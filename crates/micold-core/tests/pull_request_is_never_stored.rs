@@ -108,13 +108,14 @@ fn a_listed_pull_request_derives_no_serialisation_and_prints_no_title_or_address
         created_at: "2026-10-10T09:00:00Z".to_string(),
         base: "main".to_string(),
         head: "0123456789abcdef0123456789abcdef01234567".to_string(),
+        head_branch: "feat/billing-export".to_string(),
     };
     for output in [format!("{listed:?}"), format!("{listed:#?}")] {
         assert!(
             output.contains("4712") && output.contains("Merged"),
             "{output}"
         );
-        for secret in ["billing", "github.com", "0123456789", "main"] {
+        for secret in ["billing", "github.com", "0123456789", "main", "feat/"] {
             assert!(!output.contains(secret), "{secret} printed: {output}");
         }
     }

@@ -261,18 +261,18 @@ fn the_source_is_read_from_one_place() {
         // One line for the status reading, one for the branch list, one for a pull request's
         // diff (feature 775).
         reads.len() == 3 && reads.iter().all(|(f, _, _)| f == SHELL),
-        "the source must be reached from three lines (`read`, `list_branch`, `diff`), in {SHELL}; found:\n{}",
+        "the source must be reached from three lines (`read`, `list_branches`, `diff`), in {SHELL}; found:\n{}",
         show(&reads)
     );
 
-    // The branch list (feature 775) is read through the same one call site.
+    // The branch set's list (features 775, 1003) is read through the same one call site.
     let lists: Vec<_> = lines
         .iter()
-        .filter(|(f, _, l)| f != MAIN_TESTS && l.contains(".list_branch("))
+        .filter(|(f, _, l)| f != MAIN_TESTS && l.contains(".list_branches("))
         .collect();
     assert!(
         !lists.is_empty() && lists.iter().all(|(f, _, _)| f == SHELL),
-        "`PullRequestSource::list_branch` must be reached only from {SHELL}; found:\n{}",
+        "`PullRequestSource::list_branches` must be reached only from {SHELL}; found:\n{}",
         show(&lists)
     );
 

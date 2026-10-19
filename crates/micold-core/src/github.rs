@@ -1926,15 +1926,19 @@ impl crate::pull_request::PullRequestSource for GhCli {
         })
     }
 
-    fn list_branch(
+    fn list_branches(
         &self,
         repo: &GithubRepo,
-        branch: &str,
+        branches: &[String],
         now: u64,
     ) -> Result<Vec<crate::pull_request::BranchPullRequest>, crate::pull_request::ReadingFailure>
     {
-        let outcome = self.outcome(crate::pull_request::list_args(repo, branch));
-        crate::pull_request::read_list_outcome(&outcome, now)
+        let began = std::time::Instant::now();
+        crate::pull_request::list_in_chunks(branches, |chunk| {
+            let outcome = self.outcome(crate::pull_request::list_args(repo, chunk));
+            let now = now.saturating_add(began.elapsed().as_secs());
+            crate::pull_request::read_list_outcome(&outcome, chunk, now)
+        })
     }
 
     fn diff(

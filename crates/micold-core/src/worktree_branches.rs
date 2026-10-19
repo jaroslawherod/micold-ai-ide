@@ -13,6 +13,15 @@ use crate::git::Git;
 /// (R2 rule 2): one git command writes both and can straddle a second boundary.
 pub const MATCH_WINDOW_SECS: u64 = 2;
 
+/// What git writes as the subject of a branch's first reflog entry.
+const CREATED_FROM: &str = "branch: Created from ";
+/// The subject of a HEAD entry that moved HEAD from one branch or commit to another.
+const CHECKOUT: &str = "checkout: moving from ";
+/// The subject of a HEAD entry that renamed the branch.
+const RENAMED: &str = "Branch: renamed refs/heads/";
+/// Where a local branch's ref lives.
+const LOCAL: &str = "refs/heads/";
+
 /// One reflog line as `git log -g --date=unix --format=%gD%x09%H%x09%gs` prints it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReflogEntry {
@@ -28,43 +37,208 @@ pub struct ReflogEntry {
 
 /// The entries of reflog text, in git's order (newest first per ref). A line that does not split
 /// into three tab-separated fields, or whose `@{…}` is not a number, is skipped.
-pub fn parse_reflog(_text: &str) -> Vec<ReflogEntry> {
-    Vec::new()
+pub fn parse_reflog(text: &str) -> Vec<ReflogEntry> {
+    text.lines().filter_map(parse_line).collect()
+}
+
+fn parse_line(line: &str) -> Option<ReflogEntry> {
+    let mut fields = line.splitn(3, '\t');
+    let (selector, commit, subject) = (fields.next()?, fields.next()?, fields.next()?);
+    let (refname, time) = selector.strip_suffix('}')?.rsplit_once("@{")?;
+    Some(ReflogEntry {
+        refname: refname.to_string(),
+        time: time.parse().ok()?,
+        commit: commit.to_string(),
+        subject: subject.to_string(),
+    })
+}
+
+/// Whether a name of a checkout or rename entry is a branch: not `HEAD`, and not a commit name (40
+/// or 64 lowercase hex characters), which is what a checkout entry names when HEAD is detached.
+fn is_branch(name: &str) -> bool {
+    let commit = matches!(name.len(), 40 | 64)
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+    !name.is_empty() && name != "HEAD" && !commit
+}
+
+/// `(<A>, <B>)` of `checkout: moving from <A> to <B>`.
+fn checkout(subject: &str) -> Option<(&str, &str)> {
+    subject.strip_prefix(CHECKOUT)?.split_once(" to ")
+}
+
+/// `(<X>, <Y>)` of `Branch: renamed refs/heads/<X> to refs/heads/<Y>`.
+fn rename(subject: &str) -> Option<(&str, &str)> {
+    let (from, to) = subject.strip_prefix(RENAMED)?.split_once(" to ")?;
+    Some((from, to.strip_prefix(LOCAL)?))
+}
+
+/// Both names of a checkout or rename entry, in that order.
+fn named(subject: &str) -> Option<(&str, &str)> {
+    checkout(subject).or_else(|| rename(subject))
 }
 
 /// The branch names the worktree's HEAD reflog names (R2 rule 1): the current branch, then both
 /// names of every checkout and rename entry, deduplicated in first-seen order. Commit names and
 /// `HEAD` are not branches.
-pub fn candidates(_head_log: &[ReflogEntry], _current: Option<&str>) -> Vec<String> {
-    Vec::new()
+pub fn candidates(head_log: &[ReflogEntry], current: Option<&str>) -> Vec<String> {
+    let names = head_log
+        .iter()
+        .filter_map(|entry| named(&entry.subject))
+        .flat_map(|(a, b)| [a, b]);
+    let mut out: Vec<String> = Vec::new();
+    for name in current.into_iter().chain(names) {
+        if is_branch(name) && !out.iter().any(|seen| seen == name) {
+            out.push(name.to_string());
+        }
+    }
+    out
 }
 
 /// Whether a creation `subject` copies the remote branch of the same `name` (R2 rule 3):
 /// `branch: Created from refs/remotes/<remote>/<name>` or `branch: Created from <remote>/<name>`.
-pub fn copies_remote(_subject: &str, _name: &str) -> bool {
-    false
+pub fn copies_remote(subject: &str, name: &str) -> bool {
+    let Some(source) = subject.strip_prefix(CREATED_FROM) else {
+        return false;
+    };
+    let source = source.strip_prefix("refs/remotes/").unwrap_or(source);
+    source
+        .split_once('/')
+        .is_some_and(|(remote, rest)| !remote.is_empty() && rest == name)
+}
+
+/// One HEAD entry with the branch (or commit) HEAD is on after it.
+struct Position<'a> {
+    time: u64,
+    commit: &'a str,
+    on: &'a str,
+}
+
+/// Where HEAD is after each entry (R2 rule 2), walked oldest first: a checkout moves it to `<B>`, a
+/// rename to `<Y>`; entries before the first checkout are on that checkout's `<A>`, or on the
+/// current branch when there is no checkout.
+fn positions<'a>(head_log: &'a [ReflogEntry], current: Option<&'a str>) -> Vec<Position<'a>> {
+    let start = head_log
+        .iter()
+        .rev()
+        .find_map(|entry| checkout(&entry.subject).map(|(from, _)| from))
+        .or(current)
+        .unwrap_or("");
+    let mut on = start;
+    head_log
+        .iter()
+        .rev()
+        .map(|entry| {
+            if let Some((_, to)) = named(&entry.subject) {
+                on = to;
+            }
+            Position {
+                time: entry.time,
+                commit: &entry.commit,
+                on,
+            }
+        })
+        .collect()
+}
+
+/// `name` and every name it was renamed from, as far back as the HEAD reflog's renames go.
+fn former_names<'a>(name: &'a str, renames: &[(&'a str, &'a str)]) -> Vec<&'a str> {
+    let mut names = vec![name];
+    let mut i = 0;
+    while let Some(&current) = names.get(i) {
+        for &(from, to) in renames {
+            if to == current && !names.contains(&from) {
+                names.push(from);
+            }
+        }
+        i += 1;
+    }
+    names
+}
+
+/// Whether `name` counts on its own record (R2 rules 2 to 4).
+fn created_here(
+    name: &str,
+    ref_logs: &[ReflogEntry],
+    positions: &[Position<'_>],
+    renames: &[(&str, &str)],
+) -> bool {
+    let refname = format!("{LOCAL}{name}");
+    // git prints each ref's entries newest first: the last one is the oldest still held.
+    let Some(oldest) = ref_logs.iter().rev().find(|entry| entry.refname == refname) else {
+        return true; // deleted: the record is gone (rule 4)
+    };
+    if !oldest.subject.starts_with(CREATED_FROM) {
+        return true; // expired: the creation is gone (rule 4)
+    }
+    if copies_remote(&oldest.subject, name) {
+        return false; // the remote's branch (rule 3)
+    }
+    let names = former_names(name, renames);
+    positions.iter().any(|p| {
+        p.commit == oldest.commit
+            && p.time.abs_diff(oldest.time) <= MATCH_WINDOW_SECS
+            && names.contains(&p.on)
+    })
 }
 
 /// The worktree's branch set from its HEAD reflog and the reflogs of the candidates' refs (R2
 /// rules 2 to 6), in [`candidates`] order. The default branch is not dropped here: the pull request
 /// read names it (R3).
 pub fn branch_set(
-    _head_log: &[ReflogEntry],
-    _ref_logs: &[ReflogEntry],
-    _current: Option<&str>,
+    head_log: &[ReflogEntry],
+    ref_logs: &[ReflogEntry],
+    current: Option<&str>,
 ) -> Vec<String> {
-    Vec::new()
+    let names = candidates(head_log, current);
+    let positions = positions(head_log, current);
+    let renames: Vec<(&str, &str)> = head_log.iter().filter_map(|e| rename(&e.subject)).collect();
+    let mut kept: Vec<bool> = names
+        .iter()
+        .map(|name| {
+            Some(name.as_str()) == current || created_here(name, ref_logs, &positions, &renames)
+        })
+        .collect();
+    // Rule 5: a renamed branch counts under both names when either counts.
+    let index = |name: &str| names.iter().position(|n| n == name);
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for &(from, to) in &renames {
+            if let (Some(a), Some(b)) = (index(from), index(to)) {
+                if kept[a] != kept[b] {
+                    kept[a] = true;
+                    kept[b] = true;
+                    changed = true;
+                }
+            }
+        }
+    }
+    names
+        .into_iter()
+        .zip(kept)
+        .filter_map(|(name, keep)| keep.then_some(name))
+        .collect()
 }
 
 /// Read the branch set of the worktree at `dir`: one HEAD reflog run, then one run over the
 /// candidates' refs. A failed HEAD run gives the current branch alone; a failed refs run treats
 /// every candidate's record as gone (R2 rule 4).
-pub fn read_branch_set<G: Git + ?Sized>(
-    _git: &G,
-    _dir: &Path,
-    _current: Option<&str>,
-) -> Vec<String> {
-    Vec::new()
+pub fn read_branch_set<G: Git + ?Sized>(git: &G, dir: &Path, current: Option<&str>) -> Vec<String> {
+    let Ok(text) = git.reflogs(dir, &["HEAD".to_string()]) else {
+        return current.map(str::to_string).into_iter().collect();
+    };
+    let head_log = parse_reflog(&text);
+    let refs: Vec<String> = candidates(&head_log, current)
+        .iter()
+        .map(|name| format!("{LOCAL}{name}"))
+        .collect();
+    let ref_logs = git
+        .reflogs(dir, &refs)
+        .map(|text| parse_reflog(&text))
+        .unwrap_or_default();
+    branch_set(&head_log, &ref_logs, current)
 }
 
 #[cfg(test)]
@@ -135,7 +309,11 @@ mod tests {
         let text = format!(
             "garbage\nHEAD@{{x}}\t{C1}\ts\nHEAD\t{C1}\ts\nHEAD@{{7}}\t{C1}\nHEAD@{{8}}\t{C1}\tok\n\n"
         );
-        assert_eq!(parse_reflog(&text), [head(8, C1, "ok")], "only the whole line is read");
+        assert_eq!(
+            parse_reflog(&text),
+            [head(8, C1, "ok")],
+            "only the whole line is read"
+        );
     }
 
     #[test]
@@ -191,7 +369,10 @@ mod tests {
                 "HEAD moved at {moved}, created at {created}: within the window"
             );
         }
-        for moved in [created - MATCH_WINDOW_SECS - 1, created + MATCH_WINDOW_SECS + 1] {
+        for moved in [
+            created - MATCH_WINDOW_SECS - 1,
+            created + MATCH_WINDOW_SECS + 1,
+        ] {
             assert!(
                 !has(&feat_moved_at(created, moved, CREATED_HERE), "feat"),
                 "HEAD moved at {moved}, created at {created}: outside the window"

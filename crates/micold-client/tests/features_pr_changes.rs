@@ -33,6 +33,7 @@ fn pr(number: u64, state: BranchPrState) -> BranchPullRequest {
         created_at: "2026-10-10T09:00:00Z".into(),
         base: "main".into(),
         head: "abc".into(),
+        head_branch: "feat/a".into(),
     }
 }
 
@@ -80,12 +81,19 @@ fn opening_reads_the_list_first_and_the_pull_requests_apart_from_it() {
     let mut state = opened(true);
     let effect = wanted(&mut state, Some("feat/a"));
     let Effect::ReadPullRequests {
-        project: p, branch, ..
+        project: p,
+        entry,
+        current,
+        ..
     } = effect
     else {
         panic!("expected ReadPullRequests, got {effect:?}");
     };
-    assert_eq!((p, branch), (project(), "feat/a".to_string()));
+    assert_eq!(
+        (p, entry, current),
+        (project(), worktree(), Some("feat/a".to_string())),
+        "the shell reads the entry's branch set, starting from its current branch (feature 1003)"
+    );
     assert!(matches!(view_list(&state), PrList::Loading { .. }));
 }
 
@@ -97,10 +105,41 @@ fn the_setting_off_gives_no_section_and_no_read() {
 }
 
 #[test]
-fn an_entry_without_a_branch_gives_no_section_and_no_read() {
+fn a_worktree_on_a_detached_head_still_reads_its_created_branches() {
     let mut state = opened(true);
-    assert_eq!(wanted(&mut state, None), Effect::None);
+    let effect = wanted(&mut state, None);
+    let Effect::ReadPullRequests { entry, current, .. } = effect else {
+        panic!("expected ReadPullRequests, got {effect:?}");
+    };
+    assert_eq!(
+        (entry, current),
+        (worktree(), None),
+        "no current branch: the set is the branches created there (feature 1003)"
+    );
+    assert!(matches!(view_list(&state), PrList::Loading { .. }));
+}
+
+#[test]
+fn the_project_root_gives_no_section_and_no_read() {
+    let mut state = opened(true);
+    reopen(&mut state, SessionLocation::Default);
+    assert_eq!(wanted(&mut state, Some("main")), Effect::None, "FR-012");
     assert_eq!(view_list(&state), &PrList::Absent);
+}
+
+#[test]
+fn the_base_line_names_the_shown_pull_requests_own_head_branch() {
+    let mut state = opened(true);
+    let mut old = pr(5, BranchPrState::Merged);
+    old.head_branch = "feat/old".into();
+    listed(&mut state, vec![old]);
+    chosen(&mut state, 5);
+    let view = state.open.as_ref().expect("open");
+    assert_eq!(
+        base_line(view).as_deref(),
+        Some("Pull request #5: main ... feat/old"),
+        "its own branch, not the entry's current feat/a (research R6)"
+    );
 }
 
 #[test]

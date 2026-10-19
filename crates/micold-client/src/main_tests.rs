@@ -9678,10 +9678,10 @@ mod pr_status {
             })
         }
 
-        fn list_branch(
+        fn list_branches(
             &self,
             _: &micold_core::github::GithubRepo,
-            _: &str,
+            _: &[String],
             _: u64,
         ) -> Result<Vec<micold_core::pull_request::BranchPullRequest>, ReadingFailure> {
             Ok(Vec::new())
@@ -10461,6 +10461,7 @@ mod pr_status {
             created_at: "2026-10-10T09:00:00Z".into(),
             base: "main".into(),
             head: "a".repeat(40),
+            head_branch: "feat-a".into(),
         }
     }
 
@@ -10503,7 +10504,7 @@ mod pr_status {
         answer_remotes(&mut rig.app, first[0], github_remote());
         assert_eq!(
             rig.source.list_calls(),
-            vec![("o/r".to_string(), "feat/a".to_string())]
+            vec![("o/r".to_string(), vec!["feat/a".to_string()])]
         );
         assert!(matches!(
             view_list(&rig.app),
@@ -10536,8 +10537,8 @@ mod pr_status {
         assert_eq!(
             rig.source.list_calls(),
             vec![
-                ("o/r".to_string(), "feat/a".to_string()),
-                ("o2/r2".to_string(), "feat/a".to_string())
+                ("o/r".to_string(), vec!["feat/a".to_string()]),
+                ("o2/r2".to_string(), vec!["feat/a".to_string()])
             ]
         );
     }

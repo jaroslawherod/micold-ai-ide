@@ -223,6 +223,12 @@ pub fn status_query(n: usize) -> String {
 /// boolean or a number, and read `@file` from disk. `--hostname` keeps a `GH_HOST` in the user's
 /// environment from redirecting the request (FR-005).
 pub fn status_args(repo: &GithubRepo, branches: &[String]) -> Vec<String> {
+    graphql_args(&status_query(branches.len()), repo, branches)
+}
+
+/// `gh api graphql` with `query`, the repository's owner and name, and `branches` as `$b0`… (raw
+/// strings, `-f`), as [`status_args`] explains.
+fn graphql_args(query: &str, repo: &GithubRepo, branches: &[String]) -> Vec<String> {
     let mut args: Vec<String> = ["api", "graphql", "--hostname", "github.com", "--include"]
         .map(str::to_string)
         .to_vec();
@@ -230,7 +236,7 @@ pub fn status_args(repo: &GithubRepo, branches: &[String]) -> Vec<String> {
         args.push("-f".into());
         args.push(value);
     };
-    field(format!("query={}", status_query(branches.len())));
+    field(format!("query={query}"));
     field(format!("owner={}", repo.owner()));
     field(format!("name={}", repo.name()));
     for (i, branch) in branches.iter().enumerate() {
@@ -762,6 +768,8 @@ pub struct BranchPullRequest {
     pub base: String,
     /// `headRefOid`.
     pub head: String,
+    /// `headRefName`: the branch it was opened from (feature 1003), named by the header's base line.
+    pub head_branch: String,
 }
 
 impl fmt::Debug for BranchPullRequest {
@@ -787,31 +795,38 @@ pub enum BranchPrState {
     Closed,
 }
 
-/// The GraphQL document that lists one branch's pull requests, newest first (contracts §1). The
-/// branch travels as the variable `$b`, never inside the document.
-pub fn list_query() -> &'static str {
-    "query($owner: String!, $name: String!, $b: String!) { \
-     repository(owner: $owner, name: $name) { \
-     pullRequests(headRefName: $b, first: 100, orderBy: {field: CREATED_AT, direction: DESC}) { \
-     nodes { number title url state isDraft createdAt isCrossRepository baseRefName headRefOid } } } \
-     rateLimit { remaining resetAt } }"
+/// How many branches one list request asks for (feature 1003, research R3): SC-007's 25 branches
+/// are one request.
+pub const LIST_BRANCHES_PER_REQUEST: usize = 25;
+
+/// The GraphQL document that lists the pull requests of `n` branches, each newest first
+/// (feature 1003, contracts/pull-request-list.md §2): alias `p<i>` reads branch `$b<i>`, and the
+/// default branch's name comes back so its alias can be dropped. No branch name is in the document.
+pub fn list_query(n: usize) -> String {
+    use fmt::Write as _;
+    let mut variables = String::new();
+    let mut aliases = String::new();
+    for i in 0..n {
+        // Writing to a `String` cannot fail.
+        let _ = write!(variables, ", $b{i}: String!");
+        let _ = write!(
+            aliases,
+            "p{i}: pullRequests(headRefName: $b{i}, first: 100, orderBy: {{field: CREATED_AT, direction: DESC}}) \
+             {{ nodes {{ number title url state isDraft createdAt isCrossRepository baseRefName \
+             headRefName headRefOid }} }} "
+        );
+    }
+    format!(
+        "query($owner: String!, $name: String!{variables}) {{ \
+         repository(owner: $owner, name: $name) {{ defaultBranchRef {{ name }} {aliases}}} \
+         rateLimit {{ remaining resetAt }} }}"
+    )
 }
 
-/// The arguments after `gh` for [`list_query`]: raw string variables (`-f`), like [`status_args`].
-pub fn list_args(repo: &GithubRepo, branch: &str) -> Vec<String> {
-    let mut args: Vec<String> = ["api", "graphql", "--hostname", "github.com", "--include"]
-        .map(str::to_string)
-        .to_vec();
-    for value in [
-        format!("query={}", list_query()),
-        format!("owner={}", repo.owner()),
-        format!("name={}", repo.name()),
-        format!("b={branch}"),
-    ] {
-        args.push("-f".into());
-        args.push(value);
-    }
-    args
+/// The arguments after `gh` for [`list_query`] over `branches`: raw string variables (`-f`), like
+/// [`status_args`].
+pub fn list_args(repo: &GithubRepo, branches: &[String]) -> Vec<String> {
+    graphql_args(&list_query(branches.len()), repo, branches)
 }
 
 #[derive(serde::Deserialize)]
@@ -823,13 +838,7 @@ struct ListAnswer {
 
 #[derive(serde::Deserialize)]
 struct ListData {
-    repository: Option<ListRepository>,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ListRepository {
-    pull_requests: ListConnection,
+    repository: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -848,53 +857,80 @@ struct ListNode {
     created_at: String,
     is_cross_repository: bool,
     base_ref_name: String,
+    head_ref_name: String,
     head_ref_oid: String,
 }
 
-/// The pull requests of an answer's body to [`list_query`]: forks dropped, newest first. An answer
-/// that cannot be read whole (an `errors` entry, a `null` repository, a state this version does
-/// not know, JSON that does not parse) is [`ReadingFailure::Passing`].
-pub fn parse_list(body: &[u8]) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
+/// Newest first by `createdAt`, then the higher number first (FR-004).
+fn sort_newest_first(list: &mut [BranchPullRequest]) {
+    list.sort_by(|a, b| {
+        b.created_at
+            .cmp(&a.created_at)
+            .then(b.number.cmp(&a.number))
+    });
+}
+
+/// The pull requests of an answer's body to [`list_query`] over `branches`: forks dropped, the
+/// default branch's alias dropped, newest first. An answer that cannot be read whole (an `errors`
+/// entry, a `null` repository, an alias missing, a state this version does not know, JSON that
+/// does not parse) is [`ReadingFailure::Passing`]: no branch is silently left out (FR-013).
+pub fn parse_list(
+    body: &[u8],
+    branches: &[String],
+) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
     const UNREADABLE: ReadingFailure = ReadingFailure::Passing;
     let answer: ListAnswer = serde_json::from_slice(body).map_err(|_| UNREADABLE)?;
     if !answer.errors.is_empty() {
         return Err(UNREADABLE);
     }
-    let repository = answer
+    let mut repository = answer
         .data
         .and_then(|data| data.repository)
         .ok_or(UNREADABLE)?;
+    let default = repository
+        .get("defaultBranchRef")
+        .and_then(|r| r.get("name"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
     let mut list = Vec::new();
-    for node in repository.pull_requests.nodes {
-        if node.is_cross_repository {
-            continue;
+    for (i, branch) in branches.iter().enumerate() {
+        let alias = repository.remove(&format!("p{i}")).ok_or(UNREADABLE)?;
+        let connection: ListConnection = serde_json::from_value(alias).map_err(|_| UNREADABLE)?;
+        if default.as_deref() == Some(branch.as_str()) {
+            continue; // the default branch is never part of the set (FR-002)
         }
-        let state = match (node.state.as_str(), node.is_draft) {
-            ("OPEN", true) => BranchPrState::Draft,
-            ("OPEN", false) => BranchPrState::Open,
-            ("MERGED", _) => BranchPrState::Merged,
-            ("CLOSED", _) => BranchPrState::Closed,
-            _ => return Err(UNREADABLE),
-        };
-        list.push(BranchPullRequest {
-            number: node.number,
-            title: node.title,
-            url: node.url,
-            state,
-            created_at: node.created_at,
-            base: node.base_ref_name,
-            head: node.head_ref_oid,
-        });
+        for node in connection.nodes {
+            if node.is_cross_repository {
+                continue;
+            }
+            let state = match (node.state.as_str(), node.is_draft) {
+                ("OPEN", true) => BranchPrState::Draft,
+                ("OPEN", false) => BranchPrState::Open,
+                ("MERGED", _) => BranchPrState::Merged,
+                ("CLOSED", _) => BranchPrState::Closed,
+                _ => return Err(UNREADABLE),
+            };
+            list.push(BranchPullRequest {
+                number: node.number,
+                title: node.title,
+                url: node.url,
+                state,
+                created_at: node.created_at,
+                base: node.base_ref_name,
+                head: node.head_ref_oid,
+                head_branch: node.head_ref_name,
+            });
+        }
     }
-    // GitHub's order is trusted; the sort is a guard (stable, so equal times keep it).
-    list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    sort_newest_first(&mut list);
     Ok(list)
 }
 
-/// The list of one `gh` run that asked [`list_args`]: the pull requests when `gh` exited 0 with an
-/// HTTP 200 that [`parse_list`] reads, else the kind [`reading_failure`] names.
+/// The list of one `gh` run that asked [`list_args`] over `branches`: the pull requests when `gh`
+/// exited 0 with an HTTP 200 that [`parse_list`] reads, else the kind [`reading_failure`] names.
 pub fn read_list_outcome(
     outcome: &RunOutcome,
+    branches: &[String],
     now: u64,
 ) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
     if let RunOutcome::Exited {
@@ -903,12 +939,27 @@ pub fn read_list_outcome(
     {
         let read = split_response(stdout)
             .filter(|response| response.status == 200)
-            .map(|response| parse_list(response.body));
+            .map(|response| parse_list(response.body, branches));
         if let Some(Ok(list)) = read {
             return Ok(list);
         }
     }
     Err(reading_failure(outcome, now))
+}
+
+/// List `branches` in chunks of [`LIST_BRANCHES_PER_REQUEST`], one after another (feature 1003,
+/// research R3), merged newest first. No branch, no call. The first chunk that fails ends the read
+/// with that failure: whole or a failure, so no branch is silently dropped (FR-013).
+pub fn list_in_chunks(
+    branches: &[String],
+    mut list_chunk: impl FnMut(&[String]) -> Result<Vec<BranchPullRequest>, ReadingFailure>,
+) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
+    let mut list = Vec::new();
+    for chunk in branches.chunks(LIST_BRANCHES_PER_REQUEST) {
+        list.extend(list_chunk(chunk)?);
+    }
+    sort_newest_first(&mut list);
+    Ok(list)
 }
 
 // ---- §1: the source ----
@@ -926,12 +977,13 @@ pub trait PullRequestSource {
         now: u64,
     ) -> Result<StatusReading, ReadingFailure>;
 
-    /// Every pull request whose head branch is `branch`, newest first, forks dropped (feature
-    /// 775). One GitHub request, no retry.
-    fn list_branch(
+    /// Every pull request whose head branch is one of `branches`, newest first, forks and the
+    /// default branch dropped (features 775, 1003). One GitHub request per
+    /// [`LIST_BRANCHES_PER_REQUEST`] branches, no retry; none for no branch.
+    fn list_branches(
         &self,
         repo: &GithubRepo,
-        branch: &str,
+        branches: &[String],
         now: u64,
     ) -> Result<Vec<BranchPullRequest>, ReadingFailure>;
 
@@ -1016,12 +1068,12 @@ pub struct FakePullRequestSource {
     script: std::sync::Mutex<std::collections::VecDeque<Reading>>,
     calls: std::sync::Mutex<Vec<(String, Vec<String>)>>,
     list_script: std::sync::Mutex<std::collections::VecDeque<ListReading>>,
-    list_calls: std::sync::Mutex<Vec<(String, String)>>,
+    list_calls: std::sync::Mutex<Vec<(String, Vec<String>)>>,
     diff_script: std::sync::Mutex<std::collections::VecDeque<Result<String, DiffReadFailure>>>,
     diff_calls: std::sync::Mutex<Vec<(String, u64)>>,
 }
 
-/// One scripted answer of [`FakePullRequestSource::list_branch`].
+/// One scripted answer of [`FakePullRequestSource::list_branches`].
 type ListReading = Result<Vec<BranchPullRequest>, ReadingFailure>;
 
 impl FakePullRequestSource {
@@ -1050,13 +1102,13 @@ impl FakePullRequestSource {
         self
     }
 
-    /// Answer the next unanswered `list_branch` with `list`.
+    /// Answer the next unanswered `list_branches` with `list`.
     pub fn with_list_answer(self, list: Vec<BranchPullRequest>) -> Self {
         self.lock_list_script().push_back(Ok(list));
         self
     }
 
-    /// Answer the next unanswered `list_branch` with `failure`.
+    /// Answer the next unanswered `list_branches` with `failure`.
     pub fn with_list_failure(self, failure: ReadingFailure) -> Self {
         self.lock_list_script().push_back(Err(failure));
         self
@@ -1091,8 +1143,8 @@ impl FakePullRequestSource {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// Every `list_branch` so far, as (`owner/name`, branch).
-    pub fn list_calls(&self) -> Vec<(String, String)> {
+    /// Every `list_branches` so far, as (`owner/name`, branches).
+    pub fn list_calls(&self) -> Vec<(String, Vec<String>)> {
         self.list_calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1141,16 +1193,16 @@ impl PullRequestSource for FakePullRequestSource {
     }
 
     /// Nothing scripted answers [`ReadingFailure::Passing`].
-    fn list_branch(
+    fn list_branches(
         &self,
         repo: &GithubRepo,
-        branch: &str,
+        branches: &[String],
         _now: u64,
     ) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
         self.list_calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push((repo.to_string(), branch.to_string()));
+            .push((repo.to_string(), branches.to_vec()));
         self.lock_list_script()
             .pop_front()
             .unwrap_or(Err(ReadingFailure::Passing))
