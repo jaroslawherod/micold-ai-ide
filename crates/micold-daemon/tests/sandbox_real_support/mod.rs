@@ -495,6 +495,11 @@ fn start_sandbox_on(
         spec.port,
         micold_core::sandbox::argv::CONTAINER_SSH_PORT
     );
+    let git_identity_label = format!(
+        "{}={}",
+        micold_core::sandbox::parse::GIT_IDENTITY_LABEL,
+        micold_core::sandbox::parse::GIT_IDENTITY_NONE
+    );
     let home_env = format!("HOME={}", spec.home);
     let micold_home_env = format!("MICOLD_HOME={}", spec.home);
     let image_env = format!("MICOLD_IMAGE_REFERENCE={image}");
@@ -521,6 +526,10 @@ fn start_sandbox_on(
         "create",
         "--name",
         spec.container,
+        // The stamp `argv::create` passes (#1002): without it `adopt` replaces the container as one
+        // made before the git identity was removed.
+        "--label",
+        &git_identity_label,
         "--restart",
         micold_core::sandbox::argv::restart_policy(spec.survive_logout),
         "--network",
