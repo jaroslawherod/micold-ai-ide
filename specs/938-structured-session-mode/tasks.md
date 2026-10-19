@@ -412,7 +412,7 @@ phase sits before US6 because the UI milestone ships last.
 **Independent Test**: `cargo test -p micold-core --test terminal_history_store`, `cargo test -p micold-core --lib structured::` and
 `cargo test -p micold-daemon --test structured_saved_history`.
 
-- [ ] T049 [P] [US7] Write failing unit tests in `crates/micold-core/src/structured/saved.rs`:
+- [x] T049 [P] [US7] Write failing unit tests in `crates/micold-core/src/structured/saved.rs`:
   `encode_events`/`decode_events` round-trip a history holding every saved event kind (each
   CLI-sourced event comes back equal after `parse_line` of its `raw`; an `Unreadable` whose text is
   valid JSON stays `Unreadable`; `TurnEndedWithoutResult` kept; `omitted` kept); `OversizedOnWire`
@@ -421,7 +421,7 @@ phase sits before US6 because the UI milestone ships last.
   `omitted + len` overflowing, over `MAX_EVENTS_FILE_BYTES` — returns its `DamageReason` and no
   events; a pinned version-1 fixture decodes, so a change of encoding fails until
   `EVENTS_FORMAT_VERSION` is bumped.
-- [ ] T050 [P] [US7] Write failing unit tests in `crates/micold-core/src/structured/history.rs`:
+- [x] T050 [P] [US7] Write failing unit tests in `crates/micold-core/src/structured/history.rs`:
   `EventHistory::restored(omitted, events)` numbers the events from `omitted`, the next append gets
   `omitted + len`, and lower bounds evict further and add to `omitted`.
 - [ ] T051 [P] [US7] Write failing tests in `crates/micold-core/tests/terminal_history_store.rs` for
@@ -431,7 +431,7 @@ phase sits before US6 because the UI milestone ships last.
   `.events.tmp`; `forget` deletes both kinds; `sweep(keep)` keeps `<kept id>.events` and deletes
   others; a session's `.history` and `.events` saves do not mark each other `Unchanged`. Every
   existing test in the file keeps passing unchanged.
-- [ ] T052 [US7] Make T049 and T050 pass: new `crates/micold-core/src/structured/saved.rs`
+- [x] T052 [US7] Make T049 and T050 pass: new `crates/micold-core/src/structured/saved.rs`
   (registered in `structured/mod.rs`), `EventHistory::restored` in
   `crates/micold-core/src/structured/history.rs`, and the shared `frame`/`unframe` split out of
   `crates/micold-core/src/terminal_history/format.rs` with the terminal format's bytes and its
