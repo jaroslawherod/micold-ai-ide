@@ -506,6 +506,23 @@ fn delivered(dir: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Wait, within 10 s, until `delivered(dir)` equals `expected`: the stand-in records a message
+/// asynchronously, so the daemon's `OperationOk` can arrive before the record has the line.
+async fn delivered_is<const N: usize>(dir: &Path, expected: [&str; N]) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let got = delivered(dir);
+        if got == expected {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "delivered {got:?}, expected {expected:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 /// `await-stdin`, then `text-turn.jsonl` with a pause of `pause_ms` before its result.
 fn answering_turn(pause_ms: u64) -> String {
     let lines = structured::fixture_lines("text-turn.jsonl");
@@ -562,7 +579,7 @@ async fn the_first_prompt_is_delivered_once_in_the_sessions_life() {
     )
     .await;
     assert!(typed.is_ok(), "the prompt was delivered: {typed:?}");
-    assert_eq!(delivered(project.path()), [prompt]);
+    delivered_is(project.path(), [prompt]).await;
 
     state.stop_session(id);
     state
@@ -595,7 +612,7 @@ async fn a_user_message_is_one_line_and_its_answer_reaches_every_viewer() {
     let mut second = viewer(&state, project.path(), id).await;
     let text = "two lines\n\"quoted\" — zażółć 🦀 m3-secret-marker";
     assert_ok(&send_text(&mut first, 1, id, text).await, "the message");
-    assert_eq!(delivered(project.path()), [text]);
+    delivered_is(project.path(), [text]).await;
     let expected = fixture_events("text-turn.jsonl");
     for client in [&mut first, &mut second] {
         let got = events_until(client, id, complete(expected.len())).await;
@@ -653,7 +670,7 @@ async fn messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal() {
         &send_text(&mut client, 6, id, "after").await,
         "after the result",
     );
-    assert_eq!(delivered(project.path()), ["one", "after"]);
+    delivered_is(project.path(), ["one", "after"]).await;
 
     state.stop_session(id);
     let got = send_text(&mut client, 7, id, "stopped").await;
@@ -735,7 +752,7 @@ async fn a_message_reaches_only_its_own_session() {
         &send_text(&mut client, 1, ids[0], "for one").await,
         "the message",
     );
-    assert_eq!(delivered(&one), ["for one"]);
+    delivered_is(&one, ["for one"]).await;
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(
         !two.join("stdin-record").exists()
