@@ -458,37 +458,37 @@ pub fn pane<'a>(
     // The colour-rendering terminal body fills the whole main area (feature 006). Falls back to
     // an empty state if the runtime is not yet available (e.g. the session is still starting).
     let several = area.filter(|a| a.layout.len() > 1);
-    let body: Element<'a, Message> =
-        if session_kind(state, active) == micold_core::session::SessionKind::Structured {
-            // A structured session draws no terminal and takes no input (feature 938, FR-022a).
-            structured_log_body(state, active, r)
-        } else if let Some(area) = several {
-            // Feature 484: several panes tile the area; each measures itself, so no outer reporter.
-            crate::ui::panes::view(
-                state,
-                area,
-                selection,
-                display_offset,
-                scheme,
-                &link_context,
-            )
-        } else {
-            match grid {
-                Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
-                    .selection(selection)
-                    .display_offset(display_offset)
-                    .focused(state.terminal_focused())
-                    .session(active)
-                    .link_context(link_context)
-                    .into(),
-                None => container(
-                    Text::new(empty_terminal_message(state, active), TypeRole::Caption, r).muted(),
-                )
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
+    let body: Element<'a, Message> = if shows_structured_log(state, active) {
+        // A structured session's AI process draws no terminal and takes no input (feature 938,
+        // FR-022a); its shell instances stay terminals.
+        structured_log_body(state, active, r)
+    } else if let Some(area) = several {
+        // Feature 484: several panes tile the area; each measures itself, so no outer reporter.
+        crate::ui::panes::view(
+            state,
+            area,
+            selection,
+            display_offset,
+            scheme,
+            &link_context,
+        )
+    } else {
+        match grid {
+            Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
+                .selection(selection)
+                .display_offset(display_offset)
+                .focused(state.terminal_focused())
+                .session(active)
+                .link_context(link_context)
                 .into(),
-            }
-        };
+            None => container(
+                Text::new(empty_terminal_message(state, active), TypeRole::Caption, r).muted(),
+            )
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into(),
+        }
+    };
     // Measured whether the pane, the placeholder, or nothing at all is inside it (see above).
     let body: Element<'a, Message> = if several.is_some() {
         body
@@ -786,6 +786,15 @@ fn structured_log_body<'a>(
 }
 
 /// How session `id` runs its CLI; a terminal session when the projection does not list it.
+/// Whether the pane for `id` is the structured log: a structured session with its AI tab displayed.
+fn shows_structured_log(state: &State, id: SessionId) -> bool {
+    state.active_sessions().iter().any(|s| {
+        s.id == id
+            && s.kind == micold_core::session::SessionKind::Structured
+            && s.mode == TerminalMode::AiCli
+    })
+}
+
 fn session_kind(state: &State, id: SessionId) -> micold_core::session::SessionKind {
     state
         .active_sessions()

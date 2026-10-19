@@ -81,3 +81,28 @@ fn two_sessions_logs_stay_separate() {
     assert_eq!(rows(&state, b).len(), 2);
     assert_eq!(rows(&state, SessionId::new()).len(), 0);
 }
+
+#[test]
+fn a_snapshot_sent_again_without_live_events_replaces_the_lines() {
+    let (mut state, s) = (State::default(), SessionId::new());
+    state.apply(s, 0, &[event(0, "a"), event(1, "b")], false);
+    // The window views the session again: the daemon sends the whole history afresh.
+    state.apply(s, 0, &[event(0, "a"), event(1, "b")], false);
+    assert_eq!(rows(&state, s).len(), 2);
+}
+
+#[test]
+fn a_snapshot_that_continues_the_log_appends_to_it() {
+    let (mut state, s) = (State::default(), SessionId::new());
+    state.apply(s, 0, &[event(0, "a"), event(1, "b")], false);
+    state.apply(s, 0, &[event(2, "c")], false);
+    assert_eq!(rows(&state, s).len(), 3);
+}
+
+#[test]
+fn forgetting_a_session_drops_its_log() {
+    let (mut state, s) = (State::default(), SessionId::new());
+    state.apply(s, 0, &[event(0, "a")], false);
+    state.forget(s);
+    assert_eq!(rows(&state, s).len(), 0);
+}

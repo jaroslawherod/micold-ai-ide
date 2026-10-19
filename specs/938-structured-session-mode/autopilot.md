@@ -90,6 +90,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 review B (conformance) | 1 | 1f22e8f07fbc422f09a973efac33dd9d5ffb049a:768105c2827677d4dc7fe93d49a6096d35646df4 | CHANGES: 1 MAJOR (no red for T049/T050; fixed by showing 11 of 37 failing against stubs, cycle-log), 1 MINOR declined |
 | M7 review A (code-review high, sonnet) | 2 | cd63101c4d6a93126b38cbaf204719bb1578adc8:a9a7ff41fd018ba604366dca2e6c38850e427008 | no BLOCKER/MAJOR; 8 MINOR: fixed 5 (has_events one stat, kind guard restored, damage recorded on insert, doc, test for a removed session), 3 declined; no round 3 |
 | M7 review B (conformance, sonnet) | 2 | cd63101c4d6a93126b38cbaf204719bb1578adc8:a9a7ff41fd018ba604366dca2e6c38850e427008 | CLEAN; 1 MINOR (tests for the fix-round guards) fixed for the removed-session guard, rest declined |
+| M8 review A (code-review high) | 1 | 30968b0f2fae8e248c798145b19437ab6a678657:3aaefff6a9d3dd04b6289a11c6a89049b1821432 | 3 MAJOR fixed (re-sent snapshot appended; log drawn over shell instances; const after test module = clippy), 6 MINOR (2 fixed, rest declined) |
+| M8 review B (conformance) | 1 | 30968b0f2fae8e248c798145b19437ab6a678657:3aaefff6a9d3dd04b6289a11c6a89049b1821432 | CHANGES: 1 MAJOR (no red for M8 tests; mutation red recorded in cycle-log), 2 MINOR fixed |
 
 ## Declined review findings
 
@@ -136,12 +138,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | B 2 | scenario 8 (removal racing a save) has no daemon-level test | the daemon's save goes through `HistoryStore::save_events`, whose forgotten check under the lock is tested in `terminal_history_store`; the daemon test covers the save after removal |
 | M7 | A2 | stale-snapshot prune of a seeded schedule; the store-mutex stat; free-form dedupe keys; a re-spawned load for an id archived mid-sync | one redundant write at worst; has_events no longer locks; keys follow the existing "deletion:" convention; the re-spawn ends with the next catalog change |
 | M7 | B2 | tests for the stop-save with saving off and the events failure key | both are one-line guards with no behaviour a user sees; the removed-session guard has a test |
+| M8 | A 1 | F5 every `StreamDelta` row rebuilt per frame, no tail-follow; F8 `cut(&flat(text))` allocates the whole text | the pane is the interim read-only log until #939's transcript view; bounded at 5,000 rows; MINOR |
+| M8 | A 1 | F7 / B3 `offers_a_choice` test helper re-implements the old rule | it keeps the tests' meaning (a second CLI); the production rule has its own test in features_session; MINOR |
+| M8 | A 1 | F9 FR-016a source-level assert loosened | the label still comes from the session's provider through `command_caption`, which uses `command()`; MINOR |
 
 ## Handover
 
-M8 part 2: code and client tests green (T037-T045, T047, T056 ticked; tests that saw the extra entry
-fixed). Remaining: gate (`scripts/gate.sh`, log $SCRATCHPAD/gate.log), T046 visual pass, reviews,
-push `--force-with-lease=claude/project-thread-cl0lw3:`, pr-title.md/pr-body.md.
+M8 part 2: code, tests, review round 1 fixes done. Remaining: round 2 of review A on the fix diff
+(snapshot above), `scripts/gate.sh` on the final tree, T046 visual pass (tick it), push
+`--force-with-lease=claude/project-thread-cl0lw3:`; pr-title.md/pr-body.md are written.
 
 ## Open escalation
 

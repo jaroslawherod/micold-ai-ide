@@ -24,16 +24,17 @@ struct Log {
     /// The marker for `omitted`, when it is above zero.
     marker: Option<String>,
     lines: Vec<String>,
-    /// The last message was a live event: the next history message starts over.
-    after_live: bool,
+    /// One past the last event's sequence number held, `0` before any.
+    next_seq: u64,
 }
 
 impl State {
     /// Take one `StructuredEvents` message for `session`.
     ///
-    /// A history message (`live: false`) replaces the lines when it is the session's first, or
-    /// follows a live event (the window viewed the session again); otherwise it, and every live
-    /// event, appends.
+    /// A history message (`live: false`) replaces the lines when it is the session's first, or does
+    /// not continue the log (its first event is not the one after the last held: the window viewed
+    /// the session again, or re-synced); a message that does continue it, and every live event,
+    /// appends.
     pub fn apply(
         &mut self,
         session: SessionId,
@@ -42,12 +43,15 @@ impl State {
         live: bool,
     ) {
         let log = self.logs.entry(session).or_default();
-        let replaces = !live && (log.lines.is_empty() && log.omitted == 0 || log.after_live);
+        let continues = events.first().is_none_or(|e| e.seq == log.next_seq);
+        let replaces = !live && (log.lines.is_empty() && log.omitted == 0 || !continues);
         if replaces {
             *log = Log::default();
             log.omitted = omitted;
         }
-        log.after_live = live;
+        if let Some(last) = events.last() {
+            log.next_seq = last.seq + 1;
+        }
         log.lines.extend(events.iter().map(log_line));
         // The log stays as bounded as the service's history is.
         let excess = log.lines.len().saturating_sub(MAX_EVENTS);

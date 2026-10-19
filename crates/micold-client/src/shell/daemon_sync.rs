@@ -2734,6 +2734,7 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
     // and a session being archived will take no more input. Never on a mere detach — the
     // counter must survive a reconnect for loss detection to hold.
     app.stamper.forget(id);
+    app.core.structured_log.forget(id);
     // Addressed to the daemon the session runs on, whichever location is in view.
     let binding = app.session_binding_of(id);
     send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
@@ -2785,6 +2786,7 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
         app.scrollback_inflight
             .retain(|_, (session, _)| *session != id);
         app.stamper.forget(id); // T114, as in the close path above.
+        app.core.structured_log.forget(id);
         let binding = app.session_binding_of(id);
         send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
             ClientMsg::SessionDelete { req, session: id }
@@ -3695,7 +3697,7 @@ pub(crate) mod tests {
 
     use super::*;
 
-    /// FR-016: the confirmed request is an explicit additional session, and a plain start is not.
+    /// 938 FR-022: a structured start asks the daemon for a structured session.
     #[test]
     fn a_structured_start_asks_the_daemon_for_a_structured_session() {
         use micold_core::protocol::messages::ClientMsg;
@@ -3717,6 +3719,7 @@ pub(crate) mod tests {
         ));
     }
 
+    /// FR-016: the confirmed request is an explicit additional session, and a plain start is not.
     #[test]
     fn a_confirmed_additional_session_carries_the_allow_flag() {
         use micold_core::protocol::messages::ClientMsg;

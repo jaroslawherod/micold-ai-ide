@@ -2362,6 +2362,10 @@ pub fn diff_layout_set(
     }
 }
 
+/// The note under **Save terminal history** (feature 938, FR-023): what the setting writes to disk
+/// and what turning it off deletes. Here, not in the view, so a test can read it.
+pub const SAVE_TERMINAL_HISTORY_NOTE: &str = "Terminal output, and the events of structured sessions, are written to this computer's disk while this is on. Turning it off deletes the saved history and events.";
+
 #[cfg(test)]
 mod parse_budget_tests {
     //! Feature 804, T003: the one parser of the four typed limits.
@@ -2445,7 +2449,3 @@ mod parse_budget_tests {
         assert_eq!(cores_text(MilliCpus(2000)), "2");
     }
 }
-
-/// The note under **Save terminal history** (feature 938, FR-023): what the setting writes to disk
-/// and what turning it off deletes. Here, not in the view, so a test can read it.
-pub const SAVE_TERMINAL_HISTORY_NOTE: &str = "Terminal output, and the events of structured sessions, are written to this computer's disk while this is on. Turning it off deletes the saved history and events.";
