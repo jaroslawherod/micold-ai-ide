@@ -139,27 +139,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Done (committed, not yet compiled/tested when written): T037/T041 `structured/log_line.rs`; T038/T042
-`StartMenuEntry.kind`, `StartRequested.kind`, `AdditionalOpened.kind` + `state.session.additional_kind`,
-`PendingOp::CreateSession.kind`, `ui::entry_label`; T039/T043 `features/structured_log.rs` +
-`app.structured_log` + `DaemonMsg::StructuredEvents` arm in daemon_sync; T040 gate
-`tests/gates/structured_row_marker_fits.rs` (registered in layout_snapshot.rs); T044
-`features::session::command_caption` used in sidebar row + AI tab; T045 `structured_log_body` in
-`ui/terminal.rs`; T047 user guide; T056 `SAVE_TERMINAL_HISTORY_NOTE` in features/settings.rs + settings.md.
-Next: (1) `cargo build -p micold-client --tests` (log $SCRATCHPAD/b.log), fix errors; (2) run
-`cargo test -p micold-client --test structured_start_menu --test structured_log --test layout_snapshot
---test session_start_press --test additional_session_provider --test root_state_is_shared --test
-features_settings --test features_session --test directory_availability --test
-feature_registration_cost --test feature_write_isolation`; fix existing asserts broken by the new
-entry (`directory_availability` entries==ALL, `features_session` single-CLI chevron asserts at ~594/646/701,
-`main_tests.rs` ~8741 start_menu_entries); add `tests/features_structured_log.rs` isolation test if
-`feature_registration_cost` demands it; add a main_tests test that a Structured start sends
-`SessionCreate{kind: Structured}`; layout_snapshot fixture may need regenerating if the gate says so;
-(3) tick T037–T045, T047, T056 in tasks.md; (4) T046 visual pass (cloud-visual-pass memory: apt install
-libxkbcommon-x11-0 xdotool; ICED_BACKEND=tiny-skia) into specs/938-structured-session-mode/visual-pass/;
-(5) gate (`scripts/gate.sh` detached), reviews (claude -p --agent autopilot-reviewer), push
-`--force-with-lease=claude/project-thread-cl0lw3:`, write $SCRATCHPAD/pr-title.md and pr-body.md.
-Disk: wiped target-shared/debug once (full); wipe again if short.
+M8 part 2: code and client tests green (T037-T045, T047, T056 ticked; tests that saw the extra entry
+fixed). Remaining: gate (`scripts/gate.sh`, log $SCRATCHPAD/gate.log), T046 visual pass, reviews,
+push `--force-with-lease=claude/project-thread-cl0lw3:`, pr-title.md/pr-body.md.
 
 ## Open escalation
 

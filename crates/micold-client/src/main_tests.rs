@@ -4569,10 +4569,10 @@ fn answer_each(
     }
 }
 
+/// Whether the row for `dir` has a second CLI to choose. Claude Code alone still shows the chevron
+/// for its structured entry (938 FR-022); tests/features_session.rs pins that.
 fn offers_a_choice(app: &App, dir: &str) -> bool {
-    app.core
-        .session
-        .start_affordance_offers_a_choice(Path::new(dir))
+    app.core.session.known_clis(Some(Path::new(dir))).len() >= 2
 }
 
 /// What the primary half of `location`'s start affordance would do — the same reader
@@ -8851,7 +8851,9 @@ mod a_rows_cli_list_shows_every_cli_and_says_why_one_is_disabled {
         );
 
         let clis: Vec<AiCli> = entries(&app, FEAT_A).iter().map(|e| e.cli).collect();
-        assert_eq!(clis, AiCli::ALL, "an entry per supported CLI, in order");
+        let mut expected = AiCli::ALL.to_vec();
+        expected.insert(1, AiCli::ClaudeCode); // the structured entry (938)
+        assert_eq!(clis, expected, "an entry per supported CLI, in order");
         let said = reason(&app, FEAT_A, AiCli::Pi).expect("Pi is unavailable there");
         assert_eq!(said, pi_missing(SpawnEnv::ScriptFailed, FEAT_A));
         for part in [
@@ -8926,7 +8928,7 @@ mod a_rows_cli_list_shows_every_cli_and_says_why_one_is_disabled {
             )),
             "the message carries the reason there (FR-008)"
         );
-        assert_eq!(entries(&app, FEAT_A).len(), AiCli::ALL.len());
+        assert_eq!(entries(&app, FEAT_A).len(), AiCli::ALL.len() + 1);
         assert_eq!(
             reason(&app, FEAT_A, AiCli::Pi),
             Some(pi_missing(SpawnEnv::ScriptFailed, FEAT_A)),

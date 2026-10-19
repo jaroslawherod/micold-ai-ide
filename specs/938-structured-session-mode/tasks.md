@@ -482,32 +482,32 @@ structured_log --test layout_snapshot`, then quickstart §B.
 
 ### Tests for User Story 6 ⚠️
 
-- [ ] T037 [P] [US6] Write failing unit tests in `crates/micold-core/src/structured/log_line.rs`:
+- [x] T037 [P] [US6] Write failing unit tests in `crates/micold-core/src/structured/log_line.rs`:
   `log_line(&SequencedEvent) -> String` gives one line per variant (init with model, assistant
   text/thinking/tool call by name, user tool result with its call id and error flag, result with
   outcome and duration, stream delta with its type, unrecognised with its `type` when it has one,
   unreadable with its text, turn ended without result, oversized on wire with its size); no line
   contains `\n` (multi-line text is flattened); `omitted_line(n)` names how many earlier events
   were omitted.
-- [ ] T038 [P] [US6] Write failing reducer tests in
+- [x] T038 [P] [US6] Write failing reducer tests in
   `crates/micold-client/tests/structured_start_menu.rs`: `start_menu_entries` lists "Claude Code
   (structured)" right after "Claude Code", with the same availability, only when Claude Code is
   supported; `start_affordance_offers_a_choice` is true with Claude Code as the only CLI; picking
   the entry sends `SessionCreate { kind: Structured }`; the plain start press and every other
   entry send `Terminal`.
-- [ ] T039 [P] [US6] Write failing reducer tests in `crates/micold-client/tests/structured_log.rs`:
+- [x] T039 [P] [US6] Write failing reducer tests in `crates/micold-client/tests/structured_log.rs`:
   the first `live: false` message (on first view, or after a `live: true`) replaces the session's
   lines, later `live: false` messages append, `live: true` appends, `omitted > 0` puts the
   omitted line first, and two sessions' logs stay separate.
-- [ ] T040 [P] [US6] Write the failing geometry gate
+- [x] T040 [P] [US6] Write the failing geometry gate
   `crates/micold-client/tests/gates/structured_row_marker_fits.rs` (registered in
   `crates/micold-client/tests/layout_snapshot.rs` with `#[path = …]`): a structured session's
   sidebar row marker stays inside its row at the narrowest sidebar width.
 
 ### Implementation for User Story 6
 
-- [ ] T041 [US6] Make T037 pass: `crates/micold-core/src/structured/log_line.rs`.
-- [ ] T042 [US6] Make T038 pass in `crates/micold-client/src/features/session.rs`
+- [x] T041 [US6] Make T037 pass: `crates/micold-core/src/structured/log_line.rs`.
+- [x] T042 [US6] Make T038 pass in `crates/micold-client/src/features/session.rs`
   (`StartMenuEntry.kind`, `start_menu_entries`, `start_affordance_offers_a_choice`,
   `StartRequested` carrying the kind), `crates/micold-client/src/shell/daemon_sync.rs`
   (`SessionCreate.kind`), and every place that maps start-menu entries into the chevron's list or
@@ -519,26 +519,26 @@ structured_log --test layout_snapshot`, then quickstart §B.
   get `kind: SessionKind::Terminal` added mechanically and must keep passing (SC-004); the
   `start_menu_entries` assertions in `src/main_tests.rs` and `tests/directory_availability.rs` are
   updated for the new "Claude Code (structured)" entry.
-- [ ] T043 [US6] Make T039 pass: new render-free `crates/micold-client/src/features/structured_log.rs`
+- [x] T043 [US6] Make T039 pass: new render-free `crates/micold-client/src/features/structured_log.rs`
   (registered in `features/mod.rs`) and routing of `StructuredEvents` to it in
   `crates/micold-client/src/shell/daemon_sync.rs`.
-- [ ] T044 [US6] Make T040 pass: the "structured" caption on a structured session's row in
+- [x] T044 [US6] Make T040 pass: the "structured" caption on a structured session's row in
   `crates/micold-client/src/ui/sidebar.rs`, with the existing row text roles (R10), and the same
   caption wherever else the client lists sessions with their AI CLI (find them with
   `LSP findReferences` on `SessionSummary.provider`); T038 asserts the row model's kind for each.
-- [ ] T045 [US6] Draw a structured session's pane in `crates/micold-client/src/ui/terminal.rs` as
+- [x] T045 [US6] Draw a structured session's pane in `crates/micold-client/src/ui/terminal.rs` as
   the read-only log of T043 (shared `Text` in a `Scrollable`, no input box, no keystroke routing),
   reusing shared primitives; a missing one goes into `ui/material/` with a builder API (R10).
 - [ ] T046 [US6] Run quickstart [Part B](quickstart.md) steps 1–6 with the `visual-pass` skill and
   save its evidence under `specs/938-structured-session-mode/visual-pass/`.
-- [ ] T047 [US6] Add a "Structured sessions" section to
+- [x] T047 [US6] Add a "Structured sessions" section to
   `docs/user-guide/worktrees-and-sessions.md` (FR-023): what the structured kind is, how to choose
   it from the start-session chevron, that it is Claude Code only, the plain log it shows, and what
   it does not yet do with the issue for each (#939 transcript view, #940 rich rendering, #941
   prompt input and interrupt, #942 permission prompts, #943 slash commands and switching kinds,
   #944 usage and subagents); and that, while **Save terminal history** is on, the log is kept
   across a restart of the background service.
-- [ ] T056 [US6] Test first: in `crates/micold-client/tests/features_settings.rs` assert that
+- [x] T056 [US6] Test first: in `crates/micold-client/tests/features_settings.rs` assert that
   **Save terminal history**'s note names structured sessions' events (fails on today's text); then
   make it pass by moving the note's literal in `crates/micold-client/src/ui/settings/terminal.rs`
   into a `pub const` the test reads and extending it, and extend the setting's entry in

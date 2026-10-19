@@ -292,7 +292,7 @@ fn the_marks_slot_is_reserved_rather_than_pushed_when_stopped() {
 fn the_ai_tab_names_the_cli_from_the_provider_and_never_a_literal() {
     let ai = ai_tab_body(&terminal_source());
     assert!(
-        ai.contains(".provider().command()"),
+        ai.contains("command_caption(") && ai.contains("session_provider("),
         "the AI tab's label must come from the session's provider, in the command register"
     );
     assert!(

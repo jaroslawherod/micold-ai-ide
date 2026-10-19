@@ -603,9 +603,13 @@ mod start_list_items {
         );
 
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        let expected: Vec<String> = AiCli::ALL.iter().map(ToString::to_string).collect();
+        // Claude Code's structured entry follows its terminal one (feature 938).
+        let mut clis = AiCli::ALL.to_vec();
+        clis.insert(1, AiCli::ClaudeCode);
+        let mut expected: Vec<String> = clis.iter().map(ToString::to_string).collect();
+        expected[1] = "Claude Code (structured)".to_owned();
         assert_eq!(labels, expected, "every supported CLI, in supported order");
-        for (item, cli) in items.iter().zip(AiCli::ALL) {
+        for (item, cli) in items.iter().zip(clis) {
             let offered = matches!(cli, AiCli::ClaudeCode | AiCli::Copilot);
             assert_eq!(
                 item.message.is_some(),

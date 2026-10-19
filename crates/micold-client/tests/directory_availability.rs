@@ -615,13 +615,17 @@ fn reason_of(state: &State, path: &str, cli: AiCli) -> Option<String> {
         })
 }
 
-/// 037 U93 (FR-010, SC-007, BUG-753): every supported CLI, in `AiCli::ALL` order.
+/// 037 U93 (FR-010, SC-007, BUG-753): every supported CLI, in `AiCli::ALL` order (938: Claude Code
+/// twice).
 #[test]
 fn a_list_has_an_entry_for_every_cli_in_supported_order_whatever_the_answer() {
     for available in [&AiCli::ALL[..], WITHOUT_PI, &[AiCli::ClaudeCode], &[]] {
         let state = row_answered(available, Some(SpawnEnv::ScriptFailed));
         let clis: Vec<AiCli> = entries(&state, P).iter().map(|e| e.cli).collect();
-        assert_eq!(clis, AiCli::ALL, "answer {available:?}");
+        // Claude Code has a second, structured entry (feature 938) right after its terminal one.
+        let mut expected = AiCli::ALL.to_vec();
+        expected.insert(1, AiCli::ClaudeCode);
+        assert_eq!(clis, expected, "answer {available:?}");
     }
 }
 

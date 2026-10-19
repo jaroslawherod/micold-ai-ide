@@ -292,7 +292,7 @@ fn the_pinned_ai_tab_names_the_sessions_cli() {
         .1;
 
     assert!(
-        tab.contains("session_provider(state, id).provider().command()"),
+        tab.contains("session_provider(state, id)") && tab.contains("command_caption("),
         "the pinned AI tab must label itself from the *session's* provider, by `command()` — a \
          constant or a call that drops the session names one CLI on every session's bar (FR-016a)"
     );
