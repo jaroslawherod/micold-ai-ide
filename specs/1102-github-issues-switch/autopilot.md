@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1102
 - **Worktree branch**: feat/1102_allow-the-github-issues-integration-to-be-disabled
 - **Started**: 2026-10-19
-- **Phase**: M2 implemented, in review
-- **Next step**: review A, scoped gate, review B, full gate, M2 PR
+- **Phase**: M2 PR open
+- **Next step**: orchestrator merges M2 PR; then M3
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1111 | Design | merged | 33cd837f45cc6412d3aa888a4cb6d2f221b969ef |
 | #1112 | M1 | merged | 4fd3e6e4ce9c7a58ebea3d3cfa88113d9aa1aa75 |
+| #PR | M2 | open | |
 
 ## Milestones
 
