@@ -359,6 +359,7 @@ pub fn view_with<'a>(
                 state.window.focused_field,
                 state.settings.settings_rail_collapsed,
                 (&state.daemon_list, state.daemon_rows()),
+                &state.settings.github_tokens,
                 scheme,
             ),
             bg,

@@ -51,6 +51,8 @@ use std::path::PathBuf;
 
 use crate::features::session::CliAvailability;
 use crate::features::window::FieldId;
+pub mod github_tokens;
+
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::cli_reason::{explain, AttemptDir, Explanation};
 use micold_core::issue_types::{
@@ -92,6 +94,9 @@ pub struct State {
     pub legacy_container: Option<micold_core::daemons::DaemonId>,
     /// In-progress Settings edit, present only while the Settings view is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
+    /// The *GitHub access tokens* section (#1002): the pasted tokens and the form that adds one.
+    /// Not a setting and not part of the draft: Add, Replace and Remove act at once.
+    pub github_tokens: crate::features::settings::github_tokens::GithubTokens,
     /// Whether the Jira integration is on, as the service last reported it (feature 533, FR-022).
     /// Every Jira control and request is gated on it through `micold_core::jira::jira_visible`.
     pub jira_enabled: bool,
@@ -1647,6 +1652,31 @@ pub enum Msg {
     JiraRemoveRequested,
     /// The Keep-or-Remove question was answered (US2 AS5, US3 AS4).
     JiraKeepOrRemoveChosen(KeepOrRemove),
+    /// *GitHub access tokens*: **Repository** was edited (#1002).
+    GithubPatRepoChanged(String),
+    /// *GitHub access tokens*: **Token** was edited; the text never shows in `Debug`.
+    GithubPatTokenChanged(TokenInput),
+    /// *GitHub access tokens*: **Add** was pressed; the shell checks the token off the UI thread.
+    GithubPatAddRequested,
+    /// *GitHub access tokens*: **Replace** on a row.
+    GithubPatReplaceRequested(micold_core::github::GithubRepo),
+    /// *GitHub access tokens*: **Remove** on a row; the shell deletes the stored token.
+    GithubPatRemoveRequested(micold_core::github::GithubRepo),
+    /// *GitHub access tokens*: a token's check finished. `Ok` carries the expiry GitHub reported
+    /// (the token is stored); `Err` the reason, and nothing was stored.
+    GithubPatChecked {
+        /// The repository the token is for.
+        repo: micold_core::github::GithubRepo,
+        /// The expiry, or why the token was refused.
+        result: Result<micold_core::scoped_credential::UnixTime, String>,
+    },
+    /// *GitHub access tokens*: the stored tokens were read (Settings opened).
+    GithubPatsLoaded(
+        Vec<(
+            micold_core::github::GithubRepo,
+            micold_core::scoped_credential::UnixTime,
+        )>,
+    ),
     /// Save the Settings form (validated + persisted by the shell) (FR-020, FR-021).
     Saved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -1779,6 +1809,17 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
                 }
             }
         }),
+        Msg::GithubPatRepoChanged(text) => state.settings.github_tokens.repo_edited(text),
+        Msg::GithubPatTokenChanged(text) => state.settings.github_tokens.token_edited(text),
+        Msg::GithubPatAddRequested => state.settings.github_tokens.add_requested(),
+        Msg::GithubPatReplaceRequested(repo) => {
+            state.settings.github_tokens.replace_requested(&repo);
+        }
+        Msg::GithubPatRemoveRequested(repo) => state.settings.github_tokens.removed(&repo),
+        Msg::GithubPatChecked { repo, result } => {
+            state.settings.github_tokens.checked(repo, result);
+        }
+        Msg::GithubPatsLoaded(stored) => state.settings.github_tokens.load(stored),
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
         Msg::ScriptPathCheckStarted {

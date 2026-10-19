@@ -46,6 +46,7 @@ pub mod runs_watch;
 pub mod sandbox;
 #[cfg(all(test, feature = "sandbox-real-runtime"))]
 mod sandbox_real;
+pub mod scoped_credential;
 pub mod service_control;
 pub mod settings;
 pub mod startup;

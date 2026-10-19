@@ -250,9 +250,16 @@ one-time notice saying so, with a **Dismiss** button; the next save drops the ol
 A sandbox container made before this change is replaced on its next start, even a running one,
 which ends any session still running in it: it may still mount your agent or credential store.
 
-**Until the scoped credential is set up, a sandbox cannot push.** A session that tries to push to a
-remote fails for want of credentials, and the application says so rather than leaving you with an
-unexplained authentication error.
+**Until you paste a GitHub token for its repository, a sandbox cannot push.** Paste one per
+repository in [Settings → GitHub → GitHub access
+tokens](settings.md#github-access-tokens). A sandbox then pushes and pulls its project's repository
+with that **fine-grained token, limited to that one repository**, over HTTPS; a remote that uses
+SSH goes over HTTPS inside the sandbox, with no SSH key. The application never renews the token: it
+warns you 24 hours before it expires and takes it out of the sandbox at the expiry, and you paste a
+new one without restarting anything. A token that leaks from a sandbox stays valid until it
+expires or you delete it on GitHub. A session that tries to push without one fails for want of
+credentials, and the application says so rather than leaving you with an unexplained
+authentication error.
 
 ### Where sandboxed conversations live
 

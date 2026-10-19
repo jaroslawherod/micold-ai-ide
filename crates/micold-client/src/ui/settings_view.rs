@@ -58,6 +58,8 @@ pub fn view<'a>(
         &'a crate::features::daemons::State,
         crate::features::daemons::ViewModel,
     ),
+    // The GitHub section's pasted tokens (#1002).
+    github_tokens: &'a crate::features::settings::github_tokens::GithubTokens,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
@@ -107,7 +109,7 @@ pub fn view<'a>(
             };
             daemons::view(daemons.0, daemons.1, facts, focused, r)
         }
-        SettingsSection::GithubIssues => github::view(draft, focused, r),
+        SettingsSection::GithubIssues => github::view(draft, github_tokens, focused, r),
         SettingsSection::Jira => jira::view(draft, focused, r),
     };
 

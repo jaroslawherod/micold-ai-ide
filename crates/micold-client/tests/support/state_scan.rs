@@ -43,6 +43,14 @@ pub use source_scan::code_only;
 /// resolved to the members it actually writes rather than treated as one opaque mutation.
 pub const MUTATORS: &[&str] = &[
     "advance",
+    // `GithubTokens`' edits of the Settings access-token form and rows (#1002).
+    "add_requested",
+    "checked",
+    "load",
+    "removed",
+    "replace_requested",
+    "repo_edited",
+    "token_edited",
     "append",
     // `attach.dialog.as_mut` borrows the open dialog to edit it (feature 582).
     "as_mut",

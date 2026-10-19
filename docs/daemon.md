@@ -428,15 +428,21 @@ or SSH daemon never sends the first and answers the others with an `OperationErr
   2.31 (no `GIT_CONFIG_COUNT`): the client issues nothing and the daemon refuses every grant.
 - `ClientMsg::GitCredentialGrant { repo, token, expires_at }`: the daemon writes
   `<root>/<owner>/<repo>` (lower case; root `/run/micold/git`, in memory) atomically with mode
-  `0600`, replacing the previous file (a renewal). No reply on success. Refused when no project of
+  `0600`, replacing the previous file (a replacement). No reply on success. Refused when no project of
   the daemon pushes to `repo`, so a client bug cannot widen its reach; a write failure is reported
   naming the repository.
 - `ClientMsg::GitCredentialRevoke { repo }`: removes the file; idempotent.
 
 Invariants: the token is never logged (`SecretToken`'s `Debug` is redacted, and so is the wire
 message's), never forwarded to another daemon or a session's environment, and never written outside
-the credential root. The client renews each credential 10 minutes before it expires and revokes
-them when the daemon stops or is deleted (`micold_core::scoped_credential::schedule::Schedule`).
+the credential root. The one real source is a fine-grained PAT the user pasted per repository
+(contract `specs/1002-sandbox-scoped-token/contracts/pat-source.md`): the client never renews it and
+never revokes it on GitHub. It re-checks it once at its expiry and then sends a `GitCredentialRevoke`
+(also when a PAT was removed or refused while the daemon was disconnected, and on removal in the
+settings), and it sends one when the daemon stops or is deleted
+(`micold_core::scoped_credential::schedule::Schedule` with `RenewPolicy::AtExpiry`). A grant may
+live up to 366 days (`MAX_LIFETIME_SECS`; the daemon refuses an expiry that is past or further
+away), and the token's expiry is always known.
 
 ## Finding the logs and recent errors
 

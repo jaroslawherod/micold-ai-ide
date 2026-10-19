@@ -320,7 +320,7 @@ reducer and wiring tests with a fake transport; quickstart Part C steps 1–8, 1
 
 ### Tests (write first, must fail)
 
-- [ ] T039 [P] [US2] [source] M4 rework tests in `crates/micold-core/src/scoped_credential/mod.rs` and
+- [x] T039 [P] [US2] [source] M4 rework tests in `crates/micold-core/src/scoped_credential/mod.rs` and
   `schedule.rs` (this task also owns the `mod pat; mod pat_store;` declarations in `mod.rs` that T040
   and T041's files need, with empty module files to hold their tests): `MINTED_LIFETIME_SECS` (3600, used by `accept` and `FakeSource`) is split from
   `MAX_LIFETIME_SECS` (366 days, the sanity cap, data-model §2); `ScopedCredential::pasted(repo,
@@ -334,7 +334,7 @@ reducer and wiring tests with a fake transport; quickstart Part C steps 1–8, 1
   (FR-008); `message()` of `PatExpired`, and the new wording of `SourceNotSetUp` / `SourceRefused`
   (data-model §6). And in `crates/micold-daemon/tests/git_credential_grant.rs`: a grant expiring
   300 days out is accepted, one past 366 days + skew or already expired is refused.
-- [ ] T040 [P] [US2] [source] Unit tests in `crates/micold-core/src/scoped_credential/pat.rs`
+- [x] T040 [P] [US2] [source] Unit tests in `crates/micold-core/src/scoped_credential/pat.rs`
   (contracts/pat-source.md §2–§3): shape check (`github_pat_…` accepted; `ghp_`, `gho_`, empty,
   whitespace-padded refused — padding trimmed once at paste); probe response parsing (`permissions.push`
   true/false/missing; the `github-authentication-token-expiration` header absent → "no expiry", past →
@@ -343,13 +343,13 @@ reducer and wiring tests with a fake transport; quickstart Part C steps 1–8, 1
   reason: `401` → refused ("rejected"), `403`/`404` → "does not reach", timeout/DNS/TLS/`5xx` →
   `SourceUnreachable(<short>)`, with `REACH_CHECK` off the reach step is skipped and the settings text says reach cannot be verified (FR-009), `403` with `x-ratelimit-remaining: 0` → `SourceUnreachable("rate limited")`, `403` with `x-github-sso` → refused with the SSO remedy; stored-file format round trip (`expires_at=` / `token=`); a token
   never appears in `Debug`, in any `message()` or in the request log line the module builds.
-- [ ] T041 [P] [US2] [source] Tests for `paths::secrets_dir()` in `crates/micold-core/src/paths.rs`
+- [x] T041 [P] [US2] [source] Tests for `paths::secrets_dir()` in `crates/micold-core/src/paths.rs`
   (sibling of `data_dir()` named `micold-ai-ide-secrets` on the Linux, macOS and Windows layouts,
   neither under nor above `data_dir()`, research R5 — reuse from bundle commit f8a1cdc0), and for
   `PatStore` in `crates/micold-core/src/scoped_credential/pat_store.rs` over a temp root: `put` writes
   `github-pat/<owner>/<repo>` owner-only (mode `0600` on Unix), replaces an existing PAT, `get`,
   `remove` (idempotent), `list`; a path-traversal repository name cannot leave the root.
-- [ ] T042 [P] [US2] [source] Client reducer tests in `crates/micold-client/src/features/settings.rs`
+- [x] T042 [P] [US2] [source] Client reducer tests in `crates/micold-client/src/features/settings.rs`
   for the *GitHub access tokens* section: a row per stored repository with its expiry date; from 24 h
   before expiry the row shows the warning; *Add* accepts `owner/name` or a github.com URL, refuses
   anything else at the field; a PAT the check refuses is shown with its reason at the form and
@@ -359,7 +359,7 @@ reducer and wiring tests with a fake transport; quickstart Part C steps 1–8, 1
   use everything the token can, that the client cannot narrow it, that a leaked token stays valid until
   it expires or is deleted on GitHub and that *Remove* does not delete it there (FR-011), and, when
   the reach check is off, that the client cannot verify which other repositories the token reaches (FR-009).
-- [ ] T043 [P] [US2] [source] Client wiring tests in `crates/micold-client/src/shell/scoped_credential.rs`
+- [x] T043 [P] [US2] [source] Client wiring tests in `crates/micold-client/src/shell/scoped_credential.rs`
   (`#[cfg(test)]`, a fake HTTP transport and a temp `PatStore` behind the seam): targets reported with
   a stored PAT → checks → `GitCredentialGrant` sent with that PAT only for its repository; no stored
   PAT → `SourceNotSetUp`; replace → `refresh` → the new token is granted without a daemon restart
@@ -371,17 +371,17 @@ reducer and wiring tests with a fake transport; quickstart Part C steps 1–8, 1
 
 ### Implementation
 
-- [ ] T044 [US2] [source] The M4 rework in `crates/micold-core/src/scoped_credential/{mod.rs,
+- [x] T044 [US2] [source] The M4 rework in `crates/micold-core/src/scoped_credential/{mod.rs,
   schedule.rs,fake.rs}` and `crates/micold-daemon/src/git_credential.rs`: `MINTED_LIFETIME_SECS`,
   `MAX_LIFETIME_SECS` = 366 days, `ScopedCredential::pasted`, `RenewPolicy`, `Schedule::refresh`,
   `CredentialStatus::expires_within`, `NoCredentialReason::PatExpired` and the new texts; `withdraw`, the daemon's
   grant check uses the shared cap, and the docs of `Grant::permissions` and `CredentialSource::revoke`
   no longer say "installation token" / "within an hour"; likewise every other 1-hour / installation-token
   / renewal doc comment in `mod.rs` (lines ~31, 40, 184) and `helper.rs` (line ~16) (T039).
-- [ ] T045 [US2] [source] `crates/micold-core/src/scoped_credential/pat.rs`, `pat_store.rs` (declared
+- [x] T045 [US2] [source] `crates/micold-core/src/scoped_credential/pat.rs`, `pat_store.rs` (declared
   by T039 in `scoped_credential/mod.rs`) and `paths::secrets_dir()` — reuse `secrets_dir()` from
   bundle commit f8a1cdc0 (T040, T041). No new dependency.
-- [ ] T046 [US2] [source] `crates/micold-client/src/shell/scoped_credential.rs`: `PatSource`
+- [x] T046 [US2] [source] `crates/micold-client/src/shell/scoped_credential.rs`: `PatSource`
   implementing `CredentialSource` over `ureq` as `shell/jira_http.rs` does (`issue` = stored PAT →
   checks → `pasted`; `revoke` does nothing), the per-daemon `Schedule` (`AtExpiry`) on the subscription
   clock while connected, checks off the UI thread, grants and revokes on the daemon's connection,
@@ -389,12 +389,12 @@ reducer and wiring tests with a fake transport; quickstart Part C steps 1–8, 1
   (`shell/scoped_credential.rs`, `daemon_sync.rs`, `daemons.rs`, `startup.rs`, `main.rs` hook-ups, with
   the App parts removed) and review-A fixes of bundle commit 3b68bf1a (no revoke on a lost connection,
   no gap on a source change, stale clock) (T043).
-- [ ] T047 [US2] [source] *GitHub access tokens* settings section in
+- [x] T047 [US2] [source] *GitHub access tokens* settings section in
   `crates/micold-client/src/features/settings.rs` and its view, from existing settings components (text
   field, masked field if the Jira token one exists, buttons; no new widget), with the help text of
   contracts/pat-source.md §1 — reuse the section scaffold from bundle commit 026081c3
   (`ui/settings/github.rs`, `features/window.rs`, layout snapshot and `covered_states` updates) (T042).
-- [ ] T048 [P] [US2] [source] User guide: `docs/user-guide/settings.md` (*GitHub access tokens*:
+- [x] T048 [P] [US2] [source] User guide: `docs/user-guide/settings.md` (*GitHub access tokens*:
   creating the fine-grained PAT with its permissions and a short expiry, pasting, replacing, the 24 h
   warning, removing, that removing does not delete it on GitHub) and
   `docs/daemon.md` (the grant/revoke section: the PAT source is never renewed or revoked on GitHub,
