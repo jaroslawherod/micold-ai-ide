@@ -5,6 +5,7 @@
 //! full-width, which is why the catalogue gives them their own rows — a banner beside a chip would
 //! push the chip off screen (spec, Edge Cases).
 
+use iced::widget::column;
 use iced::{Element, Length};
 use micold_core::naming::ConventionalType;
 use micold_core::tokens::{spacing, Roles};
@@ -267,6 +268,31 @@ pub fn accordion_section<'a>(
             posed(
                 "press the header, or focus it and press Space or Enter",
                 section(showcase.shown(index)).on_toggle(Message::Reversed(index)),
+                roles,
+            ),
+            posed(
+                "a group: opening one closes the others",
+                column(
+                    ["Network", "Storage", "Tools"]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(key, title)| {
+                            material::AccordionSection::new(title, body(roles), roles)
+                                .open(showcase.group_open(key))
+                                .on_toggle(Message::GroupSectionToggled(key))
+                                .into()
+                        }),
+                ),
+                roles,
+            ),
+            posed(
+                "independent sections",
+                column([
+                    section(showcase.shown(index))
+                        .on_toggle(Message::Reversed(index))
+                        .into(),
+                    section(true).into(),
+                ]),
                 roles,
             ),
         ],

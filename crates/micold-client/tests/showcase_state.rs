@@ -125,6 +125,21 @@ fn reversing_flips_only_that_entry() {
     assert!(s.shown(0), "reversing again brings it back");
 }
 
+/// Feature 1091, FR-001/FR-003/FR-008: the showcase's grouped sections are exclusive, and the
+/// independent set keeps each section's own toggle.
+#[test]
+fn grouped_sections_are_exclusive_and_leave_the_independent_set_alone() {
+    let mut s = showcase();
+    assert!(s.group_open(0), "the first grouped section starts open");
+    s.update(Message::GroupSectionToggled(1));
+    assert!(s.group_open(1) && !s.group_open(0), "opening one closes the other");
+    s.update(Message::GroupSectionToggled(1));
+    assert!(!s.group_open(0) && !s.group_open(1), "pressing the open one closes it");
+    for i in 0..ENTRIES {
+        assert!(s.shown(i), "entry {i}: the independent set is untouched");
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // The run control (FR-023a)
 // ---------------------------------------------------------------------------------------------

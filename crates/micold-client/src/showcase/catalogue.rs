@@ -685,6 +685,8 @@ pub const COMPONENTS: &[Entry] = &[
             "closed, with a summary",
             "open",
             "closed, a required field empty",
+            "a group: opening one closes the others",
+            "independent sections",
         ],
         live: &["press the header, or focus it and press Space or Enter"],
         interactive: true,
