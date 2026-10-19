@@ -458,11 +458,12 @@ mod tests {
     /// Answers `image inspect` with "no such image", then ends every limited run as `ended`.
     struct EndsEarly {
         ended: io::ErrorKind,
+        inspect_stderr: &'static str,
     }
 
     impl CommandRunner for EndsEarly {
         fn run(&self, _: &OsStr, _: &[OsString]) -> io::Result<CommandOutput> {
-            Ok(CommandOutput::err(1, "Error: No such image: x"))
+            Ok(CommandOutput::err(1, self.inspect_stderr))
         }
 
         fn run_limited(
@@ -478,10 +479,20 @@ mod tests {
     }
 
     fn acquire(ended: io::ErrorKind) -> RuntimeError {
-        CliRuntime::new(RuntimeKind::Docker, EndsEarly { ended })
-            .limiting_acquire(Duration::from_secs(15 * 60), CancelToken::new())
-            .acquire_image(&ImageChoice::Basic, &mut |_| {})
-            .expect_err("the pull ended early")
+        acquire_after(ended, "Error: No such image: x")
+    }
+
+    fn acquire_after(ended: io::ErrorKind, inspect_stderr: &'static str) -> RuntimeError {
+        CliRuntime::new(
+            RuntimeKind::Podman,
+            EndsEarly {
+                ended,
+                inspect_stderr,
+            },
+        )
+        .limiting_acquire(Duration::from_secs(15 * 60), CancelToken::new())
+        .acquire_image(&ImageChoice::Basic, &mut |_| {})
+        .expect_err("the pull ended early")
     }
 
     #[test]
@@ -491,6 +502,17 @@ mod tests {
         assert!(matches!(error, RuntimeError::Timeout { .. }), "{error:?}");
         assert!(reason.contains("15 minutes"), "{reason}");
         assert!(reason.contains(ImageChoice::Basic.reference()), "{reason}");
+    }
+
+    #[test]
+    fn podmans_image_not_known_is_absent_so_the_image_is_pulled() {
+        // Podman 5.x words an absent image "image not known"; the pull must still be attempted,
+        // which the stub observes by ending it early.
+        let error = acquire_after(
+            io::ErrorKind::Interrupted,
+            "Error: ghcr.io/x/micold-basic@sha256:7551: image not known",
+        );
+        assert_eq!(error, RuntimeError::Cancelled);
     }
 
     #[test]
@@ -504,6 +526,7 @@ mod tests {
             RuntimeKind::Docker,
             EndsEarly {
                 ended: io::ErrorKind::TimedOut,
+                inspect_stderr: "",
             },
         )
         .limiting_commands(Duration::from_secs(15 * 60), CancelToken::new());
