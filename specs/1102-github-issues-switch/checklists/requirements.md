@@ -5,4 +5,4 @@
 - [x] Success criteria are measurable and technology-agnostic
 - [x] Edge cases cover failure, multi-session and cross-platform
 - [x] Out of scope stated (Out of Scope section)
-- [ ] Two `[NEEDS CLARIFICATION]` markers remain for the clarify unit
+- [x] No `[NEEDS CLARIFICATION]` markers remain (both resolved in Clarifications; verified by grep)

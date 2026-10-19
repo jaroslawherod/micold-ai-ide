@@ -75,7 +75,7 @@ crates/micold-client/src/
 ├── shell/daemon_sync.rs     # adopt_daemon_settings + refresh_open_settings
 ├── shell/pr_status.rs       # reads draft.github.pr_status_enabled (l.233): check whether the new draft field needs a sibling line
 ├── shell/startup.rs         # loaded settings -> core.settings
-└── shell/issues.rs          # sync_github_issues_availability; the starters refuse while off
+└── shell/issues.rs          # sync_github_issues_availability; starters refuse while off via github_repo() (traced in T013)
 test literals of `DaemonSettings` (`main_tests.rs`, `tests/support`) gain the field
 docs/user-guide/settings.md, worktrees-and-sessions.md; docs/daemon.md
 ```
@@ -87,7 +87,7 @@ hand-written lists that name `jira_enabled` (found with `grep -n jira_enabled`) 
 
 ### D1. Setting and wire (FR-001, FR-007, FR-008)
 
-- `Settings` and `SettingsFile`: `#[serde(default = "default_true")] github_issues_enabled: bool` (`default_true` is a new helper, or reuse `default_desktop_notifications`); `Settings::default()` sets `true`. A missing, unknown or corrupt file yields `true` (spec edge cases; the corrupt-file path already returns `Settings::default()` and does not rewrite).
+- `Settings` and `SettingsFile`: `#[serde(default = "default_true")] github_issues_enabled: bool` (`default_true` is a new helper); `Settings::default()` sets `true`. A missing, unknown or corrupt file yields `true` (spec edge cases; the corrupt-file path already returns `Settings::default()` and does not rewrite).
 - `DaemonSettings::github_issues_enabled: bool` (strict on the wire, no serde default: the codec is not self-describing) and `ClientMsg::SettingsSet::github_issues_enabled: Option<bool>`, placed after `jira_connection`. Service-owned: `Catalog::persist_service_settings` and the on-disk merge copy it, as for `jira_enabled`, so the latest write wins on every daemon/window (multi-session edge case).
 - Wire contract and version bump: [contracts/wire.md](contracts/wire.md). `tests/schema_hash.rs` pins the hash; the bump and the pin move in one commit.
 
