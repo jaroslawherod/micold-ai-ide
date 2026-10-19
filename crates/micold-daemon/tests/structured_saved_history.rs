@@ -370,3 +370,27 @@ async fn a_history_over_the_bound_is_restored_under_the_bounds() {
         other => panic!("{other:?}"),
     }
 }
+
+// A restored history the file already holds is not written again until a new event comes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restored_history_is_saved_again_only_after_a_new_event() {
+    let case = Case::new();
+    let state = case.daemon();
+    let stream = case.start(&state);
+    push(&stream, &["a"]);
+    state.stop_session(case.id());
+    drop(state);
+
+    let restarted = case.daemon();
+    let got = view(&restarted, &case, 1).await;
+    assert_eq!(texts(&got), ["a"]);
+    let file = events_file(case.dir(), case.id());
+    std::fs::remove_file(&file).unwrap();
+    restarted.save_due_at(Instant::now() + Duration::from_secs(60));
+    assert!(!file.exists(), "nothing new since the file was read");
+    let stream = case.start(&restarted);
+    push(&stream, &["b"]);
+    restarted.save_due_at(Instant::now() + Duration::from_secs(120));
+    assert!(file.exists());
+    restarted.stop_session(case.id());
+}

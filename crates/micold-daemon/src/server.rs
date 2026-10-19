@@ -2670,12 +2670,18 @@ fn sync_terminal_streams(
         if streams.contains_key(t) {
             continue;
         }
-        // A structured session's primary is its events, not a screen (feature 938, R6). One that
-        // has no stream in this run yet is restored from its saved event history first, off the
-        // runtime's threads; one that never ran has nothing to show and ends the task (R14).
-        if t.process == SessionProcess::Primary
-            && state.session_kind(t.session) == Some(micold_core::session::SessionKind::Structured)
+        // A structured session's primary is its events, not a screen (feature 938, R6).
+        if let Some(events) = state
+            .event_stream(t.session)
+            .filter(|_| t.process == SessionProcess::Primary)
         {
+            let handle = tokio::spawn(stream_events(t.session, events, tx.clone()));
+            streams.insert(*t, (None, handle));
+            continue;
+        }
+        // One with no stream in this run yet but a saved event history is restored from it first,
+        // off the runtime's threads (research R14). One that never ran has nothing to show.
+        if t.process == SessionProcess::Primary && state.has_saved_events(t.session) {
             let (state, session, tx) = (Arc::clone(state), t.session, tx.clone());
             let handle = tokio::spawn(async move {
                 let loading = Arc::clone(&state);
