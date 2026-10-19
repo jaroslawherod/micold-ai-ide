@@ -65,7 +65,8 @@ git does not record which worktree created a branch. It is derived from two reco
 - **Known limit** (recorded, not fixed): a branch created elsewhere, checked out here, and then
   deleted is listed (rule 4); so is a remote branch checked out here (rule 3) once deleted. A new
   branch `x` made from a local branch `a/x` matches the remote form of rule 3 and is dropped; git's
-  reflog text does not tell the two apart without the remote list, and the name pattern is rare. Two worktrees of one project creating branches at the same commit in
+  reflog text does not tell the two apart without the remote list, and the name pattern is rare.
+  Two worktrees of one project creating branches at the same commit in
   the same two seconds cannot be told apart. Both are rare and only add entries; none is lost.
 - **Rejected**: every branch HEAD was ever on (lists `main`/`develop` checkouts, contradicts the
   clarification); only branches whose reflog still exists (loses every merged-and-deleted branch);
