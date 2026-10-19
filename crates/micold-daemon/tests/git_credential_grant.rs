@@ -29,6 +29,18 @@ static ONE_AT_A_TIME: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(())
 
 const ROOT_ENV: &str = "MICOLD_GIT_CREDENTIAL_ROOT";
 
+/// An expiry the daemon accepts, fixed for the whole test binary so a file's text can be compared.
+fn soon() -> u64 {
+    static AT: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *AT.get_or_init(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 1800
+    })
+}
+
 fn repo(url: &str) -> GithubRepo {
     GithubRepo::from_remote_url(url).unwrap()
 }
@@ -95,7 +107,7 @@ async fn refusal(client: &mut Client) -> (ErrorKind, String) {
         DaemonMsg::OperationError {
             kind,
             message,
-            req: 0,
+            req: u64::MAX,
             ..
         } => Some((kind, message)),
         _ => None,
@@ -195,7 +207,7 @@ async fn a_grant_is_written_atomically_with_mode_0600_and_replaced_by_the_next()
         token: SecretToken::new(token),
         expires_at,
     };
-    send(&mut client, grant("tok-1", 111)).await;
+    send(&mut client, grant("tok-1", soon())).await;
     send(
         &mut client,
         ClientMsg::GitCredentialRevoke {
@@ -204,8 +216,9 @@ async fn a_grant_is_written_atomically_with_mode_0600_and_replaced_by_the_next()
     )
     .await;
     let file = creds.join("acme").join("app");
-    let wait_for = |expected: &'static str| {
+    let wait_for = |expected: &str| {
         let file = file.clone();
+        let expected = expected.to_string();
         async move {
             for _ in 0..200 {
                 if std::fs::read_to_string(&file).is_ok_and(|t| t == expected) {
@@ -216,14 +229,14 @@ async fn a_grant_is_written_atomically_with_mode_0600_and_replaced_by_the_next()
             panic!("{} never held {expected:?}", file.display());
         }
     };
-    wait_for("expires_at=111\ntoken=tok-1\n").await;
+    wait_for(&format!("expires_at={}\ntoken=tok-1\n", soon())).await;
     assert_eq!(
         std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
         0o600
     );
 
-    send(&mut client, grant("tok-2", 222)).await;
-    wait_for("expires_at=222\ntoken=tok-2\n").await;
+    send(&mut client, grant("tok-2", soon() + 1)).await;
+    wait_for(&format!("expires_at={}\ntoken=tok-2\n", soon() + 1)).await;
     let leftovers: Vec<_> = std::fs::read_dir(file.parent().unwrap())
         .unwrap()
         .map(|e| e.unwrap().file_name())
@@ -268,7 +281,7 @@ async fn a_grant_for_a_repository_no_project_pushes_to_is_refused() {
         ClientMsg::GitCredentialGrant {
             repo: repo("https://github.com/o/other"),
             token: SecretToken::new("tok-secret"),
-            expires_at: 5,
+            expires_at: soon(),
         },
     )
     .await;
@@ -298,7 +311,7 @@ async fn a_host_process_daemon_refuses_grants_and_sends_no_targets() {
         ClientMsg::GitCredentialGrant {
             repo: repo("https://github.com/o/r"),
             token: SecretToken::new("tok"),
-            expires_at: 5,
+            expires_at: soon(),
         },
     )
     .await;
@@ -309,7 +322,11 @@ async fn a_host_process_daemon_refuses_grants_and_sends_no_targets() {
                 Frame::Control(DaemonMsg::GitCredentialTargets { .. }) => {
                     panic!("a host-process daemon sent targets")
                 }
-                Frame::Control(DaemonMsg::OperationError { req: 0, kind, .. }) => return kind,
+                Frame::Control(DaemonMsg::OperationError {
+                    req: u64::MAX,
+                    kind,
+                    ..
+                }) => return kind,
                 _ => {}
             }
         }
@@ -336,7 +353,7 @@ async fn a_write_failure_names_the_repository_and_never_the_token() {
         ClientMsg::GitCredentialGrant {
             repo: repo("https://github.com/o/r"),
             token: SecretToken::new("tok-secret"),
-            expires_at: 5,
+            expires_at: soon(),
         },
     )
     .await;
@@ -383,7 +400,7 @@ async fn a_git_older_than_2_31_marks_the_targets_and_refuses_every_grant() {
         ClientMsg::GitCredentialGrant {
             repo: repo("https://github.com/o/r"),
             token: SecretToken::new("tok"),
-            expires_at: 5,
+            expires_at: soon(),
         },
     )
     .await;
@@ -391,4 +408,37 @@ async fn a_git_older_than_2_31_marks_the_targets_and_refuses_every_grant() {
     assert_eq!(kind, ErrorKind::Refused);
     assert!(message.contains("2.30.0"), "{message}");
     assert!(!creds.exists());
+}
+
+#[tokio::test]
+async fn a_malformed_token_or_a_stale_expiry_is_refused_and_a_path_is_not_a_repository() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let dir = tempfile::tempdir().unwrap();
+    let creds = dir.path().join("creds");
+    let _env = root_env(&creds);
+    let a = project(dir.path(), "a", Some("https://github.com/o/r"));
+    let state = state_with(&[&a]);
+    let mut client = connect_and_attach(&state, &a).await;
+    let _ = targets(&mut client).await;
+    for (token, expires_at) in [
+        ("a\nexpires_at=9", soon()),
+        ("", soon()),
+        ("tok", 5),
+        ("tok", soon() + 7200),
+    ] {
+        send(
+            &mut client,
+            ClientMsg::GitCredentialGrant {
+                repo: repo("https://github.com/o/r"),
+                token: SecretToken::new(token),
+                expires_at,
+            },
+        )
+        .await;
+        assert_eq!(refusal(&mut client).await.0, ErrorKind::InvalidInput);
+    }
+    assert!(!creds.exists());
+    // A peer cannot name a path: the repository does not even decode.
+    let bad = serde_json::json!({"GitCredentialRevoke": {"repo": {"owner": "..", "name": "x"}}});
+    assert!(serde_json::from_value::<ClientMsg>(bad).is_err());
 }

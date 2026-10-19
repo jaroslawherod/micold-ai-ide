@@ -19,6 +19,7 @@ use crate::git::GitRemote;
 /// is unrepresentable and a token in a remote URL can never reach the display (FR-022). It also
 /// crosses the wire (#1002), where a receiver trusts nothing it did not derive itself.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "RepoParts")]
 pub struct GithubRepo {
     owner: String,
     name: String,
@@ -68,11 +69,18 @@ impl GithubRepo {
         let path = path.trim_start_matches('/').trim_end_matches('/');
         let path = path.strip_suffix(".git").unwrap_or(path);
         let (owner, name) = path.split_once('/')?;
+        Self::checked(owner, name)
+    }
+
+    /// The repository `owner/name` when both are plain names (never empty, `.` or `..`).
+    fn checked(owner: &str, name: &str) -> Option<GithubRepo> {
         let owner_ok = !owner.is_empty()
             && owner
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'));
         let name_ok = !name.is_empty()
+            && name != "."
+            && name != ".."
             && name
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
@@ -80,6 +88,15 @@ impl GithubRepo {
             owner: owner.to_string(),
             name: name.to_string(),
         })
+    }
+
+    /// The same repository with lower-case names: GitHub ignores case, so this is the key to
+    /// share one credential (and one file) between `Foo/Bar` and `foo/bar`.
+    pub fn lowercased(&self) -> GithubRepo {
+        GithubRepo {
+            owner: self.owner.to_ascii_lowercase(),
+            name: self.name.to_ascii_lowercase(),
+        }
     }
 
     /// The owning user or organization.
@@ -90,6 +107,23 @@ impl GithubRepo {
     /// The repository's name, without `.git`.
     pub fn name(&self) -> &str {
         &self.name
+    }
+}
+
+#[derive(Deserialize)]
+struct RepoParts {
+    owner: String,
+    name: String,
+}
+
+impl TryFrom<RepoParts> for GithubRepo {
+    type Error = String;
+
+    /// Off the wire a repository is validated like one read from a remote URL, so a peer cannot
+    /// name a path.
+    fn try_from(parts: RepoParts) -> Result<Self, String> {
+        GithubRepo::checked(&parts.owner, &parts.name)
+            .ok_or_else(|| format!("{}/{} is not a GitHub repository", parts.owner, parts.name))
     }
 }
 

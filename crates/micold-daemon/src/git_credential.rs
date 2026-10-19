@@ -16,7 +16,7 @@ use micold_core::protocol::messages::CredentialTarget;
 use micold_core::scoped_credential::helper::{
     answer, parse_request, render_credential_file, GIT_CREDENTIAL_ROOT,
 };
-use micold_core::scoped_credential::{SecretToken, UnixTime, GITHUB_BASE};
+use micold_core::scoped_credential::{SecretToken, UnixTime, GITHUB_BASE, MAX_LIFETIME_SECS};
 
 /// Test override of the credential root, as `repo_clone::ROOT_ENV` is for the clone root.
 pub const ROOT_ENV: &str = "MICOLD_GIT_CREDENTIAL_ROOT";
@@ -59,7 +59,13 @@ pub fn write_grant(
     let file = file_of(root, repo);
     let dir = file.parent().expect("a credential file has a directory");
     std::fs::create_dir_all(dir)?;
-    let temporary = dir.join(format!(".{}.tmp", std::process::id()));
+    // Unique per write: grants for two repositories of one owner may be written at once.
+    static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let temporary = dir.join(format!(
+        ".{}.{}.tmp",
+        std::process::id(),
+        WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
@@ -135,6 +141,8 @@ pub enum GrantRefused {
     GitTooOld(String),
     /// None of the daemon's projects pushes to the repository.
     NotAProjectRepo,
+    /// The token or its expiry cannot be a credential.
+    Invalid,
     /// The file could not be written.
     Write(std::io::Error),
 }
@@ -151,9 +159,17 @@ pub fn apply_grant(
     if let Some(version) = git_too_old() {
         return Err(GrantRefused::GitTooOld(version));
     }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let plain = !token.expose().is_empty() && token.expose().bytes().all(|b| b.is_ascii_graphic());
+    if !plain || expires_at <= now || expires_at > now + MAX_LIFETIME_SECS {
+        return Err(GrantRefused::Invalid);
+    }
+    let want = repo.lowercased();
     let pushes_there = collect_targets(projects)
         .iter()
-        .any(|t| t.repo().as_ref() == Ok(repo));
+        .any(|t| t.repo().is_ok_and(|r| r.lowercased() == want));
     if !pushes_there {
         return Err(GrantRefused::NotAProjectRepo);
     }

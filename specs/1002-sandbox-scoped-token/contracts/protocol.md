@@ -2,7 +2,7 @@
 
 Added to `micold-core/src/protocol/messages.rs`. `PROTOCOL_VERSION` is bumped and `SCHEMA_HASH`
 changes. Only sandboxed daemons (container, Kubernetes) act on them; a host-process or remote SSH
-daemon answers `GitCredentialGrant` with `RefusedRequest` and never sends targets.
+daemon answers `GitCredentialGrant` with an `OperationError` (`Refused`, `req: u64::MAX`) and never sends targets.
 
 ## DaemonMsg::GitCredentialTargets
 
@@ -45,4 +45,4 @@ GitCredentialRevoke { repo: GithubRepo }
 - The daemon never forwards a token to another daemon, a session's environment, or a file outside
   `/run/micold/git`.
 - `GitCredentialGrant` for a repository none of the daemon's projects pushes to is refused
-  (`RefusedRequest`), so a client bug cannot widen a daemon's reach.
+  (an `OperationError`, `Refused`), so a client bug cannot widen a daemon's reach.
