@@ -1295,7 +1295,7 @@ async fn container_attempt(
     // minutes: say so in the row instead of leaving it on a bare "starting" (feature 806).
     sink(ProvisionEvent::Entered(Step::Acquire));
     let (runtime, name) = (reach.runtime, reach.container_name.to_string());
-    let mut undo = StartRollback::new(roll_back.then(|| {
+    let mut undo = StartRollback::new((roll_back || reach.bring_up.is_some()).then(|| {
         Box::new(move |ledger: AttemptLedger| {
             let _ =
                 micold_core::provision::rollback(&ledger, &CliRuntime::new(runtime, SystemRunner));
