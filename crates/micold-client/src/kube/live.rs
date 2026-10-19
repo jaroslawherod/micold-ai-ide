@@ -40,6 +40,13 @@ pub struct ContextEntry {
     pub namespace: Option<String>,
 }
 
+impl std::fmt::Display for ContextEntry {
+    /// The context's name, which is what a select lists it as.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name)
+    }
+}
+
 /// The contexts of `config`, in the order the files and the file lists give them.
 pub fn list_contexts(config: &Kubeconfig) -> Vec<ContextEntry> {
     config

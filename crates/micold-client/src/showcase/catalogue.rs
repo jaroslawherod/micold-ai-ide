@@ -693,6 +693,18 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::surfaces::accordion_section,
     },
     Entry {
+        module: "material/field_group.rs",
+        component: "FieldGroup",
+        variants: &[],
+        density: &[],
+        posed: &["with a note", "without a note"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::surfaces::field_group,
+    },
+    Entry {
         module: "material/toolbar.rs",
         component: "Toolbar",
         variants: &[],

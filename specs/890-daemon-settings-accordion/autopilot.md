@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #890
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
-- **Phase**: M2
-- **Next step**: M2 PR opened by the orchestrator (title and body in the scratchpad); wait for CI, merge, then M3
+- **Phase**: M3
+- **Next step**: M3 PR opened by the orchestrator (title and body in the scratchpad); wait for CI, merge, then close
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1063 | Design: spec, plan, tasks | merged (rebase) | ad4d1946127e6dc0c06e4add04416f2fc962db00 |
 | #1068 | M1: AccordionSection summary and required marker | merged (rebase) | c0507555cf2611f462f7a55a590087b57730364f |
+| #1075 | M2: daemon forms in sections | merged (rebase) | b33e26ed297d0b02dc5f0864c640da7d9768ecb6 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | #1068 | merged |
-| M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | (orchestrator opens) | in review |
-| M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | — | pending |
+| M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | #1075 | merged |
+| M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | (orchestrator opens) | in review |
 
 ## Decisions
 
@@ -56,6 +57,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 (code-review high, headless) | 1 | be7183037bd8e32b5f7cf0ba45918bbf1f2b3f23:d53128e282e961dc1276cca8a18b84ebcca69cc8 | 2 MAJOR + 5 MINOR: both MAJOR fixed with tests first (a click on an error-held section is not recorded; `allowed` refusal maps to Credentials and is shown there); MINOR same-kind re-choice no longer clears the flips (fixed); 4 MINOR declined |
 | Review B M2 (conformance, sonnet) | 1 | be7183037bd8e32b5f7cf0ba45918bbf1f2b3f23:d53128e282e961dc1276cca8a18b84ebcca69cc8 | CLEAN; 2 MINOR: F1 fixed (T009 red measured on origin/main: Cancel bottom 1851 > 800; cycle-log), F2 its scratch worktree, outside the repo |
 | Visual pass M2 (quickstart B2–B3) | 1 | — | PASS light; dark Container + Resources error; Tab walk and dark Host/SSH/Kubernetes not judged; visual-pass/m2/ |
+| Review A M3 (headless reviewer, high-level correctness) | 1 | ff248a7331fa644dfa71963d23b13b695d01150a:b33e26ed297d0b02dc5f0864c640da7d9768ecb6 | CLEAN |
+| Review B M3 (conformance, sonnet) | 1 | ff248a7331fa644dfa71963d23b13b695d01150a:b33e26ed297d0b02dc5f0864c640da7d9768ecb6 | CHANGES: F1 BLOCKER lib test did not compile (fixed, 809 lib tests pass); F2 MAJOR no M3 cycle-log (written, says honestly no separate red run); F3 MINOR T028 open until visual pass; F1 fix verified by the full gate rather than a second round (the gate runs `--lib`) |
+| Visual pass M3 (quickstart B4–B6, headless `claude -p`; the skill's fork got no args) | 1 | — | PASS all 9 checks, light + dark, 640 px Kubernetes; D1 (select long value wraps and clips at 640 px) left as a follow-up; visual-pass/m3/ |
 
 ## Declined review findings
 
@@ -83,4 +87,5 @@ None.
 
 ## Follow-ups not done
 
+- Shared `Select` wraps and clips a long selected value at a narrow width (visual-pass/m3 D1, seen with a 48-character kube context); a daemon row's action row clips at 640 px for an Unreachable daemon (D2, untouched by 890).
 - M1 visual pass: on an inert header (no `on_toggle`, the showcase's static poses) the title dims as a disabled button but the summary keeps `on_surface_variant`. Every daemon-form section has a toggle, so no form shows it; dim the summary with the header if an inert use appears.

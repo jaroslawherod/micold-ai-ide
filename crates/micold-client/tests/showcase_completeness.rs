@@ -838,6 +838,22 @@ fn the_accordion_section_poses_its_summary_and_marker() {
     );
 }
 
+/// Feature 890 (FR-008, T019): the catalogue lists `FieldGroup`, posed with a note and without.
+#[test]
+fn the_field_group_is_listed_with_and_without_a_note() {
+    let entry = COMPONENTS
+        .iter()
+        .find(|e| e.module == "material/field_group.rs" && e.component == "FieldGroup")
+        .expect("the gallery has a `material/field_group.rs` / `FieldGroup` entry");
+    for pose in ["with a note", "without a note"] {
+        assert!(
+            entry.posed.contains(&pose),
+            "the FieldGroup entry poses `{pose}`: {:?}",
+            entry.posed
+        );
+    }
+}
+
 /// The gallery poses a disabled `ToggleChip` (feature 034, T021 — U65): the GitHub issue chip is
 /// disabled whenever the repository has no GitHub remote, so the disabled treatment is a state
 /// users see and the gallery has to show it.

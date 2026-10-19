@@ -274,6 +274,31 @@ pub fn accordion_section<'a>(
     )
 }
 
+/// `FieldGroup` — a labelled group of checkboxes with a note under its label, and without one
+/// (feature 890, FR-008).
+pub fn field_group<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let group = |note: Option<&str>| {
+        let mut group = material::FieldGroup::new("AI tools in this daemon", roles)
+            .push(material::Checkbox::new("Claude Code", true, roles).on_toggle(|_| Message::NoOp))
+            .push(material::Checkbox::new("Codex", false, roles).on_toggle(|_| Message::NoOp));
+        if let Some(note) = note {
+            group = group.note(note);
+        }
+        group
+    };
+    arrange(
+        vec![
+            posed(
+                "with a note",
+                group(Some("Installed when the pod starts.")),
+                roles,
+            ),
+            posed("without a note", group(None), roles),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// `Toolbar` — a title alone, and a title with actions.
 pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(

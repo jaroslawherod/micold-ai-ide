@@ -14,21 +14,22 @@
 //! carrying the runtime's own reason is the only arrangement that does all three.
 
 use crate::app::Message;
+use crate::features::daemon_sections::{marked, summary};
 use crate::features::daemons::ImageKind;
+use crate::features::daemons::{Draft, State};
 use crate::features::daemons::{Msg as DaemonsMsg, Section};
 use crate::features::sandbox::SandboxLimit;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{AccordionSection, Checkbox, Select, TextField};
-use crate::ui::settings::{caution, field_note, name_of, note, Named};
-use iced::widget::column;
+use crate::ui::material::{AccordionSection, Checkbox, FieldGroup, Select, TextField};
+use crate::ui::settings::{caution, field_note, name_of, note, section_body, Named};
 use iced::Element;
 use micold_core::required::FieldRequirement;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::{LimitSupport, RuntimeCapabilities, RuntimeKind};
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
 use micold_core::session::AiCli;
-use micold_core::tokens::{spacing, Roles};
+use micold_core::tokens::Roles;
 
 const RUNTIMES: &[Named<RuntimeKind>] = &[
     Named(RuntimeKind::Docker, "Docker"),
@@ -398,22 +399,22 @@ pub fn survival_note<'a>(placement: PlacementKind, roles: Roles) -> Element<'a, 
     }
 }
 
-/// One titled [`AccordionSection`] around `controls`, open as `is_open` says and toggled by its
-/// header (feature 890, FR-001, FR-004).
+/// One titled [`AccordionSection`] around `body`, open as `is_open` says and toggled by its header,
+/// showing the section's summary and required marker while closed (feature 890, FR-001, FR-004,
+/// FR-014).
 pub fn accordion<'a>(
     section: Section,
-    controls: Vec<Element<'a, Message>>,
+    body: Element<'a, Message>,
     is_open: bool,
+    draft: &Draft,
     roles: Roles,
 ) -> Element<'a, Message> {
-    AccordionSection::new(
-        section.title(),
-        column(controls).spacing(spacing::SM),
-        roles,
-    )
-    .open(is_open)
-    .on_toggle(Message::Daemons(DaemonsMsg::SectionToggled(section)))
-    .into()
+    AccordionSection::new(section.title(), body, roles)
+        .open(is_open)
+        .on_toggle(Message::Daemons(DaemonsMsg::SectionToggled(section)))
+        .summary_maybe(summary(draft, section))
+        .required(marked(draft, section))
+        .into()
 }
 
 /// The six container sections, from the connection to the survive-logout opt-in, each a titled
@@ -426,9 +427,12 @@ pub fn sections<'a>(
     errors: FieldErrors,
     missing_cli: Option<String>,
     focused: Option<FieldId>,
-    is_open: impl Fn(Section) -> bool,
+    state: &State,
     roles: Roles,
 ) -> Vec<Element<'a, Message>> {
+    let Some(draft) = state.draft.as_ref() else {
+        return Vec::new();
+    };
     let runtime = Select::new(
         RUNTIMES,
         Some(Named(
@@ -490,43 +494,37 @@ pub fn sections<'a>(
         container.push(archive.into());
     }
 
-    container.push(note("AI tools in this daemon", roles));
+    let mut tools = FieldGroup::new("AI tools in this daemon", roles).note(AI_CLI_NOTE);
     for (cli, name, on) in ai_cli_rows(view.profile) {
-        container.push(
+        tools = tools.push(
             Checkbox::new(name, on, roles)
                 .track_focus(FieldId::DaemonAiCli(cli), focused)
-                .on_toggle(move |checked| Message::Daemons(DaemonsMsg::AiCliToggled(cli, checked)))
-                .into(),
+                .on_toggle(move |checked| Message::Daemons(DaemonsMsg::AiCliToggled(cli, checked))),
         );
     }
-    container.push(note(AI_CLI_NOTE, roles));
+    container.push(tools.into());
 
-    let mut credentials: Vec<Element<'a, Message>> = vec![note(
-        "The container starts with none of your credentials. Share only what the agent needs.",
-        roles,
-    )];
-
+    let mut shares = FieldGroup::new("Shared with the container", roles);
     for share in CredentialShare::ALL {
         let on = view.profile.credentials.contains(&share);
-        credentials.push(
+        shares = shares.push(
             Checkbox::new(share.label(), on, roles)
                 .track_focus(FieldId::DaemonCredential(share), focused)
                 .on_toggle(move |checked| {
                     Message::Daemons(DaemonsMsg::CredentialToggled(share, checked))
-                })
-                .into(),
+                }),
         );
         // FR-004g: directly under the share it is about, so it cannot be read as the next one's.
         if share == CredentialShare::AiCliAuth {
             if let Some(notice) = unshared_sign_in_notice(view) {
-                credentials.push(caution(notice, roles));
+                shares = shares.push(caution(notice, roles));
             }
         }
     }
-
     if let Some(summary) = sharing_summary(view) {
-        credentials.push(caution(summary, roles));
+        shares = shares.push(caution(summary, roles));
     }
+    let credentials: Vec<Element<'a, Message>> = vec![shares.into()];
 
     let network = Select::new(
         NETWORKS,
@@ -537,23 +535,18 @@ pub fn sections<'a>(
         |chosen: Named<NetworkPosture>| Message::Daemons(DaemonsMsg::NetworkChosen(chosen.0)),
         roles,
     )
-    .label("Network");
+    .label("Network")
+    .supporting(
+        "Names still resolve either way — the runtime's resolver answers from the host side. \
+         Blocked means connections fail, not that nothing leaves the container.",
+    );
 
     let mut net: Vec<Element<'a, Message>> = vec![network.into()];
     if let Some(warning) = network_warning(view) {
         net.push(caution(warning, roles));
     }
-    net.push(note(
-        "Names still resolve either way — the runtime's resolver answers from the host side. \
-         Blocked means connections fail, not that nothing leaves the container.",
-        roles,
-    ));
 
-    let mut limit_fields: Vec<Element<'a, Message>> = vec![note(
-        "What the sandbox may consume. A limit the runtime cannot enforce is shown, and says so, \
-         rather than being quietly dropped.",
-        roles,
-    )];
+    let mut limit_fields: Vec<Element<'a, Message>> = Vec::new();
     let [e0, e1, e2, e3] = errors.limits;
     for (l, error) in limits(view).into_iter().zip([e0, e1, e2, e3]) {
         limit_fields.push(limit_field(l, error, focused, roles));
@@ -563,15 +556,32 @@ pub fn sections<'a>(
         vec![survive.into(), survival_note(view.placement, roles)];
 
     [
-        (Section::Connection, connection),
-        (Section::Container, container),
-        (Section::Credentials, credentials),
-        (Section::Network, net),
-        (Section::Resources, limit_fields),
-        (Section::Sessions, sessions),
+        (Section::Connection, None, connection),
+        (Section::Container, None, container),
+        (
+            Section::Credentials,
+            Some(
+                "The container starts with none of your credentials. Share only what the agent \
+                 needs.",
+            ),
+            credentials,
+        ),
+        (Section::Network, None, net),
+        (
+            Section::Resources,
+            Some(
+                "What the sandbox may consume. A limit the runtime cannot enforce is shown, and \
+                 says so, rather than being quietly dropped.",
+            ),
+            limit_fields,
+        ),
+        (Section::Sessions, None, sessions),
     ]
     .into_iter()
-    .map(|(section, controls)| accordion(section, controls, is_open(section), roles))
+    .map(|(section, lead, controls)| {
+        let body = section_body(lead, controls, roles);
+        accordion(section, body, state.section_open(section), draft, roles)
+    })
     .collect()
 }
 
@@ -777,6 +787,9 @@ mod tests {
     #[test]
     fn the_container_section_builds_for_both_image_choices() {
         let [basic, own] = both_choices();
+        let mut app = crate::app::State::default();
+        app.update(Message::Daemons(DaemonsMsg::AddOpened));
+        let form = &app.daemon_list;
         let count = |profile: &SandboxProfile| {
             let view = view_of(profile, None);
             // One accordion per section; the container section is open.
@@ -786,7 +799,7 @@ mod tests {
                 FieldErrors::default(),
                 None,
                 None,
-                |s| s == Section::Container,
+                form,
                 micold_core::tokens::roles(micold_core::theme::ColorScheme::Dark),
             )
             .len()

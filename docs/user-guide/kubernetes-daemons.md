@@ -9,9 +9,11 @@ credential, and needs neither `kubectl`, a registry nor a local container runtim
 1. Open **Settings > Daemons** and choose **Add daemon**.
 2. Name it, and set **Runs in** to **Kubernetes**.
 3. The form groups the rest in sections: **Connection** (open first), **Image**, **Credentials**,
-   **Resources** and **Placement and storage**; a section with an error opens itself. In
-   **Connection**, choose the **Context** (the form lists the contexts of your kubeconfig) and enter the
-   **Namespace**. Everything else about reaching the cluster comes from the kubeconfig. Micold does
+   **Resources** and **Placement and storage**; a section with an error opens itself. A closed
+   section shows a one-line summary of its settings, and a `*` after its title when a required field
+   inside it is empty. In **Connection**, choose the **Context** from the **Context from your
+   kubeconfig** select above the **Context** field (it appears when the kubeconfig lists contexts;
+   you can still type a context in **Context**) and enter the **Namespace**. Everything else about reaching the cluster comes from the kubeconfig. Micold does
    not create namespaces.
 4. In **Image**, tick the **AI CLIs installed in the pod when it starts**; in **Credentials**, tick
    any credentials the pod may use (see [Allowed credentials](#allowed-credentials)).

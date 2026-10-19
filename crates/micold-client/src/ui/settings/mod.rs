@@ -93,6 +93,32 @@ pub fn page<'a>(
     body.into()
 }
 
+/// The vertical gap between consecutive controls in a daemon form section's body, and inside a
+/// [`FieldGroup`](crate::ui::material::FieldGroup), which spaces its children with the same
+/// `spacing::SM` itself (it must not import this module) (feature 890, FR-006).
+pub(crate) const FIELD_GAP: f32 = spacing::SM;
+
+/// The vertical gap between consecutive sections of a daemon form, and between *Runs in* and the
+/// first section (feature 890, FR-006).
+pub(crate) const SECTION_GAP: f32 = spacing::SM;
+
+/// A form section's body: the optional section-wide `note` as its first line (muted caption), then
+/// the `controls`, `FIELD_GAP` apart (feature 890, FR-006, FR-007).
+pub fn section_body<'a>(
+    note_text: Option<&str>,
+    controls: Vec<Element<'a, Message>>,
+    roles: Roles,
+) -> Element<'a, Message> {
+    let mut body = column![].spacing(FIELD_GAP).width(Length::Fill);
+    if let Some(text) = note_text {
+        body = body.push(note(text.to_string(), roles));
+    }
+    for control in controls {
+        body = body.push(control);
+    }
+    body.into()
+}
+
 /// A heading over a group of controls inside a page — a name for the group, never for one control,
 /// which carries its own label inside its container (§7.7, FR-031a).
 pub fn group<'a>(title: &'static str, roles: Roles) -> Element<'a, Message> {
