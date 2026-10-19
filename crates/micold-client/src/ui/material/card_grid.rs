@@ -283,8 +283,8 @@ impl<M> Grid<'_, M> {
             .find(|piece| piece.rect.contains(local))
             .map_or(mouse::Cursor::Unavailable, |piece| {
                 mouse::Cursor::Available(Point::new(
-                    position.x + node_at.x - piece.origin.x,
-                    position.y + node_at.y - piece.origin.y,
+                    local.x - piece.origin.x + node_at.x,
+                    local.y - piece.origin.y + node_at.y,
                 ))
             })
     }
@@ -1135,5 +1135,49 @@ mod tests {
             full_row >= normal_row + freed - EPS,
             "{full_row} vs {normal_row}"
         );
+    }
+
+    /// 970: the pointer maps onto the card's primary box when the grid is not at (0, 0) and the
+    /// card is split at a row end; outside every piece it is unavailable.
+    #[test]
+    fn cursor_maps_into_the_primary_box_with_a_grid_origin() {
+        let mut state = ZoomState::new(true);
+        state.ends = Some((100.0, 200.0));
+        let piece = |x: f32, y: f32, ox: f32, node: usize| Piece {
+            card: 3,
+            rect: Rectangle::new(Point::new(x, y), Size::new(50.0, 40.0)),
+            origin: Point::new(ox, y),
+            node,
+        };
+        // Primary piece at (10, 0) in the grid; the tail is on the next row, card begins at -30.
+        state.pieces = vec![piece(10.0, 0.0, 10.0, 0), piece(0.0, 60.0, -30.0, 0)];
+        let grid_origin = Point::new(24.0, 80.0);
+        let node_at = Point::new(grid_origin.x + 10.0, grid_origin.y);
+        let at = |p: Point| {
+            Grid::<()>::cursor_for_state(
+                &state,
+                grid_origin,
+                3,
+                node_at,
+                mouse::Cursor::Available(p),
+            )
+        };
+        let expect = |c: mouse::Cursor, x: f32, y: f32| {
+            let p = c.position().expect("available");
+            assert!(near(p.x, x) && near(p.y, y), "{p:?} != ({x}, {y})");
+        };
+        // Over the primary piece, 5 right and 7 down of its corner.
+        expect(
+            at(Point::new(24.0 + 15.0, 80.0 + 7.0)),
+            node_at.x + 5.0,
+            node_at.y + 7.0,
+        );
+        // Over the tail, 5 right of its corner: card x = 5 - (-30) = 35 into the card.
+        expect(
+            at(Point::new(24.0 + 5.0, 80.0 + 65.0)),
+            node_at.x + 35.0,
+            node_at.y + 5.0,
+        );
+        assert!(at(Point::new(24.0 + 200.0, 80.0)).position().is_none());
     }
 }

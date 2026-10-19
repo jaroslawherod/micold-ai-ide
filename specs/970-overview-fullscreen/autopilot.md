@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
 - **Phase**: implement M2
-- **Next step**: M2 — see Handover
+- **Next step**: M2 — F1 fixed; scoped gate + review A round 2 running
 
 ## Pull requests
 
