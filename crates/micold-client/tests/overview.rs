@@ -306,19 +306,20 @@ fn the_default_card_is_never_pull_request_derived() {
 }
 
 #[test]
-fn the_summary_is_the_branch_else_the_display_name_and_default_is_project_root() {
+fn the_title_is_the_branch_else_the_display_name() {
     let state = project_with(vec![
         worktree("feat-a", Some("feat/a"), WorktreeStatus::Valid, false),
         worktree("gone", None, WorktreeStatus::Missing, false),
     ]);
     let all = cards(&state);
+    let root = card(&all, &SessionLocation::Default);
     assert_eq!(
-        card(&all, &SessionLocation::Default).summary,
-        "Project root"
+        root.title, root.display_name,
+        "the root has no branch on its card"
     );
-    assert_eq!(card(&all, &wt("feat-a")).summary, "feat/a");
+    assert_eq!(card(&all, &wt("feat-a")).title, "feat/a");
     let gone = card(&all, &wt("gone"));
-    assert_eq!(gone.summary, gone.display_name);
+    assert_eq!(gone.title, gone.display_name);
 }
 
 #[test]
@@ -922,30 +923,31 @@ fn a_progress_reading_is_kept_per_worktree_and_a_project_switch_clears_it_and_th
     assert!(state.overview.titles.is_empty());
 }
 
-/// US4.1, FR-015: a known title is the summary; every other lookup, a Jira ticket and a worktree
-/// without a ticket fall back to the branch; Default stays *Project root*.
+/// US2.1, US2.2, FR-006: a known issue title is the title; every other lookup, a Jira ticket and a
+/// worktree without a ticket fall back to the branch; Default is its display name.
 #[test]
-fn the_summary_is_the_known_title_else_the_branch() {
+fn the_title_is_the_known_issue_title_else_the_branch() {
     let mut state = ticketed();
     assert_eq!(
-        ticketed_card(&state).summary,
+        ticketed_card(&state).title,
         "feat/813-worktree-overview",
         "no entry"
     );
     title_read(&mut state, 813, TitleLookup::Pending);
-    assert_eq!(ticketed_card(&state).summary, "feat/813-worktree-overview");
+    assert_eq!(ticketed_card(&state).title, "feat/813-worktree-overview");
     title_read(&mut state, 813, TitleLookup::Unavailable);
-    assert_eq!(ticketed_card(&state).summary, "feat/813-worktree-overview");
+    assert_eq!(ticketed_card(&state).title, "feat/813-worktree-overview");
     title_read(
         &mut state,
         813,
         TitleLookup::Known("Worktree overview".into()),
     );
-    assert_eq!(ticketed_card(&state).summary, "Worktree overview");
+    assert_eq!(ticketed_card(&state).title, "Worktree overview");
+    let all = cards(&state);
+    let root = card(&all, &SessionLocation::Default);
     assert_eq!(
-        card(&cards(&state), &SessionLocation::Default).summary,
-        "Project root",
-        "a title never replaces the project root"
+        root.title, root.display_name,
+        "a title never replaces the project root's name"
     );
     let mut jira = project_with(vec![worktree(
         "feat-ABC-12_thing",
@@ -955,7 +957,7 @@ fn the_summary_is_the_known_title_else_the_branch() {
     )]);
     title_read(&mut jira, 12, TitleLookup::Known("Not this one".into()));
     assert_eq!(
-        card(&cards(&jira), &wt("feat-ABC-12_thing")).summary,
+        card(&cards(&jira), &wt("feat-ABC-12_thing")).title,
         "feat/ABC-12-thing"
     );
 }
@@ -1151,8 +1153,8 @@ fn hook_activity_reaches_the_main_sessions_card_beside_the_task_list_ratio() {
     let activity = card(&all, &wt("feat-a")).activity.clone().unwrap();
     assert_eq!(activity.line, "Writing tests");
     assert_eq!(activity.ratio.map(|r| (r.done, r.total)), Some((2, 5)));
-    // Story 4's summary stays what it was.
-    assert_eq!(card(&all, &wt("feat-a")).summary, "feat/a");
+    // Story 4's title stays what it was.
+    assert_eq!(card(&all, &wt("feat-a")).title, "feat/a");
 }
 
 #[test]
@@ -1171,7 +1173,7 @@ fn without_hook_data_or_after_a_reconnect_the_card_falls_back() {
     adopt(&mut state, &session, None);
     let all = cards(&state);
     assert!(card(&all, &wt("feat-a")).activity.is_none());
-    assert_eq!(card(&all, &wt("feat-a")).summary, "feat/a");
+    assert_eq!(card(&all, &wt("feat-a")).title, "feat/a");
 }
 
 #[test]

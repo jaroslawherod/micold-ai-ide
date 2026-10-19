@@ -130,7 +130,8 @@ pub enum PrDisplay {
 }
 
 impl PrDisplay {
-    /// The card footer's text and, for an unknown mark, its tooltip; `None` when hidden. A capped
+    /// The pull request row's text and, for an unknown mark, its tooltip (C9, FR-010); `None` when
+    /// hidden or both counts are 0, and a count of 0 beside a non-zero one is left out. A capped
     /// count reads *100+*.
     pub fn footer(self) -> Option<(String, Option<String>)> {
         let count = |n: u8, capped: bool| {
@@ -143,14 +144,18 @@ impl PrDisplay {
         match self {
             Self::Hidden => None,
             Self::Unknown(reason) => Some(("\u{2014}".to_string(), Some(reason.label()))),
-            Self::Counts(c) => Some((
-                format!(
-                    "{} open \u{b7} {} merged",
-                    count(c.open, c.open_capped),
-                    count(c.merged, c.merged_capped)
-                ),
-                None,
-            )),
+            Self::Counts(c) => {
+                let open = (c.open > 0 || c.open_capped)
+                    .then(|| format!("{} open", count(c.open, c.open_capped)));
+                let merged = (c.merged > 0 || c.merged_capped)
+                    .then(|| format!("{} merged", count(c.merged, c.merged_capped)));
+                let text = match (open, merged) {
+                    (None, None) => return None,
+                    (Some(one), None) | (None, Some(one)) => one,
+                    (Some(open), Some(merged)) => format!("{open} \u{b7} {merged}"),
+                };
+                Some((text, None))
+            }
         }
     }
 }
@@ -387,8 +392,9 @@ pub struct CardModel {
     pub state: CardState,
     /// Why it is in that state.
     pub reason: CardReason,
-    /// The one line saying what the location is for.
-    pub summary: String,
+    /// The card's title: the issue title, else the branch, else the display name (FR-006,
+    /// [`card_title`](crate::overview_text::card_title)).
+    pub title: String,
     /// Its pull request counts, or why there are none.
     pub prs: PrDisplay,
     /// The feature's phase and task ratio, or none (data-model *CardModel*, R9).
@@ -1053,6 +1059,32 @@ mod tests {
         assert_eq!(idle.activation, Activation::OfferStart(worktree("a")));
     }
 
+    /// C9, FR-010, US2.7: no row at 0 · 0; one count alone when the other is 0; the unknown mark
+    /// keeps its reason.
+    #[test]
+    fn the_pull_request_row_hides_zero_counts() {
+        let counts = |open: u8, merged: u8, open_capped: bool| {
+            PrDisplay::Counts(PrCounts {
+                open,
+                merged,
+                open_capped,
+                merged_capped: false,
+            })
+            .footer()
+        };
+        let text = |s: &str| Some((s.to_string(), None));
+        assert_eq!(counts(0, 0, false), None, "nothing to say: no row");
+        assert_eq!(counts(1, 0, false), text("1 open"));
+        assert_eq!(counts(0, 2, false), text("2 merged"));
+        assert_eq!(counts(1, 2, false), text("1 open \u{b7} 2 merged"));
+        assert_eq!(counts(100, 0, true), text("100+ open"), "a capped count");
+        assert_eq!(PrDisplay::Hidden.footer(), None);
+        assert_eq!(
+            PrDisplay::Unknown(PrUnknown::Unreachable).footer(),
+            Some(("\u{2014}".to_string(), Some(PrUnknown::Unreachable.label())))
+        );
+    }
+
     fn card(name: &str, state: CardState) -> CardModel {
         CardModel {
             location: worktree(name),
@@ -1062,7 +1094,7 @@ mod tests {
             sessions: (0, 0),
             state,
             reason: CardReason::Idle,
-            summary: name.into(),
+            title: name.into(),
             prs: PrDisplay::Hidden,
             progress: Default::default(),
             activity: None,

@@ -37,19 +37,21 @@ open and shows the new project's cards.
 Each card shows:
 
 - the location's **type**, as an icon and a word (the word leads the footer line, and is also the icon's tooltip);
-- its name, and the branch below it;
-- a one-line summary (see [The summary line](#the-summary-line));
-- its session counts: how many sessions there are and how many are running;
+- its **title**, which says what the location is for (see [Title](#title)); hover it for the location's folder name;
+- below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. Hover it for the full branch name. A card whose title already is the branch does not repeat it;
+- its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
 - its **state**, as an icon and a word. Hover for the reason;
 - when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
-- a **progress row** (see [Feature progress](#feature-progress));
-- for a card with a branch, its **pull request counts**, such as *1 open · 2 merged* (drafts count as open; a count of 100 or more reads *100+*).
+- a **progress row**, when there is progress to show (see [Feature progress](#feature-progress));
+- for a card with a branch, its **pull request counts** (see [Pull request counts](#pull-request-counts)).
 
-## The summary line
+A row with nothing to say is not shown.
 
-The summary says what the location is for. For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) it is the **issue's title**, once the app has it. Otherwise it is the **branch** (or the display name when there is no branch). Default reads *Project root*.
+### Title
 
-Titles come from the issues the New-worktree form already loaded, or from one read of each issue when the Overview opens, when the project is on GitHub and `gh` is available. A Jira ticket, an offline machine, a closed issue or a missing `gh` leave the branch as the summary. Each title is read once while the app runs, and is never written to a log.
+For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. Otherwise it is the **branch**, or the location's folder name when there is no branch: Default's title is *Default*. The folder name always shows when you hover the title.
+
+Titles come from the issues the New-worktree form already loaded, or from one read of each issue when the Overview opens, when the project is on GitHub and `gh` is available. A Jira ticket, an offline machine, a closed issue or a missing `gh` leave the branch as the title. Each title is read once while the app runs, and is never written to a log.
 
 ## Feature progress
 
@@ -62,7 +64,7 @@ The progress row reads the worktree's own files, so it needs no session. It show
   3. *PR* when the branch has an open pull request;
   4. otherwise what the files imply: `tasks.md` with a ticked task is *Implement*, `tasks.md` alone is *Tasks*, then `plan.md` is *Plan*, then `spec.md` is *Spec*.
 - **No bar without a ratio**: a phase without a task list shows the phase alone.
-- **Empty state**: with nothing to read, the row says *No task progress* and shows no bar.
+- **Nothing to show**: with neither a phase nor a task list, the card has no progress row.
 
 The files are watched only while the Overview is open: each worktree is read once on opening and again shortly after a change, so a card follows the files within 5 seconds.
 
@@ -70,11 +72,13 @@ The files are watched only while the Overview is open: each worktree is read onc
 
 When the location's main session runs an agent CLI with **hooks configured** (Claude Code with the app's hooks installed), the card shows an **activity line** above the progress row: the agent's in-progress todo, else the latest prompt you submitted shortened to one line, with the todo list's done / total after it (*Writing tests · 2/5*). The task-list ratio of the progress row stays below it as the feature's progress.
 
-Without hooks, with a session that has reported nothing yet, or while the window reconnects to the service, there is no activity line and the card shows the summary and progress described above, without an error.
+Without hooks, with a session that has reported nothing yet, or while the window reconnects to the service, there is no activity line and the card shows the title and progress described above, without an error.
 
 The todo text and prompt stay on your machine: the hooks report them to the app's own service, which hands them to the window over the same local connection. They are held in memory only, never written to a log or to the saved session list, and sent nowhere else.
 
 ## Pull request counts
+
+The row shows the branch's open and merged pull requests, such as *1 open · 2 merged*; drafts count as open, and a count of 100 or more reads *100+*. A count of 0 is left out (*1 open*, *2 merged*), and with both at 0 the card has no pull request row.
 
 The counts come from the pull request status the app already reads; the Overview starts no reading of its own. When they cannot be read, the card shows a dash (*—*) and its tooltip says why:
 

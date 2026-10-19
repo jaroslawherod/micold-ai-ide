@@ -137,7 +137,7 @@ mod tests {
                         sessions: (1, 0),
                         state: CardState::Idle,
                         reason: CardReason::Idle,
-                        summary: "s".into(),
+                        title: "s".into(),
                         prs: micold_core::overview::PrDisplay::Hidden,
                         progress: Default::default(),
                         activity: None,

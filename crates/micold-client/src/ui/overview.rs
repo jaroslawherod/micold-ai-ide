@@ -241,12 +241,12 @@ fn card(app: &State, place: &Place) -> CardModel {
         SessionLocation::Worktree(dir) => crate::features::overview::numeric_ticket(dir),
         SessionLocation::Default => None,
     };
-    let summary = crate::features::overview::summary(
-        &location,
-        &display_name,
-        branch.as_deref(),
-        ticket.and_then(|number| app.overview.titles.get(&number)),
-    );
+    let issue_title = match ticket.and_then(|number| app.overview.titles.get(&number)) {
+        Some(crate::features::overview::TitleLookup::Known(text)) => Some(text.as_str()),
+        _ => None,
+    };
+    let title =
+        micold_core::overview_text::card_title(issue_title, branch.as_deref(), &display_name);
     let pr_open = matches!(
         pr_signal(&app.pr_status, branch.as_deref()),
         PrSignal::Known { current: Some(current), .. } if current.open
@@ -267,7 +267,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         sessions: session_counts(sessions.iter().copied()),
         state,
         reason,
-        summary,
+        title,
         progress,
         activity,
         prs: pr_display(&app.pr_status, branch_ref),
