@@ -123,17 +123,43 @@ pub fn progress_row(progress: &crate::task_progress::Progress) -> Option<Progres
     })
 }
 
+/// What an activity text says (contract C2): its words without markup ([`readable`]), and a slash
+/// command as a sentence, *Running autopilot on #1117*; `None` when nothing readable is left.
+///
+/// [`readable`]: crate::markup::readable
+pub fn activity_text(text: &str) -> Option<String> {
+    let words = crate::markup::readable(text)?;
+    let Some(command) = words.strip_prefix('/') else {
+        return Some(words);
+    };
+    let (name, args) = command.split_once(' ').unwrap_or((command, ""));
+    let is_name = |c: char| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':' | '.');
+    if name.is_empty() || !name.chars().all(is_name) {
+        return Some(words);
+    }
+    let name = match name.strip_prefix("speckit-") {
+        Some(rest) if !rest.is_empty() => rest,
+        _ => name,
+    };
+    let name = name.replace('-', " ");
+    let name = name.trim();
+    if name.is_empty() {
+        return Some(words);
+    }
+    Some(match args {
+        "" => format!("Running {name}"),
+        args => format!("Running {name} on {args}"),
+    })
+}
+
 /// The activity line with its todo ratio (*Writing tests · 2/5*), the same text as tooltip; `None`
 /// for no activity or a blank line, so a ratio never shows alone (C3).
 pub fn activity_line(activity: Option<&crate::hook_activity::CurrentActivity>) -> Option<Line> {
     let activity = activity?;
-    let line = activity.line.trim();
-    if line.is_empty() {
-        return None;
-    }
+    let line = activity_text(&activity.line)?;
     let text = match activity.ratio {
         Some(r) => format!("{line} \u{b7} {}/{}", r.done, r.total),
-        None => line.to_string(),
+        None => line,
     };
     Some(Line {
         tooltip: text.clone(),
@@ -345,6 +371,73 @@ mod tests {
             activity_line(Some(&activity("   ", Some(ratio(1, 2))))),
             None,
             "a blank line is not shown, and the ratio not alone"
+        );
+    }
+
+    /// C2: markup removed, a slash command read as a sentence.
+    #[test]
+    fn a_slash_command_reads_as_a_sentence() {
+        for (text, want) in [
+            ("/speckit-autopilot #1117", "Running autopilot on #1117"),
+            ("/clear", "Running clear"),
+            ("/compact keep the plan", "Running compact on keep the plan"),
+            (
+                r#"/speckit-autopilot <agent-message from="o">#1117</agent-message>"#,
+                "Running autopilot on #1117",
+            ),
+            ("/speckit-", "Running speckit"),
+            ("/etc", "Running etc"),
+            ("/speckit-tdd-run", "Running tdd run"),
+        ] {
+            assert_eq!(activity_text(text).as_deref(), Some(want), "{text}");
+        }
+    }
+
+    /// C2: a path, a lone slash and plain words stay as written; markup only is nothing.
+    #[test]
+    fn other_text_stays_and_markup_only_is_none() {
+        for text in ["/home/user/x", "/", "Writing tests"] {
+            assert_eq!(activity_text(text).as_deref(), Some(text), "{text}");
+        }
+        assert_eq!(
+            activity_text(r#"<agent-message from="x"></agent-message>"#),
+            None
+        );
+    }
+
+    /// C3 with sanitising: the words of a wrapped prompt, on one line; markup only hides the line
+    /// and its ratio; a todo item is sanitised the same way.
+    #[test]
+    fn the_activity_line_shows_no_markup() {
+        let wrapped = activity(
+            r#"<agent-message from="orchestrator">Continue M2</agent-message>"#,
+            None,
+        );
+        assert_eq!(
+            activity_line(Some(&wrapped)),
+            Some(Line {
+                text: "Continue M2".into(),
+                tooltip: "Continue M2".into(),
+            })
+        );
+        let markup_only = activity(
+            "<agent-message from=\"x\"></agent-message>",
+            Some(ratio(1, 2)),
+        );
+        assert_eq!(
+            activity_line(Some(&markup_only)),
+            None,
+            "the ratio never shows alone"
+        );
+        let todo = activity("<b>Writing</b> tests", Some(ratio(2, 5)));
+        assert_eq!(
+            activity_line(Some(&todo)).map(|l| l.text),
+            Some("Writing tests \u{b7} 2/5".into())
+        );
+        let multi = activity("fix the bug\n  and the test", None);
+        assert_eq!(
+            activity_line(Some(&multi)).map(|l| l.text),
+            Some("fix the bug and the test".into())
         );
     }
 

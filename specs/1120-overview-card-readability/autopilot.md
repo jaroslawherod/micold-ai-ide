@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: pr M1
-- **Next step**: orchestrator opens the M1 PR, waits on CI and merges; then M2
+- **Phase**: implement M2
+- **Next step**: M2 implement (T012–T020), then gate, reviews, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1129 | design (spec, plan, tasks) | merged | 5e78699ef85a34cc921da1f4c5e89ecd70b9f1f7 |
+| #1136 | M1 | merged | a658e7575682acda7e881561c13762690df4c428 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Card content from core text rules: issue title, `type/number` branch, sessions line, no empty rows (US2) | — | in progress |
-| M2 | T012–T020 | full | Activity line without markup; slash commands as sentences (US3) | — | planned |
+| M1 | T001–T011 | full | Card content from core text rules: issue title, `type/number` branch, sessions line, no empty rows (US2) | #1136 | merged |
+| M2 | T012–T020 | full | Activity line without markup; slash commands as sentences (US3) | — | in progress |
 | M3 | T021–T030 | full | Larger type, cards grow to fit, even rows (US4) | — | planned |
 | M4 | T031–T039 | full | Tinted header row over a neutral body; showcase, layout snapshot, visual pass (US1) | — | planned |
 

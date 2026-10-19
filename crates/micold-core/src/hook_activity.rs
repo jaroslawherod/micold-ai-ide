@@ -12,7 +12,7 @@ use crate::task_progress::Ratio;
 
 /// At most this many todos are kept.
 pub const MAX_TODOS: usize = 50;
-/// A todo's text, its active form and the prompt line are cut to this many characters.
+/// A todo's text, its active form and the prompt's readable words are cut to this many characters.
 pub const MAX_TEXT_CHARS: usize = 200;
 
 /// A todo's state.
@@ -83,18 +83,17 @@ impl HookActivity {
     pub fn apply(&mut self, body: &Value) -> bool {
         match body.get("hook_event_name").and_then(Value::as_str) {
             Some("UserPromptSubmit") => {
-                let line = body
-                    .get("prompt")
-                    .and_then(Value::as_str)
-                    .and_then(|p| p.lines().map(str::trim).find(|l| !l.is_empty()))
-                    .map(clip);
-                match line {
-                    Some(line) if self.prompt.as_deref() != Some(line.as_str()) => {
-                        self.prompt = Some(line);
-                        true
-                    }
-                    _ => false,
+                let Some(prompt) = body.get("prompt").and_then(Value::as_str) else {
+                    return false;
+                };
+                // Sanitise the whole prompt before clipping, so a clip never cuts a tag in half
+                // (research R8); nothing readable clears the earlier prompt.
+                let prompt = crate::markup::readable(prompt).map(|p| clip(&p));
+                if prompt == self.prompt {
+                    return false;
                 }
+                self.prompt = prompt;
+                true
             }
             Some("PostToolUse")
                 if body.get("tool_name").and_then(Value::as_str) == Some("TodoWrite") =>
@@ -158,23 +157,41 @@ mod tests {
         ])
     }
 
+    fn prompt(text: &str) -> Value {
+        json!({"hook_event_name": "UserPromptSubmit", "prompt": text})
+    }
+
+    /// C10: the whole prompt's words on one line, markup removed; the same again is no change.
     #[test]
-    fn prompt_is_first_non_empty_line() {
+    fn prompt_is_its_readable_words_on_one_line() {
         let mut h = HookActivity::default();
-        let body =
-            json!({"hook_event_name": "UserPromptSubmit", "prompt": "\n  fix the bug\nmore"});
+        let body = prompt("<agent-message from=\"x\">\nContinue M2\n</agent-message>");
         assert!(h.apply(&body));
-        assert_eq!(h.prompt.as_deref(), Some("fix the bug"));
+        assert_eq!(h.prompt.as_deref(), Some("Continue M2"));
         assert!(!h.apply(&body), "same prompt is no change");
+        assert!(h.apply(&prompt("\n  fix the bug\nmore")));
+        assert_eq!(h.prompt.as_deref(), Some("fix the bug more"));
+    }
+
+    /// C10: a prompt with nothing readable clears the earlier one, so it does not linger.
+    #[test]
+    fn a_markup_only_prompt_clears_the_prompt() {
+        let mut h = HookActivity::default();
+        assert!(h.apply(&prompt("Continue M2")));
+        assert!(h.apply(&prompt("<agent-message from=\"x\"></agent-message>")));
+        assert_eq!(h.prompt, None);
+        assert!(!h.apply(&prompt(" \n ")), "still nothing: no change");
     }
 
     #[test]
-    fn prompt_is_clipped_and_blank_prompt_ignored() {
+    fn prompt_is_clipped_after_sanitising() {
         let mut h = HookActivity::default();
-        let long = "x".repeat(300);
-        assert!(h.apply(&json!({"hook_event_name": "UserPromptSubmit", "prompt": long})));
-        assert_eq!(h.prompt.as_ref().unwrap().chars().count(), 200);
-        assert!(!h.apply(&json!({"hook_event_name": "UserPromptSubmit", "prompt": " \n "})));
+        let long = format!(
+            "<agent-message from=\"x\">{}</agent-message>",
+            "x".repeat(300)
+        );
+        assert!(h.apply(&prompt(&long)));
+        assert_eq!(h.prompt.as_deref(), Some("x".repeat(200).as_str()));
         assert!(!h.apply(&json!({"hook_event_name": "UserPromptSubmit"})));
     }
 

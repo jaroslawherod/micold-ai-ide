@@ -474,8 +474,8 @@ struct LiveSession {
     /// The turn clock that tells a finished turn's kind (feature 613, C1). Created `NotInTurn`
     /// with the live entry and dropped with it; not persisted.
     turn: TurnClock,
-    /// The todo list and last prompt line this session's hooks reported (feature 813, W2). Not
-    /// persisted; never logged (FR-020).
+    /// The todo list and last prompt (its words, markup removed; feature 1120 R8) this session's
+    /// hooks reported (feature 813, W2). Not persisted; never logged (FR-020).
     hook_activity: micold_core::hook_activity::HookActivity,
     /// The most recent OSC-0 title observed on the AI CLI's `Primary` process (glyph-stripped,
     /// the CLI's own startup title excluded), used to project a live session title and to

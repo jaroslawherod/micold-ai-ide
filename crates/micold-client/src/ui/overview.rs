@@ -610,4 +610,48 @@ mod tests {
         assert_eq!(full_screen_icon(false), Icon::FullScreen);
         assert_eq!(full_screen_icon(true), Icon::FullScreenExit);
     }
+
+    /// Spec edge case "Several sessions" (feature 1120): the card shows its main session's
+    /// activity only. With nothing readable there it shows no line, never a helper session's.
+    #[test]
+    fn the_activity_line_never_falls_back_to_another_sessions_prompt() {
+        use micold_core::hook_activity::HookActivity;
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::{AiCli, SessionLifecycle};
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state
+            .workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        state.workspace.active = Some(path.clone());
+        state.worktree.worktrees = vec![Worktree {
+            dir_name: "feat-a".into(),
+            path: "/repo/.claude/worktrees/feat-a".into(),
+            branch: Some("feat/a".into()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }];
+        let location = SessionLocation::Worktree("feat-a".into());
+        let session = |prompt: Option<&str>| {
+            let mut s = Session::start_new(location.clone(), AiCli::ClaudeCode);
+            s.lifecycle = SessionLifecycle::Running;
+            s.hook_activity = Some(HookActivity {
+                todos: Vec::new(),
+                prompt: prompt.map(str::to_string),
+            });
+            s
+        };
+        state
+            .workspace
+            .sessions
+            .insert(path, vec![session(None), session(Some("Helper prompt"))]);
+        let all = cards(&state);
+        let card = all
+            .iter()
+            .find(|c| c.location == location)
+            .expect("the worktree's card");
+        assert_eq!(card.activity, None);
+    }
 }
