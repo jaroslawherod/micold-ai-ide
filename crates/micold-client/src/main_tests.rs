@@ -1499,8 +1499,13 @@ fn creates(rx: &mut SentRx) -> Vec<(CreateTarget, bool)> {
 type CreateTarget = (AiCli,);
 
 fn start(app: &mut App, provider: AiCli, automatic: bool) {
-    let _ =
-        shell::daemon_sync::on_session_start_requested(app, occupied_loc(), provider, automatic);
+    let _ = shell::daemon_sync::on_session_start_requested(
+        app,
+        occupied_loc(),
+        provider,
+        micold_core::session::SessionKind::Terminal,
+        automatic,
+    );
 }
 
 fn pending_create(app: &App) -> u64 {

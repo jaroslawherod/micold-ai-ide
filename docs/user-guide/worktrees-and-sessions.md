@@ -1012,8 +1012,9 @@ decided when the session is created.
   [Default AI CLI](./settings.md#default-ai-cli), in one press, exactly as before.
 - **Press the small chevron beside it** to pick a different CLI for this session only. Your default
   is not changed.
-- **If only one CLI is installed, the chevron is not there at all.** There is nothing to choose
-  between, so the affordance is the plain button it always was.
+- **If only one CLI is installed, the chevron is not there at all** — unless that CLI is Claude
+  Code, whose list also offers [Claude Code (structured)](#structured-sessions). Otherwise there is
+  nothing to choose between, so the affordance is the plain button it always was.
 - Only CLIs you actually have installed are ever offered.
 - **Each row offers what its own project or worktree provides.** A row is answered for the
   directory a session started from it would run in, including what
@@ -1048,6 +1049,32 @@ conversations in its own place.
 
 **Two sessions in the same worktree can run different CLIs at once.** They do not interfere: each
 has its own process, its own terminal, its own conversation record, and its own title.
+
+### Structured sessions
+
+A **structured session** runs Claude Code without a terminal: the app talks to it over pipes and
+the background service keeps the events it reports. It is Claude Code only.
+
+- **Choose it** from the start-session chevron: the list has a **Claude Code (structured)** entry
+  right after **Claude Code**, wherever Claude Code is available. The plain start-session press,
+  and every other entry, start a normal terminal session.
+- **Its row says so.** The label beside the name reads `claude, structured`, and so does the AI
+  tab of its pane.
+- **Its pane is a plain log.** One line per event, in order, read-only: what Claude said, the
+  tools it called and their results, how each turn ended, and any event or line the app does not
+  recognise. If the service no longer holds the earliest events, the first line says how many were
+  omitted. There is no input box.
+- **It does not do yet** what the rest of this work adds: a readable transcript instead of the
+  plain log ([#939](https://github.com/jaroslawherod/micold-ai-ide/issues/939)), rich rendering of
+  messages and tool calls ([#940](https://github.com/jaroslawherod/micold-ai-ide/issues/940)),
+  typing a prompt and interrupting a turn
+  ([#941](https://github.com/jaroslawherod/micold-ai-ide/issues/941)), permission prompts
+  ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash commands and switching
+  a session between kinds ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)), and
+  usage and sub-agents ([#944](https://github.com/jaroslawherod/micold-ai-ide/issues/944)).
+- **Across a restart.** While [Save terminal history](./settings.md#terminal) is on, the log is
+  kept across a restart of the background service; with it off the events live in the service's
+  memory only.
 
 ### Sessions on Codex and OpenCode
 

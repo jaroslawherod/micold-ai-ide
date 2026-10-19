@@ -142,8 +142,12 @@ mod tests {
     #[test]
     fn assistant_blocks_show_text_thinking_and_tool_name() {
         let line = log_line(&seq(assistant(vec![
-            ContentBlock::Text { text: "hello".into() },
-            ContentBlock::Thinking { thinking: "hmm".into() },
+            ContentBlock::Text {
+                text: "hello".into(),
+            },
+            ContentBlock::Thinking {
+                thinking: "hmm".into(),
+            },
             ContentBlock::ToolUse {
                 id: "t1".into(),
                 name: "Bash".into(),
@@ -218,7 +222,9 @@ mod tests {
         }));
         assert!(unreadable.contains("not json"));
         assert!(log_line(&seq(StructuredEvent::TurnEndedWithoutResult)).contains("without"));
-        let big = log_line(&seq(StructuredEvent::OversizedOnWire { original_bytes: 99999 }));
+        let big = log_line(&seq(StructuredEvent::OversizedOnWire {
+            original_bytes: 99999,
+        }));
         assert!(big.contains("99999"));
     }
 
@@ -228,7 +234,9 @@ mod tests {
             log_line(&seq(assistant(vec![ContentBlock::Text {
                 text: "a\nb\r\nc".into(),
             }]))),
-            log_line(&seq(StructuredEvent::Unreadable { text: "x\ny".into() })),
+            log_line(&seq(StructuredEvent::Unreadable {
+                text: "x\ny".into(),
+            })),
         ];
         for line in lines {
             assert!(!line.contains('\n') && !line.contains('\r'), "{line:?}");

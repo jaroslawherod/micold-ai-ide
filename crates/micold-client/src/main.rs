@@ -355,6 +355,7 @@ fn compose_scene(app: &mut App) -> Task<Message> {
             steps.push(Task::done(Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
                 provider: app.core.session.provider_for_start(None),
+                kind: micold_core::session::SessionKind::Terminal,
                 automatic: true,
             })));
         }
@@ -980,8 +981,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(SessionMsg::StartRequested {
             location,
             provider,
+            kind,
             automatic,
-        }) => shell::daemon_sync::on_session_start_requested(app, location, provider, automatic),
+        }) => {
+            shell::daemon_sync::on_session_start_requested(app, location, provider, kind, automatic)
+        }
         // A row's start list is opening: refresh that row's answer first (feature 026, T014a;
         // feature 033, contract C1 A3). It is asked about the directory a session started from
         // this list would run in (029 FR-003b), filed under that directory alone, and replaces no

@@ -29,7 +29,7 @@ use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::{AvailabilityKey, AvailabilitySource, CliAvailability};
 use micold_client::icons::Icon;
 use micold_core::env_include::EnvIncludeOutcome;
-use micold_core::session::{AiCli, SessionLocation};
+use micold_core::session::{AiCli, SessionKind, SessionLocation};
 use support::layout as lay;
 
 const PROJECT: &str = "/fixture/start-press";
@@ -195,6 +195,7 @@ fn pressing_start_with_the_default_installed_still_starts_it_in_one_interaction(
             Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
                 provider: AiCli::Copilot,
+                kind: SessionKind::Terminal,
                 automatic: false,
             })
         )),
@@ -353,6 +354,7 @@ fn the_default_row_starts_a_default_its_own_directory_provides() {
             Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
                 provider: AiCli::Pi,
+                kind: SessionKind::Terminal,
                 automatic: false,
             })
         )),

@@ -488,6 +488,7 @@ fn start_press(state: &State, location: SessionLocation) -> Message {
         StartIntent::Start(provider) => Message::Session(SessionMsg::StartRequested {
             location,
             provider,
+            kind: micold_core::session::SessionKind::Terminal,
             automatic: false,
         }),
         StartIntent::OfferChoice {
@@ -505,6 +506,7 @@ fn start_press(state: &State, location: SessionLocation) -> Message {
             automatic: false,
             location,
             provider: state.session.provider_for_start(None),
+            kind: micold_core::session::SessionKind::Terminal,
         }),
     }
 }
@@ -999,7 +1001,8 @@ fn session_tree_item(
         .annotation(
             // A helper says so (FR-017); the main session is the unmarked one.
             {
-                let command = session.provider.provider().command();
+                let command =
+                    &crate::features::session::command_caption(session.provider, session.kind);
                 match place {
                     // An orphan says why it is not nested (FR-016, FR-018).
                     TreePlace::Orphan(Orphan::Pending) => format!("origin pending, {command}"),

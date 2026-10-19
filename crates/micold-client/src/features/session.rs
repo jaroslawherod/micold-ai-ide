@@ -59,7 +59,9 @@ use micold_core::cli_reason::{
     explain_one, start_refusal, start_refusal_unknown, AttemptDir, Explanation, Place, SpawnEnv,
 };
 use micold_core::project::canonicalize_best_effort;
-use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionKind, SessionLocation, ShellInstanceId,
+};
 use micold_core::terminal::LaunchMode;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -142,6 +144,10 @@ pub struct State {
     /// that opened the confirmation chose. `None` means the default, as a confirmation opened from
     /// the row's menu uses. Set and cleared with [`Self::additional_target`].
     pub additional_provider: Option<AiCli>,
+    /// The kind the confirmed additional session will have (feature 938, FR-022): the one the
+    /// start that opened the confirmation chose; a terminal session from the row's menu. Set and
+    /// cleared with [`Self::additional_target`].
+    pub additional_kind: SessionKind,
     /// A stopped session whose start another live session of its worktree blocks, awaiting the
     /// user's confirmation to run both (feature 776, FR-013, FR-016). Its presence *is* the
     /// confirm dialog being shown.
@@ -1278,7 +1284,7 @@ pub fn additional_requested(state: &mut crate::app::State, location: SessionLoca
     if state.start_offered(&location) {
         return;
     }
-    additional_opened(state, location, None);
+    additional_opened(state, location, None, SessionKind::Terminal);
 }
 
 /// Open the confirmation for `location` with the CLI the person chose (feature 802, FR-001). Unlike
@@ -1288,16 +1294,19 @@ pub fn additional_opened(
     state: &mut crate::app::State,
     location: SessionLocation,
     provider: Option<AiCli>,
+    kind: SessionKind,
 ) {
     state.clear_for_dialog();
     state.session.additional_target = Some(location);
     state.session.additional_provider = provider;
+    state.session.additional_kind = kind;
 }
 
 /// The additional-session confirmation was dismissed: nothing changes (FR-016).
 pub fn additional_cancelled(state: &mut crate::app::State) {
     state.session.additional_target = None;
     state.session.additional_provider = None;
+    state.session.additional_kind = SessionKind::Terminal;
     state.session.blocked_start = None;
 }
 
@@ -1306,6 +1315,7 @@ pub fn additional_cancelled(state: &mut crate::app::State) {
 pub fn additional_confirmed(state: &mut crate::app::State) {
     state.session.additional_target = None;
     state.session.additional_provider = None;
+    state.session.additional_kind = SessionKind::Terminal;
     state.session.blocked_start = None;
 }
 
@@ -1627,6 +1637,10 @@ pub enum Msg {
         /// The start-up auto-start rather than a person's press (feature 802, FR-004): its
         /// refusal stays a notice, never the confirmation.
         automatic: bool,
+        /// How the session runs its CLI (feature 938, FR-022): `Structured` only from the start
+        /// list's "Claude Code (structured)" entry; the plain press and every other entry, and the
+        /// auto-start, ask for a terminal session.
+        kind: SessionKind,
     },
     /// Open the "start a session on…" list for a location (feature 026, FR-004). The binary
     /// first re-asks for that location's directory's answer — one of the named events of feature
@@ -1695,6 +1709,8 @@ pub enum Msg {
     AdditionalOpened {
         location: SessionLocation,
         provider: Option<AiCli>,
+        /// The kind the start asked for (feature 938), kept for the confirmed session.
+        kind: SessionKind,
     },
     /// The confirmation was accepted. The binary sends `SessionCreate` with
     /// `allow_additional_session: true`.
@@ -2012,9 +2028,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RemoveRequested(id) => remove_requested(state, id),
         Msg::RemoveCancelled => remove_cancelled(state),
         Msg::AdditionalRequested(location) => additional_requested(state, location),
-        Msg::AdditionalOpened { location, provider } => {
-            additional_opened(state, location, provider)
-        }
+        Msg::AdditionalOpened {
+            location,
+            provider,
+            kind,
+        } => additional_opened(state, location, provider, kind),
         Msg::AdditionalConfirmed => additional_confirmed(state),
         Msg::AdditionalCancelled => additional_cancelled(state),
         Msg::StartBlocked(id) => start_blocked(state, id),
@@ -2323,7 +2341,12 @@ impl State {
     /// Absent when fewer than two CLIs are available there: a "choose which one" control that
     /// opens a list of one is a worse single-CLI experience than the plain button it replaced.
     pub fn start_affordance_offers_a_choice(&self, dir: &Path) -> bool {
-        self.known_clis(Some(dir)).len() >= 2
+        let known = self.known_clis(Some(dir));
+        // A CLI with a structured mode has the second entry to offer (feature 938, FR-022).
+        known.len() >= 2
+            || known
+                .iter()
+                .any(|cli| SessionKind::Structured.check(*cli).is_ok())
     }
 
     /// What the start list of the row for `dir` shows: every supported CLI in [`AiCli::ALL`]
@@ -2345,7 +2368,7 @@ impl State {
         };
         AiCli::ALL
             .into_iter()
-            .map(|cli| {
+            .flat_map(|cli| {
                 let availability = if answer.available.contains(&cli) {
                     CliEntryAvailability::Available
                 } else {
@@ -2359,7 +2382,23 @@ impl State {
                     };
                     CliEntryAvailability::Unavailable { reason }
                 };
-                StartMenuEntry { cli, availability }
+                // The structured entry follows its CLI's plain one, with the same availability
+                // (feature 938, FR-022).
+                let structured =
+                    SessionKind::Structured
+                        .check(cli)
+                        .is_ok()
+                        .then(|| StartMenuEntry {
+                            cli,
+                            kind: SessionKind::Structured,
+                            availability: availability.clone(),
+                        });
+                std::iter::once(StartMenuEntry {
+                    cli,
+                    kind: SessionKind::Terminal,
+                    availability,
+                })
+                .chain(structured)
             })
             .collect()
     }
@@ -2454,11 +2493,25 @@ impl crate::app::State {
     }
 }
 
+/// The short text that says which CLI a session runs and, for a structured session, how (feature
+/// 938, FR-022): `claude`, or `claude, structured`. The one place the marker is spelled, for every
+/// list of sessions.
+pub fn command_caption(provider: AiCli, kind: SessionKind) -> String {
+    let command = provider.provider().command();
+    match kind {
+        SessionKind::Terminal => command.to_string(),
+        SessionKind::Structured => format!("{command}, structured"),
+    }
+}
+
 /// One supported AI CLI in a row's start list, and whether it can be chosen there (037 FR-010).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartMenuEntry {
     /// The CLI the entry stands for.
     pub cli: AiCli,
+    /// How the session it starts runs the CLI (feature 938): `Structured` for the second entry of
+    /// a CLI with a structured mode.
+    pub kind: SessionKind,
     /// Whether a session can start on it where the row's sessions would run.
     pub availability: CliEntryAvailability,
 }

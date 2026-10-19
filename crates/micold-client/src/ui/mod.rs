@@ -1027,26 +1027,45 @@ pub(crate) fn session_start_menu_items(
         .session
         .start_menu_entries(&dir)
         .into_iter()
-        .map(|StartMenuEntry { cli, availability }| match availability {
-            CliEntryAvailability::Available => material::MenuItem::labeled(
-                cli.to_string(),
-                Message::Session(SessionMsg::StartRequested {
-                    automatic: false,
-                    location: location.clone(),
-                    provider: cli,
-                }),
-            ),
-            CliEntryAvailability::Unavailable { reason } => material::MenuItem {
-                message: None,
-                trailing_icon: Some((
-                    Icon::Unavailable,
-                    icon_role(IconSurface::Unavailable, roles),
-                )),
-                ..material::MenuItem::labeled(cli.to_string(), Message::NoOp)
-            }
-            .trailing_tooltip(reason),
-        })
+        .map(
+            |StartMenuEntry {
+                 cli,
+                 kind,
+                 availability,
+             }| match availability {
+                CliEntryAvailability::Available => material::MenuItem::labeled(
+                    entry_label(cli, kind),
+                    Message::Session(SessionMsg::StartRequested {
+                        automatic: false,
+                        location: location.clone(),
+                        provider: cli,
+                        kind,
+                    }),
+                ),
+                CliEntryAvailability::Unavailable { reason } => material::MenuItem {
+                    message: None,
+                    trailing_icon: Some((
+                        Icon::Unavailable,
+                        icon_role(IconSurface::Unavailable, roles),
+                    )),
+                    ..material::MenuItem::labeled(entry_label(cli, kind), Message::NoOp)
+                }
+                .trailing_tooltip(reason),
+            },
+        )
         .collect()
+}
+
+/// The label of a start-list entry: the CLI's name, and for the structured kind the suffix that
+/// tells the two entries of one CLI apart (feature 938, FR-022).
+fn entry_label(
+    cli: micold_core::session::AiCli,
+    kind: micold_core::session::SessionKind,
+) -> String {
+    match kind {
+        micold_core::session::SessionKind::Terminal => cli.to_string(),
+        micold_core::session::SessionKind::Structured => format!("{cli} (structured)"),
+    }
 }
 
 /// FR-019: with one session at `location` there is no sub-row to carry its Close and Remove, so the
