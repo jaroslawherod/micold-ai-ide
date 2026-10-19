@@ -868,7 +868,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // has to read the focus the move just set.
         Message::FocusMoved { forward } => {
             app.core.overview.focus_landed = None;
-            let moved = if forward {
+            // The daemon dialogs keep Tab to themselves (feature 1092, FR-009): the traversal is
+            // scoped to the dialog, so it never reaches the page behind the scrim.
+            let moved = if micold_client::ui::dialog_keeps_focus(&app.core) {
+                micold_client::ui::dialog_focus_move_task(forward)
+            } else if forward {
                 iced::widget::operation::focus_next()
             } else {
                 iced::widget::operation::focus_previous()

@@ -335,6 +335,8 @@ register! {
     // (feature 491, M3): questions about an action already asked for.
     crate::features::daemons::ConfirmDaemonRemovalDialog => crate::ui::confirm_daemon_removal::dialog,
     crate::features::daemons::BindDaemonDialog => crate::ui::bind_daemon::dialog,
+    // The add and edit form, and the counted confirmation it asks inside itself (feature 1092).
+    crate::features::daemons::DaemonFormDialog => crate::ui::daemon_form_dialog::dialog,
     crate::features::sidebar::SidebarFilterPanel {
         displaces:
             crate::features::help::HelpMenu,

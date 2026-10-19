@@ -194,7 +194,7 @@ fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Eleme
     buttons.into()
 }
 
-fn details_block<'a>(details: DaemonDetails, roles: Roles) -> Element<'a, Message> {
+pub(crate) fn details_block<'a>(details: DaemonDetails, roles: Roles) -> Element<'a, Message> {
     let mut block = column![group("Details", roles)].spacing(spacing::XS);
     if let Some(reason) = details.runtime_missing {
         block = block.push(caution(reason, roles));
@@ -360,32 +360,32 @@ pub struct MachineFacts<'a> {
     pub missing_cli: Option<String>,
 }
 
-fn form<'a>(
+/// The daemon form: the dialog's body (feature 1092). Its Save daemon / Cancel live in the dialog.
+pub(crate) fn form<'a>(
     draft: &'a Draft,
     state: &'a State,
     facts: MachineFacts<'a>,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
-    let title = match draft.editing {
-        Some(_) => "Edit daemon",
-        None => "Add a daemon",
-    };
     let required = draft.required_fields();
     let marker = |id| draft.required.state_in(&required, id);
-    // The marker's explanation, once for the whole form, between its title and its first field
-    // (feature 937, FR-004); the container and SSH fields below add none.
-    let heading = column![group(title, roles)]
-        .spacing(spacing::SM)
-        .extend(RequiredLegend::for_fields(&required, roles));
-    let mut fields = column![
-        heading,
+    // The marker's explanation, once for the whole form, above its first field (feature 937,
+    // FR-004); the container and SSH fields below add none. The dialog's own title names the form.
+    let legend = RequiredLegend::for_fields(&required, roles);
+    let mut fields = column![]
+        .spacing(SECTION_GAP)
+        .width(Length::Fill)
+        .extend(legend)
+        .push(
         TextField::new("", &draft.name, roles)
             .label("Name")
             .required(marker(FieldId::DaemonName))
             .track_focus(FieldId::DaemonName, focused)
             .error(error_of(state, "name"))
             .on_input(|v| Message::Daemons(DaemonsMsg::NameEdited(v))),
+        )
+        .push(
         Select::new(
             offered(draft),
             Some(Named(draft.runtime, name_of(RUNTIMES, draft.runtime))),
@@ -393,9 +393,7 @@ fn form<'a>(
             roles,
         )
         .label("Runs in"),
-    ]
-    .spacing(SECTION_GAP)
-    .width(Length::Fill);
+        );
     if let Some(message) = error_of(state, "runtime") {
         fields = fields.push(caution(message, roles));
     }
@@ -540,16 +538,7 @@ fn form<'a>(
     for control in sections {
         fields = fields.push(control);
     }
-    fields
-        .push(
-            row![
-                Button::filled("Save daemon", roles).on_press(Message::Daemons(DaemonsMsg::Saved)),
-                Button::outlined("Cancel", roles)
-                    .on_press(Message::Daemons(DaemonsMsg::DraftDiscarded)),
-            ]
-            .spacing(spacing::SM),
-        )
-        .into()
+    fields.into()
 }
 
 /// The connect-at-start checkbox, which closes the `Connection` section of every kind.
@@ -757,25 +746,22 @@ pub fn empty_state<'a>(roles: Roles) -> Element<'a, Message> {
 pub fn view<'a>(
     state: &'a State,
     list: ViewModel,
-    facts: MachineFacts<'a>,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
     let mut controls: Vec<Element<'a, Message>> = Vec::new();
-    if list.empty && state.draft.is_none() {
+    if list.empty {
         controls.push(empty_state(roles));
     }
     for view in list.rows {
         controls.push(daemon_row(view, state, focused, roles));
     }
-    match &state.draft {
-        Some(draft) => controls.push(form(draft, state, facts, focused, roles)),
-        None if !list.empty => controls.push(
+    if !list.empty {
+        controls.push(
             Button::outlined("Add daemon", roles)
                 .on_press(Message::Daemons(DaemonsMsg::AddOpened))
                 .into(),
-        ),
-        None => {}
+        );
     }
     page(
         "Daemons",

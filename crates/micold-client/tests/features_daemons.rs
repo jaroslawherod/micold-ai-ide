@@ -1281,6 +1281,11 @@ mod drift_behind_the_form {
         let mut state = State::default();
         send(&mut state, &mut w, Msg::AddOpened);
         send(&mut state, &mut w, Msg::NameEdited("Plain".into()));
+        send(
+            &mut state,
+            &mut w,
+            Msg::RuntimeChosen(micold_client::features::daemons::DraftRuntime::Host),
+        );
         dial(&mut w, id);
         send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
         assert!(state.prompt().is_none());

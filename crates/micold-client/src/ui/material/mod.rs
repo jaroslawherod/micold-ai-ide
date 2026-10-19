@@ -100,6 +100,7 @@ mod review_comment;
 mod review_panel_row;
 mod ripple;
 mod scrollable;
+mod scrolling_dialog;
 mod section_list;
 mod select;
 /// The select's own anatomy, and the two behaviours nothing outside it can observe — its indicator
@@ -210,6 +211,7 @@ pub use review_comment::{CardState, ReviewCommentCard};
 pub use review_panel_row::{status_label, ReviewPanelRow, HEIGHT as PANEL_ROW_HEIGHT};
 pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::{ScrollDirection, Scrollable};
+pub use scrolling_dialog::ScrollingDialog;
 pub use section_list::{Section, SectionList};
 pub use select::Select;
 pub use snackbar::Snackbar;

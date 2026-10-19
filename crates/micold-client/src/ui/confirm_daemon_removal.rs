@@ -44,6 +44,6 @@ pub fn dialog<'a>(
 ) -> Option<Element<'a, Message>> {
     state
         .daemon_list
-        .prompt()
+        .standalone_prompt()
         .map(|prompt| modal(prompt, scheme))
 }

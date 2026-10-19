@@ -1,3 +1,105 @@
+//! A dialog whose body scrolls and whose action row stays put (feature 1092, FR-011).
+//!
+//! [`dialog::confirm`](super::dialog::confirm) lays a short question out and lets the dialog grow
+//! with it. A form dialog cannot: a long form would push the action row off a small window. This
+//! keeps §7.4's anatomy (title, body, actions on a [`SurfaceKind::Dialog`] surface) but puts the
+//! body in a [`Scrollable`] capped so the whole dialog fits `max_height`, and leaves the actions
+//! outside it, always visible.
+//!
+//! The scroll container is deliberately not `Length::Fill`: a fill child makes a shrink column take
+//! the full height, so a short body would stretch the dialog to the window.
+
+use super::{dialog, Scrollable, Surface, SurfaceKind, Text, TypeRole};
+use iced::widget::{column, container};
+use iced::{Element, Length};
+use micold_core::tokens::{anatomy, Roles};
+
+/// The height of the title line (a headline).
+const TITLE_HEIGHT: f32 = 32.0;
+/// The room the modal leaves around a dialog, top and bottom together.
+const MODAL_MARGIN: f32 = 32.0;
+/// The default height of a single row of action buttons.
+const ACTIONS_HEIGHT: f32 = 40.0;
+/// The default width.
+const WIDTH: f32 = 560.0;
+
+/// A titled dialog with a scrolling body and pinned actions. Builder form (Principle VIII):
+/// `ScrollingDialog::new("Edit", body, actions, roles).max_height(window_height).into()`.
+pub struct ScrollingDialog<'a, M> {
+    title: String,
+    body: Element<'a, M>,
+    actions: Element<'a, M>,
+    roles: Roles,
+    width: f32,
+    max_height: Option<f32>,
+    actions_height: f32,
+}
+
+impl<'a, M: Clone + 'a> ScrollingDialog<'a, M> {
+    /// A dialog titled `title` with `body` above `actions`.
+    pub fn new(
+        title: impl Into<String>,
+        body: impl Into<Element<'a, M>>,
+        actions: impl Into<Element<'a, M>>,
+        roles: Roles,
+    ) -> Self {
+        Self {
+            title: title.into(),
+            body: body.into(),
+            actions: actions.into(),
+            roles,
+            width: WIDTH,
+            max_height: None,
+            actions_height: ACTIONS_HEIGHT,
+        }
+    }
+
+    /// Lay the dialog out at `width` dp; the dialog kind caps it at §7.4's maximum.
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width;
+        self
+    }
+
+    /// The height of the window the dialog sits in; the body scrolls to keep the dialog inside it.
+    pub fn max_height(mut self, height: f32) -> Self {
+        self.max_height = Some(height);
+        self
+    }
+
+    /// The height of the actions region, when it is taller than one row of buttons.
+    pub fn actions_height(mut self, height: f32) -> Self {
+        self.actions_height = height;
+        self
+    }
+}
+
+impl<'a, M: Clone + 'a> From<ScrollingDialog<'a, M>> for Element<'a, M> {
+    fn from(d: ScrollingDialog<'a, M>) -> Self {
+        let title = Text::new(d.title, TypeRole::Headline, d.roles);
+        let scroll = container(Scrollable::new(d.body, d.roles));
+        let scroll = match d.max_height {
+            Some(window) => {
+                let chrome = 2.0 * anatomy::dialog::PADDING
+                    + anatomy::dialog::TITLE_TO_BODY
+                    + TITLE_HEIGHT
+                    + anatomy::dialog::BODY_TO_ACTIONS
+                    + d.actions_height
+                    + MODAL_MARGIN;
+                scroll.max_height((window - chrome).max(0.0))
+            }
+            None => scroll,
+        };
+        let fields = dialog::fields(column![title, scroll]);
+        Surface::new(
+            dialog::body(fields, d.actions),
+            SurfaceKind::Dialog,
+            d.roles,
+        )
+        .width(Length::Fixed(d.width))
+        .into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

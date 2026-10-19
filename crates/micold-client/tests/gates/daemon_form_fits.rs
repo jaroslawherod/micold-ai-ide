@@ -4,6 +4,11 @@
 //! heights. With default section states, no contexts found and no error shown, its section list
 //! and actions must end — the bottom of *Cancel* — within 800 logical pixels at the canonical
 //! Settings width. Asks the renderer where it drew the text.
+//!
+//! The form is a dialog now (feature 1092) and scrolls when the window is short, so what is held
+//! to a window height is the dialog's own extent: from its title to the bottom of *Cancel*. The
+//! window is tall enough here that the dialog is not scrolling, and it is centred in it, so the
+//! extent is measured rather than the absolute position.
 
 use crate::support::layout as lay;
 use iced::Size;
@@ -32,6 +37,7 @@ fn the_kubernetes_add_form_fits_one_window_height() {
         DaemonsMsg::RuntimeChosen(DraftRuntime::Kubernetes),
         Vec::new(),
     );
+    state.window.window_size = (TALL.width as u16, TALL.height as u16);
     let mut renderer = lay::renderer();
     let element = micold_client::ui::view(
         &state,
@@ -53,9 +59,15 @@ fn the_kubernetes_add_form_fits_one_window_height() {
                 drawn.iter().map(|d| &d.content).collect::<Vec<_>>()
             )
         });
-    let bottom = cancel.origin.y + HALF_BUTTON;
+    // The title is the largest "Add daemon" text; the page's own button carries the same words.
+    let title = drawn
+        .iter()
+        .filter(|d| d.content == "Add daemon")
+        .max_by(|a, b| a.natural_height.total_cmp(&b.natural_height))
+        .expect("the dialog title is painted");
+    let extent = cancel.origin.y + HALF_BUTTON - title.origin.y;
     assert!(
-        bottom <= HEIGHT,
-        "the Kubernetes add form ends at {bottom}, past {HEIGHT}"
+        extent <= HEIGHT,
+        "the Kubernetes add form is {extent} tall from its title, past {HEIGHT}"
     );
 }

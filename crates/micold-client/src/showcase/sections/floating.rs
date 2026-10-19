@@ -227,6 +227,42 @@ pub fn modal<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Messa
     )
 }
 
+/// `ScrollingDialog` — a body taller than the 360dp it is given, so it scrolls while its action
+/// row stays visible. Posed inline: the dialog is a surface, not a floating layer of its own.
+pub fn scrolling_dialog<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let body = (0..12).fold(iced::widget::column![].spacing(spacing::SM), |col, n| {
+        col.push(material::Text::new(
+            format!("Field {}: {}", n + 1, samples::BODY),
+            TypeRole::Body,
+            roles,
+        ))
+    });
+    let actions = material::dialog::actions(iced::widget::row![
+        text_button(
+            "Save",
+            TypeRole::Body,
+            material::ButtonVariant::Filled,
+            roles
+        )
+        .on_press(Message::NoOp),
+        text_button(
+            "Cancel",
+            TypeRole::Body,
+            material::ButtonVariant::Outlined,
+            roles
+        )
+        .on_press(Message::NoOp),
+    ]);
+    let dialog: Element<'a, Message> =
+        material::ScrollingDialog::new("A scrolling dialog", body, actions, roles)
+            .max_height(360.0)
+            .into();
+    arrange(
+        vec![posed("tall body", dialog, roles)],
+        Layout::Inline,
+    )
+}
+
 /// `MenuOverlay` — the toolbar's overflow panel, and the project switcher's list, which is the
 /// same panel carrying different items (018 FR-029c). Two openers under one entry so the pair can
 /// be compared where they used to be two components that could not be.

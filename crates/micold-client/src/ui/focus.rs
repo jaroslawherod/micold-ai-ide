@@ -107,6 +107,50 @@ pub fn scroll_focused_into_view<M: Send + 'static>() -> Task<M> {
     operate(into_view())
 }
 
+/// The container id every dialog surface carries, so Tab can be confined to one (feature 1092,
+/// FR-009, research R5). iced's `focus_next` walks the whole view, page behind the scrim included.
+pub fn dialog_scope() -> Id {
+    Id::new("dialog")
+}
+
+/// Tab (`forward`) or Shift+Tab within the open dialog only: the traversal is scoped to the
+/// [`dialog_scope`] container, so the keyboard never reaches the page behind it.
+pub fn dialog_focus_move<T: Send + 'static>(forward: bool) -> impl Operation<T> {
+    use iced::advanced::widget::operation::{focusable, scope};
+    let inner: Box<dyn Operation<T>> = if forward {
+        Box::new(focusable::focus_next::<T>())
+    } else {
+        Box::new(focusable::focus_previous::<T>())
+    };
+    scope(dialog_scope(), BoxedOperation(inner))
+}
+
+/// [`dialog_focus_move`] as the runtime runs it.
+pub fn dialog_focus_move_task<M: Send + 'static>(forward: bool) -> Task<M> {
+    operate(dialog_focus_move(forward))
+}
+
+/// A boxed operation, which `scope` can take as the `impl Operation` it wants.
+struct BoxedOperation<T>(Box<dyn Operation<T>>);
+
+impl<T: 'static> Operation<T> for BoxedOperation<T> {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+        self.0.traverse(operate);
+    }
+
+    fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+        self.0.container(id, bounds);
+    }
+
+    fn focusable(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
+        self.0.focusable(id, bounds, state);
+    }
+
+    fn finish(&self) -> Outcome<T> {
+        self.0.finish()
+    }
+}
+
 /// The operation itself, for a caller that needs to drive it rather than hand it to the runtime.
 ///
 /// [`scroll_focused_into_view`] is the shape the application uses, and a [`Task`] is opaque — it
