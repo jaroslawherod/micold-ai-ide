@@ -688,7 +688,10 @@ pub const COMPONENTS: &[Entry] = &[
             "a group: opening one closes the others",
             "independent sections",
         ],
-        live: &["press the header, or focus it and press Space or Enter"],
+        live: &[
+            "press the header, or focus it and press Space or Enter",
+            "press a header in the group, then in the independent sections",
+        ],
         interactive: true,
         section: Section::Components,
         layout: Layout::FullWidth,
