@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
 use crate::attention::{NotificationKind, NotificationKinds};
 use crate::cli_reason::SpawnEnv;
+use crate::github::GithubRepo;
 use crate::jira::JiraConnection;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::naming::WorktreeNaming;
@@ -31,6 +32,7 @@ use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::review::comment::{CommentId, Move, Outcome, ReviewComment};
 use crate::review::Side;
 use crate::runs::{GroupId, Integration, RunGroup};
+use crate::scoped_credential::{SecretToken, UnixTime};
 use crate::session::{AiCli, SessionId, SessionKind, SessionLabel, ShellInstanceId};
 use crate::settings::DiffLayout;
 use crate::settings::JiraConnectionChange;
@@ -470,6 +472,22 @@ pub enum ClientMsg {
         /// The absolute POSIX path of the clone on the daemon's host.
         dest: String,
     },
+    /// A scoped credential for one repository (#1002, contracts/protocol.md). A sandboxed daemon
+    /// writes it to its in-memory credential file, replacing any earlier one; a repository none of
+    /// its projects pushes to, and a host-process daemon, refuse it. Never answered on success.
+    GitCredentialGrant {
+        /// The one repository the token reaches.
+        repo: GithubRepo,
+        /// The token; its `Debug` is redacted.
+        token: SecretToken,
+        /// When it expires, in seconds since the Unix epoch.
+        expires_at: UnixTime,
+    },
+    /// Remove the credential file of `repo`. Idempotent.
+    GitCredentialRevoke {
+        /// The repository.
+        repo: GithubRepo,
+    },
     /// Create a worktree under a project.
     WorktreeCreate {
         /// Correlation id.
@@ -900,6 +918,16 @@ pub enum DaemonMsg {
         /// Why.
         failure: CloneFailureWire,
     },
+    /// What a sandboxed daemon's projects push to (#1002, contracts/protocol.md): sent after a
+    /// successful `Attach` and whenever a project is added or removed or its `origin` changes. The
+    /// whole list every time; the client diffs.
+    GitCredentialTargets {
+        /// One per project.
+        targets: Vec<CredentialTarget>,
+        /// The container's `git --version` when it is older than 2.31, so scoped credentials
+        /// cannot apply; the daemon then refuses every grant.
+        git_too_old: Option<String>,
+    },
     // --- Connection ---
     /// Handshake accepted.
     Welcome {
@@ -1212,6 +1240,15 @@ pub enum DaemonMsg {
         /// Why, for the user.
         reason: String,
     },
+}
+
+/// One project of a sandboxed daemon and where it pushes (#1002).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CredentialTarget {
+    /// The daemon's path for the project.
+    pub project: PathBuf,
+    /// `git remote get-url --push origin`, verbatim; `None` without an `origin`.
+    pub push_url: Option<String>,
 }
 
 /// A terminal-only request a structured session's AI process cannot serve (feature 938, FR-019).

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: milestones
-- **Next step**: M3: orchestrator opens the M3 PR (pr-m3-title.txt / pr-m3-body.md in the unit's scratchpad), waits on CI and merges; then M4.
+- **Next step**: M4: gate, reviews A and B, then the orchestrator opens the M4 PR (pr-m4-title.txt / pr-m4-body.md in the unit's scratchpad); then M5.
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1090 | design (spec, plan, tasks) | merged | 04b29291209b144376228864f40d0f46ac87d103 |
 | #1096 | M1 | merged | 07ad3c1f936358fd25ecf021e7009459c9ca2458 |
 | #1099 | M2 | merged | abb25cf8907de6acef23805b2334f679f0060af7 |
+| #1107 | M3 | merged | 5c0ba07dfc32194eec443241efee61836931b4cb |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | — (to open) | gate green at 17370db2, pushed |
 | M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | #1099 | merged |
-| M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | — (to open) | gate green, pushed |
-| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — | planned |
+| M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | #1107 | merged (5c0ba07d) |
+| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — (to open) | implemented, tests green; gate + reviews A/B running |
 | M5 | T039–T049 | full | [source] GitHub App source + client wiring (FR-005) | — | planned |
 | M6 | T050–T055 | full | Status rows + PR/issues toggles (FR-011, FR-013) | — | planned |
 

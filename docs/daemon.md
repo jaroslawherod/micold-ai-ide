@@ -413,6 +413,31 @@ classified as authentication, a full disk, an unreachable remote or other. Git n
 (`GIT_TERMINAL_PROMPT=0`). `dest` must lie under `MICOLD_REPOS_ROOT` (`/data/repos` in a Kubernetes
 pod; a daemon without it refuses every clone). Two requests for one `dest` run one after the other.
 
+## Scoped git credentials (feature 1002, protocol 55)
+
+A sandboxed daemon (in a container or a pod) holds no git identity of the user. The application
+hands it one credential per repository its projects push to, over three messages; a host-process
+or SSH daemon never sends the first and answers the others with an `OperationError`
+(`req: 0`, `Refused`).
+
+- `DaemonMsg::GitCredentialTargets { targets, git_too_old }`: sent by the daemon after a successful
+  `Attach`, and to every client when a project is added or removed or a worktree refresh finds a
+  changed list. One `CredentialTarget { project, push_url }` per project, `push_url` being
+  `git remote get-url --push origin` verbatim (`None` without an `origin`). The whole list every
+  time; the client diffs. `git_too_old` is the container's `git --version` when it is older than
+  2.31 (no `GIT_CONFIG_COUNT`): the client issues nothing and the daemon refuses every grant.
+- `ClientMsg::GitCredentialGrant { repo, token, expires_at }`: the daemon writes
+  `<root>/<owner>/<repo>` (lower case; root `/run/micold/git`, in memory) atomically with mode
+  `0600`, replacing the previous file (a renewal). No reply on success. Refused when no project of
+  the daemon pushes to `repo`, so a client bug cannot widen its reach; a write failure is reported
+  naming the repository.
+- `ClientMsg::GitCredentialRevoke { repo }`: removes the file; idempotent.
+
+Invariants: the token is never logged (`SecretToken`'s `Debug` is redacted, and so is the wire
+message's), never forwarded to another daemon or a session's environment, and never written outside
+the credential root. The client renews each credential 10 minutes before it expires and revokes
+them when the daemon stops or is deleted (`micold_core::scoped_credential::schedule::Schedule`).
+
 ## Finding the logs and recent errors
 
 When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two
