@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-18
 
-**Status**: Draft
+**Status**: Closed 2026-10-19 — shipped in PRs #1063, #1068, #1075, #1082 and the close PR
 
 **Input**: Issue #890, "Group daemon settings sections in an accordion (new material component)":
 with #804 the container (Session service) settings live in each daemon's form in Settings › Daemons,

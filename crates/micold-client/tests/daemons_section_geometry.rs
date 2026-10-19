@@ -866,5 +866,8 @@ fn closed_headers_paint_their_summary_and_the_required_marker() {
     )));
     let shown = painted_tall(&state);
     assert!(shown.iter().any(|c| c == "Connection*"), "{shown:?}");
-    assert!(has(&shown, "Manual start") || has(&shown, "Connects at launch"));
+    assert!(
+        has(&shown, "Connects at launch"),
+        "the closed SSH summary: {shown:?}"
+    );
 }

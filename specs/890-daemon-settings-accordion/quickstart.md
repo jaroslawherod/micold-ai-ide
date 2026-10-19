@@ -21,6 +21,12 @@ Run in the worktree (CI's order): `scripts/gate.sh` (or `mise run gate`). The fe
 Stored data (SC-004): the existing save/edit round-trip tests in `tests/daemons_feature.rs`,
 `tests/features_daemons.rs` and `tests/features_daemons_kube.rs` stay green unchanged.
 
+**Recorded 2026-10-19 (close unit)**: `scripts/gate.sh` at the close commit ran every test in the
+table, the workspace suite and the script tests: result in the close PR's *Local gate* section.
+`tests/features_daemons.rs` and `tests/features_daemons_kube.rs` are unchanged since the design PR;
+`tests/daemons_feature.rs` gained the section tests and had its section-specific assertions updated
+for the new section list (the save/edit round-trip tests in it are untouched). SC-004 holds.
+
 ## Part B — visual pass (needs eyes at a display; `visual-pass` skill)
 
 Prerequisites: a build of the client and of the component showcase.
