@@ -355,6 +355,7 @@ mod tests {
                 },
                 credentials: Vec::new(),
                 history: None,
+                retired: Vec::new(),
             };
             Fixture {
                 _tmp: tmp,

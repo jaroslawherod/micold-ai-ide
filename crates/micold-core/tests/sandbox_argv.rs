@@ -51,7 +51,7 @@ fn caps() -> RuntimeCapabilities {
 
 /// A spec for one project, with every credential opted in, under a named platform's mapping.
 ///
-/// All four credentials are shared deliberately: they are the mounts whose *host* paths come from
+/// Every credential is shared deliberately: they are the mounts whose *host* paths come from
 /// the user's home directory, so they are where a Windows path would leak into a container path if
 /// the mapping were skipped for anything but projects.
 fn spec_for(windows_host: bool) -> SandboxSpec {
@@ -64,7 +64,6 @@ fn spec_for(windows_host: bool) -> SandboxSpec {
         image: ImageChoice::Own(OwnImage::Reference("micold-daemon:0.27.0".into())),
         credentials: BTreeSet::from([
             CredentialShare::GitConfig,
-            CredentialShare::GitCredentials,
             CredentialShare::AiCliAuth,
         ]),
         ..SandboxProfile::default()
@@ -421,4 +420,49 @@ fn an_adopted_containers_credential_mounts_are_not_projects() {
         vec!["/proj/P".to_string()],
         "a credential this profile does not share is still a credential, not a project"
     );
+}
+
+/// #1002 (FR-001, spec edge case "personal token in the host environment", T003): with the user's
+/// GitHub tokens and agent socket in the host's environment, and other values passed into the
+/// container, none of the three reaches a `-e` argument. The argv names each variable it sets, so
+/// every one is checked against the short list a container may get.
+#[test]
+fn no_personal_token_or_agent_socket_reaches_the_container_environment() {
+    // Set in this process, so a builder that read the host's environment would find them.
+    std::env::set_var("GH_TOKEN", "host-gh-token-value");
+    std::env::set_var("GITHUB_TOKEN", "host-github-token-value");
+    std::env::set_var("SSH_AUTH_SOCK", "/tmp/ssh-host/agent.sock");
+    let mut spec = spec_for(false);
+    // Other values are passed: the zone and the idle rule.
+    spec.time_zone = Some("Europe/Berlin".into());
+    spec.profile.survive_logout = true;
+    let args: Vec<String> = argv::create(&spec, &caps())
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    let env: Vec<&String> = args
+        .windows(2)
+        .filter(|w| w[0] == "-e" || w[0] == "--env")
+        .map(|w| &w[1])
+        .collect();
+    assert!(env.iter().any(|e| e.starts_with("TZ=")), "{env:?}");
+    for e in &env {
+        let name = e.split('=').next().unwrap();
+        assert!(
+            name == "HOME" || name == "TZ" || name.starts_with("MICOLD_"),
+            "{e} is passed into the container"
+        );
+    }
+    let all = args.join(" ");
+    for leaked in [
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "SSH_AUTH_SOCK",
+        "host-gh-token-value",
+        "host-github-token-value",
+        "/tmp/ssh-host",
+    ] {
+        assert!(!all.contains(leaked), "{leaked} reaches the container: {all}");
+    }
+    assert!(!args.iter().any(|a| a == "--env-host" || a.starts_with("--env-file")));
 }

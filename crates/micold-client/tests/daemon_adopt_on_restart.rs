@@ -13,6 +13,7 @@ fn entry(runtime: DaemonRuntime, auto_start: bool) -> DaemonEntry {
         name: DaemonName::new("D").unwrap(),
         runtime,
         auto_start,
+        notice: None,
     }
 }
 

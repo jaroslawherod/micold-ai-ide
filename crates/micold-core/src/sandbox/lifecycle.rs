@@ -228,11 +228,33 @@ impl StaleReason {
 /// Pure: it takes the facts and returns the decision, so every branch is testable without a
 /// runtime — including the ones that are awkward to arrange with one (an image that changed under
 /// a running container, a build with no fingerprint at all).
-pub fn adopt(existing: Option<&ContainerFacts>, expected_image: &str) -> Adoption {
+///
+/// `retired` names the container paths where a sandbox made before #1002 mounted the user's SSH
+/// agent or git credential store. A container mounting one is replaced whatever else holds, even
+/// running and even of a released image: attaching to it would keep the user's whole git identity
+/// inside the sandbox (FR-001).
+pub fn adopt(
+    existing: Option<&ContainerFacts>,
+    expected_image: &str,
+    retired: &[std::path::PathBuf],
+) -> Adoption {
     let Some(facts) = existing else {
         return Adoption::Create;
     };
     let id = ContainerId(facts.id.clone());
+
+    if let Some(destination) = facts
+        .mount_destinations
+        .iter()
+        .find(|d| retired.iter().any(|r| r.as_path() == std::path::Path::new(d.as_str())))
+    {
+        return Adoption::Replace {
+            id,
+            reason: StaleReason::RetiredCredentialMount {
+                destination: destination.clone(),
+            },
+        };
+    }
 
     // A running container of a released all-in-one daemon image is attached as it is (FR-017): the
     // daemon inside it may have sessions, and replacing it would end them. Stopped, it holds
@@ -1290,19 +1312,50 @@ mod adoption_tests {
         let released = "ghcr.io/jaroslawherod/micold-daemon:0.30.0";
         let running = facts(released, Some("abc"), true);
         assert_eq!(
-            adopt(Some(&running), crate::sandbox::basic_image::BASIC_IMAGE),
+            adopt(Some(&running), crate::sandbox::basic_image::BASIC_IMAGE, &[]),
             Adoption::Legacy(ContainerId("9f2b".into()))
         );
         let stopped = facts(released, Some("abc"), false);
         assert!(matches!(
-            adopt(Some(&stopped), crate::sandbox::basic_image::BASIC_IMAGE),
+            adopt(Some(&stopped), crate::sandbox::basic_image::BASIC_IMAGE, &[]),
             Adoption::Replace { .. }
         ));
         let other = facts("acme/x:1", None, true);
         assert!(matches!(
-            adopt(Some(&other), crate::sandbox::basic_image::BASIC_IMAGE),
+            adopt(Some(&other), crate::sandbox::basic_image::BASIC_IMAGE, &[]),
             Adoption::Replace { .. }
         ));
+    }
+
+    #[test]
+    fn a_container_mounting_a_retired_credential_is_replaced_even_running_or_legacy() {
+        let retired = vec![std::path::PathBuf::from("/home/u/.git-credentials")];
+        let mut ours = facts("micold-daemon:0.27.0", Some("abc"), true);
+        ours.mount_destinations = vec!["/home/u/.git-credentials".into()];
+        assert_eq!(
+            adopt(Some(&ours), "micold-daemon:0.27.0", &retired),
+            Adoption::Replace {
+                id: ContainerId("9f2b".into()),
+                reason: StaleReason::RetiredCredentialMount {
+                    destination: "/home/u/.git-credentials".into(),
+                },
+            }
+        );
+        let mut legacy = facts("ghcr.io/jaroslawherod/micold-daemon:0.30.0", Some("abc"), true);
+        legacy.mount_destinations = vec!["/home/u/.git-credentials".into()];
+        assert!(matches!(
+            adopt(Some(&legacy), crate::sandbox::basic_image::BASIC_IMAGE, &retired),
+            Adoption::Replace {
+                reason: StaleReason::RetiredCredentialMount { .. },
+                ..
+            }
+        ));
+        // Without the mount the same container is attached as before.
+        ours.mount_destinations = vec!["/home/u/project".into()];
+        assert_eq!(
+            adopt(Some(&ours), "micold-daemon:0.27.0", &retired),
+            Adoption::Attach(ContainerId("9f2b".into()))
+        );
     }
 
     #[test]

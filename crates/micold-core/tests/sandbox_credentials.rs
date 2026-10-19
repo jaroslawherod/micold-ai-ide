@@ -132,20 +132,22 @@ fn every_active_share_is_individually_identifiable() {
 
 /// An opt-in whose path the host layout does not know is skipped, not substituted.
 ///
-/// The edge case the spec names: a credential opt-in enabled while the item it shares is absent —
-/// no authentication agent running, or the socket it named has gone. Mounting *something* nearby
-/// would be worse than mounting nothing, because the user would believe the opt-in worked.
+/// The edge case the spec names: a credential opt-in enabled while the item it shares is absent.
+/// Mounting *something* nearby would be worse than mounting nothing, because the user would believe
+/// the opt-in worked.
 #[test]
 fn an_opt_in_with_no_known_path_is_skipped_rather_than_substituted() {
     let profile = SandboxProfile {
-        credentials: BTreeSet::from([CredentialShare::SshAgent]),
+        credentials: BTreeSet::from([CredentialShare::GitConfig]),
         ..SandboxProfile::default()
     };
+    let mut layout = layout();
+    // No git config: the user has the share enabled, and there is nothing to share.
+    layout.git_config = None;
     let mounts = MountSet::build(
         &[],
         &profile,
-        // No agent socket: the user has one enabled, and there is nothing to enable it with.
-        &CredentialLayout::conventional(Path::new("/home/u"), None),
+        &layout,
         std::path::PathBuf::from("/home/u/.local/share/micold-ai-ide"),
         Path::new("/home/u"),
         secret(),
@@ -310,11 +312,7 @@ fn a_shared_sign_in_names_the_sandbox_homes_onboarding_record() {
 /// Every other share is held to this too: none of them is a sign-in.
 #[test]
 fn without_a_shared_sign_in_no_onboarding_record_is_named() {
-    for share in [
-        CredentialShare::GitConfig,
-        CredentialShare::SshAgent,
-        CredentialShare::GitCredentials,
-    ] {
+    for share in [CredentialShare::GitConfig] {
         let profile = SandboxProfile {
             credentials: BTreeSet::from([share]),
             ..SandboxProfile::default()
@@ -648,4 +646,57 @@ fn another_clis_sign_in_does_not_record_claude_setup_as_done() {
         secret(),
     );
     assert_eq!(mounts.onboarding_record(), None);
+}
+
+// --- No user git identity in a sandbox (#1002, FR-001, FR-014, T002) ---
+
+/// FR-014, US1 scenarios 1 and 4: a host with an SSH key, an agent socket, a populated credential
+/// store, a GitHub CLI token and personal tokens in its environment, and saved settings that still
+/// enable the SSH agent and the credential store beside the kept items. Nothing of any of it — path
+/// or content — is in the container's arguments, environment or mounts.
+#[cfg(feature = "kube-fake")]
+#[test]
+fn a_container_start_up_carries_no_user_git_credential_whatever_the_saved_settings_say() {
+    use micold_core::sandbox::argv;
+    use micold_core::sandbox::hostile_host::{docker_caps, HostileHost};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let host = HostileHost::create(tmp.path()).unwrap();
+    let profile: SandboxProfile = serde_json::from_str(
+        r#"{"credentials": ["ssh_agent", "git_credentials", "git_config", "ai_cli_auth"]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        profile.credentials,
+        BTreeSet::from([CredentialShare::GitConfig, CredentialShare::AiCliAuth])
+    );
+    let spec = host.container_spec(profile);
+    // The kept items are mounted, so the search below is not over an empty start-up.
+    assert!(spec
+        .mounts
+        .credentials
+        .iter()
+        .any(|c| c.share == CredentialShare::GitConfig));
+
+    let args: Vec<String> = argv::create(&spec, &docker_caps())
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    let mut start_up = args.join("\n");
+    for path in spec.mounts.host_paths() {
+        start_up.push_str(&format!("\n{}", path.display()));
+    }
+    for c in &spec.mounts.credentials {
+        start_up.push_str(&format!("\n{}", c.container.display()));
+    }
+    for dir in spec.mounts.home_dirs_to_create() {
+        start_up.push_str(&format!("\n{}", dir.display()));
+    }
+    assert_eq!(host.leaks(&start_up), Vec::<String>::new(), "{start_up}");
+    // And every file the mounts expose: none holds a credential's content.
+    for path in spec.mounts.host_paths() {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            assert_eq!(host.leaks(&text), Vec::<String>::new(), "{}", path.display());
+        }
+    }
 }

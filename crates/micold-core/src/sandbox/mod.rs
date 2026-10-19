@@ -25,6 +25,8 @@ pub mod basic_image;
 pub mod cli;
 pub mod dialect;
 pub mod exec;
+#[cfg(any(test, feature = "kube-fake"))]
+pub mod hostile_host;
 pub mod image;
 pub mod lifecycle;
 pub mod parse;
@@ -283,7 +285,8 @@ pub enum CredentialShare {
 #[serde(untagged)]
 enum RawShare {
     Kept(CredentialShare),
-    Removed(RemovedShare),
+    // Read only to recognise the removed names; which one it was does not matter.
+    Removed(#[allow(dead_code)] RemovedShare),
 }
 
 /// The shares #1002 removed (FR-001, FR-002).
@@ -1412,6 +1415,39 @@ mod tests {
             let back: CredentialShare = serde_json::from_str(&json).unwrap();
             assert_eq!(share, back);
         }
+    }
+
+    /// FR-002 (T005): a profile saved before #1002 that names the SSH agent and the credential
+    /// store loads, keeps the items still offered, remembers it named a removed one, and is written
+    /// back without them.
+    #[test]
+    fn a_profile_naming_the_removed_shares_loads_keeps_the_rest_and_drops_them_on_save() {
+        let mut profile: SandboxProfile = serde_json::from_str(
+            r#"{"credentials": ["ssh_agent", "git_config", "git_credentials", "ai_cli_auth"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            profile.credentials,
+            BTreeSet::from([CredentialShare::GitConfig, CredentialShare::AiCliAuth])
+        );
+        assert!(profile.removed_git_credentials);
+        let saved = serde_json::to_string(&profile).unwrap();
+        assert!(!saved.contains("ssh_agent"), "{saved}");
+        assert!(!saved.contains("git_credentials"), "{saved}");
+        assert!(!saved.contains("removed_git_credentials"), "{saved}");
+        // Raised once: taken, it is gone, and the saved form does not raise it again.
+        assert!(profile.take_removed_git_credentials());
+        assert!(!profile.take_removed_git_credentials());
+        let reloaded: SandboxProfile = serde_json::from_str(&saved).unwrap();
+        assert!(!reloaded.removed_git_credentials);
+        assert_eq!(reloaded.credentials, profile.credentials);
+    }
+
+    #[test]
+    fn a_profile_naming_only_kept_shares_raises_nothing() {
+        let profile: SandboxProfile =
+            serde_json::from_str(r#"{"credentials": ["git_config"]}"#).unwrap();
+        assert!(!profile.removed_git_credentials);
     }
 }
 

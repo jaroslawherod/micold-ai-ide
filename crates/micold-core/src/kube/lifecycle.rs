@@ -149,7 +149,6 @@ mod tests {
     fn allowed() -> BTreeSet<KubeCredential> {
         [
             KubeCredential::GitConfig,
-            KubeCredential::GitCredentials,
             KubeCredential::SignIn {
                 cli: AiCli::ClaudeCode,
             },
@@ -224,7 +223,8 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn remove_deletes_pod_secrets_and_claim_that_are_ours() {
         let fake = running_daemon();
-        let foreign = names().secret(&KubeCredential::GitCredentials);
+        // A retired secret's name (#1002), not labelled ours: `remove` deletes only its own.
+        let foreign = names().retired_secrets()[0].clone();
         fake.insert(NS, ObjectKind::Secret, &foreign, BTreeMap::new());
         remove(&fake, NS, &names(), &allowed()).await.unwrap();
         assert!(fake.names(NS, ObjectKind::Pod).is_empty());

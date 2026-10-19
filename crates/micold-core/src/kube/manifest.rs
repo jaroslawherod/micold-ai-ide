@@ -641,7 +641,6 @@ mod tests {
         let pull = KubeCredential::RegistryPull { auths: "/a".into() };
         let p = with_allowed(&[
             KubeCredential::GitConfig,
-            KubeCredential::GitSshKey { key: "/k".into() },
             signin.clone(),
             pull.clone(),
         ]);
@@ -653,7 +652,7 @@ mod tests {
             .filter_map(|v| v["secret"]["secretName"].as_str())
             .collect();
         // The pull secret is read by the kubelet, not mounted.
-        assert_eq!(volumes.len(), 4, "{volumes:?}");
+        assert_eq!(volumes.len(), 3, "{volumes:?}");
         assert!(!volumes.contains(&n.pull_secret().as_str()));
         let mounts = p["spec"]["containers"][0]["volumeMounts"]
             .as_array()
@@ -663,16 +662,13 @@ mod tests {
         assert_eq!(config["mountPath"], "/data/home/.gitconfig");
         assert_eq!(config["subPath"], "gitconfig");
         assert_eq!(config["readOnly"], true);
-        let ssh = find(n.secret(&KubeCredential::GitSshKey { key: "/k".into() }));
-        assert_eq!(ssh["mountPath"], "/run/micold/creds/ssh");
-        assert!(ssh.get("subPath").is_none());
         let auth = find(n.secret(&signin));
         assert_eq!(auth["mountPath"], "/data/home/.claude/.credentials.json");
         assert_eq!(
             p["spec"]["imagePullSecrets"],
             json!([{ "name": n.pull_secret() }])
         );
-        assert_eq!(mounts.len(), 3 + 3);
+        assert_eq!(mounts.len(), 3 + 2);
     }
 
     #[test]

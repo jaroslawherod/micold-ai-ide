@@ -320,6 +320,7 @@ mod tests {
                 },
                 credentials: Vec::new(),
                 history: None,
+                retired: Vec::new(),
             },
             uid: 1000,
             gid: 1000,
