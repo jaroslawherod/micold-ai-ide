@@ -14,3 +14,7 @@ No `tdd/test-list.md`: tasks.md's test-first order is the list (ledger *Handover
 | T011 | green | `cargo test -p micold-client --test features_pr_changes` (with T012, one build) | passed |
 | T010 | red | `cargo test -p micold-client --bin micold-ai-ide pr_list_branch_set`, T012 read swapped back to `[current]` | 2 failed: `left: [{"C"}]`, `right: [{"A", "B", "C"}]`; no-local-git case passed (it pins the old behaviour) |
 | T012 | green | `cargo test -p micold-client --bin micold-ai-ide pr_list_` | 16 passed |
+| T015 | red | not run apart: tests (fixture `pr_list_branches_checks.txt`, `checks` field) were written before `list_query`/`BranchPullRequest.checks` (T016) in one edit; against the old code they do not compile (`CheckStatus` field missing) | does not compile |
+| T016 | green | `cargo test -p micold-core --test pull_request_list --test pull_request_is_never_stored` | 17 + 3 passed |
+| T017 | red | not run apart: `check_mark` and `PullRequestRow::checks` did not exist when their tests were written | does not compile |
+| T018 | green | `cargo test -p micold-client --test features_pr_changes`; `cargo test -p micold-client --lib -- check_mark pull_request_row` | 28 passed; 2 passed |

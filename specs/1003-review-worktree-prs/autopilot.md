@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
 - **Phase**: implement
-- **Next step**: M2 gate and reviews, then PR (orchestrator opens it)
+- **Next step**: M2 PR (orchestrator opens it), CI, merge; then M3
 
 ## Pull requests
 
@@ -48,6 +48,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A (code-review high) | 1 | bef59e95fbba721e36f6f54cbecf8cb2d371c0d4:89a7b0abec0a58022fce19560d375967f4976cc4 | CLEAN |
 | M1 B (conformance) | 1 | bef59e95fbba721e36f6f54cbecf8cb2d371c0d4:89a7b0abec0a58022fce19560d375967f4976cc4 | CHANGES: F1 BLOCKER T014 ticked but not run (fixed: unticked, moved to the close unit beside T037); F2 MINOR T004 has no separate red run (not fixed: historical, cycle log says so); F3 MINOR reviewer could not run `pr_list_branch_set` (ENOSPC; unit's run: 16 + full client suite passed) |
 | M1 B (conformance) | 2 | 74880d28be801857f9b50418d8c67b3ff0b819d7:ca62c70abdc3140bafc276b1afad54b7a30d433f | CLEAN |
+| M2 A (reviewer, correctness) | 1 | b7b08693fcd26de23101f24df3f284bd753ba301:606b03e7666ae48b3f70868852b311d125cedd33 | CLEAN |
+| M2 B (conformance) | 1 | b7b08693fcd26de23101f24df3f284bd753ba301:606b03e7666ae48b3f70868852b311d125cedd33 | CLEAN (3 MINOR: F1 Verify line fixed, prose only; F2 red was a compile failure, noted in the cycle log; F3 test name left, so the gated tree is the pushed tree) |
 
 ## Declined review findings
 
