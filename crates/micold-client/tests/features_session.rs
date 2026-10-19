@@ -587,7 +587,8 @@ fn the_secondary_half_offers_the_installed_clis_and_starts_nothing() {
 fn a_single_installed_cli_has_no_secondary_half_at_all() {
     // FR-006. A "choose which one" control that opens a list of one is a worse single-CLI
     // experience than the plain button it replaced, so the half is absent rather than disabled.
-    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
+    // Claude Code alone is not such a CLI: its structured entry gives it the chevron (938 FR-022).
+    let state = state_with(AiCli::Copilot, &[AiCli::Copilot]);
 
     assert!(!state
         .session
@@ -596,7 +597,7 @@ fn a_single_installed_cli_has_no_secondary_half_at_all() {
         state
             .session
             .start_intent(PressTarget::Primary, Path::new(ROW)),
-        StartIntent::Start(AiCli::ClaudeCode),
+        StartIntent::Start(AiCli::Copilot),
         "and the primary half is unchanged — the single-CLI user is unaffected by this feature"
     );
 }
@@ -692,10 +693,7 @@ fn the_chevron_follows_the_rows_own_answer() {
     let state = state_holding(
         AiCli::ClaudeCode,
         &[AiCli::ClaudeCode],
-        &[
-            (P, &[AiCli::ClaudeCode, AiCli::Pi]),
-            (Q, &[AiCli::ClaudeCode]),
-        ],
+        &[(P, &[AiCli::ClaudeCode, AiCli::Pi]), (Q, &[AiCli::Copilot])],
     );
     assert!(
         state.session.start_affordance_offers_a_choice(Path::new(P)),
@@ -709,7 +707,7 @@ fn the_chevron_follows_the_rows_own_answer() {
     let two_at_home = state_holding(
         AiCli::ClaudeCode,
         &[AiCli::ClaudeCode, AiCli::Pi],
-        &[(Q, &[AiCli::ClaudeCode])],
+        &[(Q, &[AiCli::Copilot])],
     );
     assert!(
         !two_at_home
@@ -1382,5 +1380,31 @@ fn a_blocked_start_shows_the_reason_and_offers_the_confirmation_naming_the_live_
     assert_eq!(
         st.session.blocked_start, None,
         "nothing blocks the live session"
+    );
+}
+
+/// 938 FR-022: Claude Code as the only CLI still shows the chevron, for its structured entry.
+#[test]
+fn claude_code_alone_still_offers_the_chevron_for_its_structured_entry() {
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
+
+    assert!(state
+        .session
+        .start_affordance_offers_a_choice(Path::new(ROW)));
+}
+
+/// 938 FR-022: the caption of a session row names the command, and a structured session says so.
+#[test]
+fn a_structured_sessions_caption_says_so() {
+    use micold_client::features::session::command_caption;
+    use micold_core::session::SessionKind;
+
+    assert_eq!(
+        command_caption(AiCli::ClaudeCode, SessionKind::Terminal),
+        "claude"
+    );
+    assert_eq!(
+        command_caption(AiCli::ClaudeCode, SessionKind::Structured),
+        "claude, structured"
     );
 }

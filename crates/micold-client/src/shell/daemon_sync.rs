@@ -3697,6 +3697,27 @@ pub(crate) mod tests {
 
     /// FR-016: the confirmed request is an explicit additional session, and a plain start is not.
     #[test]
+    fn a_structured_start_asks_the_daemon_for_a_structured_session() {
+        use micold_core::protocol::messages::ClientMsg;
+        use micold_core::session::SessionKind;
+        let location = SessionLocation::Worktree("wt".into());
+        let msg = super::additional_session_request(
+            7,
+            PathBuf::from("/p"),
+            &location,
+            micold_core::session::AiCli::ClaudeCode,
+            SessionKind::Structured,
+        );
+        assert!(matches!(
+            msg,
+            ClientMsg::SessionCreate {
+                kind: SessionKind::Structured,
+                ..
+            }
+        ));
+    }
+
+    #[test]
     fn a_confirmed_additional_session_carries_the_allow_flag() {
         use micold_core::protocol::messages::ClientMsg;
         let location = SessionLocation::Worktree("wt".into());
