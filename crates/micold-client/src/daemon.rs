@@ -404,12 +404,12 @@ pub fn actor_specs_answered(
                     ai_clis: c.profile.ai_clis.clone(),
                     bring_up: (boot_owner != Some(entry.id))
                         .then(|| {
-                            entry
-                                .state_dir(state_dir, legacy_default)
-                                .map(|state_dir| ContainerBringUp {
+                            entry.state_dir(state_dir, legacy_default).map(|state_dir| {
+                                ContainerBringUp {
                                     state_dir,
                                     profile: Box::new(c.profile.clone()),
-                                })
+                                }
+                            })
                         })
                         .flatten(),
                 },
@@ -457,8 +457,8 @@ pub fn connections(
             boot_owner,
             drift,
         )
-            .into_iter()
-            .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
+        .into_iter()
+        .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
     )
 }
 

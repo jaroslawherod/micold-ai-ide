@@ -1208,7 +1208,10 @@ fn a_container_daemon_added_in_the_form_creates_its_own_container() {
     };
     let own = setup(None).expect("the actor creates the container");
     assert_eq!(own.state_dir, base.join("daemons").join("c3"));
-    assert!(setup(Some(added)).is_none(), "the boot's daemon is left to the boot");
+    assert!(
+        setup(Some(added)).is_none(),
+        "the boot's daemon is left to the boot"
+    );
 }
 
 /// FR-004: the question counts the daemon's running sessions, one and none included.
