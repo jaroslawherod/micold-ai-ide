@@ -9,20 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1102
 - **Worktree branch**: feat/1102_allow-the-github-issues-integration-to-be-disabled
 - **Started**: 2026-10-19
-- **Phase**: plan (done)
-- **Next step**: tasks unit
+- **Phase**: tasks (design PR open)
+- **Next step**: M1 after the design PR merges
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Design | open / merged | … |
+| #PRNUM | Design | open | … |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | … | #… | pending / in-progress / in-review / ci / merged |
+| M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #… | pending |
+| M2 | T017–T021 | full | Open forms follow the switch live | #… | pending |
+| M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #… | pending |
 
 ## Decisions
 
@@ -55,5 +57,7 @@ None. <or: the banner as sent, and when>
 ## Follow-ups not done
 
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+
+| Tasks review | 1 | 9ee5e15dc9b0aae22c6d661908c19341be7a4078:72004d40f6ad887da122bbd09c2195ca2a84601f | CLEAN (2 MINOR fixed; analyze MEDIUMs C1,C2,I1 fixed) |
 
 <!-- plan review A round 1 snapshot 9dacc3ca5a9cc8c52890dd052f80d02761ab1bb4:eb157e8d63016f57bb1cc60dffff99c63cf2b1e1: CLEAN, 4 MINORs fixed, prose only -->
