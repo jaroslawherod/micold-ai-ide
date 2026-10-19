@@ -41,3 +41,37 @@ B18 and two extra checks. Card order in the grid: Default, Alpha, Inc, Misc. Scr
 | Extra: Menu key / Shift+F10 start no ripple or activation | PASS (partial evidence) | After each, the Overview stays open and no card activates; no ripple seen in grabs taken straight after the key, with the same capture limit as above |
 
 Observation: with the software renderer a menu showed some rows dimmed after Down (renderer damage, as in M1's ghost rectangle); a forced redraw cleared it.
+
+# Visual pass — feature 972, close unit (B2, B6, B17)
+
+Run 2026-10-19 on Xvfb (tiny-skia software renderer, `ICED_BACKEND=tiny-skia`), input via xdotool,
+at origin/main 12619e44 (client, daemon and showcase built together, pinned copies, private data dir,
+fixture project P: Default, `feat-42_alpha`, `inc`, `misc`). Scope: only the steps the M1 and M3 passes
+left open: B2, the mark part of B6, B17. Screenshots: [visual/](visual/).
+
+| Step | Result | Seen |
+|---|---|---|
+| B2 | PASS (mark); hover not capturable | Menu opened on Alpha: Alpha has the 2dp primary outline and selected layer. Pointer over the menu ([shot](visual/b2-pointer-over-menu.png)): mark stays on Alpha only, *Open* row shows hover. Pointer moved onto Inc with the menu open ([shot](visual/b2-pointer-on-other-card.png)): mark still on Alpha only, Inc carries no outline or layer. Inc's own hover is not visible: the card draws no hover layer of its own (its button style is empty; only the keyboard-focus indicator tops one up), and pixel samples of Inc under the pointer and of Misc were identical, with and without the menu. The Default card's heavy outline in the shots is its keyboard focus ring from Ctrl+Shift+O, not a mark |
+| B6 | PASS | Escape ([shot](visual/b6-escape-closed.png)), click on empty Overview space ([shot](visual/b6-empty-space-closed.png)) and click on Inc ([shot](visual/b6-other-card-closed.png)) each closed the menu, left the Overview open with all four cards, removed Alpha's mark, opened no dialog and ran no entry; Inc was not activated (no agent picker, Overview still shown). Frames were taken after a window resize nudge to force a redraw (see observation) |
+| B17 | PASS (light, dark, greyscale) | Showcase reached by scrolling with wheel clicks (slow: the page redraws late, wait 10-15 s per scroll). `OverviewCard` *targeted* next to an untargeted card: light [colour](visual/b17-card-light.png), [grey](visual/b17-card-light-gray.png); dark [colour](visual/b17-card-dark.png), [grey](visual/b17-card-dark-gray.png). In all four the outline and the darker fill separate it from its neighbour; in greyscale the outline is a clear dark (light) or light (dark) line. `MenuOverlay` with a keyboard-highlighted item (*Rename*): light [colour](visual/b17-menu-light.png), [grey](visual/b17-menu-light-gray.png); dark [colour](visual/b17-menu-dark.png), [grey](visual/b17-menu-dark-gray.png). Ring plus state layer on the one row are visible in both schemes and in greyscale |
+
+Observation: after the pointer moved, the open menu's rows below the hovered one were drawn dimmed until a
+forced redraw (same renderer damage as in M1 and M3). Not an app finding.
+
+# Quickstart §C — macOS and Windows (T030)
+
+Not run on a desktop: no macOS or Windows machine is available to the autopilot.
+
+**Covered by CI** (`.github/workflows/ci.yml`): the `test` job builds and runs the whole workspace
+suite on `ubuntu-latest`, `macos-latest` and `windows-latest` (the matrix drops Ubuntu only on a
+push its pull request proved), and `windows-11-arm` builds the ARM64 client when packaging
+changes. The feature's tests (reducer, card menu composition, key mapping, root dispatch, overlay
+registry, popover displacement, pixel tests of the mark) run on all three, so the logic is
+platform-checked. The release workflow's `macos` and `windows` jobs build the shipped artifacts.
+
+**Still for a human on real desktops** (Principle VI; the same results as the Linux pass):
+
+- B1 with a right-click on Windows, and with Ctrl+click and a two-finger click on macOS.
+- B6: Escape, empty-space click and other-card click close the menu with no entry run.
+- B10: the keyboard path (Shift+F10 / the Menu key on Windows; Shift+F10 or the context-menu key on
+  macOS keyboards that have one), Up/Down, Enter, and focus back on the card.

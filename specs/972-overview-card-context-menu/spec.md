@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-18
 
-**Status**: Draft
+**Status**: Closed 2026-10-19 — shipped in PRs #1034, #1042, #1069, #1077 and the close PR
 
 **Input**: User description: "Overview: right-click context menu on cards (GitHub issue #972).
 Overview cards only respond to a primary click, so actions on a worktree/session need opening it

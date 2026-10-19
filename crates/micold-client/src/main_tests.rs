@@ -12927,3 +12927,162 @@ mod jira_request_path {
         assert_eq!(rig.source.seen().len(), asked, "the search asked nothing");
     }
 }
+
+// ---- Feature 972 (FR-004, FR-005, FR-011): the root's half of the Overview card menu ----
+
+/// A connected app on a project with the given worktrees, the Overview open.
+fn app_in_overview_with(dirs: &[&str]) -> App {
+    use micold_core::project::{Availability, Project};
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+    let (mut app, _rx) = connected_app();
+    let path = PathBuf::from("/repo");
+    app.core.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    app.core.workspace.active = Some(path);
+    app.core.worktree.worktrees = dirs
+        .iter()
+        .map(|dir| Worktree {
+            dir_name: (*dir).to_string(),
+            path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
+            branch: Some(format!("feat/{dir}")),
+            status: WorktreeStatus::Valid,
+            included: false,
+        })
+        .collect();
+    app.core.overview.open = true;
+    app
+}
+
+fn open_card_menu(app: &mut App, dir: &str, origin: micold_client::features::overview::MenuOrigin) {
+    use micold_client::features::overview::Msg;
+    app.core.update(Message::Overview(Msg::CardMenuOpened {
+        location: SessionLocation::Worktree(dir.to_string()),
+        anchor: (10, 10),
+        origin,
+    }));
+    assert!(app.core.overview.card_menu.is_some(), "fixture: menu open");
+}
+
+fn open_dialog_id(app: &App) -> Option<&'static str> {
+    micold_client::overlay::registry::open_dialog(&app.core).map(|open| open.id().as_str())
+}
+
+/// FR-004/FR-005 through the root: a picked entry closes the menu *and* the root runs the inner
+/// message, so an in-place entry's dialog opens over the still-open Overview.
+#[test]
+fn the_root_runs_the_entry_a_card_menu_pick_carries() {
+    use micold_client::features::overview::{MenuOrigin, Msg};
+    use micold_client::features::worktree::Msg as WorktreeMsg;
+    let mut app = app_in_overview_with(&["feat-a"]);
+    open_card_menu(&mut app, "feat-a", MenuOrigin::Pointer);
+    let inner = Message::Worktree(WorktreeMsg::DeleteRequested("feat-a".into()));
+
+    let _ = update_inner(
+        &mut app,
+        Message::Overview(Msg::CardMenuEntryChosen(Box::new(inner))),
+    );
+
+    assert_eq!(
+        app.core.overview.card_menu, None,
+        "the pick closes the menu"
+    );
+    assert_eq!(
+        open_dialog_id(&app),
+        Some("confirm_worktree_delete"),
+        "the root dispatched the inner message"
+    );
+    assert!(
+        app.core.overview.open,
+        "an in-place entry keeps the Overview"
+    );
+}
+
+/// FR-010 through the root: Enter on the highlighted entry runs that entry.
+#[test]
+fn the_root_runs_the_highlighted_card_menu_entry_on_activation() {
+    use micold_client::features::overview::{MenuOrigin, Msg};
+    let mut app = app_in_overview_with(&["feat-a"]);
+    open_card_menu(&mut app, "feat-a", MenuOrigin::Keyboard);
+    let rename = micold_client::ui::overview::card_menu_items(
+        &app.core,
+        &SessionLocation::Worktree("feat-a".into()),
+    )
+    .iter()
+    .position(|item| item.label == "Rename")
+    .expect("the worktree's card menu lists Rename");
+    app.core
+        .overview
+        .card_menu
+        .as_mut()
+        .expect("open")
+        .highlighted = Some(rename);
+
+    let _ = update_inner(&mut app, Message::Overview(Msg::CardMenuActivated));
+
+    assert_eq!(
+        app.core.overview.card_menu, None,
+        "activating closes the menu"
+    );
+    assert_eq!(
+        open_dialog_id(&app),
+        Some("rename_worktree"),
+        "and runs the entry"
+    );
+}
+
+/// FR-011, US3.3 (visual pass B12): the keyboard returns to the card the menu came from once no
+/// dialog is up, and moves to the first card if the landed card has since gone.
+#[test]
+fn the_card_focus_return_waits_for_a_dialog_then_follows_the_card_or_the_first() {
+    use micold_client::features::worktree::Msg as WorktreeMsg;
+    let b = SessionLocation::Worktree("feat-b".into());
+    let mut app = app_in_overview_with(&["feat-a", "feat-b"]);
+    app.core.overview.focus_return = Some(b.clone());
+    let _ = update_inner(
+        &mut app,
+        Message::Worktree(WorktreeMsg::DeleteRequested("feat-b".into())),
+    );
+    assert!(
+        card_focus_return(&mut app).is_none(),
+        "a dialog is up: no focus move"
+    );
+    assert_eq!(
+        app.core.overview.focus_return,
+        Some(b.clone()),
+        "and the return stays armed"
+    );
+
+    let _ = update_inner(&mut app, Message::Worktree(WorktreeMsg::DeleteCancelled));
+    assert!(open_dialog_id(&app).is_none(), "fixture: dialog closed");
+    assert!(
+        card_focus_return(&mut app).is_some(),
+        "no dialog: focus moves"
+    );
+    assert_eq!(app.core.overview.focus_return, None, "the return is spent");
+    assert_eq!(
+        app.core.overview.focus_landed,
+        Some(b),
+        "onto the card the menu came from"
+    );
+    assert!(
+        card_focus_return(&mut app).is_none(),
+        "landed and still listed: nothing more"
+    );
+
+    app.core
+        .worktree
+        .worktrees
+        .retain(|w| w.dir_name != "feat-b");
+    assert!(
+        card_focus_return(&mut app).is_some(),
+        "the landed card went: focus moves again"
+    );
+    assert_eq!(
+        app.core.overview.focus_landed, None,
+        "the landing is cleared"
+    );
+}
