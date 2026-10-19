@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1111 | Design | merged | 33cd837f45cc6412d3aa888a4cb6d2f221b969ef |
 | #1112 | M1 | merged | 4fd3e6e4ce9c7a58ebea3d3cfa88113d9aa1aa75 |
 | #1114 | M2 | merged | 8ca8d75141adfc72ea5ed1f678d46885bcfaa35f |
-| #M3PR | M3 | open | |
+| #1133 | M3 | open | |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #1112 | in review |
 | M2 | T017–T021 | full | Open forms follow the switch live | #1114 | in review |
-| M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #M3PR | in review |
+| M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #1133 | in review |
 
 ## Decisions
 
