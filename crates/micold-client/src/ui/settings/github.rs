@@ -29,6 +29,7 @@ use micold_core::typeahead::Direction;
 #[allow(dead_code)]
 pub const SETTINGS: &[(&str, &str)] = &[
     ("pr_status_enabled", "PrStatusToggled"),
+    ("github_issues_enabled", "GithubIssuesToggled"),
     ("issue_label_types", "IssueMappingLabelChanged"),
 ];
 
@@ -63,6 +64,21 @@ pub fn view<'a>(
             "Reads the pull requests of the open project's GitHub repository with your GitHub CLI \
              sign-in: when the project opens, every 5 minutes, and when you refresh the worktree \
              list. Only the repository's name and your worktrees' branch names are sent.",
+        ),
+        roles,
+    ));
+    // Feature 1102 (FR-006): the switch for GitHub issues, beside the pull request one.
+    controls.push(field_note(
+        Checkbox::new(
+            "Offer GitHub issues when creating worktrees",
+            draft.github.issues_enabled,
+            roles,
+        )
+        .track_focus(FieldId::SettingsGithubIssues, focused)
+        .on_toggle(|v| Message::Settings(SettingsMsg::GithubIssuesToggled(v))),
+        Some(
+            "Reads open issues of the project's GitHub repository to start worktrees from. Off: \
+             no GitHub issue is requested or offered.",
         ),
         roles,
     ));

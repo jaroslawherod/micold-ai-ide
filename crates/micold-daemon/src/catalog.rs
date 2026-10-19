@@ -238,6 +238,7 @@ impl Catalog {
             pr_status_enabled: self.settings.pr_status_enabled,
             jira_enabled: self.settings.jira_enabled,
             jira_connections: self.settings.jira_connections.clone(),
+            github_issues_enabled: self.settings.github_issues_enabled,
             desktop_notifications: self.settings.desktop_notifications,
             notification_kinds: self.settings.notification_kinds,
             long_task_threshold_secs: self.settings.long_task_threshold_secs,
@@ -399,6 +400,7 @@ impl Catalog {
                 // `jira_enabled` is a service field; `jira_connections` is not copied from this
                 // daemon's snapshot, only merged from the one change that arrived (feature 533).
                 on_disk.jira_enabled = self.settings.jira_enabled;
+                on_disk.github_issues_enabled = self.settings.github_issues_enabled;
                 if let Some(change) = jira {
                     change.apply(&mut on_disk.jira_connections);
                 }
@@ -530,6 +532,13 @@ impl Catalog {
     /// service only holds the switch for the clients; it never reads it (FR-021).
     pub fn set_jira_enabled(&mut self, on: bool) -> io::Result<()> {
         self.settings.jira_enabled = on;
+        self.persist_service_settings()
+    }
+
+    /// Turn the GitHub issues integration on or off, persisting atomically (feature 1102, FR-001).
+    /// The service only holds the switch for the clients; it never reads it.
+    pub fn set_github_issues_enabled(&mut self, on: bool) -> io::Result<()> {
+        self.settings.github_issues_enabled = on;
         self.persist_service_settings()
     }
 

@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1102
 - **Worktree branch**: feat/1102_allow-the-github-issues-integration-to-be-disabled
 - **Started**: 2026-10-19
-- **Phase**: tasks (design PR open)
-- **Next step**: M1 after the design PR merges
+- **Phase**: implement M1 (T001-T015 done, T016 docs open)
+- **Next step**: finish M1: T016 docs, scoped gate + review A, review B, full gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1111 | Design | open | … |
+| #1111 | Design | merged | 33cd837f45cc6412d3aa888a4cb6d2f221b969ef |
 
 ## Milestones
 
@@ -48,8 +48,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+Done (uncommitted work committed as WIP): T001-T015 ticked. Core setting, wire (PROTOCOL_VERSION 56), daemon catalog/state/server, client settings draft/persist/daemon_sync/startup, form gate, Settings checkbox, tests for all. Deviations: `WorktreeForm.github_issues_off` (inverted, so derived `Default` keeps GitHub on); `features::settings::State` got a hand `Default` with `github_issues_enabled: true`; the Overview issue-title lookup (`shell/issues.rs::on_title_remotes`) is also gated on the switch (it is a GitHub issue read; record in PR body).
+Next: T016 (docs/user-guide/settings.md, docs/user-guide/worktrees-and-sessions.md, docs/daemon.md settings list); `mise run gate` is not yet run (only targeted tests green: core, features_settings, settings_sections, features_worktree_form, main_tests github_issues/issue_source); then scoped gate with review A (code-review high) in its shadow, review B (conformance, sonnet, once), full gate, PR `feat(1102): ... (#1102)`. M1 PR body needs the title-gating note. Review rounds so far: none.
 
 ## Open escalation
 

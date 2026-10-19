@@ -270,6 +270,12 @@ pub struct Settings {
     /// 533, FR-006). Never holds a token. An entry that no longer parses is dropped on read.
     #[serde(default, deserialize_with = "crate::jira::known_connections")]
     pub jira_connections: BTreeMap<String, JiraConnection>,
+    /// Whether the GitHub issues integration is on (feature 1102, FR-001). On by default, and in a
+    /// file written before the switch (FR-007). While off, no GitHub issue request is made and the
+    /// New worktree form offers no GitHub issue source. Service-owned so every window follows one
+    /// switch (FR-008).
+    #[serde(default = "default_github_issues_enabled")]
+    pub github_issues_enabled: bool,
     /// Whether a session that comes to await input while not in view raises a desktop
     /// notification (feature 039, FR-026). One switch for every AI CLI (FR-028). Service-owned,
     /// so every window follows it at once; unread marks do not depend on it (FR-017).
@@ -329,6 +335,11 @@ fn default_save_terminal_history() -> bool {
     true
 }
 
+/// The GitHub issues switch when a file predates it: on (feature 1102, FR-007).
+fn default_github_issues_enabled() -> bool {
+    true
+}
+
 /// Desktop notifications when a file predates the switch, or cannot be read: on (feature 039,
 /// FR-026).
 fn default_desktop_notifications() -> bool {
@@ -356,6 +367,7 @@ impl Default for Settings {
             pr_status_enabled: false,
             jira_enabled: false,
             jira_connections: BTreeMap::new(),
+            github_issues_enabled: default_github_issues_enabled(),
             desktop_notifications: default_desktop_notifications(),
             notification_kinds: NotificationKinds::default(),
             long_task_threshold_secs: default_long_task_threshold_secs(),
@@ -754,6 +766,10 @@ struct StoredSettings {
     /// Missing → none; an entry that no longer parses is dropped and the rest kept (FR-006).
     #[serde(default, deserialize_with = "crate::jira::known_connections")]
     jira_connections: BTreeMap<String, JiraConnection>,
+    /// Missing in files written before feature 1102 → on (FR-007). Additive and defaulted, so
+    /// `settings_version` does not move.
+    #[serde(default = "default_github_issues_enabled")]
+    github_issues_enabled: bool,
     /// Missing in files written before feature 039 → on, the requirement's default (FR-026).
     /// Additive and defaulted, so `settings_version` does not move for it either.
     #[serde(default = "default_desktop_notifications")]
@@ -821,6 +837,7 @@ impl StoredSettings {
             pr_status_enabled: settings.pr_status_enabled,
             jira_enabled: settings.jira_enabled,
             jira_connections: settings.jira_connections.clone(),
+            github_issues_enabled: settings.github_issues_enabled,
             desktop_notifications: settings.desktop_notifications,
             notification_kinds: settings.notification_kinds,
             long_task_threshold_secs: settings.long_task_threshold_secs,
@@ -874,6 +891,7 @@ impl StoredSettings {
             pr_status_enabled: self.pr_status_enabled,
             jira_enabled: self.jira_enabled,
             jira_connections: self.jira_connections,
+            github_issues_enabled: self.github_issues_enabled,
             desktop_notifications: self.desktop_notifications,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: clamp_long_task_threshold(self.long_task_threshold_secs),

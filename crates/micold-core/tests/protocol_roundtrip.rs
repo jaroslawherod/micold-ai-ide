@@ -365,6 +365,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             pr_status_enabled: Some(true),
             jira_enabled: None,
             jira_connection: None,
+            github_issues_enabled: Some(false),
             desktop_notifications: Some(false),
             // Feature 613 (W5.4, W5.6): the whole set of kinds, and the threshold in seconds.
             notification_kinds: Some(NotificationKinds {
@@ -394,6 +395,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             pr_status_enabled: None,
             jira_enabled: None,
             jira_connection: None,
+            github_issues_enabled: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -536,6 +538,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 scrollback_lines: 10_000,
@@ -609,6 +612,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 scrollback_lines: 1_000,
@@ -882,8 +886,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_55() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 55);
+fn the_protocol_version_is_56() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 56);
 }
 
 /// Two merged branches and the last commit of each one's pull request (feature 040).
@@ -1100,6 +1104,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
         let settings = DaemonSettings {
             jira_enabled: false,
             jira_connections: Default::default(),
+            github_issues_enabled: true,
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1139,6 +1144,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             pr_status_enabled: None,
             jira_enabled: None,
             jira_connection: None,
+            github_issues_enabled: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1150,6 +1156,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             ClientMsg::SettingsSet {
                 jira_enabled: None,
                 jira_connection: None,
+                github_issues_enabled: None,
                 cross_session_access,
                 ..
             } => assert_eq!(cross_session_access, Some(access)),
@@ -1176,6 +1183,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
         let settings = DaemonSettings {
             jira_enabled: false,
             jira_connections: Default::default(),
+            github_issues_enabled: true,
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1206,6 +1214,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
         let set = ClientMsg::SettingsSet {
             jira_enabled: None,
             jira_connection: None,
+            github_issues_enabled: None,
             plan_usage_enabled: None,
             plan_usage_warn_percent: None,
             req: 3,
@@ -1229,6 +1238,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             ClientMsg::SettingsSet {
                 jira_enabled: None,
                 jira_connection: None,
+                github_issues_enabled: None,
                 pr_status_enabled,
                 ..
             } => assert_eq!(pr_status_enabled, chosen),
@@ -1536,6 +1546,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
         let settings = DaemonSettings {
             jira_enabled: false,
             jira_connections: Default::default(),
+            github_issues_enabled: true,
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1578,6 +1589,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             pr_status_enabled: None,
             jira_enabled: None,
             jira_connection: None,
+            github_issues_enabled: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1740,6 +1752,7 @@ fn the_save_terminal_history_setting_round_trips_on_the_wire() {
             pr_status_enabled: None,
             jira_enabled: None,
             jira_connection: None,
+            github_issues_enabled: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1750,6 +1763,7 @@ fn the_save_terminal_history_setting_round_trips_on_the_wire() {
             ClientMsg::SettingsSet {
                 jira_enabled: None,
                 jira_connection: None,
+                github_issues_enabled: None,
                 save_terminal_history,
                 ..
             } => assert_eq!(save_terminal_history, chosen),
@@ -1784,6 +1798,7 @@ fn plan_usage_settings_set(
         pr_status_enabled: None,
         jira_enabled: None,
         jira_connection: None,
+        github_issues_enabled: None,
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,
@@ -1868,6 +1883,7 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 plan_usage_enabled: enabled,
                 plan_usage_warn_percent: percent,
                 ..settings.clone()
@@ -1883,6 +1899,7 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
             ClientMsg::SettingsSet {
                 jira_enabled: None,
                 jira_connection: None,
+                github_issues_enabled: None,
                 plan_usage_enabled,
                 plan_usage_warn_percent,
                 ..
@@ -2068,4 +2085,32 @@ fn hook_activity_round_trips_and_defaults_to_none() {
 #[test]
 fn the_repo_clone_messages_are_protocol_51_or_later() {
     assert!(std::hint::black_box(micold_core::protocol::version::PROTOCOL_VERSION) >= 51);
+}
+
+/// Feature 1102 (W1, W2): the GitHub issues switch crosses the wire both ways, off and unchanged.
+#[test]
+fn the_github_issues_switch_round_trips() {
+    for chosen in [None, Some(true), Some(false)] {
+        let mut asked = sample_client_msgs()
+            .into_iter()
+            .find(|m| matches!(m, ClientMsg::SettingsSet { .. }))
+            .expect("a SettingsSet sample");
+        if let ClientMsg::SettingsSet {
+            github_issues_enabled,
+            ..
+        } = &mut asked
+        {
+            *github_issues_enabled = chosen;
+        }
+        json_roundtrip(&asked);
+    }
+    let mut settings = sample_daemon_msgs()
+        .into_iter()
+        .find_map(|m| match m {
+            DaemonMsg::SettingsChanged { settings } => Some(settings),
+            _ => None,
+        })
+        .expect("a SettingsChanged sample");
+    settings.github_issues_enabled = false;
+    json_roundtrip(&DaemonMsg::SettingsChanged { settings });
 }

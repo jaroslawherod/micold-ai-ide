@@ -297,7 +297,9 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 54 → 55 for feature 1002's `GitCredentialTargets`, `GitCredentialGrant` and
 /// `GitCredentialRevoke` (contracts/protocol.md, M4).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 55;
+///
+/// And 55 → 56 for feature 1102's `github_issues_enabled` on `DaemonSettings` and `SettingsSet`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 56;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

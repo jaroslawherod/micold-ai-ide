@@ -192,7 +192,10 @@
 /// And 54 → 55 for feature 1002's scoped git credentials (contracts/protocol.md, M4):
 /// `DaemonMsg::GitCredentialTargets`, `ClientMsg::GitCredentialGrant` and
 /// `ClientMsg::GitCredentialRevoke`, which an older peer cannot decode.
-pub const PROTOCOL_VERSION: u32 = 55;
+///
+/// And 55 → 56 for feature 1102's GitHub issues switch (contracts/wire.md, W1-W3):
+/// `github_issues_enabled` on `DaemonSettings` and on `ClientMsg::SettingsSet`.
+pub const PROTOCOL_VERSION: u32 = 56;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

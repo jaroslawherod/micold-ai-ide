@@ -731,6 +731,9 @@ pub enum ClientMsg {
         /// (feature 533, FR-006). Per project, so two windows saving different projects never
         /// overwrite each other. Carries no token.
         jira_connection: Option<JiraConnectionChange>,
+        /// Turn the GitHub issues integration on or off, or `None` to leave unchanged (feature
+        /// 1102, FR-001).
+        github_issues_enabled: Option<bool>,
         /// Raise desktop notifications, or `None` to leave unchanged (feature 039, FR-026).
         desktop_notifications: Option<bool>,
         /// The per-kind switches, all four at once, or `None` to leave them unchanged
@@ -1626,6 +1629,9 @@ pub struct DaemonSettings {
     /// that this build would refuse, bar a development daemon's loopback `http` site reaching a
     /// release client, which is dev-only (research R10).
     pub jira_connections: std::collections::BTreeMap<String, JiraConnection>,
+    /// Whether the GitHub issues integration is on (feature 1102, FR-001). Service-owned so every
+    /// window follows one switch (FR-008).
+    pub github_issues_enabled: bool,
     /// Whether a session that comes to await input while not in view raises a desktop
     /// notification (feature 039, FR-026, FR-027). Service-owned so that every window follows one
     /// switch, and because the service is what grants a claim.
@@ -2063,6 +2069,7 @@ mod desktop_notifications_wire_tests {
         DaemonSettings {
             jira_enabled: false,
             jira_connections: Default::default(),
+            github_issues_enabled: true,
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -2119,6 +2126,7 @@ mod desktop_notifications_wire_tests {
                 pr_status_enabled: None,
                 jira_enabled: None,
                 jira_connection: None,
+                github_issues_enabled: None,
                 desktop_notifications: chosen,
                 notification_kinds: None,
                 long_task_threshold_secs: None,

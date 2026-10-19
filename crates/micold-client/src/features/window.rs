@@ -155,6 +155,7 @@ pub enum FieldId {
     SettingsSaveTerminalHistory,
     /// The Settings → GitHub pull request status switch (feature 040).
     SettingsPrStatus,
+    SettingsGithubIssues,
     /// Settings -> Jira: the **Enable Jira integration** switch (feature 533).
     SettingsJiraEnabled,
     /// Settings -> Jira: **Site URL** (feature 533).

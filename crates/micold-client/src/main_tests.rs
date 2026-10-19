@@ -407,6 +407,7 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
     micold_core::protocol::messages::DaemonSettings {
         jira_enabled: false,
         jira_connections: Default::default(),
+        github_issues_enabled: true,
         plan_usage_enabled: true,
         plan_usage_warn_percent: 80,
         scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
@@ -2569,6 +2570,7 @@ fn the_binding_toggle_opens_with_the_value_the_service_reported() {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 tool_server_enabled: false,
                 ..quiet_settings()
             },
@@ -2701,6 +2703,7 @@ fn the_desktop_notifications_switch_opens_with_the_value_the_service_reported() 
                 settings: DaemonSettings {
                     jira_enabled: false,
                     jira_connections: Default::default(),
+                    github_issues_enabled: true,
                     desktop_notifications: reported,
                     ..quiet_settings()
                 },
@@ -2749,6 +2752,7 @@ fn an_open_settings_page_shows_another_windows_save_and_keeps_its_own_edits() {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 desktop_notifications: false,
                 env_include_script_path: "/elsewhere/env.sh".into(),
                 scrollback_lines: 9999,
@@ -2800,6 +2804,7 @@ fn an_open_settings_page_keeps_an_edited_pr_status_switch_and_follows_an_untouch
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 desktop_notifications: false,
                 ..quiet_settings()
             },
@@ -2818,6 +2823,7 @@ fn an_open_settings_page_keeps_an_edited_pr_status_switch_and_follows_an_untouch
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 pr_status_enabled: true,
                 ..quiet_settings()
             },
@@ -2904,6 +2910,7 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 desktop_notifications: false,
                 tool_server_enabled: false,
                 ..quiet_settings()
@@ -3020,6 +3027,7 @@ fn turning_the_pr_status_switch_off_and_saving_tells_the_service() {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 pr_status_enabled: true,
                 ..quiet_settings()
             },
@@ -3058,6 +3066,7 @@ fn the_open_draft_follows_a_pr_status_change_from_the_service() {
                 settings: DaemonSettings {
                     jira_enabled: false,
                     jira_connections: Default::default(),
+                    github_issues_enabled: true,
                     pr_status_enabled: reported,
                     ..quiet_settings()
                 },
@@ -3216,6 +3225,124 @@ fn the_window_and_the_open_draft_follow_the_services_jira_settings() {
     );
 }
 
+/// Feature 1102 (FR-008): turning GitHub issues off and saving tells the service that one field.
+#[test]
+fn turning_github_issues_off_and_saving_tells_the_service() {
+    let (mut app, mut rx) = connected_app();
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::GithubIssuesToggled(false)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    let told: Vec<_> = drain(&mut rx)
+        .into_iter()
+        .filter_map(|msg| match msg {
+            ClientMsg::SettingsSet {
+                github_issues_enabled,
+                jira_enabled,
+                pr_status_enabled,
+                ..
+            } => Some((github_issues_enabled, jira_enabled, pr_status_enabled)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(told, vec![(Some(false), None, None)]);
+}
+
+/// A save that leaves the switch alone does not name it, so it never overwrites another window's.
+#[test]
+fn a_save_that_leaves_github_issues_alone_does_not_send_it() {
+    let (mut app, mut rx) = connected_app();
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    assert!(drain(&mut rx).into_iter().all(|msg| !matches!(
+        msg,
+        ClientMsg::SettingsSet {
+            github_issues_enabled: Some(_),
+            ..
+        }
+    )));
+}
+
+/// Feature 1102 (FR-008): the window adopts the service's switch, and an open untouched Settings
+/// page follows it; a page whose user edited it keeps the edit.
+#[test]
+fn the_window_and_the_open_draft_follow_the_services_github_issues_switch() {
+    let mut app = base_app();
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    assert!(
+        app.core.settings.github_issues_enabled,
+        "on on a first start"
+    );
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                github_issues_enabled: false,
+                ..quiet_settings()
+            },
+        },
+    );
+    assert!(!app.core.settings.github_issues_enabled);
+    let shown = |app: &App| {
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("the page is open")
+            .github
+            .issues_enabled
+    };
+    assert!(!shown(&app), "the open page shows what the service says");
+
+    // The user edits it on the page; the service then reports the other value: the edit stays.
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::GithubIssuesToggled(true)),
+    );
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                github_issues_enabled: false,
+                pr_status_enabled: true,
+                ..quiet_settings()
+            },
+        },
+    );
+    assert!(shown(&app), "an edit on the page is not overwritten");
+}
+
+/// A save with no service to echo it still puts the new value in force for this window, whatever
+/// the write does after (spec edge case).
+#[test]
+fn a_save_without_a_service_puts_the_github_issues_switch_in_force() {
+    let mut app = base_app();
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::GithubIssuesToggled(false)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    assert!(
+        !app.core.settings.github_issues_enabled,
+        "the new value is in force for this session"
+    );
+}
+
 /// U217 (feature 034, FR-016): choosing a value for "Let agents read and type into other
 /// sessions" and saving tells the connected service, which reads it on every tool request.
 #[test]
@@ -3274,6 +3401,7 @@ fn the_cross_session_select_opens_with_the_value_the_service_reported() {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 cross_session_access: CrossSessionAccess::Off,
                 ..quiet_settings()
             },
@@ -3433,6 +3561,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
             settings: micold_core::protocol::messages::DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -3476,6 +3605,7 @@ fn settings_changed_event_syncs_env_include_fields() {
             settings: micold_core::protocol::messages::DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -3979,6 +4109,7 @@ fn the_service_answers_with(
             settings: micold_core::protocol::messages::DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -5138,6 +5269,7 @@ fn settings_with_env_include(enabled: bool) -> DaemonSettings {
     DaemonSettings {
         jira_enabled: false,
         jira_connections: Default::default(),
+        github_issues_enabled: true,
         env_include_enabled: enabled,
         env_include_script_path: "   ".into(),
         ..quiet_settings()
@@ -5276,6 +5408,7 @@ fn availability_an_unrelated_settings_change_asks_nothing() {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 scrollback_lines: 42_000,
                 ..settings_with_env_include(true)
             },
@@ -6226,6 +6359,7 @@ mod script_path_report {
         micold_core::protocol::messages::DaemonSettings {
             jira_enabled: false,
             jira_connections: Default::default(),
+            github_issues_enabled: true,
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             default_ai_cli: AiCli::ClaudeCode,
@@ -6903,6 +7037,45 @@ mod issue_source {
                 mapping: vec![],
             },
         );
+    }
+
+    // --- 1102: the GitHub issues switch off (FR-002, FR-009, SC-001) -----------------------------
+
+    /// With the switch off, opening the form and trying every named event reaches neither `gh`
+    /// lookup nor a source: no issue list, search, description or details request is made. The
+    /// remotes are still asked for (FR-009).
+    #[test]
+    fn with_the_switch_off_no_issue_request_is_ever_made() {
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_page(page(issues())),
+        );
+        rig.app.core.settings.github_issues_enabled = false;
+        send(&mut rig.app, FormMsg::Opened);
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(sent.len(), 1, "the remotes are still read (FR-009)");
+        answer_remotes(&mut rig.app, sent[0].0, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        send(&mut rig.app, FormMsg::IssueRetry);
+        send(&mut rig.app, FormMsg::IssueQueryChanged("flick".into()));
+        assert!(form(&rig.app).github_repo().is_none());
+        assert_ne!(form(&rig.app).source, BranchSource::Issue);
+        assert!(rig.located_with.lock().unwrap().is_empty(), "no gh lookup");
+        assert!(rig.constructed.lock().unwrap().is_empty(), "no gh source");
+        // The search, descriptions and details starters are built from these requests, which the
+        // reducer only forms from a known repository.
+        let held = &rig.app.core.worktree_form;
+        assert!(held.issue_search_request().is_none());
+        assert!(held.issue_description_request().is_none());
+        assert!(held.issue_details_request().is_none());
+    }
+
+    /// With the switch on, the same steps do load (the default is unchanged: US2 AS2).
+    #[test]
+    fn with_the_switch_on_the_issue_source_still_loads() {
+        let rig = loaded_rig();
+        assert!(!rig.constructed.lock().unwrap().is_empty());
+        assert!(!form(&rig.app).issue_matches.is_empty());
     }
 
     // --- 837: the picked issue's details (US2, US3) ---------------------------------------------
@@ -10187,6 +10360,7 @@ mod pr_status {
             settings: micold_core::protocol::messages::DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 pr_status_enabled,
                 ..quiet_settings()
             },
@@ -11342,6 +11516,7 @@ fn another_windows_kinds_and_threshold_reach_the_stored_values() {
             settings: DaemonSettings {
                 jira_enabled: false,
                 jira_connections: Default::default(),
+                github_issues_enabled: true,
                 notification_kinds: kinds,
                 long_task_threshold_secs: 15,
                 ..quiet_settings()
