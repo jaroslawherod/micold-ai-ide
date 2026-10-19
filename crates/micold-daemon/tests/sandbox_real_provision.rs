@@ -223,7 +223,7 @@ fn facts_of(container: &str) -> ContainerFacts {
         image: parts.next().unwrap_or_default().to_string(),
         fingerprint: None,
         mount_destinations: Vec::new(),
-        // Created through `argv::create`, so stamped like any sandbox since #1002.
+        // The harness stamps its containers as `argv::create` does since #1002.
         git_identity_free: parts.next() == Some("none"),
     }
 }
