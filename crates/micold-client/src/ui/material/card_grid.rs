@@ -14,6 +14,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{Element, Event, Length, Point, Rectangle, Size, Vector};
+use micold_core::tokens::motion::duration;
 use micold_core::tokens::{spacing, Roles};
 
 /// The narrowest a card is drawn.
@@ -219,7 +220,7 @@ impl ZoomState {
 }
 
 /// How long a zoom may last: the sidebar's slide, and a little more.
-const ZOOM_LIMIT: Duration = SLIDE.saturating_add(Duration::from_millis(100));
+const ZOOM_LIMIT: Duration = SLIDE.saturating_add(Duration::from_millis(duration::SHORT_2));
 
 /// How close to an end width counts as there.
 const END_REACHED: f32 = 0.5;
@@ -888,7 +889,7 @@ mod tests {
             (1150.0, 1450.0, 1450.0, 1.0),
         ] {
             let got = zoom_fraction(start, end, w);
-            assert!(near(got, want), "{start}→{end} at {w}: {got} != {want}");
+            assert!(near(got, want), "{start} to {end} at {w}: {got} != {want}");
         }
     }
 
@@ -901,7 +902,7 @@ mod tests {
                     let got = ribbon_at(count, start, end, f);
                     let n = columns(width, MIN_WIDTH, GAP, MAX_COLUMNS);
                     let w = rest(width);
-                    assert_eq!(got.len(), count, "one piece per card at {start}→{end}");
+                    assert_eq!(got.len(), count, "one piece per card at {start} to {end}");
                     for (i, piece) in got.iter().enumerate() {
                         assert_eq!(piece.card, i);
                         assert!(near(piece.rect.x, (i % n) as f32 * (w + GAP)), "{piece:?}");
@@ -947,7 +948,7 @@ mod tests {
                                     || !crate::ui::material::test_support::overlap(
                                         &a.rect, &b.rect
                                     ),
-                                "{start}→{end} f {f}: {a:?} overlaps {b:?}"
+                                "{start} to {end} f {f}: {a:?} overlaps {b:?}"
                             );
                         }
                     }
