@@ -82,6 +82,7 @@ fn save_and_remove_keep_the_token_in_its_file_alone() {
         pr_status_enabled: None,
         jira_enabled: Some(true),
         jira_connection: Some(change),
+        github_issues_enabled: None,
         notification_kinds: None,
         long_task_threshold_secs: None,
         plan_usage_enabled: None,

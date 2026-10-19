@@ -1001,6 +1001,8 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     app.core.settings.jira_enabled = settings.jira_enabled;
     app.core.settings.jira_connections = settings.jira_connections;
     crate::shell::issues::sync_jira_availability(app);
+    // Feature 1102: the GitHub issues switch in force, in every window (FR-008).
+    app.core.settings.github_issues_enabled = settings.github_issues_enabled;
     // Feature 490: the switch and threshold in force; off forgets the reading (FR-002).
     app.core.plan_usage.settings(
         settings.plan_usage_enabled,
@@ -1052,6 +1054,7 @@ fn refresh_open_settings(app: &mut App) {
     // window counts as connected.
     now.pr_status_enabled = app.core.pr_status.enabled;
     now.jira_enabled = app.core.settings.jira_enabled;
+    now.github_issues_enabled = app.core.settings.github_issues_enabled;
     now.jira_connections = app.core.settings.jira_connections.clone();
     let project = app
         .core

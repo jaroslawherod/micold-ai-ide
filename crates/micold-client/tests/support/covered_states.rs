@@ -1825,6 +1825,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                         // On, so the page records the checked switch with its note (feature 040,
                         // UI §5/§6).
                         pr_status_enabled: true,
+                        issues_enabled: true,
                     },
                     section: SettingsSection::GithubIssues,
                     appearance: AppearanceDraft::default(),
