@@ -18,7 +18,7 @@ What one card says, `CardText::of(&CardModel)`. Validation rules are the contrac
 | Field | Type | Rule |
 |---|---|---|
 | `title` | `String` | `model.title` |
-| `title_tooltip` | `String` | `model.display_name` |
+| `title_tooltip` | `String` | `title_tooltip(title, display_name)`: `"<title>\n<display name>"`, or the display name alone when the title is it (FR-006, FR-015) |
 | `branch` | `Option<Line>` | `branch_line(title, branch)`: `None` without a branch or when the title is the branch; text = short branch or the branch; tooltip = full branch (FR-007) |
 | `sessions` | `String` | `sessions_line(model.sessions)` (FR-008) |
 | `progress` | `Option<ProgressRow>` | `progress_row(&model.progress)` (FR-009) |

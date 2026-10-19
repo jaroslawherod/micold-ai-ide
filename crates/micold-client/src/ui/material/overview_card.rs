@@ -449,7 +449,10 @@ mod tests {
             "{text:?}"
         );
         let words = micold_core::overview_text::CardText::of(&m);
-        assert_eq!(words.title_tooltip, "feat-1120_x");
+        assert_eq!(
+            words.title_tooltip,
+            "Overview cards: readable layout\nfeat-1120_x"
+        );
         assert_eq!(
             words.branch.map(|b| b.tooltip).as_deref(),
             Some("feat/1120_x")
@@ -510,16 +513,17 @@ mod tests {
         assert!(heights.iter().all(|h| *h == HEIGHT), "{heights:?}");
     }
 
-    /// U4: at 280 px no two pieces of the card overlap and none leaves it, even with a long name.
+    /// U4: at 280 px no two pieces of the card overlap and none leaves it, even with a long title
+    /// and a long branch.
     #[test]
-    fn no_text_overlaps_at_280_and_a_long_name_ellipsizes() {
-        let long = "a-display-name-that-is-far-too-long-to-fit-in-the-card ".repeat(4);
+    fn no_text_overlaps_at_280_and_a_long_title_ellipsizes() {
+        let long = "a-title-that-is-far-too-long-to-fit-in-the-card ".repeat(4);
         for state in CardState::ALL {
-            for name in ["feat-a", long.as_str()] {
-                let node = super::super::test_support::laid_out(
-                    card(&model(state, name)),
-                    Size::new(280.0, 400.0),
-                );
+            for text in ["feat-a", long.as_str()] {
+                let mut m = model(state, text);
+                m.title = text.into();
+                m.branch = Some(format!("feat/{text}"));
+                let node = super::super::test_support::laid_out(card(&m), Size::new(280.0, 400.0));
                 let parts = leaves(&node);
                 let whole = Rectangle::new(iced::Point::ORIGIN, node.size());
                 for (i, a) in parts.iter().enumerate() {
@@ -538,13 +542,15 @@ mod tests {
         }
     }
 
-    /// U4: the full name is the tooltip of the ellipsized name.
+    /// U4, FR-015: the full title and the display name are the tooltip of the ellipsized title.
     #[test]
-    fn the_full_display_name_is_in_the_tooltip() {
+    fn the_full_title_is_in_the_tooltip() {
         let long = "x".repeat(200);
+        let mut m = model(CardState::Idle, "feat-a");
+        m.title = long.clone();
         assert_eq!(
-            micold_core::overview_text::CardText::of(&model(CardState::Idle, &long)).title_tooltip,
-            long
+            micold_core::overview_text::CardText::of(&m).title_tooltip,
+            format!("{long}\nfeat-a")
         );
     }
 

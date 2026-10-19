@@ -248,7 +248,8 @@ the cards of a row share one height.
 - **FR-005**: Idle cards MUST stay visibly de-emphasised compared with every other state (feature
   813 FR-006), by the header row's colour, without lowering any text below FR-003's contrast.
 - **FR-006**: The card's title MUST be the linked issue's title when the app knows it, else the
-  branch, else the display name; its tooltip MUST show the location's display name.
+  branch, else the display name; its tooltip MUST show the full title followed by the location's
+  display name (the display name alone when the title is the display name).
 - **FR-007**: A card with a branch MUST show the short branch on its own line, unless the title
   already is the branch: `type/number` when the branch is `<type>/<number>`, or `<type>/<number>` or
   `<type>-<number>` followed by `_` or `-` and a slug (so `fix/1115-foo` and `fix/1115_foo` both

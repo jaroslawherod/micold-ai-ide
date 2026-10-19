@@ -48,10 +48,21 @@ pub struct CardText {
 /// A blank issue title counts as unknown.
 pub fn card_title(issue_title: Option<&str>, branch: Option<&str>, display_name: &str) -> String {
     issue_title
-        .filter(|title| !title.trim().is_empty())
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
         .or(branch)
         .unwrap_or(display_name)
         .to_string()
+}
+
+/// The title's tooltip (FR-006, FR-015): the display name, after the full title when the title is
+/// something else, so an ellipsized title can always be read in full.
+pub fn title_tooltip(title: &str, display_name: &str) -> String {
+    if title == display_name {
+        display_name.to_string()
+    } else {
+        format!("{title}\n{display_name}")
+    }
 }
 
 /// `type/number` of a conventional branch, `None` for any other (C5, FR-007, research R3): a
@@ -136,7 +147,7 @@ impl CardText {
         Self {
             branch: branch_line(&model.title, model.branch.as_deref()),
             title: model.title.clone(),
-            title_tooltip: model.display_name.clone(),
+            title_tooltip: title_tooltip(&model.title, &model.display_name),
             sessions: sessions_line(model.sessions),
             progress: progress_row(&model.progress),
             prs: model.prs.footer(),
@@ -197,6 +208,11 @@ mod tests {
             card_title(Some("   "), Some("main"), "d"),
             "main",
             "a blank issue title counts as unknown"
+        );
+        assert_eq!(
+            card_title(Some("  Fix the gate \n"), Some("main"), "d"),
+            "Fix the gate",
+            "an issue title is trimmed"
         );
     }
 
@@ -355,6 +371,30 @@ mod tests {
         }
     }
 
+    /// FR-006 and FR-015: the title's tooltip names the location and, when the title is not the
+    /// display name, holds the full title too, so a long (ellipsized) title can be read in full.
+    #[test]
+    fn the_title_tooltip_holds_the_full_title_and_the_display_name() {
+        let long = "A very long issue title that will not fit on one line of a 280 px card at all";
+        assert_eq!(
+            title_tooltip(long, "Worktree overview"),
+            format!("{long}\nWorktree overview")
+        );
+        assert_eq!(
+            title_tooltip(
+                "feat/make-a-very-long-branch-selector",
+                "Make a very long branch selector"
+            ),
+            "feat/make-a-very-long-branch-selector\nMake a very long branch selector",
+            "a branch used as the title keeps its full name in the tooltip"
+        );
+        assert_eq!(
+            title_tooltip("Default", "Default"),
+            "Default",
+            "a title that is the display name shows once"
+        );
+    }
+
     /// Data-model *CardText*: each field from its rule.
     #[test]
     fn card_text_takes_each_field_from_its_rule() {
@@ -363,7 +403,7 @@ mod tests {
             CardText::of(&m),
             CardText {
                 title: ISSUE_TITLE.into(),
-                title_tooltip: "feat-1120_x".into(),
+                title_tooltip: format!("{ISSUE_TITLE}\nfeat-1120_x"),
                 branch: Some(Line {
                     text: "feat/1120".into(),
                     tooltip: "feat/1120_x".into(),

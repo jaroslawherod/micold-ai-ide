@@ -12,3 +12,8 @@ list, and each row names the task pair it covers. Append only.
 | T009 | `CardModel.summary` → `title` via `card_title`; `features::overview::summary` removed; showcase sample | structural rename; `tests/overview.rs` title tests now expect the root's title to be its display name (R2: *Project root* moves to the header in US1) | client builds; see T010 |
 | T005, T010 | card renders `CardText`: title, short branch, `Feature · 1 session · 1 running`, no empty progress or 0 · 0 row | `cargo test -p micold-client --lib -- overview_card`: 5 FAILED, e.g. painted `["…", "feat-1120_x", …, "feat/1120_x", "Overview cards: readable layout", "Feature · 1 sessions, 1 running", "No task progress"]`; `FR-009: no empty progress row left: "No task progress"` | `cargo test -p micold-client --lib -- overview_card card_grid`: 41 passed. Note: at the 400 px test window the title ellipsizes (`Overview cards: readable…`), so the title assertion accepts an ellipsized prefix; growing cards is M3 |
 | T011 | user guide: *Title*, short branch, sessions line, hidden empty rows | docs | — |
+
+## M1 review A round 1 fixes (F1, F4)
+
+- Red: `the_title_tooltip_holds_the_full_title_and_the_display_name` and the trim case of `the_title_is_the_issue_title_else_the_branch_else_the_display_name` — `error[E0425]: cannot find function title_tooltip`.
+- Green: `overview_text::title_tooltip`, `card_title` trims; `cargo test -p micold-core --lib overview_text`: 9 passed.
