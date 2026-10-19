@@ -643,15 +643,26 @@ mod tests {
             });
             s
         };
-        state
-            .workspace
-            .sessions
-            .insert(path, vec![session(None), session(Some("Helper prompt"))]);
+        state.workspace.sessions.insert(
+            path,
+            vec![
+                session(Some(r#"<agent-message from="x"></agent-message>"#)),
+                session(Some("Helper prompt")),
+            ],
+        );
         let all = cards(&state);
         let card = all
             .iter()
             .find(|c| c.location == location)
             .expect("the worktree's card");
-        assert_eq!(card.activity, None);
+        assert_eq!(
+            card.activity.as_ref().map(|a| a.line.as_str()),
+            Some(r#"<agent-message from="x"></agent-message>"#),
+            "the main session's activity, not the helper's"
+        );
+        assert_eq!(
+            micold_core::overview_text::activity_line(card.activity.as_ref()),
+            None
+        );
     }
 }

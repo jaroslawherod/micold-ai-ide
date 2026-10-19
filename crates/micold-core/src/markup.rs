@@ -6,11 +6,27 @@
 //! (FR-020).
 
 /// The words of `text` with every tag removed and whitespace runs collapsed to one space; `None`
-/// when nothing is left, or when removal left a tag behind (`<<b>a>`) (contract C1).
+/// when nothing is left (contract C1).
 ///
 /// A tag is `<`, an optional `/`, an ASCII letter, then every character up to and including the
 /// next `>`, provided no `<` comes first. `a < b` and `x<3` are not tags and stay as written.
+/// Removal repeats until no tag is left, because one removal can join a `<` and a following `a>`
+/// into a new tag: `<<b>a>` is `None`, and `Vec<Vec<u8>>` reads `Vec`.
 pub fn readable(text: &str) -> Option<String> {
+    let mut words = strip_tags(text);
+    loop {
+        let again = strip_tags(&words);
+        if again == words {
+            break;
+        }
+        words = again;
+    }
+    let words = words.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!words.is_empty()).then_some(words)
+}
+
+/// `text` with one pass of tag removal.
+fn strip_tags(text: &str) -> String {
     let mut words = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(at) = rest.find('<') {
@@ -24,11 +40,7 @@ pub fn readable(text: &str) -> Option<String> {
         }
     }
     words.push_str(rest);
-    let words = words.split_whitespace().collect::<Vec<_>>().join(" ");
-    let tag_left = words
-        .match_indices('<')
-        .any(|(at, _)| tag_len(&words[at..]).is_some());
-    (!words.is_empty() && !tag_left).then_some(words)
+    words
 }
 
 /// The length in bytes of the tag `s` starts with, or `None` when `s` does not start with one.
@@ -90,8 +102,12 @@ mod tests {
     }
 
     #[test]
-    fn a_tag_left_after_removal_is_none() {
+    fn a_tag_formed_by_a_removal_is_removed_too() {
         assert_eq!(readable("<<b>a>"), None);
+        assert_eq!(
+            readable("Change the field to Vec<Vec<u8>>"),
+            some("Change the field to Vec")
+        );
     }
 
     #[test]

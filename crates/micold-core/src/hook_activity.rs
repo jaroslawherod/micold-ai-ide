@@ -49,11 +49,15 @@ fn clip(s: &str) -> String {
     s.chars().take(MAX_TEXT_CHARS).collect()
 }
 
+/// A todo's readable words, clipped after sanitising like the prompt (research R8); `None` when
+/// nothing readable is left.
+fn readable_clip(s: &str) -> Option<String> {
+    crate::markup::readable(s).map(|s| clip(&s))
+}
+
+/// One todo item; an item whose content has nothing readable is skipped like an empty one.
 fn parse_todo(item: &Value) -> Option<Todo> {
-    let text = clip(item.get("content")?.as_str()?.trim());
-    if text.is_empty() {
-        return None;
-    }
+    let text = readable_clip(item.get("content")?.as_str()?)?;
     let status = match item.get("status")?.as_str()? {
         "pending" => TodoStatus::Pending,
         "in_progress" => TodoStatus::InProgress,
@@ -63,9 +67,7 @@ fn parse_todo(item: &Value) -> Option<Todo> {
     let active = item
         .get("activeForm")
         .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(clip);
+        .and_then(readable_clip);
     Some(Todo {
         text,
         active,
@@ -88,7 +90,7 @@ impl HookActivity {
                 };
                 // Sanitise the whole prompt before clipping, so a clip never cuts a tag in half
                 // (research R8); nothing readable clears the earlier prompt.
-                let prompt = crate::markup::readable(prompt).map(|p| clip(&p));
+                let prompt = readable_clip(prompt);
                 if prompt == self.prompt {
                     return false;
                 }
@@ -193,6 +195,28 @@ mod tests {
         assert!(h.apply(&prompt(&long)));
         assert_eq!(h.prompt.as_deref(), Some("x".repeat(200).as_str()));
         assert!(!h.apply(&json!({"hook_event_name": "UserPromptSubmit"})));
+    }
+
+    /// C10: todo content and `activeForm` are sanitised before clipping, like the prompt; a
+    /// markup-only todo is skipped, so it never hides the prompt.
+    #[test]
+    fn todo_text_is_sanitised_before_clipping() {
+        let mut h = HookActivity::default();
+        let long = format!("<b>{}</b>", "y".repeat(300));
+        assert!(h.apply(&todo_write(json!([
+            {"content": long, "activeForm": "<i>\nFixing it\n</i>", "status": "in_progress"},
+            {"content": "<agent-message from=\"x\"></agent-message>", "status": "in_progress"},
+        ]))));
+        assert_eq!(h.todos.len(), 1, "the markup-only todo is skipped");
+        assert_eq!(h.todos[0].text, "y".repeat(200));
+        assert_eq!(h.todos[0].active.as_deref(), Some("Fixing it"));
+
+        let mut h = HookActivity::default();
+        h.apply(&prompt("Continue M2"));
+        h.apply(&todo_write(json!([
+            {"content": "<agent-message from=\"x\"></agent-message>", "status": "in_progress"},
+        ])));
+        assert_eq!(h.current().map(|c| c.line).as_deref(), Some("Continue M2"));
     }
 
     #[test]
