@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use micold_client::features::changes::{
-    self, base_line, diff_body, list_body, pr_mark, DiffBody, Effect, ListBody, Msg, PrDiffLoad,
-    PrList, Source, State,
+    self, base_line, check_mark, diff_body, list_body, pr_mark, DiffBody, Effect, ListBody, Msg,
+    PrDiffLoad, PrList, Source, State,
 };
 use micold_client::ui::PrMark;
 use micold_core::pull_request::{
@@ -34,6 +34,7 @@ fn pr(number: u64, state: BranchPrState) -> BranchPullRequest {
         base: "main".into(),
         head: "abc".into(),
         head_branch: "feat/a".into(),
+        checks: micold_core::pull_request::CheckStatus::None,
     }
 }
 
@@ -283,6 +284,25 @@ fn the_four_states_have_four_distinct_marks() {
     assert_eq!(
         marks,
         [PrMark::Open, PrMark::Draft, PrMark::Merged, PrMark::Closed]
+    );
+}
+
+#[test]
+fn a_check_status_maps_to_a_mark_and_none_has_no_mark() {
+    use micold_client::ui::CheckMark;
+    use micold_core::pull_request::CheckStatus;
+    assert_eq!(check_mark(CheckStatus::None), None);
+    assert_eq!(
+        [
+            check_mark(CheckStatus::Pending),
+            check_mark(CheckStatus::Passing),
+            check_mark(CheckStatus::Failing)
+        ],
+        [
+            Some(CheckMark::Pending),
+            Some(CheckMark::Passing),
+            Some(CheckMark::Failing)
+        ]
     );
 }
 

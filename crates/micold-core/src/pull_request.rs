@@ -180,12 +180,24 @@ const COUNT_PAGE_SIZE: usize = 100;
 /// Only the fork flag of each node: the counts leave out other repositories' pull requests.
 const COUNT_NODES: &str = "{ nodes { isCrossRepository } }";
 
+/// The last commit's check counts by state, as a field list: one text for the sidebar's fragment and
+/// the Review changes list (feature 1003, FR-003), so both mark a pull request the same way.
+macro_rules! commits_rollup {
+    () => {
+        "commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 1) { \
+checkRunCount checkRunCountsByState { state count } statusContextCount \
+statusContextCountsByState { state count } } } } } }"
+    };
+}
+
 /// What is read of each pull request. Check counts by state, never the checks themselves: one
 /// request stays small however many checks a pull request has.
-const FRAGMENT: &str = "fragment pr on PullRequest { number title url state isDraft createdAt \
-isCrossRepository headRefOid reviewDecision mergeable commits(last: 1) { nodes { commit { \
-statusCheckRollup { contexts(first: 1) { checkRunCount checkRunCountsByState { state count } \
-statusContextCount statusContextCountsByState { state count } } } } } } }";
+const FRAGMENT: &str = concat!(
+    "fragment pr on PullRequest { number title url state isDraft createdAt \
+isCrossRepository headRefOid reviewDecision mergeable ",
+    commits_rollup!(),
+    " }"
+);
 
 /// The GraphQL document that asks about `n` branches (1 to [`BRANCHES_PER_REQUEST`]), on one line.
 ///
@@ -491,7 +503,7 @@ struct RawNode {
     commits: RawCommits,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Default)]
 struct RawCommits {
     nodes: Vec<RawCommitNode>,
 }
@@ -525,24 +537,29 @@ struct RawStateCount {
     count: u64,
 }
 
-impl From<RawNode> for PrNode {
-    fn from(raw: RawNode) -> Self {
+impl RawCommits {
+    /// The check counts of the last commit; `None` for a `null` rollup or no commit.
+    fn into_counts(self) -> Option<CheckCounts> {
         let counts = |list: Option<Vec<RawStateCount>>| {
             list.unwrap_or_default()
                 .into_iter()
                 .map(|entry| (entry.state, entry.count))
                 .collect()
         };
-        let checks = raw
-            .commits
-            .nodes
+        self.nodes
             .into_iter()
             .next_back()
             .and_then(|node| node.commit.status_check_rollup)
             .map(|rollup| CheckCounts {
                 check_runs: counts(rollup.contexts.check_run_counts_by_state),
                 status_contexts: counts(rollup.contexts.status_context_counts_by_state),
-            });
+            })
+    }
+}
+
+impl From<RawNode> for PrNode {
+    fn from(raw: RawNode) -> Self {
+        let checks = raw.commits.into_counts();
         PrNode {
             number: raw.number,
             title: raw.title,
@@ -770,6 +787,8 @@ pub struct BranchPullRequest {
     pub head: String,
     /// `headRefName`: the branch it was opened from (feature 1003), named by the header's base line.
     pub head_branch: String,
+    /// The combined result of its last commit's checks (feature 1003, FR-003), whatever its state.
+    pub checks: CheckStatus,
 }
 
 impl fmt::Debug for BranchPullRequest {
@@ -804,6 +823,7 @@ pub const LIST_BRANCHES_PER_REQUEST: usize = 25;
 /// default branch's name comes back so its alias can be dropped. No branch name is in the document.
 pub fn list_query(n: usize) -> String {
     use fmt::Write as _;
+    const COMMITS_ROLLUP: &str = commits_rollup!();
     let mut variables = String::new();
     let mut aliases = String::new();
     for i in 0..n {
@@ -813,7 +833,7 @@ pub fn list_query(n: usize) -> String {
             aliases,
             "p{i}: pullRequests(headRefName: $b{i}, first: 100, orderBy: {{field: CREATED_AT, direction: DESC}}) \
              {{ nodes {{ number title url state isDraft createdAt isCrossRepository baseRefName \
-             headRefName headRefOid }} }} "
+             headRefName headRefOid {COMMITS_ROLLUP} }} }} "
         );
     }
     format!(
@@ -859,6 +879,9 @@ struct ListNode {
     base_ref_name: String,
     head_ref_name: String,
     head_ref_oid: String,
+    /// Absent in answers recorded before the counts were asked: no checks.
+    #[serde(default)]
+    commits: RawCommits,
 }
 
 /// Newest first by `createdAt`, then the higher number first (FR-004).
@@ -919,6 +942,7 @@ pub fn parse_list(
                 base: node.base_ref_name,
                 head: node.head_ref_oid,
                 head_branch: node.head_ref_name,
+                checks: reduce_checks(node.commits.into_counts().as_ref()),
             });
         }
     }

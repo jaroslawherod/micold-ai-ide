@@ -480,7 +480,7 @@ pub fn pull_request_row<'a>(
     roles: Roles,
     _i: usize,
 ) -> Element<'a, Message> {
-    use crate::ui::material::{PrMark, PullRequestRow};
+    use crate::ui::material::{CheckMark, PrMark, PullRequestRow};
     let pose = |label: &'static str, row: PullRequestRow<'a, Message>| {
         posed(label, Element::from(row), roles)
     };
@@ -493,6 +493,18 @@ pub fn pull_request_row<'a>(
             pose("draft", row_of(13, "Try a spike", PrMark::Draft)),
             pose("merged", row_of(12, "Ship the parser", PrMark::Merged)),
             pose("closed", row_of(11, "Abandoned attempt", PrMark::Closed)),
+            pose(
+                "checks passing",
+                row_of(14, "Add the export", PrMark::Open).checks(CheckMark::Passing),
+            ),
+            pose(
+                "checks failing",
+                row_of(13, "Try a spike", PrMark::Draft).checks(CheckMark::Failing),
+            ),
+            pose(
+                "checks pending",
+                row_of(12, "Ship the parser", PrMark::Merged).checks(CheckMark::Pending),
+            ),
             pose(
                 "selected",
                 row_of(14, "Add the export", PrMark::Open).selected(true),

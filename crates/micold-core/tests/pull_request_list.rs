@@ -9,7 +9,8 @@ use micold_core::github::GithubRepo;
 use micold_core::process::RunOutcome;
 use micold_core::pull_request::{
     list_args, list_in_chunks, list_query, read_list_outcome, BranchPrState, BranchPullRequest,
-    FakePullRequestSource, PullRequestSource, ReadingFailure, LIST_BRANCHES_PER_REQUEST,
+    CheckStatus, FakePullRequestSource, PullRequestSource, ReadingFailure,
+    LIST_BRANCHES_PER_REQUEST,
 };
 
 const NOW: u64 = 1_790_000_000;
@@ -56,6 +57,7 @@ fn pr(number: u64, created_at: &str) -> BranchPullRequest {
         base: "main".to_string(),
         head: format!("{number:040x}"),
         head_branch: format!("feat/{number}"),
+        checks: CheckStatus::None,
     }
 }
 
@@ -281,5 +283,36 @@ fn the_fake_answers_in_script_order_and_records_each_call() {
             ("acme/widgets".to_string(), c.clone()),
             ("acme/widgets".to_string(), c),
         ]
+    );
+}
+
+#[test]
+fn the_query_asks_the_last_commits_check_counts_like_the_sidebar() {
+    let query = list_query(1);
+    for field in [
+        "commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 1) {",
+        "checkRunCountsByState { state count }",
+        "statusContextCountsByState { state count }",
+    ] {
+        assert!(query.contains(field), "asks {field}");
+    }
+}
+
+#[test]
+fn every_state_carries_the_check_status_of_its_last_commit() {
+    let list = read("pr_list_branches_checks.txt", &["feat/k"]).expect("readable");
+    let seen: Vec<(u64, BranchPrState, CheckStatus)> =
+        list.iter().map(|p| (p.number, p.state, p.checks)).collect();
+    assert_eq!(
+        seen,
+        [
+            (55, BranchPrState::Closed, CheckStatus::Failing),
+            (54, BranchPrState::Merged, CheckStatus::Failing),
+            (53, BranchPrState::Open, CheckStatus::None),
+            (52, BranchPrState::Draft, CheckStatus::Pending),
+            (51, BranchPrState::Open, CheckStatus::Failing),
+            (50, BranchPrState::Open, CheckStatus::Passing),
+        ],
+        "merged and closed keep their check status too (FR-003)"
     );
 }

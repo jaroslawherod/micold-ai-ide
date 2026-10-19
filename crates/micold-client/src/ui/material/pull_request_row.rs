@@ -1,10 +1,10 @@
 //! `PullRequestRow`: one pull request of the Changes pane's list (feature 775, FR-003).
 //!
-//! The state mark (the sidebar's [`PullRequestIndicator`], without check status), `#number`, and the
+//! The state mark and the check mark (the sidebar's [`PullRequestIndicator`]), `#number`, and the
 //! title on one fixed-height line; `selected` outlines it, `stale` draws the mark and the text in
 //! their quieter form. The row is informational until a press is wired (M2).
 
-use crate::ui::material::{PrMark, PullRequestIndicator, Text, TypeRole};
+use crate::ui::material::{CheckMark, PrMark, PullRequestIndicator, Text, TypeRole};
 use iced::widget::{container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::tokens::{spacing, Roles};
@@ -20,6 +20,7 @@ pub struct PullRequestRow<'a, M> {
     number: u64,
     title: Cow<'a, str>,
     state: PrMark,
+    checks: Option<CheckMark>,
     selected: bool,
     stale: bool,
     _marker: PhantomData<M>,
@@ -33,10 +34,17 @@ impl<'a, M: 'a> PullRequestRow<'a, M> {
             number,
             title: title.into(),
             state,
+            checks: None,
             selected: false,
             stale: false,
             _marker: PhantomData,
         }
+    }
+
+    /// Follow the state mark with the check mark (feature 1003, FR-003). No call, no check mark.
+    pub fn checks(mut self, checks: CheckMark) -> Self {
+        self.checks = Some(checks);
+        self
     }
 
     /// Draw the row as the one shown in the diff.
@@ -63,7 +71,10 @@ impl<'a, M: 'a> From<PullRequestRow<'a, M>> for Element<'a, M> {
                 text
             }
         };
-        let mark = PullRequestIndicator::<M>::new(r.state, &roles).stale(r.stale);
+        let mut mark = PullRequestIndicator::<M>::new(r.state, &roles).stale(r.stale);
+        if let Some(checks) = r.checks {
+            mark = mark.checks(checks);
+        }
         let line = row![
             Element::from(mark),
             text(Cow::Owned(format!("#{}", r.number))),
@@ -120,5 +131,24 @@ mod tests {
         .map(|e: Element<'_, ()>| size_of(e).height)
         .collect();
         assert!(heights.iter().all(|h| *h == HEIGHT), "{heights:?}");
+    }
+
+    /// FR-003: a check mark widens the mark but never the row's height, and it is drawn.
+    #[test]
+    fn a_check_mark_keeps_the_row_height_and_is_drawn() {
+        let r = tokens::roles(ColorScheme::Light);
+        let row = |checks: Option<CheckMark>| {
+            let row = PullRequestRow::<()>::new(1, "short", PrMark::Merged, &r);
+            Element::from(match checks {
+                Some(c) => row.checks(c),
+                None => row,
+            })
+        };
+        let bare = size_of(row(None));
+        for mark in [CheckMark::Pending, CheckMark::Passing, CheckMark::Failing] {
+            let with = size_of(row(Some(mark)));
+            assert_eq!(with.height, HEIGHT, "{mark:?}");
+            assert_eq!(with.width, bare.width, "the row fills its width");
+        }
     }
 }

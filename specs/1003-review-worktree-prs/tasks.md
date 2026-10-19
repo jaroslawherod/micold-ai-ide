@@ -44,13 +44,13 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 
 ### Check status on every entry (US1 scenario 3; milestone M2)
 
-- [ ] T015 [P] [US1] Write failing tests in `crates/micold-core/tests/pull_request_list.rs` for check status (FR-003, research R4) on new fixtures `crates/micold-core/tests/fixtures/gh/pr_list_branches_checks.txt` (one PR per check outcome: passing, failing, pending, no rollup; a merged and a closed PR with a failing rollup): `list_query` asks the last commit's `statusCheckRollup` counts with the sidebar's `FRAGMENT` fields; `parse_list` sets `BranchPullRequest.checks` by `reduce_checks` for every state, merged and closed included
-- [ ] T016 [US1] Add the rollup fields to `list_query` and `checks: CheckStatus` to `BranchPullRequest` in `crates/micold-core/src/pull_request.rs` (reuse `reduce_checks` and the `status_query` fragment, no copy), until T015 passes
-- [ ] T017 [P] [US1] Write failing tests for one shared `check_mark(CheckStatus) -> Option<CheckMark>` beside `pr_mark` in `crates/micold-client/src/features/changes.rs` (`None` → no mark, the other three distinct), and the `PullRequestRow::checks(CheckMark)` component test in `crates/micold-client/src/ui/material/pull_request_row.rs`, in the pattern of its existing test (Constitution VIII)
-- [ ] T018 [US1] Implement `check_mark` in `crates/micold-client/src/features/changes.rs` and make `indicator_marks` in `crates/micold-client/src/ui/sidebar.rs` use it (one mapping); implement `PullRequestRow::checks` passing the mark to its `PullRequestIndicator`; in `crates/micold-client/src/showcase/sections/review.rs` show a row with each check mark; until T017 passes
-- [ ] T019 [US1] `crates/micold-client/src/ui/changes.rs`: each pull request row draws its check mark with `.checks(..)` (US1 scenario 3)
-- [ ] T020 [US1] User guide: the check mark on every entry (merged and closed included, same marks as the sidebar) in `docs/user-guide/reviewing-changes.md` § Pull requests
-- [ ] T021 [US1] Visual pass (quickstart §B step 2, the check marks); record evidence in `specs/1003-review-worktree-prs/`
+- [x] T015 [P] [US1] Write failing tests in `crates/micold-core/tests/pull_request_list.rs` for check status (FR-003, research R4) on new fixtures `crates/micold-core/tests/fixtures/gh/pr_list_branches_checks.txt` (one PR per check outcome: passing, failing, pending, no rollup; a merged and a closed PR with a failing rollup): `list_query` asks the last commit's `statusCheckRollup` counts with the sidebar's `FRAGMENT` fields; `parse_list` sets `BranchPullRequest.checks` by `reduce_checks` for every state, merged and closed included
+- [x] T016 [US1] Add the rollup fields to `list_query` and `checks: CheckStatus` to `BranchPullRequest` in `crates/micold-core/src/pull_request.rs` (reuse `reduce_checks` and the `status_query` fragment, no copy), until T015 passes
+- [x] T017 [P] [US1] Write failing tests for one shared `check_mark(CheckStatus) -> Option<CheckMark>` beside `pr_mark` in `crates/micold-client/src/features/changes.rs` (`None` → no mark, the other three distinct), and the `PullRequestRow::checks(CheckMark)` component test in `crates/micold-client/src/ui/material/pull_request_row.rs`, in the pattern of its existing test (Constitution VIII)
+- [x] T018 [US1] Implement `check_mark` in `crates/micold-client/src/features/changes.rs` and make `indicator_marks` in `crates/micold-client/src/ui/sidebar.rs` use it (one mapping); implement `PullRequestRow::checks` passing the mark to its `PullRequestIndicator`; in `crates/micold-client/src/showcase/sections/review.rs` show a row with each check mark; until T017 passes
+- [x] T019 [US1] `crates/micold-client/src/ui/changes.rs`: each pull request row draws its check mark with `.checks(..)` (US1 scenario 3)
+- [x] T020 [US1] User guide: the check mark on every entry (merged and closed included, same marks as the sidebar) in `docs/user-guide/reviewing-changes.md` § Pull requests
+- [ ] T021 [US1] Visual pass (quickstart §B step 2, the check marks); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M2 to the close unit, beside T014 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
 
 ## Phase 4: User Story 2 - Switch between the pull requests and review each one's diff (P1)
 
@@ -117,7 +117,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — Every pull request of the worktree is listed 🎯 MVP
 
-- **Tasks**: T001–T013 (T014 moved to the close unit)
+- **Tasks**: T001–T013 (T014 moved to the close unit) · **M1 PR**: #1094
 - **Deliverable**: with "Show pull request status" on, Review changes of a worktree lists the pull requests of its current branch and of every branch created in it (deleted ones included, the default branch and branches only checked out there excluded), newest first, each with number, title and state; selecting any of them shows its own diff (775) under a base line naming its own head branch
 - **Satisfies**: US1 acceptance scenarios 1, 2, 4; FR-001, FR-002, FR-004, FR-013, FR-014; SC-001, SC-007
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test worktree_branch_set --test pull_request_list`; `scripts/build-lock.sh cargo test -p micold-core --lib worktree_branches`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes --test pr_status_is_read_only_on_named_events`; `scripts/build-lock.sh cargo test -p micold-client pr_list_branch_set`; quickstart §B steps 1, 2, 6 in the close unit (T014)
@@ -126,10 +126,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M2 — Check status on every entry
 
-- **Tasks**: T015–T021
+- **Tasks**: T015–T020 (T021 moved to the close unit)
 - **Deliverable**: every listed pull request, merged and closed included, shows its last commit's check mark (passing, failing, pending, or none) with the same marks the sidebar uses, from one shared mapping
 - **Satisfies**: US1 acceptance scenario 3; FR-003
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test pull_request_list`; `scripts/build-lock.sh cargo test -p micold-client --lib -- check_mark pull_request_row`; quickstart §B step 2 (check marks)
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test pull_request_list`; `scripts/build-lock.sh cargo test -p micold-client --lib -- check_mark pull_request_row`; quickstart §B step 2 (check marks) in the close unit (T021)
 - **Depends on**: M1
 - **Tier**: full
 

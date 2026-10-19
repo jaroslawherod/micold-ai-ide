@@ -10462,6 +10462,7 @@ mod pr_status {
             base: "main".into(),
             head: "a".repeat(40),
             head_branch: "feat-a".into(),
+            checks: micold_core::pull_request::CheckStatus::None,
         }
     }
 

@@ -109,6 +109,7 @@ fn a_listed_pull_request_derives_no_serialisation_and_prints_no_title_or_address
         base: "main".to_string(),
         head: "0123456789abcdef0123456789abcdef01234567".to_string(),
         head_branch: "feat/billing-export".to_string(),
+        checks: micold_core::pull_request::CheckStatus::None,
     };
     for output in [format!("{listed:?}"), format!("{listed:#?}")] {
         assert!(

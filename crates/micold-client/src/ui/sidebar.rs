@@ -917,12 +917,7 @@ pub(crate) fn unix_now() -> u64 {
 /// request module, so the mapping lives here (contract §1). Only an open or draft one has checks,
 /// and `None` means no checks at all (FR-003).
 fn indicator_marks(state: &PrState) -> (PrMark, Option<CheckMark>) {
-    let checks = |c: &CheckStatus| match c {
-        CheckStatus::None => None,
-        CheckStatus::Pending => Some(CheckMark::Pending),
-        CheckStatus::Passing => Some(CheckMark::Passing),
-        CheckStatus::Failing => Some(CheckMark::Failing),
-    };
+    let checks = |c: &CheckStatus| crate::features::changes::check_mark(*c);
     match state {
         PrState::Open { checks: c } => (PrMark::Open, checks(c)),
         PrState::Draft { checks: c } => (PrMark::Draft, checks(c)),
