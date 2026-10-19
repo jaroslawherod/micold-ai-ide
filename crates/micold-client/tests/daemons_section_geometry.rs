@@ -422,7 +422,7 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
             namespace: Some("apps".into()),
         },
     ]))));
-    for kind in [AllowedKind::GitSshKey, AllowedKind::RegistryPull] {
+    for kind in [AllowedKind::GitConfig, AllowedKind::RegistryPull] {
         state.update(Message::Daemons(DaemonsMsg::AllowedToggled(kind, true)));
     }
     state.update(Message::Daemons(DaemonsMsg::Saved));
@@ -436,7 +436,6 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
         "Image",
         "CPU request",
         "Memory limit",
-        "SSH key file",
         "Registry credentials file",
         "Node selector",
         "Tolerations",

@@ -832,6 +832,9 @@ pub struct DaemonView {
     /// A sentence under the row about the image the daemon runs on (FR-016, FR-017): the stored
     /// migration notice, or that a running container is still on the released image.
     pub notice: Option<String>,
+    /// The notice includes the entry's own one-time notice ([`DaemonEntry::notice`]), which the
+    /// user dismisses from the row (FR-003).
+    pub notice_dismissable: bool,
     /// Stopping (and so restarting) it is not offered yet: a container still on the released image
     /// is replaced only when no session is running in it (FR-017).
     pub stop_blocked: bool,

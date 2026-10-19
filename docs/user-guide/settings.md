@@ -484,7 +484,7 @@ daemon either and says where to add one.
 ### Container daemons
 
 Everything about the process that actually runs your sessions is in the daemon's form, because it is
-one decision: sharing your SSH agent means nothing when the service is a plain process on this
+one decision: sharing your AI CLI sign-in means nothing when the service is a plain process on this
 computer, and means a great deal when it is a container.
 
 A daemon runs either directly on this computer (the default) or inside a container that sees only
@@ -531,11 +531,14 @@ The container starts with **none** of your credentials, and upgrading the app ne
 Each share is separate, and only what you tick is passed in:
 
 - **Git configuration** — `~/.gitconfig`, read-only: your commit identity.
-- **SSH agent** — the agent's socket. The socket, never the keys themselves.
-- **Git credentials** — the git credential helper's store.
 - **AI CLI sign-in** — the AI CLI's own authentication material.
 
-While any of these is on, the form lists exactly which ones by name, and the rail marks
+The **SSH agent** and **Git credentials** shares were removed: they handed the sandbox your whole
+git identity. A daemon that had either on keeps working without it, and its entry in the daemon list
+shows a one-time notice with a **Dismiss** button. Until the scoped credential is set up, a sandbox
+cannot push.
+
+While either of these is on, the form lists exactly which ones by name, and the rail marks
 **Daemons** with a *Sharing* badge — so you can tell at a glance, from any section, that
 something is being shared.
 

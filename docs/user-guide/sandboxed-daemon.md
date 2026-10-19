@@ -168,7 +168,7 @@ around it.
 |---|---|
 | Every project you have registered, at its own path | Your home directory |
 | The service's own data directory | Any project you have not registered |
-| The credentials you explicitly share (below) | Your SSH keys, browser profile, system configuration |
+| The credentials you explicitly share (below) | Your SSH keys and agent, your git credentials, browser profile, system configuration |
 | | The container runtime's own control socket |
 
 Projects are mounted at **the same absolute path** they have on your computer. That is deliberate:
@@ -234,16 +234,21 @@ files in your own home directory.
 Nothing of yours is shared unless you say so. Each item is a separate opt-in:
 
 - **Git configuration** — your commit name and email, read-only.
-- **SSH agent** — the agent's socket, so a session can push. Never your key files.
-- **Git credentials** — the credential helper's store.
 - **AI CLI sign-in** — each CLI's sign-in file, and nothing else from its directory:
   Claude Code's `~/.claude/.credentials.json`, Codex's `~/.codex/auth.json` and OpenCode's
   `~/.local/share/opencode/auth.json`. A file you do not have is simply not shared. It is the one
   share a session can write to: a CLI replaces its file each time it refreshes the sign-in, and that
   refresh lands in your computer's file, as it does for Claude Code.
 
-With none of these on, a session that tries to push to a remote fails for want of credentials, and
-the application says so rather than leaving you with an unexplained authentication error.
+A sandbox never holds your git identity. The **SSH agent** and **Git credentials** items were
+removed: they handed the sandbox everything your key and credential store can do, on every
+repository. `SSH_AUTH_SOCK`, `GH_TOKEN` and `GITHUB_TOKEN` are not passed in either. A daemon whose
+saved settings named either item keeps working without it, and its entry in the daemon list shows a
+one-time notice saying so, with a **Dismiss** button; the next save drops the old names for good.
+
+**Until the scoped credential is set up, a sandbox cannot push.** A session that tries to push to a
+remote fails for want of credentials, and the application says so rather than leaving you with an
+unexplained authentication error.
 
 ### Where sandboxed conversations live
 

@@ -68,7 +68,7 @@ fn every_refusable_field_has_its_section() {
         (Container, &["cpus", "memory", "pids", "storage"], Resources),
         (Kubernetes, &["context", "namespace"], Connection),
         (Kubernetes, &["image"], Image),
-        (Kubernetes, &["ssh_key_file", "pull_file"], Credentials),
+        (Kubernetes, &["pull_file"], Credentials),
         (
             Kubernetes,
             &["cpu_request", "cpu_limit", "memory_request", "memory_limit"],
@@ -129,7 +129,6 @@ fn every_required_or_marked_control_has_its_section() {
         (Kubernetes, F::DaemonKubeImage, Image),
         (Kubernetes, F::DaemonKubeProvider(cli), Image),
         (Kubernetes, F::DaemonKubeAllowed(0), Credentials),
-        (Kubernetes, F::DaemonKubeSshKeyFile, Credentials),
         (Kubernetes, F::DaemonKubePullFile, Credentials),
         (Kubernetes, F::DaemonCpuRequest, Resources),
         (Kubernetes, F::DaemonCpuLimit, Resources),
@@ -241,11 +240,11 @@ mod summaries {
             said(&d, Section::Credentials).as_deref(),
             Some("Nothing shared")
         );
-        d.profile.credentials.insert(CredentialShare::SshAgent);
+        d.profile.credentials.insert(CredentialShare::AiCliAuth);
         d.profile.credentials.insert(CredentialShare::GitConfig);
         assert_eq!(
             said(&d, Section::Credentials).as_deref(),
-            Some("Shared: Git configuration, SSH agent")
+            Some("Shared: Git configuration, AI CLI sign-in")
         );
         d.profile.network = NetworkPosture::NoOutbound;
         assert_eq!(
@@ -318,11 +317,11 @@ mod summaries {
             said(&d, Section::Credentials).as_deref(),
             Some("Nothing allowed")
         );
-        d.kube.allowed.insert(AllowedKind::GitSshKey);
+        d.kube.allowed.insert(AllowedKind::RegistryPull);
         d.kube.allowed.insert(AllowedKind::GitConfig);
         assert_eq!(
             said(&d, Section::Credentials).as_deref(),
-            Some("Allowed: Git config, SSH key")
+            Some("Allowed: Git config, Registry credentials")
         );
         d.kube.cpu_request = String::new();
         d.kube.cpu_limit = String::new();
@@ -443,8 +442,6 @@ mod summaries {
     #[test]
     fn allowed_kinds_have_short_labels() {
         assert_eq!(AllowedKind::GitConfig.short_label(), "Git config");
-        assert_eq!(AllowedKind::GitCredentials.short_label(), "Git credentials");
-        assert_eq!(AllowedKind::GitSshKey.short_label(), "SSH key");
         assert_eq!(
             AllowedKind::SignIn(AiCli::ClaudeCode).short_label(),
             format!("{} sign-in", AiCli::ClaudeCode.provider().display_name())

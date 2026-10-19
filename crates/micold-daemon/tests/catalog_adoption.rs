@@ -436,7 +436,7 @@ fn a_service_settings_write_leaves_the_clients_own_fields_alone() {
         .daemon
         .sandbox
         .credentials
-        .insert(CredentialShare::SshAgent);
+        .insert(CredentialShare::GitConfig);
     store.save(&written).unwrap();
 
     catalog.set_scrollback(20_000).unwrap();
@@ -460,7 +460,7 @@ fn a_service_settings_write_leaves_the_clients_own_fields_alone() {
             .daemon
             .sandbox
             .credentials
-            .contains(&CredentialShare::SshAgent),
+            .contains(&CredentialShare::GitConfig),
         "the daemon cleared a credential the user had explicitly shared"
     );
 

@@ -34,7 +34,7 @@ container's `/`, `$HOME` and `env` find none of them, and that `/run/micold/git`
    App is not installed on you/scratch…*; `git push` fails at once (US3-2).
 8. Remove the GitHub App settings → status *No GitHub App is set up…* (US3-1).
 9. Open the settings of a daemon saved before this change with *SSH agent* ticked → the item is
-   gone and the one-time notice is shown; reopen → notice gone (US1-3).
+   gone and the one-time notice is shown, with *Dismiss*; dismiss it, reopen → notice gone (US1-3).
 10. Keep a daemon running with the client open for over 2 h, push → succeeds (SC-004). With
     *survive logout* on, quit the client for over an hour, reopen it → within a few seconds of the
     reconnect the status shows a fresh expiry and a push succeeds, with no daemon restart (US3-4,

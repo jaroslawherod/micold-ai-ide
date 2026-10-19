@@ -142,7 +142,11 @@ impl HostileHost {
         .collect();
         for path in paths {
             out.push(path.display().to_string());
-            out.push(super::pathmap::map_for(&path, cfg!(windows)).display().to_string());
+            out.push(
+                super::pathmap::map_for(&path, cfg!(windows))
+                    .display()
+                    .to_string(),
+            );
         }
         out.push("SSH_AUTH_SOCK".into());
         out.push("GH_TOKEN".into());

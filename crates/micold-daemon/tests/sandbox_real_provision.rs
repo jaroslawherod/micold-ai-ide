@@ -252,7 +252,7 @@ async fn sandbox_real_provision_a_running_legacy_container_is_attached_then_repl
 
     let before = facts_of(LEGACY_CONTAINER);
     assert_eq!(
-        adopt(Some(&before), &image()),
+        adopt(Some(&before), &image(), &[]),
         Adoption::Legacy(micold_core::sandbox::runtime::ContainerId(
             before.id.clone()
         )),

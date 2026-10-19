@@ -85,7 +85,7 @@ impl Section {
             (Container | Kubernetes, "cpus" | "memory" | "pids" | "storage") => Section::Resources,
             (Kubernetes, "context" | "namespace") => Section::Connection,
             (Kubernetes, "image") => Section::Image,
-            (Kubernetes, "allowed" | "ssh_key_file" | "pull_file") => Section::Credentials,
+            (Kubernetes, "allowed" | "pull_file") => Section::Credentials,
             (Kubernetes, "cpu_request" | "cpu_limit" | "memory_request" | "memory_limit") => {
                 Section::Resources
             }
@@ -120,10 +120,7 @@ impl Section {
             (Container, F::DaemonSurviveLogout) => Section::Sessions,
             (Kubernetes, F::DaemonKubeContext | F::DaemonKubeNamespace) => Section::Connection,
             (Kubernetes, F::DaemonKubeImage | F::DaemonKubeProvider(_)) => Section::Image,
-            (
-                Kubernetes,
-                F::DaemonKubeAllowed(_) | F::DaemonKubeSshKeyFile | F::DaemonKubePullFile,
-            ) => Section::Credentials,
+            (Kubernetes, F::DaemonKubeAllowed(_) | F::DaemonKubePullFile) => Section::Credentials,
             (
                 Kubernetes,
                 F::DaemonCpuRequest

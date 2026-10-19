@@ -40,10 +40,6 @@ pub enum ContextList {
 pub enum AllowedKind {
     /// `~/.gitconfig`.
     GitConfig,
-    /// `~/.git-credentials`.
-    GitCredentials,
-    /// One SSH private key; needs a file.
-    GitSshKey,
     /// One AI CLI's sign-in.
     SignIn(AiCli),
     /// A registry `auths` file; needs a file.
@@ -53,7 +49,7 @@ pub enum AllowedKind {
 impl AllowedKind {
     /// Every line, in the order the form lists them.
     pub fn all() -> Vec<AllowedKind> {
-        let mut all = vec![Self::GitConfig, Self::GitCredentials, Self::GitSshKey];
+        let mut all = vec![Self::GitConfig];
         all.extend(AiCli::ALL.iter().map(|cli| Self::SignIn(*cli)));
         all.push(Self::RegistryPull);
         all
@@ -63,8 +59,6 @@ impl AllowedKind {
     pub fn label(self) -> String {
         match self {
             Self::GitConfig => KubeCredential::GitConfig.label(),
-            Self::GitCredentials => KubeCredential::GitCredentials.label(),
-            Self::GitSshKey => "an SSH key".into(),
             Self::SignIn(cli) => KubeCredential::SignIn { cli }.label(),
             Self::RegistryPull => KubeCredential::RegistryPull {
                 auths: PathBuf::new(),
@@ -77,8 +71,6 @@ impl AllowedKind {
     pub fn short_label(self) -> String {
         match self {
             Self::GitConfig => "Git config".into(),
-            Self::GitCredentials => "Git credentials".into(),
-            Self::GitSshKey => "SSH key".into(),
             Self::SignIn(cli) => format!("{} sign-in", cli.provider().display_name()),
             Self::RegistryPull => "Registry credentials".into(),
         }
@@ -118,8 +110,6 @@ pub struct KubeDraft {
     pub storage_class: String,
     /// The credentials ticked.
     pub allowed: BTreeSet<AllowedKind>,
-    /// The SSH key file, while the SSH key is ticked.
-    pub ssh_key_file: String,
     /// The registry auth file, while registry pull is ticked.
     pub pull_file: String,
 }
@@ -164,17 +154,11 @@ impl KubeDraft {
             volume_size: settings.volume_size.to_k8s(),
             storage_class: settings.storage_class.clone().unwrap_or_default(),
             allowed: BTreeSet::new(),
-            ssh_key_file: String::new(),
             pull_file: String::new(),
         };
         for credential in &settings.allowed {
             match credential {
                 KubeCredential::GitConfig => draft.allowed.insert(AllowedKind::GitConfig),
-                KubeCredential::GitCredentials => draft.allowed.insert(AllowedKind::GitCredentials),
-                KubeCredential::GitSshKey { key } => {
-                    draft.ssh_key_file = key.display().to_string();
-                    draft.allowed.insert(AllowedKind::GitSshKey)
-                }
                 KubeCredential::SignIn { cli } => draft.allowed.insert(AllowedKind::SignIn(*cli)),
                 KubeCredential::RegistryPull { auths } => {
                     draft.pull_file = auths.display().to_string();
@@ -291,13 +275,9 @@ impl KubeDraft {
         for kind in &self.allowed {
             match kind {
                 AllowedKind::GitConfig => out.insert(KubeCredential::GitConfig),
-                AllowedKind::GitCredentials => out.insert(KubeCredential::GitCredentials),
                 AllowedKind::SignIn(cli) => out.insert(KubeCredential::SignIn { cli: *cli }),
-                AllowedKind::GitSshKey | AllowedKind::RegistryPull => true,
+                AllowedKind::RegistryPull => true,
             };
-        }
-        if let Some(key) = file(AllowedKind::GitSshKey, &self.ssh_key_file, "ssh_key_file")? {
-            out.insert(KubeCredential::GitSshKey { key });
         }
         if let Some(auths) = file(AllowedKind::RegistryPull, &self.pull_file, "pull_file")? {
             out.insert(KubeCredential::RegistryPull { auths });
