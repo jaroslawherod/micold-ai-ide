@@ -272,29 +272,36 @@ pub enum NetworkPosture {
 pub enum CredentialShare {
     /// `~/.gitconfig` — the user's commit identity, read-only.
     GitConfig,
-    /// The authentication agent's socket. The socket, never the keys themselves.
-    SshAgent,
-    /// The git credential helper's store.
-    GitCredentials,
     /// The AI CLI's sign-in token file, and only that file (FR-004e).
     AiCliAuth,
 }
 
+/// A share a profile stored before #1002 may name: one of today's, or one of the two that carried
+/// the user's whole git identity (the SSH agent and the credential store, FR-002). Read, never
+/// written: the removed ones are dropped and the profile remembers that it named one.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawShare {
+    Kept(CredentialShare),
+    Removed(RemovedShare),
+}
+
+/// The shares #1002 removed (FR-001, FR-002).
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum RemovedShare {
+    SshAgent,
+    GitCredentials,
+}
+
 impl CredentialShare {
     /// Every share, for rendering the opt-in list.
-    pub const ALL: [CredentialShare; 4] = [
-        CredentialShare::GitConfig,
-        CredentialShare::SshAgent,
-        CredentialShare::GitCredentials,
-        CredentialShare::AiCliAuth,
-    ];
+    pub const ALL: [CredentialShare; 2] = [CredentialShare::GitConfig, CredentialShare::AiCliAuth];
 
     /// The user-facing label.
     pub fn label(self) -> &'static str {
         match self {
             CredentialShare::GitConfig => "Git configuration",
-            CredentialShare::SshAgent => "SSH agent",
-            CredentialShare::GitCredentials => "Git credentials",
             CredentialShare::AiCliAuth => "AI CLI sign-in",
         }
     }
@@ -348,12 +355,22 @@ pub struct SandboxProfile {
     /// stored `MigrationNotice` and clears it ([`Self::take_moved_off_released`]).
     #[serde(skip)]
     pub moved_off_released: bool,
+    /// Set on read when the stored profile named a share #1002 removed (the SSH agent or the git
+    /// credential store, FR-002). Never written; turned into a stored `MigrationNotice` by whoever
+    /// owns the profile ([`Self::take_removed_git_credentials`], FR-003).
+    #[serde(skip)]
+    pub removed_git_credentials: bool,
 }
 
 impl SandboxProfile {
     /// Whether the read moved this profile off the released image, clearing the fact.
     pub fn take_moved_off_released(&mut self) -> bool {
         std::mem::take(&mut self.moved_off_released)
+    }
+
+    /// Whether the stored profile named a removed git credential share, clearing the fact.
+    pub fn take_removed_git_credentials(&mut self) -> bool {
+        std::mem::take(&mut self.removed_git_credentials)
     }
 }
 
@@ -372,7 +389,7 @@ struct RawProfile {
     #[serde(default)]
     network: NetworkPosture,
     #[serde(default)]
-    credentials: BTreeSet<CredentialShare>,
+    credentials: Vec<RawShare>,
     #[serde(default)]
     survive_logout: bool,
     #[serde(default)]
@@ -386,15 +403,27 @@ impl From<RawProfile> for SandboxProfile {
             (None, Some(old)) => old.into_choice(),
             (None, None) => (ImageChoice::Basic, false),
         };
+        let removed_git_credentials = raw
+            .credentials
+            .iter()
+            .any(|share| matches!(share, RawShare::Removed(_)));
         Self {
             runtime: raw.runtime,
             image,
             budget: raw.budget,
             network: raw.network,
-            credentials: raw.credentials,
+            credentials: raw
+                .credentials
+                .into_iter()
+                .filter_map(|share| match share {
+                    RawShare::Kept(kept) => Some(kept),
+                    RawShare::Removed(_) => None,
+                })
+                .collect(),
             survive_logout: raw.survive_logout,
             ai_clis: raw.ai_clis,
             moved_off_released,
+            removed_git_credentials,
         }
     }
 }
@@ -603,6 +632,10 @@ pub struct MountSet {
     pub credentials: Vec<CredentialMount>,
     /// The saved terminal histories, when the state mount does not already carry them (feature 041).
     pub history: Option<HistoryMount>,
+    /// Container paths no sandbox may mount: where one made before #1002 mounted the user's SSH
+    /// agent or git credential store (FR-001). Never mounted by this set; an existing container
+    /// that mounts one is replaced rather than adopted (`lifecycle::adopt`).
+    pub retired: Vec<PathBuf>,
 }
 
 /// How many components an absolute container path has, which is how specific it is (C15).
@@ -653,10 +686,6 @@ pub fn host_identity() -> (u32, u32) {
 pub struct CredentialLayout {
     /// `~/.gitconfig`.
     pub git_config: Option<PathBuf>,
-    /// The authentication agent's socket, from `SSH_AUTH_SOCK`.
-    pub ssh_agent: Option<PathBuf>,
-    /// The git credential helper's store.
-    pub git_credentials: Option<PathBuf>,
     /// The AI CLI's sign-in token file (`~/.claude/.credentials.json`), and nothing else of the
     /// CLI's directory: the rest is its session store and the hooks the host's `claude` runs
     /// (FR-004e).
@@ -664,10 +693,16 @@ pub struct CredentialLayout {
     /// One entry per provider that has such a file (`AiCliProvider::sandbox_auth_file`), in
     /// `AiCli::ALL`'s order, so Claude Code's comes first. One toggle governs all of them.
     pub ai_cli_auth: Vec<PathBuf>,
+    /// Where a container made before #1002 may mount the user's git identity: the SSH agent's
+    /// socket and the git credential store. Never mounted (FR-001); looked for only so that an
+    /// existing container mounting one is replaced, not adopted ([`MountSet::retired`]).
+    pub retired: Vec<PathBuf>,
 }
 
 impl CredentialLayout {
-    /// The conventional layout under `home`, with the agent socket taken from `ssh_auth_sock`.
+    /// The conventional layout under `home`. `ssh_auth_sock` is where the SSH agent's socket is, so
+    /// a container made before #1002 that mounts it is recognised ([`Self::retired`]); it is never
+    /// mounted.
     ///
     /// Pure and argument-driven: the caller does the two environment lookups. A path is included
     /// whether or not it exists — whether it is *present* is a question for the moment the sandbox
@@ -675,11 +710,12 @@ impl CredentialLayout {
     pub fn conventional(home: &Path, ssh_auth_sock: Option<&Path>) -> Self {
         Self {
             git_config: Some(home.join(".gitconfig")),
-            ssh_agent: ssh_auth_sock.map(Path::to_path_buf),
-            git_credentials: Some(home.join(".git-credentials")),
             ai_cli_auth: crate::session::AiCli::ALL
                 .iter()
                 .filter_map(|cli| cli.provider().sandbox_auth_file(home))
+                .collect(),
+            retired: std::iter::once(home.join(".git-credentials"))
+                .chain(ssh_auth_sock.map(Path::to_path_buf))
                 .collect(),
         }
     }
@@ -687,10 +723,6 @@ impl CredentialLayout {
     fn paths_for(&self, share: CredentialShare) -> Vec<&Path> {
         match share {
             CredentialShare::GitConfig => self.git_config.as_deref().into_iter().collect(),
-            CredentialShare::SshAgent => self.ssh_agent.as_deref().into_iter().collect(),
-            CredentialShare::GitCredentials => {
-                self.git_credentials.as_deref().into_iter().collect()
-            }
             CredentialShare::AiCliAuth => self.ai_cli_auth.iter().map(PathBuf::as_path).collect(),
         }
     }
@@ -778,6 +810,11 @@ impl MountSet {
             secret,
             credentials,
             history: None,
+            retired: layout
+                .retired
+                .iter()
+                .map(|host| pathmap::map_for(host, windows_host))
+                .collect(),
         }
     }
 
@@ -926,6 +963,7 @@ impl MountSet {
                     .chain(self.history.iter().map(|h| &h.container))
                     .chain(std::iter::once(&self.secret.container))
                     .chain(self.credentials.iter().map(|c| &c.container))
+                    .chain(&self.retired)
                     .map(|p| path(p))
                     // Every credential the layout could mount, shared by this profile or not: the
                     // container may come from another window, or from before a share was turned off.

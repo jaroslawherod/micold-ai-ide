@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::daemon_resources::DaemonResources;
 use crate::daemons::RegistryError;
-use crate::kube::credentials::KubeCredential;
+use crate::kube::credentials::{KubeCredential, RawKubeCredential};
 use crate::sandbox::image::ImageRef;
 use crate::session::AiCli;
 
@@ -135,6 +135,7 @@ const DECIMAL_UNITS: [(&str, u64); 4] = [
 
 /// A Kubernetes daemon's settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "RawKubeSettings")]
 pub struct KubeSettings {
     /// The kubeconfig context.
     pub context: KubeContextName,
@@ -168,6 +169,63 @@ pub struct KubeSettings {
     /// The credentials the daemon may receive.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub allowed: BTreeSet<KubeCredential>,
+    /// Set on read when `allowed` named an item #1002 removed (the git credentials, an SSH key,
+    /// FR-002). Never written; the daemon's entry turns it into a stored notice
+    /// ([`Self::take_removed_git_credentials`], FR-003).
+    #[serde(skip)]
+    pub removed_git_credentials: bool,
+}
+
+/// The stored shape of [`KubeSettings`]: `allowed` may name the items #1002 removed.
+#[derive(Deserialize)]
+struct RawKubeSettings {
+    context: KubeContextName,
+    namespace: Namespace,
+    #[serde(default, deserialize_with = "stored_image::deserialize")]
+    image: Option<ImageRef>,
+    #[serde(default)]
+    providers: BTreeSet<AiCli>,
+    #[serde(default)]
+    resources: DaemonResources,
+    #[serde(default)]
+    node_selector: BTreeMap<LabelKey, LabelValue>,
+    #[serde(default)]
+    tolerations: Vec<Toleration>,
+    #[serde(default = "default_volume_size")]
+    volume_size: Quantity,
+    #[serde(default)]
+    storage_class: Option<String>,
+    #[serde(default)]
+    allowed: Vec<RawKubeCredential>,
+}
+
+impl From<RawKubeSettings> for KubeSettings {
+    fn from(raw: RawKubeSettings) -> Self {
+        let removed_git_credentials = raw
+            .allowed
+            .iter()
+            .any(|c| matches!(c, RawKubeCredential::Removed(_)));
+        Self {
+            context: raw.context,
+            namespace: raw.namespace,
+            image: raw.image,
+            providers: raw.providers,
+            resources: raw.resources,
+            node_selector: raw.node_selector,
+            tolerations: raw.tolerations,
+            volume_size: raw.volume_size,
+            storage_class: raw.storage_class,
+            allowed: raw
+                .allowed
+                .into_iter()
+                .filter_map(|c| match c {
+                    RawKubeCredential::Kept(kept) => Some(kept),
+                    RawKubeCredential::Removed(_) => None,
+                })
+                .collect(),
+            removed_git_credentials,
+        }
+    }
 }
 
 fn default_volume_size() -> Quantity {
@@ -189,7 +247,13 @@ impl KubeSettings {
             volume_size: DEFAULT_VOLUME_SIZE,
             storage_class: None,
             allowed: BTreeSet::new(),
+            removed_git_credentials: false,
         }
+    }
+
+    /// Whether the stored `allowed` named a removed git credential item, clearing the fact.
+    pub fn take_removed_git_credentials(&mut self) -> bool {
+        std::mem::take(&mut self.removed_git_credentials)
     }
 
     /// The image the pod runs: the one given, else #806's pinned basic image (FR-004, FR-024).
@@ -245,11 +309,13 @@ impl KubeSettings {
         {
             return Err(invalid("storage_class"));
         }
-        // One secret per kind: two keys or two pull files would share a secret name.
-        let count = |is: fn(&KubeCredential) -> bool| self.allowed.iter().filter(|c| is(c)).count();
-        if count(|c| matches!(c, KubeCredential::GitSshKey { .. })) > 1
-            || count(|c| matches!(c, KubeCredential::RegistryPull { .. })) > 1
-        {
+        // One secret per kind: two pull files would share a secret name.
+        let pulls = self
+            .allowed
+            .iter()
+            .filter(|c| matches!(c, KubeCredential::RegistryPull { .. }))
+            .count();
+        if pulls > 1 {
             return Err(invalid("allowed"));
         }
         self.resources.validate()
@@ -643,16 +709,8 @@ mod tests {
     }
 
     #[test]
-    fn two_ssh_keys_or_two_pull_files_are_refused_for_sharing_a_secret() {
+    fn two_pull_files_are_refused_for_sharing_a_secret() {
         let mut s = KubeSettings::new("kind-dev", "dev", &[]);
-        s.allowed
-            .insert(KubeCredential::GitSshKey { key: "/a".into() });
-        assert!(s.validate().is_ok());
-        s.allowed
-            .insert(KubeCredential::GitSshKey { key: "/b".into() });
-        assert!(s.validate().is_err());
-        s.allowed
-            .remove(&KubeCredential::GitSshKey { key: "/b".into() });
         s.allowed
             .insert(KubeCredential::RegistryPull { auths: "/p".into() });
         assert!(s.validate().is_ok());

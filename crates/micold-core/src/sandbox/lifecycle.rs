@@ -204,6 +204,9 @@ pub enum StaleReason {
     /// Built from a different image than the profile now names — the user changed the image
     /// setting, or upgraded the application.
     DifferentImage { found: String, expected: String },
+    /// Mounts where a sandbox made before #1002 shared the user's SSH agent or git credential
+    /// store (FR-001): adopting it would leave the user's whole git identity inside.
+    RetiredCredentialMount { destination: String },
 }
 
 impl StaleReason {
@@ -213,6 +216,9 @@ impl StaleReason {
             StaleReason::DifferentImage { found, expected } => {
                 format!("the existing sandbox was built from `{found}`, not `{expected}`")
             }
+            StaleReason::RetiredCredentialMount { destination } => format!(
+                "the existing sandbox mounts `{destination}`, a git credential no sandbox may hold"
+            ),
         }
     }
 }
@@ -334,7 +340,11 @@ where
         stage: Stage::Creating,
         error,
     })?;
-    let decision = adopt(existing.as_ref(), profile.image.reference());
+    let decision = adopt(
+        existing.as_ref(),
+        profile.image.reference(),
+        &mounts.retired,
+    );
 
     // Read before the decision is consumed, and only for the two branches that keep a container
     // somebody else created: what *it* mounts is what a sandboxed session's paths can reach, and
@@ -465,7 +475,7 @@ fn adopt_winner<R: ContainerRuntime>(
                 },
             )
         })?;
-    match adopt(Some(&facts), expected_image) {
+    match adopt(Some(&facts), expected_image, &spec.mounts.retired) {
         Adoption::Attach(id) => Ok(Created::Won {
             id,
             facts,
@@ -1226,7 +1236,7 @@ mod adoption_tests {
 
     #[test]
     fn nothing_there_means_create_one() {
-        assert_eq!(adopt(None, "micold-daemon:0.27.0"), Adoption::Create);
+        assert_eq!(adopt(None, "micold-daemon:0.27.0", &[]), Adoption::Create);
     }
 
     #[test]
@@ -1235,7 +1245,7 @@ mod adoption_tests {
         // user left running, on every launch.
         let f = facts("micold-daemon:0.27.0", Some("abc"), true);
         assert_eq!(
-            adopt(Some(&f), "micold-daemon:0.27.0"),
+            adopt(Some(&f), "micold-daemon:0.27.0", &[]),
             Adoption::Attach(ContainerId("9f2b".into()))
         );
     }
@@ -1246,7 +1256,7 @@ mod adoption_tests {
         // up as a recovery.
         let f = facts("micold-daemon:0.27.0", Some("abc"), false);
         assert_eq!(
-            adopt(Some(&f), "micold-daemon:0.27.0"),
+            adopt(Some(&f), "micold-daemon:0.27.0", &[]),
             Adoption::Start(ContainerId("9f2b".into()))
         );
     }
@@ -1254,7 +1264,7 @@ mod adoption_tests {
     #[test]
     fn a_different_image_is_replaced_with_the_reason_named() {
         let f = facts("micold-daemon:0.26.0", Some("abc"), true);
-        match adopt(Some(&f), "micold-daemon:0.27.0") {
+        match adopt(Some(&f), "micold-daemon:0.27.0", &[]) {
             Adoption::Replace { reason, .. } => {
                 let text = reason.describe();
                 assert!(text.contains("0.26.0"), "{text}");
@@ -1270,7 +1280,7 @@ mod adoption_tests {
         // daemon is current, and provisioning replaces a stale one in place (R10).
         let f = facts("micold-basic:dev", Some("old"), true);
         assert_eq!(
-            adopt(Some(&f), "micold-basic:dev"),
+            adopt(Some(&f), "micold-basic:dev", &[]),
             Adoption::Attach(ContainerId("9f2b".into()))
         );
     }

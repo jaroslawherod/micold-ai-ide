@@ -1667,7 +1667,6 @@ pub async fn kube_attempt(
         client: &client,
         drift,
         home: &env.home,
-        hosts: &[],
         read: &read,
     };
     let started = match start(&request, &mut |_| {}).await {

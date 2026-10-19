@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: milestones
-- **Next step**: M1 implementation (T001–T013), continuing from *Handover*.
+- **Next step**: M1 implementation (T001–T013), continuing from *Handover* (unit 3).
 
 ## Pull requests
 
@@ -65,18 +65,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-**From**: M1 unit 1 (2026-10-19), at 141k context, before any code change. Branch reset to origin/main (04b29291); nothing committed but this ledger.
+**From**: M1 unit 2 (2026-10-19), at ~135k context. Commit "wip(1002): M1 core removal" on the branch (not pushed, no PR). **The tree does not compile yet**: tests and client still name the removed items.
 
-**Done**: read the M1 brief and the code. Design decisions D13–D15 above. Findings for the implementer:
-- `sandbox/argv.rs::create` forwards no host env at all (only HOME, TZ, MICOLD_*): T003 is a guard test (set the three vars in the env map/process env, assert no `-e` carries them; prove it with a mutant).
-- `CredentialLayout.ssh_agent/git_credentials` feed `MountSet::build_for`, `container_projects` (mod.rs:915-947: subtracts every layout credential from an adopted container's mounts) and `paths_for`. After removal an adopted pre-upgrade container still mounting the agent socket would read it as a project and keep the socket: check how `shell/sandbox.rs` adopts a container whose mounts differ (around :531) and make one with a retired credential mount be recreated, not adopted (FR-001 "whatever the saved settings say").
-- Client uses to change: `shell/sandbox.rs:63` (SSH_AUTH_SOCK lookup) and :531; `features/daemons_kube.rs` `AllowedKind::{GitCredentials,GitSshKey}` (:44-81, :173-176, :294-300) and `ui/settings/daemons.rs:636-651` (ssh key file field); `features/daemon_sections.rs:236` and `ui/settings/container_fields.rs:508` iterate `CredentialShare::ALL`; row notice at `features/daemons.rs:588-593`, rendered at `ui/settings/daemons.rs:256`.
-- Core tests using removed items: `tests/sandbox_credentials.rs:139-154, 311-320`, `kube/credentials.rs` tests, `kube/names.rs:229-279`, `kube/lifecycle.rs:145-268`, `micold-daemon/tests/catalog_adoption.rs:439-463`, client `tests/features_daemons.rs`, `tests/daemons_section_geometry.rs`, `tests/features_daemon_sections.rs`.
-- `KubeCredential` is `#[serde(tag = "kind")]`; old stored values are `{"kind":"git_credentials"}` and `{"kind":"git_ssh_key","key":...}`.
-- `kube-fake` feature exists in micold-core; integration tests reach `kube::fake` with it. Put `sandbox/hostile_host.rs` under `#[cfg(any(test, feature = "kube-fake"))]`.
-- Environment: docker exists at /usr/bin/docker (daemon state unchecked); no `mise`: gate is `scripts/gate.sh`; `gh` unauthenticated; no Agent tool, so reviewers run as a detached `claude -p --agent autopilot-reviewer` with hold.sh.
+**Done (core, production code; tests written after, so D13's test-first order is broken for T008/T009 — record the red lines for T002–T006 by reverting the guard in a scratch run, or say so in the PR)**:
+- `sandbox/mod.rs`: `CredentialShare` = `GitConfig`, `AiCliAuth` (`ALL: [_; 2]`); `RawProfile.credentials: Vec<RawShare>` (untagged `Kept`/`Removed(RemovedShare{SshAgent,GitCredentials})`), sets `SandboxProfile::removed_git_credentials` (`#[serde(skip)]`, `take_removed_git_credentials()`). `CredentialLayout` lost `ssh_agent`/`git_credentials`, gained `retired: Vec<PathBuf>` (`~/.git-credentials` + `ssh_auth_sock`; `conventional(home, ssh_auth_sock)` keeps its signature). `MountSet` gained `retired: Vec<PathBuf>` (container paths, from `build_for`); `container_projects` subtracts them. **Every `MountSet {` literal needs `retired: Vec::new()`**: argv.rs:303, lifecycle.rs tests (~1012), path_insert/mod.rs:339, client shell/pasted_image.rs:342, client tests/features_session.rs:990.
+- `sandbox/lifecycle.rs`: `adopt(existing, image, retired)` returns `Replace { reason: StaleReason::RetiredCredentialMount { destination } }` before Legacy/Attach when a mount destination is retired (handover item "adopted pre-upgrade container"); callers pass `&mounts.retired` / `&spec.mounts.retired`. **Needs a unit test** in lifecycle.rs tests (running + legacy container with `/home/u/.git-credentials` → Replace).
+- `kube/credentials.rs`: `GitCredentials`/`GitSshKey` gone, `known_hosts_for` and `secret_data`'s `hosts` param gone (also `StartRequest.hosts`, client daemon.rs:1517); `daemon_env` returns only the two MICOLD vars (param `_allowed`); `pub(crate) RawKubeCredential { Kept, Removed(RemovedKubeCredential{GitCredentials, GitSshKey {}}) }` (check `GitSshKey {}` ignores the `key` field; else add `#[allow(dead_code)] key: serde::de::IgnoredAny`). Its unit tests rewritten.
+- `kube/settings.rs`: `#[serde(from = "RawKubeSettings")]`, `removed_git_credentials` + `take_removed_git_credentials()`; validate counts pull files only. **Every `KubeSettings {` literal (11) needs `removed_git_credentials: false`** (or use `KubeSettings::new` + fields).
+- `kube/names.rs`: `retired_secrets() -> [String; 2]`; `kube/start.rs` secrets phase deletes them (ours only) beside withdrawn kinds; `kube/lifecycle.rs::remove` deletes them too. names.rs tests updated.
 
-**Next step**: implement T001–T013 test-first per D13, then verify.md (gate, review A high, review B, visual pass, full gate), then write the PR title/body to the scratchpad (title: "#1002: Sandbox container with daemon should use a fine-grained token, not the user's GitHub token and SSH key" + milestone suffix per pr.md) and return.
+**Left (compile errors to fix first)**: kube/lifecycle.rs:148,223, kube/manifest.rs:644,666, kube/start_tests.rs:970,991 (use `retired_secrets()` / `GitConfig`); sandbox argv.rs:777 `CredentialShare::ALL` ok; core tests listed in unit 1's handover (sandbox_credentials.rs, sandbox_argv.rs:67, micold-daemon catalog_adoption.rs:439-463 → test the removed-share read instead). Then T010 daemons.rs per D14 (`DaemonEntry.notice`, `RawDaemonEntry`, `migrated_entry`, `dismiss_notice`, `const` naming the replacement), T001 fixture, T002–T007 tests, T011 client (unit 1 handover list; `shell/sandbox.rs:63` may keep the `SSH_AUTH_SOCK` read — it now only feeds `layout.retired` for recognising old containers; :531 passes it for `container_projects`), T012, T013, tick tasks.md, then verify.md.
+
+**Next step**: fix the compile errors above, then T010, T001–T007, T011–T013, verify.md, PR title/body to scratchpad.
 
 ## Open escalation
 
