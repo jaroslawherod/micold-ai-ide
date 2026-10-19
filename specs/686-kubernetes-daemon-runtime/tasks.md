@@ -328,8 +328,8 @@ in the list and open in Edit; the Add form's runtime list omits Kubernetes (FR-0
 
 ## Phase 14: Polish
 
-- [ ] T097 Run quickstart Part B at a display (the `visual-pass` skill) and save screenshots under `specs/686-kubernetes-daemon-runtime/visual-pass/`.
-- [ ] T098 Re-run `speckit-converge` against the code and tick what is done.
+- [x] T097 Run quickstart Part B at a display (the `visual-pass` skill) and save screenshots under `specs/686-kubernetes-daemon-runtime/visual-pass/`.
+- [x] T098 Re-run `speckit-converge` against the code and tick what is done.
 
 ---
 
