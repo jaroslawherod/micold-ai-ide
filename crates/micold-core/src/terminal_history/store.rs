@@ -407,16 +407,11 @@ impl HistoryStore {
         }
     }
 
-    /// Whether an event history file is saved for `id` and may be loaded: a cheap check (no read)
-    /// for the view path, which loads off the runtime only when there is something to load.
+    /// Whether an event history file is there for `id`: one `stat`, no store lock and no read, for
+    /// the view path, which loads off the runtime only when there is something to load.
+    /// [`Self::load_events`] still judges the setting, a removal and a file to be deleted.
     pub fn has_events(&self, id: SessionId) -> bool {
-        let state = self.lock();
-        let name = file_name(id, FileKind::Events);
-        state.enabled
-            && !state.unlisted
-            && !state.forgotten.contains(&id)
-            && !state.undeleted.contains(&name)
-            && self.dir.join(name).is_file()
+        self.dir.join(file_name(id, FileKind::Events)).is_file()
     }
 
     /// The bytes of `id`'s file of `kind`; `None` when saving is off, the file was to be deleted,

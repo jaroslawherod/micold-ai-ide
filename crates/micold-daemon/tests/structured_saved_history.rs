@@ -394,3 +394,18 @@ async fn a_restored_history_is_saved_again_only_after_a_new_event() {
     assert!(file.exists());
     restarted.stop_session(case.id());
 }
+
+// A session removed does not get a stream made for it, from a file or empty.
+#[tokio::test(flavor = "multi_thread")]
+async fn no_stream_is_made_for_a_removed_session() {
+    let case = Case::new();
+    let state = case.daemon();
+    let stream = case.start(&state);
+    push(&stream, &["a"]);
+    state.stop_session(case.id());
+    let (_, ptys) = state.delete_session(case.id()).expect("deleted");
+    drop(ptys);
+    assert!(state.event_stream_loading(case.id(), true).is_none());
+    assert!(state.event_stream_loading(case.id(), false).is_none());
+    assert!(state.event_stream(case.id()).is_none());
+}
