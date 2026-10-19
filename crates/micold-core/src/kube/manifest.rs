@@ -472,7 +472,7 @@ mod tests {
     fn the_claim_is_mounted_at_data_with_an_empty_dir_at_tmp() {
         let p = &all()[0];
         let volumes = p["spec"]["volumes"].as_array().unwrap();
-        assert_eq!(volumes.len(), 3);
+        assert_eq!(volumes.len(), 4);
         assert_eq!(volumes[0]["name"], "data");
         assert_eq!(
             volumes[0]["persistentVolumeClaim"]["claimName"],
@@ -679,7 +679,7 @@ mod tests {
         let mounts = p["spec"]["containers"][0]["volumeMounts"]
             .as_array()
             .unwrap();
-        assert_eq!(mounts.len(), 3);
+        assert_eq!(mounts.len(), 4);
     }
 
     #[test]
@@ -713,7 +713,7 @@ mod tests {
             p["spec"]["imagePullSecrets"],
             json!([{ "name": n.pull_secret() }])
         );
-        assert_eq!(mounts.len(), 3 + 2);
+        assert_eq!(mounts.len(), 4 + 2);
     }
 
     #[test]
