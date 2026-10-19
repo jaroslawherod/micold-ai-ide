@@ -41,6 +41,11 @@ button, its badge and the project switcher. The button then reads **Exit full sc
 the shortcut again and the sidebar slides back. The button's tooltip names the shortcut, and Tab
 reaches it. While a card's menu is open, the shortcut does nothing.
 
+Entering and leaving full screen is one motion: the cards widen (or narrow) and slide to their new
+places as the sidebar goes or returns, never overlapping. A card that moves to another row slides
+along the row ends instead of vanishing and reappearing. Press the button or the shortcut again
+part-way and the motion reverses from where it is.
+
 Leaving the Overview leaves full screen in the same step: activating a card, **Escape**, the
 top-bar **Overview** button or **Ctrl+Shift+O** close the Overview and bring the sidebar back. The
 sidebar always returns exactly as you left it: collapsed or expanded, at the same width. Full

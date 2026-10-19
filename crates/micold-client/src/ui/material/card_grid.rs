@@ -5,9 +5,14 @@
 //! The cards share the width equally, so a wider grid makes wider cards, and the grid scrolls
 //! vertically.
 
+use std::time::{Duration, Instant};
+
+use crate::ui::material::navigation_drawer::SLIDE;
 use crate::ui::material::{OverviewCard, Scrollable};
-use iced::widget::{column, responsive, row, Space};
-use iced::{Element, Length};
+use iced::advanced::layout::{self, Layout};
+use iced::advanced::widget::{tree, Operation, Tree};
+use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
+use iced::{Element, Event, Length, Point, Rectangle, Size, Vector};
 use micold_core::tokens::{spacing, Roles};
 
 /// The narrowest a card is drawn.
@@ -30,6 +35,7 @@ pub struct CardGrid<'a, M> {
     spacing: f32,
     max_columns: usize,
     on_scroll: Option<M>,
+    zoom: Zoom,
 }
 
 impl<'a, M: Clone + 'a> CardGrid<'a, M> {
@@ -42,6 +48,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             spacing: spacing::MD,
             max_columns: MAX_COLUMNS,
             on_scroll: None,
+            zoom: Zoom::default(),
         }
     }
 
@@ -71,45 +78,461 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
     }
 }
 
-/// The cards in rows of `columns`, the last row padded so its cards keep the others' width.
-fn rows<'a, M: Clone + 'a>(
-    cards: &[OverviewCard<'a, M>],
-    columns: usize,
-    gap: f32,
-) -> Element<'a, M> {
-    let mut grid = column![].spacing(gap).width(Length::Fill);
-    for chunk in cards.chunks(columns.max(1)) {
-        let mut line = row![].spacing(gap).width(Length::Fill);
-        for card in chunk {
-            line = line.push(Element::from(card.clone()));
-        }
-        for _ in chunk.len()..columns.max(1) {
-            line = line.push(Space::new().width(Length::FillPortion(1)));
-        }
-        grid = grid.push(line);
-    }
-    grid.into()
+/// How the Overview is zoomed (feature 970): whether it is in full-screen mode, and how much
+/// width that mode gives it (the sidebar's width when expanded, its strip when collapsed).
+///
+/// A flip of `full_screen` between two builds of the grid starts a zoom; see [`ZoomState`].
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Zoom {
+    /// Whether the Overview is full screen.
+    pub full_screen: bool,
+    /// The width full screen adds to the grid, in logical pixels.
+    pub freed: f32,
 }
+
+/// How far `width` lies from `start` toward `end`, clamped to `0..=1` (either order of ends).
+pub fn zoom_fraction(start: f32, end: f32, width: f32) -> f32 {
+    if (end - start).abs() < f32::EPSILON {
+        return 1.0;
+    }
+    ((width - start) / (end - start)).clamp(0.0, 1.0)
+}
+
+/// The width of a card in a grid `width` wide at rest (feature 1024's rule).
+fn rest_width(width: f32, min: f32, gap: f32, max_columns: usize) -> f32 {
+    let n = columns(width, min, gap, max_columns) as f32;
+    (width - (n - 1.0) * gap) / n
+}
+
+/// Tolerances, in pixels: where a card's span is taken to start on a row, and the narrowest
+/// piece worth drawing.
+const SNAP: f32 = 1e-3;
+const MIN_PIECE: f32 = 0.01;
+
+/// One drawn part of a card: the rectangle it shows and where the whole card would sit.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Piece {
+    /// The card's index.
+    pub card: usize,
+    /// The visible rectangle, in the grid's coordinates; the clip the card is drawn under.
+    pub rect: Rectangle,
+    /// Where the whole card's top-left falls for this piece (left of `rect` when the card begins
+    /// on the row before).
+    pub origin: Point,
+    /// The index of the layout node the piece is drawn from.
+    node: usize,
+}
+
+/// Cards of width `w` on a ribbon: card `i` starts at `i · (w + gap)` along rows `width + gap`
+/// long, so row `r` shows the stretch `r · (width + gap) .. + width` and the `gap` after it is
+/// not shown. A card that runs past a row's end is cut there and continues at the next row's
+/// start; at a rest width (`width + gap = n · (w + gap)`) no card is cut.
+///
+/// Cards keep reading order and a constant pitch, so no two pieces of different cards intersect,
+/// and a card never disappears: of its `w` it loses at most the `gap`.
+pub fn ribbon(count: usize, w: f32, gap: f32, width: f32, card_height: f32) -> Vec<Piece> {
+    let line = width + gap;
+    let mut pieces = Vec::with_capacity(count + 2);
+    for card in 0..count {
+        let start = card as f32 * (w + gap);
+        let first = ((start + SNAP) / line).floor().max(0.0);
+        for row in [first, first + 1.0] {
+            let origin = start - row * line;
+            let left = origin.max(0.0);
+            let right = (origin + w).min(width);
+            if right - left >= MIN_PIECE {
+                let y = row * (card_height + gap);
+                pieces.push(Piece {
+                    card,
+                    rect: Rectangle::new(Point::new(left, y), Size::new(right - left, card_height)),
+                    origin: Point::new(origin, y),
+                    node: 0,
+                });
+            }
+            if origin + w <= line + SNAP {
+                break;
+            }
+        }
+    }
+    pieces
+}
+
+/// The zoom a grid is in, kept in the widget tree between layouts (data-model.md).
+#[derive(Debug)]
+struct ZoomState {
+    /// `Zoom::full_screen` at the last layout, to see it flip.
+    full_screen_seen: bool,
+    /// The widths a zoom runs between: the width before the flip, and that width ± `freed`.
+    ends: Option<(f32, f32)>,
+    /// When the last flip happened.
+    started: Instant,
+    /// The width of the last layout, which a flip takes as its start.
+    last_width: Option<f32>,
+    /// What the last layout drew.
+    pieces: Vec<Piece>,
+}
+
+impl ZoomState {
+    fn new(full_screen: bool) -> Self {
+        Self {
+            full_screen_seen: full_screen,
+            ends: None,
+            started: Instant::now(),
+            last_width: None,
+            pieces: Vec::new(),
+        }
+    }
+
+    /// Takes the next layout's `width`: starts a zoom on a flip, keeps it on a reversal, and ends
+    /// it when the width reaches the end it heads for, leaves the range, or the slide is over.
+    fn advance(&mut self, zoom: Zoom, width: f32, now: Instant) -> Option<(f32, f32)> {
+        if zoom.full_screen != self.full_screen_seen {
+            self.full_screen_seen = zoom.full_screen;
+            self.started = now;
+            if self.ends.is_none() && zoom.freed >= 1.0 {
+                if let Some(before) = self.last_width {
+                    let after = if zoom.full_screen {
+                        before + zoom.freed
+                    } else {
+                        before - zoom.freed
+                    };
+                    self.ends = Some((before, after));
+                }
+            }
+        }
+        if let Some((a, b)) = self.ends {
+            let (low, high) = (a.min(b), a.max(b));
+            let heading = if zoom.full_screen { high } else { low };
+            if (width - heading).abs() <= END_REACHED
+                || width < low - END_REACHED
+                || width > high + END_REACHED
+                || now.saturating_duration_since(self.started) >= SLIDE + Duration::from_millis(100)
+            {
+                self.ends = None;
+            }
+        }
+        self.last_width = Some(width);
+        self.ends
+    }
+}
+
+/// How close to an end width counts as there.
+const END_REACHED: f32 = 0.5;
+
+impl<'a, M: Clone + 'a> CardGrid<'a, M> {
+    /// Zoom with the sidebar (feature 970): a flip of `zoom.full_screen` between two builds of the
+    /// grid moves the cards from the layout they had to the one the new width gives, in step with
+    /// the width. Defaults to no zoom.
+    pub fn zoom(mut self, zoom: Zoom) -> Self {
+        self.zoom = zoom;
+        self
+    }
+
+    /// The grid proper, without its scrollable.
+    fn into_grid(self) -> Grid<'a, M> {
+        Grid {
+            cards: self
+                .cards
+                .iter()
+                .map(|card| Element::from(card.clone()))
+                .collect(),
+            min_width: self.min_width,
+            spacing: self.spacing,
+            max_columns: self.max_columns,
+            zoom: self.zoom,
+        }
+    }
+}
+
+/// The cards laid out by the rest rule, or on the ribbon during a zoom. It owns the cards, so it
+/// can place one in two pieces at a row end.
+struct Grid<'a, M> {
+    cards: Vec<Element<'a, M>>,
+    min_width: f32,
+    spacing: f32,
+    max_columns: usize,
+    zoom: Zoom,
+}
+
+impl<M> Grid<'_, M> {
+    /// Where the pointer is on `card`'s own (primary) box: unchanged at rest; during a zoom, the
+    /// pointer over any piece of the card translated to the box, and none elsewhere.
+    fn cursor_for_state(
+        state: &ZoomState,
+        origin: Point,
+        card: usize,
+        node_at: Point,
+        cursor: mouse::Cursor,
+    ) -> mouse::Cursor {
+        if state.ends.is_none() {
+            return cursor;
+        }
+        let Some(position) = cursor.position() else {
+            return cursor;
+        };
+        let local = Point::new(position.x - origin.x, position.y - origin.y);
+        state
+            .pieces
+            .iter()
+            .filter(|piece| piece.card == card)
+            .find(|piece| piece.rect.contains(local))
+            .map_or(mouse::Cursor::Unavailable, |piece| {
+                mouse::Cursor::Available(Point::new(
+                    position.x + node_at.x - piece.origin.x,
+                    position.y + node_at.y - piece.origin.y,
+                ))
+            })
+    }
+}
+
+impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<ZoomState>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(ZoomState::new(self.zoom.full_screen))
+    }
+
+    fn children(&self) -> Vec<Tree> {
+        self.cards
+            .iter()
+            .map(|card| Tree::new(card.as_widget()))
+            .collect()
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children_custom(
+            &self.cards,
+            |child_tree, card| child_tree.diff(card.as_widget()),
+            |card| Tree::new(card.as_widget()),
+        );
+    }
+
+    fn size(&self) -> Size<Length> {
+        Size::new(Length::Fill, Length::Shrink)
+    }
+
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let width = limits.max().width;
+        let width = if width.is_finite() { width } else { self.min_width };
+        let (min, gap, max) = (self.min_width, self.spacing, self.max_columns);
+        let state = tree.state.downcast_mut::<ZoomState>();
+        let card_width = match state.advance(self.zoom, width, Instant::now()) {
+            Some((start, end)) => {
+                let f = zoom_fraction(start, end, width);
+                let at_start = rest_width(start, min, gap, max);
+                let at_end = rest_width(end, min, gap, max);
+                at_start + (at_end - at_start) * f
+            }
+            None => rest_width(width, min, gap, max),
+        };
+        let mut pieces = ribbon(self.cards.len(), card_width, gap, width, CARD_HEIGHT);
+
+        // One node per card, at its largest piece; the other piece of a split card follows.
+        let mut primary: Vec<Option<usize>> = vec![None; self.cards.len()];
+        for (index, piece) in pieces.iter().enumerate() {
+            let best = primary[piece.card].map_or(0.0, |i| pieces[i].rect.width);
+            if piece.rect.width > best {
+                primary[piece.card] = Some(index);
+            }
+        }
+        let card_limits = layout::Limits::new(
+            Size::new(card_width, CARD_HEIGHT),
+            Size::new(card_width, CARD_HEIGHT),
+        );
+        let mut nodes = Vec::with_capacity(self.cards.len() + 2);
+        for (i, (card, card_tree)) in self.cards.iter_mut().zip(&mut tree.children).enumerate() {
+            let node = card.as_widget_mut().layout(card_tree, renderer, &card_limits);
+            let at = primary[i].map_or(Point::ORIGIN, |p| pieces[p].origin);
+            nodes.push(node.move_to(at));
+        }
+        let mut extra = Vec::new();
+        for (index, piece) in pieces.iter_mut().enumerate() {
+            if primary[piece.card] == Some(index) {
+                piece.node = piece.card;
+            } else {
+                piece.node = nodes.len() + extra.len();
+                extra.push(nodes[piece.card].clone().move_to(piece.origin));
+            }
+        }
+        nodes.extend(extra);
+
+        let rows = pieces
+            .iter()
+            .map(|piece| (piece.rect.y / (CARD_HEIGHT + gap)).round() as usize + 1)
+            .max()
+            .unwrap_or(0);
+        let height = if rows == 0 {
+            0.0
+        } else {
+            rows as f32 * CARD_HEIGHT + (rows - 1) as f32 * gap
+        };
+        tree.state.downcast_mut::<ZoomState>().pieces = pieces;
+        layout::Node::with_children(Size::new(width, height), nodes)
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, M>,
+        viewport: &Rectangle,
+    ) {
+        let zooming = tree.state.downcast_ref::<ZoomState>().ends.is_some();
+        // The widths move with the sidebar and the zoom ends on a layout, so ask for both while it
+        // runs; nothing is asked for at rest.
+        if zooming && matches!(event, Event::Window(iced::window::Event::RedrawRequested(_))) {
+            shell.request_redraw();
+            shell.invalidate_layout();
+        }
+        let origin = layout.position();
+        let (state_tree, children) = (&tree.state, &mut tree.children);
+        let state = state_tree.downcast_ref::<ZoomState>();
+        for (i, (card, card_tree)) in self.cards.iter_mut().zip(children).enumerate() {
+            let Some(card_layout) = layout.children().nth(i) else {
+                continue;
+            };
+            let at = card_layout.position();
+            let local = Grid::<M>::cursor_for_state(state, origin, i, at, cursor);
+            card.as_widget_mut().update(
+                card_tree,
+                event,
+                card_layout,
+                local,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+        renderer: &iced::Renderer,
+    ) -> mouse::Interaction {
+        let origin = layout.position();
+        let state = tree.state.downcast_ref::<ZoomState>();
+        self.cards
+            .iter()
+            .zip(&tree.children)
+            .zip(layout.children())
+            .enumerate()
+            .map(|(i, ((card, card_tree), card_layout))| {
+                let local = Grid::<M>::cursor_for_state(state, origin, i, card_layout.position(), cursor);
+                card.as_widget()
+                    .mouse_interaction(card_tree, card_layout, local, viewport, renderer)
+            })
+            .max()
+            .unwrap_or_default()
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut iced::Renderer,
+        theme: &iced::Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        use iced::advanced::Renderer as _;
+        let state = tree.state.downcast_ref::<ZoomState>();
+        let origin = layout.position();
+        for piece in &state.pieces {
+            let card_layout = layout.child(piece.node);
+            let bounds = card_layout.bounds();
+            if !bounds.intersects(viewport) {
+                continue;
+            }
+            let clip = Rectangle {
+                x: origin.x + piece.rect.x,
+                y: origin.y + piece.rect.y,
+                width: piece.rect.width,
+                height: piece.rect.height,
+            };
+            let whole = (clip.width - bounds.width).abs() < MIN_PIECE;
+            let draw_card = |renderer: &mut iced::Renderer| {
+                let local = if state.ends.is_none() || cursor.position().is_some_and(|p| clip.contains(p)) {
+                    cursor
+                } else {
+                    mouse::Cursor::Unavailable
+                };
+                self.cards[piece.card].as_widget().draw(
+                    &tree.children[piece.card],
+                    renderer,
+                    theme,
+                    style,
+                    card_layout,
+                    local,
+                    viewport,
+                );
+            };
+            if whole {
+                draw_card(renderer);
+            } else {
+                renderer.with_layer(clip, draw_card);
+            }
+        }
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        for ((card, card_tree), card_layout) in self
+            .cards
+            .iter_mut()
+            .zip(&mut tree.children)
+            .zip(layout.children())
+        {
+            card.as_widget_mut()
+                .operate(card_tree, card_layout, renderer, operation);
+        }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &iced::Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
+        overlay::from_children(&mut self.cards, tree, layout, renderer, viewport, translation)
+    }
+}
+
+/// The height of every card (feature 813).
+const CARD_HEIGHT: f32 = super::overview_card::HEIGHT;
 
 impl<'a, M: Clone + 'a> From<CardGrid<'a, M>> for Element<'a, M> {
     fn from(g: CardGrid<'a, M>) -> Self {
-        let CardGrid {
-            cards,
-            roles,
-            min_width,
-            spacing,
-            max_columns,
-            on_scroll,
-        } = g;
-        responsive(move |size| {
-            let n = columns(size.width, min_width, spacing, max_columns);
-            let scrollable = Scrollable::new(rows(&cards, n, spacing), roles).height(Length::Fill);
-            match on_scroll.clone() {
-                Some(message) => scrollable.on_scroll(message).into(),
-                None => scrollable.into(),
-            }
-        })
-        .into()
+        let on_scroll = g.on_scroll.clone();
+        let roles = g.roles;
+        let scrollable = Scrollable::new(Element::new(g.into_grid()), roles).height(Length::Fill);
+        match on_scroll {
+            Some(message) => scrollable.on_scroll(message).into(),
+            None => scrollable.into(),
+        }
     }
 }
 
@@ -371,5 +794,293 @@ mod tests {
             assert!(b.width >= 1.5 * before, "{} < 1.5 × {before}", b.width);
             assert!((b.height - super::super::overview_card::HEIGHT).abs() < EPS);
         }
+    }
+
+    // ---- feature 970: the cards zoom with the sidebar ----
+
+    const H: f32 = super::super::overview_card::HEIGHT;
+    const PAIRS: [(f32, f32); 3] = [(1150.0, 1450.0), (1300.0, 1650.0), (1464.0, 1770.0)];
+
+    fn lerp(a: f32, b: f32, t: f32) -> f32 {
+        a + (b - a) * t
+    }
+
+    fn rest(width: f32) -> f32 {
+        rest_width(width, MIN_WIDTH, GAP, MAX_COLUMNS)
+    }
+
+    /// The pieces a zoom from `start` to `end` shows at fraction `f` (the window `lerp(start, end, f)`
+    /// wide, the cards `lerp` of the two rest widths).
+    fn ribbon_at(count: usize, start: f32, end: f32, f: f32) -> Vec<Piece> {
+        ribbon(
+            count,
+            lerp(rest(start), rest(end), f),
+            GAP,
+            lerp(start, end, f),
+            H,
+        )
+    }
+
+    /// The three width pairs, entering and leaving.
+    fn both_ways() -> Vec<(f32, f32)> {
+        PAIRS.iter().flat_map(|&(a, b)| [(a, b), (b, a)]).collect()
+    }
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() < EPS
+    }
+
+    fn same(a: &Piece, b: &Piece) -> bool {
+        a.card == b.card
+            && near(a.rect.x, b.rect.x)
+            && near(a.rect.y, b.rect.y)
+            && near(a.rect.width, b.rect.width)
+            && near(a.origin.x, b.origin.x)
+            && near(a.origin.y, b.origin.y)
+    }
+
+    fn assert_same(got: &[Piece], want: &[Piece]) {
+        assert_eq!(got.len(), want.len(), "{got:?} vs {want:?}");
+        for (g, w) in got.iter().zip(want) {
+            assert!(same(g, w), "{g:?} vs {w:?}");
+        }
+    }
+
+    /// U18 (970): `zoom_fraction` is how far `w` lies from `start` toward `end`, clamped.
+    #[test]
+    fn zoom_fraction_is_the_clamped_position_between_the_ends() {
+        for (start, end, w, want) in [
+            (1150.0, 1450.0, 1300.0, 0.5),
+            (1150.0, 1450.0, 1000.0, 0.0),
+            (1150.0, 1450.0, 1600.0, 1.0),
+            (1450.0, 1150.0, 1300.0, 0.5),
+            (1450.0, 1150.0, 1500.0, 0.0),
+            (1450.0, 1150.0, 1000.0, 1.0),
+            (1150.0, 1450.0, 1150.0, 0.0),
+            (1150.0, 1450.0, 1450.0, 1.0),
+        ] {
+            let got = zoom_fraction(start, end, w);
+            assert!(near(got, want), "{start}→{end} at {w}: {got} != {want}");
+        }
+    }
+
+    /// U19 (970, FR-004): at either end of a zoom the ribbon is feature 1024's rest grid.
+    #[test]
+    fn the_ribbon_at_either_end_equals_the_rest_grid() {
+        for (start, end) in both_ways() {
+            for count in [1, 7, 30] {
+                for (f, width) in [(0.0, start), (1.0, end)] {
+                    let got = ribbon_at(count, start, end, f);
+                    let n = columns(width, MIN_WIDTH, GAP, MAX_COLUMNS);
+                    let w = rest(width);
+                    assert_eq!(got.len(), count, "one piece per card at {start}→{end}");
+                    for (i, piece) in got.iter().enumerate() {
+                        assert_eq!(piece.card, i);
+                        assert!(near(piece.rect.x, (i % n) as f32 * (w + GAP)), "{piece:?}");
+                        assert!(near(piece.rect.y, (i / n) as f32 * (H + GAP)), "{piece:?}");
+                        assert!(near(piece.rect.width, w), "{piece:?} (w {w})");
+                        assert!(near(piece.rect.height, H));
+                    }
+                }
+            }
+        }
+    }
+
+    /// U20 (970, FR-006, SC-002): on every sampled frame of every zoom no two cards overlap, every
+    /// card is drawn (one piece, or two across a row end), every piece lies inside the grid and the
+    /// card width stays between its two end values.
+    #[test]
+    fn ribbon_pieces_never_overlap_and_stay_in_range() {
+        for (start, end) in both_ways() {
+            for count in [1, 7, 30] {
+                for step in 0..=20 {
+                    let f = step as f32 * 0.05;
+                    let width = lerp(start, end, f);
+                    let w = lerp(rest(start), rest(end), f);
+                    assert!(w >= rest(start).min(rest(end)) - EPS);
+                    assert!(w <= rest(start).max(rest(end)) + EPS);
+                    let pieces = ribbon_at(count, start, end, f);
+                    assert!(!pieces.is_empty(), "the grid is never empty");
+                    for card in 0..count {
+                        let own: Vec<&Piece> = pieces.iter().filter(|p| p.card == card).collect();
+                        assert!((1..=2).contains(&own.len()), "card {card}: {own:?}");
+                        // A card that runs through the gap at a row end loses at most the gap.
+                        let total: f32 = own.iter().map(|p| p.rect.width).sum();
+                        assert!(total <= w + EPS && total >= w - GAP - EPS, "{total} vs {w}");
+                        if let [a, b] = own[..] {
+                            assert!(near(b.rect.y - a.rect.y, H + GAP), "{a:?} {b:?}");
+                        }
+                    }
+                    for (i, a) in pieces.iter().enumerate() {
+                        assert!(a.rect.x >= -EPS && a.rect.x + a.rect.width <= width + EPS);
+                        for b in &pieces[i + 1..] {
+                            assert!(
+                                a.card == b.card || !crate::ui::material::test_support::overlap(&a.rect, &b.rect),
+                                "{start}→{end} f {f}: {a:?} overlaps {b:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A tree kept across layouts, as the running application keeps it: the zoom is state that
+    /// lives from one layout to the next.
+    struct Rig {
+        tree: Option<iced::advanced::widget::Tree>,
+    }
+
+    impl Rig {
+        fn new() -> Self {
+            Self { tree: None }
+        }
+
+        /// Lays `cards` out `width` wide with `zoom`, as the next frame of the same widget.
+        fn lay(&mut self, cards: Vec<OverviewCard<'static, ()>>, zoom: Zoom, width: f32) -> layout::Node {
+            let mut element: Element<'static, ()> = Element::new(
+                CardGrid::new(cards, roles())
+                    .min_width(MIN_WIDTH)
+                    .spacing(GAP)
+                    .zoom(zoom)
+                    .into_grid(),
+            );
+            let tree = match &mut self.tree {
+                Some(tree) => {
+                    tree.diff(element.as_widget());
+                    tree
+                }
+                None => self
+                    .tree
+                    .insert(iced::advanced::widget::Tree::new(element.as_widget())),
+            };
+            element.as_widget_mut().layout(
+                tree,
+                &crate::ui::material::test_support::renderer(),
+                &layout::Limits::new(Size::ZERO, Size::new(width, 10_000.0)),
+            )
+        }
+
+        fn state(&mut self) -> &mut ZoomState {
+            self.tree
+                .as_mut()
+                .expect("laid out")
+                .state
+                .downcast_mut::<ZoomState>()
+        }
+
+        fn pieces(&mut self) -> Vec<Piece> {
+            self.state().pieces.clone()
+        }
+    }
+
+    fn full(freed: f32) -> Zoom {
+        Zoom { full_screen: true, freed }
+    }
+
+    fn normal(freed: f32) -> Zoom {
+        Zoom { full_screen: false, freed }
+    }
+
+    /// A rig that has laid 7 cards out normally at 1150 px and then flipped to full screen at
+    /// 1300 px: a zoom from 1150 to 1450 at its midpoint.
+    fn midway() -> Rig {
+        let mut rig = Rig::new();
+        rig.lay(cards(7), normal(300.0), 1150.0);
+        rig.lay(cards(7), full(300.0), 1300.0);
+        rig
+    }
+
+    /// U21 (970, FR-011): a grid built full screen is at rest, with no zoom.
+    #[test]
+    fn a_grid_built_full_screen_lays_out_at_rest() {
+        let mut rig = Rig::new();
+        rig.lay(cards(7), full(300.0), 1300.0);
+        assert_eq!(rig.state().ends, None);
+        assert_same(&rig.pieces(), &ribbon(7, rest(1300.0), GAP, 1300.0, H));
+    }
+
+    /// U22 (970, FR-004, FR-006): a flip starts a zoom whose ends are the width before the flip and
+    /// that width plus the freed width; the frame between them is the ribbon at that fraction.
+    #[test]
+    fn a_flip_starts_a_zoom_between_the_two_end_widths() {
+        let mut rig = midway();
+        assert_eq!(rig.state().ends, Some((1150.0, 1450.0)));
+        assert_same(&rig.pieces(), &ribbon_at(7, 1150.0, 1450.0, 0.5));
+        rig.lay(cards(7), full(300.0), 1450.0);
+        assert_eq!(rig.state().ends, None, "the zoom ends at its end width");
+        assert_same(&rig.pieces(), &ribbon(7, rest(1450.0), GAP, 1450.0, H));
+    }
+
+    /// U23 (970): a zoom ends at an end width, when the width leaves its range, and after the slide.
+    #[test]
+    fn a_zoom_ends_at_an_end_outside_the_range_or_after_the_slide() {
+        let mut rig = midway();
+        rig.lay(cards(7), full(300.0), 1449.8);
+        assert_eq!(rig.state().ends, None, "within 0.5 px of the end");
+        assert_same(&rig.pieces(), &ribbon(7, rest(1449.8), GAP, 1449.8, H));
+
+        let mut rig = midway();
+        rig.lay(cards(7), full(300.0), 1700.0);
+        assert_eq!(rig.state().ends, None, "a resize past the end");
+        let mut rig = midway();
+        rig.lay(cards(7), full(300.0), 1000.0);
+        assert_eq!(rig.state().ends, None, "a resize past the start");
+
+        let mut rig = midway();
+        rig.state().started = std::time::Instant::now()
+            - (super::super::navigation_drawer::SLIDE + std::time::Duration::from_millis(100));
+        rig.lay(cards(7), full(300.0), 1300.0);
+        assert_eq!(rig.state().ends, None, "the slide and 100 ms are over");
+        assert_same(&rig.pieces(), &ribbon(7, rest(1300.0), GAP, 1300.0, H));
+    }
+
+    /// U24 (970, FR-007): flipping back midway keeps the ends, and the frame does not move.
+    #[test]
+    fn a_reversal_midway_keeps_the_ends() {
+        let mut rig = midway();
+        let before = rig.pieces();
+        rig.lay(cards(7), normal(300.0), 1300.0);
+        assert_eq!(rig.state().ends, Some((1150.0, 1450.0)));
+        assert_same(&rig.pieces(), &before);
+        rig.lay(cards(7), normal(300.0), 1150.0);
+        assert_eq!(rig.state().ends, None, "back at its start");
+        assert_same(&rig.pieces(), &ribbon(7, rest(1150.0), GAP, 1150.0, H));
+    }
+
+    /// U25 (970, US2 #5): a change of cards mid-zoom neither restarts nor ends the zoom.
+    #[test]
+    fn a_card_count_change_mid_zoom_keeps_the_zoom() {
+        let mut rig = midway();
+        let started = rig.state().started;
+        let changed: Vec<OverviewCard<'static, ()>> = cards(9);
+        rig.lay(changed, full(300.0), 1320.0);
+        assert_eq!(rig.state().ends, Some((1150.0, 1450.0)));
+        assert_eq!(rig.state().started, started);
+        let pieces = rig.pieces();
+        assert_same(&pieces, &ribbon_at(9, 1150.0, 1450.0, 170.0 / 300.0));
+        for (i, a) in pieces.iter().enumerate() {
+            for b in &pieces[i + 1..] {
+                assert!(a.card == b.card || !crate::ui::material::test_support::overlap(&a.rect, &b.rect));
+            }
+        }
+    }
+
+    /// U26 (970, SC-001): at rest in full screen a full row spans the whole freed width.
+    #[test]
+    fn full_screen_rows_span_the_freed_width() {
+        let freed = f32::from(crate::app::SIDEBAR_DEFAULT_WIDTH)
+            + crate::ui::material::resize_handle::WIDTH;
+        let span = |width: f32, zoom: Zoom| {
+            let mut rig = Rig::new();
+            rig.lay(cards(30), zoom, width);
+            let row: Vec<Piece> = rig.pieces().into_iter().filter(|p| p.rect.y < 1.0).collect();
+            row.iter().map(|p| p.rect.x + p.rect.width).fold(0.0, f32::max)
+        };
+        let window = 1400.0 - 48.0;
+        let normal_row = span(window - freed, normal(freed));
+        let full_row = span(window, full(freed));
+        assert!(near(full_row, window), "{full_row} != {window}");
+        assert!(full_row >= normal_row + freed - EPS, "{full_row} vs {normal_row}");
     }
 }

@@ -28,3 +28,14 @@ failed before the implementation.
   moved: `a_card_press_requests_its_activation` presses at y 120, below the new header row.
 - refactor: the drawer's `layout` split into `layout_shown` (open/close) and the retraction on top;
   `draw` into `draw_children`, clipped to the drawer while it retracts.
+
+## Cycle 2: M2, U18–U26 (T018–T026)
+
+- tests: `card_grid.rs` `mod tests` (zoom_fraction, ribbon end/overlap/range gates, laid-out `Rig` tests).
+- red 1 (T021, compile): `cargo test -p micold-client --lib --no-run card_grid` -> `E0422/E0425: cannot
+  find ... Zoom / ribbon / zoom_fraction / rest_width / Piece / ZoomState`, `E0599: no method named zoom
+  found for CardGrid`, `E0432: unresolved import card_grid::Zoom` (27 errors).
+- red 2 (behavioural, stubs): not run separately; the implementation was written in one step after the
+  compile red. Recorded as a gap.
+- green: `cargo test -p micold-client --lib card_grid` -> 19 passed; `--test showcase_completeness` -> 42
+  passed (its CardGrid assertion `!interactive` became `interactive == (component == "CardGrid")`).

@@ -583,10 +583,13 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     )
 }
 
+/// The width the zoom pose's drawer gives the grid when it retracts.
+const ZOOM_DRAWER_WIDTH: f32 = 200.0;
+
 /// `CardGrid` with 1, 3 and 30 cards, and in a narrow room.
-pub fn card_grid<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+pub fn card_grid<'a>(showcase: &'a Showcase, roles: Roles, index: usize) -> Element<'a, Message> {
     use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
-    let grid = |n: usize, width: Length| {
+    let zoomed = |n: usize, width: Length, zoom: material::Zoom| {
         let cards = (0..n)
             .map(|i| {
                 let state = S::ALL[i % S::ALL.len()];
@@ -596,16 +599,70 @@ pub fn card_grid<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
                 )
             })
             .collect();
-        iced::widget::container(Element::from(material::CardGrid::new(cards, roles)))
-            .width(width)
-            .height(Length::Fixed(320.0))
+        iced::widget::container(Element::from(
+            material::CardGrid::new(cards, roles).zoom(zoom),
+        ))
+        .width(width)
+        .height(Length::Fixed(320.0))
     };
+    let grid = |n: usize, width: Length| zoomed(n, width, material::Zoom::default());
     arrange(
         vec![
             posed("1 card", grid(1, Length::Fill), roles),
             posed("3 cards", grid(3, Length::Fill), roles),
             posed("30 cards", grid(30, Length::Fill), roles),
             posed("narrow", grid(3, Length::Fixed(279.0)), roles),
+            // Feature 970: the cards widen and slide with the drawer beside them.
+            posed(
+                "zoom — press it",
+                iced::widget::column![
+                    material::Button::text(
+                        if showcase.shown(index) {
+                            "Full screen"
+                        } else {
+                            "Exit full screen"
+                        },
+                        roles,
+                    )
+                    .on_press(Message::Reversed(index)),
+                    iced::widget::row![
+                        material::NavigationDrawer::new(
+                            material::Surface::new(
+                                material::Text::new("The sidebar", TypeRole::Body, roles),
+                                SurfaceKind::Sidebar,
+                                roles,
+                            )
+                            .padding(spacing::MD)
+                            .width(Length::Fixed(ZOOM_DRAWER_WIDTH))
+                            .height(Length::Fill),
+                            material::Surface::new(
+                                material::Glyph::<Message>::new(
+                                    Icon::ShowSidebar,
+                                    TypeRole::Title,
+                                    roles,
+                                ),
+                                SurfaceKind::Sidebar,
+                                roles,
+                            )
+                            .padding(spacing::SM)
+                            .height(Length::Fill),
+                        )
+                        .open(true)
+                        .retracted(!showcase.shown(index)),
+                        zoomed(
+                            12,
+                            Length::Fill,
+                            material::Zoom {
+                                full_screen: !showcase.shown(index),
+                                freed: ZOOM_DRAWER_WIDTH,
+                            },
+                        ),
+                    ]
+                    .height(Length::Fixed(320.0)),
+                ]
+                .spacing(spacing::XS),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )

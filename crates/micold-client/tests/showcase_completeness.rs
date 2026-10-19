@@ -930,7 +930,7 @@ fn the_overview_card_and_grid_are_posed() {
         (
             "CardGrid",
             "material/card_grid.rs",
-            &["1 card", "3 cards", "30 cards", "narrow"][..],
+            &["1 card", "3 cards", "30 cards", "narrow", "zoom"][..],
         ),
     ] {
         let entry = COMPONENTS
@@ -944,6 +944,12 @@ fn the_overview_card_and_grid_are_posed() {
                 "{component}: pose \"{pose}\" is missing"
             );
         }
-        assert!(!entry.interactive, "{component} answers no press yet");
+        // The card answers no press; the grid's zoom pose has a button that flips full screen
+        // (feature 970).
+        assert_eq!(
+            entry.interactive,
+            component == "CardGrid",
+            "{component}: interactive"
+        );
     }
 }
