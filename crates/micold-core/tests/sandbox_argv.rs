@@ -62,10 +62,7 @@ fn spec_for(windows_host: bool) -> SandboxSpec {
     };
     let profile = SandboxProfile {
         image: ImageChoice::Own(OwnImage::Reference("micold-daemon:0.27.0".into())),
-        credentials: BTreeSet::from([
-            CredentialShare::GitConfig,
-            CredentialShare::AiCliAuth,
-        ]),
+        credentials: BTreeSet::from([CredentialShare::GitConfig, CredentialShare::AiCliAuth]),
         ..SandboxProfile::default()
     };
     let layout = CredentialLayout::conventional(Path::new(home), None);
@@ -184,8 +181,8 @@ fn a_windows_host_mounts_every_path_under_the_container_root() {
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
     assert_eq!(
         mapped.len(),
-        6,
-        "one project, two git credentials and three sign-in files: {mapped:?}"
+        5,
+        "one project, the git config and three sign-in files: {mapped:?}"
     );
     assert!(
         mapped
@@ -243,8 +240,8 @@ fn a_unix_host_mounts_every_path_at_itself() {
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
     assert_eq!(
         mapped.len(),
-        6,
-        "one project, two git credentials and three sign-in files: {mapped:?}"
+        5,
+        "one project, the git config and three sign-in files: {mapped:?}"
     );
     for (host, container, _) in mapped {
         assert_eq!(
@@ -462,7 +459,12 @@ fn no_personal_token_or_agent_socket_reaches_the_container_environment() {
         "host-github-token-value",
         "/tmp/ssh-host",
     ] {
-        assert!(!all.contains(leaked), "{leaked} reaches the container: {all}");
+        assert!(
+            !all.contains(leaked),
+            "{leaked} reaches the container: {all}"
+        );
     }
-    assert!(!args.iter().any(|a| a == "--env-host" || a.starts_with("--env-file")));
+    assert!(!args
+        .iter()
+        .any(|a| a == "--env-host" || a.starts_with("--env-file")));
 }

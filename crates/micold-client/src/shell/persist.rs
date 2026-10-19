@@ -406,6 +406,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
                             },
                         network: _,
                         moved_off_released: _,
+                        removed_git_credentials: _,
                         credentials: _,
                         survive_logout: _,
                         ai_clis: _,

@@ -117,3 +117,106 @@ fn an_unknown_runtime_kind_is_unsupported_and_survives_a_save_verbatim() {
         "an entry this build cannot run is written back unchanged"
     );
 }
+
+/// A settings document holding a container daemon whose profile names the SSH agent and the git
+/// credential store, and a Kubernetes daemon whose `allowed` names git credentials and an SSH key
+/// (#1002 removed all four), each beside an item that is kept.
+fn document_naming_removed_git_credentials() -> String {
+    use micold_core::daemons::{ContainerSettings, DaemonEntry, DaemonName, DaemonRegistry};
+    use micold_core::kube::settings::KubeSettings;
+    let entry = |id, name: &str, runtime| DaemonEntry {
+        id: DaemonId(id),
+        name: DaemonName::new(name).unwrap(),
+        runtime,
+        auto_start: false,
+        notice: None,
+    };
+    let container = DaemonRuntime::Container(ContainerSettings {
+        profile: Default::default(),
+        container_name: "micold-box".to_string(),
+        port: 7730,
+        migration: None,
+    });
+    let kube = DaemonRuntime::Kubernetes(KubeSettings::new("dev", "micold", &[]));
+    let mut settings = Settings::default();
+    settings.set_registry(DaemonRegistry::new(
+        vec![entry(1, "Box", container), entry(2, "Cluster", kube)],
+        3,
+    ));
+    let mut json = serde_json::to_value(&settings).unwrap();
+    json["daemons"][0]["runtime"]["profile"]["credentials"] =
+        serde_json::json!(["ssh_agent", "git_config", "git_credentials"]);
+    json["daemons"][1]["runtime"]["allowed"] = serde_json::json!([
+        { "kind": "git_credentials" },
+        { "kind": "git_config" },
+        { "kind": "git_ssh_key", "key": "/home/u/.ssh/id_ed25519" }
+    ]);
+    json.to_string()
+}
+
+#[test]
+fn a_daemon_whose_settings_named_a_removed_git_credential_item_stores_the_notice_once() {
+    use micold_core::daemons::MigrationNotice;
+    let (dir, store, mut s) = load(&document_naming_removed_git_credentials());
+    for entry in &s.daemons {
+        assert_eq!(
+            entry.notice,
+            Some(MigrationNotice::RemovedGitCredentials),
+            "{} named a removed item, so it carries the notice",
+            entry.name.as_str()
+        );
+    }
+    store.save(&s).unwrap();
+    let saved = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
+    // Quoted: the stored notice's own name, `removed_git_credentials`, contains `git_credentials`.
+    for removed in [
+        "\"ssh_agent\"",
+        "\"git_credentials\"",
+        "\"git_ssh_key\"",
+        "id_ed25519",
+    ] {
+        assert!(
+            !saved.contains(removed),
+            "{removed} is dropped on save: {saved}"
+        );
+    }
+    assert!(saved.contains("git_config"), "the kept item stays: {saved}");
+    assert_eq!(
+        store.load().settings.daemons[0].notice,
+        Some(MigrationNotice::RemovedGitCredentials),
+        "the notice survives a save until it is dismissed"
+    );
+
+    let mut registry = s.registry();
+    for id in [DaemonId(1), DaemonId(2)] {
+        assert!(
+            registry.dismiss_notice(id),
+            "the notice was there to dismiss"
+        );
+        assert!(
+            !registry.dismiss_notice(id),
+            "dismissing twice changes nothing"
+        );
+    }
+    s.set_registry(registry);
+    store.save(&s).unwrap();
+    let reloaded = store.load().settings;
+    assert!(
+        reloaded.daemons.iter().all(|e| e.notice.is_none()),
+        "a reload after the dismissal does not raise it again"
+    );
+}
+
+#[test]
+fn the_removed_git_credentials_notice_says_what_went_why_and_what_replaces_it() {
+    use micold_core::daemons::{MigrationNotice, SCOPED_CREDENTIAL};
+    let text = MigrationNotice::RemovedGitCredentials.message();
+    for item in ["SSH agent", "SSH key", "git credentials"] {
+        assert!(text.contains(item), "names {item}: {text}");
+    }
+    assert!(text.contains("whole git identity"), "says why: {text}");
+    assert!(
+        text.contains(SCOPED_CREDENTIAL),
+        "names the replacement: {text}"
+    );
+}

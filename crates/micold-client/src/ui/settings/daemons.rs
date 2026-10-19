@@ -255,6 +255,12 @@ fn daemon_row<'a>(
     }
     if let Some(sentence) = &view.notice {
         body = body.push(note(sentence.clone(), roles));
+        if view.notice_dismissable {
+            body = body.push(
+                Button::text("Dismiss", roles)
+                    .on_press(Message::Daemons(DaemonsMsg::DismissNotice(view.id))),
+            );
+        }
     }
     if view.runtime_label == micold_core::daemons::SSH_RUNTIME_LABEL {
         body = body.push(repository_step(&view, state, focused, roles));
@@ -633,12 +639,6 @@ fn kube_sections<'a>(
                 .on_toggle(move |on| Message::Daemons(DaemonsMsg::AllowedToggled(kind, on))),
         );
         let file = match kind {
-            AllowedKind::GitSshKey => Some((
-                "SSH key file",
-                &kube.ssh_key_file,
-                FieldId::DaemonKubeSshKeyFile,
-                "ssh_key_file",
-            )),
             AllowedKind::RegistryPull => Some((
                 "Registry credentials file",
                 &kube.pull_file,
@@ -648,11 +648,8 @@ fn kube_sections<'a>(
             _ => None,
         };
         if let Some((label, value, id, name)) = file.filter(|_| kube.allowed.contains(&kind)) {
-            let on_input: fn(String) -> Message = if kind == AllowedKind::GitSshKey {
-                |v| Message::Daemons(DaemonsMsg::KubeSshKeyEdited(v))
-            } else {
-                |v| Message::Daemons(DaemonsMsg::PullFileEdited(v))
-            };
+            let on_input: fn(String) -> Message =
+                |v| Message::Daemons(DaemonsMsg::PullFileEdited(v));
             allowed = allowed.push(
                 TextField::new("", value, roles)
                     .label(label)

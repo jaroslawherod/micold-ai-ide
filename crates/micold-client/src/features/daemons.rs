@@ -585,13 +585,21 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 .cloned()
                 .unwrap_or(DaemonState::Stopped),
             bound: bound_to(model, entry.id),
-            notice: match &entry.runtime {
-                DaemonRuntime::Container(_) if model.legacy_container == Some(entry.id) => {
-                    Some(micold_core::daemons::LEGACY_NOTICE.to_string())
+            notice: {
+                let image = match &entry.runtime {
+                    DaemonRuntime::Container(_) if model.legacy_container == Some(entry.id) => {
+                        Some(micold_core::daemons::LEGACY_NOTICE.to_string())
+                    }
+                    DaemonRuntime::Container(c) => c.migration.map(|m| m.message().to_string()),
+                    _ => None,
+                };
+                let stored = entry.notice.map(|n| n.message().to_string());
+                match (stored, image) {
+                    (Some(a), Some(b)) => Some(format!("{a} {b}")),
+                    (a, b) => a.or(b),
                 }
-                DaemonRuntime::Container(c) => c.migration.map(|m| m.message().to_string()),
-                _ => None,
             },
+            notice_dismissable: entry.notice.is_some(),
             stop_blocked: model.legacy_container == Some(entry.id)
                 && model.sessions.get(&entry.id).is_some_and(|s| !s.is_empty()),
             explanation: crate::links::remote_mismatch_text(entry, model.links),
@@ -1710,10 +1718,10 @@ pub enum Msg {
     MemoryRequestEdited(String),
     /// The Kubernetes memory limit field changed.
     KubeMemoryLimitEdited(String),
+    /// The user dismissed a daemon's one-time notice.
+    DismissNotice(DaemonId),
     /// An allowed credential was ticked or unticked.
     AllowedToggled(AllowedKind, bool),
-    /// The allowed SSH key file field changed.
-    KubeSshKeyEdited(String),
     /// The allowed registry auth file field changed.
     PullFileEdited(String),
     /// The Kubernetes node selector text changed (one `key=value` row per line).
@@ -1917,7 +1925,6 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
                 d.kube.allowed.remove(&kind);
             }
         }),
-        Msg::KubeSshKeyEdited(v) => edit(state, &|d| d.kube.ssh_key_file = v.clone()),
         Msg::PullFileEdited(v) => edit(state, &|d| d.kube.pull_file = v.clone()),
         Msg::ContainerNameEdited(v) => edit(state, &|d| d.container_name = v.clone()),
         Msg::PortEdited(v) => edit(state, &|d| d.port = v.clone()),
@@ -2039,6 +2046,11 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
                 return request_kube_stop(state, model, id);
             }
             stop(state, model, id);
+        }
+        Msg::DismissNotice(id) => {
+            if model.registry.dismiss_notice(id) {
+                return vec![Outcome::DaemonRegistryChanged(model.registry.clone())];
+            }
         }
         Msg::Reconnected(id) => {
             reconnect(state, model, id);

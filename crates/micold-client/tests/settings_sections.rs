@@ -58,6 +58,11 @@ const DEFERRED: &[(&str, &str)] = &[
         "daemon.sandbox.moved_off_released",
         "M5 (T058) migration notice",
     ),
+    // Read-repair state (`#[serde(skip)]`): shown through `DaemonEntry.notice` (feature 1002).
+    (
+        "daemon.sandbox.removed_git_credentials",
+        "1002 M1 (T010) removed git credentials notice",
+    ),
 ];
 
 /// Settings stored with the others but chosen outside the Settings screen, each with the client

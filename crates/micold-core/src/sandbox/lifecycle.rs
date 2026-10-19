@@ -243,11 +243,11 @@ pub fn adopt(
     };
     let id = ContainerId(facts.id.clone());
 
-    if let Some(destination) = facts
-        .mount_destinations
-        .iter()
-        .find(|d| retired.iter().any(|r| r.as_path() == std::path::Path::new(d.as_str())))
-    {
+    if let Some(destination) = facts.mount_destinations.iter().find(|d| {
+        retired
+            .iter()
+            .any(|r| r.as_path() == std::path::Path::new(d.as_str()))
+    }) {
         return Adoption::Replace {
             id,
             reason: StaleReason::RetiredCredentialMount {
@@ -1312,12 +1312,20 @@ mod adoption_tests {
         let released = "ghcr.io/jaroslawherod/micold-daemon:0.30.0";
         let running = facts(released, Some("abc"), true);
         assert_eq!(
-            adopt(Some(&running), crate::sandbox::basic_image::BASIC_IMAGE, &[]),
+            adopt(
+                Some(&running),
+                crate::sandbox::basic_image::BASIC_IMAGE,
+                &[]
+            ),
             Adoption::Legacy(ContainerId("9f2b".into()))
         );
         let stopped = facts(released, Some("abc"), false);
         assert!(matches!(
-            adopt(Some(&stopped), crate::sandbox::basic_image::BASIC_IMAGE, &[]),
+            adopt(
+                Some(&stopped),
+                crate::sandbox::basic_image::BASIC_IMAGE,
+                &[]
+            ),
             Adoption::Replace { .. }
         ));
         let other = facts("acme/x:1", None, true);
@@ -1341,10 +1349,18 @@ mod adoption_tests {
                 },
             }
         );
-        let mut legacy = facts("ghcr.io/jaroslawherod/micold-daemon:0.30.0", Some("abc"), true);
+        let mut legacy = facts(
+            "ghcr.io/jaroslawherod/micold-daemon:0.30.0",
+            Some("abc"),
+            true,
+        );
         legacy.mount_destinations = vec!["/home/u/.git-credentials".into()];
         assert!(matches!(
-            adopt(Some(&legacy), crate::sandbox::basic_image::BASIC_IMAGE, &retired),
+            adopt(
+                Some(&legacy),
+                crate::sandbox::basic_image::BASIC_IMAGE,
+                &retired
+            ),
             Adoption::Replace {
                 reason: StaleReason::RetiredCredentialMount { .. },
                 ..

@@ -1305,13 +1305,23 @@ async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved
     let auths = tmp.path().join("auths.json");
     std::fs::write(&auths, r#"{"auths": {}}"#).unwrap();
     let mut stored = serde_json::to_value(settings()).unwrap();
-    stored["allowed"] = serde_json::json!([
-        { "kind": "git_credentials" },
-        { "kind": "git_ssh_key", "key": host.home.join(".ssh").join("id_ed25519") },
-        { "kind": "git_config" },
-        { "kind": "sign_in", "cli": "claude_code" },
-        { "kind": "registry_pull", "auths": auths },
-    ]);
+    // The kept items as this build writes them, beside the two removed ones as they were written.
+    let kept = serde_json::to_value([
+        KubeCredential::GitConfig,
+        KubeCredential::SignIn {
+            cli: crate::session::AiCli::ClaudeCode,
+        },
+        KubeCredential::RegistryPull {
+            auths: auths.clone(),
+        },
+    ])
+    .unwrap();
+    let mut allowed = vec![
+        serde_json::json!({ "kind": "git_credentials" }),
+        serde_json::json!({ "kind": "git_ssh_key", "key": host.home.join(".ssh").join("id_ed25519") }),
+    ];
+    allowed.extend(kept.as_array().unwrap().iter().cloned());
+    stored["allowed"] = serde_json::Value::Array(allowed);
     let settings: KubeSettings = serde_json::from_value(stored).unwrap();
     assert_eq!(settings.allowed.len(), 3, "{:?}", settings.allowed);
 
@@ -1335,7 +1345,10 @@ async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved
 
     // The kept items did reach the cluster, so the search is not over an empty start-up.
     let secrets = fake.names(NS, ObjectKind::Secret);
-    assert!(secrets.contains(&n.secret(&KubeCredential::GitConfig)), "{secrets:?}");
+    assert!(
+        secrets.contains(&n.secret(&KubeCredential::GitConfig)),
+        "{secrets:?}"
+    );
     let mut start_up = fake.calls().join("\n");
     for kind in [
         ObjectKind::Pod,

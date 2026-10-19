@@ -217,8 +217,6 @@ pub enum FieldId {
     DaemonKubeVolumeSize,
     /// Settings → Daemons: the Kubernetes form's storage class (feature 686).
     DaemonKubeStorageClass,
-    /// Settings → Daemons: the Kubernetes form's allowed SSH key file (feature 686).
-    DaemonKubeSshKeyFile,
     /// Settings → Daemons: the Kubernetes form's allowed registry auth file (feature 686).
     DaemonKubePullFile,
     /// Settings → Daemons: the form's process-count limit (feature 804).

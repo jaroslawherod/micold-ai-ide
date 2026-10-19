@@ -639,11 +639,7 @@ mod tests {
             cli: crate::session::AiCli::ClaudeCode,
         };
         let pull = KubeCredential::RegistryPull { auths: "/a".into() };
-        let p = with_allowed(&[
-            KubeCredential::GitConfig,
-            signin.clone(),
-            pull.clone(),
-        ]);
+        let p = with_allowed(&[KubeCredential::GitConfig, signin.clone(), pull.clone()]);
         let n = names();
         let volumes: Vec<&str> = p["spec"]["volumes"]
             .as_array()

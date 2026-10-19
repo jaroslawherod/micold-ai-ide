@@ -85,14 +85,18 @@ daemon's own.
 mounted read-only, and never goes into the image:
 
 - **the git config**, as `~/.gitconfig` on the volume;
-- **the git credentials**, at `/run/micold/creds/git-credentials`;
-- **an SSH key**, with its **SSH key file**, at `/run/micold/creds/ssh`;
 - **the sign-in** of each AI CLI (Claude Code, GitHub Copilot, Pi Coding Agent), at the path that
   CLI reads under its home;
 - **the registry credentials**, with its **Registry credentials file**, as an image-pull secret.
 
 A ticked credential whose file is missing fails the start (`<credential> is allowed but <path> does
 not exist`). Unticking one deletes its secret on the next start.
+
+The **git credentials** and **SSH key** items were removed: they handed the pod your whole git
+identity. A daemon that had them ticked keeps working without them; its entry in the daemon list
+shows a one-time notice, with a **Dismiss** button, and the old secrets (`<name>-git-credentials`
+and `<name>-git-ssh`) are deleted on the next start or remove. Until the scoped credential is set
+up, the pod cannot push.
 
 ## The form
 
@@ -136,9 +140,9 @@ fetches the existing clone instead of cloning again.
 - A project with no git remote is refused: "<project> has no git remote; a Kubernetes daemon clones
   from it". With several remotes and none called `origin`, the refusal names them.
 - Commits you have not pushed stay on your computer; the pod sees only what the remote holds.
-- A remote that needs a credential needs it allowed for the daemon (see Allowed credentials);
-  otherwise the create stops with "cloning <url> needs a credential: allow Git credentials or an SSH
-  key for <daemon>". A full volume stops it with "the volume of <daemon> is full". Nothing
+- A remote that needs a credential the pod cannot be given stops the create with "cloning <url>
+  needs a credential"; git credentials and SSH keys are no longer allowed (see Allowed
+  credentials). A full volume stops it with "the volume of <daemon> is full". Nothing
   half-cloned is left behind.
 
 ## Stop, Remove and Forget locally

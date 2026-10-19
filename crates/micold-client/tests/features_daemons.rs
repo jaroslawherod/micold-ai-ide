@@ -440,6 +440,25 @@ mod kubernetes {
 
     // T066: the allowed-credentials list.
     #[test]
+    fn the_allowed_items_include_no_git_credentials_or_ssh_key() {
+        let labels: Vec<String> = AllowedKind::all()
+            .into_iter()
+            .map(AllowedKind::label)
+            .collect();
+        assert!(
+            labels.iter().all(|l| !l.to_lowercase().contains("ssh")
+                && !l.to_lowercase().contains("credentials")
+                || l.to_lowercase().contains("registry")),
+            "{labels:?}"
+        );
+        assert_eq!(
+            AllowedKind::all().len(),
+            2 + AiCli::ALL.len(),
+            "git config, one sign-in per CLI, registry pull: {labels:?}"
+        );
+    }
+
+    #[test]
     fn nothing_is_allowed_by_default() {
         let (mut w, _) = world();
         let mut state = State::default();
@@ -489,21 +508,9 @@ mod kubernetes {
     }
 
     #[test]
-    fn an_ssh_key_and_registry_auth_require_a_file() {
+    fn registry_auth_requires_a_file() {
         let (mut w, id) = world();
         let mut state = open(&mut w, id);
-        send(
-            &mut state,
-            &mut w,
-            Msg::AllowedToggled(AllowedKind::GitSshKey, true),
-        );
-        send(&mut state, &mut w, Msg::Saved);
-        assert_eq!(state.form_error.as_ref().unwrap().field, "ssh_key_file");
-        send(
-            &mut state,
-            &mut w,
-            Msg::KubeSshKeyEdited("/home/u/.ssh/id_ed25519".into()),
-        );
         send(
             &mut state,
             &mut w,
@@ -519,9 +526,6 @@ mod kubernetes {
         send(&mut state, &mut w, Msg::Saved);
         assert!(state.form_error.is_none(), "{:?}", state.form_error);
         let allowed = stored(&w, id).allowed;
-        assert!(allowed.contains(&KubeCredential::GitSshKey {
-            key: "/home/u/.ssh/id_ed25519".into()
-        }));
         assert!(allowed.contains(&KubeCredential::RegistryPull {
             auths: "/home/u/.docker/config.json".into()
         }));
@@ -1185,5 +1189,66 @@ mod save_required {
             state.repository_marks.state(id_b, req_b),
             FieldRequirement::Required
         );
+    }
+}
+
+/// Feature 1002: the sandbox no longer shares the user's git identity, and says so once.
+mod retired_git_identity {
+    use super::daemons_fixture::World;
+    use micold_client::features::daemons::{self, Msg, State};
+    use micold_client::features::Outcome;
+    use micold_core::daemons::{DaemonRegistry, MigrationNotice};
+    use micold_core::sandbox::CredentialShare;
+
+    fn with_notice(w: &mut World) {
+        let mut entries = w.registry.entries().to_vec();
+        for e in entries.iter_mut().filter(|e| e.id == w.boxed) {
+            e.notice = Some(MigrationNotice::RemovedGitCredentials);
+        }
+        w.registry = DaemonRegistry::new(entries, 10);
+    }
+
+    /// The boxed daemon's notice, and whether the row offers to dismiss it.
+    fn notice_of(w: &mut World) -> (Option<String>, bool) {
+        let vm = daemons::views(&State::default(), &w.model());
+        let row = vm.rows.into_iter().find(|r| r.id == w.boxed).unwrap();
+        (row.notice, row.notice_dismissable)
+    }
+
+    #[test]
+    fn the_container_credential_rows_offer_only_git_configuration_and_ai_cli_sign_in() {
+        let labels: Vec<&str> = CredentialShare::ALL.iter().map(|s| s.label()).collect();
+        assert_eq!(labels, ["Git configuration", "AI CLI sign-in"]);
+    }
+
+    #[test]
+    fn a_daemon_with_the_stored_notice_shows_its_message() {
+        let mut w = World::new();
+        assert_eq!(notice_of(&mut w), (None, false));
+        with_notice(&mut w);
+        assert_eq!(
+            notice_of(&mut w),
+            (
+                Some(MigrationNotice::RemovedGitCredentials.message().to_string()),
+                true
+            )
+        );
+    }
+
+    #[test]
+    fn dismissing_the_notice_clears_it_from_the_registry_and_the_row() {
+        let mut w = World::new();
+        with_notice(&mut w);
+        let mut state = State::default();
+        let boxed = w.boxed;
+        let out = daemons::update(&mut state, &mut w.model(), Msg::DismissNotice(boxed));
+        assert!(matches!(
+            out.as_slice(),
+            [Outcome::DaemonRegistryChanged(_)]
+        ));
+        assert_eq!(w.registry.get(w.boxed).unwrap().notice, None);
+        assert_eq!(notice_of(&mut w), (None, false));
+        let again = daemons::update(&mut state, &mut w.model(), Msg::DismissNotice(boxed));
+        assert!(again.is_empty());
     }
 }

@@ -31,7 +31,7 @@ T014 adds `pub type UnixTime = u64;` in `scoped_credential/mod.rs`. Each task th
 
 ## Phase 1: Setup
 
-- [ ] T001 Add a "hostile host" test fixture: a temp home holding `~/.ssh/id_ed25519` (+ `.pub`),
+- [x] T001 Add a "hostile host" test fixture: a temp home holding `~/.ssh/id_ed25519` (+ `.pub`),
   `~/.git-credentials`, `~/.config/gh/hosts.yml` (with a `oauth_token`), a fake `SSH_AUTH_SOCK`
   socket path, and `GH_TOKEN`/`GITHUB_TOKEN` values in the env map passed to the argv/manifest
   builders, each with a distinctive marker string. Put it in a new
@@ -59,31 +59,31 @@ built container argv and pod manifest contain none of the items, path or content
 
 ### Tests (write first, must fail)
 
-- [ ] T002 [P] [US1] FR-014 container test in `crates/micold-core/tests/sandbox_credentials.rs`:
+- [x] T002 [P] [US1] FR-014 container test in `crates/micold-core/tests/sandbox_credentials.rs`:
   build the full container start-up (argv, env, mounts) with the T001 fixture and a saved profile
   whose JSON names `ssh_agent` and `git_credentials` and also enables `git_config` and
   `ai_cli_auth` (the kept items); assert no arg, env value or mount source
   contains the agent socket path, any `~/.ssh` path or key content, `~/.git-credentials` path or
   content, `hosts.yml`, or the `GH_TOKEN`/`GITHUB_TOKEN` values (contracts/git-in-container.md §4).
-- [ ] T003 [P] [US1] Env pass-through test in `crates/micold-core/tests/sandbox_argv.rs`: with
+- [x] T003 [P] [US1] Env pass-through test in `crates/micold-core/tests/sandbox_argv.rs`: with
   `GH_TOKEN`, `GITHUB_TOKEN` and `SSH_AUTH_SOCK` in the host env and other env forwarded, none of
   the three reaches a `-e` arg (spec edge case "personal token in the host environment").
-- [ ] T004 [P] [US1] FR-014 Kubernetes test in `crates/micold-core/src/kube/start_tests.rs` with
+- [x] T004 [P] [US1] FR-014 Kubernetes test in `crates/micold-core/src/kube/start_tests.rs` with
   `kube-fake`: `KubeSettings` loaded from JSON whose `allowed` names `git_credentials` and
   `git_ssh_key` and also the kept git config, AI CLI sign-in and registry pull items, host per T001
   → no secret, volume, mount or env var carries them; `GH_TOKEN` /
   `GITHUB_TOKEN` values in no env var.
-- [ ] T005 [P] [US1] Legacy-settings tests (FR-002): in the `#[cfg(test)]` module of
+- [x] T005 [P] [US1] Legacy-settings tests (FR-002): in the `#[cfg(test)]` module of
   `crates/micold-core/src/sandbox/mod.rs`, a profile JSON naming `ssh_agent` and `git_credentials`
   loads without error, keeps `git_config`/`ai_cli_auth`, sets `removed_git_credentials`, and
   serialises without the removed names; same for `KubeSettings.allowed` with `git_credentials` and
   `git_ssh_key` in `crates/micold-core/src/kube/settings.rs`.
-- [ ] T006 [P] [US1] Migration-notice test in `crates/micold-core/tests/daemons_migration.rs`
+- [x] T006 [P] [US1] Migration-notice test in `crates/micold-core/tests/daemons_migration.rs`
   (FR-003): a daemon whose profile or Kubernetes settings set `removed_git_credentials` stores
   `MigrationNotice::RemovedGitCredentials` once; dismissing it clears it and a reload does not
   raise it again; `message()` names the removed items, why (they carried the user's whole git
   identity), and the scoped credential that replaces them.
-- [ ] T007 [P] [US1] Client reducer tests in the `#[cfg(test)]` modules of
+- [x] T007 [P] [US1] Client reducer tests in the `#[cfg(test)]` modules of
   `crates/micold-client/src/features/daemons.rs` and `features/daemons_kube.rs`: the credential
   rows offer only *Git configuration* and *AI CLI sign-in* (container) and no git-credentials /
   SSH-key item (Kubernetes); a daemon carrying the notice shows it, and the dismiss message
@@ -91,31 +91,31 @@ built container argv and pod manifest contain none of the items, path or content
 
 ### Implementation
 
-- [ ] T008 [US1] `crates/micold-core/src/sandbox/mod.rs`: `CredentialShare` keeps only `GitConfig`
+- [x] T008 [US1] `crates/micold-core/src/sandbox/mod.rs`: `CredentialShare` keeps only `GitConfig`
   and `AiCliAuth`; `RawProfile.credentials` reads a `Vec<RawShare>` (`RawShare` adds `SshAgent`,
   `GitCredentials`), drops those and sets `SandboxProfile::removed_git_credentials`
   (`#[serde(skip)]`), following the `moved_off_released` pattern; `CredentialLayout` loses
   `ssh_agent` and `git_credentials`; `MountSet::build_for` and `crates/micold-core/src/sandbox/argv.rs`
   never forward `SSH_AUTH_SOCK`, `GH_TOKEN` or `GITHUB_TOKEN` (T002, T003, T005).
-- [ ] T009 [US1] `crates/micold-core/src/kube/credentials.rs` and `kube/settings.rs`:
+- [x] T009 [US1] `crates/micold-core/src/kube/credentials.rs` and `kube/settings.rs`:
   `KubeCredential` loses `GitCredentials` and `GitSshKey` (`every_kind`, `daemon_env`, secret
   builders updated); `KubeSettings.allowed` reads through a raw list, dropping the old names and
   setting `KubeSettings::removed_git_credentials` (T004, T005).
-- [ ] T010 [US1] `crates/micold-core/src/daemons.rs`: `MigrationNotice::RemovedGitCredentials`
+- [x] T010 [US1] `crates/micold-core/src/daemons.rs`: `MigrationNotice::RemovedGitCredentials`
   with its `message()`, raised once from either flag exactly as `MovedOffReleasedImage` is. Name
   the replacement through one `const` so a D7 source switch edits one line (T006).
-- [ ] T011 [US1] Client: remove the items and their messages from
+- [x] T011 [US1] Client: remove the items and their messages from
   `crates/micold-client/src/features/daemons.rs`, `features/daemons_kube.rs` and
   `features/daemon_sections.rs`; show the notice with the existing migration-notice row; fix every
   remaining use the compiler reports in `crates/micold-client/src/shell/sandbox.rs` (no host agent
   socket or credential-store lookup) (T007). Then run the `visual-pass` skill on the notice row
   (quickstart Part C step 9) and save the evidence in `specs/1002-sandbox-scoped-token/visual-pass/`.
-- [ ] T012 [US1] Real-runtime check (off by default, quickstart Part B): add
+- [x] T012 [US1] Real-runtime check (off by default, quickstart Part B): add
   `crates/micold-daemon/tests/sandbox_real_no_user_credentials.rs` on `sandbox_real_support`,
   gated like the other `sandbox_real_*` tests: start a container daemon on the T001-style host with
   a profile naming the removed items; `docker inspect` plus an in-container `env` and
   `grep -r` of `/` and `$HOME` find no marker.
-- [ ] T013 [P] [US1] User guide: `docs/user-guide/sandboxed-daemon.md`,
+- [x] T013 [P] [US1] User guide: `docs/user-guide/sandboxed-daemon.md`,
   `docs/user-guide/kubernetes-daemons.md` and `docs/user-guide/settings.md` — the removed items,
   why, the one-time notice, and that sandboxes cannot push until the scoped credential is set up.
 

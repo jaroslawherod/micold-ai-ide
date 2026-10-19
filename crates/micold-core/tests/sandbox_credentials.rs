@@ -312,7 +312,10 @@ fn a_shared_sign_in_names_the_sandbox_homes_onboarding_record() {
 /// Every other share is held to this too: none of them is a sign-in.
 #[test]
 fn without_a_shared_sign_in_no_onboarding_record_is_named() {
-    for share in [CredentialShare::GitConfig] {
+    for share in CredentialShare::ALL
+        .into_iter()
+        .filter(|s| *s != CredentialShare::AiCliAuth)
+    {
         let profile = SandboxProfile {
             credentials: BTreeSet::from([share]),
             ..SandboxProfile::default()
@@ -695,8 +698,13 @@ fn a_container_start_up_carries_no_user_git_credential_whatever_the_saved_settin
     assert_eq!(host.leaks(&start_up), Vec::<String>::new(), "{start_up}");
     // And every file the mounts expose: none holds a credential's content.
     for path in spec.mounts.host_paths() {
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            assert_eq!(host.leaks(&text), Vec::<String>::new(), "{}", path.display());
+        if let Ok(text) = std::fs::read_to_string(path) {
+            assert_eq!(
+                host.leaks(&text),
+                Vec::<String>::new(),
+                "{}",
+                path.display()
+            );
         }
     }
 }
