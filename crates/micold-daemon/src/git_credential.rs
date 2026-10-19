@@ -16,7 +16,9 @@ use micold_core::protocol::messages::CredentialTarget;
 use micold_core::scoped_credential::helper::{
     answer, parse_request, render_credential_file, GIT_CREDENTIAL_ROOT,
 };
-use micold_core::scoped_credential::{SecretToken, UnixTime, CLOCK_SKEW_SECS, GITHUB_BASE, MAX_LIFETIME_SECS};
+use micold_core::scoped_credential::{
+    SecretToken, UnixTime, CLOCK_SKEW_SECS, GITHUB_BASE, MAX_LIFETIME_SECS,
+};
 
 /// Test override of the credential root, as `repo_clone::ROOT_ENV` is for the clone root.
 pub const ROOT_ENV: &str = "MICOLD_GIT_CREDENTIAL_ROOT";
