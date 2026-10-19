@@ -313,7 +313,8 @@ pub enum ClientMsg {
         cols: u16,
         /// New row count.
         rows: u16,
-        /// Resize this process's PTY only; `None` is the attached process (feature 484).
+        /// Resize this process's PTY only; `None` is every process of the session (feature 484). A
+        /// structured session's AI process has no PTY and refuses a `Some` (feature 938, FR-019).
         #[serde(default)]
         process: Option<SessionProcess>,
     },

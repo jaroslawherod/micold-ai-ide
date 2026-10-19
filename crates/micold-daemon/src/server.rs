@@ -1229,11 +1229,11 @@ where
                 rows,
                 process,
             } => {
-                // `None` resizes every process (`resize_terminal`): a structured session refuses
-                // for its AI process but its shell instances still follow the pane's size.
-                let refused =
-                    refuse_terminal_request(state, id, session, process, RefusedRequest::Resize);
-                if !refused || process.is_none() {
+                // `None` resizes every process (`resize_terminal`), the session's shell instances
+                // included, so it is not addressed to the AI process: only a `Some` is refused.
+                if process.is_none()
+                    || !refuse_terminal_request(state, id, session, process, RefusedRequest::Resize)
+                {
                     state.resize_terminal(session, process, cols, rows);
                 }
             }

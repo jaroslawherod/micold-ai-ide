@@ -200,9 +200,10 @@ Append only. Newest last.
 - green (T035, T036): `SessionRequestRefused`, `RefusedRequest`, `PROTOCOL_VERSION` 54;
   `DaemonState::refuses_terminal_request` and `refuse_terminal_request` in `server.rs` at the four
   arms. `ok. 7 passed` (structured_lifecycle), 3 of 3 runs.
-- review A F1 (MAJOR): a `process: None` resize means every process; it is refused for the AI
-  process yet still recorded and applied to the shells. New case
-  `a_resize_for_every_process_is_refused_for_the_ai_process_and_taken_by_the_shells` (`stty size`
-  in the shell reads `41 91`). The served case now waits for its marker before the interrupt (a
+- review A F1 (MAJOR): a `process: None` resize means every process, so it is not addressed to the
+  AI process: only a `Some` resize is refused (round 2 rejected refuse-and-apply as a mixed reply);
+  the shells take the size. New case
+  `a_resize_for_every_process_is_not_refused_and_the_shells_take_it` (`stty size` in the shell
+  reads `41 91`). The served case now waits for its marker before the interrupt (a
   flake: the ^C cancelled a line the shell had not read).
 - refactor: empty `if` arms replaced by `if !refuse_terminal_request(..)`.
