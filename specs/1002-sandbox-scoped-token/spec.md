@@ -53,6 +53,10 @@ unchanged.
   the user's device, with no project-run server in the path. _(agent-resolved:
   .specify/memory/constitution.md#IV. Local-First Storage, #Technology, Storage & Licensing
   Constraints "no separate server process")_
+- Q: Where does the scoped credential come from (FR-005)? → A: A GitHub App the user registers
+  and installs; the client holds its ID and private key on the device and mints 1-hour,
+  single-repository installation tokens. _(provisional, pending the user's answer on the decision
+  card; agent recommendation)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -177,8 +181,8 @@ and the reason; story 1's inspection still finds none of the user's items.
   one daemon share that daemon's credential for the repository.
 - **Renewal racing a push**: a push in progress keeps using the credential it started with, which
   is still valid (FR-008's margin); the next git operation uses the renewed one.
-- **Daemon stopped or deleted**: the credentials it held are revoked where the source allows it, and
-  otherwise left to expire.
+- **Daemon stopped or deleted**: the credentials it held are revoked (FR-010); one whose revocation
+  fails is left to expire within the hour.
 
 ## Requirements *(mandatory)*
 
@@ -210,14 +214,11 @@ and the reason; story 1's inspection still finds none of the user's items.
 - **FR-005**: For each project a sandboxed daemon serves whose push remote is a GitHub repository,
   the system MUST obtain a credential that (a) can reach only that one repository, (b) is granted
   repository contents read/write and metadata read and nothing else by default, and (c) expires on
-  its own. [NEEDS CLARIFICATION: Where does the scoped credential come from? (A) A GitHub App the
-  user registers and installs on their account/org, whose App ID and private key the client holds
-  on the device and from which it mints a per-repository installation token (expires in 1 hour,
-  renewable, permissions narrowed per request; no project-hosted service, per Clarifications); (B) a fine-grained
-  personal access token the user creates on GitHub for each repository and pastes into the
-  application, whose expiry the user sets on GitHub; (C) both, App preferred, PAT as the manual
-  path. Recommended: (A), the only source that gives per-repository scope, minimal permissions and
-  sub-day expiry with automatic renewal without asking the user per repository.]
+  its own. The source is a **GitHub App the user registers once and installs** on the accounts or
+  organisations (and repositories) they choose. The client holds the App's ID and private key on
+  the user's device and, per project, mints an installation token restricted to that one repository
+  and to those permissions. The App's private key never enters a container. *(Provisional: decided
+  by the agent pending the user's answer.)*
 - **FR-006**: The credential MUST be readable only inside the container it was issued for. It MUST
   NOT be written into the project's files, the project's git configuration on the host, or any path
   the container shares with the host.
@@ -227,20 +228,19 @@ and the reason; story 1's inspection still finds none of the user's items.
   Git MUST NOT offer that credential to any other repository or host.
 - **FR-008**: While a daemon runs, the system MUST renew each credential before it expires, with a
   margin of at least 5 minutes, without restarting the daemon or interrupting sessions.
-- **FR-009**: Credential lifetime MUST be no more than 1 hour where the source allows it to be set,
-  and MUST NOT be "no expiry" for any source. [Depends on FR-005's answer: for a user-pasted token
-  the system MUST refuse one without an expiry date and warn when its expiry is more than 90 days
-  away.]
-- **FR-010**: When a daemon stops or is deleted, the system MUST revoke the credentials it obtained
-  where the source supports revocation, and MUST discard its copy of them in every case.
+- **FR-009**: Every credential MUST expire no more than 1 hour after issue (the installation
+  token's fixed lifetime), and none MAY be issued without an expiry.
+- **FR-010**: When a daemon stops or is deleted, the system MUST revoke the installation tokens it
+  obtained (best effort: a token whose revocation fails, for example offline, is left to expire
+  within FR-009's hour), and MUST discard its copy of them in every case.
 - **FR-011**: Per daemon, the user MUST be able to turn on, separately, *pull requests (read/write)*
   and *issues (read/write)* for the scoped credential; both MUST be off by default, and each MUST say
   at the point of choosing what it allows.
 
 **Failing closed**
 
-- **FR-012**: When no scoped credential can be obtained for a project — no source set up, source
-  refused or unreachable, remote not on GitHub, or renewal failed — the daemon MUST still start (or
+- **FR-012**: When no scoped credential can be obtained for a project — no source set up, App not
+  installed on the repository, source refused or unreachable, remote not on GitHub, or renewal failed — the daemon MUST still start (or
   keep running) with no git credentials for that project, and MUST NOT use any of the items of
   FR-001 instead.
 - **FR-013**: The daemon's status MUST say, per project without a credential, that it has none and
@@ -262,10 +262,11 @@ and the reason; story 1's inspection still finds none of the user's items.
 - **Scoped repository credential**: a secret value bound to one daemon and one repository
   (`owner/name` on github.com), with its granted permissions and its expiry time. Held by the client
   and the daemon's own state; never by the project or the host's git configuration.
-- **Credential source**: where scoped credentials come from (FR-005); per user, set up once in the
-  application's settings.
+- **Credential source**: the user's GitHub App (FR-005): its App ID and private key, held on the
+  user's device; per user, set up once in the application's settings.
 - **Credential status (per daemon project)**: *has credential (expires at …)*, or *none* with a reason
-  from: source not set up, source refused, source unreachable, remote not on GitHub, renewal failed.
+  from: source not set up, App not installed on the repository, source refused, source unreachable,
+  remote not on GitHub, renewal failed.
 
 ## Success Criteria *(mandatory)*
 
@@ -275,11 +276,12 @@ and the reason; story 1's inspection still finds none of the user's items.
   secrets and files finds zero occurrences of the user's SSH keys, agent socket, credential store or
   personal token.
 - **SC-002**: A session in a sandboxed daemon can push and pull its project's GitHub repository with
-  no step by the user beyond the one-time credential source setup.
+  no step by the user beyond the one-time credential source setup (registering the GitHub App,
+  installing it on the repository's account or organisation, and giving the client its ID and key).
 - **SC-003**: The credential found inside a sandbox is refused by GitHub for every repository other
   than the project's own, and for every permission other than those granted.
-- **SC-004**: Every credential issued has an expiry no later than 1 hour after issue (for a
-  user-supplied credential: a set expiry, per FR-009), and a push after two consecutive renewals
+- **SC-004**: Every credential issued has an expiry no later than 1 hour after issue, and a push
+  after two consecutive renewals
   succeeds without user action.
 - **SC-005**: When no credential can be obtained, the daemon starts in 100% of cases, and the user can
   tell from its status, without logs, which project lacks credentials and why.
