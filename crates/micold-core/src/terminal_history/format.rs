@@ -160,35 +160,45 @@ impl fmt::Display for DamageReason {
 /// The file bytes for `snapshot`: magic, version, payload length, payload, then the SHA-256 of all
 /// of those. The same on every platform.
 pub fn encode(snapshot: &HistorySnapshot) -> Vec<u8> {
-    let mut file = Vec::with_capacity(HEADER_BYTES + CHECKSUM_BYTES);
-    file.extend_from_slice(&MAGIC);
-    file.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
-    file.extend_from_slice(&[0; 8]);
     // Writing strings and integers into a `Vec` has no failure of its own.
-    let mut file = postcard::to_extend(&SavedHistory::of(snapshot), file)
+    let payload = postcard::to_allocvec(&SavedHistory::of(snapshot))
         .expect("a saved history serialises into memory");
-    let payload_bytes = (file.len() - HEADER_BYTES) as u64;
-    file[LENGTH_AT..HEADER_BYTES].copy_from_slice(&payload_bytes.to_le_bytes());
+    frame(&MAGIC, FORMAT_VERSION, &payload)
+}
+
+/// A framed file: `magic`, `version`, the payload length, `payload`, then the SHA-256 of all of
+/// those. Shared by the terminal history and the structured event history (feature 938, R14).
+pub(crate) fn frame(magic: &[u8; 8], version: u32, payload: &[u8]) -> Vec<u8> {
+    let mut file = Vec::with_capacity(HEADER_BYTES + payload.len() + CHECKSUM_BYTES);
+    file.extend_from_slice(magic);
+    file.extend_from_slice(&version.to_le_bytes());
+    file.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+    file.extend_from_slice(payload);
     let checksum = sha256(&file);
     file.extend_from_slice(&checksum);
     file
 }
 
-/// The snapshot `bytes` hold, or the first check of the contract's §4 they fail (checks 2 to 10;
-/// check 1, reading the file, is the caller's). Never panics, and never returns part of a history.
-/// A snapshot it returns passes [`HistorySnapshot::validate`].
-pub fn decode(bytes: &[u8]) -> Result<HistorySnapshot, DamageReason> {
-    if bytes.len() as u64 > MAX_FILE_BYTES {
+/// The payload of a file framed by [`frame`] with this `magic` and `version`, or the first check
+/// of the contract's §4 it fails (checks 2 to 7): over `cap`, not ours, another version, a size
+/// its header does not give, a wrong checksum.
+pub(crate) fn unframe<'a>(
+    bytes: &'a [u8],
+    magic: &[u8; 8],
+    version: u32,
+    cap: u64,
+) -> Result<&'a [u8], DamageReason> {
+    if bytes.len() as u64 > cap {
         return Err(DamageReason::TooLarge);
     }
-    if bytes.len() < HEADER_BYTES + CHECKSUM_BYTES || bytes[..MAGIC.len()] != MAGIC {
+    if bytes.len() < HEADER_BYTES + CHECKSUM_BYTES || bytes[..magic.len()] != *magic {
         return Err(DamageReason::NotAHistory);
     }
     let (body, checksum) = bytes.split_at(bytes.len() - CHECKSUM_BYTES);
     let (header, payload) = body.split_at(HEADER_BYTES);
-    let version = u32::from_le_bytes(field(header, VERSION_AT));
-    if version != FORMAT_VERSION {
-        return Err(DamageReason::OtherVersion(version));
+    let found = u32::from_le_bytes(field(header, VERSION_AT));
+    if found != version {
+        return Err(DamageReason::OtherVersion(found));
     }
     if u64::from_le_bytes(field(header, LENGTH_AT)) != payload.len() as u64 {
         return Err(DamageReason::Truncated);
@@ -196,6 +206,14 @@ pub fn decode(bytes: &[u8]) -> Result<HistorySnapshot, DamageReason> {
     if sha256(body) != checksum {
         return Err(DamageReason::Checksum);
     }
+    Ok(payload)
+}
+
+/// The snapshot `bytes` hold, or the first check of the contract's §4 they fail (checks 2 to 10;
+/// check 1, reading the file, is the caller's). Never panics, and never returns part of a history.
+/// A snapshot it returns passes [`HistorySnapshot::validate`].
+pub fn decode(bytes: &[u8]) -> Result<HistorySnapshot, DamageReason> {
+    let payload = unframe(bytes, &MAGIC, FORMAT_VERSION, MAX_FILE_BYTES)?;
     let saved = match postcard::take_from_bytes::<SavedHistory>(payload) {
         Ok((saved, [])) => saved,
         _ => return Err(DamageReason::Malformed),

@@ -49,6 +49,35 @@ impl EventHistory {
         }
     }
 
+    /// A history rebuilt from a saved one (research R14): `events` are the retained ones, oldest
+    /// first, after `omitted` evicted; they are numbered from `omitted`, so the next append gets
+    /// `omitted + events.len()`. Applies the given bounds, evicting further (and counting it in
+    /// `omitted`) when they are lower than the ones the file was saved under.
+    pub fn restored_with_bounds(
+        omitted: u64,
+        events: Vec<StructuredEvent>,
+        max_events: usize,
+        max_bytes: usize,
+    ) -> Self {
+        let mut history = Self::with_bounds(max_events, max_bytes);
+        history.omitted = omitted;
+        history.next_seq = omitted;
+        for event in events {
+            history.append(event);
+        }
+        history
+    }
+
+    /// [`Self::restored_with_bounds`] under the default bounds.
+    pub fn restored(omitted: u64, events: Vec<StructuredEvent>) -> Self {
+        Self::restored_with_bounds(omitted, events, MAX_EVENTS, MAX_BYTES)
+    }
+
+    /// The `seq` the next append gets; `omitted + len` of the history.
+    pub fn next_seq(&self) -> u64 {
+        self.next_seq
+    }
+
     /// Append `event` under the next `seq`, evict the oldest events while over a bound, and
     /// return the sequenced event.
     pub fn append(&mut self, event: StructuredEvent) -> SequencedEvent {
@@ -178,5 +207,41 @@ mod tests {
             history.append(line(""));
         }
         assert_eq!((history.len(), history.omitted()), (MAX_EVENTS, 1));
+    }
+
+    #[test]
+    fn a_restored_history_numbers_its_events_from_the_omitted_count() {
+        let mut history = EventHistory::restored(10, vec![line("a"), line("b")]);
+        assert_eq!(
+            (history.omitted(), history.len(), history.next_seq()),
+            (10, 2, 12)
+        );
+        assert_eq!(seqs(&history), vec![10, 11]);
+        assert_eq!(history.append(line("c")).seq, 12);
+    }
+
+    #[test]
+    fn an_empty_restored_history_continues_after_the_omitted_ones() {
+        let mut history = EventHistory::restored(4, vec![]);
+        assert_eq!(history.append(line("a")).seq, 4);
+    }
+
+    #[test]
+    fn lower_bounds_evict_a_restored_history_further_and_count_it() {
+        let history = EventHistory::restored_with_bounds(
+            5,
+            vec![line("a"), line("b"), line("c"), line("d")],
+            2,
+            usize::MAX,
+        );
+        assert_eq!((history.omitted(), history.next_seq()), (7, 9));
+        assert_eq!(seqs(&history), vec![7, 8]);
+        let by_bytes = EventHistory::restored_with_bounds(
+            0,
+            vec![line("aaaa"), line("bbbb"), line("cccc")],
+            usize::MAX,
+            8,
+        );
+        assert_eq!((by_bytes.omitted(), seqs(&by_bytes)), (1, vec![1, 2]));
     }
 }
