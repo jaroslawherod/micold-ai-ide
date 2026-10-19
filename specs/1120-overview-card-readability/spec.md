@@ -43,6 +43,15 @@ guide and layout snapshot updated." Labels: enhancement, flow:feature. Builds on
   `/speckit-autopilot #1117`.
 - **Card width**: the width the grid gives one card (feature 1024); the narrowest is 280 px.
 
+## Clarifications
+
+### Session 2026-10-19
+
+- Q: Is FR-012's one generic sentence right for every slash command, or should built-in commands
+  (`/clear`, `/compact`, `/model`) read differently or be hidden? → A: One generic sentence for
+  every slash command, built-ins included; none is hidden or reworded. _(orchestrator default,
+  the recommended option; user decision card open)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Read a card's state and type at a glance (Priority: P1)
@@ -259,9 +268,9 @@ the cards of a row share one height.
 - **FR-012**: An activity text that is a slash command MUST be shown as a sentence: "Running
   *name* on *arguments*", or "Running *name*" without arguments, where *name* is the command name
   with the spec-kit prefix (`speckit-`) removed and hyphens read as spaces (for example
-  `/speckit-autopilot #1117` reads "Running autopilot on #1117"). [NEEDS CLARIFICATION: is this one
-  generic sentence right for every slash command, or should some commands (for example `/clear`,
-  `/compact`, `/model`) read differently or be hidden?]
+  `/speckit-autopilot #1117` reads "Running autopilot on #1117"). The same sentence applies to every
+  slash command, Claude's built-in commands (`/clear`, `/compact`, `/model`, …) included: none is
+  hidden or worded differently.
 - **FR-013**: When nothing readable remains after FR-011 and FR-012 (empty, only whitespace, or still
   holding a tag), the card MUST show no activity line, and MUST NOT show markup.
 - **FR-014**: The card's height MUST be a minimum (no shorter than feature 813's card), not a fixed
