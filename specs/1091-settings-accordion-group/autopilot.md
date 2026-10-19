@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1091
 - **Worktree branch**: feat/1091_settings-accordions-should-form-a-group-opening
 - **Started**: 2026-10-19
-- **Phase**: milestone M1 (PR open)
-- **Next step**: orchestrator merges M1 PR, then M2
+- **Phase**: milestone M2 (PR open)
+- **Next step**: orchestrator merges M2 PR, then close unit
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1135 | Design | merged | f3c827a5f8ce6947d331a5bb9aadddc4f8b552e7 |
-| #1140 | M1 | open | |
+| #1140 | M1 | merged | 71fd52bdb46ec17805319fae33a6aca191d60092 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | Daemon form sections form a group; error-held sections stay open | #1140 | in review |
-| M2 | T010–T012 | light | Showcase shows grouped and independent sets | | pending |
+| M1 | T001–T009 | full | Daemon form sections form a group; error-held sections stay open | #1140 | merged |
+| M2 | T010–T012 | light | Showcase shows grouped and independent sets | PR-M2 | in review |
 
 ## Decisions
 
@@ -65,3 +65,7 @@ None.
 ## Follow-ups not done
 
 None.
+
+## M2 notes
+
+Review A (code-review high): 7 findings; fixed lockstep independent set (own state), in_group use, GROUP_DEFAULT, T011 text, test strength, live caption; declined: completeness test for new poses (catalogue/captions tests already tie poses to render), summary on group sections kept. Review B (sonnet): CLEAN (1 MINOR fixed). Visual pass: PASS. Full gate green.
