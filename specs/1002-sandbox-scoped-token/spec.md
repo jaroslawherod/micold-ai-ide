@@ -39,6 +39,21 @@ own account; it is not a sandbox and is out of scope. *Git configuration* (commi
 secret), *AI CLI sign-in* and *registry pull* credentials are not git push/pull credentials and are
 unchanged.
 
+## Clarifications
+
+### Session 2026-10-19
+
+- Q: Should non-GitHub remotes (GitLab, Bitbucket, self-hosted) keep the old *SSH agent* / *Git
+  credentials* opt-ins until they get a scoped credential of their own? → A: No. They get no git
+  credentials in a sandbox, and the status says the host is not supported (FR-012, US3 scenario 3).
+  _(agent-resolved: issue #1002 body, "If no scoped token can be obtained, the sandbox starts without
+  git credentials and says so, rather than falling back to the user's credentials")_
+- Q: May scoped credentials be minted by a service the project hosts (a published GitHub App whose
+  private key lives on a server)? → A: No; whatever the source, the client obtains credentials on
+  the user's device, with no project-run server in the path. _(agent-resolved:
+  .specify/memory/constitution.md#IV. Local-First Storage, #Technology, Storage & Licensing
+  Constraints "no separate server process")_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A sandboxed daemon never holds my personal git credentials (Priority: P1)
@@ -196,8 +211,9 @@ and the reason; story 1's inspection still finds none of the user's items.
   the system MUST obtain a credential that (a) can reach only that one repository, (b) is granted
   repository contents read/write and metadata read and nothing else by default, and (c) expires on
   its own. [NEEDS CLARIFICATION: Where does the scoped credential come from? (A) A GitHub App the
-  user installs on their account/org, from which the client mints a per-repository installation
-  token (expires in 1 hour, renewable, permissions narrowed per request); (B) a fine-grained
+  user registers and installs on their account/org, whose App ID and private key the client holds
+  on the device and from which it mints a per-repository installation token (expires in 1 hour,
+  renewable, permissions narrowed per request; no project-hosted service, per Clarifications); (B) a fine-grained
   personal access token the user creates on GitHub for each repository and pastes into the
   application, whose expiry the user sets on GitHub; (C) both, App preferred, PAT as the manual
   path. Recommended: (A), the only source that gives per-repository scope, minimal permissions and
