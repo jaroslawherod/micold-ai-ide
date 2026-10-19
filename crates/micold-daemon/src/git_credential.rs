@@ -9,9 +9,11 @@
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use micold_core::github::GithubRepo;
+use micold_core::process::no_window;
 use micold_core::protocol::messages::CredentialTarget;
 use micold_core::scoped_credential::helper::{
     answer, parse_request, render_credential_file, GIT_CREDENTIAL_ROOT,
@@ -96,7 +98,7 @@ pub fn remove_grant(root: &Path, repo: &GithubRepo) -> std::io::Result<()> {
 /// The version in `git --version` when it is older than 2.31 (no `GIT_CONFIG_COUNT`, so the
 /// helper reset would not apply); `None` when it is new enough or cannot be told.
 pub fn git_too_old() -> Option<String> {
-    let out = std::process::Command::new("git")
+    let out = no_window(&mut Command::new("git"))
         .arg("--version")
         .output()
         .ok()?;
@@ -116,7 +118,7 @@ pub fn collect_targets(projects: &[PathBuf]) -> Vec<CredentialTarget> {
     projects
         .iter()
         .map(|project| {
-            let out = std::process::Command::new("git")
+            let out = no_window(&mut Command::new("git"))
                 .arg("-C")
                 .arg(project)
                 .args(["remote", "get-url", "--push", "origin"])

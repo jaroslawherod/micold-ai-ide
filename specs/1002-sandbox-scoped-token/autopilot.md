@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: milestones
-- **Next step**: M4: gate, reviews A and B, then the orchestrator opens the M4 PR (pr-m4-title.txt / pr-m4-body.md in the unit's scratchpad); then M5.
+- **Next step**: the orchestrator opens the M4 PR (pr-m4-title.txt / pr-m4-body.md in the unit's scratchpad), waits on CI and merges; then M5.
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | — (to open) | gate green at 17370db2, pushed |
 | M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | #1099 | merged |
 | M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | #1107 | merged (5c0ba07d) |
-| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — (to open) | implemented; review A fixes applied, gate running |
+| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — (to open) | implemented; reviews A and B done, gate green, pushed |
 | M5 | T039–T049 | full | [source] GitHub App source + client wiring (FR-005) | — | planned |
 | M6 | T050–T055 | full | Status rows + PR/issues toggles (FR-011, FR-013) | — | planned |
 
@@ -72,12 +72,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A (code-review high) | 1 | c75e6c9544fffc82c433e36f5fe2f5bbbfc143ae:7b33318943986e21f128454d80907d89e9890a85 | CHANGES (F1 MAJOR fixed: kube pod's daemon is not on PATH, so kube daemon_env names it by its build dir via git_env_with_helper; F2–F7 MINOR declined, below) |
 | M3 A (sonnet) | 2 | fb5dee54b57bf5ff0f8af7c3389b5cad4ecf069d:7b33318943986e21f128454d80907d89e9890a85 | CLEAN (3 MINOR: no start-level test of the helper path, no direct git_env_with_helper test, a daemon already running keeps its old env) |
 | M3 B (conformance + correctness, sonnet; one reviewer for A and B) | 1 | f62bba4f347d8a6361d83cac442b621f119d2a6f:79e2d3e0e3335139d58a5d999979f26b0472e0b0 | CLEAN (2 MINOR: no tdd/cycle-log.md; sandbox_argv run collided with a build, green in the gate). Review A as the `code-review` skill not run separately |
+| M4 A+B (sonnet, one reviewer, conformance + code-review high) | 2 | 6e7d225a1c67b191916f3701b61708f112f66edf:15904e76d07ecff2f2045c7acfdadcddbcc0bef5 | CHANGES (F1 MAJOR fixed: `Schedule::run` no longer revokes a superseded token, `Renewal::revoke_superseded` does, after delivery (SC-004); F2 MAJOR fixed: core `CLOCK_SKEW_SECS` shared by `accept` and the daemon; F3 MINOR declined; F4 Verify not run by the reviewer, covered by the full gate) |
 
 ## M4 review notes
 
 Review A (high) round 1: CHANGES, F1–F7 fixed (validating GithubRepo Deserialize, unique temp names, lower-cased schedule keys, grant token/expiry validation, req u64::MAX sentinel, revoke of superseded token, git_too_old in change detection); F8 (cache git version) declined as MINOR. Review B (sonnet): CLEAN.
 
 ## Declined review findings
+
+- M4 A+B F3 [MINOR]: announce_git_targets ordering race — the caller (M5 wiring) does not exist yet; revisit there.
 
 - M1 B F1 [MAJOR] no `tdd/cycle-log.md` red evidence for T002–T005, T008, T009 (Constitution I): declined — already decided in D16 (tests kept as written, each asserts the removed item's absence), and the PR body discloses that those tests came after the code. Re-deriving red runs would mean reverting the removal against tests that no longer compile on the old code.
 | Milestone | Review | Finding | Why declined |
