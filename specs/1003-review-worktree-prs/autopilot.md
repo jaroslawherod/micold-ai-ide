@@ -52,7 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B (conformance) | 2 | 74880d28be801857f9b50418d8c67b3ff0b819d7:ca62c70abdc3140bafc276b1afad54b7a30d433f | CLEAN |
 | M2 A (reviewer, correctness) | 1 | b7b08693fcd26de23101f24df3f284bd753ba301:606b03e7666ae48b3f70868852b311d125cedd33 | CLEAN |
 | M2 B (conformance) | 1 | b7b08693fcd26de23101f24df3f284bd753ba301:606b03e7666ae48b3f70868852b311d125cedd33 | CLEAN (3 MINOR: F1 Verify line fixed, prose only; F2 red was a compile failure, noted in the cycle log; F3 test name left, so the gated tree is the pushed tree) |
-| M4 A (reviewer, correctness) | 1 | b17b5e81aa73c6fb0c16d72738976a31324f1807:16b99b417fb3eba22f7efaf0276edeb860acedbb | CHANGES: F1 MAJOR test could not fail (fixed: sets Loading{last:None} directly); F2, F3 MINOR fixed. Not re-reviewed: test-only/prose fixes, verified by me and the gate
+| M4 A (reviewer, correctness) | 1 | b17b5e81aa73c6fb0c16d72738976a31324f1807:16b99b417fb3eba22f7efaf0276edeb860acedbb | CHANGES: F1 MAJOR test could not fail (fixed: sets Loading{last:None} directly); F2, F3 MINOR fixed. Not re-reviewed: test-only/prose fixes, verified by me and the gate |
 | M4 B (conformance) | 1 | b17b5e81aa73c6fb0c16d72738976a31324f1807:16b99b417fb3eba22f7efaf0276edeb860acedbb | CLEAN (F1 cycle-log rows added, F2 rewrapped; Verify 42 passed) |
 
 | Review A M3 | 1 | ec71d534c306adcf2388fe4d387e1397656064eb:6bd123d0cfa3586894e2ba9d6b14873228e1056c | CLEAN (3 MINOR: base line drawn twice, PROVENANCE rows, closure naming; not fixed, left to visual pass T027) |
