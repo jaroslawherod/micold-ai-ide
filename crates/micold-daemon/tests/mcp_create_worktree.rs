@@ -806,6 +806,40 @@ mod github_issue {
         assert_eq!(fake.lookup_calls(), vec![("o/r".to_string(), 123)]);
     }
 
+    /// 1102 FR-010: with the switch off `github_issue` is refused before any GitHub request, and
+    /// calls without it are unchanged; switched back on, it works again.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_switch_off_refuses_github_issue_before_any_request() {
+        let f = Fixture::new().await;
+        let fake = on_github(
+            &f,
+            FakeIssueSource::new().with_lookup(Ok(snapshot(123, "Login crash", &["bug"]))),
+        );
+        f.state.set_github_issues_enabled(false).unwrap();
+        let before = f.snapshot().await;
+        let error = f.err(sid(3), json!({"github_issue": 123})).await;
+        assert_eq!(error["category"], "invalid_input", "{error}");
+        assert_eq!(
+            error["message"],
+            "GitHub issues are turned off in Settings (GitHub). Give a branch, or type, ticket \
+             and name instead."
+        );
+        assert!(fake.lookup_calls().is_empty(), "no GitHub request");
+        f.assert_unchanged(&before).await;
+
+        let row = f.ok(sid(3), json!({"branch": "feat/x"})).await;
+        assert_eq!(row["branch"], "feat/x");
+        let row = f
+            .ok(sid(3), json!({"type": "fix", "ticket": "9", "name": "y"}))
+            .await;
+        assert_eq!(row["branch"], "fix/9_y");
+
+        f.state.set_github_issues_enabled(true).unwrap();
+        let row = f.ok(sid(3), json!({"github_issue": 123})).await;
+        assert_eq!(row["branch"], "fix/123_login-crash");
+        assert_eq!(fake.lookup_calls(), vec![("o/r".to_string(), 123)]);
+    }
+
     /// US3 s2: no mapped label and no `type` is the form's "Select a type"; an explicit type works.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn unmapped_labels_need_a_type() {
