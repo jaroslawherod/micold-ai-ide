@@ -825,6 +825,11 @@ mod github_issue {
              and name instead."
         );
         assert!(fake.lookup_calls().is_empty(), "no GitHub request");
+        assert!(
+            fake.details_calls().is_empty(),
+            "no GitHub details request: {:?}",
+            fake.details_calls()
+        );
         f.assert_unchanged(&before).await;
 
         let row = f.ok(sid(3), json!({"branch": "feat/x"})).await;

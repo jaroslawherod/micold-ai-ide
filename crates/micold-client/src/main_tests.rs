@@ -3410,6 +3410,47 @@ fn a_save_without_a_service_puts_the_github_issues_switch_in_force() {
     );
 }
 
+/// Feature 1102 (spec edge case): a settings write that fails leaves the switch in force for the
+/// session and still tells the service; the page reopened shows it off.
+#[test]
+fn a_failed_settings_save_keeps_github_issues_in_force_and_still_tells_the_service() {
+    let (mut app, mut rx) = connected_app();
+    app.caps = app.caps.clone().with_settings(Arc::new(
+        micold_core::settings::FakeSettingsStore::new()
+            .failing_save(std::io::ErrorKind::PermissionDenied),
+    ));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::GithubIssuesToggled(false)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    assert!(
+        !app.core.settings.github_issues_enabled,
+        "the failed write does not roll the switch back"
+    );
+    let told = sent_matching(&mut rx, |msg| match msg {
+        ClientMsg::SettingsSet {
+            github_issues_enabled,
+            ..
+        } => Some(github_issues_enabled),
+        _ => None,
+    });
+    assert_eq!(told, vec![Some(false)], "the service is told despite it");
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let draft = app.core.settings.settings_draft.as_ref().expect("open");
+    assert!(
+        !draft.github.issues_enabled,
+        "the reopened page shows it off"
+    );
+}
+
 /// U217 (feature 034, FR-016): choosing a value for "Let agents read and type into other
 /// sessions" and saving tells the connected service, which reads it on every tool request.
 #[test]
@@ -6959,7 +7000,8 @@ mod issue_source {
     use micold_client::features::worktree_form::{BranchSource, IssueList, WorktreeForm};
     use micold_core::git::GitRemote;
     use micold_core::github::{
-        DescriptionPage, FakeIssueSource, Issue, IssueLoadError, IssuePage, IssueSource,
+        DescriptionPage, FakeIssueSource, Issue, IssueLoadError, IssuePage, IssueSnapshot,
+        IssueSource,
     };
     use micold_core::naming::ConventionalType;
     use micold_core::protocol::messages::{ErrorKind, OperationResult};
@@ -7144,6 +7186,89 @@ mod issue_source {
         let rig = loaded_rig();
         assert!(!rig.constructed.lock().unwrap().is_empty());
         assert!(!form(&rig.app).issue_matches.is_empty());
+    }
+
+    // --- 1102: the Overview's issue titles are GitHub issue reads, so the switch gates them -----
+
+    /// The rig with the Overview's project holding one worktree of ticket 42.
+    fn titles_rig(enabled: bool) -> IssueRig {
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+        let mut rig = issue_rig(
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_lookup(Ok(IssueSnapshot {
+                number: 42,
+                title: "Crash when opening empty project".into(),
+                labels: vec![],
+            })),
+        );
+        rig.app.core.settings.github_issues_enabled = enabled;
+        rig.app.core.worktree.worktrees = vec![Worktree {
+            dir_name: "feat-42_crash".into(),
+            path: PathBuf::from("/repo/demo/.claude/worktrees/feat-42_crash"),
+            branch: Some("feat/42_crash".into()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }];
+        rig
+    }
+
+    /// Off: opening the Overview asks the daemon for no remotes, reads no title, and records
+    /// nothing, not even "unavailable", so turning the switch on reads them next time.
+    #[test]
+    fn with_the_switch_off_opening_the_overview_reads_no_title() {
+        let mut rig = titles_rig(false);
+        let work = crate::shell::issues::on_overview_opened(&mut rig.app);
+        settle(&mut rig.app, work);
+        assert!(
+            remote_lists_sent(&mut rig.rx).is_empty(),
+            "no remotes asked"
+        );
+        assert!(rig.app.core.overview.titles.is_empty(), "nothing recorded");
+        assert!(rig.located_with.lock().unwrap().is_empty(), "no gh lookup");
+        assert!(rig.source.lookup_calls().is_empty(), "no title read");
+    }
+
+    /// Off: a remotes answer arriving after the switch went off reads nothing and settles the
+    /// asked titles as unavailable, without locating `gh`.
+    #[test]
+    fn with_the_switch_off_the_remotes_answer_reads_no_title() {
+        let mut rig = titles_rig(false);
+        rig.app
+            .core
+            .overview
+            .titles
+            .insert(42, micold_client::features::overview::TitleLookup::Pending);
+        let work = crate::shell::issues::on_title_remotes(
+            &mut rig.app,
+            PathBuf::from(PROJECT),
+            vec![42],
+            Some(github_remote()),
+        );
+        settle(&mut rig.app, work);
+        assert!(
+            micold_client::features::overview::TitleLookup::Unavailable
+                == rig.app.core.overview.titles[&42]
+        );
+        assert!(rig.located_with.lock().unwrap().is_empty(), "no gh lookup");
+        assert!(rig.constructed.lock().unwrap().is_empty(), "no gh source");
+        assert!(rig.source.lookup_calls().is_empty(), "no title read");
+    }
+
+    /// On: the same steps read the title (the default is unchanged).
+    #[test]
+    fn with_the_switch_on_the_overview_still_reads_its_titles() {
+        let mut rig = titles_rig(true);
+        let work = crate::shell::issues::on_overview_opened(&mut rig.app);
+        settle(&mut rig.app, work);
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(sent.len(), 1, "the remotes are asked for");
+        answer_remotes(&mut rig.app, sent[0].0, github_remote());
+        assert_eq!(rig.source.lookup_calls(), vec![("o/r".to_string(), 42)]);
+        assert!(
+            micold_client::features::overview::TitleLookup::Known(
+                "Crash when opening empty project".into()
+            ) == rig.app.core.overview.titles[&42]
+        );
     }
 
     // --- 837: the picked issue's details (US2, US3) ---------------------------------------------
@@ -9790,6 +9915,27 @@ mod pr_status {
         let asked = remote_lists(rig);
         assert_eq!(asked.len(), 1, "switching on while held reads");
         asked[0]
+    }
+
+    // Feature 1102 (FR-009): the GitHub issues switch off leaves the pull request status reading
+    // alone: the remotes are still asked for and the branches still read.
+    #[test]
+    fn pr_status_still_reads_with_the_github_issues_switch_off() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_answer(statuses()),
+        );
+        rig.app.core.settings.github_issues_enabled = false;
+        attached(&mut rig.app);
+        listed(&mut rig.app, listing(&[("a", Some("feat/a"))]));
+        let asked = remote_lists(&mut rig);
+        assert_eq!(asked.len(), 1, "the remotes are still asked for");
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+        assert_eq!(
+            rig.source.calls(),
+            vec![("o/r".to_string(), vec!["feat/a".to_string()])]
+        );
+        assert_eq!(rig.app.core.pr_status.statuses, statuses());
     }
 
     // A10, U89, U91: what the reading asks, and that its answer lands.
