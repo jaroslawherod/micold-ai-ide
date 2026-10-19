@@ -225,7 +225,7 @@ the cards of a row share one height.
 - **Both themes and every state**: the header tint, the neutral body and all text meet 4.5:1 in
   light and dark.
 - **Platforms and display scale** (Principle VI): no overlap and equal row heights hold on Linux,
-  macOS and Windows with each platform's default UI font, at display scale 1.0 and 2.0.
+  macOS and Windows in the bundled UI font, at display scale 1.0 and 2.0 (logical-pixel layout, R14).
 - **Pane narrower than one minimum-width card** (under 280 px): one card per row as feature 1024
   defines; text ellipsizes, nothing overlaps.
 
