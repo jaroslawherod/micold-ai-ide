@@ -59,7 +59,7 @@ fn with_daemons() -> (State, [DaemonId; 3]) {
         section: SettingsSection::Daemons,
         ..SettingsDraft::default()
     });
-    state.window.window_size = (1280, 900);
+    state.window.window_size = (1280, 4000);
     (state, [host, boxed, idle])
 }
 

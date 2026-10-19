@@ -6,7 +6,12 @@
 //!
 //! ## Probe outcome (T001)
 //!
-//! PROBE_OUTCOME_PLACEHOLDER
+//! Unscoped, Tab escaped. With the removal dialog open the view held 21 focusables, 2 of them the
+//! dialog's; iced's `focus_next` walked the header and the sidebar behind the scrim (the first Tab
+//! landed on the header's project button). The application therefore scopes the traversal to the
+//! container every dialog `Surface` carries (`ui::dialog_focus_move`) while a daemon dialog is open
+//! (`features::daemons::traps_focus`), and T013 applies. The tests below drive that same scoped
+//! operation, so they fail if the dialog loses its scope container.
 
 #[path = "support/mod.rs"]
 mod support;
@@ -14,7 +19,7 @@ mod support;
 use std::sync::{Arc, Mutex};
 
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::operation::{self, focusable, Focusable, Outcome};
+use iced::advanced::widget::operation::{Focusable, Outcome};
 use iced::advanced::widget::{Id, Operation, Tree};
 use iced::{Element, Rectangle, Size};
 use micold_client::app::{Message, State};
@@ -90,7 +95,7 @@ impl<'a> Mounted<'a> {
     }
 
     fn tab(&mut self) {
-        self.operate(Box::new(focusable::focus_next::<()>()));
+        self.operate(Box::new(micold_client::ui::dialog_focus_move::<()>(true)));
     }
 
     fn reached(&mut self) -> Vec<(Rectangle, bool)> {
@@ -147,7 +152,8 @@ fn dialog_focusables(state: &State) -> usize {
     let open = micold_client::overlay::registry::open_dialog(state).expect("a dialog is open");
     let body = open.view().expect("a dialog view")(state, micold_core::theme::ColorScheme::Dark, &outcome)
         .expect("the dialog draws");
-    Mounted::new(body).reached().len()
+    let count = Mounted::new(body).reached().len();
+    count
 }
 
 /// Tab through the whole view and return the traversal positions the keyboard visited that are
@@ -160,11 +166,11 @@ fn escapes(state: &State) -> Vec<usize> {
     let mut left = Vec::new();
     for _ in 0..total + 2 {
         mounted.tab();
-        let at = mounted
-            .reached()
-            .iter()
-            .position(|(_, focused)| *focused)
-            .expect("Tab focuses something");
+        // iced's traversal does not wrap: past the last control nothing holds the keyboard, and the
+        // next Tab starts again at the first. Neither is an escape.
+        let Some(at) = mounted.reached().iter().position(|(_, focused)| *focused) else {
+            continue;
+        };
         if at < total - own {
             left.push(at);
         }
@@ -180,6 +186,30 @@ fn tab_never_leaves_the_removal_dialog() {
     assert!(
         left.is_empty(),
         "Tab walked {} step(s) onto the page behind the dialog: {left:?}",
+        left.len()
+    );
+}
+
+#[test]
+fn both_daemon_dialogs_ask_for_the_scoped_traversal() {
+    let (mut state, [host, _]) = state();
+    state.update(Message::Daemons(DaemonsMsg::RemovalRequested(host)));
+    let open = micold_client::overlay::registry::open_dialog(&state).expect("removal dialog");
+    assert!(micold_client::features::daemons::traps_focus(open.id()));
+    state.update(Message::Daemons(DaemonsMsg::RemovalCancelled));
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    let open = micold_client::overlay::registry::open_dialog(&state).expect("form dialog");
+    assert!(micold_client::features::daemons::traps_focus(open.id()));
+}
+
+#[test]
+fn tab_never_leaves_the_daemon_form() {
+    let (mut state, _) = state();
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    let left = escapes(&state);
+    assert!(
+        left.is_empty(),
+        "Tab walked {} step(s) onto the page behind the form: {left:?}",
         left.len()
     );
 }

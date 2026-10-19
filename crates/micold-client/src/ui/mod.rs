@@ -10,6 +10,7 @@ pub mod compare;
 pub mod confirm_additional_session;
 pub(crate) mod confirm_agent_request;
 pub mod confirm_daemon_removal;
+pub mod daemon_form_dialog;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_dismiss_group;
 pub(crate) mod confirm_forget;
@@ -36,8 +37,10 @@ pub mod quick_switcher;
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
 /// composes the `full` measurement scene and a ripple only starts from a press, so it needs the one
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
+pub(crate) use focus::dialog_scope as focus_dialog_scope;
 pub use focus::{
-    focused_bounds, focused_bounds_task, into_view as focus_into_view, scroll_focused_into_view,
+    dialog_focus_move, dialog_focus_move_task, focused_bounds, focused_bounds_task,
+    into_view as focus_into_view, scroll_focused_into_view,
 };
 /// The reveal control's `label · N` rule (feature 029, FR-025a), named individually for the same
 /// reason the ripple below is: `tests/toggle_chip_count.rs` asserts the rule — zero renders the
@@ -1379,6 +1382,13 @@ fn escape_message(event: iced::keyboard::Event) -> Option<Message> {
         }
     )
     .then_some(Message::EscapePressed)
+}
+
+/// Whether the open dialog keeps Tab to itself (feature 1092, FR-009), so the focus move is
+/// scoped to it rather than walking the page behind the scrim.
+pub fn dialog_keeps_focus(state: &crate::app::State) -> bool {
+    crate::overlay::registry::open_dialog(state)
+        .is_some_and(|open| crate::features::daemons::traps_focus(open.id()))
 }
 
 /// Which way Tab moves the focus, if this event is a Tab at all.

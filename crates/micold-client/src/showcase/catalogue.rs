@@ -965,6 +965,18 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::floating::modal,
     },
     Entry {
+        module: "material/scrolling_dialog.rs",
+        component: "ScrollingDialog",
+        variants: &[],
+        density: &[],
+        posed: &["a body taller than its room, scrolling above pinned actions"],
+        live: &["the body scrolls, the actions stay put"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::floating::scrolling_dialog,
+    },
+    Entry {
         module: "material/menu.rs",
         component: "MenuOverlay",
         // `Anchor::TopEnd` — a trigger-attached popover hangs below the app bar.

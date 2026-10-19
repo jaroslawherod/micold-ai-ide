@@ -244,6 +244,8 @@ impl<'a, M: 'a> From<Surface<'a, M>> for Element<'a, M> {
             // against the contract in `tokens_anatomy.rs`, so the number stays true even though
             // nothing applies it here.
             widget = widget.max_width(anatomy::dialog::MAX_WIDTH);
+            // The scope Tab is confined to while a dialog is open (feature 1092, FR-009).
+            widget = widget.id(crate::ui::focus_dialog_scope());
         }
         // §7.4's padding, defaulted by the *kind* for the same reason the width bounds above are:
         // nine call sites each spelled it `spacing::LG`, which is 24 and therefore looked right,

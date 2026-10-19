@@ -39,8 +39,9 @@ use crate::floating_surface;
 use crate::kube::live::ContextEntry;
 use crate::links::{route, DaemonLinks, Route};
 use crate::overlay::registry::Registered;
-use crate::overlay::SurfaceId;
+use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use crate::ui::material::AccordionGroup;
+use micold_core::overlay::Layer;
 
 /// What the reducer acts on: the registry, the connection of each daemon, the bindings and what
 /// runs where. Borrowed from the app's settings and workspace for the length of one step.
@@ -473,6 +474,23 @@ impl State {
     /// The confirmation waiting for an answer.
     pub fn prompt(&self) -> Option<&RemovalPrompt> {
         self.pending.as_ref().map(|(_, prompt)| prompt)
+    }
+
+    /// The confirmation of an edit being saved: shown inside the form dialog, not as a second modal
+    /// (feature 1092, FR-008).
+    pub fn form_confirmation(&self) -> Option<&RemovalPrompt> {
+        match &self.pending {
+            Some((Pending::Edit { .. }, prompt)) => Some(prompt),
+            _ => None,
+        }
+    }
+
+    /// The confirmation that stands on its own as a dialog: every pending one but an edit's.
+    pub fn standalone_prompt(&self) -> Option<&RemovalPrompt> {
+        match &self.pending {
+            Some((Pending::Edit { .. }, _)) | None => None,
+            Some((_, prompt)) => Some(prompt),
+        }
     }
 
     /// The answers to the drift prompts: a Kubernetes daemon listed here is started with that
@@ -1156,6 +1174,15 @@ fn save_checked(
     let Some(draft) = state.draft.clone() else {
         return Ok(Vec::new());
     };
+    if let Some(id) = draft.editing {
+        // The daemon was removed while the dialog was open (R6, FR-014).
+        if model.registry.get(id).is_none() {
+            return Err(FormError {
+                field: "name",
+                message: "This daemon no longer exists".to_string(),
+            });
+        }
+    }
     let name = DaemonName::new(&draft.name)
         .map_err(|e| form_error(model.registry, &draft, e))?
         .as_str()
@@ -1384,7 +1411,8 @@ fn request_drift_answer(
 /// Open the next queued drift prompt when no prompt is open. Entries whose daemon is no longer
 /// starting (stopped, removed, cancelled meanwhile) are dropped.
 fn show_next_drift(state: &mut State, model: &Model<'_>) {
-    while state.pending.is_none() {
+    // A form dialog being open holds the prompts back; they show once it closes (R7).
+    while state.pending.is_none() && state.draft.is_none() {
         let Some((id, fields)) = state.drift_queue.pop_front() else {
             return;
         };
@@ -2159,9 +2187,50 @@ impl Registered for ConfirmDaemonRemovalDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
         state
             .daemon_list
-            .prompt()
+            .standalone_prompt()
             .map(|_| ConfirmDaemonRemovalDialog)
     }
+}
+
+/// The add and edit form, as a floating surface (feature 1092, FR-001). Escape and the scrim
+/// discard the edits, or, while the dialog asks its confirmation, answer no.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DaemonFormDialog {
+    /// The dialog is showing the confirmation of a running daemon's edit.
+    pub confirming: bool,
+}
+
+impl FloatingSurface for DaemonFormDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("daemon_form")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        let cancel = if self.confirming {
+            Msg::RemovalCancelled
+        } else {
+            Msg::DraftDiscarded
+        };
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(crate::app::Message::Daemons(cancel))
+    }
+}
+
+impl Registered for DaemonFormDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.daemon_list.draft.as_ref().map(|_| DaemonFormDialog {
+            confirming: state.daemon_list.form_confirmation().is_some(),
+        })
+    }
+}
+
+/// Whether the dialog `id` keeps Tab to itself (feature 1092, FR-009): the form and the removal
+/// confirmation, the two this feature puts over the Settings page.
+pub fn traps_focus(id: SurfaceId) -> bool {
+    id == SurfaceId::new("daemon_form") || id == SurfaceId::new("confirm_daemon_removal")
 }
 
 /// The `Bind to daemon...` picker, as a floating surface (feature 491, T036).

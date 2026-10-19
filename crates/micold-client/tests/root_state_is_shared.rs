@@ -212,11 +212,6 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          not on the screen it produces (feature 028, FR-019)",
     ),
     (
-        "window.window_size",
-        "tests/features_window.rs::the_window_size_is_recorded_as_reported — the size is what the \
-         sidebar width is clamped against, so it is read before any component exists",
-    ),
-    (
         "worktree_form.cancelled_create",
         "tests/add_worktree_dismissal.rs::a_create_failing_after_cancel_is_reported_as_an_error_notification \
          — the record is made as the form closes and read when the create's outcome arrives, so it \
