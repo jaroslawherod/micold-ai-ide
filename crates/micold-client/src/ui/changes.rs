@@ -20,9 +20,9 @@ use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
     self as changes, adjacent, base_line, can_pick, card_model, committed_available,
     composer_placed, diff_body, discard_prompt, file_comments, list_body, panel_rows,
-    pending_counts, pr_header, review_of, review_toolbar_label, selected_file, send_action,
-    status_counts, tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView, Source, Step,
-    DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
+    pending_counts, pr_header, review_of, review_toolbar_label, section, selected_file,
+    send_action, status_counts, tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView,
+    PrSection, Source, Step, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -44,6 +44,14 @@ pub const WORKING_TREE: &str = "Working tree";
 /// The caption under the pull request section's title once a failed refresh left a list older than
 /// the PR status stale threshold (feature 775, FR-012).
 pub const POSSIBLY_STALE: &str = "Possibly stale";
+/// The section's line while the first read is pending (feature 1003, FR-010).
+pub const PRS_LOADING: &str = "Reading pull requests…";
+/// The section's muted line when no list can be read (FR-011).
+pub const PRS_UNAVAILABLE: &str = "Pull requests can't be shown for this worktree";
+/// The section's line for a worktree with no pull request (FR-010).
+pub const PRS_EMPTY: &str = "No pull requests from this worktree yet";
+/// The tallest the list of pull requests grows before it scrolls.
+const PRS_MAX_HEIGHT: f32 = 220.0;
 pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines to place it.";
 
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
@@ -225,7 +233,7 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
     if view.source == Source::Changes {
         pane = pane.push(toggles);
     }
-    if let Some(section) = pull_request_section(view, r) {
+    if let Some(section) = pull_request_section(view, state.changes.pr_enabled, r) {
         pane = pane.push(section);
     }
     if !available && view.source == Source::Changes {
@@ -276,13 +284,25 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
     pane.push(list).into()
 }
 
-/// The pull requests of the entry's branch, above the file list (feature 775, FR-001 to FR-003):
-/// absent while the section is, and when the branch has none.
-fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, Message>> {
-    let (prs, _read_at) = view.pull_requests.shown()?;
-    if prs.is_empty() {
-        return None;
-    }
+/// The pull requests of the worktree's branches, above the file list (features 775, 1003): the
+/// loading, unavailable and empty lines, or the list; absent per `section(..)`.
+fn pull_request_section<'a>(
+    view: &'a OpenView,
+    enabled: bool,
+    r: Roles,
+) -> Option<Element<'a, Message>> {
+    let line = |text: &'static str, muted: bool| {
+        let text = Text::new(text, TypeRole::Body, r);
+        let text = if muted { text.muted() } else { text };
+        column![Text::new("Pull requests", TypeRole::Section, r), text].spacing(spacing::XS)
+    };
+    let (prs, stale) = match section(view, enabled, super::sidebar::unix_now()) {
+        PrSection::Absent => return None,
+        PrSection::Loading => return Some(line(PRS_LOADING, true).into()),
+        PrSection::Unavailable => return Some(line(PRS_UNAVAILABLE, true).into()),
+        PrSection::Empty => return Some(line(PRS_EMPTY, false).into()),
+        PrSection::List { prs, stale } => (prs, stale),
+    };
     let shown = match &view.source {
         Source::Changes => None,
         Source::PullRequest(pr) => Some(pr.number),
@@ -309,12 +329,10 @@ fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, 
         ),
     ]
     .spacing(spacing::XS);
-    if view
-        .pull_requests
-        .possibly_stale(super::sidebar::unix_now())
-    {
+    if stale {
         section = section.push(Text::new(POSSIBLY_STALE, TypeRole::Caption, r).muted());
     }
+    let mut rows = column![].spacing(spacing::XS);
     for pr in prs {
         let mut row = PullRequestRow::<Message>::new(
             pr.number,
@@ -326,12 +344,16 @@ fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, 
         if let Some(mark) = crate::features::changes::check_mark(pr.checks) {
             row = row.checks(mark);
         }
-        section = section.push(choice(
+        rows = rows.push(choice(
             Element::from(row),
             shown == Some(pr.number),
             Msg::SourceChosen(Some(pr.number)),
         ));
     }
+    section = section.push(
+        container(crate::ui::material::Scrollable::new(rows, r).height(Length::Shrink))
+            .max_height(PRS_MAX_HEIGHT),
+    );
     Some(section.into())
 }
 
