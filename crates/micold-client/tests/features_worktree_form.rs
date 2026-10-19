@@ -359,7 +359,16 @@ mod github_issues_switch {
             .issue_sources
             .insert(project(), IssueProvider::Github);
         let before = state.worktree_form.issue_request_seq;
+        let seq = state.worktree_form.awaited_issue_load().expect("in flight");
         send(&mut state, Msg::GithubIssuesChanged(false));
+        send(
+            &mut state,
+            Msg::IssuesLoaded {
+                seq,
+                result: Err(micold_core::github::IssueLoadError::Offline),
+                resolved_env: None,
+            },
+        );
         let f = form(&state);
         assert!(f.github_repo().is_none());
         assert_eq!(
