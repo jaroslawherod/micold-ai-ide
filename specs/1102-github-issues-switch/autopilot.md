@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1102
 - **Worktree branch**: feat/1102_allow-the-github-issues-integration-to-be-disabled
 - **Started**: 2026-10-19
-- **Phase**: clarify (done); next plan
-- **Next step**: plan unit
+- **Phase**: plan (done)
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -55,3 +55,5 @@ None. <or: the banner as sent, and when>
 ## Follow-ups not done
 
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+
+<!-- plan review A round 1 snapshot 9dacc3ca5a9cc8c52890dd052f80d02761ab1bb4:eb157e8d63016f57bb1cc60dffff99c63cf2b1e1: CLEAN, 4 MINORs fixed, prose only -->

@@ -3,7 +3,7 @@
 ## W1. `DaemonSettings` (daemon -> client, in `SettingsChanged` and the settings reply)
 Add `pub github_issues_enabled: bool` after `jira_connections`. Doc: "Whether the GitHub issues
 integration is on (feature 1102, FR-001). Service-owned so every window follows one switch
-(FR-008)." Serde default `true` for a file or frame without it.
+(FR-008)." Strict on the wire (no serde default); a settings file without it reads `true` (W4).
 
 ## W2. `ClientMsg::SettingsSet` (client -> daemon)
 Add `github_issues_enabled: Option<bool>` after `jira_connection`; `None` leaves the value
