@@ -73,7 +73,7 @@ only failure was `idle_requests_no_frames` (frame requests must go through `Prog
 `ZoomState.started: Instant` with `clock: Progress` (ZOOM_LIMIT = SLIDE + 100 ms, `on_layout_frame` in
 `Grid::update`); data-model.md's `started` mention should now read `clock` (update it). Next:
 1. Commit the working tree (fmt + clock fix, uncommitted at hand-over) as `fix(970): ...`.
-2. Review A (round 1) was started detached on snapshot `ecb6d8c4e7d818f7cd319b4870d4b812095fe700:4ff93b1c3d965bda0ffa49b2acee062c108e0590`: prompt `/tmp/claude-0/-home-user-micold-ai-ide/610acce1-41f7-5bc4-9972-1f899e9527fb/scratchpad/promptA.txt`,
+2. Review A (round 1) FINISHED with VERDICT CHANGES: one MAJOR, F1 in `cursor_for_state` (mixes absolute `position`/`node_at` with grid-relative `piece.origin`; add a test with a nonzero grid origin and a split card); full text in the output file below, fix it, then round 2 (sonnet, fix diff). It was started detached on snapshot `ecb6d8c4e7d818f7cd319b4870d4b812095fe700:4ff93b1c3d965bda0ffa49b2acee062c108e0590`: prompt `/tmp/claude-0/-home-user-micold-ai-ide/610acce1-41f7-5bc4-9972-1f899e9527fb/scratchpad/promptA.txt`,
    output `/tmp/claude-0/-home-user-micold-ai-ide/610acce1-41f7-5bc4-9972-1f899e9527fb/scratchpad/review-A.md` (ends with `REVIEW_EXIT=`; if empty/absent, re-run the same command:
    `claude -p --agent autopilot-reviewer --permission-mode auto "$(cat promptA.txt)"`). Act on it per
    review-rounds.md (it saw the pre-clock-fix tree).
