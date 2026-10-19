@@ -35,7 +35,7 @@ pub static SIDEBAR_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
 const MAX_NESTING: usize = 4;
 
 /// Width of the collapsed strip that hosts the "show sidebar" button.
-const STRIP_WIDTH: f32 = 32.0;
+pub(crate) const STRIP_WIDTH: f32 = 32.0;
 
 /// Render the sidebar for the active project's worktrees and sessions, at the current
 /// (adjustable) width.

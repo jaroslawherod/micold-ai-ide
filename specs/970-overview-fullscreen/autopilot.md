@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: implement M1
-- **Next step**: M1 PR — full gate green, branch pushed; orchestrator opens the PR from the scratchpad title/body, records its number, waits on CI
+- **Phase**: implement M2
+- **Next step**: M2 — review A (high) + gate, then review B and visual pass, full gate, push, PR text in scratchpad
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1066 | design (spec, plan, tasks) | merged (rebase) | d7005808fd4f200f8ec2fa1afb23e4d640f53aeb |
+| #1074 | M1 (full screen hides the sidebar) | merged (rebase) | 3603ce06621499419e86a60e106d605b14a7904c |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | — (to open) | verified, gate green |
-| M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | — | pending |
+| M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | #1074 | merged |
+| M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | — | implemented (T018–T026 ticked), reviews next |
 | M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | — | pending |
 | M4 | T032–T041 | full | Reduce motion (US3) | — | pending |
 
@@ -76,3 +77,9 @@ None.
 ## Follow-ups not done
 
 - Showcase `NavigationDrawer` section renders blank (its pre-existing open/closed poses too; `size()` Shrink×Fill unchanged from main) — seen by the M1 visual pass, `specs/970-overview-fullscreen/visual-pass.md` finding 3.
+
+## Where things went (M2)
+
+- Zoom lives in `ui/material/card_grid.rs`: `Zoom`, `zoom_fraction`, `rest_width`, `ribbon`, `Piece`, `ZoomState` (+ `advance`), private `Grid` widget (the `Scrollable` content; `CardGrid::into_grid`). `SLIDE` is `pub(super)` in `navigation_drawer.rs`. `RESIZE_HANDLE_WIDTH` re-exported from `material/mod.rs`.
+- Glue: `ui/overview.rs` `freed_width`; `ui/sidebar.rs` `STRIP_WIDTH` is `pub(crate)`. Showcase pose "zoom" in `showcase/sections/surfaces.rs` (`card_grid`), catalogue entry now interactive.
+- Deviations: a flip's start width is the previous *layout's* width (`last_width`), not the flip layout's; the zoom end rule heads for the larger end when entering and the smaller when leaving (so the flip layout itself, at the start width, never ends it). On the ribbon the gap at a row end is hidden, so a split card's pieces sum to `w` minus at most the gap (the spec's "sum to w" holds up to the gap). Pointer events over any piece of a card reach the card, translated to its primary box.

@@ -8,7 +8,7 @@ use crate::features::overview::{MenuOrigin, Msg};
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
-use crate::ui::material::{Button, CardGrid, MenuItem, OverviewCard, Tooltip};
+use crate::ui::material::{Button, CardGrid, MenuItem, OverviewCard, Tooltip, Zoom};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
 use micold_core::location_state::location_state;
@@ -58,7 +58,12 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
-    let grid = CardGrid::new(cards, r).on_scroll(Message::Overview(Msg::GridScrolled));
+    let grid = CardGrid::new(cards, r)
+        .on_scroll(Message::Overview(Msg::GridScrolled))
+        .zoom(Zoom {
+            full_screen: state.overview.full_screen(),
+            freed: freed_width(state),
+        });
     let pane = container(column![header(state, r), grid].spacing(spacing::SM))
         .padding(spacing::LG)
         .width(Length::Fill)
@@ -69,6 +74,16 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     ContextArea::new(pane)
         .on_secondary_press(|_| Message::Overview(Msg::CardMenuDismissed))
         .into()
+}
+
+/// The width full screen gives the grid (feature 970, research R5): the sidebar drawer's, with its
+/// resize handle when expanded, or its collapsed strip.
+fn freed_width(state: &State) -> f32 {
+    if state.sidebar.hidden {
+        crate::ui::sidebar::STRIP_WIDTH
+    } else {
+        f32::from(state.sidebar_width_px()) + crate::ui::material::RESIZE_HANDLE_WIDTH
+    }
 }
 
 /// Whether `location`'s card is the target of the open card menu (FR-006). Identity, not a grid

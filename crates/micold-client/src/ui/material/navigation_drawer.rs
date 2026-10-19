@@ -35,7 +35,7 @@ const CLOSED: f32 = 0.001;
 /// Owned here, not passed in: how long a thing takes is part of how it looks, and that is the
 /// design system's business rather than the application's — the same reasoning that put the
 /// dialog's timing in `modal` and the menu's in `menu`.
-const SLIDE: Duration = Duration::from_millis(duration::MEDIUM_4);
+pub(super) const SLIDE: Duration = Duration::from_millis(duration::MEDIUM_4);
 
 /// A panel that slides in and out beside the content, leaving `rail` behind when closed. Builder
 /// form (Principle VIII): `NavigationDrawer::new(panel, rail).open(b).handle(h).into()`.
