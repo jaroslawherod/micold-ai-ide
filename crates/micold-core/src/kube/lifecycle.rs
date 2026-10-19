@@ -98,7 +98,11 @@ pub async fn remove(
     allowed: &BTreeSet<KubeCredential>,
 ) -> Result<(), KubeFailure> {
     stop(cluster, namespace, names).await?;
-    for secret in names.all_secrets(allowed) {
+    for secret in names
+        .all_secrets(allowed)
+        .into_iter()
+        .chain(names.retired_secrets())
+    {
         delete_ours(cluster, namespace, names, ObjectKind::Secret, &secret).await?;
     }
     let pvc = names.pvc();

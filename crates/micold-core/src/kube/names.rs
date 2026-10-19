@@ -117,11 +117,18 @@ impl ResourceNames {
     pub fn secret(&self, credential: &KubeCredential) -> String {
         match credential {
             KubeCredential::GitConfig => format!("{}-gitconfig", self.base),
-            KubeCredential::GitCredentials => format!("{}-git-credentials", self.base),
-            KubeCredential::GitSshKey { .. } => format!("{}-git-ssh", self.base),
             KubeCredential::SignIn { cli } => format!("{}-signin-{}", self.base, cli_slug(*cli)),
             KubeCredential::RegistryPull { .. } => self.pull_secret(),
         }
+    }
+
+    /// The secrets of the credential kinds #1002 removed (the git credential store, an SSH key): no
+    /// daemon creates them any more, and start and remove delete any a cluster still holds.
+    pub fn retired_secrets(&self) -> [String; 2] {
+        [
+            format!("{}-git-credentials", self.base),
+            format!("{}-git-ssh", self.base),
+        ]
     }
 
     /// The secret holding the pod's SSH host key and the client's public key (contract §1).
@@ -226,12 +233,8 @@ mod tests {
             format!("{base}-gitconfig")
         );
         assert_eq!(
-            n.secret(&KubeCredential::GitCredentials),
-            format!("{base}-git-credentials")
-        );
-        assert_eq!(
-            n.secret(&KubeCredential::GitSshKey { key: "/k".into() }),
-            format!("{base}-git-ssh")
+            n.retired_secrets(),
+            [format!("{base}-git-credentials"), format!("{base}-git-ssh")]
         );
         assert_eq!(
             n.secret(&KubeCredential::SignIn {
@@ -245,7 +248,7 @@ mod tests {
             n.pull_secret()
         );
         let long = ResourceNames::new("c", "n", &"x".repeat(80));
-        for name in [long.pod(), long.secret(&KubeCredential::GitCredentials)] {
+        for name in [long.pod(), long.retired_secrets()[0].clone()] {
             assert!(is_dns_1123(&name), "{name} fits a DNS-1123 label");
         }
     }
@@ -267,7 +270,7 @@ mod tests {
             "with nothing allowed only the access secret"
         );
         let allowed = BTreeSet::from([
-            KubeCredential::GitCredentials,
+            KubeCredential::GitConfig,
             KubeCredential::SignIn { cli: AiCli::Pi },
             KubeCredential::RegistryPull { auths: "/a".into() },
         ]);

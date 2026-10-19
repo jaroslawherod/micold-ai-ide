@@ -174,8 +174,6 @@ pub struct StartRequest<'a> {
     pub drift: DriftChoice,
     /// This machine's home directory, where the allowed credentials' source files are.
     pub home: &'a Path,
-    /// The remote hosts whose `known_hosts` lines go with an allowed SSH key.
-    pub hosts: &'a [String],
     /// How the `Secrets` phase reads a source file (the only place one is read).
     pub read: ReadFile<'a>,
 }
@@ -392,7 +390,7 @@ async fn credential_secrets(
 ) -> Result<(), KubeFailure> {
     for credential in &r.settings.allowed {
         let name = r.names.secret(credential);
-        let data = credential.secret_data(r.home, r.hosts, r.read)?;
+        let data = credential.secret_data(r.home, r.read)?;
         let manifest = manifest::typed_secret(r.names, &name, credential.secret_type(), &data);
         if let Ensured::Adopted(view) =
             ensure(r, ObjectKind::Secret, manifest.clone(), attempt).await?
@@ -406,12 +404,19 @@ async fn credential_secrets(
             }
         }
     }
-    for kind in credentials::every_kind() {
-        let name = r.names.secret(&kind);
-        let allowed = r.settings.allowed.iter().any(|a| r.names.secret(a) == name);
-        if allowed {
-            continue;
-        }
+    // The withdrawn kinds, and the secrets of the kinds #1002 retired: a cluster may still hold the
+    // user's key or credential store from before it (FR-001).
+    let withdrawn = credentials::every_kind()
+        .iter()
+        .map(|kind| r.names.secret(kind))
+        .filter(|name| {
+            !r.settings
+                .allowed
+                .iter()
+                .any(|a| r.names.secret(a) == *name)
+        })
+        .chain(r.names.retired_secrets());
+    for name in withdrawn {
         if let Some(view) = r
             .cluster
             .get(namespace(r), ObjectKind::Secret, &name)

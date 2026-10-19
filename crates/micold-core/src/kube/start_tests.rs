@@ -89,7 +89,6 @@ fn start_request<'a>(
         client,
         drift,
         home: Path::new("/home/u"),
-        hosts: &[],
         read,
     }
 }
