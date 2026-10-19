@@ -10547,8 +10547,9 @@ mod pr_status {
 
     /// Run `git -C dir args` as if at Unix second `time`, so the reflog's seconds are the test's.
     fn git_at(dir: &std::path::Path, time: u64, args: &[&str]) {
+        use std::process::Command;
         let date = format!("@{time} +0000");
-        let out = std::process::Command::new("git")
+        let out = micold_core::process::no_window(&mut Command::new("git"))
             .arg("-C")
             .arg(dir)
             .args(args)
