@@ -42,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | b6b2e210aec70a341e81ec5a5b1a1839924c1347:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CLEAN |
 | Code review A (M1) | 1 | e7f8a8e905e614e4914ef8dce0298614dc853ccb:fcb574c5d59f23a83383a065e30ec84754ffc3a7 | fixed 3 (provider resolved at open, titles gated before request, doc comment); declined 4 |
 | Review B (M1) | 1 | same | CLEAN |
+| Code review A (M2) | 1 | HEAD | fixed 1 (stale-load test); declined 4 |
+| Review B (M2) | 1 | 8121ae5e0baec97411dd9a6a8e52c326205da2a0:4b9b4517273e3b247db11ce22655bbd934b0e9ce | CLEAN (2 MINOR test-depth, accepted) |
 | Tasks review | 1 | 9ee5e15dc9b0aae22c6d661908c19341be7a4078:72004d40f6ad887da122bbd09c2195ca2a84601f | CLEAN (2 MINOR fixed; analyze MEDIUMs C1,C2,I1 fixed) |
 
 ## Declined review findings
@@ -51,6 +53,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | MCP create_worktree still reads issue; open forms do not follow switch live | M3 and M2 scope |
 | M1 | A | Optimistic core.settings on save, no rollback | Same pattern as Jira; daemon push reconciles |
 | M1 | A | Hand Default on settings State | Intentional; documented deviation |
+| M2 | A | Switch on flips a browsed Jira list to GitHub | Provider changed, so the list is for the wrong provider; reset is required |
+| M2 | A | github_issues_changed duplicates jira_settings_changed | Small, mirrors existing; not worth a helper |
+| M2 | A | Applied while Creating | Same as jira_settings_changed; create outcome does not read source |
+| M2 | A | Unconnected-save sync on failed write | Same pattern as Jira; daemon push reconciles |
 
 ## Handover
 
