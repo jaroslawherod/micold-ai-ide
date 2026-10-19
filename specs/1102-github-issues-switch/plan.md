@@ -70,11 +70,13 @@ crates/micold-client/src/
 ├── features/settings.rs     # State.github_issues_enabled (default true), SettingsDraft/GithubDraft/ValidSettings, Msg::GithubIssuesToggled, baseline seeding
 ├── features/worktree_form.rs# form flag + github_repo() gate, resolve_provider, FormMsg::GithubIssuesChanged, captions
 ├── ui/settings/github.rs    # the checkbox; SETTINGS list entry
-├── ui/focus/FieldId         # FieldId::SettingsGithubIssues (new variant, beside SettingsPrStatus)
+├── features/window.rs       # FieldId::SettingsGithubIssues (new variant, beside SettingsPrStatus)
 ├── shell/persist.rs         # settings_in_force, set!/changed! lists, SettingsSet builder, apply of an unconnected save
 ├── shell/daemon_sync.rs     # adopt_daemon_settings + refresh_open_settings
+├── shell/pr_status.rs       # reads draft.github.pr_status_enabled (l.233): check whether the new draft field needs a sibling line
 ├── shell/startup.rs         # loaded settings -> core.settings
 └── shell/issues.rs          # sync_github_issues_availability; the starters refuse while off
+test literals of `DaemonSettings` (`main_tests.rs`, `tests/support`) gain the field
 docs/user-guide/settings.md, worktrees-and-sessions.md; docs/daemon.md
 ```
 
@@ -85,8 +87,8 @@ hand-written lists that name `jira_enabled` (found with `grep -n jira_enabled`) 
 
 ### D1. Setting and wire (FR-001, FR-007, FR-008)
 
-- `Settings` and `SettingsFile`: `#[serde(default = "default_true")] github_issues_enabled: bool`; `Settings::default()` sets `true`. A missing, unknown or corrupt file yields `true` (spec edge cases; the corrupt-file path already returns `Settings::default()` and does not rewrite).
-- `DaemonSettings::github_issues_enabled: bool` (`#[serde(default = "default_true")]` as the neighbouring fields do where applicable) and `ClientMsg::SettingsSet::github_issues_enabled: Option<bool>`, placed after `jira_connection`. Service-owned: `Catalog::persist_service_settings` and the on-disk merge copy it, as for `jira_enabled`, so the latest write wins on every daemon/window (multi-session edge case).
+- `Settings` and `SettingsFile`: `#[serde(default = "default_true")] github_issues_enabled: bool` (`default_true` is a new helper, or reuse `default_desktop_notifications`); `Settings::default()` sets `true`. A missing, unknown or corrupt file yields `true` (spec edge cases; the corrupt-file path already returns `Settings::default()` and does not rewrite).
+- `DaemonSettings::github_issues_enabled: bool` (strict on the wire, no serde default: the codec is not self-describing) and `ClientMsg::SettingsSet::github_issues_enabled: Option<bool>`, placed after `jira_connection`. Service-owned: `Catalog::persist_service_settings` and the on-disk merge copy it, as for `jira_enabled`, so the latest write wins on every daemon/window (multi-session edge case).
 - Wire contract and version bump: [contracts/wire.md](contracts/wire.md). `tests/schema_hash.rs` pins the hash; the bump and the pin move in one commit.
 
 ### D2. Settings page (FR-006)
@@ -103,7 +105,7 @@ hand-written lists that name `jira_enabled` (found with `grep -n jira_enabled`) 
 
 ### D4. MCP `create_worktree` (FR-010)
 
-`resolve_naming` (daemon `mcp/tools.rs`) returns `OpError::invalid_input("GitHub issues are turned off in Settings (GitHub). Give branch, or type, ticket and name instead.")` as its first act for `github_issue: Some(_)` when `state.github_issues_enabled()` is false, before `remote_list`, `issue_lookup` or any detail read; feature 837's relationship reads are inside that path and so never run. Requests without `github_issue` take the early `Ok` return unchanged. The tool description in `micold-core/src/mcp/tools.rs` gains one sentence; `tests/mcp_tools_catalog.rs` pins the catalog text and moves with it.
+`resolve_naming` (daemon `mcp/tools.rs`) returns `OpError::invalid_input("GitHub issues are turned off in Settings (GitHub). Give a branch, or type, ticket and name instead.")` as its first act for `github_issue: Some(_)` when `state.github_issues_enabled()` is false, before `remote_list`, `issue_lookup` or any detail read; feature 837's relationship reads are inside that path and so never run. Requests without `github_issue` take the early `Ok` return unchanged. The tool description in `micold-core/src/mcp/tools.rs` gains one sentence; `tests/mcp_tools_catalog.rs` pins the catalog text and moves with it.
 
 ## Test strategy (layer per requirement)
 
