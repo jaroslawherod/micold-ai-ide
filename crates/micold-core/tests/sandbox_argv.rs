@@ -419,16 +419,47 @@ fn an_adopted_containers_credential_mounts_are_not_projects() {
     );
 }
 
+/// Variables set for one test, restored (or removed) when it ends.
+struct EnvGuard(Vec<(&'static str, Option<std::ffi::OsString>)>);
+
+impl EnvGuard {
+    fn set(vars: &[(&'static str, &str)]) -> Self {
+        Self(
+            vars.iter()
+                .map(|(name, value)| {
+                    let old = std::env::var_os(name);
+                    std::env::set_var(name, value);
+                    (*name, old)
+                })
+                .collect(),
+        )
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        for (name, old) in &self.0 {
+            match old {
+                Some(v) => std::env::set_var(name, v),
+                None => std::env::remove_var(name),
+            }
+        }
+    }
+}
+
 /// #1002 (FR-001, spec edge case "personal token in the host environment", T003): with the user's
 /// GitHub tokens and agent socket in the host's environment, and other values passed into the
 /// container, none of the three reaches a `-e` argument. The argv names each variable it sets, so
 /// every one is checked against the short list a container may get.
 #[test]
 fn no_personal_token_or_agent_socket_reaches_the_container_environment() {
-    // Set in this process, so a builder that read the host's environment would find them.
-    std::env::set_var("GH_TOKEN", "host-gh-token-value");
-    std::env::set_var("GITHUB_TOKEN", "host-github-token-value");
-    std::env::set_var("SSH_AUTH_SOCK", "/tmp/ssh-host/agent.sock");
+    // Set in this process, so a builder that read the host's environment would find them; the
+    // guard puts the previous values back, so no other test in this binary sees them.
+    let _env = EnvGuard::set(&[
+        ("GH_TOKEN", "host-gh-token-value"),
+        ("GITHUB_TOKEN", "host-github-token-value"),
+        ("SSH_AUTH_SOCK", "/tmp/ssh-host/agent.sock"),
+    ]);
     let mut spec = spec_for(false);
     // Other values are passed: the zone and the idle rule.
     spec.time_zone = Some("Europe/Berlin".into());

@@ -117,6 +117,24 @@ impl FakeCluster {
         uid
     }
 
+    /// Overwrite one annotation of an object, as an older client's write would have left it.
+    pub fn set_annotation(
+        &self,
+        namespace: &str,
+        kind: ObjectKind,
+        name: &str,
+        key: &str,
+        value: &str,
+    ) {
+        let mut inner = self.lock();
+        if let Some((view, _)) = inner
+            .objects
+            .get_mut(&(namespace.into(), kind, name.into()))
+        {
+            view.annotations.insert(key.into(), value.into());
+        }
+    }
+
     /// Mark an object as being deleted; it is gone after the next `get` that sees it.
     pub fn mark_deleting(&self, namespace: &str, kind: ObjectKind, name: &str) {
         if let Some((view, _)) = self

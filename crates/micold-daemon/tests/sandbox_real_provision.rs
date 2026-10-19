@@ -213,7 +213,7 @@ fn facts_of(container: &str) -> ContainerFacts {
     let raw = cli_out(&[
         "inspect",
         "-f",
-        "{{.Id}} {{.State.Running}} {{.Config.Image}}",
+        "{{.Id}} {{.State.Running}} {{.Config.Image}} {{index .Config.Labels \"io.micold.git-identity\"}}",
         container,
     ]);
     let mut parts = raw.split_whitespace();
@@ -223,6 +223,8 @@ fn facts_of(container: &str) -> ContainerFacts {
         image: parts.next().unwrap_or_default().to_string(),
         fingerprint: None,
         mount_destinations: Vec::new(),
+        // Created through `argv::create`, so stamped like any sandbox since #1002.
+        git_identity_free: parts.next() == Some("none"),
     }
 }
 

@@ -134,11 +134,9 @@ pub fn every_kind() -> Vec<KubeCredential> {
     all
 }
 
-/// The environment the daemon runs with for the `allowed` credentials (the pod's own env does not
-/// reach it: sshd starts sessions clean). Nothing is added for a credential that needs none.
-pub fn daemon_env(
-    _allowed: &std::collections::BTreeSet<KubeCredential>,
-) -> BTreeMap<String, String> {
+/// The environment the daemon runs with (the pod's own env does not reach it: sshd starts sessions
+/// clean). No allowed credential adds to it.
+pub fn daemon_env() -> BTreeMap<String, String> {
     // Nothing allowed reaches the env since #1002 removed the git credential store and the SSH key
     // (FR-001): what remains is mounted as files where the tools look for them.
     BTreeMap::from([
@@ -167,8 +165,6 @@ pub(crate) enum RemovedKubeCredential {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-
     use super::*;
     use crate::kube::names::ResourceNames;
 
@@ -276,22 +272,12 @@ mod tests {
 
     #[test]
     fn the_daemon_env_carries_no_credential() {
-        let env = |c: &[KubeCredential]| daemon_env(&c.iter().cloned().collect::<BTreeSet<_>>());
-        let base = env(&[]);
         assert_eq!(
-            base,
+            daemon_env(),
             BTreeMap::from([
                 ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
                 ("MICOLD_REPOS_ROOT".to_string(), "/data/repos".to_string()),
             ])
-        );
-        assert_eq!(
-            env(&[
-                KubeCredential::GitConfig,
-                KubeCredential::SignIn { cli: AiCli::Pi },
-                KubeCredential::RegistryPull { auths: "/a".into() }
-            ]),
-            base
         );
     }
 }

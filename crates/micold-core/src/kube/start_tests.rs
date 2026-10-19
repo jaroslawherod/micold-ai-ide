@@ -427,6 +427,44 @@ async fn keep_continues_with_the_drifted_pod_unchanged() {
     assert!(deletes(&fake).is_empty());
 }
 
+/// #1002 review A F2: a pod made before #1002 — its stamp allowing an SSH key — is recreated
+/// whether the user chose to keep a drifted pod or has not been asked: neither keeps the key.
+#[tokio::test(start_paused = true)]
+async fn a_pod_allowing_a_retired_credential_is_recreated_never_kept_or_asked_about() {
+    for choice in [DriftChoice::Keep, DriftChoice::Ask] {
+        let fake = cluster();
+        let first = ready(run(&fake, &settings()).await.0);
+        let old = first.attempt.created[2].uid.clone();
+        let pod = fake.manifest(NS, ObjectKind::Pod, &names().pod()).unwrap();
+        let mut stamp: serde_json::Value = serde_json::from_str(
+            pod["metadata"]["annotations"][POD_STAMP_ANNOTATION]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        stamp["allowed"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({"kind": "git_ssh_key", "key": "/home/u/.ssh/id_ed25519"}));
+        fake.set_annotation(
+            NS,
+            ObjectKind::Pod,
+            &names().pod(),
+            POD_STAMP_ANNOTATION,
+            &stamp.to_string(),
+        );
+        let second = ready(run_with(&fake, &settings(), &client("c1"), choice).await.0);
+        let new = second
+            .attempt
+            .created
+            .iter()
+            .find(|c| c.kind == ObjectKind::Pod)
+            .expect("a new pod");
+        assert_ne!(new.uid, old, "{choice:?}");
+        assert_eq!(deletes(&fake), [format!("delete Pod {}", names().pod())]);
+    }
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_pod_never_scheduled_times_out_in_schedule_and_rolls_back_in_reverse() {
     let fake = cluster();
@@ -1361,7 +1399,7 @@ async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved
             }
         }
     }
-    for (name, value) in crate::kube::credentials::daemon_env(&settings.allowed) {
+    for (name, value) in crate::kube::credentials::daemon_env() {
         start_up.push_str(&format!("\n{name}={value}"));
     }
     assert_eq!(host.leaks(&start_up), Vec::<String>::new(), "{start_up}");

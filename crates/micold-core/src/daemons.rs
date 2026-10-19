@@ -74,9 +74,10 @@ impl MigrationNotice {
             }
             MigrationNotice::RemovedGitCredentials => concat!(
                 "The SSH agent, SSH key and git credentials items were removed: they handed the ",
-                "sandbox your whole git identity. They are replaced by ",
+                "sandbox your whole git identity. A sandbox started before this change is replaced ",
+                "on its next start, ending any session still running in it. Until ",
                 scoped_credential!(),
-                "; until that is set up, the sandbox cannot push."
+                " is set up, the sandbox cannot push."
             ),
         }
     }

@@ -528,14 +528,8 @@ fn locations_for(
         unshared_sign_in: unshared_sign_in.map(|p| p.to_string_lossy().into_owned()),
         projects: mounts.container_projects(
             mounted,
-            // The socket only lets the layout recognise an old container's mount; it is never
-            // forwarded.
-            &CredentialLayout::conventional(
-                &facts.home,
-                std::env::var_os("SSH_AUTH_SOCK")
-                    .map(PathBuf::from)
-                    .as_deref(),
-            ),
+            // An old container's agent socket mount is already among `mounts.retired`.
+            &CredentialLayout::conventional(&facts.home, None),
         ),
     }
 }

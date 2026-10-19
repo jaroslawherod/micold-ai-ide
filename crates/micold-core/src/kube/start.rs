@@ -534,8 +534,13 @@ async fn pod(
             Ensured::Adopted(view) => view,
         };
         let on_pod = view.annotations.get(manifest::POD_STAMP_ANNOTATION);
-        let fields = manifest::drift(on_pod.map_or("", String::as_str), &stamp);
+        let on_pod = on_pod.map_or("", String::as_str);
+        let fields = manifest::drift(on_pod, &stamp);
+        // A pod made before #1002 mounts the user's SSH key and sets `GIT_SSH_COMMAND` (FR-001):
+        // keeping it would keep them, so it is recreated whatever the user chose about drift.
+        let retired = manifest::holds_retired_credential(on_pod);
         match r.drift {
+            _ if retired => delete_and_wait(r, ObjectKind::Pod, &r.names.pod(), &view.uid).await?,
             _ if fields.is_empty() => return Ok(Vec::new()),
             DriftChoice::Keep => return Ok(Vec::new()),
             DriftChoice::Ask => return Ok(fields),
@@ -675,9 +680,7 @@ pub fn pod_target(reach: PinnedReach, settings: &KubeSettings) -> ProvisionTarge
             install: StartPhase::Install.bound(),
             ..StepBounds::container()
         },
-        env: super::credentials::daemon_env(&settings.allowed)
-            .into_iter()
-            .collect(),
+        env: super::credentials::daemon_env().into_iter().collect(),
     }
 }
 

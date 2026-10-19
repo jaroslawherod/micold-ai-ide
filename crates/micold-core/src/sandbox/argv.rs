@@ -17,6 +17,7 @@
 use std::ffi::OsString;
 
 use super::dialect::Dialect;
+use super::parse::{GIT_IDENTITY_LABEL, GIT_IDENTITY_NONE};
 use super::runtime::RuntimeCapabilities;
 use super::{MountSet, NetworkPosture, SandboxSpec};
 use crate::spawn::{IDLE_STOP_ENV, IDLE_STOP_OFF};
@@ -112,6 +113,11 @@ const SSH_MOUNT_FILES: [(&str, &str); 3] = [
 pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     let dialect = Dialect::for_kind(caps.kind);
     let mut args: Vec<OsString> = vec!["create".into(), "--name".into(), (&spec.name).into()];
+
+    // The stamp that tells `adopt` this container holds none of the user's git identity (#1002):
+    // one without it is replaced, not attached to.
+    args.push("--label".into());
+    args.push(format!("{GIT_IDENTITY_LABEL}={GIT_IDENTITY_NONE}").into());
 
     // Identity first, so a reader of the argv sees immediately that this is not running as root.
     args.extend(
@@ -845,6 +851,11 @@ mod tests {
                 Some("micold-daemon:0.27.0")
             );
             assert!(args.iter().any(|a| a == "--name"));
+            assert!(
+                args.windows(2)
+                    .any(|w| w[0] == "--label" && w[1] == "io.micold.git-identity=none"),
+                "every new sandbox is stamped free of the user's git identity (#1002)"
+            );
         }
     }
 }
