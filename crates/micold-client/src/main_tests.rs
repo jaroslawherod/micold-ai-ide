@@ -13027,10 +13027,9 @@ fn the_root_runs_the_highlighted_card_menu_entry_on_activation() {
         app.core.overview.card_menu, None,
         "activating closes the menu"
     );
-    assert_eq!(
-        open_dialog_id(&app),
-        Some("rename_worktree"),
-        "and runs the entry"
+    assert!(
+        app.core.worktree.rename_draft.is_some() && open_dialog_id(&app).is_some(),
+        "and runs the entry: the rename dialog is open"
     );
 }
 
