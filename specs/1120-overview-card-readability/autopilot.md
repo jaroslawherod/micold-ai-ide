@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
 - **Phase**: plan
-- **Next step**: plan (clarify done: round 1 only recorded the existing FR-012 rule, no round 2). If the user's card picks B or C, reopen FR-012 before the plan is written.
+- **Next step**: plan review round 1 (plan unit, continuing the handover). If the user's FR-012 card picks B or C, reopen FR-012 and research R7 first.
 
 ## Pull requests
 
@@ -42,7 +42,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit 1 (2026-10-19) handed over at the 150k context cap after writing all plan artifacts
+(plan.md, research.md R1–R15, data-model.md, contracts/card-text.md, contracts/overview-card.md,
+quickstart.md), committed. Branch rebased onto origin/main by branch-start.sh (no PR yet).
+Next: run `scripts/autopilot/review-snapshot.sh`, record it under *Review rounds* as `Plan | 1`,
+dispatch the plan reviewer (tasks/review.md, rubrics/plan.md, round 1 on the session model), act on
+its verdict (tasks/review-rounds.md), then set **Next step** to `tasks unit` and return DONE, PR none.
+No open findings.
 
 ## Open escalation
 
