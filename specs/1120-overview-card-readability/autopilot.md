@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
 - **Phase**: tasks
-- **Next step**: tasks review round 1 (tasks rubric + checklist items), then specs-only gate and design PR
+- **Next step**: design PR review and merge (orchestrator); then milestone M1
 
 ## Pull requests
 
@@ -50,7 +50,7 @@ inequality + visual pass).
 | Spec | 1 | fdfeae51b28753936f4e21eca650306af1098566:38a9ce97b751560df8c8feaddf1271cbceba0cc2 | CHANGES: 2 MAJOR, 3 MINOR (run by orchestrator); all fixed |
 | Spec | 2 | e3d615be650081e55115b2439e1bb15d4948f794:c672c92ff959967fbae970486c6fd8c64a0fa07c | CLEAN (scoped re-review on sonnet, run by orchestrator) |
 | Plan | 1 | 221940aa90b85d7d1661e8a886cc5a8581948ec5:fceaaad45c2dd36fcc8549bfb609d09e4e0c3436 | CHANGES: 1 MAJOR, 3 MINOR (run by orchestrator). F1 (R11, R15 alternatives rejected) fixed, prose only; F2 quickstart filters after `--`; F3 FR-020 checked by a quickstart grep; F4 main_session citation. No round 2 needed |
-| Tasks | 1 | 04af9d88d365d79a2cfbae93da9b8304531204d6:dcf5c72a69ec31f09b10908c7738ead41a7c3884 | pending (tasks rubric + checklists/requirements.md open items) |
+| Tasks | 1 | 04af9d88d365d79a2cfbae93da9b8304531204d6:dcf5c72a69ec31f09b10908c7738ead41a7c3884 | CHANGES: 1 MAJOR, 3 MINOR (run by orchestrator). F1 checklist items confirmed by reviewer, ticked, Notes updated (fixed, prose only); F2 T003/T007 read `summary`, T009 updates to `title`; F3 spec edge case names the bundled font (R14); F4 T013 adds a client guard test for no fall back to another session. Only MINORs after the prose-only MAJOR fix: no round 2 |
 
 ## Declined review findings
 
@@ -59,14 +59,7 @@ inequality + visual pass).
 
 ## Handover
 
-Done: branch rebased on origin/main; tasks.md (T001–T040) and the four milestones written;
-speckit-analyze run and fixed (see Milestones note); tasks review round 1 snapshot recorded, not yet
-reviewed. Next: act on the tasks review round 1 verdict (review-rounds.md); tick
-checklists/requirements.md items the reviewer confirms (4 open: two "no implementation details",
-"no NEEDS CLARIFICATION markers", "testable and unambiguous"); specs-only gate
-(`scripts/check-criteria-observables.sh specs/1120-overview-card-readability/spec.md`); design PR
-(title `#1120: Overview cards: readable layout and content — design: spec, plan and tasks`, body ends
-`Refs #1120`). No PR open yet.
+None.
 
 ## Open escalation
 
