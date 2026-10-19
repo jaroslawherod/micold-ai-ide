@@ -30,6 +30,10 @@ fn env_or(name: &str, default: &str) -> String {
         .unwrap_or_else(|| default.to_string())
 }
 
+/// How far ahead of this daemon's clock a credential's expiry may be beyond the hour: the host
+/// issued it by its own clock.
+const CLOCK_SKEW_SECS: u64 = 300;
+
 /// Where this daemon keeps credential files, or `None` when it is not sandboxed (#1002): the test
 /// override [`ROOT_ENV`], else the default root in a container or when the runtime mounted an
 /// authentication token. A host-process daemon holds no credential and refuses every grant.
@@ -163,7 +167,7 @@ pub fn apply_grant(
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     let plain = !token.expose().is_empty() && token.expose().bytes().all(|b| b.is_ascii_graphic());
-    if !plain || expires_at <= now || expires_at > now + MAX_LIFETIME_SECS {
+    if !plain || expires_at <= now || expires_at > now + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS {
         return Err(GrantRefused::Invalid);
     }
     let want = repo.lowercased();
