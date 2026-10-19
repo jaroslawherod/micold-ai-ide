@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M7
-- **Next step**: M7 PR to open (reviews done, gate on rebased head); then M8
+- **Next step**: M7 PR to open (reviews done, gate green on the rebased head (one load-flake in structured_session passed on rerun)); then M8
 
 ## Pull requests
 
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T029–T030 | full | resume | #1072 | merged |
 | M5 | T031–T032 | full | late and multiple viewers | #1076 | merged |
 | M6 | T033–T036 | full | terminal-only requests refused | #1080 | merged |
-| M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | to open | reviews done, gate running |
+| M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | to open | reviews done, gate green |
 | M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | planned |
 
 ## Decisions
