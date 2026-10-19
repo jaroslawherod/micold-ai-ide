@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: implement M1
-- **Next step**: verify M1: free disk, scoped gate, then reviews A and B
+- **Phase**: verify M1
+- **Next step**: verify M1: act on review A (code-review high) and review B (conformance) verdicts and the visual pass (quickstart B6, M1 part), then PR
 
 ## Pull requests
 
@@ -52,6 +52,10 @@ inequality + visual pass).
 | Spec | 2 | e3d615be650081e55115b2439e1bb15d4948f794:c672c92ff959967fbae970486c6fd8c64a0fa07c | CLEAN (scoped re-review on sonnet, run by orchestrator) |
 | Plan | 1 | 221940aa90b85d7d1661e8a886cc5a8581948ec5:fceaaad45c2dd36fcc8549bfb609d09e4e0c3436 | CHANGES: 1 MAJOR, 3 MINOR (run by orchestrator). F1 (R11, R15 alternatives rejected) fixed, prose only; F2 quickstart filters after `--`; F3 FR-020 checked by a quickstart grep; F4 main_session citation. No round 2 needed |
 | Tasks | 1 | 04af9d88d365d79a2cfbae93da9b8304531204d6:dcf5c72a69ec31f09b10908c7738ead41a7c3884 | CHANGES: 1 MAJOR, 3 MINOR (run by orchestrator). F1 checklist items confirmed by reviewer, ticked, Notes updated (fixed, prose only); F2 T003/T007 read `summary`, T009 updates to `title`; F3 spec edge case names the bundled font (R14); F4 T013 adds a client guard test for no fall back to another session. Only MINORs after the prose-only MAJOR fix: no round 2 |
+| M1 review A | 1 | 60d84141b9749fbe478ec83d7417912026602853:79beca3120025c93ca35a5afce3057b1bc99cd41 | pending (dispatched by orchestrator) |
+| M1 review B | 1 | 60d84141b9749fbe478ec83d7417912026602853:79beca3120025c93ca35a5afce3057b1bc99cd41 | pending (dispatched by orchestrator) |
+
+M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red was the root-only settings test that `scripts/gate.sh` runs unprivileged).
 
 ## Declined review findings
 
@@ -60,16 +64,7 @@ inequality + visual pass).
 
 ## Handover
 
-M1 unit (context over 150k). Done: T001–T011 implemented and ticked (TDD evidence in
-`tdd/cycle-log.md`); core `overview_text` tests (8) and `PrDisplay::footer` test green, client
-`overview_card card_grid` lib tests 41 passed; user guide updated. Committed, not pushed (no PR).
-Scoped gate not yet green: run 1 failed on a borrow error in `crates/micold-client/tests/overview.rs`
-(fixed); run 2 failed only because the disk filled (`ld terminated with signal 7`, 34 MB free,
-`target-shared/debug/deps` 29 GB). Next: free disk (`reclaim-disk` skill; `mise` is missing, so
-sweep `target-shared` by hand), rerun `scripts/autopilot/scoped-gate.sh` detached, then verify.md
-step 1 review A (`code-review` high) and step 2 review B (conformance) through the orchestrator,
-full gate (`scripts/gate.sh`), PR. Possible fallout to check: `layout_snapshot`/showcase tests (the
-showcase sample card's branch and title changed). No review rounds yet; no open findings.
+None.
 
 ## Open escalation
 
