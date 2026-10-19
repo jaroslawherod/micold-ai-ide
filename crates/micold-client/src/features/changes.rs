@@ -61,8 +61,7 @@ pub enum Load<T> {
 /// every session of one worktree shares one list and one read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum PrList {
-    /// No section: the setting is off, the entry is the project root, or there is no GitHub
-    /// access.
+    /// No section: the setting is off, or the entry is the project root.
     #[default]
     Absent,
     /// A read is under way; `again`: one more follows it. `last` stays on screen meanwhile.
@@ -135,7 +134,7 @@ pub fn section(view: &OpenView, enabled: bool, now: u64) -> PrSection<'_> {
         return PrSection::Absent;
     }
     match (view.pull_requests.shown(), &view.pull_requests) {
-        (Some((prs, _)), _) if prs.is_empty() => PrSection::Empty,
+        (Some(([], _)), _) => PrSection::Empty,
         (Some((prs, _)), _) => PrSection::List {
             prs,
             stale: view.pull_requests.possibly_stale(now),

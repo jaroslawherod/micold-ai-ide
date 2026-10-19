@@ -293,10 +293,23 @@ fn a_failure_without_a_list_resets_the_source_to_the_working_tree() {
         let mut state = opened(true);
         listed(&mut state, vec![pr(1, BranchPrState::Open)]);
         chosen(&mut state, 1);
-        // The list is gone (a reopen), then the first read of the new view fails.
-        reopen(&mut state, worktree());
-        answered(&mut state, 3, Err(failure));
+        assert!(matches!(source(&state), Source::PullRequest(_)));
+        // A read with no list behind it (as after the setting was toggled) fails.
+        state.open.as_mut().expect("open").pull_requests = PrList::Loading {
+            seq: 77,
+            again: false,
+            last: None,
+        };
+        changes::update(
+            &mut state,
+            Msg::PullRequestsRead {
+                seq: 77,
+                read_at: 3,
+                result: Err(failure),
+            },
+        );
         assert_eq!(source(&state), &Source::Changes);
+        assert_eq!(view_list(&state), &PrList::Unavailable { last: None });
     }
 }
 

@@ -57,13 +57,13 @@ only pull requests of this project's own repository. A pull request opened from 
 listed.
 
 The working-tree changes below it never wait for the section: they appear first, and the section
-joins when GitHub has answered. Until the first read finishes the section says **Reading pull requests…**. A worktree none of
-whose branches has a pull request says **No pull requests from this worktree yet**. When GitHub
-cannot be reached and no list has been read (no `gh`, not signed in, no GitHub remote, offline), it
-shows one muted line, **Pull requests can't be shown for this worktree**, and raises no error. The
-section is absent, with no line at all, when the switch is off and when the entry is the project
-root. While GitHub cannot be reached after a list was read, the last list and your selection stay.
-A long list scrolls inside the section.
+joins when GitHub has answered. Until the first read finishes the section says **Reading pull
+requests…**. A worktree none of whose branches has a pull request says **No pull requests from this
+worktree yet**. When GitHub cannot be reached and no list has been read (no `gh`, not signed in, no
+GitHub remote, offline), it shows one muted line, **Pull requests can't be shown for this
+worktree**, and raises no error. The section is absent, with no line at all, when the switch is off
+and when the entry is the project root. While GitHub cannot be reached after a list was read, the
+last list and your selection stay. A long list scrolls inside the section.
 
 ### Reading a pull request's diff
 
