@@ -189,3 +189,20 @@ Append only. Newest last.
   message, so a client starts a fresh log on every `live: false` message except a continuation
   of the history in progress (first seq one past the last held).
 - refactor: none beyond `events_until` built on `messages_until`.
+
+## Cycle 11 (U15, M6): refused terminal-only requests — RED, GREEN
+- red (T033, T034): `structured_wire` references `DaemonMsg::SessionRequestRefused` and
+  `RefusedRequest` (compile error before T035). `structured_lifecycle`
+  `terminal_only_requests_to_a_structured_primary_are_refused_to_the_sender` FAILED with
+  `left: [] right: [Input, Resize, Scrollback, Interrupt]` (types added as a stub, no server check).
+  `the_same_requests_to_its_shell_instance_are_served` passed at once (shells already serve them;
+  test-after, it guards the new check).
+- green (T035, T036): `SessionRequestRefused`, `RefusedRequest`, `PROTOCOL_VERSION` 54;
+  `DaemonState::refuses_terminal_request` and `refuse_terminal_request` in `server.rs` at the four
+  arms. `ok. 7 passed` (structured_lifecycle), 3 of 3 runs.
+- review A F1 (MAJOR): a `process: None` resize means every process; it is refused for the AI
+  process yet still recorded and applied to the shells. New case
+  `a_resize_for_every_process_is_refused_for_the_ai_process_and_taken_by_the_shells` (`stty size`
+  in the shell reads `41 91`). The served case now waits for its marker before the interrupt (a
+  flake: the ^C cancelled a line the shell had not read).
+- refactor: empty `if` arms replaced by `if !refuse_terminal_request(..)`.

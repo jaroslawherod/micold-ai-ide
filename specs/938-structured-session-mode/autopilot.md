@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M6
-- **Next step**: M6 gate (scripts/gate.sh, log in scratchpad) and reviews; then PR to open
+- **Next step**: round-2 scoped review (sonnet) of the review-A fixes, gate (scripts/gate.sh, log gate-m6.log in scratchpad), then PR to open
 
 ## Pull requests
 
@@ -81,6 +81,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Revision review spec (sonnet) | 2 | 7497d055378edd3e6c97a8eea28e417fb1c95801:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (1 MINOR fixed: FR-021b and scenario 7 cover purge at start with saving off) |
 | M5 review A (code-review high) | 1 | 08ffe9fb82c67bdbf328f60fed45034f77cf54fd:404a706fc8eb3bff573d8b0a9d4d72f748468f22 | 9 findings: 1 MAJOR declined (F1 per-viewer serialization), 8 MINOR declined |
 | M5 review B (conformance, sonnet) | 1 | 08ffe9fb82c67bdbf328f60fed45034f77cf54fd:404a706fc8eb3bff573d8b0a9d4d72f748468f22 | CLEAN |
+| M6 review A (code-review high) | 1 | 0ad26a1db386ecc3b9daf44ff41c705785387658:f7da76abb46db0eda52a1df692dac5b491e8552f | 7 findings: 1 MAJOR fixed (resize with no process dropped the shells' size), 2 MINOR fixed, 4 declined |
+| M6 review B (conformance, sonnet) | 1 | 0ad26a1db386ecc3b9daf44ff41c705785387658:f7da76abb46db0eda52a1df692dac5b491e8552f | CHANGES: 1 MAJOR (no cycle-log entry; fixed), 2 MINOR fixed |
 
 ## Declined review findings
 
@@ -117,6 +119,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | A 1 | F4 stand-in warn logged per viewer; F5 lag re-snapshot unthrottled into the unbounded client channel | MINOR; a lag needs 1,024 events unread by one viewer |
 | M5 | A 1 | F6 continuation rule is adjacency-based | Decision 12: a re-snapshot starting one past the last held seq holds the same events onward, so keeping the log loses nothing; MINOR |
 | M5 | A 1 | F7–F9 test-only bounds setter is `pub`, a second byte-count writer, `MESSAGE_OVERHEAD` comment vs value | the codebase's test setters are `pub` and documented; 256 leaves margin over the ~120 bytes measured; MINOR |
+| M6 | A 2 | refusal per request is not rate-limited | the shipped client sends none to a structured session until M8, which draws no terminal for it; one small frame per request
+| M6 | A 3 | check and dispatch are two lock takes; attach can switch between | the client orders its own attach and requests on one connection; a request is judged against the process attached when it arrives, which is the contract's meaning of `None`
+| M6 | A 5 | scrollback and interrupt carry no process field | wire.md addresses them to the attached process; adding a field is a wire change outside T033–T036
+| M6 | A 7 | `refuses_terminal_request` duplicates target resolution | it needs the kind under the same lock as the attached process; reusing `session_kind` plus `attached_process` would take two locks
 
 ## Handover
 

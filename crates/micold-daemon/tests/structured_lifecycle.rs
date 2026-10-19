@@ -349,6 +349,15 @@ async fn the_same_requests_to_its_shell_instance_are_served() {
     for msg in requests {
         client.send(Frame::Control(msg)).await.expect("sent");
     }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !marker.exists() {
+        assert!(
+            Instant::now() < deadline,
+            "the shell never ran the typed command"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    // The interrupt below would cancel a line the shell has not read yet.
     // With the shell attached, the scrollback request and the interrupt without a `process` reach
     // the shell, not the AI process.
     client
@@ -378,12 +387,56 @@ async fn the_same_requests_to_its_shell_instance_are_served() {
             .any(|m| matches!(m, DaemonMsg::ScrollbackResponse { req: 5, .. })),
         "the scrollback is answered"
     );
+}
+
+/// A resize without a `process` is every process's: the structured session's AI process refuses
+/// it, and its shell instances still take the size.
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn a_resize_for_every_process_is_refused_for_the_ai_process_and_taken_by_the_shells() {
+    use futures_util::SinkExt;
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::{ClientMsg, RefusedRequest, SessionProcess};
+    use micold_core::session::ShellInstanceId;
+    let _serial = one_at_a_time();
+    fake_stream_cli();
+    let project = tempfile::tempdir().unwrap();
+    let session = structured_session(SessionLocation::Default);
+    let id = session.id;
+    let state: Arc<DaemonState> = service(project.path(), vec![session]);
+    stream_script(project.path(), "");
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    let instance = ShellInstanceId(1);
+    state.open_shell(id, instance).expect("shell opens");
+    let mut client = viewer(&state, project.path(), id).await;
+    let size_file = project.path().join("shell-size");
+    for msg in [
+        ClientMsg::SessionResize {
+            session: id,
+            cols: 91,
+            rows: 41,
+            process: None,
+        },
+        ClientMsg::SessionInput {
+            session: id,
+            serial: 0,
+            bytes: format!("stty size > '{}'\n", size_file.display()).into_bytes(),
+            process: Some(SessionProcess::Shell(instance)),
+        },
+    ] {
+        client.send(Frame::Control(msg)).await.expect("sent");
+    }
+    let got = refusals(&frames_within(&mut client, Duration::from_secs(2)).await);
+    assert_eq!(
+        got.iter().map(|(request, ..)| *request).collect::<Vec<_>>(),
+        [RefusedRequest::Resize]
+    );
     let deadline = Instant::now() + Duration::from_secs(10);
-    while !marker.exists() {
-        assert!(
-            Instant::now() < deadline,
-            "the shell never ran the typed command"
-        );
+    loop {
+        if std::fs::read_to_string(&size_file).is_ok_and(|s| s.trim() == "41 91") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "the shell never took the size");
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
