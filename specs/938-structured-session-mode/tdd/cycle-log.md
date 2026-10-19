@@ -209,11 +209,13 @@ Append only. Newest last.
 - refactor: empty `if` arms replaced by `if !refuse_terminal_request(..)`.
 
 ## Cycle 12 (U16–U19, M7): event history saved and restored — RED, GREEN
-- red/green (T049, T050, T052): `structured::saved` tests (round trip of every saved kind, an
-  unreadable line that parses stays unreadable, `OversizedOnWire` never written, each `DamageReason`,
-  a hand-built version-1 file byte for byte) and `EventHistory::restored*` tests written with the
-  code; `ok. 37 passed` in `structured::`. `frame`/`unframe` split out of `terminal_history::format`
-  with the terminal bytes unchanged (`terminal_history_format` 34 passed, fixture test untouched).
+- red (T049, T050): the tests were written with the code, so red was shown afterwards (review B F1):
+  `saved.rs` `encode_events`/`decode_events` reduced to an empty encoding and a constant `Malformed`,
+  and `EventHistory::restored_with_bounds` to numbering from 0, then `cargo test -p micold-core --lib
+  structured::` FAILED 11 of 37 (all 8 `saved` cases that read a file, and the 3 `restored` cases).
+  The code was restored: green (T052) `ok. 37 passed`. `frame`/`unframe` split out of
+  `terminal_history::format` with the terminal bytes unchanged (`terminal_history_format` 34 passed,
+  fixture test untouched).
 - red (T051): `terminal_history_store::events_kind` failed to compile (`save_events`, `EventsLoad`
   missing). green (T053): `FileKind`, `save_events`, `load_events`, both extensions in deletion, sweep
   and retry; `last_written` keyed by session and kind. One test fixed: after an external overwrite the
