@@ -454,16 +454,22 @@ rust-cache, `target/remote-daemon` and the installer scripts need no change (an 
 `CARGO_TARGET_DIR` such as `E:/target` was rejected: rust-cache joins it onto the workspace path and
 `windows-installer.sh` treats only `/`-prefixed paths as absolute). The rust-cache step also reports
 `cache-hit` in the run summary. If the image cannot make a Dev Drive the step warns and the leg
-builds in a plain `target`; the run summary says which happened. The ARM64 job is untouched. No
-Defender exclusions were added, and sccache was not adopted (a second cache beside rust-cache that
-does not touch the test steps).
+builds in a plain `target`; the run summary says which happened. The ARM64 job is untouched.
+sccache was not adopted (a second cache beside rust-cache that does not touch the test steps).
 
-**After**: not yet measured. It needs 10 runs with the change; take them from the pull request's
-CI runs plus runs on `main` after the merge, with the same query (job durations of `build + test
-(windows-latest)`), and add the median, min, max and spread here. In each run's log check that the
-Dev Drive step lists `CACHEDIR.TAG` in `target`, that rust-cache prints `Restored from cache key`
-(or `No cache found`) with no `ENOENT` annotation, and that its post step saves (`Saving cache`)
-after a miss. If the hit rate has regressed, the mount is the first suspect.
+**After the Dev Drive** (16 successful `main` runs after the merge, 2026-10-18 11:20 to 21:00 UTC,
+same query): median 1660 s, min 1143 s, max 1816 s, mean 1563 s, standard deviation 242 s. No
+change from before. In each run's log the Dev Drive step lists `CACHEDIR.TAG` in `target`,
+rust-cache prints `Restored from cache key` (or `No cache found`) with no `ENOENT` annotation, and
+its post step saves after a miss; if the hit rate regresses, the mount is the first suspect.
+
+**Defender exclusions** (maintainer's decision, 2026-10-19): a second Windows-only step, before the
+Dev Drive, adds Defender exclusion paths for the workspace, `~/.cargo`, `~/.rustup`, `RUNNER_TEMP`
+and the tool cache, and exclusion processes for `cargo`, `rustc`, `rustdoc` and `link`. The runner is
+discarded after the job, so nothing outside it is affected. The step writes to the run summary
+whether real-time protection was on; if it reads `False`, Defender cannot be the cause and the
+exclusions do nothing. **After**: not yet measured; take 10 `main` runs after the merge with the same
+query and add them here.
 
 ## Real-runtime daemon tests build only their own targets
 
