@@ -3326,6 +3326,70 @@ fn the_window_and_the_open_draft_follow_the_services_github_issues_switch() {
     assert!(shown(&app), "an edit on the page is not overwritten");
 }
 
+/// An app whose New worktree form is open on a GitHub remote.
+fn app_with_github_form() -> App {
+    let mut app = base_app();
+    app.core.workspace.active = Some(PathBuf::from("/work/acme"));
+    app.core.update(Message::WorktreeForm(FormMsg::Opened));
+    app.core
+        .update(Message::WorktreeForm(FormMsg::RemotesListed(Ok(vec![
+            micold_core::git::GitRemote {
+                name: "origin".into(),
+                url: "git@github.com:o/r.git".into(),
+            },
+        ]))));
+    app
+}
+
+fn form_offers_github(app: &App) -> bool {
+    app.core
+        .worktree_form
+        .form
+        .as_ref()
+        .expect("the form is open")
+        .github_repo()
+        .is_some()
+}
+
+/// Feature 1102 (FR-005, SC-004, US3 AS1): the service's report of the switch reaches the form
+/// already open in this window, with no reopening, both ways.
+#[test]
+fn an_open_form_follows_the_services_github_issues_switch() {
+    let mut app = app_with_github_form();
+    assert!(form_offers_github(&app));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                github_issues_enabled: false,
+                ..quiet_settings()
+            },
+        },
+    );
+    assert!(!form_offers_github(&app), "off drops GitHub issues");
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                github_issues_enabled: true,
+                ..quiet_settings()
+            },
+        },
+    );
+    assert!(form_offers_github(&app), "on offers them again");
+}
+
+/// The unconnected save puts the value in force (the test below) and then tells the form with the
+/// same sync the service's report uses; Settings and the form are both dialogs, so a save seldom
+/// has a form open, but the sync must hold when one is.
+#[test]
+fn the_github_issues_sync_reaches_the_open_form() {
+    let mut app = app_with_github_form();
+    app.core.settings.github_issues_enabled = false;
+    crate::shell::issues::sync_github_issues_availability(&mut app);
+    assert!(!form_offers_github(&app));
+}
+
 /// A save with no service to echo it still puts the new value in force for this window, whatever
 /// the write does after (spec edge case).
 #[test]

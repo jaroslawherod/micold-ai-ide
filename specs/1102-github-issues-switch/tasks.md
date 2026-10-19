@@ -39,11 +39,11 @@ description: "Task list for the GitHub issues switch (#1102)"
 
 **Goal**: flipping the switch, in any window or daemon, changes every open form at once; stale GitHub results are discarded.
 
-- [ ] T017 [P] [US1] Test (reducer, `features_worktree_form.rs`): `FormMsg::GithubIssuesChanged(false)` with GitHub as provider drops the list, clears a picked issue, returns `BranchSource::Issue` to `New`, bumps `issue_request_seq` so an in-flight list, search, description or detail result is discarded (AS 4, edge cases); `true` re-offers GitHub and loads on choosing the chip (US3 AS 3); `workspace.issue_sources` untouched; unchanged value is a no-op
-- [ ] T018 [US1] `FormMsg::GithubIssuesChanged(bool)` handled like `jira_settings_changed` in `crates/micold-client/src/features/worktree_form.rs`
-- [ ] T019 [P] [US3] Test (`crates/micold-client/src/main_tests.rs` or `tests/`): `adopt_daemon_settings` with a changed value updates `core.settings` and every window's open form; an unconnected save applies it; a second window's open form drops GitHub issues without reopening (US3 AS 1, SC-004)
-- [ ] T020 [US3] `sync_github_issues_availability` in `crates/micold-client/src/shell/issues.rs`, called from `adopt_daemon_settings` in `crates/micold-client/src/shell/daemon_sync.rs` and from the unconnected-save apply in `crates/micold-client/src/shell/persist.rs`, beside `sync_jira_availability`
-- [ ] T021 [US3] User guide: a sentence in `docs/user-guide/worktrees-and-sessions.md` that an open form follows the switch at once, and that the setting is shared by all windows, in `docs/user-guide/settings.md`
+- [x] T017 [P] [US1] Test (reducer, `features_worktree_form.rs`): `FormMsg::GithubIssuesChanged(false)` with GitHub as provider drops the list, clears a picked issue, returns `BranchSource::Issue` to `New`, bumps `issue_request_seq` so an in-flight list, search, description or detail result is discarded (AS 4, edge cases); `true` re-offers GitHub and loads on choosing the chip (US3 AS 3); `workspace.issue_sources` untouched; unchanged value is a no-op
+- [x] T018 [US1] `FormMsg::GithubIssuesChanged(bool)` handled like `jira_settings_changed` in `crates/micold-client/src/features/worktree_form.rs`
+- [x] T019 [P] [US3] Test (`crates/micold-client/src/main_tests.rs` or `tests/`): `adopt_daemon_settings` with a changed value updates `core.settings` and every window's open form; an unconnected save applies it; a second window's open form drops GitHub issues without reopening (US3 AS 1, SC-004)
+- [x] T020 [US3] `sync_github_issues_availability` in `crates/micold-client/src/shell/issues.rs`, called from `adopt_daemon_settings` in `crates/micold-client/src/shell/daemon_sync.rs` and from the unconnected-save apply in `crates/micold-client/src/shell/persist.rs`, beside `sync_jira_availability`
+- [x] T021 [US3] User guide: a sentence in `docs/user-guide/worktrees-and-sessions.md` that an open form follows the switch at once, and that the setting is shared by all windows, in `docs/user-guide/settings.md`
 
 ## Phase 4: MCP `create_worktree` refuses `github_issue` while off (FR-010)
 

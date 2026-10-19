@@ -1003,6 +1003,7 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     crate::shell::issues::sync_jira_availability(app);
     // Feature 1102: the GitHub issues switch in force, in every window (FR-008).
     app.core.settings.github_issues_enabled = settings.github_issues_enabled;
+    crate::shell::issues::sync_github_issues_availability(app);
     // Feature 490: the switch and threshold in force; off forgets the reading (FR-002).
     app.core.plan_usage.settings(
         settings.plan_usage_enabled,

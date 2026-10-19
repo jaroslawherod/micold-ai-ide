@@ -1365,6 +1365,33 @@ pub fn jira_settings_changed(state: &mut crate::app::State, jira: JiraAvailabili
     }
 }
 
+/// The GitHub issues switch changed while the form is open (feature 1102, FR-005): the provider is
+/// chosen again and a GitHub list that no longer applies is forgotten with its in-flight load,
+/// which a bumped seq makes stale. The remotes already read are kept, so on again offers GitHub
+/// without asking git once more.
+pub fn github_issues_changed(state: &mut crate::app::State, enabled: bool) {
+    let next_seq = state.worktree_form.issue_request_seq + 1;
+    let mut bumped = false;
+    with_form(state, |form| {
+        if form.github_issues_off == !enabled {
+            return;
+        }
+        let was_github = form.provider == IssueProvider::Github;
+        form.github_issues_off = !enabled;
+        form.resolve_provider();
+        if was_github || form.provider == IssueProvider::Github {
+            form.reset_issues();
+            if form.source == BranchSource::Issue {
+                form.source = BranchSource::New;
+            }
+            bumped = true;
+        }
+    });
+    if bumped {
+        state.worktree_form.issue_request_seq = next_seq;
+    }
+}
+
 /// An issue load finished. Only the awaited one applies (invariant 2, FR-007a).
 pub fn issues_loaded(
     state: &mut crate::app::State,
@@ -1981,6 +2008,8 @@ pub enum Msg {
     },
     /// The settings now make Jira available or not to this form (feature 533, FR-005).
     JiraSettingsChanged(JiraAvailability),
+    /// The GitHub issues switch now in force changed (feature 1102, FR-005).
+    GithubIssuesChanged(bool),
     /// The GitHub / Jira choice of a project with both sources (feature 533, FR-016, FR-017).
     IssueProviderChanged(IssueProvider),
     /// Retry a failed issue load (FR-007).
@@ -2067,6 +2096,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RemotesListed(remotes) => remotes_listed(state, remotes),
         Msg::IssuesLoaded { seq, result, .. } => issues_loaded(state, seq, result),
         Msg::JiraSettingsChanged(jira) => jira_settings_changed(state, jira),
+        Msg::GithubIssuesChanged(enabled) => github_issues_changed(state, enabled),
         Msg::IssueProviderChanged(provider) => return issue_provider_changed(state, provider),
         Msg::IssueRetry => issue_retry(state),
         Msg::IssueQueryChanged(text) => issue_query_changed(state, text),

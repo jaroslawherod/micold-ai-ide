@@ -335,4 +335,77 @@ mod github_issues_switch {
         assert!(State::default().settings.github_issues_enabled);
         assert!(!WorktreeForm::default().github_issues_off);
     }
+
+    // --- T017: the switch changes while the form is open (FR-005, US1 AS4, US3 AS3) ---------
+
+    fn send(state: &mut State, msg: Msg) {
+        state.update(Message::WorktreeForm(msg));
+    }
+
+    /// An open form with the GitHub issue load in flight.
+    fn loading(state: State) -> State {
+        let mut state = opened(state);
+        send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+        assert!(state.worktree_form.awaited_issue_load().is_some());
+        state
+    }
+
+    /// US1 AS4: off drops the list, discards the load in flight and leaves the Issue source.
+    #[test]
+    fn turning_off_drops_the_list_and_discards_the_load() {
+        let mut state = loading(state(true, false));
+        state
+            .workspace
+            .issue_sources
+            .insert(project(), IssueProvider::Github);
+        let before = state.worktree_form.issue_request_seq;
+        send(&mut state, Msg::GithubIssuesChanged(false));
+        let f = form(&state);
+        assert!(f.github_repo().is_none());
+        assert_eq!(
+            f.issues,
+            micold_client::features::worktree_form::IssueList::NotRequested
+        );
+        assert_eq!(f.source, BranchSource::New);
+        assert!(state.worktree_form.issue_request_seq > before);
+        assert!(state.worktree_form.awaited_issue_load().is_none());
+        assert_eq!(
+            state.workspace.issue_sources.get(&project()),
+            Some(&IssueProvider::Github),
+            "the remembered provider is untouched"
+        );
+    }
+
+    /// US1 AS4 with Jira connected: Jira becomes the only source.
+    #[test]
+    fn turning_off_falls_back_to_jira() {
+        let mut state = loading(state(true, true));
+        send(&mut state, Msg::GithubIssuesChanged(false));
+        let f = form(&state);
+        assert_eq!(f.provider, IssueProvider::Jira);
+        assert!(!f.offers_issue_provider_choice());
+        assert_eq!(f.source, BranchSource::New);
+    }
+
+    /// US3 AS3: on offers GitHub again, and choosing the chip loads.
+    #[test]
+    fn turning_on_offers_github_and_loads_on_choosing_the_chip() {
+        let mut state = opened(state(false, false));
+        assert!(form(&state).github_repo().is_none());
+        send(&mut state, Msg::GithubIssuesChanged(true));
+        assert!(form(&state).github_repo().is_some());
+        assert!(form(&state).issue_source_ready());
+        send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+        assert!(state.worktree_form.awaited_issue_load().is_some());
+    }
+
+    /// An unchanged value changes nothing, not even the request counter.
+    #[test]
+    fn an_unchanged_value_is_a_no_op() {
+        let mut state = loading(state(true, false));
+        let before = state.worktree_form.issue_request_seq;
+        send(&mut state, Msg::GithubIssuesChanged(true));
+        assert_eq!(state.worktree_form.issue_request_seq, before);
+        assert!(state.worktree_form.awaited_issue_load().is_some());
+    }
 }

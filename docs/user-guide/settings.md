@@ -602,7 +602,8 @@ Also applies to Jira issues: an issue's type name and labels are matched against
 off. With it unchecked, the New worktree form makes no GitHub issue request and does not offer
 **GitHub issue** as a source, even for a GitHub project; Jira, if connected, stays available, as does
 a branch name you type. Worktrees you already created from GitHub issues keep working. Save applies
-it, and the daemon shares it, so every window and every app on that daemon follows. It does not
+it, and the daemon shares it, so every window and every app on that daemon follows, and a New
+worktree form already open in any of them changes at once. It does not
 change the pull request status switch.
 
 Each row is one entry: a **Label**, the **Type** it selects, and buttons to move the entry up or
