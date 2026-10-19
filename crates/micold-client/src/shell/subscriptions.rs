@@ -99,9 +99,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }));
     // #1002 (FR-013): a sandboxed daemon's git credential changed. Event-driven, like the clicks.
     subs.push(
-        crate::shell::scoped_credential::statuses().map(|(daemon, statuses)| {
+        crate::shell::scoped_credential::statuses().map(|(daemon, statuses, at)| {
             Message::Daemons(micold_client::features::daemons::Msg::CredentialStatuses(
-                daemon, statuses,
+                daemon, statuses, at,
             ))
         }),
     );

@@ -10,7 +10,7 @@
 //! `Debug` redacts, so no state, message or log line shows it.
 
 use micold_core::github::GithubRepo;
-use micold_core::local_time::rfc3339_utc;
+use micold_core::local_time::utc_date;
 use micold_core::scoped_credential::{pat, UnixTime, EXPIRY_WARNING_SECS};
 
 use super::TokenInput;
@@ -51,12 +51,6 @@ impl PatRow {
             self.expiry_date()
         ))
     }
-}
-
-/// `at` as a UTC date, `2026-11-20`.
-pub fn utc_date(at: UnixTime) -> String {
-    let secs = i64::try_from(at).unwrap_or(i64::MAX);
-    rfc3339_utc(secs).chars().take(10).collect()
 }
 
 /// A token waiting to be checked: the shell checks it and answers with [`GithubTokens::checked`].

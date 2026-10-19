@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use super::daemons::{AllowedKind, Draft, DraftRuntime, ImageKind};
-use super::settings::github_tokens::utc_date;
 use super::window::FieldId;
 use micold_core::daemons::CredentialLine;
+use micold_core::local_time::utc_date;
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture};
 use micold_core::scoped_credential::{CredentialStatus, UnixTime, EXPIRY_WARNING_SECS};
@@ -352,18 +352,25 @@ fn ssh_target(d: &Draft) -> String {
 /// The git credential lines of a sandboxed daemon's row, one per project it reported, by the
 /// daemon's path for it (#1002, FR-013, FR-008). A project still waiting for its first check has
 /// none, so a line appears only once there is something to say, and a delivered credential
-/// replaces the line that said there was none.
+/// replaces the line that said there was none. A project is named by its folder, or by its whole
+/// path when another project of the daemon has a folder of the same name.
 pub fn credential_lines(
     statuses: &BTreeMap<PathBuf, CredentialStatus>,
     now: UnixTime,
 ) -> Vec<CredentialLine> {
+    let folder = |p: &PathBuf| p.file_name().map(|n| n.to_string_lossy().into_owned());
     statuses
         .iter()
         .filter_map(|(project, status)| {
-            let name = project
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| project.display().to_string());
+            let shared = statuses
+                .keys()
+                .filter(|other| folder(other) == folder(project))
+                .count()
+                > 1;
+            let name = match folder(project) {
+                Some(name) if !shared => name,
+                _ => project.display().to_string(),
+            };
             let (text, warning) = match status {
                 CredentialStatus::Pending => return None,
                 CredentialStatus::Held { repo, expires_at } => {
@@ -479,6 +486,26 @@ mod credential_tests {
         assert_eq!(after.len(), 1);
         assert!(!after[0].text.contains("No git credential"));
         assert!(!after[0].warning);
+    }
+
+    #[test]
+    fn projects_with_the_same_folder_name_are_told_apart_by_their_path() {
+        let statuses = BTreeMap::from([
+            (
+                PathBuf::from("/work/client/app"),
+                CredentialStatus::None(NoCredentialReason::NoRemote),
+            ),
+            (
+                PathBuf::from("/work/server/app"),
+                CredentialStatus::None(NoCredentialReason::NoRemote),
+            ),
+        ]);
+        let texts: Vec<String> = credential_lines(&statuses, NOW)
+            .into_iter()
+            .map(|l| l.text)
+            .collect();
+        assert!(texts[0].starts_with("/work/client/app: "));
+        assert!(texts[1].starts_with("/work/server/app: "));
     }
 
     #[test]

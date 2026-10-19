@@ -86,6 +86,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 A (code-review high) | 1 | (not recorded by part 1) | CLEAN (2 MINOR fixed in 069c651a) |
 | M5 B (conformance, sonnet) | 1 | (not recorded by part 1) | CLEAN; Verify green |
 
+| M6 A (code-review high) | 1 | (pre-fix HEAD 96367608) | CHANGES (MAJOR: the 24 h warning never redrew at its threshold — the worker now wakes at expiry − 24 h and reports it, and views use the report's time; MAJOR: a lost report advanced `reported` — `unreported` resends; MINOR fixed: same-named project folders show their paths, `credentials` dropped on Remove/forget and for unknown ids, `utc_date` moved to `micold_core::local_time`, reducer tests added; declined: see *Declined review findings*) |
+
 ## M4 review notes
 
 Review A (high) round 1: CHANGES, F1–F7 fixed (validating GithubRepo Deserialize, unique temp names, lower-cased schedule keys, grant token/expiry validation, req u64::MAX sentinel, revoke of superseded token, git_too_old in change detection); F8 (cache git version) declined as MINOR. Review B (sonnet): CLEAN.
@@ -106,6 +108,10 @@ Review A (high) round 1: CHANGES, F1–F7 fixed (validating GithubRepo Deseriali
 | M3 | A | F3/F4 [MINOR] pod drift stamp lacks the git volume; emptyDir mode | pods are rebuilt on a new image/spec stamp; one uid in the pod, so the daemon is the only reader; follow-up |
 | M3 | A | F5 [MINOR] no expiry margin | the Schedule (M4) renews 10 min before expiry |
 | M3 | A | F6/F7 [MINOR] test comment, main.rs dispatch | taste |
+
+- M6 A: the take-once status channel copies `desktop_notify`'s pattern; a generic helper needs a per-type static (a macro) for two users — kept as is.
+- M6 A: `changed_statuses` rebuilds every daemon's map per worker wake — a handful of projects per daemon, wakes are rare; not worth dirty tracking.
+- M6 A: the expiry shows as a UTC date, as the M5 settings rows do; one convention for both.
 
 ## Handover
 

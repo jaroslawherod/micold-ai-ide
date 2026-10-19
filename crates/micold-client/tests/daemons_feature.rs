@@ -1690,3 +1690,69 @@ mod install_warnings {
         assert!(row(&state, &mut w, id).install_warnings.is_empty());
     }
 }
+
+/// #1002, FR-013: a sandboxed daemon's row carries one line per project about its git credential,
+/// set and cleared by what the credential wiring reports.
+mod credential_lines {
+    use super::*;
+    use daemons::Msg;
+    use micold_core::scoped_credential::{CredentialStatus, NoCredentialReason};
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+
+    const AT: u64 = 1_792_368_000;
+
+    fn lines(state: &State, w: &mut World, id: micold_core::daemons::DaemonId) -> Vec<String> {
+        daemons::views(state, &w.model())
+            .rows
+            .into_iter()
+            .find(|r| r.id == id)
+            .unwrap()
+            .credential_lines
+            .into_iter()
+            .map(|l| l.text)
+            .collect()
+    }
+
+    fn none(reason: NoCredentialReason) -> BTreeMap<PathBuf, CredentialStatus> {
+        BTreeMap::from([(PathBuf::from("/work/app"), CredentialStatus::None(reason))])
+    }
+
+    #[test]
+    fn a_report_sets_the_lines_and_an_empty_one_clears_them() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let id = w.boxed;
+        assert!(lines(&state, &mut w, id).is_empty());
+        send(
+            &mut state,
+            &mut w,
+            Msg::CredentialStatuses(id, none(NoCredentialReason::SourceNotSetUp), AT),
+        );
+        let shown = lines(&state, &mut w, id);
+        assert_eq!(shown.len(), 1);
+        assert!(shown[0].starts_with("app: No git credential: No GitHub token is stored"));
+        send(
+            &mut state,
+            &mut w,
+            Msg::CredentialStatuses(id, BTreeMap::new(), AT),
+        );
+        assert!(lines(&state, &mut w, id).is_empty());
+    }
+
+    #[test]
+    fn a_report_for_a_daemon_that_is_not_configured_is_dropped() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let gone = micold_core::daemons::DaemonId(9_999);
+        send(
+            &mut state,
+            &mut w,
+            Msg::CredentialStatuses(gone, none(NoCredentialReason::NoRemote), AT),
+        );
+        assert!(daemons::views(&state, &w.model())
+            .rows
+            .iter()
+            .all(|r| r.credential_lines.is_empty()));
+    }
+}

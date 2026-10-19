@@ -278,8 +278,14 @@ fn at_the_expiry_the_status_is_expired_and_the_daemon_is_told_to_delete_the_toke
     rig.manager
         .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
     rig.run();
+    // First the status is reported again for the expiry warning, then the token is withdrawn.
+    assert_eq!(
+        rig.manager.next_wake(rig.now()),
+        Some(T0 + 30 * DAY - EXPIRY_WARNING_SECS)
+    );
+    rig.advance(30 * DAY - EXPIRY_WARNING_SECS);
     assert_eq!(rig.manager.next_wake(rig.now()), Some(T0 + 30 * DAY));
-    rig.advance(30 * DAY);
+    rig.advance(EXPIRY_WARNING_SECS);
     rig.run();
     assert_eq!(
         rig.status("/pa"),
@@ -512,4 +518,38 @@ fn statuses_are_reported_once_per_change_and_cleared_when_the_daemon_stops() {
         vec![(DaemonId(1), BTreeMap::new())]
     );
     assert!(rig.manager.changed_statuses(now).is_empty());
+}
+
+#[test]
+fn a_held_token_is_reported_again_when_it_comes_within_a_day_of_its_expiry() {
+    let mut rig = Rig::new();
+    rig.store_pat("a", PAT_A);
+    let (send, _log) = sink();
+    rig.manager
+        .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
+    rig.run();
+    assert_eq!(rig.manager.changed_statuses(rig.now()).len(), 1);
+    let warn_at = T0 + 30 * DAY - EXPIRY_WARNING_SECS;
+    assert_eq!(rig.manager.next_wake(rig.now()), Some(warn_at));
+    rig.advance(warn_at - rig.now());
+    rig.run();
+    assert_eq!(
+        rig.manager.changed_statuses(rig.now()).len(),
+        1,
+        "the warning is news"
+    );
+    assert_eq!(rig.manager.next_wake(rig.now()), Some(T0 + 30 * DAY));
+}
+
+#[test]
+fn statuses_the_window_did_not_get_are_reported_again() {
+    let mut rig = Rig::new();
+    let (send, _log) = sink();
+    rig.manager
+        .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
+    rig.run();
+    let now = rig.now();
+    assert_eq!(rig.manager.changed_statuses(now).len(), 1);
+    rig.manager.unreported(DaemonId(1));
+    assert_eq!(rig.manager.changed_statuses(now).len(), 1);
 }

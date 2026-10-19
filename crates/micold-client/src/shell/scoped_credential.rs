@@ -28,7 +28,7 @@ use micold_core::scoped_credential::pat_store::{PatStore, StoredPat};
 use micold_core::scoped_credential::schedule::{RenewPolicy, Schedule};
 use micold_core::scoped_credential::{
     CredentialSource, CredentialStatus, CredentialTarget, Grant, NoCredentialReason,
-    ScopedCredential, SecretToken, UnixTime,
+    ScopedCredential, SecretToken, UnixTime, EXPIRY_WARNING_SECS,
 };
 
 /// The whole request's budget: connect, send and read.
@@ -183,16 +183,18 @@ struct Entry {
 /// Each project's credential status, by the daemon's path for it.
 pub type Statuses = BTreeMap<PathBuf, CredentialStatus>;
 
-/// Where a daemon's changed statuses go: the window (FR-013).
-pub type Publish = Arc<dyn Fn(DaemonId, Statuses) + Send + Sync>;
+/// Where a daemon's changed statuses go, with the time they hold at: the window (FR-013).
+/// `false` when it could not be delivered, so it is sent again.
+pub type Publish = Arc<dyn Fn(DaemonId, Statuses, UnixTime) -> bool + Send + Sync>;
 
 /// Every connected sandboxed daemon's [`Schedule`], and the source they issue through.
 pub struct Manager {
     source: Arc<dyn CredentialSource>,
     log: Log,
     daemons: BTreeMap<DaemonId, Entry>,
-    /// What [`Manager::changed_statuses`] last reported, per daemon.
-    reported: BTreeMap<DaemonId, Statuses>,
+    /// What [`Manager::changed_statuses`] last reported, per daemon, with which of them were
+    /// within [`EXPIRY_WARNING_SECS`] of their expiry.
+    reported: BTreeMap<DaemonId, (Statuses, Vec<bool>)>,
 }
 
 impl Manager {
@@ -207,28 +209,36 @@ impl Manager {
     }
 
     /// The daemons whose statuses at `now` differ from what this last reported, with their new
-    /// statuses; a daemon whose schedule was dropped (disconnected, stopped) reports an empty map
-    /// once, so the window clears its lines (FR-013).
+    /// statuses; a held credential coming within [`EXPIRY_WARNING_SECS`] of its expiry counts as a
+    /// change (FR-008), and a daemon whose schedule was dropped (disconnected, stopped) reports an
+    /// empty map once, so the window clears its lines (FR-013).
     pub fn changed_statuses(&mut self, now: UnixTime) -> Vec<(DaemonId, Statuses)> {
-        let current: BTreeMap<DaemonId, Statuses> = self
-            .daemons
-            .iter()
-            .map(|(id, e)| (*id, e.schedule.statuses(now)))
-            .collect();
-        let mut changed: Vec<(DaemonId, Statuses)> = self
-            .reported
-            .keys()
-            .filter(|id| !current.contains_key(id))
-            .map(|id| (*id, Statuses::new()))
-            .collect();
-        changed.extend(
-            current
-                .iter()
-                .filter(|(id, statuses)| self.reported.get(id) != Some(statuses))
-                .map(|(id, statuses)| (*id, statuses.clone())),
-        );
-        self.reported = current;
+        let mut changed: Vec<(DaemonId, Statuses)> = Vec::new();
+        self.reported.retain(|id, _| {
+            let kept = self.daemons.contains_key(id);
+            if !kept {
+                changed.push((*id, Statuses::new()));
+            }
+            kept
+        });
+        for (id, entry) in &self.daemons {
+            let statuses = entry.schedule.statuses(now);
+            let warned = statuses
+                .values()
+                .map(|s| s.expires_within(now, EXPIRY_WARNING_SECS))
+                .collect();
+            let current = (statuses, warned);
+            if self.reported.get(id) != Some(&current) {
+                changed.push((*id, current.0.clone()));
+                self.reported.insert(*id, current);
+            }
+        }
         changed
+    }
+
+    /// `daemon`'s statuses did not reach the window: report them again next time.
+    pub fn unreported(&mut self, daemon: DaemonId) {
+        self.reported.remove(&daemon);
     }
 
     /// `daemon` reported `targets` (the whole list), after an `Attach` or a change. Creates its
@@ -295,11 +305,25 @@ impl Manager {
         }
     }
 
-    /// When [`Manager::run_due`] next has something to do, across every daemon.
+    /// When [`Manager::run_due`] next has something to do, or a held credential comes within
+    /// [`EXPIRY_WARNING_SECS`] of its expiry so its status is reported again, across every daemon.
     pub fn next_wake(&self, now: UnixTime) -> Option<UnixTime> {
+        let warnings = self.daemons.values().flat_map(|e| {
+            e.schedule
+                .statuses(now)
+                .into_values()
+                .filter_map(|status| match status {
+                    CredentialStatus::Held { expires_at, .. } => {
+                        Some(expires_at.saturating_sub(EXPIRY_WARNING_SECS))
+                    }
+                    _ => None,
+                })
+                .filter(move |warn_at| *warn_at > now)
+        });
         self.daemons
             .values()
             .filter_map(|e| e.schedule.next_wake(now))
+            .chain(warnings)
             .min()
     }
 
@@ -347,8 +371,11 @@ impl GitCredentials {
     /// Start the worker over the device's pasted tokens, reporting statuses to the window.
     pub fn start() -> Self {
         let log: Log = Arc::new(crate::log_line);
-        let publish: Publish = Arc::new(|daemon, statuses| {
-            let _ = status_channel().0.unbounded_send((daemon, statuses));
+        let publish: Publish = Arc::new(|daemon, statuses, now| {
+            status_channel()
+                .0
+                .unbounded_send((daemon, statuses, now))
+                .is_ok()
         });
         Self::start_with(Arc::new(PatSource::on_device()), log, publish)
     }
@@ -417,15 +444,18 @@ fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager, publish: Publish) {
         let now = micold_core::unix_time::unix_secs();
         manager.run_due(now);
         for (daemon, statuses) in manager.changed_statuses(now) {
-            publish(daemon, statuses);
+            if !publish(daemon, statuses, now) {
+                manager.unreported(daemon);
+            }
         }
     }
 }
 
-type StatusSender = UnboundedSender<(DaemonId, Statuses)>;
+/// One report: the daemon, its statuses, and the time they hold at.
+pub type StatusReport = (DaemonId, Statuses, UnixTime);
 type StatusChannel = (
-    StatusSender,
-    Mutex<Option<UnboundedReceiver<(DaemonId, Statuses)>>>,
+    UnboundedSender<StatusReport>,
+    Mutex<Option<UnboundedReceiver<StatusReport>>>,
 );
 
 /// The process's one channel of credential statuses: the worker sends, [`statuses`] receives.
@@ -439,12 +469,12 @@ fn status_channel() -> &'static StatusChannel {
 
 /// The credential statuses the worker reports, as the window receives them (FR-013). Nothing
 /// arrives, and nothing wakes the window, until a status changes.
-pub fn statuses() -> iced::Subscription<(DaemonId, Statuses)> {
+pub fn statuses() -> iced::Subscription<StatusReport> {
     iced::Subscription::run(received_statuses)
 }
 
 /// The receiving end, handed out once: the subscription lives as long as the window.
-fn received_statuses() -> BoxStream<'static, (DaemonId, Statuses)> {
+fn received_statuses() -> BoxStream<'static, StatusReport> {
     let taken = status_channel()
         .1
         .lock()
