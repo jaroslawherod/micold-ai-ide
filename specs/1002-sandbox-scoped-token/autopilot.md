@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: milestones
-- **Next step**: milestone unit M5 (pasted-PAT source), from the reworked spec, plan and tasks (D7, D19). The abandoned GitHub App M5 is in the bundle /mnt/project-files/backups/1002-m5-github-app.bundle and the stash `m5-app-wip`; tasks T044–T047 name what to reuse.
+- **Next step**: open and merge the M6 PR, then the close unit (T055 visual pass and T056 live quickstart Part C with a real PAT; `speckit-tdd-verify`).
 
 ## Pull requests
 
@@ -20,17 +20,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1096 | M1 | merged | 07ad3c1f936358fd25ecf021e7009459c9ca2458 |
 | #1099 | M2 | merged | abb25cf8907de6acef23805b2334f679f0060af7 |
 | #1107 | M3 | merged | 5c0ba07dfc32194eec443241efee61836931b4cb |
+| #1113 | M5 | merged | 38a9ce97b751560df8c8feaddf1271cbceba0cc2 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | — (to open) | gate green at 17370db2, pushed |
+| M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | #1096 | merged (07ad3c1f) |
 | M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | #1099 | merged |
 | M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | #1107 | merged (5c0ba07d) |
-| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — (to open) | implemented; reviews A and B done, gate green, pushed |
-| M5 | T039–T049 | full | [source] Pasted-PAT source + client wiring (FR-005, FR-008–010); the GitHub App M5 is abandoned (bundle backups/1002-m5-github-app.bundle) | — | implemented; reviews A and B done, full gate green, pushed |
-| M6 | T050–T055 | full | Status rows (FR-013, SC-005); FR-011's guidance text is in M5, T051/T053 withdrawn | — | planned |
+| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — | merged (on main by 03e1fb38) |
+| M5 | T039–T049 | full | [source] Pasted-PAT source + client wiring (FR-005, FR-008–010); the GitHub App M5 is abandoned (bundle backups/1002-m5-github-app.bundle) | #1113 | merged (38a9ce97) |
+| M6 | T050–T055 | full | Status rows (FR-013, SC-005); FR-011's guidance text is in M5, T051/T053 withdrawn | — | implemented (T050, T052, T054); T055 is the close unit's |
 
 ## Decisions
 
@@ -55,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D15 | M1 | Kubernetes secrets `<base>-git-credentials` / `<base>-git-ssh` already in a cluster from before the change: removing the variants drops them from `every_kind()`, so start (start.rs:409) and remove (lifecycle.rs:101) would never delete them and the user's key would stay in the cluster | Keep their names as `ResourceNames::retired_secrets()`; start deletes them (ours-labelled only) beside the withdrawn kinds, and `remove` deletes them too (`delete_ours` tolerates absence). Test it in `start_tests.rs` with the fake cluster | agent-resolved | kube/start.rs:409-424, kube/lifecycle.rs:94-114 |
 | D17 | M1 | Review A F1: a pre-#1002 container's SSH-agent mount is recognised only when today's `SSH_AUTH_SOCK` equals its creation path | Least privilege: new containers carry the label `io.micold.git-identity=none`; `adopt` replaces any existing container without it (running, legacy released image or not), ahead of every other branch. The retired-path check stays as a second line. Cost: every container made before #1002 is replaced once on its next start, ending sessions in it; the `RemovedGitCredentials` notice says so (F3) | agent-resolved | reviewA.out F1/F3; sandbox/lifecycle.rs `adopt` |
 | D18 | M1 | Red CI: `sandbox_real_provision_a_running_legacy_container_is_attached_then_replaced` got `Replace{MadeBeforeCredentialRemoval}` where FR-017 expects `Legacy` | Not a D17/FR-017 conflict: the real-runtime harness (`start_sandbox_on`) builds its `create` argv by hand, not via `argv::create`, and omitted the `io.micold.git-identity=none` label, so its container really was unlabelled. Harness now passes the label (mirroring argv); D17 stands (an unlabelled container is replaced, least privilege), FR-017 still holds for labelled released-image containers. Other real-runtime tests do not call `adopt`/read facts, so none shares the assumption | agent-resolved | sandbox_real_support/mod.rs; CI log |
+| D20 | M6 | Where T052's "project's daemon status line" goes | In the daemon's row in Settings → Daemons, one line per project naming it (the row is the daemon's status: state, worktrees, notices). The sidebar chip is one short label keyed by host paths, while the credential wiring knows the daemon's path, so no second copy there. The worker reports changed statuses over an event-driven subscription; the 24 h warning is worked out at view time | agent-resolved | features/daemon_sections.rs `credential_lines`; shell/scoped_credential.rs `changed_statuses` |
 
 ## Review rounds
 

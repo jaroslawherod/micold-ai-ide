@@ -25,6 +25,7 @@ use micold_core::required::{FieldRequirement, RequiredMarks, Requirement};
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
+use micold_core::scoped_credential::CredentialStatus;
 use micold_core::session::AiCli;
 use micold_core::session::SessionId;
 use micold_core::ssh::config_hosts::{literal_identity, EffectiveSsh};
@@ -364,6 +365,9 @@ pub struct State {
     drift_queue: VecDeque<(DaemonId, Vec<String>)>,
     diagnostics: BTreeMap<DaemonId, DaemonDiagnostics>,
     versions: BTreeMap<DaemonId, String>,
+    /// Each sandboxed daemon's git credential per project, by the daemon's path (#1002, FR-013).
+    /// Rebuilt from what the credential wiring reports; never saved.
+    credentials: BTreeMap<DaemonId, BTreeMap<PathBuf, CredentialStatus>>,
     runtime_missing: BTreeMap<DaemonId, String>,
     /// The start step an SSH daemon is in and, while it copies its build, the percent (features
     /// 489 and 806). Per daemon: one daemon's start never touches another's (FR-022).
@@ -612,6 +616,16 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 .cloned()
                 .unwrap_or_default(),
             stopped_reason: model.links.stopped_reason(entry.id).map(str::to_string),
+            credential_lines: state
+                .credentials
+                .get(&entry.id)
+                .map(|statuses| {
+                    super::daemon_sections::credential_lines(
+                        statuses,
+                        micold_core::unix_time::unix_secs(),
+                    )
+                })
+                .unwrap_or_default(),
             activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
                 (DaemonRuntime::Ssh(_) | DaemonRuntime::Container(_), Some(progress))
                     if model.links.state(entry.id) == Some(&DaemonState::Starting) =>
@@ -1720,6 +1734,9 @@ pub enum Msg {
     KubeMemoryLimitEdited(String),
     /// The user dismissed a daemon's one-time notice.
     DismissNotice(DaemonId),
+    /// The git credential of each project of a sandboxed daemon, as the credential wiring now
+    /// holds it (#1002, FR-013); empty once the daemon is disconnected or stopped.
+    CredentialStatuses(DaemonId, BTreeMap<PathBuf, CredentialStatus>),
     /// An allowed credential was ticked or unticked.
     AllowedToggled(AllowedKind, bool),
     /// The allowed registry auth file field changed.
@@ -2050,6 +2067,13 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::DismissNotice(id) => {
             if model.registry.dismiss_notice(id) {
                 return vec![Outcome::DaemonRegistryChanged(model.registry.clone())];
+            }
+        }
+        Msg::CredentialStatuses(id, statuses) => {
+            if statuses.is_empty() {
+                state.credentials.remove(&id);
+            } else {
+                state.credentials.insert(id, statuses);
             }
         }
         Msg::Reconnected(id) => {

@@ -261,6 +261,25 @@ expires or you delete it on GitHub. A session that tries to push without one fai
 credentials, and the application says so rather than leaving you with an unexplained
 authentication error.
 
+### The git credential lines
+
+While a sandbox is connected, its row in **Settings → Daemons** has one line per project it serves
+that says where the project's git credential stands:
+
+| Line | What to do |
+|---|---|
+| *project: Git credential for owner/repo, expires on 2026-11-20* | Nothing: the sandbox pushes and pulls with it. |
+| *project: Git credential for owner/repo expires on 2026-11-20: paste a new token in Settings* (within 24 hours of the expiry) | Paste a new token for the repository in Settings → GitHub access tokens; the sandbox gets it without a restart. |
+| *project: No git credential: No GitHub token is stored for this repository. …* | Paste a fine-grained token for the repository. |
+| *project: No git credential: The GitHub token for this repository expired. …* | The token was taken out of the sandbox at its expiry: paste a new one. |
+| *project: No git credential: GitHub refused the token: …* | Paste a corrected token: the reason says what GitHub refused (not fine-grained, no expiry, cannot push to the repository, reaches another private repository). |
+| *project: No git credential: GitHub could not be reached: … Retrying.* | Nothing: the application tries again. A token the sandbox already holds stays until its expiry. |
+| *project: No git credential: The project has no GitHub remote (origin).* or *… is not supported for scoped credentials.* | Set `origin` to the project's GitHub repository; other hosts get no credential. |
+| *project: No git credential: Git … in the container is older than 2.31 …* | Use an image with a newer git. |
+
+A line goes from *No git credential* to *Git credential for …* as soon as a token is delivered, and
+the lines go away when the sandbox stops or disconnects.
+
 ### Where sandboxed conversations live
 
 Conversations started in the sandbox are stored in the sandbox's own home, under the application's

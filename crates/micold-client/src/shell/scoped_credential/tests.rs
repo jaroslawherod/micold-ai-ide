@@ -477,3 +477,39 @@ fn a_transport_failure_is_short_and_carries_no_token() {
         "{error}"
     );
 }
+
+#[test]
+fn statuses_are_reported_once_per_change_and_cleared_when_the_daemon_stops() {
+    let mut rig = Rig::new();
+    let (send, _log) = sink();
+    rig.manager
+        .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
+    rig.run();
+    let now = rig.now();
+    let not_set_up = BTreeMap::from([(
+        PathBuf::from("/pa"),
+        CredentialStatus::None(NoCredentialReason::SourceNotSetUp),
+    )]);
+    assert_eq!(
+        rig.manager.changed_statuses(now),
+        vec![(DaemonId(1), not_set_up)]
+    );
+    assert!(
+        rig.manager.changed_statuses(now).is_empty(),
+        "nothing changed"
+    );
+    rig.store_pat("a", PAT_A);
+    rig.manager.refresh(&repo("a"), now);
+    rig.run();
+    let changed = rig.manager.changed_statuses(now);
+    assert!(matches!(
+        changed.as_slice(),
+        [(DaemonId(1), s)] if matches!(s.get(Path::new("/pa")), Some(CredentialStatus::Held { .. }))
+    ));
+    rig.manager.stopped(DaemonId(1));
+    assert_eq!(
+        rig.manager.changed_statuses(now),
+        vec![(DaemonId(1), BTreeMap::new())]
+    );
+    assert!(rig.manager.changed_statuses(now).is_empty());
+}

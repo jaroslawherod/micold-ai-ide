@@ -13,9 +13,12 @@
 //! reordered.
 
 use std::collections::BTreeMap;
-use std::path::Path;
-use std::sync::{mpsc, Arc};
+use std::path::PathBuf;
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::time::Duration;
+
+use iced::futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use iced::futures::stream::{self, BoxStream, StreamExt};
 
 use micold_core::daemons::DaemonId;
 use micold_core::github::GithubRepo;
@@ -177,11 +180,19 @@ struct Entry {
     send: Sink,
 }
 
+/// Each project's credential status, by the daemon's path for it.
+pub type Statuses = BTreeMap<PathBuf, CredentialStatus>;
+
+/// Where a daemon's changed statuses go: the window (FR-013).
+pub type Publish = Arc<dyn Fn(DaemonId, Statuses) + Send + Sync>;
+
 /// Every connected sandboxed daemon's [`Schedule`], and the source they issue through.
 pub struct Manager {
     source: Arc<dyn CredentialSource>,
     log: Log,
     daemons: BTreeMap<DaemonId, Entry>,
+    /// What [`Manager::changed_statuses`] last reported, per daemon.
+    reported: BTreeMap<DaemonId, Statuses>,
 }
 
 impl Manager {
@@ -191,7 +202,33 @@ impl Manager {
             source,
             log,
             daemons: BTreeMap::new(),
+            reported: BTreeMap::new(),
         }
+    }
+
+    /// The daemons whose statuses at `now` differ from what this last reported, with their new
+    /// statuses; a daemon whose schedule was dropped (disconnected, stopped) reports an empty map
+    /// once, so the window clears its lines (FR-013).
+    pub fn changed_statuses(&mut self, now: UnixTime) -> Vec<(DaemonId, Statuses)> {
+        let current: BTreeMap<DaemonId, Statuses> = self
+            .daemons
+            .iter()
+            .map(|(id, e)| (*id, e.schedule.statuses(now)))
+            .collect();
+        let mut changed: Vec<(DaemonId, Statuses)> = self
+            .reported
+            .keys()
+            .filter(|id| !current.contains_key(id))
+            .map(|id| (*id, Statuses::new()))
+            .collect();
+        changed.extend(
+            current
+                .iter()
+                .filter(|(id, statuses)| self.reported.get(id) != Some(statuses))
+                .map(|(id, statuses)| (*id, statuses.clone())),
+        );
+        self.reported = current;
+        changed
     }
 
     /// `daemon` reported `targets` (the whole list), after an `Attach` or a change. Creates its
@@ -284,11 +321,11 @@ impl Manager {
     }
 
     /// The status of `project` on `daemon`, when the daemon has reported.
-    #[allow(dead_code)] // Used by the status UI (M6).
+    #[cfg(test)]
     pub fn status(
         &self,
         daemon: DaemonId,
-        project: &Path,
+        project: &std::path::Path,
         now: UnixTime,
     ) -> Option<CredentialStatus> {
         self.daemons
@@ -307,18 +344,21 @@ pub struct GitCredentials {
 }
 
 impl GitCredentials {
-    /// Start the worker over the device's pasted tokens.
+    /// Start the worker over the device's pasted tokens, reporting statuses to the window.
     pub fn start() -> Self {
         let log: Log = Arc::new(crate::log_line);
-        Self::start_with(Arc::new(PatSource::on_device()), log)
+        let publish: Publish = Arc::new(|daemon, statuses| {
+            let _ = status_channel().0.unbounded_send((daemon, statuses));
+        });
+        Self::start_with(Arc::new(PatSource::on_device()), log, publish)
     }
 
     /// Start the worker over `source`.
-    pub fn start_with(source: Arc<dyn CredentialSource>, log: Log) -> Self {
+    pub fn start_with(source: Arc<dyn CredentialSource>, log: Log, publish: Publish) -> Self {
         let (tx, rx) = mpsc::channel::<Command>();
         std::thread::Builder::new()
             .name("scoped-credentials".into())
-            .spawn(move || worker(rx, Manager::new(source, log)))
+            .spawn(move || worker(rx, Manager::new(source, log), publish))
             .ok();
         Self { tx }
     }
@@ -362,7 +402,7 @@ impl GitCredentials {
     }
 }
 
-fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager) {
+fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager, publish: Publish) {
     loop {
         let now = micold_core::unix_time::unix_secs();
         let received = match manager.next_wake(now) {
@@ -374,7 +414,45 @@ fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager) {
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
         }
-        manager.run_due(micold_core::unix_time::unix_secs());
+        let now = micold_core::unix_time::unix_secs();
+        manager.run_due(now);
+        for (daemon, statuses) in manager.changed_statuses(now) {
+            publish(daemon, statuses);
+        }
+    }
+}
+
+type StatusSender = UnboundedSender<(DaemonId, Statuses)>;
+type StatusChannel = (
+    StatusSender,
+    Mutex<Option<UnboundedReceiver<(DaemonId, Statuses)>>>,
+);
+
+/// The process's one channel of credential statuses: the worker sends, [`statuses`] receives.
+fn status_channel() -> &'static StatusChannel {
+    static CHANNEL: OnceLock<StatusChannel> = OnceLock::new();
+    CHANNEL.get_or_init(|| {
+        let (sent, received) = unbounded();
+        (sent, Mutex::new(Some(received)))
+    })
+}
+
+/// The credential statuses the worker reports, as the window receives them (FR-013). Nothing
+/// arrives, and nothing wakes the window, until a status changes.
+pub fn statuses() -> iced::Subscription<(DaemonId, Statuses)> {
+    iced::Subscription::run(received_statuses)
+}
+
+/// The receiving end, handed out once: the subscription lives as long as the window.
+fn received_statuses() -> BoxStream<'static, (DaemonId, Statuses)> {
+    let taken = status_channel()
+        .1
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    match taken {
+        Some(received) => received.boxed(),
+        None => stream::pending().boxed(),
     }
 }
 

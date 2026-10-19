@@ -97,6 +97,14 @@ pub fn subscription(app: &App) -> Subscription<Message> {
             event,
         ))
     }));
+    // #1002 (FR-013): a sandboxed daemon's git credential changed. Event-driven, like the clicks.
+    subs.push(
+        crate::shell::scoped_credential::statuses().map(|(daemon, statuses)| {
+            Message::Daemons(micold_client::features::daemons::Msg::CredentialStatuses(
+                daemon, statuses,
+            ))
+        }),
+    );
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
     subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
     // The snackbar's clock, subscribed **only while something is on screen** (FR-032a, SC-017).

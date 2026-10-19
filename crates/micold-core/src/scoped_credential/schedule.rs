@@ -272,6 +272,14 @@ impl Schedule {
         }
     }
 
+    /// The status of every project the daemon reported at `now`, by the daemon's path (FR-013).
+    pub fn statuses(&self, now: UnixTime) -> BTreeMap<PathBuf, CredentialStatus> {
+        self.targets
+            .keys()
+            .map(|project| (project.clone(), self.status(project, now)))
+            .collect()
+    }
+
     /// The daemon stopped or was deleted: revoke every held credential at `source` (best effort,
     /// FR-010) and drop everything. Returns the repositories, for the daemon's files.
     pub fn revoke_all(&mut self, source: &dyn CredentialSource) -> Vec<GithubRepo> {

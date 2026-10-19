@@ -420,7 +420,7 @@ toggle under D7: its guidance text is in M5 (T042, T047) (ledger D19).
 
 ### Tests (write first, must fail)
 
-- [ ] T050 [P] [US3] Client reducer tests in `crates/micold-client/src/features/daemon_sections.rs`:
+- [x] T050 [P] [US3] Client reducer tests in `crates/micold-client/src/features/daemon_sections.rs`:
   a status row per `(DaemonId, project)`: *Git credential for owner/repo, expires on <date>* while held,
   with *— paste a new token in Settings* once `expires_within(now, 24 h)`; *No git credential:
   <NoCredentialReason::message()>* otherwise; it clears when a credential is delivered (FR-013).
@@ -429,10 +429,10 @@ toggle under D7: its guidance text is in M5 (T042, T047) (ledger D19).
 
 ### Implementation
 
-- [ ] T052 [US3] Status rows in `crates/micold-client/src/features/daemon_sections.rs` and the
+- [x] T052 [US3] Status rows in `crates/micold-client/src/features/daemon_sections.rs` and the
   project's daemon status line, fed by the `CredentialStatus` the wiring holds (T050).
 - [-] T053 Withdrawn (D19), with T051.
-- [ ] T054 [P] [US3] User guide `docs/user-guide/sandboxed-daemon.md` and
+- [x] T054 [P] [US3] User guide `docs/user-guide/sandboxed-daemon.md` and
   `docs/user-guide/kubernetes-daemons.md`: the statuses and their remedies, including the expiry
   warning and *expired*.
 - [ ] T055 [US3] Close unit, with T056: run the `visual-pass` skill on the status rows against the real client, a real daemon and the PAT of quickstart Part C steps 4, 8, 10 (the status rows are reachable only with a connected daemon; the showcase has no daemon) and
