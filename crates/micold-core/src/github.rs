@@ -9,13 +9,16 @@ use std::fmt;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 use crate::git::GitRemote;
 
 /// A repository on github.com, as `owner/name` (data-model §1).
 ///
 /// Constructed only by [`GithubRepo::from_remote_url`], so an Enterprise or non-GitHub repository
-/// is unrepresentable and a token in a remote URL can never reach the display (FR-022).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// is unrepresentable and a token in a remote URL can never reach the display (FR-022). It also
+/// crosses the wire (#1002), where a receiver trusts nothing it did not derive itself.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct GithubRepo {
     owner: String,
     name: String,

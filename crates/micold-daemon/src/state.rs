@@ -97,6 +97,9 @@ pub struct DaemonState {
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
+    /// The credential targets last sent to the clients (#1002), so a refresh that changed nothing
+    /// sends nothing. Its own mutex: it is touched around git calls, never under `inner`.
+    git_targets: Mutex<Option<Vec<micold_core::protocol::messages::CredentialTarget>>>,
     /// The loopback hook receiver (US2, T045/T046), set once at startup by `server::run`. Absent for
     /// tests and when binding fails — activity then degrades to `Unknown` (H1), never to a wrong
     /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
@@ -772,6 +775,7 @@ impl DaemonState {
             // must not outlive the machine (G1).
             presence: Mutex::new(Presence::new(micold_core::clock::now())),
             diagnostics: std::sync::OnceLock::new(),
+            git_targets: Mutex::new(None),
             hooks: std::sync::OnceLock::new(),
             tool_server: std::sync::OnceLock::new(),
             first_prompt_bound: Mutex::new(FIRST_PROMPT_BOUND),
@@ -3039,6 +3043,28 @@ impl DaemonState {
     }
 
     // --- US3: worktree management through the daemon (T053) ---
+
+    /// Every known project's path (#1002: the daemon reports where each pushes).
+    pub fn project_paths(&self) -> Vec<PathBuf> {
+        self.catalog_snapshot()
+            .projects
+            .into_iter()
+            .map(|p| p.path)
+            .collect()
+    }
+
+    /// Remember `targets` as the last list sent; `true` when it differs from the one before.
+    pub fn git_targets_changed(
+        &self,
+        targets: &[micold_core::protocol::messages::CredentialTarget],
+    ) -> bool {
+        let mut last = self.git_targets.lock().unwrap_or_else(|e| e.into_inner());
+        let changed = last.as_deref() != Some(targets);
+        if changed {
+            *last = Some(targets.to_vec());
+        }
+        changed
+    }
 
     /// A known project's repo path + whether it is a git repository. `None` if unknown.
     pub fn project_repo(&self, project: &Path) -> Option<(PathBuf, bool)> {

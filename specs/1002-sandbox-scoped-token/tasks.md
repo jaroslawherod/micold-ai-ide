@@ -244,7 +244,7 @@ grant → file written `0600`; revoke → file gone; a grant outside the daemon'
 
 ### Tests (write first, must fail)
 
-- [ ] T030 [P] [US2] Unit tests in `crates/micold-core/src/scoped_credential/mod.rs`: `Grant`'s
+- [x] T030 [P] [US2] Unit tests in `crates/micold-core/src/scoped_credential/mod.rs`: `Grant`'s
   permissions body is always `contents: write`, `metadata: read`, plus `pull_requests: write` /
   `issues: write` only when set (both `false` by default); `SecretToken` `Debug` is redacted;
   `ScopedCredential::accept(asked, response, now)` refuses repositories other than exactly
@@ -254,7 +254,7 @@ grant → file written `0600`; revoke → file gone; a grant outside the daemon'
   `SourceNotSetUp`'s text comes from one `const SOURCE_SETUP_HINT` whose M4 wording is source-neutral
   ("No credential source is set up. Set one up in Settings to push from sandboxes."); `CredentialTarget` →
   `GithubRepo` via `GithubRepo::from_remote_url`: `None` → `NoRemote`, non-GitHub → `NotGithub { host }`.
-- [ ] T031 [P] [US3] Unit tests in `crates/micold-core/src/scoped_credential/schedule.rs` for every
+- [x] T031 [P] [US3] Unit tests in `crates/micold-core/src/scoped_credential/schedule.rs` for every
   row of data-model §8: new repos due now; vanished repos revoked and dropped; a project's repo
   change revokes the old one unless another project uses it; issue ok → due at
   `expires_at − 10 min` (FR-008); failure never held → retries at 1, 2, 4, 8, 10, 10 min; failure
@@ -263,11 +263,11 @@ grant → file written `0600`; revoke → file gone; a grant outside the daemon'
   two consecutive renewals each re-issue before expiry, leaving a valid credential throughout
   (SC-004); a target set with `git_too_old` issues nothing; `due(now)` and
   `next_wake(now)` are pure.
-- [ ] T032 [P] [US2] Protocol tests beside the existing message round-trip tests (grep
+- [x] T032 [P] [US2] Protocol tests beside the existing message round-trip tests (grep
   `round_trip` under `crates/micold-core/tests/` and `crates/micold-core/src/protocol/`):
   `DaemonMsg::GitCredentialTargets`, `ClientMsg::GitCredentialGrant`, `ClientMsg::GitCredentialRevoke`
   round-trip; the wire debug log prints a grant with the token redacted; `PROTOCOL_VERSION` is 55.
-- [ ] T033 [US2] Daemon test `crates/micold-daemon/tests/git_credential_grant.rs`
+- [x] T033 [US2] Daemon test `crates/micold-daemon/tests/git_credential_grant.rs`
   (contracts/protocol.md): a sandboxed daemon on a test root sends `GitCredentialTargets` with each
   project's `git remote get-url --push origin` (`None` without `origin`) after `Attach`, and again
   after a project is added or removed or `origin` changes on worktree refresh; `GitCredentialGrant`
@@ -280,23 +280,23 @@ grant → file written `0600`; revoke → file gone; a grant outside the daemon'
 
 ### Implementation
 
-- [ ] T034 [US2] `crates/micold-core/src/scoped_credential/mod.rs`: `Grant`, `SecretToken`,
+- [x] T034 [US2] `crates/micold-core/src/scoped_credential/mod.rs`: `Grant`, `SecretToken`,
   `ScopedCredential::accept`, `CredentialSource` trait (`issue`, `revoke`), `NoCredentialReason`
   (without `AppNotInstalled`) with `message()` (`SourceNotSetUp` through `SOURCE_SETUP_HINT`), `CredentialStatus`, `CredentialTarget`; and
   `scoped_credential/fake.rs` with `FakeSource`, compiled for tests the way `kube/fake.rs` is (T030).
-- [ ] T035 [US3] `crates/micold-core/src/scoped_credential/schedule.rs`: the `Schedule` state
+- [x] T035 [US3] `crates/micold-core/src/scoped_credential/schedule.rs`: the `Schedule` state
   machine; a target set reported with `git_too_old` maps every target to
   `NoCredentialReason::GitTooOld` and issues nothing (T031).
-- [ ] T036 [US2] `crates/micold-core/src/protocol/messages.rs` and `protocol/version.rs`: the three
+- [x] T036 [US2] `crates/micold-core/src/protocol/messages.rs` and `protocol/version.rs`: the three
   messages, `PROTOCOL_VERSION` 54 → 55, regenerated `SCHEMA_HASH`, token redaction in the wire
   debug log (T032).
-- [ ] T037 [US2] Daemon: targets in `crates/micold-daemon/src/ops.rs` / `state.rs` (after attach,
+- [x] T037 [US2] Daemon: targets in `crates/micold-daemon/src/ops.rs` / `state.rs` (after attach,
   on project add/remove and worktree refresh), grant/revoke handling in
   `crates/micold-daemon/src/server.rs` writing through `git_credential.rs`; only when sandboxed.
   When the container's `git --version` is older than 2.31, send the targets with
   `git_too_old: Some(<version>)`, refuse every grant and log a warning naming the version; the
   client maps every target to `NoCredentialReason::GitTooOld { version }` (plan Risks) (T033).
-- [ ] T038 [P] [US2] `docs/daemon.md`: the three messages, who sends them, and the invariants of
+- [x] T038 [P] [US2] `docs/daemon.md`: the three messages, who sends them, and the invariants of
   contracts/protocol.md.
 
 **Checkpoint**: any `CredentialSource` can now feed sandboxes; none is wired in the client yet.

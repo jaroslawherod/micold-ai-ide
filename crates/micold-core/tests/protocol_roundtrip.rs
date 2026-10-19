@@ -61,6 +61,14 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             url: "git@github.com:acme/app.git".into(),
             dest: "/data/repos/app-1a2b3c4d".into(),
         },
+        ClientMsg::GitCredentialGrant {
+            repo: scoped_repo(),
+            token: micold_core::scoped_credential::SecretToken::new("ghs_wire_secret"),
+            expires_at: 1_900_000_000,
+        },
+        ClientMsg::GitCredentialRevoke {
+            repo: scoped_repo(),
+        },
         ClientMsg::Hello {
             protocol_version: 1,
             schema_hash: [7u8; 32],
@@ -836,7 +844,46 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             dest: "/data/repos/app-1a2b3c4d".into(),
             failure: micold_core::protocol::messages::CloneFailureWire::DiskFull,
         },
+        DaemonMsg::GitCredentialTargets {
+            targets: vec![
+                micold_core::protocol::messages::CredentialTarget {
+                    project: "/work/app".into(),
+                    push_url: Some("git@github.com:acme/app.git".into()),
+                },
+                micold_core::protocol::messages::CredentialTarget {
+                    project: "/work/scratch".into(),
+                    push_url: None,
+                },
+            ],
+            git_too_old: Some("2.30.0".into()),
+        },
     ]
+}
+
+fn scoped_repo() -> micold_core::github::GithubRepo {
+    micold_core::github::GithubRepo::from_remote_url("https://github.com/acme/app").unwrap()
+}
+
+/// #1002: the token survives both wires, and nothing that prints the message shows it.
+#[test]
+fn a_credential_grant_round_trips_and_prints_without_its_token() {
+    let grant = ClientMsg::GitCredentialGrant {
+        repo: scoped_repo(),
+        token: micold_core::scoped_credential::SecretToken::new("ghs_wire_secret"),
+        expires_at: 1_900_000_000,
+    };
+    json_roundtrip(&grant);
+    postcard_roundtrip(&grant);
+    let shown = format!("{grant:?}");
+    assert!(
+        shown.contains("redacted") && !shown.contains("ghs_wire_secret"),
+        "{shown}"
+    );
+}
+
+#[test]
+fn the_protocol_version_is_55() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 55);
 }
 
 /// Two merged branches and the last commit of each one's pull request (feature 040).
