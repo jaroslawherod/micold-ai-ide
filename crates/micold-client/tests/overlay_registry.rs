@@ -854,3 +854,86 @@ fn escape_and_a_scroll_beneath_reach_the_overview_card_menu() {
     state.update(Message::EscapePressed);
     assert_eq!(state.overview.card_menu, None, "Escape closed it");
 }
+
+/// Feature 1092 M1: the daemon form is a dialog, open exactly while its draft exists.
+mod daemon_form {
+    use super::*;
+    use micold_client::features::daemons::Msg as DaemonsMsg;
+    use micold_core::daemons::{DaemonEvent, DaemonRegistry, DaemonRuntime};
+
+    fn with_daemon() -> (State, micold_core::daemons::DaemonId) {
+        let mut state = State::default();
+        let mut registry = DaemonRegistry::new(Vec::new(), 1);
+        let host = registry.add("Host", DaemonRuntime::Host, false).unwrap();
+        state.settings.links = micold_client::links::DaemonLinks::at_launch(&registry);
+        state.settings.daemons = registry;
+        (state, host)
+    }
+
+    fn id_of(state: &State) -> Option<&'static str> {
+        registry::open_dialog(state).map(|open| open.id().as_str())
+    }
+
+    #[test]
+    fn it_is_open_exactly_while_the_draft_exists_on_the_dialog_layer() {
+        let (mut state, host) = with_daemon();
+        assert_eq!(id_of(&state), None);
+        state.update(Message::Daemons(DaemonsMsg::AddOpened));
+        assert_eq!(id_of(&state), Some("daemon_form"));
+        assert_eq!(registry::open_dialog(&state).unwrap().layer(), Layer::Dialog);
+        assert!(registry::open_dialog(&state).unwrap().view().is_some());
+        state.update(Message::Daemons(DaemonsMsg::DraftDiscarded));
+        assert_eq!(id_of(&state), None);
+        state.update(Message::Daemons(DaemonsMsg::EditOpened(host)));
+        assert_eq!(id_of(&state), Some("daemon_form"));
+    }
+
+    #[test]
+    fn escape_and_the_scrim_discard_the_draft() {
+        let (mut state, _) = with_daemon();
+        state.update(Message::Daemons(DaemonsMsg::AddOpened));
+        assert_eq!(
+            registry::escape(&state),
+            Some(Message::Daemons(DaemonsMsg::DraftDiscarded))
+        );
+        assert_eq!(
+            on_escape(&state),
+            Some(Message::Daemons(DaemonsMsg::DraftDiscarded))
+        );
+    }
+
+    fn confirming() -> State {
+        let (mut state, host) = with_daemon();
+        state.settings.links.apply(host, DaemonEvent::Start);
+        state.update(Message::Daemons(DaemonsMsg::EditOpened(host)));
+        state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(
+            micold_client::features::daemons::DraftRuntime::Container,
+        )));
+        state.update(Message::Daemons(DaemonsMsg::ContainerNameEdited("c".into())));
+        state.update(Message::Daemons(DaemonsMsg::Saved));
+        state
+    }
+
+    /// FR-008, R4: while the confirmation shows, Escape answers no; the removal dialog stays closed.
+    #[test]
+    fn while_confirming_escape_answers_no_and_no_second_modal_opens() {
+        let state = confirming();
+        assert!(state.daemon_list.form_confirmation().is_some(), "setup");
+        assert_eq!(id_of(&state), Some("daemon_form"));
+        assert_eq!(
+            registry::escape(&state),
+            Some(Message::Daemons(DaemonsMsg::RemovalCancelled))
+        );
+        assert!(!registry::open_dialogs(&state)
+            .iter()
+            .any(|open| open.id().as_str() == "confirm_daemon_removal"));
+    }
+
+    /// The removal question is unchanged: it is still its own dialog.
+    #[test]
+    fn a_removal_confirmation_is_still_its_own_dialog() {
+        let (mut state, host) = with_daemon();
+        state.update(Message::Daemons(DaemonsMsg::RemovalRequested(host)));
+        assert_eq!(id_of(&state), Some("confirm_daemon_removal"));
+    }
+}

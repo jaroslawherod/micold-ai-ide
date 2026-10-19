@@ -2037,3 +2037,208 @@ fn several_held_sections_stay_open_together() {
         "Connection and Resources stay open; the user's section moved"
     );
 }
+
+/// Feature 1092, M1: the add/edit form is a dialog with its own Save and Cancel. The reducer is the
+/// form's, unchanged; these pin what the dialog relies on.
+mod form_dialog {
+    use super::*;
+    use daemons::Msg;
+    use micold_client::app;
+
+    fn stored_name(w: &World, id: micold_core::daemons::DaemonId) -> String {
+        w.registry.get(id).unwrap().name.as_str().to_string()
+    }
+
+    /// US1 #1: Edit opens the form filled from the stored values.
+    #[test]
+    fn edit_opened_fills_the_draft_from_the_stored_values() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        let draft = state.draft.as_ref().expect("Edit opens the form");
+        assert_eq!(draft.editing, Some(boxed));
+        assert_eq!(draft.name, "Box");
+        assert_eq!(draft.container_name, "box-ctr");
+        assert_eq!(draft.port, "7001");
+    }
+
+    /// US1 #2, FR-003, SC-001, SC-003: Save stores the change at once and closes the form.
+    #[test]
+    fn saved_with_valid_data_stores_and_closes() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        send(&mut state, &mut w, Msg::NameEdited("Renamed".into()));
+        let out = send(&mut state, &mut w, Msg::Saved);
+        assert!(state.draft.is_none(), "the dialog closes");
+        assert_eq!(stored_name(&w, boxed), "Renamed");
+        assert!(
+            out.iter()
+                .any(|o| matches!(o, Outcome::DaemonRegistryChanged(r) if r.get(boxed).is_some_and(|e| e.name.as_str() == "Renamed"))),
+            "the shell is told to persist and re-link: {out:?}"
+        );
+        assert!(w.links.state(boxed).is_some(), "FR-003: the connection is kept");
+    }
+
+    /// US1 #3, FR-004: a refusal stores nothing, keeps the dialog open and names the field.
+    #[test]
+    fn saved_with_an_error_keeps_the_draft_and_names_the_field() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        send(&mut state, &mut w, Msg::NameEdited("Host".into()));
+        let out = send(&mut state, &mut w, Msg::Saved);
+        assert!(out.is_empty());
+        assert!(state.draft.is_some(), "the dialog stays open");
+        assert_eq!(state.form_error.as_ref().map(|e| e.field), Some("name"));
+        assert_eq!(stored_name(&w, boxed), "Box");
+    }
+
+    /// US2, FR-005, SC-002: discarding changes nothing; reopening shows the stored values.
+    #[test]
+    fn discarding_leaves_the_stored_values_and_a_reopen_shows_them() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        send(&mut state, &mut w, Msg::NameEdited("Discarded".into()));
+        send(&mut state, &mut w, Msg::DraftDiscarded);
+        assert!(state.draft.is_none());
+        assert_eq!(stored_name(&w, boxed), "Box");
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        assert_eq!(state.draft.as_ref().unwrap().name, "Box");
+    }
+
+    /// FR-007, SC-004: saving a daemon from the dialog does not touch the page's own draft.
+    #[test]
+    fn a_daemon_saved_from_the_dialog_leaves_the_page_draft_alone() {
+        let mut w = World::new();
+        let boxed = w.boxed;
+        let mut app = app::State::default();
+        app.settings.daemons = std::mem::replace(
+            &mut w.registry,
+            micold_core::daemons::DaemonRegistry::new(Vec::new(), 1),
+        );
+        app.settings.links = micold_client::links::DaemonLinks::at_launch(&app.settings.daemons);
+        app.settings.settings_draft = Some(Default::default());
+        let before = app.settings.settings_draft.clone();
+        app.update(app::Message::Daemons(Msg::EditOpened(boxed)));
+        app.update(app::Message::Daemons(Msg::NameEdited("Renamed".into())));
+        app.update(app::Message::Daemons(Msg::Saved));
+        assert!(app.daemon_list.draft.is_none());
+        assert_eq!(
+            app.settings.daemons.get(boxed).unwrap().name.as_str(),
+            "Renamed"
+        );
+        assert_eq!(app.settings.settings_draft, before, "the page's pending edits");
+    }
+
+    /// FR-014, R6: another window's change to the registry does not replace the open draft.
+    #[test]
+    fn a_registry_change_does_not_replace_the_draft() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let (host, boxed) = (w.host, w.boxed);
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        send(&mut state, &mut w, Msg::NameEdited("Typed".into()));
+        // Another window removes a different daemon, and renames this one.
+        w.registry.remove(host);
+        w.registry.edit(boxed, "Elsewhere", super::daemons_fixture::container("box-ctr", 7001), false).unwrap();
+        send(&mut state, &mut w, Msg::PidLimitEdited("300".into()));
+        assert_eq!(state.draft.as_ref().unwrap().name, "Typed");
+    }
+
+    /// FR-014, R6: saving an edit whose daemon left the registry stores nothing and says why.
+    #[test]
+    fn saving_an_edit_of_a_removed_daemon_is_refused() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        w.registry.remove(boxed);
+        let before = w.registry.clone();
+        let out = send(&mut state, &mut w, Msg::Saved);
+        assert!(out.is_empty());
+        assert_eq!(w.registry, before, "nothing was stored");
+        assert!(state.draft.is_some(), "the edits are kept");
+        assert_eq!(
+            state.form_error.as_ref().map(|e| e.message.as_str()),
+            Some("This daemon no longer exists")
+        );
+    }
+
+    fn running_edit(w: &mut World, state: &mut State) {
+        let boxed = w.boxed;
+        daemons::start(state, &mut w.model(), boxed);
+        send(state, w, Msg::EditOpened(boxed));
+        send(state, w, Msg::PidLimitEdited("300".into()));
+    }
+
+    /// US5 #1, R4: the counted confirmation is the form's own, not a second modal.
+    #[test]
+    fn a_running_daemons_edit_asks_inside_the_form() {
+        let mut w = World::new();
+        let mut state = State::default();
+        running_edit(&mut w, &mut state);
+        assert!(send(&mut state, &mut w, Msg::Saved).is_empty());
+        assert!(state.draft.is_some(), "the dialog stays open");
+        assert!(state.form_confirmation().is_some(), "asked inside the dialog");
+        assert!(
+            state.standalone_prompt().is_none(),
+            "never a second modal over the form"
+        );
+        assert!(state.prompt().is_some());
+    }
+
+    /// US5 #2: answering no returns to the form with the edits kept.
+    #[test]
+    fn declining_the_confirmation_returns_to_the_form_with_the_edits() {
+        let mut w = World::new();
+        let mut state = State::default();
+        running_edit(&mut w, &mut state);
+        let boxed = w.boxed;
+        let pids_before = profile_of(&w, boxed).budget.pids;
+        send(&mut state, &mut w, Msg::Saved);
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert!(state.form_confirmation().is_none());
+        assert_eq!(state.draft.as_ref().unwrap().pids, "300", "edits kept");
+        assert_eq!(profile_of(&w, boxed).budget.pids, pids_before);
+    }
+
+    /// US5 #3: answering yes stores and closes.
+    #[test]
+    fn accepting_the_confirmation_stores_and_closes() {
+        let mut w = World::new();
+        let mut state = State::default();
+        running_edit(&mut w, &mut state);
+        let boxed = w.boxed;
+        send(&mut state, &mut w, Msg::Saved);
+        send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert!(state.draft.is_none());
+        assert_eq!(profile_of(&w, boxed).budget.pids, Some(300));
+    }
+
+    /// Edge case: whether to ask is decided when Save is pressed, not when the form opened.
+    #[test]
+    fn the_running_decision_is_taken_at_save_time() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        // Opened while stopped, started before Save: asks.
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        send(&mut state, &mut w, Msg::PidLimitEdited("300".into()));
+        daemons::start(&mut state, &mut w.model(), boxed);
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_confirmation().is_some());
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        // Opened while running, stopped before Save: stores at once.
+        daemons::stop(&mut state, &mut w.model(), boxed);
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_confirmation().is_none());
+        assert!(state.draft.is_none());
+        assert_eq!(profile_of(&w, boxed).budget.pids, Some(300));
+    }
+}
