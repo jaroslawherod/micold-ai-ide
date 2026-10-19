@@ -358,6 +358,7 @@ mod tests {
             },
             credentials: Vec::new(),
             history: None,
+            retired: Vec::new(),
         };
         let plan = plan_insertion(
             &[path],

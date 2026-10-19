@@ -12705,6 +12705,7 @@ mod two_daemons {
             name: DaemonName::new(name).expect("a name"),
             runtime,
             auto_start: true,
+            notice: None,
         }
     }
 

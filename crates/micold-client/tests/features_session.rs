@@ -1003,6 +1003,7 @@ mod drops {
                 },
                 credentials: Vec::new(),
                 history: None,
+                retired: Vec::new(),
             },
             mounted: vec!["/mnt/host/p".to_string()],
         }

@@ -494,6 +494,41 @@ mod tests {
         KubeSettings::new("kind-dev", "dev", &[AiCli::ClaudeCode])
     }
 
+    /// FR-002 (T005): `allowed` saved before #1002 naming the git credential store and an SSH key
+    /// loads, keeps the git config, sign-in and registry pull items, remembers it named a removed
+    /// one, and is written back without them.
+    #[test]
+    fn allowed_naming_the_removed_items_loads_keeps_the_rest_and_drops_them_on_save() {
+        let kept = [
+            KubeCredential::GitConfig,
+            KubeCredential::SignIn {
+                cli: AiCli::ClaudeCode,
+            },
+            KubeCredential::RegistryPull {
+                auths: "/home/u/.docker/config.json".into(),
+            },
+        ];
+        let mut stored = serde_json::to_value(valid()).unwrap();
+        let mut allowed = serde_json::to_value(&kept).unwrap();
+        let list = allowed.as_array_mut().unwrap();
+        list.insert(0, serde_json::json!({ "kind": "git_credentials" }));
+        list.push(serde_json::json!({ "kind": "git_ssh_key", "key": "/home/u/.ssh/id_ed25519" }));
+        stored["allowed"] = allowed;
+
+        let mut s: KubeSettings = serde_json::from_value(stored).unwrap();
+        assert_eq!(s.allowed, kept.iter().cloned().collect());
+        assert!(s.removed_git_credentials);
+        let saved = serde_json::to_string(&s).unwrap();
+        assert!(!saved.contains("git_credentials"), "{saved}");
+        assert!(!saved.contains("git_ssh_key"), "{saved}");
+        assert!(!saved.contains("id_ed25519"), "{saved}");
+        assert!(s.take_removed_git_credentials());
+        assert!(!s.take_removed_git_credentials());
+        let reloaded: KubeSettings = serde_json::from_str(&saved).unwrap();
+        assert!(!reloaded.removed_git_credentials);
+        assert_eq!(reloaded.allowed, s.allowed);
+    }
+
     fn refused_field(s: &KubeSettings) -> Option<&'static str> {
         match s.validate() {
             Err(RegistryError::InvalidField { field }) => Some(field),

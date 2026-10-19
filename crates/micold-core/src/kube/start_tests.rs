@@ -966,8 +966,8 @@ async fn a_withdrawn_secret_of_ours_is_deleted_and_one_not_ours_is_left() {
     .await;
     ready(first);
     assert!(fake.names(NS, ObjectKind::Secret).contains(&n.secret(&cfg)));
-    // A same-named secret of someone else, for a credential that was never allowed here.
-    let foreign = n.secret(&KubeCredential::GitCredentials);
+    // A retired secret's name (#1002) held by someone else: neither start nor its sweep touches it.
+    let foreign = n.retired_secrets()[0].clone();
     fake.insert(NS, ObjectKind::Secret, &foreign, Default::default());
     let (second, _) = run_reading(
         &fake,
@@ -988,7 +988,9 @@ async fn a_withdrawn_secret_of_ours_is_deleted_and_one_not_ours_is_left() {
 
 #[tokio::test(start_paused = true)]
 async fn a_missing_source_file_fails_the_secrets_phase_and_rolls_back() {
-    let s = allowing(&[KubeCredential::GitCredentials]);
+    let s = allowing(&[KubeCredential::SignIn {
+        cli: crate::session::AiCli::Copilot,
+    }]);
     let fake = cluster();
     let (outcome, phases) =
         run_reading(&fake, &s, &client("c1"), DriftChoice::Ask, &home_files).await;
@@ -1287,5 +1289,70 @@ mod connect {
         assert_eq!(failure(outcome), KubeFailure::Cancelled);
         assert_eq!(phases.last(), Some(&StartPhase::Install));
         assert_rolled_back(&fake).await;
+    }
+}
+
+/// FR-014 (T004), US1 scenario 2: on a host with an SSH key, an agent socket, a credential store, a
+/// GitHub CLI token and personal tokens in its environment, settings saved before #1002 that allow
+/// the git credentials and an SSH key beside the kept items start a pod in which no secret, volume,
+/// mount or environment variable carries any of it.
+#[tokio::test(start_paused = true)]
+async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved_settings_say() {
+    use crate::sandbox::hostile_host::HostileHost;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let host = HostileHost::create(tmp.path()).unwrap();
+    let auths = tmp.path().join("auths.json");
+    std::fs::write(&auths, r#"{"auths": {}}"#).unwrap();
+    let mut stored = serde_json::to_value(settings()).unwrap();
+    stored["allowed"] = serde_json::json!([
+        { "kind": "git_credentials" },
+        { "kind": "git_ssh_key", "key": host.home.join(".ssh").join("id_ed25519") },
+        { "kind": "git_config" },
+        { "kind": "sign_in", "cli": "claude_code" },
+        { "kind": "registry_pull", "auths": auths },
+    ]);
+    let settings: KubeSettings = serde_json::from_value(stored).unwrap();
+    assert_eq!(settings.allowed.len(), 3, "{:?}", settings.allowed);
+
+    let fake = cluster();
+    let n = names();
+    fake.progress(&n.pod(), vec![running()]);
+    let keys = FakeKeyGen::default();
+    let client = client("c1");
+    let read = |p: &Path| std::fs::read_to_string(p);
+    let mut request = start_request(
+        &fake,
+        &settings,
+        &n,
+        &keys,
+        &client,
+        DriftChoice::Ask,
+        &read,
+    );
+    request.home = &host.home;
+    ready(start(&request, &mut |_| {}).await);
+
+    // The kept items did reach the cluster, so the search is not over an empty start-up.
+    let secrets = fake.names(NS, ObjectKind::Secret);
+    assert!(secrets.contains(&n.secret(&KubeCredential::GitConfig)), "{secrets:?}");
+    let mut start_up = fake.calls().join("\n");
+    for kind in [
+        ObjectKind::Pod,
+        ObjectKind::Secret,
+        ObjectKind::PersistentVolumeClaim,
+    ] {
+        for name in fake.names(NS, kind) {
+            if let Some(manifest) = fake.manifest(NS, kind, &name) {
+                start_up.push_str(&format!("\n{name}\n{manifest}"));
+            }
+        }
+    }
+    for (name, value) in crate::kube::credentials::daemon_env(&settings.allowed) {
+        start_up.push_str(&format!("\n{name}={value}"));
+    }
+    assert_eq!(host.leaks(&start_up), Vec::<String>::new(), "{start_up}");
+    for retired in n.retired_secrets() {
+        assert!(!secrets.contains(&retired), "{retired} was created");
     }
 }

@@ -153,7 +153,8 @@ pub fn daemon_env(
 #[serde(untagged)]
 pub(crate) enum RawKubeCredential {
     Kept(KubeCredential),
-    Removed(RemovedKubeCredential),
+    // Read only to recognise the removed names; what it held is dropped.
+    Removed(#[allow(dead_code)] RemovedKubeCredential),
 }
 
 /// The items #1002 removed: they carried the user's whole git identity into the cluster.

@@ -58,6 +58,7 @@ fn an_unsupported_runtime_gets_no_actor() {
                 raw: serde_json::json!({"kind": "vm"}),
             },
             auto_start: true,
+            notice: None,
         }],
         2,
     );

@@ -47,7 +47,23 @@ pub enum MigrationNotice {
     /// The stored image was the released daemon image; the daemon moves to the basic image on its
     /// next start.
     MovedOffReleasedImage,
+    /// The saved settings named an item #1002 removed — the SSH agent or the git credential store of
+    /// a container daemon, the git credentials or SSH key of a Kubernetes one (FR-003). Kept on the
+    /// [`DaemonEntry`] until the user dismisses it.
+    RemovedGitCredentials,
 }
+
+/// The credential that replaces the removed items, named once so that a change of credential source
+/// (decision D7) edits one line. A macro, not only a `const`, so [`MigrationNotice::message`] can
+/// stay a `&'static str` built with `concat!`.
+macro_rules! scoped_credential {
+    () => {
+        "a short-lived GitHub App token scoped to the one repository a session works on"
+    };
+}
+
+/// What replaces the removed git credential items (FR-003).
+pub const SCOPED_CREDENTIAL: &str = scoped_credential!();
 
 impl MigrationNotice {
     /// The row text (contracts/daemon-settings.md).
@@ -56,6 +72,12 @@ impl MigrationNotice {
             MigrationNotice::MovedOffReleasedImage => {
                 "Moved off the released daemon image; it moves to the basic image on its next start."
             }
+            MigrationNotice::RemovedGitCredentials => concat!(
+                "The SSH agent, SSH key and git credentials items were removed: they handed the ",
+                "sandbox your whole git identity. They are replaced by ",
+                scoped_credential!(),
+                "; until that is set up, the sandbox cannot push."
+            ),
         }
     }
 }
@@ -109,6 +131,7 @@ pub enum DaemonRuntime {
 
 /// One configured daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "RawDaemonEntry")]
 pub struct DaemonEntry {
     /// Stable identity.
     pub id: DaemonId,
@@ -119,6 +142,50 @@ pub struct DaemonEntry {
     /// Connect this daemon when the app launches.
     #[serde(default)]
     pub auto_start: bool,
+    /// A one-time notice about this daemon's saved settings, kept until the user dismisses it
+    /// ([`DaemonRegistry::dismiss_notice`]). Today only [`MigrationNotice::RemovedGitCredentials`]:
+    /// [`ContainerSettings::migration`] is cleared by a start, which this must survive. Omitted from
+    /// the file when there is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notice: Option<MigrationNotice>,
+}
+
+/// The stored shape of [`DaemonEntry`]: reading the runtime's settings may have dropped a removed
+/// git credential item, which becomes the stored notice (FR-002, FR-003).
+#[derive(Deserialize)]
+struct RawDaemonEntry {
+    id: DaemonId,
+    name: DaemonName,
+    runtime: DaemonRuntime,
+    #[serde(default)]
+    auto_start: bool,
+    #[serde(default)]
+    notice: Option<MigrationNotice>,
+}
+
+impl From<RawDaemonEntry> for DaemonEntry {
+    fn from(mut raw: RawDaemonEntry) -> Self {
+        if take_removed_git_credentials(&mut raw.runtime) {
+            raw.notice = Some(MigrationNotice::RemovedGitCredentials);
+        }
+        Self {
+            id: raw.id,
+            name: raw.name,
+            runtime: raw.runtime,
+            auto_start: raw.auto_start,
+            notice: raw.notice,
+        }
+    }
+}
+
+/// Whether reading `runtime`'s settings dropped an item #1002 removed; clears the flag, so the
+/// notice is raised once per read and, after the next save drops the names, never again.
+fn take_removed_git_credentials(runtime: &mut DaemonRuntime) -> bool {
+    match runtime {
+        DaemonRuntime::Container(c) => c.profile.take_removed_git_credentials(),
+        DaemonRuntime::Kubernetes(k) => k.take_removed_git_credentials(),
+        _ => false,
+    }
 }
 
 /// Why a registry change was refused.
@@ -309,6 +376,7 @@ impl DaemonRegistry {
             name,
             runtime,
             auto_start,
+            notice: None,
         });
         Ok(id)
     }
@@ -426,6 +494,15 @@ impl DaemonRegistry {
     pub fn remove(&mut self, id: DaemonId) -> Option<DaemonEntry> {
         let at = self.entries.iter().position(|e| e.id == id)?;
         Some(self.entries.remove(at))
+    }
+
+    /// Drop a daemon's one-time notice, once the user has seen it (FR-003). Whether it had one.
+    pub fn dismiss_notice(&mut self, id: DaemonId) -> bool {
+        self.entries
+            .iter_mut()
+            .find(|e| e.id == id)
+            .and_then(|e| e.notice.take())
+            .is_some()
     }
 }
 
@@ -842,12 +919,15 @@ pub fn migrated_entry(config: &crate::settings::DaemonConfig) -> DaemonEntry {
             }),
         ),
     };
+    let mut runtime = runtime;
+    let removed = take_removed_git_credentials(&mut runtime);
     DaemonEntry {
         id: DaemonId(1),
         name: DaemonName(name.to_string()),
         runtime,
         // Today's daemon is always brought up at launch.
         auto_start: true,
+        notice: removed.then_some(MigrationNotice::RemovedGitCredentials),
     }
 }
 

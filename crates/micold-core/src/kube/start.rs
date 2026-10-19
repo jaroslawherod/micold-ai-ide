@@ -406,7 +406,8 @@ async fn credential_secrets(
     }
     // The withdrawn kinds, and the secrets of the kinds #1002 retired: a cluster may still hold the
     // user's key or credential store from before it (FR-001).
-    let withdrawn = credentials::every_kind()
+    let kinds = credentials::every_kind();
+    let withdrawn = kinds
         .iter()
         .map(|kind| r.names.secret(kind))
         .filter(|name| {

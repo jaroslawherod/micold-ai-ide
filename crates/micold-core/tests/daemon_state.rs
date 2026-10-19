@@ -172,6 +172,7 @@ fn launch_state_follows_auto_start_and_support() {
         name: DaemonName::new(name).unwrap(),
         runtime,
         auto_start,
+        notice: None,
     };
     let registry = DaemonRegistry::new(
         vec![
