@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1091
 - **Worktree branch**: feat/1091_settings-accordions-should-form-a-group-opening
 - **Started**: 2026-10-19
-- **Phase**: milestone M1 (review)
-- **Next step**: M1 reviews, full gate, PR
+- **Phase**: milestone M1 (PR open)
+- **Next step**: orchestrator merges M1 PR, then M2
 
 ## Pull requests
 
@@ -40,12 +40,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 6c09689ef177f6b42e67ad2577e443830a87b4d1:0b267cf632915083624acd3d8b44e7c4cfe3f66f | CHANGES: 1 MAJOR |
 | Spec | 2 | 0bf2cd470ebf87d48ab4abff4222017bd50d4253:0b267cf632915083624acd3d8b44e7c4cfe3f66f | CLEAN (1 MINOR fixed) |
 | Plan | 1 | ba7c38f22d155fb504ddb33aa8737b70c5a640eb:83ef880756ad3299406803c3e66a8b5984a0018b | CLEAN (3 MINOR fixed, prose only) |
+| M1 A (code-review high) | 1 | 13b113bded067ae9c3d0314bcc2e7ee8337071ee:e9406cd35042eeb4dc63d27f5b8874c4e0fd50b3 | no BLOCKER/MAJOR; stale-press guard and per-section overflow check fixed; rest declined |
+| M1 B (conformance) | 1 | 13b113bded067ae9c3d0314bcc2e7ee8337071ee:e9406cd35042eeb4dc63d27f5b8874c4e0fd50b3 | CLEAN (1 MINOR doc wrap fixed) |
 | Tasks | 1 | f14a22d473606b7e75e25f4b4e9bbd2a586ba061:933b6630274d782e6037b84d4a919f036546d3c9 | CHANGES: 1 MAJOR ([P] on shared file), fixed, prose only; 2 MINOR fixed |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | press on error-held section not recorded | FR-002: the press changes nothing |
+| M1 | A | default key not stored in the group; in_group unused | data-model.md/T004 fix the API; in_group is used by M2 showcase |
+| M1 | A | rapid-sequence test tautological; open_form stitching | kept: pins determinism; stitching is the FR-009 geometry tradeoff |
 | #1135 | Design | open | |
 
 ## Handover
