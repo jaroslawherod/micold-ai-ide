@@ -231,3 +231,19 @@ Append only. Newest last.
   view path asks it only for a structured session; a damaged load is recorded for the schedule only
   when the stream is inserted. New `no_stream_is_made_for_a_removed_session` (test-after: the guard
   came with review A round 1's fix); `ok. 12 passed` in `structured_saved_history`.
+
+## Cycle 13 (U20–U23, M8): the UI — entry, row marker, log pane, settings note
+
+- The M8 tests were written with the code (review B F1), so red is shown afterwards, by mutation:
+  the log reducer's continuation rule forced to `true` made `features_structured_log` FAIL 3 of 10
+  (a history after live events, a snapshot sent again, a replacing history's marker); restored:
+  `ok. 10 passed`. The start-menu entry (`structured_start_menu`, 6 cases), the row-marker geometry
+  gate, `command_caption`, the settings note and the create request's kind each have a test that
+  asserts the new value (`StartMenuEntry.kind`, `claude, structured`, `SessionCreate.kind`).
+- Existing tests that saw the extra "Claude Code (structured)" entry changed expectations on
+  purpose (FR-022): the entry list, the menu items, and the Claude-only chevron (the helper
+  `offers_a_choice` in `main_tests.rs` keeps its old meaning, a second CLI; the new rule has its own
+  test in `features_session`).
+- Review A fixes: a re-sent snapshot replaced by sequence continuity, not by "a live event came
+  between"; the log pane only for the AI tab (shell instances stay terminals); a log forgotten when
+  its session is removed; the settings const placed before the test module.
