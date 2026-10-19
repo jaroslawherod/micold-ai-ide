@@ -211,6 +211,11 @@ pub trait Git {
     /// The git metadata directories of the worktree at `dir`, absolute: its own git dir and the
     /// common dir (feature 482, research R9). Read-only.
     fn git_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>>;
+
+    /// The reflog entries of `refs` (`HEAD`, `refs/heads/<name>`) in the worktree at `dir`, as
+    /// `git log -g --ignore-missing --date=unix --format=%gD%x09%H%x09%gs <refs> --` prints them
+    /// (feature 1003, research R1). A ref without a reflog is skipped. Read-only.
+    fn reflogs(&self, dir: &Path, refs: &[String]) -> io::Result<String>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -793,6 +798,10 @@ impl Git for GitCli {
     fn git_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>> {
         GitCli::git_dirs(self, dir)
     }
+
+    fn reflogs(&self, dir: &Path, refs: &[String]) -> io::Result<String> {
+        GitCli::reflogs(self, dir, refs)
+    }
 }
 
 /// How many of a failed fetch's output lines are retained for its error message. Generous, because
@@ -933,12 +942,24 @@ struct FakeState {
     /// exercise the progress-streaming plumbing without a real subprocess (feature 010
     /// follow-up).
     submodule_progress_lines: Vec<String>,
+    /// (worktree dir, refs) -> the reflog text `reflogs` answers, as scripted (feature 1003).
+    reflogs: BTreeMap<(PathBuf, Vec<String>), String>,
 }
 
 impl FakeGit {
     /// A fake with no repos.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Answer `reflogs(dir, refs)` with `text` (feature 1003); an unscripted call fails.
+    pub fn with_reflog(self, dir: impl Into<PathBuf>, refs: &[&str], text: &str) -> Self {
+        let refs = refs.iter().map(|r| r.to_string()).collect();
+        self.inner
+            .borrow_mut()
+            .reflogs
+            .insert((dir.into(), refs), text.to_string());
+        self
     }
 
     /// Register `repo` as an existing git repository root.
@@ -1524,5 +1545,16 @@ impl Git for FakeGit {
     /// The fake has no git metadata on disk.
     fn git_dirs(&self, _dir: &Path) -> io::Result<Vec<PathBuf>> {
         Ok(Vec::new())
+    }
+
+    /// The text scripted by [`FakeGit::with_reflog`] for exactly `dir` and `refs`; anything else
+    /// fails, as a git that cannot read the record.
+    fn reflogs(&self, dir: &Path, refs: &[String]) -> io::Result<String> {
+        self.inner
+            .borrow()
+            .reflogs
+            .get(&(dir.to_path_buf(), refs.to_vec()))
+            .cloned()
+            .ok_or_else(|| io::Error::other("no reflog scripted"))
     }
 }

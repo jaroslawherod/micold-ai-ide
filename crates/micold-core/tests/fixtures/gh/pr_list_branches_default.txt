@@ -1,0 +1,8 @@
+HTTP/2.0 200 OK
+Content-Type: application/json; charset=utf-8
+X-Ratelimit-Limit: 5000
+X-Ratelimit-Remaining: 4990
+X-Ratelimit-Reset: 1790966100
+X-Ratelimit-Resource: graphql
+
+{"data":{"repository":{"defaultBranchRef":{"name":"main"},"p0":{"nodes":[{"number":40,"title":"Release","url":"https://github.com/acme/widgets/pull/40","state":"OPEN","isDraft":false,"createdAt":"2026-10-09T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefName":"main","headRefOid":"0000000000000000000000000000000000000028"}]},"p1":{"nodes":[{"number":41,"title":"Own branch","url":"https://github.com/acme/widgets/pull/41","state":"OPEN","isDraft":false,"createdAt":"2026-10-08T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefName":"feat/d","headRefOid":"0000000000000000000000000000000000000029"}]}},"rateLimit":{"remaining":4990,"resetAt":"2026-10-12T12:00:00Z"}}}

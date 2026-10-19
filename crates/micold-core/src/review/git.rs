@@ -273,6 +273,22 @@ impl GitCli {
         Ok(dirs)
     }
 
+    /// The reflog entries of `refs` in the worktree at `dir` (feature 1003, contracts/
+    /// pull-request-list.md §1), one `%gD\t%H\t%gs` line each with the time as Unix seconds. A ref
+    /// with no reflog is skipped, not an error. Read-only, bounded like every review read.
+    pub fn reflogs(&self, dir: &Path, refs: &[String]) -> io::Result<String> {
+        let mut args = vec![
+            "log",
+            "-g",
+            "--ignore-missing",
+            "--date=unix",
+            "--format=%gD%x09%H%x09%gs",
+        ];
+        args.extend(refs.iter().map(String::as_str));
+        args.push("--");
+        read(dir, &args, None)
+    }
+
     /// The base of the worktree at `dir` (R7): the merge-base of `HEAD` and the default branch.
     pub fn review_base(&self, dir: &Path) -> Base {
         let origin_head = read(

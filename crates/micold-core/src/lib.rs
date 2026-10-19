@@ -85,3 +85,4 @@ pub mod unix_time;
 pub(crate) mod win_job;
 pub mod workspace;
 pub mod worktree;
+pub mod worktree_branches;
