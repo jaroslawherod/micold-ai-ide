@@ -24,9 +24,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- Clarify Q1 (FR-012, slash commands): A, one generic sentence for every command, built-ins included. A, orchestrator default (recommended), user card open.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | FR-012: one generic sentence for every slash command, or special wording / hiding for built-ins? | A: one generic sentence for every command, built-ins included | A, orchestrator default (recommended), user card open | spec.md Clarifications; specs/032-untitled-session-labels/contracts/first-turn-label.md C3.5a |
 
 ## Review rounds
 
