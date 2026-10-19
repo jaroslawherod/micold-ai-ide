@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: close
-- **Next step**: close: tdd-verify, converge, T048 quickstart, review, gate
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1080 | M6 terminal-only requests refused | merged (rebase) | 32dc336005547824faa2f20ac2122cc455cd9734 |
 | #1086 | M7 event history saved/restored | merged (rebase) | 31a742c9f9a99a0431a486fbb66a4aa2573c203f |
 | #1087 | M8 chevron entry, row marker, log pane, user guide, setting note | merged (rebase) | a47882ccc0f123e0a991ca87f46e40c20c50dc73 |
+| close | whole-feature tdd-verify fixes, test-list, quickstart results, spec closed | to open | — |
 
 ## Milestones
 
@@ -61,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Close review (sonnet) | 1 | bd913552b9afcd85093d4bb7a7c76042af5ec941:3571832cd48508c802b561980161d31490ed2322 | CHANGES: 3 MAJOR (F1 declined, see below; F2 ledger row and F3 quickstart results fixed), 2 MINOR fixed; prose/ledger fixes only, no round 2 |
 | Review spec | 1 | e63810803ba37fa21cbd87694781aa84aa9312bd:8ee4531564743d6032729cd056a73f655abfb1a0 | CHANGES: 3 MAJOR, 3 MINOR (all fixed) |
 | Review spec | 2 | fd5463849846bf112086f77d7913c42278133170:8ee4531564743d6032729cd056a73f655abfb1a0 | CLEAN (1 MINOR, fixed) |
 | Review plan | 1 | 45b0fc650d313338200dd10363a89e8a9d0c79d7:62098e2ac5367f62ce4e90774162b79389a152c5 | CHANGES: 2 MAJOR, 2 MINOR (all fixed) |
@@ -96,6 +98,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M8 review A (code-review high, sonnet) | 2 | adb63f3dd9f0a8b0f15002096d7d4b91ace01e16:3aaefff6a9d3dd04b6289a11c6a89049b1821432 | CLEAN; 2 MINOR (doc comment placement fixed, prose only; catalog-leave forget declined) |
 
 ## Declined review findings
+
+| Close | A 1 | F1 row-marker gate's empty branch asserts nothing | at the narrowest width the caption is clipped and moves no geometry (the old non-empty assert fails); the gate proves the marker never overflows, its text is pinned by `command_caption` and the tab guards; documented in the test and `verification.md` |
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
@@ -147,9 +151,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M8 part 2: code, tests, review round 1-2, T046 visual pass done (it found and fixed the catalog fold
-dropping `kind`). Remaining: `scripts/gate.sh` on the final tree, push
-`--force-with-lease=claude/project-thread-cl0lw3:`; pr-title.md/pr-body.md are written.
+None.
 
 ## Open escalation
 

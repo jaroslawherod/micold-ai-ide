@@ -9,6 +9,11 @@
 | Terminal sessions unchanged | `mise run gate` | every existing test green (SC-004) |
 | Client reducer | `cargo test -p micold-client` | start-menu entries and chevron rule, kind on create, log model |
 
+**Results (close unit, 2026-10-19, `scripts/gate.sh` green on the close tree)**: all four checks
+passed — core parser and `mise run test-core` equivalents, the five daemon structured targets, the
+whole workspace suite (SC-004), and `cargo test -p micold-client`. Part B was recorded in M8
+(`visual-pass/notes.md`).
+
 Contracts: [contracts/claude-stream-json.md](contracts/claude-stream-json.md),
 [contracts/wire.md](contracts/wire.md). Entities: [data-model.md](data-model.md).
 
