@@ -115,9 +115,9 @@ Review A (high) round 1: CHANGES, F1–F7 fixed (validating GithubRepo Deseriali
 - M6 A: the take-once status channel copies `desktop_notify`'s pattern; a generic helper needs a per-type static (a macro) for two users — kept as is.
 - M6 A: `changed_statuses` rebuilds every daemon's map per worker wake — a handful of projects per daemon, wakes are rare; not worth dirty tracking.
 - M6 A: the expiry shows as a UTC date, as the M5 settings rows do; one convention for both.
-
 - Close verification F10 (MED, eager grant test in `git_credential_grant.rs`): the steps are one sequence on one daemon (a replacement needs a prior grant, an idempotent revoke a prior revoke); splitting repeats the daemon setup per step for no new coverage.
 - Close verification F12, `GIT_CREDENTIAL_ROOT == "/run/micold/git"`: kept; that path is a contract with the container's tmpfs mount and the image's helper, not an internal constant. The lifetime pins were removed.
+
 ## Handover
 
 None.
