@@ -11,7 +11,7 @@ content. Redo what a card shows and how it reads. Tinted header row: state icon 
 location type right; neutral body instead of the whole-card state fill. Type scale: title 17 px,
 body 14 px, labels 12-13 px minimum. Text uses the on-*-container roles, at least 4.5:1 in every
 state in both themes. Card height becomes a minimum; a grid row takes its tallest card. Title =
-issue title, else branch, else display name (dir name to the tooltip). Branch shown as
+issue title, else branch, else display name (full title and display name to the tooltip). Branch shown as
 `type/number`. One line "1 session · 1 running" with correct plurals. Rows with nothing to say are
 removed: "No task progress", "0 open · 0 merged". Activity line: strip `<agent-message from="…">`
 markup, show a slash command as a sentence ("Running autopilot on #1117"), show nothing rather than
