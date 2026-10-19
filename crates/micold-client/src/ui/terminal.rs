@@ -785,7 +785,6 @@ fn structured_log_body<'a>(
         .into()
 }
 
-/// How session `id` runs its CLI; a terminal session when the projection does not list it.
 /// Whether the pane for `id` is the structured log: a structured session with its AI tab displayed.
 fn shows_structured_log(state: &State, id: SessionId) -> bool {
     state.active_sessions().iter().any(|s| {
@@ -795,6 +794,7 @@ fn shows_structured_log(state: &State, id: SessionId) -> bool {
     })
 }
 
+/// How session `id` runs its CLI; a terminal session when the projection does not list it.
 fn session_kind(state: &State, id: SessionId) -> micold_core::session::SessionKind {
     state
         .active_sessions()
