@@ -684,6 +684,15 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
         vec![false, false, false, false, true, false],
         "the section holding the error is open"
     );
+
+    // Discarding the form and opening a new one forgets what the user flipped.
+    send(&mut state, &mut w, daemons::Msg::DraftDiscarded);
+    send(&mut state, &mut w, daemons::Msg::AddOpened);
+    assert_eq!(
+        open(&state),
+        vec![true, false, false, false, false, false],
+        "a reopened form is back to Connection only"
+    );
 }
 
 /// FR-004, US1 AS2: every kind opens on its first section only, for an add and for an edit; a
@@ -1205,7 +1214,6 @@ fn every_section_field_error_opens_its_section() {
         ("pids", Section::Resources),
         ("storage", Section::Resources),
     ] {
-        let mut w = World::new();
         let mut state = State::default();
         add_container(&mut state, "Sec", "sec-ctr", "7050");
         assert!(
@@ -1216,7 +1224,6 @@ fn every_section_field_error_opens_its_section() {
             field,
             message: "refused".into(),
         });
-        let _ = &mut w;
         for other in Section::of(DraftRuntime::Container) {
             let expected = *other == section || *other == Section::Connection;
             assert_eq!(state.section_open(*other), expected, "{field}");

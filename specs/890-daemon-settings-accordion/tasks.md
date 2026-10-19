@@ -129,7 +129,7 @@ required marker (FR-006–FR-009, FR-014, FR-017; US2 AS1–AS5, US3 AS1–AS3 i
 
 Left to the close unit (no code change, so not a milestone):
 
-- [ ] T029 Run quickstart.md Part A in full and confirm the SC-004 round-trip tests in `C/tests/daemons_feature.rs`, `C/tests/features_daemons.rs` and `C/tests/features_daemons_kube.rs` stayed green unchanged; record the result in `specs/890-daemon-settings-accordion/quickstart.md`.
+- [X] T029 Run quickstart.md Part A in full and confirm the SC-004 round-trip tests in `C/tests/daemons_feature.rs`, `C/tests/features_daemons.rs` and `C/tests/features_daemons_kube.rs` stayed green unchanged; record the result in `specs/890-daemon-settings-accordion/quickstart.md`.
 
 ---
 

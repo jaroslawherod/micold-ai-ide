@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #890
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
-- **Phase**: M3
-- **Next step**: M3 PR opened by the orchestrator (title and body in the scratchpad); wait for CI, merge, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,6 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1063 | Design: spec, plan, tasks | merged (rebase) | ad4d1946127e6dc0c06e4add04416f2fc962db00 |
 | #1068 | M1: AccordionSection summary and required marker | merged (rebase) | c0507555cf2611f462f7a55a590087b57730364f |
 | #1075 | M2: daemon forms in sections | merged (rebase) | b33e26ed297d0b02dc5f0864c640da7d9768ecb6 |
+| #1082 | M3: one look, summaries, marker | merged (rebase) | f3d8a05ad7b45eedc27ff7b5330ca32712324012 |
+| (orchestrator opens) | Close: tdd-verify, T029, spec closed | in review | — |
 
 ## Milestones
 
@@ -26,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | #1068 | merged |
 | M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | #1075 | merged |
-| M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | (orchestrator opens) | in review |
+| M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | #1082 | merged |
 
 ## Decisions
 
@@ -60,6 +62,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 (headless reviewer, high-level correctness) | 1 | ff248a7331fa644dfa71963d23b13b695d01150a:b33e26ed297d0b02dc5f0864c640da7d9768ecb6 | CLEAN |
 | Review B M3 (conformance, sonnet) | 1 | ff248a7331fa644dfa71963d23b13b695d01150a:b33e26ed297d0b02dc5f0864c640da7d9768ecb6 | CHANGES: F1 BLOCKER lib test did not compile (fixed, 809 lib tests pass); F2 MAJOR no M3 cycle-log (written, says honestly no separate red run); F3 MINOR T028 open until visual pass; F1 fix verified by the full gate rather than a second round (the gate runs `--lib`) |
 | Visual pass M3 (quickstart B4–B6, headless `claude -p`; the skill's fork got no args) | 1 | — | PASS all 9 checks, light + dark, 640 px Kubernetes; D1 (select long value wraps and clips at 640 px) left as a follow-up; visual-pass/m3/ |
+| Review B M3 round 2 (scoped, sonnet) | 2 | — | CLEAN (F1 lib test builds, F2 cycle-log has M3) |
+| TDD verify (close, inline; smell pass by a fresh reviewer) | 1 | f3d8a05a | PASS_WITH_GAPS: F1 HIGH (lost discard-then-reopen assertion) fixed, F4 F7 F9 fixed, rest open as test-style follow-ups (tdd/verification.md); 3 deliberate mutants all killed; M2/M3 rows added to the test list |
 
 ## Declined review findings
 

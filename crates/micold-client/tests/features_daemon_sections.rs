@@ -158,7 +158,8 @@ fn every_required_or_marked_control_has_its_section() {
     assert_eq!(Section::holding(Ssh, F::DaemonCpuLimit), None);
     assert_eq!(
         Section::holding(Host, F::DaemonSurviveLogout),
-        false.then_some(Sessions)
+        None,
+        "a host daemon has no survive-logout control, though it has a Sessions section"
     );
 }
 
