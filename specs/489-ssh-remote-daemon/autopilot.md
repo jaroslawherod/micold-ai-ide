@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: close, in progress (Phase 10 T089-T090 done, T091-T095 open)
-- **Next step**: finish T091-T095, review diff, gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1026 | M7 | merged | 1d73b72fca6198e80ad2d4be2c0cf85cadbaf6f9 |
 | #1029 | M8 | merged | 1800df279b79d4dcbfab1a413ced53e497f5fa90 |
 | #1051 | M9 | merged | 51ae5b657 |
+| close | Close the spec (#489) | open | |
 
 ## Milestones
 
@@ -40,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | #1026 | done |
 | M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | #1029 | done |
 | M9 | T085–T088 | full | Session lost across a daemon restart shows `lost to daemon`; Reconnect epoch pinned | #1051 | done |
+| close | Close the spec (#489) | open | |
 
 ## Decisions
 
@@ -92,7 +94,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Close unit 1 (context low, blocked by shared build lock): converge by autopilot-reviewer CLEAN (no unbuilt behaviour). Phase 10 (T089-T095) re-added to tasks.md; T089, T090 done (verification.md Close-unit update, test-list rows). Open: T091/T092 mutants and T093 (dead `_subscription` at crates/micold-client/src/shell/daemons.rs:513) were given to autopilot-worker a2233705bf66a9dcc, which may still be editing: check `git status` for stray production edits (mutants must be restored with git checkout) before continuing. Then T094 `mise run test-ssh`, T095 verification.md final, spec Status `Closed <date> - shipped in PRs ...`, diff review, full gate, close PR, ledger done.
+None.
 
 ## Open escalation
 
