@@ -38,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T031–T032 | full | late and multiple viewers | #1076 | merged |
 | M6 | T033–T036 | full | terminal-only requests refused | #1080 | merged |
 | M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | #1086 | merged |
-| M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | #1087 | merged |
+| M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | #1087 | merged |
 
 ## Decisions
 

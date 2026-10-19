@@ -12,7 +12,6 @@ use crate::context_menu_anchor::with_worktrees;
 use crate::support::layout::{self as lay, LayoutRecord};
 use micold_client::app::{State, SIDEBAR_MIN_WIDTH};
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::session::command_caption;
 use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
 
 /// Half a pixel, matching every geometry gate beside this one.
@@ -67,15 +66,11 @@ fn a_structured_rows_marker_stays_inside_its_row_at_the_narrowest_sidebar() {
                 .is_none_or(|p| !same(p, m))
         })
         .collect();
+    // At the narrowest sidebar the longer caption is clipped to its slot, so it moves nothing
+    // (asserting a change here fails): the marker then fits trivially. That the marker exists is
+    // not this gate's to prove; `command_caption`'s test pins its text and `terminal_tabs.rs`
+    // pins that the tab uses it.
     if changed.is_empty() {
-        // The annotation is clipped to its slot at this width, so the longer caption moves
-        // nothing and trivially fits. The marker must still be there: the captions differ.
-        assert_ne!(
-            command_caption(AiCli::ClaudeCode, SessionKind::Terminal),
-            command_caption(AiCli::ClaudeCode, SessionKind::Structured),
-            "marking a session structured changed no geometry and no caption: the marker is not \
-             drawn, or this gate reads the wrong state"
-        );
         return;
     }
     let common = changed
