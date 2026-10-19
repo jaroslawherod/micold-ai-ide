@@ -716,6 +716,7 @@ fn a_container_start_up_carries_no_user_git_credential_whatever_the_saved_settin
 }
 
 /// `path` itself when it is a file, else every file below it; nothing when it does not exist.
+#[cfg(feature = "kube-fake")]
 fn files_under(path: &std::path::Path) -> Vec<std::path::PathBuf> {
     if path.is_file() {
         return vec![path.to_path_buf()];
