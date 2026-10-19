@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Every PR of the worktree's branch set listed (number, title, state), each diff reachable | #1094 | merged |
 | M2 | T015–T020 | full | Check mark on every entry, one mapping shared with the sidebar | #1097 | merged |
 | M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | #1100 | merged |
-| M4 | T032–T036 (T036 moved to close) | full | Loading, empty and unavailable lines | pending PR | gate running, reviews clean |
+| M4 | T032–T036 (T036 moved to close) | full | Loading, empty and unavailable lines | pending PR | gate green, reviews clean |
 
 ## Decisions
 
