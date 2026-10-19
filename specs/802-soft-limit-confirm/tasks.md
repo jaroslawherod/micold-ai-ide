@@ -72,3 +72,16 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run test-core` (`mcp_tools_catalog.rs`); daemon `mcp_create_session.rs` tests
 - **Depends on**: M1
 - **Tier**: light
+
+## Phase 6: TDD remediation
+
+Source: `tdd/verification.md` (verdict FAIL at audit time). T015-T021 cleared in the close PR; T022 resolved by recording the gap below.
+
+- [x] T015 [US1] Finding 4: add a test in `crates/micold-client/src/main_tests.rs` that a `Refused` reply with a UUID `detail` to a flagged (`additional: true`) create stays a notice and opens no confirmation; it must fail when `&& !additional` is removed at `crates/micold-client/src/shell/daemon_sync.rs:1787`. Proof: `cargo test -p micold-client --bin micold-ai-ide main_tests::` with the mutant applied then restored.
+- [x] T016 [US2] Finding 1: rewrite `after_confirming_both_sessions_are_listed_and_deleting_one_leaves_the_other` (`main_tests.rs:1687`) to drive the daemon's catalog push for the second session and a real delete instead of editing `workspace.sessions` in the test; proof: `cargo test -p micold-client --bin micold-ai-ide after_confirming_both`.
+- [x] T017 [US1] Finding 2 (B17): make `with_several_sessions_the_confirmation_names_the_main_one` (`main_tests.rs:1672`) call `ui::confirm_additional_session::dialog` (or expose its text) and assert the main session's label appears and a helper's does not; it must fail with the occupant name replaced by a constant at `ui/confirm_additional_session.rs:77`.
+- [x] T018 [US1] Finding 3: restore the notice-text value check in `other_refusals_and_an_automatic_refusal_stay_notices` (`main_tests.rs:1594`): `assert_eq!` of the visible notice to the service message, and split the two scenarios into two tests (finding 7).
+- [x] T019 [US1] Finding 5: add cases for a non-`Refused` kind with a UUID `detail` and a `Refused` with a non-UUID `detail`, both staying notices (`daemon_sync.rs:1782-1785`).
+- [x] T020 [US1] Finding 6: test that the startup auto-start sends `StartRequested { automatic: true }` (`main.rs:359`) and that an automatic start at an occupied location is not turned into the confirmation (`daemon_sync.rs:2593`).
+- [x] T021 [US1] Findings 8 and 9: assert in `the_blocked_start_and_the_row_entry_still_open_the_confirmation` (`main_tests.rs:1644`) that the confirmation opens for the blocked start, and drop `a_free_location_offers_the_start` (`tests/additional_session_provider.rs:45`) as redundant.
+- [x] T022 [US3] Finding 10: either add a test that an agent create on an occupied location produces no `additional_target` in any window state, or record in `spec.md` that this clause rests on the daemon tests; and record a cycle-log red for future cycles so the next audit can classify PROVEN. Resolved: the gap is recorded in `tdd/verification.md`; no cycle-log red is kept.

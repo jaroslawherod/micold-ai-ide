@@ -1516,16 +1516,49 @@ fn pending_create(app: &App) -> u64 {
         .0
 }
 
+const REFUSAL_TEXT: &str = "this worktree already has a main session";
+
 fn refuse(app: &mut App, req: u64, detail: Option<&str>) {
+    refuse_as(
+        app,
+        req,
+        micold_core::protocol::messages::ErrorKind::Refused,
+        detail,
+    );
+}
+
+fn refuse_as(
+    app: &mut App,
+    req: u64,
+    kind: micold_core::protocol::messages::ErrorKind,
+    detail: Option<&str>,
+) {
     let _ = shell::daemon_sync::on_daemon_event(
         app,
         micold_core::daemons::DaemonId(1),
         DaemonMsg::OperationError {
             req,
-            kind: micold_core::protocol::messages::ErrorKind::Refused,
-            message: "this worktree already has a main session".into(),
+            kind,
+            message: REFUSAL_TEXT.into(),
             detail: detail.map(str::to_owned),
         },
+    );
+}
+
+/// A start of `provider` at the free `feat-x`, sent and left pending; returns its request id.
+fn pending_start(app: &mut App, rx: &mut SentRx, provider: AiCli, automatic: bool) -> u64 {
+    start(app, provider, automatic);
+    let _ = creates(rx);
+    pending_create(app)
+}
+
+/// Asserts the refusal left no confirmation and showed the service's own text.
+fn assert_stays_a_notice(app: &App) {
+    assert_eq!(app.core.additional_request(), None);
+    assert_eq!(
+        visible_notice(app).as_deref(),
+        Some(REFUSAL_TEXT),
+        "the service's text is shown as worded"
     );
 }
 
@@ -1589,30 +1622,87 @@ fn a_refusal_after_a_project_switch_stays_a_notice() {
     assert!(visible_notice(&app).is_some());
 }
 
-/// FR-004: any other refusal, and an automatic start's, still shows the service's text.
+/// FR-004: a refusal that names no occupant shows the service's text.
 #[test]
-fn other_refusals_and_an_automatic_refusal_stay_notices() {
+fn a_refusal_without_an_occupant_stays_a_notice() {
     let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
-    start(&mut app, AiCli::ClaudeCode, false);
-    let _ = creates(&mut rx);
-    let req = pending_create(&app);
+    let req = pending_start(&mut app, &mut rx, AiCli::ClaudeCode, false);
     refuse(&mut app, req, None);
-    assert_eq!(app.core.additional_request(), None);
-    assert!(
-        visible_notice(&app).is_some(),
-        "a refusal without an occupant is shown"
-    );
+    assert_stays_a_notice(&app);
+}
 
+/// FR-004: an automatic start's refusal shows the service's text even when it names the occupant.
+#[test]
+fn an_automatic_refusal_stays_a_notice() {
     let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
-    start(&mut app, AiCli::ClaudeCode, true);
-    let _ = creates(&mut rx);
+    let req = pending_start(&mut app, &mut rx, AiCli::ClaudeCode, true);
+    refuse(&mut app, req, Some(OCCUPANT_ID));
+    assert_stays_a_notice(&app);
+}
+
+/// FR-004, T007: the refusal of an already-confirmed (flagged) create is a plain notice, never a
+/// second confirmation.
+#[test]
+fn the_refusal_of_a_confirmed_create_stays_a_notice() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(1);
+    start(&mut app, AiCli::Copilot, false);
+    let _ = shell::daemon_sync::on_additional_session_confirmed(&mut app);
+    assert_eq!(creates(&mut rx), vec![((AiCli::Copilot,), true)]);
     let req = pending_create(&app);
     refuse(&mut app, req, Some(OCCUPANT_ID));
-    assert_eq!(app.core.additional_request(), None);
+    assert_stays_a_notice(&app);
+}
+
+/// T007: the typed kind decides, so a non-`Refused` error with an occupant-shaped detail is a notice.
+#[test]
+fn a_non_refusal_error_carrying_a_session_id_stays_a_notice() {
+    use micold_core::protocol::messages::ErrorKind;
+    for kind in [
+        ErrorKind::Busy,
+        ErrorKind::Internal,
+        ErrorKind::AlreadyExists,
+    ] {
+        let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
+        let req = pending_start(&mut app, &mut rx, AiCli::Pi, false);
+        refuse_as(&mut app, req, kind, Some(OCCUPANT_ID));
+        assert_stays_a_notice(&app);
+    }
+}
+
+/// T007: a `Refused` whose detail is not a session id names no occupant, so it is a notice.
+#[test]
+fn a_refusal_with_a_detail_that_is_not_a_session_id_stays_a_notice() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
+    let req = pending_start(&mut app, &mut rx, AiCli::Pi, false);
+    refuse(&mut app, req, Some("not-a-uuid"));
+    assert_stays_a_notice(&app);
+}
+
+/// FR-004: the startup auto-start asks for an automatic start.
+#[test]
+fn the_startup_auto_start_requests_an_automatic_start() {
+    let (mut app, _rx) = connected_app();
+    app.core.workspace.active = Some(PathBuf::from("/repo/demo"));
+    let sent = messages(compose_scene(&mut app));
     assert!(
-        visible_notice(&app).is_some(),
-        "an automatic refusal is shown"
+        sent.iter().any(|m| matches!(
+            m,
+            Message::Session(SessionMsg::StartRequested {
+                automatic: true,
+                ..
+            })
+        )),
+        "the scene's start is automatic, got {sent:?}"
     );
+}
+
+/// FR-004: an automatic start at an occupied location is sent, not turned into the confirmation.
+#[test]
+fn an_automatic_start_at_an_occupied_location_sends_the_create() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(1);
+    start(&mut app, AiCli::ClaudeCode, true);
+    assert_eq!(app.core.additional_request(), None);
+    assert_eq!(creates(&mut rx), vec![((AiCli::ClaudeCode,), false)]);
 }
 
 /// US1 s2, FR-002: confirming sends exactly one flagged create with the chosen CLI.
@@ -1639,10 +1729,10 @@ fn cancelling_creates_nothing_and_leaves_the_catalog() {
     assert_eq!(visible_notice(&app), None);
 }
 
-/// US1 s4 and the row entry, regression: both still open the same confirmation.
+/// US1 s4 regression: the row entry opens the confirmation.
 #[test]
-fn the_blocked_start_and_the_row_entry_still_open_the_confirmation() {
-    let (mut app, _rx, ids) = app_with_sessions_at_feat_x(2);
+fn the_row_entry_opens_the_confirmation() {
+    let (mut app, _rx, _) = app_with_sessions_at_feat_x(2);
     app.core
         .update(Message::Session(SessionMsg::AdditionalRequested(
             occupied_loc(),
@@ -1651,9 +1741,13 @@ fn the_blocked_start_and_the_row_entry_still_open_the_confirmation() {
         app.core.additional_request().map(|(location, _)| location),
         Some(occupied_loc())
     );
-    app.core
-        .update(Message::Session(SessionMsg::AdditionalCancelled));
+    assert!(confirmation_is_shown(&app), "the dialog is on screen");
+}
 
+/// US1 s4 regression: a start another live session blocks opens the confirmation.
+#[test]
+fn the_blocked_start_opens_the_confirmation() {
+    let (mut app, _rx, ids) = app_with_sessions_at_feat_x(2);
     let sessions = app
         .core
         .workspace
@@ -1665,61 +1759,106 @@ fn the_blocked_start_and_the_row_entry_still_open_the_confirmation() {
     app.core
         .update(Message::Session(SessionMsg::StartBlocked(ids[1])));
     assert_eq!(app.core.session.blocked_start, Some(ids[1]));
+    assert!(
+        app.core.session_start_block_text(ids[1]).is_some(),
+        "the confirmation has text to show"
+    );
+    assert!(confirmation_is_shown(&app), "the dialog is on screen");
 }
 
-/// FR-004: with several sessions the confirmation names the main one.
+fn confirmation_is_shown(app: &App) -> bool {
+    micold_client::ui::confirm_additional_session::dialog(
+        &app.core,
+        micold_core::theme::ColorScheme::Dark,
+        &micold_core::env_include::EnvIncludeOutcome::Disabled,
+    )
+    .is_some()
+}
+
+/// FR-004: with several sessions the confirmation names the main one, not a helper.
 #[test]
 fn with_several_sessions_the_confirmation_names_the_main_one() {
-    let (mut app, _rx, ids) = app_with_sessions_at_feat_x(3);
-    start(&mut app, AiCli::ClaudeCode, false);
-    assert_eq!(
-        micold_core::occupancy::main_session(
-            app.core.active_sessions(),
-            &app.core.additional_request().unwrap().0
-        ),
-        Some(ids[0])
-    );
-}
-
-/// US2 s1-s2 (T010): after the confirmed create the catalog lists both sessions, the original still
-/// main and the new one selected; deleting either leaves the other.
-#[test]
-fn after_confirming_both_sessions_are_listed_and_deleting_one_leaves_the_other() {
-    use micold_core::protocol::messages::OperationResult;
-    let (mut app, mut rx, ids) = app_with_sessions_at_feat_x(1);
-    start(&mut app, AiCli::ClaudeCode, false);
-    let _ = shell::daemon_sync::on_additional_session_confirmed(&mut app);
-    let _ = creates(&mut rx);
-    let req = pending_create(&app);
-
-    let mut helper = micold_core::session::Session::start_new(occupied_loc(), AiCli::ClaudeCode);
-    helper.main = false;
-    let helper_id = helper.id;
-    app.core
+    use micold_core::session::SessionLabel;
+    let (mut app, _rx, _) = app_with_sessions_at_feat_x(3);
+    for (session, name) in app
+        .core
         .workspace
         .sessions
         .get_mut(Path::new("/repo/demo"))
         .unwrap()
-        .push(helper);
+        .iter_mut()
+        .zip(["the-main-one", "second-one", "third-one"])
+    {
+        session.label = SessionLabel::Named(name.into());
+    }
+    start(&mut app, AiCli::ClaudeCode, false);
+    let (place, existing) =
+        micold_client::ui::confirm_additional_session::target_text(&app.core).unwrap();
+    assert!(place.starts_with("The worktree"), "got {place:?}");
+    assert_eq!(existing.as_deref(), Some("the-main-one"));
+    let text =
+        micold_client::ui::confirm_additional_session::body_text(&place, existing.as_deref());
+    assert!(text.contains("the-main-one"));
+    assert!(!text.contains("second-one") && !text.contains("third-one"));
+}
+
+/// The daemon's catalog push for `ids` (the first main) at `feat-x`, on `/repo/demo`.
+fn catalog_of(ids: &[micold_core::session::SessionId]) -> DaemonMsg {
+    let sessions = ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| {
+            let mut s = summary(*id, "s", WireLifecycle::Running);
+            s.worktree_dir = Some("feat-x".into());
+            s.main = i == 0;
+            s
+        })
+        .collect();
+    DaemonMsg::CatalogChanged {
+        catalog: snapshot_with("/repo/demo", sessions),
+    }
+}
+
+/// US2 s1-s2 (T010): after the confirmed create the daemon's catalog lists both sessions, the
+/// original still main and the new one selected; a real delete of one leaves the other.
+#[test]
+fn after_confirming_both_sessions_are_listed_and_deleting_one_leaves_the_other() {
+    use micold_core::protocol::messages::OperationResult;
+    let (mut app, mut rx, ids) = app_with_sessions_at_feat_x(1);
+    let daemon = micold_core::daemons::DaemonId(1);
+    let sessions_of = |app: &App| {
+        app.core
+            .workspace
+            .sessions
+            .get(Path::new("/repo/demo"))
+            .cloned()
+            .unwrap_or_default()
+    };
+    start(&mut app, AiCli::ClaudeCode, false);
+    let _ = shell::daemon_sync::on_additional_session_confirmed(&mut app);
+    assert_eq!(creates(&mut rx), vec![((AiCli::ClaudeCode,), true)]);
+    let req = pending_create(&app);
+
+    // The daemon creates the helper, pushes the catalog, then answers the create.
+    let helper_id = micold_core::session::SessionId::new();
+    let _ = shell::daemon_sync::on_daemon_event(&mut app, daemon, catalog_of(&[ids[0], helper_id]));
     let _ = shell::daemon_sync::on_daemon_event(
         &mut app,
-        micold_core::daemons::DaemonId(1),
+        daemon,
         DaemonMsg::OperationOk {
             req,
             result: OperationResult::SessionCreated { session: helper_id },
         },
     );
-
-    let listed = app
-        .core
-        .workspace
-        .sessions
-        .get(Path::new("/repo/demo"))
-        .unwrap();
-    assert_eq!(listed.len(), 2);
+    let listed = sessions_of(&app);
+    assert_eq!(listed.len(), 2, "both sessions are listed");
     assert!(
         listed.iter().find(|s| s.id == ids[0]).unwrap().main,
         "the original stays main"
+    );
+    assert!(
+        !listed.iter().find(|s| s.id == helper_id).unwrap().main,
+        "the new one is a helper"
     );
     assert_eq!(
         app.core.session.active,
@@ -1727,19 +1866,15 @@ fn after_confirming_both_sessions_are_listed_and_deleting_one_leaves_the_other()
         "the new session is selected"
     );
 
-    app.core
-        .workspace
-        .sessions
-        .get_mut(Path::new("/repo/demo"))
-        .unwrap()
-        .retain(|s| s.id != helper_id);
-    let left = app
-        .core
-        .workspace
-        .sessions
-        .get(Path::new("/repo/demo"))
-        .unwrap();
+    // Deleting the helper goes to the daemon, whose next push no longer lists it.
+    let _ = shell::daemon_sync::on_session_close_requested(&mut app, helper_id);
+    assert!(drain(&mut rx)
+        .iter()
+        .any(|m| matches!(m, ClientMsg::SessionDelete { session, .. } if *session == helper_id)));
+    let _ = shell::daemon_sync::on_daemon_event(&mut app, daemon, catalog_of(&[ids[0]]));
+    let left = sessions_of(&app);
     assert_eq!(left.iter().map(|s| s.id).collect::<Vec<_>>(), vec![ids[0]]);
+    assert!(left[0].main, "the original is still main");
 }
 
 /// `013` BUG-001, A1: with a create in flight, neither Escape nor the scrim closes the form.

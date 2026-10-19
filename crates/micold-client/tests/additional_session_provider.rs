@@ -40,13 +40,6 @@ fn a_start_that_opens_the_confirmation_keeps_its_cli() {
 }
 
 #[test]
-fn a_free_location_offers_the_start() {
-    let mut st = State::default();
-    st.workspace.active = Some(PathBuf::from("/a"));
-    assert!(st.start_offered(&taken()));
-}
-
-#[test]
 fn declining_clears_the_target_and_the_cli() {
     let mut st = state_with_an_occupant();
     additional_opened(
