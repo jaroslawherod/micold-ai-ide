@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: clarify
-- **Next step**: clarify unit: resolve FR-005's [NEEDS CLARIFICATION] (credential source)
+- **Next step**: clarify unit (continued with the user's answer): apply the credential-source answer to FR-005/FR-008/FR-009/FR-010/SC-002/SC-004, record it `decided by user`, run clarify round 2
 
 ## Pull requests
 
@@ -30,6 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D2 | spec | Non-GitHub remotes? | No git credentials in a sandbox; old opt-ins not kept for them (least privilege) | agent-resolved | spec.md#Assumptions |
 | D3 | spec | Default permissions? | contents rw + metadata r; PRs and issues per-daemon opt-ins, off by default | agent-resolved | spec.md FR-011 |
 | D4 | spec | One credential per daemon or per repo? | Per repository | agent-resolved | spec.md#Assumptions |
+| D5 | clarify | Keep old opt-ins for non-GitHub remotes? | No; no credentials, status says host unsupported (confirms D2) | agent-resolved | issue #1002 body ("rather than falling back") |
+| D6 | clarify | May a project-hosted service mint credentials? | No; client mints/holds on the device | agent-resolved | constitution.md#IV, #Technology constraints |
 
 ## Review rounds
 
@@ -48,7 +50,17 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1, category 1 (product decision the repo does not settle). Q: Where should the
+sandbox's scoped GitHub credential come from (FR-005; FR-009 depends on it)?
+- (A, Recommended) A GitHub App the user registers once and installs on the repos/orgs they want;
+  the client holds its App ID + private key on the device and mints a 1-hour, single-repo,
+  contents-rw installation token per project, renewed automatically. Only option meeting FR-005(a-c),
+  FR-008 renewal and SC-002/SC-004 (≤1 h) with no per-repo user step. Cost: a heavier one-time setup.
+- (B) A fine-grained PAT the user creates and pastes per repository; expiry set on GitHub (min 1
+  day, so FR-009/SC-004's 1 h cannot hold; no renewal, FR-008 becomes "warn before expiry"). Simple,
+  but a manual step per repo, against SC-002.
+- (C) Both: App preferred, per-repo PAT as manual fallback. Most flexible, roughly doubles the
+  source/settings/test surface.
 
 ## Follow-ups not done
 
