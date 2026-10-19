@@ -35,11 +35,20 @@ While the list is read, the view says **Reading changes…**. With nothing to li
 
 With **Show pull request status on worktrees** checked in [Settings →
 GitHub](settings.md#show-pull-request-status-on-worktrees), the list is preceded by a **Pull
-requests** section: every pull request whose head branch is this worktree's branch, newest first.
-Each row has the pull request's state mark, its `#number` and its title. The marks are the ones the
+requests** section: every pull request this worktree produced, open, draft, merged and closed,
+newest first across all of them. Each row has the pull request's state mark, its `#number` and its
+title. The marks are the ones the
 sidebar uses (see [Pull request status](worktrees-and-sessions.md#pull-request-status)): open,
 draft, merged and closed each have their own shape, so a merged pull request is never mistaken for
 a closed one.
+
+A worktree's pull requests are those of its current branch and of every branch created in it,
+including branches that were merged and deleted since, and a branch name that had several pull
+requests over time. The worktree's own git history says which branches were created there, so the
+list survives restarting the app. Not listed: the repository's default branch, and a branch that
+was only checked out in this worktree but created elsewhere (in another worktree, in the main
+checkout, or on GitHub). Each worktree lists only its own branches, never another worktree's. When
+the session service runs on another computer, only the current branch is listed.
 
 The section is the same for a worktree with no session as for one with sessions, and it shows
 only pull requests of this project's own repository. A pull request opened from a fork is not
@@ -47,14 +56,15 @@ listed.
 
 The working-tree changes below it never wait for the section: they appear first, and the section
 joins when GitHub has answered. The section is absent, with no message and no error, when the switch
-is off, when the entry is the project root or a detached HEAD, when the branch has no pull request,
+is off, when the entry is the project root, when none of the worktree's branches has a pull request,
 and when GitHub cannot be reached (no `gh`, not signed in, no GitHub remote, offline). While GitHub
 cannot be reached after a list was read, the last list stays.
 
 ### Reading a pull request's diff
 
 Click a pull request row to read its diff. The file list, the diff and the base line then show
-the pull request: **Pull request #N: base ... head**, as GitHub computes it. Select a file as
+the pull request: **Pull request #N: base ... head**, as GitHub computes it, where *head* is that
+pull request's own branch. Select a file as
 usual; comments are kept per file and line as for any other diff. While the pull request is
 chosen, the working-tree changes are not read, and nothing reads them behind your back.
 

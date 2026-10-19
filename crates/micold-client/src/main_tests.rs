@@ -10543,6 +10543,186 @@ mod pr_status {
         );
     }
 
+    // ---- Feature 1003, T010: the list read asks for the worktree's branch set ----------------
+
+    /// Run `git -C dir args` as if at Unix second `time`, so the reflog's seconds are the test's.
+    fn git_at(dir: &std::path::Path, time: u64, args: &[&str]) {
+        let date = format!("@{time} +0000");
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .env("GIT_COMMITTER_DATE", &date)
+            .env("GIT_AUTHOR_DATE", &date)
+            .output()
+            .expect("git runs");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A repository under `tmp` with one worktree per `(dir, branches)`: added with `-b` on the
+    /// first branch, then `switch -c` to each next one; the first is deleted when there are more.
+    /// Listed in the app as worktrees of `DEMO`, each on its last branch.
+    fn worktrees_with_history(
+        app: &mut App,
+        tmp: &tempfile::TempDir,
+        worktrees: &[(&str, &[&str])],
+    ) {
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git_at(&repo, 1_000, &["init", "-q"]);
+        git_at(&repo, 1_000, &["config", "user.email", "t@t.test"]);
+        git_at(&repo, 1_000, &["config", "user.name", "T"]);
+        git_at(
+            &repo,
+            1_000,
+            &["commit", "-q", "--allow-empty", "-m", "root"],
+        );
+        let mut listed = Vec::new();
+        for (i, (dir, branches)) in worktrees.iter().enumerate() {
+            let wt = tmp.path().join(dir);
+            let t = 2_000 + 10_000 * i as u64;
+            git_at(
+                &repo,
+                t,
+                &[
+                    "worktree",
+                    "add",
+                    "-q",
+                    "-b",
+                    branches[0],
+                    wt.to_str().unwrap(),
+                ],
+            );
+            for (k, branch) in branches.iter().enumerate().skip(1) {
+                let at = t + 1_000 * k as u64;
+                git_at(
+                    &wt,
+                    at - 100,
+                    &["commit", "-q", "--allow-empty", "-m", "work"],
+                );
+                git_at(&wt, at, &["switch", "-q", "-c", branch]);
+            }
+            if branches.len() > 1 {
+                git_at(&wt, t + 5_000, &["branch", "-q", "-D", branches[0]]);
+            }
+            listed.push(micold_core::worktree::Worktree {
+                dir_name: dir.to_string(),
+                path: wt,
+                branch: branches.last().map(|b| b.to_string()),
+                status: micold_core::worktree::WorktreeStatus::Valid,
+                included: false,
+            });
+        }
+        app.core.worktree.worktrees = listed;
+    }
+
+    /// Open the Changes view of `DEMO`'s worktree `dir`, on `current`, and ask for its pull
+    /// requests; answer the remotes with a GitHub one.
+    fn ask_branch_set(rig: &mut Rig, dir: &str, current: Option<&str>) {
+        let _ = rig.app.core.update_changes(ChangesMsg::Opened {
+            project: PathBuf::from(DEMO),
+            entry: SessionLocation::Worktree(dir.into()),
+        });
+        let _ = crate::shell::changes::update(
+            &mut rig.app,
+            ChangesMsg::PullRequestsWanted {
+                branch: current.map(str::to_string),
+            },
+        );
+        let asked = remote_lists(rig);
+        assert_eq!(asked.len(), 1, "one remotes ask per read");
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+    }
+
+    fn set(names: &[&str]) -> std::collections::BTreeSet<String> {
+        names.iter().map(|n| n.to_string()).collect()
+    }
+
+    /// The branches each `list_branches` call asked for, as sets.
+    fn asked_sets(rig: &Rig) -> Vec<std::collections::BTreeSet<String>> {
+        rig.source
+            .list_calls()
+            .into_iter()
+            .map(|(repo, branches)| {
+                assert_eq!(repo, "o/r");
+                branches.into_iter().collect()
+            })
+            .collect()
+    }
+
+    fn pr_on(number: u64, branch: &str) -> micold_core::pull_request::BranchPullRequest {
+        let mut pr = branch_pr(number);
+        pr.head_branch = branch.into();
+        pr
+    }
+
+    // US1 scenario 1, FR-001, FR-002: a worktree that had A (deleted), then B, and is on C asks for
+    // all three, and lists every pull request the answer holds.
+    #[test]
+    fn pr_list_branch_set_asks_every_branch_created_in_the_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_list_answer(vec![
+                pr_on(3, "C"),
+                pr_on(2, "B"),
+                pr_on(1, "A"),
+            ]),
+        );
+        worktrees_with_history(&mut rig.app, &tmp, &[("a", &["A", "B", "C"])]);
+        ask_branch_set(&mut rig, "a", Some("C"));
+        assert_eq!(asked_sets(&rig), vec![set(&["A", "B", "C"])]);
+        assert!(matches!(
+            view_list(&rig.app),
+            PrList::Ready { prs, .. } if prs.iter().map(|p| p.number).collect::<Vec<_>>() == [3, 2, 1]
+        ));
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // US1 scenario 4, FR-014: two worktrees of one project each ask only their own set.
+    #[test]
+    fn pr_list_branch_set_two_worktrees_each_ask_only_their_own() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new()
+                .with_list_answer(vec![pr_on(1, "C")])
+                .with_list_answer(vec![pr_on(2, "Y")]),
+        );
+        worktrees_with_history(
+            &mut rig.app,
+            &tmp,
+            &[("a", &["A", "B", "C"]), ("b", &["X", "Y"])],
+        );
+        ask_branch_set(&mut rig, "a", Some("C"));
+        ask_branch_set(&mut rig, "b", Some("Y"));
+        assert_eq!(
+            asked_sets(&rig),
+            vec![set(&["A", "B", "C"]), set(&["X", "Y"])]
+        );
+    }
+
+    // FR-002 with no local git (the session service runs elsewhere): the current branch alone,
+    // and no notice.
+    #[test]
+    fn pr_list_branch_set_without_local_git_asks_the_current_branch_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_list_answer(vec![pr_on(3, "C")]),
+        );
+        worktrees_with_history(&mut rig.app, &tmp, &[("a", &["A", "B", "C"])]);
+        rig.app.caps = rig.app.caps.clone().without_local_git();
+        ask_branch_set(&mut rig, "a", Some("C"));
+        assert_eq!(asked_sets(&rig), vec![set(&["C"])]);
+        assert!(matches!(view_list(&rig.app), PrList::Ready { prs, .. } if prs.len() == 1));
+        assert!(nothing_was_reported(&rig.app));
+    }
+
     // Principle II: a second ask while the first is under way shares its read.
     #[test]
     fn pr_list_read_a_second_ask_shares_the_read_under_way() {
