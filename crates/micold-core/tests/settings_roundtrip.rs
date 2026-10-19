@@ -792,3 +792,49 @@ fn folded_origins_round_trip_and_an_older_file_loads_none() {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert_eq!(value["settings_version"], 4);
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 1102 — the GitHub issues switch (FR-001, FR-007, SC-003)
+// ---------------------------------------------------------------------------------------
+
+/// The switch is on by default, in a file written before it existed and in a corrupt file (which
+/// is backed up, not rewritten).
+#[test]
+fn github_issues_are_on_by_default_in_an_old_file_and_in_a_corrupt_one() {
+    assert!(Settings::default().github_issues_enabled);
+
+    let (_dir, store, _path) = store_with(r#"{ "settings_version": 4, "theme": "dark" }"#);
+    assert!(store.load().settings.github_issues_enabled);
+
+    let (_dir, store, path) = store_with("{ not json");
+    let outcome = store.load();
+    assert!(outcome.settings.github_issues_enabled);
+    assert_ne!(outcome.status, LoadStatus::Loaded);
+    assert!(
+        !std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .contains("github_issues_enabled"),
+        "reading must not rewrite the file"
+    );
+}
+
+/// Off survives a save and a load without moving the settings version.
+#[test]
+fn turning_github_issues_off_survives_a_save_and_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let store = JsonFileSettingsStore::at(path.clone());
+    store
+        .save(&Settings {
+            github_issues_enabled: false,
+            ..Settings::default()
+        })
+        .unwrap();
+    let outcome = store.load();
+    assert_eq!(outcome.status, LoadStatus::Loaded);
+    assert!(!outcome.settings.github_issues_enabled);
+    let document: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(document["settings_version"], 4);
+    assert_eq!(document["github_issues_enabled"], false);
+}

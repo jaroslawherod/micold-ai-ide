@@ -77,7 +77,7 @@ use micold_core::typeahead::Direction;
 ///
 /// The fields keep the names they had as flat members of `app::State`, and the reducers below
 /// spell the root's type `crate::app::State` now that `State` here means this struct.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
     /// What this window knows of each daemon's connection (feature 491): its state and, while
     /// connected, the handle that sends to it. One daemon failing changes no other's entry; ops are
@@ -102,6 +102,9 @@ pub struct State {
     pub jira_enabled: bool,
     /// Each project's Jira connection, as the service last reported it (feature 533, FR-022).
     pub jira_connections: std::collections::BTreeMap<String, micold_core::jira::JiraConnection>,
+    /// Whether the GitHub issues integration is on, as the service last reported it (feature 1102,
+    /// FR-008). On until told otherwise (FR-007), so a hand `Default` rather than a derived one.
+    pub github_issues_enabled: bool,
     /// Whether the Settings rail is showing icons alone (feature 027, FR-026c).
     ///
     /// Here rather than on [`SettingsDraft`], and that placement is the requirement: FR-026d calls
@@ -145,6 +148,32 @@ pub struct State {
     /// merged, on each snapshot, so a directory the service stopped reporting disappears here too.
     /// The Environment page lists them after the note on the last resolution.
     pub env_include_failures: Vec<micold_core::protocol::messages::EnvIncludeFailure>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            links: Default::default(),
+            lost_sessions: Default::default(),
+            runtime_missing: false,
+            legacy_container: None,
+            settings_draft: None,
+            jira_enabled: false,
+            jira_connections: Default::default(),
+            github_issues_enabled: true,
+            github_tokens: Default::default(),
+            settings_rail_collapsed: false,
+            system_scheme: Default::default(),
+            theme_pref: Default::default(),
+            placement_in_force: Default::default(),
+            daemons: Default::default(),
+            legacy_default_daemon: None,
+            script_check: Default::default(),
+            script_check_seq: 0,
+            script_check_save_seq: None,
+            env_include_failures: Default::default(),
+        }
+    }
 }
 
 /// Why a script path check was started (spec 035, contracts/settings-indication.md §1).
@@ -349,6 +378,9 @@ pub struct GithubDraft {
     /// The switch **Show pull request status on worktrees** (feature 040, FR-029). Off until the
     /// user turns it on (FR-030).
     pub pr_status_enabled: bool,
+    /// The switch **Offer GitHub issues when creating worktrees** (feature 1102, FR-006). On by
+    /// default (FR-001, FR-007).
+    pub issues_enabled: bool,
 }
 
 impl Default for GithubDraft {
@@ -357,6 +389,7 @@ impl Default for GithubDraft {
         Self {
             entries: default_mapping(),
             pr_status_enabled: false,
+            issues_enabled: true,
         }
     }
 }
@@ -657,6 +690,8 @@ pub struct ValidSettings {
     pub issue_label_types: Vec<LabelTypeEntry>,
     /// GitHub: whether pull request status is read (feature 040, FR-029).
     pub pr_status_enabled: bool,
+    /// GitHub: whether GitHub issues are offered (feature 1102, FR-006).
+    pub github_issues_enabled: bool,
     /// Jira: whether the integration is on (feature 533, FR-002).
     pub jira_enabled: bool,
     /// Jira: what the save does to the open project's connection (feature 533, US3).
@@ -682,6 +717,7 @@ impl ValidSettings {
             issue_label_types: self.issue_label_types,
             pr_status_enabled: self.pr_status_enabled,
             jira_enabled: self.jira_enabled,
+            github_issues_enabled: self.github_issues_enabled,
             // Not in the form yet (feature 533): written by their own change, never by a save.
             jira_connections: std::collections::BTreeMap::new(),
             notification_kinds: self.notification_kinds,
@@ -1065,6 +1101,7 @@ impl SettingsDraft {
                 })
                 .collect(),
             pr_status_enabled: self.github.pr_status_enabled,
+            github_issues_enabled: self.github.issues_enabled,
             jira_enabled: self.jira.enabled,
             jira,
         })
@@ -1410,6 +1447,7 @@ impl SettingsDraft {
                 GithubDraft {
                     entries: _,
                     pr_status_enabled: _,
+                    issues_enabled: _,
                 },
             jira:
                 JiraDraft {
@@ -1462,6 +1500,7 @@ impl SettingsDraft {
             daemon.storage_mib,
             github.entries,
             github.pr_status_enabled,
+            github.issues_enabled,
             jira.enabled,
         );
         self.baseline = Some(
@@ -1520,6 +1559,7 @@ impl SettingsDraft {
             github: GithubDraft {
                 entries: settings.issue_label_types.clone(),
                 pr_status_enabled: settings.pr_status_enabled,
+                issues_enabled: settings.github_issues_enabled,
             },
             jira: JiraDraft {
                 enabled: settings.jira_enabled,
@@ -1638,6 +1678,8 @@ pub enum Msg {
     IssueMappingDefaultsRestored,
     /// The pull request status switch was toggled (feature 040, FR-029).
     PrStatusToggled(bool),
+    /// The **Offer GitHub issues** checkbox (feature 1102, FR-006).
+    GithubIssuesToggled(bool),
     /// The **Enable Jira integration** switch was toggled (feature 533, FR-002).
     JiraEnabledToggled(bool),
     /// **Site URL** was edited (feature 533, FR-006).
@@ -1772,6 +1814,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             forget_mapping_marks(state);
         }
         Msg::PrStatusToggled(on) => edit(state, |draft| draft.github.pr_status_enabled = on),
+        Msg::GithubIssuesToggled(on) => edit(state, |draft| draft.github.issues_enabled = on),
         Msg::JiraEnabledToggled(on) => edit(state, |draft| {
             draft.jira.enabled = on;
             draft.jira.prompt = None;
@@ -2394,6 +2437,7 @@ pub fn diff_layout_set(
         pr_status_enabled: None,
         jira_enabled: None,
         jira_connection: None,
+        github_issues_enabled: None,
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,

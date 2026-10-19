@@ -679,6 +679,11 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
             }));
         }
     }
+    // Feature 1102: with the switch off no title is read, and none is recorded as unavailable, so
+    // turning it back on reads them on the next open.
+    if !app.core.settings.github_issues_enabled {
+        return Task::none();
+    }
     let binding = app.active_binding();
     let routed = matches!(
         app.route(binding),
@@ -736,8 +741,10 @@ pub fn on_title_remotes(
     if app.core.workspace.active.as_deref() != Some(project.as_path()) {
         return Task::none();
     }
-    let Some(micold_core::github::RemoteChoice::Github { repo, .. }) =
-        remotes.map(|remotes| micold_core::github::choose_remote(&remotes))
+    // Feature 1102: an issue title is a GitHub issue read, so the switch gates it too.
+    let Some(micold_core::github::RemoteChoice::Github { repo, .. }) = remotes
+        .filter(|_| app.core.settings.github_issues_enabled)
+        .map(|remotes| micold_core::github::choose_remote(&remotes))
     else {
         return unavailable(numbers);
     };

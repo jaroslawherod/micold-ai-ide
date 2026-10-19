@@ -1883,6 +1883,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
             pr_status_enabled,
             jira_enabled,
             jira_connection,
+            github_issues_enabled,
             desktop_notifications,
             notification_kinds,
             long_task_threshold_secs,
@@ -1904,6 +1905,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
                     && pr_status_enabled.is_none()
                     && jira_enabled.is_none()
                     && jira_connection.is_none()
+                    && github_issues_enabled.is_none()
                     && desktop_notifications.is_none()
                     && notification_kinds.is_none()
                     && long_task_threshold_secs.is_none()
@@ -2030,6 +2032,65 @@ mod pr_status_switch {
     #[test]
     fn the_section_is_titled_github() {
         assert_eq!(SettingsSection::GithubIssues.label(), "GitHub");
+    }
+}
+
+// --- Feature 1102: the GitHub issues switch (T008) ------------------------------------------------
+
+mod github_issues_switch {
+    use micold_client::app::State;
+    use micold_client::features::settings::{update, Msg, SettingsDraft, ValidSettings};
+    use micold_core::settings::Settings;
+
+    fn open(stored: bool) -> State {
+        let settings = Settings {
+            github_issues_enabled: stored,
+            ..Settings::default()
+        };
+        let mut state = State::default();
+        state.settings.settings_draft = Some(SettingsDraft::from_settings(&settings));
+        state
+    }
+
+    fn shown(state: &State) -> bool {
+        state
+            .settings
+            .settings_draft
+            .as_ref()
+            .unwrap()
+            .github
+            .issues_enabled
+    }
+
+    /// FR-001, FR-007: on until the user turns it off; the app state and a fresh draft say so.
+    #[test]
+    fn it_is_on_by_default_and_the_draft_is_seeded_from_the_stored_value() {
+        assert!(State::default().settings.github_issues_enabled);
+        assert!(SettingsDraft::default().github.issues_enabled);
+        assert!(shown(&open(true)));
+        assert!(!shown(&open(false)));
+    }
+
+    #[test]
+    fn toggling_edits_the_draft_and_save_carries_it() {
+        for chosen in [false, true] {
+            let mut state = open(!chosen);
+            update(&mut state, Msg::GithubIssuesToggled(chosen));
+            assert_eq!(shown(&state), chosen);
+            let valid: ValidSettings = state.settings.settings_draft.unwrap().validate().unwrap();
+            assert_eq!(valid.github_issues_enabled, chosen);
+            assert_eq!(valid.into_settings().github_issues_enabled, chosen);
+        }
+    }
+
+    /// The baseline a save is compared against holds the value the draft was seeded from.
+    #[test]
+    fn the_baseline_is_seeded_with_the_stored_value() {
+        let draft = open(false).settings.settings_draft.unwrap();
+        assert_eq!(
+            draft.baseline.as_ref().map(|b| b.github_issues_enabled),
+            Some(false)
+        );
     }
 }
 

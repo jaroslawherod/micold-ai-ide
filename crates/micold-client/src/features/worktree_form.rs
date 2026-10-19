@@ -497,6 +497,9 @@ impl std::fmt::Display for SessionChoice {
     }
 }
 
+/// The caption of an issue source that is not offered because the switch is off (feature 1102).
+pub const GITHUB_ISSUES_OFF_NOTICE: &str = "GitHub issues are turned off in Settings.";
+
 /// In-progress add-worktree form state, present only while the form overlay is open (FR-005).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorktreeForm {
@@ -575,6 +578,11 @@ pub struct WorktreeForm {
     pub github: GithubAvailability,
     /// Whether Jira can be an issue source here (feature 533).
     pub jira: JiraAvailability,
+    /// The GitHub issues switch was off when the form opened (feature 1102, FR-003). Stored
+    /// inverted so a form built with `Default` keeps GitHub issues on, as the switch does. While
+    /// set, [`Self::github_repo`] is `None`, so no GitHub issue request is built and GitHub is
+    /// never the issue provider.
+    pub github_issues_off: bool,
     /// Which provider the Issue source lists (feature 533). Jira only while `jira` is
     /// `Connected` and the repository has no GitHub remote, or the project has both and Jira is the
     /// remembered choice (`remembered_provider`, set by `IssueProviderChanged`).
@@ -662,6 +670,9 @@ impl WorktreeForm {
                 _ => self.jira_notice(),
             };
         }
+        if self.github_issues_off {
+            return Some(GITHUB_ISSUES_OFF_NOTICE.to_string());
+        }
         match &self.github {
             GithubAvailability::Checking => Some("Checking for a GitHub remote…".to_string()),
             GithubAvailability::Unavailable(reason) => Some(reason.clone()),
@@ -680,8 +691,8 @@ impl WorktreeForm {
                 _ => None,
             };
         }
-        match (&self.github, self.source) {
-            (GithubAvailability::Available(repo), BranchSource::Issue) => {
+        match (self.github_repo(), self.source) {
+            (Some(repo), BranchSource::Issue) => {
                 Some(format!("Reads open issues of {repo} from GitHub."))
             }
             _ => None,
@@ -728,7 +739,8 @@ impl WorktreeForm {
     /// connected and the repository is known to have no GitHub remote, else GitHub.
     fn resolve_provider(&mut self) {
         let connected = matches!(self.jira, JiraAvailability::Connected(_));
-        let no_github = matches!(self.github, GithubAvailability::Unavailable(_));
+        let no_github =
+            self.github_issues_off || matches!(self.github, GithubAvailability::Unavailable(_));
         self.provider = if connected
             && (no_github
                 || (self.offers_issue_provider_choice()
@@ -797,7 +809,7 @@ impl WorktreeForm {
     /// The repository the issue source reads, once known.
     pub fn github_repo(&self) -> Option<&GithubRepo> {
         match &self.github {
-            GithubAvailability::Available(repo) => Some(repo),
+            GithubAvailability::Available(repo) if !self.github_issues_off => Some(repo),
             _ => None,
         }
     }
@@ -1094,8 +1106,9 @@ pub fn opened(state: &mut crate::app::State) {
         .as_ref()
         .and_then(|project| state.workspace.issue_sources.get(project))
         .copied();
-    state.worktree_form.form = Some(WorktreeForm {
+    let mut form = WorktreeForm {
         jira,
+        github_issues_off: !state.settings.github_issues_enabled,
         remembered_provider,
         daemons,
         daemon,
@@ -1103,7 +1116,10 @@ pub fn opened(state: &mut crate::app::State) {
         session_cli,
         session_choices,
         ..WorktreeForm::default()
-    });
+    };
+    // Before the remotes answer, a switched-off GitHub must not leave Jira unchosen.
+    form.resolve_provider();
+    state.worktree_form.form = Some(form);
     state.worktree_form.worktree_error = None;
 }
 

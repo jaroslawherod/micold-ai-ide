@@ -878,6 +878,29 @@ fn the_github_page_is_titled_github_and_claims_the_pull_request_switch() {
     );
 }
 
+/// Feature 1102 (FR-006, T014): the GitHub page claims the GitHub issues switch with its message
+/// and renders it right after the pull request status checkbox.
+#[test]
+fn the_github_page_claims_the_github_issues_switch_after_the_pull_request_one() {
+    let src = read(&client_dir().join("src/ui/settings/github.rs"));
+    assert!(
+        src.contains("(\"github_issues_enabled\", \"GithubIssuesToggled\")"),
+        "the page declares the switch it renders"
+    );
+    let pr = src
+        .find("\"Show pull request status on worktrees\"")
+        .expect("the pull request checkbox");
+    let issues = src
+        .find("\"Offer GitHub issues when creating worktrees\"")
+        .expect("the GitHub issues checkbox");
+    assert!(pr < issues, "the issues checkbox follows the PR status one");
+    assert!(src.contains("FieldId::SettingsGithubIssues"));
+    assert_eq!(
+        claims().get("github_issues_enabled").map(Vec::as_slice),
+        Some(["github.rs".to_string()].as_slice())
+    );
+}
+
 /// Feature 041, FR-026, FR-031: the Terminal page claims the save-history switch, and its message.
 #[test]
 fn the_terminal_page_claims_the_save_terminal_history_switch() {

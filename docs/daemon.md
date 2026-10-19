@@ -562,7 +562,8 @@ window (`RevealSession`); version 26 adds the Wayland activation token of the cl
 (`activation`) to both, which the service forwards unread; version 27 adds the Desktop notifications switch
 (`desktop_notifications`) to the service's settings. Version 30 adds `SessionRestart`, the AI CLI's
 manual restart, which the service handles as `SessionStart` after re-sourcing the session's
-environment-include script.
+environment-include script. Version 56 adds the GitHub issues switch (`github_issues_enabled`) to the
+service's settings.
 
 ### The lifecycle
 

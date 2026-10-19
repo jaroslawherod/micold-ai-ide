@@ -66,6 +66,7 @@ async fn set(
             pr_status_enabled: None,
             jira_enabled,
             jira_connection,
+            github_issues_enabled: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,

@@ -2176,6 +2176,17 @@ impl DaemonState {
         Ok(())
     }
 
+    /// Turn the GitHub issues integration on or off (feature 1102, FR-001). Pushes
+    /// `SettingsChanged` to every client, so every window follows the switch (FR-008).
+    pub fn set_github_issues_enabled(&self, on: bool) -> std::io::Result<()> {
+        self.change_settings(|catalog| catalog.set_github_issues_enabled(on))
+    }
+
+    /// Whether the GitHub issues integration is on (feature 1102).
+    pub fn github_issues_enabled(&self) -> bool {
+        self.lock().catalog.settings_wire().github_issues_enabled
+    }
+
     /// Upsert or remove one project's Jira connection (feature 533, FR-006). Pushes
     /// `SettingsChanged` carrying the whole merged map to every client.
     pub fn set_jira_connection(

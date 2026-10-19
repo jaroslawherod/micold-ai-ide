@@ -159,6 +159,8 @@ pub enum FieldId {
     SettingsGithubPatRepo,
     /// Settings -> GitHub access tokens: **Token** (#1002).
     SettingsGithubPatToken,
+    /// The Settings → GitHub **Offer GitHub issues** switch (feature 1102).
+    SettingsGithubIssues,
     /// Settings -> Jira: the **Enable Jira integration** switch (feature 533).
     SettingsJiraEnabled,
     /// Settings -> Jira: **Site URL** (feature 533).

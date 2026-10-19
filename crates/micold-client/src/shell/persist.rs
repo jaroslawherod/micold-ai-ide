@@ -360,6 +360,12 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         } else {
             stored.jira_enabled
         },
+        // Connected, the service's value is the truth, as above (feature 1102).
+        github_issues_enabled: if app.active_outbox().is_some() {
+            app.core.settings.github_issues_enabled
+        } else {
+            stored.github_issues_enabled
+        },
         jira_connections: if app.active_outbox().is_some() {
             app.core.settings.jira_connections.clone()
         } else {
@@ -420,6 +426,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         issue_label_types: _,
         pr_status_enabled: _,
         jira_enabled: _,
+        github_issues_enabled: _,
         // Written by its own per-project change, never by a save of the form (feature 533).
         jira_connections: _,
         desktop_notifications: _,
@@ -473,6 +480,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(long_task_threshold_secs);
     set!(pr_status_enabled);
     set!(jira_enabled);
+    set!(github_issues_enabled);
     set!(plan_usage_enabled);
     set!(plan_usage_warn_percent);
     // The placement and profile live in the registry's single entry too (feature 491, FR-005):
@@ -502,6 +510,7 @@ struct ServiceChanges {
     pr_status_enabled: Option<bool>,
     jira_enabled: Option<bool>,
     jira_connection: Option<micold_core::settings::JiraConnectionChange>,
+    github_issues_enabled: Option<bool>,
     plan_usage_enabled: Option<bool>,
     plan_usage_warn_percent: Option<u8>,
 }
@@ -524,6 +533,7 @@ impl ServiceChanges {
             pr_status_enabled: self.pr_status_enabled,
             jira_enabled: self.jira_enabled,
             jira_connection: self.jira_connection,
+            github_issues_enabled: self.github_issues_enabled,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             plan_usage_enabled: self.plan_usage_enabled,
@@ -556,6 +566,7 @@ fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<Serv
         pr_status_enabled: changed!(pr_status_enabled),
         jira_enabled: changed!(jira_enabled),
         jira_connection: None,
+        github_issues_enabled: changed!(github_issues_enabled),
         plan_usage_enabled: changed!(plan_usage_enabled),
         plan_usage_warn_percent: changed!(plan_usage_warn_percent),
     };
@@ -673,6 +684,14 @@ pub(crate) fn save_and_prepare_check(
         baseline.as_ref().map(|b| &b.jira_enabled),
     ) {
         app.core.settings.jira_enabled = enabled;
+    }
+    // Feature 1102: the same for the GitHub issues switch. Not rolled back when the write fails
+    // (it stays in force for the session) and, the baseline not moving, the next save retries it.
+    if let Some(enabled) = changed_value(
+        &settings.github_issues_enabled,
+        baseline.as_ref().map(|b| &b.github_issues_enabled),
+    ) {
+        app.core.settings.github_issues_enabled = enabled;
     }
     // Feature 490: in force here at once, as the fields above are; the service's echo agrees.
     app.core.plan_usage.settings(
@@ -1103,6 +1122,7 @@ mod tests {
         let stored = Settings {
             jira_enabled: false,
             jira_connections: Default::default(),
+            github_issues_enabled: true,
             plan_usage_enabled: false,
             plan_usage_warn_percent: 65,
             theme: ThemePreference::Light,

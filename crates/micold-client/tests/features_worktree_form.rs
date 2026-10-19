@@ -238,3 +238,101 @@ mod required {
         assert_eq!(form.preview(), Err(NamingError::EmptyNameAfterSlug));
     }
 }
+
+// --- Feature 1102: the GitHub issues switch off (T011; FR-003, FR-004, US1 AS1-3, US2 AS2) ------
+
+mod github_issues_switch {
+    use std::path::PathBuf;
+
+    use micold_client::app::{Message, State};
+    use micold_client::features::worktree_form::{BranchSource, Msg, WorktreeForm};
+    use micold_core::git::GitRemote;
+    use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
+
+    fn project() -> PathBuf {
+        PathBuf::from("/work/acme")
+    }
+
+    fn github_remote() -> Vec<GitRemote> {
+        vec![GitRemote {
+            name: "origin".into(),
+            url: "git@github.com:o/r.git".into(),
+        }]
+    }
+
+    /// A state with the switch as given and, when `jira`, Jira on and connected for `project()`.
+    fn state(github_issues_enabled: bool, jira: bool) -> State {
+        let mut state = State::default();
+        state.workspace.active = Some(project());
+        state.settings.github_issues_enabled = github_issues_enabled;
+        if jira {
+            state.settings.jira_enabled = true;
+            state.settings.jira_connections.insert(
+                connection_key(&project()),
+                JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
+            );
+        }
+        state
+    }
+
+    fn opened(mut state: State) -> State {
+        state.update(Message::WorktreeForm(Msg::Opened));
+        state.update(Message::WorktreeForm(Msg::RemotesListed(Ok(
+            github_remote(),
+        ))));
+        state
+    }
+
+    fn form(state: &State) -> &WorktreeForm {
+        state.worktree_form.form.as_ref().expect("the form is open")
+    }
+
+    /// US1 AS1: no GitHub source, so no request can be built.
+    #[test]
+    fn off_offers_no_github_source() {
+        let state = opened(state(false, false));
+        let form = form(&state);
+        assert!(form.github_repo().is_none());
+        assert!(!form.issue_source_ready());
+        assert_eq!(form.provider, IssueProvider::Github);
+        assert_eq!(
+            form.source_caption().as_deref(),
+            Some("GitHub issues are turned off in Settings.")
+        );
+    }
+
+    /// US1 AS2: Jira is the sole provider and no choice is shown.
+    #[test]
+    fn off_with_jira_connected_makes_jira_the_only_source() {
+        let state = opened(state(false, true));
+        let form = form(&state);
+        assert_eq!(form.provider, IssueProvider::Jira);
+        assert!(!form.offers_issue_provider_choice());
+        assert!(form.issue_source_ready());
+        assert!(form.github_repo().is_none());
+    }
+
+    /// US1 AS3: no issue source at all, and a worktree without an issue is still creatable.
+    #[test]
+    fn off_with_jira_off_has_no_source_but_creating_still_works() {
+        let mut state = opened(state(false, false));
+        state.update(Message::WorktreeForm(Msg::SourceChanged(
+            BranchSource::Issue,
+        )));
+        assert_ne!(form(&state).source, BranchSource::Issue);
+        state.update(Message::WorktreeForm(Msg::NameChanged("fix-it".into())));
+        assert_eq!(form(&state).name, "fix-it", "a name can still be typed");
+    }
+
+    /// US2 AS2: on (the default) the form is the form of before.
+    #[test]
+    fn on_behaves_as_before() {
+        let state = opened(state(true, true));
+        let form = form(&state);
+        assert!(form.github_repo().is_some());
+        assert!(form.offers_issue_provider_choice());
+        assert!(form.issue_source_ready());
+        assert!(State::default().settings.github_issues_enabled);
+        assert!(!WorktreeForm::default().github_issues_off);
+    }
+}
