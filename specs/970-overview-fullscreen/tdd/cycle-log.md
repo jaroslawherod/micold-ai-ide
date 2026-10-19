@@ -35,7 +35,12 @@ failed before the implementation.
 - red 1 (T021, compile): `cargo test -p micold-client --lib --no-run card_grid` -> `E0422/E0425: cannot
   find ... Zoom / ribbon / zoom_fraction / rest_width / Piece / ZoomState`, `E0599: no method named zoom
   found for CardGrid`, `E0432: unresolved import card_grid::Zoom` (27 errors).
-- red 2 (behavioural, stubs): not run separately; the implementation was written in one step after the
-  compile red. Recorded as a gap.
-- green: `cargo test -p micold-client --lib card_grid` -> 19 passed; `--test showcase_completeness` -> 42
+- red 2 (behavioural, by mutation after the fact, review B F1): `Grid::layout` made to ignore the zoom
+  (`state.advance(..)` result replaced by `None`), `cargo test -p micold-client --lib card_grid` ->
+  `FAILED. 18 passed; 2 failed`: `a_flip_starts_a_zoom_between_the_two_end_widths` and
+  `a_card_count_change_mid_zoom_keeps_the_zoom` (pieces equal the rest layout instead of the ribbon).
+  The other zoom tests compare against `ribbon(..)` or the rest layout and pass either way, so they
+  guard the geometry (U18–U20, U22) rather than the flip; the implementation was written before this
+  run, which is the gap this entry records. Mutation reverted.
+- green: `cargo test -p micold-client --lib card_grid` -> 20 passed; `--test showcase_completeness` -> 42
   passed (its CardGrid assertion `!interactive` became `interactive == (component == "CardGrid")`).
