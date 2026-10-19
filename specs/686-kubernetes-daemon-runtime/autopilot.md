@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #686
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
-- **Phase**: implement
-- **Next step**: M9 merged (#1047, real-cluster job green). Pin the basic image published from 6d1a4fbc (this PR), then the close unit: T097 visual pass, T098 converge, then close #686.
+- **Phase**: done
+- **Next step**: none. Close unit merged; #686 closed.
 
 ## Pull requests
 
@@ -29,6 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1025 | M7 | merged | d6d74c272bd4bcc76d081ec171e2e63a00c448f1 |
 | #1028 | M8 | merged | cc09ae12641f04b1e7986941ca4ee152539e4d7b |
 | #1047 | M9 | merged | 6d1a4fbc733a9af12d53a079873bc566f85bac48 |
+| #1081 | basic image pin | merged | 5c479c109f4294989a7ed69df134be44d32a53f3 |
 
 ## Milestones
 
@@ -195,3 +196,8 @@ None. (The anchor-timing flake seen in earlier gate runs did not recur; gate8 gr
 ## M9 CI fix 1
 
 - Root cause of the pod's `Error` exit: no passwd entry for uid 10001 under a read-only root (entrypoint could not append one); now baked into `packaging/basic/Containerfile`. Insufficient cpu: request defaulted to the 2000m limit; the suite now requests 100m. Failed starts print pod description, logs and events. Details in `tdd/cycle-log.md`. Awaiting CI.
+
+## Close unit (T097, T098)
+
+- T097: quickstart Part B run on Xvfb with tiny-skia and xdotool (`visual-pass/README.md`, 9 screenshots). The form, context chips, blank-namespace refusal, volume-size note, row endpoint and failure text all pass in light and dark. Steps 2–8 need a cluster and are covered by the green `kube_real_*` CI job. No defects.
+- T098: converge found no unbuilt work beyond the recorded T092 cut. The AI CLI install (flock), clone (per-dest lock) and copy (`.part.$$`) are guarded for FR-023.
