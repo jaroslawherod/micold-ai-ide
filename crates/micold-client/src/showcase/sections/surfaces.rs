@@ -272,17 +272,14 @@ pub fn accordion_section<'a>(
             ),
             posed(
                 "a group: opening one closes the others",
-                column(
-                    ["Network", "Storage", "Tools"]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(key, title)| {
-                            material::AccordionSection::new(title, body(roles), roles)
-                                .open(showcase.group_open(key))
-                                .on_toggle(Message::GroupSectionToggled(key))
-                                .into()
-                        }),
-                ),
+                column(["Network", "Storage", "Tools"].into_iter().enumerate().map(
+                    |(key, title)| {
+                        material::AccordionSection::new(title, body(roles), roles)
+                            .open(showcase.group_open(key))
+                            .on_toggle(Message::GroupSectionToggled(key))
+                            .into()
+                    },
+                )),
                 roles,
             ),
             posed(
