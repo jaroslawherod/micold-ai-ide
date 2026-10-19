@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: tasks
-- **Next step**: design PR review and merge (orchestrator); then milestone M1
+- **Phase**: implement M1
+- **Next step**: verify M1: free disk, scoped gate, then reviews A and B
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1129 | design (spec, plan, tasks) | merged | 5e78699ef85a34cc921da1f4c5e89ecd70b9f1f7 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Card content from core text rules: issue title, `type/number` branch, sessions line, no empty rows (US2) | — | planned |
+| M1 | T001–T011 | full | Card content from core text rules: issue title, `type/number` branch, sessions line, no empty rows (US2) | — | in progress |
 | M2 | T012–T020 | full | Activity line without markup; slash commands as sentences (US3) | — | planned |
 | M3 | T021–T030 | full | Larger type, cards grow to fit, even rows (US4) | — | planned |
 | M4 | T031–T039 | full | Tinted header row over a neutral body; showcase, layout snapshot, visual pass (US1) | — | planned |
@@ -59,7 +60,16 @@ inequality + visual pass).
 
 ## Handover
 
-None.
+M1 unit (context over 150k). Done: T001–T011 implemented and ticked (TDD evidence in
+`tdd/cycle-log.md`); core `overview_text` tests (8) and `PrDisplay::footer` test green, client
+`overview_card card_grid` lib tests 41 passed; user guide updated. Committed, not pushed (no PR).
+Scoped gate not yet green: run 1 failed on a borrow error in `crates/micold-client/tests/overview.rs`
+(fixed); run 2 failed only because the disk filled (`ld terminated with signal 7`, 34 MB free,
+`target-shared/debug/deps` 29 GB). Next: free disk (`reclaim-disk` skill; `mise` is missing, so
+sweep `target-shared` by hand), rerun `scripts/autopilot/scoped-gate.sh` detached, then verify.md
+step 1 review A (`code-review` high) and step 2 review B (conformance) through the orchestrator,
+full gate (`scripts/gate.sh`), PR. Possible fallout to check: `layout_snapshot`/showcase tests (the
+showcase sample card's branch and title changed). No review rounds yet; no open findings.
 
 ## Open escalation
 

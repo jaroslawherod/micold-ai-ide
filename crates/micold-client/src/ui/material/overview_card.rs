@@ -1,8 +1,9 @@
 //! `OverviewCard`: one location of the project Overview (feature 813, FR-005, FR-006, FR-021).
 //!
-//! The type icon and the display name (ellipsized, the full name in a tooltip), the state icon and
-//! word (the reason is the word's tooltip), the branch when it has one, the summary line and the
-//! activity line (when the agent's hooks report), the sessions footer. Every colour comes from the
+//! The type icon and the title (ellipsized, the display name in a tooltip), the state icon and
+//! word (the reason is the word's tooltip), the short branch when it has one, the sessions footer,
+//! and the activity, progress and pull request rows when they have something to say. What each
+//! line says is [`CardText`], tested in the core (feature 1120, FR-018). Every colour comes from the
 //! theme's roles through [`palette`]: Needs action is the `error` family, Needs attention
 //! `warning`, Working `primary`, Done `success`, and Idle sits on the de-emphasised
 //! `surface_container_low`. With a press (`on_press`) the card is a control: a
@@ -15,9 +16,8 @@ use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Ripple, Text, Tooltip, TypeRole};
 use iced::widget::{button, column, container, row};
 use iced::{keyboard, Alignment, Element, Length};
-use micold_core::hook_activity::CurrentActivity;
 use micold_core::overview::{CardModel, CardState, LocationType};
-use micold_core::task_progress::{Progress, Ratio};
+use micold_core::overview_text::CardText;
 use micold_core::tokens::{spacing, state, Rgb, Roles};
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -76,57 +76,19 @@ pub fn type_icon(kind: LocationType) -> Icon {
     }
 }
 
-/// What the card says in words, apart from the layout that places it.
+/// The icons and words of the type and state, apart from the layout that places them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Words {
     /// The type icon.
     pub type_icon: Icon,
     /// The type's word: the footer's first words and the type icon's tooltip.
     pub type_label: &'static str,
-    /// The name's tooltip: the whole display name, however much of it shows.
-    pub name_tooltip: String,
     /// The state icon.
     pub state_icon: Icon,
     /// The state's word.
     pub state_label: &'static str,
     /// The reason, the state word's tooltip.
     pub reason_tooltip: &'static str,
-    /// The footer line.
-    pub footer: String,
-}
-
-/// What the card's progress row says (FR-016, FR-017).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProgressWords {
-    /// *Implement \u{b7} 6/10*, *6/10*, the phase alone, or *No task progress*.
-    pub text: String,
-    /// The ratio a bar is drawn for; `None` draws no bar.
-    pub bar: Option<Ratio>,
-}
-
-/// The words of a card's progress row.
-pub fn progress_words(progress: &Progress) -> ProgressWords {
-    let text = match (progress.ratio, progress.phase) {
-        (Some(ratio), Some(phase)) => {
-            format!("{} \u{b7} {}/{}", phase.label(), ratio.done, ratio.total)
-        }
-        (Some(ratio), None) => format!("{}/{}", ratio.done, ratio.total),
-        (None, Some(phase)) => phase.label().to_string(),
-        (None, None) => "No task progress".to_string(),
-    };
-    ProgressWords {
-        text,
-        bar: progress.ratio,
-    }
-}
-
-/// The activity line: what the agent is doing now, with its todo ratio when it has a list
-/// (*Writing tests \u{b7} 2/5*). The task-list progress row stays below it (Story 5).
-pub fn activity_words(activity: &CurrentActivity) -> String {
-    match activity.ratio {
-        Some(ratio) => format!("{} \u{b7} {}/{}", activity.line, ratio.done, ratio.total),
-        None => activity.line.clone(),
-    }
 }
 
 /// The words of `model`.
@@ -134,16 +96,9 @@ pub fn words(model: &CardModel) -> Words {
     Words {
         type_icon: type_icon(model.kind),
         type_label: model.kind.label(),
-        name_tooltip: model.display_name.clone(),
         state_icon: state_icon(model.state),
         state_label: model.state.label(),
         reason_tooltip: model.reason.label(),
-        footer: format!(
-            "{} · {} sessions, {} running",
-            model.kind.label(),
-            model.sessions.0,
-            model.sessions.1
-        ),
     }
 }
 
@@ -239,13 +194,14 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let roles = card.roles;
         let p = palette(card.model.state, &roles);
         let w = words(&card.model);
+        let text = CardText::of(&card.model);
         let glyph =
             |icon: Icon| Element::from(Glyph::<M>::new(icon, TypeRole::Title, roles).tint(p.icon));
         let header = row![
             Tooltip::new(glyph(w.type_icon), w.type_label, roles),
             Tooltip::new(
-                Ellipsized::<M>::at_role(card.model.display_name.clone(), TypeRole::Title, p.text),
-                w.name_tooltip,
+                Ellipsized::<M>::at_role(text.title, TypeRole::Title, p.text),
+                text.title_tooltip,
                 roles
             ),
             Tooltip::new(
@@ -262,33 +218,35 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         .spacing(spacing::SM)
         .align_y(Alignment::Center);
         let mut body = column![header].spacing(spacing::XS);
-        if let Some(branch) = &card.model.branch {
-            body = body.push(Ellipsized::<M>::at_role(
-                branch.clone(),
-                TypeRole::Caption,
-                p.text,
+        if let Some(branch) = text.branch {
+            body = body.push(Tooltip::new(
+                Ellipsized::<M>::at_role(branch.text, TypeRole::Caption, p.text),
+                branch.tooltip,
+                roles,
             ));
         }
-        body = body
-            .push(Ellipsized::<M>::at_role(
-                card.model.summary.clone(),
-                TypeRole::Body,
-                p.text,
-            ))
-            .push(Text::new(w.footer, TypeRole::Caption, roles).tint(p.text));
-        if let Some(activity) = &card.model.activity {
-            body = body.push(Ellipsized::<M>::at_role(
-                activity_words(activity),
+        body = body.push(
+            Text::new(
+                format!("{} \u{b7} {}", w.type_label, text.sessions),
                 TypeRole::Caption,
-                p.text,
+                roles,
+            )
+            .tint(p.text),
+        );
+        if let Some(activity) = text.activity {
+            body = body.push(Tooltip::new(
+                Ellipsized::<M>::at_role(activity.text, TypeRole::Caption, p.text),
+                activity.tooltip,
+                roles,
             ));
         }
-        let row = progress_words(&card.model.progress);
-        body = body.push(Text::new(row.text, TypeRole::Caption, roles).tint(p.text));
-        if let Some(ratio) = row.bar {
-            body = body.push(ProgressBar::new(ratio, roles));
+        if let Some(row) = text.progress {
+            body = body.push(Text::new(row.text, TypeRole::Caption, roles).tint(p.text));
+            if let Some(ratio) = row.bar {
+                body = body.push(ProgressBar::new(ratio, roles));
+            }
         }
-        if let Some((text, tooltip)) = card.model.prs.footer() {
+        if let Some((text, tooltip)) = text.prs {
             let line = Text::new(text, TypeRole::Caption, roles).tint(p.text);
             body = match tooltip {
                 Some(reason) => body.push(Tooltip::new(line, reason, roles)),
@@ -369,7 +327,7 @@ mod tests {
     use iced::{Rectangle, Size};
     use micold_core::overview::{Activation, CardReason, PrDisplay};
     use micold_core::session::{SessionId, SessionLocation};
-    use micold_core::task_progress::Phase;
+    use micold_core::task_progress::{Phase, Progress, Ratio};
     use micold_core::theme::ColorScheme;
     use micold_core::tokens;
 
@@ -382,7 +340,7 @@ mod tests {
             sessions: (3, 2),
             state,
             reason: CardReason::Working,
-            summary: "Adds the worktree overview".into(),
+            title: "Adds the worktree overview".into(),
             prs: PrDisplay::Hidden,
             progress: Default::default(),
             activity: None,
@@ -409,19 +367,106 @@ mod tests {
             .count()
     }
 
-    /// FR-016, FR-017: the row has a bar only with a ratio; without one it says so in words.
+    /// FR-016, FR-009: the row has a bar only with a ratio; with neither a ratio nor a phase
+    /// there is no row at all.
     #[test]
     fn the_progress_row_has_a_bar_only_with_a_ratio() {
         let with = with_progress(Some((6, 10)), Some(Phase::Implement));
         assert_eq!(bars(&with, 280.0), 1);
-        assert_eq!(progress_words(&with.progress).text, "Implement \u{b7} 6/10");
+        assert!(painted(&with).contains(&"Implement \u{b7} 6/10".to_string()));
         let phase_only = with_progress(None, Some(Phase::Pr));
         assert_eq!(bars(&phase_only, 280.0), 0);
-        assert_eq!(progress_words(&phase_only.progress).text, "PR");
+        assert!(painted(&phase_only).contains(&"PR".to_string()));
         let none = with_progress(None, None);
         assert_eq!(bars(&none, 280.0), 0);
-        let words = progress_words(&none.progress);
-        assert_eq!((words.text.as_str(), words.bar), ("No task progress", None));
+        assert_eq!(
+            painted(&none).len(),
+            painted(&phase_only).len() - 1,
+            "no progress row: one line fewer than with a phase"
+        );
+    }
+
+    /// Every paragraph `model`'s card paints, in draw order.
+    fn painted(model: &CardModel) -> Vec<String> {
+        Mounted::new(OverviewCard::<String>::new(model, roles()))
+            .painted_text()
+            .into_iter()
+            .map(|p| p.content)
+            .collect()
+    }
+
+    /// The card of US2's example: an issue title, a conventional branch, one running session.
+    fn titled() -> CardModel {
+        let mut m = model(CardState::Working, "feat-1120_x");
+        m.title = "Overview cards: readable layout".into();
+        m.branch = Some("feat/1120_x".into());
+        m.sessions = (1, 1);
+        m
+    }
+
+    /// FR-009, FR-010, SC-003: a row with nothing to say is not shown.
+    #[test]
+    fn no_empty_progress_or_pull_request_row_is_shown() {
+        let mut m = with_progress(None, None);
+        m.prs = PrDisplay::Counts(micold_core::overview::PrCounts {
+            open: 0,
+            merged: 0,
+            open_capped: false,
+            merged_capped: false,
+        });
+        for text in painted(&m) {
+            assert_ne!(text, "No task progress", "FR-009: no empty progress row");
+            assert!(
+                !text.contains("0 open"),
+                "FR-010: no 0 \u{b7} 0 row: {text}"
+            );
+        }
+    }
+
+    /// FR-006, FR-007, FR-008, SC-003: the issue title, the short branch and the sessions line,
+    /// with the display name and the full branch on hover.
+    #[test]
+    fn the_card_shows_the_title_the_short_branch_and_the_sessions_line() {
+        let m = titled();
+        let text = painted(&m);
+        let title = "Overview cards: readable layout";
+        assert!(
+            text.iter().any(|t| {
+                let shown = t.trim_end_matches('\u{2026}');
+                shown.starts_with("Overview cards") && title.starts_with(shown)
+            }),
+            "the issue title is the title, ellipsized at most: {text:?}"
+        );
+        assert!(text.contains(&"feat/1120".to_string()), "{text:?}");
+        assert!(
+            !text
+                .iter()
+                .any(|t| t.contains("feat/1120_x") || t == "feat-1120_x"),
+            "neither the full branch nor the display name is shown: {text:?}"
+        );
+        assert!(
+            text.contains(&"Feature \u{b7} 1 session \u{b7} 1 running".to_string()),
+            "{text:?}"
+        );
+        let words = micold_core::overview_text::CardText::of(&m);
+        assert_eq!(words.title_tooltip, "feat-1120_x");
+        assert_eq!(
+            words.branch.map(|b| b.tooltip).as_deref(),
+            Some("feat/1120_x")
+        );
+    }
+
+    /// US2.8: a card whose title is its branch shows the branch once.
+    #[test]
+    fn a_card_titled_by_its_branch_shows_it_once() {
+        let mut m = titled();
+        m.title = "feat/1120_x".into();
+        let text = painted(&m);
+        assert_eq!(
+            text.iter().filter(|t| t.contains("feat/1120")).count(),
+            1,
+            "{text:?}"
+        );
     }
 
     /// FR-016: the bar fits the card at 280 px with every other row present, and the card keeps
@@ -497,7 +542,10 @@ mod tests {
     #[test]
     fn the_full_display_name_is_in_the_tooltip() {
         let long = "x".repeat(200);
-        assert_eq!(words(&model(CardState::Idle, &long)).name_tooltip, long);
+        assert_eq!(
+            micold_core::overview_text::CardText::of(&model(CardState::Idle, &long)).title_tooltip,
+            long
+        );
     }
 
     /// SC-005: each card carries its type icon with the type's word, and its state icon with the
@@ -529,9 +577,9 @@ mod tests {
         for (i, a) in icons.iter().enumerate() {
             assert!(!icons[i + 1..].contains(a), "{a:?} stands for two types");
         }
-        assert_eq!(
-            words(&model(CardState::Idle, "n")).footer,
-            "Feature · 3 sessions, 2 running",
+        assert!(
+            painted(&model(CardState::Idle, "n"))
+                .contains(&"Feature \u{b7} 3 sessions \u{b7} 2 running".to_string()),
             "FR-002: the type's word is visible text on the card, not only a tooltip"
         );
     }

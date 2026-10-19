@@ -465,12 +465,12 @@ fn card_model(
     micold_core::overview::CardModel {
         location: micold_core::session::SessionLocation::Worktree(name.to_string()),
         display_name: name.to_string(),
-        branch: Some(format!("feat/{name}")),
+        branch: Some("feat/813_worktree-overview".to_string()),
         kind,
         sessions: (3, 2),
         state,
         reason,
-        summary: "Adds the worktree overview".to_string(),
+        title: "Worktree overview: one card per location".to_string(),
         prs: micold_core::overview::PrDisplay::Counts(micold_core::overview::PrCounts {
             open: 1,
             merged: 2,

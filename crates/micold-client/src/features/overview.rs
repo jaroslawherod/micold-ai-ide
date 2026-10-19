@@ -333,22 +333,6 @@ pub fn titles_to_fetch(state: &State, dirs: &[String], github_available: bool) -
     wanted
 }
 
-/// The card's one line saying what the location is for: the issue title when known, else the
-/// branch, else the display name; the project root says so (FR-015).
-pub fn summary(
-    location: &micold_core::session::SessionLocation,
-    display_name: &str,
-    branch: Option<&str>,
-    title: Option<&TitleLookup>,
-) -> String {
-    use micold_core::session::SessionLocation;
-    match (location, title) {
-        (SessionLocation::Default, _) => "Project root".to_string(),
-        (_, Some(TitleLookup::Known(title))) => title.clone(),
-        _ => branch.unwrap_or(display_name).to_string(),
-    }
-}
-
 /// Which colour family the badge is drawn in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
