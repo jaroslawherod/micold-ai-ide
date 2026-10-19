@@ -389,14 +389,14 @@ async fn the_same_requests_to_its_shell_instance_are_served() {
     );
 }
 
-/// A resize without a `process` is every process's: the structured session's AI process refuses
-/// it, and its shell instances still take the size.
+/// A resize without a `process` is every process's, not the AI process's: it is not refused and
+/// the session's shell instances take the size.
 #[tokio::test]
 #[allow(clippy::await_holding_lock)]
-async fn a_resize_for_every_process_is_refused_for_the_ai_process_and_taken_by_the_shells() {
+async fn a_resize_for_every_process_is_not_refused_and_the_shells_take_it() {
     use futures_util::SinkExt;
     use micold_core::protocol::codec::Frame;
-    use micold_core::protocol::messages::{ClientMsg, RefusedRequest, SessionProcess};
+    use micold_core::protocol::messages::{ClientMsg, SessionProcess};
     use micold_core::session::ShellInstanceId;
     let _serial = one_at_a_time();
     fake_stream_cli();
@@ -427,10 +427,7 @@ async fn a_resize_for_every_process_is_refused_for_the_ai_process_and_taken_by_t
         client.send(Frame::Control(msg)).await.expect("sent");
     }
     let got = refusals(&frames_within(&mut client, Duration::from_secs(2)).await);
-    assert_eq!(
-        got.iter().map(|(request, ..)| *request).collect::<Vec<_>>(),
-        [RefusedRequest::Resize]
-    );
+    assert!(got.is_empty(), "not addressed to the AI process: {got:?}");
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         if std::fs::read_to_string(&size_file).is_ok_and(|s| s.trim() == "41 91") {

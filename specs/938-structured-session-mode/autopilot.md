@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M6
-- **Next step**: round-2 scoped review (sonnet) of the review-A fixes, gate (scripts/gate.sh, log gate-m6.log in scratchpad), then PR to open
+- **Next step**: gate (scripts/gate.sh, log gate-m6.log in scratchpad) then push and PR to open
 
 ## Pull requests
 
@@ -83,6 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 review B (conformance, sonnet) | 1 | 08ffe9fb82c67bdbf328f60fed45034f77cf54fd:404a706fc8eb3bff573d8b0a9d4d72f748468f22 | CLEAN |
 | M6 review A (code-review high) | 1 | 0ad26a1db386ecc3b9daf44ff41c705785387658:f7da76abb46db0eda52a1df692dac5b491e8552f | 7 findings: 1 MAJOR fixed (resize with no process dropped the shells' size), 2 MINOR fixed, 4 declined |
 | M6 review B (conformance, sonnet) | 1 | 0ad26a1db386ecc3b9daf44ff41c705785387658:f7da76abb46db0eda52a1df692dac5b491e8552f | CHANGES: 1 MAJOR (no cycle-log entry; fixed), 2 MINOR fixed |
+| M6 review A (code-review high, sonnet) | 2 | b480bc7d5293b1a1ab13b1adb3bc08e3e17fe1e0:bca89db402cd6b67058a8a23a550fe616acf75d7 | 1 MAJOR fixed (a process-less resize was refused and applied; now not refused), 1 MINOR fixed (SessionResize doc), 3 MINOR declined; fix verified by test, no round 3 |
 
 ## Declined review findings
 
@@ -123,6 +124,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | A 3 | check and dispatch are two lock takes; attach can switch between | the client orders its own attach and requests on one connection; a request is judged against the process attached when it arrives, which is the contract's meaning of `None`
 | M6 | A 5 | scrollback and interrupt carry no process field | wire.md addresses them to the attached process; adding a field is a wire change outside T033–T036
 | M6 | A 7 | `refuses_terminal_request` duplicates target resolution | it needs the kind under the same lock as the attached process; reusing `session_kind` plus `attached_process` would take two locks
+| M6 | A2 4-6 | served test checks no refusal not the ^C target; new test lacks a no-shell case and repeats setup; nested `if !refuse(..)` | the contract is the reply; setup is the file's existing pattern (three cases); edition 2021 has no let-chains
 
 ## Handover
 
