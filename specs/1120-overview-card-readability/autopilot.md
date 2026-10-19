@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
 - **Phase**: plan
-- **Next step**: plan review round 1 (plan unit, continuing the handover). If the user's FR-012 card picks B or C, reopen FR-012 and research R7 first.
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| 1 | clarify | FR-012: one generic sentence for every slash command, or special wording / hiding for built-ins? | A: one generic sentence for every command, built-ins included | A, orchestrator default (recommended), user card open | spec.md Clarifications; specs/032-untitled-session-labels/contracts/first-turn-label.md C3.5a |
+| 1 | clarify | FR-012: one generic sentence for every slash command, or special wording / hiding for built-ins? | A: one generic sentence for every command, built-ins included | A, orchestrator default (recommended), confirmed by jaro 2026-10-19T19:09Z | spec.md Clarifications; specs/032-untitled-session-labels/contracts/first-turn-label.md C3.5a |
 
 ## Review rounds
 
@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | fdfeae51b28753936f4e21eca650306af1098566:38a9ce97b751560df8c8feaddf1271cbceba0cc2 | CHANGES: 2 MAJOR, 3 MINOR (run by orchestrator); all fixed |
 | Spec | 2 | e3d615be650081e55115b2439e1bb15d4948f794:c672c92ff959967fbae970486c6fd8c64a0fa07c | CLEAN (scoped re-review on sonnet, run by orchestrator) |
+| Plan | 1 | 221940aa90b85d7d1661e8a886cc5a8581948ec5:fceaaad45c2dd36fcc8549bfb609d09e4e0c3436 | CHANGES: 1 MAJOR, 3 MINOR (run by orchestrator). F1 (R11, R15 alternatives rejected) fixed, prose only; F2 quickstart filters after `--`; F3 FR-020 checked by a quickstart grep; F4 main_session citation. No round 2 needed |
 
 ## Declined review findings
 
@@ -42,13 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit 1 (2026-10-19) handed over at the 150k context cap after writing all plan artifacts
-(plan.md, research.md R1–R15, data-model.md, contracts/card-text.md, contracts/overview-card.md,
-quickstart.md), committed. Branch rebased onto origin/main by branch-start.sh (no PR yet).
-Next: run `scripts/autopilot/review-snapshot.sh`, record it under *Review rounds* as `Plan | 1`,
-dispatch the plan reviewer (tasks/review.md, rubrics/plan.md, round 1 on the session model), act on
-its verdict (tasks/review-rounds.md), then set **Next step** to `tasks unit` and return DONE, PR none.
-No open findings.
+None.
 
 ## Open escalation
 
