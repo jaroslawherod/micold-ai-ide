@@ -31,6 +31,9 @@ pub type UnixTime = u64;
 /// The longest a scoped credential may live (FR-009): the hour GitHub gives an installation token.
 pub const MAX_LIFETIME_SECS: u64 = 3600;
 
+/// How far past [`MAX_LIFETIME_SECS`] an expiry may lie: the source issued it by its own clock.
+pub const CLOCK_SKEW_SECS: u64 = 300;
+
 /// The forge the scoped credential is for, as git names it in `credential.<base>.*`.
 pub const GITHUB_BASE: &str = "https://github.com";
 
@@ -204,7 +207,7 @@ impl ScopedCredential {
             return Err(wider());
         }
         match response.expires_at {
-            Some(expires_at) if expires_at > now && expires_at <= now + MAX_LIFETIME_SECS => {
+            Some(expires_at) if expires_at > now && expires_at <= now + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS => {
                 Ok(Self {
                     repo: repo.clone(),
                     token: response.token,
@@ -427,8 +430,14 @@ mod tests {
     }
 
     #[test]
+    fn an_expiry_within_the_clock_skew_is_accepted() {
+        let r = response(Some(NOW + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS));
+        assert!(ScopedCredential::accept(&repo(), Grant::default(), r, NOW).is_ok());
+    }
+
+    #[test]
     fn a_missing_late_or_past_expiry_is_refused() {
-        for expires_at in [None, Some(NOW + MAX_LIFETIME_SECS + 1), Some(NOW)] {
+        for expires_at in [None, Some(NOW + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS + 1), Some(NOW)] {
             assert!(refused(ScopedCredential::accept(
                 &repo(),
                 Grant::default(),
