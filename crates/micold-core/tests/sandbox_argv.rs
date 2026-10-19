@@ -133,6 +133,13 @@ fn mapped_volumes(
     let fixed = [
         spec.mounts.state.host.to_string_lossy().into_owned(),
         spec.mounts.home.host.to_string_lossy().into_owned(),
+        // The sanitized git configuration: built in the state directory, mounted at `~/.gitconfig`.
+        spec.mounts
+            .state
+            .host
+            .join("gitconfig")
+            .to_string_lossy()
+            .into_owned(),
     ]
     .into_iter()
     .chain(
@@ -181,8 +188,8 @@ fn a_windows_host_mounts_every_path_under_the_container_root() {
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
     assert_eq!(
         mapped.len(),
-        5,
-        "one project, the git config and three sign-in files: {mapped:?}"
+        4,
+        "one project and three sign-in files: {mapped:?}"
     );
     assert!(
         mapped
@@ -240,8 +247,9 @@ fn a_unix_host_mounts_every_path_at_itself() {
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
     assert_eq!(
         mapped.len(),
-        5,
-        "one project, the git config and three sign-in files: {mapped:?}"
+        4,
+        "one project and three sign-in files, the git config being the state-directory copy: \
+         {mapped:?}"
     );
     for (host, container, _) in mapped {
         assert_eq!(
@@ -477,7 +485,11 @@ fn no_personal_token_or_agent_socket_reaches_the_container_environment() {
     for e in &env {
         let name = e.split('=').next().unwrap();
         assert!(
-            name == "HOME" || name == "TZ" || name.starts_with("MICOLD_"),
+            name == "HOME"
+                || name == "TZ"
+                || name.starts_with("MICOLD_")
+                || name.starts_with("GIT_CONFIG_")
+                || name == "GIT_TERMINAL_PROMPT",
             "{e} is passed into the container"
         );
     }
@@ -498,4 +510,53 @@ fn no_personal_token_or_agent_socket_reaches_the_container_environment() {
     assert!(!args
         .iter()
         .any(|a| a == "--env-host" || a.starts_with("--env-file")));
+}
+
+/// FR-004: git in the container is told, in its environment, to reset every credential helper,
+/// and each pair of that block is one `-e` argument.
+#[test]
+fn git_in_the_container_resets_every_credential_helper() {
+    let spec = spec_for(false);
+    let args: Vec<String> = argv::create(&spec, &caps())
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    let env: Vec<&String> = args
+        .windows(2)
+        .filter(|w| w[0] == "-e")
+        .map(|w| &w[1])
+        .collect();
+    let block =
+        micold_core::scoped_credential::git_env(micold_core::scoped_credential::GITHUB_BASE);
+    assert!(block.contains_key("GIT_CONFIG_COUNT"));
+    for (name, value) in block {
+        assert!(
+            env.iter().any(|e| **e == format!("{name}={value}")),
+            "{name}={value} is not passed: {env:?}"
+        );
+    }
+}
+
+/// FR-004: the `~/.gitconfig` mount's source is the sanitized copy in the daemon state directory,
+/// not the host's file, whichever platform the host is.
+#[test]
+fn the_git_config_mount_is_the_sanitized_copy_not_the_host_file() {
+    for windows_host in [false, true] {
+        let spec = spec_for(windows_host);
+        let mount = spec
+            .mounts
+            .credentials
+            .iter()
+            .find(|c| c.share == CredentialShare::GitConfig)
+            .expect("the spec shares the git configuration");
+        assert_eq!(mount.host, spec.mounts.state.host.join("gitconfig"));
+        assert!(mount.container.to_string_lossy().ends_with(".gitconfig"));
+        let args = argv::create(&spec, &caps());
+        let volume = volumes(&args)
+            .into_iter()
+            .find(|(_, container, _)| container.ends_with(".gitconfig"))
+            .expect("the git configuration is mounted");
+        assert_eq!(volume.2, "ro");
+        assert!(!volume.0.ends_with(".gitconfig"), "{volume:?}");
+    }
 }

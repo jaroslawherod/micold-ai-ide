@@ -341,6 +341,13 @@ pub fn start_attempt<R: CommandRunner>(
         mounts.history = None;
     }
 
+    // The git configuration is shared as a copy without anything that could carry a credential
+    // (FR-004). A host without a readable configuration or without `git` shares none, as an
+    // absent file does.
+    if let Err(e) = share_sanitized_git_config(&mut mounts, facts) {
+        eprintln!("sandbox: the git configuration is not shared: {e}");
+    }
+
     // A credential mounted into a directory of that home — the AI CLI's sign-in, in `~/.claude` —
     // needs the directory too, for the same reason: left to the runtime it comes out root-owned,
     // and the CLI cannot write its sessions beside the token (research R11, BUG-006).
@@ -411,6 +418,46 @@ pub fn start_attempt<R: CommandRunner>(
         );
     }
     Ok(Ready { started, locations })
+}
+
+/// Writes the sanitized copy of the host's `~/.gitconfig` to where [`MountSet`] mounts it from, or,
+/// when that cannot be done, takes the mount out so the host's file is not shared in its place.
+fn share_sanitized_git_config(mounts: &mut MountSet, facts: &HostFacts) -> Result<(), String> {
+    use micold_core::sandbox::CredentialShare;
+    let Some(copy) = mounts
+        .credentials
+        .iter()
+        .find(|c| c.share == CredentialShare::GitConfig)
+        .map(|c| c.host.clone())
+    else {
+        return Ok(());
+    };
+    let written = (|| -> Result<(), String> {
+        let source = facts
+            .layout
+            .git_config
+            .as_ref()
+            .ok_or("the host has no git configuration")?;
+        let text = std::fs::read_to_string(source)
+            .map_err(|e| format!("could not read {}: {e}", source.display()))?;
+        let sanitized = micold_core::scoped_credential::sanitize_gitconfig_text(&text)
+            .map_err(|e| format!("could not sanitize {}: {e}", source.display()))?;
+        let (dir, name) = (
+            copy.parent().ok_or("no state directory")?,
+            copy.file_name()
+                .and_then(|n| n.to_str())
+                .ok_or("no file name")?,
+        );
+        micold_core::owner_only::write(dir, name, sanitized.as_bytes())
+            .map(drop)
+            .map_err(|e| format!("could not write {}: {e}", copy.display()))
+    })();
+    if written.is_err() {
+        mounts
+            .credentials
+            .retain(|c| c.share != CredentialShare::GitConfig);
+    }
+    written
 }
 
 /// The directory of this daemon's SSH keys on the host, and where the container sees it (feature
@@ -1241,6 +1288,51 @@ mod tests {
         // "runtime is not installed" failure could never be reported properly.
         let facts = HostFacts::gather(std::env::temp_dir());
         assert!(facts.layout.git_config.is_some());
+    }
+
+    /// FR-004: the shared git configuration is the sanitized copy in the state directory; the
+    /// host's file is not what is mounted, and a configuration that cannot be read shares nothing.
+    #[test]
+    fn the_git_config_is_shared_as_a_sanitized_copy() {
+        use micold_core::sandbox::CredentialShare;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let home = dir.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        let host_file = home.join(".gitconfig");
+        std::fs::write(
+            &host_file,
+            "[user]\n\tname = Ada\n[credential]\n\thelper = store\n",
+        )
+        .unwrap();
+        let mut facts = HostFacts::gather(dir.path().join("state"));
+        facts.home = home.clone();
+        facts.layout = micold_core::sandbox::CredentialLayout::conventional(&home, None);
+        let profile = SandboxProfile {
+            credentials: std::collections::BTreeSet::from([CredentialShare::GitConfig]),
+            ..SandboxProfile::default()
+        };
+        let mut mounts = mount_set(&profile, &[], &facts);
+        let git = |m: &MountSet| {
+            m.credentials
+                .iter()
+                .any(|c| c.share == CredentialShare::GitConfig)
+        };
+        if share_sanitized_git_config(&mut mounts, &facts).is_err() {
+            eprintln!("skipped: no git on this host");
+            return;
+        }
+        let copy = &mounts.credentials[0].host;
+        assert_eq!(copy, &facts.state_dir.join("gitconfig"));
+        let text = std::fs::read_to_string(copy).unwrap();
+        assert!(
+            text.contains("name = \"Ada\"") && !text.contains("store"),
+            "{text}"
+        );
+
+        std::fs::remove_file(&host_file).unwrap();
+        let mut mounts = mount_set(&profile, &[], &facts);
+        assert!(share_sanitized_git_config(&mut mounts, &facts).is_err());
+        assert!(!git(&mounts), "an unreadable configuration shares nothing");
     }
 
     /// SC-004c at its source: every stage a bring-up enters has to leave the worker, in order, and

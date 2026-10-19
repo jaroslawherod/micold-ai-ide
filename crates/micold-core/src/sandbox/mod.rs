@@ -493,6 +493,11 @@ pub const STATE_CONTAINER_DIR: &str = "/var/lib/micold-ai-ide";
 /// can look at from the host. It is *not* the user's home — see [`HomeMount`].
 pub const SANDBOX_HOME_DIR: &str = "sandbox-home";
 
+/// The sanitized copy of the host's `~/.gitconfig`, in the daemon state directory (#1002, FR-004).
+/// The bring-up writes it; the container mounts it where `~/.gitconfig` was, so the host's file
+/// itself, with whatever credential helper or token it holds, is never mounted.
+pub const SANDBOX_GITCONFIG_FILE: &str = "gitconfig";
+
 /// The file in the sandbox's home where `claude` records that its first-run setup is done
 /// (FR-004f, BUG-007).
 const ONBOARDING_RECORD: &str = ".claude.json";
@@ -788,7 +793,12 @@ impl MountSet {
                         // Credentials are mounted at their own absolute paths for the same reason
                         // projects are: the tools inside look for them where they always are.
                         container: pathmap::map_for(host, windows_host),
-                        host: host.to_path_buf(),
+                        // The git configuration is mounted from its sanitized copy, never from
+                        // the host's file (FR-004).
+                        host: match share {
+                            CredentialShare::GitConfig => state_dir.join(SANDBOX_GITCONFIG_FILE),
+                            CredentialShare::AiCliAuth => host.to_path_buf(),
+                        },
                     })
             })
             .collect();

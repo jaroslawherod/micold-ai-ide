@@ -43,7 +43,8 @@ subsection as written):
   (userinfo)
 - `http.extraHeader`, `http.<url>.extraHeader`
 - `include.*`, `includeIf.*`
-- `core.sshCommand`, `core.askPass`
+- `core.sshCommand`, `core.askPass`, `sendemail.smtpPass`, `imap.pass`, `http.proxyAuthMethod`
+- any setting whose value is a URL with userinfo (`remote.<n>.url`, `http.proxy`, ...)
 
 Everything else is written back in order, as `git config` would read it. The result is written by
 the client to `<daemon state dir>/gitconfig` (container; mounted where `~/.gitconfig` was) or into

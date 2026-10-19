@@ -209,8 +209,10 @@ fn credentials_appear_at_the_paths_their_tools_expect() {
     };
     let mounts = build(&profile);
     let c = &mounts.credentials[0];
+    // The source is the sanitized copy in the state directory (FR-004); the target is the path the
+    // tool looks at.
+    assert_eq!(c.host, mounts.state.host.join("gitconfig"));
     if cfg!(not(windows)) {
-        assert_eq!(c.host, c.container);
         assert!(c.container.ends_with(".gitconfig"));
     }
 }
