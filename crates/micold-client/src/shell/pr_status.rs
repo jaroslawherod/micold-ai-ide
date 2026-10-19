@@ -37,6 +37,8 @@ use micold_core::overview::PrCounts;
 use micold_core::protocol::messages::{BranchContainment, ClientMsg, MergedBranchQuery};
 use micold_core::pull_request::{DiffReadFailure, PrState, PullRequestStatus, ReadingFailure};
 use micold_core::review::pr_diff::split_pr_diff;
+use micold_core::session::SessionLocation;
+use micold_core::worktree_branches::read_branch_set;
 
 use crate::shell::daemon_sync::{send_op, PendingOp};
 use crate::shell::env_include::resolve_env_include;
@@ -322,11 +324,18 @@ fn may_read_pull_requests(app: &App, started: u64) -> bool {
     !paused && routed
 }
 
-/// A Changes view asked for the pull requests of `branch` (feature 775, contracts §1). The one
-/// entry of the list read: asks the daemon for the remotes, bounded by [`REMOTES_TIMEOUT`], and
-/// answers `Msg::PullRequestsRead` of the Changes view. Held back while the status reading is paused
-/// by GitHub's request limit (R3); every failure ends as a passing one, never a notice (FR-008).
-pub fn list_requested(app: &mut App, seq: u64, project: PathBuf, branch: String) -> Task<Message> {
+/// A Changes view asked for the pull requests of `entry`'s branch set (feature 775, contracts §1;
+/// feature 1003). The one entry of the list read: asks the daemon for the remotes, bounded by
+/// [`REMOTES_TIMEOUT`], and answers `Msg::PullRequestsRead` of the Changes view. Held back while
+/// the status reading is paused by GitHub's request limit (R3); every failure ends as a passing
+/// one, never a notice (FR-008).
+pub fn list_requested(
+    app: &mut App,
+    seq: u64,
+    project: PathBuf,
+    entry: SessionLocation,
+    current: Option<String>,
+) -> Task<Message> {
     let started = now();
     let passing = move || {
         Message::Changes(ChangesMsg::PullRequestsRead {
@@ -345,7 +354,8 @@ pub fn list_requested(app: &mut App, seq: u64, project: PathBuf, branch: String)
         PendingOp::PrListRemotes {
             project: asked_for,
             seq,
-            branch,
+            entry,
+            current,
             started,
         },
         move |req| ClientMsg::RemoteList { req, project },
@@ -358,13 +368,16 @@ pub fn list_requested(app: &mut App, seq: u64, project: PathBuf, branch: String)
     )
 }
 
-/// The daemon answered a list read's `RemoteList` (`None`: it failed). Reads the branch's pull
-/// requests on a blocking thread when the repository is on GitHub and `gh` is found.
+/// The daemon answered a list read's `RemoteList` (`None`: it failed). On a blocking thread, when
+/// the repository is on GitHub and `gh` is found, reads the entry's branch set with this
+/// computer's git (feature 1003, FR-002; no local git: `current` alone, with no notice), then the
+/// pull requests of every branch of it.
 pub fn on_list_remotes(
     app: &mut App,
     project: PathBuf,
     seq: u64,
-    branch: String,
+    entry: SessionLocation,
+    current: Option<String>,
     started: u64,
     remotes: Option<Vec<GitRemote>>,
 ) -> Task<Message> {
@@ -396,6 +409,7 @@ pub fn on_list_remotes(
     let enabled = app.env_include_enabled;
     let script = app.env_include_script_path.clone();
     let timeout_secs = app.env_include_timeout_secs;
+    let local = crate::shell::changes::local(app, &entry).ok();
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
@@ -405,7 +419,11 @@ pub fn on_list_remotes(
                 let Some(gh) = (tooling.locate_gh)(env_include_path(&snapshot.vars)) else {
                     return Err(ReadingFailure::Unavailable);
                 };
-                (tooling.pull_requests)(gh).list_branches(&repo, &[branch], now())
+                let branches = match local {
+                    Some((dir, git)) => read_branch_set(&*git, &dir, current.as_deref()),
+                    None => current.into_iter().collect(),
+                };
+                (tooling.pull_requests)(gh).list_branches(&repo, &branches, now())
             })
             .await
         },

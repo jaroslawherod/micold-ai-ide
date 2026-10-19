@@ -11,3 +11,6 @@ No `tdd/test-list.md`: tasks.md's test-first order is the list (ledger *Handover
 | T006 | red | compile: `list_in_chunks`, `LIST_BRANCHES_PER_REQUEST`, `head_branch`, `list_branches` missing (test written in part 1 against the API in the ledger) | does not compile |
 | T007 | green | `cargo test -p micold-core --test pull_request_list --test pull_request_is_never_stored` | 15 + 3 passed |
 | T009 | red | `cargo check -p micold-client --all-targets` | E0026: `ReadPullRequests` has no fields `entry`, `current` |
+| T011 | green | `cargo test -p micold-client --test features_pr_changes` (with T012, one build) | passed |
+| T010 | red | `cargo test -p micold-client --bin micold-ai-ide pr_list_branch_set`, T012 read swapped back to `[current]` | 2 failed: `left: [{"C"}]`, `right: [{"A", "B", "C"}]`; no-local-git case passed (it pins the old behaviour) |
+| T012 | green | `cargo test -p micold-client --bin micold-ai-ide pr_list_` | 16 passed |

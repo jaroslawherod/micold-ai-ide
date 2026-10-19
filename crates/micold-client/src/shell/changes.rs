@@ -153,8 +153,9 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
         Effect::ReadPullRequests {
             seq,
             project,
-            branch,
-        } => crate::shell::pr_status::list_requested(app, seq, project, branch),
+            entry,
+            current,
+        } => crate::shell::pr_status::list_requested(app, seq, project, entry, current),
         Effect::ReadPullRequestDiff {
             seq,
             project,
@@ -276,7 +277,7 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
 }
 
 /// The entry's directory and this computer's git, or why a read cannot run here.
-fn local(
+pub(crate) fn local(
     app: &App,
     entry: &SessionLocation,
 ) -> Result<(PathBuf, Arc<dyn Git + Send + Sync>), &'static str> {

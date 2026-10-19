@@ -147,7 +147,10 @@ pub enum PendingOp {
     PrListRemotes {
         project: PathBuf,
         seq: u64,
-        branch: String,
+        /// The worktree whose branch set is read (feature 1003).
+        entry: SessionLocation,
+        /// Its current branch; `None` on a detached HEAD.
+        current: Option<String>,
         started: u64,
     },
     /// The `RemoteList` a Changes view's pull request diff read starts with (feature 775).
@@ -1449,7 +1452,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             Some(PendingOp::PrListRemotes {
                 project,
                 seq,
-                branch,
+                entry,
+                current,
                 started,
             }) => {
                 let remotes = match result {
@@ -1457,7 +1461,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     _ => None,
                 };
                 follow_up = crate::shell::pr_status::on_list_remotes(
-                    app, project, seq, branch, started, remotes,
+                    app, project, seq, entry, current, started, remotes,
                 );
             }
             // Feature 775: the remotes a Changes view's pull request diff read asked for.
@@ -1692,11 +1696,12 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 Some(PendingOp::PrListRemotes {
                     project,
                     seq,
-                    branch,
+                    entry,
+                    current,
                     started,
                 }) => {
                     return crate::shell::pr_status::on_list_remotes(
-                        app, project, seq, branch, started, None,
+                        app, project, seq, entry, current, started, None,
                     );
                 }
                 Some(PendingOp::PrDiffRemotes {

@@ -61,7 +61,8 @@ pub enum Load<T> {
 /// every session of one worktree shares one list and one read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum PrList {
-    /// No section: the setting is off, the entry has no branch, or there is no GitHub access.
+    /// No section: the setting is off, the entry is the project root, or there is no GitHub
+    /// access.
     #[default]
     Absent,
     /// A read is under way; `again`: one more follows it. `last` stays on screen meanwhile.
@@ -782,15 +783,18 @@ pub enum Effect {
         /// Read it even over the size limits (the user pressed Show diff).
         force_large: bool,
     },
-    /// Read the pull requests of `branch` in `project` as read `seq`. Never issued as part of a
-    /// `ReadList`: the working-tree list does not wait for it (feature 775, FR-009).
+    /// Read the pull requests of `entry`'s branch set (feature 1003, FR-002) in `project` as read
+    /// `seq`. Never issued as part of a `ReadList`: the working-tree list does not wait for it
+    /// (feature 775, FR-009).
     ReadPullRequests {
         /// The read's sequence number.
         seq: u64,
         /// The project.
         project: PathBuf,
-        /// The branch.
-        branch: String,
+        /// The worktree whose branch set is read.
+        entry: SessionLocation,
+        /// The entry's current branch; `None` on a detached HEAD.
+        current: Option<String>,
     },
     /// Read pull request `number`'s diff in `project` as read `seq` (feature 775, FR-004).
     ReadPullRequestDiff {
@@ -1853,18 +1857,19 @@ fn reconcile_source(state: &mut State, numbers: &[u64], again: bool) -> Option<E
 }
 
 /// Start a read of the open view's pull requests, or queue one behind the read under way. Nothing
-/// is read, and no section shown, while the setting is off or the entry has no branch.
+/// is read, and no section shown, while the setting is off or the entry is the project root
+/// (FR-012); a worktree on a detached HEAD still reads the branches created there (feature 1003).
 fn request_pull_requests(state: &mut State) -> Effect {
     let seq = state.next_seq;
     let enabled = state.pr_enabled;
     let Some(view) = state.open.as_mut() else {
         return Effect::None;
     };
-    let Some(branch) = view.branch.clone().filter(|_| enabled) else {
+    if !enabled || !matches!(view.entry, SessionLocation::Worktree(_)) {
         view.pull_requests = PrList::Absent;
         view.source = Source::Changes;
         return Effect::None;
-    };
+    }
     let last = match std::mem::take(&mut view.pull_requests) {
         PrList::Loading {
             seq,
@@ -1891,7 +1896,8 @@ fn request_pull_requests(state: &mut State) -> Effect {
     Effect::ReadPullRequests {
         seq,
         project: view.project.clone(),
-        branch,
+        entry: view.entry.clone(),
+        current: view.branch.clone(),
     }
 }
 
@@ -2183,13 +2189,9 @@ pub fn base_line(view: &OpenView) -> Option<String> {
     if let Source::PullRequest(pr) = &view.source {
         let (prs, _) = view.pull_requests.shown()?;
         let listed = prs.iter().find(|p| p.number == pr.number)?;
-        let head = view
-            .branch
-            .clone()
-            .unwrap_or_else(|| listed.head.chars().take(7).collect());
         return Some(format!(
-            "Pull request #{}: {} ... {head}",
-            pr.number, listed.base
+            "Pull request #{}: {} ... {}",
+            pr.number, listed.base, listed.head_branch
         ));
     }
     let list = shown_list(view)?;
