@@ -418,7 +418,7 @@ pod; a daemon without it refuses every clone). Two requests for one `dest` run o
 A sandboxed daemon (in a container or a pod) holds no git identity of the user. The application
 hands it one credential per repository its projects push to, over three messages; a host-process
 or SSH daemon never sends the first and answers the others with an `OperationError`
-(`req: 0`, `Refused`).
+(`req: u64::MAX`, `Refused`).
 
 - `DaemonMsg::GitCredentialTargets { targets, git_too_old }`: sent by the daemon after a successful
   `Attach`, and to every client when a project is added or removed or a worktree refresh finds a

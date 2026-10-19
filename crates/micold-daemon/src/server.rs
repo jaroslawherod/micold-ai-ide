@@ -1866,6 +1866,12 @@ where
                             format!("git {version} is older than 2.31; refused a credential for {asked}"),
                         );
                     }
+                    Ok(Err(GrantRefused::Invalid)) => refuse_git_credential(
+                        state,
+                        id,
+                        ErrorKind::InvalidInput,
+                        format!("the credential for {asked} is empty, malformed or expired"),
+                    ),
                     Ok(Err(GrantRefused::NotAProjectRepo)) => refuse_git_credential(
                         state,
                         id,
@@ -1886,7 +1892,7 @@ where
             }
             ClientMsg::GitCredentialRevoke { repo } => {
                 if let Some(root) = crate::git_credential::credential_root() {
-                    if let Err(e) = crate::git_credential::remove_grant(&root, &repo) {
+                    if let Err(e) = crate::git_credential::remove_grant(&root, &repo.lowercased()) {
                         tracing::warn!(repo = %repo, error = %e, "git credential not removed");
                         refuse_git_credential(
                             state,
@@ -2398,7 +2404,7 @@ async fn announce_git_targets(state: &Arc<DaemonState>, only: Option<crate::stat
     if let Some(version) = &git_too_old {
         tracing::warn!(version = %version, "git is older than 2.31: scoped git credentials are refused");
     }
-    let changed = state.git_targets_changed(&targets);
+    let changed = state.git_targets_changed(&targets, git_too_old.as_deref());
     let msg = DaemonMsg::GitCredentialTargets {
         targets,
         git_too_old,
@@ -2409,6 +2415,10 @@ async fn announce_git_targets(state: &Arc<DaemonState>, only: Option<crate::stat
         None => {}
     }
 }
+
+/// The `req` of an `OperationError` answering no request: a refused or failed credential message.
+/// Clients number requests up from 0, so the top of the range cannot be one of theirs.
+pub const GIT_CREDENTIAL_NOTICE_REQ: u64 = u64::MAX;
 
 /// A refused or failed credential request, to the requester only. It names the repository, never
 /// the token.
@@ -2421,7 +2431,7 @@ fn refuse_git_credential(
     state.send(
         id,
         DaemonMsg::OperationError {
-            req: 0,
+            req: GIT_CREDENTIAL_NOTICE_REQ,
             kind,
             message,
             detail: None,

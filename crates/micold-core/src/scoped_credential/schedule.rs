@@ -76,7 +76,7 @@ impl Schedule {
                     Some(version) => Err(NoCredentialReason::GitTooOld {
                         version: version.to_string(),
                     }),
-                    None => t.repo(),
+                    None => t.repo().map(|r| r.lowercased()),
                 };
                 (t.project.clone(), resolved)
             })
@@ -143,7 +143,11 @@ impl Schedule {
             .into_iter()
             .map(|repo| {
                 let result = source.issue(&repo, self.grant);
-                self.record(&repo, &result, now);
+                let superseded = self.record(&repo, &result, now);
+                // The token a renewal replaces is revoked too, best effort (FR-010).
+                if let Some(old) = superseded {
+                    let _ = source.revoke(&old);
+                }
                 Renewal { repo, result }
             })
             .collect()
@@ -154,10 +158,8 @@ impl Schedule {
         repo: &GithubRepo,
         result: &Result<ScopedCredential, NoCredentialReason>,
         now: UnixTime,
-    ) {
-        let Some(state) = self.repos.get_mut(repo) else {
-            return;
-        };
+    ) -> Option<ScopedCredential> {
+        let state = self.repos.get_mut(repo)?;
         match result {
             Ok(credential) => {
                 let (issued, expires) = (credential.issued_at(), credential.expires_at());
@@ -167,8 +169,8 @@ impl Schedule {
                 } else {
                     issued + (expires - issued) / 2 + 1
                 };
-                state.held = Some(credential.clone());
                 state.failure = None;
+                return state.held.replace(credential.clone());
             }
             Err(reason) => {
                 let attempts = state.failure.as_ref().map_or(0, |(_, n)| *n);
@@ -176,6 +178,7 @@ impl Schedule {
                 state.failure = Some((reason.clone(), attempts + 1));
             }
         }
+        None
     }
 
     /// The status of `project` at `now`.
@@ -492,6 +495,32 @@ mod tests {
     fn a_target_before_its_first_issue_is_pending() {
         let (s, _) = started(&one());
         assert_eq!(s.status("/p".as_ref(), T0), CredentialStatus::Pending);
+    }
+
+    #[test]
+    fn repositories_differing_only_in_case_share_one_credential() {
+        let (mut s, f) = started(&[
+            target("/p", Some("https://github.com/O/A")),
+            target("/q", Some("https://github.com/o/a")),
+        ]);
+        assert_eq!(s.run(&f, T0).len(), 1);
+        let gone = s.set_targets(
+            &[target("/q", Some("https://github.com/o/a"))],
+            None,
+            &f,
+            T0 + 1,
+        );
+        assert!(gone.is_empty() && f.revoked().is_empty());
+    }
+
+    #[test]
+    fn a_renewal_revokes_the_token_it_replaces() {
+        let (mut s, f) = started(&one());
+        s.run(&f, T0);
+        let due = T0 + HOUR - 10 * MIN;
+        f.set_now(due);
+        s.run(&f, due);
+        assert_eq!(f.revoked(), vec![repo("a")]);
     }
 
     #[test]

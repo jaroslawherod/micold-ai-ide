@@ -80,6 +80,12 @@ type IssueLookupFactory =
 /// One input batch held while its session starts: serial, bytes and the targeted process.
 type HeldInput = (u64, Vec<u8>, Option<SessionProcess>);
 
+/// The credential targets and `git_too_old` last sent to the clients.
+type GitTargetsSent = (
+    Vec<micold_core::protocol::messages::CredentialTarget>,
+    Option<String>,
+);
+
 /// The daemon's shared, mutable runtime state.
 pub struct DaemonState {
     inner: Mutex<Inner>,
@@ -99,7 +105,7 @@ pub struct DaemonState {
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
     /// The credential targets last sent to the clients (#1002), so a refresh that changed nothing
     /// sends nothing. Its own mutex: it is touched around git calls, never under `inner`.
-    git_targets: Mutex<Option<Vec<micold_core::protocol::messages::CredentialTarget>>>,
+    git_targets: Mutex<Option<GitTargetsSent>>,
     /// The loopback hook receiver (US2, T045/T046), set once at startup by `server::run`. Absent for
     /// tests and when binding fails — activity then degrades to `Unknown` (H1), never to a wrong
     /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
@@ -3057,11 +3063,13 @@ impl DaemonState {
     pub fn git_targets_changed(
         &self,
         targets: &[micold_core::protocol::messages::CredentialTarget],
+        git_too_old: Option<&str>,
     ) -> bool {
         let mut last = self.git_targets.lock().unwrap_or_else(|e| e.into_inner());
-        let changed = last.as_deref() != Some(targets);
+        let now = (targets.to_vec(), git_too_old.map(str::to_string));
+        let changed = last.as_ref() != Some(&now);
         if changed {
-            *last = Some(targets.to_vec());
+            *last = Some(now);
         }
         changed
     }

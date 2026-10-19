@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | — (to open) | gate green at 17370db2, pushed |
 | M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | #1099 | merged |
 | M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | #1107 | merged (5c0ba07d) |
-| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — (to open) | implemented, tests green; gate + reviews A/B running |
+| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — (to open) | implemented; review A fixes applied, gate running |
 | M5 | T039–T049 | full | [source] GitHub App source + client wiring (FR-005) | — | planned |
 | M6 | T050–T055 | full | Status rows + PR/issues toggles (FR-011, FR-013) | — | planned |
 
@@ -72,6 +72,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A (code-review high) | 1 | c75e6c9544fffc82c433e36f5fe2f5bbbfc143ae:7b33318943986e21f128454d80907d89e9890a85 | CHANGES (F1 MAJOR fixed: kube pod's daemon is not on PATH, so kube daemon_env names it by its build dir via git_env_with_helper; F2–F7 MINOR declined, below) |
 | M3 A (sonnet) | 2 | fb5dee54b57bf5ff0f8af7c3389b5cad4ecf069d:7b33318943986e21f128454d80907d89e9890a85 | CLEAN (3 MINOR: no start-level test of the helper path, no direct git_env_with_helper test, a daemon already running keeps its old env) |
 | M3 B (conformance + correctness, sonnet; one reviewer for A and B) | 1 | f62bba4f347d8a6361d83cac442b621f119d2a6f:79e2d3e0e3335139d58a5d999979f26b0472e0b0 | CLEAN (2 MINOR: no tdd/cycle-log.md; sandbox_argv run collided with a build, green in the gate). Review A as the `code-review` skill not run separately |
+
+## M4 review notes
+
+Review A (high) round 1: CHANGES, F1–F7 fixed (validating GithubRepo Deserialize, unique temp names, lower-cased schedule keys, grant token/expiry validation, req u64::MAX sentinel, revoke of superseded token, git_too_old in change detection); F8 (cache git version) declined as MINOR. Review B (sonnet): CLEAN.
 
 ## Declined review findings
 
