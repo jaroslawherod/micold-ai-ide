@@ -18,15 +18,17 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    self as changes, base_line, can_pick, card_model, committed_available, composer_placed,
-    diff_body, discard_prompt, file_comments, list_body, panel_rows, pending_counts, review_of,
-    review_toolbar_label, selected_file, send_action, status_counts, tidy_actions, ComposerTarget,
-    DiffBody, ListBody, Msg, OpenView, Source, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
+    self as changes, adjacent, base_line, can_pick, card_model, committed_available,
+    composer_placed, diff_body, discard_prompt, file_comments, list_body, panel_rows,
+    pending_counts, pr_header, review_of, review_toolbar_label, selected_file, send_action,
+    status_counts, tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView, Source, Step,
+    DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
-    status_label, Button, ButtonVariant, CardState, DiffView, PullRequestRow, ReviewCommentCard,
-    ReviewPanelRow, StageProgress, Tag, Text, TextArea, ToggleChip, TypeRole, VirtualRows,
+    status_label, Button, ButtonVariant, CardState, DiffView, IconButton, PullRequestIndicator,
+    PullRequestRow, ReviewCommentCard, ReviewPanelRow, StageProgress, Tag, Text, TextArea,
+    ToggleChip, Tooltip, TypeRole, VirtualRows,
 };
 
 /// The heading of the comments whose lines the diff on screen does not show (C3).
@@ -389,10 +391,68 @@ fn kind_tag(kind: &ChangeKind, r: Roles) -> (String, Rgb) {
     }
 }
 
+/// The diff area: while a pull request is shown, its header above (feature 1003, FR-007).
+fn diff_pane<'a>(
+    state: &'a State,
+    view: &'a OpenView,
+    scheme: ColorScheme,
+    composer: Option<&'a text_editor::Content>,
+) -> Element<'a, Message> {
+    let body = diff_pane_body(state, view, scheme, composer);
+    let Some(header) = pull_request_header(view, tokens::roles(scheme)) else {
+        return body;
+    };
+    column![header, body]
+        .spacing(spacing::MD)
+        .height(Length::Fill)
+        .into()
+}
+
+/// The header of the shown pull request: its state and checks, `#number title`, the base line, and
+/// previous/next, each disabled at an end of the list (contracts/changes-view.md § Header).
+fn pull_request_header<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, Message>> {
+    let header = pr_header(view)?;
+    let (prs, _) = view.pull_requests.shown()?;
+    let step = |icon: Icon, step: Step, tip: &'static str| {
+        Tooltip::new(
+            IconButton::new(icon, r).compact().on_press_maybe(
+                adjacent(prs, header.number, step)
+                    .map(|_| Message::Changes(Msg::PullRequestStepped(step))),
+            ),
+            tip,
+            r,
+        )
+    };
+    let mut indicator = PullRequestIndicator::<Message>::new(header.mark, &r);
+    if let Some(checks) = header.check {
+        indicator = indicator.checks(checks);
+    }
+    let naming = column![
+        Text::new(
+            format!("#{} {}", header.number, header.title),
+            TypeRole::Label,
+            r
+        ),
+        Text::new(header.base, TypeRole::Caption, r).muted(),
+    ]
+    .spacing(spacing::XS);
+    Some(
+        row![
+            Element::from(indicator),
+            container(naming).width(Length::Fill),
+            step(Icon::ChevronLeft, Step::Previous, "Previous pull request"),
+            step(Icon::ChevronRight, Step::Next, "Next pull request"),
+        ]
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center)
+        .into(),
+    )
+}
+
 /// The right pane (D1–D4): what to do before a file is picked, the progress line while its first
 /// read runs, git's message when it fails, else the diff — whose D3 messages and D4 large gate
 /// `DiffView` draws.
-fn diff_pane<'a>(
+fn diff_pane_body<'a>(
     state: &'a State,
     view: &'a OpenView,
     scheme: ColorScheme,

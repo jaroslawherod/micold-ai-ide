@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
 - **Phase**: implement
-- **Next step**: M2 PR (orchestrator opens it), CI, merge; then M3
+- **Next step**: M3 gate, reviews, push; orchestrator opens the PR; then M4
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1089 | design | merged | 6fbd754f11c2d0ed387dfb0ae886c0070ac2d573 |
 | #1094 | M1 | merged | 577dc7141bc72365d0084961a184d55fb394d46a |
+| #1097 | M2 | merged | a275545740c99aaf988f4795ff1c626879376da1 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Every PR of the worktree's branch set listed (number, title, state), each diff reachable | #1094 | merged |
-| M2 | T015–T020 | full | Check mark on every entry, one mapping shared with the sidebar | — | in progress |
-| M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | — | pending |
+| M2 | T015–T020 | full | Check mark on every entry, one mapping shared with the sidebar | #1097 | merged |
+| M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | — | in progress |
 | M4 | T032–T036 | full | Loading, empty and unavailable lines | — | pending |
 
 ## Decisions
@@ -66,6 +67,8 @@ None.
 
 ## Follow-ups not done
 
+- T027 (M3 visual pass, quickstart §B steps 3, 4) moved to the close unit beside T014, T021 and T037: no `gh` auth and no `xdotool` in M3's container.
+- M3: T029 and T028 passed at once (T030 needs no fix): M1's per-read branch set and M3's `pr_header` already deliver US3.
 - T021 (M2 visual pass, quickstart §B step 2 check marks) moved to the close unit beside T014 and T037: same reason.
 - T014 (M1 visual pass, quickstart §B steps 1, 2, 6) moved to the close unit beside T037: no `gh` auth and no `xdotool` in M1's container (`visual-pass.md`).
 

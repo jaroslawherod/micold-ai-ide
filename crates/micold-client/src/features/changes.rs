@@ -180,6 +180,61 @@ pub fn check_mark(status: CheckStatus) -> Option<crate::ui::material::CheckMark>
     }
 }
 
+/// Which way previous/next moves through the pull request list (feature 1003, FR-006).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    /// The entry before the shown one, in list order.
+    Previous,
+    /// The entry after the shown one, in list order.
+    Next,
+}
+
+/// The number of the pull request next to `number` in `prs` in the direction of `step`; `None` at
+/// either end of the list, and for a number that is not listed (FR-006).
+pub fn adjacent(prs: &[BranchPullRequest], number: u64, step: Step) -> Option<u64> {
+    let at = prs.iter().position(|pr| pr.number == number)?;
+    let to = match step {
+        Step::Previous => at.checked_sub(1)?,
+        Step::Next => at + 1,
+    };
+    prs.get(to).map(|pr| pr.number)
+}
+
+/// What the diff area's header says of the shown pull request (feature 1003, FR-007).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrHeader {
+    /// Its number.
+    pub number: u64,
+    /// Its title.
+    pub title: String,
+    /// Its state's mark.
+    pub mark: crate::ui::material::PrMark,
+    /// Its checks' mark; `None` when it has no check.
+    pub check: Option<crate::ui::material::CheckMark>,
+    /// The base line: `Pull request #N: <base> ... <head branch>`.
+    pub base: String,
+}
+
+/// The header of the shown pull request, from the list's current entry so a refresh updates it;
+/// `None` for the working tree, or while no list holds the shown number.
+pub fn pr_header(view: &OpenView) -> Option<PrHeader> {
+    let Source::PullRequest(shown) = &view.source else {
+        return None;
+    };
+    let (prs, _) = view.pull_requests.shown()?;
+    let listed = prs.iter().find(|pr| pr.number == shown.number)?;
+    Some(PrHeader {
+        number: listed.number,
+        title: listed.title.clone(),
+        mark: pr_mark(listed.state),
+        check: check_mark(listed.checks),
+        base: format!(
+            "Pull request #{}: {} ... {}",
+            listed.number, listed.base, listed.head_branch
+        ),
+    })
+}
+
 /// The open view (data-model § Client).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenView {
@@ -734,6 +789,9 @@ pub enum Msg {
     /// A row of the pull request section was pressed: `Some(number)` for a pull request, `None`
     /// for "Working tree" (FR-004, FR-005).
     SourceChosen(Option<u64>),
+    /// Previous or next was pressed: the adjacent listed pull request is chosen as if its row were
+    /// pressed; nothing at an end, or while the working tree is shown (feature 1003, FR-006).
+    PullRequestStepped(Step),
     /// Diff read `seq` of pull request `number` ended, already split per file.
     PullRequestDiffRead {
         /// The read it answers.
@@ -970,6 +1028,22 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             let key = (view.project.clone(), view.entry.clone());
             state.remembered.insert(key, number);
             read_pull_request_diff(state, number)
+        }
+        Msg::PullRequestStepped(step) => {
+            let Some(view) = state.open.as_ref() else {
+                return Effect::None;
+            };
+            let Source::PullRequest(shown) = &view.source else {
+                return Effect::None;
+            };
+            let next = view
+                .pull_requests
+                .shown()
+                .and_then(|(prs, _)| adjacent(prs, shown.number, step));
+            match next {
+                Some(number) => update(state, Msg::SourceChosen(Some(number))),
+                None => Effect::None,
+            }
         }
         Msg::PullRequestDiffRead {
             seq,
@@ -2198,13 +2272,8 @@ pub fn list_body(view: &OpenView) -> ListBody<'_> {
 /// The header's base line (V2): `Compared with <branch> at <short sha>`, or why there is none.
 /// `None` until the first read answers.
 pub fn base_line(view: &OpenView) -> Option<String> {
-    if let Source::PullRequest(pr) = &view.source {
-        let (prs, _) = view.pull_requests.shown()?;
-        let listed = prs.iter().find(|p| p.number == pr.number)?;
-        return Some(format!(
-            "Pull request #{}: {} ... {}",
-            pr.number, listed.base, listed.head_branch
-        ));
+    if matches!(view.source, Source::PullRequest(_)) {
+        return pr_header(view).map(|header| header.base);
     }
     let list = shown_list(view)?;
     Some(match &list.scope {

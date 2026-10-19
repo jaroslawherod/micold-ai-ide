@@ -4,12 +4,12 @@
 use std::path::PathBuf;
 
 use micold_client::features::changes::{
-    self, base_line, check_mark, diff_body, list_body, pr_mark, DiffBody, Effect, ListBody, Msg,
-    PrDiffLoad, PrList, Source, State,
+    self, adjacent, base_line, check_mark, diff_body, list_body, pr_header, pr_mark, DiffBody,
+    Effect, ListBody, Msg, PrDiffLoad, PrList, Source, State, Step,
 };
 use micold_client::ui::PrMark;
 use micold_core::pull_request::{
-    BranchPrState, BranchPullRequest, DiffReadFailure, ReadingFailure,
+    BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure,
 };
 use micold_core::review::diff::FileDiff;
 use micold_core::review::pr_diff::split_pr_diff;
@@ -692,4 +692,276 @@ fn pr_list_refresh_failure_keeps_the_list_and_marks_it_stale_by_age() {
         },
     );
     assert!(!view_list(&state).possibly_stale(5_000));
+}
+
+fn diff_of(file: &str) -> String {
+    format!(
+        "diff --git a/{file} b/{file}\nindex 1..2 100644\n--- a/{file}\n+++ b/{file}\n@@ -1 +1 @@\n-old\n+new\n"
+    )
+}
+
+/// The paths of the files listed for the shown pull request.
+fn shown_paths(state: &State) -> Vec<String> {
+    let view = state.open.as_ref().expect("open");
+    let ListBody::Files(files) = list_body(view) else {
+        panic!("files of the pull request");
+    };
+    files.iter().map(|f| f.path.as_str().to_string()).collect()
+}
+
+fn answer(state: &mut State, seq: u64, number: u64, file: &str) {
+    changes::update(
+        state,
+        Msg::PullRequestDiffRead {
+            seq,
+            number,
+            result: Ok(split_pr_diff(&diff_of(file))),
+        },
+    );
+}
+
+fn three(state: &mut State) {
+    listed(
+        state,
+        vec![
+            pr(3, BranchPrState::Open),
+            pr(2, BranchPrState::Merged),
+            pr(1, BranchPrState::Closed),
+        ],
+    );
+}
+
+// SC-002, US2 scenarios 1, 2: each choice shows that pull request's own files.
+#[test]
+fn choosing_the_second_then_the_third_shows_each_ones_own_files() {
+    let mut state = opened(true);
+    three(&mut state);
+    let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(2))), 2);
+    answer(&mut state, seq, 2, "two.rs");
+    assert_eq!(shown_paths(&state), ["two.rs"]);
+    let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(3))), 3);
+    answer(&mut state, seq, 3, "three.rs");
+    assert_eq!(shown_paths(&state), ["three.rs"]);
+}
+
+// FR-006: list order, none at an end or for a number that is not listed.
+#[test]
+fn adjacent_follows_list_order_and_stops_at_the_ends() {
+    let prs = [
+        pr(3, BranchPrState::Open),
+        pr(2, BranchPrState::Open),
+        pr(1, BranchPrState::Open),
+    ];
+    assert_eq!(adjacent(&prs, 2, Step::Next), Some(1));
+    assert_eq!(adjacent(&prs, 2, Step::Previous), Some(3));
+    assert_eq!(adjacent(&prs, 3, Step::Previous), None);
+    assert_eq!(adjacent(&prs, 1, Step::Next), None);
+    assert_eq!(adjacent(&prs, 9, Step::Next), None);
+}
+
+// SC-003, US2 scenario 3.
+#[test]
+fn stepping_selects_the_adjacent_pull_request_and_stops_at_the_ends() {
+    let mut state = opened(true);
+    three(&mut state);
+    let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Next));
+    assert_eq!(effect, Effect::None, "the working tree has nothing to step");
+    chosen(&mut state, 2);
+    let seq = diff_seq(
+        changes::update(&mut state, Msg::PullRequestStepped(Step::Next)),
+        1,
+    );
+    answer(&mut state, seq, 1, "one.rs");
+    assert_eq!(shown_paths(&state), ["one.rs"]);
+    let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Next));
+    assert_eq!(effect, Effect::None, "next on the last entry does nothing");
+    let seq = diff_seq(
+        changes::update(&mut state, Msg::PullRequestStepped(Step::Previous)),
+        2,
+    );
+    answer(&mut state, seq, 2, "two.rs");
+    chosen(&mut state, 3);
+    let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Previous));
+    assert_eq!(effect, Effect::None, "previous on the first does nothing");
+}
+
+// Edge case: more pull requests than fit in the list.
+#[test]
+fn next_from_the_first_of_thirty_reaches_the_last() {
+    let mut state = opened(true);
+    listed(
+        &mut state,
+        (1..=30).rev().map(|n| pr(n, BranchPrState::Open)).collect(),
+    );
+    chosen(&mut state, 30);
+    for expected in (1..30).rev() {
+        let seq = diff_seq(
+            changes::update(&mut state, Msg::PullRequestStepped(Step::Next)),
+            expected,
+        );
+        answer(&mut state, seq, expected, "f.rs");
+    }
+    let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Next));
+    assert_eq!(effect, Effect::None);
+    let header = pr_header(state.open.as_ref().expect("open")).expect("header");
+    assert_eq!(header.number, 1);
+}
+
+// FR-007, US2 scenarios 4, 5.
+#[test]
+fn the_header_names_the_shown_pull_request_with_state_and_checks() {
+    let mut state = opened(true);
+    let mut second = pr(2, BranchPrState::Merged);
+    second.checks = CheckStatus::Failing;
+    listed(&mut state, vec![pr(3, BranchPrState::Open), second]);
+    assert_eq!(pr_header(state.open.as_ref().expect("open")), None);
+    chosen(&mut state, 2);
+    let header = pr_header(state.open.as_ref().expect("open")).expect("header");
+    assert_eq!((header.number, header.title.as_str()), (2, "title 2"));
+    assert_eq!(header.mark, PrMark::Merged);
+    assert_eq!(header.check, check_mark(CheckStatus::Failing));
+    assert_eq!(header.base, "Pull request #2: main ... feat/a");
+
+    changes::update(&mut state, Msg::SourceChosen(None));
+    assert_eq!(pr_header(state.open.as_ref().expect("open")), None);
+    let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Previous));
+    assert_eq!(
+        effect,
+        Effect::None,
+        "stepping is a no-op on the working tree"
+    );
+}
+
+// FR-016: the last choice wins; a late answer to an earlier choice is dropped.
+#[test]
+fn three_fast_choices_show_only_the_last_ones_diff_under_its_header() {
+    let mut state = opened(true);
+    three(&mut state);
+    let s3 = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(3))), 3);
+    let s2 = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(2))), 2);
+    let s1 = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(1))), 1);
+    answer(&mut state, s2, 2, "two.rs");
+    answer(&mut state, s1, 1, "one.rs");
+    answer(&mut state, s3, 3, "three.rs");
+    assert_eq!(shown_paths(&state), ["one.rs"]);
+    let header = pr_header(state.open.as_ref().expect("open")).expect("header");
+    assert_eq!(header.number, 1);
+}
+
+#[test]
+fn a_failed_or_too_large_diff_keeps_the_header_and_stepping() {
+    let mut state = opened(true);
+    three(&mut state);
+    let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(2))), 2);
+    changes::update(
+        &mut state,
+        Msg::PullRequestDiffRead {
+            seq,
+            number: 2,
+            result: Err(DiffReadFailure::TooLarge),
+        },
+    );
+    assert_eq!(
+        pr_header(state.open.as_ref().expect("open")).map(|h| h.number),
+        Some(2)
+    );
+    let seq = diff_seq(
+        changes::update(&mut state, Msg::PullRequestStepped(Step::Next)),
+        1,
+    );
+    changes::update(
+        &mut state,
+        Msg::PullRequestDiffRead {
+            seq,
+            number: 1,
+            result: Err(DiffReadFailure::Failed(ReadingFailure::Passing)),
+        },
+    );
+    assert_eq!(
+        pr_header(state.open.as_ref().expect("open")).map(|h| h.number),
+        Some(1)
+    );
+    let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Previous));
+    diff_seq(effect, 2);
+}
+
+// US3 scenario 1, FR-008: a new entry at the top does not move the selection.
+#[test]
+fn a_refresh_adding_a_pull_request_keeps_the_selected_one_shown() {
+    let mut state = opened(true);
+    listed(
+        &mut state,
+        vec![
+            pr(3, BranchPrState::Open),
+            pr(2, BranchPrState::Open),
+            pr(1, BranchPrState::Open),
+        ],
+    );
+    chosen(&mut state, 2);
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    let effect = changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 2,
+            result: Ok(vec![
+                pr(4, BranchPrState::Open),
+                pr(3, BranchPrState::Open),
+                pr(2, BranchPrState::Open),
+                pr(1, BranchPrState::Open),
+            ]),
+        },
+    );
+    assert_eq!(effect, Effect::None, "no new diff read");
+    assert_eq!(
+        pr_header(state.open.as_ref().expect("open")).map(|h| h.number),
+        Some(2)
+    );
+    assert_eq!(shown_paths(&state), ["a.rs", "b.rs"]);
+}
+
+// US3 scenario 3: a state and check change updates the row and header, and reads nothing.
+#[test]
+fn a_refresh_changing_the_selected_ones_state_updates_the_header_without_a_read() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(2, BranchPrState::Open)]);
+    chosen(&mut state, 2);
+    let mut merged = pr(2, BranchPrState::Merged);
+    merged.checks = CheckStatus::Passing;
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    let effect = changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 2,
+            result: Ok(vec![merged]),
+        },
+    );
+    assert_eq!(effect, Effect::None);
+    let header = pr_header(state.open.as_ref().expect("open")).expect("header");
+    assert_eq!(header.mark, PrMark::Merged);
+    assert_eq!(header.check, check_mark(CheckStatus::Passing));
+    assert_eq!(shown_paths(&state), ["a.rs", "b.rs"]);
+}
+
+// US3 scenario 4: the selected one leaving the list returns to the working tree.
+#[test]
+fn the_selected_pull_request_leaving_the_list_removes_the_header() {
+    let mut state = opened(true);
+    listed(
+        &mut state,
+        vec![pr(2, BranchPrState::Open), pr(1, BranchPrState::Open)],
+    );
+    chosen(&mut state, 2);
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 2,
+            result: Ok(vec![pr(1, BranchPrState::Open)]),
+        },
+    );
+    assert_eq!(pr_header(state.open.as_ref().expect("open")), None);
+    assert_eq!(source(&state), &Source::Changes);
 }

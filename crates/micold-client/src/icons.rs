@@ -172,6 +172,11 @@ pub enum Icon {
     /// **Open**, the first entry of an Overview card's menu (feature 972, R10) — `login`, an arrow
     /// entering a door: going into the location, not opening a browser.
     Open,
+    /// Previous pull request, in the Changes view's pull request header (feature 1003) —
+    /// `chevron_left`.
+    ChevronLeft,
+    /// Next pull request, beside [`Icon::ChevronLeft`] — `chevron_right`.
+    ChevronRight,
 }
 
 impl Icon {
@@ -243,6 +248,8 @@ impl Icon {
         Icon::TypeIncluded,
         Icon::TypeOrphan,
         Icon::Open,
+        Icon::ChevronLeft,
+        Icon::ChevronRight,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -331,6 +338,9 @@ impl Icon {
             Icon::TypeOrphan => '\u{eb83}',
             // `login` (feature 972, R10).
             Icon::Open => '\u{ea77}',
+            // `chevron_left` / `chevron_right` (feature 1003).
+            Icon::ChevronLeft => '\u{e5cb}',
+            Icon::ChevronRight => '\u{e5cc}',
         }
     }
 }

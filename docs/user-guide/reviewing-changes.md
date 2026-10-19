@@ -70,6 +70,11 @@ pull request's own branch. Select a file as
 usual; comments are kept per file and line as for any other diff. While the pull request is
 chosen, the working-tree changes are not read, and nothing reads them behind your back.
 
+Above the diff, a header names the pull request you are reading: its state and checks, its
+number and title, and the base line. The **previous** and **next** buttons beside it step through
+the list in the order it is shown; each is greyed out at its end of the list. Pressing a row or
+a button while a diff is still loading shows the last one you chose, never an earlier one's diff.
+
 Click the **Working tree** row to go back. Each entry remembers its own choice while the window is
 open, so switching to another worktree and back returns to the pull request you were reading.
 
@@ -149,6 +154,11 @@ request opened, merged or closed while the view is open shows its new state with
 interval (5 minutes), and a list refresh in the sidebar updates it too. If a refresh cannot reach
 GitHub, the last list stays on screen with no error, and once it is older than ten minutes it is
 captioned **Possibly stale** until a refresh succeeds.
+
+A pull request opened from a new branch of the worktree appears at the next refresh, without
+reopening the view. The pull request you are reading stays shown and keeps its place in the list
+while the list changes; its header follows its state and checks. It is replaced by the working
+tree only when it leaves the list.
 
 The text you are writing in a comment box is kept across a refresh. Picked lines are kept while
 they are still in the diff; when they are gone, the pick is dropped.
