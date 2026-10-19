@@ -598,6 +598,13 @@ issue's labels choose the type](worktrees-and-sessions.md#the-issues-labels-choo
 section is that label-to-type mapping: one list, applied to every project.
 Also applies to Jira issues: an issue's type name and labels are matched against this list.
 
+**Offer GitHub issues when creating worktrees** (on by default) turns the GitHub issues integration
+off. With it unchecked, the New worktree form makes no GitHub issue request and does not offer
+**GitHub issue** as a source, even for a GitHub project; Jira, if connected, stays available, as does
+a branch name you type. Worktrees you already created from GitHub issues keep working. Save applies
+it, and the daemon shares it, so every window and every app on that daemon follows. It does not
+change the pull request status switch.
+
 Each row is one entry: a **Label**, the **Type** it selects, and buttons to move the entry up or
 down, or to delete it. Order matters: when an issue carries several mapped labels, the entry nearest
 the top wins, so move an entry up to make it win.
