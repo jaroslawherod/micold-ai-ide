@@ -22,6 +22,12 @@ use micold_core::task_progress::{self, Progress, Source};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
+/// The card grid's scroll viewport, by name: a zoom's reflow scrolls it to keep the first visible
+/// card in view (feature 970, FR-013). A `LazyLock` for the reason
+/// [`crate::ui::SIDEBAR_SCROLL_ID`] is one.
+pub static GRID_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("overview-grid"));
+
 /// A card's widget id, stable per location: the keyboard goes to the first card's when the Overview
 /// opens (research R13) and back to the target's when a card menu closes (feature 972, FR-011).
 pub fn card_id(location: &SessionLocation) -> iced::advanced::widget::Id {
@@ -60,6 +66,8 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
     let grid = CardGrid::new(cards, r)
         .on_scroll(Message::Overview(Msg::GridScrolled))
+        .scroll_id(GRID_SCROLL_ID.clone())
+        .on_reflow(|offset| Message::Overview(Msg::Reflowed(offset.y)))
         .zoom(Zoom {
             full_screen: state.overview.full_screen(),
             freed: crate::ui::freed_width(state),

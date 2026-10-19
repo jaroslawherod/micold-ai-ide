@@ -145,3 +145,14 @@ fn a_project_switch_keeps_full_screen() {
     update(&mut state, Msg::ProjectSwitched);
     assert!(state.full_screen());
 }
+
+/// Feature 970 (FR-013, US2 #5): a zoom's scroll request is the root's task, not the Overview's
+/// state: it changes nothing and asks for nothing.
+#[test]
+fn reflowed_changes_no_state() {
+    let mut state = in_full_screen();
+    let before = format!("{state:?}");
+    let outcomes = update(&mut state, Msg::Reflowed(96.0));
+    assert!(outcomes.is_empty(), "no outcome: {outcomes:?}");
+    assert_eq!(format!("{state:?}"), before, "no state change");
+}

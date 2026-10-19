@@ -81,3 +81,22 @@ ribbon splits a card across a row end; this harness cannot show them.
 
 ## Screenshots
 `specs/970-overview-fullscreen/visual-pass/` 20-27.
+
+# Visual pass — M3 (scroll position survives the zoom), quickstart Part B item 7
+
+Run 2026-10-19 on a private Xvfb, `ICED_BACKEND=tiny-skia`, client and daemon built from the uncommitted
+working tree and copied out of `target-shared/`. Fixture: one git repo with 29 worktrees
+(`feat/wt-01`..`wt-29`) plus the project root = 30 cards, window 1400x1000 (3 columns windowed, 4 full
+screen). Scrolled with the wheel (60 px a notch) to the bottom of the grid; card 20 (`feat/wt-19`, middle
+column) sits in the first fully visible row. The wheel cannot put a card at the very top of a grid
+whose last rows end the page, so "first visible" is the first full row, not the first card. Entered
+full screen with the button, not the chord (the chord was not run for this item).
+
+| Item | Result |
+|---|---|
+| 7 Card 20 of 30 visible after entering full screen | PASS: after the zoom settles (12 s) `feat/wt-19` is top right of the 4-column grid, still in the first visible row (`30-m3-fullscreen-settled.png`; before: `30-m3-before-scrolled-windowed.png`) |
+| 7 No cards overlap | PASS: settled frame is an even 4x grid with no overlap; one mid-zoom frame (`30-m3-fullscreen-mid.png`) shows cards sliding left under the retracting sidebar, none overlapping, card 20 present |
+| 7 Exit full screen keeps card 20 visible | not observed: only entering was driven |
+| 7 Card 20 as the very first card in the viewport | not observed: see above; the scroll offset in px was not read, only the visible rows |
+
+Screenshots: `specs/970-overview-fullscreen/visual-pass/30-m3-*.png` (downscaled to 60%).

@@ -44,3 +44,16 @@ failed before the implementation.
   run, which is the gap this entry records. Mutation reverted.
 - green: `cargo test -p micold-client --lib card_grid` -> 20 passed; `--test showcase_completeness` -> 42
   passed (its CardGrid assertion `!interactive` became `interactive == (component == "CardGrid")`).
+
+## Cycle 3: M3, U27–U28 (T027–T031)
+
+- tests: `card_grid.rs` `the_first_visible_card_stays_in_view_across_a_zoom` (30 cards, 400 px view at
+  card 20, 4 → 5 columns in 50 px steps, a user scroll mid-zoom); `features_overview.rs`
+  `reflowed_changes_no_state`.
+- red (T028, compile): the implementation was written before the tests this cycle (the gap review B
+  flagged in M2 again), so the red is by mutation: `shift = moved.unwrap_or(0.0) * 0.0` (the grid never
+  asks to scroll), `cargo test -p micold-client --lib the_first_visible` -> `FAILED`:
+  `step 1 (1350 px): card 20 sits -188 from the view's top, began at 0`. Mutation reverted.
+- green: `cargo test -p micold-client --lib card_grid` -> 21 passed; `--test features_overview` -> 8 passed.
+- note: `Msg::Reflowed` carries an `f32` y (`features_are_render_free` bars iced types); `Msg` could no longer derive `Eq` (a float); `impl Eq for Msg {}` is
+  written by hand (finite offsets) because `Message` and the overlay registry need it.

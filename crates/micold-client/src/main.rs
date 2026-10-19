@@ -761,6 +761,14 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
             .update(Message::Overview(Msg::CardMenuEntryChosen(inner.clone())));
         return update_inner(app, *inner);
     }
+    // A zoom moved the first visible card: scroll the grid to keep it in view (feature 970).
+    if let Msg::Reflowed(y) = msg {
+        app.core.update(Message::Overview(Msg::Reflowed(y)));
+        return iced::widget::operation::scroll_to(
+            micold_client::ui::overview::GRID_SCROLL_ID.clone(),
+            iced::widget::scrollable::AbsoluteOffset { x: 0.0, y },
+        );
+    }
     let Msg::CardActivated(activation) = msg else {
         app.core.update(Message::Overview(msg));
         return if !was_open && app.core.overview.open {
