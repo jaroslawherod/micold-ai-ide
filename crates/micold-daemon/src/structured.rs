@@ -74,6 +74,37 @@ impl EventStream {
         }
     }
 
+    /// A stream around a history restored from a saved one (research R14): `events` are the
+    /// retained ones after `omitted` evicted, numbered from `omitted`, under `bounds`.
+    pub fn restored(omitted: u64, events: Vec<StructuredEvent>, bounds: StreamBounds) -> Self {
+        Self {
+            history: Mutex::new(EventHistory::restored_with_bounds(
+                omitted,
+                events,
+                bounds.max_events,
+                bounds.max_bytes,
+            )),
+            live: broadcast::channel(bounds.live_capacity).0,
+        }
+    }
+
+    /// The history as `(omitted, events, next_seq)` for a save, taken under the history lock so
+    /// the three agree.
+    pub fn saved_snapshot(&self) -> (u64, Vec<SequencedEvent>, u64) {
+        let history = self.history.lock().unwrap_or_else(|e| e.into_inner());
+        let (omitted, events) = history.snapshot();
+        (omitted, events, history.next_seq())
+    }
+
+    /// The `seq` the next event gets: what the periodic saver counts (a save is due after a new
+    /// event).
+    pub fn next_seq(&self) -> u64 {
+        self.history
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .next_seq()
+    }
+
     /// Append `event` to the history and broadcast it, under the history lock, so a viewer that
     /// [`Self::subscribe`]s sees each event exactly once: in its snapshot or on its receiver.
     pub fn push(&self, event: StructuredEvent) {

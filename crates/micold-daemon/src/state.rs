@@ -2914,6 +2914,12 @@ impl DaemonState {
         for proc in live.procs.values() {
             let _ = proc.kill();
         }
+        // A structured process's events are whole once its readers are joined, and are saved then
+        // (research R14).
+        if let Some(Proc::Structured(child)) = live.procs.get(&SessionProcess::Primary) {
+            child.teardown(TEARDOWN_WAIT);
+            self.save_events_final(session);
+        }
         if covered {
             if let Some(primary) = live.procs.get(&SessionProcess::Primary).and_then(Proc::pty) {
                 self.carry_history(session, primary);
@@ -4526,14 +4532,9 @@ impl DaemonState {
         spec: &LaunchSpec,
         extra: &[OsString],
     ) -> io::Result<Proc> {
-        let stream =
-            {
-                let mut inner = self.lock();
-                let bounds = inner.event_bounds;
-                Arc::clone(inner.event_streams.entry(id).or_insert_with(|| {
-                    Arc::new(crate::structured::EventStream::with_bounds(bounds))
-                }))
-            };
+        let stream = self
+            .event_stream_loading(id, true)
+            .expect("a stream is created when asked to");
         StructuredSession::spawn(id, spec, extra, move |event| stream.push(event))
             .map(|child| Proc::Structured(Arc::new(child)))
     }
@@ -4541,6 +4542,154 @@ impl DaemonState {
     /// `id`'s structured event stream, if it has ever run as a structured session (feature 938).
     pub fn event_stream(&self, id: SessionId) -> Option<Arc<crate::structured::EventStream>> {
         self.lock().event_streams.get(&id).cloned()
+    }
+
+    /// `id`'s event stream, made when this daemon run has none yet: restored from the saved event
+    /// history when there is one, else empty when `create` (the structured spawn), else `None`
+    /// (a viewer of a session that never ran). The one call the spawn and the view path share, so
+    /// two first users agree on one stream (research R14). The file is read **off the state lock**
+    /// and the result inserted only if still absent. **Blocking**.
+    ///
+    /// A file that cannot be read in full gives an empty stream, one warning naming the session and
+    /// the reason, and a save due at the saver's first look, which replaces the file (FR-021c).
+    pub fn event_stream_loading(
+        &self,
+        id: SessionId,
+        create: bool,
+    ) -> Option<Arc<crate::structured::EventStream>> {
+        use micold_core::terminal_history::EventsLoad;
+        let bounds = {
+            let inner = self.lock();
+            if let Some(stream) = inner.event_streams.get(&id) {
+                return Some(Arc::clone(stream));
+            }
+            inner.event_bounds
+        };
+        let loaded = match self.history_store.get().map(|store| store.load_events(id)) {
+            Some(EventsLoad::Events { omitted, events }) => Some(
+                crate::structured::EventStream::restored(omitted, events, bounds),
+            ),
+            Some(EventsLoad::Damaged(reason)) => {
+                tracing::warn!(
+                    session = %id.0,
+                    %reason,
+                    "the saved event history could not be read; starting without it"
+                );
+                self.saver
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .events_started_damaged(id);
+                Some(crate::structured::EventStream::with_bounds(bounds))
+            }
+            Some(EventsLoad::None) | None => {
+                create.then(|| crate::structured::EventStream::with_bounds(bounds))
+            }
+        }?;
+        let mut inner = self.lock();
+        Some(Arc::clone(
+            inner
+                .event_streams
+                .entry(id)
+                .or_insert_with(|| Arc::new(loaded)),
+        ))
+    }
+
+    /// The sessions that have an event stream in this daemon run.
+    pub(crate) fn event_stream_ids(&self) -> Vec<SessionId> {
+        self.lock().event_streams.keys().copied().collect()
+    }
+
+    /// Save `id`'s event history if the last save does not hold all of it, for a process end and
+    /// the orderly stop (research R14). **Blocking**. The caller holds the session's gate, or is
+    /// [`Self::save_events_gated`]. A failure is one warning, once per reason.
+    fn save_events_final(&self, id: SessionId) {
+        let Some(store) = self.history_store.get() else {
+            return;
+        };
+        let Some(stream) = self.event_stream(id) else {
+            return;
+        };
+        if !store.enabled()
+            || !self
+                .saver
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .events_unsaved(id, stream.next_seq())
+        {
+            return;
+        }
+        self.save_stream(store, id, &stream, Instant::now());
+    }
+
+    /// [`Self::save_events_final`] under the session's gate, so a periodic save never lands after it.
+    pub(crate) fn save_events_gated(&self, id: SessionId) {
+        let _gate = self.hold_gate(id);
+        self.save_events_final(id);
+    }
+
+    /// Write `stream`'s history as `id`'s events file and tell the saver how it went.
+    fn save_stream(
+        &self,
+        store: &micold_core::terminal_history::HistoryStore,
+        id: SessionId,
+        stream: &crate::structured::EventStream,
+        now: Instant,
+    ) {
+        use micold_core::terminal_history::{SaveOutcome, SkipReason};
+        // Counted with the snapshot: an event pushed meanwhile is saved again later.
+        let (omitted, events, count) = stream.saved_snapshot();
+        let result = store.save_events(id, omitted, &events);
+        if matches!(result, Ok(SaveOutcome::Skipped(SkipReason::NoDirectory)))
+            && history::first_missing_directory(&self.history_directory_warned)
+        {
+            history::warn_directory_missing();
+        }
+        let mut saver = self
+            .saver
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match result {
+            Ok(_) => saver.events_saved(id, now, count),
+            Err(err) => {
+                let reason = err.to_string();
+                if saver.events_failed(id, now, &reason) {
+                    tracing::warn!(session = %id.0, %reason, "the event history was not saved");
+                }
+            }
+        }
+    }
+
+    /// Save every event stream that is due at `now`: one with a new event and a last attempt 30 s
+    /// ago (research R14). **Blocking**; under each session's gate.
+    fn save_event_streams_due(
+        &self,
+        store: &micold_core::terminal_history::HistoryStore,
+        now: Instant,
+    ) {
+        let streams: Vec<_> = {
+            let inner = self.lock();
+            inner
+                .event_streams
+                .iter()
+                .map(|(id, stream)| (*id, Arc::clone(stream)))
+                .collect()
+        };
+        let counts: Vec<_> = streams
+            .iter()
+            .map(|(id, stream)| (*id, stream.next_seq()))
+            .collect();
+        let due = self
+            .saver
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .events_due(now, &counts);
+        for (id, _) in due {
+            let Some((_, stream)) = streams.iter().find(|(live, _)| *live == id) else {
+                continue;
+            };
+            let _gate = self.hold_gate(id);
+            self.save_stream(store, id, stream, now);
+        }
     }
 
     /// Adopt a freshly-spawned process into the live registry as `id`'s `Primary` (attached by
@@ -5463,6 +5612,7 @@ impl DaemonState {
         if !store.enabled() {
             return;
         }
+        self.save_event_streams_due(store, now);
         let terminals = self.covered_live_terminals();
         let due = self
             .saver
@@ -5675,8 +5825,13 @@ impl DaemonState {
                         )
                         .map(|pty| new_proc(Arc::new(pty), id))
                     }
-                    // Its events are kept in its stream, which the new process continues.
-                    Proc::Structured(_) => self.spawn_structured(id, &spec, &extra),
+                    // Its events are kept in its stream, which the new process continues; the
+                    // dead process's are saved first, once its readers are joined.
+                    Proc::Structured(child) => {
+                        child.teardown(TEARDOWN_WAIT);
+                        self.save_events_final(id);
+                        self.spawn_structured(id, &spec, &extra)
+                    }
                 }
             }
             TerminalMode::Regular => PtySession::spawn_shell(

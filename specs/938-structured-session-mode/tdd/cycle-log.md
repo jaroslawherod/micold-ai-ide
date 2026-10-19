@@ -207,3 +207,21 @@ Append only. Newest last.
   reads `41 91`). The served case now waits for its marker before the interrupt (a
   flake: the ^C cancelled a line the shell had not read).
 - refactor: empty `if` arms replaced by `if !refuse_terminal_request(..)`.
+
+## Cycle 12 (U16–U19, M7): event history saved and restored — RED, GREEN
+- red/green (T049, T050, T052): `structured::saved` tests (round trip of every saved kind, an
+  unreadable line that parses stays unreadable, `OversizedOnWire` never written, each `DamageReason`,
+  a hand-built version-1 file byte for byte) and `EventHistory::restored*` tests written with the
+  code; `ok. 37 passed` in `structured::`. `frame`/`unframe` split out of `terminal_history::format`
+  with the terminal bytes unchanged (`terminal_history_format` 34 passed, fixture test untouched).
+- red (T051): `terminal_history_store::events_kind` failed to compile (`save_events`, `EventsLoad`
+  missing). green (T053): `FileKind`, `save_events`, `load_events`, both extensions in deletion, sweep
+  and retry; `last_written` keyed by session and kind. One test fixed: after an external overwrite the
+  store's own checksum says `Unchanged`, so the replacement save writes different content. `ok. 44`.
+- red (T054): `structured_saved_history` 9 of 10 FAILED against the unchanged daemon (no file ever
+  written, nothing restored). green (T055): `DaemonState::event_stream_loading` (spawn and view path),
+  `EventStream::restored`/`saved_snapshot`, saver event schedules, saves at process end (stop and
+  respawn, after the readers are joined) and in `save_all_live`; the view task loads off the runtime.
+  `ok. 10 passed`, 3 of 3 runs. The damaged case is checked through the structured spawn (the log
+  capture is per thread) and the view of a stopped session separately.
+- refactor: none beyond sharing `logged_warnings` in `support/history.rs`.

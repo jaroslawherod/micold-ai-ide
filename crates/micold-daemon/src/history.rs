@@ -318,15 +318,22 @@ pub const STOP_SAVE_BOUND: std::time::Duration = std::time::Duration::from_secs(
 /// its live `Term` and written on the blocking pool, all at once, and the whole step is over after
 /// `bound` whatever is left. A save that does not finish is abandoned, never cancelled half way:
 /// the file is written through a temporary one, so the previous file is still whole.
+///
+/// A structured session's event history is saved with them, in the same bound (feature 938, R14).
 pub async fn save_all_live(state: &Arc<crate::state::DaemonState>, bound: std::time::Duration) {
     let terminals = state.covered_live_terminals();
-    if terminals.is_empty() {
+    let streams = state.event_stream_ids();
+    if terminals.is_empty() && streams.is_empty() {
         return;
     }
     let mut saves = tokio::task::JoinSet::new();
     for (id, pty) in terminals {
         let state = Arc::clone(state);
         saves.spawn_blocking(move || state.save_final(id, &pty));
+    }
+    for id in streams {
+        let state = Arc::clone(state);
+        saves.spawn_blocking(move || state.save_events_gated(id));
     }
     let all = async { while saves.join_next().await.is_some() {} };
     if tokio::time::timeout(bound, all).await.is_err() {
@@ -350,6 +357,12 @@ pub struct Saver {
     start_due: HashSet<SessionId>,
     /// When the deletions that failed were last tried again (FR-033).
     last_retry: Option<Instant>,
+    /// One schedule per structured session's event stream; its count is the history's `next_seq`
+    /// (feature 938, R14).
+    event_schedules: HashMap<SessionId, SaveSchedule>,
+    /// Streams restored from a file that could not be read: due at the first look, so the next
+    /// save replaces it (FR-021c).
+    events_start_due: HashSet<SessionId>,
 }
 
 /// A schedule and the process it is of. A restarted process counts its output from zero again,
@@ -435,6 +448,66 @@ impl Saver {
         for tracked in self.schedules.values_mut() {
             tracked.schedule.mark_due();
         }
+        for schedule in self.event_schedules.values_mut() {
+            schedule.mark_due();
+        }
+    }
+
+    /// The event streams due at `now` among `streams`, each with the count it was judged by. The
+    /// schedule of a stream that is gone is dropped.
+    pub fn events_due(
+        &mut self,
+        now: Instant,
+        streams: &[(SessionId, u64)],
+    ) -> Vec<(SessionId, u64)> {
+        self.event_schedules
+            .retain(|id, _| streams.iter().any(|(live, _)| live == id));
+        let mut due = Vec::new();
+        for &(id, count) in streams {
+            let schedule = self
+                .event_schedules
+                .entry(id)
+                .or_insert_with(|| SaveSchedule::new(0));
+            if self.events_start_due.remove(&id) {
+                schedule.mark_due();
+            }
+            if schedule.due(now, count) {
+                due.push((id, count));
+            }
+        }
+        due
+    }
+
+    /// Whether `id`'s event stream, at `count`, holds an event the last save does not: a stream
+    /// the saver has not looked at yet counts as unsaved.
+    pub fn events_unsaved(&self, id: SessionId, count: u64) -> bool {
+        self.event_schedules
+            .get(&id)
+            .is_none_or(|schedule| schedule.needs_save(count))
+    }
+
+    /// `id`'s event stream was restored from a file that could not be read: its first look finds
+    /// it due (FR-021c).
+    pub fn events_started_damaged(&mut self, id: SessionId) {
+        self.events_start_due.insert(id);
+    }
+
+    /// `id`'s event history was saved at `now` as of `count`.
+    pub fn events_saved(&mut self, id: SessionId, now: Instant, count: u64) {
+        self.event_schedules
+            .entry(id)
+            .or_insert_with(|| SaveSchedule::new(0))
+            .saved(now, count);
+    }
+
+    /// A save of `id`'s event history failed at `now` for `reason`: due again later. Returns
+    /// whether this is the first time the reason is seen for the session.
+    pub fn events_failed(&mut self, id: SessionId, now: Instant, reason: &str) -> bool {
+        self.event_schedules
+            .entry(id)
+            .or_insert_with(|| SaveSchedule::new(0))
+            .failed(now);
+        self.logged.insert((id, reason.to_string()))
     }
 
     /// The deletion of a file of `id` failed for `reason`. Returns whether this is the first time
