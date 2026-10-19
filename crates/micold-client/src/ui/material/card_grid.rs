@@ -11,8 +11,9 @@ use crate::ui::cdk::motion::Progress;
 use crate::ui::material::navigation_drawer::SLIDE;
 use crate::ui::material::{OverviewCard, Scrollable};
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::{tree, Operation, Tree};
+use iced::advanced::widget::{tree, Id, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
+use iced::widget::scrollable::AbsoluteOffset;
 use iced::{Element, Event, Length, Point, Rectangle, Size, Vector};
 use micold_core::tokens::motion::duration;
 use micold_core::tokens::{spacing, Roles};
@@ -38,7 +39,12 @@ pub struct CardGrid<'a, M> {
     max_columns: usize,
     on_scroll: Option<M>,
     zoom: Zoom,
+    on_reflow: Option<OnReflow<'a, M>>,
+    scroll_id: Option<Id>,
 }
+
+/// What a grid asks its owner when a zoom moves the card at the top of the view.
+type OnReflow<'a, M> = Box<dyn Fn(AbsoluteOffset) -> M + 'a>;
 
 impl<'a, M: Clone + 'a> CardGrid<'a, M> {
     /// A grid of `cards`, themed by `roles`.
@@ -51,6 +57,8 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             max_columns: MAX_COLUMNS,
             on_scroll: None,
             zoom: Zoom::default(),
+            on_reflow: None,
+            scroll_id: None,
         }
     }
 
@@ -173,6 +181,11 @@ struct ZoomState {
     last_width: Option<f32>,
     /// What the last layout drew.
     pieces: Vec<Piece>,
+    /// The card at the top of the view and where its top was when `update` last looked (the
+    /// anchor: R6).
+    anchor: Option<(usize, f32)>,
+    /// Whether the last `update` saw a zoom, so the layout that ends it is answered too.
+    was_zooming: bool,
 }
 
 impl ZoomState {
@@ -183,6 +196,8 @@ impl ZoomState {
             clock: Progress::new(1.0),
             last_width: None,
             pieces: Vec::new(),
+            anchor: None,
+            was_zooming: false,
         }
     }
 
@@ -219,6 +234,26 @@ impl ZoomState {
     }
 }
 
+/// The first card with a piece in the band `top..bottom` and where its top is: the smallest
+/// card index, at the highest of its pieces.
+fn first_visible(pieces: &[Piece], top: f32, bottom: f32) -> Option<(usize, f32)> {
+    let card = pieces
+        .iter()
+        .filter(|p| p.rect.y < bottom && p.rect.y + p.rect.height > top)
+        .map(|p| p.card)
+        .min()?;
+    card_top(pieces, card).map(|y| (card, y))
+}
+
+/// Where `card`'s top is: its highest piece.
+fn card_top(pieces: &[Piece], card: usize) -> Option<f32> {
+    pieces
+        .iter()
+        .filter(|p| p.card == card)
+        .map(|p| p.rect.y)
+        .reduce(f32::min)
+}
+
 /// How long a zoom may last: the sidebar's slide, and a little more.
 const ZOOM_LIMIT: Duration = SLIDE.saturating_add(Duration::from_millis(duration::SHORT_2));
 
@@ -234,6 +269,21 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
         self
     }
 
+    /// Keep the card at the top of the view in view while a zoom moves the cards (feature 970,
+    /// FR-013): each layout step that moves it, `f` gets the scroll offset that undoes the move,
+    /// for the owner to apply to the grid's scrollable ([`Self::scroll_id`]). Nothing is asked at
+    /// rest.
+    pub fn on_reflow(mut self, f: impl Fn(AbsoluteOffset) -> M + 'a) -> Self {
+        self.on_reflow = Some(Box::new(f));
+        self
+    }
+
+    /// Name the grid's scrollable, so `operation::scroll_to` can reach it.
+    pub fn scroll_id(mut self, id: impl Into<Id>) -> Self {
+        self.scroll_id = Some(id.into());
+        self
+    }
+
     /// The grid proper, without its scrollable.
     fn into_grid(self) -> Grid<'a, M> {
         Grid {
@@ -246,6 +296,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             spacing: self.spacing,
             max_columns: self.max_columns,
             zoom: self.zoom,
+            on_reflow: self.on_reflow,
         }
     }
 }
@@ -258,6 +309,7 @@ struct Grid<'a, M> {
     spacing: f32,
     max_columns: usize,
     zoom: Zoom,
+    on_reflow: Option<OnReflow<'a, M>>,
 }
 
 impl<M> Grid<'_, M> {
@@ -409,6 +461,27 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
                 .clock
                 .on_layout_frame(event, 1.0, ZOOM_LIMIT, shell);
         }
+        if let Some(on_reflow) = &self.on_reflow {
+            let state = tree.state.downcast_mut::<ZoomState>();
+            // The visible top, in the grid's own coordinates (`viewport` is the scrollable's
+            // window in the content's).
+            let top = viewport.y - layout.position().y;
+            let mut shift = 0.0;
+            if zooming || state.was_zooming {
+                let moved = state
+                    .anchor
+                    .and_then(|(card, was)| card_top(&state.pieces, card).map(|now| now - was));
+                shift = moved.unwrap_or(0.0);
+            }
+            if shift.abs() >= MIN_PIECE {
+                shell.publish(on_reflow(AbsoluteOffset {
+                    x: 0.0,
+                    y: (top + shift).max(0.0),
+                }));
+            }
+            state.anchor = first_visible(&state.pieces, top + shift, top + shift + viewport.height);
+            state.was_zooming = zooming;
+        }
         let origin = layout.position();
         let (state_tree, children) = (&tree.state, &mut tree.children);
         let state = state_tree.downcast_ref::<ZoomState>();
@@ -557,7 +630,12 @@ impl<'a, M: Clone + 'a> From<CardGrid<'a, M>> for Element<'a, M> {
     fn from(g: CardGrid<'a, M>) -> Self {
         let on_scroll = g.on_scroll.clone();
         let roles = g.roles;
-        let scrollable = Scrollable::new(Element::new(g.into_grid()), roles).height(Length::Fill);
+        let scroll_id = g.scroll_id.clone();
+        let mut scrollable =
+            Scrollable::new(Element::new(g.into_grid()), roles).height(Length::Fill);
+        if let Some(id) = scroll_id {
+            scrollable = scrollable.id(id);
+        }
         match on_scroll {
             Some(message) => scrollable.on_scroll(message).into(),
             None => scrollable.into(),
@@ -982,6 +1060,11 @@ mod tests {
                     .zoom(zoom)
                     .into_grid(),
             );
+            self.lay_element(&mut element, width)
+        }
+
+        /// Diffs `element` into the kept tree and lays it out `width` wide.
+        fn lay_element<M>(&mut self, element: &mut Element<'_, M>, width: f32) -> layout::Node {
             let tree = match &mut self.tree {
                 Some(tree) => {
                     tree.diff(element.as_widget());
@@ -996,6 +1079,36 @@ mod tests {
                 &crate::ui::material::test_support::renderer(),
                 &layout::Limits::new(Size::ZERO, Size::new(width, 10_000.0)),
             )
+        }
+
+        /// The next frame of a grid whose `on_reflow` publishes the offset's y: lays it out
+        /// `width` wide, then lets it see an event in a viewport `VIEW` tall scrolled to `scroll`.
+        /// Returns what it published.
+        fn frame(&mut self, zoom: Zoom, width: f32, scroll: f32) -> Vec<f32> {
+            let mut element: Element<'static, f32> = Element::new(
+                CardGrid::new(cards::<f32>(30), roles())
+                    .min_width(MIN_WIDTH)
+                    .spacing(GAP)
+                    .zoom(zoom)
+                    .on_reflow(|offset| offset.y)
+                    .into_grid(),
+            );
+            let node = self.lay_element(&mut element, width);
+            let mut published = Vec::new();
+            let mut shell = iced::advanced::Shell::new(&mut published);
+            element.as_widget_mut().update(
+                self.tree.as_mut().expect("laid out"),
+                &Event::Window(iced::window::Event::RedrawRequested(
+                    std::time::Instant::now(),
+                )),
+                Layout::new(&node),
+                mouse::Cursor::Unavailable,
+                &crate::ui::material::test_support::renderer(),
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::new(Point::new(0.0, scroll), Size::new(width, VIEW)),
+            );
+            published
         }
 
         fn state(&mut self) -> &mut ZoomState {
@@ -1032,6 +1145,64 @@ mod tests {
         rig.lay(cards(7), normal(300.0), 1150.0);
         rig.lay(cards(7), full(300.0), 1300.0);
         rig
+    }
+
+    /// The viewport height of the anchor tests.
+    const VIEW: f32 = 400.0;
+
+    /// Where card `i`'s top is in the rig's last layout.
+    fn top_of(rig: &mut Rig, i: usize) -> f32 {
+        card_top(&rig.pieces(), i).expect("the card is drawn")
+    }
+
+    /// U27 (970, FR-013, US2 #5): across a zoom the first card in view stays where it was in the
+    /// view, because each layout step publishes the scroll that undoes the move; a scroll in
+    /// mid-zoom hands the anchor to the new first card; a grid at rest publishes nothing.
+    #[test]
+    fn the_first_visible_card_stays_in_view_across_a_zoom() {
+        let row = CARD_HEIGHT + GAP;
+        let mut rig = Rig::new();
+        rig.frame(normal(350.0), 1300.0, 0.0);
+        let mut scroll = 5.0 * row;
+        assert!(
+            rig.frame(normal(350.0), 1300.0, scroll).is_empty(),
+            "a grid at rest publishes nothing"
+        );
+        assert!(
+            rig.frame(normal(350.0), 1280.0, scroll).is_empty(),
+            "a resize at rest publishes nothing"
+        );
+        rig.frame(normal(350.0), 1300.0, scroll);
+        // Card 20 is first in view: row 5 of 4 columns. At 5 columns it is row 4.
+        let mut watched = 20;
+        let mut rel = top_of(&mut rig, 20) - scroll;
+        assert_eq!(rel, 0.0, "card 20 starts the view");
+
+        let widths = [
+            1300.0, 1350.0, 1400.0, 1450.0, 1500.0, 1550.0, 1600.0, 1650.0,
+        ];
+        let mut asked = false;
+        for (step, width) in widths.into_iter().enumerate() {
+            if let Some(&y) = rig.frame(full(350.0), width, scroll).last() {
+                scroll = y;
+                asked = true;
+            }
+            let now = top_of(&mut rig, watched) - scroll;
+            assert!(
+                (now - rel).abs() <= 1.0,
+                "step {step} ({width} px): card {watched} sits {now} from the view's top, began at {rel}"
+            );
+            if step == 3 {
+                // The user scrolls two rows up in mid-zoom: the anchor becomes the first card in
+                // the new view, and it is that one the next steps keep in place.
+                scroll -= 2.0 * row;
+                rig.frame(full(350.0), width, scroll);
+                (watched, _) = first_visible(&rig.pieces(), scroll, scroll + VIEW).expect("a card");
+                rel = top_of(&mut rig, watched) - scroll;
+                assert_ne!(watched, 20, "a scroll mid-zoom changed the anchor");
+            }
+        }
+        assert!(asked, "the zoom moved card 20, so it asked to scroll");
     }
 
     /// U21 (970, FR-011): a grid built full screen is at rest, with no zoom.

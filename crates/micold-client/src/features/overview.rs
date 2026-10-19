@@ -139,7 +139,7 @@ impl Registered for OverviewCardMenu {
 }
 
 /// What happens to the Overview.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Msg {
     /// The shortcut or the top-bar button. Does nothing while Settings is open, which cannot yield
     /// to another view without losing or saving its draft (research R2).
@@ -218,7 +218,17 @@ pub enum Msg {
     CardMenuEntryChosen(Box<Message>),
     /// The card grid scrolled: the root closes what floats over it (FR-012).
     GridScrolled,
+    /// A zoom moved the card at the top of the view, and the grid asks for this vertical scroll
+    /// offset, in pixels, to keep it there (feature 970, FR-013). The root scrolls the grid;
+    /// nothing of the Overview's own changes. A bare `f32` because a feature module names no
+    /// rendering type.
+    Reflowed(f32),
 }
+
+// `Reflowed` holds a float, so `Eq` cannot be derived; the offset is a finite scroll position
+// (never NaN), so equality is reflexive, which is all `Eq` promises. `Message` and the overlay
+// registry need it.
+impl Eq for Msg {}
 
 impl Msg {
     /// The project a read was started in, for the messages that carry one. Issue numbers and
@@ -308,6 +318,8 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         }
         // The root answers it with the shared scroll-beneath rule; nothing of the Overview's own.
         Msg::GridScrolled => {}
+        // The root scrolls the grid to the offset (a task, not state).
+        Msg::Reflowed(_) => {}
         // The root answers these two with the measured card and the highlighted entry.
         Msg::CardMenuRequested(_) | Msg::CardMenuActivated => {}
         Msg::CardMenuMoved { forward, items } => {

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: M2 verified, full gate next
-- **Next step**: M2 push and PR
+- **Phase**: M3 reviewed, full gate next
+- **Next step**: M3 full gate, push, PR text
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1066 | design (spec, plan, tasks) | merged (rebase) | d7005808fd4f200f8ec2fa1afb23e4d640f53aeb |
 | #1074 | M1 (full screen hides the sidebar) | merged (rebase) | 3603ce06621499419e86a60e106d605b14a7904c |
+| #1143 | M2 (the cards zoom with the sidebar) | merged (rebase) | 34fccd299512b1ea90e592c8a920a631ba26ebf7 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | #1074 | merged |
-| M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | — | implemented (T018–T026 ticked), reviews next |
-| M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | — | pending |
+| M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | #1143 | merged |
+| M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | — | implemented (T027–T031 ticked), scoped gate and reviews next |
 | M4 | T032–T041 | full | Reduce motion (US3) | — | pending |
 
 Polish T042–T043 (visual pass, final gate) changes no code: close unit. M1 keeps US1 whole at 15
@@ -63,6 +64,9 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 | M2 review A (code-review high, sonnet) | 2 | e915063c705611ab260afb599fb42f45c0593e1b:c4f236d890ae55fc6ea27212f0565a008c8ccd4e | CLEAN |
 | M2 review B (conformance, sonnet) | 1 | e915063c705611ab260afb599fb42f45c0593e1b:c4f236d890ae55fc6ea27212f0565a008c8ccd4e | CHANGES: 1 MAJOR (no behavioural red for T021) fixed by a mutation run recorded in the cycle-log (no re-review: record only); 1 MINOR (test count) fixed |
 | M2 visual pass | 1 | — | PASS (zoom 3→4 columns, rest layouts, showcase pose; split-card mid-frames not observed, covered by `ribbon` unit tests) |
+| M3 review A (code-review high) | 1 | c8483b7d07bdf0a4a36969e4f8711dd9aeaa4761:34fccd299512b1ea90e592c8a920a631ba26ebf7 | CLEAN |
+| M3 review B (conformance, sonnet) | 1 | 3cd7cdcfe0ecbcc3c43be3158a6a371c6687c908:34fccd299512b1ea90e592c8a920a631ba26ebf7 | CLEAN (2 MINOR: tests-after-code gap, recorded in the cycle-log; T030 names app.rs, the Task is in main.rs, recorded under Where things went) |
+| M3 visual pass | 1 | — | PASS (30 cards, scrolled to the bottom, card 20 stays in its row after entering full screen; no overlap mid-zoom). Not observed: card 20 as the very first card, exit, the chord |
 
 ## Declined review findings
 
@@ -87,3 +91,8 @@ None.
 - Zoom lives in `ui/material/card_grid.rs`: `Zoom`, `zoom_fraction`, `rest_width`, `ribbon`, `Piece`, `ZoomState` (+ `advance`), private `Grid` widget (the `Scrollable` content; `CardGrid::into_grid`). `SLIDE` is `pub(super)` in `navigation_drawer.rs`. `RESIZE_HANDLE_WIDTH` re-exported from `material/mod.rs`.
 - Glue: `ui/overview.rs` `freed_width`; `ui/sidebar.rs` `STRIP_WIDTH` is `pub(crate)`. Showcase pose "zoom" in `showcase/sections/surfaces.rs` (`card_grid`), catalogue entry now interactive.
 - Deviations: a flip's start width is the previous *layout's* width (`last_width`), not the flip layout's; the zoom end rule heads for the larger end when entering and the smaller when leaving (so the flip layout itself, at the start width, never ends it). On the ribbon the gap at a row end is hidden, so a split card's pieces sum to `w` minus at most the gap (the spec's "sum to w" holds up to the gap). Pointer events over any piece of a card reach the card, translated to its primary box.
+
+## Where things went (M3)
+
+- `card_grid.rs`: `CardGrid::on_reflow` / `scroll_id`, `OnReflow`, `first_visible`, `card_top`; `ZoomState.anchor` / `was_zooming`; the anchor logic is the top block of `Grid::update`. Test rig: `Rig::frame` (+ `lay_element`).
+- Glue: `features/overview.rs` `Msg::Reflowed` (an `f32` y, not `AbsoluteOffset`: `features_are_render_free` bars iced types from feature modules, a deviation from contracts/ui.md; + hand-written `impl Eq for Msg`); `ui/overview.rs` `GRID_SCROLL_ID`; the root's `scroll_to` is in `main.rs` `overview_message` (the Task side; `app.rs` has no Tasks). User guide: one sentence in `docs/user-guide/overview.md`.
