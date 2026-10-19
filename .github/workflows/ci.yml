@@ -236,6 +236,28 @@ jobs:
       # `target/remote-daemon`, the installer scripts) is unchanged. It must run before rust-cache
       # so the restore lands on the Dev Drive. Best effort: if the image cannot make a Dev Drive
       # the leg builds in a plain `target` as before.
+      # Issue 958: the Dev Drive alone left the median and spread unchanged (16 main runs, median
+      # 1660 s, 1143-1816 s), so real-time scanning of freshly built test binaries is the next
+      # suspect. The runner is discarded after the job, so the exclusions reach nothing else.
+      # The step logs whether real-time protection was on, so a run shows whether this can matter.
+      # Best effort: a failure warns and the leg carries on.
+      - name: Exclude the build from Defender scanning (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try {
+            $status = Get-MpComputerStatus
+            "Defender real-time protection: $($status.RealTimeProtectionEnabled)" |
+              Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+            $paths = @($env:GITHUB_WORKSPACE, (Join-Path $env:USERPROFILE '.cargo'),
+              (Join-Path $env:USERPROFILE '.rustup'), $env:RUNNER_TEMP, $env:RUNNER_TOOL_CACHE)
+            Add-MpPreference -ExclusionPath $paths
+            Add-MpPreference -ExclusionProcess @('cargo.exe', 'rustc.exe', 'link.exe', 'rustdoc.exe')
+            "Defender exclusions: $((Get-MpPreference).ExclusionPath -join ', ')" | Write-Output
+          } catch {
+            Write-Output "::warning::Could not add Defender exclusions: $_"
+            "Defender exclusions: none ($_)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
       - name: Mount a Dev Drive at target (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
