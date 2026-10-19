@@ -70,6 +70,7 @@ Resolved on the client: `GithubRepo::from_remote_url(push_url)`; `None` → `NoR
 | `SourceUnreachable(String)` | "GitHub could not be reached: <reason>. Retrying." |
 | `NotGithub { host }` | "The remote's host <host> is not supported for scoped credentials." |
 | `NoRemote` | "The project has no GitHub remote (origin)." |
+| `GitTooOld { version }` | "Git <version> in the container is older than 2.31, so it cannot use scoped credentials. Use an image with a newer git." |
 | `RenewalFailed(Box<NoCredentialReason>)` | "Renewing the credential failed: <inner>. Pushes fail until it succeeds." |
 
 `AppNotInstalled` is the one variant specific to the GitHub App source (research R3).
