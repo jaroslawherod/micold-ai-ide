@@ -8,6 +8,7 @@ mod conn;
 mod env_support;
 
 use std::ffi::OsString;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -230,6 +231,7 @@ async fn a_grant_is_written_atomically_with_mode_0600_and_replaced_by_the_next()
         }
     };
     wait_for(&format!("expires_at={}\ntoken=tok-1\n", soon())).await;
+    #[cfg(unix)]
     assert_eq!(
         std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
         0o600
@@ -365,6 +367,8 @@ async fn a_write_failure_names_the_repository_and_never_the_token() {
     );
 }
 
+// The stand-in `git` is a `sh` script on a `:`-separated PATH.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_git_older_than_2_31_marks_the_targets_and_refuses_every_grant() {
     let _one = ONE_AT_A_TIME.lock().await;
