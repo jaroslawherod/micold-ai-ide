@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-12
 
-**Status**: Draft
+**Status**: Closed 2026-10-19 - shipped in PRs #789, #845, #883, #895, #918, #964, #1020, #1026, #1029, #1051 and the close PR
 
 **Input**: User description: GitHub issue #489, "Run the session daemon on a remote host over SSH".
 Builds on the multi-daemon model of spec 491 (daemon list, per-worktree binding, Settings **Daemons**

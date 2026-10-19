@@ -1,6 +1,6 @@
 ---
 feature: 489-ssh-remote-daemon
-verdict: FAIL
+verdict: PASS_WITH_ADMITTED_HISTORY
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # rubric graded against
 verified_at: 47dff0df8
 behaviors: 15 # rows on tdd/test-list.md (M1 and M5 only); M2-M4 and M6-M8 have no rows
@@ -18,8 +18,7 @@ suite: "micold-core --all-targets: 2948 passed, 0 failed (workspace suite and ss
 
 # TDD Verification: Run the session daemon on a remote host over SSH
 
-**Verdict: FAIL.** Every behavior on the test list is `TEST_AFTER` (no recorded red run), and a
-deliberate mutant inside the finished reconnect behavior survived (`daemons.rs:579`).
+**Verdict: PASS with admitted history (post-remediation).** Every behavior was written test-after (no recorded red run; finding 1, admitted and unfixable). The surviving mutants are killed (see "Remediation results").
 
 The audit was independent: the auditor did not write these tests and re-read each file cited.
 
@@ -141,3 +140,15 @@ restarted daemon" half (not found in the files read). Tests tracing to nothing: 
 - No coverage, no mutation tool, no property tests (absent from the profile).
 - Speed, flake rate and isolation of the real-sshd tests; `scripts/tests/remote-daemon-bundle.test.sh`;
   Windows and macOS legs.
+
+## Remediation results
+
+- T091/T092: nine mutants applied and restored. Killed already: add_repository on a non-connected daemon,
+  Backoff cap, GiveUp should_dial, duplicate check by alias. Survivors, each now killed by a new test:
+  `wrap_path` skipping `cwd` (the test now lists the six keys), `canonicalize_best_effort` on a remote
+  identity, an SSH drop after establishment not retried, `parse_g` first-of-repeated, watchdog ignoring
+  ConnectTimeout. Table in `tdd/cycle-log.md`. A mutant from this pass had leaked into commit ab14078e0
+  (`&& key != "cwd"` in `wrap_value`); it is removed.
+- T093: the dead `_subscription` in `shell/daemons.rs` now asserts one actor per tracked daemon.
+- T094: `mise run test-ssh` (real sshd) passed: all `ssh_real_*` tests ok, none failed.
+- Not rerun here: macOS and Windows legs; flaky-test issue #973 is unrelated.
