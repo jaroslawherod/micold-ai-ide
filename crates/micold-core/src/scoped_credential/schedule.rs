@@ -695,7 +695,13 @@ mod tests {
         assert_eq!(s.due(T0 + 11), vec![]);
         s.refresh(&repo("A"), T0 + 11);
         assert_eq!(s.due(T0 + 11), vec![repo("a")]);
-        s.refresh(&repo("other"), T0 + 11);
+        s.run(&f, T0 + 11);
+        s.refresh(&repo("other"), T0 + 12);
+        assert_eq!(
+            s.due(T0 + 12),
+            vec![],
+            "a repository no project uses changes nothing"
+        );
     }
 
     #[test]

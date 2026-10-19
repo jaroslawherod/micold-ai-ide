@@ -59,6 +59,9 @@ windows-sys = { workspace = true }
 tempfile = { workspace = true }
 # Feature 686: phase bounds are tested on a paused clock.
 tokio = { workspace = true, features = ["test-util"] }
+# #1002 (FR-014): the integration tests that build a container start-up on a hostile host need
+# `sandbox::hostile_host`, so `cargo test -p micold-core` runs them too, not only the workspace.
+micold-core = { path = ".", features = ["kube-fake"] }
 
 [lints]
 workspace = true

@@ -262,3 +262,13 @@ reasons and their remedy texts are one table in core (`NoCredentialReason::messa
   or host. The repository limit is proven by delivery of the PAT stored for that repository only (and the
   paste-time checks on fixtures); permissions and reach are the PAT's, checked live in the
   quickstart's manual part.
+
+## R13. Why the minted-token path stays (close unit, verification finding 5)
+
+`ScopedCredential::accept`, `RenewPolicy::Renew` and `MINTED_LIFETIME_SECS` are not used by the
+pasted-PAT source, which issues through `ScopedCredential::pasted` under `RenewPolicy::AtExpiry`.
+They stay because `FakeSource` (M4) issues through `accept`: it is the test double that drives the
+`Schedule` tests, the daemon's grant/revoke protocol tests and the client's worker tests. Deleting
+the path means rewriting that suite against a PAT-shaped fake, which changes no behaviour a user
+sees. `Renew` is never constructed in production (`Manager::targets` uses `AtExpiry`), so FR-008's
+"never renew" holds; the tests that pin `Renew` pin the fake's contract, not the product's.

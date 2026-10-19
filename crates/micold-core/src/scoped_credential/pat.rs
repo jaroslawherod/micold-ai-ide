@@ -351,6 +351,13 @@ mod tests {
             parse_probe(&good_probe(), &repo(), 1_800_000_000),
             Err(NoCredentialReason::PatExpired)
         );
+        let expiry = parse_expiration("2023-11-20 00:00:00 UTC").unwrap();
+        assert_eq!(
+            parse_probe(&good_probe(), &repo(), expiry),
+            Err(NoCredentialReason::PatExpired),
+            "a token expiring this second is expired"
+        );
+        assert_eq!(parse_probe(&good_probe(), &repo(), expiry - 1), Ok(expiry));
     }
 
     #[test]

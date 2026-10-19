@@ -245,4 +245,17 @@ mod tests {
             assert_eq!(parse_repo(bad), None, "{bad}");
         }
     }
+
+    #[test]
+    fn the_warning_starts_exactly_a_day_before_the_expiry() {
+        let row = PatRow {
+            repo: parse_repo("o/r").unwrap(),
+            expires_at: 1_800_000_000,
+        };
+        assert_eq!(row.warning(row.expires_at - EXPIRY_WARNING_SECS - 1), None);
+        let warned = row.warning(row.expires_at - EXPIRY_WARNING_SECS).unwrap();
+        assert!(warned.contains(" expires on "), "{warned}");
+        let expired = row.warning(row.expires_at).unwrap();
+        assert!(expired.contains(" expired on "), "{expired}");
+    }
 }

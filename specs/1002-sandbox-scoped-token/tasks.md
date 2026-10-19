@@ -550,3 +550,17 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 T056 (quickstart Part C results, with a real PAT) changes no code and is left to the close unit.
+
+## Phase 10: TDD remediation
+
+Verdict `FAIL` (`tdd/verification.md`, audited at 8b2d4b38): the feature is not done until T057-T058 are cleared. T059 onward are `MED` and `LOW` follow-ups.
+
+- [x] T057 [US2] Verification finding 2 (HIGH): in `crates/micold-core/src/scoped_credential/helper.rs` tests (`another_repository_host_scheme_or_no_path_gets_nothing`, ~line 178) add `"../r"`, `"o/.."`, `"./r"`, `"o/."` and assert `answer(...) == ""`; prove it kills the mutant that deletes `&& s != ".."` at `helper.rs:81`. Done when `cargo test -p micold-core --lib scoped_credential::helper` is green with the guard and red without it.
+- [x] T058 Verification finding 1 (HIGH): there is no red evidence. Either record, in `tdd/cycle-log.md`, a red run per test-bearing task (T002-T007, T015-T018, T023-T025, T029-T033, T039-T043, T050) by reverting the guarded source line and running the single test, or record the accepted exception in `autopilot.md` as a decision. Done when `/speckit.tdd.verify` no longer classifies these behaviors `TEST_AFTER`.
+- [x] T059 [US2] Finding 3: in `pat.rs` tests add a probe with an expiry equal to `NOW` and assert `Err(NoCredentialReason::PatExpired)` (`pat.rs:177`). Done when `cargo test -p micold-core --lib scoped_credential::pat` fails with `expires_at < now` and passes with `<=`.
+- [x] T060 [US3] Finding 4: add unit tests for `PatRow::warning` in `crates/micold-client/src/features/settings/github_tokens.rs` at `expires_at - 86_400` (warns) and `- 86_401` (none). Done when `cargo test -p micold-client --lib features::settings` fails with the boundary shifted by one second.
+- [x] T061 Finding 5: delete `ScopedCredential::accept`, `RenewPolicy::Renew`, `Grant` extras and `MINTED_LIFETIME_SECS` with the ~14 tests that pin them, or document in `research.md` why they stay. Done when `grep -rn "RenewPolicy::Renew" crates` is empty (or the reason is recorded) and `mise run test-core` is green.
+- [x] T062 Finding 6: in `crates/micold-daemon/tests/scoped_git_credential.rs` replace the four `eprintln!` + `return` skips with a failing assertion (or `#[ignore = "needs git http-backend"]`). Done when the test fails on a PATH without `git http-backend`.
+- [x] T063 Finding 7: make the FR-014 container test run under `mise run test-core` (enable `kube-fake` for it or move it). Done when `cargo test -p micold-core --all-targets -- a_container_start_up` reports 1 passed.
+- [x] T064 Finding 8: make the FR-014 environment check use the environment the client actually builds for a container start, without `std::env::set_var`. Done when a pass-through of `GH_TOKEN` added to the client's container env fails the test.
+- [x] T065 Findings 9-13 (MED/LOW): assert git's refusal reason in `scoped_git_credential.rs:468`; split `git_credential_grant.rs:196`; drop the duplicate string pin `mod.rs:549` and the literal-equals-constant tests (`mod.rs:556`, `helper.rs:142`); remove the silent `if let Ok` and the no-op calls (`sandbox_credentials.rs`, `schedule.rs:698`, `scoped_git_credential.rs:411`). Done when `mise run gate` is green.

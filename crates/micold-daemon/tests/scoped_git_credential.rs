@@ -52,10 +52,7 @@ fn fill(home: &Path, repo: &Path, with_env: bool) -> String {
 
 #[test]
 fn a_planted_host_helper_never_runs_and_no_password_is_returned() {
-    if !git_available() {
-        eprintln!("skipped: `git` is not on PATH, so there is no helper to plant");
-        return;
-    }
+    assert!(git_available(), "`git` is not on PATH");
     let dir = tempfile::tempdir().expect("tempdir");
     let home = dir.path().join("home");
     let repo = dir.path().join("repo");
@@ -360,14 +357,8 @@ fn ok(out: &std::process::Output, what: &str) {
 
 #[test]
 fn push_and_pull_succeed_with_the_scoped_credential_and_ssh_remotes_are_rewritten() {
-    if !git_available() {
-        eprintln!("skipped: `git` is not on PATH");
-        return;
-    }
-    let Some(w) = world("scoped-secret") else {
-        eprintln!("skipped: `git http-backend` is not installed");
-        return;
-    };
+    assert!(git_available(), "`git` is not on PATH");
+    let w = world("scoped-secret").expect("`git http-backend` is installed with git");
     credential_file(&w, far_future(), "scoped-secret");
     let url = format!("{}/o/r.git", w.base);
     let mine = w.work.join("mine");
@@ -408,19 +399,12 @@ fn push_and_pull_succeed_with_the_scoped_credential_and_ssh_remotes_are_rewritte
     let rewritten = w.run(&mine, &["ls-remote", "origin"]);
     ok(&rewritten, "ls-remote over the rewritten ssh remote");
     assert!(String::from_utf8_lossy(&rewritten.stdout).contains("refs/heads/main"));
-    let _ = w.port;
 }
 
 #[test]
 fn nothing_is_offered_for_another_repository_or_host() {
-    if !git_available() {
-        eprintln!("skipped: `git` is not on PATH");
-        return;
-    }
-    let Some(w) = world("scoped-secret") else {
-        eprintln!("skipped: `git http-backend` is not installed");
-        return;
-    };
+    assert!(git_available(), "`git` is not on PATH");
+    let w = world("scoped-secret").expect("`git http-backend` is installed with git");
     credential_file(&w, far_future(), "scoped-secret");
     let fill = |host: &str, path: &str| {
         let mut child = w
@@ -447,14 +431,8 @@ fn nothing_is_offered_for_another_repository_or_host() {
 
 #[test]
 fn an_expired_credential_makes_push_fail_at_once_without_a_prompt() {
-    if !git_available() {
-        eprintln!("skipped: `git` is not on PATH");
-        return;
-    }
-    let Some(w) = world("scoped-secret") else {
-        eprintln!("skipped: `git http-backend` is not installed");
-        return;
-    };
+    assert!(git_available(), "`git` is not on PATH");
+    let w = world("scoped-secret").expect("`git http-backend` is installed with git");
     credential_file(&w, far_future(), "scoped-secret");
     let url = format!("{}/o/r.git", w.base);
     let mine = w.work.join("mine");
@@ -466,5 +444,10 @@ fn an_expired_credential_makes_push_fail_at_once_without_a_prompt() {
     let started = std::time::Instant::now();
     let out = w.run(&mine, &["push", "-q", "origin", "HEAD:main"]);
     assert!(!out.status.success(), "an expired credential pushed");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("could not read Username"),
+        "git should fail for want of a credential: {stderr}"
+    );
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
 }

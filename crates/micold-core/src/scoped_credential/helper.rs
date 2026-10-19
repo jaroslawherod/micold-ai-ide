@@ -190,6 +190,19 @@ mod tests {
     }
 
     #[test]
+    fn a_dot_or_dot_dot_segment_names_no_file() {
+        let root = tempfile::tempdir().unwrap();
+        for path in ["../r", "o/..", "./r", "o/.", "../r.git", "o/../"] {
+            let req = request("github.com", Some(path));
+            assert_eq!(
+                credential_file(root.path(), GITHUB_BASE, &req),
+                None,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
     fn an_expired_missing_or_unreadable_file_gets_nothing() {
         let root = root_with("o/r", &render_credential_file(NOW, "tok-1"));
         let req = request("github.com", Some("o/r"));
