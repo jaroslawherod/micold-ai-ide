@@ -154,7 +154,7 @@ mod kubernetes {
     use micold_core::kube::start::DriftChoice;
     use micold_core::session::AiCli;
 
-    fn world() -> (World, DaemonId) {
+    pub(super) fn world() -> (World, DaemonId) {
         let mut w = World::new();
         let id = w
             .registry
@@ -170,7 +170,7 @@ mod kubernetes {
         state
     }
 
-    fn send(state: &mut State, w: &mut World, msg: Msg) -> Vec<Outcome> {
+    pub(super) fn send(state: &mut State, w: &mut World, msg: Msg) -> Vec<Outcome> {
         daemons::update(state, &mut w.model(), msg)
     }
 
@@ -602,7 +602,7 @@ mod kubernetes {
         }
     }
 
-    fn dial(w: &mut World, id: DaemonId) {
+    pub(super) fn dial(w: &mut World, id: DaemonId) {
         w.links.apply(id, micold_core::daemons::DaemonEvent::Start);
         assert!(w.links.should_dial(id));
     }
@@ -1250,5 +1250,42 @@ mod retired_git_identity {
         assert_eq!(notice_of(&mut w), (None, false));
         let again = daemons::update(&mut state, &mut w.model(), Msg::DismissNotice(boxed));
         assert!(again.is_empty());
+    }
+}
+
+/// Feature 1092 R7: a system-raised prompt waits for the open form dialog (US5, edge case).
+mod drift_behind_the_form {
+    use super::kubernetes::{dial, send, world};
+    use micold_client::features::daemons::{Msg, State};
+
+    #[test]
+    fn a_drift_prompt_raised_while_the_form_is_open_waits_for_it_to_close() {
+        let (mut w, id) = world();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::AddOpened);
+        send(&mut state, &mut w, Msg::NameEdited("Typed".into()));
+        dial(&mut w, id);
+        send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
+        assert!(state.prompt().is_none(), "no second modal over the form");
+        assert_eq!(state.draft.as_ref().unwrap().name, "Typed", "never applied to the draft");
+        send(&mut state, &mut w, Msg::DraftDiscarded);
+        assert!(
+            state.prompt().unwrap().text.starts_with("The running pod differs"),
+            "queued until the overlay closed"
+        );
+    }
+
+    #[test]
+    fn a_queued_drift_prompt_also_shows_after_a_save() {
+        let (mut w, id) = world();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::AddOpened);
+        send(&mut state, &mut w, Msg::NameEdited("Plain".into()));
+        dial(&mut w, id);
+        send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
+        assert!(state.prompt().is_none());
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.draft.is_none());
+        assert!(state.prompt().is_some(), "queued until the overlay closed");
     }
 }

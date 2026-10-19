@@ -451,11 +451,11 @@ it, the version it reported, a state badge (**Connected**, **Starting**, **Unrea
 | **Start** | Connects to that daemon and no other. A stopped daemon is neither connected to nor reconnected until you start it |
 | **Stop** | Disconnects from that daemon and no other |
 | **Reconnect** | Tries an unreachable or mismatched daemon again now, instead of waiting for the next automatic try |
-| **Edit** | Opens the form below the list, filled in |
+| **Edit** | Opens the daemon's form in a dialog, filled in |
 | **Details** | Shows the recent connection errors and the log tail, and why a container runtime cannot be used when that is the reason |
 | **Remove** | Asks first, see below |
 
-**Add daemon** opens a form for a name, what it runs in (container or host), the container name,
+**Add daemon** opens a dialog with a form for a name, what it runs in (container or host), the container name,
 port and image, and whether to connect when the application starts. A form that cannot be saved
 says why beside the field at fault: a blank or repeated name, a port outside 1-65535, a container
 already used by another daemon, a second host daemon. The form groups its settings in titled
@@ -464,8 +464,15 @@ a required field inside it is empty. For a Kubernetes daemon, the contexts found
 are chosen from the **Context from your kubeconfig** select above **Context**, which can still be
 typed.
 
+The dialog has its own **Save daemon** and **Cancel** buttons, which stay in view while the form
+scrolls in a small window. **Save daemon** checks the form and, if it is fine, keeps the daemon at
+once and closes the dialog. **Cancel**, Esc and a click outside the dialog close it and discard
+what you typed; opening it again shows the saved values. While it is open the page behind it takes
+no input.
+
 Saving the Settings page does not save this section and cancelling the page does not undo it: a
-daemon you added or removed here is kept at once.
+daemon you added, changed or removed here is kept at once, and it needs no press of the page's
+**Save**.
 
 ### Removing a daemon
 
@@ -482,7 +489,9 @@ running on it. If you confirm:
 
 Choosing **Cancel**, or pressing Esc, changes nothing. Editing the runtime settings of a daemon that
 is running asks the same way, stops its sessions and then reconnects it; a change of name alone
-asks nothing and changes nothing else.
+asks nothing and changes nothing else. For an edit the question appears inside the daemon's
+dialog, in place of its buttons: **Cancel**, or Esc, returns to the form with your changes kept, and
+**Continue** applies them and closes the dialog.
 
 ### With no daemons
 
