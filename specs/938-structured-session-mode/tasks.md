@@ -529,7 +529,7 @@ structured_log --test layout_snapshot`, then quickstart §B.
 - [x] T045 [US6] Draw a structured session's pane in `crates/micold-client/src/ui/terminal.rs` as
   the read-only log of T043 (shared `Text` in a `Scrollable`, no input box, no keystroke routing),
   reusing shared primitives; a missing one goes into `ui/material/` with a builder API (R10).
-- [ ] T046 [US6] Run quickstart [Part B](quickstart.md) steps 1–6 with the `visual-pass` skill and
+- [x] T046 [US6] Run quickstart [Part B](quickstart.md) steps 1–6 with the `visual-pass` skill and
   save its evidence under `specs/938-structured-session-mode/visual-pass/`.
 - [x] T047 [US6] Add a "Structured sessions" section to
   `docs/user-guide/worktrees-and-sessions.md` (FR-023): what the structured kind is, how to choose

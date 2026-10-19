@@ -4662,6 +4662,26 @@ pub(crate) mod tests {
         );
     }
 
+    /// 938 FR-020: a structured session the daemon reports is a structured session in the model.
+    #[test]
+    fn a_reported_structured_session_keeps_its_kind() {
+        let path = "/repo/demo";
+        let mut core = State::default();
+        let id = SessionId::new();
+        let mut summary = summary_on(id, "A", WireLifecycle::Running, AiCli::ClaudeCode);
+        summary.kind = micold_core::session::SessionKind::Structured;
+
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
+            &snapshot_with(path, vec![summary]),
+            false,
+        );
+
+        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
+        assert_eq!(list[0].kind, micold_core::session::SessionKind::Structured);
+    }
+
     /// And a session already in the model is not re-derived from the snapshot.
     ///
     /// The update branch adopts `lifecycle`, `activity` and a real `title` — deliberately not the

@@ -229,7 +229,7 @@ pub fn reconcile_catalog(
                     .clone()
                     .map(SessionLocation::Worktree)
                     .unwrap_or(SessionLocation::Default);
-                let mut s = Session::restored(
+                let mut s = Session::restored_of_kind(
                     summary.id,
                     location,
                     summary.title.clone(),
@@ -242,6 +242,9 @@ pub fn reconcile_catalog(
                     // terminal bar and the split affordance all reading `claude` for a Copilot
                     // session, with every other test still green.
                     summary.provider,
+                    // Likewise the kind (feature 938, FR-020): without it every structured session
+                    // reads as a terminal one, and its pane draws a grid that never arrives.
+                    summary.kind,
                 );
                 s.lifecycle = lifecycle;
                 s.activity = summary.activity.clone();

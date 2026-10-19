@@ -92,6 +92,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 review B (conformance, sonnet) | 2 | cd63101c4d6a93126b38cbaf204719bb1578adc8:a9a7ff41fd018ba604366dca2e6c38850e427008 | CLEAN; 1 MINOR (tests for the fix-round guards) fixed for the removed-session guard, rest declined |
 | M8 review A (code-review high) | 1 | 30968b0f2fae8e248c798145b19437ab6a678657:3aaefff6a9d3dd04b6289a11c6a89049b1821432 | 3 MAJOR fixed (re-sent snapshot appended; log drawn over shell instances; const after test module = clippy), 6 MINOR (2 fixed, rest declined) |
 | M8 review B (conformance) | 1 | 30968b0f2fae8e248c798145b19437ab6a678657:3aaefff6a9d3dd04b6289a11c6a89049b1821432 | CHANGES: 1 MAJOR (no red for M8 tests; mutation red recorded in cycle-log), 2 MINOR fixed |
+| M8 review A (code-review high, sonnet) | 2 | adb63f3dd9f0a8b0f15002096d7d4b91ace01e16:3aaefff6a9d3dd04b6289a11c6a89049b1821432 | CLEAN; 2 MINOR (doc comment placement fixed, prose only; catalog-leave forget declined) |
 
 ## Declined review findings
 
@@ -138,14 +139,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | B 2 | scenario 8 (removal racing a save) has no daemon-level test | the daemon's save goes through `HistoryStore::save_events`, whose forgotten check under the lock is tested in `terminal_history_store`; the daemon test covers the save after removal |
 | M7 | A2 | stale-snapshot prune of a seeded schedule; the store-mutex stat; free-form dedupe keys; a re-spawned load for an id archived mid-sync | one redundant write at worst; has_events no longer locks; keys follow the existing "deletion:" convention; the re-spawn ends with the next catalog change |
 | M7 | B2 | tests for the stop-save with saving off and the events failure key | both are one-line guards with no behaviour a user sees; the removed-session guard has a test |
+| M8 | A 2 | F2 a session that leaves the catalog by another route keeps its log | MINOR; the log is bounded (5,000 rows) and dropped on close/remove |
 | M8 | A 1 | F5 every `StreamDelta` row rebuilt per frame, no tail-follow; F8 `cut(&flat(text))` allocates the whole text | the pane is the interim read-only log until #939's transcript view; bounded at 5,000 rows; MINOR |
 | M8 | A 1 | F7 / B3 `offers_a_choice` test helper re-implements the old rule | it keeps the tests' meaning (a second CLI); the production rule has its own test in features_session; MINOR |
 | M8 | A 1 | F9 FR-016a source-level assert loosened | the label still comes from the session's provider through `command_caption`, which uses `command()`; MINOR |
 
 ## Handover
 
-M8 part 2: code, tests, review round 1 fixes done. Remaining: round 2 of review A on the fix diff
-(snapshot above), `scripts/gate.sh` on the final tree, T046 visual pass (tick it), push
+M8 part 2: code, tests, review round 1-2, T046 visual pass done (it found and fixed the catalog fold
+dropping `kind`). Remaining: `scripts/gate.sh` on the final tree, push
 `--force-with-lease=claude/project-thread-cl0lw3:`; pr-title.md/pr-body.md are written.
 
 ## Open escalation

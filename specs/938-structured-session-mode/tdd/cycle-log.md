@@ -247,3 +247,6 @@ Append only. Newest last.
 - Review A fixes: a re-sent snapshot replaced by sequence continuity, not by "a live event came
   between"; the log pane only for the AI tab (shell instances stay terminals); a log forgotten when
   its session is removed; the settings const placed before the test module.
+- red (found by the T046 visual pass): a structured session showed `claude` and "Starting…" because
+  `catalog_sync` folded a daemon summary through `Session::restored` (kind dropped).
+  `a_reported_structured_session_keeps_its_kind` FAILED against it, passes with `restored_of_kind`.
