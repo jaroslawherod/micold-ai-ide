@@ -1299,7 +1299,7 @@ async fn container_attempt(
         Box::new(move |ledger: AttemptLedger| {
             let _ =
                 micold_core::provision::rollback(&ledger, &CliRuntime::new(runtime, SystemRunner));
-        }) as Box<dyn FnOnce(AttemptLedger) + Send>
+        }) as Box<dyn FnOnce(AttemptLedger) + Send + Sync>
     }));
     // A daemon added in Settings has no other bring-up: without this the wait below is for a
     // container nobody creates (BUG-868). What it creates is removed again if the attempt fails.
@@ -1376,12 +1376,12 @@ async fn container_attempt(
 /// connected, including when its future is dropped by a cancel (feature 806, FR-019, FR-020).
 struct StartRollback {
     ledger: std::sync::Arc<std::sync::Mutex<AttemptLedger>>,
-    undo: Option<Box<dyn FnOnce(AttemptLedger) + Send>>,
+    undo: Option<Box<dyn FnOnce(AttemptLedger) + Send + Sync>>,
 }
 
 impl StartRollback {
     /// `None` for an attempt that must leave the container alone.
-    fn new(undo: Option<Box<dyn FnOnce(AttemptLedger) + Send>>) -> Self {
+    fn new(undo: Option<Box<dyn FnOnce(AttemptLedger) + Send + Sync>>) -> Self {
         Self {
             ledger: std::sync::Arc::default(),
             undo,
@@ -2385,7 +2385,7 @@ mod tests {
     fn rolled_back(body: impl FnOnce(&mut StartRollback)) -> Option<AttemptLedger> {
         let (tx, rx) = std::sync::mpsc::channel();
         let undo = Box::new(move |ledger| tx.send(ledger).unwrap())
-            as Box<dyn FnOnce(AttemptLedger) + Send>;
+            as Box<dyn FnOnce(AttemptLedger) + Send + Sync>;
         let mut rollback = StartRollback::new(Some(undo));
         body(&mut rollback);
         drop(rollback);
