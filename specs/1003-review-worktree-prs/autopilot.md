@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
 - **Phase**: implement
-- **Next step**: orchestrator opens the M3 PR, CI, merge; then M4
+- **Next step**: orchestrator opens the M4 PR, CI, merge; then close unit (T014, T021, T027, T036, T037)
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Every PR of the worktree's branch set listed (number, title, state), each diff reachable | #1094 | merged |
 | M2 | T015–T020 | full | Check mark on every entry, one mapping shared with the sidebar | #1097 | merged |
 | M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | #1100 | merged |
-| M4 | T032–T036 | full | Loading, empty and unavailable lines | — | pending |
+| M4 | T032–T036 (T036 moved to close) | full | Loading, empty and unavailable lines | pending PR | gate running, reviews clean |
 
 ## Decisions
 
@@ -52,6 +52,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B (conformance) | 2 | 74880d28be801857f9b50418d8c67b3ff0b819d7:ca62c70abdc3140bafc276b1afad54b7a30d433f | CLEAN |
 | M2 A (reviewer, correctness) | 1 | b7b08693fcd26de23101f24df3f284bd753ba301:606b03e7666ae48b3f70868852b311d125cedd33 | CLEAN |
 | M2 B (conformance) | 1 | b7b08693fcd26de23101f24df3f284bd753ba301:606b03e7666ae48b3f70868852b311d125cedd33 | CLEAN (3 MINOR: F1 Verify line fixed, prose only; F2 red was a compile failure, noted in the cycle log; F3 test name left, so the gated tree is the pushed tree) |
+| M4 A (reviewer, correctness) | 1 | b17b5e81aa73c6fb0c16d72738976a31324f1807:16b99b417fb3eba22f7efaf0276edeb860acedbb | CHANGES: F1 MAJOR test could not fail (fixed: sets Loading{last:None} directly); F2, F3 MINOR fixed. Not re-reviewed: test-only/prose fixes, verified by me and the gate
+| M4 B (conformance) | 1 | b17b5e81aa73c6fb0c16d72738976a31324f1807:16b99b417fb3eba22f7efaf0276edeb860acedbb | CLEAN (F1 cycle-log rows added, F2 rewrapped; Verify 42 passed) |
 
 | Review A M3 | 1 | ec71d534c306adcf2388fe4d387e1397656064eb:6bd123d0cfa3586894e2ba9d6b14873228e1056c | CLEAN (3 MINOR: base line drawn twice, PROVENANCE rows, closure naming; not fixed, left to visual pass T027) |
 | Review B M3 | 1 | ec71d534c306adcf2388fe4d387e1397656064eb:6bd123d0cfa3586894e2ba9d6b14873228e1056c | CLEAN |
