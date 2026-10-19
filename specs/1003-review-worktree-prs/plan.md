@@ -85,12 +85,12 @@ No violation: Complexity Tracking is empty.
 
 | Requirement | Layer and test |
 |---|---|
-| FR-002 rules | core unit: `worktree_branches` on reflog text (checkout, rename, worktree-add start, created elsewhere, deleted, expired creation, ±2 s, commit-named checkouts) |
-| FR-001, FR-002, FR-014, SC-001 | core integration `tests/worktree_branch_set.rs`, real git: one worktree on A then B then C (A deleted), a branch created in the main checkout and checked out in the worktree (excluded), a second worktree (disjoint set) — Isolation gate |
+| FR-002 rules | core unit: `worktree_branches` on reflog text (checkout, rename, worktree-add start, created elsewhere, remote copy by `switch <remote-branch>` and `switch -c <name> origin/<name>` (dropped), `switch -c x origin/main` (kept), deleted, expired creation, ±2 s, commit-named checkouts) |
+| FR-001, FR-002, FR-014, SC-001 | core integration `tests/worktree_branch_set.rs`, real git: one worktree on A then B then C (A deleted), a branch created in the main checkout and checked out in the worktree (excluded), a `git switch <name>` of a remote-only branch (excluded), a second worktree (disjoint set) — Isolation gate |
 | FR-003, FR-004, FR-013, SC-007 | core `tests/pull_request_list.rs`: multi-alias fixture, checks per state, default branch dropped, tie by number, 26 branches = 2 requests, second chunk failing fails all |
 | FR-006, FR-007, FR-016, SC-002, SC-003 | reducer `features_pr_changes.rs`: three PRs with distinct diffs, select 2nd then 3rd, next/previous incl. ends, header fields, three fast choices show only the last |
 | FR-008, FR-009, SC-004 | reducer: new PR at top keeps selection; state/check change updates header |
-| FR-010, FR-011, FR-012, FR-015, SC-005, SC-006 | reducer: `section` for each table row; `Err(Unavailable)` with and without a last list; no notice |
+| FR-010, FR-011, FR-012, FR-015, SC-005, SC-006 | reducer: `section` for each table row; `Err(Unavailable)` with and without a last list, `view.source` kept with a last list and reset to `Changes` without one; no notice |
 | shell | `main_tests.rs`: `ReadPullRequests` reads the set with `FakeGit` reflogs and calls `list_branches` with it; no local git → current branch only |
 | Look | quickstart §B visual pass (`visual-pass` skill) |
 

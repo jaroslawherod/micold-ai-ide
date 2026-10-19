@@ -14,6 +14,7 @@ or address prints number and state only, as 775.
 | `candidates(head_log, current) -> Vec<String>` | dedup, in first-seen order | research R2 rule 1 |
 | `branch_set(head_log, ref_logs, current) -> Vec<String>` | `ref_logs`: entries of `refs/heads/*` for the candidates | research R2 rules 2 to 6, without the default-branch rule |
 | `MATCH_WINDOW_SECS` | `2` | R2 rule 2 |
+| `copies_remote(subject, name) -> bool` | `branch: Created from refs/remotes/<r>/<name>` or `<r>/<name>` | R2 rule 3 |
 
 A commit name is 40 or 64 lowercase hex characters; `HEAD` is not a branch.
 
@@ -51,7 +52,10 @@ Ordering (FR-004): `created_at` descending, then `number` descending.
 - `request_pull_requests`: reads for every worktree entry while enabled, `current` may be `None`
   (detached HEAD: the set is the created branches alone). The project root (`Default`) stays
   `Absent` (FR-012).
-- `PullRequestsRead(Err(Unavailable))` keeps `PrList::Unavailable { last }` (was `Absent`) (R5).
+- `PullRequestsRead(Err(Unavailable))` keeps `PrList::Unavailable { last }` (was `Absent`) (R5),
+  the same arm as every other error. `view.source` is kept when `last` is `Some` (the shown pull
+  request is still in the listed `last`, FR-008); with `last: None` it resets to `Source::Changes`,
+  so a shown pull request is never outside any list.
 - `Msg::PullRequestStepped(Step)`, `enum Step { Previous, Next }`.
 - `pub fn adjacent(prs, number, step) -> Option<u64>`.
 - `pub enum PrSection<'a> { Absent, Loading, Unavailable, Empty, List { prs: &'a [BranchPullRequest], stale: bool } }`

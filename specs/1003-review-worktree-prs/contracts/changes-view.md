@@ -8,7 +8,9 @@ Extends `specs/775-diff-view-session-prs/contracts/changes-view.md`.
   an end or while the working tree is shown.
 - `Effect::ReadPullRequests { seq, project, entry, current }`: `entry` names the worktree whose
   directory the branch set is read in; `current` its branch, if any.
-- `Msg::PullRequestsRead` unchanged; `Err(Unavailable)` now keeps the last list (or none).
+- `Msg::PullRequestsRead` unchanged; `Err(Unavailable)` now keeps the last list (or none), like
+  every other error. `view.source` is kept with a last list and reset to `Source::Changes` without
+  one.
 
 ## Section (`ui/changes.rs`, drawn from `section(..)`)
 

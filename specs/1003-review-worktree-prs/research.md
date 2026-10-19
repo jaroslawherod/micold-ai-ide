@@ -43,7 +43,13 @@ git does not record which worktree created a branch. It is derived from two reco
      `<B>`; entries before the first checkout (the worktree's own creation, `git worktree add -b`)
      are on that checkout's `<A>`, or on the current branch when there is no checkout.
   3. **Created elsewhere** (dropped) when the branch's reflog exists, its oldest entry is a
-     creation, and no HEAD entry matches as in 2.
+     creation, and either no HEAD entry matches as in 2, or the creation copies a remote branch of
+     the same name: its `branch: Created from <src>` source is `refs/remotes/<remote>/<name>` or
+     `<remote>/<name>` (one segment, then exactly the branch's own name `<name>`). That is what
+     `git switch <name>` writes when it makes the local branch from `origin/<name>` (DWIM), and
+     what `git switch -c <name> origin/<name>` writes; HEAD moves onto it in the same second at the
+     same commit, so the time match alone would accept it. FR-002 counts the remote's branch as
+     created elsewhere.
   4. **Record gone** (kept): the branch was deleted (its reflog went with it), or its reflog no
      longer reaches its creation (expired). The worktree's HEAD record shows it was on that branch;
      nothing shows it was made elsewhere. This is what keeps a merged-and-deleted branch's pull
@@ -57,12 +63,15 @@ git does not record which worktree created a branch. It is derived from two reco
   branch whose pull requests the issue asks for. `± 2 s`: the ref and HEAD are written by one git
   command, which can straddle a second boundary.
 - **Known limit** (recorded, not fixed): a branch created elsewhere, checked out here, and then
-  deleted is listed (rule 4). Two worktrees of one project creating branches at the same commit in
+  deleted is listed (rule 4); so is a remote branch checked out here (rule 3) once deleted. A new
+  branch `x` made from a local branch `a/x` matches the remote form of rule 3 and is dropped; git's
+  reflog text does not tell the two apart without the remote list, and the name pattern is rare. Two worktrees of one project creating branches at the same commit in
   the same two seconds cannot be told apart. Both are rare and only add entries; none is lost.
 - **Rejected**: every branch HEAD was ever on (lists `main`/`develop` checkouts, contradicts the
   clarification); only branches whose reflog still exists (loses every merged-and-deleted branch);
-  matching on the `Created from HEAD` text (an agent's `git switch -c x origin/main` writes
-  `Created from origin/main`).
+  deciding on the `Created from` text alone, e.g. accepting only `Created from HEAD` or dropping
+  every remote source (an agent's `git switch -c x origin/main` writes `Created from origin/main`
+  and is a branch created here). The text is used only for the same-name remote copy (rule 3).
 
 ## R3: Reading many branches' pull requests in one request
 
