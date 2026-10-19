@@ -78,10 +78,11 @@ The switch is saved with the other settings, reaches every open window and every
 - **FR-003**: While it is off, the New worktree form MUST NOT offer GitHub as an issue source, and MUST NOT show the GitHub / Jira choice.
 - **FR-004**: While it is off, Jira, when on and connected, MUST remain usable as the sole issue source, and a worktree without an issue MUST remain creatable.
 - **FR-005**: Turning the switch off MUST, in every open window, drop the GitHub issue list, discard a GitHub load in flight and clear a picked GitHub issue; turning it on MUST offer GitHub issues again without a restart.
-- **FR-006**: The user MUST be able to turn the switch on and off in Settings, next to the Jira switch, with a one-line description of what it does.
+- **FR-006**: The user MUST be able to turn the switch on and off in the Settings **GitHub** section, beside the pull request status switch, with a one-line description of what it does.
 - **FR-007**: A settings file without the entry MUST read as on, so existing users see no change.
 - **FR-008**: The switch MUST be saved across restarts, and a value set in one window or on one daemon MUST become the value every other window and daemon uses; when two changes race, the most recent one wins on all of them (the behaviour the Jira switch has today).
 - **FR-009**: Turning the switch off MUST NOT affect GitHub features that are not issues (pull request status, remotes, branch listing).
+- **FR-010**: While it is off, the MCP `create_worktree` with `github_issue` MUST fail without any GitHub request, with an error that names the switch and points to `branch`, or `type`, `ticket` and `name`; feature 837's relationship details are not read.
 
 ### Key Entities
 
@@ -106,9 +107,11 @@ The switch is saved with the other settings, reaches every open window and every
 
 - The switch is global like `jira_enabled`, not per project.
 - Only the issue features of GitHub are covered: listing, searching and reading issues for the New worktree form.
-- The Settings layout of the Jira switch is the model for placement and wording.
+- The Jira switch is the model for wording and for how the value is saved and shared; it is placed in the GitHub section, not the Jira one.
 
-## Open questions
+## Clarifications
 
-- [NEEDS CLARIFICATION: Should issue references that name a GitHub issue elsewhere (the MCP `create_worktree` with `github_issue`, issue-relationship metadata of feature 837) also stop making GitHub requests when the switch is off, or is the scope the New worktree form only?]
-- [NEEDS CLARIFICATION: Where does the switch live in Settings: beside the Jira switch in its section, or in a new GitHub section alongside the pull request status switch?]
+### Session 2026-10-19
+
+- Q: Do issue references elsewhere (MCP `create_worktree` with `github_issue`, feature 837's relationship metadata) stop making GitHub requests when the switch is off? -> A: Yes. The issue's own rule is "no GitHub issue requests are made", and FR-002 is absolute; the MCP call reads the issue to fill the form's inputs, so it would break it. With the switch off, `create_worktree` with `github_issue` fails with a clear error naming the switch and pointing to `branch`, or `type`, `ticket` and `name`; feature 837's details are never read. Calls without `github_issue` are unchanged. _(agent-resolved: GitHub issue #1102 text; specs/837-issue-relationship-metadata/spec.md FR-001, FR-010)_
+- Q: Where does the switch live in Settings? -> A: In the existing **GitHub** section (`SettingsSection::GithubIssues`), above the issue-label mapping, beside the pull request status switch. The Jira switch heads the Jira section because that section holds Jira's connection; the GitHub section is the one that already holds GitHub's switch and issue settings, so a new section is not needed. The one-line description follows the Jira switch's wording. _(agent-resolved: crates/micold-client/src/features/settings.rs `SettingsSection`, `GithubDraft`)_

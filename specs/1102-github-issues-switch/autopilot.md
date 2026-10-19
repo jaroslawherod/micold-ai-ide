@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1102
 - **Worktree branch**: feat/1102_allow-the-github-issues-integration-to-be-disabled
 - **Started**: 2026-10-19
-- **Phase**: spec (done); next clarify
-- **Next step**: clarify unit resolves the 2 [NEEDS CLARIFICATION] markers in spec.md
+- **Phase**: clarify (done); next plan
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -28,7 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+| D1 | clarify | MCP create_worktree/feature 837 when off | Also no GitHub request; github_issue fails with a clear error (FR-010) | agent-resolved | issue #1102 text; specs/837 FR-001/FR-010 |
+| D2 | clarify | Settings placement | Existing GitHub section beside PR status switch | agent-resolved | features/settings.rs SettingsSection::GithubIssues |
 
 ## Review rounds
 
