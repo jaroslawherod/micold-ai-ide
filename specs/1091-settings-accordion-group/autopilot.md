@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1091
 - **Worktree branch**: feat/1091_settings-accordions-should-form-a-group-opening
 - **Started**: 2026-10-19
-- **Phase**: spec
-- **Next step**: clarify unit: resolve FR-006 [NEEDS CLARIFICATION]
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 

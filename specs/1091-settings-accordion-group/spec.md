@@ -21,6 +21,12 @@ the user flips any section, and a section holding a shown validation error is fo
 FR-004). With the sections independent, a long daemon form can end up with several sections open
 and need a lot of scrolling.
 
+## Clarifications
+
+### Session 2026-10-19
+
+- Q: When an error-held section is open and the user opens another section, do both stay open, or does the user's section replace it? → A: Both stay open; the group is exclusive only among non-error-held sections. 890 FR-004 says a section holding a shown error MUST be open, and 890 edge cases already allow several error sections open at once. _(agent-resolved: specs/890-daemon-settings-accordion/spec.md#FR-004)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Opening a daemon section closes the one that was open (Priority: P1)
@@ -119,10 +125,8 @@ and check the section with the error is still visible.
 - **FR-005**: Opening or closing sections MUST NOT change any field value, the draft or anything
   saved, and MUST work the same with the pointer and with Space or Enter on a focused header.
 - **FR-006**: A section holding the field of a shown validation error MUST stay open whatever the
-  group does (890 FR-004). [NEEDS CLARIFICATION: when an error-held section is open and the user
-  opens another section, do both stay open (the group is exclusive only among the sections that are
-  not error-held), or does the user's section replace the error section's open state at the cost
-  of hiding the error?]
+  group does (890 FR-004). The group is exclusive only among sections not held open by a
+  shown error: opening another section leaves error-held sections open.
 - **FR-007**: A form opening or *Runs in* changing MUST leave exactly the kind's first section open
   (890 FR-004), unless error-held sections are also open.
 - **FR-008**: The component showcase MUST show a grouped set and an independent set of sections.
