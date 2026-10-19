@@ -7,6 +7,7 @@
 mod event;
 mod history;
 mod lines;
+mod log_line;
 mod parse;
 mod saved;
 mod turn;
@@ -15,6 +16,7 @@ mod user_message;
 pub use event::{ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage};
 pub use history::{EventHistory, MAX_BYTES, MAX_EVENTS};
 pub use lines::LineSplitter;
+pub use log_line::{log_line, omitted_line};
 pub use parse::{pair_tool_calls, parse_line};
 pub use saved::{decode_events, encode_events, EVENTS_FORMAT_VERSION, MAX_EVENTS_FILE_BYTES};
 pub use turn::TurnState;

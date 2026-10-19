@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: M7
-- **Next step**: M7 PR to open (reviews done, gate green on the rebased head (one load-flake in structured_session passed on rerun)); then M8
+- **Phase**: M8
+- **Next step**: M8 implement T037–T047, T056 (tests first)
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1072 | M4 resume | merged (rebase) | 768812fbee80229c924968341b79cf1c553fd63a |
 | #1076 | M5 late and multiple viewers | merged (rebase) | 73e57588cecef1a680173b80ba4922d404028571 |
 | #1080 | M6 terminal-only requests refused | merged (rebase) | 32dc336005547824faa2f20ac2122cc455cd9734 |
+| #1086 | M7 event history saved/restored | merged (rebase) | 31a742c9f9a99a0431a486fbb66a4aa2573c203f |
 
 ## Milestones
 
@@ -35,8 +36,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T029–T030 | full | resume | #1072 | merged |
 | M5 | T031–T032 | full | late and multiple viewers | #1076 | merged |
 | M6 | T033–T036 | full | terminal-only requests refused | #1080 | merged |
-| M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | to open | reviews done, gate green |
-| M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | planned |
+| M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | #1086 | merged |
+| M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | in progress |
 
 ## Decisions
 
