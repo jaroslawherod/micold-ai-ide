@@ -33,7 +33,7 @@ description: "Task list for the GitHub issues switch (#1102)"
 - [x] T013 [US1] Form flag `github_issues_enabled` set in `open_form` from `state.settings`, `github_repo()` gated on it, `resolve_provider` treating off like `GithubAvailability::Unavailable`, the `source_caption` text, in `crates/micold-client/src/features/worktree_form.rs`; trace the four starters in `crates/micold-client/src/shell/issues.rs` (`start_issue_load`, `start_issue_search`, `start_issue_descriptions`, `start_issue_details`): any that does not resolve its repo through `github_repo()` gets the off check; T012 must go red to green
 - [x] T014 [P] [US1] Test: `SETTINGS` lists `("github_issues_enabled", "GithubIssuesToggled")` and the checkbox renders under the PR status one, in `crates/micold-client/tests/settings_sections.rs`
 - [x] T015 [US1] Checkbox "Offer GitHub issues when creating worktrees" with its `field_note` right after the PR status checkbox and the `SETTINGS` entry in `crates/micold-client/src/ui/settings/github.rs`; `FieldId::SettingsGithubIssues` in `crates/micold-client/src/features/window.rs`
-- [ ] T016 [US1] User guide: the GitHub issues switch in `docs/user-guide/settings.md` and the form's behaviour with it off in `docs/user-guide/worktrees-and-sessions.md`; add the setting to the settings list in `docs/daemon.md`
+- [x] T016 [US1] User guide: the GitHub issues switch in `docs/user-guide/settings.md` and the form's behaviour with it off in `docs/user-guide/worktrees-and-sessions.md`; add the setting to the settings list in `docs/daemon.md`
 
 ## Phase 3: User Story 3 + US1 AS4 - live in every window (P2)
 

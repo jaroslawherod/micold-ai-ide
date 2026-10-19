@@ -530,6 +530,10 @@ number becomes the **Ticket** and its title becomes the **Name**. Everything els
 new branch: the same preview, the same create, the same prompt when the branch name is already
 taken. The issue's labels choose the **Type** (see below); you can change it before you create.
 
+With **Offer GitHub issues when creating worktrees** unchecked in [Settings →
+GitHub](settings.md#github-issues), the form never shows **GitHub issue** and the app makes no GitHub
+issue request when you open it; the Overview does not look up issue titles on GitHub either.
+
 **What you need.** The app reads issues through the GitHub CLI, `gh`, so install it from
 [cli.github.com](https://cli.github.com) and sign in once with `gh auth login` in a terminal. The app
 looks for `gh` on the `PATH` your environment-include script sets up (Settings → Environment), then
