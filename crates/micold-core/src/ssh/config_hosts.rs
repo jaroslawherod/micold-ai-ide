@@ -217,6 +217,19 @@ mod tests {
         );
     }
 
+    /// A key that appears twice (a `Match` block, a later `Host *` default) takes its last value.
+    #[test]
+    fn parse_g_takes_the_last_of_repeated_keys() {
+        let e = parse_g(
+            "hostname first.example\nuser a\nport 22\nconnecttimeout 3\n\
+             hostname last.example\nuser b\nport 2222\nconnecttimeout 9\n",
+        );
+        assert_eq!(e.hostname, "last.example");
+        assert_eq!(e.user.as_deref(), Some("b"));
+        assert_eq!(e.port, Some(2222));
+        assert_eq!(e.timeout_secs(), 9);
+    }
+
     #[test]
     fn a_connect_timeout_of_none_or_absent_falls_back_to_fifteen_seconds() {
         assert_eq!(parse_g("connecttimeout none\n").timeout_secs(), 15);

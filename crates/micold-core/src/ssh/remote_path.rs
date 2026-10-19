@@ -324,10 +324,11 @@ mod tests {
     /// come back as an identity of its daemon, or the client keys it as a local path.
     #[test]
     fn every_path_field_is_wrapped_including_a_working_directory() {
-        for key in PATH_KEYS {
-            let mut v = serde_json::json!({ *key: "/srv/r" });
+        // Spelled out, not read from `PATH_KEYS`: dropping a key from the list must fail here.
+        for key in ["project", "path", "dir", "cwd", "last_active", "preserved"] {
+            let mut v = serde_json::json!({ key: "/srv/r" });
             wrap_value(&mut v, DaemonId(1));
-            assert_eq!(v[*key], "micold-remote://1/srv/r", "{key}");
+            assert_eq!(v[key], "micold-remote://1/srv/r", "{key}");
         }
     }
 }

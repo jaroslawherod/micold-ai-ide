@@ -166,6 +166,23 @@ mod remote_identity_tests {
         );
     }
 
+    /// A remote identity is never resolved against the local filesystem: even when the same
+    /// relative path exists here, it comes back as typed, not as an absolute local path.
+    #[test]
+    fn a_remote_identity_is_not_resolved_on_the_local_filesystem() {
+        struct Cleanup;
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all("micold-remote:/987654");
+                let _ = std::fs::remove_dir("micold-remote:");
+            }
+        }
+        let _cleanup = Cleanup;
+        std::fs::create_dir_all("micold-remote:/987654/srv").unwrap();
+        let id = Path::new("micold-remote://987654/srv");
+        assert_eq!(canonicalize_best_effort(id), id);
+    }
+
     #[test]
     fn a_local_path_is_still_normalised() {
         assert_eq!(
