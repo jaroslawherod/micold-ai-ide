@@ -10773,20 +10773,23 @@ mod pr_status {
         assert_eq!(rig.source.list_calls().len(), 1);
     }
 
-    // FR-008: no `gh`, or no GitHub remote, leaves no section and no notice.
+    // FR-008, 1003 FR-011: no `gh`, or no GitHub remote, leaves the muted line and no notice.
     #[test]
-    fn pr_list_read_without_gh_is_absent_and_silent() {
+    fn pr_list_read_without_gh_is_unavailable_and_silent() {
         let mut rig = rig(None, FakePullRequestSource::new());
         ask_list(&mut rig, "feat/a");
         let asked = remote_lists(&mut rig);
         answer_remotes(&mut rig.app, asked[0], github_remote());
-        assert!(matches!(view_list(&rig.app), PrList::Absent));
+        assert!(matches!(
+            view_list(&rig.app),
+            PrList::Unavailable { last: None }
+        ));
         assert!(rig.source.list_calls().is_empty());
         assert!(nothing_was_reported(&rig.app));
     }
 
     #[test]
-    fn pr_list_read_without_a_github_remote_is_absent_and_silent() {
+    fn pr_list_read_without_a_github_remote_is_unavailable_and_silent() {
         let mut rig = rig(Some(FAKE_GH), FakePullRequestSource::new());
         ask_list(&mut rig, "feat/a");
         let asked = remote_lists(&mut rig);
@@ -10798,7 +10801,10 @@ mod pr_status {
                 url: "git@example.com:o/r.git".into(),
             }],
         );
-        assert!(matches!(view_list(&rig.app), PrList::Absent));
+        assert!(matches!(
+            view_list(&rig.app),
+            PrList::Unavailable { last: None }
+        ));
         assert!(rig.source.list_calls().is_empty());
         assert!(nothing_was_reported(&rig.app));
     }
