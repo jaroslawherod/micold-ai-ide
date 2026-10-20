@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M4
-- **Next step**: M4 — review round 1 fixed (A F1–F3, F5, B F1; A F4 declined); full gate on the fix tree, then review A r2 + review B r2 (sonnet, fix diff) and a visual re-look of the Overview open state; then PR files.
+- **Next step**: M4 — round 1 fixed (A F1–F3, F5, B F1; A F4 declined), full gate GREEN at 4d9b78ff, pushed; review A r2, review B r2 and the visual re-look are with the orchestrator. Then: fix if needed (scoped tests, gate), PR files per pr.md.
 
 ## Pull requests
 
@@ -78,6 +78,8 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Full gate M3 | G | 4d9894e3 + round 2 fixes | GREEN (first run red on `cargo fmt` of the new card_grid test; formatted, re-run green) |
 | Full gate M4 | A | 78dc827a | GREEN (first run) |
 | Review A / Review B / Visual pass §B.5–B.6 M4 | 1 | 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8 | Review A CHANGES: 2 MAJOR (F1 open-time focus expands the first card, FR-013; F2 Page keys swallow Ctrl/Cmd+Shift+PageUp/PageDown project chords), 3 MINOR (F3 scrollbar press collapses a focus-expanded card; F4 card trees keyed by index, focus state moves on reorder; F5 double map in `view` + 3 redraw helpers). Review B CLEAN, 1 MINOR (F1 `expansion_card_paged_scrolls` asserts only a task). Visual pass PASS every criterion (4 dark/light × 1x/2x; full-screen dark-1x only), evidence visual-pass/m4/ (180 PNGs); confirms A F1 by eye; observations: a fast 12-notch wheel burst scrolled body then Overview in one burst; a resting pointer on another card beats keyboard focus. Fixes (M4 part 2): A F1 fixed — core `Event::OpenFocused` + `ui::overview::open_focus` (the opening's focus report expands nothing; the card stays collapsed as after Escape until focus moves), tests core `the_opening_focus_expands_nothing`, mounted `the_opening_focus_expands_no_card`, app `expansion_none_after_the_opening_focus`; A F2 fixed — Page keys claimed with `.chord(key, Modifiers::empty(), …)`, test in `page_keys_on_the_focused_card_publish_its_page_message`; A F3 fixed in the core — a `FocusLost` under the resting pointer keeps the card expanded by the pointer (`a_focus_loss_under_the_resting_pointer_keeps_the_card_by_hover`); A F4 declined (see *Declined*); A F5 fixed — `on_page` attached in the one map, `Mounted::redraw()` replaces the overview/keyboard_focus/overview_card/field_focus copies; B F1 fixed — the test's doc names `a_page_scrolls_the_named_body_by_its_visible_height`. Visual observations: hover beating focus conforms (FR-002 rest expands, FR-005/FR-006 another card expanding collapses it, the focused card re-expands when the pointer leaves), user guide now says so; fast wheel burst → follow-up |
+| Full gate M4 | B | 4d9b78ff | GREEN (first run, on the review r1 fix tree) |
+| Review A r2 / Review B r2 (sonnet, fix diff) / visual re-look of the Overview open state (A F1, F2, F3) | 2 | base 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8 | pending (prompts in the scratchpad: m4-prompt-review-a-r2.md, m4-prompt-review-b-r2.md, m4-prompt-visual-r2.md) |
 
 ## Declined review findings
 
