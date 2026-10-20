@@ -42,7 +42,8 @@ target mark cover the card as drawn (FR-011).
   `.on_rest(Msg::Expansion(PointerRested(location)))`, `.on_leave(...PointerLeft(location))`.
 - `CardMenuOpened` → `MenuOpened`; `CardMenuDismissed`/`EntryChosen` → `MenuClosed`;
   `settle_card_menu`: `!open` → `Expansion::default()` (covers `Closed`, `Toggled`, `CardActivated`;
-  app test: activate a card, reopen → none expanded, FR-013), else `Listed`.
+  app test: activate a card, reopen → none expanded, FR-013), else `Listed`, fed before the
+  early `return` taken when no card menu is open, so a removed card is reported with no menu open.
 - `FullScreenToggled` sends nothing: the expansion stays as in the normal Overview (FR-011).
 - `on_escape`: expanded → `Msg::Expansion(Escape)`, else `Msg::Closed` (D1, R7).
 - `WindowFocusChanged(false)` → `Msg::Expansion(WindowBlurred)`.
