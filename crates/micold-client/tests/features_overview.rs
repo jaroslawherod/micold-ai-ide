@@ -129,8 +129,9 @@ fn every_exit_leaves_full_screen() {
                 Msg::CardActivated(Activation::RevealOnly(SessionLocation::Default)),
             );
         },
-        // The `app.rs` exits (`MainAreaTaken`, the Changes and Compare views) are driven through the
-        // app's `update` in `overview.rs::opening_changes_leaves_full_screen`.
+        // The `app.rs` Changes exit (`Outcome::ChangesRequested`) is driven through the app's
+        // `update` in `overview.rs::opening_changes_leaves_full_screen`; the Compare and
+        // `MainAreaTaken` exits are not covered at app level.
     ];
     for (index, exit) in exits.into_iter().enumerate() {
         let mut state = in_full_screen();

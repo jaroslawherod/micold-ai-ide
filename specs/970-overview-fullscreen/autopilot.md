@@ -54,6 +54,7 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Close review | 1 | 97e7f19d9a90b880f82a4b75878ab7efcf65595f:e74be4d14e3b08e7c28a628c351ae413bb7a1138 | CHANGES: 1 MAJOR (Status said Closed while T052–T055 open: T052–T054 done, T055 deferred with reason in verification.md Resolution, Status stays Closed as the close PR closes it), 2 MINOR fixed (stale comments, U35 wording) |
 | Spec review | 1 | 0f936e933b45470ec78960e325652da519ed1345:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CHANGES: 4 MAJOR, 2 MINOR |
 | Spec review | 2 | 89236166dc9f65c1c4ccda6390048046cc91bcdd:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CLEAN (2 MINOR, fixed prose only) |
 | Plan review | 1 | 492e6e945eaee1a4aadbe9442ad1423220268194:32e91cce3fcb38094295f0fa9ffdcd4c201aecb4 | CLEAN (1 MINOR: tree state renamed `ZoomState`, fixed prose only) |
@@ -89,6 +90,7 @@ None.
 
 ## Follow-ups not done
 
+- Close visual pass (T042) PASS on top bar, connection lost, 650 px; showcase NavigationDrawer still blank, so the follow-up stays open: file it as a bug (pre-existing, `surfaces.rs:820`, all four poses missing).
 - Showcase `NavigationDrawer` section renders blank (its pre-existing open/closed poses too; `size()` Shrink×Fill unchanged from main) — seen by the M1 visual pass, `specs/970-overview-fullscreen/visual-pass.md` finding 3.
 
 ## Where things went (M2)

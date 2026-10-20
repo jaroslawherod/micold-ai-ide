@@ -1385,6 +1385,16 @@ mod tests {
         );
     }
 
+    /// Finding 11: a layout 2 px short of the end width is still a running zoom.
+    #[test]
+    fn a_layout_two_pixels_short_of_the_end_is_still_zooming() {
+        let mut state = ZoomState::new(false);
+        state.advance(normal(300.0), 1150.0);
+        state.advance(full(300.0), 1300.0);
+        assert_eq!(state.advance(full(300.0), 1448.0), Some((1150.0, 1450.0)));
+        assert_eq!(state.advance(full(300.0), 1450.0), None, "at the end");
+    }
+
     /// 970: the pointer maps onto the card's primary box when the grid is not at (0, 0) and the
     /// card is split at a row end; outside every piece it is unavailable.
     #[test]

@@ -234,6 +234,18 @@ mod tests {
         assert!(overview_press(&state).is_none(), "settings open");
     }
 
+    /// Finding 12 (FR-003): full screen leaves the top bar, and its Overview button, in place.
+    #[test]
+    fn the_overview_button_is_still_built_in_full_screen() {
+        let mut state = State::default();
+        state.workspace.active = Some(std::path::PathBuf::from("/repo"));
+        state.overview.open = true;
+        state.overview.full_screen = true;
+        assert!(state.overview.full_screen());
+        assert!(overview_press(&state).is_some(), "button still pressable");
+        let _bar = view(&state, ColorScheme::Light);
+    }
+
     /// U3: the indicator is in the bar only with the switch on and a current reading.
     #[test]
     fn the_bar_carries_the_indicator_only_for_a_current_reading() {

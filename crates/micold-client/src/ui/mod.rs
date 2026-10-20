@@ -394,6 +394,7 @@ pub fn view_with<'a>(
         // The drawer owns both the panel and the rail that replaces it, so it decides which of them
         // is on screen — the last thing the binary was reading a progress value to work out. All
         // that is left to say here is whether the sidebar is open.
+        let flags = drawer_flags(state);
         let left: Element<'a, Message> = material::NavigationDrawer::new(
             sidebar::view(state, scheme),
             sidebar::collapsed_strip(scheme),
@@ -401,9 +402,9 @@ pub fn view_with<'a>(
         .open(!state.sidebar.hidden)
         // Full screen slides the whole drawer off without touching the sidebar's own state
         // (feature 970, FR-009); every way out of the Overview clears it through `full_screen()`.
+        .retracted(flags.retracted)
         // Reduce motion: the zoom switches in one step (feature 970, FR-008).
-        .retracted(drawer_flags(state).retracted)
-        .instant(drawer_flags(state).instant)
+        .instant(flags.instant)
         .handle(
             material::ResizeHandle::new(roles)
                 .on_resize(|x| Message::Sidebar(SidebarMsg::DragMoved(x.max(0.0) as u16))),

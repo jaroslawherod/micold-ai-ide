@@ -83,4 +83,7 @@ failed before the implementation.
 - T046: hand-worked 7-card f 0.5 frame (`seven_cards_at_half_way`); mutant `ribbon`'s `.min(width)` -> `.min(width + gap)` -> `a_flip_starts_a_zoom_between_the_two_end_widths` and the overlap test FAILED; restored, green. (A first mutant, `first` row index +1 px, was equivalent for these widths and survived.)
 - T047/T048: eager drawer and grid tests split one per scenario; the skippable `if width > 0.0` and `if let [a, b]` now also assert their branch ran (`translated_steps >= 10`, `two_piece_cards > 0`).
 - T049: `overlay_registry.rs` compares the whole whitespace-free message name against an exact `EXEMPT` list (no 80-character cut).
-- T050: test-list.md extended with U18-U35. T051: `the_mode_writes_no_sidebar_state` kept (explicit FR-009 guard, cheap); `features_overview.rs`'s direct `s.open = false` removed, the app exit is `overview.rs::opening_changes_leaves_full_screen` through `ReviewChangesRequested`.
+- T050: test-list.md extended with U18-U35. T051: `the_mode_writes_no_sidebar_state` kept (explicit FR-009 guard, cheap); `features_overview.rs`'s direct `s.open = false` removed, the app Changes exit (`ChangesRequested` only) is `overview.rs::opening_changes_leaves_full_screen` through `ReviewChangesRequested`.
+- T052: `freed_width_counts_the_handle_only_when_the_sidebar_is_expanded` (drawer_flags_tests.rs) red under the mutant dropping `RESIZE_HANDLE_WIDTH` from `freed_width`, green restored.
+- T053: `a_layout_two_pixels_short_of_the_end_is_still_zooming` (card_grid.rs) red under `END_REACHED = 5.0`, green restored.
+- T054: `the_overview_button_is_still_built_in_full_screen` (toolbar.rs) pins FR-003 at view level; tab-order half skipped, no focus harness for the header toggle (still the visual pass).
