@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Draft
+**Status**: Closed 2026-10-20 — shipped in PRs #1090, #1096, #1099, #1107, #1113, #1132, #1139; the live check with a real PAT is #1147
 
 **Input**: User description: "Issue #1002 — Sandbox container with daemon should use a fine-grained
 token, not the user's GitHub token and SSH key. Starting a sandbox container with a daemon gives it

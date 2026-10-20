@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1002
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
-- **Phase**: close
-- **Next step**: close PR #1139 (draft): record T055/T056 (live PAT check, how it runs is on jaro's decision card), set the spec's Status, finish the ledger, then merge.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1107 | M3 | merged | 5c0ba07dfc32194eec443241efee61836931b4cb |
 | #1113 | M5 | merged | 38a9ce97b751560df8c8feaddf1271cbceba0cc2 |
 | #1132 | M6 | merged | 0b267cf632915083624acd3d8b44e7c4cfe3f66f |
-| #1139 | close | draft | — |
+| #1139 | close | open | — |
 
 ## Milestones
 
@@ -60,6 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D18 | M1 | Red CI: `sandbox_real_provision_a_running_legacy_container_is_attached_then_replaced` got `Replace{MadeBeforeCredentialRemoval}` where FR-017 expects `Legacy` | Not a D17/FR-017 conflict: the real-runtime harness (`start_sandbox_on`) builds its `create` argv by hand, not via `argv::create`, and omitted the `io.micold.git-identity=none` label, so its container really was unlabelled. Harness now passes the label (mirroring argv); D17 stands (an unlabelled container is replaced, least privilege), FR-017 still holds for labelled released-image containers. Other real-runtime tests do not call `adopt`/read facts, so none shares the assumption | agent-resolved | sandbox_real_support/mod.rs; CI log |
 | D20 | M6 | Where T052's "project's daemon status line" goes | In the daemon's row in Settings → Daemons, one line per project naming it (the row is the daemon's status: state, worktrees, notices). The sidebar chip is one short label keyed by host paths, while the credential wiring knows the daemon's path, so no second copy there. The worker reports changed statuses over an event-driven subscription; the 24 h warning is worked out at view time | jaro (decision card 2026-10-19: *Settings only*) | features/daemon_sections.rs `credential_lines`; shell/scoped_credential.rs `changed_statuses` |
 | D21 | close | No red evidence for any behaviour (verification finding 1, T058) | Accepted exception, as D16 did for M1: no tdd/test-list.md or cycle log was kept, and re-deriving red runs means reverting merged code against tests written for it. The close unit instead proved the tests that matter now bite: each new test (T057, T059, T060) is shown to fail on the audit's mutant and pass on the code | agent-resolved | tdd/verification.md; tasks.md T058 |
+| D22 | close | How the live check with a real PAT runs (T055, T056) | Skipped in this run; filed as #1147, which jaro takes over | jaro (decision card 2026-10-20: *Skip for now*; "report it as separate issue and I will take over it") | issue #1147 |
 
 ## Review rounds
 

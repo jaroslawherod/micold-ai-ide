@@ -435,7 +435,7 @@ toggle under D7: its guidance text is in M5 (T042, T047) (ledger D19).
 - [x] T054 [P] [US3] User guide `docs/user-guide/sandboxed-daemon.md` and
   `docs/user-guide/kubernetes-daemons.md`: the statuses and their remedies, including the expiry
   warning and *expired*.
-- [ ] T055 [US3] Close unit, with T056: run the `visual-pass` skill on the status rows against the real client, a real daemon and the PAT of quickstart Part C steps 4, 8, 10 (the status rows are reachable only with a connected daemon; the showcase has no daemon) and
+- [ ] T055 [US3] Moved to #1147 (jaro, 2026-10-20). With T056: run the `visual-pass` skill on the status rows against the real client, a real daemon and the PAT of quickstart Part C steps 4, 8, 10 (the status rows are reachable only with a connected daemon; the showcase has no daemon) and
   save the evidence in `specs/1002-sandbox-scoped-token/visual-pass/`.
 
 **Checkpoint**: all three user stories hold.
@@ -444,7 +444,7 @@ toggle under D7: its guidance text is in M5 (T042, T047) (ledger D19).
 
 ## Phase 9: Polish
 
-- [ ] T056 Run quickstart Part C against a real fine-grained PAT and record the results in
+- [ ] T056 Moved to #1147 (jaro, 2026-10-20). Run quickstart Part C against a real fine-grained PAT and record the results in
   `specs/1002-sandbox-scoped-token/quickstart.md` (close unit; needs a GitHub account).
 
 ---
