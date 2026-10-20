@@ -206,12 +206,14 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let p = palette(card.model.state, &roles);
         let w = words(&card.model);
         let text = CardText::of(&card.model);
-        // A glyph and its word, in the header's colour, carrying `tooltip`.
+        // A glyph and its word, in the header's colour, carrying `tooltip`. The word shortens with
+        // an ellipsis when a narrow card leaves it too little room; the state's, laid out first,
+        // keeps its width before the type's gives way.
         let cluster = |icon: Icon, word: &'static str, tooltip: &'static str| {
             Tooltip::new(
                 row![
                     Glyph::<M>::new(icon, TypeRole::Label, roles).tint(p.on_header),
-                    Text::new(word, TypeRole::Label, roles).tint(p.on_header)
+                    Ellipsized::<M>::at_role_spaced(word, TypeRole::Label, p.on_header).shrink()
                 ]
                 .spacing(spacing::XS)
                 .align_y(Alignment::Center),
@@ -288,22 +290,27 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 ..container::Style::default()
             });
         // The target mark is the top layer, so the header's fill cannot paint over the outline
-        // (research R13); its *selected* layer covers the header and the body alike.
-        let mark =
-            container(Space::new().width(Length::Fill).height(Length::Fill)).style(move |_| {
-                let mut layer = style::color(p.on_body);
-                layer.a = state::SELECTED;
-                container::Style {
-                    background: targeted.then_some(iced::Background::Color(layer)),
-                    border: iced::Border {
-                        radius: RADIUS.into(),
-                        color: style::color(roles.primary),
-                        width: if targeted { TARGET_WIDTH } else { 0.0 },
-                    },
-                    ..container::Style::default()
-                }
-            });
-        let face = stack![fill, mark].width(Length::Fill);
+        // (research R13); its *selected* layer covers the header and the body alike. Only a
+        // targeted card stacks it, so no other card opens a renderer layer for nothing.
+        let face: Element<'a, M> = if targeted {
+            let mark =
+                container(Space::new().width(Length::Fill).height(Length::Fill)).style(move |_| {
+                    let mut layer = style::color(p.on_body);
+                    layer.a = state::SELECTED;
+                    container::Style {
+                        background: Some(iced::Background::Color(layer)),
+                        border: iced::Border {
+                            radius: RADIUS.into(),
+                            color: style::color(roles.primary),
+                            width: TARGET_WIDTH,
+                        },
+                        ..container::Style::default()
+                    }
+                });
+            stack![fill, mark].width(Length::Fill).into()
+        } else {
+            fill.into()
+        };
         let secondary = card.on_secondary_press;
         let menu = move |content: Element<'a, M>| match secondary {
             Some(f) => ContextArea::new(content)
@@ -819,6 +826,50 @@ mod tests {
                             "{at}: {spot:?} is not the body fill"
                         );
                     }
+                }
+            }
+        }
+    }
+
+    /// K4 (FR-015): a pane under one minimum card stacks cards narrower than 280 px (a 200 px pane
+    /// leaves 168 px). The longest state word and the longest type words still keep the header on
+    /// one line inside the card: the state word stays whole, the type word ends where the card does,
+    /// shortened with an ellipsis if it must be, and no two header words overlap.
+    #[test]
+    fn a_narrow_card_keeps_its_header_words_on_one_line_inside_it() {
+        for kind in [LocationType::ProjectRoot, LocationType::Included] {
+            for state in CardState::ALL {
+                let mut m = full(false);
+                m.state = state;
+                m.kind = kind;
+                for width in [168.0, 200.0] {
+                    let text = mounted_at(&m, width, roles()).painted_text();
+                    let at = format!("{state:?}, {kind:?} at {width}");
+                    let state_word = word(&text, state.label());
+                    let type_word = text
+                        .iter()
+                        .find(|t| {
+                            t.content == kind.label()
+                                || (t.content.ends_with('\u{2026}')
+                                    && kind
+                                        .label()
+                                        .starts_with(t.content.trim_end_matches('\u{2026}')))
+                        })
+                        .unwrap_or_else(|| panic!("{at}: no type word: {text:?}"));
+                    for w in [state_word, type_word] {
+                        assert!(
+                            w.bounds.x >= 0.0 && w.bounds.x + w.bounds.width <= width,
+                            "{at}: {w:?} leaves the card"
+                        );
+                        assert_eq!(
+                            w.bounds.y, state_word.bounds.y,
+                            "{at}: {w:?} is not on the header's line"
+                        );
+                    }
+                    assert!(
+                        state_word.bounds.x + state_word.bounds.width <= type_word.bounds.x,
+                        "{at}: {state_word:?} overlaps {type_word:?}"
+                    );
                 }
             }
         }

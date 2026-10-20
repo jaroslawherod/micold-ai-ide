@@ -612,7 +612,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             };
             let whole = (clip.width - bounds.width).abs() < MIN_PIECE
                 && (clip.height - bounds.height).abs() < MIN_PIECE;
-            let draw_card = |renderer: &mut iced::Renderer| {
+            // A split piece hands its clip down as the viewport too: a layer the card opens itself
+            // (a `stack`'s upper child) clips to the viewport it is given, not to this layer.
+            let draw_card = |renderer: &mut iced::Renderer, viewport: &Rectangle| {
                 let local = if state.ends.is_none()
                     || cursor.position().is_some_and(|p| clip.contains(p))
                 {
@@ -631,9 +633,10 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
                 );
             };
             if whole {
-                draw_card(renderer);
+                draw_card(renderer, viewport);
             } else {
-                renderer.with_layer(clip, draw_card);
+                let view = clip.intersection(viewport).unwrap_or(clip);
+                renderer.with_layer(clip, |renderer| draw_card(renderer, &view));
             }
         }
     }

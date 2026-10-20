@@ -2043,11 +2043,11 @@ pub fn covered_states() -> &'static [CoveredState] {
             anchors: &[
                 Anchor {
                     name: "overview.card.header",
-                    path: &[0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0],
+                    path: &[0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0],
                 },
                 Anchor {
                     name: "overview.card.title",
-                    path: &[0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0],
+                    path: &[0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0],
                 },
             ],
         },

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
 - **Phase**: implement M4
-- **Next step**: M4 review A (high) + review B + visual pass (T039) on the recorded snapshot; then fixes, full gate, PR
+- **Next step**: M4 round 2 re-review of the fixes (A and B, sonnet) + targeted-outline visual re-look; then PR
 
 ## Pull requests
 
@@ -67,9 +67,9 @@ inequality + visual pass).
 | M3 review A | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | CLEAN, 3 MINOR (code-review high, run by orchestrator). F1 row height ignores pieces under 1 px (`row_heights`, `ROW_PIECE`, test `a_sliver_does_not_stretch_its_row`). F2 card lines use the role's line height (`Ellipsized::at_role_spaced`; sidebar keeps `at_role`). F3 recorded as an accepted spec edge case (anchor only during a zoom; feature 970's at-rest tests publish nothing). Only MINORs: no round 2 |
 | M3 review B | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | CLEAN (sonnet). Verify: client `even_row card_grid overview_card type_role_mapping` 68 pass, cdk_no_appearance 3, core tokens_scales 17. F1 plan.md "Amended in M3" note, quickstart filter drops `even_row`: fixed, prose only. F2 T023/T028 ticked, keep "Superseded" |
 | M3 visual pass | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | PASS §B6 M3 part (`visual-pass.md`); equal row heights only by unit test (showcase grid cards equal), M4's T035 grid can pose a taller card |
-| M4 review A | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | pending (dispatched by orchestrator) |
-| M4 review B | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | pending (dispatched by orchestrator) |
-| M4 visual pass | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | pending (dispatched by orchestrator) |
+| M4 review A | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | CHANGES, 3 MAJOR, 3 MINOR (code-review high). F1 a targeted card's mark layer escaped a split piece's clip: `CardGrid::draw` hands a split piece its clip as the viewport. F2 five-state grid lost its fixed 480 px height (could paint over the poses below). F3 header words are `Ellipsized::shrink()` (new builder), test `a_narrow_card_keeps_its_header_words_on_one_line_inside_it` at 168/200 px. F4 the five single-state names left the catalogue and `the_overview_card_and_grid_are_posed`. F5 `Mounted` keeps its `room` for relayout, events and overlays. F6 the mark is stacked only on a targeted card |
+| M4 review B | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | CHANGES, 1 MAJOR, 1 MINOR (sonnet). F1 `tdd/cycle-log.md` M4 section added (red evidence reproduced after the fact, see its note). F2 the T036 row names the generic gates that iterate `covered_states()`. Verify: client `overview_card composition_contrast` 44, `layout_snapshot` 72, `showcase_completeness` 42 pass |
+| M4 visual pass | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | PASS §B M4 checks 1–6 (`visual-pass.md` M4 section, `visual-pass/b-m4-*.png`); B4 tooltips, B5 outline/focus/ripple, B7 resize not covered. Re-look at the targeted outline (B5) asked for round 2 after A-F1/F6 |
 
 M4 full gate (`scripts/gate.sh`) green at 89b4a4ac before reviews (rebased onto origin/main 08cb6ea1).
 M3 full gate (`scripts/gate.sh`) green at b95c7a3a after the review fixes (rebased onto origin/main 17a5dc46).

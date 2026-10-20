@@ -35,3 +35,19 @@ Screenshots: `visual-pass/b6-m2-*.png`.
 Snapshot `35292da2…:d544ff00…` (before the review A fixes, which change line heights by a few px and
 row heights only mid-zoom). Screenshots: `visual-pass/b-m3-*.png`.
 
+
+## M4 (quickstart §B, M4 part), 2026-10-20, light and dark, showcase and client Overview (Xvfb, lavapipe)
+
+| Check | Result |
+|---|---|
+| Header row: tinted, full width, state icon and word at the start, type icon and word at the end | PASS in all five states of the "five states" grid and in the single-card poses |
+| Idle header de-emphasised; body fill the same in every state | PASS: Idle header light rgb(231,224,236) on body rgb(248,242,247), dark rgb(73,69,78) on rgb(28,27,30); body fill identical across states |
+| Legible in both schemes | PASS: pastel headers with dark text in light, deep headers with light text in dark |
+| A taller card stretches its row | PASS: the needs-action card (activity and progress) sets its row's height |
+| Client Overview has the same layout | PASS: seeded repository, three cards (Idle only: no sessions running) |
+| User guide colour words match | PASS: `docs/user-guide/overview.md` lines 187–188 |
+
+Not covered in this pass: tooltips (B4), outline, focus and ripple (B5), the resize sweep (B7).
+Snapshot `1684990c…:89b4a4ac…` (before the review A fixes, which change how a targeted card's
+outline is drawn and let the header words ellipsize in a card under 280 px). Screenshots:
+`visual-pass/b-m4-*.png`.

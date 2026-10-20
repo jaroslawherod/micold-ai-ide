@@ -349,11 +349,6 @@ pub const COMPONENTS: &[Entry] = &[
         variants: &[],
         density: &[],
         posed: &[
-            "Needs action",
-            "Needs attention",
-            "Working",
-            "Done",
-            "Idle",
             "five states",
             "Default",
             "orphan",
