@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
 - **Phase**: implement M4
-- **Next step**: M4 round 2 re-review of the fixes (A and B, sonnet) + targeted-outline visual re-look; then PR
+- **Next step**: open the M4 PR (title/body in the unit's scratchpad), CI, merge; then the close unit (T040; B4, focus/ripple, B7, zoom with a targeted card)
 
 ## Pull requests
 
@@ -70,11 +70,11 @@ inequality + visual pass).
 | M4 review A | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | CHANGES, 3 MAJOR, 3 MINOR (code-review high). F1 a targeted card's mark layer escaped a split piece's clip: `CardGrid::draw` hands a split piece its clip as the viewport. F2 five-state grid lost its fixed 480 px height (could paint over the poses below). F3 header words are `Ellipsized::shrink()` (new builder), test `a_narrow_card_keeps_its_header_words_on_one_line_inside_it` at 168/200 px. F4 the five single-state names left the catalogue and `the_overview_card_and_grid_are_posed`. F5 `Mounted` keeps its `room` for relayout, events and overlays. F6 the mark is stacked only on a targeted card |
 | M4 review B | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | CHANGES, 1 MAJOR, 1 MINOR (sonnet). F1 `tdd/cycle-log.md` M4 section added (red evidence reproduced after the fact, see its note). F2 the T036 row names the generic gates that iterate `covered_states()`. Verify: client `overview_card composition_contrast` 44, `layout_snapshot` 72, `showcase_completeness` 42 pass |
 | M4 visual pass | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | PASS §B M4 checks 1–6 (`visual-pass.md` M4 section, `visual-pass/b-m4-*.png`); B4 tooltips, B5 outline/focus/ripple, B7 resize not covered. Re-look at the targeted outline (B5) asked for round 2 after A-F1/F6 |
-| M4 review A | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | pending (scoped re-review, sonnet; dispatched by orchestrator) |
-| M4 review B | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | pending (scoped re-review, sonnet; dispatched by orchestrator) |
-| M4 visual pass | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | pending (B5 targeted-outline re-look; dispatched by orchestrator) |
+| M4 review A | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | CLEAN, no findings (sonnet). client `--tests` ok; lib `overview_card card_grid ellipsized` 78 pass incl. `a_narrow_card_keeps_its_header_words_on_one_line_inside_it` |
+| M4 review B | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | CLEAN, 1 MINOR (sonnet). F1 T039 ticked while B4/B5/B7 uncovered and the B5 re-look pending: fixed, `visual-pass.md` M4 round-2 re-look records the B5 outline and says B4, focus/ripple, B7 and a zoom with a targeted card are left to the close unit |
+| M4 visual pass | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | FAIL: the "five states" pose drew nothing at 600 and 1600 px (ca40630b dropped its fixed height; the grid's own scrollable fills a height the scrolling page lacks). B5 outline PASS (partial), header under 280 px PASS, zoom with a targeted card NOT RUN (no such pose). Fixed: `CardGrid::unscrolled()` for the pose + test `the_five_state_grid_is_drawn_and_the_next_pose_starts_below_it` (red 0 px at 600, then green); unit re-checked at 600 and 1600 px by hand: renders, no overlap (`visual-pass/b-m4r3-*.png`). Small layout fix: no round 3 |
 
-M4 full gate (`scripts/gate.sh`) green at aa16d973 after the round-1 fixes (one red before it: clippy `useless_conversion` on `menu(face.into())`); green at 89b4a4ac before reviews (rebased onto origin/main 08cb6ea1).
+M4 full gate (`scripts/gate.sh`) green after the round-2 visual fix (two reds before it: `material_boundary` on a bare iced `scrollable` in the new test, `material_builder_api` on a non-chainable `unscrolled`); green at aa16d973 after the round-1 fixes (one red before it: clippy `useless_conversion` on `menu(face.into())`); green at 89b4a4ac before reviews (rebased onto origin/main 08cb6ea1).
 M3 full gate (`scripts/gate.sh`) green at b95c7a3a after the review fixes (rebased onto origin/main 17a5dc46).
 CI run 39391625306 (head 6bf5d378) red: `micold-daemon` test `structured_session::messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` hit its 20 s answer timeout (`tests/support/conn.rs:200`). Not this PR: no daemon file changed, the core change is additive typography tokens; the test passed 3/3 locally. No code change; re-run.
 M2 full gate (`scripts/gate.sh`) green at 500e8fa2 after the review fixes (and at 1751ce27 before them); its scoped gate's one red was the same root-only settings test.
@@ -95,4 +95,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- Close unit: visual pass B4 tooltips, B5 focus and ripple, B7 resize sweep, and a zoom with a targeted card (no showcase pose has one; no unit test draws a targeted card split across rows).

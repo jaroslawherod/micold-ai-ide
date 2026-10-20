@@ -567,24 +567,29 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     needs_action.progress = with_progress.progress;
     let mut done = card_model("done", T::Other, S::Done, R::Merged);
     done.prs = micold_core::overview::PrDisplay::Hidden;
-    let five = iced::widget::container(Element::from(material::CardGrid::new(
-        [
-            needs_action,
-            card_model(
-                "needs-attention",
-                T::Bugfix,
-                S::NeedsAttention,
-                R::ChecksFailing,
-            ),
-            card_model("working", T::Chore, S::Working, R::Working),
-            done,
-            card_model("idle", T::Included, S::Idle, R::Idle),
-        ]
-        .iter()
-        .map(|m| material::OverviewCard::<Message>::new(m, roles).on_press(Message::NoOp))
-        .collect(),
-        roles,
-    )))
+    // Unscrolled: the showcase page scrolls, and a grid with its own scrollable fills a height
+    // the page does not have, so it drew nothing (feature 1120, M4 visual re-look).
+    let five = iced::widget::container(
+        material::CardGrid::new(
+            [
+                needs_action,
+                card_model(
+                    "needs-attention",
+                    T::Bugfix,
+                    S::NeedsAttention,
+                    R::ChecksFailing,
+                ),
+                card_model("working", T::Chore, S::Working, R::Working),
+                done,
+                card_model("idle", T::Included, S::Idle, R::Idle),
+            ]
+            .iter()
+            .map(|m| material::OverviewCard::<Message>::new(m, roles).on_press(Message::NoOp))
+            .collect(),
+            roles,
+        )
+        .unscrolled(),
+    )
     .width(Length::Fill);
     arrange(
         vec![
@@ -989,5 +994,53 @@ fn cleanup_pose(confirming: Option<Vec<u8>>) -> crate::features::runs::CleanupOf
         ],
         rechecking: false,
         confirming,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::material::test_support::{laid_out, roles};
+    use iced::advanced::Layout as Laid;
+    use iced::Size;
+
+    /// The "five states" pose (feature 1120, T035) in the showcase's scrolling page: at a narrow
+    /// and a wide window its grid is at least 100 px tall (a card is at least 172), and the pose
+    /// after it starts below it.
+    /// A grid that fills its room collapses to nothing in a page that scrolls.
+    #[test]
+    fn the_five_state_grid_is_drawn_and_the_next_pose_starts_below_it() {
+        let showcase = Showcase::new(1);
+        for width in [600.0, 1600.0] {
+            let page = material::Scrollable::new(overview_card(&showcase, roles(), 0), roles());
+            let node = laid_out(page.into(), Size::new(width, 800.0));
+            let section = Laid::new(&node)
+                .children()
+                .next()
+                .expect("the page's content");
+            let pose = |i: usize| {
+                let row = section.children().nth(i).expect("a pose's row");
+                row.children().next().expect("the pose")
+            };
+            let five = pose(3);
+            let grid = five
+                .children()
+                .next()
+                .and_then(|column| column.children().next())
+                .expect("the pose's instance")
+                .bounds();
+            assert!(
+                grid.height >= 100.0,
+                "at {width} px the five-state grid is {} px tall",
+                grid.height
+            );
+            let next = pose(4).bounds();
+            assert!(
+                next.y >= five.bounds().y + five.bounds().height,
+                "at {width} px the pose after the five-state grid starts at {} inside it {:?}",
+                next.y,
+                five.bounds()
+            );
+        }
     }
 }
