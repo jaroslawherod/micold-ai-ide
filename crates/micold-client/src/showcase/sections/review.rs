@@ -28,6 +28,7 @@ use std::sync::LazyLock;
 
 use micold_core::review::comment::Status;
 use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
+use micold_core::review::expand::{shape, Expansion, Shaped};
 use micold_core::review::{LineRange, Side};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
@@ -216,6 +217,12 @@ static COLOURED: LazyLock<LoadedDiff> = LazyLock::new(|| {
     loaded
 });
 
+/// [`COLOURED`]'s hunks with their hidden runs marked, none revealed (feature 1150).
+static HIDDEN: LazyLock<Shaped> = LazyLock::new(|| match (&COLOURED.diff, &COLOURED.new) {
+    (FileDiff::Text(hunks), Some(new)) => shape(hunks, new, &Expansion::default()),
+    _ => Shaped::default(),
+});
+
 /// A binary file.
 static BINARY: FileDiff = FileDiff::Binary;
 
@@ -244,6 +251,15 @@ pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
         container(DiffView::new(&COLOURED.diff, layout, roles).spans(spans))
             .height(Length::Fixed(DIFF_HEIGHT))
     };
+    let hidden = |layout| {
+        container(
+            DiffView::new(&COLOURED.diff, layout, roles)
+                .spans(spans)
+                .shaped(&HIDDEN)
+                .on_gap(|_| Message::NoOp),
+        )
+        .height(Length::Fixed(DIFF_HEIGHT))
+    };
     arrange(
         vec![
             posed("unified", pose(&UNIFIED), roles),
@@ -261,6 +277,12 @@ pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
             posed(
                 "side by side, syntax-coloured",
                 coloured(DiffLayout::SideBySide),
+                roles,
+            ),
+            posed("hidden lines, unified", hidden(DiffLayout::Unified), roles),
+            posed(
+                "hidden lines, side by side",
+                hidden(DiffLayout::SideBySide),
                 roles,
             ),
             posed("binary message", pose(&BINARY), roles),

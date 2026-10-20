@@ -126,6 +126,24 @@ adjusted so that every token stays readable on the added and removed tints. Othe
 as plain text. Only the start of a very long line is coloured (its first 2,000 bytes, which is 2,000
 characters of plain ASCII text); the rest of it is shown in the plain text colour.
 
+### Reading hidden lines
+
+A diff shows each change with a few lines around it. Where unchanged lines are left out (before
+the first change, between two changes, after the last one), a row reads **N hidden lines**. Press it
+and exactly those lines appear in place: numbered in step with the lines around them, coloured like
+them, and in both the unified and the side-by-side layout. Press the row that opens the revealed
+lines to hide them again and get the usual hunk back.
+
+- The view remembers what you opened for each file while it stays open. A refresh keeps the
+  revealed lines that are still there and drops the ones that are gone.
+- The lines come from the file as it is on disk, so they are the latest saved version, committed or
+  not. Nothing is written: revealing lines changes no file and no review state, and it works
+  offline.
+- Added, untracked and deleted files, and files whose contents are not shown as text, have no
+  hidden lines and no row.
+- A file over the size limits (see *Large files*) shows its lines only after **Show diff**; its
+  hidden lines are then available like any other file's. A pull request's diff has no such rows yet.
+
 ### Binary and non-text files
 
 A file whose contents are not readable text is listed, but its contents are never shown. The diff

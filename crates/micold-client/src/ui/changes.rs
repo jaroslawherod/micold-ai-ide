@@ -529,6 +529,11 @@ fn diff_pane_body<'a>(
                         height: height.ceil() as u32,
                     })
                 });
+            if view.source == Source::Changes {
+                diff = diff
+                    .shaped(&view.shaped)
+                    .on_gap(|key| Message::Changes(Msg::GapToggled(key)));
+            }
             if can_pick(view) {
                 diff = diff.on_gutter(|old, new, extend| {
                     Message::Changes(Msg::GutterPressed { old, new, extend })

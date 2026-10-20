@@ -18,20 +18,20 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ## Phase 1: Setup
 
-- [ ] T001 Register an empty `pub mod expand;` in `crates/micold-core/src/review/mod.rs` and create `crates/micold-core/src/review/expand.rs` with the module doc, so later tasks compile
+- [x] T001 Register an empty `pub mod expand;` in `crates/micold-core/src/review/mod.rs` and create `crates/micold-core/src/review/expand.rs` with the module doc, so later tasks compile
 
 ## Phase 2: Foundational (gap computation and shaping, pure core)
 
 **Blocks every story.** Tests first.
 
-- [ ] T002 [P] Write failing unit tests for `gaps(hunks, new_total)` in `crates/micold-core/src/review/expand.rs`: leading/between/trailing runs, zero-length runs omitted, hunk at line 1, hunk at EOF, pure-deletion hunk (`new_len == 0`), empty and one-line file, file fully covered (data-model §1)
-- [ ] T003 [P] Write failing property/unit tests for `shape` in `crates/micold-core/src/review/expand.rs`: whole-file covers every new-side line once in order, changed and removed lines preserved in place, numbering continuous across a revealed run, touching hunks merged (recomputed `old_len`/`new_len`, first `section`, last no-newline flags), closed expansion returns the input hunks with every run listed, collapse restores input, 5,000-line shape under 100 ms (SC-004)
-- [ ] T004 [P] Write failing unit tests for `Expansion` (`toggle`, `set_whole`, `is_open`) and `reconcile` in `crates/micold-core/src/review/expand.rs`: open gap kept when position and span are unchanged, dropped when it vanished, `whole` kept (FR-008)
-- [ ] T005 Implement `Gap`, `GapKey`, `Position`, `Expansion` and `gaps()` in `crates/micold-core/src/review/expand.rs` (T002, T004 gaps part green)
-- [ ] T006 Implement `shape()` and `Shaped` in `crates/micold-core/src/review/expand.rs` (T003 green)
-- [ ] T007 Implement `Expansion::reconcile` in `crates/micold-core/src/review/expand.rs` (T004 green)
-- [ ] T008 [P] Write failing tests for row builders over `&Shaped` in `crates/micold-core/src/review/diff.rs`: `UnifiedRow::Gap` / `SideRow::Gap` emitted where a gap is, revealed lines are ordinary context rows with the same numbers, indexes (`UnifiedIndex`, `SideIndex`) stay consistent in both layouts (FR-007)
-- [ ] T009 Make `unified_rows`, `side_by_side_rows` and their index types accept `&Shaped` and emit gap rows in `crates/micold-core/src/review/diff.rs`; update existing callers
+- [x] T002 [P] Write failing unit tests for `gaps(hunks, new_total)` in `crates/micold-core/src/review/expand.rs`: leading/between/trailing runs, zero-length runs omitted, hunk at line 1, hunk at EOF, pure-deletion hunk (`new_len == 0`), empty and one-line file, file fully covered (data-model §1)
+- [x] T003 [P] Write failing property/unit tests for `shape` in `crates/micold-core/src/review/expand.rs`: whole-file covers every new-side line once in order, changed and removed lines preserved in place, numbering continuous across a revealed run, touching hunks merged (recomputed `old_len`/`new_len`, first `section`, last no-newline flags), closed expansion returns the input hunks with every run listed, collapse restores input, 5,000-line shape under 100 ms (SC-004)
+- [x] T004 [P] Write failing unit tests for `Expansion` (`toggle`, `set_whole`, `is_open`) and `reconcile` in `crates/micold-core/src/review/expand.rs`: open gap kept when position and span are unchanged, dropped when it vanished, `whole` kept (FR-008)
+- [x] T005 Implement `Gap`, `GapKey`, `Position`, `Expansion` and `gaps()` in `crates/micold-core/src/review/expand.rs` (T002, T004 gaps part green)
+- [x] T006 Implement `shape()` and `Shaped` in `crates/micold-core/src/review/expand.rs` (T003 green)
+- [x] T007 Implement `Expansion::reconcile` in `crates/micold-core/src/review/expand.rs` (T004 green)
+- [x] T008 [P] Write failing tests for row builders over `&Shaped` in `crates/micold-core/src/review/diff.rs`: `UnifiedRow::Gap` / `SideRow::Gap` emitted where a gap is, revealed lines are ordinary context rows with the same numbers, indexes (`UnifiedIndex`, `SideIndex`) stay consistent in both layouts (FR-007)
+- [x] T009 Make `unified_rows`, `side_by_side_rows` and their index types accept `&Shaped` and emit gap rows in `crates/micold-core/src/review/diff.rs`; update existing callers
 
 **Checkpoint**: `mise run test-core` green.
 
@@ -40,14 +40,14 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 **Goal**: gap markers on worktree-change diffs, expand and collapse in place.
 **Independent test**: file with two distant hunks; expand and collapse each gap.
 
-- [ ] T010 [P] [US1] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `Msg::GapToggled` opens and closes a range for the selected file, state keyed `(SourceKey, RelPath)` never leaks across files, refresh reconciles (kept/dropped), added/deleted/binary files offer no markers (`Revealable`), over-2 MB version shows the large note and `Msg::ShowLargeFile` ("Show anyway") expands it, worktree new side comes from `LoadedDiff::new` (FR-001, FR-003, FR-008, FR-009, FR-010)
-- [ ] T011 [P] [US1] Write failing geometry-gate tests for the gap row (height, hit target, unified and side-by-side) in `crates/micold-client/src/ui/material/diff_view.rs`
-- [ ] T012 [US1] Add per-file `Expansion` map, `SourceKey`, `Revealable`, `Msg::GapToggled`, `Msg::ShowLargeFile`, shaping on `DiffRead` and reconcile on refresh in `crates/micold-client/src/features/changes.rs` (T010 green)
-- [ ] T013 [US1] Add `DiffView::gaps(..)` and `.on_gap(..)` builders and the gap row ("N hidden lines", expand and collapse controls) in `crates/micold-client/src/ui/material/diff_view.rs` (T011 green)
-- [ ] T014 [P] [US1] Pass shaped hunks and gaps to `DiffView`, show the large-file note with "Show anyway" in `crates/micold-client/src/ui/changes.rs`
-- [ ] T015 [P] [US1] Add `highlight_file` (highlight over the full new side so revealed lines are coloured like the diff's context lines; the one highlight path later milestones reuse) in `crates/micold-client/src/ui/syntax.rs`
-- [ ] T016 [P] [US1] Add a gap row to the review section of `crates/micold-client/src/showcase/sections/review.rs`
-- [ ] T017 [US1] Document "Reading hidden lines" (markers, expand, collapse, committed-only note, large files) in `docs/user-guide/reviewing-changes.md`
+- [x] T010 [P] [US1] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `Msg::GapToggled` opens and closes a range for the selected file, state keyed `(SourceKey, RelPath)` never leaks across files, refresh reconciles (kept/dropped), added/deleted/binary files offer no markers (`Revealable`), over-2 MB version shows the large note and `Msg::ShowLargeFile` ("Show anyway") expands it, worktree new side comes from `LoadedDiff::new` (FR-001, FR-003, FR-008, FR-009, FR-010)
+- [x] T011 [P] [US1] Write failing geometry-gate tests for the gap row (height, hit target, unified and side-by-side) in `crates/micold-client/src/ui/material/diff_view.rs`
+- [x] T012 [US1] Add per-file `Expansion` map, `SourceKey`, `Revealable`, `Msg::GapToggled`, `Msg::ShowLargeFile`, shaping on `DiffRead` and reconcile on refresh in `crates/micold-client/src/features/changes.rs` (T010 green)
+- [x] T013 [US1] Add `DiffView::gaps(..)` and `.on_gap(..)` builders and the gap row ("N hidden lines", expand and collapse controls) in `crates/micold-client/src/ui/material/diff_view.rs` (T011 green)
+- [x] T014 [P] [US1] Pass shaped hunks and gaps to `DiffView`, show the large-file note with "Show anyway" in `crates/micold-client/src/ui/changes.rs`
+- [x] T015 [P] [US1] Add `highlight_file` (highlight over the full new side so revealed lines are coloured like the diff's context lines; the one highlight path later milestones reuse) in `crates/micold-client/src/ui/syntax.rs`
+- [x] T016 [P] [US1] Add a gap row to the review section of `crates/micold-client/src/showcase/sections/review.rs`
+- [x] T017 [US1] Document "Reading hidden lines" (markers, expand, collapse, committed-only note, large files) in `docs/user-guide/reviewing-changes.md`
 
 ## Phase 4: User Story 2 - Show the whole file with one toggle (P1)
 

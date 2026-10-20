@@ -13,6 +13,7 @@ use micold_client::features::changes::{
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
 use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, SideLines};
+use micold_core::review::expand::{GapKey, Position};
 use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
 
@@ -2381,4 +2382,172 @@ fn the_panel_row_and_the_jump_use_the_shown_lines() {
             line: 7
         })
     );
+}
+
+// Feature 1150, M1: expanding the hidden lines of a diff.
+
+/// A 20-line `b.rs` whose one hunk changes line 10: lines 1-8 hidden before it, 12-20 after.
+fn long_file(changed: &str) -> LoadedDiff {
+    let text = |tenth: &str| {
+        (1..=20)
+            .map(|n| {
+                if n == 10 {
+                    tenth.to_owned()
+                } else {
+                    format!("l{n}")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n"
+    };
+    LoadedDiff {
+        diff: parse_unified(b"@@ -9,3 +9,3 @@\n l9\n-l10\n+X\n l11\n"),
+        old: SideLines::from_bytes(text("l10").as_bytes()),
+        new: SideLines::from_bytes(text(changed).as_bytes()),
+        spans: Default::default(),
+    }
+}
+
+fn view_of(state: &State) -> &changes::OpenView {
+    state.open.as_ref().expect("view open")
+}
+
+fn shown_lines(state: &State) -> usize {
+    view_of(state)
+        .shaped
+        .hunks
+        .iter()
+        .map(|h| h.lines.len())
+        .sum()
+}
+
+fn toggle_gap(state: &mut State, at: usize) {
+    let key = view_of(state).shaped.gaps[at].key();
+    changes::update(state, Msg::GapToggled(key));
+}
+
+/// FR-001..FR-003. A marker per hidden run; pressing one reveals exactly that run, pressing the
+/// same run again restores the hunk.
+#[test]
+fn a_gap_marker_expands_and_collapses_its_run() {
+    let mut state = showing(long_file("X"));
+    let closed = shown_lines(&state);
+    assert_eq!(view_of(&state).shaped.gaps.len(), 2, "before and after");
+    assert_eq!(
+        (
+            view_of(&state).shaped.gaps[0].len,
+            view_of(&state).shaped.gaps[1].len
+        ),
+        (8, 9)
+    );
+    toggle_gap(&mut state, 0);
+    assert_eq!(shown_lines(&state), closed + 8);
+    assert_eq!(
+        view_of(&state).shaped.gaps.len(),
+        1,
+        "the other run stays hidden"
+    );
+    let key = view_of(&state).shaped.revealed[0].gap.key();
+    changes::update(&mut state, Msg::GapToggled(key));
+    assert_eq!(shown_lines(&state), closed);
+    assert_eq!(view_of(&state).shaped.gaps.len(), 2);
+    assert!(
+        view_of(&state).expansions.is_empty(),
+        "nothing open is nothing kept"
+    );
+}
+
+/// FR-008. A file's open runs are kept under its own key: another file never shows them, and the
+/// file shows them again when selected.
+#[test]
+fn expansion_state_is_kept_per_file() {
+    let mut state = showing(long_file("X"));
+    toggle_gap(&mut state, 0);
+    let open = shown_lines(&state);
+    let (seq, _) = select(&mut state, "a.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(long_file("X")),
+        },
+    );
+    assert_eq!(
+        view_of(&state).shaped.gaps.len(),
+        2,
+        "a.rs has its own, closed"
+    );
+    let (seq, _) = select(&mut state, "b.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(long_file("X")),
+        },
+    );
+    assert_eq!(shown_lines(&state), open);
+}
+
+/// FR-008. A refresh keeps a run that still exists and drops one that vanished.
+#[test]
+fn a_refresh_keeps_surviving_runs_and_drops_vanished_ones() {
+    let mut state = showing(long_file("X"));
+    toggle_gap(&mut state, 0);
+    toggle_gap(&mut state, 0);
+    assert_eq!(view_of(&state).expansions.len(), 1);
+    // The same diff again: both runs survive.
+    refresh(&mut state, &["a.rs", "b.rs"], long_file("X"));
+    assert_eq!(view_of(&state).shaped.revealed.len(), 2);
+    // A diff that now covers lines 1-20: nothing hidden, nothing kept.
+    let mut whole = long_file("X");
+    whole.diff = parse_unified(
+        format!(
+            "@@ -1,20 +1,20 @@\n{}-l10\n+X\n{}",
+            (1..=9).map(|n| format!(" l{n}\n")).collect::<String>(),
+            (11..=20).map(|n| format!(" l{n}\n")).collect::<String>()
+        )
+        .as_bytes(),
+    );
+    refresh(&mut state, &["a.rs", "b.rs"], whole);
+    assert!(view_of(&state).shaped.gaps.is_empty());
+    assert!(view_of(&state).shaped.revealed.is_empty());
+    assert!(view_of(&state).expansions.is_empty());
+}
+
+/// FR-009. Added, deleted and binary files offer no marker, and a press on one reveals nothing.
+#[test]
+fn files_without_two_text_versions_offer_no_markers() {
+    for kind in [
+        ChangeKind::Added,
+        ChangeKind::Untracked,
+        ChangeKind::Deleted,
+    ] {
+        let mut state = ready(&["b.rs"]);
+        let mut files = list(&["b.rs"]);
+        files.files[0].kind = kind.clone();
+        if let Some(view) = state.open.as_mut() {
+            view.list = Load::Ready(files);
+        }
+        let (seq, _) = select(&mut state, "b.rs");
+        changes::update(
+            &mut state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(long_file("X")),
+            },
+        );
+        assert!(view_of(&state).shaped.gaps.is_empty(), "{kind:?}");
+        // The key of the run a modified file would offer: before the hunk, lines 1-8.
+        let key = GapKey {
+            position: Position::Leading,
+            new_start: 1,
+            len: 8,
+        };
+        changes::update(&mut state, Msg::GapToggled(key));
+        assert!(view_of(&state).expansions.is_empty(), "{kind:?}");
+    }
+    let state = showing(loaded(FileDiff::Binary));
+    assert!(view_of(&state).shaped.gaps.is_empty());
+    assert!(view_of(&state).shaped.hunks.is_empty());
 }
