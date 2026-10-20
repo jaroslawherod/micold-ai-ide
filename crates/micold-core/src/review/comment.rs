@@ -1237,13 +1237,31 @@ x",
             "any open send makes the entry busy"
         );
         review.abort_send();
+        let context = context_for_pr_9();
         assert_eq!(
             review
-                .begin_send(EntryKind::Worktree, Scope::PullRequest(9), None, &[])
+                .begin_send(
+                    EntryKind::Worktree,
+                    Scope::PullRequest(9),
+                    Some(&context),
+                    &[]
+                )
                 .map(|s| s.ids),
             Err(ReviewError::NothingPending),
             "other scopes' drafts are not sent"
         );
+    }
+
+    fn context_for_pr_9() -> PrContext {
+        PrContext {
+            number: 9,
+            title: "t".into(),
+            head_branch: "b".into(),
+            state: crate::pull_request::BranchPrState::Open,
+            current_head: "a".repeat(40),
+            checked_out: None,
+            unreadable: Vec::new(),
+        }
     }
 
     fn state_of(review: &EntryReview, n: u128) -> CommentState {
@@ -1288,15 +1306,7 @@ x",
     #[test]
     fn begin_send_refuses_a_scope_and_context_that_differ() {
         let mut review = EntryReview::default();
-        let context = PrContext {
-            number: 9,
-            title: "t".into(),
-            head_branch: "b".into(),
-            state: crate::pull_request::BranchPrState::Open,
-            current_head: "a".repeat(40),
-            checked_out: None,
-            unreadable: Vec::new(),
-        };
+        let context = context_for_pr_9();
         for (scope, pr) in [
             (Scope::PullRequest(9), None),
             (Scope::WorkingTree, Some(&context)),
