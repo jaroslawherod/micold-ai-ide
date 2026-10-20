@@ -90,7 +90,7 @@ pub fn view<'a>(
         .into();
 
     let page: Element<'a, Message> = match draft.section {
-        SettingsSection::Appearance => appearance::view(draft, r),
+        SettingsSection::Appearance => appearance::view(draft, focused, r),
         SettingsSection::Terminal => terminal::view(draft, focused, r),
         SettingsSection::Environment => environment::view(
             draft,

@@ -96,7 +96,7 @@ w, gap, width, card_height) -> Vec<Piece>`. `ui/overview.rs` computes `freed` fr
 
 ### D4 — Reduce motion setting (R4) — core settings, `features/settings.rs`, `ui/settings/appearance.rs`, `shell/persist.rs`
 
-Field through draft, validation, save and persistence (data-model.md); `LabelledToggle` on the
+Field through draft, validation, save and persistence (data-model.md); `Checkbox` with a note (not `LabelledToggle`, an icon button) on the
 Appearance page: *Reduce motion*, supporting text "Switch the Overview's full-screen zoom in one
 step"; `SETTINGS` entry.
 

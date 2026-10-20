@@ -74,3 +74,4 @@ failed before the implementation.
   navigation_drawer card_grid persist settings_sections reduce_motion` all pass.
 - deviation: plan D4 named a `LabelledToggle` (an icon button); the page uses a `Checkbox` with a
   `field_note` like the other switches. Drawer snaps in `layout` (so the frame after the flip is the end).
+- scoped gate: `field_focus_call_sites` demanded `.track_focus(FieldId::SettingsReduceMotion, ..)`, so `appearance::view` takes `focused`; `layout_snapshot` fixture regenerated (six rows, the new checkbox on Appearance).
