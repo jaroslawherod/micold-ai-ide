@@ -1323,6 +1323,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                         Ok(diff) => Load::Ready(diff),
                         Err(message) => Load::Failed(message),
                     };
+                    reshape(view);
                 }
             }
             let moves = judge_anchors(state);
