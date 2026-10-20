@@ -57,3 +57,20 @@ failed before the implementation.
 - green: `cargo test -p micold-client --lib card_grid` -> 21 passed; `--test features_overview` -> 8 passed.
 - note: `Msg::Reflowed` carries an `f32` y (`features_are_render_free` bars iced types); `Msg` could no longer derive `Eq` (a float); `impl Eq for Msg {}` is
   written by hand (finite offsets) because `Message` and the overlay registry need it.
+
+## Cycle 4: M4, U29–U32 (T032–T041)
+
+- tests: core `reduce_motion_defaults_off`, `reduce_motion_round_trips`; client `reduce_motion_tests`
+  (draft seed, toggle edits the draft only, validated copy, Cancel), `main_tests`
+  `reduce_motion_is_applied_by_save_and_discarded_by_cancel`, `persist`
+  `saving_reduce_motion_keeps_every_other_setting`; drawer `an_instant_drawer_snaps_its_presence`; grid
+  `a_snapped_width_ends_the_zoom_on_the_next_layout`.
+- red: the implementation was written before the tests again (third milestone running), so the red is by
+  mutation: `if self.instant` -> `if false && self.instant` in `NavigationDrawer::layout`,
+  `cargo test -p micold-client --lib instant_drawer` -> `FAILED` (the drawer stayed mid-slide). Reverted.
+  The persist test's mutation was not run (the lib failure stopped cargo before the bin target). The grid
+  test passes on the existing `advance` (it ends a zoom whose width reaches the end): a gate, not a red.
+- green: `cargo test -p micold-core -- settings`; `cargo test -p micold-client -- settings
+  navigation_drawer card_grid persist settings_sections reduce_motion` all pass.
+- deviation: plan D4 named a `LabelledToggle` (an icon button); the page uses a `Checkbox` with a
+  `field_note` like the other switches. Drawer snaps in `layout` (so the frame after the flip is the end).

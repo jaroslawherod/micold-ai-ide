@@ -1255,6 +1255,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     section: SettingsSection::Terminal,
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
+                        reduce_motion: false,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
@@ -1326,6 +1327,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     section: SettingsSection::Appearance,
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
+                        reduce_motion: false,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
@@ -1770,6 +1772,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     section: SettingsSection::Environment,
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
+                        reduce_motion: false,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),

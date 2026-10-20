@@ -45,6 +45,7 @@ pub struct NavigationDrawer<'a, M, Theme = iced::Theme, Renderer = iced::Rendere
     handle: Option<Element<'a, M, Theme, Renderer>>,
     open: bool,
     retracted: bool,
+    instant: bool,
 }
 
 impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
@@ -59,6 +60,7 @@ impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
             handle: None,
             open: true,
             retracted: false,
+            instant: false,
         }
     }
 
@@ -75,6 +77,14 @@ impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
     /// retracted starts at zero width, not sliding there.
     pub fn retracted(mut self, retracted: bool) -> Self {
         self.retracted = retracted;
+        self
+    }
+
+    /// Make the retraction switch in one step instead of sliding (feature 970, FR-008, the
+    /// *Reduce motion* setting): the next layout shows the end width, also when the retraction was
+    /// already under way. Only the retraction snaps; the open and close slide is unchanged.
+    pub fn instant(mut self, instant: bool) -> Self {
+        self.instant = instant;
         self
     }
 
@@ -176,6 +186,9 @@ where
     ) -> layout::Node {
         let node = self.layout_shown(tree, renderer, limits);
         let track = tree.state.downcast_mut::<Track>();
+        if self.instant {
+            track.presence.restart_at(self.presence_target());
+        }
         let presence = track.presence.value();
         track.gone = self.retracted && presence <= CLOSED;
         if track.gone {
@@ -790,6 +803,11 @@ mod tests {
 
     /// The sidebar as the app builds it: a panel, the collapsed strip and a resize handle.
     fn sidebar<'a>(open: bool, retracted: bool) -> Element<'a, ()> {
+        sidebar_in(open, retracted, false)
+    }
+
+    /// [`sidebar`], with the retraction snapping rather than easing when `instant`.
+    fn sidebar_in<'a>(open: bool, retracted: bool, instant: bool) -> Element<'a, ()> {
         NavigationDrawer::new(
             Space::new().width(PANEL_WIDTH).height(100.0),
             Space::new().width(RAIL_WIDTH).height(100.0),
@@ -797,6 +815,7 @@ mod tests {
         .open(open)
         .handle(Space::new().width(crate::ui::material::resize_handle::WIDTH))
         .retracted(retracted)
+        .instant(instant)
         .into()
     }
 
@@ -805,6 +824,8 @@ mod tests {
         tree: Tree,
         node: layout::Node,
         start: std::time::Instant,
+        /// Whether the drawer is built `.instant(true)` from now on.
+        instant: bool,
     }
 
     impl Harness {
@@ -814,13 +835,14 @@ mod tests {
                 tree: Tree::new(drawer.as_widget()),
                 node: layout::Node::new(Size::ZERO),
                 start: std::time::Instant::now(),
+                instant: false,
             };
             harness.lay_out(open, retracted);
             harness
         }
 
         fn lay_out(&mut self, open: bool, retracted: bool) -> &layout::Node {
-            let mut drawer = sidebar(open, retracted);
+            let mut drawer = sidebar_in(open, retracted, self.instant);
             self.tree.diff(drawer.as_widget());
             let renderer = crate::ui::material::test_support::renderer();
             let limits = layout::Limits::new(Size::ZERO, Size::new(1000.0, 100.0));
@@ -832,7 +854,7 @@ mod tests {
 
         /// One redraw at `at` ms through the drawer's own `update`, then the layout it asks for.
         fn frame(&mut self, open: bool, retracted: bool, at: u64) -> &layout::Node {
-            let mut drawer = sidebar(open, retracted);
+            let mut drawer = sidebar_in(open, retracted, self.instant);
             self.tree.diff(drawer.as_widget());
             let renderer = crate::ui::material::test_support::renderer();
             let event = Event::Window(iced::window::Event::RedrawRequested(
@@ -1105,5 +1127,33 @@ mod tests {
             }
             assert_eq!(harness.width(), given, "open {open}: as given");
         }
+    }
+
+    /// Feature 970, FR-008 (Story 3 #1, #3, SC-003): reduced motion snaps the retraction.
+    #[test]
+    fn an_instant_drawer_snaps_its_presence() {
+        let full = PANEL_WIDTH + crate::ui::material::resize_handle::WIDTH;
+
+        let mut harness = Harness::new(true, false);
+        harness.instant = true;
+        assert_eq!(harness.frame(true, true, 0).size().width, 0.0, "retracts at once");
+        assert!(harness.every_child_parked(), "and parked");
+        assert_eq!(harness.frame(true, false, 16).size().width, full, "shows at once");
+
+        // Turned on 200 ms into a retraction that was easing: it completes in one step.
+        let mut harness = Harness::new(true, false);
+        for at in (0..=200).step_by(16) {
+            harness.frame(true, true, at);
+        }
+        let mid = harness.width();
+        assert!(mid > 0.0 && mid < full, "mid-way at 200 ms: {mid}");
+        harness.instant = true;
+        assert_eq!(harness.frame(true, true, 216).size().width, 0.0, "completes in one step");
+
+        // Only the retraction snaps: opening and closing the panel still slide.
+        let mut harness = Harness::new(false, false);
+        harness.instant = true;
+        let first = harness.frame(true, false, 16).size().width;
+        assert!(first < full, "the panel is still sliding open: {first} of {full}");
     }
 }
