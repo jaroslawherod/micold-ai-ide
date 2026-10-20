@@ -514,7 +514,11 @@ mod tests {
             progress: progress(None, None),
             activity: Some(activity("Writing tests", None)),
             activation: Activation::RevealOnly(location),
-            dir: std::path::PathBuf::from("/home/alice/code/app/.worktrees/feat-1120_x"),
+            dir: std::path::Path::new(HOME)
+                .join("code")
+                .join("app")
+                .join(".worktrees")
+                .join("feat-1120_x"),
         }
     }
 
