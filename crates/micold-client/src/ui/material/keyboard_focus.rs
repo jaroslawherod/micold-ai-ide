@@ -76,6 +76,8 @@ pub(super) struct TakesTheKeyboard<'a, M> {
     /// application moved the keyboard here, no press or traversal did.
     shown: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
+    /// Told when the focus is held *and shown* changes: keyboard focus only (feature 1121, U1).
+    on_shown_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
     /// A stable name, so the application can move the keyboard here (feature 813, R12/R13).
     id: Option<iced::advanced::widget::Id>,
 }
@@ -93,6 +95,7 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
             focused: false,
             shown: false,
             on_focus_change: None,
+            on_shown_change: None,
             id: None,
         }
     }
@@ -152,6 +155,15 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
         self
     }
 
+    /// The message emitted when the control's *shown* focus changes, `focused && visible`: a Tab,
+    /// an arrow move or a `focus(id)` hand-back report `true`; a pointer press takes the keyboard
+    /// without showing it and reports nothing, and a press on a control whose focus was shown
+    /// reports `false` (feature 1121, U1, FR-002).
+    pub fn on_shown_change(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
+        self.on_shown_change = Some(Box::new(f));
+        self
+    }
+
     /// The message `key` sends, if this control claims it.
     fn message_for(&self, key: &keyboard::Key, held: keyboard::Modifiers) -> Option<M> {
         let keyboard::Key::Named(named) = key else {
@@ -203,6 +215,9 @@ pub(super) struct Focus {
     /// but it clears this: Material marks keyboard focus, and a ring left on the last button clicked
     /// says the keyboard is somewhere the user never sent it.
     visible: bool,
+    /// What `on_shown_change` was last told, `focused && visible` as of then (feature 1121, U1):
+    /// compared after every event, as `reported` is, so a traversal is seen on the next frame.
+    shown_reported: bool,
     /// Whether the child is held down, mirrored from the rendering stack's button, which keeps its
     /// own copy private. The indicator needs it to know which layer the child has already drawn.
     pressed: bool,
@@ -331,6 +346,7 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
             supplied: self.focused,
             reported: self.focused,
             visible: self.focused && self.shown,
+            shown_reported: self.focused && self.shown,
             pressed: false,
         })
     }
@@ -514,6 +530,13 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
                 shell.publish(on_focus_change(now));
             }
         }
+        let shown = state.focused && state.visible;
+        if state.shown_reported != shown {
+            state.shown_reported = shown;
+            if let Some(on_shown_change) = &self.on_shown_change {
+                shell.publish(on_shown_change(shown));
+            }
+        }
     }
 }
 
@@ -665,6 +688,51 @@ mod tests {
             rest,
             "Tab landed on a disabled wrapper"
         );
+    }
+
+    /// Two controls, each publishing `"<name> shown <bool>"` when its shown focus changes.
+    fn shown_pair() -> Mounted<'static> {
+        let control = |name: &'static str| {
+            TakesTheKeyboard::new(container(text(name)).padding(8), true)
+                .on_shown_change(move |shown| format!("{name} shown {shown}"))
+        };
+        Mounted::new(iced::widget::column![control("first"), control("second")])
+    }
+
+    /// Any event: the frame after a traversal, where a change it made is reported.
+    fn tick(mounted: &mut Mounted<'_>) -> Vec<String> {
+        mounted.send(
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            mouse::Cursor::Unavailable,
+        )
+    }
+
+    /// Feature 1121 T036 (U1): Tab focus publishes `true`; leaving it publishes `false`.
+    #[test]
+    fn tab_focus_publishes_shown_and_leaving_it_unshown() {
+        let mut m = shown_pair();
+        m.focus_next();
+        assert_eq!(tick(&mut m), ["first shown true"]);
+        m.focus_next();
+        let mut moved = tick(&mut m);
+        moved.sort();
+        assert_eq!(moved, ["first shown false", "second shown true"]);
+        assert!(tick(&mut m).is_empty(), "a change is reported once");
+    }
+
+    /// U1, FR-002: a pointer press takes the keyboard without showing it, so it publishes
+    /// nothing; a press on a keyboard-focused control hides its focus and publishes `false`.
+    #[test]
+    fn a_press_publishes_no_shown_focus() {
+        let mut m = shown_pair();
+        let at = m.container().center();
+        assert!(m.press(at).is_empty(), "a press shows no focus");
+        let mut m = shown_pair();
+        m.focus_next();
+        assert_eq!(tick(&mut m), ["first shown true"]);
+        assert_eq!(m.press(at), ["first shown false"]);
     }
 
     /// Feature 972, R5, FR-009 (T020): a chord publishes on exactly its modifiers; a key claim
