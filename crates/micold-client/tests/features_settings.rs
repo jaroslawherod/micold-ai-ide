@@ -3284,9 +3284,14 @@ fn the_default_prompt_template_opens_with_the_stored_text_and_saves_the_edited_o
         "/speckit-autopilot #{issue}\nthen {branch}"
     );
 
-    draft.environment.set_default_prompt_template("Fix {issue_title}\n\nline".into());
+    draft
+        .environment
+        .set_default_prompt_template("Fix {issue_title}\n\nline".into());
 
-    let saved = draft.validate().expect("the stored numbers are in range").into_settings();
+    let saved = draft
+        .validate()
+        .expect("the stored numbers are in range")
+        .into_settings();
     assert_eq!(saved.default_prompt_template, "Fix {issue_title}\n\nline");
 }
 

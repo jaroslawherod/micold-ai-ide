@@ -48,6 +48,7 @@ fn page(descriptions: &[(u64, &str)], next_cursor: Option<&str>) -> DescriptionP
             .map(|(number, text)| (*number, (*text).to_string()))
             .collect(),
         next_cursor: next_cursor.map(str::to_string),
+        bodies: Vec::new(),
     }
 }
 
@@ -327,4 +328,19 @@ fn the_fake_source_scripts_and_records_description_pages() {
         ]
     );
     assert!(source.calls().is_empty(), "no list page was asked for");
+}
+
+/// Feature 1161, FR-003: the pass carries the whole body, not only the cut description, so a listed
+/// issue can fill `{issue_body}`.
+#[test]
+fn describe_listed_keeps_the_whole_body() {
+    let long = "word ".repeat(200);
+    let parsed = parse_descriptions_page(&answer(
+        &format!(r#"{{"number":7,"bodyText":"{long}"}}"#),
+        None,
+    ))
+    .unwrap();
+    let mut issues = vec![issue(7)];
+    describe_listed(&mut issues, &parsed);
+    assert_eq!(issues[0].body(), long);
 }

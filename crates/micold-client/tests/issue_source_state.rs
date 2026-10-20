@@ -1295,6 +1295,7 @@ fn descriptions(pairs: &[(u64, &str)], next: Option<&str>) -> DescriptionPage {
             .iter()
             .map(|(number, text)| (*number, text.to_string()))
             .collect(),
+        bodies: Vec::new(),
         next_cursor: next.map(str::to_string),
     }
 }

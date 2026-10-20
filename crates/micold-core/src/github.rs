@@ -1253,6 +1253,8 @@ pub struct DescriptionPage {
     /// Each issue's number and its description ([`description_from`] of its `bodyText`), in the
     /// list's order.
     pub descriptions: Vec<(u64, String)>,
+    /// Each issue's whole plain-text body, for the default prompt's `{issue_body}` (feature 1161).
+    pub bodies: Vec<(u64, String)>,
     /// Where the next page starts; `None` on the last page.
     pub next_cursor: Option<String>,
 }
@@ -1263,6 +1265,7 @@ impl fmt::Debug for DescriptionPage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DescriptionPage")
             .field("descriptions", &self.descriptions.len())
+            .field("bodies", &self.bodies.len())
             .field("next_cursor", &self.next_cursor)
             .finish()
     }
@@ -1282,16 +1285,19 @@ pub fn parse_descriptions_page(stdout: &[u8]) -> Result<DescriptionPage, IssueLo
     let nodes = issues["nodes"]
         .as_array()
         .ok_or_else(|| IssueLoadError::Other("GitHub's answer had no issue list".into()))?;
-    let descriptions = nodes
-        .iter()
-        .filter_map(|node| {
-            let number = node["number"].as_u64()?;
-            let body_text = node["bodyText"].as_str().unwrap_or_default();
-            Some((number, description_from(body_text)))
-        })
-        .collect();
+    let mut descriptions = Vec::new();
+    let mut bodies = Vec::new();
+    for node in nodes {
+        let Some(number) = node["number"].as_u64() else {
+            continue;
+        };
+        let body_text = node["bodyText"].as_str().unwrap_or_default();
+        descriptions.push((number, description_from(body_text)));
+        bodies.push((number, body_text.to_string()));
+    }
     Ok(DescriptionPage {
         descriptions,
+        bodies,
         next_cursor: next_cursor_of(issues),
     })
 }
@@ -1313,6 +1319,11 @@ pub fn describe_listed(issues: &mut [Issue], page: &DescriptionPage) {
     for (number, description) in &page.descriptions {
         if let Some(issue) = issues.iter_mut().find(|issue| issue.number == *number) {
             issue.description.clone_from(description);
+        }
+    }
+    for (number, body) in &page.bodies {
+        if let Some(issue) = issues.iter_mut().find(|issue| issue.number == *number) {
+            issue.body.clone_from(body);
         }
     }
 }

@@ -27,7 +27,10 @@ fn setting_the_template_stores_it_on_disk_and_on_the_wire() {
     let on_disk = JsonFileSettingsStore::at(dir.path().join("settings.json"))
         .load()
         .settings;
-    assert_eq!(on_disk.default_prompt_template, "/speckit-autopilot #{issue}\nmore");
+    assert_eq!(
+        on_disk.default_prompt_template,
+        "/speckit-autopilot #{issue}\nmore"
+    );
 }
 
 #[test]
@@ -40,9 +43,15 @@ fn an_unrelated_settings_change_does_not_revert_it() {
         })
         .unwrap();
     let mut catalog = catalog_at(dir.path());
-    assert_eq!(catalog.settings_wire().default_prompt_template, "keep {issue}");
+    assert_eq!(
+        catalog.settings_wire().default_prompt_template,
+        "keep {issue}"
+    );
     catalog.set_scrollback(42_000).unwrap();
-    assert_eq!(catalog.settings_wire().default_prompt_template, "keep {issue}");
+    assert_eq!(
+        catalog.settings_wire().default_prompt_template,
+        "keep {issue}"
+    );
     let on_disk = JsonFileSettingsStore::at(dir.path().join("settings.json"))
         .load()
         .settings;

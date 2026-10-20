@@ -147,8 +147,8 @@ impl PromptTemplate {
                             Some(ch) => name.push(ch),
                         }
                     }
-                    let p = Placeholder::from_spelling(&name)
-                        .ok_or(TemplateError::Unknown(name))?;
+                    let p =
+                        Placeholder::from_spelling(&name).ok_or(TemplateError::Unknown(name))?;
                     if !literal.is_empty() {
                         segments.push(Segment::Literal(std::mem::take(&mut literal)));
                     }
@@ -190,7 +190,8 @@ pub mod shared_fixture {
 
     pub const TEMPLATE: &str =
         "Fix #{issue} {issue_title} on {branch} ({type}/{name}) {{ok}}\n{issue_body}";
-    pub const OUTPUT: &str = "Fix #42 Crash on save on fix/42_crash (fix/crash) {ok}\nIt crashes. {issue}";
+    pub const OUTPUT: &str =
+        "Fix #42 Crash on save on fix/42_crash (fix/crash) {ok}\nIt crashes. {issue}";
 
     pub fn facts() -> WorktreeFacts {
         WorktreeFacts {
