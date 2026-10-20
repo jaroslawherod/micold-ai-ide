@@ -565,40 +565,61 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     );
     needs_action.activity = with_activity.activity.clone();
     needs_action.progress = with_progress.progress;
-    // Titles needing about 1, 2, 3 and 5 lines at the card's 320 px, the last cut on its third
-    // line, and a short and a long activity, the long one cut on its second (feature 1121, US1).
+    // Titles needing about 1, 2, 3 and 5 lines, the last cut on its third line, and a short and a
+    // long activity, the long one cut on its second (feature 1121, US1), in a grid as the Overview
+    // lays them out: a full-width one, where a row takes its tallest card's height (1120 FR-014),
+    // and one column each at the card widths 280, 380 and 480 px (FR-007).
     let long_activity = "Rewriting the card grid so a row of cards keeps the height of its \
         tallest card while the title wraps, then running the layout snapshot";
-    let wrapped = iced::widget::row(
-        [
-            ("Fix tab bar", "Editing card_grid.rs"),
-            (
-                "Overview cards: full text without truncation",
-                long_activity,
-            ),
-            (
-                "Overview cards: full text without truncation, expanded in place on hover",
-                "Editing card_grid.rs",
-            ),
-            (
-                "Overview cards: the title wraps onto three lines and the activity onto two, \
-                 and hover or keyboard focus expands the card in place over its neighbours",
-                long_activity,
-            ),
-        ]
-        .into_iter()
-        .map(|(title, activity)| {
-            let mut m = card_model("wrapped", T::Feature, S::Working, R::Working);
-            m.title = title.to_string();
-            m.activity = Some(micold_core::hook_activity::CurrentActivity {
-                line: activity.to_string(),
-                ratio: None,
-            });
-            card(m).into()
-        }),
-    )
-    .spacing(spacing::MD)
-    .wrap();
+    let wrapped_models: Vec<_> = [
+        ("Fix tab bar", "Editing card_grid.rs"),
+        (
+            "Overview cards: full text without truncation",
+            long_activity,
+        ),
+        (
+            "Overview cards: full text without truncation, expanded in place on hover",
+            "Editing card_grid.rs",
+        ),
+        (
+            "Overview cards: the title wraps onto three lines and the activity onto two, \
+             and hover or keyboard focus expands the card in place over its neighbours",
+            long_activity,
+        ),
+    ]
+    .into_iter()
+    .map(|(title, activity)| {
+        let mut m = card_model("wrapped", T::Feature, S::Working, R::Working);
+        m.title = title.to_string();
+        m.activity = Some(micold_core::hook_activity::CurrentActivity {
+            line: activity.to_string(),
+            ratio: None,
+        });
+        m
+    })
+    .collect();
+    let wrapped_grid = |width: Length| {
+        iced::widget::container(Element::from(
+            material::CardGrid::new(
+                wrapped_models
+                    .iter()
+                    .map(|m| {
+                        material::OverviewCard::<Message>::new(m, roles).on_press(Message::NoOp)
+                    })
+                    .collect(),
+                roles,
+            )
+            .unscrolled(),
+        ))
+        .width(width)
+    };
+    let wrapped = iced::widget::column![
+        wrapped_grid(Length::Fill),
+        iced::widget::row([280.0, 380.0, 480.0].map(|w| wrapped_grid(Length::Fixed(w)).into()))
+            .spacing(spacing::MD)
+            .wrap(),
+    ]
+    .spacing(spacing::MD);
     let mut done = card_model("done", T::Other, S::Done, R::Merged);
     done.prs = micold_core::overview::PrDisplay::Hidden;
     // Unscrolled: the showcase page scrolls, and a grid with its own scrollable fills a height
