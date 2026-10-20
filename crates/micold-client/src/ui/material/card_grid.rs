@@ -1053,6 +1053,34 @@ mod tests {
         assert!((height - (tall + GAP + MIN_HEIGHT)).abs() < EPS, "{height}");
     }
 
+    /// Feature 1121 US1 sc.5 (feature 1120 FR-014): a card whose title wraps to three lines makes
+    /// its row taller, every card in the row takes its height, and no two cards overlap.
+    #[test]
+    fn a_wrapped_title_sets_its_rows_height_and_nothing_overlaps() {
+        let plain = [rich(0), rich(1), rich(2)];
+        let (_, before) = even(&plain, 900.0);
+        let mut wrapped = plain.clone();
+        wrapped[1].title =
+            "Overview cards wrap the title onto three lines before an ellipsis ".repeat(4);
+        let (_, boxes) = even(&wrapped, 900.0);
+        let tall = boxes[1].height;
+        assert!(
+            tall > before[1].height + EPS,
+            "the wrapped title makes the card taller: {tall} vs {}",
+            before[1].height
+        );
+        for (i, a) in boxes.iter().enumerate() {
+            assert!((a.height - tall).abs() < EPS, "{a:?} != {tall}");
+            assert!(a.y.abs() < EPS, "one row: {a:?}");
+            for b in &boxes[i + 1..] {
+                assert!(
+                    !super::super::test_support::overlap(a, b),
+                    "{a:?} overlaps {b:?}"
+                );
+            }
+        }
+    }
+
     /// Review A F1 (M3): a tall card's sub-pixel sliver at the start of the next row, mid-zoom,
     /// does not stretch that row; the same card's full piece still sets its own row.
     #[test]

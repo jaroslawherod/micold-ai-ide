@@ -2,9 +2,9 @@
 //!
 //! A header row in the state's colour, with the state icon and word at its start (the reason is
 //! their tooltip) and the location type's icon and word at its end (the word is their tooltip),
-//! over one neutral body: the title (ellipsized, the display name in a tooltip), the short branch
-//! when it has one, the sessions line, and the activity, progress and pull request rows when they
-//! have something to say (feature 1120, contracts K1). What each line says is [`CardText`], tested
+//! over one neutral body: the title (on up to three lines, the display name in a tooltip), the
+//! short branch when it has one, the sessions line, and the activity (up to two lines), progress
+//! and pull request rows when they have something to say (feature 1120, contracts K1). What each line says is [`CardText`], tested
 //! in the core (FR-018). Every colour comes from the theme's roles through [`palette`]: the header
 //! of Needs action is the `error` container, Needs attention `warning`, Working `primary`, Done
 //! `success`, and Idle's is the grey `surface_variant`; the body is `surface_container_low` in
@@ -15,6 +15,7 @@
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
+use crate::ui::material::line_clamp::LineClamped;
 use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Ripple, Text, Tooltip, TypeRole};
 use iced::widget::{button, column, container, row, stack, Space};
 use iced::{keyboard, Alignment, Element, Length};
@@ -252,8 +253,10 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 None => shown.into(),
             }
         };
+        // The title wraps onto three lines and the activity onto two before an ellipsis (feature
+        // 1121, FR-001); the branch stays one line.
         let mut body = column![Tooltip::new(
-            Ellipsized::<M>::at_role_spaced(text.title, TypeRole::CardTitle, p.on_body),
+            LineClamped::<M>::new(text.title, TypeRole::CardTitle, 3).tint(p.on_body),
             text.title_tooltip,
             roles
         )]
@@ -263,7 +266,11 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         }
         body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
         if let Some(activity) = text.activity {
-            body = body.push(line(activity.text, Some(activity.tooltip)));
+            body = body.push(Tooltip::new(
+                LineClamped::<M>::new(activity.text, TypeRole::Body, 2).tint(p.on_body_variant),
+                activity.tooltip,
+                roles,
+            ));
         }
         if let Some(row) = text.progress {
             body = body.push(Text::new(row.text, TypeRole::Body, roles).tint(p.on_body_variant));
@@ -279,16 +286,20 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
             };
         }
         let targeted = card.targeted;
-        let fill = container(column![header, container(body).padding(spacing::MD)])
-            .width(Length::Fill)
-            .style(move |_| container::Style {
-                background: Some(iced::Background::Color(style::color(p.body))),
-                border: iced::Border {
-                    radius: RADIUS.into(),
-                    ..iced::Border::default()
-                },
-                ..container::Style::default()
-            });
+        // The body spans the card: a clamped line is only as wide as its text (feature 1121).
+        let fill = container(column![
+            header,
+            container(body).padding(spacing::MD).width(Length::Fill)
+        ])
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(iced::Background::Color(style::color(p.body))),
+            border: iced::Border {
+                radius: RADIUS.into(),
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        });
         // The target mark is the top layer, so the header's fill cannot paint over the outline
         // (research R13); its *selected* layer covers the header and the body alike. Only a
         // targeted card stacks it, so no other card opens a renderer layer for nothing.
@@ -537,8 +548,9 @@ mod tests {
 
     /// What `model`'s card paints laid out `width` wide.
     fn painted_at(model: &CardModel, width: f32) -> Vec<super::super::test_support::Painted> {
-        Mounted::new(
+        Mounted::new_in(
             container(OverviewCard::<String>::new(model, roles())).width(Length::Fixed(width)),
+            Size::new(width, 1000.0),
         )
         .painted_text()
     }
@@ -587,6 +599,144 @@ mod tests {
                     .find(|p| p.content.starts_with(start))
                     .unwrap_or_else(|| panic!("{width}: no {start:?} line: {text:?}"));
                 assert!(line.content.ends_with('\u{2026}'), "{width}: {line:?}");
+            }
+        }
+    }
+
+    /// How many lines `text` needs at `role` laid out `room` wide, with nothing limiting it.
+    fn lines_needed(text: &str, role: TypeRole, room: f32) -> usize {
+        let (_, size) = super::super::line_clamp::laid_out_at(text, role, 50, room);
+        (size.height / role.line_height_dp()).round() as usize
+    }
+
+    /// Words that need exactly `lines` lines at `role` in a card `width` wide: the shortest run of
+    /// them that wraps onto that many.
+    fn needing(lines: usize, role: TypeRole, width: f32) -> String {
+        let room = width - 2.0 * spacing::MD;
+        let mut text = String::new();
+        for word in "Overview cards wrap the title onto three lines and the activity onto two"
+            .split(' ')
+            .cycle()
+            .take(400)
+        {
+            if !text.is_empty() {
+                text.push(' ');
+            }
+            text.push_str(word);
+            if lines_needed(&text, role, room) == lines {
+                return text;
+            }
+        }
+        panic!("no run of words needs {lines} lines at {width}");
+    }
+
+    /// The card `width` wide with `title` and `activity`, and what it paints: each paragraph and
+    /// the card's own size.
+    fn card_with(
+        title: &str,
+        activity: &str,
+        width: f32,
+    ) -> (Vec<super::super::test_support::Painted>, Size) {
+        let mut m = model(CardState::Working, "feat-a");
+        m.title = title.into();
+        m.activity = Some(micold_core::hook_activity::CurrentActivity {
+            line: activity.into(),
+            ratio: None,
+        });
+        let mut mounted = Mounted::new_in(
+            container(OverviewCard::<String>::new(&m, roles())).width(Length::Fixed(width)),
+            Size::new(width, 1000.0),
+        );
+        let painted = mounted.painted_text();
+        (painted, mounted.node.size())
+    }
+
+    /// The painted paragraph that starts `text`'s first word run, and how many `role` lines it
+    /// takes.
+    fn lines_of(
+        painted: &[super::super::test_support::Painted],
+        start: &str,
+        role: TypeRole,
+    ) -> (String, usize) {
+        let p = painted
+            .iter()
+            .find(|p| p.content.starts_with(start))
+            .unwrap_or_else(|| panic!("no {start:?} paragraph: {painted:?}"));
+        (
+            p.content.clone(),
+            (p.bounds.height / role.line_height_dp()).round() as usize,
+        )
+    }
+
+    /// Feature 1121 US1 sc.1, sc.2, sc.4, FR-001: at 280, 380 and 480 px a title needing 1, 2 or
+    /// 3 lines takes that many in full; one needing 5 takes 3, the third ending in an ellipsis.
+    #[test]
+    fn the_title_wraps_onto_up_to_three_lines_then_ends_in_an_ellipsis() {
+        for width in WIDTHS {
+            for (needs, takes) in [(1, 1), (2, 2), (3, 3), (5, 3)] {
+                let title = needing(needs, TypeRole::CardTitle, width);
+                let (painted, _) = card_with(&title, "Editing card_grid.rs", width);
+                let (shown, lines) = lines_of(&painted, "Overview", TypeRole::CardTitle);
+                assert_eq!(lines, takes, "{width}: a title needing {needs}: {shown:?}");
+                if needs <= 3 {
+                    assert_eq!(shown, title, "{width}: shown in full");
+                } else {
+                    assert!(shown.ends_with('\u{2026}'), "{width}: {shown:?}");
+                }
+            }
+        }
+    }
+
+    /// Feature 1121 US1 sc.3, sc.4, FR-001: an activity needing 1 or 2 lines takes that many in
+    /// full; one needing 4 takes 2, the second ending in an ellipsis.
+    #[test]
+    fn the_activity_wraps_onto_up_to_two_lines_then_ends_in_an_ellipsis() {
+        for width in WIDTHS {
+            for (needs, takes) in [(1, 1), (2, 2), (4, 2)] {
+                let activity = needing(needs, TypeRole::Body, width);
+                let (painted, _) = card_with("Adds a card", &activity, width);
+                let (shown, lines) = lines_of(&painted, "Overview", TypeRole::Body);
+                assert_eq!(
+                    lines, takes,
+                    "{width}: an activity needing {needs}: {shown:?}"
+                );
+                if needs <= 2 {
+                    assert_eq!(shown, activity, "{width}: shown in full");
+                } else {
+                    assert!(shown.ends_with('\u{2026}'), "{width}: {shown:?}");
+                }
+            }
+        }
+    }
+
+    /// Feature 1121 FR-001: the short branch stays one line, ellipsized, however long it is.
+    #[test]
+    fn the_branch_stays_one_line_ellipsized() {
+        let m = full(true);
+        for width in WIDTHS {
+            let (shown, lines) = lines_of(&painted_at(&m, width), "topic-", TypeRole::Body);
+            assert_eq!(lines, 1, "{width}: {shown:?}");
+            assert!(shown.ends_with('\u{2026}'), "{width}: {shown:?}");
+        }
+    }
+
+    /// Feature 1121 FR-007, SC-002: with a five-line title and a four-line activity, no painted
+    /// text leaves the card at 280, 380 or 480 px.
+    #[test]
+    fn no_wrapped_text_leaves_the_card() {
+        for width in WIDTHS {
+            let title = needing(5, TypeRole::CardTitle, width);
+            let activity = needing(4, TypeRole::Body, width);
+            let (painted, card) = card_with(&title, &activity, width);
+            for p in &painted {
+                let b = p.bounds;
+                assert!(
+                    b.x >= -0.01
+                        && b.y >= -0.01
+                        && b.x + b.width <= card.width + 0.01
+                        && b.y + b.height <= card.height + 0.01,
+                    "{width}: {p:?} leaves the card {card:?}"
+                );
             }
         }
     }

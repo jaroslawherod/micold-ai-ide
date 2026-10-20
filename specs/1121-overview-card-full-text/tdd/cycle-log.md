@@ -1,0 +1,15 @@
+# TDD cycle log: 1121 (M1)
+
+The feature has no `tdd/test-list.md` (as 1120, 972): tasks.md's test tasks are the list, and each
+row names the task pair it covers. Append only. Baseline: `main` at 1952d53a, green in CI.
+
+## M1 (US1: title on three lines, activity on two)
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T001, T004 | `LineClamped::tint` draws in its tint; line height = `Ellipsized::at_role_spaced`'s; 5-line text at 280 px → 3 lines + ellipsis; 120-char unbroken run within 280 px, ellipsized | `tint` stubbed to return `self`; `cargo test -p micold-client --lib -- line_clamp overview_card card_grid`: `a_tinted_label_draws_in_its_tint` `left: Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 } right: Color { r: 0.0705…, g: 0.5019…, b: 0.2039… }`. The other three passed at red (`LineClamped` already did them): deliberate mutants (`LineHeight::default()`, `Wrapping::Word`, `max_lines + 1`) made them fail (`CardTitle left: 22.099998 right: 24.0`; `left: 88.399994 right: 72.0`; unbroken run `left: 22.099998 right: 72.0`); source restored | `tint: Option<Rgb>`, drawn with `map_or(style.text_color, style::color)`; `pub(crate)`; 110 passed |
+| T002, T005 | card title 1/2/3 lines in full, 5 → 3 + ellipsis; activity 1/2 in full, 4 → 2 + ellipsis, at 280/380/480; branch 1 line ellipsized; no painted text leaves the card | same run: `the_title_wraps_onto_up_to_three_lines_then_ends_in_an_ellipsis` `280: a title needing 2: "Overview cards wrap the title o…" left: 1 right: 2`; `the_activity_wraps_onto_up_to_two_lines_then_ends_in_an_ellipsis` `280: an activity needing 2 … left: 1 right: 2`. `the_branch_stays_one_line_ellipsized` and `no_wrapped_text_leaves_the_card` are guards (pass at red); mutant (branch as `LineClamped` 2 lines) failed the branch guard | title `LineClamped(CardTitle, 3).tint(on_body)`, activity `LineClamped(Body, 2).tint(on_body_variant)` in their tooltips |
+| T003, T005 | a 3-line title sets its row's height, no overlap | same run: `a_wrapped_title_sets_its_rows_height_and_nothing_overlaps` `the wrapped title makes the card taller: 216 vs 216` | green with T005 |
+| T007 | showcase pose `wrapped titles` | `cargo test -p micold-client --test showcase_completeness the_overview_card_and_grid_are_posed`: `OverviewCard: pose "wrapped titles" is missing` | `showcase_completeness` 42 passed |
+| T006 | layout snapshot | first run after T005: `the_overview_card_anchors_are_the_header_strip_and_the_title` `the node after overview.card.header is 108.9x80.0 …, not the card body directly under a 311.3x32.0 header` (a clamped line is Shrink, so the body shrank) | body container `.width(Fill)`; fixture regenerated; `layout_snapshot` 72 passed. Open: the fixture's title/body-column widths changed (279.3 → ~77), heights did not |
+| T008 | user guide | docs | — |

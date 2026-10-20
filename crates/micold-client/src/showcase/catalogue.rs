@@ -355,6 +355,7 @@ pub const COMPONENTS: &[Entry] = &[
             "with progress",
             "without progress",
             "targeted",
+            "wrapped titles",
         ],
         live: &[],
         interactive: false,
