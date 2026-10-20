@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M3
-- **Next step**: M3 — full gate, then review A and B and visual pass T035 (see Handover).
+- **Next step**: M3 — review A, review B and visual pass T035 (round 1), then PR.
 
 ## Pull requests
 
@@ -66,6 +66,8 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Full gate M3 | A | 04d8bd3e | RED: `idle_requests_no_frames::wake_at_has_one_caller` — card_grid.rs now calls `motion::wake_at` for the expand rest. Fixed in 8a8eef80: CALLERS names `ui/material/card_grid.rs` ("asks only while its expand `RestTimer` is waiting on a hovered card, for the instant the rest ends (1121 FR-002)"); test renamed `wake_at_has_only_listed_callers` |
 | Full gate M3 | B | 8a8eef80 | RED: `motion_tokens::every_duration_is_a_named_token` flagged `from_millis(1)` in card_grid's rest test. Fixed in 44a94760: named `JUST_SHORT_MS` |
 | Full gate M3 | C | 44a94760 | RED: `root_vocabulary_is_cross_cutting::no_root_variant_belongs_to_one_feature` — "`Message::WindowFocusChanged` — `overview`": M3's main.rs focus arm sent `Overview(Expansion(WindowBlurred))`. Fixed (recommended route, test not weakened): root arm change dropped; `CardGrid::on_window_blur(M)` publishes on iced's `window::Event::Unfocused`, wired in ui/overview.rs to `Msg::Expansion(Event::WindowBlurred)`; pinned by card_grid `the_window_losing_focus_publishes_on_window_blur`; main_tests `expansion_window_blur_collapses` now drives the Overview message |
+| Full gate M3 | D | 330bf003 | RED: `micold-daemon --test structured_session` `messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` timed out (`Elapsed`); untouched by this branch, 3/3 green in isolation: load flake |
+| Full gate M3 | E | 330bf003 | GREEN |
 
 ## Declined review findings
 
@@ -76,26 +78,11 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-M3 unit 2 (context cap). Local commits on claude/project-thread-7041o6, not pushed, no PR yet.
-- **Done**: T024–T034 all ticked; cycle log rows for T027/T030/T032, T031, T033. Targeted runs green:
-  core `overview_` 34, `--test overview` 58, `--bin … expansion_` 1, `--lib card_grid overview` 115,
-  `--test layout_snapshot` 72 (fixture regenerated with `overview-expanded`); FR-018 grep empty.
-- **Gate**: run 1 red on fmt (fixed, amended); run 2 red on `feature_write_isolation`
-  (`overview.expansion.apply`/`.expanded` unclassified): fixed in `tests/support/state_scan.rs`
-  (`apply` → MUTATORS, `expanded` → READERS), that test now 8 passed. Committed, full gate NOT yet re-run.
-- **Next step**: `scripts/gate.sh` detached (full gate) → green → `review-snapshot.sh`, record, push
-  (`git push --force-with-lease=claude/project-thread-7041o6: -u origin claude/project-thread-7041o6`),
-  return REVIEW-NEEDED for review A (high), review B (conformance, sonnet) and the visual pass T035
-  (quickstart §B.3, §B.4, §B.6–§B.8, client; evidence `visual-pass/m3/`), together as in M2.
-- **For the reviewers** (deliberate): `settle_card_menu` feeds `Listed` only when a card is expanded
-  (no `cards()` derivation on every message); FR-004's "no tooltip" check is
-  `overview_card.rs::the_title_branch_and_activity_have_no_tooltip` (needs the `Mounted` hover
-  harness), not `tests/overview.rs`; `CardText.branch`/`activity` became `Option<String>` (`Line` removed).
-  T027 red evidence was taken with the wiring disabled after writing it (cycle log says so).
-- **Open for M4** (carried from M2): K4 — iced never calls `on_scroll` without overflow, so
-  `on_body_scroll` never sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on
-  expand (cycle log T013 row). Locally `micold-core` `settings_refuses_save_over_failed_read` is red
-  when run as root (pre-existing; `scripts/gate.sh` runs it unprivileged).
+M3 part 3. Full gate green on 330bf003, pushed. Review snapshot for A/B/visual round 1: 0a4547560bec594c020ff529e18c24c9b260ec0c:330bf0031533a0f591c99bb52f3ebae2cdac4322.
+Next: orchestrator dispatches review A (code-review high), review B (conformance, sonnet) and the
+visual pass T035 (quickstart §B.3, §B.4, §B.6–§B.8); then act on verdicts, tick T035, write PR files.
+Open for M4 (carried from M2): K4 — M4 MUST reset `body_edges` to `(false, false)` on expand
+(cycle log T013 row). `settings_refuses_save_over_failed_read` red as root only (pre-existing).
 
 ## Open escalation
 
