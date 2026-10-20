@@ -11,6 +11,10 @@ wider window makes each card wider rather than adding more cards to a row. A nar
 fewer cards per row, down to one. With more cards than fit on screen, the grid scrolls down; it
 never scrolls sideways.
 
+A card is never shorter than it used to be, and grows taller when it has more to show, such as a
+branch, an activity line, task progress and pull requests. Every card in a row is as tall as the
+tallest card in that row, so rows stay even and nothing is cut off.
+
 ## Opening and closing it
 
 Press **Overview** in the top bar, next to the project switcher. Press it again to close the

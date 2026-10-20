@@ -58,4 +58,4 @@ Invariant (tested): every `on_*` at ≥ 4.5:1 on its fill, both schemes; Idle `h
 ## Card height
 
 `overview_card::MIN_HEIGHT = 172.0` (was `HEIGHT`). A grid row's height = `max(MIN_HEIGHT, tallest
-card's natural height)`; every card in the row takes it (`cdk::EvenRow`).
+card's natural height)`; every card in the row takes it (`CardGrid`'s `Grid::layout`, contracts K2).

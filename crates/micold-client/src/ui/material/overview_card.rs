@@ -22,8 +22,10 @@ use micold_core::tokens::{spacing, state, Rgb, Roles};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-/// The card's one height: the same for every state and every content, so a grid row never ragged.
-pub const HEIGHT: f32 = 172.0;
+/// The card's minimum height: feature 813's card, which every card was until feature 1120. A card is
+/// as tall as its rows need and never shorter than this when its limits ask it to be: the grid lays
+/// every card of a row at the row's tallest (FR-014).
+pub const MIN_HEIGHT: f32 = 172.0;
 
 /// The colours one card state is drawn in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -200,7 +202,7 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let header = row![
             Tooltip::new(glyph(w.type_icon), w.type_label, roles),
             Tooltip::new(
-                Ellipsized::<M>::at_role(text.title, TypeRole::Title, p.text),
+                Ellipsized::<M>::at_role(text.title, TypeRole::CardTitle, p.text),
                 text.title_tooltip,
                 roles
             ),
@@ -220,7 +222,7 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let mut body = column![header].spacing(spacing::XS);
         if let Some(branch) = text.branch {
             body = body.push(Tooltip::new(
-                Ellipsized::<M>::at_role(branch.text, TypeRole::Caption, p.text),
+                Ellipsized::<M>::at_role(branch.text, TypeRole::Body, p.text),
                 branch.tooltip,
                 roles,
             ));
@@ -228,26 +230,26 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         body = body.push(
             Text::new(
                 format!("{} \u{b7} {}", w.type_label, text.sessions),
-                TypeRole::Caption,
+                TypeRole::Body,
                 roles,
             )
             .tint(p.text),
         );
         if let Some(activity) = text.activity {
             body = body.push(Tooltip::new(
-                Ellipsized::<M>::at_role(activity.text, TypeRole::Caption, p.text),
+                Ellipsized::<M>::at_role(activity.text, TypeRole::Body, p.text),
                 activity.tooltip,
                 roles,
             ));
         }
         if let Some(row) = text.progress {
-            body = body.push(Text::new(row.text, TypeRole::Caption, roles).tint(p.text));
+            body = body.push(Text::new(row.text, TypeRole::Body, roles).tint(p.text));
             if let Some(ratio) = row.bar {
                 body = body.push(ProgressBar::new(ratio, roles));
             }
         }
         if let Some((text, tooltip)) = text.prs {
-            let line = Text::new(text, TypeRole::Caption, roles).tint(p.text);
+            let line = Text::new(text, TypeRole::Body, roles).tint(p.text);
             body = match tooltip {
                 Some(reason) => body.push(Tooltip::new(line, reason, roles)),
                 None => body.push(line),
@@ -256,7 +258,6 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let targeted = card.targeted;
         let face = container(body)
             .width(Length::Fill)
-            .height(Length::Fixed(HEIGHT))
             .padding(spacing::MD)
             .style(move |_| container::Style {
                 background: Some(iced::Background::Color(if targeted {
@@ -472,58 +473,158 @@ mod tests {
         );
     }
 
-    /// FR-016: the bar fits the card at 280 px with every other row present, and the card keeps
-    /// its one height.
-    #[test]
-    fn the_card_with_every_row_fits_its_height() {
-        let mut full = with_progress(Some((6, 10)), Some(Phase::Implement));
-        full.prs = PrDisplay::Unknown(micold_core::overview::PrUnknown::Unreachable);
-        full.activity = Some(micold_core::hook_activity::CurrentActivity {
-            line: "A long activity line that has to ellipsize rather than wrap in the card"
-                .repeat(2),
+    /// A card with every optional row: a branch, an activity, progress with a bar, and pull
+    /// requests; `long` makes the title, branch and activity too long for any card width.
+    fn full(long: bool) -> CardModel {
+        let mut m = with_progress(Some((6, 10)), Some(Phase::Implement));
+        m.prs = PrDisplay::Unknown(micold_core::overview::PrUnknown::Unreachable);
+        let tail = if long {
+            " that is far too long to fit".repeat(8)
+        } else {
+            String::new()
+        };
+        m.title = format!("Adds the worktree overview{tail}");
+        // A conventional branch shows as `type/number` (FR-007), so the long one is not.
+        m.branch = Some(if long {
+            format!("topic{}", tail.replace(' ', "-"))
+        } else {
+            "feat/1120-overview".into()
+        });
+        m.activity = Some(micold_core::hook_activity::CurrentActivity {
+            line: format!("Editing card_grid.rs{tail}"),
             ratio: Some(micold_core::task_progress::Ratio { done: 3, total: 7 }),
         });
-        let node = super::super::test_support::laid_out(card(&full), Size::new(280.0, 400.0));
-        assert_eq!(node.size().height, HEIGHT);
-        for part in leaves(&node) {
-            assert!(
-                part.y + part.height <= HEIGHT - spacing::MD + 0.01,
-                "{part:?} runs into the card's padding"
-            );
+        m
+    }
+
+    /// The card widths FR-015 and SC-002 name.
+    const WIDTHS: [f32; 3] = [280.0, 380.0, 480.0];
+
+    /// What `model`'s card paints laid out `width` wide.
+    fn painted_at(model: &CardModel, width: f32) -> Vec<super::super::test_support::Painted> {
+        Mounted::new(
+            container(OverviewCard::<String>::new(model, roles())).width(Length::Fixed(width)),
+        )
+        .painted_text()
+    }
+
+    /// FR-014, FR-015, US4.1, SC-002: with every optional row, at 280, 380 and 480 px, no two
+    /// pieces of the card overlap, every piece sits inside the card, and the card is at least
+    /// `MIN_HEIGHT` tall; a long title, branch and activity end in an ellipsis and the tooltips
+    /// hold the full text.
+    #[test]
+    fn a_card_with_every_row_fits_at_every_card_width() {
+        for long in [false, true] {
+            let m = full(long);
+            for width in WIDTHS {
+                let node = super::super::test_support::laid_out(card(&m), Size::new(width, 1000.0));
+                assert!(
+                    node.size().height >= MIN_HEIGHT,
+                    "{width}: {:?}",
+                    node.size()
+                );
+                assert_eq!(node.size().width, width);
+                let parts = leaves(&node);
+                for (i, a) in parts.iter().enumerate() {
+                    assert!(
+                        a.x >= -0.01
+                            && a.y >= -0.01
+                            && a.x + a.width <= width + 0.01
+                            && a.y + a.height <= node.size().height - spacing::MD + 0.01,
+                        "{width}: {a:?} leaves the card's padded box {:?}",
+                        node.size()
+                    );
+                    for b in &parts[i + 1..] {
+                        assert!(!overlap(a, b), "{width}: {a:?} overlaps {b:?}");
+                    }
+                }
+                if long {
+                    let text = painted_at(&m, width);
+                    for start in ["Adds", "topic-", "Editing"] {
+                        let line = text
+                            .iter()
+                            .find(|p| p.content.starts_with(start))
+                            .unwrap_or_else(|| panic!("{width}: no {start:?} line: {text:?}"));
+                        assert!(line.content.ends_with('\u{2026}'), "{width}: {line:?}");
+                    }
+                }
+            }
+            if long {
+                let words = CardText::of(&m);
+                assert!(words.title_tooltip.starts_with(&m.title));
+                assert_eq!(words.branch.map(|b| b.tooltip), m.branch.clone());
+                let activity = words.activity.expect("an activity row");
+                assert!(activity
+                    .tooltip
+                    .contains(&m.activity.as_ref().unwrap().line));
+            }
         }
+    }
+
+    /// FR-004, SC-004: the title is 17 px, the body lines 14 px, and nothing on the card under
+    /// 12 px.
+    #[test]
+    fn the_title_is_17_px_the_body_14_and_nothing_under_12() {
+        let m = full(false);
+        let text = painted_at(&m, 380.0);
+        for p in &text {
+            assert!(p.size >= 12.0, "{p:?} is under 12 px");
+        }
+        let size_of = |start: &str| {
+            text.iter()
+                .find(|p| p.content.starts_with(start))
+                .unwrap_or_else(|| panic!("no {start:?} line: {text:?}"))
+                .size
+        };
+        assert_eq!(size_of("Adds"), 17.0);
+        for body in [
+            "feat/1120",
+            "Feature \u{b7}",
+            "Editing card_grid",
+            "Implement",
+        ] {
+            assert_eq!(size_of(body), 14.0, "{body}");
+        }
+    }
+
+    /// FR-014, US4.3: the card is a minimum, not a fixed height: a sparse card given a 172 px
+    /// minimum by its limits is 172 tall, and alone it is no taller than it needs.
+    #[test]
+    fn a_sparse_card_takes_the_minimum_its_limits_give() {
+        let m = model(CardState::Idle, "feat-a");
+        let mut element = card(&m);
+        let mut tree = iced::advanced::widget::Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &super::super::test_support::renderer(),
+            &iced::advanced::layout::Limits::new(
+                Size::new(280.0, MIN_HEIGHT),
+                Size::new(280.0, 1000.0),
+            ),
+        );
+        assert_eq!(node.size(), Size::new(280.0, MIN_HEIGHT));
+        let natural = super::super::test_support::size_of(card(&m), Size::new(280.0, 1000.0));
+        assert!(natural.height < MIN_HEIGHT, "{natural:?}");
     }
 
     fn card(model: &CardModel) -> Element<'static, ()> {
         OverviewCard::<()>::new(model, tokens::roles(ColorScheme::Light)).into()
     }
 
-    /// U4: the card is one height whatever its state.
-    #[test]
-    fn the_card_has_one_height_in_all_five_states() {
-        let heights: Vec<f32> = CardState::ALL
-            .into_iter()
-            .map(|s| {
-                super::super::test_support::size_of(
-                    card(&model(s, "feat-a")),
-                    Size::new(400.0, 400.0),
-                )
-                .height
-            })
-            .collect();
-        assert!(heights.iter().all(|h| *h == HEIGHT), "{heights:?}");
-    }
-
-    /// U4: at 280 px no two pieces of the card overlap and none leaves it, even with a long title
-    /// and a long branch.
+    /// U4, FR-015: at 280, 380 and 480 px no two pieces of the card overlap and none leaves it,
+    /// even with a long title and a long branch.
     #[test]
     fn no_text_overlaps_at_280_and_a_long_title_ellipsizes() {
         let long = "a-title-that-is-far-too-long-to-fit-in-the-card ".repeat(4);
         for state in CardState::ALL {
-            for text in ["feat-a", long.as_str()] {
+            for (text, width) in ["feat-a", long.as_str()]
+                .into_iter()
+                .flat_map(|t| WIDTHS.map(|w| (t, w)))
+            {
                 let mut m = model(state, text);
                 m.title = text.into();
                 m.branch = Some(format!("feat/{text}"));
-                let node = super::super::test_support::laid_out(card(&m), Size::new(280.0, 400.0));
+                let node = super::super::test_support::laid_out(card(&m), Size::new(width, 400.0));
                 let parts = leaves(&node);
                 let whole = Rectangle::new(iced::Point::ORIGIN, node.size());
                 for (i, a) in parts.iter().enumerate() {
@@ -537,7 +638,7 @@ mod tests {
                         assert!(!overlap(a, b), "{state:?}: {a:?} overlaps {b:?}");
                     }
                 }
-                assert_eq!(node.size().width, 280.0);
+                assert_eq!(node.size().width, width);
             }
         }
     }
@@ -880,7 +981,7 @@ mod tests {
                         .on_press("open".to_string())
                         .on_secondary_press(|(x, y)| format!("menu at {x},{y}")),
                 )
-                .height(Length::Fixed(HEIGHT * 2.0)),
+                .height(Length::Fixed(MIN_HEIGHT * 2.0)),
             )
             .on_secondary_press(|_| "dismiss".to_string())
         };
@@ -894,7 +995,7 @@ mod tests {
         };
         assert_eq!(right(iced::Point::new(40.0, 30.0)), ["menu at 40,30"]);
         assert_eq!(
-            right(iced::Point::new(40.0, HEIGHT * 2.0 - 10.0)),
+            right(iced::Point::new(40.0, MIN_HEIGHT * 2.0 - 10.0)),
             ["dismiss"],
             "empty space dismisses"
         );

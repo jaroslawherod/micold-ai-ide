@@ -212,7 +212,14 @@ the card draws with, as today.
 
 ## R12. Height: a minimum, and every card in a row as tall as the tallest
 
-**Decision**: A new layout-only widget `cdk::EvenRow` (`crates/micold-client/src/ui/cdk/even_row.rs`):
+**Amended in M3**: the decision below is carried out inside `CardGrid`'s `Grid::layout`, not by a
+`cdk::EvenRow`: feature 970 made the grid one widget placing cards on a ribbon that cuts a card
+across rows during a zoom, so a per-row widget cannot sit in it. The measure-then-stretch rule is
+the same (contracts K2): measure each card at its width with the minimum as its least height, take
+each row's tallest, lay each card out at exactly the tallest of its rows. T023 and T028 are
+superseded.
+
+**Decision (as planned)**: A new layout-only widget `cdk::EvenRow` (`crates/micold-client/src/ui/cdk/even_row.rs`):
 `EvenRow::new(children, columns).spacing(gap).min_height(h)`. It gives each of `columns` slots the
 width `(W − gap·(columns − 1)) / columns`, lays every child out at that width with an unbounded
 height to measure it, takes `H = max(h, tallest)`, then lays every child out again with limits

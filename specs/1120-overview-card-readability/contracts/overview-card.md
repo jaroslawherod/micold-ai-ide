@@ -23,20 +23,25 @@ Top to bottom, full card width:
 and `ContextArea` wrap the whole stack (FR-016). Height: shrink to content, accepting a larger
 minimum from its limits; no fixed height.
 
-## K2. `cdk::EvenRow` (`ui/cdk/even_row.rs`)
+## K2. Even rows in `CardGrid`'s `Grid` (`ui/material/card_grid.rs`)
 
-`EvenRow::new(children: Vec<Element>, columns: usize).spacing(f32).min_height(f32)` → `Element`.
+Amended in M3: feature 970 lays every card out in one `Grid` widget that places cards on a ribbon
+and cuts a card across two rows during a sidebar zoom, so no per-row widget can sit in it and no
+`cdk::EvenRow` is built (T023, T028 superseded). `Grid::layout` measures then stretches (R12):
 
-- Width: fills its limits. Slot width `(W − spacing·(columns − 1)) / columns`, `columns` ≥ 1;
-  children beyond `columns` are a caller error (`CardGrid` chunks by `columns`).
-- Height: `H = max(min_height, max natural height of the children at slot width)`; every child laid
-  out at exactly `slot × H`. Fewer children than `columns` leave the trailing slots empty.
-- Draw, events, operations and overlays forwarded to the children; draws nothing itself.
+- Each card is measured at its card width with limits `(w, MIN_HEIGHT) .. (w, ∞)`.
+- A row's height `H_r = max(MIN_HEIGHT, tallest measured card with a piece in row r)`; rows stack a
+  gap apart, and the grid's height is `Σ H_r` plus the gaps.
+- A card is laid out at exactly `w × max(H_r of its rows)`: at rest, its row's height. During a zoom a
+  card cut across two rows is clipped to each row's height. `ribbon()` keeps its uniform-height
+  signature (feature 970's tests).
+- A missing slot in the last row stays empty; draw, events, operations and overlays are the
+  `Grid`'s as before.
 
 ## K3. `CardGrid`
 
-Rows are `EvenRow`s of `columns(width, MIN_WIDTH, spacing::MD, MAX_COLUMNS)` slots with
-`min_height(overview_card::MIN_HEIGHT)`; the column rule of features 813/1024 is unchanged.
+The column rule of features 813/1024 is unchanged; rows are even per K2, with
+`overview_card::MIN_HEIGHT` as the least row height.
 
 ## K4. Geometry invariants (client tests)
 
