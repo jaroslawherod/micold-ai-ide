@@ -242,6 +242,19 @@ impl<'a> Mounted<'a> {
         self.node.children()[0].bounds()
     }
 
+    /// The frame tick every widget sees, with the pointer away. iced delivers `RedrawRequested`
+    /// through `update` like any other event, which is what gives a widget somewhere to publish
+    /// from after an *operation* (a traversal, a `focus(id)`) changed something: an operation
+    /// carries no shell and can say nothing itself.
+    pub fn redraw(&mut self) -> Vec<String> {
+        self.send(
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            mouse::Cursor::Unavailable,
+        )
+    }
+
     /// One event, with no settling, returning whatever was published.
     pub fn send(&mut self, event: Event, cursor: mouse::Cursor) -> Vec<String> {
         self.send_captured(event, cursor).0

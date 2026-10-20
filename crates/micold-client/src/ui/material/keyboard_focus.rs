@@ -699,27 +699,17 @@ mod tests {
         Mounted::new(iced::widget::column![control("first"), control("second")])
     }
 
-    /// Any event: the frame after a traversal, where a change it made is reported.
-    fn tick(mounted: &mut Mounted<'_>) -> Vec<String> {
-        mounted.send(
-            Event::Window(iced::window::Event::RedrawRequested(
-                std::time::Instant::now(),
-            )),
-            mouse::Cursor::Unavailable,
-        )
-    }
-
     /// Feature 1121 T036 (U1): Tab focus publishes `true`; leaving it publishes `false`.
     #[test]
     fn tab_focus_publishes_shown_and_leaving_it_unshown() {
         let mut m = shown_pair();
         m.focus_next();
-        assert_eq!(tick(&mut m), ["first shown true"]);
+        assert_eq!(m.redraw(), ["first shown true"]);
         m.focus_next();
-        let mut moved = tick(&mut m);
+        let mut moved = m.redraw();
         moved.sort();
         assert_eq!(moved, ["first shown false", "second shown true"]);
-        assert!(tick(&mut m).is_empty(), "a change is reported once");
+        assert!(m.redraw().is_empty(), "a change is reported once");
     }
 
     /// U1, FR-002: a pointer press takes the keyboard without showing it, so it publishes
@@ -731,7 +721,7 @@ mod tests {
         assert!(m.press(at).is_empty(), "a press shows no focus");
         let mut m = shown_pair();
         m.focus_next();
-        assert_eq!(tick(&mut m), ["first shown true"]);
+        assert_eq!(m.redraw(), ["first shown true"]);
         assert_eq!(m.press(at), ["first shown false"]);
     }
 

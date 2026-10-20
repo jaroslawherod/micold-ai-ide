@@ -96,6 +96,9 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .expansion
         .expanded()
         .and_then(|at| models.iter().position(|model| &model.location == at));
+    // Page Up / Page Down go to the expanded card only while `page_target` gives them to it (K4).
+    let paging = |down: bool| page_target(&state.overview.expansion, down).is_some();
+    let paging = (paging(false), paging(true));
     let cards = models
         .iter()
         .enumerate()
@@ -103,7 +106,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
             let location = model.location.clone();
             let menu_at = location.clone();
             let expansion = |event: Event| Message::Overview(Msg::Expansion(event));
-            OverviewCard::new(model, r)
+            let card = OverviewCard::new(model, r)
                 .id(card_id(&location))
                 .targeted(is_targeted(state, &location))
                 .menu_open(menu_open)
@@ -132,21 +135,15 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                         anchor,
                         origin: MenuOrigin::Pointer,
                     })
+                });
+            if expanded_at == Some(index) && (paging.0 || paging.1) {
+                card.on_page(move |down| {
+                    let claimed = if down { paging.1 } else { paging.0 };
+                    claimed.then_some(Message::Overview(Msg::CardPaged { down }))
                 })
-        })
-        .collect::<Vec<_>>();
-    // Page Up / Page Down go to the expanded card only while `page_target` gives them to it (K4).
-    let paging = |down: bool| page_target(&state.overview.expansion, down).is_some();
-    let paging = (paging(false), paging(true));
-    let cards = cards
-        .into_iter()
-        .enumerate()
-        .map(|(index, card)| match expanded_at {
-            Some(at) if at == index && (paging.0 || paging.1) => card.on_page(move |down| {
-                let claimed = if down { paging.1 } else { paging.0 };
-                claimed.then_some(Message::Overview(Msg::CardPaged { down }))
-            }),
-            _ => card,
+            } else {
+                card
+            }
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
@@ -177,6 +174,16 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     ContextArea::new(pane)
         .on_secondary_press(|_| Message::Overview(Msg::CardMenuDismissed))
         .into()
+}
+
+/// The card the Overview's opening puts the keyboard on, its first (research R13); None with no
+/// cards. Tells the expansion first, so that focus expands nothing (FR-013, review A F1, M4).
+pub fn open_focus(state: &mut State) -> Option<SessionLocation> {
+    let first = cards(state).into_iter().next()?.location;
+    state.update(Message::Overview(Msg::Expansion(Event::OpenFocused(
+        first.clone(),
+    ))));
+    Some(first)
 }
 
 /// Whether `location`'s card is the target of the open card menu (FR-006). Identity, not a grid
@@ -772,22 +779,12 @@ mod tests {
         )
     }
 
-    /// The frame after a traversal, where the cards report what it did.
-    fn redraw(mounted: &mut Mounted<'_>) -> Vec<String> {
-        mounted.send(
-            iced::Event::Window(iced::window::Event::RedrawRequested(
-                std::time::Instant::now(),
-            )),
-            iced::mouse::Cursor::Unavailable,
-        )
-    }
-
     /// The focus messages of `moves` Tab moves through the mounted Overview, in order.
     fn focus_moves(mounted: &mut Mounted<'_>, moves: usize) -> Vec<String> {
         (0..moves)
             .flat_map(|_| {
                 mounted.focus_next();
-                let mut reported = redraw(mounted);
+                let mut reported = mounted.redraw();
                 // Within one frame, the card that lost focus first.
                 reported.sort_by_key(|m| !m.contains("FocusLost"));
                 reported
@@ -824,7 +821,7 @@ mod tests {
         let mut mounted = mount(&overview_of(1));
         let at = iced::Point::new(100.0, 120.0);
         let mut published = mounted.press(at);
-        published.extend(redraw(&mut mounted));
+        published.extend(mounted.redraw());
         assert!(
             !published.iter().any(|m| m.contains("Focus")),
             "{published:?}"
@@ -842,9 +839,27 @@ mod tests {
             card_id(&target),
         ));
         assert_eq!(
-            redraw(&mut mounted),
+            mounted.redraw(),
             [expansion_message(Event::FocusGained(target))]
         );
+    }
+
+    /// Review A F1 (M4), FR-013, R13: the opening's focus on the first card, run on the mounted
+    /// Overview, reports that card's focus, and the expansion that takes it in expands nothing.
+    #[test]
+    fn the_opening_focus_expands_no_card() {
+        let mut state = overview_of(2);
+        let first = open_focus(&mut state).expect("an Overview with cards has a first");
+        let mut mounted = mount(&state);
+        mounted.drive(iced::advanced::widget::operation::focusable::focus::<()>(
+            card_id(&first),
+        ));
+        let gained = Event::FocusGained(first);
+        assert_eq!(mounted.redraw(), [expansion_message(gained.clone())]);
+        state.update(Message::Overview(
+            crate::features::overview::Msg::Expansion(gained),
+        ));
+        assert_eq!(state.overview.expansion.expanded(), None);
     }
 
     /// T038, US4 sc.4: Tab visits the cards in the same order with a card expanded as without.
@@ -887,7 +902,7 @@ mod tests {
         mounted.drive(iced::advanced::widget::operation::focusable::focus::<()>(
             card_id(&SessionLocation::Default),
         ));
-        redraw(&mut mounted);
+        mounted.redraw();
         let cursor = iced::mouse::Cursor::Unavailable;
         use crate::ui::material::test_support::named_key;
         assert_eq!(
@@ -916,7 +931,7 @@ mod tests {
             .on_scroll_metrics(|offset, view, _| format!("{offset} {view}"))
             .height(Length::Fixed(200.0));
         let mut mounted = Mounted::new(body);
-        let metrics = |mounted: &mut Mounted<'_>| redraw(mounted).pop();
+        let metrics = |mounted: &mut Mounted<'_>| mounted.redraw().pop();
         let before = metrics(&mut mounted).expect("an overflowing body reports");
         assert_eq!(before, "0 200");
         mounted.drive(page_body::<()>(id.clone(), true));

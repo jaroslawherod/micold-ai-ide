@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M4
-- **Next step**: M4 — T036–T045 done, full gate green at 78dc827a; review A, review B and the T046 visual pass (round 1) are with the orchestrator; then fix, gate, PR files.
+- **Next step**: M4 — review round 1 fixed (A F1–F3, F5, B F1; A F4 declined); full gate on the fix tree, then review A r2 + review B r2 (sonnet, fix diff) and a visual re-look of the Overview open state; then PR files.
 
 ## Pull requests
 
@@ -77,7 +77,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review B M3 | 2 | same | CLEAN, 1 MINOR, fixed (prose only): cycle-log M3 row T027/T030/T032 said `WindowBlurred` in `main.rs`; now `.on_window_blur` in `ui/overview.rs`. Verify re-run: core `overview_` 36, client `card_grid overview` 118, `--test overview` 58, `idle_requests_no_frames` 14, `expansion_` 1, FR-018 grep empty |
 | Full gate M3 | G | 4d9894e3 + round 2 fixes | GREEN (first run red on `cargo fmt` of the new card_grid test; formatted, re-run green) |
 | Full gate M4 | A | 78dc827a | GREEN (first run) |
-| Review A / Review B / Visual pass §B.5–B.6 M4 | 1 | 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8 | Review A CHANGES: 2 MAJOR (F1 open-time focus expands the first card, FR-013; F2 Page keys swallow Ctrl/Cmd+Shift+PageUp/PageDown project chords), 3 MINOR (F3 scrollbar press collapses a focus-expanded card; F4 card trees keyed by index, focus state moves on reorder; F5 double map in `view` + 3 redraw helpers). Review B CLEAN, 1 MINOR (F1 `expansion_card_paged_scrolls` asserts only a task). Visual pass PASS every criterion (4 dark/light × 1x/2x; full-screen dark-1x only), evidence visual-pass/m4/ (180 PNGs); confirms A F1 by eye; observations: a fast 12-notch wheel burst scrolled body then Overview in one burst; a resting pointer on another card beats keyboard focus |
+| Review A / Review B / Visual pass §B.5–B.6 M4 | 1 | 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8 | Review A CHANGES: 2 MAJOR (F1 open-time focus expands the first card, FR-013; F2 Page keys swallow Ctrl/Cmd+Shift+PageUp/PageDown project chords), 3 MINOR (F3 scrollbar press collapses a focus-expanded card; F4 card trees keyed by index, focus state moves on reorder; F5 double map in `view` + 3 redraw helpers). Review B CLEAN, 1 MINOR (F1 `expansion_card_paged_scrolls` asserts only a task). Visual pass PASS every criterion (4 dark/light × 1x/2x; full-screen dark-1x only), evidence visual-pass/m4/ (180 PNGs); confirms A F1 by eye; observations: a fast 12-notch wheel burst scrolled body then Overview in one burst; a resting pointer on another card beats keyboard focus. Fixes (M4 part 2): A F1 fixed — core `Event::OpenFocused` + `ui::overview::open_focus` (the opening's focus report expands nothing; the card stays collapsed as after Escape until focus moves), tests core `the_opening_focus_expands_nothing`, mounted `the_opening_focus_expands_no_card`, app `expansion_none_after_the_opening_focus`; A F2 fixed — Page keys claimed with `.chord(key, Modifiers::empty(), …)`, test in `page_keys_on_the_focused_card_publish_its_page_message`; A F3 fixed in the core — a `FocusLost` under the resting pointer keeps the card expanded by the pointer (`a_focus_loss_under_the_resting_pointer_keeps_the_card_by_hover`); A F4 declined (see *Declined*); A F5 fixed — `on_page` attached in the one map, `Mounted::redraw()` replaces the overview/keyboard_focus/overview_card/field_focus copies; B F1 fixed — the test's doc names `a_page_scrolls_the_named_body_by_its_visible_height`. Visual observations: hover beating focus conforms (FR-002 rest expands, FR-005/FR-006 another card expanding collapses it, the focused card re-expands when the pointer leaves), user guide now says so; fast wheel burst → follow-up |
 
 ## Declined review findings
 
@@ -85,15 +85,11 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M4 | A r1 | F4 (card trees keyed by index: a reorder moves a focused card's focus state to another card) | The index-keyed tree is the grid's since feature 813: on a reorder the keyboard focus and ring themselves move to the card now at that index, before and without 1121. The expansion only follows that pre-existing mismatch, and clears on the next Tab, arrow, Escape, window blur, hover or close. Keying the card trees by location is a `CardGrid::diff` change of its own, recorded under *Follow-ups not done* |
 
 ## Handover
 
 None.
-
-<!-- previous handover (M4 unit 1), done:
-M4 unit 1 stopped at the context cap (checkpoint 220k). Done: T036–T045 ticked (TDD, cycle-log rows T037… onward), M3 row set to #1177 merged, full gate GREEN at 78dc827a, branch pushed at 69b77c74. Ledger follow-ups picked up: K4 (pinned by `an_expand_resets_the_body_edges`), focus under an open menu settles on `MenuClosed` (core `focus_held`/`settle_focus`), the Menu-key note and the §B.4 wheel order are criteria 6 and 4 of the visual-pass prompt.
-Next: review A, review B and the T046 visual pass, round 1, snapshot 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8; prompts in the scratchpad: m4-prompt-review-a.md, m4-prompt-review-b.md, m4-prompt-visual.md. Then: record verdicts in *Review rounds*, fix real findings (scoped gate), tick T046 on a visual PASS (commit its evidence under visual-pass/m4/), full gate once on the final tree, pr.md: scratchpad pr-title.txt `#1121: Overview cards: full text without truncation — M4 of 4: keyboard focus expands a card, Escape collapses first, Page keys scroll` and pr-body.md ending `Refs #1121`.
-Open findings: none yet. PR: none opened. -->
 
 ## Open escalation
 
@@ -104,4 +100,6 @@ None.
 - Review A M1 F3 (MINOR): during a zoom `card_width` is interpolated each frame, so a wrapping title can change line count mid-zoom and its row height jumps a line; measure naturals at the zoom's end width, or pin the jump in a test. Not in M1's tasks or FRs.
 - For M4 (carried from M2): K4 — M4 MUST reset `body_edges` to `(false, false)` on expand (cycle log T013 row). `settings_refuses_save_over_failed_read` red as root only (pre-existing).
 - For M4 (M3 visual note): with focus expansion, the Menu key on the focused card must find it expanded (focus expanded it, the hovered card collapsed, FR-006) and keep that form under the menu (FR-012); add it to the M4 visual pass (§B.5/§B.6 Menu key with a different card hovered). Also: `FocusLost`/`FocusGained` under an open menu are not settled on `MenuClosed` the way M3 now settles the pointer (review A F2/F3) — M4's keyboard work should do the same for focus.
+- From M4 review A F4: key `CardGrid`'s card trees by location, not index, so a reorder by state keeps keyboard focus (and a focus expansion) on the same card (pre-existing since feature 813).
+- From M4 visual pass r1 (criterion 4): a fast synthetic burst of 12 wheel notches 50 ms apart over a tall expanded card scrolled its body to the end and then the Overview within the same burst (dark-1x `b4-w1`, `w2`); slow notches latch as FR-008/D4 say and `a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview` pins in-gesture latching. The latching is iced's wheel transaction (ends on a cursor move ≥100 ms after the last scroll); check with a real wheel whether a rebuild during the burst (BodyScrolled, the shift) ends it early.
 - M3 visual §B.4: the wheel's "inside first, then Overview" order at the card's end was inferred, not shown; re-check in M4's Page-key/scroll visual pass.

@@ -172,7 +172,7 @@ Page Up / Page Down scroll a long expanded card (K4), focus order unchanged (US4
 - [X] T043 [US3] Wire `.on_keyboard_focus(|f| Msg::Expansion(FocusGained/FocusLost(location)))` and `.on_page` (set only when `page_target` is `Some`) in `crates/micold-client/src/ui/overview.rs`; add `Msg::CardPaged { down }` in `crates/micold-client/src/features/overview.rs` and answer it in `crates/micold-client/src/main.rs::overview_message` with `scrollable::scroll_by` of ± one visible height on `card_scroll_id` (R6, U4); T038 passes
 - [X] T044 [US3] (D1) In `crates/micold-client/src/app.rs::on_escape`, after the registry and Settings arms: `Msg::Expansion(Event::Escape)` when `state.overview.expansion.expanded()` is some, else `Msg::Closed` as today (R7); T039 passes
 - [X] T045 [US3] (D1) In `docs/user-guide/overview.md` *Reading a card in full* and *Keyboard*: focus expands a card; Escape collapses it first and closes the Overview when no card is expanded; Page Up / Page Down scroll a long expanded card (FR-017)
-- [ ] T046 [US3] Visual pass through an `autopilot-worker` (`visual-pass` skill), quickstart §B.5 and §B.6 by keyboard; evidence in `specs/1121-overview-card-full-text/visual-pass/`
+- [x] T046 [US3] Visual pass through an `autopilot-worker` (`visual-pass` skill), quickstart §B.5 and §B.6 by keyboard; evidence in `specs/1121-overview-card-full-text/visual-pass/`
 
 **Checkpoint**: every story works; quickstart §B passes.
 
