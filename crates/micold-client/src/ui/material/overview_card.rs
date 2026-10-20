@@ -319,7 +319,7 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
             None => content,
         };
         let Some(message) = card.on_press else {
-            return menu(face.into());
+            return menu(face);
         };
         // The card is its own fill, so the button around it draws nothing.
         let pressable = button(face)
