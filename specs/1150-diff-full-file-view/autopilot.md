@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1150
 - **Worktree branch**: feat/1150_show-the-full-file-while-reviewing-a-diff-in-the
 - **Started**: 2026-10-20
-- **Phase**: clarify
-- **Next step**: Run clarify on spec.md (3 open markers: large-file limit, symbol definition lookup, picking in untouched files)
+- **Phase**: plan
+- **Next step**: Plan unit (clarify round 1 done: 3 markers agent-resolved, none escalated)
 
 ## Pull requests
 
