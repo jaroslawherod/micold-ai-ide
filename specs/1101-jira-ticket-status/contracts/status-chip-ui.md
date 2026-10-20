@@ -26,7 +26,7 @@ StatusChip::accessible_text(&TicketStatus, stale: bool) -> String // "In Review"
 
 | Event | Condition | Action |
 |---|---|---|
-| Project opened (NEW call `shell::jira_status::on_project_changed(app)` in the project-change branch of `shell/daemon_sync.rs` beside `Overview::Msg::ProjectSwitched`, and once after startup restores the project, `shell/startup.rs`) | gate passes, >=1 linked Jira key | `clear()` (new epoch) then `begin` + one request; the board is app-wide, so a second window attaching to the same project does not fire it |
+| Project opened (NEW call `shell::jira_refresh::on_project_changed(app)` in the project-change branch of `shell/daemon_sync.rs` beside `Overview::Msg::ProjectSwitched`, and once after startup restores the project, `shell/startup.rs`) | gate passes, >=1 linked Jira key | `clear()` (new epoch) then `begin` + one request; the board is app-wide, so a second window attaching to the same project does not fire it |
 | `WindowFocusChanged(true)` | gate passes, board `due(Focus)` | same |
 | Any other | | none (FR-006) |
 | Switch off / connection removed / project switch | | `clear()` |

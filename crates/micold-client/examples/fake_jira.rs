@@ -16,10 +16,10 @@
 //! next refresh shows. A key listed as `missing ABC-9` is not returned, as Jira does for a ticket
 //! it cannot show.
 
+use std::collections::BTreeMap;
 use std::io::{BufRead, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;

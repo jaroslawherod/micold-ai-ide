@@ -183,10 +183,8 @@ pub enum Message {
         /// The keys the read asked for.
         keys: Vec<String>,
         /// What Jira answered.
-        result: Result<
-            Vec<micold_core::jira_status::KeyedStatus>,
-            micold_core::github::IssueLoadError,
-        >,
+        result:
+            Result<Vec<micold_core::jira_status::KeyedStatus>, micold_core::github::IssueLoadError>,
         /// Time on the refresh clock when the read ended.
         at: std::time::Duration,
     },

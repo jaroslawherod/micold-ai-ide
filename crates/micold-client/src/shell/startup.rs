@@ -375,7 +375,7 @@ fn boot() -> (App, Task<Message>) {
         let outcomes = core.set_worktrees(discover_worktrees(caps.git(), &repo));
         micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut core, o));
         // Feature 1101 (FR-005): the restored project is opened, so its linked tickets' statuses
-        // are read once, as `shell::jira_status::after_update` finds the worktrees known.
+        // are read once, as `shell::jira_refresh::after_update` finds the worktrees known.
         core.jira_status.project_opened();
         // Feature 025: land on the session this project was last showing, rather than on the
         // project overview. The memory came from the store above, beside that project's sessions.

@@ -89,7 +89,7 @@ crates/micold-core/src/
 
 crates/micold-client/
 ├── src/shell/jira_http.rs  # FIELDS + "status"; JiraCloud::statuses
-├── src/shell/jira_status.rs# NEW: refresh driver (gate, spawn, apply, triggers)
+├── src/shell/jira_refresh.rs# NEW: refresh driver (gate, spawn, apply, triggers)
 ├── src/shell/issues.rs     # jira_request / JiraRequest widened to pub(crate)
 ├── src/main.rs             # WindowFocusChanged(true) -> refresh trigger
 ├── src/shell/daemon_sync.rs, startup.rs  # project change / restore -> on_project_changed
@@ -114,7 +114,7 @@ plumbing in the client `shell/`, drawing in `ui/`, matching feature 533's layout
 | FR-001 | `parse_page` reads `fields.status`; `FIELDS` gains `status` ([contract §1-2](contracts/jira-status-source.md)) |
 | FR-002, FR-009 | `ui/worktree_form.rs` row + `StatusChip::from_status` returns `None` for unusable status |
 | FR-003, FR-004, FR-013 | `StatusChip` ([contract](contracts/status-chip-ui.md)); sidebar row |
-| FR-005, FR-006 | `shell/jira_status.rs` triggers and `StatusBoard::due` ([data-model](data-model.md)) |
+| FR-005, FR-006 | `shell/jira_refresh.rs` triggers and `StatusBoard::due` ([data-model](data-model.md)) |
 | FR-006b | `ui/settings/jira.rs` disclosure; extended named-events test; 533 amendment note in research R6 |
 | FR-007 | `JiraSource::statuses` by `key in (...)`, chunks of 100 ([contract §3](contracts/jira-status-source.md)) |
 | FR-008 | `StatusBoard::apply` (stale, retire on not-found/off/3 failures) |

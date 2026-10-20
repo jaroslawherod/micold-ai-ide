@@ -266,14 +266,14 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
                 .align_y(alignment::Vertical::Center);
             // The chip stands beside the label's first line and takes only its own width, so the
             // label wraps in what is left; a row without a status has the label alone, as before.
-            let first_line: Element<'a, M> = match StatusChip::maybe(item.status.as_ref(), item.status_stale, r)
-            {
-                Some(chip) => row![label, chip]
-                    .spacing(spacing::XS)
-                    .align_y(alignment::Vertical::Top)
-                    .into(),
-                None => label.into(),
-            };
+            let first_line: Element<'a, M> =
+                match StatusChip::maybe(item.status.as_ref(), item.status_stale, r) {
+                    Some(chip) => row![label, chip]
+                        .spacing(spacing::XS)
+                        .align_y(alignment::Vertical::Top)
+                        .into(),
+                    None => label.into(),
+                };
             let lines = row![marker, column![first_line, details].width(Length::Fill)]
                 .spacing(spacing::SM)
                 .align_y(alignment::Vertical::Top)

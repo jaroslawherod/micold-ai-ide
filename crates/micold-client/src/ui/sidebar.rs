@@ -682,14 +682,18 @@ fn build_items(
         let dir = wt.dir_name.clone();
         // Feature 1101 (FR-003): the ticket's status right of its key tag, from the one board
         // every surface reads (FR-010). A ticket without a status has no chip and no gap.
-        let status_chip = node.tags.iter().enumerate().find_map(|(index, tag)| match tag {
-            Tag::Issue(key) => state
-                .jira_status
-                .board
-                .status_of(key)
-                .map(|entry| (index, entry)),
-            _ => None,
-        });
+        let status_chip = node
+            .tags
+            .iter()
+            .enumerate()
+            .find_map(|(index, tag)| match tag {
+                Tag::Issue(key) => state
+                    .jira_status
+                    .board
+                    .status_of(key)
+                    .map(|entry| (index, entry)),
+                _ => None,
+            });
 
         let keyboard = state.sidebar.keyboard_row.as_ref();
         let mut item = TreeItem::new(depth, node.display_name.clone(), tint)
