@@ -366,17 +366,6 @@ pub enum Opener {
     Row(DaemonId, RowAction),
 }
 
-impl Opener {
-    /// The widget id of the button, which `ui::settings::daemons` puts on it.
-    pub fn widget_id(self) -> iced::advanced::widget::Id {
-        iced::advanced::widget::Id::from(match self {
-            Opener::Add => "daemons-add".to_string(),
-            Opener::Row(id, RowAction::Edit) => format!("daemons-edit-{id:?}"),
-            Opener::Row(id, RowAction::Details) => format!("daemons-details-{id:?}"),
-        })
-    }
-}
-
 /// What the Daemons feature remembers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
