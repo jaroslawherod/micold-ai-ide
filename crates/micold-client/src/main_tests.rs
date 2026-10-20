@@ -144,12 +144,13 @@ fn update_inner_applies_window_focus_changed() {
     assert!(app.window_focused);
 }
 
-/// Feature 1121 T027, FR-005: the window losing focus collapses the expanded card, and regaining
-/// it expands none (Edge Case *Window regains focus*). The card grid sees the blur and publishes
-/// `Expansion(WindowBlurred)` through the Overview's own message (`card_grid.rs`
-/// `the_window_losing_focus_publishes_on_window_blur`); the root's focus arm names no feature.
+/// Feature 1121 T027, FR-005: the app's update collapses the expanded card on the Overview's
+/// `Expansion(WindowBlurred)`, and the window regaining focus expands none (Edge Case *Window
+/// regains focus*). That the mounted Overview publishes this message on the window's blur is
+/// `ui/overview.rs` `the_window_losing_focus_publishes_the_expansion_blur` (review A F4, B F1);
+/// the root's focus arm names no feature.
 #[test]
-fn expansion_window_blur_collapses() {
+fn expansion_window_blurred_collapses_and_refocus_expands_none() {
     use micold_client::features::overview::Msg as OverviewMsg;
     use micold_core::overview_expansion::Event;
     use micold_core::project::{Availability, Project};
@@ -175,7 +176,6 @@ fn expansion_window_blur_collapses() {
         app.core.overview.expansion.expanded(),
         Some(&SessionLocation::Default)
     );
-    let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
     let _ = update_inner(
         &mut app,
         Message::Overview(OverviewMsg::Expansion(Event::WindowBlurred)),

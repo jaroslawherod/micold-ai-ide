@@ -635,6 +635,43 @@ mod tests {
             )]
         );
     }
+
+    /// Feature 1121 T032, FR-005 (review A F4, B F1, M3): with a card expanded, the window losing
+    /// focus makes the mounted Overview publish `Expansion(WindowBlurred)`, the event that
+    /// collapses it; regaining focus publishes nothing (Edge Case *Window regains focus*).
+    #[test]
+    fn the_window_losing_focus_publishes_the_expansion_blur() {
+        use micold_core::overview_expansion::Event;
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::SessionLocation;
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state
+            .workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        state.workspace.active = Some(path);
+        state.overview.open = true;
+        state
+            .overview
+            .expansion
+            .apply(Event::FocusGained(SessionLocation::Default));
+        let mut mounted = Mounted::new(view(&state, ColorScheme::Dark).map(|m| format!("{m:?}")));
+        let away = iced::mouse::Cursor::Unavailable;
+        let blur = iced::Event::Window(iced::window::Event::Unfocused);
+        assert_eq!(
+            mounted.send(blur, away),
+            [format!(
+                "{:?}",
+                Message::Overview(crate::features::overview::Msg::Expansion(
+                    Event::WindowBlurred
+                ))
+            )]
+        );
+        let focus = iced::Event::Window(iced::window::Event::Focused);
+        assert!(mounted.send(focus, away).is_empty());
+    }
+
     // Feature 970 (FR-012, contracts/ui.md *Overview header*): the full-screen toggle's words and
     // glyph name its action, and the tooltip carries the platform's chord.
     #[test]

@@ -139,9 +139,10 @@ impl Expansion {
                 self.menu_open = false;
                 // What the open menu held back (review A F2, F3, M3): a hover that ended under it
                 // ends now (FR-005), and a rest it held back expands its card now.
-                let hovered = self.expanded.as_ref().and_then(|(location, cause)| {
-                    (*cause == Cause::Pointer).then_some(location)
-                });
+                let hovered = self
+                    .expanded
+                    .as_ref()
+                    .and_then(|(location, cause)| (*cause == Cause::Pointer).then_some(location));
                 if hovered.is_some_and(|location| self.pointer_on.as_ref() != Some(location)) {
                     self.end_hover();
                 }
@@ -488,10 +489,17 @@ mod tests {
     #[test]
     fn a_leave_during_an_open_menu_collapses_on_close() {
         let left = [rest("a"), Event::MenuOpened, leave("a")];
-        assert_eq!(shown(&after(left.clone())), Some("a".into()), "collapsed under the menu");
+        assert_eq!(
+            shown(&after(left.clone())),
+            Some("a".into()),
+            "collapsed under the menu"
+        );
         let closed = left.clone().into_iter().chain([Event::MenuClosed]);
         assert_eq!(shown(&after(closed)), None);
-        let focused = [focus("f")].into_iter().chain(left).chain([Event::MenuClosed]);
+        let focused = [focus("f")]
+            .into_iter()
+            .chain(left)
+            .chain([Event::MenuClosed]);
         let back = after(focused);
         assert_eq!(shown(&back), Some("f".into()));
         assert_eq!(back.cause(), Some(Cause::Focus));
@@ -502,13 +510,23 @@ mod tests {
     #[test]
     fn a_rest_during_an_open_menu_expands_on_close() {
         let rested = [rest("a"), Event::MenuOpened, leave("a"), rest("b")];
-        assert_eq!(shown(&after(rested.clone())), Some("a".into()), "b expanded under the menu");
+        assert_eq!(
+            shown(&after(rested.clone())),
+            Some("a".into()),
+            "b expanded under the menu"
+        );
         let closed = after(rested.into_iter().chain([Event::MenuClosed]));
         assert_eq!(shown(&closed), Some("b".into()));
         assert_eq!(closed.cause(), Some(Cause::Pointer));
         let gone = [Event::MenuOpened, rest("b"), leave("b"), Event::MenuClosed];
         assert_eq!(shown(&after(gone)), None);
-        let escaped = [rest("b"), Event::Escape, Event::MenuOpened, rest("b"), Event::MenuClosed];
+        let escaped = [
+            rest("b"),
+            Event::Escape,
+            Event::MenuOpened,
+            rest("b"),
+            Event::MenuClosed,
+        ];
         assert_eq!(shown(&after(escaped)), None);
     }
 
