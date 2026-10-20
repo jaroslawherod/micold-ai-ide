@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M1
-- **Next step**: M1 — review A round 2 (sonnet, fix diff) and visual pass §B.1 re-look, then full gate and PR.
+- **Next step**: M1 — full gate, push, PR.
 
 ## Pull requests
 
@@ -52,8 +52,8 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review A M1 | 1 | f3f7177bfa31e5285626195c230750b7f3cbe9c9:1989575f73ddc7bc76270f166d7fd39597d31330 | CHANGES: 1 MAJOR, 3 MINOR (+4 MINOR cut). F1 cache key gains the role + `a_slot_reused_at_another_role_is_shaped_again`; F2 FR-007 tests at the 280 px card's label width; F4 `wrapped titles` pose is a full-width `CardGrid` plus one-column grids at 280/380/480; F3 not fixed (Follow-ups) |
 | Review B M1 | 1 | f3f7177bfa31e5285626195c230750b7f3cbe9c9:1989575f73ddc7bc76270f166d7fd39597d31330 | CLEAN (2 MINOR: F1 module doc re-wrapped; F2 no fix needed). Verify 84 passed |
 | Visual pass §B.1 M1 | 1 | 1989575f | titles/activity/branch/no clipping PASS (light+dark, 1x+2x); equal row height and 280/380/480 not verifiable in the `row().wrap()` pose: pose fixed with A F4, re-look requested |
-| Review A M1 | 2 | a3e7ef9c94a31e8534e21af63ee1824b4265bff6:fc5a5717e4acc163a7e7f5a300eefdfb5d72dce5 | pending (sonnet, fix diff) |
-| Visual pass §B.1 M1 | 2 | fc5a5717 | pending |
+| Review A M1 | 2 | a3e7ef9c94a31e8534e21af63ee1824b4265bff6:fc5a5717e4acc163a7e7f5a300eefdfb5d72dce5 | CLEAN (F1, F2, F4 hold; 88 passed) |
+| Visual pass §B.1 M1 | 2 | fc5a5717 | PASS all criteria, light+dark, 1x+2x; evidence visual-pass/m1/ |
 
 ## Declined review findings
 
