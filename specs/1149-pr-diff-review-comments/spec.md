@@ -170,3 +170,4 @@ The PR branch can gain commits (the agent's push, a human's push) or be force-pu
 - Line picking, the comment card, the review panel, statuses, replies, re-anchoring and batch delivery are reused from 482 and 946; this feature adds the pull-request scope to them.
 - The agent has git access to the PR branch from the worktree; whether the push succeeds is the agent's outcome, reported through the 946 reply, not verified by the app.
 - The batch is a request to the agent; the app does not verify that a push happened.
+- The pull request's title in the preamble is flattened to one line of at most 200 characters, and is neither stored nor logged (plan R5).
