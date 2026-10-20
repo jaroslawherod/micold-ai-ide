@@ -1442,8 +1442,8 @@ fn request_drift_answer(
 /// Open the next queued drift prompt when no prompt is open. Entries whose daemon is no longer
 /// starting (stopped, removed, cancelled meanwhile) are dropped.
 fn show_next_drift(state: &mut State, model: &Model<'_>) {
-    // A form dialog being open holds the prompts back; they show once it closes (R7).
-    while state.pending.is_none() && state.draft.is_none() {
+    // A form or details dialog being open holds the prompts back; they show once it closes (R7).
+    while state.pending.is_none() && state.draft.is_none() && state.details.is_none() {
         let Some((id, fields)) = state.drift_queue.pop_front() else {
             return;
         };
@@ -2192,7 +2192,10 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             state.details = Some(id);
             state.opener = Some(Opener::Row(id, RowAction::Details));
         }
-        Msg::DetailsClosed => state.details = None,
+        Msg::DetailsClosed => {
+            state.details = None;
+            show_next_drift(state, model);
+        }
         Msg::EventReported(id, event) => {
             daemon_event(state, model.links, id, event);
         }

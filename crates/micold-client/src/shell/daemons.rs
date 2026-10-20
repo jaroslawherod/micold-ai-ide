@@ -162,10 +162,8 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         let _ = crate::shell::workspace::on_folder_chosen(app, path);
     }
     // The dialog closed: the keyboard goes back to the button that opened it (FR-009).
-    if let Some(opener) = app.core.daemon_list.take_focus_return() {
-        tasks.push(iced::widget::operation::focus(
-            micold_client::ui::daemon_opener_id(opener),
-        ));
+    if let Some(id) = focus_return_id(&mut app.core.daemon_list) {
+        tasks.push(iced::widget::operation::focus(id));
     }
     if wants_hosts {
         tasks.push(Task::perform(
@@ -469,9 +467,51 @@ fn make_key_pair(comment: &str) -> std::io::Result<micold_core::kube::access::Ke
     made
 }
 
+/// The widget to give the keyboard back to once a daemon dialog has closed (FR-009).
+fn focus_return_id(
+    list: &mut micold_client::features::daemons::State,
+) -> Option<iced::advanced::widget::Id> {
+    list.take_focus_return()
+        .map(micold_client::ui::daemon_opener_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_closed_dialog_returns_the_keyboard_to_the_button_that_opened_it() {
+        use micold_client::app::Message;
+        use micold_client::features::daemons::{Opener, RowAction};
+        let mut app = micold_client::app::State::default();
+        let mut registry = micold_core::daemons::DaemonRegistry::new(Vec::new(), 1);
+        let host = registry
+            .add("Host", micold_core::daemons::DaemonRuntime::Host, false)
+            .unwrap();
+        app.settings.links = micold_client::links::DaemonLinks::at_launch(&registry);
+        app.settings.daemons = registry;
+        app.update(Message::Daemons(Msg::DetailsOpened(host)));
+        assert_eq!(
+            focus_return_id(&mut app.daemon_list),
+            None,
+            "nothing returns while the dialog is open"
+        );
+        app.update(Message::Daemons(Msg::DetailsClosed));
+        assert_eq!(
+            focus_return_id(&mut app.daemon_list),
+            Some(micold_client::ui::daemon_opener_id(Opener::Row(
+                host,
+                RowAction::Details
+            )))
+        );
+        assert_eq!(focus_return_id(&mut app.daemon_list), None, "once");
+        app.update(Message::Daemons(Msg::AddOpened));
+        app.update(Message::Daemons(Msg::DraftDiscarded));
+        assert_eq!(
+            focus_return_id(&mut app.daemon_list),
+            Some(micold_client::ui::daemon_opener_id(Opener::Add))
+        );
+    }
 
     #[test]
     fn the_bundled_builds_are_found_where_each_package_puts_them() {

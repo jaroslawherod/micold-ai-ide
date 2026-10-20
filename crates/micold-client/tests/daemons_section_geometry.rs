@@ -132,28 +132,51 @@ fn several_rows_paint_name_runtime_and_state_without_overflow() {
 }
 
 #[test]
-fn the_page_has_no_inline_details_and_the_details_dialog_paints_errors_and_log() {
+fn the_details_dialog_paints_the_errors_and_the_log_and_the_page_paints_neither() {
     let (mut state, [_, boxed, _]) = with_daemons();
     state.update(Message::Daemons(DaemonsMsg::DetailsOpened(boxed)));
+    state.update(Message::Daemons(DaemonsMsg::EventReported(
+        boxed,
+        DaemonEvent::DialFailed("connection refused".into()),
+    )));
+    state.update(Message::Daemons(DaemonsMsg::LogLine(
+        boxed,
+        "first line".into(),
+    )));
     let page = painted(&state);
     assert!(!has(&page, "Hide details"), "{page:?}");
     assert!(!has(&page, "Log"), "{page:?}");
+    assert!(!has(&page, "first line"), "{page:?}");
     assert_no_text_overflows(&state, "page with details open");
     let outcome = EnvIncludeOutcome::Disabled;
-    let body = || {
-        micold_client::ui::daemon_details_dialog::dialog(&state, ColorScheme::Dark, &outcome)
-            .expect("the dialog is open")
+    let dialog_strings = |state: &State| {
+        let mut renderer = lay::renderer();
+        let body =
+            micold_client::ui::daemon_details_dialog::dialog(state, ColorScheme::Dark, &outcome)
+                .expect("the dialog is open");
+        lay::painted_text(body, &mut renderer)
+            .into_iter()
+            .map(|drawn| drawn.content)
+            .collect::<Vec<String>>()
     };
-    let mut renderer = lay::renderer();
-    let strings: Vec<String> = lay::painted_text(body(), &mut renderer)
-        .into_iter()
-        .map(|drawn| drawn.content)
-        .collect();
-    assert!(has(&strings, "No connection errors"), "{strings:?}");
-    assert!(has(&strings, "Nothing logged yet"), "{strings:?}");
+    let strings = dialog_strings(&state);
+    assert!(has(&strings, "connection refused"), "{strings:?}");
+    assert!(has(&strings, "first line"), "{strings:?}");
+    assert!(!has(&strings, "No connection errors"), "{strings:?}");
+    assert!(!has(&strings, "Nothing logged yet"), "{strings:?}");
     assert!(has(&strings, "Close"), "{strings:?}");
+    state.update(Message::Daemons(DaemonsMsg::LogLine(
+        boxed,
+        "second line".into(),
+    )));
+    let strings = dialog_strings(&state);
+    assert!(has(&strings, "first line"), "{strings:?}");
+    assert!(has(&strings, "second line"), "{strings:?}");
+    let mut renderer = lay::renderer();
+    let body = micold_client::ui::daemon_details_dialog::dialog(&state, ColorScheme::Dark, &outcome)
+        .expect("the dialog is open");
     assert!(
-        lay::text_overflows(body(), &mut renderer).is_empty(),
+        lay::text_overflows(body, &mut renderer).is_empty(),
         "the dialog text fits"
     );
 }
@@ -981,26 +1004,31 @@ fn the_dialog_actions_stay_inside_the_smallest_window() {
     }
 }
 
-/// FR-013: opening the form leaves the rows' status and actions as they were.
+/// FR-013: opening the form leaves the rows' status and actions on the page, each painted as its
+/// own label (an exact match, so the dialog's own text cannot stand in for it).
 #[test]
 fn the_rows_keep_their_status_and_actions_with_the_dialog_open() {
     let (mut state, [host, ..]) = with_daemons();
+    let exact = |painted: &[String], label: &str| painted.iter().any(|c| c == label);
     let before = painted_tall(&state);
-    state.update(Message::Daemons(DaemonsMsg::EditOpened(host)));
-    let after = painted_tall(&state);
-    for needle in [
+    let needles = [
         "Connected",
         "Unreachable",
         "Edit",
+        "Details",
         "Remove",
         "Start",
         "Stop",
-    ] {
-        assert_eq!(
-            has(&before, needle),
-            has(&after, needle),
-            "{needle:?} changed when the dialog opened: {after:?}"
+    ];
+    for needle in needles {
+        assert!(exact(&before, needle), "{needle:?} not on the page: {before:?}");
+    }
+    state.update(Message::Daemons(DaemonsMsg::EditOpened(host)));
+    let after = painted_tall(&state);
+    for needle in needles {
+        assert!(
+            exact(&after, needle),
+            "{needle:?} gone when the dialog opened: {after:?}"
         );
     }
-    assert!(has(&after, "Remove"), "{after:?}");
 }

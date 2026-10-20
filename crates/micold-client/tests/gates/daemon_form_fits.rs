@@ -8,7 +8,7 @@
 //! The form is a dialog now (feature 1092) and scrolls when the window is short, so what is held
 //! to a window height is the dialog's own extent: from its title to the bottom of *Cancel*. The
 //! window is tall enough here that the dialog is not scrolling, and it is centred in it, so the
-//! extent is measured rather than the absolute position.
+//! extent is measured rather than the absolute position (the dialog must only sit inside the window).
 
 use crate::support::layout as lay;
 use iced::Size;
@@ -66,6 +66,15 @@ fn the_kubernetes_add_form_fits_one_window_height() {
         .max_by(|a, b| a.natural_height.total_cmp(&b.natural_height))
         .expect("the dialog title is painted");
     let extent = cancel.origin.y + HALF_BUTTON - title.origin.y;
+    // The dialog is centred in the forced-tall window, so its absolute bottom is not a height to
+    // hold to 800; it must still sit inside that window, not be placed off it.
+    assert!(
+        title.origin.y >= 0.0 && cancel.origin.y + HALF_BUTTON <= TALL.height,
+        "the dialog spans {}..{}, outside the {} tall window",
+        title.origin.y,
+        cancel.origin.y + HALF_BUTTON,
+        TALL.height
+    );
     assert!(
         extent <= HEIGHT,
         "the Kubernetes add form is {extent} tall from its title, past {HEIGHT}"

@@ -1298,4 +1298,23 @@ mod drift_behind_the_form {
         assert!(state.draft.is_none());
         assert!(state.prompt().is_some(), "queued until the overlay closed");
     }
+
+    #[test]
+    fn a_drift_prompt_raised_while_details_are_open_waits_for_them_to_close() {
+        let (mut w, id) = world();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::DetailsOpened(id));
+        dial(&mut w, id);
+        send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
+        assert!(state.prompt().is_none(), "no second modal over Details");
+        send(&mut state, &mut w, Msg::DetailsClosed);
+        assert!(
+            state
+                .prompt()
+                .unwrap()
+                .text
+                .starts_with("The running pod differs"),
+            "queued until Details closed"
+        );
+    }
 }

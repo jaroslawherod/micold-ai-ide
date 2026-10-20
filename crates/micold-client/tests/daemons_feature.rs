@@ -2142,6 +2142,33 @@ mod form_dialog {
         );
     }
 
+    /// SC-003: a daemon saved from the dialog is in the registry the shell writes, and the written
+    /// settings file gives it back after a restart (without the page save).
+    #[test]
+    fn a_daemon_saved_from_the_dialog_survives_a_restart() {
+        use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        send(&mut state, &mut w, Msg::NameEdited("Renamed".into()));
+        let outcomes = send(&mut state, &mut w, Msg::Saved);
+        let registry = outcomes
+            .into_iter()
+            .find_map(|o| match o {
+                Outcome::DaemonRegistryChanged(registry) => Some(registry),
+                _ => None,
+            })
+            .expect("saving publishes the registry for the shell to write");
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+        let mut settings = Settings::default();
+        settings.set_registry(registry);
+        store.save(&settings).unwrap();
+        let restarted = store.load().settings.registry();
+        assert_eq!(restarted.get(boxed).unwrap().name.as_str(), "Renamed");
+    }
+
     /// FR-014, R6: another window's change to the registry does not replace the open draft.
     #[test]
     fn a_registry_change_does_not_replace_the_draft() {
