@@ -27,6 +27,10 @@ use iced::{alignment, Element, Font, Length, Pixels, Rectangle, Size};
 use micold_core::tokens::Rgb;
 use micold_core::tooltip::clamp_to_lines;
 
+/// What a shaped paragraph was shaped from: the text, the width, the line limit and the role
+/// (its size, font and line height), so a tree slot reused at another role shapes again.
+type Key = (String, f32, usize, TypeRole);
+
 /// A wrapping label at a type role, cut to at most `max_lines` lines.
 pub(crate) struct LineClamped<M> {
     content: String,
@@ -70,11 +74,11 @@ where
     Renderer: text::Renderer<Font = Font>,
 {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State<Renderer::Paragraph, (String, f32, usize)>>()
+        tree::Tag::of::<State<Renderer::Paragraph, Key>>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::<Renderer::Paragraph, (String, f32, usize)>::default())
+        tree::State::new(State::<Renderer::Paragraph, Key>::default())
     }
 
     fn size(&self) -> Size<Length> {
@@ -87,12 +91,10 @@ where
         _renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let state = tree
-            .state
-            .downcast_mut::<State<Renderer::Paragraph, (String, f32, usize)>>();
+        let state = tree.state.downcast_mut::<State<Renderer::Paragraph, Key>>();
         let available = limits.max().width;
 
-        let key = (self.content.clone(), available, self.max_lines);
+        let key = (self.content.clone(), available, self.max_lines, self.role);
         if !state.holds(&key) {
             // Shaped as it will be drawn: at the width on offer, breaking on words and, where a
             // word is wider than the line (a path, an address), on glyphs.
@@ -133,9 +135,7 @@ where
         _cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let state = tree
-            .state
-            .downcast_ref::<State<Renderer::Paragraph, (String, f32, usize)>>();
+        let state = tree.state.downcast_ref::<State<Renderer::Paragraph, Key>>();
         // A measurement off by a fraction must not paint a fourth line below the panel.
         draw_paragraph(
             renderer,
@@ -194,8 +194,7 @@ pub(super) mod tests {
         let node = widget.layout(&mut tree, &renderer, &limits);
         let state = tree
             .state
-            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, (String, f32, usize)>>(
-            );
+            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, Key>>();
         (state.fitted.clone(), node.size())
     }
 
@@ -266,6 +265,9 @@ pub(super) mod tests {
     /// The card widths feature 1121 names (FR-007).
     const NARROWEST_CARD: f32 = 280.0;
 
+    /// The room a line has inside the narrowest card: the card less its body's padding.
+    const NARROWEST_LABEL: f32 = NARROWEST_CARD - 2.0 * spacing::MD;
+
     /// Feature 1121 T001: a tinted label draws in its tint, not the surrounding text colour.
     #[test]
     fn a_tinted_label_draws_in_its_tint() {
@@ -292,6 +294,28 @@ pub(super) mod tests {
         }
     }
 
+    /// Feature 1121 review A M1 F1: a tree slot laid out at one role and then at another shapes
+    /// the text again, at the second role's size and line height.
+    #[test]
+    fn a_slot_reused_at_another_role_is_shaped_again() {
+        let renderer = test_support::renderer();
+        let limits = layout::Limits::new(Size::ZERO, Size::new(NARROWEST_CARD, f32::INFINITY));
+        let text = long();
+        let mut title = LineClamped::<()>::new(&text, TypeRole::CardTitle, 3);
+        let mut body = LineClamped::<()>::new(&text, TypeRole::Body, 3);
+        let title: &mut dyn Widget<(), iced::Theme, iced::Renderer> = &mut title;
+        let body: &mut dyn Widget<(), iced::Theme, iced::Renderer> = &mut body;
+        let mut tree = Tree {
+            tag: title.tag(),
+            state: title.state(),
+            children: Vec::new(),
+        };
+        title.layout(&mut tree, &renderer, &limits);
+        let reused = body.layout(&mut tree, &renderer, &limits).size();
+        let (_, fresh) = laid_out_at(&text, TypeRole::Body, 3, NARROWEST_CARD);
+        assert_eq!(reused, fresh);
+    }
+
     /// Feature 1121 T006: a `Fill` label spans its row as the ellipsized line did, so the card's
     /// title and activity keep their width in the layout; the default is as wide as its text.
     #[test]
@@ -311,31 +335,31 @@ pub(super) mod tests {
         assert!(shrink.width < NARROWEST_CARD, "{shrink:?}");
     }
 
-    /// Feature 1121 T001, US1 sc.2: a title needing five lines at 280 px takes three, the third
+    /// Feature 1121 T001, US1 sc.2: a title needing five lines in a 280 px card takes three, the third
     /// ending in an ellipsis.
     #[test]
     fn a_five_line_title_at_280_takes_three_lines_ending_in_an_ellipsis() {
         let role = TypeRole::CardTitle;
         let five =
             "Overview cards show the full title and the activity without truncation ".repeat(3);
-        let (whole, size) = laid_out_at(&five, role, 10, NARROWEST_CARD);
+        let (whole, size) = laid_out_at(&five, role, 10, NARROWEST_LABEL);
         assert!(
             size.height >= 5.0 * role.line_height_dp() && whole == five,
             "precondition: the text needs five lines or more: {size:?}",
         );
-        let (fitted, size) = laid_out_at(&five, role, 3, NARROWEST_CARD);
+        let (fitted, size) = laid_out_at(&five, role, 3, NARROWEST_LABEL);
         assert_eq!(size.height, 3.0 * role.line_height_dp(), "{fitted:?}");
         assert!(fitted.ends_with('…'), "{fitted:?}");
     }
 
-    /// Feature 1121 T001, FR-007: an unbroken run of 120 characters stays within 280 px and ends
+    /// Feature 1121 T001, FR-007: an unbroken run of 120 characters stays within a 280 px card and ends
     /// in an ellipsis.
     #[test]
     fn an_unbroken_run_stays_within_the_width_and_ends_in_an_ellipsis() {
         let run = "m".repeat(120);
         for (role, lines) in [(TypeRole::CardTitle, 3), (TypeRole::Body, 2)] {
-            let (fitted, size) = laid_out_at(&run, role, lines, NARROWEST_CARD);
-            assert!(size.width <= NARROWEST_CARD, "{role:?}: {size:?}");
+            let (fitted, size) = laid_out_at(&run, role, lines, NARROWEST_LABEL);
+            assert!(size.width <= NARROWEST_LABEL, "{role:?}: {size:?}");
             assert_eq!(
                 size.height,
                 lines as f32 * role.line_height_dp(),

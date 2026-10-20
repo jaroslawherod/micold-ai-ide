@@ -4,8 +4,8 @@
 //! their tooltip) and the location type's icon and word at its end (the word is their tooltip),
 //! over one neutral body: the title (on up to three lines, the display name in a tooltip), the
 //! short branch when it has one, the sessions line, and the activity (up to two lines), progress
-//! and pull request rows when they have something to say (feature 1120, contracts K1). What each line says is [`CardText`], tested
-//! in the core (FR-018). Every colour comes from the theme's roles through [`palette`]: the header
+//! and pull request rows when they have something to say (feature 1120, contracts K1). What each
+//! line says is [`CardText`], tested in the core (FR-018). Every colour comes from the theme's roles through [`palette`]: the header
 //! of Needs action is the `error` container, Needs attention `warning`, Working `primary`, Done
 //! `success`, and Idle's is the grey `surface_variant`; the body is `surface_container_low` in
 //! every state. With a press (`on_press`) the card is a control: a
