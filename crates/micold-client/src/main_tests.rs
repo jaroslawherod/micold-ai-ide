@@ -13858,12 +13858,18 @@ fn reduce_motion_is_applied_by_save_and_discarded_by_cancel() {
         &mut app,
         Message::Settings(SettingsMsg::ReduceMotionToggled(true)),
     );
-    assert!(!app.core.settings.reduce_motion, "the draft alone changes nothing");
+    assert!(
+        !app.core.settings.reduce_motion,
+        "the draft alone changes nothing"
+    );
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
     assert!(app.core.settings.reduce_motion, "Save applies it");
     assert!(
-        store.saves().last().is_some_and(|saved| saved.reduce_motion),
+        store
+            .saves()
+            .last()
+            .is_some_and(|saved| saved.reduce_motion),
         "and writes it"
     );
 }

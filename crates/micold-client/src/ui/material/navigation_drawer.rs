@@ -1136,9 +1136,17 @@ mod tests {
 
         let mut harness = Harness::new(true, false);
         harness.instant = true;
-        assert_eq!(harness.frame(true, true, 0).size().width, 0.0, "retracts at once");
+        assert_eq!(
+            harness.frame(true, true, 0).size().width,
+            0.0,
+            "retracts at once"
+        );
         assert!(harness.every_child_parked(), "and parked");
-        assert_eq!(harness.frame(true, false, 16).size().width, full, "shows at once");
+        assert_eq!(
+            harness.frame(true, false, 16).size().width,
+            full,
+            "shows at once"
+        );
 
         // Turned on 200 ms into a retraction that was easing: it completes in one step.
         let mut harness = Harness::new(true, false);
@@ -1148,12 +1156,19 @@ mod tests {
         let mid = harness.width();
         assert!(mid > 0.0 && mid < full, "mid-way at 200 ms: {mid}");
         harness.instant = true;
-        assert_eq!(harness.frame(true, true, 216).size().width, 0.0, "completes in one step");
+        assert_eq!(
+            harness.frame(true, true, 216).size().width,
+            0.0,
+            "completes in one step"
+        );
 
         // Only the retraction snaps: opening and closing the panel still slide.
         let mut harness = Harness::new(false, false);
         harness.instant = true;
         let first = harness.frame(true, false, 16).size().width;
-        assert!(first < full, "the panel is still sliding open: {first} of {full}");
+        assert!(
+            first < full,
+            "the panel is still sliding open: {first} of {full}"
+        );
     }
 }
