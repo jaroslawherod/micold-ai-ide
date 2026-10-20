@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1149_review-comments-on-a-pull-request-s-diff-sent-to
 - **Started**: 2026-10-20
 - **Phase**: spec
-- **Next step**: clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers in spec.md (wrong-branch delivery, merged/closed PR)
+- **Next step**: clarify unit (escalated, awaiting answers): resolve the 2 [NEEDS CLARIFICATION] markers in spec.md (wrong-branch delivery, merged/closed PR)
 
 ## Pull requests
 
@@ -44,7 +44,10 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1 (repo does not settle either; product decisions):
+1. Wrong checked-out branch on Send review (Story 3 sc.2, FR-009): deliver with a switch-branch preamble (Recommended) or refuse.
+2. Merged/closed PR on Send review (Story 4 sc.3): allow with a state line in the batch (Recommended) or block.
+On answers: record `_(decided by user)_` in spec.md Clarifications, replace both markers, no new round unless a requirement changes.
 
 ## Follow-ups not done
 
