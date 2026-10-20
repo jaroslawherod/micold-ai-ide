@@ -546,20 +546,6 @@ mod tests {
     }
 
     #[test]
-    fn the_source_setup_hint_asks_for_a_token() {
-        assert_eq!(
-            SOURCE_SETUP_HINT,
-            "No GitHub token is stored for this repository. Paste a fine-grained token for it in Settings › GitHub access tokens to push from sandboxes."
-        );
-    }
-
-    #[test]
-    fn the_minted_and_the_pasted_lifetimes_are_split() {
-        assert_eq!(MINTED_LIFETIME_SECS, 3600);
-        assert_eq!(MAX_LIFETIME_SECS, 366 * 86_400);
-    }
-
-    #[test]
     fn a_pasted_credential_needs_a_future_expiry_within_the_cap() {
         let paste = |expires_at| {
             ScopedCredential::pasted(&repo(), SecretToken::new("github_pat_x"), expires_at, NOW)

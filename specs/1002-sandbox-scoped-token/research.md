@@ -262,3 +262,14 @@ reasons and their remedy texts are one table in core (`NoCredentialReason::messa
   or host. The repository limit is proven by delivery of the PAT stored for that repository only (and the
   paste-time checks on fixtures); permissions and reach are the PAT's, checked live in the
   quickstart's manual part.
+
+## R13. The minted-token path (close unit, verification finding 5)
+
+`ScopedCredential::accept`, `RenewPolicy::Renew`, `MINTED_LIFETIME_SECS` and the `Grant` extras
+(pull requests, issues) are dead in production: the pasted-PAT source issues through
+`ScopedCredential::pasted`, and `Manager::targets` builds every `Schedule` with
+`RenewPolicy::AtExpiry`, so FR-008's "never renew" holds. Their only user is `FakeSource` (M4),
+which issues through `accept` and drives the core `Schedule` tests in `scoped_credential/schedule.rs`
+(the daemon and client tests have their own fakes). Removing them means rewriting those tests
+against a PAT-shaped fake. That changes no behaviour, so the close unit leaves it as a follow-up
+(ledger, *Follow-ups not done*) rather than widen the close PR.

@@ -698,15 +698,34 @@ fn a_container_start_up_carries_no_user_git_credential_whatever_the_saved_settin
         start_up.push_str(&format!("\n{}", dir.display()));
     }
     assert_eq!(host.leaks(&start_up), Vec::<String>::new(), "{start_up}");
-    // And every file the mounts expose: none holds a credential's content.
+    // And every file the mounts expose that exists before start-up: none holds a credential's
+    // content. The state dir and the sanitized git configuration are written at start-up, not by
+    // this fixture; the sanitizer has its own tests (FR-004, `sanitize_gitconfig_text`).
     for path in spec.mounts.host_paths() {
-        if let Ok(text) = std::fs::read_to_string(path) {
+        for file in files_under(path) {
+            let text = std::fs::read(&file)
+                .unwrap_or_else(|e| panic!("{} is unreadable: {e}", file.display()));
             assert_eq!(
-                host.leaks(&text),
+                host.leaks(&String::from_utf8_lossy(&text)),
                 Vec::<String>::new(),
                 "{}",
-                path.display()
+                file.display()
             );
         }
     }
+}
+
+/// `path` itself when it is a file, else every file below it; nothing when it does not exist.
+#[cfg(feature = "kube-fake")]
+fn files_under(path: &std::path::Path) -> Vec<std::path::PathBuf> {
+    if path.is_file() {
+        return vec![path.to_path_buf()];
+    }
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .flat_map(|e| files_under(&e.path()))
+        .collect()
 }
