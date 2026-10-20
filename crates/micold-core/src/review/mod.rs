@@ -4,6 +4,7 @@
 
 pub mod anchor;
 pub mod base;
+pub mod browse;
 pub mod changes;
 pub mod comment;
 pub mod diff;

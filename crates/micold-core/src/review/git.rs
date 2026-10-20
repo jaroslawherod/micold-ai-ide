@@ -38,7 +38,7 @@ fn read(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<String> {
 }
 
 /// [`read`], answering git's bytes as they are: a diff body is checked for UTF-8, not repaired.
-fn read_bytes(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<Vec<u8>> {
+pub(super) fn read_bytes(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<Vec<u8>> {
     let ran = run_read(dir, &GLOBAL, args, stdin, READ_TIMEOUT)?;
     if ran.success() {
         Ok(ran.stdout)
@@ -170,7 +170,7 @@ fn untracked(dir: &Path) -> io::Result<Vec<Untracked>> {
 
 /// The sizes of `specs` (`<rev>:<path>`) in one `git cat-file --batch-check`; `None` for one git
 /// does not have.
-fn object_sizes(dir: &Path, specs: &[String]) -> Vec<Option<u64>> {
+pub(super) fn object_sizes(dir: &Path, specs: &[String]) -> Vec<Option<u64>> {
     if specs.is_empty() {
         return Vec::new();
     }
@@ -593,7 +593,7 @@ fn blob(dir: &Path, rev: &str, path: &RelPath) -> Option<Vec<u8>> {
 
 /// The bytes git diffs for a working-tree file: a symlink's target path, never what it points to
 /// (review A M2 F3: the target may be outside the worktree).
-fn worktree_bytes(full: &Path) -> io::Result<Vec<u8>> {
+pub(super) fn worktree_bytes(full: &Path) -> io::Result<Vec<u8>> {
     if std::fs::symlink_metadata(full)?.file_type().is_symlink() {
         return Ok(std::fs::read_link(full)?
             .into_os_string()

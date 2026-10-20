@@ -2002,6 +2002,17 @@ impl crate::pull_request::PullRequestSource for GhCli {
         let outcome = self.outcome(crate::pull_request::diff_args(repo, number));
         crate::pull_request::diff_outcome(&outcome, now)
     }
+
+    fn file_at(
+        &self,
+        repo: &GithubRepo,
+        commit: &str,
+        path: &crate::review::RelPath,
+        _now: u64,
+    ) -> Result<Vec<u8>, crate::review::browse::FileReadFailure> {
+        let outcome = self.outcome(crate::pull_request::file_args(repo, commit, path));
+        crate::pull_request::file_outcome(&outcome)
+    }
 }
 
 /// The bound on one `gh` run (FR-007's "didn't answer within 10 seconds").

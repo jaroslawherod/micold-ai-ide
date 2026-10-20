@@ -15,6 +15,8 @@ use std::fmt;
 use crate::github::{classify, GithubRepo, IssueLoadError};
 use crate::overview::PrCounts;
 use crate::process::RunOutcome;
+use crate::review::browse::FileReadFailure;
+use crate::review::RelPath;
 
 /// What one reading found for one branch (data-model §1).
 #[derive(Clone, PartialEq, Eq)]
@@ -1015,6 +1017,17 @@ pub trait PullRequestSource {
     /// The unified diff of pull request `number` as GitHub computes it, base...head, so it also
     /// exists after the head branch is deleted (feature 775, FR-004). One request, no retry.
     fn diff(&self, repo: &GithubRepo, number: u64, now: u64) -> Result<String, DiffReadFailure>;
+
+    /// The bytes of `path` at `commit`, for a head commit that is not in the local repository
+    /// (feature 1150, FR-005). One request, no retry, the same `gh` and credentials as
+    /// [`Self::diff`].
+    fn file_at(
+        &self,
+        repo: &GithubRepo,
+        commit: &str,
+        path: &RelPath,
+        now: u64,
+    ) -> Result<Vec<u8>, FileReadFailure>;
 }
 
 /// Why a pull request's diff was not read (feature 775).
@@ -1054,6 +1067,62 @@ pub fn diff_failure(outcome: &RunOutcome, now: u64) -> DiffReadFailure {
         }
     }
     DiffReadFailure::Failed(reading_failure(outcome, now))
+}
+
+/// `text` with every byte outside the unreserved set percent-encoded, as one URL path segment or
+/// query value.
+fn percent_encoded(text: &str) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            out.push(char::from(byte));
+        } else {
+            let _ = write!(out, "%{byte:02X}");
+        }
+    }
+    out
+}
+
+/// The arguments after `gh` for one file's raw content at a commit (feature 1150, R3): each path
+/// segment percent-encoded, the commit as the `ref` query.
+pub fn file_args(repo: &GithubRepo, commit: &str, path: &RelPath) -> Vec<String> {
+    let path = path
+        .as_str()
+        .split('/')
+        .map(percent_encoded)
+        .collect::<Vec<_>>()
+        .join("/");
+    [
+        "api",
+        "--hostname",
+        "github.com",
+        "-H",
+        "Accept: application/vnd.github.raw",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .chain([format!(
+        "repos/{}/{}/contents/{path}?ref={}",
+        repo.owner(),
+        repo.name(),
+        percent_encoded(commit)
+    )])
+    .collect()
+}
+
+/// The file's bytes when `gh` exited 0; HTTP 404 is [`FileReadFailure::Missing`], any other
+/// failure [`FileReadFailure::HeadUnavailable`].
+pub fn file_outcome(outcome: &RunOutcome) -> Result<Vec<u8>, FileReadFailure> {
+    match outcome {
+        RunOutcome::Exited {
+            code: 0, stdout, ..
+        } => Ok(stdout.clone()),
+        RunOutcome::Exited { stderr, .. } if stderr.contains("HTTP 404") => {
+            Err(FileReadFailure::Missing)
+        }
+        _ => Err(FileReadFailure::HeadUnavailable),
+    }
 }
 
 /// The diff text when `gh` exited 0, else [`diff_failure`].
@@ -1096,6 +1165,8 @@ pub struct FakePullRequestSource {
     list_calls: std::sync::Mutex<Vec<(String, Vec<String>)>>,
     diff_script: std::sync::Mutex<std::collections::VecDeque<Result<String, DiffReadFailure>>>,
     diff_calls: std::sync::Mutex<Vec<(String, u64)>>,
+    file_script: std::sync::Mutex<std::collections::VecDeque<Result<Vec<u8>, FileReadFailure>>>,
+    file_calls: std::sync::Mutex<Vec<(String, String, RelPath)>>,
 }
 
 /// One scripted answer of [`FakePullRequestSource::list_branches`].
@@ -1149,6 +1220,35 @@ impl FakePullRequestSource {
     pub fn with_diff_failure(self, failure: DiffReadFailure) -> Self {
         self.lock_diff_script().push_back(Err(failure));
         self
+    }
+
+    /// Answer the next unanswered `file_at` with `bytes`.
+    pub fn with_file_answer(self, bytes: Vec<u8>) -> Self {
+        self.lock_file_script().push_back(Ok(bytes));
+        self
+    }
+
+    /// Answer the next unanswered `file_at` with `failure`.
+    pub fn with_file_failure(self, failure: FileReadFailure) -> Self {
+        self.lock_file_script().push_back(Err(failure));
+        self
+    }
+
+    /// Every `file_at` so far, as (`owner/name`, commit, path).
+    pub fn file_calls(&self) -> Vec<(String, String, RelPath)> {
+        self.file_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn lock_file_script(
+        &self,
+    ) -> std::sync::MutexGuard<'_, std::collections::VecDeque<Result<Vec<u8>, FileReadFailure>>>
+    {
+        self.file_script
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Every `diff` so far, as (`owner/name`, number).
@@ -1242,6 +1342,101 @@ impl PullRequestSource for FakePullRequestSource {
         self.lock_diff_script()
             .pop_front()
             .unwrap_or(Err(DiffReadFailure::Failed(ReadingFailure::Passing)))
+    }
+
+    /// Nothing scripted answers [`FileReadFailure::HeadUnavailable`].
+    fn file_at(
+        &self,
+        repo: &GithubRepo,
+        commit: &str,
+        path: &RelPath,
+        _now: u64,
+    ) -> Result<Vec<u8>, FileReadFailure> {
+        self.file_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), commit.to_string(), path.clone()));
+        self.lock_file_script()
+            .pop_front()
+            .unwrap_or(Err(FileReadFailure::HeadUnavailable))
+    }
+}
+
+#[cfg(test)]
+mod file_at_tests {
+    use super::*;
+
+    fn repo() -> GithubRepo {
+        GithubRepo::from_remote_url("https://github.com/acme/widgets").expect("a repo")
+    }
+
+    fn path(text: &str) -> RelPath {
+        RelPath::from_native(text).expect("relative")
+    }
+
+    #[test]
+    fn the_args_ask_for_the_raw_file_at_the_commit() {
+        let args = file_args(&repo(), "abc123", &path("src/a.rs"));
+        assert!(args.contains(&"Accept: application/vnd.github.raw".to_string()));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("repos/acme/widgets/contents/src/a.rs?ref=abc123")
+        );
+    }
+
+    #[test]
+    fn each_path_segment_is_percent_encoded() {
+        let args = file_args(&repo(), "abc", &path("my dir/a#b?.rs"));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("repos/acme/widgets/contents/my%20dir/a%23b%3F.rs?ref=abc")
+        );
+    }
+
+    fn exited(code: i32, stdout: &[u8], stderr: &str) -> RunOutcome {
+        RunOutcome::Exited {
+            code,
+            stdout: stdout.to_vec(),
+            stderr: stderr.to_string(),
+        }
+    }
+
+    #[test]
+    fn a_failed_run_maps_to_a_file_failure() {
+        assert_eq!(file_outcome(&exited(0, b"x\n", "")), Ok(b"x\n".to_vec()));
+        assert_eq!(
+            file_outcome(&exited(1, b"", "gh: Not Found (HTTP 404)")),
+            Err(FileReadFailure::Missing)
+        );
+        assert_eq!(
+            file_outcome(&exited(1, b"", "gh: boom")),
+            Err(FileReadFailure::HeadUnavailable)
+        );
+        assert_eq!(
+            file_outcome(&RunOutcome::TimedOut {
+                stderr: String::new()
+            }),
+            Err(FileReadFailure::HeadUnavailable)
+        );
+    }
+
+    #[test]
+    fn the_fake_answers_in_order_and_records_calls() {
+        let fake = FakePullRequestSource::new()
+            .with_file_answer(b"head\n".to_vec())
+            .with_file_failure(FileReadFailure::Missing);
+        let p = path("a.rs");
+        assert_eq!(fake.file_at(&repo(), "c1", &p, 0), Ok(b"head\n".to_vec()));
+        assert_eq!(
+            fake.file_at(&repo(), "c2", &p, 0),
+            Err(FileReadFailure::Missing)
+        );
+        assert_eq!(
+            fake.file_at(&repo(), "c3", &p, 0),
+            Err(FileReadFailure::HeadUnavailable)
+        );
+        assert_eq!(fake.file_calls().len(), 3);
+        assert_eq!(fake.file_calls()[0].1, "c1");
     }
 }
 
