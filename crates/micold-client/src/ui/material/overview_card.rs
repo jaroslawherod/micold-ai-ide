@@ -136,6 +136,8 @@ pub struct OverviewCard<'a, M> {
     on_body_scroll: Option<Rc<dyn Fn(bool, bool) -> M + 'a>>,
     on_rest: Option<M>,
     on_leave: Option<M>,
+    on_keyboard_focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
+    on_page: Option<Rc<dyn Fn(bool) -> Option<M> + 'a>>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -162,6 +164,8 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             on_body_scroll: None,
             on_rest: None,
             on_leave: None,
+            on_keyboard_focus: None,
+            on_page: None,
             _marker: PhantomData,
         }
     }
@@ -261,6 +265,23 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             self.on_rest.clone(),
             self.on_leave.clone(),
         )
+    }
+
+    /// Publish `f(true)` when the card gets keyboard focus (Tab, Shift+Tab, an arrow move, a
+    /// `focus(id)` hand-back) and `f(false)` when it loses it; a pointer press that takes the
+    /// keyboard publishes nothing (feature 1121, U1, FR-002).
+    pub fn on_keyboard_focus(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
+        self.on_keyboard_focus = Some(Rc::new(f));
+        self
+    }
+
+    /// Claim Page Down (`f(true)`) and Page Up (`f(false)`) while the card holds the keyboard,
+    /// each only when `f` gives a message for it: the application answers with a page of the
+    /// expanded card's body, and a direction it declines goes on as today (feature 1121, U1,
+    /// FR-008, contract K4).
+    pub fn on_page(mut self, f: impl Fn(bool) -> Option<M> + 'a) -> Self {
+        self.on_page = Some(Rc::new(f));
+        self
     }
 
     /// Name the card so the application can move the keyboard to it.
@@ -387,6 +408,19 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                     .key(keyboard::key::Named::ContextMenu, menu.clone())
                     .chord(keyboard::key::Named::F10, keyboard::Modifiers::SHIFT, menu);
             }
+            if let Some(page) = &card.on_page {
+                for (key, down) in [
+                    (keyboard::key::Named::PageDown, true),
+                    (keyboard::key::Named::PageUp, false),
+                ] {
+                    if let Some(message) = page(down) {
+                        focusable = focusable.key(key, message);
+                    }
+                }
+            }
+        }
+        if let Some(f) = card.on_keyboard_focus {
+            focusable = focusable.on_shown_change(move |shown| f(shown));
         }
         let focusable = focusable.indicator(Indicator {
             outline: roles.secondary,
@@ -1740,6 +1774,73 @@ mod tests {
         for key in &menu_keys {
             assert_eq!(targeted.send_captured(key.clone(), cursor), (vec![], false));
         }
+    }
+
+    /// Feature 1121 T042, FR-008: with `.on_page` and the keyboard, Page Down / Page Up publish
+    /// the card's page message for the directions it claims, captured; a direction it declines,
+    /// a card without `.on_page`, or an unfocused card claims nothing, and the key goes on as today.
+    #[test]
+    fn page_keys_on_the_focused_card_publish_its_page_message() {
+        let cursor = iced::advanced::mouse::Cursor::Unavailable;
+        let card = |paged: bool| {
+            let card = OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
+                .on_press("open".to_string())
+                .expanded(true);
+            Mounted::new(if paged {
+                // Down only: the body is at its top (K4).
+                card.on_page(|down| down.then(|| "page down".to_string()))
+            } else {
+                card
+            })
+        };
+        let mut focused = card(true);
+        focused.focus_next();
+        assert_eq!(
+            focused.send_captured(named_key(Named::PageDown), cursor),
+            (vec!["page down".to_string()], true)
+        );
+        assert_eq!(
+            focused.send_captured(named_key(Named::PageUp), cursor),
+            (vec![], false),
+            "a declined direction is not claimed"
+        );
+        let mut unfocused = card(true);
+        assert_eq!(
+            unfocused.send_captured(named_key(Named::PageDown), cursor),
+            (vec![], false)
+        );
+        let mut plain = card(false);
+        plain.focus_next();
+        assert_eq!(
+            plain.send_captured(named_key(Named::PageDown), cursor),
+            (vec![], false)
+        );
+    }
+
+    /// Feature 1121 T042 (U1): `.on_keyboard_focus` publishes when Tab gives the card the
+    /// keyboard, and nothing when a press does (FR-002).
+    #[test]
+    fn keyboard_focus_publishes_on_tab_and_not_on_a_press() {
+        let cursor = iced::advanced::mouse::Cursor::Unavailable;
+        let card = || {
+            Mounted::new(
+                OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
+                    .on_press("open".to_string())
+                    .on_keyboard_focus(|shown| format!("keyboard {shown}")),
+            )
+        };
+        let mut tabbed = card();
+        tabbed.focus_next();
+        let redraw = iced::Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        ));
+        assert_eq!(tabbed.send(redraw, cursor), ["keyboard true"]);
+        let mut pressed = card();
+        let at = pressed.container().center();
+        assert!(
+            !pressed.press(at).iter().any(|m| m.starts_with("keyboard")),
+            "a press shows no keyboard focus"
+        );
     }
 
     /// Feature 972, FR-013: while a menu is open on another card, this one claims no key either.
