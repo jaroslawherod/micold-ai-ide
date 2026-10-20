@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Draft
+**Status**: Closed 2026-10-20 — shipped in PRs #1129, #1136, #1141, #1157, #1166 and the close PR
 
 **Input**: User description: "Implement GitHub issue #1120: Overview cards: readable layout and
 content. Redo what a card shows and how it reads. Tinted header row: state icon and word left,
