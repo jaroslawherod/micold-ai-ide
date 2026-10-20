@@ -934,8 +934,14 @@ where
         let Some(child) = layout.children().next() else {
             return;
         };
-        // Clip to the (animated) visible height so the growing child never overflows.
-        renderer.with_layer(layout.bounds(), |renderer| {
+        // Clip to the (animated) visible height so the growing child never overflows. Cut to
+        // `viewport` first: a pushed clip *replaces* the enclosing one rather than intersecting
+        // with it, so without this an expanded section half-scrolled out of its list painted over
+        // whatever sits beyond the scrollable's edge (feature 1092: a dialog's action row).
+        let Some(visible) = layout.bounds().intersection(viewport) else {
+            return;
+        };
+        renderer.with_layer(visible, |renderer| {
             self.content.as_widget().draw(
                 &tree.children[0],
                 renderer,
