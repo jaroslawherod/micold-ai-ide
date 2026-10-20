@@ -31,4 +31,4 @@
 
 ## Notes
 
-- The open markers are left for `speckit-clarify`.
+- Markers resolved in spec.md Clarifications.

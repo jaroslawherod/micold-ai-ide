@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- M1 has 17 tasks (Setup + Foundational + US1): Foundational alone is no milestone, and no acceptance-scenario split exists below the gap marker. Polish (T063-T064) changes no code: left to the close unit.
+- M1 has 17 tasks (Setup + Foundational + US1): Foundational alone is no milestone, and no acceptance-scenario split exists below the gap marker. M5 has 11 tasks, kept whole: its tree, picker and back share one reducer state and no acceptance scenario splits them. Polish (T063-T064) changes no code: left to the close unit.
 - analyze C1/C2: browsed-file pick pin moved to M5 (T038); M4 mirrors the existing line-pick handling.
 
 | # | Phase | Question | Answer | By | Evidence |

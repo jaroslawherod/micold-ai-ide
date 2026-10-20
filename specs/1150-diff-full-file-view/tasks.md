@@ -64,7 +64,7 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 **Goal**: gaps and whole-file on a PR's files show the PR head version.
 
 - [ ] T023 [P] [US3] Write failing unit tests for `PullRequestSource::file_at` args builder (percent-encoded path segments, `Accept: application/vnd.github.raw`), failure mapping to `FileReadFailure`, and the fake's `with_file_answer` in `crates/micold-core/src/pull_request.rs`
-- [ ] T024 [P] [US3] Write failing real-git integration tests in `crates/micold-core/tests/review_browse.rs`: PR-head read equals the commit's blob while the worktree differs, `..`/absolute/symlink-escape refused, read-only worktree: files and `git status` unchanged and the fake `gh` unused for worktree reads (FR-005, FR-010, FR-014)
+- [ ] T024 [P] [US3] Write failing real-git integration tests in `crates/micold-core/tests/review_browse.rs`: PR-head read equals the commit's blob while the worktree differs, `read_file` failures (Binary, NotUtf8, Missing, TooLarge, `force_large`, worktree symlink escape refused), `..`/absolute/symlink-escape refused, read-only worktree: files and `git status` unchanged and the fake `gh` unused for worktree reads (FR-005, FR-010, FR-014)
 - [ ] T025 [P] [US3] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: selecting a PR file returns `Effect::ReadFile` for the head, no markers until `Msg::FileRead` answers (caption "Reading file…"), stale `seq` or changed source dropped, failure shows the FR-009 message with the diff usable, expansion never applies across worktree/PR/PR
 - [ ] T026 [US3] Implement `PullRequestSource::file_at`, its pure args builder and the fake answer in `crates/micold-core/src/pull_request.rs` (T023 green)
 - [ ] T027 [US3] Create `crates/micold-core/src/review/browse.rs` (register in `review/mod.rs`) with `FileSource`, `Confined`, `FileText`, `FileReadFailure` and `read_file` (worktree via fs, PR head via local `git cat-file` first then `file_at`; 2 MB limit with `force_large`) (T024 green)
@@ -84,14 +84,14 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ### Worktree browsing, tree, picker, back
 
-- [ ] T036 [P] [US5] Write failing tests in `crates/micold-core/tests/review_browse.rs` and `crates/micold-core/src/review/diff.rs`: `list_tree` for worktree changes (tracked and untracked, ignored excluded), `read_file` failures (Binary, NotUtf8, Missing, TooLarge, worktree symlink escape refused), `plain_file` yields context-only lines with CR stripped
+- [ ] T036 [P] [US5] Write failing tests in `crates/micold-core/tests/review_browse.rs` and `crates/micold-core/src/review/diff.rs`: `list_tree` for worktree changes (tracked and untracked, ignored excluded),  `plain_file` yields context-only lines with CR stripped
 - [ ] T037 [P] [US5] Write failing `BrowseStack` tests (push, back, empty back is a no-op, clear on source change) in `crates/micold-core/src/review/browse.rs`
 - [ ] T038 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `pickable` is false for untouched browsed files (pinned until #1149; FR-015, US4 scenario 3), SC-006 action count (tree or picker, select: at most 3 actions; Back: 1), `BrowseOpen`, `PathPickerChanged`, `TreeRead`, `BrowseBack` restores file, scroll and expansion (against a refreshed diff), `OpenFileDiff` only when the change modifies the file, missing/binary/large messages with Back working, large "Show anyway"
 - [ ] T039 [US5] Implement `list_tree` (worktree: `git ls-files -z --cached --others --exclude-standard`; typed ignored path checked on disk) and `BrowseStack` in `crates/micold-core/src/review/browse.rs`
 - [ ] T040 [US5] Implement `plain_file(&SideLines) -> FileDiff` in `crates/micold-core/src/review/diff.rs`
 - [ ] T041 [US5] Add `BrowsedFile`, `Effect::ReadTree`, `Msg::{BrowseOpen, BrowseBack, OpenFileDiff, PathPickerChanged, TreeRead}` in `crates/micold-client/src/features/changes.rs` (T038 green)
 - [ ] T042 [US5] Run `Effect::ReadTree` on a blocking thread in `crates/micold-client/src/shell/changes.rs`
-- [ ] T043 [P] [US5] Create the shared `BrowseBar` component (Back, path, "Open diff") in `crates/micold-client/src/ui/material/browse_bar.rs` and register it
+- [ ] T043 [P] [US5] Write a failing geometry-gate test for `BrowseBar` and the tree/picker header, then create the shared `BrowseBar` component (Back, path, "Open diff") in `crates/micold-client/src/ui/material/browse_bar.rs` and register it
 - [ ] T044 [US5] Add the file tree (`TreeView`), path picker (`Typeahead`) and browse header to the list pane in `crates/micold-client/src/ui/changes.rs`
 - [ ] T045 [P] [US5] Add `BrowseBar` to `crates/micold-client/src/showcase/sections/review.rs`
 - [ ] T046 [US5] Document "Browsing the repository" in `docs/user-guide/reviewing-changes.md`
@@ -125,7 +125,7 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ## Dependencies and order
 
-Setup, then Foundational, then US1 (MVP). US2, US3, US4 depend on US1; US5 worktree browsing depends on US1; PR-head browsing on US3 and worktree browsing; references on worktree browsing. Within a phase: tests, core, reducer, shell, UI, docs.
+Setup, then Foundational, then US1 (MVP). US2, US3, US4 depend on US1; US5 worktree browsing depends on US1, US3 (`read_file`, `Effect::ReadFile`) and US4 (`pickable`); PR-head browsing on US3 and worktree browsing; references on worktree browsing. Within a phase: tests, core, reducer, shell, UI, docs.
 
 ## Implementation Strategy
 
@@ -177,7 +177,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot). 
 - **Deliverable**: A file tree and path picker open any file of the worktree with numbers and colouring; Back returns to the diff with file, scroll and expansion; "Open diff" for changed files.
 - **Satisfies**: US5 acceptance scenarios 1, 3, 5 and 4 (worktree); FR-011, FR-013, FR-014, FR-015; SC-006
 - **Verify**: `cargo test -p micold-core --test review_browse`; `cargo test -p micold-client --test features_changes browse`; quickstart Part B steps 6 (tree and picker, Back), 8
-- **Depends on**: M1
+- **Depends on**: M1, M3, M4
 - **Tier**: full
 
 ### M6 — Browse at the pull request head
