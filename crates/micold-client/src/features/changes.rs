@@ -344,18 +344,72 @@ pub enum SourceKey {
     Pr(u64),
 }
 
+/// How the selected file's whole-file toggle appears (feature 1150, FR-004).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WholeFile {
+    /// No toggle: no file is selected, or it is added and shows every line already.
+    Hidden,
+    /// Shown disabled with a reason: the file has no text version to show whole (FR-009).
+    Unavailable,
+    /// Offered; `on` when every line of the file is shown.
+    Available {
+        /// Whole-file mode is on.
+        on: bool,
+    },
+}
+
+/// The tooltip of a disabled whole-file toggle.
+pub const WHOLE_FILE_UNAVAILABLE: &str = "No text version of this file to show";
+
+/// The kind the list gives the selected file of the entry's changes.
+fn changes_kind<'a>(view: &'a OpenView, path: &RelPath) -> Option<&'a ChangeKind> {
+    if view.source != Source::Changes {
+        return None;
+    }
+    shown_list(view)
+        .and_then(|list| list.files.iter().find(|f| &f.path == path))
+        .map(|f| &f.kind)
+}
+
 /// Whether the selected file of the entry's changes can have hidden lines revealed: it is listed
 /// with a text version on both sides, so not added, untracked or deleted (FR-009).
 fn revealable(view: &OpenView, path: &RelPath) -> bool {
-    view.source == Source::Changes
-        && shown_list(view)
-            .and_then(|list| list.files.iter().find(|f| &f.path == path))
-            .is_some_and(|f| {
-                !matches!(
-                    f.kind,
-                    ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Deleted
-                )
-            })
+    changes_kind(view, path).is_some_and(|kind| {
+        !matches!(
+            kind,
+            ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Deleted
+        )
+    })
+}
+
+/// The whole-file toggle of the selected file: hidden for an added file, disabled when there is no
+/// text version to show, else on or off (FR-004).
+pub fn whole_file(view: &OpenView) -> WholeFile {
+    let Some(path) = view.selected.as_ref() else {
+        return WholeFile::Hidden;
+    };
+    if matches!(
+        changes_kind(view, path),
+        Some(ChangeKind::Added | ChangeKind::Untracked)
+    ) {
+        return WholeFile::Hidden;
+    }
+    let text = matches!(
+        diff_body(view),
+        DiffBody::Diff(LoadedDiff {
+            diff: FileDiff::Text(_),
+            new: Some(_),
+            ..
+        })
+    );
+    if !(text && revealable(view, path)) {
+        return WholeFile::Unavailable;
+    }
+    let on = view
+        .expansions
+        .get(&(SourceKey::Worktree, path.clone()))
+        .is_some_and(|e| e.whole);
+    WholeFile::Available { on }
 }
 
 /// Recompute `view.shaped` from the diff on screen and the file's expansion, dropping open runs
@@ -883,6 +937,8 @@ pub enum Msg {
     /// A hidden-lines marker was pressed: reveal that run of the selected file, or hide it again
     /// (feature 1150, FR-002, FR-003).
     GapToggled(GapKey),
+    /// The selected file's whole-file toggle was pressed (feature 1150, FR-004).
+    WholeFileToggled,
     /// The diff scrolled or was resized.
     DiffScrolled {
         /// Offset from the top, pixels.
@@ -1393,6 +1449,19 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                         .entry((SourceKey::Worktree, path))
                         .or_default()
                         .toggle_key(key);
+                }
+            }
+            Effect::None
+        }
+        Msg::WholeFileToggled => {
+            if let Some(view) = state.open.as_mut() {
+                if let (WholeFile::Available { on }, Some(path)) =
+                    (whole_file(view), view.selected.clone())
+                {
+                    view.expansions
+                        .entry((SourceKey::Worktree, path))
+                        .or_default()
+                        .set_whole(!on);
                 }
             }
             Effect::None

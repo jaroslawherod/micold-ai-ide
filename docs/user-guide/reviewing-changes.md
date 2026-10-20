@@ -144,6 +144,20 @@ lines to hide them again and get the usual hunk back.
 - A file over the size limits (see *Large files*) shows its lines only after **Show diff**; its
   hidden lines are then available like any other file's. A pull request's diff has no such rows yet.
 
+### Showing the whole file
+
+Instead of opening hidden lines one row at a time, press **Whole file** beside the layout choice to
+see every line of the selected file. Added and removed lines stay marked and in their place, the
+numbers run on without a break, and the lines are coloured like the rest of the diff. Press it
+again to go back to the hunks.
+
+- The choice is kept for each file while the view stays open, and a refresh keeps it.
+- An added or untracked file shows all its lines already, so it has no **Whole file** button. For a
+  file with no text version to show (deleted, binary, or not readable as text) the button is
+  greyed out, and hovering it says why.
+- The lines come from the file as it is on disk, like the hidden lines above. A very long file may
+  be left uncoloured rather than make the view wait.
+
 ### Binary and non-text files
 
 A file whose contents are not readable text is listed, but its contents are never shown. The diff

@@ -53,11 +53,11 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 **Goal**: per-file whole-file mode.
 
-- [ ] T018 [P] [US2] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `Msg::WholeFileToggled` shows every line once and off restores hunks, toggle hidden for added files and disabled (with reason) when no text version, whole-file state per `(SourceKey, RelPath)`, survives refresh (FR-004, FR-008)
-- [ ] T019 [US2] Add `Msg::WholeFileToggled` and the added-file/unavailable gating in `crates/micold-client/src/features/changes.rs` (T018 green)
-- [ ] T020 [P] [US2] Add the per-file whole-file toggle (hidden for added files; for other files with no text version, disabled with a tooltip, since FR-009 forbids offering expansion) to the file header in `crates/micold-client/src/ui/changes.rs`
-- [ ] T021 [P] [US2] Run `highlight_file` under the existing `highlight_within` budget (uncoloured on budget, no UI freeze for large files) with a test in `crates/micold-client/src/ui/syntax.rs`
-- [ ] T022 [US2] Document "Showing the whole file" in `docs/user-guide/reviewing-changes.md`
+- [x] T018 [P] [US2] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `Msg::WholeFileToggled` shows every line once and off restores hunks, toggle hidden for added files and disabled (with reason) when no text version, whole-file state per `(SourceKey, RelPath)`, survives refresh (FR-004, FR-008)
+- [x] T019 [US2] Add `Msg::WholeFileToggled` and the added-file/unavailable gating in `crates/micold-client/src/features/changes.rs` (T018 green)
+- [x] T020 [P] [US2] Add the per-file whole-file toggle (hidden for added files; for other files with no text version, disabled with a tooltip, since FR-009 forbids offering expansion) to the file header in `crates/micold-client/src/ui/changes.rs`
+- [x] T021 [P] [US2] Run `highlight_file` under the existing `highlight_within` budget (uncoloured on budget, no UI freeze for large files) with a test in `crates/micold-client/src/ui/syntax.rs`
+- [x] T022 [US2] Document "Showing the whole file" in `docs/user-guide/reviewing-changes.md`
 
 ## Phase 5: User Story 3 - Works for a pull request's diff (P1)
 
