@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1161
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
-- **Phase**: tasks
-- **Next step**: tasks review, then design PR
+- **Phase**: design-pr
+- **Next step**: merge design PR, then M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Design | open / merged | … |
+| #1163 | Design | open | … |
 
 ## Milestones
 
