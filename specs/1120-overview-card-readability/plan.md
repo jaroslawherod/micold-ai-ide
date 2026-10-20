@@ -18,6 +18,13 @@ header labels. A new layout-only `cdk::EvenRow` makes every card in a grid row a
 never under 172 px (`CardGrid`). Contrast, overlap and row-height gates, a new Overview layout-snapshot
 state, the showcase and the user guide follow. Design decisions: [research.md](research.md).
 
+> **Amended in M3** (Decisions #2 in `autopilot.md`): there is no `cdk::EvenRow` and no
+> `cdk/even_row.rs`. Feature 970's ribbon `Grid` in `card_grid.rs` cannot hold per-row widgets, so
+> `Grid::layout` measures each card, makes each row as tall as its tallest card (never under 172 px)
+> and lays each card out at that height (contracts K2/K3, research R12). Read every `EvenRow` below
+> (summary, Technical Context, Principles I, V and VIII, Structure, FR-014's row) as that
+> measure-then-stretch in `CardGrid`; its tests are in `card_grid.rs`.
+
 ## Technical Context
 
 **Language/Version**: Rust, stable toolchain (via `mise`)

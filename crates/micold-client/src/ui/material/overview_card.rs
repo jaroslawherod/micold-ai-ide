@@ -202,7 +202,7 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let header = row![
             Tooltip::new(glyph(w.type_icon), w.type_label, roles),
             Tooltip::new(
-                Ellipsized::<M>::at_role(text.title, TypeRole::CardTitle, p.text),
+                Ellipsized::<M>::at_role_spaced(text.title, TypeRole::CardTitle, p.text),
                 text.title_tooltip,
                 roles
             ),
@@ -222,7 +222,7 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let mut body = column![header].spacing(spacing::XS);
         if let Some(branch) = text.branch {
             body = body.push(Tooltip::new(
-                Ellipsized::<M>::at_role(branch.text, TypeRole::Body, p.text),
+                Ellipsized::<M>::at_role_spaced(branch.text, TypeRole::Body, p.text),
                 branch.tooltip,
                 roles,
             ));
@@ -237,7 +237,7 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         );
         if let Some(activity) = text.activity {
             body = body.push(Tooltip::new(
-                Ellipsized::<M>::at_role(activity.text, TypeRole::Body, p.text),
+                Ellipsized::<M>::at_role_spaced(activity.text, TypeRole::Body, p.text),
                 activity.tooltip,
                 roles,
             ));
