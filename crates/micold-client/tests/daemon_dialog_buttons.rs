@@ -87,7 +87,10 @@ fn the_form_dialog_buttons_send_save_and_discard() {
     let dialog = micold_client::ui::daemon_form_dialog::dialog(&state, ColorScheme::Dark, &outcome)
         .expect("the form is open");
     let sent = sweep(dialog);
-    assert!(sent.contains(&daemons(DaemonsMsg::Saved)), "Save daemon: {sent:?}");
+    assert!(
+        sent.contains(&daemons(DaemonsMsg::Saved)),
+        "Save daemon: {sent:?}"
+    );
     assert!(
         sent.contains(&daemons(DaemonsMsg::DraftDiscarded)),
         "Cancel: {sent:?}"
@@ -118,7 +121,10 @@ fn the_page_buttons_open_the_dialog_for_their_row() {
         ("Edit of the first row", DaemonsMsg::EditOpened(host)),
         ("Edit of the second row", DaemonsMsg::EditOpened(other)),
         ("Details of the first row", DaemonsMsg::DetailsOpened(host)),
-        ("Details of the second row", DaemonsMsg::DetailsOpened(other)),
+        (
+            "Details of the second row",
+            DaemonsMsg::DetailsOpened(other),
+        ),
     ] {
         assert!(sent.contains(&daemons(msg)), "{what}: {sent:?}");
     }
@@ -191,7 +197,11 @@ fn the_add_and_row_buttons_carry_the_ids_focus_returns_to() {
         Opener::Row(other, RowAction::Details),
     ];
     for (n, opener) in openers.iter().enumerate() {
-        assert!(ids.0.contains(&id_of(*opener)), "{opener:?} has no button: {:?}", ids.0);
+        assert!(
+            ids.0.contains(&id_of(*opener)),
+            "{opener:?} has no button: {:?}",
+            ids.0
+        );
         for later in &openers[n + 1..] {
             assert_ne!(id_of(*opener), id_of(*later), "two openers share an id");
         }
