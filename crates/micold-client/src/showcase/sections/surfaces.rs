@@ -505,6 +505,7 @@ fn card_model(
         activation: micold_core::overview::Activation::RevealOnly(
             micold_core::session::SessionLocation::Default,
         ),
+        dir: std::path::PathBuf::from("/home/dev/code/app"),
     }
 }
 

@@ -403,6 +403,8 @@ pub struct CardModel {
     pub activity: Option<crate::hook_activity::CurrentActivity>,
     /// What activating the card does.
     pub activation: Activation,
+    /// Its directory: the worktree's path, or the project root for *Default* (feature 1121 R8).
+    pub dir: std::path::PathBuf,
 }
 
 /// Orders cards worst state first, keeping the sidebar's order within a state (FR-007).
@@ -1099,6 +1101,7 @@ mod tests {
             progress: Default::default(),
             activity: None,
             activation: Activation::RevealOnly(worktree(name)),
+            dir: std::path::PathBuf::from(format!("/repo/{name}")),
         }
     }
 

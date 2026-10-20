@@ -261,12 +261,13 @@ enum Place<'a> {
 }
 
 fn card(app: &State, place: &Place) -> CardModel {
-    let (location, display_name, branch, kind) = match place {
+    let (location, display_name, branch, kind, dir) = match place {
         Place::Default => (
             SessionLocation::Default,
             "Default".to_string(),
             None,
             LocationType::ProjectRoot,
+            app.workspace.active.clone().unwrap_or_default(),
         ),
         Place::Worktree(node) => {
             let location = SessionLocation::Worktree(node.worktree.dir_name.clone());
@@ -276,6 +277,7 @@ fn card(app: &State, place: &Place) -> CardModel {
                 node.display_name.clone(),
                 node.worktree.branch.clone(),
                 kind,
+                node.worktree.path.clone(),
             )
         }
     };
@@ -330,6 +332,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         activity,
         prs: pr_display(&app.pr_status, branch_ref),
         activation,
+        dir,
     }
 }
 
