@@ -34,6 +34,8 @@ pub(crate) struct LineClamped<M> {
     max_lines: usize,
     /// `None` draws in the surrounding text colour, as a tooltip's label does.
     tint: Option<Rgb>,
+    /// `Shrink` is as wide as the text, as a tooltip's label is; `Fill` spans the row it is in.
+    width: Length,
     marker: PhantomData<M>,
 }
 
@@ -45,6 +47,7 @@ impl<M> LineClamped<M> {
             role,
             max_lines,
             tint: None,
+            width: Length::Shrink,
             marker: PhantomData,
         }
     }
@@ -52,6 +55,12 @@ impl<M> LineClamped<M> {
     /// Drawn in `color` rather than the surrounding text colour.
     pub(crate) fn tint(mut self, color: Rgb) -> Self {
         self.tint = Some(color);
+        self
+    }
+
+    /// Laid out `width` wide: `Fill` spans the row, as the one-line label it replaces did.
+    pub(crate) fn width(mut self, width: Length) -> Self {
+        self.width = width;
         self
     }
 }
@@ -69,7 +78,7 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Shrink, Length::Shrink)
+        Size::new(self.width, Length::Shrink)
     }
 
     fn layout(
@@ -111,11 +120,7 @@ where
             state.store(paragraph, fitted, key);
         }
 
-        layout::Node::new(limits.resolve(
-            Length::Shrink,
-            Length::Shrink,
-            state.paragraph.min_bounds(),
-        ))
+        layout::Node::new(limits.resolve(self.width, Length::Shrink, state.paragraph.min_bounds()))
     }
 
     fn draw(
@@ -286,6 +291,25 @@ mod tests {
             );
             assert_eq!(clamped.height, spaced.height, "{role:?}");
         }
+    }
+
+    /// Feature 1121 T006: a `Fill` label spans its row as the ellipsized line did, so the card's
+    /// title and activity keep their width in the layout; the default is as wide as its text.
+    #[test]
+    fn a_filling_label_spans_the_row_and_a_default_one_its_text() {
+        let room = Size::new(NARROWEST_CARD, 400.0);
+        let fill = test_support::size_of(
+            LineClamped::<()>::new("Overview", TypeRole::CardTitle, 3)
+                .width(Length::Fill)
+                .into(),
+            room,
+        );
+        let shrink = test_support::size_of(
+            LineClamped::<()>::new("Overview", TypeRole::CardTitle, 3).into(),
+            room,
+        );
+        assert_eq!(fill.width, NARROWEST_CARD);
+        assert!(shrink.width < NARROWEST_CARD, "{shrink:?}");
     }
 
     /// Feature 1121 T001, US1 sc.2: a title needing five lines at 280 px takes three, the third
