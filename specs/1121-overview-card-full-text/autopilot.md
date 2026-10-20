@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: tasks
-- **Next step**: tasks unit: review A tasks round 2 (sonnet), then close checklists (none open), specs-only gate, design PR
+- **Next step**: orchestrator opens and merges the design PR; then milestone M1. Checklists: none open. Specs-only gate (check-criteria-observables) green.
 
 ## Pull requests
 
@@ -47,7 +47,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review A plan | 1 | 87d13a0a2d57de09847732a4e464bd243ec8a49f:efe4e646959dbdee73bf65a2b7f4d65fa0d75299 | CHANGES: 4 MAJOR, 3 MINOR (F1–F7 all fixed: F1 Escape flags by card not cause + K1 test; F2 `on_shown_change`, keyboard focus only; F3 zoom clause dropped, no zoom event; F4 reset in `settle_card_menu` `!open`; F5 twin in own slot, skipped; F6 `ShowTimer::reset` on topmost change; F7 alternatives R8/R10, `directories::UserDirs`) |
 | Review A plan | 2 | 8eb81ec18dea43a1ee32fb6eb0e6de7fa1e7ba2a:22be5f13e209d69fdbed61593e8d148f16f15c88 | CLEAN (1 MINOR: `Listed` fed before `settle_card_menu`'s no-menu early return; fixed, prose only in U4/plan) |
 | Review A tasks | 1 | 84b609124a576b8d793f47f09216b3c79bbeea8b:d6f4f3fbafa534911b5f566630df5fd306294e10 | CHANGES: 2 MAJOR, 3 MINOR (F1–F5 all fixed: F1 T009/T017/T019/T034 tagged (D2), Decisions-pending note widened; F2 [P] dropped from T011/T015/T025/T039, Parallel Opportunities updated; F3 M3/M4 Verify run `--lib card_grid overview`/`overview_card`, `test-core`, `--bin micold-ai-ide -- expansion_` (main_tests.rs tests named `expansion_*` in T027/T038), FR-018 grep; F4 T014 asserts first-frame draw, no animation (Reduced motion); F5 `CardMenuEntryChosen`) |
-| Review A tasks | 2 | 9ac10ee67c517503859ade450408ae3c2d3ef643:74d69ce7b73920adac4b6794eea2fe66fcf871a2 | pending |
+| Review A tasks | 2 | 9ac10ee67c517503859ade450408ae3c2d3ef643:74d69ce7b73920adac4b6794eea2fe66fcf871a2 | CLEAN (no findings) |
 
 ## Declined review findings
 
