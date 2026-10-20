@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (two open: Overview card scope, refresh cadence; the clarify unit closes them)
+- [x] No [NEEDS CLARIFICATION] markers remain (Overview card scope and refresh cadence were decided in the clarify session)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Two open clarification markers remain on purpose for `/speckit-clarify`.
+- Both clarification markers were decided in the clarify session.
