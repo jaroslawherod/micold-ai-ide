@@ -174,6 +174,48 @@ pub fn tag<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message
     )
 }
 
+/// `StatusChip` — one chip per status category and the neutral one, a stale one and one cut short.
+pub fn status_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use micold_core::jira_status::{StatusCategory, TicketStatus};
+    let status = |name: &str, category| TicketStatus {
+        name: name.to_string(),
+        category,
+    };
+    let chip = |label: &'static str, status: TicketStatus, stale: bool| {
+        posed(
+            label,
+            Element::<Message>::from(material::StatusChip::new(&status, roles).stale(stale)),
+            roles,
+        )
+    };
+    arrange(
+        vec![
+            chip("To Do", status("To Do", Some(StatusCategory::ToDo)), false),
+            chip(
+                "In Progress",
+                status("In Review", Some(StatusCategory::InProgress)),
+                false,
+            ),
+            chip("Done", status("Done", Some(StatusCategory::Done)), false),
+            chip("no category", status("Triage", None), false),
+            chip(
+                "stale",
+                status("In Review", Some(StatusCategory::InProgress)),
+                true,
+            ),
+            chip(
+                "long name",
+                status(
+                    "Waiting for customer confirmation",
+                    Some(StatusCategory::InProgress),
+                ),
+                false,
+            ),
+        ],
+        Layout::Inline,
+    )
+}
+
 /// `IconLabel` — a glyph and a label as one unit, posed at the three roles it is used at.
 ///
 /// The gallery is where the distinction this type exists for is visible: the glyph tracks the
