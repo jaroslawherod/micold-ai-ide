@@ -2551,3 +2551,15 @@ fn files_without_two_text_versions_offer_no_markers() {
     assert!(view_of(&state).shaped.gaps.is_empty());
     assert!(view_of(&state).shaped.hunks.is_empty());
 }
+
+/// A pick on a revealed line ends when its run is hidden again.
+#[test]
+fn collapsing_a_run_drops_a_pick_on_its_lines() {
+    let mut state = showing(long_file("X"));
+    toggle_gap(&mut state, 0);
+    gutter(&mut state, Some(3), Some(3), false);
+    assert!(pick(&state).is_some());
+    let key = view_of(&state).shaped.revealed[0].gap.key();
+    changes::update(&mut state, Msg::GapToggled(key));
+    assert!(pick(&state).is_none());
+}
