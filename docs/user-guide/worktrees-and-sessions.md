@@ -471,6 +471,11 @@ With a CLI chosen, an optional **First prompt** field holds the opening prompt s
 session is defined here, when the worktree is created, and opens at once; there is no separate
 add action on a worktree that already has one.
 
+When Settings holds a [default prompt template](settings.md#default-prompt-template), the field is
+filled from it as you pick an issue, type, ticket or name, and when you choose a CLI. Once you type
+in the field, or clear it, your text stays whatever you change after. Choosing **None** and then a
+CLI again returns the field to the template.
+
 The form shows the derived names before you create:
 
 - **Directory**: `.claude/worktrees/${type}-${ticket}_${name}`
