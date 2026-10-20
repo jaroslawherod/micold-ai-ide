@@ -16,6 +16,7 @@ use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::widget::scrollable::AbsoluteOffset;
 use iced::{window, Element, Event, Length, Point, Rectangle, Size, Vector};
 use micold_core::overview_expansion::EXPAND_REST;
+use micold_core::session::SessionLocation;
 use micold_core::tokens::motion::duration;
 use micold_core::tokens::{spacing, Roles};
 use micold_core::tooltip::ShowTimer;
@@ -247,8 +248,9 @@ struct ZoomState {
     capped_at: Option<f32>,
     /// The pointer's rest on the topmost card under it (feature 1121, R5, U3).
     rest: ShowTimer,
-    /// That card, and whether its rest was published.
-    resting: Option<(usize, bool)>,
+    /// That card's location, and whether its rest was published: the card, not its place in
+    /// the list, so a re-sort under the pointer leaves it (review A F1, M3).
+    resting: Option<(SessionLocation, bool)>,
 }
 
 impl ZoomState {
@@ -412,8 +414,8 @@ struct Grid<'a, M> {
     /// That card collapsed: measured for its row, never drawn, focused or sent events. Its tree
     /// is the one after the cards'.
     twin: Option<Element<'a, M>>,
-    /// Each card's `on_rest` and `on_leave` messages (feature 1121, R5).
-    rests: Vec<(Option<M>, Option<M>)>,
+    /// Each card's location and its `on_rest` and `on_leave` messages (feature 1121, R5).
+    rests: Vec<(SessionLocation, Option<M>, Option<M>)>,
     /// Published when the window loses focus (feature 1121, FR-005).
     on_window_blur: Option<M>,
 }
@@ -472,20 +474,22 @@ impl<M: Clone> Grid<'_, M> {
                     .position(|card| card.bounds().contains(at))
             })
         };
-        if topmost != state.resting.map(|(card, _)| card) {
-            if let Some((left, true)) = state.resting {
-                if let Some((_, Some(on_leave))) = self.rests.get(left) {
+        let topmost = topmost.and_then(|card| self.rests.get(card).map(|(at, ..)| at));
+        let messages = |at: &SessionLocation| self.rests.iter().find(|(card, ..)| card == at);
+        if topmost != state.resting.as_ref().map(|(card, _)| card) {
+            if let Some((left, true)) = &state.resting {
+                if let Some((_, _, Some(on_leave))) = messages(left) {
                     shell.publish(on_leave.clone());
                 }
             }
             state.rest.reset();
-            state.resting = topmost.map(|card| (card, false));
+            state.resting = topmost.map(|card| (card.clone(), false));
         }
         let rest = state.rest.observe(topmost.is_some(), now, EXPAND_REST);
         if let Some((card, rested @ false)) = state.resting.as_mut() {
             if rest.open {
                 *rested = true;
-                if let Some((Some(on_rest), _)) = self.rests.get(*card) {
+                if let Some((_, Some(on_rest), _)) = messages(card) {
                     shell.publish(on_rest.clone());
                 }
             }
@@ -2604,6 +2608,51 @@ mod tests {
         let t1 = t0 + EXPAND_REST * 2;
         assert_eq!(frame_at(&mut m, next, t1), ["leave 1"]);
         assert_eq!(frame_at(&mut m, next, t1 + EXPAND_REST), ["rest 4"]);
+    }
+
+    /// Feature 1121 R5, FR-005 (review A F1, M3): the cards re-sorted under a pointer at rest, so
+    /// that another card now holds the rested card's place, leave the rested card and rest on
+    /// the new one: the rest follows the card, not its place in the list.
+    #[test]
+    fn a_reorder_under_a_resting_pointer_leaves_the_card_and_rests_on_the_new_one() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let keyed = |models: &[CardModel]| {
+            let cards = models
+                .iter()
+                .map(|m| {
+                    OverviewCard::new(m, roles())
+                        .on_rest(format!("rest {:?}", m.location))
+                        .on_leave(format!("leave {:?}", m.location))
+                })
+                .collect();
+            CardGrid::new(cards, roles())
+                .min_width(280.0)
+                .spacing(GAP)
+                .unscrolled()
+        };
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let mut m = Mounted::new_in(keyed(&models), Size::new(900.0, 4000.0));
+        let on = slots(&m.node, 6)[2].center();
+        let t0 = std::time::Instant::now();
+        frame_at(&mut m, on, t0);
+        assert_eq!(
+            frame_at(&mut m, on, t0 + EXPAND_REST),
+            [format!("rest {:?}", models[2].location)]
+        );
+        let mut sorted = models.clone();
+        sorted.swap(0, 2);
+        m.element = keyed(&sorted).into();
+        m.tree.diff(&m.element);
+        m.relayout();
+        let t1 = t0 + EXPAND_REST * 2;
+        assert_eq!(
+            frame_at(&mut m, on, t1),
+            [format!("leave {:?}", models[2].location)]
+        );
+        assert_eq!(
+            frame_at(&mut m, on, t1 + EXPAND_REST),
+            [format!("rest {:?}", models[0].location)]
+        );
     }
 
     /// Feature 1121 FR-005, U4: the window losing focus publishes the grid's `on_window_blur`,

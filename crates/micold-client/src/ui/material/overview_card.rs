@@ -248,12 +248,19 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         self
     }
 
-    /// The messages of [`Self::on_rest`] and [`Self::on_leave`], for the grid's rest timer.
-    pub(crate) fn rest_messages(&self) -> (Option<M>, Option<M>)
+    /// The card's location and the messages of [`Self::on_rest`] and [`Self::on_leave`], for the
+    /// grid's rest timer, which follows the card by its location.
+    pub(crate) fn rest_messages(
+        &self,
+    ) -> (micold_core::session::SessionLocation, Option<M>, Option<M>)
     where
         M: Clone,
     {
-        (self.on_rest.clone(), self.on_leave.clone())
+        (
+            self.model.location.clone(),
+            self.on_rest.clone(),
+            self.on_leave.clone(),
+        )
     }
 
     /// Name the card so the application can move the keyboard to it.
