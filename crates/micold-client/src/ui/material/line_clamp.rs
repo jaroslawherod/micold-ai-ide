@@ -160,33 +160,7 @@ where
 }
 
 #[cfg(test)]
-/// `content` at `role` laid out `width` wide on at most `max_lines` lines: what it holds, and
-/// its size.
-pub(super) fn laid_out_at(
-    content: &str,
-    role: TypeRole,
-    max_lines: usize,
-    width: f32,
-) -> (String, Size) {
-    let renderer = super::test_support::renderer();
-    let mut label = LineClamped::<()>::new(content, role, max_lines);
-    let widget: &mut dyn Widget<(), iced::Theme, iced::Renderer> = &mut label;
-    let mut tree = Tree {
-        tag: widget.tag(),
-        state: widget.state(),
-        children: Vec::new(),
-    };
-    let limits = layout::Limits::new(Size::ZERO, Size::new(width, f32::INFINITY));
-    let node = widget.layout(&mut tree, &renderer, &limits);
-    let state = tree
-        .state
-        .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, (String, f32, usize)>>(
-        );
-    (state.fitted.clone(), node.size())
-}
-
-#[cfg(test)]
-mod tests {
+pub(super) mod tests {
     //! The line limit as the tooltip shows it (U68; contracts/rest-tooltip.md §5). The rule is
     //! `micold_core`'s and is held there with a fake measure; what is held here is the real one —
     //! the shipped face at the tooltip's width — and the panel that results.
@@ -199,6 +173,31 @@ mod tests {
     use micold_core::tokens::{self, spacing, Rgb};
 
     const WINDOW: Size = Size::new(800.0, 600.0);
+
+    /// `content` at `role` laid out `width` wide on at most `max_lines` lines: what it holds, and
+    /// its size.
+    pub(crate) fn laid_out_at(
+        content: &str,
+        role: TypeRole,
+        max_lines: usize,
+        width: f32,
+    ) -> (String, Size) {
+        let renderer = test_support::renderer();
+        let mut label = LineClamped::<()>::new(content, role, max_lines);
+        let widget: &mut dyn Widget<(), iced::Theme, iced::Renderer> = &mut label;
+        let mut tree = Tree {
+            tag: widget.tag(),
+            state: widget.state(),
+            children: Vec::new(),
+        };
+        let limits = layout::Limits::new(Size::ZERO, Size::new(width, f32::INFINITY));
+        let node = widget.layout(&mut tree, &renderer, &limits);
+        let state = tree
+            .state
+            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, (String, f32, usize)>>(
+            );
+        (state.fitted.clone(), node.size())
+    }
 
     /// Far more than three lines at the tooltip's width, in words.
     fn long() -> String {
