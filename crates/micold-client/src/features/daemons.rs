@@ -380,8 +380,8 @@ pub struct State {
     /// sections of one form are one group (feature 1091, FR-004). View state: never persisted,
     /// forgotten when the form closes (FR-015).
     sections: AccordionGroup<Section>,
-    /// The daemons whose details (errors and log tail) are open.
-    pub details_shown: BTreeSet<DaemonId>,
+    /// The daemon whose details (errors and log tail) are open in the dialog (feature 1092).
+    pub details: Option<DaemonId>,
     /// The location the `Bind to daemon...` picker is open for.
     pub bind_target: Option<WorktreeRef>,
     pending: Option<(Pending, RemovalPrompt)>,
@@ -433,7 +433,7 @@ impl State {
     /// The opener to give focus back to, once the form has closed: `None` while it is open or
     /// when nothing is waiting. Taken, so focus moves once per close (FR-009).
     pub fn take_focus_return(&mut self) -> Option<Opener> {
-        if self.draft.is_some() {
+        if self.draft.is_some() || self.details.is_some() {
             return None;
         }
         self.opener.take()
@@ -1663,7 +1663,9 @@ fn forget(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome
     state.credentials.remove(&id);
     state.applies_on_next_start.remove(&id);
     state.pod_logs.remove(&id);
-    state.details_shown.remove(&id);
+    if state.details == Some(id) {
+        state.details = None;
+    }
     vec![
         Outcome::DaemonRegistryChanged(model.registry.clone()),
         Outcome::KubeKeysDelete { daemon: id },
@@ -1839,8 +1841,10 @@ pub enum Msg {
     LogsFetched(DaemonId, Result<String, String>),
     /// Decline it: nothing changes.
     RemovalCancelled,
-    /// Show or hide this daemon's errors and log tail.
-    DetailsToggled(DaemonId),
+    /// Open this daemon's errors and log tail in a dialog.
+    DetailsOpened(DaemonId),
+    /// Close the details dialog; nothing is stored.
+    DetailsClosed,
     /// What one daemon's connection reported (its state moves, and what it said is kept for the
     /// details). Sent by the shell as the connection actor's messages arrive.
     EventReported(DaemonId, DaemonEvent),
@@ -2171,11 +2175,7 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             state.pod_logs.insert(id, result);
         }
         Msg::RemovalConfirmed => {
-            let out = confirm(state, model);
-            state
-                .details_shown
-                .retain(|id| model.registry.get(*id).is_some());
-            return out;
+            return confirm(state, model);
         }
         Msg::RemovalCancelled => {
             if let Some((Pending::Drift(id), _)) = &state.pending {
@@ -2188,11 +2188,11 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         }
         Msg::KubeDrift(id, fields) => return request_drift_answer(state, model, id, &fields),
         Msg::StartCancelled(id) => return cancel_kube_start(state, model, id),
-        Msg::DetailsToggled(id) => {
-            if !state.details_shown.remove(&id) {
-                state.details_shown.insert(id);
-            }
+        Msg::DetailsOpened(id) => {
+            state.details = Some(id);
+            state.opener = Some(Opener::Row(id, RowAction::Details));
         }
+        Msg::DetailsClosed => state.details = None,
         Msg::EventReported(id, event) => {
             daemon_event(state, model.links, id, event);
         }
@@ -2264,10 +2264,46 @@ impl Registered for DaemonFormDialog {
     }
 }
 
-/// Whether the dialog `id` keeps Tab to itself (feature 1092, FR-009): the form and the removal
-/// confirmation, the two this feature puts over the Settings page.
+/// A daemon's details, read-only, as a floating surface (feature 1092, FR-012). It is open while
+/// its daemon is in the registry, so removing the daemon cannot leave an empty modal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DaemonDetailsDialog {
+    /// The daemon the dialog shows.
+    pub daemon: DaemonId,
+}
+
+impl FloatingSurface for DaemonDetailsDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("daemon_details")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(crate::app::Message::Daemons(Msg::DetailsClosed))
+    }
+}
+
+impl Registered for DaemonDetailsDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        let daemon = state.daemon_list.details?;
+        state
+            .settings
+            .daemons
+            .get(daemon)
+            .map(|_| DaemonDetailsDialog { daemon })
+    }
+}
+
+/// Whether the dialog `id` keeps Tab to itself (feature 1092, FR-009): the form, the removal
+/// confirmation and the details, the dialogs this feature puts over the Settings page.
 pub fn traps_focus(id: SurfaceId) -> bool {
-    id == SurfaceId::new("daemon_form") || id == SurfaceId::new("confirm_daemon_removal")
+    id == SurfaceId::new("daemon_form")
+        || id == SurfaceId::new("confirm_daemon_removal")
+        || id == SurfaceId::new("daemon_details")
 }
 
 /// The `Bind to daemon...` picker, as a floating surface (feature 491, T036).

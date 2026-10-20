@@ -241,7 +241,8 @@ fn every_popover_is_in_the_table() {
     // Twenty-one with `review_full_reply`, the dialog that shows a whole reply (feature 946).
     // Twenty-two with `quick_switcher`, the palette that jumps to a location (feature 968).
     // Twenty-three with `daemon_form`, the add and edit dialog (feature 1092).
-    const DIALOGS: usize = 23;
+    // Twenty-four with `daemon_details`, the read-only details dialog (feature 1092).
+    const DIALOGS: usize = 24;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

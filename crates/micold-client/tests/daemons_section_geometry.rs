@@ -132,13 +132,29 @@ fn several_rows_paint_name_runtime_and_state_without_overflow() {
 }
 
 #[test]
-fn a_row_with_its_details_open_paints_its_errors_and_log() {
+fn the_page_has_no_inline_details_and_the_details_dialog_paints_errors_and_log() {
     let (mut state, [_, boxed, _]) = with_daemons();
-    state.update(Message::Daemons(DaemonsMsg::DetailsToggled(boxed)));
-    let painted = painted(&state);
-    assert!(has(&painted, "Hide details"), "{painted:?}");
-    assert!(has(&painted, "connection refused"), "{painted:?}");
-    assert_no_text_overflows(&state, "details open");
+    state.update(Message::Daemons(DaemonsMsg::DetailsOpened(boxed)));
+    let page = painted(&state);
+    assert!(!has(&page, "Hide details"), "{page:?}");
+    assert!(!has(&page, "connection refused"), "{page:?}");
+    assert_no_text_overflows(&state, "page with details open");
+    let outcome = EnvIncludeOutcome::Disabled;
+    let body = || {
+        micold_client::ui::daemon_details_dialog::dialog(&state, ColorScheme::Dark, &outcome)
+            .expect("the dialog is open")
+    };
+    let mut renderer = lay::renderer();
+    let strings: Vec<String> = lay::painted_text(body(), &mut renderer)
+        .into_iter()
+        .map(|drawn| drawn.content)
+        .collect();
+    assert!(has(&strings, "connection refused"), "{strings:?}");
+    assert!(has(&strings, "Close"), "{strings:?}");
+    assert!(
+        lay::text_overflows(body(), &mut renderer).is_empty(),
+        "the dialog text fits"
+    );
 }
 
 #[test]
@@ -566,7 +582,7 @@ fn the_host_picker_and_the_error_rows_paint_without_overflow() {
         ssh,
         DaemonEvent::StartFailed(reason.into()),
     )));
-    state.update(Message::Daemons(DaemonsMsg::DetailsToggled(ssh)));
+    state.update(Message::Daemons(DaemonsMsg::DetailsOpened(ssh)));
     assert!(
         has(&painted(&state), "The host key for build has changed"),
         "the reason is on the row"

@@ -1427,7 +1427,7 @@ fn recent_errors_of_an_ssh_daemon_are_listed_with_the_named_reason() {
         id,
         DaemonEvent::StartFailed("host key for devbox has changed".into()),
     );
-    send(&mut state, &mut w, daemons::Msg::DetailsToggled(id));
+    send(&mut state, &mut w, daemons::Msg::DetailsOpened(id));
     let details = daemons::details(&state, id);
     assert!(
         details.errors.iter().any(|e| e.reason.contains("host key")),
@@ -2345,4 +2345,33 @@ mod add_dialog {
         assert_eq!(state.take_focus_return(), None);
         assert_eq!(state.opener, Some(Opener::Add));
     }
+}
+
+/// Feature 1092, FR-012: opening Details sets the one daemon shown, closing clears it, and the
+/// view's data follows the daemon's log without reopening (US4 scenarios 1 and 2).
+#[test]
+fn details_open_and_close_and_follow_a_new_log_line() {
+    let mut w = World::new();
+    let mut state = State::default();
+    fill_ssh(&mut state, "Remote", true);
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let id = w.registry.entries().last().unwrap().id;
+    assert_eq!(state.details, None);
+    send(&mut state, &mut w, daemons::Msg::DetailsOpened(id));
+    assert_eq!(state.details, Some(id));
+    assert!(daemons::details(&state, id).log.is_empty());
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::LogLine(id, "a fresh line".into()),
+    );
+    assert!(
+        daemons::details(&state, id)
+            .log
+            .iter()
+            .any(|l| l.contains("a fresh line")),
+        "the open dialog reads live state"
+    );
+    send(&mut state, &mut w, daemons::Msg::DetailsClosed);
+    assert_eq!(state.details, None);
 }

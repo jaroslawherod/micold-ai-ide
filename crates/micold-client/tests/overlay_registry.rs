@@ -905,6 +905,25 @@ mod daemon_form {
         );
     }
 
+    /// Feature 1092 M3: the details dialog is open while its daemon exists.
+    #[test]
+    fn details_dialog_is_open_while_its_daemon_is_in_the_registry() {
+        let (mut state, host) = with_daemon();
+        assert_eq!(id_of(&state), None);
+        state.update(Message::Daemons(DaemonsMsg::DetailsOpened(host)));
+        assert_eq!(id_of(&state), Some("daemon_details"));
+        assert!(registry::open_dialog(&state).unwrap().view().is_some());
+        assert_eq!(
+            registry::escape(&state),
+            Some(Message::Daemons(DaemonsMsg::DetailsClosed))
+        );
+        state.update(Message::Daemons(DaemonsMsg::DetailsClosed));
+        assert_eq!(id_of(&state), None);
+        state.update(Message::Daemons(DaemonsMsg::DetailsOpened(host)));
+        state.settings.daemons.remove(host);
+        assert_eq!(id_of(&state), None, "a removed daemon leaves no empty modal");
+    }
+
     fn confirming() -> State {
         let (mut state, host) = with_daemon();
         state.settings.links.apply(host, DaemonEvent::Start);

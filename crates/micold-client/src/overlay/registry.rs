@@ -337,6 +337,8 @@ register! {
     crate::features::daemons::BindDaemonDialog => crate::ui::bind_daemon::dialog,
     // The add and edit form, and the counted confirmation it asks inside itself (feature 1092).
     crate::features::daemons::DaemonFormDialog => crate::ui::daemon_form_dialog::dialog,
+    // A daemon's details, read-only (feature 1092).
+    crate::features::daemons::DaemonDetailsDialog => crate::ui::daemon_details_dialog::dialog,
     crate::features::sidebar::SidebarFilterPanel {
         displaces:
             crate::features::help::HelpMenu,
