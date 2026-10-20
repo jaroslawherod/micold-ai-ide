@@ -433,7 +433,9 @@ impl State {
     /// The opener to give focus back to, once the form has closed: `None` while it is open or
     /// when nothing is waiting. Taken, so focus moves once per close (FR-009).
     pub fn take_focus_return(&mut self) -> Option<Opener> {
-        if self.draft.is_some() || self.details.is_some() {
+        // A prompt raised as the dialog closed (a queued drift prompt) is a modal of its own:
+        // focus returns once it is answered.
+        if self.draft.is_some() || self.details.is_some() || self.standalone_prompt().is_some() {
             return None;
         }
         self.opener.take()
@@ -1443,7 +1445,11 @@ fn request_drift_answer(
 /// starting (stopped, removed, cancelled meanwhile) are dropped.
 fn show_next_drift(state: &mut State, model: &Model<'_>) {
     // A form or details dialog being open holds the prompts back; they show once it closes (R7).
-    while state.pending.is_none() && state.draft.is_none() && state.details.is_none() {
+    // Details of a daemon no longer in the registry show no dialog, so they hold nothing back.
+    let details_open = state
+        .details
+        .is_some_and(|id| model.registry.get(id).is_some());
+    while state.pending.is_none() && state.draft.is_none() && !details_open {
         let Some((id, fields)) = state.drift_queue.pop_front() else {
             return;
         };
@@ -2192,10 +2198,7 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             state.details = Some(id);
             state.opener = Some(Opener::Row(id, RowAction::Details));
         }
-        Msg::DetailsClosed => {
-            state.details = None;
-            show_next_drift(state, model);
-        }
+        Msg::DetailsClosed => state.details = None,
         Msg::EventReported(id, event) => {
             daemon_event(state, model.links, id, event);
         }
