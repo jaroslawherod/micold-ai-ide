@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M3
-- **Next step**: M3 — gate, review A and B, visual pass T035 (T024–T034 done; branch at main 4eaa990f).
+- **Next step**: M3 — full gate, then review A and B and visual pass T035 (see Handover).
 
 ## Pull requests
 
@@ -73,10 +73,26 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-None. Carried for M4 (from M2): K4 — iced never calls `on_scroll` without overflow, so
-`on_body_scroll` never sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on
-expand (cycle log T013 row). Locally `micold-core` `settings_refuses_save_over_failed_read` is red
-when run as root (pre-existing; `scripts/gate.sh` runs it unprivileged).
+M3 unit 2 (context cap). Local commits on claude/project-thread-7041o6, not pushed, no PR yet.
+- **Done**: T024–T034 all ticked; cycle log rows for T027/T030/T032, T031, T033. Targeted runs green:
+  core `overview_` 34, `--test overview` 58, `--bin … expansion_` 1, `--lib card_grid overview` 115,
+  `--test layout_snapshot` 72 (fixture regenerated with `overview-expanded`); FR-018 grep empty.
+- **Gate**: run 1 red on fmt (fixed, amended); run 2 red on `feature_write_isolation`
+  (`overview.expansion.apply`/`.expanded` unclassified): fixed in `tests/support/state_scan.rs`
+  (`apply` → MUTATORS, `expanded` → READERS), that test now 8 passed. Committed, full gate NOT yet re-run.
+- **Next step**: `scripts/gate.sh` detached (full gate) → green → `review-snapshot.sh`, record, push
+  (`git push --force-with-lease=claude/project-thread-7041o6: -u origin claude/project-thread-7041o6`),
+  return REVIEW-NEEDED for review A (high), review B (conformance, sonnet) and the visual pass T035
+  (quickstart §B.3, §B.4, §B.6–§B.8, client; evidence `visual-pass/m3/`), together as in M2.
+- **For the reviewers** (deliberate): `settle_card_menu` feeds `Listed` only when a card is expanded
+  (no `cards()` derivation on every message); FR-004's "no tooltip" check is
+  `overview_card.rs::the_title_branch_and_activity_have_no_tooltip` (needs the `Mounted` hover
+  harness), not `tests/overview.rs`; `CardText.branch`/`activity` became `Option<String>` (`Line` removed).
+  T027 red evidence was taken with the wiring disabled after writing it (cycle log says so).
+- **Open for M4** (carried from M2): K4 — iced never calls `on_scroll` without overflow, so
+  `on_body_scroll` never sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on
+  expand (cycle log T013 row). Locally `micold-core` `settings_refuses_save_over_failed_read` is red
+  when run as root (pre-existing; `scripts/gate.sh` runs it unprivileged).
 
 ## Open escalation
 
