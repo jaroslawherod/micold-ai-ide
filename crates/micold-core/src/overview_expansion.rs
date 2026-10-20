@@ -60,6 +60,8 @@ pub struct Expansion {
     pointer_on: Option<SessionLocation>,
     pointer_escaped: bool,
     menu_open: bool,
+    /// The pointer rested on `pointer_on` while a menu was open: it expands once the menu closes.
+    rest_held: bool,
     body_edges: (bool, bool),
 }
 
@@ -87,25 +89,25 @@ impl Expansion {
                 // until the pointer leaves it.
                 let escaped_here =
                     self.pointer_escaped && self.pointer_on.as_ref() == Some(&location);
-                if self.menu_open || escaped_here {
+                if escaped_here {
                     return;
                 }
                 self.pointer_on = Some(location.clone());
                 self.pointer_escaped = false;
-                self.expand(location, Cause::Pointer);
+                // FR-012: no other card expands under an open menu; this one does once it closes.
+                self.rest_held = self.menu_open;
+                if !self.menu_open {
+                    self.expand(location, Cause::Pointer);
+                }
             }
             Event::PointerLeft(location) => {
                 if self.pointer_on.as_ref() == Some(&location) {
                     self.pointer_on = None;
                     self.pointer_escaped = false;
+                    self.rest_held = false;
                 }
                 if self.expanded == Some((location, Cause::Pointer)) && !self.menu_open {
-                    self.collapse();
-                    // FR-005: the hover ended on no other card; the focused card expands again,
-                    // unless Escape collapsed it since it got focus.
-                    if let Some(focused) = self.focused.clone().filter(|_| !self.focus_escaped) {
-                        self.expand(focused, Cause::Focus);
-                    }
+                    self.end_hover();
                 }
             }
             Event::FocusGained(location) => {
@@ -133,7 +135,22 @@ impl Expansion {
             }
             Event::WindowBlurred => self.collapse(),
             Event::MenuOpened => self.menu_open = true,
-            Event::MenuClosed => self.menu_open = false,
+            Event::MenuClosed => {
+                self.menu_open = false;
+                // What the open menu held back (review A F2, F3, M3): a hover that ended under it
+                // ends now (FR-005), and a rest it held back expands its card now.
+                let hovered = self.expanded.as_ref().and_then(|(location, cause)| {
+                    (*cause == Cause::Pointer).then_some(location)
+                });
+                if hovered.is_some_and(|location| self.pointer_on.as_ref() != Some(location)) {
+                    self.end_hover();
+                }
+                if std::mem::take(&mut self.rest_held) {
+                    if let Some(location) = self.pointer_on.clone() {
+                        self.expand(location, Cause::Pointer);
+                    }
+                }
+            }
             Event::Listed(listed) => {
                 let gone = |slot: &Option<SessionLocation>| {
                     slot.as_ref()
@@ -165,6 +182,15 @@ impl Expansion {
             self.body_edges = (false, false);
         }
         self.expanded = Some((location, cause));
+    }
+
+    /// Collapse the card the pointer expanded: the hover ended on no other card, so the focused
+    /// card expands again, unless Escape collapsed it since it got focus (FR-005).
+    fn end_hover(&mut self) {
+        self.collapse();
+        if let Some(focused) = self.focused.clone().filter(|_| !self.focus_escaped) {
+            self.expand(focused, Cause::Focus);
+        }
     }
 
     /// Collapse the expanded card, if any.
@@ -455,6 +481,35 @@ mod tests {
             shown(&after([Event::MenuOpened, Event::MenuClosed, focus("b")])),
             Some("b".into())
         );
+    }
+
+    /// K1, FR-005, FR-012 (review A F2, M3): a pointer leaving the hover-expanded card while a
+    /// menu is open collapses it once the menu closes, and the focused card expands again.
+    #[test]
+    fn a_leave_during_an_open_menu_collapses_on_close() {
+        let left = [rest("a"), Event::MenuOpened, leave("a")];
+        assert_eq!(shown(&after(left.clone())), Some("a".into()), "collapsed under the menu");
+        let closed = left.clone().into_iter().chain([Event::MenuClosed]);
+        assert_eq!(shown(&after(closed)), None);
+        let focused = [focus("f")].into_iter().chain(left).chain([Event::MenuClosed]);
+        let back = after(focused);
+        assert_eq!(shown(&back), Some("f".into()));
+        assert_eq!(back.cause(), Some(Cause::Focus));
+    }
+
+    /// K1, US4 sc.3 (review A F3, M3): a rest held back by an open menu expands its card once
+    /// the menu closes, unless the pointer left it first or Escape collapsed it there.
+    #[test]
+    fn a_rest_during_an_open_menu_expands_on_close() {
+        let rested = [rest("a"), Event::MenuOpened, leave("a"), rest("b")];
+        assert_eq!(shown(&after(rested.clone())), Some("a".into()), "b expanded under the menu");
+        let closed = after(rested.into_iter().chain([Event::MenuClosed]));
+        assert_eq!(shown(&closed), Some("b".into()));
+        assert_eq!(closed.cause(), Some(Cause::Pointer));
+        let gone = [Event::MenuOpened, rest("b"), leave("b"), Event::MenuClosed];
+        assert_eq!(shown(&after(gone)), None);
+        let escaped = [rest("b"), Event::Escape, Event::MenuOpened, rest("b"), Event::MenuClosed];
+        assert_eq!(shown(&after(escaped)), None);
     }
 
     /// K1, Edge Case *card removed*: a listing without the expanded card collapses it; a focus
