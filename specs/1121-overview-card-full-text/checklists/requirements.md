@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,6 +31,6 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers are left for the clarify unit: Escape's effect on the Overview
-  while a card is focus-expanded (Story 3 scenario 2, FR-005), and the form of the worktree
-  directory (FR-014).
+- The two [NEEDS CLARIFICATION] markers (Escape's effect on the Overview, the worktree directory's
+  form) were resolved in clarify on the recommended options, pending the user's confirmation
+  (spec.md#Clarifications).
