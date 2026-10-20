@@ -561,11 +561,9 @@ fn diff_pane_body<'a>(
                         height: height.ceil() as u32,
                     })
                 });
-            if view.source == Source::Changes {
-                diff = diff
-                    .shaped(&view.shaped)
-                    .on_gap(|key| Message::Changes(Msg::GapToggled(key)));
-            }
+            diff = diff
+                .shaped(&view.shaped)
+                .on_gap(|key| Message::Changes(Msg::GapToggled(key)));
             if can_pick(view) {
                 diff = diff.on_gutter(|old, new, extend| {
                     Message::Changes(Msg::GutterPressed { old, new, extend })
@@ -628,6 +626,15 @@ fn diff_pane_body<'a>(
                 (None, None) => {}
             }
             let mut pane = column![layouts].spacing(spacing::MD).height(Length::Fill);
+            // FR-009: the head version's state, with the diff usable either way.
+            if let Some(note) = changes::head_note(view) {
+                let text = Text::new(note.clone(), TypeRole::Caption, r);
+                pane = pane.push(if note == changes::READING_FILE {
+                    text.muted()
+                } else {
+                    text.tint(r.error)
+                });
+            }
             if let Some(unplaced) = unplaced {
                 pane = pane.push(unplaced);
             }

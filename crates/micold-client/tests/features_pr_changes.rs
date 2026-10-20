@@ -1789,7 +1789,13 @@ mod head_version {
         }
     }
 
-    fn answer(state: &mut State, seq: u64, number: u64, file: &str, result: Result<FileText, FileReadFailure>) {
+    fn answer(
+        state: &mut State,
+        seq: u64,
+        number: u64,
+        file: &str,
+        result: Result<FileText, FileReadFailure>,
+    ) {
         changes::update(
             state,
             Msg::FileRead {
@@ -1808,7 +1814,10 @@ mod head_version {
     /// Pull request 7 chosen and `a.rs` selected; the head read is asked for, not yet answered.
     fn waiting() -> (State, u64) {
         let mut state = opened(true);
-        listed(&mut state, vec![pr(7, BranchPrState::Open), pr(8, BranchPrState::Open)]);
+        listed(
+            &mut state,
+            vec![pr(7, BranchPrState::Open), pr(8, BranchPrState::Open)],
+        );
         chosen(&mut state, 7);
         let effect = select(&mut state, "a.rs");
         let seq = asked(effect, 7, "a.rs");
@@ -1839,7 +1848,10 @@ mod head_version {
             .iter()
             .flat_map(|h| h.lines.iter().map(|l| l.text.clone()))
             .collect();
-        assert!(shown.ends_with(&["l3".into(), "l4".into(), "l5".into(), "l6".into()]), "{shown:?}");
+        assert!(
+            shown.ends_with(&["l3".into(), "l4".into(), "l5".into(), "l6".into()]),
+            "{shown:?}"
+        );
         assert!(view(&state).shaped.gaps.is_empty());
     }
 
@@ -1865,7 +1877,10 @@ mod head_version {
         answer(&mut state, seq + 100, 7, "a.rs", Ok(text(HEAD)));
         assert!(view(&state).shaped.gaps.is_empty(), "another read's answer");
         answer(&mut state, seq, 8, "a.rs", Ok(text(HEAD)));
-        assert!(view(&state).shaped.gaps.is_empty(), "another source's answer");
+        assert!(
+            view(&state).shaped.gaps.is_empty(),
+            "another source's answer"
+        );
         answer(&mut state, seq, 7, "b.rs", Ok(text(HEAD)));
         assert!(view(&state).shaped.gaps.is_empty(), "another file's answer");
         assert_eq!(head_note(view(&state)).as_deref(), Some(READING_FILE));
@@ -1876,7 +1891,13 @@ mod head_version {
     #[test]
     fn an_unobtainable_head_says_so_and_leaves_the_diff_usable() {
         let (mut state, seq) = waiting();
-        answer(&mut state, seq, 7, "a.rs", Err(FileReadFailure::HeadUnavailable));
+        answer(
+            &mut state,
+            seq,
+            7,
+            "a.rs",
+            Err(FileReadFailure::HeadUnavailable),
+        );
         assert_eq!(
             head_note(view(&state)),
             Some(FileReadFailure::HeadUnavailable.message())
@@ -1888,7 +1909,10 @@ mod head_version {
         };
         assert!(matches!(&loaded.diff, FileDiff::Text(_)));
         // Toggling before a head exists changes nothing and asks nothing.
-        assert_eq!(changes::update(&mut state, Msg::WholeFileToggled), Effect::None);
+        assert_eq!(
+            changes::update(&mut state, Msg::WholeFileToggled),
+            Effect::None
+        );
     }
 
     #[test]
@@ -1940,9 +1964,8 @@ mod head_version {
         // The working tree has no such state.
         changes::update(&mut state, Msg::SourceChosen(None));
         assert!(view(&state).shaped.gaps.is_empty());
-        assert!(!view(&state).expansions.contains_key(&(
-            SourceKey::Worktree,
-            RelPath::from_native("a.rs").unwrap()
-        )));
+        assert!(!view(&state)
+            .expansions
+            .contains_key(&(SourceKey::Worktree, RelPath::from_native("a.rs").unwrap())));
     }
 }

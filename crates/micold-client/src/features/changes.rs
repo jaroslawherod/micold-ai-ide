@@ -460,7 +460,13 @@ pub fn whole_file(view: &OpenView) -> WholeFile {
     }
     if let Source::PullRequest(pr) = &view.source {
         if matches!(pr.head_text, HeadText::NotRead | HeadText::Reading { .. })
-            && matches!(diff_body(view), DiffBody::Diff(LoadedDiff { diff: FileDiff::Text(_), .. }))
+            && matches!(
+                diff_body(view),
+                DiffBody::Diff(LoadedDiff {
+                    diff: FileDiff::Text(_),
+                    ..
+                })
+            )
             && revealable(view, &path)
         {
             return WholeFile::Hidden;
@@ -1516,7 +1522,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 pr.file = pr_file_diff(pr);
                 pr.head_text = HeadText::NotRead;
                 reset_diff_pane(view);
-                return request_head(view, &mut state.next_seq);
+                return request_head(view, &mut state.next_seq, false);
             }
             // The file already shown keeps its diff and scroll; only a failed read is retried.
             if view.selected.as_ref() == Some(&path) && !matches!(view.diff, Load::Failed(_)) {
@@ -1539,7 +1545,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     pr.shown_large.insert(path);
                     pr.file = pr_file_diff(pr);
                 }
-                return request_head(view, &mut state.next_seq);
+                // Asked for the large file: its head version is read despite the size limit.
+                return request_head(view, &mut state.next_seq, true);
             }
             let Some(path) = view.selected.clone() else {
                 return Effect::None;
@@ -2443,16 +2450,24 @@ fn follow_head(state: &mut State) -> Option<Effect> {
 /// Ask for the head version of the selected pull request file when it has one to show: a text
 /// file that is neither added nor deleted (FR-009). A pull request the list does not hold has no
 /// head commit to ask for, which the file's note says.
-fn request_head(view: &mut OpenView, next_seq: &mut u64) -> Effect {
+fn request_head(view: &mut OpenView, next_seq: &mut u64, force_large: bool) -> Effect {
     let Source::PullRequest(pr) = &view.source else {
         return Effect::None;
     };
-    let (Some(path), Some(LoadedDiff { diff: FileDiff::Text(_), .. })) =
-        (pr.selected.clone(), &pr.file)
+    let (
+        Some(path),
+        Some(LoadedDiff {
+            diff: FileDiff::Text(_),
+            ..
+        }),
+    ) = (pr.selected.clone(), &pr.file)
     else {
         return Effect::None;
     };
     if !revealable(view, &path) {
+        if let Source::PullRequest(pr) = &mut view.source {
+            pr.head_text = HeadText::NotRead;
+        }
         return Effect::None;
     }
     let number = pr.number;
@@ -2477,7 +2492,7 @@ fn request_head(view: &mut OpenView, next_seq: &mut u64) -> Effect {
         commit,
         address,
         path,
-        force_large: false,
+        force_large,
     }
 }
 

@@ -258,10 +258,10 @@ fn the_source_is_read_from_one_place() {
         .filter(|(f, _, l)| f != MAIN_TESTS && l.contains("(tooling.pull_requests)("))
         .collect();
     assert!(
-        // One line for the status reading, one for the branch list, one for a pull request's
-        // diff (feature 775).
-        reads.len() == 3 && reads.iter().all(|(f, _, _)| f == SHELL),
-        "the source must be reached from three lines (`read`, `list_branches`, `diff`), in {SHELL}; found:\n{}",
+        // One line, in `pull_request_source`, shared by the status reading, the branch list, a
+        // pull request's diff (feature 775) and a pull request file's head version (feature 1150).
+        reads.len() == 1 && reads.iter().all(|(f, _, _)| f == SHELL),
+        "the source must be reached from one line (`pull_request_source`), in {SHELL}; found:\n{}",
         show(&reads)
     );
 

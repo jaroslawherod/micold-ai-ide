@@ -16,12 +16,16 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::changes::Effect;
 use micold_client::features::changes::Msg;
+use micold_client::features::changes::SourceKey;
 use micold_client::features::settings;
 use micold_client::ui::syntax;
 use micold_core::git::Git;
-use micold_core::pull_request::ReadingFailure;
+use micold_core::github::GithubRepo;
+use micold_core::pull_request::{PullRequestSource, ReadingFailure};
 use micold_core::review::base::{ReviewScope, Toggles};
+use micold_core::review::browse::{self, Confined, FileReadFailure, FileSource, FileText};
 use micold_core::review::changes::ChangeList;
+use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
 
 use crate::shell::daemon_sync::PendingOp;
@@ -236,6 +240,26 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                 answer,
             )
         }
+        Effect::ReadFile {
+            seq,
+            project,
+            entry,
+            source,
+            commit,
+            address,
+            path,
+            force_large,
+        } => read_file_requested(
+            app,
+            seq,
+            project,
+            entry,
+            source,
+            commit,
+            address,
+            path,
+            force_large,
+        ),
         Effect::ReadDiff {
             seq,
             entry,
@@ -276,6 +300,78 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             )
         }
     }
+}
+
+/// The repository a pull request address names: its first two path segments on GitHub.
+fn repo_of_address(address: &str) -> Option<GithubRepo> {
+    let rest = address.strip_prefix(micold_client::features::sidebar::GITHUB_ADDRESS_PREFIX)?;
+    let mut parts = rest.split('/');
+    let (owner, name) = (parts.next()?, parts.next()?);
+    GithubRepo::from_remote_url(&format!("https://github.com/{owner}/{name}"))
+}
+
+/// Read a pull request file's head version off the update thread (feature 1150, FR-005, FR-014):
+/// local objects first, then GitHub. Anything that cannot run here answers `HeadUnavailable`.
+#[allow(clippy::too_many_arguments)]
+fn read_file_requested(
+    app: &App,
+    seq: u64,
+    project: PathBuf,
+    entry: SessionLocation,
+    source: SourceKey,
+    commit: String,
+    address: String,
+    path: RelPath,
+    force_large: bool,
+) -> Task<Message> {
+    let answer = {
+        let path = path.clone();
+        move |result: Result<FileText, FileReadFailure>| {
+            Message::Changes(Msg::FileRead {
+                seq,
+                source,
+                path: path.clone(),
+                result,
+            })
+        }
+    };
+    let unavailable = || Task::done(answer(Err(FileReadFailure::HeadUnavailable)));
+    let Ok((dir, _git)) = local(app, &entry) else {
+        return unavailable();
+    };
+    let Some(repo) = repo_of_address(&address) else {
+        return unavailable();
+    };
+    let gh = crate::shell::pr_status::pull_request_source(app, &project);
+    let label = format!("file seq={seq} path={path}");
+    Task::perform(
+        async move {
+            let started = Instant::now();
+            let read = tokio::task::spawn_blocking(move || {
+                let confined = Confined::new(path.as_str())?;
+                let gh = gh();
+                let source = FileSource::PrHead { dir, repo, commit };
+                browse::read_file(
+                    &source,
+                    &confined,
+                    force_large,
+                    gh.as_deref().map(|gh| gh as &dyn PullRequestSource),
+                    micold_core::unix_time::unix_secs(),
+                )
+            });
+            let result = match tokio::time::timeout(READ_DEADLINE, read).await {
+                Ok(joined) => joined.unwrap_or(Err(FileReadFailure::HeadUnavailable)),
+                Err(_) => Err(FileReadFailure::HeadUnavailable),
+            };
+            crate::log_line(&format!(
+                "changes: {label} {}ms {}",
+                started.elapsed().as_millis(),
+                if result.is_ok() { "ok" } else { "failed" }
+            ));
+            result
+        },
+        answer,
+    )
 }
 
 /// The entry's directory and this computer's git, or why a read cannot run here.
