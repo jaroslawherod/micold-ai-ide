@@ -14,7 +14,7 @@ use micold_core::review::comment::{
     fresh_id, CommentId, CommentRef, Draft, EntryReview, Outcome, PrAnchor, Reporter,
     ReviewComment, ReviewError, Scope, SendSnapshot, Status,
 };
-use micold_core::review::prompt::EntryKind;
+use micold_core::review::prompt::{EntryKind, PrContext};
 use micold_core::review::store::ReviewFile;
 use micold_core::review::{LineRange, RelPath};
 
@@ -188,42 +188,53 @@ impl Reviews {
         Ok(Some(msg))
     }
 
-    /// Entry `dir`'s Draft comments, for re-anchoring before a send (W16).
-    pub fn drafts(&mut self, catalog: &Catalog, project: &Path, dir: &str) -> Vec<ReviewComment> {
+    /// Entry `dir`'s Draft comments of `scope`, for re-anchoring or reading before a send (W16,
+    /// W20).
+    pub fn drafts(
+        &mut self,
+        catalog: &Catalog,
+        project: &Path,
+        dir: &str,
+        scope: Scope,
+    ) -> Vec<ReviewComment> {
         self.project(catalog, project)
             .get(dir)
             .map(|review| {
                 review
                     .comments()
                     .iter()
-                    .filter(|comment| comment.state.status() == Status::Draft)
+                    .filter(|comment| {
+                        comment.state.status() == Status::Draft && comment.scope() == scope
+                    })
                     .cloned()
                     .collect()
             })
             .unwrap_or_default()
     }
 
-    /// Open a send of entry `dir`'s Draft comments (W6): the snapshot to deliver and the
-    /// `ReviewChanged` (with `sending`) to push. `InvalidInput` with no Draft, `Busy` while
-    /// another send of the entry is open. Nothing is written: `sending` is not stored.
+    /// Open a send of entry `dir`'s Draft comments of `scope` (W6, W20): the snapshot to deliver
+    /// and the `ReviewChanged` (with `sending`) to push. `InvalidInput` with no Draft, `Busy`
+    /// while another send of the entry is open. Nothing is written: `sending` is not stored.
     pub fn begin_send(
         &mut self,
         catalog: &Catalog,
         project: &Path,
         dir: &str,
         kind: EntryKind,
+        scope: (Scope, Option<&PrContext>),
         outdated: &[CommentId],
     ) -> Result<(SendSnapshot, DaemonMsg), Refusal> {
         let review = self
             .project(catalog, project)
             .get_mut(dir)
             .ok_or(ReviewError::NothingPending)?;
-        let snapshot = review.begin_send(kind, Scope::WorkingTree, None, outdated)?;
+        let snapshot = review.begin_send(kind, scope.0, scope.1, outdated)?;
         let msg = changed(project, dir, review);
         tracing::info!(
             project = %project.display(),
             entry = dir,
             comments = snapshot.ids.len(),
+            pr = scope.1.map(|pr| pr.number),
             "review send opened"
         );
         Ok((snapshot, msg))

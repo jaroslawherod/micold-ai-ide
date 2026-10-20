@@ -637,3 +637,35 @@ fn a_worktree_has_its_own_git_dir_and_the_common_one() {
         "the main worktree's are one"
     );
 }
+
+/// Feature 1149 (G1): the branch checked out, and whether a commit is in the repository.
+#[test]
+fn the_checked_out_branch_is_named_and_a_detached_head_has_none() {
+    let f = fixture();
+    let cli = GitCli::new();
+    assert_eq!(cli.checked_out_branch(&f.wt).as_deref(), Some("feature"));
+    assert_eq!(cli.checked_out_branch(&f.root).as_deref(), Some("main"));
+    let head = git(&f.wt, &["rev-parse", "HEAD"]);
+    git(&f.wt, &["checkout", "-q", "--detach", &head]);
+    assert_eq!(cli.checked_out_branch(&f.wt), None);
+    assert_eq!(
+        cli.checked_out_branch(&f.root.join("missing")),
+        None,
+        "a git failure is None"
+    );
+}
+
+#[test]
+fn has_commit_tells_present_from_missing_and_never_runs_git_for_a_bad_id() {
+    let f = fixture();
+    let cli = GitCli::new();
+    let head = git(&f.wt, &["rev-parse", "HEAD"]);
+    assert!(cli.has_commit(&f.wt, &head));
+    assert!(cli.has_commit(&f.wt, &head.to_ascii_uppercase()));
+    assert!(!cli.has_commit(&f.wt, &"1".repeat(40)), "absent");
+    assert!(!cli.has_commit(&f.wt, "HEAD"), "not an id");
+    assert!(!cli.has_commit(&f.wt, &head[..39]), "39 digits");
+    assert!(!cli.has_commit(&f.wt, &format!("{head}0")), "41 digits");
+    // A directory that is no repository would make git fail: a bad id never gets that far.
+    assert!(!cli.has_commit(&f.root.join("missing"), "--help"));
+}

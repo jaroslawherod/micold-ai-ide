@@ -278,8 +278,8 @@ non-text and too-large files take no comments, as before.
 - If a pull request leaves the list, its comments are kept and shown flagged "not in the list".
 - **Clear sent** and **Discard drafts** act only on the comments of what is shown: the pull
   request, or the working tree.
-- Nothing is posted to GitHub. Sending a pull request's comments to the agent is not available
-  yet.
+- Nothing is posted to GitHub. To have the agent act on a pull request's comments, see [Sending a
+  pull request's comments](#sending-a-pull-requests-comments).
 
 ### Sending a review
 
@@ -319,6 +319,30 @@ While a send of an entry is under way, Send review reads **Sending…** and is u
 entry in every window, including while a new session is starting for it. Each comment is delivered
 once: a second send started meanwhile is refused, and the comments of the first are not sent twice.
 
+### Sending a pull request's comments
+
+While a pull request's diff is shown, **Send review (n)** sends that pull request's draft comments
+only — *n* of them. The drafts of other pull requests and of the working tree stay drafts, and the
+working-tree diff's **Send review** sends the working-tree drafts only. It is unavailable while the
+pull request is not in the list.
+
+The message goes to the session of the worktree, and a session is started when none runs, exactly
+as in [Sending a review](#sending-a-review); the comments become **sent** once it is delivered, and
+stay drafts, with an error, when it is not. The agent's reports show on the comments as for the
+working tree's.
+
+The message names the pull request (number, title and head branch) and says it is merged or closed
+when it is. It asks the agent to make each change or explain why not, to commit the changes and to
+push them to the pull request's head branch. It asks for nothing to be posted: **nothing is posted
+to GitHub** by Micold or by the message, and the agent's push is what updates the pull request.
+
+When the worktree does not have the pull request's head branch checked out, the message is still
+delivered, with a paragraph telling the agent to switch to that branch before changing anything.
+Other paragraphs appear only when they apply: when the pull request's head has moved since the
+comments were written, one names the commits they were written against and the head now (each
+comment then also says which commit its code is from, if they differ); and when a commit the
+comments were written against is not in the worktree, one says so.
+
 ### The review message
 
 The message asks the session to address the comments. This is one for a worktree with three
@@ -350,6 +374,15 @@ let x = 1;
 ```
 Name this.
 ````
+
+A pull request's message has the same blocks. Its first paragraph reads "Please work through these
+review comments on pull request #12 "Add retry" (head branch feat/retry). Each block below is one
+comment: …" (", which is merged" or ", which is closed" follows the branch for those states, and the
+title is cut to one line of at most 200 characters), and its second reads "For each comment, either
+make the change it asks for, or explain why you are not making it. Commit the changes you make and
+push them to the branch feat/retry. Then report each outcome …". The notes of [Sending a pull
+request's comments](#sending-a-pull-requests-comments) follow, each its own paragraph, then the
+blocks.
 
 From the top:
 

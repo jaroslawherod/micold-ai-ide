@@ -255,6 +255,24 @@ impl GitCli {
         }
     }
 
+    /// The branch checked out in the worktree at `dir` (feature 1149, G1): `None` when `HEAD` is
+    /// detached or git cannot say. Read-only, bounded like every review read.
+    pub fn checked_out_branch(&self, dir: &Path) -> Option<String> {
+        let name = read(dir, &["symbolic-ref", "--short", "-q", "HEAD"], None).ok()?;
+        let name = name.trim_end_matches('\n');
+        (!name.is_empty()).then(|| name.to_owned())
+    }
+
+    /// Whether commit `sha` exists in the repository of `dir` (feature 1149, G1). A `sha` that is
+    /// not 40 or 64 hex digits is false without running git; a git failure counts as absent.
+    pub fn has_commit(&self, dir: &Path, sha: &str) -> bool {
+        if !super::comment::is_commit_id(sha) {
+            return false;
+        }
+        let object = format!("{sha}^{{commit}}");
+        read(dir, &["cat-file", "-e", &object], None).is_ok()
+    }
+
     /// The git metadata directories of the worktree at `dir`: its own git dir and the common dir
     /// (the same for the main worktree), absolute (R9).
     pub fn git_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>> {

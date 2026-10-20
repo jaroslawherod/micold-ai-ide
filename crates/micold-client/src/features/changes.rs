@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use micold_core::protocol::messages::ReviewEditOp;
+use micold_core::protocol::messages::{PrSend, ReviewEditOp};
 use micold_core::pull_request::{
     BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure,
 };
@@ -1167,6 +1167,9 @@ pub enum Effect {
         outdated: Vec<CommentId>,
         /// How many pending comments the send carries, for the success snackbar (S2).
         count: usize,
+        /// The shown pull request, when the send is of its comments (feature 1149, W20); `None`
+        /// sends the working tree's.
+        pr: Option<PrSend>,
     },
 }
 
@@ -1613,24 +1616,27 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;
             };
-            if view_scope(view) != Scope::WorkingTree {
+            // Only a listed pull request can be sent (FR-013).
+            let scope = view_scope(view);
+            let Some(pr) = send_target(view, scope) else {
                 return Effect::None;
-            }
+            };
             let count = review_of(state, view)
                 .filter(|r| !r.sending)
-                .map_or(0, |r| {
-                    in_scope(r, Scope::WorkingTree)
-                        .filter(|c| is_pending(c))
-                        .count()
-                });
+                .map_or(0, |r| in_scope(r, scope).filter(|c| is_pending(c)).count());
             if count == 0 {
                 return Effect::None;
             }
+            // The removed side of a working-tree comment is judged here; the service judges the
+            // rest, but not a pull request's comments, which it never reads off disk.
             let outdated = review_of(state, view)
                 .map(|r| {
-                    r.comments
-                        .iter()
-                        .filter(|c| c.side == Side::Old && is_pending(c) && is_outdated(view, c))
+                    in_scope(r, scope)
+                        .filter(|c| {
+                            (scope != Scope::WorkingTree || c.side == Side::Old)
+                                && is_pending(c)
+                                && is_outdated(view, c)
+                        })
                         .map(|c| c.id)
                         .collect()
                 })
@@ -1640,6 +1646,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 worktree_dir: entry_dir(&view.entry),
                 outdated,
                 count,
+                pr,
             }
         }
         Msg::ClearSentPressed => match state.open.as_ref() {
@@ -1999,6 +2006,22 @@ pub fn review_of<'a>(state: &'a State, view: &OpenView) -> Option<&'a ReviewView
         .get(&(view.project.clone(), entry_dir(&view.entry)))
 }
 
+/// What a send of `scope` carries as its pull request (1149, W20): `Some(None)` for the working
+/// tree, `Some(Some(..))` from the list's pull request, `None` when the pull request is not listed.
+fn send_target(view: &OpenView, scope: Scope) -> Option<Option<PrSend>> {
+    let Scope::PullRequest(number) = scope else {
+        return Some(None);
+    };
+    let listed = listed_pull_request(view, number).filter(|pr| !pr.head.is_empty())?;
+    Some(Some(PrSend {
+        number,
+        title: listed.title.clone(),
+        head_branch: listed.head_branch.clone(),
+        state: listed.state,
+        current_head: listed.head.clone(),
+    }))
+}
+
 /// The toolbar's **Send review (n)** (S1; 946 FR-009).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SendAction {
@@ -2011,10 +2034,9 @@ pub struct SendAction {
 /// The open view's **Send review (n)**; `None` with no view open (S1).
 pub fn send_action(state: &State) -> Option<SendAction> {
     let view = state.open.as_ref()?;
-    // A pull request's review cannot be sent yet (1149, M2).
-    if view_scope(view) != Scope::WorkingTree {
-        return None;
-    }
+    // A pull request that is not listed cannot be sent (FR-013).
+    let scope = view_scope(view);
+    send_target(view, scope)?;
     let review = review_of(state, view);
     if review.is_some_and(|r| r.sending) {
         return Some(SendAction {
@@ -2022,11 +2044,7 @@ pub fn send_action(state: &State) -> Option<SendAction> {
             enabled: false,
         });
     }
-    let count = review.map_or(0, |r| {
-        in_scope(r, Scope::WorkingTree)
-            .filter(|c| is_pending(c))
-            .count()
-    });
+    let count = review.map_or(0, |r| in_scope(r, scope).filter(|c| is_pending(c)).count());
     Some(SendAction {
         label: format!("Send review ({count})"),
         enabled: count > 0,
