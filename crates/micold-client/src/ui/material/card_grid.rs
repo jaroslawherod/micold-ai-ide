@@ -135,23 +135,8 @@ pub struct Piece {
     row: usize,
 }
 
-/// Cards of width `w` on a ribbon: card `i` starts at `i · (w + gap)` along rows `width + gap`
-/// long, so row `r` shows the stretch `r · (width + gap) .. + width` and the `gap` after it is
-/// not shown. A card that runs past a row's end is cut there and continues at the next row's
-/// start; at a rest width (`width + gap = n · (w + gap)`) no card is cut. Every row is
-/// `card_height` tall.
-///
-/// Cards keep reading order and a constant pitch, so no two pieces of different cards intersect,
-/// and a card never disappears: of its `w` it loses at most the `gap`.
-pub fn ribbon(count: usize, w: f32, gap: f32, width: f32, card_height: f32) -> Vec<Piece> {
-    let mut pieces = ribbon_rows(count, w, gap, width);
-    let heights = vec![card_height; row_count(&pieces)];
-    stack_rows(&mut pieces, &heights, gap);
-    pieces
-}
-
 /// The ribbon's pieces placed along their rows, each with its row and no height yet: the
-/// horizontal half of [`ribbon`].
+/// horizontal half of the ribbon (feature 970).
 fn ribbon_rows(count: usize, w: f32, gap: f32, width: f32) -> Vec<Piece> {
     let line = width + gap;
     let mut pieces = Vec::with_capacity(count + 2);
@@ -185,7 +170,7 @@ fn row_count(pieces: &[Piece]) -> usize {
 }
 
 /// Stacks the rows top to bottom, row `r` being `heights[r]` tall and a `gap` below the one
-/// before: the vertical half of [`ribbon`] (feature 1120, FR-014).
+/// before: the vertical half of the ribbon (feature 1120, FR-014).
 fn stack_rows(pieces: &mut [Piece], heights: &[f32], gap: f32) {
     let tops: Vec<f32> = heights
         .iter()
@@ -706,6 +691,23 @@ mod tests {
     use iced::{Rectangle, Size};
     use micold_core::overview::{CardModel, CardReason, CardState, LocationType};
     use micold_core::session::SessionLocation;
+
+    /// Cards of width `w` on a ribbon: card `i` starts at `i · (w + gap)` along rows `width + gap`
+    /// long, so row `r` shows the stretch `r · (width + gap) .. + width` and the `gap` after it is
+    /// not shown. A card that runs past a row's end is cut there and continues at the next row's
+    /// start; at a rest width (`width + gap = n · (w + gap)`) no card is cut. Every row is
+    /// `card_height` tall.
+    ///
+    /// Cards keep reading order and a constant pitch, so no two pieces of different cards intersect,
+    /// and a card never disappears: of its `w` it loses at most the `gap`. The grid itself stacks rows
+    /// of differing heights (`ribbon_rows`, `stack_rows`); this uniform form is feature 970's tested
+    /// model of it.
+    fn ribbon(count: usize, w: f32, gap: f32, width: f32, card_height: f32) -> Vec<Piece> {
+        let mut pieces = ribbon_rows(count, w, gap, width);
+        let heights = vec![card_height; row_count(&pieces)];
+        stack_rows(&mut pieces, &heights, gap);
+        pieces
+    }
 
     /// The gap between cards, and the tolerance for comparing laid-out pixels.
     const GAP: f32 = 16.0;

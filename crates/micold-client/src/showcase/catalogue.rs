@@ -147,6 +147,8 @@ pub const COMPONENTS: &[Entry] = &[
             // deliberately — the difference is the whole point, and a weight difference is one of
             // the few things you genuinely cannot judge from memory.
             "SidebarSessionCurrent",
+            // Feature 1120: the Overview card's 17 px title, scoped to the card (R10).
+            "CardTitle",
         ],
         density: &[],
         posed: &["muted"],
