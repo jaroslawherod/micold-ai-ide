@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1092
 - **Worktree branch**: feat/1092_daemon-settings-should-open-in-an-overlay-with-its
 - **Started**: 2026-10-19
-- **Phase**: milestone M2 (PR open)
-- **Next step**: wait for CI, merge, then M3
+- **Phase**: milestone M3 (gate green, PR next)
+- **Next step**: wait for CI, merge, then close unit (T030)
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1137 | Design | merged | 0db3cf9ccbebc1b98662a5becfc4f2c4c3b96504 |
 | #1160 | M1 | merged | 08cb6ea11959288eb6832df9cce396a0589238f1 |
-| #1170 | M2 | open | - |
+| #1170 | M2 | merged | e8055c90fa21a43bcfcc6fa33187f3ca3d39c5db |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014, T016, T017, T019, T020 | full | Add/Edit daemon in a modal dialog, own Save/Cancel, in-dialog confirmation, no inline form | #1160 | merged |
-| M2 | T015, T018, T021–T023 | full | Add-path tests, focus return | #1170 | PR open |
-| M3 | T024–T029 | light | Details in a dialog | - | pending |
+| M2 | T015, T018, T021–T023 | full | Add-path tests, focus return | #1170 | merged |
+| M3 | T024–T029 | light | Details in a dialog | - | PR open |
 
 ## Decisions
 
@@ -46,6 +46,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 Review A | 1 | c2e04ee6d352affb88b858d6a55c99397353009f:7587e4590cd561429a0f28e2b229fe889f811818 | 8 MINOR-level, no BLOCKER/MAJOR; none fixed |
 | M2 Review B | 1 | same | CLEAN (2 MINOR: no shell focus test, no tdd dir) |
 | M2 Visual | 1 | same | Add->Cancel focus ring PASS; Esc/Save/Edit/Tab not judged (headless sway key input unreliable) |
+| M3 Review A | 1 | 2d73eeb79e83dc1283335b0e56fada23ba12f8f9:56fa4f9e024877f97adbf83b93318d93e9a288a1 | CLEAN (1 MINOR: opener not cleared on removal; declined, harmless) |
+| M3 Review B | 1 | same | CLEAN (MINOR: Close bounds not asserted; test checks painted + no overflow) |
 
 ## Declined review findings
 

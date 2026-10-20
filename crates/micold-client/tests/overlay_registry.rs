@@ -921,7 +921,11 @@ mod daemon_form {
         assert_eq!(id_of(&state), None);
         state.update(Message::Daemons(DaemonsMsg::DetailsOpened(host)));
         state.settings.daemons.remove(host);
-        assert_eq!(id_of(&state), None, "a removed daemon leaves no empty modal");
+        assert_eq!(
+            id_of(&state),
+            None,
+            "a removed daemon leaves no empty modal"
+        );
     }
 
     fn confirming() -> State {
