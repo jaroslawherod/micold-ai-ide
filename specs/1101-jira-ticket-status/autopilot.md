@@ -16,6 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1152 | Design PR | open | |
 
 ## Milestones
 
@@ -34,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| #1152 | Design PR | open | |
 | Spec | 1 | 952ec53aa3d23346f6fed8f12d836bcf43d073d0:cf7c64d7d7ee21a78fe03d60d64165dd811a1c92 | CHANGES: 4 MAJOR |
 | Spec | 2 | 2791b5d842f73b2d98560fad5de1801a962e828a:cf7c64d7d7ee21a78fe03d60d64165dd811a1c92 | CHANGES: 1 MAJOR (not-found contradiction), 2 MINOR; fixed, checked by author (wording reconciliation only) |
 | Plan | 1 | 87105a5c80cf11e780ace91fd3629036eddc60f5:f3cacdb0b33caca2142ce3ac8f3e8ef396c86102 | CHANGES: 3 MAJOR (400 on unknown key, project-open hook, epoch), 3 MINOR; all fixed in plan/research/data-model/contracts (design decisions added: bisection on 400, epoch, daemon_sync hook) |
@@ -44,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| #1152 | Design PR | open | |
 
 ## Handover
 
