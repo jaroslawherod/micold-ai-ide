@@ -249,6 +249,24 @@ Comments belong to the worktree (or the Default entry) they were written in, and
 service keeps them: they are still there after you restart the app, and every window open on the
 project shows the same comments as they are added, edited and deleted.
 
+### Commenting on a pull request
+
+While a pull request's diff is shown, you comment on it the same way as on the working-tree diff:
+click a line number (shift-click to extend the range), write the comment and save. Binary,
+non-text and too-large files take no comments, as before.
+
+- A comment belongs to the pull request it was written on and shows on that pull request's diff
+  only, never on another pull request's or the working-tree diff.
+- The review panel lists them under the pull request's number and title, after the working-tree
+  comments, ordered by pull request number.
+- Comments are kept per pull request on your computer, survive a restart, and go away when the
+  worktree is removed.
+- If a pull request leaves the list, its comments are kept and shown flagged "not in the list".
+- **Clear sent** and **Discard drafts** act only on the comments of what is shown: the pull
+  request, or the working tree.
+- Nothing is posted to GitHub. Sending a pull request's comments to the agent is not available
+  yet.
+
 ### Sending a review
 
 **Send review (n)** in the view's header sends the entry's draft comments — *n* of them — to the

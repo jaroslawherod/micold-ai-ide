@@ -194,6 +194,7 @@ pub fn open_discard_pending(state: &mut State) {
                 text: "t".into(),
                 state: CommentState::Draft,
                 created: 1,
+                pr: None,
             }],
             sending: false,
         },
@@ -225,6 +226,7 @@ pub fn open_full_reply(state: &mut State) {
         text: "t".into(),
         state: CommentState::Sent { at: 1 },
         created: 1,
+        pr: None,
     };
     let (id, reference) = (sent.id, sent.reference());
     let mut entry = EntryReview::from_comments(vec![sent]);

@@ -16,7 +16,9 @@ use micold_core::pull_request::{
 use micold_core::review::anchor::{self, locate, Located};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
-use micold_core::review::comment::{CommentId, CommentState, Move, Outcome, ReviewComment, Status};
+use micold_core::review::comment::{
+    CommentId, CommentState, Move, Outcome, PrAnchor, ReviewComment, Scope, Status,
+};
 use micold_core::review::diff::{
     parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, LoadedDiff, SideRow, Spans,
     UnifiedRow,
@@ -163,6 +165,9 @@ pub enum Source {
 pub struct PullRequestView {
     /// Its number.
     pub number: u64,
+    /// Its head commit when the diff read started (1149, R3): what a comment written on this
+    /// diff records as `head_commit`. Empty when the list did not hold the number.
+    pub head: String,
     /// Its diff as read.
     pub diff: PrDiffLoad,
     /// The selected file.
@@ -471,6 +476,8 @@ impl Why {
 pub struct PanelRow {
     /// The comment.
     pub id: CommentId,
+    /// The scope it belongs to: the working tree, or one pull request (1149, FR-004).
+    pub scope: Scope,
     /// Its file.
     pub path: RelPath,
     /// Its side.
@@ -508,12 +515,14 @@ pub fn panel_rows(state: &State) -> Vec<PanelRow> {
     let mut comments: Vec<&ReviewComment> = review.comments.iter().collect();
     comments.sort_by(|a, b| {
         (
+            a.scope(),
             a.path.as_str().as_bytes(),
             shown_range(view, a).start(),
             a.side,
             a.created,
         )
             .cmp(&(
+                b.scope(),
                 b.path.as_str().as_bytes(),
                 shown_range(view, b).start(),
                 b.side,
@@ -539,19 +548,94 @@ pub fn panel_rows(state: &State) -> Vec<PanelRow> {
             };
             PanelRow {
                 id: c.id,
+                scope: c.scope(),
                 path: c.path.clone(),
                 side: c.side,
                 lines,
                 text: reply::shortened(&c.text, PANEL_TEXT_CHARS).0,
                 status: card.status,
                 reply: card.reply.map(|(text, _)| text),
-                not_in_diff: listed.is_some_and(|l| l.files.iter().all(|f| f.path != c.path)),
+                not_in_diff: match (&c.pr, &view.source) {
+                    (None, _) => listed.is_some_and(|l| l.files.iter().all(|f| f.path != c.path)),
+                    (Some(pr), Source::PullRequest(shown)) if pr.number == shown.number => {
+                        match &shown.diff {
+                            PrDiffLoad::Ready { files, .. } => {
+                                files.iter().all(|f| f.path != c.path)
+                            }
+                            _ => false,
+                        }
+                    }
+                    (Some(_), _) => false,
+                },
                 selected: view.panel.focus == Some(c.id),
                 editable: card.editable,
                 has_full_reply: full_reply(c).is_some(),
             }
         })
         .collect()
+}
+
+/// One group of the review panel: the working-tree comments, or one pull request's (1149, FR-004,
+/// FR-013).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PanelGroup {
+    /// The scope its rows belong to.
+    pub scope: Scope,
+    /// The pull request's title; `None` for the working tree, and for a pull request the list
+    /// does not hold.
+    pub title: Option<String>,
+    /// The pull request is in the list (the working tree always is). A group that is not keeps
+    /// its comments, flagged, and cannot be sent.
+    pub listed: bool,
+}
+
+impl PanelGroup {
+    /// The heading naming the group; `None` for the working tree. A pull request the list does
+    /// not hold is flagged "not in the list" (FR-013).
+    pub fn heading(&self) -> Option<String> {
+        let Scope::PullRequest(number) = self.scope else {
+            return None;
+        };
+        Some(match (&self.title, self.listed) {
+            (Some(title), true) => format!("Pull request #{number}: {title}"),
+            _ => format!("Pull request #{number} (not in the list)"),
+        })
+    }
+}
+
+/// The panel's groups, in row order: the working tree first, then pull requests by number; only
+/// scopes that have a comment.
+pub fn panel_groups(state: &State) -> Vec<PanelGroup> {
+    let Some(view) = state.open.as_ref() else {
+        return Vec::new();
+    };
+    let Some(review) = review_of(state, view) else {
+        return Vec::new();
+    };
+    let scopes: BTreeSet<Scope> = review.comments.iter().map(ReviewComment::scope).collect();
+    scopes
+        .into_iter()
+        .map(|scope| match scope {
+            Scope::WorkingTree => PanelGroup {
+                scope,
+                title: None,
+                listed: true,
+            },
+            Scope::PullRequest(number) => {
+                let listed = listed_pull_request(view, number);
+                PanelGroup {
+                    scope,
+                    title: listed.map(|pr| pr.title.clone()),
+                    listed: listed.is_some(),
+                }
+            }
+        })
+        .collect()
+}
+
+/// The comments of `review` in `scope`.
+fn in_scope(review: &ReviewView, scope: Scope) -> impl Iterator<Item = &ReviewComment> {
+    review.comments.iter().filter(move |c| c.scope() == scope)
 }
 
 /// How many comments of the open entry have each status, in the order Draft, Sent, Applied,
@@ -563,8 +647,10 @@ pub fn status_counts(state: &State) -> [(Status, usize); 4] {
         (Status::Applied, 0),
         (Status::Answered, 0),
     ];
-    let review = state.open.as_ref().and_then(|view| review_of(state, view));
-    for comment in review.iter().flat_map(|r| &r.comments) {
+    let view = state.open.as_ref();
+    let review = view.and_then(|view| review_of(state, view));
+    let scope = view.map_or(Scope::WorkingTree, view_scope);
+    for comment in review.into_iter().flat_map(|r| in_scope(r, scope)) {
         let status = comment.state.status();
         if let Some(slot) = counts.iter_mut().find(|(s, _)| *s == status) {
             slot.1 += 1;
@@ -601,25 +687,27 @@ pub fn is_outdated(view: &OpenView, comment: &ReviewComment) -> bool {
         .is_some_and(|anchor| anchor.outdated)
 }
 
-/// The toolbar toggle's label: "Review (n)", n being every comment of the entry.
+/// The toolbar toggle's label: "Review (n)", n being every comment of the shown scope.
 pub fn review_toolbar_label(state: &State) -> String {
-    let count = state
-        .open
-        .as_ref()
-        .and_then(|view| review_of(state, view))
-        .map_or(0, |r| r.comments.len());
+    let count = state.open.as_ref().map_or(0, |view| {
+        review_of(state, view).map_or(0, |r| in_scope(r, view_scope(view)).count())
+    });
     format!("Review ({count})")
 }
 
 /// Where pressing the row of comment `id` goes; `None` for an unknown comment.
 pub fn jump_target(state: &State, id: CommentId) -> Option<Jump> {
     let view = state.open.as_ref()?;
-    let comment = review_of(state, view)?
-        .comments
-        .iter()
-        .find(|c| c.id == id)?;
-    let listed = view.source == Source::Changes
-        && shown_list(view).is_some_and(|l| l.files.iter().any(|f| f.path == comment.path));
+    let comment = in_scope(review_of(state, view)?, view_scope(view)).find(|c| c.id == id)?;
+    let listed = match &view.source {
+        Source::Changes => {
+            shown_list(view).is_some_and(|l| l.files.iter().any(|f| f.path == comment.path))
+        }
+        Source::PullRequest(shown) => match &shown.diff {
+            PrDiffLoad::Ready { files, .. } => files.iter().any(|f| f.path == comment.path),
+            _ => false,
+        },
+    };
     Some(if listed {
         Jump::Shown {
             path: comment.path.clone(),
@@ -1451,9 +1539,16 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;
             };
+            if view_scope(view) != Scope::WorkingTree {
+                return Effect::None;
+            }
             let count = review_of(state, view)
                 .filter(|r| !r.sending)
-                .map_or(0, |r| r.comments.iter().filter(|c| is_pending(c)).count());
+                .map_or(0, |r| {
+                    in_scope(r, Scope::WorkingTree)
+                        .filter(|c| is_pending(c))
+                        .count()
+                });
             if count == 0 {
                 return Effect::None;
             }
@@ -1474,9 +1569,12 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::ClearSentPressed => match state.open.as_ref() {
-            Some(view) if tidy_actions(state).is_some_and(|a| a.clear_sent) => {
-                review_edit(view, ReviewEditOp::ClearSent)
-            }
+            Some(view) if tidy_actions(state).is_some_and(|a| a.clear_sent) => review_edit(
+                view,
+                ReviewEditOp::ClearSent {
+                    scope: view_scope(view),
+                },
+            ),
             _ => Effect::None,
         },
         Msg::DiscardPendingPressed => {
@@ -1499,7 +1597,12 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 Some(view) if view.confirm_discard => {
                     view.confirm_discard = false;
                     if enabled {
-                        review_edit(view, ReviewEditOp::DiscardPending)
+                        review_edit(
+                            view,
+                            ReviewEditOp::DiscardPending {
+                                scope: view_scope(view),
+                            },
+                        )
                     } else {
                         Effect::None
                     }
@@ -1729,19 +1832,49 @@ fn composer_saved(state: &mut State) -> Effect {
             let Some(pick) = placed else {
                 return Effect::None;
             };
-            let (Some(path), Load::Ready(loaded)) = (view.selected.as_ref(), &view.diff) else {
-                return Effect::None;
-            };
-            let lines = match pick.side {
-                Side::New => loaded.new.as_ref(),
-                Side::Old => loaded.old.as_ref(),
-            };
             let range = pick.range();
-            let quote: Option<Vec<String>> = (range.start()..=range.end())
-                .map(|n| lines.and_then(|l| l.line(n)).map(str::to_string))
-                .collect();
-            let Some(quote) = quote else {
-                return Effect::None;
+            let (path, quote, pr) = match &view.source {
+                Source::Changes => {
+                    let (Some(path), Load::Ready(loaded)) = (view.selected.as_ref(), &view.diff)
+                    else {
+                        return Effect::None;
+                    };
+                    let lines = match pick.side {
+                        Side::New => loaded.new.as_ref(),
+                        Side::Old => loaded.old.as_ref(),
+                    };
+                    let quote: Option<Vec<String>> = (range.start()..=range.end())
+                        .map(|n| lines.and_then(|l| l.line(n)).map(str::to_string))
+                        .collect();
+                    let Some(quote) = quote else {
+                        return Effect::None;
+                    };
+                    (path.clone(), quote, None)
+                }
+                Source::PullRequest(shown) => {
+                    let (Some(path), DiffBody::Diff(loaded)) =
+                        (shown.selected.as_ref(), diff_body(view))
+                    else {
+                        return Effect::None;
+                    };
+                    let FileDiff::Text(hunks) = &loaded.diff else {
+                        return Effect::None;
+                    };
+                    let Some(quote) = pr_quote(hunks, pick.side, range) else {
+                        return Effect::None;
+                    };
+                    let Some(listed) =
+                        listed_pull_request(view, shown.number).filter(|_| !shown.head.is_empty())
+                    else {
+                        return Effect::None;
+                    };
+                    let anchor = PrAnchor {
+                        number: shown.number,
+                        head_branch: listed.head_branch.clone(),
+                        head_commit: shown.head.clone(),
+                    };
+                    (path.clone(), quote, Some(anchor))
+                }
             };
             view.pick = None;
             ReviewEditOp::Add {
@@ -1751,11 +1884,30 @@ fn composer_saved(state: &mut State) -> Effect {
                 end: range.end(),
                 quote,
                 text,
+                pr,
             }
         }
     };
     view.composer = None;
     review_edit(view, edit)
+}
+
+/// The text of lines `range` of `side` in a pull request file's `hunks`: a pull request's diff
+/// carries no whole-file lines, so the quote is what the hunks show. `None` when a line is not in
+/// a hunk.
+fn pr_quote(hunks: &[Hunk], side: Side, range: LineRange) -> Option<Vec<String>> {
+    (range.start()..=range.end())
+        .map(|n| {
+            hunks
+                .iter()
+                .flat_map(|h| &h.lines)
+                .find(|line| match side {
+                    Side::New => line.new == Some(n),
+                    Side::Old => line.old == Some(n),
+                })
+                .map(|line| line.text.clone())
+        })
+        .collect()
 }
 
 /// The wire's form of an entry: its worktree `dir_name`, `""` for the Default entry.
@@ -1785,6 +1937,10 @@ pub struct SendAction {
 /// The open view's **Send review (n)**; `None` with no view open (S1).
 pub fn send_action(state: &State) -> Option<SendAction> {
     let view = state.open.as_ref()?;
+    // A pull request's review cannot be sent yet (1149, M2).
+    if view_scope(view) != Scope::WorkingTree {
+        return None;
+    }
     let review = review_of(state, view);
     if review.is_some_and(|r| r.sending) {
         return Some(SendAction {
@@ -1792,7 +1948,11 @@ pub fn send_action(state: &State) -> Option<SendAction> {
             enabled: false,
         });
     }
-    let count = review.map_or(0, |r| r.comments.iter().filter(|c| is_pending(c)).count());
+    let count = review.map_or(0, |r| {
+        in_scope(r, Scope::WorkingTree)
+            .filter(|c| is_pending(c))
+            .count()
+    });
     Some(SendAction {
         label: format!("Send review ({count})"),
         enabled: count > 0,
@@ -1862,8 +2022,10 @@ pub struct TidyActions {
 pub fn tidy_actions(state: &State) -> Option<TidyActions> {
     let view = state.open.as_ref()?;
     let review = review_of(state, view);
-    let any =
-        |pending: bool| review.is_some_and(|r| r.comments.iter().any(|c| is_pending(c) == pending));
+    let scope = view_scope(view);
+    let any = |pending: bool| {
+        review.is_some_and(|r| in_scope(r, scope).any(|c| is_pending(c) == pending))
+    };
     Some(TidyActions {
         clear_sent: any(false),
         discard_pending: any(true) && !review.is_some_and(|r| r.sending),
@@ -1874,8 +2036,9 @@ pub fn tidy_actions(state: &State) -> Option<TidyActions> {
 /// cannot be undone."
 pub fn discard_prompt(state: &State) -> Option<String> {
     let view = state.open.as_ref().filter(|view| view.confirm_discard)?;
+    let scope = view_scope(view);
     let count =
-        review_of(state, view).map_or(0, |r| r.comments.iter().filter(|c| is_pending(c)).count());
+        review_of(state, view).map_or(0, |r| in_scope(r, scope).filter(|c| is_pending(c)).count());
     let noun = if count == 1 { "comment" } else { "comments" };
     Some(format!(
         "Discard {count} draft {noun}? This cannot be undone."
@@ -1900,8 +2063,10 @@ pub fn send_error_text(message: &str) -> String {
 /// Each file's pending-comment count in the open view's entry (L2).
 pub fn pending_counts(state: &State) -> BTreeMap<RelPath, usize> {
     let mut counts = BTreeMap::new();
-    let review = state.open.as_ref().and_then(|view| review_of(state, view));
-    for comment in review.iter().flat_map(|r| &r.comments) {
+    let view = state.open.as_ref();
+    let review = view.and_then(|view| review_of(state, view));
+    let scope = view.map_or(Scope::WorkingTree, view_scope);
+    for comment in review.into_iter().flat_map(|r| in_scope(r, scope)) {
         if is_pending(comment) {
             *counts.entry(comment.path.clone()).or_insert(0) += 1;
         }
@@ -1931,14 +2096,11 @@ pub fn file_comments(state: &State) -> FileComments<'_> {
     let Some(view) = state.open.as_ref() else {
         return placed;
     };
-    if view.source != Source::Changes {
-        return placed;
-    }
-    let (Some(path), Some(review)) = (view.selected.as_ref(), review_of(state, view)) else {
+    let (Some(path), Some(review)) = (selected_file(view), review_of(state, view)) else {
         return placed;
     };
     let hunks = shown_hunks(view);
-    for comment in review.comments.iter().filter(|c| &c.path == path) {
+    for comment in in_scope(review, view_scope(view)).filter(|c| &c.path == path) {
         let end = shown_range(view, comment).end();
         // The row a comment sits under: its last line on its side; a removed-side comment may
         // end on a context line, which carries both numbers.
@@ -2036,14 +2198,35 @@ fn reset_diff_pane(view: &mut OpenView) {
     view.slot_heights.clear();
 }
 
+/// The listed pull request `number`, from the list the view shows.
+fn listed_pull_request(view: &OpenView, number: u64) -> Option<&BranchPullRequest> {
+    view.pull_requests
+        .shown()?
+        .0
+        .iter()
+        .find(|pr| pr.number == number)
+}
+
+/// The comments' scope of what `view` shows: the pull request's, or the working tree's (1149).
+pub fn view_scope(view: &OpenView) -> Scope {
+    match &view.source {
+        Source::Changes => Scope::WorkingTree,
+        Source::PullRequest(pr) => Scope::PullRequest(pr.number),
+    }
+}
+
 /// Show pull request `number`: ask for its diff, replacing whatever source was shown.
 fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
     let seq = state.next_seq;
     let Some(view) = state.open.as_mut() else {
         return Effect::None;
     };
+    let head = listed_pull_request(view, number)
+        .map(|pr| pr.head.clone())
+        .unwrap_or_default();
     view.source = Source::PullRequest(Box::new(PullRequestView {
         number,
+        head,
         diff: PrDiffLoad::Loading { seq },
         selected: None,
         file: None,
@@ -2274,6 +2457,17 @@ fn judge_anchors(state: &mut State) -> Vec<Move> {
         .collect();
     let mut moves = Vec::new();
     for comment in comments {
+        if comment.pr.is_some() {
+            // A pull request comment keeps its stored place until the head-follow work (M3).
+            anchors.insert(
+                comment.id,
+                Anchor {
+                    shown: comment.range,
+                    outdated: false,
+                },
+            );
+            continue;
+        }
         let status = comment.state.status();
         let held = anchors.get(&comment.id).map_or(comment.range, |a| a.shown);
         let judged = if listed.is_some_and(|l| !l.files.iter().any(|f| f.path == comment.path)) {
@@ -2482,15 +2676,23 @@ pub fn diff_body(view: &OpenView) -> DiffBody<'_> {
 
 /// Whether lines of the shown diff can be picked for a comment: text only (D3).
 pub fn can_pick(view: &OpenView) -> bool {
-    // Review comments belong to the entry's own files, never to a pull request's diff.
-    view.source == Source::Changes
-        && matches!(
+    match &view.source {
+        Source::Changes => matches!(
             &view.diff,
             Load::Ready(LoadedDiff {
                 diff: FileDiff::Text(_),
                 ..
             })
-        )
+        ),
+        // A pull request's text file once its diff is read (1149, FR-001, FR-014).
+        Source::PullRequest(_) => matches!(
+            diff_body(view),
+            DiffBody::Diff(LoadedDiff {
+                diff: FileDiff::Text(_),
+                ..
+            })
+        ),
+    }
 }
 
 /// How many bytes of a line are syntax-coloured: a minified line cannot stall the highlighter, and
