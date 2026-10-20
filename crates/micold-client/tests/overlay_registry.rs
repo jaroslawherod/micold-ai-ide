@@ -598,28 +598,30 @@ fn the_keyboard_subscription_names_no_surface() {
     // `Message::EscapePressed`.
     // So is the Overview's full-screen chord (feature 970, R7): a toggle the reducer gates itself.
     // Whitespace is dropped first, so a message rustfmt splits over lines still reads as one name.
+    // Each name runs to the first character a path cannot hold (`,`, `{`, `;`, `=`), and is compared
+    // whole, so a longer message sharing a prefix with an exempt one is still found.
+    const EXEMPT: [&str; 8] = [
+        "Message::EscapePressed",
+        "Message::EscapePressed)",
+        "Message::FocusMoved",
+        "Message::Overview(crate::features::overview::Msg::Toggled",
+        "Message::Overview(crate::features::overview::Msg::FullScreenToggled",
+        "Message::QuickSwitch(crate::features::quick_switch::Msg::Toggled",
+        "Message::Navigation(crate::features::navigation::Msg::Pressed(action)))",
+        // `card_menu_key`'s one return, `Some(Message::Overview(msg))`; the `Msg::` names it may
+        // carry are pinned below.
+        "Message::Overview(msg))",
+    ];
     let named: Vec<String> = body
         .match_indices("Message::")
         .map(|(at, _)| {
             body[at..]
                 .chars()
                 .filter(|c| !c.is_whitespace())
-                .take(80)
+                .take_while(|c| c.is_alphanumeric() || matches!(c, ':' | '_' | '(' | ')'))
                 .collect::<String>()
         })
-        .filter(|m| {
-            !m.starts_with("Message::EscapePressed")
-                && !m.starts_with("Message::FocusMoved")
-                && !m.starts_with("Message::Overview(crate::features::overview::Msg::Toggled")
-                && !m.starts_with(
-                    "Message::Overview(crate::features::overview::Msg::FullScreenToggled",
-                )
-                && !m.starts_with("Message::Navigation(")
-                && !m.starts_with("Message::QuickSwitch(")
-                // `card_menu_key`'s one return, `Some(Message::Overview(msg))`; the `Msg::` names it
-                // may carry are pinned below.
-                && !m.starts_with("Message::Overview(msg))")
-        })
+        .filter(|m| !EXEMPT.contains(&m.as_str()))
         .collect();
     let card_menu_msgs: Vec<&str> = body
         .match_indices("Msg::CardMenu")

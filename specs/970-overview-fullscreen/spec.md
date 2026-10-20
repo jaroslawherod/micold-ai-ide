@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-18
 
-**Status**: Draft
+**Status**: Closed 2026-10-20 — shipped in PRs #1074, #1143, #1144, #1145, and the close PR
 
 **Input**: User description: "Implement GitHub issue #970: Overview: full-screen mode hides the
 sidebar, animated. The problem you want solved: The overview can't use the whole window; the

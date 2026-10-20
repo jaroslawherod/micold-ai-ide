@@ -110,7 +110,7 @@ fn opening_the_overview_clears_full_screen() {
 
 #[test]
 fn every_exit_leaves_full_screen() {
-    let exits: [fn(&mut State); 5] = [
+    let exits: [fn(&mut State); 4] = [
         |s| {
             update(s, Msg::Closed);
         },
@@ -129,8 +129,8 @@ fn every_exit_leaves_full_screen() {
                 Msg::CardActivated(Activation::RevealOnly(SessionLocation::Default)),
             );
         },
-        // `app.rs` sets the flag directly for `MainAreaTaken` and the Changes/Compare views.
-        |s| s.open = false,
+        // The `app.rs` exits (`MainAreaTaken`, the Changes and Compare views) are driven through the
+        // app's `update` in `overview.rs::opening_changes_leaves_full_screen`.
     ];
     for (index, exit) in exits.into_iter().enumerate() {
         let mut state = in_full_screen();

@@ -457,6 +457,25 @@ fn opening_changes_closes_the_overview() {
     assert!(!state.overview.open);
 }
 
+/// Feature 970 (FR-010): the app's own exit, the Changes view taking the main area, leaves full
+/// screen through the real message, not by setting a flag.
+#[test]
+fn opening_changes_leaves_full_screen() {
+    let mut state = project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    open_overview(&mut state);
+    toggle_full_screen(&mut state);
+    assert!(state.overview.full_screen());
+    state.update(Message::Sidebar(
+        micold_client::features::sidebar::Msg::ReviewChangesRequested(wt("feat-a")),
+    ));
+    assert!(!state.overview.full_screen());
+}
+
 // ---- Feature 813 M2 (T026): pull request counts and the unknown mark ----
 
 fn counts(open: u8, merged: u8) -> PrCounts {

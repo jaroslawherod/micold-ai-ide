@@ -401,9 +401,9 @@ pub fn view_with<'a>(
         .open(!state.sidebar.hidden)
         // Full screen slides the whole drawer off without touching the sidebar's own state
         // (feature 970, FR-009); every way out of the Overview clears it through `full_screen()`.
-        .retracted(state.overview.full_screen())
         // Reduce motion: the zoom switches in one step (feature 970, FR-008).
-        .instant(state.settings.reduce_motion)
+        .retracted(drawer_flags(state).retracted)
+        .instant(drawer_flags(state).instant)
         .handle(
             material::ResizeHandle::new(roles)
                 .on_resize(|x| Message::Sidebar(SidebarMsg::DragMoved(x.max(0.0) as u16))),
@@ -1399,8 +1399,23 @@ pub fn focus_move_message(event: iced::keyboard::Event) -> Option<Message> {
     }
 }
 
+/// What the app tells the navigation drawer besides open or closed (feature 970).
+struct DrawerFlags {
+    retracted: bool,
+    instant: bool,
+}
+
+fn drawer_flags(state: &State) -> DrawerFlags {
+    DrawerFlags {
+        retracted: state.overview.full_screen(),
+        instant: state.settings.reduce_motion,
+    }
+}
+
 #[cfg(test)]
 mod app_chord_tests;
+#[cfg(test)]
+mod drawer_flags_tests;
 
 /// The width full screen gives the grid (feature 970, research R5): the sidebar drawer's, with its
 /// resize handle when expanded, or its collapsed strip.

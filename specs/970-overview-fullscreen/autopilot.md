@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: M4 gated, PR next
-- **Next step**: orchestrator opens the M4 PR from pr-title.txt / pr-body.md, waits on CI, merges; then close unit (T042–T043)
+- **Phase**: close unit running (tdd-verify, T042, T043)
+- **Next step**: tdd-verify, visual pass T042, full gate T043, close PR
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1074 | M1 (full screen hides the sidebar) | merged (rebase) | 3603ce06621499419e86a60e106d605b14a7904c |
 | #1143 | M2 (the cards zoom with the sidebar) | merged (rebase) | 34fccd299512b1ea90e592c8a920a631ba26ebf7 |
 | #1144 | M3 (the zoom keeps your place) | merged (rebase) | 0914629b79db4e4dd0d59658bba82df746e986fe |
+| #1145 | M4 (reduce motion) | merged (rebase) | 5f54853a04f27a1048a9148df4eb184d3efb1dd5 |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | #1074 | merged |
 | M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | #1143 | merged |
 | M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | #1144 | merged |
-| M4 | T032–T041 | full | Reduce motion (US3) | — | gated (full gate green), PR next |
+| M4 | T032–T041 | full | Reduce motion (US3) | #1145 | merged |
 
 Polish T042–T043 (visual pass, final gate) changes no code: close unit. M1 keeps US1 whole at 15
 tasks (+ US4's 2): toggle, drawer retraction and exits are one state change, and no split along a
