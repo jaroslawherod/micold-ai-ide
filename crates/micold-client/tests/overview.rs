@@ -1400,3 +1400,142 @@ fn a_marked_up_prompt_is_painted_on_the_card_without_its_markup() {
         "no markup survives to the painted card: {line:?}"
     );
 }
+
+/// Feature 1121 T027: the Overview's expansion, through the application's update.
+mod expansion {
+    use super::*;
+    use micold_client::features::overview::MenuOrigin;
+    use micold_core::overview_expansion::Event;
+    use support::layout::{painted_text_settled_at, renderer, view_of, StateUnderTest};
+
+    fn two_cards() -> State {
+        let mut state = project_with(vec![
+            worktree("feat-a", Some("feat/a"), WorktreeStatus::Valid, false),
+            worktree("feat-b", Some("feat/b"), WorktreeStatus::Valid, false),
+        ]);
+        open_overview(&mut state);
+        state
+    }
+
+    fn apply(state: &mut State, event: Event) {
+        state.update(Message::Overview(Msg::Expansion(event)));
+    }
+
+    fn expanded(state: &State) -> Option<SessionLocation> {
+        state.overview.expansion.expanded().cloned()
+    }
+
+    /// The painted texts that name a worktree directory: only an expanded card shows one (FR-004).
+    fn painted_dirs(state: State) -> Vec<String> {
+        let under = StateUnderTest::new(state);
+        let (painted, _) = painted_text_settled_at(
+            view_of(&under),
+            &mut renderer(),
+            iced::Size::new(1280.0, 2400.0),
+        );
+        painted
+            .into_iter()
+            .map(|p| p.content)
+            .filter(|c| c.contains("worktrees"))
+            .collect()
+    }
+
+    /// US2 sc.1, FR-002: a resting pointer expands its card, and the view draws it expanded.
+    #[test]
+    fn a_rested_card_is_expanded_in_the_view() {
+        let mut state = two_cards();
+        assert_eq!(expanded(&state), None, "opening expands nothing (FR-013)");
+        assert!(painted_dirs(state.clone()).is_empty());
+        apply(&mut state, Event::PointerRested(wt("feat-b")));
+        assert_eq!(expanded(&state), Some(wt("feat-b")));
+        let dirs = painted_dirs(state);
+        assert_eq!(dirs.len(), 1, "one card shows its directory: {dirs:?}");
+        assert!(dirs[0].contains("feat-b"), "{dirs:?}");
+    }
+
+    /// FR-012, US4 sc.3: an open card menu freezes the expansion until it closes.
+    #[test]
+    fn an_open_card_menu_freezes_the_expansion() {
+        let mut state = two_cards();
+        apply(&mut state, Event::PointerRested(wt("feat-a")));
+        state.update(Message::Overview(Msg::CardMenuOpened {
+            location: wt("feat-a"),
+            anchor: (10, 10),
+            origin: MenuOrigin::Pointer,
+        }));
+        apply(&mut state, Event::PointerLeft(wt("feat-a")));
+        apply(&mut state, Event::PointerRested(wt("feat-b")));
+        assert_eq!(
+            expanded(&state),
+            Some(wt("feat-a")),
+            "the target keeps its form"
+        );
+        state.update(Message::Overview(Msg::CardMenuDismissed));
+        apply(&mut state, Event::PointerRested(wt("feat-b")));
+        assert_eq!(
+            expanded(&state),
+            Some(wt("feat-b")),
+            "the menu closed: rests act again"
+        );
+    }
+
+    /// FR-012: a chosen menu entry closes the menu as a dismissal does.
+    #[test]
+    fn a_chosen_menu_entry_unfreezes_the_expansion() {
+        let mut state = two_cards();
+        state.update(Message::Overview(Msg::CardMenuOpened {
+            location: wt("feat-a"),
+            anchor: (10, 10),
+            origin: MenuOrigin::Pointer,
+        }));
+        apply(&mut state, Event::PointerRested(wt("feat-b")));
+        assert_eq!(expanded(&state), None);
+        state.update(Message::Overview(Msg::CardMenuEntryChosen(Box::new(
+            Message::Overview(Msg::GridScrolled),
+        ))));
+        apply(&mut state, Event::PointerRested(wt("feat-b")));
+        assert_eq!(expanded(&state), Some(wt("feat-b")));
+    }
+
+    /// FR-005, FR-013: closing, toggling or activating leaves the Overview with nothing expanded,
+    /// so reopening it shows every card collapsed.
+    #[test]
+    fn leaving_the_overview_resets_the_expansion() {
+        let leave = [
+            Msg::Closed,
+            Msg::Toggled {
+                settings_open: false,
+            },
+            Msg::CardActivated(Activation::OfferStart(wt("feat-a"))),
+        ];
+        for msg in leave {
+            let mut state = two_cards();
+            apply(&mut state, Event::PointerRested(wt("feat-a")));
+            state.update(Message::Overview(msg.clone()));
+            assert!(!state.overview.open, "{msg:?}");
+            open_overview(&mut state);
+            assert_eq!(expanded(&state), None, "{msg:?}");
+        }
+    }
+
+    /// FR-005 (*card removed*): a listing without the expanded card leaves none expanded, and no
+    /// menu open.
+    #[test]
+    fn a_removed_card_is_no_longer_expanded() {
+        let mut state = two_cards();
+        apply(&mut state, Event::PointerRested(wt("feat-b")));
+        state.worktree.worktrees.retain(|w| w.dir_name != "feat-b");
+        state.update(Message::Overview(Msg::GridScrolled));
+        assert_eq!(expanded(&state), None);
+        assert!(state.overview.card_menu.is_none());
+    }
+
+    /// A project switch forgets the expansion with the rest of what the Overview read.
+    #[test]
+    fn a_project_switch_resets_the_expansion() {
+        let mut state = two_cards();
+        apply(&mut state, Event::PointerRested(wt("feat-a")));
+        state.update(Message::Overview(Msg::ProjectSwitched));
+        assert_eq!(expanded(&state), None);
+    }
+}

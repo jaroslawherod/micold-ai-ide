@@ -17,8 +17,8 @@ use iced::widget::scrollable::AbsoluteOffset;
 use iced::{window, Element, Event, Length, Point, Rectangle, Size, Vector};
 use micold_core::overview_expansion::EXPAND_REST;
 use micold_core::tokens::motion::duration;
-use micold_core::tooltip::ShowTimer;
 use micold_core::tokens::{spacing, Roles};
+use micold_core::tooltip::ShowTimer;
 
 /// The narrowest a card is drawn.
 pub const MIN_WIDTH: f32 = 280.0;
@@ -2502,7 +2502,10 @@ mod tests {
             .cards
             .into_iter()
             .enumerate()
-            .map(|(i, card)| card.on_rest(format!("rest {i}")).on_leave(format!("leave {i}")))
+            .map(|(i, card)| {
+                card.on_rest(format!("rest {i}"))
+                    .on_leave(format!("leave {i}"))
+            })
             .collect();
         grid
     }
@@ -2530,7 +2533,11 @@ mod tests {
         let early = t0 + EXPAND_REST - std::time::Duration::from_millis(1);
         assert_eq!(frame_at(&mut m, on, early), NOTHING, "rested too early");
         assert_eq!(frame_at(&mut m, on, t0 + EXPAND_REST), ["rest 1"]);
-        assert_eq!(frame_at(&mut m, on, t0 + EXPAND_REST * 3), NOTHING, "rested twice");
+        assert_eq!(
+            frame_at(&mut m, on, t0 + EXPAND_REST * 3),
+            NOTHING,
+            "rested twice"
+        );
         let gap = Point::new(slot.x - GAP / 2.0, slot.center_y());
         assert_eq!(frame_at(&mut m, gap, t0 + EXPAND_REST * 4), ["leave 1"]);
         assert_eq!(frame_at(&mut m, gap, t0 + EXPAND_REST * 6), NOTHING);
@@ -2547,8 +2554,14 @@ mod tests {
         let (drawn, under) = (slots(&m.node, 6)[1], slots(&m.node, 6)[4]);
         let over_both = Point::new(drawn.center_x(), under.y + 2.0);
         let beneath = Point::new(drawn.center_x(), drawn.y + drawn.height + 2.0);
-        assert!(drawn.contains(over_both), "the expanded card does not reach over card 4");
-        assert!(under.contains(beneath), "card 4 does not show below the expanded card");
+        assert!(
+            drawn.contains(over_both),
+            "the expanded card does not reach over card 4"
+        );
+        assert!(
+            under.contains(beneath),
+            "card 4 does not show below the expanded card"
+        );
         let t0 = std::time::Instant::now();
         assert_eq!(frame_at(&mut m, over_both, t0), NOTHING);
         assert_eq!(frame_at(&mut m, over_both, t0 + EXPAND_REST), ["rest 1"]);

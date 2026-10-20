@@ -144,6 +144,41 @@ fn update_inner_applies_window_focus_changed() {
     assert!(app.window_focused);
 }
 
+/// Feature 1121 T027, FR-005: the window losing focus collapses the expanded card, and regaining
+/// it expands none (Edge Case *Window regains focus*).
+#[test]
+fn expansion_window_blur_collapses() {
+    use micold_client::features::overview::Msg as OverviewMsg;
+    use micold_core::overview_expansion::Event;
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::SessionLocation;
+
+    let mut app = base_app();
+    let path = PathBuf::from("repo");
+    app.core.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    app.core.workspace.active = Some(path);
+    app.core.overview.open = true;
+    let _ = update_inner(
+        &mut app,
+        Message::Overview(OverviewMsg::Expansion(Event::FocusGained(
+            SessionLocation::Default,
+        ))),
+    );
+    assert_eq!(
+        app.core.overview.expansion.expanded(),
+        Some(&SessionLocation::Default)
+    );
+    let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
+    assert_eq!(app.core.overview.expansion.expanded(), None);
+    let _ = update_inner(&mut app, Message::WindowFocusChanged(true));
+    assert_eq!(app.core.overview.expansion.expanded(), None);
+}
+
 #[test]
 fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
     // Reproduces the reported bug: a freshly spawned session used to always start at the

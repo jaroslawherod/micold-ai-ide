@@ -72,8 +72,8 @@ The header row shows:
 
 The body below it shows:
 
-- its **title**, which says what the location is for (see [Title](#title)), on up to three lines; hover it for the full title and the location's name;
-- below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. Hover it for the full branch name. A card whose title already is the branch does not repeat it;
+- its **title**, which says what the location is for (see [Title](#title)), on up to three lines;
+- below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. A card whose title already is the branch does not repeat it;
 - its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
 - when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
 - a **progress row**, when there is progress to show (see [Feature progress](#feature-progress));
@@ -83,9 +83,25 @@ A row with nothing to say is not shown.
 
 ### Title
 
-For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. Otherwise it is the **branch**, or the location's name when there is no branch: Default's title is *Default*. A long title wraps onto up to **three lines**, and a title longer than that ends in an ellipsis (…) on the third. Hovering the title shows the full title and the location's name.
+For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. Otherwise it is the **branch**, or the location's name when there is no branch: Default's title is *Default*. A long title wraps onto up to **three lines**, and a title longer than that ends in an ellipsis (…) on the third. To read it in full, see [Reading a card in full](#reading-a-card-in-full).
 
 Titles come from the issues the New-worktree form already loaded, or from one read of each issue when the Overview opens, when the project is on GitHub and `gh` is available. A Jira ticket, an offline machine, a closed issue or a missing `gh` leave the branch as the title. Each title is read once while the app runs, and is never written to a log.
+
+## Reading a card in full
+
+Rest the pointer on a card for a moment and it **expands in place**: its top-left corner and width stay where they are, and it grows downward, drawn over the cards below it with a shadow that sets it apart. No other card moves. The expanded card shows, wrapped and with no ellipsis:
+
+- the full **title**, and the location's name when it differs from the title;
+- the full **branch** name, when the title is not the branch;
+- the **worktree directory**, with your home folder written as `~` (`~/code/repo/.claude/worktrees/feat-813_worktree-overview`);
+- the full **activity line**;
+- every other row of the card, as it reads collapsed.
+
+Move the pointer off the card and it **collapses**; rest it on another card and that one expands instead, so at most one card is expanded at a time. A card near the bottom of the Overview is moved up just enough to be seen whole. A card taller than the Overview is as tall as the Overview, keeps its header row and title in view, and scrolls the rest inside the card with the mouse wheel; once its content is at its end, the next wheel gesture scrolls the Overview.
+
+While a card menu is open (see [Acting on a card](#acting-on-a-card)), the card it is for keeps its form, expanded or not, and no other card expands until the menu closes. Switching to another window, or closing the Overview, collapses the card; reopening the Overview shows every card collapsed.
+
+The title, branch and activity have no tooltip of their own: the expanded card shows them in full. The header row's state and type words keep theirs.
 
 ## Feature progress
 

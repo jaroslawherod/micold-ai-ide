@@ -85,7 +85,8 @@ impl Expansion {
             Event::PointerRested(location) => {
                 // Escape collapsed this card with the pointer still on it: it stays collapsed
                 // until the pointer leaves it.
-                let escaped_here = self.pointer_escaped && self.pointer_on.as_ref() == Some(&location);
+                let escaped_here =
+                    self.pointer_escaped && self.pointer_on.as_ref() == Some(&location);
                 if self.menu_open || escaped_here {
                     return;
                 }
@@ -135,7 +136,8 @@ impl Expansion {
             Event::MenuClosed => self.menu_open = false,
             Event::Listed(listed) => {
                 let gone = |slot: &Option<SessionLocation>| {
-                    slot.as_ref().is_some_and(|location| !listed.contains(location))
+                    slot.as_ref()
+                        .is_some_and(|location| !listed.contains(location))
                 };
                 if gone(&self.expanded.as_ref().map(|(location, _)| location.clone())) {
                     self.collapse();
@@ -341,7 +343,10 @@ mod tests {
     fn a_rest_on_another_card_expands_only_that_card() {
         assert_eq!(shown(&after([rest("a"), rest("b")])), Some("b".into()));
         // A's leave arriving after B's rest leaves B expanded.
-        assert_eq!(shown(&after([rest("a"), rest("b"), leave("a")])), Some("b".into()));
+        assert_eq!(
+            shown(&after([rest("a"), rest("b"), leave("a")])),
+            Some("b".into())
+        );
     }
 
     /// K1, Story 3 sc.1: focus expands a card by focus; focus on another card replaces it.
@@ -351,7 +356,10 @@ mod tests {
         assert_eq!(shown(&focused), Some("a".into()));
         assert_eq!(focused.cause(), Some(Cause::Focus));
         assert_eq!(shown(&after([focus("a"), focus("b")])), Some("b".into()));
-        assert_eq!(shown(&after([focus("a"), Event::FocusLost(loc("a"))])), None);
+        assert_eq!(
+            shown(&after([focus("a"), Event::FocusLost(loc("a"))])),
+            None
+        );
     }
 
     /// K1, FR-005: a hover ending without a rest elsewhere re-expands the focused card, unless
@@ -361,14 +369,28 @@ mod tests {
         let back = after([focus("a"), rest("b"), leave("b")]);
         assert_eq!(shown(&back), Some("a".into()));
         assert_eq!(back.cause(), Some(Cause::Focus));
-        assert_eq!(shown(&after([focus("a"), Event::Escape, rest("b"), leave("b")])), None);
+        assert_eq!(
+            shown(&after([focus("a"), Event::Escape, rest("b"), leave("b")])),
+            None
+        );
     }
 
     /// K1, Edge Case *Window regains focus*: a blur collapses, and nothing re-expands after it.
     #[test]
     fn a_window_blur_collapses_and_nothing_re_expands() {
-        assert_eq!(shown(&after([focus("a"), rest("b"), Event::WindowBlurred])), None);
-        assert_eq!(shown(&after([focus("a"), rest("b"), Event::WindowBlurred, leave("b")])), None);
+        assert_eq!(
+            shown(&after([focus("a"), rest("b"), Event::WindowBlurred])),
+            None
+        );
+        assert_eq!(
+            shown(&after([
+                focus("a"),
+                rest("b"),
+                Event::WindowBlurred,
+                leave("b")
+            ])),
+            None
+        );
         assert_eq!(shown(&after([focus("a"), Event::WindowBlurred])), None);
     }
 
@@ -379,7 +401,10 @@ mod tests {
         let escaped = after([focus("a"), Event::Escape]);
         assert_eq!(shown(&escaped), None);
         assert_eq!(escaped.focused, Some(loc("a")));
-        assert_eq!(shown(&after([focus("a"), Event::Escape, focus("b"), focus("a")])), Some("a".into()));
+        assert_eq!(
+            shown(&after([focus("a"), Event::Escape, focus("b"), focus("a")])),
+            Some("a".into())
+        );
     }
 
     /// K1: Escape on a hover-expanded card holds while the pointer stays on it; leaving and
@@ -388,9 +413,17 @@ mod tests {
     fn escape_on_a_hovered_card_holds_until_the_pointer_leaves() {
         let held = [rest("a"), Event::Escape];
         assert_eq!(shown(&after(held.clone())), None);
-        let further = [Event::MenuOpened, Event::MenuClosed, Event::Listed(vec![loc("a")]), rest("a")];
+        let further = [
+            Event::MenuOpened,
+            Event::MenuClosed,
+            Event::Listed(vec![loc("a")]),
+            rest("a"),
+        ];
         assert_eq!(shown(&after(held.clone().into_iter().chain(further))), None);
-        assert_eq!(shown(&after(held.into_iter().chain([leave("a"), rest("a")]))), Some("a".into()));
+        assert_eq!(
+            shown(&after(held.into_iter().chain([leave("a"), rest("a")]))),
+            Some("a".into())
+        );
     }
 
     /// K1, FR-005: Escape on the focused card while the pointer expanded it still counts as escaped.
@@ -403,11 +436,25 @@ mod tests {
     /// K1, FR-012: while a card menu is open nothing changes form; once closed, events act again.
     #[test]
     fn an_open_menu_freezes_the_form() {
-        assert_eq!(shown(&after([rest("a"), Event::MenuOpened, rest("b"), focus("b")])), Some("a".into()));
-        assert_eq!(shown(&after([Event::MenuOpened, rest("b"), focus("b")])), None);
+        assert_eq!(
+            shown(&after([
+                rest("a"),
+                Event::MenuOpened,
+                rest("b"),
+                focus("b")
+            ])),
+            Some("a".into())
+        );
+        assert_eq!(
+            shown(&after([Event::MenuOpened, rest("b"), focus("b")])),
+            None
+        );
         let reopened = [Event::MenuOpened, rest("b"), Event::MenuClosed, rest("b")];
         assert_eq!(shown(&after(reopened)), Some("b".into()));
-        assert_eq!(shown(&after([Event::MenuOpened, Event::MenuClosed, focus("b")])), Some("b".into()));
+        assert_eq!(
+            shown(&after([Event::MenuOpened, Event::MenuClosed, focus("b")])),
+            Some("b".into())
+        );
     }
 
     /// K1, Edge Case *card removed*: a listing without the expanded card collapses it; a focus
@@ -426,7 +473,10 @@ mod tests {
     /// K1: every collapse clears the inner scroll's edges.
     #[test]
     fn each_collapse_clears_the_body_edges() {
-        let edges = Event::BodyScrolled { up: true, down: true };
+        let edges = Event::BodyScrolled {
+            up: true,
+            down: true,
+        };
         let collapses: [Vec<Event>; 5] = [
             vec![leave("a")],
             vec![Event::Escape],

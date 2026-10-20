@@ -17,6 +17,7 @@ use micold_core::overview::{
     activation, card_state, location_type, order, session_counts, CardModel, CardSignals,
     CardState, CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
 };
+use micold_core::overview_expansion::{Event, Expansion};
 use micold_core::session::{Session, SessionLocation};
 use micold_core::task_progress::{self, Progress, Source};
 use micold_core::theme::ColorScheme;
@@ -37,19 +38,41 @@ pub fn card_id(location: &SessionLocation) -> iced::advanced::widget::Id {
     })
 }
 
+/// The expanded card's inner scrollable, by location (feature 1121, FR-008): Page Up and Page Down
+/// scroll it while the card has the keyboard.
+pub fn card_scroll_id(location: &SessionLocation) -> iced::advanced::widget::Id {
+    iced::advanced::widget::Id::from(match location {
+        SessionLocation::Default => "overview-card-body-default".to_string(),
+        SessionLocation::Worktree(dir) => format!("overview-card-body-{dir}"),
+    })
+}
+
 /// The Overview: a grid with one card per location of the active project.
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let menu_open = state.overview.card_menu.is_some();
-    let cards = cards(state)
+    let models = cards(state);
+    let expanded_at = state
+        .overview
+        .expansion
+        .expanded()
+        .and_then(|at| models.iter().position(|model| &model.location == at));
+    let cards = models
         .iter()
-        .map(|model| {
+        .enumerate()
+        .map(|(index, model)| {
             let location = model.location.clone();
             let menu_at = location.clone();
+            let expansion = |event: Event| Message::Overview(Msg::Expansion(event));
             OverviewCard::new(model, r)
                 .id(card_id(&location))
                 .targeted(is_targeted(state, &location))
                 .menu_open(menu_open)
+                .expanded(expanded_at == Some(index))
+                .on_rest(expansion(Event::PointerRested(location.clone())))
+                .on_leave(expansion(Event::PointerLeft(location.clone())))
+                .scroll_id(card_scroll_id(&location))
+                .on_body_scroll(move |up, down| expansion(Event::BodyScrolled { up, down }))
                 .on_press(Message::Overview(Msg::ActivationRequested(
                     model.activation.clone(),
                 )))
@@ -64,7 +87,12 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
-    let grid = CardGrid::new(cards, r)
+    let mut grid = CardGrid::new(cards, r);
+    if let Some(index) = expanded_at {
+        // The twin: the same card collapsed, with no id or messages, measured for its row (U2).
+        grid = grid.expanded(index, OverviewCard::new(&models[index], r));
+    }
+    let grid = grid
         .on_scroll(Message::Overview(Msg::GridScrolled))
         .scroll_id(GRID_SCROLL_ID.clone())
         .on_reflow(|offset| Message::Overview(Msg::Reflowed(offset.y)))
@@ -214,19 +242,30 @@ pub fn settle_card_menu(state: &mut State) {
         state.overview.card_menu = None;
         state.overview.focus_return = None;
         state.overview.focus_landed = None;
+        // Closing the Overview collapses the card, and reopening expands none (FR-005, FR-013).
+        state.overview.expansion = Expansion::default();
         return;
     }
-    let Some(target) = state
+    let target = state
         .overview
         .card_menu
         .as_ref()
-        .map(|m| m.location.clone())
-    else {
+        .map(|m| m.location.clone());
+    // `cards()` derives every card: only when a menu or an expanded card may have lost its card.
+    if target.is_none() && state.overview.expansion.expanded().is_none() {
         return;
-    };
-    if !cards(state).iter().any(|model| model.location == target) {
+    }
+    let listed: Vec<SessionLocation> = cards(state).into_iter().map(|m| m.location).collect();
+    if state.overview.expansion.expanded().is_some() {
+        state
+            .overview
+            .expansion
+            .apply(Event::Listed(listed.clone()));
+    }
+    if target.is_some_and(|target| !listed.contains(&target)) {
         state.overview.card_menu = None;
         state.overview.focus_return = None;
+        state.overview.expansion.apply(Event::MenuClosed);
     }
 }
 

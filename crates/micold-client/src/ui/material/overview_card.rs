@@ -2,7 +2,7 @@
 //!
 //! A header row in the state's colour, with the state icon and word at its start (the reason is
 //! their tooltip) and the location type's icon and word at its end (the word is their tooltip),
-//! over one neutral body: the title (on up to three lines, the display name in a tooltip), the
+//! over one neutral body: the title (on up to three lines), the
 //! short branch when it has one, the sessions line, and the activity (up to two lines), progress
 //! and pull request rows when they have something to say (feature 1120, contracts K1). What each
 //! line says is [`CardText`], tested in the core (FR-018). Every colour comes from the theme's roles through [`palette`]: the header
@@ -400,35 +400,27 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
 fn collapsed_body<'a, M: 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
     let roles = card.roles;
     let text = CardText::of(&card.model);
-    let line = |words: String, tooltip: Option<String>| -> Element<'a, M> {
-        let shown = Ellipsized::<M>::at_role_spaced(words, TypeRole::Body, p.on_body_variant);
-        match tooltip {
-            Some(tip) => Tooltip::new(shown, tip, roles).into(),
-            None => shown.into(),
-        }
-    };
     // The title wraps onto three lines and the activity onto two before an ellipsis (feature
-    // 1121, FR-001); the branch stays one line.
-    let mut body = column![Tooltip::new(
-        LineClamped::<M>::new(text.title, TypeRole::CardTitle, 3)
-            .tint(p.on_body)
-            .width(Length::Fill),
-        text.title_tooltip,
-        roles
-    )]
+    // 1121, FR-001); the branch stays one line. None of them has a tooltip: the expanded card
+    // shows their full text (feature 1121, FR-004).
+    let mut body = column![LineClamped::<M>::new(text.title, TypeRole::CardTitle, 3)
+        .tint(p.on_body)
+        .width(Length::Fill)]
     .spacing(spacing::XS);
     if let Some(branch) = text.branch {
-        body = body.push(line(branch.text, Some(branch.tooltip)));
+        body = body.push(Ellipsized::<M>::at_role_spaced(
+            branch,
+            TypeRole::Body,
+            p.on_body_variant,
+        ));
     }
     body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
     if let Some(activity) = text.activity {
-        body = body.push(Tooltip::new(
-            LineClamped::<M>::new(activity.text, TypeRole::Body, 2)
+        body = body.push(
+            LineClamped::<M>::new(activity, TypeRole::Body, 2)
                 .tint(p.on_body_variant)
                 .width(Length::Fill),
-            activity.tooltip,
-            roles,
-        ));
+        );
     }
     if let Some(row) = text.progress {
         body = body.push(Text::new(row.text, TypeRole::Body, roles).tint(p.on_body_variant));
@@ -643,8 +635,8 @@ mod tests {
         }
     }
 
-    /// FR-006, FR-007, FR-008, SC-003: the issue title, the short branch and the sessions line,
-    /// with the display name and the full branch on hover.
+    /// FR-006, FR-007, FR-008, SC-003: the issue title, the short branch and the sessions line;
+    /// the display name and the full branch only on the expanded card (feature 1121, FR-004).
     #[test]
     fn the_card_shows_the_title_the_short_branch_and_the_sessions_line() {
         let m = titled();
@@ -663,15 +655,6 @@ mod tests {
         assert!(
             text.contains(&"1 session \u{b7} 1 running".to_string()),
             "{text:?}"
-        );
-        let words = micold_core::overview_text::CardText::of(&m);
-        assert_eq!(
-            words.title_tooltip,
-            "Overview cards: readable layout\nfeat-1120_x"
-        );
-        assert_eq!(
-            words.branch.map(|b| b.tooltip).as_deref(),
-            Some("feat/1120_x")
         );
     }
 
@@ -1203,17 +1186,27 @@ mod tests {
         );
     }
 
-    /// FR-015: the tooltips of a long title, branch and activity hold their full text.
+    /// Feature 1121 FR-004: hovering the collapsed card's title, branch or activity shows no
+    /// tooltip, since the expanded card shows their full text; the state word keeps its reason.
     #[test]
-    fn the_tooltips_of_a_long_card_hold_the_full_text() {
-        let m = full(true);
-        let words = CardText::of(&m);
-        assert!(words.title_tooltip.starts_with(&m.title));
-        assert_eq!(words.branch.map(|b| b.tooltip), m.branch.clone());
-        let activity = words.activity.expect("an activity row");
-        assert!(activity
-            .tooltip
-            .contains(&m.activity.as_ref().unwrap().line));
+    fn the_title_branch_and_activity_have_no_tooltip() {
+        let m = full(false);
+        let text = mounted_at(&m, 380.0, roles()).painted_text();
+        for hovered in [
+            m.title.as_str(),
+            "feat/1120",
+            "Editing card_grid.rs \u{b7} 3/7",
+        ] {
+            let at = word(&text, hovered).bounds.center();
+            let floated = mounted_at(&m, 380.0, roles()).floated_text(at);
+            assert!(
+                floated.is_empty(),
+                "hovering {hovered:?} floats {floated:?}"
+            );
+        }
+        let at = word(&text, m.state.label()).bounds.center();
+        let floated = mounted_at(&m, 380.0, roles()).floated_text(at);
+        assert_eq!(floated, [m.reason.label()], "the header tooltips stay");
     }
 
     /// FR-004, SC-004: the title is 17 px, the body lines 14 px, and nothing on the card under
@@ -1300,18 +1293,6 @@ mod tests {
                 assert_eq!(node.size().width, width);
             }
         }
-    }
-
-    /// U4, FR-015: the full title and the display name are the tooltip of the ellipsized title.
-    #[test]
-    fn the_full_title_is_in_the_tooltip() {
-        let long = "x".repeat(200);
-        let mut m = model(CardState::Idle, "feat-a");
-        m.title = long.clone();
-        assert_eq!(
-            micold_core::overview_text::CardText::of(&m).title_tooltip,
-            format!("{long}\nfeat-a")
-        );
     }
 
     /// SC-005: each card carries its type icon with the type's word, and its state icon with the

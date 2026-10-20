@@ -1178,6 +1178,14 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::WindowFocusChanged(focused) => {
             app.window_focused = focused;
             app.activation.watch.focus_changed(focused);
+            // The window losing focus collapses an expanded card, and regaining it expands none
+            // (feature 1121, FR-005, contract U4).
+            if !focused {
+                use micold_client::features::overview::Msg as OverviewMsg;
+                app.core.update(Message::Overview(OverviewMsg::Expansion(
+                    micold_core::overview_expansion::Event::WindowBlurred,
+                )));
+            }
             // **Nothing here touches terminal focus, and that is the implementation of
             // FR-013–FR-015** (feature 023). Coming back to the window must leave the keyboard
             // exactly where it was, and it does — not because anything is saved and restored, but

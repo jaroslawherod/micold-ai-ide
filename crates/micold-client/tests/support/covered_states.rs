@@ -2058,6 +2058,26 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // Feature 1121 (R10, FR-017, SC-002): the Overview with its first card expanded over the
+        // cards below it, so the expanded card's full texts pass the text-overflow and containment
+        // gates in both schemes.
+        CoveredState {
+            name: "overview-expanded",
+            build: || {
+                let mut state = with_project();
+                state.overview.open = true;
+                let first = micold_client::ui::overview::cards(&state)
+                    .first()
+                    .map(|card| card.location.clone())
+                    .expect("the project lists a card");
+                state
+                    .overview
+                    .expansion
+                    .apply(micold_core::overview_expansion::Event::FocusGained(first));
+                StateUnderTest::new(state)
+            },
+            anchors: &[],
+        },
     ]
 }
 
