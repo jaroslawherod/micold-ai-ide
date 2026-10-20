@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
 - **Phase**: close
-- **Next step**: close unit: zoom re-look (visual) and T045, T047–T049 workers dispatched by the orchestrator; then the close review, gate, PR files
+- **Next step**: close review (no rubric) on `origin/main...HEAD`; then gate, Status Closed, PR files
 
 ## Pull requests
 
@@ -74,9 +74,9 @@ inequality + visual pass).
 | M4 review A | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | CLEAN, no findings (sonnet). client `--tests` ok; lib `overview_card card_grid ellipsized` 78 pass incl. `a_narrow_card_keeps_its_header_words_on_one_line_inside_it` |
 | M4 review B | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | CLEAN, 1 MINOR (sonnet). F1 T039 ticked while B4/B5/B7 uncovered and the B5 re-look pending: fixed, `visual-pass.md` M4 round-2 re-look records the B5 outline and says B4, focus/ripple, B7 and a zoom with a targeted card are left to the close unit |
 | M4 visual pass | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | FAIL: the "five states" pose drew nothing at 600 and 1600 px (ca40630b dropped its fixed height; the grid's own scrollable fills a height the scrolling page lacks). B5 outline PASS (partial), header under 280 px PASS, zoom with a targeted card NOT RUN (no such pose). Fixed: `CardGrid::unscrolled()` for the pose + test `the_five_state_grid_is_drawn_and_the_next_pose_starts_below_it` (red 0 px at 600, then green); unit re-checked at 600 and 1600 px by hand: renders, no overlap (`visual-pass/b-m4r3-*.png`). Small layout fix: no round 3 |
-| Close tdd-verify | 1 | cb98f77ea665b278639941f04fdecf851d13a1eb:3be8cbdae98b00e560de9d63807b440ff4771832 | FAIL (sonnet): T041–T049 in tasks.md Phase 8. Fixed T041 (five-state paint test), T042 (glyph tint asserted), T043 (split-piece pixel test), T044 (reds recorded), T046 (FR-020 test); reds in `tdd/cycle-log.md` close section. T045, T047–T049 (MED/LOW) open |
+| Close tdd-verify | 1 | cb98f77ea665b278639941f04fdecf851d13a1eb:3be8cbdae98b00e560de9d63807b440ff4771832 | FAIL (sonnet): T041–T049 in tasks.md Phase 8. Fixed T041 (five-state paint test), T042 (glyph tint asserted), T043 (split-piece pixel test), T044 (reds recorded), T046 (FR-020 test); reds in `tdd/cycle-log.md` close section. T045, T047–T049 (MED/LOW, test strength) fixed by sonnet workers: hook body to painted card test, `a_card_with_every_row_fits…` split into fit/ellipsis/tooltip, exact title, painted labels, header ripple probe, anchor-path comment (rewritten by the unit to what the layout test checks), core assert messages |
 | Close visual pass | 1 | cb98f77ea665b278639941f04fdecf851d13a1eb:3be8cbdae98b00e560de9d63807b440ff4771832 | B4, B5 ripple, B7 PASS; B5 focus ring not seen (showcase has no Tab; covered by unit test `the_focused_card_draws_the_focus_ring`); zoom FAIL: lower-row split piece painted below the grid. Fixed in `CardGrid::draw` (layer cut to viewport) + test `a_split_card_mid_zoom_paints_only_inside_its_pieces`. Re-look of the zoom pose needed |
-| Close visual pass | 2 | ddc843523c472a3365e23820803ddd1a29c340f3:bd25709e17a058268c0cfd36ec75a62a3a908331 | pending: re-look of the "zoom — press it" pose mid-flight after the `CardGrid::draw` clip fix |
+| Close visual pass | 2 | ddc843523c472a3365e23820803ddd1a29c340f3:bd25709e17a058268c0cfd36ec75a62a3a908331 | PASS (worker, sonnet): mid-flight split pieces clipped at the grid bottom, nothing over the label; targeted outline and tint inside the piece; outlines whole at rest (`visual-pass.md` close re-look, `visual-pass/b-close-r2-zoom-*.png`) |
 
 Close full gate (`scripts/gate.sh`) green at bd25709e (cargo fmt on 3d5c85e9: split-piece clip fix, T041–T043, T046 tests), run by the orchestrator; pushed.
 Close full gate (`scripts/gate.sh`) green at 3be8cbda (zoom pose targets every third card; quickstart §A recorded, T040).
@@ -101,4 +101,4 @@ None.
 
 ## Follow-ups not done
 
-- None yet. T045, T047–T049 (tdd-verify MED/LOW, test strength only, no behaviour): decided to fix (close.md step 3), sent to `autopilot-worker` subagents on sonnet, one per crate.
+None.

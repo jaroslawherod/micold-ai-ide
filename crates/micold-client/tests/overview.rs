@@ -1,6 +1,8 @@
 //! Feature 813 (T010): the Overview's client state — open flag, and the cards built from what the
 //! window holds.
 
+mod support;
+
 use micold_client::app::{Message, State};
 use micold_client::features::agent_confirm::Prompt;
 use micold_client::features::overview::{badge, Badge, Msg, Tone};
@@ -1335,4 +1337,40 @@ fn settings_and_a_project_switch_keep_the_mode_and_the_sidebar() {
     toggle_full_screen(&mut state);
     assert!(!state.overview.full_screen());
     assert_eq!(sidebar_of(&state), before);
+}
+
+/// F5, US3 (feature 1120): a prompt wrapped in markup goes from the hook body, through
+/// `HookActivity::apply` and `cards()`, to the painted card with the markup removed.
+#[test]
+fn a_marked_up_prompt_is_painted_on_the_card_without_its_markup() {
+    use support::layout::{painted_text_settled_at, renderer, view_of, StateUnderTest};
+    let mut state = project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    let mut session = running(&mut state, wt("feat-a"));
+    let mut hook = micold_core::hook_activity::HookActivity::default();
+    assert!(hook.apply(&serde_json::json!({
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "<agent-message from=\"orchestrator\">Continue M2</agent-message>",
+    })));
+    session.hook_activity = Some(hook);
+    state.workspace.sessions.get_mut(&project_path()).unwrap()[0] = session;
+    state.overview.open = true;
+    let under = StateUnderTest::new(state);
+    let (painted, _) = painted_text_settled_at(
+        view_of(&under),
+        &mut renderer(),
+        iced::Size::new(1280.0, 2400.0),
+    );
+    let line = painted
+        .iter()
+        .find(|p| p.content.contains("Continue M2"))
+        .unwrap_or_else(|| panic!("the prompt is painted on the card: {painted:?}"));
+    assert!(
+        !line.content.contains('<'),
+        "no markup survives to the painted card: {line:?}"
+    );
 }

@@ -2040,6 +2040,13 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             // The first card's header row and its title line, taken from the resolved geometry:
             // the card is the grid's first cell, its column holds the header then the body.
+            //
+            // Both chains share the prefix `[0, 0, 1, 1, 0, 1, 0, 0, 0, 0]`, the path from the
+            // window root down to the first card's column. From that column, `0` is the header row
+            // and `1` is the body, whose `0, 0` is the title line. A wrapper added anywhere above
+            // shifts the prefix; `the_overview_card_anchors_are_the_header_strip_and_the_title` in
+            // `layout_snapshot.rs` then fails, because an anchor no longer lands on a header strip
+            // or a title line.
             anchors: &[
                 Anchor {
                     name: "overview.card.header",
