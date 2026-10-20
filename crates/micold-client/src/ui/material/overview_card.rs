@@ -496,10 +496,8 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
 #[cfg(test)]
 mod tests {
     use super::super::test_support::{leaves, overlap};
-    use super::super::test_support::{named_key, roles, Mounted};
+    use super::super::test_support::{named_key, roles, Focusables, Mounted};
     use super::*;
-    use iced::advanced::widget::operation::Outcome;
-    use iced::advanced::widget::Operation;
     use iced::keyboard::key::Named;
     use iced::{Rectangle, Size};
     use micold_core::overview::{Activation, CardReason, PrDisplay};
@@ -1462,26 +1460,6 @@ mod tests {
     }
 
     /// How many controls take the keyboard in the card.
-    struct Focusables(usize);
-
-    impl Operation<usize> for Focusables {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<usize>)) {
-            operate(self);
-        }
-
-        fn focusable(
-            &mut self,
-            _id: Option<&iced::advanced::widget::Id>,
-            _bounds: Rectangle,
-            _state: &mut dyn iced::advanced::widget::operation::Focusable,
-        ) {
-            self.0 += 1;
-        }
-
-        fn finish(&self) -> Outcome<usize> {
-            Outcome::Some(self.0)
-        }
-    }
 
     fn mounted_targeted(targeted: bool) -> Mounted<'static> {
         Mounted::new(

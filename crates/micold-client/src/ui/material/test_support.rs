@@ -448,3 +448,28 @@ pub fn key_with(named: iced::keyboard::key::Named, modifiers: iced::keyboard::Mo
         repeat: false,
     })
 }
+
+/// Counts the focusable widgets an element offers its keyboard traversal.
+pub struct Focusables(pub usize);
+
+impl iced::advanced::widget::Operation<usize> for Focusables {
+    fn traverse(
+        &mut self,
+        operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation<usize>),
+    ) {
+        operate(self);
+    }
+
+    fn focusable(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        _bounds: Rectangle,
+        _state: &mut dyn iced::advanced::widget::operation::Focusable,
+    ) {
+        self.0 += 1;
+    }
+
+    fn finish(&self) -> iced::advanced::widget::operation::Outcome<usize> {
+        iced::advanced::widget::operation::Outcome::Some(self.0)
+    }
+}

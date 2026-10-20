@@ -42,6 +42,7 @@ pub struct CardGrid<'a, M> {
     on_reflow: Option<OnReflow<'a, M>>,
     scroll_id: Option<Id>,
     unscrolled: bool,
+    expanded: Option<(usize, OverviewCard<'a, M>)>,
 }
 
 /// What a grid asks its owner when a zoom moves the card at the top of the view.
@@ -61,6 +62,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             on_reflow: None,
             scroll_id: None,
             unscrolled: false,
+            expanded: None,
         }
     }
 
@@ -223,6 +225,11 @@ struct ZoomState {
     anchor: Option<(usize, f32)>,
     /// Whether the last `update` saw a zoom, so the layout that ends it is answered too.
     was_zooming: bool,
+    /// The view the grid was last drawn or updated in, in its own coordinates: an expanded
+    /// card is capped at its height and placed inside it (feature 1121, R6).
+    view: std::cell::Cell<Option<Rectangle>>,
+    /// The expanded card's node at its slot, from the last layout (feature 1121, R4).
+    expanded: Option<layout::Node>,
 }
 
 impl ZoomState {
@@ -235,6 +242,8 @@ impl ZoomState {
             pieces: Vec::new(),
             anchor: None,
             was_zooming: false,
+            view: std::cell::Cell::new(None),
+            expanded: None,
         }
     }
 
@@ -329,9 +338,28 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
         self
     }
 
+    /// Draw card `index` expanded (feature 1121, research R4, contract U2): `cards[index]` is the
+    /// expanded card and `twin` the same card collapsed, built with no id, focus wiring or
+    /// messages. The grid measures the twin for that card's row, so every row and slot is what it
+    /// is with nothing expanded (FR-009); the expanded card takes its slot's x, width and top, as
+    /// tall as its content up to the view's height, and is drawn over its neighbours, moved up
+    /// just enough to lie inside the view (`overview_expansion::place`, FR-008).
+    pub fn expanded(mut self, index: usize, twin: OverviewCard<'a, M>) -> Self {
+        self.expanded = Some((index, twin));
+        self
+    }
+
     /// The grid proper, without its scrollable.
     fn into_grid(self) -> Grid<'a, M> {
+        let (expanded, twin) = match self.expanded.clone() {
+            Some((index, twin)) if index < self.cards.len() => {
+                (Some(index), Some(Element::from(twin)))
+            }
+            _ => (None, None),
+        };
         Grid {
+            expanded,
+            twin,
             cards: self
                 .cards
                 .iter()
@@ -355,9 +383,42 @@ struct Grid<'a, M> {
     max_columns: usize,
     zoom: Zoom,
     on_reflow: Option<OnReflow<'a, M>>,
+    /// The card drawn expanded over its neighbours (feature 1121, R4).
+    expanded: Option<usize>,
+    /// That card collapsed: measured for its row, never drawn, focused or sent events. Its tree
+    /// is the one after the cards'.
+    twin: Option<Element<'a, M>>,
+}
+
+/// The expanded card's layout where it is drawn: its slot's node moved up by `place` (K3) to lie
+/// inside `view`; a slot below the view stays where it is.
+fn placed<'n>(node: &'n layout::Node, origin: Point, view: Rectangle) -> Layout<'n> {
+    let slot = node.bounds() + Vector::new(origin.x, origin.y);
+    let dy = if slot.y < view.y + view.height {
+        micold_core::overview_expansion::place(
+            (slot.y, slot.height),
+            slot.height,
+            (view.y, view.height),
+        )
+        .top - slot.y
+    } else {
+        0.0
+    };
+    Layout::with_offset(Vector::new(origin.x, origin.y + dy), node)
 }
 
 impl<M> Grid<'_, M> {
+    /// The expanded card's index and drawn layout, in `view`.
+    fn expanded_layout<'n>(
+        &self,
+        state: &'n ZoomState,
+        origin: Point,
+        view: Rectangle,
+    ) -> Option<(usize, Layout<'n>)> {
+        let index = self.expanded?;
+        Some((index, placed(state.expanded.as_ref()?, origin, view)))
+    }
+
     /// Where the pointer is on `card`'s own (primary) box: unchanged at rest; during a zoom, the
     /// pointer over any piece of the card translated to the box, and none elsewhere.
     fn cursor_for_state(
@@ -400,16 +461,26 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
     fn children(&self) -> Vec<Tree> {
         self.cards
             .iter()
+            .chain(&self.twin)
             .map(|card| Tree::new(card.as_widget()))
             .collect()
     }
 
     fn diff(&self, tree: &mut Tree) {
+        // The twin's tree follows the cards': set it aside while the cards are diffed.
+        let twin_tree = (tree.children.len() > self.cards.len())
+            .then(|| tree.children.pop())
+            .flatten();
         tree.diff_children_custom(
             &self.cards,
             |child_tree, card| child_tree.diff(card.as_widget()),
             |card| Tree::new(card.as_widget()),
         );
+        if let Some(twin) = &self.twin {
+            let mut twin_tree = twin_tree.unwrap_or_else(|| Tree::new(twin.as_widget()));
+            twin_tree.diff(twin.as_widget());
+            tree.children.push(twin_tree);
+        }
     }
 
     fn size(&self) -> Size<Length> {
@@ -430,6 +501,13 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         };
         let (min, gap, max) = (self.min_width, self.spacing, self.max_columns);
         let state = tree.state.downcast_mut::<ZoomState>();
+        // The expanded card is capped at the view's height: the room's when it is bounded, else
+        // (in a scrollable) the last view's (feature 1121, R6).
+        let view_height = if limits.max().height.is_finite() {
+            limits.max().height
+        } else {
+            state.view.get().map_or(f32::INFINITY, |v| v.height)
+        };
         let card_width = match state.advance(self.zoom, width) {
             Some((start, end)) => {
                 let f = zoom_fraction(start, end, width);
@@ -454,12 +532,27 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             .zip(&mut tree.children)
             .map(|(card, card_tree)| card.as_widget_mut().layout(card_tree, renderer, &measure))
             .collect();
-        let naturals: Vec<f32> = nodes.iter().map(|n| n.size().height).collect();
+        let mut naturals: Vec<f32> = nodes.iter().map(|n| n.size().height).collect();
+        // The expanded card's row is as tall as its collapsed twin makes it (FR-009).
+        if let (Some(index), Some(twin), Some(twin_tree)) = (
+            self.expanded,
+            self.twin.as_mut(),
+            tree.children.get_mut(self.cards.len()),
+        ) {
+            naturals[index] = twin
+                .as_widget_mut()
+                .layout(twin_tree, renderer, &measure)
+                .size()
+                .height;
+        }
         let heights = row_heights(&pieces, &naturals);
         stack_rows(&mut pieces, &heights, gap);
         let mut card_heights = vec![MIN_CARD_HEIGHT; self.cards.len()];
         for piece in &pieces {
             card_heights[piece.card] = card_heights[piece.card].max(piece.rect.height);
+        }
+        if let Some(index) = self.expanded {
+            card_heights[index] = nodes[index].size().height.min(view_height);
         }
 
         // One node per card, at its largest piece; the other piece of a split card follows.
@@ -498,7 +591,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         } else {
             heights.iter().sum::<f32>() + (heights.len() - 1) as f32 * gap
         };
-        tree.state.downcast_mut::<ZoomState>().pieces = pieces;
+        let state = tree.state.downcast_mut::<ZoomState>();
+        state.pieces = pieces;
+        state.expanded = self.expanded.map(|index| nodes[index].clone());
         layout::Node::with_children(Size::new(width, height), nodes)
     }
 
@@ -544,14 +639,44 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             state.was_zooming = zooming;
         }
         let origin = layout.position();
+        if self.expanded.is_some() {
+            let state = tree.state.downcast_mut::<ZoomState>();
+            let height = state.view.get().map(|v| v.height);
+            state.view.set(Some(*viewport));
+            if height != Some(viewport.height) {
+                shell.invalidate_layout();
+            }
+        }
         let (state_tree, children) = (&tree.state, &mut tree.children);
         let state = state_tree.downcast_ref::<ZoomState>();
+        // The expanded card takes events first; beneath its drawn rectangle the others see the
+        // pointer levitate (FR-010).
+        let mut over_expanded = false;
+        if let Some((index, drawn)) = self.expanded_layout(state, origin, *viewport) {
+            over_expanded = cursor.is_over(drawn.bounds());
+            self.cards[index].as_widget_mut().update(
+                &mut children[index],
+                event,
+                drawn,
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
         for (i, (card, card_tree)) in self.cards.iter_mut().zip(children).enumerate() {
+            if Some(i) == self.expanded {
+                continue;
+            }
             let Some(card_layout) = layout.children().nth(i) else {
                 continue;
             };
             let at = card_layout.position();
-            let local = Grid::<M>::cursor_for_state(state, origin, i, at, cursor);
+            let mut local = Grid::<M>::cursor_for_state(state, origin, i, at, cursor);
+            if over_expanded {
+                local = local.levitate();
+            }
             card.as_widget_mut().update(
                 card_tree,
                 event,
@@ -575,12 +700,32 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
     ) -> mouse::Interaction {
         let origin = layout.position();
         let state = tree.state.downcast_ref::<ZoomState>();
+        let expanded = self.expanded_layout(state, origin, *viewport);
+        if let Some((index, drawn)) = expanded {
+            let interaction = self.cards[index].as_widget().mouse_interaction(
+                &tree.children[index],
+                drawn,
+                cursor,
+                viewport,
+                renderer,
+            );
+            // Over the expanded card the pointer is its own (FR-010).
+            if cursor.is_over(drawn.bounds()) {
+                return interaction;
+            }
+        }
         self.cards
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
             .enumerate()
             .map(|(i, ((card, card_tree), card_layout))| {
+                if Some(i) == self.expanded {
+                    let drawn = expanded.map_or(card_layout, |(_, drawn)| drawn);
+                    return card
+                        .as_widget()
+                        .mouse_interaction(card_tree, drawn, cursor, viewport, renderer);
+                }
                 let local =
                     Grid::<M>::cursor_for_state(state, origin, i, card_layout.position(), cursor);
                 card.as_widget().mouse_interaction(
@@ -608,7 +753,13 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         use iced::advanced::Renderer as _;
         let state = tree.state.downcast_ref::<ZoomState>();
         let origin = layout.position();
+        if self.expanded.is_some() {
+            state.view.set(Some(*viewport));
+        }
         for piece in &state.pieces {
+            if Some(piece.card) == self.expanded {
+                continue;
+            }
             let card_layout = layout.child(piece.node);
             let bounds = card_layout.bounds();
             if !bounds.intersects(viewport) {
@@ -650,6 +801,20 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
                 renderer.with_layer(view, |renderer| draw_card(renderer, &view));
             }
         }
+        // The expanded card last, in a layer of its own, over its neighbours (R4).
+        if let Some((index, drawn)) = self.expanded_layout(state, origin, *viewport) {
+            renderer.with_layer(*viewport, |renderer| {
+                self.cards[index].as_widget().draw(
+                    &tree.children[index],
+                    renderer,
+                    theme,
+                    style,
+                    drawn,
+                    cursor,
+                    viewport,
+                );
+            });
+        }
     }
 
     fn operate(
@@ -659,12 +824,21 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         renderer: &iced::Renderer,
         operation: &mut dyn Operation,
     ) {
-        for ((card, card_tree), card_layout) in self
+        let (state_tree, children) = (&tree.state, &mut tree.children);
+        let state = state_tree.downcast_ref::<ZoomState>();
+        let view = state.view.get().unwrap_or(layout.bounds());
+        let expanded = self.expanded_layout(state, layout.position(), view);
+        for (i, ((card, card_tree), card_layout)) in self
             .cards
             .iter_mut()
-            .zip(&mut tree.children)
+            .zip(children)
             .zip(layout.children())
+            .enumerate()
         {
+            let card_layout = match expanded {
+                Some((index, drawn)) if index == i => drawn,
+                _ => card_layout,
+            };
             card.as_widget_mut()
                 .operate(card_tree, card_layout, renderer, operation);
         }
@@ -678,14 +852,35 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        overlay::from_children(
-            &mut self.cards,
-            tree,
-            layout,
-            renderer,
-            viewport,
-            translation,
-        )
+        let (state_tree, children) = (&tree.state, &mut tree.children);
+        let state = state_tree.downcast_ref::<ZoomState>();
+        let expanded = self.expanded.zip(
+            state
+                .expanded
+                .as_ref()
+                .map(|node| placed(node, layout.position(), *viewport)),
+        );
+        let overlays: Vec<_> = self
+            .cards
+            .iter_mut()
+            .zip(children)
+            .zip(layout.children())
+            .enumerate()
+            .filter_map(|(i, ((card, card_tree), card_layout))| {
+                let card_layout = match expanded {
+                    Some((index, drawn)) if index == i => drawn,
+                    _ => card_layout,
+                };
+                card.as_widget_mut().overlay(
+                    card_tree,
+                    card_layout,
+                    renderer,
+                    viewport,
+                    translation,
+                )
+            })
+            .collect();
+        (!overlays.is_empty()).then(|| overlay::Group::with_children(overlays).overlay())
     }
 }
 
@@ -716,7 +911,7 @@ impl<'a, M: Clone + 'a> From<CardGrid<'a, M>> for Element<'a, M> {
 mod tests {
     use super::super::overview_card::MIN_HEIGHT;
     use super::*;
-    use crate::ui::material::test_support::{laid_out, leaves, roles};
+    use crate::ui::material::test_support::{laid_out, leaves, roles, Mounted};
     use iced::{Rectangle, Size};
     use micold_core::overview::{CardModel, CardReason, CardState, LocationType};
     use micold_core::session::SessionLocation;
@@ -878,7 +1073,6 @@ mod tests {
     /// so the root can close a card menu the grid scrolled beneath.
     #[test]
     fn a_wheel_scroll_over_the_grid_publishes_on_scroll() {
-        use crate::ui::material::test_support::Mounted;
         use iced::advanced::mouse::{Cursor, Event as Mouse, ScrollDelta};
         let mut grid = Mounted::new(
             CardGrid::new(cards::<String>(30), roles()).on_scroll("scrolled".to_string()),
@@ -1167,7 +1361,6 @@ mod tests {
         freed: f32,
         view_h: f32,
     ) -> (Vec<Piece>, Vec<(u32, u32)>) {
-        use crate::ui::material::test_support::Mounted;
         use iced::advanced::renderer::Headless as _;
         use iced::advanced::Renderer as _;
         const BELOW: f32 = 80.0;
@@ -1818,5 +2011,294 @@ mod tests {
             node_at.y + 5.0,
         );
         assert!(at(Point::new(24.0 + 200.0, 80.0)).position().is_none());
+    }
+
+    // ---- Feature 1121: the expanded card (U2, U3) ----
+
+    /// [`rich`] card `i`, titled `t<i>`, so each card's title is its own.
+    fn titled(i: usize) -> CardModel {
+        CardModel {
+            title: format!("t{i}"),
+            ..rich(i)
+        }
+    }
+
+    /// Card `i` with every text far longer than a card: the expanded card's content.
+    fn long(i: usize) -> CardModel {
+        CardModel {
+            title: format!(
+                "long {i} {}",
+                "and a title too long for any card ".repeat(5)
+            ),
+            branch: Some(format!("feat/{}", "b".repeat(115))),
+            dir: std::path::PathBuf::from(format!("/{}", "d".repeat(119))),
+            activity: Some(micold_core::hook_activity::CurrentActivity {
+                line: "Editing card_grid.rs and then ".repeat(12),
+                ratio: None,
+            }),
+            ..rich(i)
+        }
+    }
+
+    /// `models` as pressable cards: card `i` publishes `open i` on a press and `menu i` on a
+    /// secondary press.
+    fn wired(models: &[CardModel]) -> Vec<OverviewCard<'static, String>> {
+        models
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                OverviewCard::new(m, roles())
+                    .on_press(format!("open {i}"))
+                    .on_secondary_press(move |_| format!("menu {i}"))
+            })
+            .collect()
+    }
+
+    /// The grid of `models`, card `index` expanded with `content` (its twin from
+    /// `models[index]`); `pressable`: whether the expanded card takes a press.
+    fn expanded_grid(
+        models: &[CardModel],
+        index: usize,
+        content: &CardModel,
+        pressable: bool,
+    ) -> CardGrid<'static, String> {
+        let mut cards = wired(models);
+        let card = OverviewCard::new(content, roles())
+            .on_body_scroll(|up, down| format!("body {up} {down}"))
+            .expanded(true);
+        cards[index] = if pressable {
+            card.on_press(format!("open {index}"))
+                .on_secondary_press(move |_| format!("menu {index}"))
+        } else {
+            card
+        };
+        CardGrid::new(cards, roles())
+            .min_width(280.0)
+            .spacing(GAP)
+            .expanded(index, OverviewCard::new(&models[index], roles()))
+    }
+
+    fn plain_grid(models: &[CardModel]) -> CardGrid<'static, String> {
+        CardGrid::new(wired(models), roles())
+            .min_width(280.0)
+            .spacing(GAP)
+    }
+
+    /// `grid`, unscrolled, in a `width` × `height` window.
+    fn mounted(grid: CardGrid<'static, String>, width: f32, height: f32) -> Mounted<'static> {
+        Mounted::new_in(grid.unscrolled(), Size::new(width, height))
+    }
+
+    /// The first `n` card nodes of a laid-out grid.
+    fn slots(node: &iced::advanced::layout::Node, n: usize) -> Vec<Rectangle> {
+        node.children()[..n].iter().map(|c| c.bounds()).collect()
+    }
+
+    /// The `y` at which `m` paints the paragraph `content`, if it does.
+    fn painted_y(m: &mut Mounted<'_>, content: &str) -> Option<f32> {
+        m.painted_text()
+            .into_iter()
+            .find(|p| p.content == content)
+            .map(|p| p.bounds.y)
+    }
+
+    /// Feature 1121 U2, FR-009, US2 sc.2, US4 sc.5: with card 1 expanded, at 900 px (3 columns)
+    /// and 279 px (1 column), every row and every other card's slot is that of the grid with
+    /// nothing expanded, even though the expanded card's text is far longer than its twin's; on
+    /// the first layout the expanded node has its slot's x, y and width and is as tall as its
+    /// content up to the view's height.
+    #[test]
+    fn an_expanded_card_keeps_every_slot_and_takes_its_own() {
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        for (width, height) in [(900.0, 4000.0), (900.0, 300.0), (279.0, 4000.0)] {
+            let plain = mounted(plain_grid(&models), width, height);
+            let grown = mounted(expanded_grid(&models, 1, &long(1), true), width, height);
+            assert_eq!(
+                grown.node.size(),
+                plain.node.size(),
+                "{width}: the rows moved"
+            );
+            let (want, got) = (slots(&plain.node, 6), slots(&grown.node, 6));
+            for i in [0, 2, 3, 4, 5] {
+                assert_eq!(got[i], want[i], "{width}: card {i}'s slot moved");
+            }
+            let natural = laid_out(
+                OverviewCard::<String>::new(&long(1), roles())
+                    .expanded(true)
+                    .into(),
+                Size::new(want[1].width, f32::INFINITY),
+            )
+            .size()
+            .height;
+            assert!(
+                natural > want[1].height,
+                "the content is no taller than the slot"
+            );
+            let e = got[1];
+            assert_eq!(
+                (e.x, e.y, e.width),
+                (want[1].x, want[1].y, want[1].width),
+                "{width}"
+            );
+            assert!(
+                (e.height - natural.min(height)).abs() < EPS,
+                "{width}x{height}: {e:?}, natural {natural}"
+            );
+        }
+    }
+
+    /// Feature 1121 U3: the expanded card is drawn after every other card.
+    #[test]
+    fn an_expanded_card_is_drawn_after_every_other_card() {
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let content = long(1);
+        let mut m = mounted(expanded_grid(&models, 1, &content, true), 900.0, 4000.0);
+        let painted = m.painted_text();
+        let title = painted
+            .iter()
+            .position(|p| p.content == content.title)
+            .expect("the expanded title is painted");
+        let last_other = painted
+            .iter()
+            .rposition(|p| (0..6).any(|i| i != 1 && p.content == format!("t{i}")))
+            .expect("other cards are painted");
+        assert!(title > last_other, "{title} drawn before {last_other}");
+    }
+
+    /// Feature 1121 FR-008, US2 sc.5, K3: in a view ending inside the last row, the last row's
+    /// expanded card is moved up by `place`, so it ends inside the view.
+    #[test]
+    fn an_expanded_card_in_the_last_row_is_moved_up_into_the_view() {
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let height = 700.0;
+        let plain_title = {
+            let mut plain = mounted(plain_grid(&models), 900.0, height);
+            let slot = slots(&plain.node, 6)[4];
+            (
+                slot,
+                painted_y(&mut plain, &models[4].title).expect("card 4's title"),
+            )
+        };
+        let (slot, collapsed_y) = plain_title;
+        let content = long(4);
+        let mut m = mounted(expanded_grid(&models, 4, &content, true), 900.0, height);
+        let drawn = slots(&m.node, 6)[4].height;
+        let p = micold_core::overview_expansion::place((slot.y, slot.height), drawn, (0.0, height));
+        assert!(
+            p.top < slot.y,
+            "the case does not need a shift: {p:?} {slot:?}"
+        );
+        assert!(p.top + p.height <= height + EPS, "{p:?}");
+        let y = painted_y(&mut m, &content.title).expect("the expanded title");
+        assert!(
+            (y - collapsed_y - (p.top - slot.y)).abs() < 0.5,
+            "drawn at {y}, the slot's title at {collapsed_y}, placed {p:?} for {slot:?}"
+        );
+    }
+
+    /// Feature 1121 FR-010, US4 sc.1: a press, a release and a secondary press over the part of
+    /// the expanded card lying on a neighbour publish only the expanded card's messages, and the
+    /// pointer is the expanded card's.
+    #[test]
+    fn the_part_over_a_neighbour_belongs_to_the_expanded_card() {
+        use iced::advanced::mouse::{Button, Cursor, Event as Mouse};
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let content = long(1);
+        let mut m = mounted(expanded_grid(&models, 1, &content, true), 900.0, 4000.0);
+        let (expanded, under) = (slots(&m.node, 6)[1], slots(&m.node, 6)[4]);
+        let at = iced::Point::new(under.center_x(), under.y + 20.0);
+        assert!(expanded.contains(at), "card 1 does not reach over card 4");
+        let mut published = m.press(at);
+        published.extend(m.send(
+            iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+            Cursor::Available(at),
+        ));
+        published.extend(m.send(
+            iced::Event::Mouse(Mouse::ButtonPressed(Button::Right)),
+            Cursor::Available(at),
+        ));
+        assert_eq!(published, ["open 1", "menu 1"]);
+        let still = mounted(expanded_grid(&models, 1, &content, false), 900.0, 4000.0);
+        let pointer = still.element.as_widget().mouse_interaction(
+            &still.tree,
+            iced::advanced::Layout::new(&still.node),
+            Cursor::Available(at),
+            &Rectangle::with_size(still.room),
+            &still.renderer,
+        );
+        assert_ne!(
+            pointer,
+            mouse::Interaction::Pointer,
+            "the pressable neighbour's pointer shows through"
+        );
+    }
+
+    /// Feature 1121 R4: the twin takes no keyboard traversal: the expanded grid offers as many
+    /// focusable cards as the plain one.
+    #[test]
+    fn the_twin_takes_no_focus_traversal() {
+        use crate::ui::material::test_support::Focusables;
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let mut plain = mounted(plain_grid(&models), 900.0, 4000.0);
+        let mut grown = mounted(expanded_grid(&models, 1, &long(1), true), 900.0, 4000.0);
+        assert_eq!(grown.drive(Focusables(0)), plain.drive(Focusables(0)));
+    }
+
+    /// Feature 1121 Edge Case *content changes*, FR-009: the expanded card given a longer
+    /// activity stays at its slot with the new text, and the rows do not move.
+    #[test]
+    fn an_expanded_card_takes_new_text_in_place() {
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let mut m = mounted(expanded_grid(&models, 1, &rich(1), true), 900.0, 4000.0);
+        let before = slots(&m.node, 6);
+        let size = m.node.size();
+        let longer = long(1);
+        m.element = expanded_grid(&models, 1, &longer, true).unscrolled().into();
+        m.tree.diff(m.element.as_widget());
+        m.relayout();
+        let after = slots(&m.node, 6);
+        assert_eq!(m.node.size(), size, "the rows moved");
+        assert_eq!((after[1].x, after[1].y), (before[1].x, before[1].y));
+        assert!(after[1].height > before[1].height, "{after:?}");
+        let activity = longer.activity.expect("an activity").line;
+        assert!(
+            m.painted_text()
+                .iter()
+                .any(|p| p.content == activity.trim()),
+            "the new activity is not painted"
+        );
+    }
+
+    /// Feature 1121 US2 sc.6, FR-008: an expanded card taller than the view is as tall as the
+    /// view; a wheel over it scrolls its body first, and at the body's end the Overview.
+    #[test]
+    fn a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview() {
+        use iced::advanced::mouse::{Cursor, Event as Mouse, ScrollDelta};
+        let models: Vec<CardModel> = (0..9).map(titled).collect();
+        let mut m = Mounted::new_in(
+            expanded_grid(&models, 0, &long(0), true).on_scroll("grid".to_string()),
+            Size::new(900.0, 400.0),
+        );
+        // A draw gives the grid its view; the next layout caps the card at it.
+        m.painted_text();
+        m.relayout();
+        let card = m.node.children()[0].children()[0].bounds();
+        assert!((card.height - 400.0).abs() < EPS, "{card:?}");
+        let at = iced::Point::new(150.0, 300.0);
+        let wheel = |m: &mut Mounted<'_>, dy: f32| {
+            m.send(
+                iced::Event::Mouse(Mouse::WheelScrolled {
+                    delta: ScrollDelta::Pixels { x: 0.0, y: dy },
+                }),
+                Cursor::Available(at),
+            )
+        };
+        assert_eq!(wheel(&mut m, -20.0), ["body true true"]);
+        assert_eq!(wheel(&mut m, -10_000.0), ["body true false"]);
+        assert_eq!(
+            wheel(&mut m, -20.0),
+            ["grid"],
+            "the Overview did not scroll"
+        );
     }
 }
