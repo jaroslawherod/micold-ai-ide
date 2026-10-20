@@ -113,7 +113,7 @@ When a session is started through MCP without an explicit prompt, the template r
 - **FR-011**: The dialog and the MCP tools MUST render identically for the same template and facts.
 - **FR-012**: Rendering MUST NOT block or fail worktree or session creation; any failure yields no prompt.
 - **FR-013**: A stored template that fails validation at load MUST NOT stop the app: it renders as empty, the file keeps its text, and Settings shows the validation error.
-- **FR-014**: For MCP, the facts are the worktree's recorded issue reference, branch, type and name; title and body are looked up from the issue tracker when the reference is known, and are empty when the lookup fails or the worktree has no issue.
+- **FR-014**: For MCP, the facts are the worktree's recorded issue reference, branch, type and name; title and body are looked up from the issue tracker when the reference is known, and are empty when the lookup fails or the worktree has no issue. Jira title and body are not looked up by the daemon, so they are empty over MCP for a Jira key (the dialog, which already holds the loaded issue, may fill them); FR-011 holds for equal facts.
 
 ### Key Entities
 
@@ -125,7 +125,7 @@ When a session is started through MCP without an explicit prompt, the template r
 ### Measurable Outcomes
 
 - **SC-001**: With a template set, creating an issue worktree needs no typing for the session to start with the rendered prompt (0 keystrokes after choosing issue and CLI).
-- **SC-002**: Each of the six placeholders renders its value, and each unknown name is rejected with that name in the message, in the dialog and in MCP.
+- **SC-002**: Each of the six placeholders renders its value, and each unknown name is rejected on save in Settings with that name in the message; the dialog and MCP render a bad stored template as empty (FR-013).
 - **SC-003**: With an empty template, dialog and MCP behaviour is byte-identical to today's in the existing tests.
 - **SC-004**: An explicit prompt is delivered unchanged in 100% of tested dialog and MCP cases.
 

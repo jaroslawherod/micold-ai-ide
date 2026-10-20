@@ -51,12 +51,12 @@ title and body read from GitHub under a 5 s bound. See [research.md](research.md
 - [x] **IV. Local-First**: stored in the local settings file; the only network use is the existing
   `gh` issue lookup, which already exists for the tool and degrades to empty offline.
 - [x] **V. Rust + iced**: a `PromptTemplate` newtype makes an unvalidated string unrenderable
-  (`validate` returns the type `render` takes).
+  (`parse` returns the type `render` takes).
 - [x] **VI. Cross-Platform Parity**: pure function, no OS branch; CI covers all three platforms.
 - [x] **VII. Documentation**: `docs/user-guide/settings.md`, `worktrees-and-sessions.md` and
   `agent-tools.md` updated in the same change.
 - [x] **VIII. Reusable UI**: the Settings field reuses the existing multi-line/text field primitive
-  in `ui/cdk` (see research R6); no feature-local widget.
+  `ui/material/text_area.rs` (see research R6); no feature-local widget.
 
 Re-checked after design: unchanged, no violations. Complexity Tracking: none.
 
@@ -88,7 +88,7 @@ crates/micold-client/src/
 ├── features/settings.rs       # draft field (text_editor::Content; string extracted for validate) + validation in SettingsDraft::validate; send path to daemon
 └── ui/settings/               # reuses ui/material/text_area.rs; placeholder list, error line (glue)
 crates/micold-daemon/src/
-├── mcp/tools.rs            # resolve_first_prompt in create_session / start in create_worktree
+├── mcp/tools.rs            # first_prompt_for in create_session / start in create_worktree
 ├── ops.rs                  # facts gathering with 5 s bound (reuses IssueLookup)
 ├── server.rs               # NEW handler arm, as for default_ai_cli
 └── catalog.rs / state.rs   # NEW set_default_prompt_template; settings_wire carries it; accessor on DaemonState
@@ -104,14 +104,14 @@ docs/user-guide/{settings,worktrees-and-sessions,agent-tools}.md
 | FR-001 | `Settings.default_prompt_template: String`, `#[serde(default)]`; service-owned, written via the set-settings message (research R3); data-model §1 |
 | FR-002 | `ui/settings/` field + list of `PromptTemplate::PLACEHOLDERS` |
 | FR-003, FR-004 | `prompt_template::render`, contracts/prompt-template.md |
-| FR-005 | `PromptTemplate::validate` called from `SettingsDraft::validate`; refusal keeps stored value (existing save path writes only on `Ok`) |
+| FR-005 | `PromptTemplate::parse` called from `SettingsDraft::validate`; refusal keeps stored value (existing save path writes only on `Ok`) |
 | FR-006 | `render` returns `Option<String>`, `None` when blank after trim |
 | FR-007 | `WorktreeForm.first_prompt_edited` + `refresh_default_prompt`; submit sends field text (`session_definition`) |
 | FR-008, FR-009 | `mcp/tools.rs::first_prompt_for` (explicit non-blank wins, else render) |
 | FR-010 | single field, no per-CLI/type keys |
 | FR-011 | both call `prompt_template::render` |
 | FR-012 | render is total; MCP lookup wrapped in `tokio::time::timeout(5 s)`; any error gives `None` |
-| FR-013 | settings load keeps the text; `PromptTemplate::validate` at use gives `Err` so callers treat as empty; Settings draft validates on open and shows the error |
+| FR-013 | settings load keeps the text; `PromptTemplate::parse` at use gives `Err` so callers treat as empty; Settings draft validates on open and shows the error |
 | FR-014 | MCP facts: `{issue}` = `naming::ticket(dir)`; `{type}` = the `Tag::Type` of `naming::parse_tags(dir)`, empty if none; `{name}` = `naming::display_name(dir)` (public; its own fallback applies); `{branch}` = the worktree's branch from the catalog (empty if unknown); title/body via `IssueLookup`. Dialog facts: from the form (`picked_issue`, `type_`, name field, derived branch). Neither new field (`Issue.body`, `IssueSnapshot.body_text`) is persisted or serialised; `tests/github_privacy.rs` and `jira_is_requested_only_on_named_events.rs` are updated for the added field |
 
 ## Test strategy
