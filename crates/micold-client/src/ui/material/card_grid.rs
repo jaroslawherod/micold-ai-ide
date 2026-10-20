@@ -230,6 +230,10 @@ struct ZoomState {
     view: std::cell::Cell<Option<Rectangle>>,
     /// The expanded card's node at its slot, from the last layout (feature 1121, R4).
     expanded: Option<layout::Node>,
+    /// The view height the last layout capped the expanded card at, when the room left it
+    /// unbounded (in a scrollable): `update` lays out again when the view's height is another
+    /// (review A F1, M2). `INFINITY` when that layout had no view yet.
+    capped_at: Option<f32>,
 }
 
 impl ZoomState {
@@ -244,6 +248,7 @@ impl ZoomState {
             was_zooming: false,
             view: std::cell::Cell::new(None),
             expanded: None,
+            capped_at: None,
         }
     }
 
@@ -407,6 +412,11 @@ fn placed<'n>(node: &'n layout::Node, origin: Point, view: Rectangle) -> Layout<
     Layout::with_offset(Vector::new(origin.x, origin.y + dy), node)
 }
 
+/// The view the grid was last updated or drawn in, in its own coordinates; its bounds before any.
+fn last_view(state: &ZoomState, layout: Layout<'_>) -> Rectangle {
+    state.view.get().unwrap_or(layout.bounds())
+}
+
 impl<M> Grid<'_, M> {
     /// The expanded card's index and drawn layout, in `view`.
     fn expanded_layout<'n>(
@@ -503,7 +513,8 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         let state = tree.state.downcast_mut::<ZoomState>();
         // The expanded card is capped at the view's height: the room's when it is bounded, else
         // (in a scrollable) the last view's (feature 1121, R6).
-        let view_height = if limits.max().height.is_finite() {
+        let bounded = limits.max().height.is_finite();
+        let view_height = if bounded {
             limits.max().height
         } else {
             state.view.get().map_or(f32::INFINITY, |v| v.height)
@@ -552,7 +563,12 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             card_heights[piece.card] = card_heights[piece.card].max(piece.rect.height);
         }
         if let Some(index) = self.expanded {
-            card_heights[index] = nodes[index].size().height.min(view_height);
+            // As tall as its content, never shorter than its stretched slot (FR-008, FR-009).
+            card_heights[index] = nodes[index]
+                .size()
+                .height
+                .max(card_heights[index])
+                .min(view_height);
         }
 
         // One node per card, at its largest piece; the other piece of a split card follows.
@@ -594,6 +610,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         let state = tree.state.downcast_mut::<ZoomState>();
         state.pieces = pieces;
         state.expanded = self.expanded.map(|index| nodes[index].clone());
+        state.capped_at = (!bounded).then_some(view_height);
         layout::Node::with_children(Size::new(width, height), nodes)
     }
 
@@ -641,9 +658,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         let origin = layout.position();
         if self.expanded.is_some() {
             let state = tree.state.downcast_mut::<ZoomState>();
-            let height = state.view.get().map(|v| v.height);
             state.view.set(Some(*viewport));
-            if height != Some(viewport.height) {
+            // Against the height the layout used, not the view stored: `draw` stores it too.
+            if state.capped_at.is_some_and(|h| h != viewport.height) {
                 shell.invalidate_layout();
             }
         }
@@ -826,8 +843,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
     ) {
         let (state_tree, children) = (&tree.state, &mut tree.children);
         let state = state_tree.downcast_ref::<ZoomState>();
-        let view = state.view.get().unwrap_or(layout.bounds());
-        let expanded = self.expanded_layout(state, layout.position(), view);
+        let expanded = self.expanded_layout(state, layout.position(), last_view(state, layout));
         for (i, ((card, card_tree), card_layout)) in self
             .cards
             .iter_mut()
@@ -854,12 +870,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
     ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
         let (state_tree, children) = (&tree.state, &mut tree.children);
         let state = state_tree.downcast_ref::<ZoomState>();
-        let expanded = self.expanded.zip(
-            state
-                .expanded
-                .as_ref()
-                .map(|node| placed(node, layout.position(), *viewport)),
-        );
+        // In the grid's own coordinates, as in `operate`: a scrollable hands `overlay` its
+        // window on the screen, not on the content (review A F2, M2).
+        let expanded = self.expanded_layout(state, layout.position(), last_view(state, layout));
         let overlays: Vec<_> = self
             .cards
             .iter_mut()
@@ -2290,12 +2303,13 @@ mod tests {
             expanded_grid(&models, 0, &long(0), true).on_scroll("grid".to_string()),
             Size::new(900.0, 400.0),
         );
-        // A draw gives the grid its view; the next layout caps the card at it.
+        let at = iced::Point::new(150.0, 300.0);
+        // A draw, then an event: the grid sees its view and asks for the layout that caps the
+        // card at it (review A F1, M2: the draw alone must not leave the card uncapped).
         m.painted_text();
-        m.relayout();
+        m.hover(at);
         let card = m.node.children()[0].children()[0].bounds();
         assert!((card.height - 400.0).abs() < EPS, "{card:?}");
-        let at = iced::Point::new(150.0, 300.0);
         let wheel = |m: &mut Mounted<'_>, dy: f32| {
             m.send(
                 iced::Event::Mouse(Mouse::WheelScrolled {
@@ -2320,5 +2334,92 @@ mod tests {
             ["grid"],
             "the Overview did not scroll"
         );
+    }
+
+    /// Review A F1 (M2): a view that shrinks under an expanded card caps it at the new height on
+    /// the next event, even when a draw saw the new view first.
+    #[test]
+    fn an_expanded_card_follows_a_shrinking_view() {
+        let models: Vec<CardModel> = (0..9).map(titled).collect();
+        let mut m = Mounted::new_in(
+            expanded_grid(&models, 0, &long(0), true),
+            Size::new(900.0, 400.0),
+        );
+        let at = iced::Point::new(150.0, 100.0);
+        m.painted_text();
+        m.hover(at);
+        m.room = Size::new(900.0, 300.0);
+        m.relayout();
+        m.painted_text();
+        m.hover(at);
+        let card = m.node.children()[0].children()[0].bounds();
+        assert!((card.height - 300.0).abs() < EPS, "{card:?}");
+    }
+
+    /// Review A F3 (M2), FR-008, FR-009: an expanded card shorter than the row a neighbour
+    /// stretches is still as tall as its own slot.
+    #[test]
+    fn an_expanded_card_is_never_shorter_than_its_stretched_slot() {
+        let mut models: Vec<CardModel> = (0..6).map(sparse).collect();
+        models[1] = CardModel {
+            title: "a neighbour's title that wraps onto three lines in a card ".repeat(3),
+            ..rich(1)
+        };
+        let content = sparse(0);
+        let m = mounted(expanded_grid(&models, 0, &content, true), 900.0, 4000.0);
+        let got = slots(&m.node, 6);
+        let natural = laid_out(
+            OverviewCard::<String>::new(&content, roles())
+                .expanded(true)
+                .into(),
+            Size::new(got[0].width, f32::INFINITY),
+        )
+        .size()
+        .height;
+        assert!(
+            natural < got[1].height,
+            "the neighbour does not stretch the row past the expanded card: {natural} {got:?}"
+        );
+        assert!(
+            (got[0].height - got[1].height).abs() < EPS,
+            "the expanded card is shorter than its slot: {got:?}"
+        );
+    }
+
+    /// Review A F2 (M2): a scrollable hands `overlay` its window on the screen, not the view the
+    /// grid was drawn in; a tooltip of the expanded card still floats by the card as drawn, below
+    /// its state word, not where that other window would place the card.
+    #[test]
+    fn an_expanded_cards_tooltip_floats_by_it_as_drawn() {
+        let models: Vec<CardModel> = (0..15).map(titled).collect();
+        let content = long(7);
+        let mut m = mounted(expanded_grid(&models, 7, &content, true), 900.0, 4000.0);
+        // Update and draw in one view: the window is the grid.
+        m.room = m.node.size();
+        m.relayout();
+        let slot = slots(&m.node, 15)[7];
+        let painted = m.painted_text();
+        let title = painted
+            .iter()
+            .position(|p| p.content == content.title)
+            .expect("the expanded title is painted");
+        // The header's state word, three paragraphs before the title (glyph, word, glyph, word).
+        let word = painted[title - 3].bounds;
+        assert!(
+            word.y > 0.0 && word.y < slot.y,
+            "the card is not moved up within the view: {word:?} {slot:?}"
+        );
+        // A window 200 px short of the grid would move the card up by another 200 px.
+        let screen = Rectangle::with_size(Size::new(m.room.width, m.room.height - 200.0));
+        let floated = m.floated_in(word.center(), screen);
+        assert!(!floated.is_empty(), "nothing floats over the state word");
+        for p in &floated {
+            let below = p.bounds.y - (word.y + word.height);
+            assert!(
+                (0.0..=60.0).contains(&below),
+                "the tooltip floats at {:?}, not just below the state word at {word:?}",
+                p.bounds
+            );
+        }
     }
 }

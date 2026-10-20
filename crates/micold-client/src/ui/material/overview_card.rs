@@ -427,14 +427,29 @@ fn wrapped<'a, M: 'a>(words: String, role: TypeRole, tint: Rgb, roles: Roles) ->
         .into()
 }
 
+/// Whether content lies above and below the expanded card's inner view (contract K4), from the
+/// scroll metrics, each rounded to a whole pixel on its own: a body at its true end can read a
+/// pixel short of it, so a pixel's slack is the end (review A F4, M2).
+fn body_edges(offset: u32, view: u32, content: u32) -> (bool, bool) {
+    (
+        offset > 0,
+        offset.saturating_add(view).saturating_add(1) < content,
+    )
+}
+
+/// The user's home directory, looked up once: the expanded body shortens the worktree directory
+/// against it on every view build (review B F3, M2).
+fn home() -> Option<&'static std::path::Path> {
+    static HOME: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    HOME.get_or_init(|| directories::UserDirs::new().map(|u| u.home_dir().to_path_buf()))
+        .as_deref()
+}
+
 /// The expanded card's body, under its header (feature 1121, research R3): the title outside the
 /// inner scrollable, so it stays in view (FR-008), and every other line inside it.
 fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
     let roles = card.roles;
-    let full = ExpandedText::of(
-        &card.model,
-        directories::UserDirs::new().as_ref().map(|u| u.home_dir()),
-    );
+    let full = ExpandedText::of(&card.model, home());
     let text = CardText::of(&card.model);
     let body_line = |words: String| wrapped::<M>(words, TypeRole::Body, p.on_body_variant, roles);
     let mut rest = column![].spacing(spacing::XS);
@@ -471,7 +486,8 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
     }
     if let Some(f) = card.on_body_scroll.clone() {
         scroll = scroll.on_scroll_metrics(move |offset, view, content| {
-            f(offset > 0, offset.saturating_add(view) < content)
+            let (up, down) = body_edges(offset, view, content);
+            f(up, down)
         });
     }
     column![
@@ -1057,6 +1073,18 @@ mod tests {
         assert_eq!(wheel(&mut card, at, 10_000.0), ["false true"]);
         let mut short = expanded_in(&model(CardState::Idle, "feat-a"), 380.0, 600.0);
         assert!(wheel(&mut short, at, -10_000.0).is_empty());
+    }
+
+    /// Review A F4 (M2): the metrics come rounded to whole pixels, each on its own, so a body at its
+    /// true end can read up to a pixel short of it; it is at its end then, and Page Down falls
+    /// through to the Overview (FR-008). Two pixels short it is not.
+    #[test]
+    fn a_body_a_rounding_short_of_its_end_is_at_its_end() {
+        // 600.1 + 400.4 = 1000.5, rounded 600 + 400 and 1001.
+        assert_eq!(body_edges(600, 400, 1001), (true, false));
+        assert_eq!(body_edges(600, 400, 1000), (true, false));
+        assert_eq!(body_edges(600, 400, 1002), (true, true));
+        assert_eq!(body_edges(0, 400, 1000), (false, true));
     }
 
     /// The card of `model` expanded, `on_press` set, in a `width` column as tall as it needs.

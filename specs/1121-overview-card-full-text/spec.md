@@ -118,7 +118,8 @@ no other card moves, and that leaving it collapses it.
 6. **Given** a card whose full content is taller than the visible area of the Overview, **When** it
    expands, **Then** it is as tall as the visible area, its header row and title stay in view, and
    the rest of its content scrolls inside the card: with the mouse wheel while the pointer is on it,
-   and with Page Up / Page Down while it has keyboard focus (Story 3 scenario 6).
+   and with Page Up / Page Down while it has keyboard focus (Story 3 scenario 6); once that content
+   is at its end, the next wheel gesture scrolls the Overview (FR-008).
 7. **Given** a card whose rows (sessions, progress, pull requests) are unchanged by expansion,
    **When** it expands, **Then** those rows read as on the collapsed card; only text that was
    wrapped short or ellipsized grows, and the lines of FR-004 that the collapsed card lacks are added.
@@ -275,7 +276,9 @@ focus through the grid; compare each with the same action on a collapsed card be
   beyond that MUST scroll inside the card, with its header row and title kept in view, by the mouse
   wheel over the card and by Page Up / Page Down while it has keyboard focus. When the card's
   content does not overflow, is already at its end in the scroll's direction, or the card is
-  collapsed, the wheel and Page Up / Page Down scroll the Overview as today.
+  collapsed, the wheel and Page Up / Page Down scroll the Overview as today; a wheel gesture that
+  scrolled the card's content to its end stays on the card, and the next wheel gesture scrolls the
+  Overview (scroll latching, as browsers do; decision D4, research R6).
 - **FR-009**: Expanding or collapsing a card MUST NOT move, resize or reflow any card or grid row,
   and MUST NOT change the Overview's scroll position.
 - **FR-010**: A pointer press, release or secondary click anywhere on an expanded card, including

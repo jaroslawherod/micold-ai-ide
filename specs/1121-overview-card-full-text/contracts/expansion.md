@@ -29,7 +29,9 @@ Edge Case is a test:
 - `top = slot.top` when `slot.top + height <= view.bottom`; otherwise
   `max(view.top, view.bottom - height)`, never greater than `slot.top`.
 - The result covers the slot: `top <= slot.top` and `top + height >= slot.top + slot.height`
-  whenever `natural >= slot.height` (expanded is never shorter than collapsed).
+  whenever `natural >= slot.height` (expanded is never shorter than collapsed) and the slot ends
+  inside the view; a slot ending below the view cannot be both covered and seen whole, and FR-008's
+  shift wins.
 
 ## K4 — `page_target(&Expansion, down: bool) -> Option<PageTarget>`
 
