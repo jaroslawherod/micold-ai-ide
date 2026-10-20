@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: implement M2
-- **Next step**: M2 — orchestrator opens the M2 PR (pending) from the scratchpad files, waits on CI and merges; then M3.
+- **Phase**: implement M3
+- **Next step**: M3 — implement T024–T035 (branch at main 4eaa990f).
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1168 | design (spec, plan, tasks) | merged (rebase) | 1952d53a85b21b30b33aa3f0093c4a7d3cb55476 |
 | #1169 | M1 | merged (rebase) | b8f4adfbbf5cbfe5bbd2cd190a54988d53323e73 |
+| #1173 | M2 | merged | 4eaa990fb3210d90c85451cc447b58584a7a492c |
 
 Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
@@ -26,7 +27,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | #1169 | merged |
-| M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | pending | gate green, pushed |
+| M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | #1173 | merged |
 | M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | | pending |
 | M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | | pending |
 
@@ -72,8 +73,9 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-M2 unit 6: everything except the push is done. Committed locally; the unit had to return before gate run 3 finished (log `$SCRATCHPAD/gate-3.log`).
-- **Next step**: if gate-3 shows `GATE_EXIT=0`, push (`git push --force-with-lease=claude/project-thread-7041o6: -u origin claude/project-thread-7041o6`), put the gate SHA into `$SCRATCHPAD/pr-body.md` (GATE_SHA) and open the PR from `pr-title.txt`/`pr-body.md`. If it is red, the likely cause is the flaky `mutation_semantics::worktree_delete_with_live_session_and_no_stop_is_refused` (git commit in the fixture; passed on its own rerun): rerun `scripts/gate.sh`.
+M3 unit 1 (context cap reached). Committed locally on claude/project-thread-7041o6, not pushed (no PR yet).
+- **Done**: T024, T025, T028 (`Expansion`, `Event`, `Cause`, `EXPAND_REST`, `apply` in core `overview_expansion.rs`); T026, T029 (`OverviewCard::on_rest/on_leave/rest_messages`, `Grid::observe_rest` in `card_grid.rs`). Cycle log rows written.
+- **Next step**: T027 tests (app: `tests/overview.rs`, uses `state.update(Message::Overview(..))`; `main_tests.rs` `expansion_window_blur_collapses` beside `update_inner_applies_window_focus_changed`, line ~82, which builds `App { .. }` literally — copy that or use `base_app()`), then T030 (`State.expansion`, `Msg::Expansion(Event)`; feed `MenuOpened` inside the `CardMenuOpened` arm (after the `activating` early return), `MenuClosed` in `CardMenuDismissed | CardMenuEntryChosen`; `ProjectSwitched` resets it; `settle_card_menu`: `!open` → default, else feed `Listed(cards)` only when the expansion names a card (avoid `cards()` on every message) and feed `MenuClosed` where it drops a menu whose target is gone), T031, T032 (`main.rs:1178`), T033, T034, then verify (gate + review A/B + visual pass T035 via REVIEW-NEEDED).
 
 - **Open for M4** (carried from M2): K4 — iced never calls `on_scroll` without overflow, so
   `on_body_scroll` never sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on
