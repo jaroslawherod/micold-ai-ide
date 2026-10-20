@@ -131,7 +131,7 @@ and what Escape does.
    card and back, **Then** the card expands again.
 6. **Given** a focused, expanded card whose content scrolls inside it (Story 2 scenario 6), **When**
    the user presses Page Down or Page Up, **Then** its content scrolls by about one visible height
-   in that direction, and Home / End are not taken from feature 813's keyboard navigation.
+   in that direction.
 
 ---
 
@@ -248,7 +248,9 @@ focus through the grid; compare each with the same action on a collapsed card be
   shifted up so it is seen whole, while still covering its own grid slot, and the shift MUST follow
   the card as the Overview scrolls. An expanded card is at most as tall as the visible area: content
   beyond that MUST scroll inside the card, with its header row and title kept in view, by the mouse
-  wheel over the card and by Page Up / Page Down while it has keyboard focus.
+  wheel over the card and by Page Up / Page Down while it has keyboard focus. When the card's
+  content does not overflow, is already at its end in the scroll's direction, or the card is
+  collapsed, the wheel and Page Up / Page Down scroll the Overview as today.
 - **FR-009**: Expanding or collapsing a card MUST NOT move, resize or reflow any card or grid row,
   and MUST NOT change the Overview's scroll position.
 - **FR-010**: A pointer press, release or secondary click anywhere on an expanded card, including
