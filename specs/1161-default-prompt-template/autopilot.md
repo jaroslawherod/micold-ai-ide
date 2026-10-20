@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1161
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
-- **Phase**: spec
-- **Next step**: Run the clarify unit (no open markers; check for ambiguities)
+- **Phase**: clarify
+- **Next step**: Run the plan unit
 
 ## Pull requests
 
