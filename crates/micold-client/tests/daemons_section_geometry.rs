@@ -137,7 +137,7 @@ fn the_page_has_no_inline_details_and_the_details_dialog_paints_errors_and_log()
     state.update(Message::Daemons(DaemonsMsg::DetailsOpened(boxed)));
     let page = painted(&state);
     assert!(!has(&page, "Hide details"), "{page:?}");
-    assert!(!has(&page, "connection refused"), "{page:?}");
+    assert!(!has(&page, "Log"), "{page:?}");
     assert_no_text_overflows(&state, "page with details open");
     let outcome = EnvIncludeOutcome::Disabled;
     let body = || {
@@ -149,7 +149,8 @@ fn the_page_has_no_inline_details_and_the_details_dialog_paints_errors_and_log()
         .into_iter()
         .map(|drawn| drawn.content)
         .collect();
-    assert!(has(&strings, "connection refused"), "{strings:?}");
+    assert!(has(&strings, "No connection errors"), "{strings:?}");
+    assert!(has(&strings, "Nothing logged yet"), "{strings:?}");
     assert!(has(&strings, "Close"), "{strings:?}");
     assert!(
         lay::text_overflows(body(), &mut renderer).is_empty(),

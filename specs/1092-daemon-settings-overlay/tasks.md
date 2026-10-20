@@ -56,12 +56,12 @@ T016, T017, T019, T020 (US5) ship in M1 so a running-daemon edit never shows a s
 **Goal**: Details opens a read-only modal with live content and a Close button; the inline block and Hide details are gone.
 **Independent test**: open Details on a daemon with a log, a new line appears live; Close/Escape/scrim close it.
 
-- [ ] T024 [P] [US4] Failing tests in `tests/daemons_feature.rs` and `tests/overlay_registry.rs`: `DetailsOpened(id)` sets `details`, `DetailsClosed` clears it; `DaemonDetailsDialog` is open while `details` is `Some` and its daemon is in the registry, closed when the daemon is removed; replace `DetailsToggled` use in `tests/daemons_feature.rs` (line near 1430).
-- [ ] T025 [US4] In `tests/daemons_feature.rs` add a test that the Details view reflects a newly logged line without reopening (US4 scenario 2). Update `tests/daemons_section_geometry.rs` (two `DetailsToggled` uses): the page shows no details block and the row has no Hide details; a new Details-dialog case checks Close is inside the window.
-- [ ] T026 [US4] In `src/features/daemons.rs` replace `details_shown: BTreeSet<DaemonId>` and `Msg::DetailsToggled` with `details: Option<DaemonId>`, `Msg::DetailsOpened(DaemonId)`, `Msg::DetailsClosed`; drop the `details_shown` pruning in `RemovalConfirmed`; set `Opener::Row(id, RowAction::Details)`.
-- [ ] T027 [US4] Create `src/ui/daemon_details_dialog.rs` (`ScrollingDialog`, body = `details_block()` computed from live state, action `Close`), register `DaemonDetailsDialog` (id `daemon_details`, dismissal `DetailsClosed`) in `src/features/daemons.rs` and `src/overlay/registry.rs`; update surface counts in `tests/popover_displacement.rs` and `tests/surface_registration_cost.rs` (bump `DIALOGS` by one, 23 to 24).
-- [ ] T028 [US4] In `src/ui/settings/daemons.rs` make the row's Details button send `DetailsOpened(id)` and remove the inline `details_block` placement and Hide details label.
-- [ ] T029 [US4] Update `docs/user-guide/settings.md`: Details opens in a dialog with Close.
+- [x] T024 [P] [US4] Failing tests in `tests/daemons_feature.rs` and `tests/overlay_registry.rs`: `DetailsOpened(id)` sets `details`, `DetailsClosed` clears it; `DaemonDetailsDialog` is open while `details` is `Some` and its daemon is in the registry, closed when the daemon is removed; replace `DetailsToggled` use in `tests/daemons_feature.rs` (line near 1430).
+- [x] T025 [US4] In `tests/daemons_feature.rs` add a test that the Details view reflects a newly logged line without reopening (US4 scenario 2). Update `tests/daemons_section_geometry.rs` (two `DetailsToggled` uses): the page shows no details block and the row has no Hide details; a new Details-dialog case checks Close is inside the window.
+- [x] T026 [US4] In `src/features/daemons.rs` replace `details_shown: BTreeSet<DaemonId>` and `Msg::DetailsToggled` with `details: Option<DaemonId>`, `Msg::DetailsOpened(DaemonId)`, `Msg::DetailsClosed`; drop the `details_shown` pruning in `RemovalConfirmed`; set `Opener::Row(id, RowAction::Details)`.
+- [x] T027 [US4] Create `src/ui/daemon_details_dialog.rs` (`ScrollingDialog`, body = `details_block()` computed from live state, action `Close`), register `DaemonDetailsDialog` (id `daemon_details`, dismissal `DetailsClosed`) in `src/features/daemons.rs` and `src/overlay/registry.rs`; update surface counts in `tests/popover_displacement.rs` and `tests/surface_registration_cost.rs` (bump `DIALOGS` by one, 23 to 24).
+- [x] T028 [US4] In `src/ui/settings/daemons.rs` make the row's Details button send `DetailsOpened(id)` and remove the inline `details_block` placement and Hide details label.
+- [x] T029 [US4] Update `docs/user-guide/settings.md`: Details opens in a dialog with Close.
 
 ## Phase 6: Polish
 
