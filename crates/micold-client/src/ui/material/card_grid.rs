@@ -644,9 +644,10 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             };
             if whole {
                 draw_card(renderer, viewport);
-            } else {
-                let view = clip.intersection(viewport).unwrap_or(clip);
-                renderer.with_layer(clip, |renderer| draw_card(renderer, &view));
+            } else if let Some(view) = clip.intersection(viewport) {
+                // A layer does not inherit its parent's clip: a piece's layer is cut to the
+                // viewport too, or a lower-row piece paints below the scrolled grid (1120).
+                renderer.with_layer(view, |renderer| draw_card(renderer, &view));
             }
         }
     }
@@ -1115,6 +1116,109 @@ mod tests {
             split[1]
         );
         assert!((node.children()[3].size().height - tall).abs() < EPS);
+    }
+
+    /// The pieces the grid somewhere in `tree` drew at its last layout.
+    fn zoom_pieces(tree: &iced::advanced::widget::Tree) -> Option<Vec<Piece>> {
+        if let tree::State::Some(state) = &tree.state {
+            if let Some(zoom) = state.downcast_ref::<ZoomState>() {
+                return Some(zoom.pieces.clone());
+            }
+        }
+        tree.children.iter().find_map(zoom_pieces)
+    }
+
+    /// 1120 (T043, close visual pass): mid-zoom, a card split across two rows paints only inside
+    /// its pieces: its target mark stays in each piece, and nothing of a lower-row piece shows
+    /// below the scrolled grid's bottom edge.
+    #[test]
+    fn a_split_card_mid_zoom_paints_only_inside_its_pieces() {
+        use crate::ui::material::test_support::Mounted;
+        use iced::advanced::renderer::Headless as _;
+        use iced::advanced::Renderer as _;
+        const VIEW_H: f32 = 320.0;
+        const BELOW: f32 = 80.0;
+        // Three columns at W and four at W + FREED: mid-zoom, the ribbon cuts cards across rows.
+        const FREED: f32 = 300.0;
+        const W: f32 = 1000.0;
+        const SCROLLBAR: f32 = 16.0;
+        let grid = |full_screen: bool| -> Element<'static, String> {
+            let cards = cards::<String>(12)
+                .into_iter()
+                .enumerate()
+                .map(|(i, card)| card.targeted(i % 3 == 1))
+                .collect();
+            CardGrid::new(cards, roles())
+                .min_width(MIN_WIDTH)
+                .spacing(GAP)
+                .zoom(Zoom {
+                    full_screen,
+                    freed: FREED,
+                })
+                .into()
+        };
+        let mut m = Mounted::new_in(grid(false), Size::new(W, VIEW_H));
+        m.element = grid(true);
+        m.tree.diff(m.element.as_widget());
+        m.room = Size::new(W + FREED / 2.0, VIEW_H);
+        m.relayout();
+        let pieces = zoom_pieces(&m.tree).expect("the grid's zoom state");
+        let split = |card: usize| pieces.iter().filter(|p| p.card == card).count() == 2;
+        assert!(
+            pieces
+                .iter()
+                .any(|p| split(p.card) && p.rect.y + p.rect.height > VIEW_H + 2.0),
+            "mid-zoom, a split card's piece crosses the grid's bottom edge: {pieces:?}"
+        );
+        assert!(
+            pieces.iter().any(|p| split(p.card) && p.card % 3 == 1),
+            "a targeted card is split: {pieces:?}"
+        );
+
+        let size = Size::new(W + FREED / 2.0, VIEW_H + BELOW);
+        let window = Rectangle::with_size(size);
+        m.renderer.reset(window);
+        m.element.as_widget().draw(
+            &m.tree,
+            &mut m.renderer,
+            &crate::ui::material::theme(micold_core::theme::ColorScheme::Light),
+            &renderer::Style {
+                text_color: iced::Color::BLACK,
+            },
+            Layout::new(&m.node),
+            mouse::Cursor::Unavailable,
+            &window,
+        );
+        let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
+        let pixels = m
+            .renderer
+            .screenshot(Size::new(w, h), 1.0, iced::Color::from_rgb(1.0, 0.0, 1.0));
+        // A pixel counts as inside a piece within 2 px of it (antialiasing), above the grid's edge.
+        // The scrollable's own bar, along the right edge above that edge, is not a card's.
+        let bar = |x: f32, y: f32| x > size.width - SCROLLBAR && y < VIEW_H;
+        let inside = |x: f32, y: f32| {
+            bar(x, y) || y < VIEW_H + 2.0
+                && pieces.iter().any(|p| {
+                    x > p.rect.x - 2.0
+                        && x < p.rect.x + p.rect.width + 2.0
+                        && y > p.rect.y - 2.0
+                        && y < p.rect.y + p.rect.height + 2.0
+                })
+        };
+        let stray: Vec<(u32, u32)> = (0..h)
+            .flat_map(|y| (0..w).map(move |x| (x, y)))
+            .filter(|&(x, y)| {
+                let i = ((y * w + x) * 4) as usize;
+                pixels[i..i + 3] != [255, 0, 255] && !inside(x as f32 + 0.5, y as f32 + 0.5)
+            })
+            .collect();
+        let below = stray.iter().filter(|&&(_, y)| y as f32 >= VIEW_H).count();
+        assert!(
+            stray.is_empty(),
+            "{} pixels painted outside every piece ({below} below the grid), first {:?}",
+            stray.len(),
+            &stray[..stray.len().min(5)]
+        );
     }
 
     // ---- feature 970: the cards zoom with the sidebar ----

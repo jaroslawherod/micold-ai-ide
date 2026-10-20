@@ -1005,7 +1005,7 @@ mod tests {
     use super::*;
     use crate::ui::material::test_support::{laid_out, roles};
     use iced::advanced::Layout as Laid;
-    use iced::Size;
+    use iced::{Rectangle, Size};
 
     /// The "five states" pose (feature 1120, T035) in the showcase's scrolling page: at a narrow
     /// and a wide window its grid is at least 100 px tall (a card is at least 172), and the pose
@@ -1017,33 +1017,59 @@ mod tests {
         for width in [600.0, 1600.0] {
             let page = material::Scrollable::new(overview_card(&showcase, roles(), 0), roles());
             let node = laid_out(page.into(), Size::new(width, 800.0));
-            let section = Laid::new(&node)
-                .children()
-                .next()
-                .expect("the page's content");
-            let pose = |i: usize| {
-                let row = section.children().nth(i).expect("a pose's row");
-                row.children().next().expect("the pose")
-            };
-            let five = pose(3);
-            let grid = five
-                .children()
-                .next()
-                .and_then(|column| column.children().next())
-                .expect("the pose's instance")
-                .bounds();
+            let (five, grid, next) = five_state_pose(&node);
             assert!(
                 grid.height >= 100.0,
                 "at {width} px the five-state grid is {} px tall",
                 grid.height
             );
-            let next = pose(4).bounds();
             assert!(
-                next.y >= five.bounds().y + five.bounds().height,
-                "at {width} px the pose after the five-state grid starts at {} inside it {:?}",
+                next.y >= five.y + five.height,
+                "at {width} px the pose after the five-state grid starts at {} inside it {five:?}",
                 next.y,
-                five.bounds()
             );
+        }
+    }
+
+    /// The "five states" pose in the laid-out page: the pose, its grid, and the pose after it.
+    fn five_state_pose(node: &iced::advanced::layout::Node) -> (Rectangle, Rectangle, Rectangle) {
+        let section = Laid::new(node)
+            .children()
+            .next()
+            .expect("the page's content");
+        let pose = |i: usize| {
+            let row = section.children().nth(i).expect("a pose's row");
+            row.children().next().expect("the pose")
+        };
+        let five = pose(3);
+        let grid = five
+            .children()
+            .next()
+            .and_then(|column| column.children().next())
+            .expect("the pose's instance")
+            .bounds();
+        (five.bounds(), grid, pose(4).bounds())
+    }
+
+    /// T041 (1120): the "five states" grid paints each state's word exactly once: one card per
+    /// state, none missing, none twice.
+    #[test]
+    fn the_five_state_grid_paints_each_state_once() {
+        use crate::ui::material::test_support::Mounted;
+        let showcase = Showcase::new(1);
+        let page = material::Scrollable::new(overview_card(&showcase, roles(), 0), roles());
+        let mut m = Mounted::new_in(
+            Element::from(page).map(|_| String::new()),
+            Size::new(1600.0, 4000.0),
+        );
+        let (_, grid, _) = five_state_pose(&m.node);
+        let painted = m.painted_text();
+        for state in micold_core::overview::CardState::ALL {
+            let n = painted
+                .iter()
+                .filter(|p| p.content == state.label() && grid.contains(p.bounds.center()))
+                .count();
+            assert_eq!(n, 1, "the five-state grid paints \"{}\" {n} times", state.label());
         }
     }
 }

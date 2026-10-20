@@ -768,7 +768,7 @@ mod tests {
     /// T032 (K1, K4 — FR-001, FR-002, FR-003, US1.1, SC-005): at 280, 380 and 480 px, in both
     /// schemes and the five states, the header row spans the card's width at its top in the
     /// state's `header` fill, the state's glyph and word end left of where the type's start, the
-    /// words are in `on_header`; the body below is the one `body` fill with the title in `on_body`
+    /// words and their icons are in `on_header`; the body below is the one `body` fill with the title in `on_body`
     /// and the other lines in `on_body_variant`; the type word is no longer in the sessions line.
     #[test]
     fn the_header_row_carries_the_state_at_the_start_and_the_type_at_the_end() {
@@ -787,6 +787,9 @@ mod tests {
                         .find(|t| t.content.starts_with("Adds"))
                         .expect("a title");
                     let sessions = word(&text, "3 sessions \u{b7} 2 running");
+                    // The header's icons are glyphs painted as text (T042, F2: tinted `on_header`).
+                    let state_glyph = word(&text, &state_icon(state).glyph().to_string());
+                    let type_glyph = word(&text, &type_icon(m.kind).glyph().to_string());
                     let at = format!("{state:?} at {width}");
                     assert!(
                         state_word.bounds.x + state_word.bounds.width < type_word.bounds.x,
@@ -806,6 +809,8 @@ mod tests {
                     for (what, painted, want) in [
                         ("state word", state_word, p.on_header),
                         ("type word", type_word, p.on_header),
+                        ("state icon", state_glyph, p.on_header),
+                        ("type icon", type_glyph, p.on_header),
                         ("title", title, p.on_body),
                         ("sessions line", sessions, p.on_body_variant),
                     ] {
