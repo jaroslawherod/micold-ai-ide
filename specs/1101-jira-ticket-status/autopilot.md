@@ -45,7 +45,7 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1 (2 questions, repo does not settle either): (1) FR-005 refresh events: project open + focus regain after 5 min, no timer (Recommended) vs add a timer. (2) US3 Overview card (feature 813, FR-002/FR-015 show name/branch/issue title but no ticket status): show status chip (Recommended) vs move to Out of Scope.
 
 ## Follow-ups not done
 
