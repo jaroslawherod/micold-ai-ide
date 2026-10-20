@@ -6,6 +6,7 @@
 use super::comment::{CommentId, ReviewComment};
 use super::limits::MAX_QUOTED_LINES;
 use super::Side;
+use crate::pull_request::BranchPrState;
 
 /// The agent tool a session reports each comment's outcome with; the preamble names it and the
 /// tool server's catalog lists it (contracts/batch-format.md, agent-tool.md).
@@ -18,6 +19,26 @@ pub enum EntryKind {
     Worktree,
     /// The Default entry: the project root.
     Default,
+}
+
+/// What a pull request's batch says about the pull request (feature 1149, data-model § `PrContext`;
+/// the batch itself, `build_pr`, arrives with the send in milestone M2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrContext {
+    /// The pull request's number.
+    pub number: u64,
+    /// Its title, any text.
+    pub title: String,
+    /// Its head branch.
+    pub head_branch: String,
+    /// Open, draft, merged or closed.
+    pub state: BranchPrState,
+    /// The head commit the list shows now.
+    pub current_head: String,
+    /// The entry's checked-out branch; `None` when detached or unknown.
+    pub checked_out: Option<String>,
+    /// Recorded commits that are not in the worktree.
+    pub unreadable: Vec<String>,
 }
 
 /// The batch holding `comments` (the snapshot of Draft comments): the preamble, then one block per
@@ -161,6 +182,7 @@ mod tests {
             text: text.to_owned(),
             state: CommentState::Draft,
             created,
+            pr: None,
         }
     }
 

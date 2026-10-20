@@ -195,7 +195,11 @@
 ///
 /// And 55 → 56 for feature 1102's GitHub issues switch (contracts/wire.md, W1-W3):
 /// `github_issues_enabled` on `DaemonSettings` and on `ClientMsg::SettingsSet`.
-pub const PROTOCOL_VERSION: u32 = 56;
+///
+/// And 56 → 57 for feature 1149's review comments on a pull request's diff (contracts/review-wire-delta.md):
+/// `pr` on `ReviewComment`, `ReviewEditOp::Add`, `ReviewEditOp::{ClearSent, DiscardPending}` take a
+/// `Scope`, and `ClientMsg::ReviewSend` gains `pr: Option<PrSend>`.
+pub const PROTOCOL_VERSION: u32 = 57;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

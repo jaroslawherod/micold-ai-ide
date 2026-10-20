@@ -21,6 +21,7 @@ use micold_core::protocol::grid::{
     CellExtras, GridFrame, LineId, StyleRun, WireColor, WireCursor, WireCursorShape, WireLine,
     WireStyle,
 };
+use micold_core::protocol::messages::PrSend;
 use micold_core::protocol::messages::SessionDefinition;
 use micold_core::protocol::messages::{
     ActivitySignal, BranchContainment, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg,
@@ -28,6 +29,7 @@ use micold_core::protocol::messages::{
     MergedBranchQuery, OperationResult, ProjectSnapshot, RefusalReason, SessionProcess,
     SessionSummary, ShellOpenFailure, TerminalRef, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
+use micold_core::pull_request::BranchPrState;
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::theme::ColorScheme;
 use micold_core::worktree::{CreateMode, CreateStage};
@@ -886,8 +888,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_56() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 56);
+fn the_protocol_version_is_57() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 57);
 }
 
 /// Two merged branches and the last commit of each one's pull request (feature 040).
@@ -1437,7 +1439,9 @@ fn a_catalog_snapshot_without_env_include_failures_reads_back_with_none() {
 #[test]
 fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
     use micold_core::protocol::messages::ReviewEditOp;
-    use micold_core::review::comment::{CommentId, CommentState, Move, Outcome, ReviewComment};
+    use micold_core::review::comment::{
+        CommentId, CommentState, Move, Outcome, PrAnchor, ReviewComment, Scope,
+    };
     use micold_core::review::{LineRange, RelPath, Side};
     use micold_core::settings::DiffLayout;
 
@@ -1450,14 +1454,39 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             end: 4,
             quote: vec!["x".into(), "y".into()],
             text: "why?".into(),
+            pr: None,
+        },
+        // Feature 1149 (W18, W19).
+        ReviewEditOp::Add {
+            path: "src/a.rs".into(),
+            side: Side::New,
+            start: 1,
+            end: 1,
+            quote: vec!["x".into()],
+            text: "on a pull request".into(),
+            pr: Some(PrAnchor {
+                number: 7,
+                head_branch: "feat/x".into(),
+                head_commit: "a".repeat(40),
+            }),
+        },
+        ReviewEditOp::ClearSent {
+            scope: Scope::PullRequest(7),
+        },
+        ReviewEditOp::DiscardPending {
+            scope: Scope::WorkingTree,
         },
         ReviewEditOp::SetText {
             id,
             text: "changed".into(),
         },
         ReviewEditOp::Delete { id },
-        ReviewEditOp::ClearSent,
-        ReviewEditOp::DiscardPending,
+        ReviewEditOp::ClearSent {
+            scope: Scope::WorkingTree,
+        },
+        ReviewEditOp::DiscardPending {
+            scope: Scope::PullRequest(8),
+        },
         // Feature 946 (W14, W15).
         ReviewEditOp::Mark {
             id,
@@ -1494,9 +1523,33 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
         project: PathBuf::from("/p"),
         worktree_dir: String::new(),
         outdated: vec![id],
+        pr: None,
     };
     json_roundtrip(&send);
     postcard_roundtrip(&send);
+    // Feature 1149 (W20): a pull request's send, every state of it.
+    for state in [
+        BranchPrState::Open,
+        BranchPrState::Draft,
+        BranchPrState::Merged,
+        BranchPrState::Closed,
+    ] {
+        let send = ClientMsg::ReviewSend {
+            req: 9,
+            project: PathBuf::from("/p"),
+            worktree_dir: "feature".into(),
+            outdated: Vec::new(),
+            pr: Some(PrSend {
+                number: 7,
+                title: "Fix é".into(),
+                head_branch: "feat/x".into(),
+                state,
+                current_head: "c".repeat(40),
+            }),
+        };
+        json_roundtrip(&send);
+        postcard_roundtrip(&send);
+    }
 
     // Feature 946 (W13): a comment in each state, and a report by each kind of reporter. A
     // `Report` has no public constructor, so the reported states come from their stored form.
@@ -1523,6 +1576,11 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             text: "t".into(),
             state,
             created: 1,
+            pr: Some(PrAnchor {
+                number: 7,
+                head_branch: "feat/x".into(),
+                head_commit: "a".repeat(40),
+            }),
         };
         let changed = DaemonMsg::ReviewChanged {
             project: PathBuf::from("/p"),

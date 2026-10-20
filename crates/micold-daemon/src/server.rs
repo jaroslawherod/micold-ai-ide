@@ -1439,10 +1439,14 @@ where
                 project,
                 worktree_dir,
                 outdated,
+                pr,
             } => {
                 let state = Arc::clone(state);
                 tokio::spawn(async move {
-                    let answer = match state.review_send(&project, &worktree_dir, &outdated).await {
+                    let answer = match state
+                        .review_send(&project, &worktree_dir, &outdated, pr.as_ref())
+                        .await
+                    {
                         Ok(result) => DaemonMsg::OperationOk { req, result },
                         Err(refusal) => DaemonMsg::OperationError {
                             req,
