@@ -67,7 +67,11 @@ inequality + visual pass).
 | M3 review A | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | CLEAN, 3 MINOR (code-review high, run by orchestrator). F1 row height ignores pieces under 1 px (`row_heights`, `ROW_PIECE`, test `a_sliver_does_not_stretch_its_row`). F2 card lines use the role's line height (`Ellipsized::at_role_spaced`; sidebar keeps `at_role`). F3 recorded as an accepted spec edge case (anchor only during a zoom; feature 970's at-rest tests publish nothing). Only MINORs: no round 2 |
 | M3 review B | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | CLEAN (sonnet). Verify: client `even_row card_grid overview_card type_role_mapping` 68 pass, cdk_no_appearance 3, core tokens_scales 17. F1 plan.md "Amended in M3" note, quickstart filter drops `even_row`: fixed, prose only. F2 T023/T028 ticked, keep "Superseded" |
 | M3 visual pass | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | PASS §B6 M3 part (`visual-pass.md`); equal row heights only by unit test (showcase grid cards equal), M4's T035 grid can pose a taller card |
+| M4 review A | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | pending (dispatched by orchestrator) |
+| M4 review B | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | pending (dispatched by orchestrator) |
+| M4 visual pass | 1 | 1684990cfac9d34872f833760f14631c204159e5:89b4a4acb16b33a1177adf3ef4c7bffded0c3674 | pending (dispatched by orchestrator) |
 
+M4 full gate (`scripts/gate.sh`) green at 89b4a4ac before reviews (rebased onto origin/main 08cb6ea1).
 M3 full gate (`scripts/gate.sh`) green at b95c7a3a after the review fixes (rebased onto origin/main 17a5dc46).
 CI run 39391625306 (head 6bf5d378) red: `micold-daemon` test `structured_session::messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` hit its 20 s answer timeout (`tests/support/conn.rs:200`). Not this PR: no daemon file changed, the core change is additive typography tokens; the test passed 3/3 locally. No code change; re-run.
 M2 full gate (`scripts/gate.sh`) green at 500e8fa2 after the review fixes (and at 1751ce27 before them); its scoped gate's one red was the same root-only settings test.
