@@ -475,6 +475,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let dialog_before = snapshot_before.as_ref().map(Closing::id);
 
     let task = update_inner(app, message);
+    // Feature 1101: the statuses follow the Jira switch and connection, and the project's open
+    // read starts once its worktrees are known. Here because both come from many messages.
+    let task = Task::batch([task, shell::jira_status::after_update(app)]);
     // A daemon added to or removed from the registry by this message is tracked (or forgotten) in
     // the same step, so the subscription that follows dials exactly the registry (feature 491).
     app.sync_links();
@@ -1202,7 +1205,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // user made on purpose. `window_focus_changes_no_focus_term` in
             // `tests/terminal_focus.rs` fails if this arm starts writing one.
             shell::os_theme::redetect_on_focus(app, focused);
-            Task::none()
+            // Feature 1101 (FR-005): regaining focus refreshes the linked tickets' statuses when
+            // the last read is over five minutes old.
+            if focused {
+                shell::jira_status::on_focus(app)
+            } else {
+                Task::none()
+            }
         }
         Message::Worktree(WorktreeMsg::DeleteConfirmed) => {
             shell::daemon_sync::on_worktree_delete_confirmed(app)

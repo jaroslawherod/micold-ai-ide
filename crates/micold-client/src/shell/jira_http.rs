@@ -19,6 +19,17 @@ use micold_core::github::{Issue, IssueLoadError, IssuePage};
 use micold_core::jira::{
     classify, list_jql, parse_page, search_jql, ApiToken, JiraConnection, JiraSource, Outcome,
 };
+use micold_core::jira_status::{parse_statuses, status_jql, statuses_jql, KeyedStatus};
+
+/// How many times a refused status request is halved to find the key Jira refuses: 2^7 covers a
+/// chunk of 100 (contracts/jira-status-source.md §3).
+const MAX_BISECTION_DEPTH: u8 = 7;
+
+/// Why one request failed: a `400` is told apart, because a status request answers it by halving.
+enum PostError {
+    BadRequest,
+    Load(IssueLoadError),
+}
 
 /// The whole request's budget: connect, send and read (FR-018).
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -70,6 +81,20 @@ impl JiraCloud {
         token: &ApiToken,
         body: &serde_json::Value,
     ) -> Result<Vec<u8>, IssueLoadError> {
+        self.send(conn, token, body).map_err(|error| match error {
+            PostError::BadRequest => classify(&Outcome::Status(400)),
+            PostError::Load(error) => error,
+        })
+    }
+
+    /// [`Self::post`], keeping a `400` apart from the other failures.
+    fn send(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        body: &serde_json::Value,
+    ) -> Result<Vec<u8>, PostError> {
+        let load = |outcome: Outcome| PostError::Load(classify(&outcome));
         let url = format!("{}/rest/api/3/search/jql", conn.site.as_str());
         let credentials = base64::engine::general_purpose::STANDARD.encode(format!(
             "{}:{}",
@@ -91,18 +116,49 @@ impl JiraCloud {
             .send(body.to_string().as_bytes());
         let mut response = match sent {
             Ok(response) => response,
-            Err(error) => return Err(classify(&outcome_of(&error, token))),
+            Err(error) => return Err(load(outcome_of(&error, token))),
         };
         let status = response.status().as_u16();
         match status {
             200..=299 => {}
-            300..=399 => return Err(classify(&Outcome::Redirected)),
-            _ => return Err(classify(&Outcome::Status(status))),
+            300..=399 => return Err(load(Outcome::Redirected)),
+            400 => return Err(PostError::BadRequest),
+            _ => return Err(load(Outcome::Status(status))),
         }
         response
             .body_mut()
             .read_to_vec()
-            .map_err(|error| classify(&outcome_of(&error, token)))
+            .map_err(|error| load(outcome_of(&error, token)))
+    }
+
+    /// Read the statuses of `keys` (one chunk): a `400` halves the keys until the one Jira refuses
+    /// stands alone, and that key is absent from the answer.
+    fn read_chunk(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        keys: &[String],
+        depth: u8,
+    ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+        let body = serde_json::json!({
+            "jql": status_jql(&conn.project_key, keys),
+            "fields": ["status"],
+            "maxResults": keys.len(),
+        });
+        match self.send(conn, token, &body) {
+            Ok(bytes) => parse_statuses(&bytes),
+            Err(PostError::Load(error)) => Err(error),
+            Err(PostError::BadRequest) if keys.len() == 1 => Ok(Vec::new()),
+            Err(PostError::BadRequest) if depth >= MAX_BISECTION_DEPTH => {
+                Err(classify(&Outcome::Status(400)))
+            }
+            Err(PostError::BadRequest) => {
+                let (head, tail) = keys.split_at(keys.len() / 2);
+                let mut read = self.read_chunk(conn, token, head, depth + 1)?;
+                read.extend(self.read_chunk(conn, token, tail, depth + 1)?);
+                Ok(read)
+            }
+        }
     }
 }
 
@@ -149,6 +205,19 @@ impl JiraSource for JiraCloud {
         };
         let body = request_body(&jql, None, SEARCH_SIZE);
         parse_page(&self.post(conn, token, &body)?).map(|page| page.issues)
+    }
+
+    fn statuses(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        keys: &[String],
+    ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+        let mut read = Vec::new();
+        for query in statuses_jql(&conn.project_key, keys) {
+            read.extend(self.read_chunk(conn, token, &query.keys, 0)?);
+        }
+        Ok(read)
     }
 }
 

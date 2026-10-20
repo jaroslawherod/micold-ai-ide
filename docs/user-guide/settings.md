@@ -690,6 +690,13 @@ project it is connected to, or that it has no Jira connection yet. With no proje
 open one. Once a project is connected, Micold contacts that connection's Jira site and sends the
 project key, the search text you type and your account email with its API token.
 
+It also does so with no dialog open, to show the status of the tickets your worktrees are linked to
+(see [A ticket's status](worktrees-and-sessions.md#a-tickets-status)): the keys of those tickets are
+sent with the project key and your credentials, in one request for up to 100 tickets. That happens
+when a project opens and when the window regains focus after the last read is more than five
+minutes old, and at no other time. With the switch off, or no connection for the project, nothing is
+sent.
+
 The switch is one setting for the whole app, kept in `settings.json`, and a change made in one open
 window shows in every other without a restart. A settings file written before the integration
 existed reads as off.

@@ -705,7 +705,7 @@ impl WorktreeForm {
             return None;
         };
         Some(format!(
-            "Reads open issues of project {} from {}. Sends the project key, your search text and your credentials.",
+            "Reads open issues of project {} from {}. Sends the project key, your search text and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.",
             site.key, site.origin
         ))
     }

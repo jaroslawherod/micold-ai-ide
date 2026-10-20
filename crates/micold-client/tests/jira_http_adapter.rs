@@ -249,3 +249,135 @@ fn the_token_is_in_no_error_string_or_debug() {
 fn the_production_request_budget_is_ten_seconds() {
     assert_eq!(jira_http::REQUEST_TIMEOUT, Duration::from_secs(10));
 }
+
+// --- feature 1101, T017: the status request ---------------------------------------------
+
+/// A server answering the next connection with the next response, reporting each request's body.
+fn serve_each(responses: Vec<String>) -> (String, mpsc::Receiver<String>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        for response in responses {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut raw = Vec::new();
+            let mut chunk = [0u8; 4096];
+            loop {
+                let n = stream.read(&mut chunk).unwrap_or(0);
+                raw.extend_from_slice(&chunk[..n]);
+                let text = String::from_utf8_lossy(&raw).to_string();
+                if let Some((head, body)) = text.split_once("\r\n\r\n") {
+                    let length = head
+                        .lines()
+                        .find_map(|l| {
+                            l.to_ascii_lowercase()
+                                .strip_prefix("content-length:")
+                                .map(|v| v.trim().parse::<usize>().unwrap())
+                        })
+                        .unwrap_or(0);
+                    if body.len() >= length {
+                        break;
+                    }
+                }
+                if n == 0 {
+                    break;
+                }
+            }
+            let text = String::from_utf8_lossy(&raw).to_string();
+            let body = text.split_once("\r\n\r\n").map_or("", |(_, b)| b).to_string();
+            tx.send(body).unwrap();
+            stream.write_all(response.as_bytes()).unwrap();
+        }
+    });
+    (origin, rx)
+}
+
+fn status_body(keys: &[(&str, &str)]) -> String {
+    let issues: Vec<String> = keys
+        .iter()
+        .map(|(k, name)| {
+            format!(
+                r#"{{"key":"{k}","fields":{{"status":{{"name":"{name}","statusCategory":{{"key":"done"}}}}}}}}"#
+            )
+        })
+        .collect();
+    format!(r#"{{"issues":[{}]}}"#, issues.join(","))
+}
+
+fn bad_request() -> String {
+    "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()
+}
+
+fn keys_of(body: &str) -> Vec<String> {
+    let json: serde_json::Value = serde_json::from_str(body).unwrap();
+    let jql = json["jql"].as_str().unwrap();
+    jql.split('(')
+        .nth(1)
+        .unwrap()
+        .split(')')
+        .next()
+        .unwrap()
+        .split(',')
+        .map(|k| k.trim_matches('"').to_string())
+        .collect()
+}
+
+#[test]
+fn a_status_request_asks_for_the_keys_and_only_the_status_field() {
+    let (origin, rx) = serve_each(vec![ok(&status_body(&[("ABC-1", "Done")]))]);
+    let keys = vec!["ABC-1".to_string(), "abc-2".to_string()];
+    let got = JiraCloud::new()
+        .statuses(&connection(&origin), &token(), &keys)
+        .expect("statuses");
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].0, "ABC-1");
+    assert_eq!(got[0].1.as_ref().unwrap().name, "Done");
+    let body: serde_json::Value = serde_json::from_str(&rx.recv().unwrap()).unwrap();
+    assert_eq!(
+        body["jql"],
+        r#"project = "ABC" AND key in ("ABC-1","ABC-2") ORDER BY key ASC"#
+    );
+    assert_eq!(body["fields"], serde_json::json!(["status"]));
+    assert_eq!(body["maxResults"], 2);
+}
+
+#[test]
+fn a_400_bisects_the_chunk_and_a_key_alone_in_a_400_is_absent() {
+    // ABC-2 is unknown to Jira: every request holding it answers 400.
+    let (origin, rx) = serve_each(vec![
+        bad_request(),                                  // [1,2,3,4]
+        bad_request(),                                  // [1,2]
+        ok(&status_body(&[("ABC-1", "Done")])),         // [1]
+        bad_request(),                                  // [2] alone
+        ok(&status_body(&[("ABC-3", "Done"), ("ABC-4", "Done")])), // [3,4]
+    ]);
+    let keys: Vec<String> = (1..=4).map(|n| format!("ABC-{n}")).collect();
+    let got = JiraCloud::new()
+        .statuses(&connection(&origin), &token(), &keys)
+        .expect("statuses");
+    let names: Vec<&str> = got.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(names, ["ABC-1", "ABC-3", "ABC-4"]);
+    let asked: Vec<Vec<String>> = (0..5).map(|_| keys_of(&rx.recv().unwrap())).collect();
+    assert_eq!(asked[1], ["ABC-1", "ABC-2"]);
+    assert_eq!(asked[3], ["ABC-2"]);
+}
+
+#[test]
+fn any_other_error_aborts_the_read_and_names_neither_token_nor_site() {
+    let (origin, _rx) = serve_each(vec![
+        "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    ]);
+    let keys: Vec<String> = (1..=3).map(|n| format!("ABC-{n}")).collect();
+    let error = JiraCloud::new()
+        .statuses(&connection(&origin), &token(), &keys)
+        .unwrap_err();
+    let text = format!("{error:?}");
+    assert!(!text.contains(SENTINEL) && !text.contains(&origin), "{text}");
+    assert!(matches!(error, IssueLoadError::Other(_)), "{text}");
+}

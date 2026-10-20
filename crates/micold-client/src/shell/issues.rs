@@ -369,15 +369,15 @@ const NO_TOKEN: &str = "no API token is stored on this computer for this project
 
 /// What a Jira request needs, taken only once the integration's switch and the project's
 /// connection allow one (FR-001, FR-020): the one gate every Jira request passes.
-struct JiraRequest {
-    project: PathBuf,
-    connection: micold_core::jira::JiraConnection,
+pub(crate) struct JiraRequest {
+    pub(crate) project: PathBuf,
+    pub(crate) connection: micold_core::jira::JiraConnection,
     dir: Option<PathBuf>,
     source: Option<std::sync::Arc<dyn micold_core::jira::JiraSource>>,
 }
 
 /// The gate: `Err` is the reason nothing is asked.
-fn jira_request(app: &mut App) -> Result<JiraRequest, &'static str> {
+pub(crate) fn jira_request(app: &mut App) -> Result<JiraRequest, &'static str> {
     let Some(project) = app.core.workspace.active.clone() else {
         return Err("no project is open.");
     };
@@ -403,7 +403,7 @@ fn jira_request(app: &mut App) -> Result<JiraRequest, &'static str> {
 impl JiraRequest {
     /// Run `ask` on a blocking thread with the source and the token read from its file, which is
     /// done only here, inside the request's thread.
-    async fn run<T: Send + 'static>(
+    pub(crate) async fn run<T: Send + 'static>(
         self,
         ask: impl FnOnce(
                 &dyn micold_core::jira::JiraSource,
