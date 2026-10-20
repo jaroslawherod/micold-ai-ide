@@ -1317,4 +1317,39 @@ mod drift_behind_the_form {
             "queued until Details closed"
         );
     }
+
+    #[test]
+    fn focus_returns_after_the_queued_drift_prompt_is_answered_not_under_it() {
+        let (mut w, id) = world();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::DetailsOpened(id));
+        dial(&mut w, id);
+        send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
+        send(&mut state, &mut w, Msg::DetailsClosed);
+        assert!(state.prompt().is_some());
+        assert!(
+            state.take_focus_return().is_none(),
+            "the prompt is the modal now"
+        );
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert!(state.prompt().is_none());
+        assert!(
+            state.take_focus_return().is_some(),
+            "returns after the answer"
+        );
+    }
+
+    #[test]
+    fn details_of_a_daemon_gone_from_the_registry_hold_no_prompt_back() {
+        let (mut w, id) = world();
+        let mut state = State::default();
+        send(
+            &mut state,
+            &mut w,
+            Msg::DetailsOpened(micold_core::daemons::DaemonId(999)),
+        );
+        dial(&mut w, id);
+        send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
+        assert!(state.prompt().is_some(), "no dialog is open to wait for");
+    }
 }
