@@ -41,15 +41,15 @@ T016, T017, T019, T020 (US5) ship in M1 so a running-daemon edit never shows a s
 **Goal**: Add path verified end to end, focus returns to the opener, the running-daemon confirmation shows inside the form dialog, system prompts wait for the overlay.
 **Independent test**: add a daemon via dialog (saved, or cancelled with nothing added); edit a running daemon's runtime: confirmation in-dialog, No keeps edits, Yes closes.
 
-- [ ] T015 [P] [US3] Failing reducer tests in `tests/daemons_feature.rs`: `AddOpened` opens a blank draft; valid `Saved` stores and lists the new daemon without page save; `DraftDiscarded` adds nothing.
+- [x] T015 [P] [US3] Failing reducer tests in `tests/daemons_feature.rs`: `AddOpened` opens a blank draft; valid `Saved` stores and lists the new daemon without page save; `DraftDiscarded` adds nothing.
 - [x] T016 [US5] Failing tests in `tests/daemons_feature.rs` and `tests/overlay_registry.rs`: `Saved` needing confirmation sets `Pending::Edit` and keeps the draft; `form_confirmation()` returns it and `standalone_prompt()` excludes `Pending::Edit`; `RemovalCancelled` returns to the form with edits kept; the running decision is taken at Save time, not at open (edge case); `RemovalConfirmed` stores and closes; `DaemonFormDialog` dismissal is `RemovalCancelled` while confirming, `DraftDiscarded` otherwise; `ConfirmDaemonRemovalDialog` is closed for `Pending::Edit`.
 - [x] T017 [US5] Failing reducer tests in `tests/daemons_feature.rs` and `tests/features_daemons.rs`: a Kubernetes drift prompt raised while `draft` is `Some` stays queued, is never applied to the draft, and shows after the overlay closes (R7).
-- [ ] T018 [US3] Failing reducer tests in `tests/daemons_feature.rs` for FR-009: `Opener` (`Add` or `Row(id, RowAction)`) is set on open and taken on close.
+- [x] T018 [US3] Failing reducer tests in `tests/daemons_feature.rs` for FR-009: `Opener` (`Add` or `Row(id, RowAction)`) is set on open and taken on close.
 - [x] T019 [US5] In `src/features/daemons.rs` add `State::form_confirmation()`, make `standalone_prompt()` exclude `Pending::Edit`, and make `DaemonFormDialog` carry `confirming: bool` with the state-dependent dismissal; gate `show_next_drift` on `pending.is_none()` and no open overlay and call it when the overlay closes (R7).
 - [x] T020 [US5] In `src/ui/daemon_form_dialog.rs` render the confirmation panel (the prompt's confirm/decline labels in place of Save daemon / Cancel) when `form_confirmation()` is `Some`; adjust `src/ui/confirm_daemon_removal.rs` so `dialog()` skips `Pending::Edit`.
-- [ ] T021 [US3] Add `Opener` and `RowAction` and `State::opener` in `src/features/daemons.rs`, set on `AddOpened`/`EditOpened`, taken on close; give the material `Button` an optional `.id(..)` in `src/ui/material/button.rs` and set ids on Add and Edit in `src/ui/settings/daemons.rs`.
-- [ ] T022 [US3] In `src/shell/daemons.rs` issue `iced::widget::operation::focus(id)` for the taken opener after a close message (FR-009).
-- [ ] T023 [US3] Update `docs/user-guide/settings.md`: focus returns to the button that opened the dialog.
+- [x] T021 [US3] Add `Opener` and `RowAction` and `State::opener` in `src/features/daemons.rs`, set on `AddOpened`/`EditOpened`, taken on close; give the material `Button` an optional `.id(..)` in `src/ui/material/button.rs` and set ids on Add and Edit in `src/ui/settings/daemons.rs`.
+- [x] T022 [US3] In `src/shell/daemons.rs` issue `iced::widget::operation::focus(id)` for the taken opener after a close message (FR-009).
+- [x] T023 [US3] Update `docs/user-guide/settings.md`: focus returns to the button that opened the dialog.
 
 ## Phase 5: User Story 4 - Details in a dialog (P3)
 

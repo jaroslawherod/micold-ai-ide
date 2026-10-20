@@ -105,6 +105,7 @@ pub struct Button<'a, M> {
     mark: Option<super::UnreadMark<'a, M>>,
     selected: bool,
     host: Option<style::Host>,
+    id: Option<iced::advanced::widget::Id>,
 }
 
 /// The tooltip of the unread count on the switcher's button (feature 039, FR-023): what the
@@ -153,12 +154,20 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             width: None,
             shape: None,
             host: None,
+            id: None,
         }
     }
 
     fn labelled(label: impl Into<String>, variant: Variant, roles: Roles) -> Self {
         let label: Element<'a, M> = Text::new(label.into(), TypeRole::Action, roles).into();
         Self::with_content(label, variant, roles)
+    }
+
+    /// Name the button so the application can move the keyboard to it with `focus(id)`, as when a
+    /// dialog closes and focus returns to the control that opened it (feature 1092, FR-009).
+    pub fn id(mut self, id: impl Into<iced::advanced::widget::Id>) -> Self {
+        self.id = Some(id.into());
+        self
     }
 
     /// The message emitted on press. Omit it and the button is disabled.
@@ -431,6 +440,9 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         // Outside the ripple rather than inside it, so the focus indicator is drawn over the state
         // layer and not under it.
         let mut focusable = TakesTheKeyboard::new(pressed, pressable);
+        if let Some(id) = b.id.clone() {
+            focusable = focusable.id(id);
+        }
         if let Some(message) = on_key {
             // Both keys, unlike the checkbox beside it. Enter and Space are what a button answers
             // everywhere it exists — WAI-ARIA names both — and a *focused* button answering Enter

@@ -13,8 +13,8 @@
 
 use crate::app::{EditorAction, Message};
 use crate::features::daemons::{
-    runtime_choices, DaemonDetails, Draft, DraftRuntime, FormError, Msg as DaemonsMsg, Section,
-    State, ViewModel,
+    runtime_choices, DaemonDetails, Draft, DraftRuntime, FormError, Msg as DaemonsMsg, Opener,
+    RowAction, Section, State, ViewModel,
 };
 use crate::features::daemons_kube::{AllowedKind, ContextList};
 use crate::features::settings::DaemonDraft;
@@ -176,7 +176,11 @@ fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Eleme
         );
     }
     buttons = buttons
-        .push(Button::text("Edit", roles).on_press(Message::Daemons(DaemonsMsg::EditOpened(id))))
+        .push(
+            Button::text("Edit", roles)
+                .id(Opener::Row(id, RowAction::Edit).widget_id())
+                .on_press(Message::Daemons(DaemonsMsg::EditOpened(id))),
+        )
         .push(
             Button::text(if open { "Hide details" } else { "Details" }, roles)
                 .on_press(Message::Daemons(DaemonsMsg::DetailsToggled(id))),
@@ -735,7 +739,9 @@ pub fn empty_state<'a>(roles: Roles) -> Element<'a, Message> {
     column![
         crate::ui::material::Text::new(EMPTY_TITLE, crate::ui::material::TypeRole::Label, roles),
         note(EMPTY_BODY, roles),
-        Button::filled("Add daemon", roles).on_press(Message::Daemons(DaemonsMsg::AddOpened)),
+        Button::filled("Add daemon", roles)
+            .id(Opener::Add.widget_id())
+            .on_press(Message::Daemons(DaemonsMsg::AddOpened)),
     ]
     .spacing(spacing::SM)
     .width(Length::Fill)
@@ -759,6 +765,7 @@ pub fn view<'a>(
     if !list.empty {
         controls.push(
             Button::outlined("Add daemon", roles)
+                .id(Opener::Add.widget_id())
                 .on_press(Message::Daemons(DaemonsMsg::AddOpened))
                 .into(),
         );

@@ -467,8 +467,9 @@ typed.
 The dialog has its own **Save daemon** and **Cancel** buttons, which stay in view while the form
 scrolls in a small window. **Save daemon** checks the form and, if it is fine, keeps the daemon at
 once and closes the dialog. **Cancel**, Esc and a click outside the dialog close it and discard
-what you typed; opening it again shows the saved values. While it is open the page behind it takes
-no input.
+what you typed; opening it again shows the saved values. When it closes, the keyboard goes back to the
+button that opened it (**Add daemon** or the row's **Edit**). While it is open the page behind it
+takes no input.
 
 Saving the Settings page does not save this section and cancelling the page does not undo it: a
 daemon you added, changed or removed here is kept at once, and it needs no press of the page's

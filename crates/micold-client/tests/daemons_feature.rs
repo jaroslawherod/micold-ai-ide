@@ -2258,3 +2258,91 @@ mod form_dialog {
         assert_eq!(profile_of(&w, boxed).budget.pids, Some(300));
     }
 }
+
+/// Feature 1092, M2: the Add path of the dialog, and the focus the dialog hands back.
+mod add_dialog {
+    use super::*;
+    use daemons::{Msg, Opener, RowAction};
+
+    /// US3 #1: Add opens a blank form.
+    #[test]
+    fn add_opened_opens_a_blank_draft() {
+        let mut w = World::new();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::AddOpened);
+        let draft = state.draft.as_ref().expect("Add opens the form");
+        assert_eq!(draft.editing, None);
+        assert_eq!(draft.name, "");
+        assert_eq!(draft.port, "");
+    }
+
+    /// US3 #2, FR-003: a valid Save stores and lists the new daemon, with no page save.
+    #[test]
+    fn a_valid_save_stores_and_lists_the_new_daemon() {
+        let mut w = World::new();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::AddOpened);
+        send(&mut state, &mut w, Msg::NameEdited("Three".into()));
+        send(&mut state, &mut w, Msg::ContainerNameEdited("c3".into()));
+        send(&mut state, &mut w, Msg::PortEdited("7003".into()));
+        let out = send(&mut state, &mut w, Msg::Saved);
+        assert!(state.draft.is_none(), "the dialog closes");
+        assert_eq!(w.registry.entries().len(), 3);
+        let id = w.registry.entries()[2].id;
+        assert!(w.links.state(id).is_some(), "the daemon is tracked");
+        assert!(out
+            .iter()
+            .any(|o| matches!(o, Outcome::DaemonRegistryChanged(r) if r.entries().len() == 3)));
+    }
+
+    /// US3 #3: dismissing a filled form adds nothing.
+    #[test]
+    fn discarding_a_filled_form_adds_nothing() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let before = w.registry.clone();
+        send(&mut state, &mut w, Msg::AddOpened);
+        send(&mut state, &mut w, Msg::NameEdited("Three".into()));
+        send(&mut state, &mut w, Msg::ContainerNameEdited("c3".into()));
+        send(&mut state, &mut w, Msg::PortEdited("7003".into()));
+        send(&mut state, &mut w, Msg::DraftDiscarded);
+        assert!(state.draft.is_none());
+        assert_eq!(w.registry, before);
+    }
+
+    /// FR-009: Add and Edit remember their button; closing hands it back once.
+    #[test]
+    fn the_opener_is_set_on_open_and_taken_on_close() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        assert_eq!(state.take_focus_return(), None);
+        send(&mut state, &mut w, Msg::AddOpened);
+        assert_eq!(state.opener, Some(Opener::Add));
+        assert_eq!(state.take_focus_return(), None, "still open");
+        send(&mut state, &mut w, Msg::DraftDiscarded);
+        assert_eq!(state.take_focus_return(), Some(Opener::Add));
+        assert_eq!(state.take_focus_return(), None, "taken once");
+
+        send(&mut state, &mut w, Msg::EditOpened(boxed));
+        assert_eq!(state.opener, Some(Opener::Row(boxed, RowAction::Edit)));
+        send(&mut state, &mut w, Msg::NameEdited("Renamed".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert_eq!(
+            state.take_focus_return(),
+            Some(Opener::Row(boxed, RowAction::Edit))
+        );
+    }
+
+    /// FR-009: a refused Save keeps the dialog, so the focus stays in it.
+    #[test]
+    fn a_refused_save_keeps_the_opener() {
+        let mut w = World::new();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::AddOpened);
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.draft.is_some());
+        assert_eq!(state.take_focus_return(), None);
+        assert_eq!(state.opener, Some(Opener::Add));
+    }
+}
