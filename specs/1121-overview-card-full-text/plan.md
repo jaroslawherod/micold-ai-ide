@@ -103,7 +103,7 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
   before `Msg::Closed` (D1, R7).
 - **`src/ui/overview.rs`**: builds each card with its expansion, focus and message wiring and the
   twin; `settle_card_menu` resets the expansion when the Overview is closed (every way of closing)
-  and otherwise feeds `Event::Listed` (card removed). `card_scroll_id(location)`.
+  and otherwise feeds `Event::Listed` (card removed) before its no-menu early `return`. `card_scroll_id(location)`.
 - **`src/main.rs`**: `WindowFocusChanged(false)` → `Event::WindowBlurred`; `Msg::CardPaged` → a
   `scrollable::scroll_by` on the card's scroll id (R6).
 - **`src/showcase/sections/surfaces.rs`**: a collapsed and an expanded card (FR-015).
