@@ -121,6 +121,9 @@ mod state_icon;
 /// application's own theme function lives behind it — see [`crate::ui::theme`].
 pub(crate) mod style;
 
+/// An expanded section stays inside the scrollable that holds it, in pixels (feature 1092).
+#[cfg(test)]
+mod expand_clipping;
 mod pull_request_indicator;
 mod pull_request_row;
 /// The ripple's clipping, checked in rasterised pixels rather than in geometry. In-crate for the
