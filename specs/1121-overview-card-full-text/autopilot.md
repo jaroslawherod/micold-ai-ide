@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M4
-- **Next step**: M4 — implement T036–T046 (TDD), then verify, reviews, gate, PR files.
+- **Next step**: M4 — T036–T045 done, full gate green at 78dc827a; review A, review B and the T046 visual pass (round 1) are with the orchestrator; then fix, gate, PR files.
 
 ## Pull requests
 
@@ -76,6 +76,8 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review A M3 | 2 | b9ac5975a159891e08788042b0574271515ff555:a6fbf63e2e0b99811fada73d9c79ee9790a9dacc | CLEAN, 2 MINOR, both fixed (no round 3: MINORs only). F1 `rest_held` survived Escape/WindowBlurred, so `MenuClosed` re-expanded a card dismissed under the menu: cleared on both, test `a_rest_held_by_the_menu_is_dropped_by_escape_or_blur` (the reviewer's sequence, + blur); F2 Default card is the same `SessionLocation` in every project, so a switch under a resting pointer never rested anew: `CardGrid::rest_scope(&workspace.active)` drops `ZoomState.resting` on change, test `a_new_rest_scope_under_a_resting_pointer_rests_anew`, T029 text amended |
 | Review B M3 | 2 | same | CLEAN, 1 MINOR, fixed (prose only): cycle-log M3 row T027/T030/T032 said `WindowBlurred` in `main.rs`; now `.on_window_blur` in `ui/overview.rs`. Verify re-run: core `overview_` 36, client `card_grid overview` 118, `--test overview` 58, `idle_requests_no_frames` 14, `expansion_` 1, FR-018 grep empty |
 | Full gate M3 | G | 4d9894e3 + round 2 fixes | GREEN (first run red on `cargo fmt` of the new card_grid test; formatted, re-run green) |
+| Full gate M4 | A | 78dc827a | GREEN (first run) |
+| Review A / Review B / Visual pass §B.5–B.6 M4 | 1 | 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8 | pending (dispatched by the orchestrator) |
 
 ## Declined review findings
 
