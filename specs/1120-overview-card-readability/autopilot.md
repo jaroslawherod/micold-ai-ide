@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: verify M3 (full gate)
-- **Next step**: M3 full gate (`scripts/gate.sh`), push, PR files
+- **Phase**: pr M3
+- **Next step**: orchestrator opens the M3 PR from the PR files, waits on CI and merges; then M4 (T031–T039)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Card content from core text rules: issue title, `type/number` branch, sessions line, no empty rows (US2) | #1136 | merged |
 | M2 | T012–T020 | full | Activity line without markup; slash commands as sentences (US3) | #1141 | merged |
-| M3 | T021–T030 | full | Larger type, cards grow to fit, even rows (US4) | — | in progress |
+| M3 | T021–T030 | full | Larger type, cards grow to fit, even rows (US4) | (PR files written) | review done, gate green |
 | M4 | T031–T039 | full | Tinted header row over a neutral body; showcase, layout snapshot, visual pass (US1) | — | planned |
 
 Milestone order note: US4 (P2) ships before US1 (P1) because US1's header band and 14 px body need
@@ -66,6 +66,7 @@ inequality + visual pass).
 | M3 review B | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | CLEAN (sonnet). Verify: client `even_row card_grid overview_card type_role_mapping` 68 pass, cdk_no_appearance 3, core tokens_scales 17. F1 plan.md "Amended in M3" note, quickstart filter drops `even_row`: fixed, prose only. F2 T023/T028 ticked, keep "Superseded" |
 | M3 visual pass | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | PASS §B6 M3 part (`visual-pass.md`); equal row heights only by unit test (showcase grid cards equal), M4's T035 grid can pose a taller card |
 
+M3 full gate (`scripts/gate.sh`) green at b95c7a3a after the review fixes (rebased onto origin/main 17a5dc46).
 M2 full gate (`scripts/gate.sh`) green at 500e8fa2 after the review fixes (and at 1751ce27 before them); its scoped gate's one red was the same root-only settings test.
 M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red was the root-only settings test that `scripts/gate.sh` runs unprivileged).
 
