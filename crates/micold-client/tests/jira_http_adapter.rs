@@ -289,7 +289,10 @@ fn serve_each(responses: Vec<String>) -> (String, mpsc::Receiver<String>) {
                 }
             }
             let text = String::from_utf8_lossy(&raw).to_string();
-            let body = text.split_once("\r\n\r\n").map_or("", |(_, b)| b).to_string();
+            let body = text
+                .split_once("\r\n\r\n")
+                .map_or("", |(_, b)| b)
+                .to_string();
             tx.send(body).unwrap();
             stream.write_all(response.as_bytes()).unwrap();
         }
@@ -350,10 +353,10 @@ fn a_status_request_asks_for_the_keys_and_only_the_status_field() {
 fn a_400_bisects_the_chunk_and_a_key_alone_in_a_400_is_absent() {
     // ABC-2 is unknown to Jira: every request holding it answers 400.
     let (origin, rx) = serve_each(vec![
-        bad_request(),                                  // [1,2,3,4]
-        bad_request(),                                  // [1,2]
-        ok(&status_body(&[("ABC-1", "Done")])),         // [1]
-        bad_request(),                                  // [2] alone
+        bad_request(),                                             // [1,2,3,4]
+        bad_request(),                                             // [1,2]
+        ok(&status_body(&[("ABC-1", "Done")])),                    // [1]
+        bad_request(),                                             // [2] alone
         ok(&status_body(&[("ABC-3", "Done"), ("ABC-4", "Done")])), // [3,4]
     ]);
     let keys: Vec<String> = (1..=4).map(|n| format!("ABC-{n}")).collect();
@@ -378,6 +381,9 @@ fn any_other_error_aborts_the_read_and_names_neither_token_nor_site() {
         .statuses(&connection(&origin), &token(), &keys)
         .unwrap_err();
     let text = format!("{error:?}");
-    assert!(!text.contains(SENTINEL) && !text.contains(&origin), "{text}");
+    assert!(
+        !text.contains(SENTINEL) && !text.contains(&origin),
+        "{text}"
+    );
     assert!(matches!(error, IssueLoadError::Other(_)), "{text}");
 }

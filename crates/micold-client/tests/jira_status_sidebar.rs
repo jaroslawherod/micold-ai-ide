@@ -53,16 +53,11 @@ fn state_with(dirs: &[&str]) -> State {
 /// Run one read for `trigger` against `source` the way the shell does, and apply the answer.
 fn refresh(state: &mut State, source: &FakeJiraSource, trigger: Trigger, now: Duration) -> bool {
     let worktrees = state.worktree.worktrees.clone();
-    let Some(read) = state
-        .jira_status
-        .plan(trigger, now, &worktrees, &project())
-    else {
+    let Some(read) = state.jira_status.plan(trigger, now, &worktrees, &project()) else {
         return false;
     };
     let result = read_statuses(source, &conn(), &token(), &read.keys);
-    state
-        .jira_status
-        .apply(read.epoch, &read.keys, result, now);
+    state.jira_status.apply(read.epoch, &read.keys, result, now);
     true
 }
 
@@ -91,7 +86,11 @@ fn shows(state: &State, text: &str) -> bool {
 #[test]
 fn the_chip_stands_beside_the_key_tag() {
     let mut state = state_with(&["fix-ABC-1_login"]);
-    let source = FakeJiraSource::new().with_statuses(Ok(vec![read("ABC-1", "In Progress", "indeterminate")]));
+    let source = FakeJiraSource::new().with_statuses(Ok(vec![read(
+        "ABC-1",
+        "In Progress",
+        "indeterminate",
+    )]));
     assert!(refresh(&mut state, &source, Trigger::Open, secs(0)));
     assert!(shows(&state, "In Progress"));
     assert!(shows(&state, "ABC-1"));
@@ -117,7 +116,11 @@ fn another_projects_key_is_never_asked_for() {
 #[test]
 fn a_focus_after_five_minutes_follows_the_ticket_and_a_recent_one_does_not_ask() {
     let mut state = state_with(&["fix-ABC-1_login"]);
-    let source = FakeJiraSource::new().with_statuses(Ok(vec![read("ABC-1", "In Progress", "indeterminate")]));
+    let source = FakeJiraSource::new().with_statuses(Ok(vec![read(
+        "ABC-1",
+        "In Progress",
+        "indeterminate",
+    )]));
     refresh(&mut state, &source, Trigger::Open, secs(0));
     source.script_statuses(Ok(vec![read("ABC-1", "In Review", "indeterminate")]));
     assert!(!refresh(&mut state, &source, Trigger::Focus, secs(299)));
@@ -211,4 +214,22 @@ fn a_chip_names_no_token_or_site() {
     let entry = state.jira_status.board.status_of("ABC-1").unwrap();
     let said = entry.status.accessible_text(true);
     assert!(!said.contains("sentinel-token") && !said.contains("atlassian"));
+}
+
+#[test]
+fn a_changed_connection_drops_the_old_statuses_and_reads_again() {
+    let mut state = state_with(&["fix-ABC-1_login"]);
+    let source = FakeJiraSource::new().with_statuses(Ok(vec![read("ABC-1", "Done", "done")]));
+    state.jira_status.connected(&conn());
+    refresh(&mut state, &source, Trigger::Open, secs(0));
+    state.jira_status.open_pending = false;
+    // The same connection again changes nothing.
+    state.jira_status.connected(&conn());
+    assert!(state.jira_status.board.status_of("ABC-1").is_some());
+    assert!(!state.jira_status.open_pending);
+    // Another account of the same site and project is another connection.
+    let other = JiraConnection::parse("https://acme.atlassian.net", "ABC", "you@acme.com").unwrap();
+    state.jira_status.connected(&other);
+    assert!(state.jira_status.board.status_of("ABC-1").is_none());
+    assert!(state.jira_status.open_pending);
 }

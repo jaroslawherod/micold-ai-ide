@@ -398,8 +398,14 @@ fn a_row_shows_the_boards_status_and_its_stale_flag() {
     use micold_core::jira_status::{StatusBoard, TicketStatus};
     let status = |name: &str| TicketStatus::from_jira(Some(name), Some("new"));
     let jira = |key: &str, n: u64| {
-        Issue::jira(key, n, format!("{key} work"), Vec::new(), "2026-09-29T00:00:00Z".into())
-            .with_status(status("Listed"))
+        Issue::jira(
+            key,
+            n,
+            format!("{key} work"),
+            Vec::new(),
+            "2026-09-29T00:00:00Z".into(),
+        )
+        .with_status(status("Listed"))
     };
     let form = form(vec![jira("ABC-1", 1), jira("ABC-2", 2)], Vec::new(), "");
     let mut board = StatusBoard::default();

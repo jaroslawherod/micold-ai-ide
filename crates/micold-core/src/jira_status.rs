@@ -184,7 +184,7 @@ pub struct StatusEntry {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StatusBoard {
     entries: BTreeMap<String, StatusEntry>,
-    /// Monotonic time of the last `Ok` read.
+    /// Time since the Unix epoch of the last `Ok` read.
     pub last_read: Option<Duration>,
     /// Consecutive failed refreshes.
     pub failures: u8,
@@ -434,7 +434,9 @@ mod tests {
             .expect("begin")
     }
 
-    fn ok(items: &[(&str, Option<&str>)]) -> Result<Vec<(String, Option<TicketStatus>)>, IssueLoadError> {
+    fn ok(
+        items: &[(&str, Option<&str>)],
+    ) -> Result<Vec<(String, Option<TicketStatus>)>, IssueLoadError> {
         Ok(items
             .iter()
             .map(|(k, s)| (k.to_string(), s.map(st)))
@@ -456,7 +458,10 @@ mod tests {
         assert!(board.due(Duration::ZERO, Trigger::Focus), "never read");
         let (epoch, asked) = begun(&mut board, &["ABC-1"]);
         board.apply(epoch, &asked, ok(&[("ABC-1", Some("To Do"))]), 10 * MIN);
-        assert!(!board.due(10 * MIN + 5 * MIN, Trigger::Focus), "exactly 5 min");
+        assert!(
+            !board.due(10 * MIN + 5 * MIN, Trigger::Focus),
+            "exactly 5 min"
+        );
         assert!(board.due(10 * MIN + 5 * MIN + Duration::from_secs(1), Trigger::Focus));
         assert!(board.due(11 * MIN, Trigger::Open));
     }
@@ -472,7 +477,12 @@ mod tests {
     fn an_ok_read_replaces_and_removes_absent_keys() {
         let mut board = StatusBoard::default();
         let (epoch, asked) = begun(&mut board, &["ABC-1", "ABC-2"]);
-        board.apply(epoch, &asked, ok(&[("ABC-1", Some("A")), ("ABC-2", Some("B"))]), MIN);
+        board.apply(
+            epoch,
+            &asked,
+            ok(&[("ABC-1", Some("A")), ("ABC-2", Some("B"))]),
+            MIN,
+        );
         let (epoch, asked) = begun(&mut board, &["ABC-1", "ABC-2"]);
         board.apply(epoch, &asked, ok(&[("ABC-1", Some("C"))]), 2 * MIN);
         assert_eq!(board.status_of("ABC-1").unwrap().status.name, "C");

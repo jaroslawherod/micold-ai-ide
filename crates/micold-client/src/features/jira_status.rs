@@ -2,7 +2,7 @@
 //!
 //! One [`StatusBoard`](micold_core::jira_status::StatusBoard) for the open project, read by every
 //! surface (FR-010). This module decides *when* a read starts and what its answer changes; the
-//! request itself is the shell's (`shell/jira_status.rs`), behind feature 533's single Jira gate.
+//! request itself is the shell's (`shell/jira_refresh.rs`), behind feature 533's single Jira gate.
 //!
 //! A read starts on two events only (FR-005): the project opening, once its worktrees are known,
 //! and the window regaining focus when the last read is over five minutes old.
@@ -10,7 +10,7 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use micold_core::github::IssueLoadError;
-use micold_core::jira::ProjectKey;
+use micold_core::jira::{JiraConnection, ProjectKey};
 use micold_core::jira_status::{statuses_jql, KeyedStatus, StatusBoard, Trigger};
 use micold_core::naming::Tag;
 use micold_core::worktree::Worktree;
@@ -33,6 +33,8 @@ pub struct State {
     pub board: StatusBoard,
     /// The project opened and its worktrees were not known yet: the open read waits for them.
     pub open_pending: bool,
+    /// The connection the board's statuses were read through: a different one drops them.
+    pub connection: Option<JiraConnection>,
 }
 
 /// The Jira keys of `worktrees` of `project`: the issue tag of each worktree's name, uppercased,
@@ -40,7 +42,7 @@ pub struct State {
 pub fn linked_keys(worktrees: &[Worktree], project: &ProjectKey) -> Vec<String> {
     let labels: Vec<String> = worktrees
         .iter()
-        .flat_map(|w| worktree_tags(w))
+        .flat_map(worktree_tags)
         .filter_map(|tag| match tag {
             Tag::Issue(label) => Some(label),
             _ => None,
@@ -71,6 +73,23 @@ impl State {
     pub fn clear(&mut self) {
         self.board.clear();
         self.open_pending = false;
+        self.connection = None;
+    }
+
+    /// The Jira gate is open with `connection`. A connection other than the one the statuses
+    /// were read through (the gate was closed, or the site, project or account changed) drops
+    /// them, and the new one is read once its worktrees are known.
+    pub fn connected(&mut self, connection: &JiraConnection) {
+        if self.connection.as_ref() != Some(connection) {
+            self.clear();
+            self.connection = Some(connection.clone());
+            self.open_pending = true;
+        }
+    }
+
+    /// Nothing to do on a message: no statuses, no read waiting.
+    pub fn is_dormant(&self) -> bool {
+        self.board.is_idle() && !self.open_pending && self.connection.is_none()
     }
 
     /// Begin a read for `trigger`, or `None` when it is not due (one is out; the last read is

@@ -29,15 +29,17 @@ pub fn on_focus(app: &mut App) -> Task<Message> {
 /// After every message: statuses of a project whose Jira switch went off or whose connection was
 /// removed are dropped (FR-008), and a project that just opened reads once its worktrees are known.
 pub fn after_update(app: &mut App) -> Task<Message> {
-    let gate_open = jira_request(app).is_ok();
-    let state = &mut app.core.jira_status;
-    if !gate_open {
-        state.open_pending = false;
-        if !state.board.is_idle() {
-            state.clear();
-        }
+    // Most messages arrive with Jira off: skip the gate's work for them.
+    if app.core.jira_status.is_dormant() && !app.core.settings.jira_enabled {
         return Task::none();
     }
+    let connection = jira_request(app).ok().map(|request| request.connection);
+    let state = &mut app.core.jira_status;
+    let Some(connection) = connection else {
+        state.clear();
+        return Task::none();
+    };
+    state.connected(&connection);
     if state.open_pending && !app.core.worktree.worktrees.is_empty() {
         state.open_pending = false;
         return trigger(app, Trigger::Open);
@@ -51,21 +53,19 @@ fn trigger(app: &mut App, trigger: Trigger) -> Task<Message> {
         return Task::none();
     };
     let project = request.connection.project_key.clone();
-    let Some(read) = app.core.jira_status.plan(
-        trigger,
-        now(),
-        &app.core.worktree.worktrees,
-        &project,
-    ) else {
+    let Some(read) =
+        app.core
+            .jira_status
+            .plan(trigger, now(), &app.core.worktree.worktrees, &project)
+    else {
         return Task::none();
     };
     let keys = read.keys.clone();
     let epoch = read.epoch;
     let asked = keys.clone();
     Task::perform(
-        request.run(move |source, connection, token| {
-            read_statuses(source, connection, token, &asked)
-        }),
+        request
+            .run(move |source, connection, token| read_statuses(source, connection, token, &asked)),
         move |joined| {
             let result = joined.unwrap_or_else(|stopped| {
                 Err(IssueLoadError::Other(format!(

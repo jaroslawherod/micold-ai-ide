@@ -54,6 +54,8 @@ pub const MUTATORS: &[&str] = &[
     "repo_edited",
     "token_edited",
     "append",
+    // `jira_status.apply` takes the answer of a Jira status read (feature 1101).
+    "apply",
     // `attach.dialog.as_mut` borrows the open dialog to edit it (feature 582).
     "as_mut",
     // `AvailabilityAnswers::asked` / `answered` / `env_include_changed` record a request, file its
