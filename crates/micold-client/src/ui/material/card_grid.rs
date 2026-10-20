@@ -2324,7 +2324,11 @@ mod tests {
             wheel(&mut m, -20.0).is_empty(),
             "the gesture left the body it started in"
         );
-        std::thread::sleep(std::time::Duration::from_millis(120));
+        // iced ends a wheel transaction on a cursor move only once 100 ms have passed since the
+        // last scroll (`iced_widget::scrollable`); this waits that out. It is iced's gesture
+        // window, not a design-system duration.
+        const ICED_WHEEL_TRANSACTION_MS: u64 = 120;
+        std::thread::sleep(std::time::Duration::from_millis(ICED_WHEEL_TRANSACTION_MS));
         m.send(
             iced::Event::Mouse(Mouse::CursorMoved { position: at }),
             Cursor::Available(at),

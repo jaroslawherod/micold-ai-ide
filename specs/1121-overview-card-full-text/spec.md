@@ -35,12 +35,12 @@ flow:feature. Builds on feature 1120 (`specs/1120-overview-card-readability`, sh
 - Q: Today Escape closes the Overview (feature 813 FR-014). Should the first Escape only collapse an
   expanded card, with a second Escape closing the Overview, or should one Escape both collapse the
   card and close the Overview? → A: The first Escape only collapses the expanded card, which keeps
-  keyboard focus; an Escape while no card is expanded closes the Overview as today. _(orchestrator
-  default, the recommended option; pending the user's confirmation)_
+  keyboard focus; an Escape while no card is expanded closes the Overview as today. _(the recommended
+  option; confirmed by the user, 2026-10-20)_
 - Q: Which form of the worktree directory does the expanded card show: the full path with the home
   folder shortened to `~`, the path relative to the project root, or the folder name only? → A: The
-  full path, with the user's home folder shown as `~`. _(orchestrator default, the recommended
-  option; pending the user's confirmation)_
+  full path, with the user's home folder shown as `~`. _(the recommended option; confirmed
+  by the user, 2026-10-20)_
 - Q: Does an Escape that closes an open card menu also collapse the card? → A: No. With a card menu
   open, Escape only closes the menu (feature 972 FR-007) and the card keeps its form (FR-012); a
   further Escape follows FR-005. _(agent-resolved:

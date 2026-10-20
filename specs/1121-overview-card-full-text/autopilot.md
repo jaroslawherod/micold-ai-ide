@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M2
-- **Next step**: M2 — Review A round 2 and visual re-look, then verify.md and PR (see *Handover*).
+- **Next step**: M2 — orchestrator opens the M2 PR (pending) from the scratchpad files, waits on CI and merges; then M3.
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | #1169 | merged |
-| M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | | in progress |
+| M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | pending | gate green, pushed |
 | M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | | pending |
 | M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | | pending |
 
@@ -36,8 +36,8 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| D1 | clarify | Escape on an expanded card (Story 3 sc.2, FR-005) | First Escape only collapses it (focus kept, Overview and full-screen stay); Escape with no card expanded closes the Overview | orchestrator default (recommended), pending jaro's confirmation on the decision card | spec.md#Clarifications |
-| D2 | clarify | Worktree directory form (FR-014) | Full absolute path, home folder shown as `~` | orchestrator default (recommended), pending jaro's confirmation on the decision card | spec.md#Clarifications |
+| D1 | clarify | Escape on an expanded card (Story 3 sc.2, FR-005) | First Escape only collapses it (focus kept, Overview and full-screen stay); Escape with no card expanded closes the Overview | jaro (confirmed on the decision card, 2026-10-20; picked the default) | spec.md#Clarifications |
+| D2 | clarify | Worktree directory form (FR-014) | Full absolute path, home folder shown as `~` | jaro (confirmed on the decision card, 2026-10-20; picked the default) | spec.md#Clarifications |
 | D3 | clarify | Escape with a card menu open; which collapse re-expands the focused card | Escape only closes the menu; only the pointer leaving a hover-expanded card re-expands the focused card | agent | specs/972-overview-card-context-menu/spec.md#FR-007; spec.md#Edge Cases |
 | D4 | implement M2 | Wheel at an expanded card's body end (FR-008): iced latches the wheel on the inner scrollable for the rest of a gesture | Keep iced's scroll latching (as browsers do): no overflow → Overview at once; at the end → Overview from the next gesture. R6 amended; test asserts both the latch and the chain | agent | research.md#R6; card_grid.rs test `a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview` |
 
@@ -59,6 +59,9 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review A M2 | 1 | HEAD f17866cf | CHANGES: 3 MAJOR, 3 MINOR. F1 `capped_at` + invalidate on height change (test drops `relayout`, shrinking-view test); F2 `overlay` uses the last view (tooltip test); F3 expanded card ≥ its stretched slot (test); F4 `body_edges` 1 px slack (test); F5 declined; F6 FR-008/US2 sc.6/T015 amended (fixed, prose only) |
 | Review B M2 | 1 | HEAD f17866cf | CLEAN (3 MINOR: F1 = A F6, amended; F2 K3/T010 amended to slots ending inside the view (fixed, prose only); F3 home dir cached in a `OnceLock`). Verify 88 + 22 passed |
 | Visual pass §B.1–B.2 M2 | 1 | f17866cf | FAIL on "draws over neighbours": a card peeks out below the expanded card. Found: it is card 4 of the next row in column 0 (6 cards, 4 columns), covered by the expanded card as spec Assumption "covers the cards below it" intends; not a twin drawn (painted-text probe: the twin is never painted). Re-look requested with a crop of both rows. Header-in-view and inside-view NOT CHECKED: re-look |
+| Review A M2 | 2 | f17866cf..13e871fe (fix diff, sonnet) | CLEAN (no findings; F1–F4, F6, B F2/F3 hold, F5 decline stands). Verify `card_grid`/`overview_card` 92 passed |
+| Visual pass §B.1–B.2 M2 | 2 (re-look) | 13e871fe | PASS all 4 criteria: neighbours unmoved, next-row card under the expanded one as intended; full text, no ellipsis, raised shadow; shifted up and whole near the window bottom; clamped in a 380 px window with header pinned and body scrolling. Light+dark 1x+2x (bottom/short poses dark 1x only); grid at 1300 px for 4 columns. Evidence visual-pass/m2/relook-*.png |
+| Full gate M2 | 1 | 13e871fe + specs | RED: `motion_tokens::every_duration_is_a_named_token` flagged `from_millis(120)` in the wheel-latch test (iced's 100 ms wheel-transaction window, not a design token). Fixed: named `ICED_WHEEL_TRANSACTION_MS` with its reason; test-only, no review round |
 
 ## Declined review findings
 
@@ -69,22 +72,13 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-M2 unit 5 (over the 150k cap; returned REVIEW-NEEDED). Nothing pushed; no PR.
-- **Done**: M2 round-1 results recorded (*Review rounds*); A F1–F4 and B F3 fixed test-first
-  (cycle log rows "M2 review A r1"), A F5 declined, A F6 / B F1 / B F2 prose amends in spec.md
-  (FR-008, US2 sc.6), tasks.md (T010, T015) and contracts/expansion.md (K3). Visual FAIL traced
-  to the next row's card under the expanded one (intended). Duplicate `visual-pass/m2-showcase/`
-  removed. `cargo test -p micold-client --lib` 935 passed; clippy `-p micold-client --all-targets
-  -D warnings` clean.
-- **Next step**: Review A M2 round 2 (sonnet) on `git diff f17866cf HEAD`; visual re-look of
-  the `expanded` pose (both rows, header in view, card inside the view); then verify.md (gate,
-  PR for M2).
-- **Open for M4**: K4 — iced never calls `on_scroll` without overflow, so `on_body_scroll` never
-  sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on expand (cycle log T013
-  row). Locally `micold-core` `settings_refuses_save_over_failed_read` is red because the run is
-  root (pre-existing).
-- Build env: detached runs with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
-  CARGO_PROFILE_TEST_DEBUG=0` + `scripts/autopilot/hold.sh`.
+M2 unit 6: everything except the push is done. Committed locally; the unit had to return before gate run 3 finished (log `$SCRATCHPAD/gate-3.log`).
+- **Next step**: if gate-3 shows `GATE_EXIT=0`, push (`git push --force-with-lease=claude/project-thread-7041o6: -u origin claude/project-thread-7041o6`), put the gate SHA into `$SCRATCHPAD/pr-body.md` (GATE_SHA) and open the PR from `pr-title.txt`/`pr-body.md`. If it is red, the likely cause is the flaky `mutation_semantics::worktree_delete_with_live_session_and_no_stop_is_refused` (git commit in the fixture; passed on its own rerun): rerun `scripts/gate.sh`.
+
+- **Open for M4** (carried from M2): K4 — iced never calls `on_scroll` without overflow, so
+  `on_body_scroll` never sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on
+  expand (cycle log T013 row). Locally `micold-core` `settings_refuses_save_over_failed_read` is red
+  when run as root (pre-existing; `scripts/gate.sh` runs it unprivileged).
 
 ## Open escalation
 
