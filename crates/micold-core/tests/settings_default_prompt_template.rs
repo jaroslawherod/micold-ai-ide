@@ -32,7 +32,10 @@ fn round_trip_keeps_newlines_verbatim() {
         ..Settings::default()
     };
     store.save(&settings).unwrap();
-    assert_eq!(load(&store).default_prompt_template, "line one\n\n  line {issue}\n");
+    assert_eq!(
+        load(&store).default_prompt_template,
+        "line one\n\n  line {issue}\n"
+    );
 }
 
 #[test]

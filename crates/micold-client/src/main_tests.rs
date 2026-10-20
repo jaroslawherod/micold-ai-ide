@@ -8389,6 +8389,7 @@ mod issue_source {
                 .iter()
                 .map(|(n, text)| (*n, text.to_string()))
                 .collect(),
+            bodies: Vec::new(),
             next_cursor: next.map(str::to_string),
         }
     }

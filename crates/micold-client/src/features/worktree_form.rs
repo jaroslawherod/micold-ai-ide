@@ -613,7 +613,10 @@ impl WorktreeForm {
     /// is chosen (feature 1161, FR-007). A template that is empty or does not parse gives an empty
     /// prompt (FR-012, FR-013).
     pub fn refresh_default_prompt(&mut self) {
-        if self.first_prompt_edited || self.session_cli.is_none() {
+        if self.first_prompt_edited
+            || self.session_cli.is_none()
+            || self.status != WorktreeFormStatus::Editing
+        {
             return;
         }
         let picked = self
@@ -1465,6 +1468,7 @@ pub fn issues_loaded(
                 };
                 form.issue_list_open = true;
                 form.rematch_issues();
+                form.refresh_default_prompt();
             }
             Err(error) => form.issues = IssueList::Failed { error },
         }
@@ -1519,6 +1523,7 @@ pub fn issue_descriptions_loaded(
             }
             Err(_) => DescriptionPass::Done,
         };
+        form.refresh_default_prompt();
     });
 }
 

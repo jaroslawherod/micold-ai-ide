@@ -3,7 +3,9 @@
 
 use micold_core::prompt_template::{PromptTemplate, WorktreeFacts};
 
-use micold_core::prompt_template::shared_fixture::{facts as shared_facts, OUTPUT as SHARED_OUTPUT, TEMPLATE as SHARED_TEMPLATE};
+use micold_core::prompt_template::shared_fixture::{
+    facts as shared_facts, OUTPUT as SHARED_OUTPUT, TEMPLATE as SHARED_TEMPLATE,
+};
 
 fn render(template: &str, facts: &WorktreeFacts) -> Option<String> {
     PromptTemplate::parse(template).unwrap().render(facts)
@@ -19,7 +21,10 @@ fn renders_the_shared_fixture() {
 
 #[test]
 fn renders_all_six_placeholders() {
-    let out = render("{issue}|{issue_title}|{issue_body}|{branch}|{type}|{name}", &shared_facts());
+    let out = render(
+        "{issue}|{issue_title}|{issue_body}|{branch}|{type}|{name}",
+        &shared_facts(),
+    );
     assert_eq!(
         out.as_deref(),
         Some("42|Crash on save|It crashes. {issue}|fix/42_crash|fix|crash")
@@ -47,13 +52,19 @@ fn inserted_body_is_not_expanded_again() {
         issue_body: "see {issue}".into(),
         ..WorktreeFacts::default()
     };
-    assert_eq!(render("{issue_body}", &facts).as_deref(), Some("see {issue}"));
+    assert_eq!(
+        render("{issue_body}", &facts).as_deref(),
+        Some("see {issue}")
+    );
 }
 
 #[test]
 fn blank_result_is_none() {
     assert_eq!(render("", &shared_facts()), None);
-    assert_eq!(render("  \n {issue_title} ", &WorktreeFacts::default()), None);
+    assert_eq!(
+        render("  \n {issue_title} ", &WorktreeFacts::default()),
+        None
+    );
 }
 
 #[test]
@@ -81,6 +92,13 @@ fn unbalanced_braces_are_an_error_with_the_contract_text() {
 fn placeholders_list_matches_the_message_order() {
     assert_eq!(
         PromptTemplate::PLACEHOLDERS,
-        ["issue", "issue_title", "issue_body", "branch", "type", "name"]
+        [
+            "issue",
+            "issue_title",
+            "issue_body",
+            "branch",
+            "type",
+            "name"
+        ]
     );
 }

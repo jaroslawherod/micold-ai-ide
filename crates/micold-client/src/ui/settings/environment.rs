@@ -267,7 +267,9 @@ pub fn view<'a>(
 
     // Feature 1161, FR-002: the template the Add Worktree dialog fills its first prompt from. The
     // placeholders it accepts are listed under the field, from the one list the core renders by.
-    let placeholders = PromptTemplate::PLACEHOLDERS.map(|p| format!("{{{p}}}")).join("  ");
+    let placeholders = PromptTemplate::PLACEHOLDERS
+        .map(|p| format!("{{{p}}}"))
+        .join("  ");
     let default_prompt = FieldGroup::new("Default prompt template", roles)
         .note(format!(
             "Pre-fills a new worktree's first prompt. Placeholders: {placeholders}. Use {{{{ and }}}} for literal braces."
