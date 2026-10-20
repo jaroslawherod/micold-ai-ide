@@ -605,7 +605,7 @@ mod tests {
 
     /// How many lines `text` needs at `role` laid out `room` wide, with nothing limiting it.
     fn lines_needed(text: &str, role: TypeRole, room: f32) -> usize {
-        let (_, size) = super::super::line_clamp::laid_out_at(text, role, 50, room);
+        let (_, size) = super::super::line_clamp::tests::laid_out_at(text, role, 50, room);
         (size.height / role.line_height_dp()).round() as usize
     }
 
