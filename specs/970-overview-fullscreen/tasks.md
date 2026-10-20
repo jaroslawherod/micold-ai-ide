@@ -190,8 +190,8 @@ settings; when on, the drawer's presence snaps, and the cards snap with it (rese
 
 Changes no code: left to the close unit (milestones rule 4).
 
-- [ ] T042 Visual pass per quickstart §B (steps 1–8) with the `visual-pass` skill on the client and the showcase; record it in `specs/970-overview-fullscreen/visual-pass.md` (FR-003, FR-005, FR-010, FR-012, SC-002, SC-006). The pass is the only proof of: the top bar working in full screen (FR-003), the sidebar and Overview edges touching on every frame (SC-002; structural from the `row!` with a `Fill` sibling), the connection-lost state and a very narrow window in full screen (spec Edge cases)
-- [ ] T043 Full gate (`mise run gate`, in the cloud container `scripts/gate.sh`) green on `main` after the last milestone, quickstart §A
+- [x] T042 Visual pass per quickstart §B (steps 1–8) with the `visual-pass` skill on the client and the showcase; record it in `specs/970-overview-fullscreen/visual-pass.md` (FR-003, FR-005, FR-010, FR-012, SC-002, SC-006). The pass is the only proof of: the top bar working in full screen (FR-003), the sidebar and Overview edges touching on every frame (SC-002; structural from the `row!` with a `Fill` sibling), the connection-lost state and a very narrow window in full screen (spec Edge cases)
+- [x] T043 Full gate (`mise run gate`, in the cloud container `scripts/gate.sh`) green on `main` after the last milestone, quickstart §A
 
 ---
 
@@ -311,5 +311,5 @@ Audit `tdd/verification.md` at `5f54853a`: verdict FAIL. The feature is not done
 - [x] T051 Findings 7 and 9: decide to keep or drop `the_mode_writes_no_sidebar_state` (`tests/overview.rs:1257`) as redundant with U16/U17, and replace the direct `s.open = false` (`tests/features_overview.rs:133`) with the real `app.rs` exit message if one is reachable. `cargo test -p micold-client --test overview --test features_overview` passes.
 - [x] T052 Finding 10: pin `freed_width` (`crates/micold-client/src/ui/mod.rs:1407`): a test that the expanded sidebar frees `sidebar_width_px() + RESIZE_HANDLE_WIDTH` and the collapsed one `STRIP_WIDTH`. Mutant dropping the handle term must fail it. `cargo test -p micold-client --lib freed_width`.
 - [x] T053 Finding 11: pin the zoom's end tolerance (`card_grid.rs:261`): a layout 2 px short of the end width still reports a running zoom (`ends` is `Some`). Mutant `END_REACHED = 5.0` must fail it. `cargo test -p micold-client --lib card_grid`.
-- [x] T054 Finding 12: automated checks for FR-003 and SC-006's keyboard half: a view-level test that the top bar's Overview button is still built in full screen, and that the header toggle takes focus in tab order. `cargo test -p micold-client --lib overview`.
+- [x] T054 Finding 12: automated checks for FR-003 and SC-006's keyboard half: a view-level test that the top bar's Overview button is still built in full screen (view level only; the tab-order half is deferred at close: no focus harness, covered by the visual pass, see verification.md Resolution). `cargo test -p micold-client --lib overview`.
 - [ ] T055 (deferred at close, see verification.md Resolution) Finding 13: a guard that `docs/user-guide/overview.md` names *Full screen* and the platform chords, and `settings.md` names *Reduce motion* (FR-013), following `scripts/tests/*.test.sh`. `mise run gate` (cloud: `scripts/gate.sh`).
