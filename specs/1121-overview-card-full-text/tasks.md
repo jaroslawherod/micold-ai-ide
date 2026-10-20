@@ -24,7 +24,7 @@ Every bullet of a contract is one assertion. Core tests: `mise run test-core` (w
 parameter; the client reads it from `directories::UserDirs`. Card text draws in the bundled font in
 logical pixels, so Linux-measured geometry tests hold on macOS and Windows CI.
 
-**Decisions pending confirmation** (ledger D1, D2): D1 (first Escape only collapses) is T039 + T044 +
+**Decisions confirmed by the user, 2026-10-20** (ledger D1, D2): D1 (first Escape only collapses) is T039 + T044 +
 T045 alone; D2 (`~` path) is the tasks tagged `(D2)`: T009, T011, T012, T017 and T019 (the `home` parameter
 of `ExpandedText::of` and its lookup) and T034 (the user guide's `~` wording), plus M2's deliverable
 and quickstart §B.8. Changing either answer changes only those tasks. D3
@@ -111,7 +111,7 @@ it into the app.
 - [x] T020 [US2] In `crates/micold-client/src/ui/material/card_grid.rs`: `.expanded(index, twin)`; `layout` measures the twin (own tree slot after the cards) for that card's `naturals` entry and lays the expanded card at its slot's x, width and top with height `min(natural, view height)`; `operate`, `overlay`, `update`, `mouse_interaction` and `draw` skip the twin (R4, U3)
 - [x] T021 [US2] In `crates/micold-client/src/ui/material/card_grid.rs`: `draw` skips the expanded card in the piece loop and draws it last in `renderer.with_layer(view)` translated by `place` from the last viewport (stored in `update`/`draw`) with `Layout::with_offset`; `update` and `mouse_interaction` go to the expanded card first, and every other card gets `cursor.levitate()` while the cursor is in the expanded card's drawn rectangle (R4, R6, FR-010); T014 and T015 pass
 - [x] T022 [US2] In `crates/micold-client/src/showcase/sections/surfaces.rs`: an `unscrolled` grid with `.expanded(0, twin)` beside the collapsed cards, with a long title, branch, directory and activity (FR-015, quickstart §B.2); `showcase_completeness` passes
-- [ ] T023 [US2] Visual pass through an `autopilot-worker` running the `visual-pass` skill on the showcase, quickstart §B.1–§B.2, both themes, scale 1.0 and 2.0; evidence in `specs/1121-overview-card-full-text/visual-pass/`
+- [x] T023 [US2] Visual pass through an `autopilot-worker` running the `visual-pass` skill on the showcase, quickstart §B.1–§B.2, both themes, scale 1.0 and 2.0; evidence in `specs/1121-overview-card-full-text/visual-pass/`
 
 **Checkpoint**: the showcase shows a card expanded over its neighbours; the app does not expand cards yet.
 
