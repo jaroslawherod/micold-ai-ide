@@ -163,7 +163,7 @@ the layout snapshot (FR-001–FR-003, FR-005, FR-016, FR-017, FR-019).
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T040 Run every quickstart §A command and record the results in `specs/1120-overview-card-readability/quickstart.md` (no code change: the close unit does it in the close PR)
+- [x] T040 Run every quickstart §A command and record the results in `specs/1120-overview-card-readability/quickstart.md` (no code change: the close unit does it in the close PR)
 
 ---
 

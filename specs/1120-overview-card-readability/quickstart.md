@@ -32,3 +32,14 @@ Prerequisite: `mise run showcase` (or the showcase binary) on a private display,
 
 Record screenshots under `specs/1120-overview-card-readability/visual-pass/` and the results in
 `visual-pass.md`.
+
+## Part A results (close unit, 2026-10-20, origin/main 92424431 plus the zoom pose's targeted cards)
+
+| Command | Result |
+|---|---|
+| `mise run test-core` (as `scripts/build-lock.sh cargo test -p micold-core --all-targets`) | every target up to `settings_refuses_save_over_failed_read` passes (lib 1221 pass, 1 ignored); that one fails only as root (`a_save_over_an_unreadable_file_is_refused_and_leaves_it_untouched`: root reads a mode-000 file). `scripts/gate.sh` runs it unprivileged |
+| `… -p micold-client --lib -- overview_card card_grid composition_contrast type_role_mapping` | 81 pass |
+| `… -p micold-client --test layout_snapshot` | 72 pass |
+| `… -p micold-client --test showcase_completeness` | 42 pass |
+| `! grep -nE 'tracing::\|log::\|println!\|eprintln!\|dbg!' …/{markup,overview_text,hook_activity}.rs` | no match (FR-020 holds) |
+| `scripts/gate.sh` | see the close PR's *Local gate* line |

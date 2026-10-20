@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: implement M4
-- **Next step**: open the M4 PR (title/body in the unit's scratchpad), CI, merge; then the close unit (T040; B4, focus/ripple, B7, zoom with a targeted card)
+- **Phase**: close
+- **Next step**: close unit: tdd-verify and visual pass (B4, B5 focus/ripple, B7, zoom with targeted cards) via workers; then fixes, review, gate, close PR
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1136 | M1 | merged | a658e7575682acda7e881561c13762690df4c428 |
 | #1141 | M2 | merged | 62825f0c831f75a3863fc62d0a4aa5cd137fd2c4 |
 | #1157 | M3 | merged (rebase; one CI flake in micold-daemon `structured_session`, passed on re-run) | 96ef5d1fe006d357e47e31a5786c72f8f4cf3ae6 |
+| #1166 | M4 | merged | 92424431d7a86e5e63d9f03cd120001f6083c755 |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T011 | full | Card content from core text rules: issue title, `type/number` branch, sessions line, no empty rows (US2) | #1136 | merged |
 | M2 | T012–T020 | full | Activity line without markup; slash commands as sentences (US3) | #1141 | merged |
 | M3 | T021–T030 | full | Larger type, cards grow to fit, even rows (US4) | #1157 | merged |
-| M4 | T031–T039 | full | Tinted header row over a neutral body; showcase, layout snapshot, visual pass (US1) | — | in progress |
+| M4 | T031–T039 | full | Tinted header row over a neutral body; showcase, layout snapshot, visual pass (US1) | #1166 | merged |
 
 Milestone order note: US4 (P2) ships before US1 (P1) because US1's header band and 14 px body need
 US4's grow-to-fit (milestones rule 5 over rule 2's priority order). US2 is the MVP. T040 (quickstart
