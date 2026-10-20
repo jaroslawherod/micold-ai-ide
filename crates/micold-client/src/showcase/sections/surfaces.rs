@@ -585,8 +585,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         .collect(),
         roles,
     )))
-    .width(Length::Fill)
-    .height(Length::Fixed(480.0));
+    .width(Length::Fill);
     arrange(
         vec![
             posed("with progress", card(with_progress), roles),

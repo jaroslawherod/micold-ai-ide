@@ -39,6 +39,8 @@ pub struct Ellipsized<M> {
     /// ([`Self::at_role_spaced`]).
     line_height: text::LineHeight,
     color: Rgb,
+    /// `Fill` unless a call site asked for [`Self::shrink`].
+    width: Length,
     marker: PhantomData<M>,
 }
 
@@ -55,6 +57,7 @@ impl<M> Ellipsized<M> {
             font: None,
             line_height: text::LineHeight::default(),
             color,
+            width: Length::Fill,
             marker: PhantomData,
         }
     }
@@ -92,6 +95,14 @@ impl<M> Ellipsized<M> {
             ..Self::at_role(content, role, color)
         }
     }
+
+    /// As wide as the fitted text rather than the whole width it is given, so a row can place it
+    /// at its end (feature 1120: an overview card's header words shorten in a narrow card instead
+    /// of wrapping or leaving it).
+    pub fn shrink(mut self) -> Self {
+        self.width = Length::Shrink;
+        self
+    }
 }
 
 /// What a cached paragraph was shaped for — the inputs that decide its outcome.
@@ -121,9 +132,9 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        // Fill, so the label claims whatever the row's controls leave it — the width the
-        // truncation is measured against.
-        Size::new(Length::Fill, Length::Shrink)
+        // Fill by default, so the label claims whatever the row's controls leave it — the width
+        // the truncation is measured against.
+        Size::new(self.width, Length::Shrink)
     }
 
     fn layout(
@@ -170,11 +181,7 @@ where
             state.store(paragraph, fitted, key);
         }
 
-        layout::Node::new(limits.resolve(
-            Length::Fill,
-            Length::Shrink,
-            state.paragraph.min_bounds(),
-        ))
+        layout::Node::new(limits.resolve(self.width, Length::Shrink, state.paragraph.min_bounds()))
     }
 
     fn draw(

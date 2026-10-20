@@ -196,6 +196,9 @@ pub struct Mounted<'a> {
     pub renderer: iced::Renderer,
     pub origin: std::time::Instant,
     pub frame: u32,
+    /// The window the element lays out, takes events and floats overlays in: [`WINDOW`] unless
+    /// [`Self::new_in`] named another.
+    pub room: Size,
 }
 
 impl<'a> Mounted<'a> {
@@ -203,8 +206,8 @@ impl<'a> Mounted<'a> {
         Self::new_in(element, WINDOW)
     }
 
-    /// [`Self::new`] with `room` in place of [`WINDOW`] for the first layout: an element wider than
-    /// the window, such as a 480 px card (feature 1120).
+    /// [`Self::new`] with `room` in place of [`WINDOW`]: an element wider than the window, such as
+    /// a 480 px card (feature 1120).
     pub fn new_in(element: impl Into<Element<'a, String>>, room: Size) -> Self {
         let mut element = element.into();
         let renderer = renderer();
@@ -221,6 +224,7 @@ impl<'a> Mounted<'a> {
             renderer,
             origin: std::time::Instant::now(),
             frame: 0,
+            room,
         }
     }
 
@@ -229,7 +233,7 @@ impl<'a> Mounted<'a> {
         self.node = self.element.as_widget_mut().layout(
             &mut self.tree,
             &self.renderer,
-            &layout::Limits::new(Size::ZERO, WINDOW),
+            &layout::Limits::new(Size::ZERO, self.room),
         );
     }
 
@@ -255,7 +259,7 @@ impl<'a> Mounted<'a> {
             &self.renderer,
             &mut clipboard::Null,
             &mut shell,
-            &Rectangle::with_size(WINDOW),
+            &Rectangle::with_size(self.room),
         );
         let captured = shell.is_event_captured();
         (messages, captured)
@@ -313,7 +317,7 @@ impl<'a> Mounted<'a> {
     /// say: empty when nothing floats (feature 1120, T032).
     pub fn floated_text(&mut self, at: Point) -> Vec<String> {
         self.hover(at);
-        let viewport = Rectangle::with_size(WINDOW);
+        let viewport = Rectangle::with_size(self.room);
         self.renderer.reset(viewport);
         let Some(mut floated) = self.element.as_widget_mut().overlay(
             &mut self.tree,
@@ -324,7 +328,7 @@ impl<'a> Mounted<'a> {
         ) else {
             return Vec::new();
         };
-        let node = floated.as_overlay_mut().layout(&self.renderer, WINDOW);
+        let node = floated.as_overlay_mut().layout(&self.renderer, self.room);
         floated.as_overlay().draw(
             &mut self.renderer,
             &super::theme(micold_core::theme::ColorScheme::Light),
