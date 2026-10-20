@@ -261,7 +261,7 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
             {
                 Some(chip) => row![label, chip]
                     .spacing(spacing::XS)
-                    .align_y(alignment::Vertical::Center)
+                    .align_y(alignment::Vertical::Top)
                     .into(),
                 None => label.into(),
             };
