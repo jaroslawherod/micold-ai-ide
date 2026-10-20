@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M1
-- **Next step**: M1 — full gate, push, PR.
+- **Next step**: M1 — PR opened by the orchestrator from pr-title.txt/pr-body.md; then CI and merge, then M2.
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | | in progress |
+| M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | (pending) | gate green, PR to open |
 | M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | | pending |
 | M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | | pending |
 | M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | | pending |
