@@ -18,9 +18,10 @@ use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
 use micold_core::review::comment::{CommentId, CommentState, Move, Outcome, ReviewComment, Status};
 use micold_core::review::diff::{
-    parse_unified, side_by_side_rows, unified_rows, FileDiff, LoadedDiff, SideRow, Spans,
+    parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, LoadedDiff, SideRow, Spans,
     UnifiedRow,
 };
+use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::pr_diff::PrDiff;
 use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::{LineRange, RelPath, Side};
@@ -320,6 +321,84 @@ pub struct OpenView {
     pub pull_requests: PrList,
     /// What the diff shows: the entry's changes, or a pull request's (feature 775).
     pub source: Source,
+    /// Which hidden runs of each file are revealed, per source and file; kept while the view is
+    /// open (feature 1150, FR-008).
+    pub expansions: BTreeMap<(SourceKey, RelPath), Expansion>,
+    /// The selected file's hunks with its revealed runs inserted, and its markers; recomputed by
+    /// [`update`] after every message that can change them. The hunks of the diff as read when
+    /// nothing can be revealed.
+    pub shaped: Shaped,
+}
+
+/// Which diff an expansion belongs to (feature 1150, data-model §2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SourceKey {
+    /// The entry's own changes.
+    Worktree,
+    /// The pull request with this number.
+    Pr(u64),
+}
+
+/// Whether the selected file of the entry's changes can have hidden lines revealed: it is listed
+/// with a text version on both sides, so not added, untracked or deleted (FR-009).
+fn revealable(view: &OpenView, path: &RelPath) -> bool {
+    view.source == Source::Changes
+        && shown_list(view)
+            .and_then(|list| list.files.iter().find(|f| &f.path == path))
+            .is_some_and(|f| {
+                !matches!(
+                    f.kind,
+                    ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Deleted
+                )
+            })
+}
+
+/// Recompute `view.shaped` from the diff on screen and the file's expansion, dropping open runs
+/// that no longer exist (FR-008).
+fn reshape(view: &mut OpenView) {
+    let shaped = match (&view.source, view.selected.clone(), diff_body(view)) {
+        (
+            Source::Changes,
+            Some(path),
+            DiffBody::Diff(LoadedDiff {
+                diff: FileDiff::Text(hunks),
+                new,
+                ..
+            }),
+        ) => match new {
+            Some(new) if revealable(view, &path) => {
+                let total = u32::try_from(new.len()).unwrap_or(u32::MAX);
+                let key = (SourceKey::Worktree, path);
+                let current = view.expansions.get(&key).cloned().unwrap_or_default();
+                let kept = current.reconcile(&gaps(hunks, total));
+                let shaped = shape(hunks, new, &kept);
+                if kept == Expansion::default() {
+                    view.expansions.remove(&key);
+                } else {
+                    view.expansions.insert(key, kept);
+                }
+                shaped
+            }
+            _ => Shaped::unshaped(hunks),
+        },
+        _ => Shaped::default(),
+    };
+    view.shaped = shaped;
+}
+
+/// The hunks the shown diff displays: the file's shaped hunks for the entry's changes, the pull
+/// request file's own otherwise.
+fn shown_hunks(view: &OpenView) -> &[Hunk] {
+    if view.source == Source::Changes {
+        return &view.shaped.hunks;
+    }
+    match diff_body(view) {
+        DiffBody::Diff(LoadedDiff {
+            diff: FileDiff::Text(hunks),
+            ..
+        }) => hunks,
+        _ => &[],
+    }
 }
 
 /// The review panel's state (feature 946, FR-016 to FR-019).
@@ -556,24 +635,22 @@ pub fn jump_target(state: &State, id: CommentId) -> Option<Jump> {
 }
 
 /// The diff row index of `line` of `side` in the layout in force, for a jump.
-fn row_of_line(diff: &LoadedDiff, layout: DiffLayout, side: Side, line: u32) -> Option<usize> {
+fn row_of_line(shaped: ShapedRef<'_>, layout: DiffLayout, side: Side, line: u32) -> Option<usize> {
     match layout {
-        DiffLayout::Unified => unified_rows(&diff.diff).iter().position(|row| match row {
+        DiffLayout::Unified => unified_rows(shaped).iter().position(|row| match row {
             UnifiedRow::Line(l) => match side {
                 Side::New => l.new == Some(line),
                 Side::Old => l.old == Some(line),
             },
-            UnifiedRow::Header(_) => false,
+            UnifiedRow::Header(_) | UnifiedRow::Gap { .. } => false,
         }),
-        DiffLayout::SideBySide => side_by_side_rows(&diff.diff)
-            .iter()
-            .position(|row| match row {
-                SideRow::Pair { left, right } => match side {
-                    Side::New => right.is_some_and(|c| c.number == line),
-                    Side::Old => left.is_some_and(|c| c.number == line),
-                },
-                SideRow::Header(_) => false,
-            }),
+        DiffLayout::SideBySide => side_by_side_rows(shaped).iter().position(|row| match row {
+            SideRow::Pair { left, right } => match side {
+                Side::New => right.is_some_and(|c| c.number == line),
+                Side::Old => left.is_some_and(|c| c.number == line),
+            },
+            SideRow::Header(_) | SideRow::Gap { .. } => false,
+        }),
     }
 }
 
@@ -593,9 +670,9 @@ fn jump_offset(state: &mut State) -> Option<u32> {
         }
         return None;
     };
-    let Load::Ready(diff) = &view.diff else {
+    if !matches!(&view.diff, Load::Ready(_)) {
         return None;
-    };
+    }
     // The cards and composers hung above the line push it down by their measured heights, known
     // once the file has been laid out; a cold jump lands a little short of them.
     let first = shown_range(view, comment).start();
@@ -605,7 +682,7 @@ fn jump_offset(state: &mut State) -> Option<u32> {
         .filter(|((_, line), _)| *line < first)
         .map(|(_, height)| *height)
         .sum();
-    let row = row_of_line(diff, layout, comment.side, first);
+    let row = row_of_line((&view.shaped).into(), layout, comment.side, first);
     let offset = row.map_or(0.0, |r| {
         r.saturating_sub(2) as f32 * crate::ui::material::DIFF_ROW_HEIGHT + hung as f32
     });
@@ -715,6 +792,9 @@ pub enum Msg {
     },
     /// The large gate's Show diff was pressed (D4).
     ShowLarge,
+    /// A hidden-lines marker was pressed: reveal that run of the selected file, or hide it again
+    /// (feature 1150, FR-002, FR-003).
+    GapToggled(GapKey),
     /// The diff scrolled or was resized.
     DiffScrolled {
         /// Offset from the top, pixels.
@@ -943,6 +1023,20 @@ pub enum Effect {
 
 /// Apply `msg` (contracts/changes-view.md V1–V3, L1).
 pub fn update(state: &mut State, msg: Msg) -> Effect {
+    let scroll = matches!(
+        msg,
+        Msg::DiffScrolled { .. } | Msg::ListScrolled { .. } | Msg::PanelScrolled { .. }
+    );
+    let effect = apply(state, msg);
+    if !scroll {
+        if let Some(view) = state.open.as_mut() {
+            reshape(view);
+        }
+    }
+    effect
+}
+
+fn apply(state: &mut State, msg: Msg) -> Effect {
     match msg {
         Msg::LayoutChosen(layout) => {
             if state.layout != layout {
@@ -985,6 +1079,8 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 branch: None,
                 pull_requests: PrList::Absent,
                 source: Source::Changes,
+                expansions: BTreeMap::new(),
+                shaped: Shaped::default(),
             });
             request_read(state)
         }
@@ -1193,6 +1289,17 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             view.shown_large.insert(path);
             request_diff(state, false)
         }
+        Msg::GapToggled(key) => {
+            if let Some(view) = state.open.as_mut() {
+                if let Some(path) = view.selected.clone().filter(|p| revealable(view, p)) {
+                    view.expansions
+                        .entry((SourceKey::Worktree, path))
+                        .or_default()
+                        .toggle_key(key);
+                }
+            }
+            Effect::None
+        }
         Msg::DiffScrolled { offset, viewport } => {
             if let Some(view) = state.open.as_mut() {
                 view.diff_offset = offset;
@@ -1207,6 +1314,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                         Ok(diff) => Load::Ready(diff),
                         Err(message) => Load::Failed(message),
                     };
+                    reshape(view);
                     // R2: a pick stays only while its lines are still rows of the diff.
                     if let Some(pick) = view.pick {
                         let rows = diff_rows(view);
@@ -1828,13 +1936,7 @@ pub fn file_comments(state: &State) -> FileComments<'_> {
     let (Some(path), Some(review)) = (view.selected.as_ref(), review_of(state, view)) else {
         return placed;
     };
-    let hunks = match diff_body(view) {
-        DiffBody::Diff(LoadedDiff {
-            diff: FileDiff::Text(hunks),
-            ..
-        }) => hunks.as_slice(),
-        _ => &[],
-    };
+    let hunks = shown_hunks(view);
     for comment in review.comments.iter().filter(|c| &c.path == path) {
         let end = shown_range(view, comment).end();
         // The row a comment sits under: its last line on its side; a removed-side comment may
@@ -2141,15 +2243,8 @@ fn request_diff(state: &mut State, keep: bool) -> Effect {
 
 /// The `(side, line)` of every row of the diff on screen; a context row gives both sides.
 fn diff_rows(view: &OpenView) -> BTreeSet<(Side, u32)> {
-    let DiffBody::Diff(LoadedDiff {
-        diff: FileDiff::Text(hunks),
-        ..
-    }) = diff_body(view)
-    else {
-        return BTreeSet::new();
-    };
     let mut rows = BTreeSet::new();
-    for line in hunks.iter().flat_map(|h| &h.lines) {
+    for line in shown_hunks(view).iter().flat_map(|h| &h.lines) {
         rows.extend(line.old.map(|n| (Side::Old, n)));
         rows.extend(line.new.map(|n| (Side::New, n)));
     }

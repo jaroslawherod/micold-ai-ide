@@ -132,9 +132,26 @@ fn highlight_lines_until<'a>(
     Some(SideSpans(out))
 }
 
-/// Both versions of `loaded`, highlighted in both schemes as `path`'s language. Each version is
-/// read only up to the last of its lines the diff shows, so a small change to a long file does not
-/// highlight all of it.
+/// All of `lines`, highlighted in `scheme` as `path`'s language; `None` once `deadline` has passed.
+/// The one path that colours a whole version, so a line revealed from outside the diff's hunks is
+/// coloured like its neighbours (feature 1150, FR-002).
+pub fn highlight_file(
+    lines: &SideLines,
+    path: &str,
+    scheme: ColorScheme,
+    deadline: Option<Instant>,
+) -> Option<SideSpans> {
+    highlight_lines_until(
+        &token(path),
+        (1..).map_while(|n| lines.line(n)),
+        scheme,
+        deadline,
+    )
+}
+
+/// Both versions of `loaded`, highlighted in both schemes as `path`'s language. The old version is
+/// read only up to the last of its lines the diff shows; the new one whole, because hidden lines
+/// of it can be revealed.
 pub fn highlight(loaded: &LoadedDiff, path: &str) -> Spans {
     highlight_within(loaded, path, None).unwrap_or_default()
 }
@@ -148,31 +165,34 @@ pub fn highlight_within(
 ) -> Option<Spans> {
     let deadline = budget.map(|budget| Instant::now() + budget);
     let token = token(path);
-    let shown = |old: bool| {
-        let FileDiff::Text(hunks) = &loaded.diff else {
-            return 0;
-        };
-        hunks
+    let old_upto = match &loaded.diff {
+        FileDiff::Text(hunks) => hunks
             .iter()
             .flat_map(|h| &h.lines)
-            .filter_map(|l| if old { l.old } else { l.new })
+            .filter_map(|l| l.old)
             .max()
-            .unwrap_or(0)
+            .unwrap_or(0),
+        _ => 0,
     };
-    let side = |lines: &Option<SideLines>, upto: u32, scheme| match lines {
+    let old = |scheme| match &loaded.old {
         Some(lines) => highlight_lines_until(
             &token,
-            (1..=upto).map_while(|n| lines.line(n)),
+            (1..=old_upto).map_while(|n| lines.line(n)),
             scheme,
             deadline,
         ),
         None => Some(SideSpans::default()),
     };
-    let (old, new) = (shown(true), shown(false));
+    let new = |scheme| match &loaded.new {
+        Some(lines) if matches!(loaded.diff, FileDiff::Text(_)) => {
+            highlight_file(lines, path, scheme, deadline)
+        }
+        _ => Some(SideSpans::default()),
+    };
     let scheme = |scheme| {
         Some(SchemeSpans {
-            old: side(&loaded.old, old, scheme)?,
-            new: side(&loaded.new, new, scheme)?,
+            old: old(scheme)?,
+            new: new(scheme)?,
         })
     };
     Some(Spans {
