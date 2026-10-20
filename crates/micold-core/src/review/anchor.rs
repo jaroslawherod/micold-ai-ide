@@ -5,6 +5,25 @@ use super::comment::Status;
 use super::diff::SideLines;
 use super::LineRange;
 
+/// The numbered lines of one version of a file that [`locate`] searches: the whole file
+/// ([`SideLines`]) or only the lines a diff's hunks show ([`super::diff::HunkLines`], 1149 R4).
+pub trait Lines {
+    /// Line `number` (1-based), `None` when there is none to read.
+    fn line(&self, number: u32) -> Option<&str>;
+    /// The highest line number there is.
+    fn len(&self) -> usize;
+}
+
+impl Lines for SideLines {
+    fn line(&self, number: u32) -> Option<&str> {
+        SideLines::line(self, number)
+    }
+
+    fn len(&self) -> usize {
+        SideLines::len(self)
+    }
+}
+
 /// Where a comment's quoted code is in the current version of its file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Located {
@@ -50,7 +69,7 @@ fn bare(line: &str) -> &str {
 }
 
 /// Whether the lines of `lines` from 1-based `start` equal `quote`.
-fn holds(quote: &[String], start: u32, lines: &SideLines) -> bool {
+fn holds(quote: &[String], start: u32, lines: &impl Lines) -> bool {
     quote.iter().zip(start..).all(|(quoted, number)| {
         lines
             .line(number)
@@ -61,7 +80,7 @@ fn holds(quote: &[String], start: u32, lines: &SideLines) -> bool {
 /// Where `quote`, last seen at `last`, is in `lines` (research R2): `Same` while `last` still holds
 /// it, else the one occurrence nearest `last.start()`, `Ambiguous` for two equally near, `Gone`
 /// for none. Lines differing only by a trailing `\r` are equal.
-pub fn locate(quote: &[String], last: LineRange, lines: &SideLines) -> Located {
+pub fn locate(quote: &[String], last: LineRange, lines: &impl Lines) -> Located {
     let wanted = quote.len();
     if wanted == 0 {
         return Located::Gone;
@@ -77,7 +96,7 @@ pub fn locate(quote: &[String], last: LineRange, lines: &SideLines) -> Located {
     };
     let mut best: Option<(u32, u32)> = None;
     let mut tied = false;
-    for start in 1..=lines.len().saturating_sub(wanted - 1) {
+    for start in 1..=Lines::len(lines).saturating_sub(wanted - 1) {
         let Ok(start) = u32::try_from(start) else {
             break;
         };
@@ -106,6 +125,8 @@ pub fn locate(quote: &[String], last: LineRange, lines: &SideLines) -> Located {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::review::diff::{parse_unified, FileDiff, HunkLines};
+    use crate::review::Side;
     use std::time::Instant;
 
     fn range(start: u32, end: u32) -> LineRange {
@@ -324,6 +345,74 @@ mod tests {
             started.elapsed().as_millis() < 100,
             "took {:?}",
             started.elapsed()
+        );
+    }
+
+    /// A patch whose one hunk shows new lines 10-15 (old 10-14): `ctx` context, `+added`, `-gone`.
+    fn patch(first: u32) -> FileDiff {
+        let text = format!(
+            "diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -{first},5 +{first},6 @@\n ctx one\n ctx two\n-gone\n+added\n+added too\n ctx three\n ctx four\n"
+        );
+        parse_unified(text.as_bytes())
+    }
+
+    #[test]
+    fn hunk_lines_hold_only_the_lines_the_hunks_number() {
+        let diff = patch(10);
+        let new = HunkLines::new(&diff, Side::New);
+        assert_eq!(new.line(10), Some("ctx one"));
+        assert_eq!(new.line(12), Some("added"));
+        assert_eq!(new.line(15), Some("ctx four"));
+        assert_eq!(new.line(9), None);
+        assert_eq!(new.line(16), None);
+        assert_eq!(new.len(), 15);
+        let old = HunkLines::new(&diff, Side::Old);
+        assert_eq!(old.line(12), Some("gone"));
+        assert_eq!(old.line(10), Some("ctx one"));
+        assert_eq!(old.line(15), None);
+    }
+
+    #[test]
+    fn hunk_lines_of_a_non_text_diff_are_empty() {
+        let lines = HunkLines::new(&FileDiff::Binary, Side::New);
+        assert_eq!(lines.len(), 0);
+        assert_eq!(lines.line(1), None);
+    }
+
+    #[test]
+    fn locate_over_hunk_lines_finds_same_moved_and_gone() {
+        let quote = vec!["added".to_owned(), "added too".to_owned()];
+        let lines = HunkLines::new(&patch(10), Side::New);
+        assert_eq!(
+            locate(&quote, range(12, 13), &lines),
+            Located::Same(range(12, 13))
+        );
+        assert_eq!(
+            locate(&quote, range(20, 21), &lines),
+            Located::Moved(range(12, 13))
+        );
+        let gone = vec!["never there".to_owned()];
+        assert_eq!(locate(&gone, range(12, 12), &lines), Located::Gone);
+    }
+
+    /// The recorded limitation (research R4): code that is not in any hunk reads as gone.
+    #[test]
+    fn a_quote_outside_every_hunk_is_gone() {
+        let lines = HunkLines::new(&patch(10), Side::New);
+        let quote = vec!["fn elsewhere() {".to_owned()];
+        assert_eq!(locate(&quote, range(40, 40), &lines), Located::Gone);
+        assert!(is_outdated(&Located::Gone, Status::Draft));
+    }
+
+    #[test]
+    fn locate_over_side_lines_is_unchanged_through_the_trait() {
+        let (all, quote) = file();
+        let side = lines(&all);
+        assert_eq!(Lines::len(&side), 30);
+        assert_eq!(Lines::line(&side, 10), Some("fn a() {"));
+        assert_eq!(
+            locate(&quote, range(10, 12), &side),
+            Located::Same(range(10, 12))
         );
     }
 }
