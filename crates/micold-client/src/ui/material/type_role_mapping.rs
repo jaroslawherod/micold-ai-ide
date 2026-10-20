@@ -1,7 +1,7 @@
 //! What each named role actually resolves to (feature 018, T017–T021 — FR-007, FR-010).
 //!
 //! `TypeRole` is the application's whole typographic vocabulary: twelve names, each standing for one
-//! of Material's fifteen roles. The names are what call sites say, so the *mapping* is the thing
+//! of Material's fifteen roles, and one declared off the scale (`CardTitle`, feature 1120). The names are what call sites say, so the *mapping* is the thing
 //! that decides how the application reads — and it is one `match` arm away from being changed by
 //! accident while renaming something nearby.
 //!
@@ -37,6 +37,8 @@ const MAPPING: &[(TypeRole, &str)] = &[
     // alone" (feature 024, FR-003a) cannot be quietly undone by re-anchoring it onto the same
     // role as every other session row.
     (TypeRole::SidebarSessionCurrent, "label_medium"),
+    // The Overview card's title: a scoped role off the scale (feature 1120, FR-004, R10).
+    (TypeRole::CardTitle, "overview_card_title"),
 ];
 
 #[test]
@@ -78,15 +80,19 @@ fn the_mapping_covers_every_role() {
 /// The sidebar roles are the ones at risk: contract §2.4 maps the sidebar's ~80% density onto the
 /// nearest smaller role in the scale precisely so it does not become three loose numbers again,
 /// which is what feature 003 had.
+///
+/// The one exception is a role declared in `typography::SCOPED` (feature 1120, R10): a deliberate
+/// off-scale size, admitted by name from that one list rather than by a second exception here.
 #[test]
 fn no_role_invents_a_size_outside_the_scale() {
     for role in TypeRole::ALL {
         let resolved = role.resolved();
+        let scoped = typography::SCOPED.iter().any(|r| r.name == resolved.name);
         assert!(
-            typography::ALL.contains(&resolved),
+            typography::ALL.contains(&resolved) || scoped,
             "`TypeRole::{}` resolves to {}dp/{}dp at weight {}, which is not one of the fifteen \
-             roles. Every role resolves into the scale — a size that sits outside it is the drift \
-             the scale exists to prevent.",
+             roles nor declared in `typography::SCOPED`. Every role resolves into the scale — a \
+             size that sits outside it is the drift the scale exists to prevent.",
             role.name(),
             resolved.size,
             resolved.line_height,
@@ -193,4 +199,13 @@ fn no_role_sets_a_line_height_below_its_size() {
             r.line_height
         );
     }
+}
+
+/// The Overview card's title resolves to the card-scoped 17 px role (feature 1120, FR-004).
+#[test]
+fn the_card_title_is_the_overview_card_title_role() {
+    assert_eq!(
+        TypeRole::CardTitle.resolved(),
+        typography::OVERVIEW_CARD_TITLE
+    );
 }

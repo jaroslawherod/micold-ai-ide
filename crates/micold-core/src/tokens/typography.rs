@@ -100,3 +100,15 @@ pub const SIDEBAR_TAG: TypeRole = LABEL_SMALL;
 
 /// The sidebar mapping, for the test that asserts each entry resolves into [`ALL`].
 pub const SIDEBAR: [TypeRole; 3] = [SIDEBAR_NAME, SIDEBAR_SESSION, SIDEBAR_TAG];
+
+// --- card-scoped roles (feature 1120, FR-004, R10) ---------------------------------------------
+//
+// Unlike the sidebar's aliases, these sit *off* the Material scale on purpose, so they are kept out
+// of [`ALL`] and declared here, in one list the client's mapping test admits by name.
+
+/// The Overview card's title: 17/24 at weight 500. 17 px is between `title_medium` (16) and
+/// `title_large` (22): large enough to lead the card, small enough for two cards a row at 280 px.
+pub const OVERVIEW_CARD_TITLE: TypeRole = role("overview_card_title", 17.0, 24.0, 500, 0.0);
+
+/// Every role deliberately outside the scale, for the tests that admit them by name.
+pub const SCOPED: [TypeRole; 1] = [OVERVIEW_CARD_TITLE];

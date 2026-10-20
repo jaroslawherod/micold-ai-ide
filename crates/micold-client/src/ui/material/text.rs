@@ -86,6 +86,9 @@ pub enum TypeRole {
     /// slot holds the activity dot and only that (BUG-005), and its name is already tinted by
     /// lifecycle.
     SidebarSessionCurrent,
+    /// An Overview card's title (feature 1120, FR-004): 17/24 at weight 500, a card-scoped role
+    /// declared off the Material scale in `typography::SCOPED` (R10).
+    CardTitle,
 }
 
 /// The embedded Roboto faces. Registered once at startup in `main` so the application looks the
@@ -106,9 +109,10 @@ impl TypeRole {
     /// The Material 3 role this resolves to (contract §2.4, §2.5).
     ///
     /// The mapping is deliberately a *narrowing*: the scale has fifteen roles and this enum names
-    /// the twelve the application actually distinguishes. The others exist in the scale and are
-    /// reachable, but no call site is required to use one — Material's true display sizes (36–57)
-    /// are larger than anything this app renders.
+    /// the twelve the application actually distinguishes, plus `CardTitle`, which is off the scale
+    /// by declaration (`typography::SCOPED`). The others exist in the scale and are reachable, but
+    /// no call site is required to use one — Material's true display sizes (36–57) are larger than
+    /// anything this app renders.
     ///
     /// This table is the whole of the app's typographic vocabulary, so it is pinned by
     /// `tests/type_role_mapping.rs` rather than left to be re-derived by reading call sites.
@@ -131,12 +135,13 @@ impl TypeRole {
             // weight changed. Adding an alias would widen `typography::SIDEBAR` and the core tests
             // that enumerate it, to say something the scale already says.
             TypeRole::SidebarSessionCurrent => typography::LABEL_MEDIUM,
+            TypeRole::CardTitle => typography::OVERVIEW_CARD_TITLE,
         }
     }
 
     /// Every role a call site can name, so a test or the showcase can enumerate them without
     /// restating the list (and drifting from it).
-    pub const ALL: [TypeRole; 12] = [
+    pub const ALL: [TypeRole; 13] = [
         TypeRole::Display,
         TypeRole::Headline,
         TypeRole::Title,
@@ -149,6 +154,7 @@ impl TypeRole {
         TypeRole::SidebarTag,
         TypeRole::SidebarSession,
         TypeRole::SidebarSessionCurrent,
+        TypeRole::CardTitle,
     ];
 
     /// The role's name as the enum spells it — for the showcase's per-role labels and for test
@@ -167,6 +173,7 @@ impl TypeRole {
             TypeRole::SidebarTag => "SidebarTag",
             TypeRole::SidebarSession => "SidebarSession",
             TypeRole::SidebarSessionCurrent => "SidebarSessionCurrent",
+            TypeRole::CardTitle => "CardTitle",
         }
     }
 
