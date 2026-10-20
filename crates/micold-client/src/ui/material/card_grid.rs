@@ -41,6 +41,7 @@ pub struct CardGrid<'a, M> {
     zoom: Zoom,
     on_reflow: Option<OnReflow<'a, M>>,
     scroll_id: Option<Id>,
+    unscrolled: bool,
 }
 
 /// What a grid asks its owner when a zoom moves the card at the top of the view.
@@ -59,6 +60,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             zoom: Zoom::default(),
             on_reflow: None,
             scroll_id: None,
+            unscrolled: false,
         }
     }
 
@@ -316,6 +318,14 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
     /// Name the grid's scrollable, so `operation::scroll_to` can reach it.
     pub fn scroll_id(mut self, id: impl Into<Id>) -> Self {
         self.scroll_id = Some(id.into());
+        self
+    }
+
+    /// Draw the grid as tall as its rows, with no scrollable of its own: for a grid in a page
+    /// that already scrolls (the showcase's poses). The scrollable it otherwise gets fills its
+    /// room's height, and a scrolling page offers none, so there the grid collapses to nothing.
+    pub fn unscrolled(mut self) -> Self {
+        self.unscrolled = true;
         self
     }
 
@@ -683,6 +693,9 @@ const MIN_CARD_HEIGHT: f32 = super::overview_card::MIN_HEIGHT;
 
 impl<'a, M: Clone + 'a> From<CardGrid<'a, M>> for Element<'a, M> {
     fn from(g: CardGrid<'a, M>) -> Self {
+        if g.unscrolled {
+            return Element::new(g.into_grid());
+        }
         let on_scroll = g.on_scroll.clone();
         let roles = g.roles;
         let scroll_id = g.scroll_id.clone();

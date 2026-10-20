@@ -51,3 +51,21 @@ Not covered in this pass: tooltips (B4), outline, focus and ripple (B5), the res
 Snapshot `1684990c…:89b4a4ac…` (before the review A fixes, which change how a targeted card's
 outline is drawn and let the header words ellipsize in a card under 280 px). Screenshots:
 `visual-pass/b-m4-*.png`.
+
+### M4 round-2 re-look, 2026-10-20, light, showcase (Xvfb, lavapipe), HEAD 66f6731d
+
+| Check | Result |
+|---|---|
+| B5 targeted outline | PASS (partial): a 2 px primary outline rgb(103,80,164) on all four sides; the selected layer darkens the header (rgb(233,221,255) → rgb(208,197,228)) and the body (rgb(248,242,247) → rgb(221,216,221)); untargeted cards have no outline (`b-m4r2-targeted-vs-untargeted.png`, `b-m4r2-targeted-x3.png`) |
+| Zoom with a targeted card | NOT RUN: the CardGrid "zoom — press it" pose has no targeted card. A mid-flight zoom frame with untargeted cards paints nothing outside a piece (`b-m4r2-zoom-midflight-untargeted.png`); no unit test draws a targeted card split across rows either |
+| Header words under 280 px | PASS: at ~203 px "Needs attention" stays whole, the type word reads "Featu…", the title ellipsizes (`b-m4r2-header-203px-ellipsis.png`) |
+| "five states" grid renders | FAIL at 66f6731d: the pose drew nothing at 600 or 1600 px (`b-m4r2-*-five-states-absent.png`). The grid's own scrollable fills its room's height, and the showcase page scrolls, so it collapsed. Fixed by `CardGrid::unscrolled()` for the pose, with the test `the_five_state_grid_is_drawn_and_the_next_pose_starts_below_it` |
+
+### M4 fix check, 2026-10-20, light, showcase (Xvfb, lavapipe)
+
+After the fix the "five states" grid renders: at 1600 px one row of five even cards, at 600 px one
+card per row; its label sits below it and the "Default" pose starts below that, no overlap
+(`b-m4r3-wide1600-five-states.png`, `b-m4r3-narrow600-five-states.png`).
+
+Left for the close unit or later: tooltips (B4), focus and ripple (B5, the outline is covered
+above), the resize sweep (B7), and a zoom with a targeted card.
