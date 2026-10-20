@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: tasks unit: review A tasks round 1, then close checklists (none open), specs-only gate, design PR
 
 ## Pull requests
 
@@ -23,6 +23,12 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | | pending |
+| M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | | pending |
+| M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | | pending |
+| M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | | pending |
+
+US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachable until M3) and its hover wiring (M3). Polish T047–T048 is code-free: close unit. speckit-analyze (14 findings, 1 HIGH) fixed in tasks.md; it also found plan.md's *Delivery order* (3 steps) out of line with the milestones: plan fixed (Delivery order superseded by the 4 milestones; `Msg::CardScrolled` → `Event::BodyScrolled` in plan and research).
 
 ## Decisions
 

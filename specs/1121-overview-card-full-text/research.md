@@ -92,7 +92,7 @@ Builds on feature 1120's code: `overview_card.rs`, `card_grid.rs` (measure-then-
   card's end or with no overflow the Overview scrolls (checked in `iced_widget-0.14` scrollable).
   Page Up / Page Down: the card claims them (`.on_page`) only while expanded and focused and
   `page_target` says the card can move that way, from the inner scroll's last reported edges
-  (`Msg::CardScrolled`); `main.rs` answers `Msg::CardPaged` with `scrollable::scroll_by` of one
+  (`Event::BodyScrolled`); `main.rs` answers `Msg::CardPaged` with `scrollable::scroll_by` of one
   visible height. Unclaimed, Page keys behave as today (FR-008).
 - **Alternatives**: a custom paging scroll widget (rejected: more code than one claim and one task).
 
