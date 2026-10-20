@@ -2252,7 +2252,15 @@ mod tests {
         let mut m = mounted(expanded_grid(&models, 1, &rich(1), true), 900.0, 4000.0);
         let before = slots(&m.node, 6);
         let size = m.node.size();
-        let longer = long(1);
+        // Longer, yet short enough for the card to lie whole within the grid's two rows, the
+        // harness's viewport.
+        let longer = CardModel {
+            activity: Some(micold_core::hook_activity::CurrentActivity {
+                line: "Editing card_grid.rs and then ".repeat(4),
+                ratio: None,
+            }),
+            ..rich(1)
+        };
         m.element = expanded_grid(&models, 1, &longer, true).unscrolled().into();
         m.tree.diff(m.element.as_widget());
         m.relayout();
@@ -2260,17 +2268,20 @@ mod tests {
         assert_eq!(m.node.size(), size, "the rows moved");
         assert_eq!((after[1].x, after[1].y), (before[1].x, before[1].y));
         assert!(after[1].height > before[1].height, "{after:?}");
-        let activity = longer.activity.expect("an activity").line;
+        let activity = micold_core::overview_text::ExpandedText::of(&longer, None)
+            .activity
+            .expect("an activity");
         assert!(
-            m.painted_text()
-                .iter()
-                .any(|p| p.content == activity.trim()),
+            m.painted_text().iter().any(|p| p.content == activity),
             "the new activity is not painted"
         );
     }
 
     /// Feature 1121 US2 sc.6, FR-008: an expanded card taller than the view is as tall as the
-    /// view; a wheel over it scrolls its body first, and at the body's end the Overview.
+    /// view; a wheel over it scrolls its body first, and at the body's end the Overview. Within
+    /// one wheel gesture iced keeps the wheel on the body it started in (scroll latching, research
+    /// R6); once the gesture ends (the pointer moves after 100 ms), the wheel goes on to the
+    /// Overview.
     #[test]
     fn a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview() {
         use iced::advanced::mouse::{Cursor, Event as Mouse, ScrollDelta};
@@ -2295,6 +2306,15 @@ mod tests {
         };
         assert_eq!(wheel(&mut m, -20.0), ["body true true"]);
         assert_eq!(wheel(&mut m, -10_000.0), ["body true false"]);
+        assert!(
+            wheel(&mut m, -20.0).is_empty(),
+            "the gesture left the body it started in"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        m.send(
+            iced::Event::Mouse(Mouse::CursorMoved { position: at }),
+            Cursor::Available(at),
+        );
         assert_eq!(
             wheel(&mut m, -20.0),
             ["grid"],
