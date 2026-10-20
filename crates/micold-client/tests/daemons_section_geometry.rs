@@ -173,8 +173,9 @@ fn the_details_dialog_paints_the_errors_and_the_log_and_the_page_paints_neither(
     assert!(has(&strings, "first line"), "{strings:?}");
     assert!(has(&strings, "second line"), "{strings:?}");
     let mut renderer = lay::renderer();
-    let body = micold_client::ui::daemon_details_dialog::dialog(&state, ColorScheme::Dark, &outcome)
-        .expect("the dialog is open");
+    let body =
+        micold_client::ui::daemon_details_dialog::dialog(&state, ColorScheme::Dark, &outcome)
+            .expect("the dialog is open");
     assert!(
         lay::text_overflows(body, &mut renderer).is_empty(),
         "the dialog text fits"
@@ -1021,7 +1022,10 @@ fn the_rows_keep_their_status_and_actions_with_the_dialog_open() {
         "Stop",
     ];
     for needle in needles {
-        assert!(exact(&before, needle), "{needle:?} not on the page: {before:?}");
+        assert!(
+            exact(&before, needle),
+            "{needle:?} not on the page: {before:?}"
+        );
     }
     state.update(Message::Daemons(DaemonsMsg::EditOpened(host)));
     let after = painted_tall(&state);
