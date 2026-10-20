@@ -65,6 +65,8 @@ pub struct Row {
     pub single_line: bool,
     /// A Jira ticket's status, drawn as a chip beside the label's first line. See [`Row::status`].
     pub status: Option<TicketStatus>,
+    /// The status may be out of date: the chip is drawn dimmed (1101 FR-008).
+    pub status_stale: bool,
 }
 
 impl Row {
@@ -79,6 +81,7 @@ impl Row {
             key: None,
             single_line: false,
             status: None,
+            status_stale: false,
         }
     }
 
@@ -125,6 +128,12 @@ impl Row {
     /// row as it was (1101 FR-009). Only a row with [`Row::details`] shows it.
     pub fn status(mut self, status: Option<TicketStatus>) -> Self {
         self.status = status;
+        self
+    }
+
+    /// Draw the status chip dimmed: the last refresh failed (1101 FR-008).
+    pub fn status_stale(mut self, stale: bool) -> Self {
+        self.status_stale = stale;
         self
     }
 
@@ -257,7 +266,7 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
                 .align_y(alignment::Vertical::Center);
             // The chip stands beside the label's first line and takes only its own width, so the
             // label wraps in what is left; a row without a status has the label alone, as before.
-            let first_line: Element<'a, M> = match StatusChip::maybe(item.status.as_ref(), false, r)
+            let first_line: Element<'a, M> = match StatusChip::maybe(item.status.as_ref(), item.status_stale, r)
             {
                 Some(chip) => row![label, chip]
                     .spacing(spacing::XS)

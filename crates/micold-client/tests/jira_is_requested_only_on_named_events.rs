@@ -130,3 +130,22 @@ fn no_jira_issue_type_derives_serialize() {
         }
     }
 }
+
+/// Feature 1101 (FR-005): a status read starts on two events only. `trigger` in
+/// `shell/jira_status.rs` is the one starter; it is called from the window-focus handler and from
+/// the project-open path, and the two public entry points are called from one place each.
+#[test]
+fn a_status_read_starts_only_from_focus_and_project_open() {
+    let calls: Vec<_> = occurrences("trigger(app, Trigger::")
+        .into_iter()
+        .map(|(file, line)| format!("{file}: {line}"))
+        .collect();
+    assert_eq!(calls.len(), 2, "{calls:?}");
+    assert!(calls
+        .iter()
+        .all(|c| c.starts_with("crates/micold-client/src/shell/jira_status.rs")));
+    assert_eq!(occurrences("jira_status::on_focus(").len(), 1);
+    assert_eq!(occurrences("jira_status::after_update(").len(), 1);
+    // The status read reaches Jira through the same gate as the picker's.
+    assert_eq!(occurrences(".jira_source()").len(), 1);
+}

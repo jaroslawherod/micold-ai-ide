@@ -25,6 +25,7 @@ use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::issue_details::DetailLine;
 use micold_core::jira::IssueProvider;
+use micold_core::jira_status::StatusBoard;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb, Roles};
@@ -37,6 +38,7 @@ pub fn modal<'a>(
     error: Option<&'a str>,
     scheme: ColorScheme,
     focused: Option<FieldId>,
+    board: &StatusBoard,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let is_creating = form.status == WorktreeFormStatus::Creating;
@@ -71,7 +73,7 @@ pub fn modal<'a>(
             fields = fields.push(session_select(form, r));
         }
         BranchSource::Issue => {
-            fields = fields.push(issue_picker(form, r));
+            fields = fields.push(issue_picker(form, board, r));
             fields = naming_inputs(fields, form, r, focused);
         }
     }
@@ -452,6 +454,16 @@ pub const JIRA_ISSUE_SEARCH_PLACEHOLDER: &str = "Search by key, summary or label
 /// The emphasis is the matcher's, found in the issue's row text, mapped to the two lines by the
 /// issue itself.
 pub fn issue_rows(form: &WorktreeForm) -> (Vec<TypeaheadRow>, Option<usize>) {
+    issue_rows_with(form, &StatusBoard::default())
+}
+
+/// [`issue_rows`], where a ticket the open project's status board holds shows the board's status
+/// and its stale flag, as every surface does (1101 FR-010); any other ticket keeps the status its
+/// own listing carried.
+pub fn issue_rows_with(
+    form: &WorktreeForm,
+    board: &StatusBoard,
+) -> (Vec<TypeaheadRow>, Option<usize>) {
     let held = form.issues.held();
     let mut selected = None;
     let mut rows: Vec<TypeaheadRow> = Vec::with_capacity(form.issue_matches.len());
@@ -463,13 +475,19 @@ pub fn issue_rows(form: &WorktreeForm) -> (Vec<TypeaheadRow>, Option<usize>) {
             selected = Some(row);
         }
         let emphasis = issue.emphasis(&matched.spans);
+        let entry = issue.key().and_then(|key| board.status_of(key));
+        let (status, stale) = match entry {
+            Some(entry) => (Some(entry.status.clone()), entry.stale),
+            None => (issue.status().cloned(), false),
+        };
         // The key tells a reused row that it stands for another issue now. An issue without a
         // description gets no tooltip at all (FR-020): `Row::tooltip` drops an empty text.
         rows.push(
             TypeaheadRow::new(issue.title_line(), emphasis.title)
                 .details(issue.details_line(), emphasis.details)
                 .key(issue.number())
-                .status(issue.status().cloned())
+                .status(status)
+                .status_stale(stale)
                 .tooltip(issue.description()),
         );
     }
@@ -478,7 +496,7 @@ pub fn issue_rows(form: &WorktreeForm) -> (Vec<TypeaheadRow>, Option<usize>) {
 
 /// The issue source's body (feature 034, contracts/issue-picker-ui.md §2): the notice naming the
 /// repository, then the picker as far as the load has got.
-fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
+fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> Element<'a, Message> {
     let mut col = column![].spacing(spacing::XS);
     if let Some(notice) = form.issue_notice() {
         col = col.push(Text::new(notice, TypeRole::Caption, r).muted());
@@ -521,7 +539,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
             col = col.push(Text::new(empty, TypeRole::Caption, r).muted());
         }
         IssueList::Loaded { .. } => {
-            let (rows, selected) = issue_rows(form);
+            let (rows, selected) = issue_rows_with(form, board);
             col = col.push(
                 material::Typeahead::new(
                     &form.issue_query,
@@ -893,6 +911,7 @@ pub fn dialog<'a>(
             state.worktree_form.worktree_error.as_deref(),
             scheme,
             state.window.focused_field,
+            &state.jira_status.board,
         )
     })
 }
