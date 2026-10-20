@@ -238,6 +238,15 @@ every call site — which itself removes a common excuse to fork a bespoke widge
   a shared component using a free-function / many-positional-parameter signature instead of
   the chainable builder-into-`Element` form (Principle VIII) MUST be rejected in review,
   unless explicitly justified and recorded. This gate operationalizes Principle VIII.
+- **Task-size gate**: Every task MUST be small enough for one person to implement in one
+  working day, and a task that is not MUST be split before work starts. This applies to
+  GitHub issues, spec-kit milestones and `tasks.md` entries alike: a unit of work is sized so
+  that one agent session finishes it end to end (roughly 150 tool calls) without carrying its
+  context across days. Work that does not fit is decomposed into child tasks, each with its
+  own acceptance criteria, worktree and session, in dependency order; state passes between
+  them through the ledger, `tasks.md` or a commit, never through a long-lived conversation.
+  Review rejects a task that spans more than a day of work unless the reason it cannot be
+  split is recorded.
 - **Isolation & lifecycle gate**: Session isolation (Principle II), worktree lifecycle,
   and the project-root ("Default") session exception (Principle III) MUST be covered by
   integration tests, not unit tests alone.
@@ -261,4 +270,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.7.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-10-01
+**Version**: 1.8.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-10-20
