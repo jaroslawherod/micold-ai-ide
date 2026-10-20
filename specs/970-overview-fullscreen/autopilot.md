@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: close unit running (tdd-verify, T042, T043)
-- **Next step**: tdd-verify, visual pass T042, full gate T043, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1143 | M2 (the cards zoom with the sidebar) | merged (rebase) | 34fccd299512b1ea90e592c8a920a631ba26ebf7 |
 | #1144 | M3 (the zoom keeps your place) | merged (rebase) | 0914629b79db4e4dd0d59658bba82df746e986fe |
 | #1145 | M4 (reduce motion) | merged (rebase) | 5f54853a04f27a1048a9148df4eb184d3efb1dd5 |
+| (close) | close: TDD remediation T044–T054, visual pass T042, final gate T043 | opened by the orchestrator (gh unavailable) | — |
 
 ## Milestones
 
@@ -54,6 +55,7 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Close review | 2 | 802bc7b76fa3d8a2c17ebd0b7c987d83458014f1:7fe12aa97108bca136ff1b6d2d92e6ff50e77231 | CLEAN (1 MINOR: T054 wording, fixed prose only) |
 | Close review | 1 | 97e7f19d9a90b880f82a4b75878ab7efcf65595f:e74be4d14e3b08e7c28a628c351ae413bb7a1138 | CHANGES: 1 MAJOR (Status said Closed while T052–T055 open: T052–T054 done, T055 deferred with reason in verification.md Resolution, Status stays Closed as the close PR closes it), 2 MINOR fixed (stale comments, U35 wording) |
 | Spec review | 1 | 0f936e933b45470ec78960e325652da519ed1345:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CHANGES: 4 MAJOR, 2 MINOR |
 | Spec review | 2 | 89236166dc9f65c1c4ccda6390048046cc91bcdd:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CLEAN (2 MINOR, fixed prose only) |

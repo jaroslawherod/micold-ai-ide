@@ -37,11 +37,10 @@ fn without_reduce_motion_the_drawer_animates() {
 #[test]
 fn freed_width_counts_the_handle_only_when_the_sidebar_is_expanded() {
     let mut state = State::default();
-    state.sidebar.hidden = false;
     assert_eq!(
         freed_width(&state),
         f32::from(state.sidebar_width_px()) + crate::ui::material::RESIZE_HANDLE_WIDTH
     );
-    state.sidebar.hidden = true;
+    crate::features::sidebar::toggled(&mut state);
     assert_eq!(freed_width(&state), crate::ui::sidebar::STRIP_WIDTH);
 }
