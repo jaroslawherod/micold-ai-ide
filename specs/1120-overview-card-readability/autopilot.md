@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
 - **Phase**: close
-- **Next step**: close unit (handover): read *Handover*
+- **Next step**: close unit: zoom re-look (visual) and T045, T047–T049 workers dispatched by the orchestrator; then the close review, gate, PR files
 
 ## Pull requests
 
@@ -76,7 +76,9 @@ inequality + visual pass).
 | M4 visual pass | 2 | 201c4e890c17ecbb1ff16151818c088bacba986a:aa16d973e14f608d52a6633610c00f90afdcad7d | FAIL: the "five states" pose drew nothing at 600 and 1600 px (ca40630b dropped its fixed height; the grid's own scrollable fills a height the scrolling page lacks). B5 outline PASS (partial), header under 280 px PASS, zoom with a targeted card NOT RUN (no such pose). Fixed: `CardGrid::unscrolled()` for the pose + test `the_five_state_grid_is_drawn_and_the_next_pose_starts_below_it` (red 0 px at 600, then green); unit re-checked at 600 and 1600 px by hand: renders, no overlap (`visual-pass/b-m4r3-*.png`). Small layout fix: no round 3 |
 | Close tdd-verify | 1 | cb98f77ea665b278639941f04fdecf851d13a1eb:3be8cbdae98b00e560de9d63807b440ff4771832 | FAIL (sonnet): T041–T049 in tasks.md Phase 8. Fixed T041 (five-state paint test), T042 (glyph tint asserted), T043 (split-piece pixel test), T044 (reds recorded), T046 (FR-020 test); reds in `tdd/cycle-log.md` close section. T045, T047–T049 (MED/LOW) open |
 | Close visual pass | 1 | cb98f77ea665b278639941f04fdecf851d13a1eb:3be8cbdae98b00e560de9d63807b440ff4771832 | B4, B5 ripple, B7 PASS; B5 focus ring not seen (showcase has no Tab; covered by unit test `the_focused_card_draws_the_focus_ring`); zoom FAIL: lower-row split piece painted below the grid. Fixed in `CardGrid::draw` (layer cut to viewport) + test `a_split_card_mid_zoom_paints_only_inside_its_pieces`. Re-look of the zoom pose needed |
+| Close visual pass | 2 | ddc843523c472a3365e23820803ddd1a29c340f3:bd25709e17a058268c0cfd36ec75a62a3a908331 | pending: re-look of the "zoom — press it" pose mid-flight after the `CardGrid::draw` clip fix |
 
+Close full gate (`scripts/gate.sh`) green at bd25709e (cargo fmt on 3d5c85e9: split-piece clip fix, T041–T043, T046 tests), run by the orchestrator; pushed.
 Close full gate (`scripts/gate.sh`) green at 3be8cbda (zoom pose targets every third card; quickstart §A recorded, T040).
 M4 full gate (`scripts/gate.sh`) green after the round-2 visual fix (two reds before it: `material_boundary` on a bare iced `scrollable` in the new test, `material_builder_api` on a non-chainable `unscrolled`); green at aa16d973 after the round-1 fixes (one red before it: clippy `useless_conversion` on `menu(face.into())`); green at 89b4a4ac before reviews (rebased onto origin/main 08cb6ea1).
 M3 full gate (`scripts/gate.sh`) green at b95c7a3a after the review fixes (rebased onto origin/main 17a5dc46).
@@ -91,9 +93,7 @@ M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red wa
 
 ## Handover
 
-Close unit handed over at 150k (2026-10-20). Done and committed (not pushed; branch tip on origin is cb4cca54): zoom split-piece clip fix in `CardGrid::draw`; tests for T041, T042, T043, T046; T044 reds; `visual-pass.md` close section; `tdd/cycle-log.md` close section; `tdd/verification.md`; tasks T041–T044, T046 ticked.
-Full gate `scripts/gate.sh` was started on this tree before the docs edits: log `/tmp/claude-0/-home-user-micold-ai-ide/9f964f32-37d5-5fbc-86f4-e611005b6fc8/scratchpad/gate2-1792500479.log` (grep `GATE_EXIT=`); if it is gone or red, rerun it.
-Next: (1) gate green, push. (2) Ask the orchestrator for a visual re-look of the CardGrid "zoom — press it" pose mid-flight (no piece paints below the grid) and the close review (review.md, no rubric: correctness of the tests and truth of the docs, diff `origin/main...HEAD`). (3) Decide T045, T047–T049 (MED/LOW): fix, or list under *Follow-ups not done*. (4) spec.md `**Status**` → `Closed <date> — shipped in PRs #1129, #1136, #1141, #1157, #1166, #<close>`; Phase `done`, Next step `handoff`; PR title/body files (`docs(1120): close the spec (#1120)`).
+None.
 
 ## Open escalation
 
@@ -101,4 +101,4 @@ None.
 
 ## Follow-ups not done
 
-- T045, T047–T049 (tdd-verify MED/LOW) not yet decided: see *Handover*.
+- None yet. T045, T047–T049 (tdd-verify MED/LOW, test strength only, no behaviour): decided to fix (close.md step 3), sent to `autopilot-worker` subagents on sonnet, one per crate.
