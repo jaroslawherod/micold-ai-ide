@@ -248,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_lines_the_diff_shows_are_highlighted() {
+    fn the_old_side_stops_at_the_diffs_last_line_and_the_new_side_is_whole() {
         let raw = "@@ -2,1 +2,1 @@\n-fn a() {}\n+fn b() {}\n";
         let old = SideLines::from_bytes(b"// one\nfn a() {}\nfn c() {}\nfn d() {}\n").unwrap();
         let new = SideLines::from_bytes(b"// one\nfn b() {}\nfn c() {}\nfn d() {}\n").unwrap();
@@ -259,18 +259,12 @@ mod tests {
             spans: Spans::default(),
         };
         let spans = highlight(&loaded, "x.rs");
-        for side in [
-            &spans.light.old,
-            &spans.light.new,
-            &spans.dark.old,
-            &spans.dark.new,
-        ] {
-            assert_eq!(
-                side.0.len(),
-                2,
-                "lines 1 and 2, not the 4 of the file: {side:?}"
-            );
+        for side in [&spans.light.old, &spans.dark.old] {
+            assert_eq!(side.0.len(), 2, "old: lines 1 and 2 only: {side:?}");
             assert!(!side.line(2).is_empty());
+        }
+        for side in [&spans.light.new, &spans.dark.new] {
+            assert_eq!(side.0.len(), 4, "new: every line, to colour revealed ones");
         }
     }
 
