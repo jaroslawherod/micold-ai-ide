@@ -601,9 +601,59 @@ pub struct WorktreeForm {
     pub session_choices: Vec<SessionChoice>,
     /// The session's first prompt, as typed. Only sent with a CLI: see [`Self::session_definition`].
     pub first_prompt: String,
+    /// The default prompt template from Settings, copied when the form opens (feature 1161).
+    pub default_prompt_template: String,
+    /// The user has typed in the first-prompt field, so the template no longer rewrites it
+    /// (feature 1161, FR-007).
+    pub first_prompt_edited: bool,
 }
 
 impl WorktreeForm {
+    /// Render the default template into the first prompt while the user has not edited it and a CLI
+    /// is chosen (feature 1161, FR-007). A template that is empty or does not parse gives an empty
+    /// prompt (FR-012, FR-013).
+    pub fn refresh_default_prompt(&mut self) {
+        if self.first_prompt_edited || self.session_cli.is_none() {
+            return;
+        }
+        let picked = self
+            .picked_issue
+            .and_then(|n| self.issues.held().into_iter().find(|i| i.number() == n));
+        let facts = micold_core::prompt_template::WorktreeFacts {
+            issue: self.ticket.trim().to_string(),
+            issue_title: picked.map(|i| i.title().to_string()).unwrap_or_default(),
+            issue_body: picked.map(|i| i.body().to_string()).unwrap_or_default(),
+            branch: self.preview().map(|names| names.branch).unwrap_or_default(),
+            type_: self
+                .type_
+                .map(|t| t.as_str().to_string())
+                .unwrap_or_default(),
+            name: self.name.clone(),
+        };
+        self.first_prompt =
+            micold_core::prompt_template::render_text(&self.default_prompt_template, &facts)
+                .unwrap_or_default();
+    }
+
+    /// The user typed in the first-prompt field. Ignored with no CLI chosen.
+    pub fn edit_first_prompt(&mut self, text: String) {
+        if self.session_cli.is_some() {
+            self.first_prompt = text;
+            self.first_prompt_edited = true;
+        }
+    }
+
+    /// Choose the session's CLI, or none. None drops the prompt and the edit; a CLI chosen after
+    /// none follows the template again.
+    pub fn choose_session_cli(&mut self, cli: Option<AiCli>) {
+        self.session_cli = cli;
+        if cli.is_none() {
+            self.first_prompt.clear();
+            self.first_prompt_edited = false;
+        }
+        self.refresh_default_prompt();
+    }
+
     /// The chosen entry of [`Self::session_choices`].
     pub fn session_choice(&self) -> SessionChoice {
         self.session_cli
@@ -832,6 +882,7 @@ impl WorktreeForm {
         self.issue_list_open = false;
         self.issue_highlight = None;
         self.set_picked_issue(None);
+        self.refresh_default_prompt();
     }
 
     /// Recompute the search results from `candidates` and `branch_query`, and re-seat the keyboard
@@ -1095,6 +1146,7 @@ pub fn opened(state: &mut crate::app::State) {
         .and_then(|project| state.workspace.issue_sources.get(project))
         .copied();
     let mut form = WorktreeForm {
+        default_prompt_template: state.session.default_prompt_template.clone(),
         jira,
         github_issues_off: !state.settings.github_issues_enabled,
         remembered_provider,
@@ -1107,6 +1159,7 @@ pub fn opened(state: &mut crate::app::State) {
     };
     // Before the remotes answer, a switched-off GitHub must not leave Jira unchosen.
     form.resolve_provider();
+    form.refresh_default_prompt();
     state.worktree_form.form = Some(form);
     state.worktree_form.worktree_error = None;
 }
@@ -1162,6 +1215,7 @@ pub fn type_selected(state: &mut crate::app::State, type_: ConventionalType) {
     while_editing(state, |form| {
         form.type_ = Some(type_);
         form.error = None;
+        form.refresh_default_prompt();
     });
 }
 
@@ -1169,19 +1223,14 @@ pub fn type_selected(state: &mut crate::app::State, type_: ConventionalType) {
 /// prompt: a prompt without a CLI is not representable.
 pub fn session_cli_chosen(state: &mut crate::app::State, cli: Option<AiCli>) {
     while_editing(state, |form| {
-        form.session_cli = cli;
-        if cli.is_none() {
-            form.first_prompt.clear();
-        }
+        form.choose_session_cli(cli);
     });
 }
 
 /// The first-prompt field was edited. Ignored with no CLI chosen.
 pub fn first_prompt_changed(state: &mut crate::app::State, text: String) {
     while_editing(state, |form| {
-        if form.session_cli.is_some() {
-            form.first_prompt = text;
-        }
+        form.edit_first_prompt(text);
     });
 }
 
@@ -1190,6 +1239,7 @@ pub fn ticket_changed(state: &mut crate::app::State, text: String) {
     while_editing(state, |form| {
         form.ticket = text;
         form.error = None;
+        form.refresh_default_prompt();
     });
 }
 
@@ -1198,6 +1248,7 @@ pub fn name_changed(state: &mut crate::app::State, text: String) {
     while_editing(state, |form| {
         form.name = text;
         form.error = None;
+        form.refresh_default_prompt();
     });
 }
 
@@ -1252,6 +1303,7 @@ pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
             form.issues = IssueList::Loading { seq: next_seq };
             started = true;
         }
+        form.refresh_default_prompt();
     });
     if started {
         state.worktree_form.issue_request_seq = next_seq;
@@ -1631,6 +1683,7 @@ pub fn issue_picked(state: &mut crate::app::State, number: u64, mapping: &[Label
         form.error = None;
         form.set_picked_issue(Some(number));
         form.issue_list_open = false;
+        form.refresh_default_prompt();
     });
 }
 
@@ -1682,6 +1735,7 @@ pub fn branch_selected(state: &mut crate::app::State, candidate: BranchCandidate
         form.selected_branch = Some(candidate);
         form.error = None;
         form.branch_list_open = false;
+        form.refresh_default_prompt();
     });
 }
 

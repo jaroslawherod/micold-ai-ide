@@ -313,6 +313,26 @@ same value. In the settings file it is `cross_session_access`, with the value `a
 `confirm_each_send` or `off`. If the file holds anything else there, for example after a mistyped
 edit, the option reads as **Off** and the rest of your settings are kept.
 
+### Default prompt template
+
+The text that fills the **First prompt** field of the Add Worktree dialog when you choose an AI
+CLI. It is multi-line and empty by default, and then the field starts empty as before.
+
+| Placeholder | Filled with |
+|---|---|
+| `{issue}` | The ticket or issue number, without a `#` |
+| `{issue_title}` | The picked issue's title |
+| `{issue_body}` | The picked issue's description |
+| `{branch}` | The branch the worktree will use |
+| `{type}` | The chosen type, such as `feat` |
+| `{name}` | The name field |
+
+A placeholder with nothing to fill it renders empty, so `/speckit-autopilot #{issue}` gives
+`/speckit-autopilot #` until a ticket is entered. Write `{{` and `}}` for literal braces. A template
+the dialog cannot read, such as an unknown placeholder, fills the field with nothing. The template is
+one setting for the whole app, kept by the session service, in the settings file as
+`default_prompt_template`. See [Adding a worktree](worktrees-and-sessions.md).
+
 ### The environment a session starts in
 
 By default, every session's AI CLI process and regular-terminal process automatically pick up

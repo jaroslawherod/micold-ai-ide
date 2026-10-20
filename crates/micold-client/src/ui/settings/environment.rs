@@ -7,7 +7,7 @@
 //! the path needs to see it beside the field they just changed rather than in a snackbar that has
 //! already gone.
 
-use crate::app::Message;
+use crate::app::{EditorAction, Message};
 use crate::features::session::CliAvailability;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{
@@ -17,7 +17,7 @@ use crate::features::settings::{
 use crate::features::window::FieldId;
 use crate::notification_icon;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Checkbox, RequiredLegend, Select, TextField};
+use crate::ui::material::{Checkbox, FieldGroup, RequiredLegend, Select, TextArea, TextField};
 use crate::ui::settings::{caution, field_note, note, page};
 use iced::widget::container;
 use iced::Element;
@@ -25,6 +25,7 @@ use micold_core::attention::NotificationKind;
 use micold_core::cli_reason;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::mcp::policy::CrossSessionAccess;
+use micold_core::prompt_template::PromptTemplate;
 use micold_core::protocol::messages::EnvIncludeFailure;
 use micold_core::session::AiCli;
 use micold_core::tokens::{spacing, Roles};
@@ -46,6 +47,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("plan_usage_enabled", "PlanUsageToggled"),
     ("plan_usage_warn_percent", "PlanUsageWarnChanged"),
     ("cross_session_access", "CrossSessionAccessChanged"),
+    ("default_prompt_template", "DefaultPromptTemplateAction"),
 ];
 
 /// The Environment page.
@@ -263,6 +265,21 @@ pub fn view<'a>(
         roles,
     );
 
+    // Feature 1161, FR-002: the template the Add Worktree dialog fills its first prompt from. The
+    // placeholders it accepts are listed under the field, from the one list the core renders by.
+    let placeholders = PromptTemplate::PLACEHOLDERS.map(|p| format!("{{{p}}}")).join("  ");
+    let default_prompt = FieldGroup::new("Default prompt template", roles)
+        .note(format!(
+            "Pre-fills a new worktree's first prompt. Placeholders: {placeholders}. Use {{{{ and }}}} for literal braces."
+        ))
+        .push(
+            TextArea::new(draft.environment.default_prompt_editor.content(), roles)
+                .placeholder("/speckit-autopilot #{issue}")
+                .on_action(|a| {
+                    Message::Settings(SettingsMsg::DefaultPromptTemplateAction(EditorAction(a)))
+                }),
+        );
+
     let mut controls: Vec<Element<'a, Message>> =
         vec![cli, pi_activity, tool_server, desktop_notifications];
     // The marker's explanation, once, above the first field (feature 937, FR-004).
@@ -270,6 +287,7 @@ pub fn view<'a>(
     controls.extend(kind_rows);
     controls.extend([plan_usage, plan_usage_warn.into()]);
     controls.push(cross_session);
+    controls.push(default_prompt.into());
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
     // What the stored path's check found, and how the last resolution went (spec 035,
