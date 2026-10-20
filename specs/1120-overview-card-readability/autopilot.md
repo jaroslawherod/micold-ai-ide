@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: implement M3
-- **Next step**: continue M3 implement from *Handover* (T023–T025, T028–T030)
+- **Phase**: verify M3
+- **Next step**: M3 review A (code-review high) + scoped gate
 
 ## Pull requests
 
@@ -45,6 +45,7 @@ inequality + visual pass).
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | 1 | clarify | FR-012: one generic sentence for every slash command, or special wording / hiding for built-ins? | A: one generic sentence for every command, built-ins included | A, orchestrator default (recommended), confirmed by jaro 2026-10-19T19:09Z | spec.md Clarifications; specs/032-untitled-session-labels/contracts/first-turn-label.md C3.5a |
+| 2 | implement M3 | K2/K3 `cdk::EvenRow` cannot sit in feature 970's single ribbon `Grid` | Even rows by measure-then-stretch in `Grid::layout`; T023/T028 superseded; K2/K3, R12, data-model amended (prose) | M3 unit (design only, FR-014 unchanged) | contracts/overview-card.md K2; research.md R12 |
 
 ## Review rounds
 
@@ -72,18 +73,7 @@ M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red wa
 
 ## Handover
 
-M3 unit 1 handed over at the 150k context cap. Branch reset to origin/main (62825f0c, #1141 merged; `gh` unauthenticated so `branch-start.sh` could not check it — the merge SHA is an ancestor of origin/main, branch switched with `git switch -C … origin/main`).
-
-Done (committed): T021, T026 (`typography::OVERVIEW_CARD_TITLE`, `SCOPED`), T022, T027 (`TypeRole::CardTitle`, `SCOPED` exception in `type_role_mapping.rs`). Cycle log rows written. `type_role_mapping`/`atoms` and `tokens_scales` green, fmt clean. The card does not use `CardTitle` yet (T029).
-
-**Plan proved false for K2/K3 (design only, FR-014 unchanged — no escalation):** feature 970 replaced the row-of-`row`s grid with one `Grid` widget in `card_grid.rs` (`Grid::layout`, ~l.374) that places every card on a ribbon (`ribbon()`, `Piece`) at a fixed `CARD_HEIGHT` and splits cards across rows during a zoom. A `cdk::EvenRow` per row cannot sit inside it. Decided: do R12's measure-then-stretch inside `Grid::layout`, and do not build `EvenRow` (an unused widget). An EvenRow + `forward_to_children!` macro draft was written and reverted. Design to implement:
-1. `Piece` gets a private `row: usize`; `ribbon()` keeps its signature (uniform height, used by 970 tests) and is built on a new `stack_rows(&mut pieces, row_heights, gap)` that sets `rect.y/height`, `origin.y`.
-2. `Grid::layout`: measure each card at `Limits::new((card_width, 0), (card_width, ∞))`; row height = max(`overview_card::MIN_HEIGHT`, tallest card with a piece in the row); a card is laid out at exactly (card_width, max height of its rows) — at rest its row's height; grid height = Σ rows + gaps.
-3. `draw`'s `whole` check compares width **and** height (a split card's piece in a shorter row must be clipped).
-4. `card_boxes` in the tests finds cards by height == HEIGHT; replace (e.g. lay out `CardGrid::into_grid()` directly and take the Grid node's children).
-5. Mark T023 and T028 in tasks.md as superseded by this (note, not ticked as done) and amend contracts/overview-card.md K2/K3 and research.md R12 (prose; record in *Decisions*). T024's even-row tests go in `card_grid.rs` against the Grid.
-6. 970's zoom tests assume sparse test cards are exactly `H`: check the sparse card's natural height stays ≤ 172 after T029 (17 px title, 14 px body).
-Remaining after that: T024, T025 tests (red first), T029 (rename `HEIGHT`→`MIN_HEIGHT`, shrink height, `CardTitle` title, `Body` lines; also `HEIGHT` used at overview_card.rs tests l.487/513/883/897 and card_grid.rs l.627/700/902/908), T030 docs; then verify.md (scoped gate + review A high, review B, visual pass — return REVIEW-NEEDED per cloud notes), full gate `scripts/gate.sh`, PR files.
+None.
 
 ## Open escalation
 

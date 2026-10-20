@@ -131,16 +131,28 @@ pub struct Piece {
     pub origin: Point,
     /// The index of the layout node the piece is drawn from.
     node: usize,
+    /// The grid row the piece is on.
+    row: usize,
 }
 
 /// Cards of width `w` on a ribbon: card `i` starts at `i · (w + gap)` along rows `width + gap`
 /// long, so row `r` shows the stretch `r · (width + gap) .. + width` and the `gap` after it is
 /// not shown. A card that runs past a row's end is cut there and continues at the next row's
-/// start; at a rest width (`width + gap = n · (w + gap)`) no card is cut.
+/// start; at a rest width (`width + gap = n · (w + gap)`) no card is cut. Every row is
+/// `card_height` tall.
 ///
 /// Cards keep reading order and a constant pitch, so no two pieces of different cards intersect,
 /// and a card never disappears: of its `w` it loses at most the `gap`.
 pub fn ribbon(count: usize, w: f32, gap: f32, width: f32, card_height: f32) -> Vec<Piece> {
+    let mut pieces = ribbon_rows(count, w, gap, width);
+    let heights = vec![card_height; row_count(&pieces)];
+    stack_rows(&mut pieces, &heights, gap);
+    pieces
+}
+
+/// The ribbon's pieces placed along their rows, each with its row and no height yet: the
+/// horizontal half of [`ribbon`].
+fn ribbon_rows(count: usize, w: f32, gap: f32, width: f32) -> Vec<Piece> {
     let line = width + gap;
     let mut pieces = Vec::with_capacity(count + 2);
     for card in 0..count {
@@ -151,12 +163,12 @@ pub fn ribbon(count: usize, w: f32, gap: f32, width: f32, card_height: f32) -> V
             let left = origin.max(0.0);
             let right = (origin + w).min(width);
             if right - left >= MIN_PIECE {
-                let y = row * (card_height + gap);
                 pieces.push(Piece {
                     card,
-                    rect: Rectangle::new(Point::new(left, y), Size::new(right - left, card_height)),
-                    origin: Point::new(origin, y),
+                    rect: Rectangle::new(Point::new(left, 0.0), Size::new(right - left, 0.0)),
+                    origin: Point::new(origin, 0.0),
                     node: 0,
+                    row: row as usize,
                 });
             }
             if origin + w <= line + SNAP {
@@ -165,6 +177,29 @@ pub fn ribbon(count: usize, w: f32, gap: f32, width: f32, card_height: f32) -> V
         }
     }
     pieces
+}
+
+/// How many rows `pieces` fill.
+fn row_count(pieces: &[Piece]) -> usize {
+    pieces.iter().map(|p| p.row + 1).max().unwrap_or(0)
+}
+
+/// Stacks the rows top to bottom, row `r` being `heights[r]` tall and a `gap` below the one
+/// before: the vertical half of [`ribbon`] (feature 1120, FR-014).
+fn stack_rows(pieces: &mut [Piece], heights: &[f32], gap: f32) {
+    let tops: Vec<f32> = heights
+        .iter()
+        .scan(0.0, |top, h| {
+            let this = *top;
+            *top += h + gap;
+            Some(this)
+        })
+        .collect();
+    for piece in pieces {
+        piece.rect.y = tops[piece.row];
+        piece.rect.height = heights[piece.row];
+        piece.origin.y = tops[piece.row];
+    }
 }
 
 /// The zoom a grid is in, kept in the widget tree between layouts (data-model.md).
@@ -394,7 +429,31 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             }
             None => rest_width(width, min, gap, max),
         };
-        let mut pieces = ribbon(self.cards.len(), card_width, gap, width, CARD_HEIGHT);
+        let mut pieces = ribbon_rows(self.cards.len(), card_width, gap, width);
+
+        // Measure-then-stretch (feature 1120, R12): each card at its width and at least the
+        // minimum height; a row is as tall as the tallest card with a piece in it, and a card is
+        // laid out at the tallest of its rows (a split card's piece in a shorter row is clipped).
+        let measure = layout::Limits::new(
+            Size::new(card_width, MIN_CARD_HEIGHT),
+            Size::new(card_width, f32::INFINITY),
+        );
+        let mut nodes: Vec<layout::Node> = self
+            .cards
+            .iter_mut()
+            .zip(&mut tree.children)
+            .map(|(card, card_tree)| card.as_widget_mut().layout(card_tree, renderer, &measure))
+            .collect();
+        let mut heights = vec![MIN_CARD_HEIGHT; row_count(&pieces)];
+        for piece in &pieces {
+            let natural = nodes[piece.card].size().height;
+            heights[piece.row] = heights[piece.row].max(natural);
+        }
+        stack_rows(&mut pieces, &heights, gap);
+        let mut card_heights = vec![MIN_CARD_HEIGHT; self.cards.len()];
+        for piece in &pieces {
+            card_heights[piece.card] = card_heights[piece.card].max(piece.rect.height);
+        }
 
         // One node per card, at its largest piece; the other piece of a split card follows.
         let mut primary: Vec<Option<usize>> = vec![None; self.cards.len()];
@@ -404,17 +463,17 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
                 primary[piece.card] = Some(index);
             }
         }
-        let card_limits = layout::Limits::new(
-            Size::new(card_width, CARD_HEIGHT),
-            Size::new(card_width, CARD_HEIGHT),
-        );
-        let mut nodes = Vec::with_capacity(self.cards.len() + 2);
         for (i, (card, card_tree)) in self.cards.iter_mut().zip(&mut tree.children).enumerate() {
-            let node = card
-                .as_widget_mut()
-                .layout(card_tree, renderer, &card_limits);
+            let height = card_heights[i];
+            if (nodes[i].size().height - height).abs() >= MIN_PIECE {
+                let exact = layout::Limits::new(
+                    Size::new(card_width, height),
+                    Size::new(card_width, height),
+                );
+                nodes[i] = card.as_widget_mut().layout(card_tree, renderer, &exact);
+            }
             let at = primary[i].map_or(Point::ORIGIN, |p| pieces[p].origin);
-            nodes.push(node.move_to(at));
+            nodes[i] = std::mem::take(&mut nodes[i]).move_to(at);
         }
         let mut extra = Vec::new();
         for (index, piece) in pieces.iter_mut().enumerate() {
@@ -427,15 +486,10 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         }
         nodes.extend(extra);
 
-        let rows = pieces
-            .iter()
-            .map(|piece| (piece.rect.y / (CARD_HEIGHT + gap)).round() as usize + 1)
-            .max()
-            .unwrap_or(0);
-        let height = if rows == 0 {
+        let height = if heights.is_empty() {
             0.0
         } else {
-            rows as f32 * CARD_HEIGHT + (rows - 1) as f32 * gap
+            heights.iter().sum::<f32>() + (heights.len() - 1) as f32 * gap
         };
         tree.state.downcast_mut::<ZoomState>().pieces = pieces;
         layout::Node::with_children(Size::new(width, height), nodes)
@@ -559,7 +613,8 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
                 width: piece.rect.width,
                 height: piece.rect.height,
             };
-            let whole = (clip.width - bounds.width).abs() < MIN_PIECE;
+            let whole = (clip.width - bounds.width).abs() < MIN_PIECE
+                && (clip.height - bounds.height).abs() < MIN_PIECE;
             let draw_card = |renderer: &mut iced::Renderer| {
                 let local = if state.ends.is_none()
                     || cursor.position().is_some_and(|p| clip.contains(p))
@@ -623,8 +678,8 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
     }
 }
 
-/// The height of every card (feature 813).
-const CARD_HEIGHT: f32 = super::overview_card::HEIGHT;
+/// The least height of a card and of a grid row (feature 1120, FR-014).
+const MIN_CARD_HEIGHT: f32 = super::overview_card::MIN_HEIGHT;
 
 impl<'a, M: Clone + 'a> From<CardGrid<'a, M>> for Element<'a, M> {
     fn from(g: CardGrid<'a, M>) -> Self {
@@ -645,6 +700,7 @@ impl<'a, M: Clone + 'a> From<CardGrid<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::overview_card::MIN_HEIGHT;
     use super::*;
     use crate::ui::material::test_support::{laid_out, leaves, roles};
     use iced::{Rectangle, Size};
@@ -655,30 +711,56 @@ mod tests {
     const GAP: f32 = 16.0;
     const EPS: f32 = 0.01;
 
-    fn cards<M: 'static>(n: usize) -> Vec<OverviewCard<'static, M>> {
-        (0..n)
-            .map(|i| {
-                OverviewCard::new(
-                    &CardModel {
-                        location: SessionLocation::Worktree(format!("w{i}")),
-                        display_name: format!("feat-{i}"),
-                        branch: None,
-                        kind: LocationType::Feature,
-                        sessions: (1, 0),
-                        state: CardState::Idle,
-                        reason: CardReason::Idle,
-                        title: "s".into(),
-                        prs: micold_core::overview::PrDisplay::Hidden,
-                        progress: Default::default(),
-                        activity: None,
-                        activation: micold_core::overview::Activation::RevealOnly(
-                            micold_core::session::SessionLocation::Default,
-                        ),
-                    },
-                    roles(),
-                )
-            })
+    /// Card `i` with no optional row: the sparse card.
+    fn sparse(i: usize) -> CardModel {
+        CardModel {
+            location: SessionLocation::Worktree(format!("w{i}")),
+            display_name: format!("feat-{i}"),
+            branch: None,
+            kind: LocationType::Feature,
+            sessions: (1, 0),
+            state: CardState::Idle,
+            reason: CardReason::Idle,
+            title: "s".into(),
+            prs: micold_core::overview::PrDisplay::Hidden,
+            progress: Default::default(),
+            activity: None,
+            activation: micold_core::overview::Activation::RevealOnly(
+                micold_core::session::SessionLocation::Default,
+            ),
+        }
+    }
+
+    /// Card `i` with every optional row: branch, activity, progress with a bar, pull requests.
+    fn rich(i: usize) -> CardModel {
+        use micold_core::task_progress::{Phase, Progress, Ratio, Source};
+        CardModel {
+            branch: Some(format!("feat/{i}-overview")),
+            activity: Some(micold_core::hook_activity::CurrentActivity {
+                line: "Editing card_grid.rs".into(),
+                ratio: None,
+            }),
+            progress: Progress {
+                phase: Some(Phase::Implement),
+                ratio: Some(Ratio { done: 6, total: 10 }),
+                source: Source::TaskList,
+            },
+            prs: micold_core::overview::PrDisplay::Unknown(
+                micold_core::overview::PrUnknown::Unreachable,
+            ),
+            ..sparse(i)
+        }
+    }
+
+    fn of<M: 'static>(models: &[CardModel]) -> Vec<OverviewCard<'static, M>> {
+        models
+            .iter()
+            .map(|m| OverviewCard::new(m, roles()))
             .collect()
+    }
+
+    fn cards<M: 'static>(n: usize) -> Vec<OverviewCard<'static, M>> {
+        of(&(0..n).map(sparse).collect::<Vec<_>>())
     }
 
     fn grid(n: usize) -> Element<'static, ()> {
@@ -697,7 +779,9 @@ mod tests {
                 walk(c, iced::Vector::new(b.x, b.y), out);
             }
             // The innermost box of the card's height is the card: its row is as tall, but holds it.
-            if out.len() == before && (b.height - super::super::overview_card::HEIGHT).abs() < EPS {
+            if out.len() == before
+                && (b.height - super::super::overview_card::MIN_HEIGHT).abs() < EPS
+            {
                 out.push(b);
             }
         }
@@ -899,13 +983,94 @@ mod tests {
         assert_eq!(boxes.len(), 12);
         for b in &boxes {
             assert!(b.width >= 1.5 * before, "{} < 1.5 × {before}", b.width);
-            assert!((b.height - super::super::overview_card::HEIGHT).abs() < EPS);
+            assert!((b.height - super::super::overview_card::MIN_HEIGHT).abs() < EPS);
         }
+    }
+
+    // ---- feature 1120: a minimum height, and even rows ----
+
+    /// The grid of `models` laid out `width` wide at rest: its height and each card's box.
+    fn even(models: &[CardModel], width: f32) -> (f32, Vec<Rectangle>) {
+        let node = Rig::new().lay(of(models), normal(0.0), width);
+        let boxes = node.children()[..models.len()]
+            .iter()
+            .map(layout::Node::bounds)
+            .collect();
+        (node.size().height, boxes)
+    }
+
+    /// FR-014, US4.2, US4.3: in a row where one card has every optional row, every card is as
+    /// tall as that card, which is taller than the minimum; a sparse card alone in its row is the
+    /// minimum, and the next row starts a gap below the tallest card.
+    #[test]
+    fn every_card_in_a_row_is_as_tall_as_the_tallest() {
+        let models = [sparse(0), rich(1), sparse(2), sparse(3)];
+        let (height, boxes) = even(&models, 900.0);
+        let tall = boxes[1].height;
+        assert!(
+            tall > MIN_HEIGHT,
+            "the full card grows past the minimum: {tall}"
+        );
+        for b in &boxes[..3] {
+            assert!((b.height - tall).abs() < EPS, "{b:?} != {tall}");
+            assert!(b.y.abs() < EPS, "{b:?}");
+        }
+        assert!((boxes[3].height - MIN_HEIGHT).abs() < EPS, "{:?}", boxes[3]);
+        assert!((boxes[3].y - (tall + GAP)).abs() < EPS, "{:?}", boxes[3]);
+        assert!((height - (tall + GAP + MIN_HEIGHT)).abs() < EPS, "{height}");
+    }
+
+    /// Spec edge case "Pane narrower than one minimum-width card": at 200 px every card has a row
+    /// of its own and no card overlaps another.
+    #[test]
+    fn a_pane_under_one_minimum_card_stacks_the_cards() {
+        let models = [rich(0), sparse(1), rich(2)];
+        let (_, boxes) = even(&models, 200.0);
+        for (i, a) in boxes.iter().enumerate() {
+            assert!(a.x.abs() < EPS && (a.width - 200.0).abs() < EPS, "{a:?}");
+            assert!(a.height >= MIN_HEIGHT, "{a:?}");
+            for b in &boxes[i + 1..] {
+                assert!(a.y + a.height <= b.y + EPS, "{a:?} overlaps {b:?}");
+            }
+        }
+    }
+
+    /// A card split across two rows during a zoom is laid out at its taller row's height, and its
+    /// piece in the shorter row is cut to that row.
+    #[test]
+    fn a_card_split_across_rows_takes_its_taller_row() {
+        let models: Vec<CardModel> = (0..7)
+            .map(|i| if i == 4 { rich(i) } else { sparse(i) })
+            .collect();
+        let mut rig = Rig::new();
+        rig.lay(of(&models), normal(300.0), 1150.0);
+        let node = rig.lay(of(&models), full(300.0), 1300.0);
+        let pieces = rig.pieces();
+        let split: Vec<&Piece> = pieces.iter().filter(|p| p.card == 3).collect();
+        assert_eq!(
+            split.len(),
+            2,
+            "card 3 runs through the row end: {pieces:?}"
+        );
+        let tall = node.children()[4].size().height;
+        assert!(tall > MIN_HEIGHT);
+        assert!(
+            (split[0].rect.height - MIN_HEIGHT).abs() < EPS,
+            "{:?}",
+            split[0]
+        );
+        assert!((split[1].rect.height - tall).abs() < EPS, "{:?}", split[1]);
+        assert!(
+            (split[1].rect.y - (MIN_HEIGHT + GAP)).abs() < EPS,
+            "{:?}",
+            split[1]
+        );
+        assert!((node.children()[3].size().height - tall).abs() < EPS);
     }
 
     // ---- feature 970: the cards zoom with the sidebar ----
 
-    const H: f32 = super::super::overview_card::HEIGHT;
+    const H: f32 = super::super::overview_card::MIN_HEIGHT;
     const PAIRS: [(f32, f32); 3] = [(1150.0, 1450.0), (1300.0, 1650.0), (1464.0, 1770.0)];
 
     fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -1166,7 +1331,7 @@ mod tests {
     /// mid-zoom hands the anchor to the new first card; a grid at rest publishes nothing.
     #[test]
     fn the_first_visible_card_stays_in_view_across_a_zoom() {
-        let row = CARD_HEIGHT + GAP;
+        let row = MIN_HEIGHT + GAP;
         let mut rig = Rig::new();
         rig.frame(normal(350.0), 1300.0, 0.0);
         let mut scroll = 5.0 * row;
@@ -1250,6 +1415,7 @@ mod tests {
                 rect: Rectangle::new(Point::new(x, y), Size::new(width, H)),
                 origin: Point::new(origin_x, y),
                 node: 0,
+                row: (y / (H + GAP)).round() as usize,
             })
             .collect()
     }
@@ -1406,6 +1572,7 @@ mod tests {
             rect: Rectangle::new(Point::new(x, y), Size::new(50.0, 40.0)),
             origin: Point::new(ox, y),
             node,
+            row: 0,
         };
         // Primary piece at (10, 0) in the grid; the tail is on the next row, card begins at -30.
         state.pieces = vec![piece(10.0, 0.0, 10.0, 0), piece(0.0, 60.0, -30.0, 0)];
