@@ -917,12 +917,7 @@ fn the_overview_card_and_grid_are_posed() {
         (
             "OverviewCard",
             "material/overview_card.rs",
-            &[
-                "five states",
-                "Default",
-                "orphan",
-                "targeted",
-            ][..],
+            &["five states", "Default", "orphan", "targeted"][..],
         ),
         (
             "CardGrid",
