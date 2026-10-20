@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1153 | Design (spec, clarify, plan, tasks) | merged | 0ebf14ba355194296f2d6d1b0c51597140a601d3 |
+| #1158 | M1 (T001–T011) | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Write, list, tidy PR comments on a PR's diff (whole wire delta, Send for PR not yet offered) | PRNUM | in review |
+| M1 | T001–T011 | full | Write, list, tidy PR comments on a PR's diff (whole wire delta, Send for PR not yet offered) | #1158 | in review |
 | M2 | T012–T022 | full | Send review on a PR: build_pr batch, branch/commit reads, daemon delivery | | pending |
 | M3 | T023–T027 | full | Anchoring on hunks, head-follow, outdated | | pending |
 
