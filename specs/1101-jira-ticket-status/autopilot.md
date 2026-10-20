@@ -17,13 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1152 | Design PR | merged | 537bf0d5193e751dbd41b377a70dd6488db31ba0 |
-| PR_M1 | M1 | open | |
+| #1155 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Status chip in the issue picker | PR_M1 | in review |
+| M1 | T001–T013 | full | Status chip in the issue picker | #1155 | in review |
 | M2 | T014–T027 | full | Current status on the sidebar | | pending |
 | M3 | T028–T030 | full | Status on Overview cards | | pending |
 
