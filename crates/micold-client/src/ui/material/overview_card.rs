@@ -1459,8 +1459,6 @@ mod tests {
         }
     }
 
-    /// How many controls take the keyboard in the card.
-
     fn mounted_targeted(targeted: bool) -> Mounted<'static> {
         Mounted::new(
             OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
