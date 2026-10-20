@@ -2530,7 +2530,9 @@ mod tests {
         let slot = slots(&m.node, 6)[1];
         let (on, t0) = (slot.center(), std::time::Instant::now());
         assert_eq!(frame_at(&mut m, on, t0), NOTHING);
-        let early = t0 + EXPAND_REST - std::time::Duration::from_millis(1);
+        /// A millisecond short of the rest: not a motion duration, the smallest step before it.
+        const JUST_SHORT_MS: u64 = 1;
+        let early = t0 + EXPAND_REST - std::time::Duration::from_millis(JUST_SHORT_MS);
         assert_eq!(frame_at(&mut m, on, early), NOTHING, "rested too early");
         assert_eq!(frame_at(&mut m, on, t0 + EXPAND_REST), ["rest 1"]);
         assert_eq!(
