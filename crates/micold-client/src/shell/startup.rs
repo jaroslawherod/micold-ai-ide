@@ -237,6 +237,7 @@ fn boot() -> (App, Task<Message>) {
     let loaded = restore_from_disk(&mut core, caps.settings(), caps.projects(), caps.scanner());
     let placement = loaded.settings.daemon.placement;
     core.settings.theme_pref = loaded.settings.theme;
+    core.settings.reduce_motion = loaded.settings.reduce_motion;
     // Feature 551, FR-017: the folds the user left; an origin never folded is expanded.
     restore_folds(&mut core, &loaded.settings);
     let scrollback_lines = loaded.settings.scrollback_lines;

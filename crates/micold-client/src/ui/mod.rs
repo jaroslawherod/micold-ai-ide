@@ -402,6 +402,8 @@ pub fn view_with<'a>(
         // Full screen slides the whole drawer off without touching the sidebar's own state
         // (feature 970, FR-009); every way out of the Overview clears it through `full_screen()`.
         .retracted(state.overview.full_screen())
+        // Reduce motion: the zoom switches in one step (feature 970, FR-008).
+        .instant(state.settings.reduce_motion)
         .handle(
             material::ResizeHandle::new(roles)
                 .on_resize(|x| Message::Sidebar(SidebarMsg::DragMoved(x.max(0.0) as u16))),

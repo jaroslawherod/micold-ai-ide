@@ -16,8 +16,8 @@
 use crate::app::Message;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::SettingsDraft;
-use crate::ui::material::Select;
-use crate::ui::settings::{name_of, page, Named};
+use crate::ui::material::{Checkbox, Select};
+use crate::ui::settings::{field_note, name_of, page, Named};
 use iced::Element;
 use micold_core::theme::ThemePreference;
 use micold_core::tokens::Roles;
@@ -27,7 +27,10 @@ use micold_core::tokens::Roles;
 // Read by `tests/settings_sections.rs`, which is a separate crate and cannot be seen from here —
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
-pub const SETTINGS: &[(&str, &str)] = &[("theme", "ThemeChanged")];
+pub const SETTINGS: &[(&str, &str)] = &[
+    ("theme", "ThemeChanged"),
+    ("reduce_motion", "ReduceMotionToggled"),
+];
 
 /// The theme options, in the order the picker lists them.
 const THEMES: &[Named<ThemePreference>] = &[
@@ -50,10 +53,20 @@ pub fn view<'a>(draft: &'a SettingsDraft, roles: Roles) -> Element<'a, Message> 
     .label("Theme")
     .supporting("Following the system switches with it, including while the app is running");
 
+    // Feature 970, FR-008: the checkbox-and-note row the other switches use (plan D4 named a
+    // `LabelledToggle`, which is an icon button).
+    let reduce_motion = Checkbox::new("Reduce motion", draft.appearance.reduce_motion, roles)
+        .on_toggle(|on| Message::Settings(SettingsMsg::ReduceMotionToggled(on)));
+    let reduce_motion = field_note(
+        reduce_motion,
+        Some("Switch the Overview's full-screen zoom in one step"),
+        roles,
+    );
+
     page(
         "Appearance",
         "How the application looks.",
-        vec![theme.into()],
+        vec![theme.into(), reduce_motion],
         roles,
     )
 }

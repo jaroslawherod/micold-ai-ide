@@ -45,7 +45,8 @@ Entering and leaving full screen is one motion: the cards widen (or narrow) and 
 places as the sidebar goes or returns, never overlapping. A card that moves to another row slides
 along the row ends instead of vanishing and reappearing. Press the button or the shortcut again
 part-way and the motion reverses from where it is. The card at the top of your view stays in view
-through the motion, even when the cards move to another row.
+through the motion, even when the cards move to another row. To have no motion at all, turn on
+[Reduce motion](settings.md#reduce-motion) in Settings: full screen then switches in one step.
 
 Leaving the Overview leaves full screen in the same step: activating a card, **Escape**, the
 top-bar **Overview** button or **Ctrl+Shift+O** close the Overview and bring the sidebar back. The

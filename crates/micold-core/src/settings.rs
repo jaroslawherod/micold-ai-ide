@@ -194,6 +194,11 @@ pub struct Settings {
     /// How the app selects its theme.
     #[serde(default)]
     pub theme: ThemePreference,
+    /// Whether the Overview's full-screen zoom switches in one step instead of animating (feature
+    /// 970, FR-008). Off by default; a file written before the key existed reads as off. It governs
+    /// that zoom only, and the operating system's reduced-motion preference is not read.
+    #[serde(default)]
+    pub reduce_motion: bool,
     /// Per-session embedded-terminal scrollback limit in lines (feature 006, FR-020/FR-021).
     #[serde(default = "default_scrollback")]
     pub scrollback_lines: usize,
@@ -350,6 +355,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: ThemePreference::default(),
+            reduce_motion: false,
             scrollback_lines: DEFAULT_SCROLLBACK_LINES,
             env_include_enabled: DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: default_env_include_script_path_string(),
@@ -699,6 +705,9 @@ struct StoredSettings {
     settings_version: u32,
     #[serde(default)]
     theme: ThemePreference,
+    /// Missing in files written before feature 970 → off.
+    #[serde(default)]
+    reduce_motion: bool,
     /// Missing in v1 files → defaults to [`DEFAULT_SCROLLBACK_LINES`] (backward compatible).
     #[serde(default = "default_scrollback")]
     scrollback_lines: usize,
@@ -820,6 +829,7 @@ impl StoredSettings {
         Self {
             settings_version: SETTINGS_VERSION,
             theme: settings.theme,
+            reduce_motion: settings.reduce_motion,
             scrollback_lines: settings.scrollback_lines,
             env_include_enabled: settings.env_include_enabled,
             env_include_script_path: settings.env_include_script_path.clone(),
@@ -863,6 +873,7 @@ impl StoredSettings {
         };
         Settings {
             theme: self.theme,
+            reduce_motion: self.reduce_motion,
             scrollback_lines: clamp_scrollback(self.scrollback_lines),
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,
@@ -1363,5 +1374,69 @@ mod notification_kinds_tests {
             NotificationKinds::default(),
             "Edge Cases: settings file unreadable"
         );
+    }
+}
+
+#[cfg(test)]
+mod reduce_motion_tests {
+    //! Feature 970, story 3: the **Reduce motion** switch as it is stored (FR-008).
+
+    use super::*;
+
+    fn store_in(dir: &tempfile::TempDir) -> JsonFileSettingsStore {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+    }
+
+    /// FR-008: off by default, and a file written before the key existed loads with it off and
+    /// every other field as before.
+    #[test]
+    fn reduce_motion_defaults_off() {
+        assert!(!Settings::default().reduce_motion, "a fresh installation animates");
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        std::fs::write(
+            dir.path().join("settings.json"),
+            r#"{ "settings_version": 4, "theme": "dark", "desktop_notifications": false }"#,
+        )
+        .unwrap();
+
+        let outcome = store.load();
+
+        assert_eq!(outcome.status, LoadStatus::Loaded);
+        assert!(!outcome.settings.reduce_motion, "an older file never asked for it");
+        assert_eq!(
+            outcome.settings,
+            Settings {
+                theme: crate::theme::ThemePreference::Dark,
+                desktop_notifications: false,
+                ..Settings::default()
+            },
+            "every other field reads as it did"
+        );
+    }
+
+    /// FR-008: on survives a save and a load, and the file holds the choice.
+    #[test]
+    fn reduce_motion_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+
+        store
+            .save(&Settings {
+                reduce_motion: true,
+                ..Settings::default()
+            })
+            .unwrap();
+        let written: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("settings.json")).unwrap())
+                .unwrap();
+
+        assert_eq!(
+            written.get("reduce_motion"),
+            Some(&serde_json::Value::Bool(true)),
+            "the file holds the user's choice"
+        );
+        assert!(store.load().settings.reduce_motion, "and loads back on");
     }
 }

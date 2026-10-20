@@ -1248,6 +1248,34 @@ mod tests {
         assert_same(&rig.pieces(), &ribbon(7, rest(1300.0), GAP, 1300.0, H));
     }
 
+    /// Feature 970, Story 3 #1-3 (FR-008): when the drawer snaps (*Reduce motion*), the first
+    /// layout after the flip, or the next one mid-zoom, is already at the end width; the zoom ends
+    /// there and the grid is the rest grid of that width, the animated route's end.
+    #[test]
+    fn a_snapped_width_ends_the_zoom_on_the_next_layout() {
+        // A flip whose layout is already at the end width: no zoom at all.
+        let mut rig = Rig::new();
+        rig.lay(cards(7), normal(300.0), 1150.0);
+        rig.lay(cards(7), full(300.0), 1450.0);
+        assert_eq!(rig.state().ends, None, "no zoom runs");
+        assert_same(&rig.pieces(), &ribbon(7, rest(1450.0), GAP, 1450.0, H));
+
+        // And back: leaving full screen onto the start width.
+        rig.lay(cards(7), normal(300.0), 1150.0);
+        assert_eq!(rig.state().ends, None);
+        assert_same(&rig.pieces(), &ribbon(7, rest(1150.0), GAP, 1150.0, H));
+
+        // A zoom at f = 0.4 whose next layout comes at the end width (the drawer snapped).
+        let mut rig = Rig::new();
+        rig.lay(cards(7), normal(300.0), 1150.0);
+        rig.lay(cards(7), full(300.0), 1270.0);
+        assert_eq!(rig.state().ends, Some((1150.0, 1450.0)));
+        assert_same(&rig.pieces(), &ribbon_at(7, 1150.0, 1450.0, 0.4));
+        rig.lay(cards(7), full(300.0), 1450.0);
+        assert_eq!(rig.state().ends, None, "the snapped layout ends the zoom");
+        assert_same(&rig.pieces(), &ribbon(7, rest(1450.0), GAP, 1450.0, H));
+    }
+
     /// U24 (970, FR-007): flipping back midway keeps the ends, and the frame does not move.
     #[test]
     fn a_reversal_midway_keeps_the_ends() {

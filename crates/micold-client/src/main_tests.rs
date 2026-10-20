@@ -13834,3 +13834,36 @@ fn the_card_focus_return_waits_for_a_dialog_then_follows_the_card_or_the_first()
         "the landing is cleared"
     );
 }
+
+/// Feature 970, FR-008 (clarification 4): Save applies *Reduce motion*, and Cancel discards it.
+#[test]
+fn reduce_motion_is_applied_by_save_and_discarded_by_cancel() {
+    let store = Arc::new(micold_core::settings::FakeSettingsStore::loaded(
+        micold_core::settings::Settings::default(),
+    ));
+    let mut app = base_app();
+    app.caps = app.caps.clone().with_settings(store.clone());
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::ReduceMotionToggled(true)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Cancelled));
+    assert!(!app.core.settings.reduce_motion, "Cancel discards the edit");
+    assert!(store.saves().is_empty(), "and writes nothing");
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::ReduceMotionToggled(true)),
+    );
+    assert!(!app.core.settings.reduce_motion, "the draft alone changes nothing");
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    assert!(app.core.settings.reduce_motion, "Save applies it");
+    assert!(
+        store.saves().last().is_some_and(|saved| saved.reduce_motion),
+        "and writes it"
+    );
+}

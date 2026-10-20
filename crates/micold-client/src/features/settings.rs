@@ -117,6 +117,9 @@ pub struct State {
     pub system_scheme: SystemScheme,
     /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
     pub theme_pref: ThemePreference,
+    /// Whether the Overview's full-screen zoom switches in one step (persisted; feature 970,
+    /// FR-008). Set by a save, like `theme_pref`; the draft's copy is the unsaved edit.
+    pub reduce_motion: bool,
     /// Where sessions are running **now** (FR-035b; BUG-003).
     ///
     /// Not the draft's `daemon.placement`, which is what the user is *choosing*, and not the
@@ -165,6 +168,7 @@ impl Default for State {
             settings_rail_collapsed: false,
             system_scheme: Default::default(),
             theme_pref: Default::default(),
+            reduce_motion: false,
             placement_in_force: Default::default(),
             daemons: Default::default(),
             legacy_default_daemon: None,
@@ -284,6 +288,8 @@ impl SettingsSection {
 pub struct AppearanceDraft {
     /// Light, dark, or follow the system.
     pub theme: ThemePreference,
+    /// Switch the Overview's full-screen zoom in one step (feature 970, FR-008).
+    pub reduce_motion: bool,
 }
 
 /// The Terminal section's fields.
@@ -656,6 +662,8 @@ impl From<FieldError> for Refusal {
 pub struct ValidSettings {
     /// Appearance.
     pub theme: ThemePreference,
+    /// Appearance (feature 970).
+    pub reduce_motion: bool,
     /// Terminal.
     pub scrollback_lines: usize,
     /// Environment.
@@ -703,6 +711,7 @@ impl ValidSettings {
     pub fn into_settings(self) -> Settings {
         Settings {
             theme: self.theme,
+            reduce_motion: self.reduce_motion,
             scrollback_lines: self.scrollback_lines,
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,
@@ -1071,6 +1080,7 @@ impl SettingsDraft {
 
         Ok(ValidSettings {
             theme: self.appearance.theme,
+            reduce_motion: self.appearance.reduce_motion,
             scrollback_lines,
             env_include_enabled: self.environment.enabled,
             env_include_script_path: self.environment.script_path.clone(),
@@ -1409,7 +1419,11 @@ impl SettingsDraft {
         // whether another window's save refreshes it.
         let Self {
             section: _,
-            appearance: AppearanceDraft { theme: _ },
+            appearance:
+                AppearanceDraft {
+                    theme: _,
+                    reduce_motion: _,
+                },
             terminal:
                 TerminalDraft {
                     scrollback_lines: _,
@@ -1476,6 +1490,7 @@ impl SettingsDraft {
         }
         refresh!(
             appearance.theme,
+            appearance.reduce_motion,
             terminal.scrollback_lines,
             terminal.save_terminal_history,
             environment.enabled,
@@ -1518,6 +1533,7 @@ impl SettingsDraft {
             section: SettingsSection::default(),
             appearance: AppearanceDraft {
                 theme: settings.theme,
+                reduce_motion: settings.reduce_motion,
             },
             terminal: TerminalDraft {
                 scrollback_lines: settings.scrollback_lines.to_string(),
@@ -1627,6 +1643,9 @@ pub enum Msg {
     /// which applies immediately from outside the form. This one edits the draft and takes effect on save, like every
     /// other control on the form.
     ThemeChanged(ThemePreference),
+    /// The Settings **Reduce motion** switch was toggled (feature 970, FR-008). Edits the draft;
+    /// Save applies it and Cancel discards it.
+    ReduceMotionToggled(bool),
     /// The Settings scrollback field changed.
     ScrollbackChanged(String),
     /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
@@ -1762,6 +1781,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::SectionShown(section) => section_shown(state, section),
         Msg::RailToggled => rail_toggled(state),
         Msg::ThemeChanged(theme) => theme_changed(state, theme),
+        Msg::ReduceMotionToggled(on) => reduce_motion_toggled(state, on),
         Msg::ScrollbackChanged(text) => scrollback_changed(state, text),
         Msg::EnvIncludeEnabledToggled(enabled) => env_include_enabled_toggled(state, enabled),
         Msg::EnvIncludePathChanged(text) => env_include_path_changed(state, text),
@@ -1954,6 +1974,11 @@ pub fn section_shown(state: &mut crate::app::State, section: SettingsSection) {
 /// Appearance: the theme was chosen (feature 027, FR-026).
 pub fn theme_changed(state: &mut crate::app::State, theme: ThemePreference) {
     edit(state, |draft| draft.appearance.theme = theme);
+}
+
+/// Appearance: the **Reduce motion** switch was toggled (feature 970, FR-008).
+pub fn reduce_motion_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.appearance.reduce_motion = on);
 }
 
 /// Terminal: the scrollback field was edited.
@@ -2532,5 +2557,68 @@ mod parse_budget_tests {
         let b = parse_budget("2", "", "", "").unwrap();
         assert_eq!(b.cpus_milli, Some(MilliCpus(2000)));
         assert_eq!(cores_text(MilliCpus(2000)), "2");
+    }
+}
+
+#[cfg(test)]
+mod reduce_motion_tests {
+    //! Feature 970, story 3: the **Reduce motion** switch is a draft field like the others
+    //! (FR-008; clarification 4). Save and Cancel through the app are in `main_tests.rs`.
+
+    use super::*;
+
+    fn open_with(reduce_motion: bool) -> crate::app::State {
+        let mut state = crate::app::State::default();
+        state.settings.settings_draft = Some(SettingsDraft::from_settings(&Settings {
+            reduce_motion,
+            ..Settings::default()
+        }));
+        state
+    }
+
+    fn draft(state: &crate::app::State) -> &SettingsDraft {
+        state.settings.settings_draft.as_ref().expect("open")
+    }
+
+    /// The draft opens showing what is stored.
+    #[test]
+    fn the_draft_is_seeded_from_the_stored_setting() {
+        assert!(!open_with(false).settings.settings_draft.unwrap().appearance.reduce_motion);
+        assert!(open_with(true).settings.settings_draft.unwrap().appearance.reduce_motion);
+    }
+
+    /// Toggling edits only the draft; the applied setting waits for Save.
+    #[test]
+    fn toggling_edits_only_the_draft() {
+        let mut state = open_with(false);
+
+        update(&mut state, Msg::ReduceMotionToggled(true));
+
+        assert!(draft(&state).appearance.reduce_motion, "the page shows it");
+        assert!(!state.settings.reduce_motion, "nothing is applied before Save");
+    }
+
+    /// Save's validated copy carries the draft's value.
+    #[test]
+    fn the_validated_settings_carry_the_draft_value() {
+        let mut state = open_with(false);
+        update(&mut state, Msg::ReduceMotionToggled(true));
+
+        let valid = draft(&state).validate().expect("the defaults are valid");
+
+        assert!(valid.reduce_motion);
+        assert!(valid.into_settings().reduce_motion, "and it reaches the stored shape");
+    }
+
+    /// Cancel discards the draft, so the next open shows the stored value again.
+    #[test]
+    fn cancel_discards_the_edit() {
+        let mut state = open_with(false);
+        update(&mut state, Msg::ReduceMotionToggled(true));
+
+        update(&mut state, Msg::Cancelled);
+
+        assert!(state.settings.settings_draft.is_none());
+        assert!(!state.settings.reduce_motion);
     }
 }

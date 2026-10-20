@@ -184,7 +184,11 @@ pub fn notify_catalog_recovery(status: LoadStatus, preserved: Option<&Path>, cor
 
 pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core: &mut State) {
     let theme = core.settings.theme_pref;
-    write_setting(store, core, &mut |settings| settings.theme = theme);
+    let reduce_motion = core.settings.reduce_motion;
+    write_setting(store, core, &mut |settings| {
+        settings.theme = theme;
+        settings.reduce_motion = reduce_motion;
+    });
 }
 
 /// Write the fold of `origin` after a toggle (feature 551, FR-017): only that id is inserted into
@@ -325,6 +329,7 @@ pub(crate) fn settings_in_force(app: &App) -> Settings {
 pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
     Settings {
         theme: app.core.settings.theme_pref,
+        reduce_motion: app.core.settings.reduce_motion,
         scrollback_lines: app.scrollback_lines,
         env_include_enabled: app.env_include_enabled,
         env_include_script_path: app.env_include_script_path.clone(),
@@ -392,6 +397,7 @@ fn changed_value<T: PartialEq + Clone>(saved: &T, opened_with: Option<&T>) -> Op
 fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settings>) {
     let Settings {
         theme: _,
+        reduce_motion: _,
         scrollback_lines: _,
         env_include_enabled: _,
         env_include_script_path: _,
@@ -452,6 +458,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         };
     }
     set!(theme);
+    set!(reduce_motion);
     set!(scrollback_lines);
     set!(env_include_enabled);
     set!(env_include_script_path);
@@ -665,6 +672,7 @@ pub(crate) fn save_and_prepare_check(
     let mut window = window_settings(app, Settings::default());
     changed(&mut window);
     app.core.settings.theme_pref = window.theme;
+    app.core.settings.reduce_motion = window.reduce_motion;
     app.scrollback_lines = window.scrollback_lines;
     app.env_include_enabled = window.env_include_enabled;
     app.env_include_script_path = window.env_include_script_path;
@@ -1150,6 +1158,7 @@ mod tests {
                 ..Default::default()
             },
             long_task_threshold_secs: 120,
+            reduce_motion: false,
             daemons: Vec::new(),
             next_daemon_id: 0,
             legacy_default_daemon: None,
@@ -1176,6 +1185,44 @@ mod tests {
             },
             stored,
             "every field but `theme` came back unchanged"
+        );
+    }
+
+    /// Feature 970, FR-008: *Reduce motion* is written by the same path as the theme, and the write
+    /// keeps every other stored setting.
+    #[test]
+    fn saving_reduce_motion_keeps_every_other_setting() {
+        let stored = Settings {
+            theme: ThemePreference::Light,
+            scrollback_lines: 12_345,
+            default_ai_cli: AiCli::Copilot,
+            desktop_notifications: false,
+            long_task_threshold_secs: 120,
+            reduce_motion: false,
+            ..Settings::default()
+        };
+        let store = FakeSettingsStore::loaded(stored.clone());
+        let mut core = State {
+            settings: settings::State {
+                theme_pref: ThemePreference::Light,
+                reduce_motion: true,
+                ..Default::default()
+            },
+            ..State::default()
+        };
+
+        persist_settings(Some(&store), &mut core);
+
+        let saved = store.saves();
+        assert_eq!(saved.len(), 1, "exactly one write");
+        assert!(saved[0].reduce_motion, "the choice is written");
+        assert_eq!(
+            Settings {
+                reduce_motion: false,
+                ..saved[0].clone()
+            },
+            stored,
+            "every field but `reduce_motion` came back unchanged"
         );
     }
 

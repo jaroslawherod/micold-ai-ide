@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: M3 reviewed, full gate next
-- **Next step**: M3 full gate, push, PR text
+- **Phase**: M4 implemented, scoped gate and reviews next
+- **Next step**: M4 scoped gate, review A, review B, visual pass, full gate, PR text
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1066 | design (spec, plan, tasks) | merged (rebase) | d7005808fd4f200f8ec2fa1afb23e4d640f53aeb |
 | #1074 | M1 (full screen hides the sidebar) | merged (rebase) | 3603ce06621499419e86a60e106d605b14a7904c |
 | #1143 | M2 (the cards zoom with the sidebar) | merged (rebase) | 34fccd299512b1ea90e592c8a920a631ba26ebf7 |
+| #1144 | M3 (the zoom keeps your place) | merged (rebase) | 0914629b79db4e4dd0d59658bba82df746e986fe |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | #1074 | merged |
 | M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | #1143 | merged |
-| M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | — | implemented (T027–T031 ticked), scoped gate and reviews next |
-| M4 | T032–T041 | full | Reduce motion (US3) | — | pending |
+| M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | #1144 | merged |
+| M4 | T032–T041 | full | Reduce motion (US3) | — | implemented (T032–T041 ticked), scoped gate and reviews next |
 
 Polish T042–T043 (visual pass, final gate) changes no code: close unit. M1 keeps US1 whole at 15
 tasks (+ US4's 2): toggle, drawer retraction and exits are one state change, and no split along a
@@ -96,3 +97,8 @@ None.
 
 - `card_grid.rs`: `CardGrid::on_reflow` / `scroll_id`, `OnReflow`, `first_visible`, `card_top`; `ZoomState.anchor` / `was_zooming`; the anchor logic is the top block of `Grid::update`. Test rig: `Rig::frame` (+ `lay_element`).
 - Glue: `features/overview.rs` `Msg::Reflowed` (an `f32` y, not `AbsoluteOffset`: `features_are_render_free` bars iced types from feature modules, a deviation from contracts/ui.md; + hand-written `impl Eq for Msg`); `ui/overview.rs` `GRID_SCROLL_ID`; the root's `scroll_to` is in `main.rs` `overview_message` (the Task side; `app.rs` has no Tasks). User guide: one sentence in `docs/user-guide/overview.md`.
+
+## Where things went (M4)
+
+- Core: `Settings.reduce_motion` + `StoredSettings` in `micold-core/src/settings.rs` (`reduce_motion_tests`). Client: `features/settings.rs` (`AppearanceDraft`/`ValidSettings`/`SettingsState.reduce_motion`, `Msg::ReduceMotionToggled`, `reduce_motion_toggled`); applied in `shell/persist.rs` (`persist_settings`, `window_settings`, `set_changed`, the Save apply) and seeded in `shell/startup.rs`; the page is `ui/settings/appearance.rs` (a `Checkbox` + `field_note`, not the plan's `LabelledToggle`, an icon button).
+- Drawer: `NavigationDrawer::instant` snaps `presence` in `layout` (`restart_at`), `ui/mod.rs` passes `state.settings.reduce_motion`. Grid needed no code: `ZoomState::advance` already ends a zoom whose width reaches the end (test only). Docs: `settings.md#reduce-motion`, one paragraph in `overview.md`.
