@@ -6,6 +6,23 @@ every run read only the principles. Newest report first; prepend the next one he
 ```text
 SYNC IMPACT REPORT
 ==================
+Version change: 1.7.0 → 1.8.0
+Bump rationale: MINOR — a new quality gate (Task-size gate) is added to Development Workflow
+  & Quality Gates; no principle is removed or redefined.
+
+  Every task MUST be small enough to implement in one working day. Measured agent usage
+  showed that the longest autopilot sessions (500–650 calls over 4–13 days) grew their
+  context from about 45k to 200–360k tokens, so each late call cost several times an early
+  one; the same work split into day-sized tasks, each in a fresh session, costs far less and
+  is easier to review.
+
+Modified in 1.8.0:
+constitution.md (Development Workflow & Quality Gates: Task-size gate)
+```
+
+```text
+SYNC IMPACT REPORT
+==================
 Version change: 1.6.1 → 1.7.0
 Bump rationale: MINOR — Principle III's prohibition on a Default session touching worktrees
   gains one narrowly-scoped, explicitly-named exception: a Default session MAY create a
