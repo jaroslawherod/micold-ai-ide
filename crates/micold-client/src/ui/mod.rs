@@ -67,6 +67,7 @@ pub(crate) mod rename_dialog;
 mod sandbox_status;
 /// The Settings sections — one module per page of the full-surface view (feature 027, FR-026).
 pub(crate) mod settings;
+pub use settings::daemon_opener_id;
 // The GitHub page's intro, re-exported for `tests/features_settings.rs` (feature 533, FR-014).
 pub use settings::github::GITHUB_ISSUES_INTRO;
 // The limits' *decision* — which appear, which are editable, what a disabled one says — re-exported
