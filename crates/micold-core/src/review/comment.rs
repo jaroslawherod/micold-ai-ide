@@ -590,8 +590,7 @@ impl EntryReview {
     /// Open a send of every draft comment of `scope` (W6, W20): `NothingPending` with none in that
     /// scope, `Busy` while any send of the entry is open. Until it finishes or aborts, its
     /// comments refuse edits (`InSend`). `pr` is the pull request's context for a pull request
-    /// scope; its batch (`build_pr`) arrives with the send (milestone M2), so only `None` is sent
-    /// for now.
+    /// scope, whose batch is `build_pr`'s; without it the working-tree batch is built.
     pub fn begin_send(
         &mut self,
         entry: EntryKind,
@@ -599,10 +598,6 @@ impl EntryReview {
         pr: Option<&PrContext>,
         outdated: &[CommentId],
     ) -> Result<SendSnapshot, ReviewError> {
-        debug_assert!(
-            pr.is_none(),
-            "the pull request batch arrives in milestone M2"
-        );
         if self.sending.is_some() {
             return Err(ReviewError::Busy);
         }
@@ -619,7 +614,10 @@ impl EntryReview {
         self.sending = Some(ids.clone());
         Ok(SendSnapshot {
             ids,
-            prompt: prompt::build(entry, &pending, outdated),
+            prompt: match pr {
+                Some(pr) => prompt::build_pr(pr, &pending, outdated),
+                None => prompt::build(entry, &pending, outdated),
+            },
         })
     }
 

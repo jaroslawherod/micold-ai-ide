@@ -1214,6 +1214,7 @@ fn pressing_send_to_session_sends_review_send_for_the_open_entry() {
             worktree_dir: "feat-a".into(),
             outdated: Vec::new(),
             count: 2,
+            pr: None,
         }
     );
     sending(&mut state, "feat-a", comments, true);

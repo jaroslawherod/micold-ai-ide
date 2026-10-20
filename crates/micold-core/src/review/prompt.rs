@@ -7,6 +7,7 @@ use super::comment::{CommentId, ReviewComment};
 use super::limits::MAX_QUOTED_LINES;
 use super::Side;
 use crate::pull_request::BranchPrState;
+use std::collections::BTreeSet;
 
 /// The agent tool a session reports each comment's outcome with; the preamble names it and the
 /// tool server's catalog lists it (contracts/batch-format.md, agent-tool.md).
@@ -22,7 +23,7 @@ pub enum EntryKind {
 }
 
 /// What a pull request's batch says about the pull request (feature 1149, data-model § `PrContext`;
-/// the batch itself, `build_pr`, arrives with the send in milestone M2).
+/// the batch itself is `build_pr`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrContext {
     /// The pull request's number.
@@ -64,6 +65,88 @@ pub fn build(entry: EntryKind, comments: &[ReviewComment], outdated: &[CommentId
         ),
     ];
 
+    blocks.extend(comment_blocks(comments, outdated, false));
+    blocks.join("\n\n")
+}
+
+/// The pull request's batch (feature 1149, contracts/batch-format.md P-1 to P-4): a preamble
+/// naming the pull request and head branch, the apply, commit and push request, the notes that
+/// apply, then one block per comment as [`build`] makes them. It never asks for anything to be
+/// posted. The title is flattened here, so any text is safe.
+pub fn build_pr(pr: &PrContext, comments: &[ReviewComment], outdated: &[CommentId]) -> String {
+    let state = match pr.state {
+        BranchPrState::Open | BranchPrState::Draft => "",
+        BranchPrState::Merged => ", which is merged",
+        BranchPrState::Closed => ", which is closed",
+    };
+    let head = &pr.head_branch;
+    let mut blocks = vec![
+        format!(
+            "Please work through these review comments on pull request #{} \"{}\" (head branch \
+             {head}){state}. Each block below is one comment: its reference, the file (relative to \
+             the worktree root), the lines it is about, the code on those lines at the pull \
+             request's head commit when the comment was written, and the comment itself.",
+            pr.number,
+            flatten_title(&pr.title),
+        ),
+        format!(
+            "For each comment, either make the change it asks for, or explain why you are not \
+             making it. Commit the changes you make and push them to the branch {head}. Then \
+             report each outcome by the comment's reference with the {REPORT_TOOL} tool of the \
+             micold tool server: outcome \"applied\" when you made the change (a reply is \
+             optional), or \"answered\" with your explanation as the reply. If you cannot use that \
+             tool, answer each comment by its reference in your reply instead."
+        ),
+    ];
+    if pr.checked_out.as_deref() != Some(head.as_str()) {
+        blocks.push(format!(
+            "This worktree does not have {head} checked out. Switch to {head} before changing \
+             anything."
+        ));
+    }
+    let recorded: BTreeSet<&str> = comments
+        .iter()
+        .filter_map(|comment| comment.pr.as_ref())
+        .map(|anchor| anchor.head_commit.as_str())
+        .collect();
+    if recorded
+        .iter()
+        .any(|commit| !commit.eq_ignore_ascii_case(&pr.current_head))
+    {
+        blocks.push(format!(
+            "The comments were written against commit {}; the pull request's head is now {}, so \
+             the code may have moved. Find it by the quoted code.",
+            recorded.iter().copied().collect::<Vec<_>>().join(", "),
+            pr.current_head
+        ));
+    }
+    if !pr.unreadable.is_empty() {
+        blocks.push(format!(
+            "Commit {} is not available in this worktree; the code is quoted as recorded.",
+            pr.unreadable.join(", ")
+        ));
+    }
+    blocks.extend(comment_blocks(comments, outdated, recorded.len() > 1));
+    blocks.join("\n\n")
+}
+
+/// `title` on one line: control characters become spaces, at most 200 characters, cut on a
+/// character boundary (P-1).
+pub fn flatten_title(title: &str) -> String {
+    title
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(200)
+        .collect()
+}
+
+/// One block per comment in path, line, side, creation and id order. `with_commit` adds each
+/// block's `Written against commit` line (a batch holding more than one recorded commit).
+fn comment_blocks(
+    comments: &[ReviewComment],
+    outdated: &[CommentId],
+    with_commit: bool,
+) -> Vec<String> {
     let mut ordered: Vec<&ReviewComment> = comments.iter().collect();
     ordered.sort_by(|a, b| {
         (&a.path, a.range.start(), a.side, a.created, a.id).cmp(&(
@@ -74,16 +157,24 @@ pub fn build(entry: EntryKind, comments: &[ReviewComment], outdated: &[CommentId
             b.id,
         ))
     });
-    blocks.extend(
-        ordered
-            .into_iter()
-            .map(|comment| comment_block(comment, outdated.contains(&comment.id))),
-    );
-    blocks.join("\n\n")
+    ordered
+        .into_iter()
+        .map(|comment| {
+            let commit = with_commit
+                .then(|| {
+                    comment
+                        .pr
+                        .as_ref()
+                        .map(|anchor| anchor.head_commit.as_str())
+                })
+                .flatten();
+            comment_block(comment, outdated.contains(&comment.id), commit)
+        })
+        .collect()
 }
 
 /// One comment: its heading, the outdated note, the fenced quote and its text.
-fn comment_block(comment: &ReviewComment, outdated: bool) -> String {
+fn comment_block(comment: &ReviewComment, outdated: bool, commit: Option<&str>) -> String {
     let range = comment.range;
     let lines = if range.start() == range.end() {
         format!("line {}", range.start())
@@ -121,6 +212,9 @@ fn comment_block(comment: &ReviewComment, outdated: bool) -> String {
         comment.reference(),
         comment.path
     );
+    if let Some(commit) = commit {
+        block.push_str(&format!("Written against commit {commit}.\n"));
+    }
     if outdated {
         block.push_str(
             "Note: the file has changed since this comment was written; the code is quoted as \
@@ -471,5 +565,212 @@ Name this.";
             at(": B, line") < at(": a/z, line") && at(": a/z, line") < at(": b, line"),
             "{prompt}"
         );
+    }
+
+    // --- The pull request's batch (feature 1149, contracts/batch-format.md P-1 to P-5) ---
+
+    fn sha(digit: char) -> String {
+        digit.to_string().repeat(40)
+    }
+
+    fn on_pr(mut comment: ReviewComment, commit: &str) -> ReviewComment {
+        comment.pr = Some(crate::review::comment::PrAnchor {
+            number: 12,
+            head_branch: "feat/retry".to_owned(),
+            head_commit: commit.to_owned(),
+        });
+        comment
+    }
+
+    fn pr_context(state: BranchPrState) -> PrContext {
+        PrContext {
+            number: 12,
+            title: "Add retry".to_owned(),
+            head_branch: "feat/retry".to_owned(),
+            state,
+            current_head: sha('2'),
+            checked_out: Some("feat/retry".to_owned()),
+            unreadable: Vec::new(),
+        }
+    }
+
+    fn pr_batch(pr: &PrContext, comments: &[ReviewComment]) -> String {
+        build_pr(pr, comments, &[])
+    }
+
+    fn pr_comment(n: u128, commit: &str) -> ReviewComment {
+        on_pr(one(n, "src/a.rs", Side::New, n as u32, n as u64), commit)
+    }
+
+    const PR_PREAMBLE_1: &str = "Please work through these review comments on pull request #12 \"Add retry\" (head branch feat/retry). Each block below is one comment: its reference, the file (relative to the worktree root), the lines it is about, the code on those lines at the pull request's head commit when the comment was written, and the comment itself.";
+    const PR_PREAMBLE_2: &str = "For each comment, either make the change it asks for, or explain why you are not making it. Commit the changes you make and push them to the branch feat/retry. Then report each outcome by the comment's reference with the report_review_comment tool of the micold tool server: outcome \"applied\" when you made the change (a reply is optional), or \"answered\" with your explanation as the reply. If you cannot use that tool, answer each comment by its reference in your reply instead.";
+
+    /// P-5: the documented bytes; they change only together with "The review message" in
+    /// `docs/user-guide/reviewing-changes.md` (FR-017).
+    #[test]
+    fn p1_pr_example_gives_the_exact_bytes() {
+        let mut pr = pr_context(BranchPrState::Open);
+        pr.checked_out = Some("main".to_owned());
+        let comment = on_pr(
+            comment(
+                10,
+                "src/a.rs",
+                Side::New,
+                7,
+                7,
+                &["let x = 1;"],
+                "Name this.",
+                1,
+            ),
+            &sha('1'),
+        );
+        let expected = format!(
+            "{PR_PREAMBLE_1}\n\n{PR_PREAMBLE_2}\n\n\
+             This worktree does not have feat/retry checked out. Switch to feat/retry before changing anything.\n\n\
+             The comments were written against commit {}; the pull request's head is now {}, so the code may have moved. Find it by the quoted code.\n\n\
+             ### Comment C-0000000a: src/a.rs, line 7 (current)\n```\nlet x = 1;\n```\nName this.",
+            sha('1'),
+            sha('2')
+        );
+        assert_eq!(build_pr(&pr, &[comment], &[]), expected);
+    }
+
+    #[test]
+    fn the_state_is_named_only_for_merged_and_closed() {
+        let state_of = |state| {
+            let batch = pr_batch(&pr_context(state), &[pr_comment(1, &sha('2'))]);
+            batch.lines().next().expect("a preamble").to_owned()
+        };
+        for open in [BranchPrState::Open, BranchPrState::Draft] {
+            assert!(state_of(open).contains("(head branch feat/retry). Each"));
+        }
+        assert!(state_of(BranchPrState::Merged)
+            .contains("(head branch feat/retry), which is merged. Each"));
+        assert!(state_of(BranchPrState::Closed)
+            .contains("(head branch feat/retry), which is closed. Each"));
+    }
+
+    #[test]
+    fn a_head_that_has_not_moved_and_the_branch_checked_out_add_no_note() {
+        let batch = pr_batch(
+            &pr_context(BranchPrState::Open),
+            &[pr_comment(1, &sha('2'))],
+        );
+        assert_eq!(
+            batch.split("\n\n").count(),
+            3,
+            "two preambles and one block: {batch}"
+        );
+        assert!(!batch.contains("checked out") && !batch.contains("written against"));
+    }
+
+    #[test]
+    fn p3_note_1_another_branch_or_a_detached_head_says_to_switch() {
+        for checked_out in [Some("main".to_owned()), None] {
+            let mut pr = pr_context(BranchPrState::Open);
+            pr.checked_out = checked_out;
+            let batch = pr_batch(&pr, &[pr_comment(1, &sha('2'))]);
+            assert!(
+                batch.contains(
+                    "\n\nThis worktree does not have feat/retry checked out. Switch to feat/retry before changing anything.\n\n### Comment"
+                ),
+                "{batch}"
+            );
+        }
+    }
+
+    #[test]
+    fn p3_note_3_names_the_unreadable_commits_after_the_head_note() {
+        let mut pr = pr_context(BranchPrState::Open);
+        pr.unreadable = vec![sha('1'), sha('3')];
+        let batch = pr_batch(&pr, &[pr_comment(1, &sha('1'))]);
+        assert!(
+            batch.contains(&format!(
+                "Find it by the quoted code.\n\nCommit {}, {} is not available in this worktree; the code is quoted as recorded.\n\n### Comment",
+                sha('1'),
+                sha('3')
+            )),
+            "{batch}"
+        );
+    }
+
+    #[test]
+    fn two_recorded_commits_give_every_block_its_own_line_and_one_sorted_note() {
+        let comments = [
+            pr_comment(1, &sha('3')),
+            pr_comment(2, &sha('1')),
+            pr_comment(3, &sha('3')),
+        ];
+        let batch = pr_batch(&pr_context(BranchPrState::Open), &comments);
+        assert!(
+            batch.contains(&format!(
+                "written against commit {}, {};",
+                sha('1'),
+                sha('3')
+            )),
+            "{batch}"
+        );
+        assert!(batch.contains(&format!(
+            "### Comment C-00000002: src/a.rs, line 2 (current)\nWritten against commit {}.\n```",
+            sha('1')
+        )));
+        assert_eq!(batch.matches("Written against commit").count(), 3);
+    }
+
+    #[test]
+    fn one_recorded_commit_adds_no_per_block_line() {
+        let batch = pr_batch(
+            &pr_context(BranchPrState::Open),
+            &[pr_comment(1, &sha('1')), pr_comment(2, &sha('1'))],
+        );
+        assert!(!batch.contains("Written against"), "{batch}");
+    }
+
+    #[test]
+    fn the_title_is_flattened_to_one_line_of_at_most_200_characters() {
+        let mut pr = pr_context(BranchPrState::Open);
+        pr.title = "a\nb\x1bc".to_owned();
+        let first = pr_batch(&pr, &[pr_comment(1, &sha('2'))]);
+        assert!(first.starts_with(
+            "Please work through these review comments on pull request #12 \"a b c\" (head"
+        ));
+        pr.title = "é".repeat(300);
+        let long = pr_batch(&pr, &[pr_comment(1, &sha('2'))]);
+        let title = long.split('"').nth(1).expect("quoted title");
+        assert_eq!(title.chars().count(), 200);
+        assert_eq!(flatten_title("tab\there"), "tab here");
+    }
+
+    #[test]
+    fn no_variant_asks_for_a_post_or_names_github() {
+        for state in [
+            BranchPrState::Open,
+            BranchPrState::Draft,
+            BranchPrState::Merged,
+            BranchPrState::Closed,
+        ] {
+            for checked_out in [Some("feat/retry".to_owned()), None] {
+                let mut pr = pr_context(state);
+                pr.checked_out = checked_out;
+                pr.unreadable = vec![sha('1')];
+                let batch = pr_batch(&pr, &[pr_comment(1, &sha('1')), pr_comment(2, &sha('3'))]);
+                let preamble = batch
+                    .split("### Comment")
+                    .next()
+                    .unwrap_or_default()
+                    .to_lowercase();
+                assert!(
+                    !preamble.contains("post") && !preamble.contains("github"),
+                    "{preamble}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_pr_batch_built_twice_has_equal_bytes() {
+        let comments = [pr_comment(2, &sha('1')), pr_comment(1, &sha('3'))];
+        let pr = pr_context(BranchPrState::Merged);
+        assert_eq!(pr_batch(&pr, &comments), pr_batch(&pr, &comments));
     }
 }

@@ -17,7 +17,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1153 | Design (spec, clarify, plan, tasks) | merged | 0ebf14ba355194296f2d6d1b0c51597140a601d3 |
-| #1158 | M1 (T001–T011) | open | |
+| #1158 | M1 (T001–T011) | merged | d9c2e378c1ef6e6a8f142a5369dd16c856e9324c |
 
 ## Milestones
 

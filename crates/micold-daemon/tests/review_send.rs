@@ -1066,3 +1066,484 @@ async fn w16_the_daemon_judges_current_side_drafts_and_the_client_removed_side_o
         "outdated: the gone current-side Draft and the client's removed-side one only"
     );
 }
+
+// --- Feature 1149: sending a pull request's review (W20) ---
+
+fn git_in(dir: &Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .expect("git runs");
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+    String::from_utf8_lossy(&out.stdout).trim().to_owned()
+}
+
+fn pr_send(
+    number: u64,
+    head_branch: &str,
+    current_head: &str,
+) -> micold_core::protocol::messages::PrSend {
+    micold_core::protocol::messages::PrSend {
+        number,
+        title: "Add retry".into(),
+        head_branch: head_branch.into(),
+        state: micold_core::pull_request::BranchPrState::Open,
+        current_head: current_head.into(),
+    }
+}
+
+/// Add a comment on pull request `number` (head branch `branch`, written at `commit`); a pull
+/// request's comments are not judged against the working tree, so no file is placed.
+#[allow(clippy::too_many_arguments)] // a test helper: one argument per field of the comment
+async fn add_pr(
+    client: &mut Client,
+    req: u64,
+    project: &Path,
+    dir: &str,
+    number: u64,
+    branch: &str,
+    commit: &str,
+    path: &str,
+    text: &str,
+) -> Vec<ReviewComment> {
+    let (result, seen) = request(
+        client,
+        req,
+        ClientMsg::ReviewEdit {
+            req,
+            project: project.to_path_buf(),
+            worktree_dir: dir.into(),
+            edit: ReviewEditOp::Add {
+                path: path.into(),
+                side: Side::New,
+                start: 1,
+                end: 1,
+                quote: vec!["quoted".into()],
+                text: text.into(),
+                pr: Some(micold_core::review::comment::PrAnchor {
+                    number,
+                    head_branch: branch.into(),
+                    head_commit: commit.into(),
+                }),
+            },
+        },
+    )
+    .await;
+    result.expect("a pull request comment is accepted");
+    seen.last().expect("the edit is pushed").1.clone()
+}
+
+async fn send_pr(
+    client: &mut Client,
+    req: u64,
+    project: &Path,
+    dir: &str,
+    pr: Option<micold_core::protocol::messages::PrSend>,
+) -> (Result<OperationResult, (ErrorKind, String)>, Vec<Pushed>) {
+    let msg = ClientMsg::ReviewSend {
+        req,
+        project: project.to_path_buf(),
+        worktree_dir: dir.into(),
+        outdated: Vec::new(),
+        pr,
+    };
+    request(client, req, msg).await
+}
+
+fn of_pr(comments: &[ReviewComment], number: u64) -> Vec<ReviewComment> {
+    comments
+        .iter()
+        .filter(|c| c.pr.as_ref().is_some_and(|pr| pr.number == number))
+        .cloned()
+        .collect()
+}
+
+fn context(
+    pr: &micold_core::protocol::messages::PrSend,
+    checked_out: Option<&str>,
+    unreadable: Vec<String>,
+) -> prompt::PrContext {
+    prompt::PrContext {
+        number: pr.number,
+        title: pr.title.clone(),
+        head_branch: pr.head_branch.clone(),
+        state: pr.state,
+        current_head: pr.current_head.clone(),
+        checked_out: checked_out.map(str::to_owned),
+        unreadable,
+    }
+}
+
+/// W20, SC-002, FR-006: ten comments on three files of one pull request, another pull request's and
+/// the working tree's drafts: only the first pull request's are delivered and become sent, and
+/// `pr: None` then sends the working tree's alone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w20_a_send_delivers_one_pull_requests_drafts_and_leaves_the_rest_draft() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let wt = entry_dir(&project, "wt");
+    let branch = git_in(&wt, &["symbolic-ref", "--short", "HEAD"]);
+    let head = git_in(&wt, &["rev-parse", "HEAD"]);
+    s.start(sid(1), false).await;
+    let mut client = window(&s.state, &project).await;
+
+    let mut all = Vec::new();
+    for n in 0..10u64 {
+        let path = ["src/a.rs", "src/b.rs", "docs/c.md"][(n % 3) as usize];
+        all = add_pr(
+            &mut client,
+            n + 1,
+            &project,
+            "wt",
+            12,
+            &branch,
+            &head,
+            path,
+            &format!("pr12 note {n}"),
+        )
+        .await;
+    }
+    add_pr(
+        &mut client,
+        20,
+        &project,
+        "wt",
+        13,
+        "other/branch",
+        &head,
+        "src/z.rs",
+        "pr13 note",
+    )
+    .await;
+    add(
+        &mut client,
+        21,
+        &project,
+        "wt",
+        "src/w.rs",
+        1,
+        &["tree"],
+        "tree note",
+    )
+    .await;
+    all = add(
+        &mut client,
+        22,
+        &project,
+        "wt",
+        "src/v.rs",
+        1,
+        &["tree"],
+        "tree note 2",
+    )
+    .await
+    .into_iter()
+    .chain(all)
+    .collect::<Vec<_>>();
+    let all = {
+        // The last push holds everything the entry has.
+        let (_, seen) = send_pr(
+            &mut client,
+            23,
+            &project,
+            "wt",
+            Some(pr_send(99, &branch, &head)),
+        )
+        .await;
+        assert!(
+            seen.is_empty(),
+            "a pull request with no draft opens nothing"
+        );
+        let _ = all;
+        let msg = ClientMsg::ReviewSend {
+            req: 24,
+            project: project.clone(),
+            worktree_dir: "wt".into(),
+            outdated: Vec::new(),
+            pr: Some(pr_send(12, &branch, &head)),
+        };
+        client.send(Frame::Control(msg)).await.unwrap();
+        answer(&mut client, 24).await
+    };
+    let (result, seen) = all;
+    assert_eq!(
+        result,
+        Ok(OperationResult::ReviewSent {
+            session: sid(1),
+            started: false
+        })
+    );
+    let (_, last, sending) = seen.last().expect("the end of the send is pushed").clone();
+    assert!(!sending);
+    let sent: Vec<&ReviewComment> = last
+        .iter()
+        .filter(|c| matches!(c.state, CommentState::Sent { .. }))
+        .collect();
+    assert_eq!(sent.len(), 10, "exactly the pull request's ten");
+    assert!(sent
+        .iter()
+        .all(|c| c.pr.as_ref().is_some_and(|pr| pr.number == 12)));
+    assert_eq!(
+        pending(&last).len(),
+        3,
+        "pr 13's and the working tree's two stay Draft"
+    );
+    let pr = pr_send(12, &branch, &head);
+    let expected = prompt::build_pr(&context(&pr, Some(&branch), vec![]), &of_pr(&last, 12), &[]);
+    assert!(!expected.contains("checked out") && !expected.contains("written against"));
+    assert_eq!(
+        s.typed_holds(sid(1), &submitted(&expected)).await,
+        submitted(&expected),
+        "one pull request batch, typed once"
+    );
+
+    // The working tree's send holds the working tree's drafts only.
+    let (result, seen) = send_pr(&mut client, 25, &project, "wt", None).await;
+    result.expect("sent");
+    let (_, last, _) = seen.last().expect("pushed").clone();
+    assert_eq!(pending(&last).len(), 1, "only pr 13's draft is left");
+    let tree: Vec<ReviewComment> = last.iter().filter(|c| c.pr.is_none()).cloned().collect();
+    let expected = prompt::build(EntryKind::Worktree, &tree, &[]);
+    s.typed_holds(sid(1), &submitted(&expected)).await;
+    assert!(!expected.contains("pr12 note") && !expected.contains("pr13 note"));
+}
+
+/// W20 refusals: W18's rules for the pull request, the Default entry, and no draft.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w20_a_bad_pull_request_or_the_default_entry_or_no_draft_is_invalid_input() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let head = "a".repeat(40);
+    let mut client = window(&s.state, &project).await;
+    add_pr(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        5,
+        "feat/x",
+        &head,
+        "a.rs",
+        "note",
+    )
+    .await;
+    let bad = [
+        ("wt", pr_send(0, "feat/x", &head)),
+        ("wt", pr_send(5, "", &head)),
+        ("wt", pr_send(5, "feat/\nx", &head)),
+        ("wt", pr_send(5, "feat/x", "not-a-commit")),
+        ("wt", pr_send(5, "feat/x", &"a".repeat(39))),
+        ("", pr_send(5, "feat/x", &head)),
+        ("wt", pr_send(6, "feat/x", &head)),
+        ("other", pr_send(5, "feat/x", &head)),
+    ];
+    for (n, (dir, pr)) in bad.into_iter().enumerate() {
+        let (result, seen) =
+            send_pr(&mut client, 10 + n as u64, &project, dir, Some(pr.clone())).await;
+        assert_eq!(
+            result.map_err(|(kind, _)| kind),
+            Err(ErrorKind::InvalidInput),
+            "{dir:?} {pr:?}"
+        );
+        assert!(seen.is_empty(), "nothing opened: {seen:?}");
+    }
+}
+
+/// W20, FR-010, W9: a delivery failure leaves the pull request's comments Draft.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w20_a_delivery_failure_leaves_the_pull_requests_comments_draft() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let head = git_in(&entry_dir(&project, "wt"), &["rev-parse", "HEAD"]);
+    let mut client = window(&s.state, &project).await;
+    let added = add_pr(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        5,
+        "feat/x",
+        &head,
+        "a.rs",
+        "Never typed.",
+    )
+    .await;
+    std::fs::remove_file(s.bin.path().join("claude")).unwrap();
+
+    let (result, seen) = send_pr(
+        &mut client,
+        2,
+        &project,
+        "wt",
+        Some(pr_send(5, "feat/x", &head)),
+    )
+    .await;
+    assert_eq!(result.expect_err("the send fails").0, ErrorKind::Refused);
+    let (_, comments, sending) = seen.last().expect("pushed").clone();
+    assert!(!sending);
+    assert_pushed_exactly(&comments, &added, false, "FR-010: they stay Draft");
+    assert!(s.inputs().is_empty());
+}
+
+/// W20, FR-010: two sends of one entry, one is `Busy`; and a head move while the send is open
+/// leaves each comment's recorded commit unchanged.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w20_two_concurrent_sends_one_is_busy_and_recorded_commits_do_not_move() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    s.slow(1.0);
+    let recorded = "1".repeat(40);
+    let moved = "2".repeat(40);
+    let mut first = window(&s.state, &project).await;
+    let mut second = window(&s.state, &project).await;
+    add_pr(
+        &mut first,
+        1,
+        &project,
+        "wt",
+        5,
+        "feat/x",
+        &recorded,
+        "a.rs",
+        "Once only.",
+    )
+    .await;
+    first
+        .send(Frame::Control(ClientMsg::ReviewSend {
+            req: 2,
+            project: project.clone(),
+            worktree_dir: "wt".into(),
+            outdated: Vec::new(),
+            pr: Some(pr_send(5, "feat/x", &moved)),
+        }))
+        .await
+        .unwrap();
+    let opened = async {
+        loop {
+            if let Frame::Control(DaemonMsg::ReviewChanged { sending: true, .. }) =
+                second.next().await.expect("stream open").unwrap()
+            {
+                return;
+            }
+        }
+    };
+    tokio::time::timeout(BOUND, opened)
+        .await
+        .expect("the send opens");
+    let (busy, _) = send_pr(
+        &mut second,
+        1,
+        &project,
+        "wt",
+        Some(pr_send(5, "feat/x", &moved)),
+    )
+    .await;
+    assert_eq!(busy.map_err(|(kind, _)| kind), Err(ErrorKind::Busy));
+
+    let (result, seen) = answer(&mut first, 2).await;
+    let new = started_session(&result);
+    let (_, last, _) = seen.last().expect("pushed").clone();
+    assert_eq!(
+        last[0].pr.as_ref().unwrap().head_commit,
+        recorded,
+        "the recorded commit stays"
+    );
+    let typed = s.typed_holds(new, "Once only.").await;
+    assert!(typed.contains(&format!(
+        "written against commit {recorded}; the pull request's head is now {moved}"
+    )));
+}
+
+/// US3 s2, FR-009, real git: another branch checked out gives the switch line, a commit the
+/// worktree does not hold gives the "not available" line, and the batch is delivered anyway.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn us3_another_branch_and_a_missing_commit_add_notes_and_are_still_delivered() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let wt = entry_dir(&project, "wt");
+    let head = git_in(&wt, &["rev-parse", "HEAD"]);
+    git_in(&wt, &["checkout", "-q", "-b", "elsewhere"]);
+    let missing = "a".repeat(40);
+    s.start(sid(1), false).await;
+    let mut client = window(&s.state, &project).await;
+    add_pr(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        5,
+        "feat/x",
+        &missing,
+        "a.rs",
+        "Gone.",
+    )
+    .await;
+
+    let pr = pr_send(5, "feat/x", &head);
+    let (result, seen) = send_pr(&mut client, 2, &project, "wt", Some(pr.clone())).await;
+    assert_eq!(
+        result,
+        Ok(OperationResult::ReviewSent {
+            session: sid(1),
+            started: false
+        }),
+        "delivery is not refused"
+    );
+    let (_, last, _) = seen.last().expect("pushed").clone();
+    let expected = prompt::build_pr(
+        &context(&pr, Some("elsewhere"), vec![missing.clone()]),
+        &last,
+        &[],
+    );
+    assert!(expected.contains("Switch to feat/x before changing anything."));
+    assert!(expected.contains(&format!(
+        "Commit {missing} is not available in this worktree"
+    )));
+    assert_eq!(
+        s.typed_holds(sid(1), &submitted(&expected)).await,
+        submitted(&expected)
+    );
+}
+
+/// US3 s3 (482 FR-016): with no session running, one starts and receives the pull request's batch
+/// as its first input; a detached head counts as another branch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn us3_no_running_session_starts_one_that_receives_the_pull_request_batch() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let wt = entry_dir(&project, "wt");
+    let head = git_in(&wt, &["rev-parse", "HEAD"]);
+    git_in(&wt, &["checkout", "-q", "--detach"]);
+    let mut client = window(&s.state, &project).await;
+    add_pr(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        5,
+        "feat/x",
+        &head,
+        "a.rs",
+        "Start one.",
+    )
+    .await;
+
+    let pr = pr_send(5, "feat/x", &head);
+    let (result, seen) = send_pr(&mut client, 2, &project, "wt", Some(pr.clone())).await;
+    let new = started_session(&result);
+    let (_, last, _) = seen.last().expect("pushed").clone();
+    let expected = prompt::build_pr(&context(&pr, None, vec![]), &last, &[]);
+    assert_eq!(
+        s.typed_holds(new, &submitted(&expected)).await,
+        submitted(&expected),
+        "its first input is the batch"
+    );
+}

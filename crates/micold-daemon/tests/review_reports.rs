@@ -527,3 +527,69 @@ async fn s6_a_comment_inside_an_open_send_is_a_conflict() {
     assert!(result.is_ok(), "{result:?}");
     assert!(is_sent(&s.comment(&comment)), "the report changed nothing");
 }
+
+/// FR-011 (characterization: reports are keyed by `CommentRef`, so this may pass on arrival): a
+/// report on a pull request's comment shows Applied or Answered with the reply, as for a
+/// working-tree comment.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn fr011_a_report_on_a_pull_request_comment_is_accepted_as_for_a_working_tree_one() {
+    use micold_core::protocol::messages::PrSend;
+    use micold_core::review::comment::PrAnchor;
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    let commit = "c".repeat(40);
+    for text in ["Rename a.", "Why b?"] {
+        s.state
+            .review_edit(
+                &project,
+                "wt",
+                ReviewEditOp::Add {
+                    path: "src/a.rs".into(),
+                    side: Side::New,
+                    start: 1,
+                    end: 1,
+                    quote: vec!["x".into()],
+                    text: text.into(),
+                    pr: Some(PrAnchor {
+                        number: 4,
+                        head_branch: "feat/x".into(),
+                        head_commit: commit.clone(),
+                    }),
+                },
+            )
+            .expect("a pull request comment is accepted");
+    }
+    let pr = PrSend {
+        number: 4,
+        title: "T".into(),
+        head_branch: "feat/x".into(),
+        state: micold_core::pull_request::BranchPrState::Open,
+        current_head: commit,
+    };
+    let sent = s.state.review_send(&project, "wt", &[], Some(&pr)).await;
+    assert!(
+        matches!(sent, Ok(OperationResult::ReviewSent { .. })),
+        "{sent:?}"
+    );
+    let held = s.comments("wt");
+    let (first, second) = (held[0].clone(), held[1].clone());
+    assert!(is_sent(&first) && is_sent(&second));
+
+    let result = s.report_ok(sid(1), report(&first, "applied", REPLY)).await;
+    assert_eq!(result["status"], "applied", "{result}");
+    s.report_ok(sid(1), report(&second, "answered", "Because."))
+        .await;
+
+    let after = s.comments("wt");
+    assert!(reported(&after, &first, Outcome::Applied));
+    assert!(reported(&after, &second, Outcome::Answered));
+    let CommentState::Reported { report, .. } = &s.comment(&second).state else {
+        panic!("reported");
+    };
+    assert_eq!(report.reply(), "Because.");
+    assert!(
+        after.iter().all(|c| c.pr.is_some()),
+        "still pull request comments"
+    );
+}

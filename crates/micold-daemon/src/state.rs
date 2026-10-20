@@ -2387,13 +2387,6 @@ impl DaemonState {
         pr: Option<&micold_core::protocol::messages::PrSend>,
     ) -> Result<micold_core::protocol::messages::OperationResult, crate::review::Refusal> {
         use micold_core::protocol::messages::{ErrorKind, OperationResult};
-        // Sending a pull request's review arrives with milestone M2 (W20).
-        if pr.is_some() {
-            return Err(crate::review::Refusal {
-                kind: ErrorKind::InvalidInput,
-                message: "sending a pull request's review is not available yet".into(),
-            });
-        }
         use micold_core::review::prompt::EntryKind;
         let asked = tokio::time::Instant::now();
         let kind = if worktree_dir.is_empty() {
@@ -2401,39 +2394,64 @@ impl DaemonState {
         } else {
             EntryKind::Worktree
         };
-        // W16: find where each Draft's code is now, reading files off the state lock.
+        // W20: a pull request's send is checked before anything else.
+        let checked = pr
+            .map(|pr| Self::checked_pr_send(pr, worktree_dir))
+            .transpose()?;
+        let scope = checked
+            .as_ref()
+            .map_or(micold_core::review::comment::Scope::WorkingTree, |pr| {
+                micold_core::review::comment::Scope::PullRequest(pr.number)
+            });
         let drafts = {
             let mut inner = self.lock();
             Self::check_entry_locked(&inner, project, worktree_dir)?;
             let inner = &mut *inner;
-            inner.reviews.drafts(&inner.catalog, project, worktree_dir)
+            inner
+                .reviews
+                .drafts(&inner.catalog, project, worktree_dir, scope)
         };
         let root = crate::catalog::location_of(worktree_dir).cwd(project);
-        let located_drafts = drafts.clone();
-        let relocated =
-            tokio::task::spawn_blocking(move || crate::review::relocate(&root, &located_drafts))
+        let (mut judged, moves, context) = match checked {
+            // W20: read the checked-out branch and each recorded commit, off the state lock. A
+            // pull request's comments are never relocated against the working tree.
+            Some(pr) => {
+                let context = Self::pr_context(&root, pr, &drafts).await;
+                (outdated.to_vec(), Vec::new(), Some(context))
+            }
+            // W16: find where each Draft's code is now, reading files off the state lock.
+            None => {
+                let located_drafts = drafts.clone();
+                let relocated = tokio::task::spawn_blocking(move || {
+                    crate::review::relocate(&root, &located_drafts)
+                })
                 .await
                 .unwrap_or_default();
-        // The client's verdict stands for removed-side comments only.
-        let mut judged = relocated.outdated;
-        judged.extend(
-            drafts
-                .iter()
-                .filter(|c| c.side == micold_core::review::Side::Old && outdated.contains(&c.id))
-                .map(|c| c.id),
-        );
+                // The client's verdict stands for removed-side comments only.
+                let mut judged = relocated.outdated;
+                judged.extend(
+                    drafts
+                        .iter()
+                        .filter(|c| {
+                            c.side == micold_core::review::Side::Old && outdated.contains(&c.id)
+                        })
+                        .map(|c| c.id),
+                );
+                (judged, relocated.moves, None)
+            }
+        };
+        judged.sort();
+        judged.dedup();
         let (snapshot, candidates) = {
             let mut inner = self.lock();
             Self::check_entry_locked(&inner, project, worktree_dir)?;
             let inner = &mut *inner;
-            if !relocated.moves.is_empty() {
+            if !moves.is_empty() {
                 let moved = inner.reviews.apply_edit(
                     &inner.catalog,
                     project,
                     worktree_dir,
-                    micold_core::protocol::messages::ReviewEditOp::Reanchor {
-                        moves: relocated.moves,
-                    },
+                    micold_core::protocol::messages::ReviewEditOp::Reanchor { moves },
                     micold_core::unix_time::unix_secs(),
                 );
                 match moved {
@@ -2444,10 +2462,14 @@ impl DaemonState {
                     }
                 }
             }
-            let (snapshot, msg) =
-                inner
-                    .reviews
-                    .begin_send(&inner.catalog, project, worktree_dir, kind, &judged)?;
+            let (snapshot, msg) = inner.reviews.begin_send(
+                &inner.catalog,
+                project,
+                worktree_dir,
+                kind,
+                (scope, context.as_ref()),
+                &judged,
+            )?;
             Self::broadcast_locked(inner, vec![msg]);
             let candidates = Self::running_sessions_locked(inner, project, worktree_dir);
             (snapshot, candidates)
@@ -2491,6 +2513,65 @@ impl DaemonState {
                 );
                 Err(crate::review::Refusal { kind, message })
             }
+        }
+    }
+
+    /// A pull request's send as the wire carries it, checked (W20): the rules of W18 for the
+    /// number, head branch and `current_head` (stored lower-cased), and no pull request for the
+    /// Default entry. The title stays as sent; `build_pr` flattens it.
+    fn checked_pr_send(
+        pr: &micold_core::protocol::messages::PrSend,
+        worktree_dir: &str,
+    ) -> Result<micold_core::protocol::messages::PrSend, crate::review::Refusal> {
+        use micold_core::protocol::messages::ErrorKind;
+        if worktree_dir.is_empty() {
+            return Err(crate::review::Refusal {
+                kind: ErrorKind::InvalidInput,
+                message: "the project root has no pull request to send comments of".into(),
+            });
+        }
+        let anchor = micold_core::review::comment::PrAnchor::checked(
+            pr.number,
+            &pr.head_branch,
+            &pr.current_head,
+        )?;
+        Ok(micold_core::protocol::messages::PrSend {
+            current_head: anchor.head_commit,
+            ..pr.clone()
+        })
+    }
+
+    /// What the batch says about pull request `pr` (W20, G1): the entry's checked-out branch and
+    /// which recorded commits of `drafts` the worktree at `root` does not hold. A git failure
+    /// counts as no branch and not available, never as a refusal.
+    async fn pr_context(
+        root: &Path,
+        pr: micold_core::protocol::messages::PrSend,
+        drafts: &[micold_core::review::comment::ReviewComment],
+    ) -> micold_core::review::prompt::PrContext {
+        let recorded: std::collections::BTreeSet<String> = drafts
+            .iter()
+            .filter_map(|c| c.pr.as_ref().map(|anchor| anchor.head_commit.clone()))
+            .collect();
+        let root = root.to_path_buf();
+        let (checked_out, unreadable) = tokio::task::spawn_blocking(move || {
+            let git = micold_core::git::GitCli::new();
+            let unreadable: Vec<String> = recorded
+                .into_iter()
+                .filter(|commit| !git.has_commit(&root, commit))
+                .collect();
+            (git.checked_out_branch(&root), unreadable)
+        })
+        .await
+        .unwrap_or_default();
+        micold_core::review::prompt::PrContext {
+            number: pr.number,
+            title: pr.title,
+            head_branch: pr.head_branch,
+            state: pr.state,
+            current_head: pr.current_head,
+            checked_out,
+            unreadable,
         }
     }
 

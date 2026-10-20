@@ -670,7 +670,14 @@ async fn w14_a_comment_of_a_held_open_send_is_busy_and_a_reported_one_refused() 
     );
     let mut reviews = Reviews::default();
     reviews
-        .begin_send(&catalog, &f.project(), "feat", EntryKind::Worktree, &[])
+        .begin_send(
+            &catalog,
+            &f.project(),
+            "feat",
+            EntryKind::Worktree,
+            (micold_core::review::comment::Scope::WorkingTree, None),
+            &[],
+        )
         .expect("the send opens and is held");
     let held = reviews
         .apply_edit(

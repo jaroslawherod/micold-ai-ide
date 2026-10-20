@@ -1087,7 +1087,7 @@ mod review_comments {
         can_pick, file_comments, jump_target, panel_groups, panel_rows, pending_counts,
         review_toolbar_label, send_action, status_counts, tidy_actions, Jump, PanelGroup,
     };
-    use micold_core::protocol::messages::ReviewEditOp;
+    use micold_core::protocol::messages::{PrSend, ReviewEditOp};
     use micold_core::review::comment::{
         CommentId, CommentState, PrAnchor, ReviewComment, Scope, Status,
     };
@@ -1333,9 +1333,9 @@ mod review_comments {
         assert_eq!(panel_rows(&state).len(), 4, "the unlisted comment is kept");
     }
 
-    // FR-015: tidy acts on the shown scope; Send is not offered for a pull request yet.
+    // FR-015: tidy acts on the shown scope.
     #[test]
-    fn tidy_emits_the_shown_scope_and_send_is_not_offered_on_a_pull_request() {
+    fn tidy_emits_the_shown_scope() {
         let mut state = showing_seven();
         push(
             &mut state,
@@ -1347,8 +1347,6 @@ mod review_comments {
         );
         let tidy = tidy_actions(&state).unwrap();
         assert!(tidy.clear_sent && tidy.discard_pending);
-        assert_eq!(send_action(&state), None);
-        assert_eq!(changes::update(&mut state, Msg::SendPressed), Effect::None);
         assert_eq!(
             add_of(changes::update(&mut state, Msg::ClearSentPressed)),
             ReviewEditOp::ClearSent {
@@ -1366,5 +1364,74 @@ mod review_comments {
         changes::update(&mut state, Msg::SourceChosen(Some(8)));
         let tidy = tidy_actions(&state).unwrap();
         assert!(!tidy.clear_sent && !tidy.discard_pending);
+    }
+
+    // US2 s1, FR-006, FR-013: Send review on a listed pull request counts its drafts only and
+    // carries the list's number, title, head branch, state and head; it is not offered for a pull
+    // request the list no longer holds.
+    #[test]
+    fn send_on_a_listed_pull_request_carries_it_and_counts_its_drafts_only() {
+        let mut state = showing_seven();
+        push(
+            &mut state,
+            vec![
+                comment_on(Some(7), "a.rs", Side::New, 2, CommentState::Draft),
+                comment_on(Some(7), "a.rs", Side::New, 1, CommentState::Sent { at: 5 }),
+                comment_on(Some(8), "a.rs", Side::New, 1, CommentState::Draft),
+                comment_on(None, "a.rs", Side::New, 1, CommentState::Draft),
+            ],
+        );
+        let action = send_action(&state).expect("a listed pull request is sendable");
+        assert_eq!(
+            (action.label.as_str(), action.enabled),
+            ("Send review (1)", true)
+        );
+        assert_eq!(
+            changes::update(&mut state, Msg::SendPressed),
+            Effect::ReviewSend {
+                project: project(),
+                worktree_dir: "feat-a".into(),
+                outdated: Vec::new(),
+                count: 1,
+                pr: Some(PrSend {
+                    number: 7,
+                    title: "title 7".into(),
+                    head_branch: "feat/a".into(),
+                    state: BranchPrState::Open,
+                    current_head: HEAD.into(),
+                }),
+            }
+        );
+        // The working tree sends its own draft with no pull request.
+        changes::update(&mut state, Msg::SourceChosen(None));
+        let Effect::ReviewSend { count, pr, .. } = changes::update(&mut state, Msg::SendPressed)
+        else {
+            panic!("a send");
+        };
+        assert_eq!((count, pr), (1, None));
+    }
+
+    #[test]
+    fn send_is_unavailable_while_the_pull_request_is_not_listed() {
+        let mut state = showing_seven();
+        push(
+            &mut state,
+            vec![comment_on(
+                Some(7),
+                "a.rs",
+                Side::New,
+                2,
+                CommentState::Draft,
+            )],
+        );
+        assert!(send_action(&state).is_some());
+        listed(&mut state, vec![listed_pr(8)]);
+        // The view returns to the working tree, which holds no draft of its own.
+        assert_eq!(
+            send_action(&state).map(|a| a.enabled),
+            Some(false),
+            "the working tree has nothing to send"
+        );
+        assert_eq!(changes::update(&mut state, Msg::SendPressed), Effect::None);
     }
 }

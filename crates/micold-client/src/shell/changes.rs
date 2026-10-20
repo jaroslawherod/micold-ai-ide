@@ -204,6 +204,7 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             worktree_dir,
             outdated,
             count,
+            pr,
         } => {
             // W6: the service pushes `sending` to every window, then answers once the prompt was
             // typed or refused (S2).
@@ -213,7 +214,7 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                     project,
                     worktree_dir,
                     outdated,
-                    pr: None,
+                    pr,
                 }
             });
             Task::none()
