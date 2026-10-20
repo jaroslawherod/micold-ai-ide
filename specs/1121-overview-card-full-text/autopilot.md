@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M3
-- **Next step**: M3 — review A r2 and review B r2 (sonnet, fix diff from round-1 snapshot 0a4547560bec594c020ff529e18c24c9b260ec0c:330bf0031533a0f591c99bb52f3ebae2cdac4322; round-2 snapshot b9ac5975a159891e08788042b0574271515ff555:a6fbf63e2e0b99811fada73d9c79ee9790a9dacc), then PR files.
+- **Next step**: M3 — orchestrator opens the M3 PR from the scratchpad's pr-title.txt / pr-body.md, waits on CI and merges; then M4.
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | #1169 | merged |
 | M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | #1173 | merged |
-| M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | | pending |
+| M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | pending | pending |
 | M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | | pending |
 
 US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachable until M3) and its hover wiring (M3). Polish T047–T048 is code-free: close unit. speckit-analyze (14 findings, 1 HIGH) fixed in tasks.md; it also found plan.md's *Delivery order* (3 steps) out of line with the milestones: plan fixed (Delivery order superseded by the 4 milestones; `Msg::CardScrolled` → `Event::BodyScrolled` in plan and research).
@@ -72,6 +72,9 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review B M3 | 1 | same | CHANGES: 1 MAJOR, 2 MINOR, all fixed. F1 mounted `ui/overview.rs` test `the_window_losing_focus_publishes_the_expansion_blur` (red by mutant: wiring line deleted); main_tests test renamed `expansion_window_blurred_collapses_and_refocus_expands_none`, `WindowFocusChanged(false)` dropped; F2 cycle log: T031 red by three one-off tooltip mutants, T033 note; F3 T027/T032 texts amended (fixed, prose only) |
 | Visual pass §B.3, B.4, B.6–B.8 M3 (T035) | 1 | 76570558 | PASS every criterion, light+dark, 1x+2x (tall-view case 1x only); §B.4 wheel order "inside first, then Overview" inferred, not shown; evidence visual-pass/m3/ (53 PNGs). Note: the Menu key opens the keyboard-focused card's menu while a different hover-expanded card stays expanded — checked against FR-012/US4: no card expands (the hovered one already was) and the Menu key's target is the focused card as before (feature 972), so M3 conforms; M4 makes focus expand, see Follow-ups |
 | Full gate M3 | F | a6fbf63e | GREEN (after review round 1 fixes) |
+| Review A M3 | 2 | b9ac5975a159891e08788042b0574271515ff555:a6fbf63e2e0b99811fada73d9c79ee9790a9dacc | CLEAN, 2 MINOR, both fixed (no round 3: MINORs only). F1 `rest_held` survived Escape/WindowBlurred, so `MenuClosed` re-expanded a card dismissed under the menu: cleared on both, test `a_rest_held_by_the_menu_is_dropped_by_escape_or_blur` (the reviewer's sequence, + blur); F2 Default card is the same `SessionLocation` in every project, so a switch under a resting pointer never rested anew: `CardGrid::rest_scope(&workspace.active)` drops `ZoomState.resting` on change, test `a_new_rest_scope_under_a_resting_pointer_rests_anew`, T029 text amended |
+| Review B M3 | 2 | same | CLEAN, 1 MINOR, fixed (prose only): cycle-log M3 row T027/T030/T032 said `WindowBlurred` in `main.rs`; now `.on_window_blur` in `ui/overview.rs`. Verify re-run: core `overview_` 36, client `card_grid overview` 118, `--test overview` 58, `idle_requests_no_frames` 14, `expansion_` 1, FR-018 grep empty |
+| Full gate M3 | G | 4d9894e3 + round 2 fixes | GREEN (first run red on `cargo fmt` of the new card_grid test; formatted, re-run green) |
 
 ## Declined review findings
 

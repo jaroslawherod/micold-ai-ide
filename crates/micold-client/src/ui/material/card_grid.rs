@@ -47,6 +47,7 @@ pub struct CardGrid<'a, M> {
     unscrolled: bool,
     expanded: Option<(usize, OverviewCard<'a, M>)>,
     on_window_blur: Option<M>,
+    rest_scope: u64,
 }
 
 /// What a grid asks its owner when a zoom moves the card at the top of the view.
@@ -68,6 +69,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             unscrolled: false,
             expanded: None,
             on_window_blur: None,
+            rest_scope: 0,
         }
     }
 
@@ -100,6 +102,14 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
     /// through its own message (feature 1121, FR-005, contract U4).
     pub fn on_window_blur(mut self, message: M) -> Self {
         self.on_window_blur = Some(message);
+        self
+    }
+
+    /// Name the set the cards belong to (the project): another scope drops the pointer's rest,
+    /// so a card at the same location in the new set rests anew (review A F2, M3 round 2).
+    pub fn rest_scope(mut self, scope: impl std::hash::Hash) -> Self {
+        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+        self.rest_scope = BuildHasherDefault::<DefaultHasher>::default().hash_one(scope);
         self
     }
 }
@@ -251,6 +261,8 @@ struct ZoomState {
     /// That card's location, and whether its rest was published: the card, not its place in
     /// the list, so a re-sort under the pointer leaves it (review A F1, M3).
     resting: Option<(SessionLocation, bool)>,
+    /// The rest scope `resting` was seen in: another drops it (review A F2, M3 round 2).
+    rest_scope: u64,
 }
 
 impl ZoomState {
@@ -268,6 +280,7 @@ impl ZoomState {
             capped_at: None,
             rest: ShowTimer::default(),
             resting: None,
+            rest_scope: 0,
         }
     }
 
@@ -386,6 +399,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             twin,
             rests: self.cards.iter().map(OverviewCard::rest_messages).collect(),
             on_window_blur: self.on_window_blur,
+            rest_scope: self.rest_scope,
             cards: self
                 .cards
                 .iter()
@@ -418,6 +432,8 @@ struct Grid<'a, M> {
     rests: Vec<(SessionLocation, Option<M>, Option<M>)>,
     /// Published when the window loses focus (feature 1121, FR-005).
     on_window_blur: Option<M>,
+    /// The cards' set, hashed: [`CardGrid::rest_scope`].
+    rest_scope: u64,
 }
 
 /// The expanded card's layout where it is drawn: its slot's node moved up by `place` (K3) to lie
@@ -476,6 +492,11 @@ impl<M: Clone> Grid<'_, M> {
         };
         let topmost = topmost.and_then(|card| self.rests.get(card).map(|(at, ..)| at));
         let messages = |at: &SessionLocation| self.rests.iter().find(|(card, ..)| card == at);
+        if state.rest_scope != self.rest_scope {
+            // The old set's card is gone with its owner's state: nothing to leave.
+            state.rest_scope = self.rest_scope;
+            state.resting = None;
+        }
         if topmost != state.resting.as_ref().map(|(card, _)| card) {
             if let Some((left, true)) = &state.resting {
                 if let Some((_, _, Some(on_leave))) = messages(left) {
@@ -2653,6 +2674,30 @@ mod tests {
             frame_at(&mut m, on, t1 + EXPAND_REST),
             [format!("rest {:?}", models[0].location)]
         );
+    }
+
+    /// Feature 1121 R5 (review A F2, M3 round 2): a new rest scope (another project) under a
+    /// pointer resting on a card at the same location, such as Default, rests on it anew.
+    #[test]
+    fn a_new_rest_scope_under_a_resting_pointer_rests_anew() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let scoped = |scope: &str| with_rests(plain_grid(&models)).rest_scope(scope);
+        let mut m = mounted(scoped("/a"), 900.0, 4000.0);
+        let on = slots(&m.node, 6)[1].center();
+        let t0 = std::time::Instant::now();
+        frame_at(&mut m, on, t0);
+        assert_eq!(frame_at(&mut m, on, t0 + EXPAND_REST), ["rest 1"]);
+        m.element = scoped("/b").unscrolled().into();
+        m.tree.diff(&m.element);
+        m.relayout();
+        let t1 = t0 + EXPAND_REST * 2;
+        assert_eq!(
+            frame_at(&mut m, on, t1),
+            NOTHING,
+            "left a card of the old set"
+        );
+        assert_eq!(frame_at(&mut m, on, t1 + EXPAND_REST), ["rest 1"]);
     }
 
     /// Feature 1121 FR-005, U4: the window losing focus publishes the grid's `on_window_blur`,
