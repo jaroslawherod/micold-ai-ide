@@ -531,7 +531,7 @@ pub fn gap_label(len: u32, open: bool) -> String {
     }
 }
 
-/// The row of a run of unchanged lines: a chevron and [`gap_label`] on the container tone, one
+/// The row of a run of unchanged lines: [`gap_label`] beside an empty number cell on the container tone, one
 /// whole-row target that expands (or, `open`, collapses) it.
 fn gap_row<'a, M: Clone + 'a>(
     gap: &Gap,
@@ -539,11 +539,9 @@ fn gap_row<'a, M: Clone + 'a>(
     r: Roles,
     on_gap: Option<&OnGap<'a, M>>,
 ) -> Element<'a, M> {
-    let chevron = if open { "\u{25BE}" } else { "\u{25B8}" };
     let cells = row![
-        container(code(chevron, r.primary))
+        container(Space::new())
             .width(Length::Fixed(NUMBER_WIDTH))
-            .align_x(Horizontal::Right)
             .padding([0.0, spacing::XS]),
         code(gap_label(gap.len, open), r.primary),
     ]
