@@ -12,3 +12,5 @@ T034 accepted: M1-M3 were not run through the TDD extension, so they have no red
 | T036 | `shell::daemons::tests::a_closed_dialog_returns_...`, `daemon_dialog_buttons::the_add_and_row_buttons_carry_the_ids_...` | Mutants: Details id equal to Edit's, and the focus return dropped, fail them. | passes |
 | T037 | `daemons_section_geometry::the_rows_keep_their_status_and_actions_...` | Mutant: renaming the Stop button fails it. | passes |
 | T038 | `daemons_feature::add_dialog::a_daemon_saved_from_the_dialog_survives_a_restart` | Pure addition over existing behaviour. | passes |
+
+Review A follow-ups (written with their tests): `take_focus_return` also waits while a standalone prompt is pending (`focus_returns_after_the_queued_drift_prompt_is_answered_not_under_it`), and Details of a daemon no longer in the registry hold no prompt back (`details_of_a_daemon_gone_from_the_registry_hold_no_prompt_back`). Both added to the fix in one commit with their tests; red not run separately.
