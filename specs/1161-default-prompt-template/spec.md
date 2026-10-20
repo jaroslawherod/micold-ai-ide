@@ -90,6 +90,12 @@ When a session is started through MCP without an explicit prompt, the template r
 - Concurrent MCP calls render independently; no shared mutable state.
 - A worktree attached to an existing branch: `{branch}` is that branch; `{type}` is empty when none applies.
 
+## Clarifications
+
+### Session 2026-10-20
+
+- Round 1: coverage scan found no critical ambiguities; storage location, tracker lookup mechanics and the dialog's edited-field tracking are plan-level. No questions asked.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
