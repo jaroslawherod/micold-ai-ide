@@ -892,7 +892,7 @@ mod daemon_form {
     }
 
     #[test]
-    fn escape_and_the_scrim_discard_the_draft() {
+    fn escape_discards_the_draft() {
         let (mut state, _) = with_daemon();
         state.update(Message::Daemons(DaemonsMsg::AddOpened));
         assert_eq!(

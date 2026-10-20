@@ -1077,6 +1077,67 @@ pub fn messages_after<'a, M: 'a>(
     published
 }
 
+/// The messages a left click (press, then release) published at each of `points`, in order, after
+/// the element has settled. For asking what a button *sends* rather than what it paints.
+pub fn clicks_at<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &iced::Renderer,
+    points: impl IntoIterator<Item = iced::Point>,
+) -> Vec<M> {
+    use iced::advanced::{clipboard, mouse, Shell};
+
+    let mut element = element;
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    settle(
+        &mut element,
+        &mut tree,
+        &node,
+        renderer,
+        std::time::Instant::now(),
+        0..SETTLE_FRAMES,
+        WINDOW,
+    );
+    node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    let mut published: Vec<M> = Vec::new();
+    for at in points {
+        for event in [
+            mouse::Event::CursorMoved { position: at },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ] {
+            let mut shell = Shell::new(&mut published);
+            element.as_widget_mut().update(
+                &mut tree,
+                &iced::Event::Mouse(event),
+                Layout::new(&node),
+                mouse::Cursor::Available(at),
+                renderer,
+                &mut clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+        }
+    }
+    published
+}
+
+/// A grid of points covering `area`, `step` apart, for [`clicks_at`] to sweep.
+pub fn grid(area: Rectangle, step: f32) -> Vec<iced::Point> {
+    let mut points = Vec::new();
+    let mut y = area.y + 1.0;
+    while y < area.y + area.height {
+        let mut x = area.x + 1.0;
+        while x < area.x + area.width {
+            points.push(iced::Point::new(x, y));
+            x += step;
+        }
+        y += step;
+    }
+    points
+}
+
 /// Settle, turn the wheel down by `LINES` with the cursor at `at`, then settle again.
 fn scroll_and_settle<'a, M: 'a>(
     element: &mut Element<'a, M>,
