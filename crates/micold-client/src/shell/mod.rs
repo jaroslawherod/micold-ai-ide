@@ -29,6 +29,7 @@ pub mod env_include;
 pub mod issues;
 pub mod jira;
 pub mod jira_http;
+pub mod jira_status;
 pub mod legacy_units;
 pub mod link_opener;
 pub mod links;

@@ -175,6 +175,21 @@ pub enum Message {
     /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
     /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
     WindowFocusChanged(bool),
+    /// The statuses of the linked Jira tickets were read (feature 1101): applied to the board by
+    /// [`crate::features::jira_status::State::apply`]. `at` is the clock the read ended on.
+    JiraStatusesRead {
+        /// The board's epoch when the read began; an answer from an earlier one is dropped.
+        epoch: u64,
+        /// The keys the read asked for.
+        keys: Vec<String>,
+        /// What Jira answered.
+        result: Result<
+            Vec<micold_core::jira_status::KeyedStatus>,
+            micold_core::github::IssueLoadError,
+        >,
+        /// Time on the refresh clock when the read ended.
+        at: std::time::Duration,
+    },
 
     // ---- Global notification surface ----
     /// What happens to the notification on screen (feature 028, FR-001). Two variants moved behind
@@ -332,6 +347,8 @@ pub struct State {
     pub attach: crate::features::attach::State,
     /// What the pr_status feature remembers -- see [`crate::features::pr_status::State`].
     pub pr_status: crate::features::pr_status::State,
+    /// The statuses of the linked Jira tickets -- see [`crate::features::jira_status::State`].
+    pub jira_status: crate::features::jira_status::State,
     /// The Claude plan's usage the service pushed (feature 490) -- see
     /// [`crate::features::plan_usage::State`].
     pub plan_usage: crate::features::plan_usage::State,
@@ -986,6 +1003,12 @@ impl State {
                 let outcomes = crate::features::project::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
+            Message::JiraStatusesRead {
+                epoch,
+                keys,
+                result,
+                at,
+            } => self.jira_status.apply(epoch, &keys, result, at),
             Message::Window(msg) => {
                 let outcomes = crate::features::window::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

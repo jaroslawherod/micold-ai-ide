@@ -370,6 +370,9 @@ pub fn switch_daemon_attachment(
         app.core.update(Message::Overview(
             micold_client::features::overview::Msg::ProjectSwitched,
         ));
+        // Feature 1101: the linked tickets' statuses belong to the project left; the new one's
+        // are read once its worktrees are known (FR-005).
+        app.core.jira_status.project_opened();
     }
     // The project being left detaches from its own daemon, the one entered attaches to its: they
     // may be two different daemons, and a down one is skipped rather than replaced (rule P-2).

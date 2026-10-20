@@ -10,7 +10,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage, GHOST_LOGIN};
-use crate::jira_status::TicketStatus;
+use crate::jira_status::{KeyedStatus, TicketStatus};
 use crate::settings::Settings;
 
 /// Which field of a connection a [`FieldProblem`] is about.
@@ -552,6 +552,17 @@ pub trait JiraSource: Send + Sync {
         token: &ApiToken,
         text: &str,
     ) -> Result<Vec<Issue>, IssueLoadError>;
+
+    /// The status of each of `keys` (at most 100) of the connected project; a key Jira does not
+    /// return is absent from the answer (not found or not visible). Done tickets are read too.
+    fn statuses(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+        _keys: &[String],
+    ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+        Ok(Vec::new())
+    }
 }
 
 /// Load a project's open issues page by page up to the load cap, through the paging rule GitHub
@@ -587,6 +598,8 @@ pub struct FakeJiraSource {
     calls: std::sync::Mutex<Vec<Option<String>>>,
     searches: Script<Vec<Issue>>,
     search_calls: std::sync::Mutex<Vec<String>>,
+    statuses: Script<Vec<KeyedStatus>>,
+    status_calls: std::sync::Mutex<Vec<Vec<String>>>,
 }
 
 impl FakeJiraSource {
@@ -611,6 +624,23 @@ impl FakeJiraSource {
     pub fn with_search(self, result: Result<Vec<Issue>, IssueLoadError>) -> Self {
         locked(&self.searches).push_back(result);
         self
+    }
+
+    /// Answer the next unanswered `statuses` call with `result`. With none scripted left, the last
+    /// answer scripted is not repeated: a call then answers an empty list.
+    pub fn with_statuses(self, result: Result<Vec<KeyedStatus>, IssueLoadError>) -> Self {
+        locked(&self.statuses).push_back(result);
+        self
+    }
+
+    /// Answer the next unanswered `statuses` call, after construction (a test changes a ticket).
+    pub fn script_statuses(&self, result: Result<Vec<KeyedStatus>, IssueLoadError>) {
+        locked(&self.statuses).push_back(result);
+    }
+
+    /// Every `statuses` call so far, as its key list.
+    pub fn status_calls(&self) -> Vec<Vec<String>> {
+        locked(&self.status_calls).clone()
     }
 
     /// Every `list_open` call so far, as its cursor.
@@ -651,5 +681,15 @@ impl JiraSource for FakeJiraSource {
                 "FakeJiraSource: no search scripted for this call".into(),
             ))
         })
+    }
+
+    fn statuses(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+        keys: &[String],
+    ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+        locked(&self.status_calls).push(keys.to_vec());
+        locked(&self.statuses).pop_front().unwrap_or(Ok(Vec::new()))
     }
 }

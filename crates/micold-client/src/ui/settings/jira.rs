@@ -27,7 +27,7 @@ pub const SETTINGS: &[(&str, &str)] = &[("jira_enabled", "JiraEnabledToggled")];
 pub const SWITCH_DESCRIPTION: &str = "Lets Micold read open issues of a Jira Cloud project to start worktrees from. Off: nothing is sent to Jira.";
 
 /// What enabling contacts and sends (FR-005b).
-pub const DATA_USE: &str = "Once a project is connected, Micold contacts that connection's Jira site and sends the project key, the search text you type and your account email with its API token.";
+pub const DATA_USE: &str = "Once a project is connected, Micold contacts that connection's Jira site and sends the project key, the search text you type and your account email with its API token. It also does so with no dialog open, to show the status of the tickets your worktrees are linked to: those tickets' keys go with the project key and your credentials when a project opens and when the window regains focus after five minutes.";
 
 /// The placeholder of the token field while a token is stored (FR-010).
 pub const TOKEN_STORED: &str = "A token is stored";

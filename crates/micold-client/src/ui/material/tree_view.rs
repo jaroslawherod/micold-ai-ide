@@ -74,6 +74,10 @@ pub struct TreeItem<'a, M> {
     /// Color-coded tag chips rendered on a second line beneath the label as `(label, accent)`
     /// (feature 008, FR-001). Empty ⇒ single-line row.
     pub tags: Vec<(String, Rgb)>,
+    /// A pre-built chip drawn right of the tag at the given index (feature 1101: the Jira status
+    /// beside the issue tag). It sits in the tag line, so it changes neither the row's height nor
+    /// where the tags start. Ignored when `tags` has no such index.
+    pub chip_after_tag: Option<(usize, Element<'a, M>)>,
     /// What a right-click of the row becomes, built from the **press point** in window
     /// coordinates (feature 008 context menu, FR-013; the point since BUG-008, FR-029d).
     ///
@@ -150,6 +154,7 @@ impl<'a, M> TreeItem<'a, M> {
             trailing: None,
             trailing_tooltip: None,
             tags: Vec::new(),
+            chip_after_tag: None,
             on_right_press: None,
             on_hover: None,
             on_unhover: None,
@@ -253,6 +258,12 @@ impl<'a, M> TreeItem<'a, M> {
     /// (feature 008, FR-001). Each is `(label, accent)`.
     pub fn tags(mut self, tags: Vec<(String, Rgb)>) -> Self {
         self.tags = tags;
+        self
+    }
+
+    /// Draw `chip` right of the tag at `index` (see [`TreeItem::chip_after_tag`]).
+    pub fn chip_after_tag(mut self, index: usize, chip: Element<'a, M>) -> Self {
+        self.chip_after_tag = Some((index, chip));
         self
     }
 
@@ -615,8 +626,14 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                         bottom: 0.0,
                         left: tag_indent,
                     });
-                for (label, accent) in item.tags {
+                let mut chip = item.chip_after_tag;
+                for (index, (label, accent)) in item.tags.into_iter().enumerate() {
                     tag_row = tag_row.push(super::Tag::new(label, accent));
+                    if chip.as_ref().is_some_and(|(at, _)| *at == index) {
+                        if let Some((_, chip)) = chip.take() {
+                            tag_row = tag_row.push(chip);
+                        }
+                    }
                 }
                 (
                     column![line, tag_row].spacing(2).width(Length::Fill).into(),

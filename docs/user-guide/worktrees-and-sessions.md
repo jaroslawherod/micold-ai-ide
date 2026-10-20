@@ -144,6 +144,8 @@ color-coded **tags** beneath it:
 - An **issue tag** — the ticket you entered when you created the worktree. A Jira-style key is
   shown upper-cased (`ABC-123`); a GitHub or GitLab issue number is shown as `#123`.
 - A **status tag** — `missing` or `invalid` for a worktree that is not usable (see above).
+- A **ticket status** chip, right of the issue tag, when the worktree's ticket belongs to the
+  project's Jira connection (see [A ticket's status](#a-tickets-status)).
 
 The name is derived from the descriptive part of the worktree's folder: `feat-abc-123_login-page`
 shows as **Login page** with `feat` and `ABC-123` tags. The tags are display-only — the underlying
@@ -678,6 +680,22 @@ If the search fails, the loaded matches stay, and the line under the list says "
 loaded issues failed —" followed by one of the reasons above, with a **Retry** button that runs the
 same search again. GitHub allows about 30 searches a minute; if you hit that, wait a minute, then
 retry.
+
+### A ticket's status
+
+With the Jira integration on and the project connected, a worktree named for one of its tickets
+shows the ticket's current status (for example **In Review**) as a chip right of the ticket's key
+tag in the sidebar. A finished ticket keeps showing its status. A worktree whose ticket is not in the
+connected project, or whose ticket Jira does not know or cannot show you, has no chip.
+
+The status is read when a project opens, and again when the window regains focus after the last
+read is more than five minutes old, so it follows a ticket a teammate moved without a restart. The
+tickets of all the project's worktrees are read together in one request (up to 100 at a time).
+
+When a read fails (you are offline, the token is rejected, Jira is unavailable), the last status
+stays on screen as a dimmed chip, and its tooltip adds "may be out of date". Nothing else changes
+and no dialog opens. After three failed reads in a row the chip is removed; turning the integration
+off, or removing the connection, removes the chips at once.
 
 ### From a Jira issue
 
