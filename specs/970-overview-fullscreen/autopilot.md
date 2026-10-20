@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: M4 reviewed, full gate next
-- **Next step**: M4 full gate, push, PR text
+- **Phase**: M4 gated, PR next
+- **Next step**: orchestrator opens the M4 PR from pr-title.txt / pr-body.md, waits on CI, merges; then close unit (T042–T043)
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | #1074 | merged |
 | M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | #1143 | merged |
 | M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | #1144 | merged |
-| M4 | T032–T041 | full | Reduce motion (US3) | — | reviewed, full gate next |
+| M4 | T032–T041 | full | Reduce motion (US3) | — | gated (full gate green), PR next |
 
 Polish T042–T043 (visual pass, final gate) changes no code: close unit. M1 keeps US1 whole at 15
 tasks (+ US4's 2): toggle, drawer retraction and exits are one state change, and no split along a
