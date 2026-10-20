@@ -39,6 +39,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | D1 | clarify | Escape on an expanded card (Story 3 sc.2, FR-005) | First Escape only collapses it (focus kept, Overview and full-screen stay); Escape with no card expanded closes the Overview | orchestrator default (recommended), pending jaro's confirmation on the decision card | spec.md#Clarifications |
 | D2 | clarify | Worktree directory form (FR-014) | Full absolute path, home folder shown as `~` | orchestrator default (recommended), pending jaro's confirmation on the decision card | spec.md#Clarifications |
 | D3 | clarify | Escape with a card menu open; which collapse re-expands the focused card | Escape only closes the menu; only the pointer leaving a hover-expanded card re-expands the focused card | agent | specs/972-overview-card-context-menu/spec.md#FR-007; spec.md#Edge Cases |
+| D4 | implement M2 | Wheel at an expanded card's body end (FR-008): iced latches the wheel on the inner scrollable for the rest of a gesture | Keep iced's scroll latching (as browsers do): no overflow → Overview at once; at the end → Overview from the next gesture. R6 amended; test asserts both the latch and the chain | agent | research.md#R6; card_grid.rs test `a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview` |
 
 ## Review rounds
 

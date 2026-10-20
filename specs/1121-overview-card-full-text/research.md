@@ -88,8 +88,14 @@ Builds on feature 1120's code: `overview_card.rs`, `card_grid.rs` (measure-then-
   bottom is in view, never above `view.top` while the slot top is in view and never below the slot
   top (contract K3). The grid stores the last viewport it was given in `update`/`draw` and computes
   `place` per frame, so the shift follows scrolling with no relayout.
-  The wheel needs nothing: iced's scrollable captures a wheel only when it scrolled, so at the
-  card's end or with no overflow the Overview scrolls (checked in `iced_widget-0.14` scrollable).
+  The wheel needs nothing: iced's scrollable captures a wheel when it scrolled or while its
+  scroll *transaction* lasts (`last_scrolled`, `iced_widget-0.14.2` scrollable ~l.601/894: ended
+  by a button, the pointer leaving the window, a pointer move 100 ms after the last scroll, or any
+  other event 1.5 s after it). So with no overflow the Overview scrolls at once, and at the card's
+  end the wheel stays latched on the card for the rest of that gesture, then goes on to the
+  Overview — the scroll latching browsers use, and FR-008's "at its end … scroll the Overview"
+  holds from the next gesture (decision D4; found in M2, test
+  `a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview`).
   Page Up / Page Down: the card claims them (`.on_page`) only while expanded and focused and
   `page_target` says the card can move that way, from the inner scroll's last reported edges
   (`Event::BodyScrolled`); `main.rs` answers `Msg::CardPaged` with `scrollable::scroll_by` of one
