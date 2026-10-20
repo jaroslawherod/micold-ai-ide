@@ -7,15 +7,6 @@
 
 use crate::task_progress::Ratio;
 
-/// One line of text and the tooltip that shows the whole of it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Line {
-    /// What the line shows.
-    pub text: String,
-    /// What hovering it shows.
-    pub tooltip: String,
-}
-
 /// The progress row: its words and the ratio a bar is drawn for (`None` draws no bar).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProgressRow {
@@ -30,10 +21,9 @@ pub struct ProgressRow {
 pub struct CardText {
     /// The issue title, else the branch, else the display name (FR-006).
     pub title: String,
-    /// The title's tooltip: the location's display name.
-    pub title_tooltip: String,
-    /// The short branch with the full branch as tooltip, unless the title is the branch (FR-007).
-    pub branch: Option<Line>,
+    /// The short branch, unless the title is the branch (FR-007). The full branch is on the
+    /// expanded card (feature 1121, FR-004), so the collapsed one has no tooltip.
+    pub branch: Option<String>,
     /// *No sessions*, *1 session · 1 running* (FR-008).
     pub sessions: String,
     /// The progress row, when there is a phase or a ratio (FR-009).
@@ -41,7 +31,7 @@ pub struct CardText {
     /// The pull request row and, for the unknown mark, its tooltip (FR-010).
     pub prs: Option<(String, Option<String>)>,
     /// What the agent is doing now, when its hooks report (FR-011).
-    pub activity: Option<Line>,
+    pub activity: Option<String>,
 }
 
 /// The card's title: the known issue title, else the branch, else the display name (C4, FR-006).
@@ -53,16 +43,6 @@ pub fn card_title(issue_title: Option<&str>, branch: Option<&str>, display_name:
         .or(branch)
         .unwrap_or(display_name)
         .to_string()
-}
-
-/// The title's tooltip (FR-006, FR-015): the display name, after the full title when the title is
-/// something else, so an ellipsized title can always be read in full.
-pub fn title_tooltip(title: &str, display_name: &str) -> String {
-    if title == display_name {
-        display_name.to_string()
-    } else {
-        format!("{title}\n{display_name}")
-    }
 }
 
 /// `type/number` of a conventional branch, `None` for any other (C5, FR-007, research R3): a
@@ -86,13 +66,10 @@ pub fn short_branch(branch: &str) -> Option<String> {
 }
 
 /// The branch line: `None` without a branch or when the title is the branch, else the short (or
-/// unchanged) branch with the full branch as tooltip (C6, FR-007).
-pub fn branch_line(title: &str, branch: Option<&str>) -> Option<Line> {
+/// unchanged) branch (C6, FR-007).
+pub fn branch_line(title: &str, branch: Option<&str>) -> Option<String> {
     let branch = branch.filter(|b| *b != title)?;
-    Some(Line {
-        text: short_branch(branch).unwrap_or_else(|| branch.to_string()),
-        tooltip: branch.to_string(),
-    })
+    Some(short_branch(branch).unwrap_or_else(|| branch.to_string()))
 }
 
 /// The sessions line (C7, FR-008): *No sessions*, *1 session*, *n sessions*, then *· k running*
@@ -152,18 +129,14 @@ pub fn activity_text(text: &str) -> Option<String> {
     })
 }
 
-/// The activity line with its todo ratio (*Writing tests · 2/5*), the same text as tooltip; `None`
-/// for no activity or a blank line, so a ratio never shows alone (C3).
-pub fn activity_line(activity: Option<&crate::hook_activity::CurrentActivity>) -> Option<Line> {
+/// The activity line with its todo ratio (*Writing tests · 2/5*); `None` for no activity or a
+/// blank line, so a ratio never shows alone (C3).
+pub fn activity_line(activity: Option<&crate::hook_activity::CurrentActivity>) -> Option<String> {
     let activity = activity?;
     let line = activity_text(&activity.line)?;
-    let text = match activity.ratio {
+    Some(match activity.ratio {
         Some(r) => format!("{line} \u{b7} {}/{}", r.done, r.total),
         None => line,
-    };
-    Some(Line {
-        tooltip: text.clone(),
-        text,
     })
 }
 
@@ -209,7 +182,7 @@ impl ExpandedText {
                 .cloned(),
             branch: model.branch.clone().filter(|branch| branch != title),
             dir: worktree_dir(&model.dir, home),
-            activity: activity_line(model.activity.as_ref()).map(|line| line.text),
+            activity: activity_line(model.activity.as_ref()),
         }
     }
 }
@@ -220,7 +193,6 @@ impl CardText {
         Self {
             branch: branch_line(&model.title, model.branch.as_deref()),
             title: model.title.clone(),
-            title_tooltip: title_tooltip(&model.title, &model.display_name),
             sessions: sessions_line(model.sessions),
             progress: progress_row(&model.progress),
             prs: model.prs.footer(),
@@ -322,26 +294,20 @@ mod tests {
         }
     }
 
-    /// C6, US2.3, US2.4, US2.8: the short (or unchanged) branch with the full one as tooltip; no
-    /// line without a branch or when the title already is the branch.
+    /// C6, US2.3, US2.4, US2.8: the short (or unchanged) branch; no line without a branch or when
+    /// the title already is the branch.
     #[test]
-    fn the_branch_line_is_short_with_the_full_branch_on_hover() {
+    fn the_branch_line_is_short() {
         assert_eq!(
             branch_line(
                 ISSUE_TITLE,
                 Some("fix/1115_container-daemon-fails-to-start")
             ),
-            Some(Line {
-                text: "fix/1115".into(),
-                tooltip: "fix/1115_container-daemon-fails-to-start".into(),
-            })
+            Some("fix/1115".into())
         );
         assert_eq!(
             branch_line(ISSUE_TITLE, Some("claude/project-thread-7041o6")),
-            Some(Line {
-                text: "claude/project-thread-7041o6".into(),
-                tooltip: "claude/project-thread-7041o6".into(),
-            }),
+            Some("claude/project-thread-7041o6".into()),
             "a branch without a short form shows unchanged"
         );
         assert_eq!(branch_line("Default", None), None, "no branch, no line");
@@ -402,23 +368,16 @@ mod tests {
         );
     }
 
-    /// C3: the line with its todo ratio, the same text on hover; nothing for no activity or a
-    /// blank line.
+    /// C3: the line with its todo ratio; nothing for no activity or a blank line.
     #[test]
     fn the_activity_line_carries_its_ratio_and_is_hidden_when_blank() {
         let with = activity("Writing tests", Some(ratio(2, 5)));
         assert_eq!(
             activity_line(Some(&with)),
-            Some(Line {
-                text: "Writing tests \u{b7} 2/5".into(),
-                tooltip: "Writing tests \u{b7} 2/5".into(),
-            })
+            Some("Writing tests \u{b7} 2/5".into())
         );
         let without = activity("Writing tests", None);
-        assert_eq!(
-            activity_line(Some(&without)).map(|l| l.text),
-            Some("Writing tests".into())
-        );
+        assert_eq!(activity_line(Some(&without)), Some("Writing tests".into()));
         assert_eq!(activity_line(None), None);
         assert_eq!(
             activity_line(Some(&activity("   ", Some(ratio(1, 2))))),
@@ -466,13 +425,7 @@ mod tests {
             r#"<agent-message from="orchestrator">Continue M2</agent-message>"#,
             None,
         );
-        assert_eq!(
-            activity_line(Some(&wrapped)),
-            Some(Line {
-                text: "Continue M2".into(),
-                tooltip: "Continue M2".into(),
-            })
-        );
+        assert_eq!(activity_line(Some(&wrapped)), Some("Continue M2".into()));
         let markup_only = activity(
             "<agent-message from=\"x\"></agent-message>",
             Some(ratio(1, 2)),
@@ -484,12 +437,12 @@ mod tests {
         );
         let todo = activity("<b>Writing</b> tests", Some(ratio(2, 5)));
         assert_eq!(
-            activity_line(Some(&todo)).map(|l| l.text),
+            activity_line(Some(&todo)),
             Some("Writing tests \u{b7} 2/5".into())
         );
         let multi = activity("fix the bug\n  and the test", None);
         assert_eq!(
-            activity_line(Some(&multi)).map(|l| l.text),
+            activity_line(Some(&multi)),
             Some("fix the bug and the test".into())
         );
     }
@@ -522,30 +475,6 @@ mod tests {
         }
     }
 
-    /// FR-006 and FR-015: the title's tooltip names the location and, when the title is not the
-    /// display name, holds the full title too, so a long (ellipsized) title can be read in full.
-    #[test]
-    fn the_title_tooltip_holds_the_full_title_and_the_display_name() {
-        let long = "A very long issue title that will not fit on one line of a 280 px card at all";
-        assert_eq!(
-            title_tooltip(long, "Worktree overview"),
-            format!("{long}\nWorktree overview")
-        );
-        assert_eq!(
-            title_tooltip(
-                "feat/make-a-very-long-branch-selector",
-                "Make a very long branch selector"
-            ),
-            "feat/make-a-very-long-branch-selector\nMake a very long branch selector",
-            "a branch used as the title keeps its full name in the tooltip"
-        );
-        assert_eq!(
-            title_tooltip("Default", "Default"),
-            "Default",
-            "a title that is the display name shows once"
-        );
-    }
-
     /// Data-model *CardText*: each field from its rule.
     #[test]
     fn card_text_takes_each_field_from_its_rule() {
@@ -554,18 +483,11 @@ mod tests {
             CardText::of(&m),
             CardText {
                 title: ISSUE_TITLE.into(),
-                title_tooltip: format!("{ISSUE_TITLE}\nfeat-1120_x"),
-                branch: Some(Line {
-                    text: "feat/1120".into(),
-                    tooltip: "feat/1120_x".into(),
-                }),
+                branch: Some("feat/1120".into()),
                 sessions: "1 session \u{b7} 1 running".into(),
                 progress: None,
                 prs: Some(("1 open".into(), None)),
-                activity: Some(Line {
-                    text: "Writing tests".into(),
-                    tooltip: "Writing tests".into(),
-                }),
+                activity: Some("Writing tests".into()),
             },
             "CardText: each field comes from its rule"
         );

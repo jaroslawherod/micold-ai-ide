@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M3
-- **Next step**: M3 — implement T024–T035 (branch at main 4eaa990f).
+- **Next step**: M3 — gate, review A and B, visual pass T035 (T024–T034 done; branch at main 4eaa990f).
 
 ## Pull requests
 
@@ -73,14 +73,10 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-M3 unit 1 (context cap reached). Committed locally on claude/project-thread-7041o6, not pushed (no PR yet).
-- **Done**: T024, T025, T028 (`Expansion`, `Event`, `Cause`, `EXPAND_REST`, `apply` in core `overview_expansion.rs`); T026, T029 (`OverviewCard::on_rest/on_leave/rest_messages`, `Grid::observe_rest` in `card_grid.rs`). Cycle log rows written.
-- **Next step**: T027 tests (app: `tests/overview.rs`, uses `state.update(Message::Overview(..))`; `main_tests.rs` `expansion_window_blur_collapses` beside `update_inner_applies_window_focus_changed`, line ~82, which builds `App { .. }` literally — copy that or use `base_app()`), then T030 (`State.expansion`, `Msg::Expansion(Event)`; feed `MenuOpened` inside the `CardMenuOpened` arm (after the `activating` early return), `MenuClosed` in `CardMenuDismissed | CardMenuEntryChosen`; `ProjectSwitched` resets it; `settle_card_menu`: `!open` → default, else feed `Listed(cards)` only when the expansion names a card (avoid `cards()` on every message) and feed `MenuClosed` where it drops a menu whose target is gone), T031, T032 (`main.rs:1178`), T033, T034, then verify (gate + review A/B + visual pass T035 via REVIEW-NEEDED).
-
-- **Open for M4** (carried from M2): K4 — iced never calls `on_scroll` without overflow, so
-  `on_body_scroll` never sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on
-  expand (cycle log T013 row). Locally `micold-core` `settings_refuses_save_over_failed_read` is red
-  when run as root (pre-existing; `scripts/gate.sh` runs it unprivileged).
+None. Carried for M4 (from M2): K4 — iced never calls `on_scroll` without overflow, so
+`on_body_scroll` never sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on
+expand (cycle log T013 row). Locally `micold-core` `settings_refuses_save_over_failed_read` is red
+when run as root (pre-existing; `scripts/gate.sh` runs it unprivileged).
 
 ## Open escalation
 

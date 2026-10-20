@@ -10,6 +10,7 @@ use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::overview::Activation;
+use micold_core::overview_expansion::{Event, Expansion};
 use micold_core::session::SessionLocation;
 use micold_core::task_progress::FileProgress;
 use micold_core::tokens::motion::duration;
@@ -70,6 +71,10 @@ pub struct State {
     /// window's width. Read only through [`State::full_screen`], which gates it on `open`, so every
     /// way out of the Overview leaves the mode with no code of its own. Not persisted (FR-001).
     pub full_screen: bool,
+    /// Which card is expanded, and the pointer, focus and menu facts that decide the next one
+    /// (feature 1121, data-model *Expansion*). Reset whenever the Overview closes
+    /// ([`crate::ui::overview::settle_card_menu`]) and on a project switch.
+    pub expansion: Expansion,
 }
 
 impl State {
@@ -223,6 +228,9 @@ pub enum Msg {
     /// nothing of the Overview's own changes. A bare `f32` because a feature module names no
     /// rendering type.
     Reflowed(f32),
+    /// Something that decides which card is expanded happened: a pointer rest or leave, a focus
+    /// move, Escape, the inner scroll of the expanded card (feature 1121, contract U4).
+    Expansion(Event),
 }
 
 // `Reflowed` holds a float, so `Eq` cannot be derived; the offset is a finite scroll position
@@ -292,6 +300,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             state.card_menu = None;
             state.focus_return = None;
             state.focus_landed = None;
+            state.expansion = Expansion::default();
         }
         Msg::CardMenuOpened {
             location,
@@ -299,6 +308,8 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             origin,
         } => {
             state.focus_landed = None;
+            // The target keeps its form and no other card expands while the menu is open (FR-012).
+            state.expansion.apply(Event::MenuOpened);
             state.card_menu = Some(CardMenu {
                 location,
                 anchor,
@@ -310,6 +321,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             )];
         }
         Msg::CardMenuDismissed | Msg::CardMenuEntryChosen(_) => {
+            state.expansion.apply(Event::MenuClosed);
             if let Some(menu) = state.card_menu.take() {
                 if menu.origin == MenuOrigin::Keyboard {
                     state.focus_return = Some(menu.location);
@@ -318,6 +330,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         }
         // The root answers it with the shared scroll-beneath rule; nothing of the Overview's own.
         Msg::GridScrolled => {}
+        Msg::Expansion(event) => state.expansion.apply(event),
         // The root scrolls the grid to the offset (a task, not state).
         Msg::Reflowed(_) => {}
         // The root answers these two with the measured card and the highlighted entry.
