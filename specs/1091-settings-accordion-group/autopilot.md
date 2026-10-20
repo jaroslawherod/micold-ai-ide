@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1091
 - **Worktree branch**: feat/1091_settings-accordions-should-form-a-group-opening
 - **Started**: 2026-10-19
-- **Phase**: milestone M2 (PR open)
-- **Next step**: orchestrator merges M2 PR, then close unit
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,13 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1135 | Design | merged | f3c827a5f8ce6947d331a5bb9aadddc4f8b552e7 |
 | #1140 | M1 | merged | 71fd52bdb46ec17805319fae33a6aca191d60092 |
+| #1142 | M2 | merged | cf7c64d7d7ee21a78fe03d60d64165dd811a1c92 |
+| close | Close the spec | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Daemon form sections form a group; error-held sections stay open | #1140 | merged |
-| M2 | T010–T012 | light | Showcase shows grouped and independent sets | #1142 | in review |
+| M2 | T010–T012 | light | Showcase shows grouped and independent sets | #1142 | merged |
 
 ## Decisions
 
@@ -44,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A (code-review high) | 1 | 13b113bded067ae9c3d0314bcc2e7ee8337071ee:e9406cd35042eeb4dc63d27f5b8874c4e0fd50b3 | no BLOCKER/MAJOR; stale-press guard and per-section overflow check fixed; rest declined |
 | M1 B (conformance) | 1 | 13b113bded067ae9c3d0314bcc2e7ee8337071ee:e9406cd35042eeb4dc63d27f5b8874c4e0fd50b3 | CLEAN (1 MINOR doc wrap fixed) |
 | Tasks | 1 | f14a22d473606b7e75e25f4b4e9bbd2a586ba061:933b6630274d782e6037b84d4a919f036546d3c9 | CHANGES: 1 MAJOR ([P] on shared file), fixed, prose only; 2 MINOR fixed |
+| Close diff | 1 | 6ef544bb74af3c18d6ff8a3e328b7c43ce6c4936:cf7c64d7d7ee21a78fe03d60d64165dd811a1c92 | CLEAN (3 MINOR, no change needed) |
 
 ## Declined review findings
 
@@ -69,3 +72,7 @@ None.
 ## M2 notes
 
 Review A (code-review high): 7 findings; fixed lockstep independent set (own state), in_group use, GROUP_DEFAULT, T011 text, test strength, live caption; declined: completeness test for new poses (catalogue/captions tests already tie poses to render), summary on group sections kept. Review B (sonnet): CLEAN (1 MINOR fixed). Visual pass: PASS. Full gate green.
+
+## Close notes
+
+Converge skipped: CLEAN review B for M1 and M2. Quickstart §B run in the real client (`visual-pass/notes.md`): steps 1, 2 (mouse), 3, 5 PASS; step 4 settled frames only; Space/Enter on a header not drivable by the harness, covered by accordion_section unit tests. speckit-tdd-verify: FAIL on finding 1 (no red recorded; tests landed with source, so test-first cannot be reconstructed; tdd/test-list.md and cycle-log.md written with mutant-derived reds, T013) and MED survivors fixed by T014-T017. Finding 11 (Space/Enter test) accepted as widget-owned.
