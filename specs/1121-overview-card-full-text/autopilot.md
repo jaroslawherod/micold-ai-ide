@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M2
-- **Next step**: M2 — T023 visual pass (worker), then verify.md and PR (see *Handover*).
+- **Next step**: M2 — Review A round 2 and visual re-look, then verify.md and PR (see *Handover*).
 
 ## Pull requests
 
@@ -56,31 +56,33 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Visual pass §B.1 M1 | 1 | 1989575f | titles/activity/branch/no clipping PASS (light+dark, 1x+2x); equal row height and 280/380/480 not verifiable in the `row().wrap()` pose: pose fixed with A F4, re-look requested |
 | Review A M1 | 2 | a3e7ef9c94a31e8534e21af63ee1824b4265bff6:fc5a5717e4acc163a7e7f5a300eefdfb5d72dce5 | CLEAN (F1, F2, F4 hold; 88 passed) |
 | Visual pass §B.1 M1 | 2 | fc5a5717 | PASS all criteria, light+dark, 1x+2x; evidence visual-pass/m1/ |
+| Review A M2 | 1 | HEAD f17866cf | CHANGES: 3 MAJOR, 3 MINOR. F1 `capped_at` + invalidate on height change (test drops `relayout`, shrinking-view test); F2 `overlay` uses the last view (tooltip test); F3 expanded card ≥ its stretched slot (test); F4 `body_edges` 1 px slack (test); F5 declined; F6 FR-008/US2 sc.6/T015 amended (fixed, prose only) |
+| Review B M2 | 1 | HEAD f17866cf | CLEAN (3 MINOR: F1 = A F6, amended; F2 K3/T010 amended to slots ending inside the view (fixed, prose only); F3 home dir cached in a `OnceLock`). Verify 88 + 22 passed |
+| Visual pass §B.1–B.2 M2 | 1 | f17866cf | FAIL on "draws over neighbours": a card peeks out below the expanded card. Found: it is card 4 of the next row in column 0 (6 cards, 4 columns), covered by the expanded card as spec Assumption "covers the cards below it" intends; not a twin drawn (painted-text probe: the twin is never painted). Re-look requested with a crop of both rows. Header-in-view and inside-view NOT CHECKED: re-look |
 
 ## Declined review findings
+
+- Review A M2 F5 (`diff()` infers the twin's tree from the child count): verified that a count change and a twin change in one frame hand one card the twin's tree or drop it, but the twin never receives events or operations (`update`, `operate`, `overlay` iterate `cards` only), so its tree carries no focus, hover or ripple state: a card that inherits it gets the equivalent of a fresh tree, and the last card's tree taken for the twin belongs to a card that is gone. No observable state moves; no test can tell the two apart.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
 
-M2 unit 4 (not over the cap; handing back for T023's worker). Nothing pushed; no PR.
-- **Done**: T014, T015, T020, T021 ticked (2bf9de5c): both red grid tests were test-side —
-  *new text in place* compared `activity.line.trim()` and used `long(1)`, whose body overran the
-  harness's paint viewport (the grid node) and was clipped; *wheel*: iced latches the wheel on
-  the inner body for the rest of a gesture, so the test now asserts the latch and then, after a
-  pointer move 120 ms later, the chain to the Overview (decision D4, research R6 amended).
-  T022 ticked: `expanded` pose in `showcase/sections/surfaces.rs` (card 0 of 6 expanded with a
-  long title, branch, directory, activity, progress); `showcase_completeness` 42 passed; clippy
-  `-p micold-client --all-targets -D warnings` clean (a stray empty doc line in
-  `overview_card.rs` tests removed). `card_grid overview_card`: 88 passed.
-- **Next step**: T023 visual pass (worker: `visual-pass` on the showcase, quickstart §B.1–§B.2,
-  both themes, scale 1.0 and 2.0, evidence in `specs/1121-overview-card-full-text/visual-pass/`);
-  then verify.md (gate, reviews, PR for M2).
+M2 unit 5 (over the 150k cap; returned REVIEW-NEEDED). Nothing pushed; no PR.
+- **Done**: M2 round-1 results recorded (*Review rounds*); A F1–F4 and B F3 fixed test-first
+  (cycle log rows "M2 review A r1"), A F5 declined, A F6 / B F1 / B F2 prose amends in spec.md
+  (FR-008, US2 sc.6), tasks.md (T010, T015) and contracts/expansion.md (K3). Visual FAIL traced
+  to the next row's card under the expanded one (intended). Duplicate `visual-pass/m2-showcase/`
+  removed. `cargo test -p micold-client --lib` 935 passed; clippy `-p micold-client --all-targets
+  -D warnings` clean.
+- **Next step**: Review A M2 round 2 (sonnet) on `git diff f17866cf HEAD`; visual re-look of
+  the `expanded` pose (both rows, header in view, card inside the view); then verify.md (gate,
+  PR for M2).
 - **Open for M4**: K4 — iced never calls `on_scroll` without overflow, so `on_body_scroll` never
   sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on expand (cycle log T013
-  row). K3's cover invariant vs. a slot ending below the view (cycle log). Locally `micold-core`
-  `settings_refuses_save_over_failed_read` is red because the run is root (pre-existing).
+  row). Locally `micold-core` `settings_refuses_save_over_failed_read` is red because the run is
+  root (pre-existing).
 - Build env: detached runs with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
   CARGO_PROFILE_TEST_DEBUG=0` + `scripts/autopilot/hold.sh`.
 

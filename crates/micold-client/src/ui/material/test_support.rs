@@ -262,6 +262,11 @@ impl<'a> Mounted<'a> {
             &Rectangle::with_size(self.room),
         );
         let captured = shell.is_event_captured();
+        let invalid = shell.is_layout_invalid();
+        // As the runtime does: a widget that asks for a new layout gets it before the next event.
+        if invalid {
+            self.relayout();
+        }
         (messages, captured)
     }
 
@@ -316,9 +321,19 @@ impl<'a> Mounted<'a> {
     /// The words of whatever floats over the element with the pointer resting at `at`, a tooltip
     /// say: empty when nothing floats (feature 1120, T032).
     pub fn floated_text(&mut self, at: Point) -> Vec<String> {
+        self.floated(at).into_iter().map(|p| p.content).collect()
+    }
+
+    /// [`Self::floated_text`] with where each paragraph floats.
+    pub fn floated(&mut self, at: Point) -> Vec<Painted> {
+        self.floated_in(at, Rectangle::with_size(self.room))
+    }
+
+    /// [`Self::floated`] with `viewport` handed to `overlay`: the window a scrollable would hand
+    /// it, which need not be the view the element was updated and drawn in.
+    pub fn floated_in(&mut self, at: Point, viewport: Rectangle) -> Vec<Painted> {
         self.hover(at);
-        let viewport = Rectangle::with_size(self.room);
-        self.renderer.reset(viewport);
+        self.renderer.reset(Rectangle::with_size(self.room));
         let Some(mut floated) = self.element.as_widget_mut().overlay(
             &mut self.tree,
             Layout::new(&self.node),
@@ -339,7 +354,7 @@ impl<'a> Mounted<'a> {
             mouse::Cursor::Available(at),
         );
         drop(floated);
-        self.paragraphs().into_iter().map(|p| p.content).collect()
+        self.paragraphs()
     }
 
     /// Every paragraph in the renderer's layers, in draw order.
