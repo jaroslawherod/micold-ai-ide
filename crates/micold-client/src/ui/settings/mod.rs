@@ -19,6 +19,7 @@
 pub(crate) mod appearance;
 pub(crate) mod container_fields;
 pub(crate) mod daemons;
+pub use daemons::opener_id as daemon_opener_id;
 pub(crate) mod environment;
 pub(crate) mod github;
 pub(crate) mod jira;

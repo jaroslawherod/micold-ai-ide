@@ -116,6 +116,15 @@ fn bound_line(view: &DaemonView) -> String {
     format!("Worktrees: {}", names.join(", "))
 }
 
+/// The widget id of the button that opened the daemon dialog, so focus can return to it (FR-009).
+pub fn opener_id(opener: Opener) -> iced::advanced::widget::Id {
+    iced::advanced::widget::Id::from(match opener {
+        Opener::Add => "daemons-add".to_string(),
+        Opener::Row(id, RowAction::Edit) => format!("daemons-edit-{id:?}"),
+        Opener::Row(id, RowAction::Details) => format!("daemons-details-{id:?}"),
+    })
+}
+
 /// Stop, which a container still on the released image offers only with no session running (FR-017).
 fn stop_button<'a>(view: &DaemonView, roles: Roles) -> Button<'a, Message> {
     let stop = Button::text("Stop", roles);
@@ -178,7 +187,7 @@ fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Eleme
     buttons = buttons
         .push(
             Button::text("Edit", roles)
-                .id(Opener::Row(id, RowAction::Edit).widget_id())
+                .id(opener_id(Opener::Row(id, RowAction::Edit)))
                 .on_press(Message::Daemons(DaemonsMsg::EditOpened(id))),
         )
         .push(
@@ -740,7 +749,7 @@ pub fn empty_state<'a>(roles: Roles) -> Element<'a, Message> {
         crate::ui::material::Text::new(EMPTY_TITLE, crate::ui::material::TypeRole::Label, roles),
         note(EMPTY_BODY, roles),
         Button::filled("Add daemon", roles)
-            .id(Opener::Add.widget_id())
+            .id(opener_id(Opener::Add))
             .on_press(Message::Daemons(DaemonsMsg::AddOpened)),
     ]
     .spacing(spacing::SM)
@@ -765,7 +774,7 @@ pub fn view<'a>(
     if !list.empty {
         controls.push(
             Button::outlined("Add daemon", roles)
-                .id(Opener::Add.widget_id())
+                .id(opener_id(Opener::Add))
                 .on_press(Message::Daemons(DaemonsMsg::AddOpened))
                 .into(),
         );
