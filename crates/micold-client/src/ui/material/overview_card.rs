@@ -396,6 +396,7 @@ mod tests {
             progress: Default::default(),
             activity: None,
             activation: Activation::OpenSession(SessionId::new()),
+            dir: std::path::PathBuf::from("/repo/.worktrees/x"),
         }
     }
 

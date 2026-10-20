@@ -50,6 +50,7 @@ pub mod origin;
 pub mod os_theme;
 pub mod overlay;
 pub mod overview;
+pub mod overview_expansion;
 pub mod overview_text;
 pub mod owner_only;
 pub mod pane_layout;

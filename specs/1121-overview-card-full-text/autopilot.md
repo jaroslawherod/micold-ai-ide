@@ -9,14 +9,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: implement M1
-- **Next step**: M1 — PR opened by the orchestrator from pr-title.txt/pr-body.md; then CI and merge, then M2.
+- **Phase**: implement M2
+- **Next step**: M2 — implement T009–T023 (TDD), then verify (gate, review A/B, visual pass §B.1–§B.2), PR.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1168 | design (spec, plan, tasks) | merged (rebase) | 1952d53a85b21b30b33aa3f0093c4a7d3cb55476 |
+| #1169 | M1 | merged (rebase) | b8f4adfbbf5cbfe5bbd2cd190a54988d53323e73 |
 
 Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
@@ -24,8 +25,8 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | (pending) | gate green, PR to open |
-| M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | | pending |
+| M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | #1169 | merged |
+| M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | | in progress |
 | M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | | pending |
 | M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | | pending |
 

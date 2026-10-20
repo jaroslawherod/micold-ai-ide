@@ -171,6 +171,32 @@ fn one_card_per_sidebar_entry_in_sidebar_order_with_every_kind() {
     assert_eq!(card(&all, &wt("fix-b")).kind, LocationType::Bugfix);
 }
 
+/// Feature 1121 R8 (Edge Cases): each card carries its directory — a worktree's path, the project
+/// root for *Default*, the recorded path for an orphan.
+#[test]
+fn each_card_carries_its_directory() {
+    let state = project_with(vec![
+        worktree("feat-a", Some("feat/a"), WorktreeStatus::Valid, false),
+        worktree("gone", None, WorktreeStatus::Missing, false),
+    ]);
+    let all = cards(&state);
+    assert_eq!(
+        card(&all, &SessionLocation::Default).dir,
+        project_path(),
+        "Default's directory is the project root"
+    );
+    assert_eq!(
+        card(&all, &wt("feat-a")).dir,
+        PathBuf::from("/repo/.claude/worktrees/feat-a"),
+        "a worktree's directory is its path"
+    );
+    assert_eq!(
+        card(&all, &wt("gone")).dir,
+        PathBuf::from("/repo/.claude/worktrees/gone"),
+        "an orphan's directory is its recorded path"
+    );
+}
+
 #[test]
 fn cards_are_in_state_order_with_sidebar_order_inside_a_state() {
     let mut state = project_with(vec![

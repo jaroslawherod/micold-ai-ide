@@ -167,6 +167,53 @@ pub fn activity_line(activity: Option<&crate::hook_activity::CurrentActivity>) -
     })
 }
 
+/// The worktree directory as the expanded card shows it (contract K6, FR-014, D2): a path inside
+/// `home` is `~`, the platform separator, then the rest; `home` itself is `~`; any other path, or
+/// no `home`, is shown in full. Whole path components only, so `/home/al` is not inside
+/// `/home/alice`.
+pub fn worktree_dir(path: &std::path::Path, home: Option<&std::path::Path>) -> String {
+    let Some(rest) = home.and_then(|home| path.strip_prefix(home).ok()) else {
+        return path.display().to_string();
+    };
+    if rest.as_os_str().is_empty() {
+        "~".to_string()
+    } else {
+        format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display())
+    }
+}
+
+/// What an expanded card says beyond the collapsed one (contract K5, data-model *ExpandedText*):
+/// every text in full, for the card to wrap with no ellipsis (FR-004, FR-014).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExpandedText {
+    /// The title in full.
+    pub title: String,
+    /// The location's display name, when it differs from the title.
+    pub display_name: Option<String>,
+    /// The full branch, when there is one and the title is not the branch.
+    pub branch: Option<String>,
+    /// The worktree directory, home folder as `~` ([`worktree_dir`]).
+    pub dir: String,
+    /// The whole activity line, when the hooks report one.
+    pub activity: Option<String>,
+}
+
+impl ExpandedText {
+    /// What `model`'s expanded card says, with `home` the user's home folder (K5).
+    pub fn of(model: &crate::overview::CardModel, home: Option<&std::path::Path>) -> Self {
+        let title = &model.title;
+        Self {
+            title: title.clone(),
+            display_name: Some(&model.display_name)
+                .filter(|name| *name != title)
+                .cloned(),
+            branch: model.branch.clone().filter(|branch| branch != title),
+            dir: worktree_dir(&model.dir, home),
+            activity: activity_line(model.activity.as_ref()).map(|line| line.text),
+        }
+    }
+}
+
 impl CardText {
     /// What `model`'s card says, each field from its rule (data-model *CardText*).
     pub fn of(model: &crate::overview::CardModel) -> Self {
@@ -467,6 +514,7 @@ mod tests {
             progress: progress(None, None),
             activity: Some(activity("Writing tests", None)),
             activation: Activation::RevealOnly(location),
+            dir: std::path::PathBuf::from("/home/alice/code/app/.worktrees/feat-1120_x"),
         }
     }
 
@@ -516,6 +564,129 @@ mod tests {
                 }),
             },
             "CardText: each field comes from its rule"
+        );
+    }
+
+    /// K6 (FR-014, D2): a path inside the home folder starts with `~`, in the platform's
+    /// separators; the home folder itself is `~`.
+    #[test]
+    fn a_directory_inside_the_home_folder_starts_with_a_tilde() {
+        let home = std::path::Path::new("/home/alice");
+        let dir = home.join("code").join("app").join(".worktrees").join("x");
+        let sep = std::path::MAIN_SEPARATOR;
+        assert_eq!(
+            worktree_dir(&dir, Some(home)),
+            format!("~{sep}code{sep}app{sep}.worktrees{sep}x"),
+            "the home folder at the start of the path is shown as ~"
+        );
+        assert_eq!(
+            worktree_dir(home, Some(home)),
+            "~",
+            "the home folder itself is ~"
+        );
+    }
+
+    /// K6: a path outside the home folder, or with no home folder known, is shown in full; a path
+    /// that only shares a string prefix with the home folder is outside it.
+    #[test]
+    fn a_directory_outside_the_home_folder_is_shown_in_full() {
+        let home = std::path::Path::new("/home/alice");
+        let outside = std::path::Path::new("/srv/repos/app");
+        assert_eq!(
+            worktree_dir(outside, Some(home)),
+            outside.display().to_string(),
+            "a path outside the home folder is not shortened"
+        );
+        let inside = home.join("code");
+        assert_eq!(
+            worktree_dir(&inside, None),
+            inside.display().to_string(),
+            "with no home folder known the path is shown in full"
+        );
+        let prefix_only = std::path::Path::new("/home/al");
+        assert_eq!(
+            worktree_dir(&home.join("x"), Some(prefix_only)),
+            home.join("x").display().to_string(),
+            "a home folder that is only a string prefix does not shorten the path"
+        );
+    }
+
+    const HOME: &str = "/home/alice";
+
+    fn expanded(model: &CardModel) -> ExpandedText {
+        ExpandedText::of(model, Some(std::path::Path::new(HOME)))
+    }
+
+    /// K5 (FR-004): the expanded card shows the title, display name, full branch, directory and
+    /// whole activity, each in full.
+    #[test]
+    fn the_expanded_text_holds_every_text_in_full() {
+        let long_activity = "Writing the tests for the expanded card, which must show the whole \
+                             activity line however long it is, never clipped to one line";
+        let m = CardModel {
+            activity: Some(activity(long_activity, Some(ratio(2, 5)))),
+            ..model()
+        };
+        let sep = std::path::MAIN_SEPARATOR;
+        assert_eq!(
+            expanded(&m),
+            ExpandedText {
+                title: ISSUE_TITLE.into(),
+                display_name: Some("feat-1120_x".into()),
+                branch: Some("feat/1120_x".into()),
+                dir: format!("~{sep}code{sep}app{sep}.worktrees{sep}feat-1120_x"),
+                activity: Some(format!("{long_activity} \u{b7} 2/5")),
+            },
+            "ExpandedText: every text in full, the branch not shortened"
+        );
+    }
+
+    /// K5: the display name and the branch are left out when the title already is them; no
+    /// activity, no activity line.
+    #[test]
+    fn the_expanded_text_leaves_out_what_the_title_already_says() {
+        let named = CardModel {
+            title: "feat-1120_x".into(),
+            branch: None,
+            activity: None,
+            ..model()
+        };
+        let text = expanded(&named);
+        assert_eq!(text.title, "feat-1120_x");
+        assert_eq!(
+            text.display_name, None,
+            "a title that is the display name shows once"
+        );
+        assert_eq!(text.branch, None, "no branch, no branch line");
+        assert_eq!(text.activity, None, "no activity, no activity line");
+        let branch_titled = CardModel {
+            title: "feat/1120_x".into(),
+            ..model()
+        };
+        assert_eq!(
+            expanded(&branch_titled).branch,
+            None,
+            "a title that is the branch shows once"
+        );
+    }
+
+    /// K5 (Edge Case): an orphan or invalid location has no branch and shows its recorded path.
+    #[test]
+    fn an_orphan_shows_its_recorded_directory_and_no_branch() {
+        let orphan = CardModel {
+            title: "gone".into(),
+            display_name: "gone".into(),
+            branch: None,
+            kind: LocationType::OrphanInvalid,
+            dir: std::path::PathBuf::from("/srv/old/gone"),
+            ..model()
+        };
+        let text = expanded(&orphan);
+        assert_eq!(text.branch, None);
+        assert_eq!(
+            text.dir,
+            std::path::Path::new("/srv/old/gone").display().to_string(),
+            "the recorded path, in full"
         );
     }
 }
