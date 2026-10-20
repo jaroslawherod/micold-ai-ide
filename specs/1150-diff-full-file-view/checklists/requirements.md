@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (three open, for the clarify unit: large-file limit, symbol definition lookup, picking in untouched files)
+- [x] No [NEEDS CLARIFICATION] markers remain (the three were resolved in spec.md Clarifications, session 2026-10-20)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic
