@@ -16,6 +16,8 @@
 use crate::app::Message;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::SettingsDraft;
+use crate::features::window::FieldId;
+use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select};
 use crate::ui::settings::{field_note, name_of, page, Named};
 use iced::Element;
@@ -40,7 +42,11 @@ const THEMES: &[Named<ThemePreference>] = &[
 ];
 
 /// The Appearance page.
-pub fn view<'a>(draft: &'a SettingsDraft, roles: Roles) -> Element<'a, Message> {
+pub fn view<'a>(
+    draft: &'a SettingsDraft,
+    focused: Option<FieldId>,
+    roles: Roles,
+) -> Element<'a, Message> {
     let theme = Select::new(
         THEMES,
         Some(Named(
@@ -56,6 +62,7 @@ pub fn view<'a>(draft: &'a SettingsDraft, roles: Roles) -> Element<'a, Message> 
     // Feature 970, FR-008: the checkbox-and-note row the other switches use (plan D4 named a
     // `LabelledToggle`, which is an icon button).
     let reduce_motion = Checkbox::new("Reduce motion", draft.appearance.reduce_motion, roles)
+        .track_focus(FieldId::SettingsReduceMotion, focused)
         .on_toggle(|on| Message::Settings(SettingsMsg::ReduceMotionToggled(on)));
     let reduce_motion = field_note(
         reduce_motion,
