@@ -1128,54 +1128,41 @@ mod tests {
         tree.children.iter().find_map(zoom_pieces)
     }
 
-    /// 1120 (T043, close visual pass): mid-zoom, a card split across two rows paints only inside
-    /// its pieces: its target mark stays in each piece, and nothing of a lower-row piece shows
-    /// below the scrolled grid's bottom edge.
-    #[test]
-    fn a_split_card_mid_zoom_paints_only_inside_its_pieces() {
+    /// What a grid of `models` paints mid-zoom, from `w` wide at rest to `w + freed / 2` wide on
+    /// the way to full screen, in a viewport `view_h` tall with room below it: the zoom's pieces,
+    /// and every painted pixel outside all of them (within 2 px), or below the grid's bottom edge.
+    fn painted_mid_zoom(
+        models: &[CardModel],
+        targeted: impl Fn(usize) -> bool,
+        w: f32,
+        freed: f32,
+        view_h: f32,
+    ) -> (Vec<Piece>, Vec<(u32, u32)>) {
         use crate::ui::material::test_support::Mounted;
         use iced::advanced::renderer::Headless as _;
         use iced::advanced::Renderer as _;
-        const VIEW_H: f32 = 320.0;
         const BELOW: f32 = 80.0;
-        // Three columns at W and four at W + FREED: mid-zoom, the ribbon cuts cards across rows.
-        const FREED: f32 = 300.0;
-        const W: f32 = 1000.0;
         const SCROLLBAR: f32 = 16.0;
         let grid = |full_screen: bool| -> Element<'static, String> {
-            let cards = cards::<String>(12)
+            let cards = of::<String>(models)
                 .into_iter()
                 .enumerate()
-                .map(|(i, card)| card.targeted(i % 3 == 1))
+                .map(|(i, card)| card.targeted(targeted(i)))
                 .collect();
             CardGrid::new(cards, roles())
                 .min_width(MIN_WIDTH)
                 .spacing(GAP)
-                .zoom(Zoom {
-                    full_screen,
-                    freed: FREED,
-                })
+                .zoom(Zoom { full_screen, freed })
                 .into()
         };
-        let mut m = Mounted::new_in(grid(false), Size::new(W, VIEW_H));
+        let mut m = Mounted::new_in(grid(false), Size::new(w, view_h));
         m.element = grid(true);
         m.tree.diff(m.element.as_widget());
-        m.room = Size::new(W + FREED / 2.0, VIEW_H);
+        m.room = Size::new(w + freed / 2.0, view_h);
         m.relayout();
         let pieces = zoom_pieces(&m.tree).expect("the grid's zoom state");
-        let split = |card: usize| pieces.iter().filter(|p| p.card == card).count() == 2;
-        assert!(
-            pieces
-                .iter()
-                .any(|p| split(p.card) && p.rect.y + p.rect.height > VIEW_H + 2.0),
-            "mid-zoom, a split card's piece crosses the grid's bottom edge: {pieces:?}"
-        );
-        assert!(
-            pieces.iter().any(|p| split(p.card) && p.card % 3 == 1),
-            "a targeted card is split: {pieces:?}"
-        );
 
-        let size = Size::new(W + FREED / 2.0, VIEW_H + BELOW);
+        let size = Size::new(w + freed / 2.0, view_h + BELOW);
         let window = Rectangle::with_size(size);
         m.renderer.reset(window);
         m.element.as_widget().draw(
@@ -1189,16 +1176,16 @@ mod tests {
             mouse::Cursor::Unavailable,
             &window,
         );
-        let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
+        let (pw, ph) = (size.width.ceil() as u32, size.height.ceil() as u32);
         let pixels =
             m.renderer
-                .screenshot(Size::new(w, h), 1.0, iced::Color::from_rgb(1.0, 0.0, 1.0));
+                .screenshot(Size::new(pw, ph), 1.0, iced::Color::from_rgb(1.0, 0.0, 1.0));
         // A pixel counts as inside a piece within 2 px of it (antialiasing), above the grid's edge.
         // The scrollable's own bar, along the right edge above that edge, is not a card's.
-        let bar = |x: f32, y: f32| x > size.width - SCROLLBAR && y < VIEW_H;
+        let bar = |x: f32, y: f32| x > size.width - SCROLLBAR && y < view_h;
         let inside = |x: f32, y: f32| {
             bar(x, y)
-                || y < VIEW_H + 2.0
+                || y < view_h + 2.0
                     && pieces.iter().any(|p| {
                         x > p.rect.x - 2.0
                             && x < p.rect.x + p.rect.width + 2.0
@@ -1206,17 +1193,61 @@ mod tests {
                             && y < p.rect.y + p.rect.height + 2.0
                     })
         };
-        let stray: Vec<(u32, u32)> = (0..h)
-            .flat_map(|y| (0..w).map(move |x| (x, y)))
+        let stray = (0..ph)
+            .flat_map(|y| (0..pw).map(move |x| (x, y)))
             .filter(|&(x, y)| {
-                let i = ((y * w + x) * 4) as usize;
+                let i = ((y * pw + x) * 4) as usize;
                 pixels[i..i + 3] != [255, 0, 255] && !inside(x as f32 + 0.5, y as f32 + 0.5)
             })
             .collect();
+        (pieces, stray)
+    }
+
+    /// 1120 (T043, close visual pass): mid-zoom, nothing of a split card's lower-row piece shows
+    /// below the scrolled grid's bottom edge.
+    #[test]
+    fn a_split_card_mid_zoom_paints_only_inside_its_pieces() {
+        const VIEW_H: f32 = 320.0;
+        // Three columns at W and four at W + FREED: mid-zoom, the ribbon cuts cards across rows.
+        let models: Vec<CardModel> = (0..12).map(sparse).collect();
+        let (pieces, stray) = painted_mid_zoom(&models, |i| i % 3 == 1, 1000.0, 300.0, VIEW_H);
+        let split = |card: usize| pieces.iter().filter(|p| p.card == card).count() == 2;
+        assert!(
+            pieces
+                .iter()
+                .any(|p| split(p.card) && p.rect.y + p.rect.height > VIEW_H + 2.0),
+            "mid-zoom, a split card's piece crosses the grid's bottom edge: {pieces:?}"
+        );
         let below = stray.iter().filter(|&&(_, y)| y as f32 >= VIEW_H).count();
         assert!(
             stray.is_empty(),
             "{} pixels painted outside every piece ({below} below the grid), first {:?}",
+            stray.len(),
+            &stray[..stray.len().min(5)]
+        );
+    }
+
+    /// 1120 (T043, review A F1/F6): mid-zoom, a targeted card split across a short row and a tall
+    /// one is laid out at the tall row's height, and its piece in the short row is cut to that
+    /// row. Its target mark, drawn in a layer of its own, stays in the piece: nothing of the card
+    /// shows in the gap under the short row.
+    #[test]
+    fn a_targeted_split_card_keeps_its_mark_inside_its_pieces() {
+        // The geometry of `a_card_split_across_rows_takes_its_taller_row`: card 3 runs through the
+        // end of a sparse row into a row with the rich card 4.
+        let models: Vec<CardModel> = (0..7)
+            .map(|i| if i == 4 { rich(i) } else { sparse(i) })
+            .collect();
+        let (pieces, stray) = painted_mid_zoom(&models, |i| i == 3, 1150.0, 300.0, 700.0);
+        let split: Vec<&Piece> = pieces.iter().filter(|p| p.card == 3).collect();
+        assert_eq!(split.len(), 2, "card 3 is split: {pieces:?}");
+        assert!(
+            split[0].rect.height < split[1].rect.height - GAP,
+            "card 3's upper piece is cut short of the card: {split:?}"
+        );
+        assert!(
+            stray.is_empty(),
+            "{} pixels painted outside every piece, first {:?}",
             stray.len(),
             &stray[..stray.len().min(5)]
         );
