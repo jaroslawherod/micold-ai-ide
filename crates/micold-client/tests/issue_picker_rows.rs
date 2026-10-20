@@ -390,3 +390,38 @@ fn a_list_that_is_loading_again_builds_no_row() {
 fn form_with_one(issue: Issue, query: &str) -> WorktreeForm {
     form(vec![issue], Vec::new(), query)
 }
+
+/// Feature 1101 (FR-008, FR-010): a row whose ticket is on the status board shows the board's
+/// status, dimmed when the board holds it stale; any other row keeps its own listing's status.
+#[test]
+fn a_row_shows_the_boards_status_and_its_stale_flag() {
+    use micold_core::jira_status::{StatusBoard, TicketStatus};
+    let status = |name: &str| TicketStatus::from_jira(Some(name), Some("new"));
+    let jira = |key: &str, n: u64| {
+        Issue::jira(key, n, format!("{key} work"), Vec::new(), "2026-09-29T00:00:00Z".into())
+            .with_status(status("Listed"))
+    };
+    let form = form(vec![jira("ABC-1", 1), jira("ABC-2", 2)], Vec::new(), "");
+    let mut board = StatusBoard::default();
+    let (epoch, keys) = board.begin(vec!["ABC-1".to_string()]).unwrap();
+    board.apply(
+        epoch,
+        &keys,
+        Ok(vec![("ABC-1".to_string(), status("In Review"))]),
+        std::time::Duration::ZERO,
+    );
+    let (rows, _) = micold_client::ui::issue_rows_with(&form, &board);
+    assert_eq!(rows[0].status.as_ref().unwrap().name, "In Review");
+    assert!(!rows[0].status_stale);
+    assert_eq!(rows[1].status.as_ref().unwrap().name, "Listed");
+
+    let (epoch, keys) = board.begin(vec!["ABC-1".to_string()]).unwrap();
+    board.apply(
+        epoch,
+        &keys,
+        Err(micold_core::github::IssueLoadError::RateLimited),
+        std::time::Duration::ZERO,
+    );
+    let (rows, _) = micold_client::ui::issue_rows_with(&form, &board);
+    assert!(rows[0].status_stale);
+}
