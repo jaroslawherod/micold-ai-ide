@@ -156,6 +156,22 @@ fn grouped_sections_are_exclusive_and_leave_the_independent_set_alone() {
     assert!(s.independent_open(0) && s.independent_open(1));
 }
 
+/// Feature 1091, FR-003: each independent section closes and reopens on its own press.
+#[test]
+fn independent_sections_close_and_reopen_on_their_own() {
+    let mut s = showcase();
+    assert!(!s.independent_open(0) && s.independent_open(1));
+    s.update(Message::IndependentSectionToggled(1));
+    assert!(!s.independent_open(1), "the open one closes");
+    assert!(!s.independent_open(0), "and leaves its neighbour closed");
+    s.update(Message::IndependentSectionToggled(1));
+    assert!(s.independent_open(1), "and reopens");
+    s.update(Message::IndependentSectionToggled(0));
+    s.update(Message::IndependentSectionToggled(0));
+    assert!(!s.independent_open(0), "two presses return it to closed");
+    assert!(s.independent_open(1), "without touching the other");
+}
+
 // ---------------------------------------------------------------------------------------------
 // The run control (FR-023a)
 // ---------------------------------------------------------------------------------------------

@@ -69,44 +69,69 @@ impl<K: Copy + Eq> AccordionGroup<K> {
 mod tests {
     use super::*;
 
+    /// The default key and the other key the tests press.
+    const FIRST: u8 = 1;
+    const SECOND: u8 = 2;
+    /// A key in a group with no default.
+    const LONE: u8 = 5;
+
     /// FR-001: the default is open until something is pressed; opening replaces it.
     #[test]
     fn the_default_is_open_until_another_opens() {
         let mut g = AccordionGroup::new();
-        assert!(g.is_open(1, Some(1)));
-        assert!(!g.is_open(2, Some(1)));
-        g.toggle(2, Some(1));
-        assert_eq!(g.open_key(Some(1)), Some(2));
-        assert!(!g.is_open(1, Some(1)));
+        assert!(g.is_open(FIRST, Some(FIRST)));
+        assert!(!g.is_open(SECOND, Some(FIRST)));
+        g.toggle(SECOND, Some(FIRST));
+        assert_eq!(g.open_key(Some(FIRST)), Some(SECOND));
+        assert!(!g.is_open(FIRST, Some(FIRST)));
     }
 
-    /// FR-002: pressing the open key closes to none, and a reopen works.
+    /// FR-002: pressing the open key closes to none.
     #[test]
-    fn pressing_the_open_key_closes_it_and_it_can_reopen() {
+    fn pressing_the_open_key_closes_it() {
         let mut g = AccordionGroup::new();
-        g.toggle(1, Some(1));
-        assert_eq!(g.open_key(Some(1)), None);
-        g.toggle(2, Some(1));
-        assert_eq!(g.open_key(Some(1)), Some(2));
-        g.toggle(2, Some(1));
-        g.toggle(2, Some(1));
-        assert_eq!(g.open_key(Some(1)), Some(2));
-        let mut none = AccordionGroup::new();
-        assert_eq!(none.open_key(None), None);
-        none.toggle(5, None);
-        assert_eq!(none.open_key(None), Some(5));
+        g.toggle(FIRST, Some(FIRST));
+        assert_eq!(g.open_key(Some(FIRST)), None);
     }
 
-    /// FR-007: reset returns to the default.
+    /// FR-002: a closed key reopens, and pressing it twice more closes then reopens it.
     #[test]
-    fn reset_returns_to_the_default() {
+    fn a_closed_key_can_reopen() {
         let mut g = AccordionGroup::new();
-        g.toggle(2, Some(1));
+        g.toggle(FIRST, Some(FIRST));
+        g.toggle(SECOND, Some(FIRST));
+        assert_eq!(g.open_key(Some(FIRST)), Some(SECOND));
+        g.toggle(SECOND, Some(FIRST));
+        assert_eq!(g.open_key(Some(FIRST)), None);
+        g.toggle(SECOND, Some(FIRST));
+        assert_eq!(g.open_key(Some(FIRST)), Some(SECOND));
+    }
+
+    /// FR-002: with no default nothing is open until a key is pressed.
+    #[test]
+    fn a_group_without_a_default_starts_closed() {
+        let mut g = AccordionGroup::new();
+        assert_eq!(g.open_key(None), None);
+        g.toggle(LONE, None);
+        assert_eq!(g.open_key(None), Some(LONE));
+    }
+
+    /// FR-007: reset returns to the default after another key was opened.
+    #[test]
+    fn reset_returns_to_the_default_after_opening_another() {
+        let mut g = AccordionGroup::new();
+        g.toggle(SECOND, Some(FIRST));
         g.reset();
-        assert_eq!(g.open_key(Some(1)), Some(1));
-        g.toggle(1, Some(1));
+        assert_eq!(g.open_key(Some(FIRST)), Some(FIRST));
+    }
+
+    /// FR-007: reset returns to the default after the default was closed.
+    #[test]
+    fn reset_returns_to_the_default_after_closing_it() {
+        let mut g = AccordionGroup::new();
+        g.toggle(FIRST, Some(FIRST));
         g.reset();
-        assert_eq!(g.open_key(Some(1)), Some(1));
+        assert_eq!(g.open_key(Some(FIRST)), Some(FIRST));
     }
 
     /// FR-003: two groups share nothing.
@@ -114,8 +139,8 @@ mod tests {
     fn two_groups_are_independent() {
         let mut a = AccordionGroup::new();
         let b = AccordionGroup::new();
-        a.toggle(2, Some(1));
-        assert_eq!(b.open_key(Some(1)), Some(1));
-        assert_eq!(a.open_key(Some(1)), Some(2));
+        a.toggle(SECOND, Some(FIRST));
+        assert_eq!(b.open_key(Some(FIRST)), Some(FIRST));
+        assert_eq!(a.open_key(Some(FIRST)), Some(SECOND));
     }
 }

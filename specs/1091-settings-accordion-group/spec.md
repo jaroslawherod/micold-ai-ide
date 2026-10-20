@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Draft
+**Status**: Closed 2026-10-20 — shipped in PRs #1135, #1140, #1142
 
 **Input**: Issue #1091, "Settings accordions should form a group: opening one closes the others":
 the accordion sections in Settings should behave as one group, so at most one is open at a time.

@@ -87,3 +87,13 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `cargo test -p micold-client --test showcase_state --test showcase_completeness`; quickstart §B step 1
 - **Depends on**: M1
 - **Tier**: light
+
+## Phase 5: TDD remediation
+
+The feature is not done until the HIGH finding (T013) and the MED survivors (T014-T017) are cleared. Findings refer to `tdd/verification.md`. Paths are under `crates/micold-client/`.
+
+- [x] T013 [US1] Finding 1: write `specs/1091-settings-accordion-group/tdd/test-list.md` and `cycle-log.md`, recording per behavior the red (apply the verification's matching mutant, quote the failing test, restore); proof: `tdd/verification.md` re-run shows no `TEST_AFTER` (files written; earlier behaviors remain TEST_AFTER, red is retroactive and mutant-based only, see tdd/cycle-log.md; the "no TEST_AFTER" proof is not met)
+- [x] T014 [US1] Findings 2 and 3 in `tests/daemons_feature.rs`: a stale `SectionToggled` for a section outside the open kind changes nothing (`src/features/daemons.rs:1904`), and `begin_edit` on a second daemon with a flipped section leaves only the first section open (`:862`); proof: `cargo test -p micold-client --test daemons_feature` fails with mutants A+B and F applied, passes restored
+- [x] T015 [US2] Finding 4 in `tests/showcase_state.rs:131-156`: independent sections close and reopen on their own (toggle index 1 and index 0 twice); proof: `cargo test -p micold-client --test showcase_state` fails with `*open = true` mutant
+- [x] T016 [US2] Finding 5: a render test that paints the grouped pose and asserts one open body by default and the group's state after a toggle (`src/showcase/sections/surfaces.rs:278`); proof: `cargo test -p micold-client --test showcase_completeness` (or a new `showcase_*` test) fails with `.open(true)` mutant
+- [x] T017 [US1] Findings 6 to 9 in `tests/daemons_feature.rs:1801-1944`: remove the self-comparing rapid-press block, split `the_sections_of_every_kind_form_one_group`, assert literal expected sections, assert `held.len() >= 2`; proof: `cargo test -p micold-client --test daemons_feature` green
