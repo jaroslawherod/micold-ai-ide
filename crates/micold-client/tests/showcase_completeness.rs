@@ -909,15 +909,21 @@ fn the_pull_request_indicator_poses_its_twelve_states() {
 }
 
 /// The gallery poses the Overview card in each of the five states (one grid of five since feature
-/// 1120), the Default card and an orphan, and the grid with 1, 3 and 30 cards and narrow (feature
-/// 813, T020 — FR-021).
+/// 1120), the Default card and an orphan, titles wrapping onto up to three lines (feature 1121), and
+/// the grid with 1, 3 and 30 cards and narrow (feature 813, T020 — FR-021).
 #[test]
 fn the_overview_card_and_grid_are_posed() {
     for (component, module, poses) in [
         (
             "OverviewCard",
             "material/overview_card.rs",
-            &["five states", "Default", "orphan", "targeted"][..],
+            &[
+                "five states",
+                "Default",
+                "orphan",
+                "targeted",
+                "wrapped titles",
+            ][..],
         ),
         (
             "CardGrid",

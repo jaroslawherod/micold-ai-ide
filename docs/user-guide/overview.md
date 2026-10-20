@@ -72,7 +72,7 @@ The header row shows:
 
 The body below it shows:
 
-- its **title**, which says what the location is for (see [Title](#title)); hover it for the full title and the location's name;
+- its **title**, which says what the location is for (see [Title](#title)), on up to three lines; hover it for the full title and the location's name;
 - below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. Hover it for the full branch name. A card whose title already is the branch does not repeat it;
 - its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
 - when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
@@ -83,7 +83,7 @@ A row with nothing to say is not shown.
 
 ### Title
 
-For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. Otherwise it is the **branch**, or the location's name when there is no branch: Default's title is *Default*. Hovering the title shows the full title, which may be cut short on the card, and the location's name.
+For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. Otherwise it is the **branch**, or the location's name when there is no branch: Default's title is *Default*. A long title wraps onto up to **three lines**, and a title longer than that ends in an ellipsis (…) on the third. Hovering the title shows the full title and the location's name.
 
 Titles come from the issues the New-worktree form already loaded, or from one read of each issue when the Overview opens, when the project is on GitHub and `gh` is available. A Jira ticket, an offline machine, a closed issue or a missing `gh` leave the branch as the title. Each title is read once while the app runs, and is never written to a log.
 
@@ -106,7 +106,7 @@ The files are watched only while the Overview is open: each worktree is read onc
 
 When the location's main session runs an agent CLI with **hooks configured** (Claude Code with the app's hooks installed), the card shows an **activity line** above the progress row: the agent's in-progress todo, else the latest prompt you submitted, with the todo list's done / total after it (*Writing tests · 2/5*). The task-list ratio of the progress row stays below it as the feature's progress.
 
-The line shows the words only, on one line: a prompt over several lines is joined, and agent markup is removed, so a prompt another agent sent as `<agent-message from="orchestrator">Continue M2</agent-message>` reads *Continue M2*. A slash command reads as a sentence: `/speckit-autopilot #1117` reads *Running autopilot on #1117* and `/clear` reads *Running clear*; every command reads the same way, built-in ones included. When nothing readable is left, such as a prompt that is only markup, the card shows no activity line, and no done / total on its own. The line only ever shows the main session's activity, never another session's.
+The line shows the words only, wrapped onto up to **two lines**, and a longer one ends in an ellipsis (…) on the second. A prompt over several lines is joined, and agent markup is removed, so a prompt another agent sent as `<agent-message from="orchestrator">Continue M2</agent-message>` reads *Continue M2*. A slash command reads as a sentence: `/speckit-autopilot #1117` reads *Running autopilot on #1117* and `/clear` reads *Running clear*; every command reads the same way, built-in ones included. When nothing readable is left, such as a prompt that is only markup, the card shows no activity line, and no done / total on its own. The line only ever shows the main session's activity, never another session's.
 
 Without hooks, with a session that has reported nothing yet, or while the window reconnects to the service, there is no activity line and the card shows the title and progress described above, without an error.
 

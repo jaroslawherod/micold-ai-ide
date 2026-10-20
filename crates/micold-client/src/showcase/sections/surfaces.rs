@@ -565,6 +565,40 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     );
     needs_action.activity = with_activity.activity.clone();
     needs_action.progress = with_progress.progress;
+    // Titles needing about 1, 2, 3 and 5 lines at the card's 320 px, the last cut on its third
+    // line, and a short and a long activity, the long one cut on its second (feature 1121, US1).
+    let long_activity = "Rewriting the card grid so a row of cards keeps the height of its \
+        tallest card while the title wraps, then running the layout snapshot";
+    let wrapped = iced::widget::row(
+        [
+            ("Fix tab bar", "Editing card_grid.rs"),
+            (
+                "Overview cards: full text without truncation",
+                long_activity,
+            ),
+            (
+                "Overview cards: full text without truncation, expanded in place on hover",
+                "Editing card_grid.rs",
+            ),
+            (
+                "Overview cards: the title wraps onto three lines and the activity onto two, \
+                 and hover or keyboard focus expands the card in place over its neighbours",
+                long_activity,
+            ),
+        ]
+        .into_iter()
+        .map(|(title, activity)| {
+            let mut m = card_model("wrapped", T::Feature, S::Working, R::Working);
+            m.title = title.to_string();
+            m.activity = Some(micold_core::hook_activity::CurrentActivity {
+                line: activity.to_string(),
+                ratio: None,
+            });
+            card(m).into()
+        }),
+    )
+    .spacing(spacing::MD)
+    .wrap();
     let mut done = card_model("done", T::Other, S::Done, R::Merged);
     done.prs = micold_core::overview::PrDisplay::Hidden;
     // Unscrolled: the showcase page scrolls, and a grid with its own scrollable fills a height
@@ -605,6 +639,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             posed("orphan", card(orphan), roles),
             posed("unknown counts", card(unknown), roles),
             posed("targeted", targeted, roles),
+            posed("wrapped titles", wrapped, roles),
         ],
         Layout::FullWidth,
     )

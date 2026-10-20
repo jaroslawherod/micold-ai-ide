@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: tasks
-- **Next step**: orchestrator opens and merges the design PR; then milestone M1. Checklists: none open. Specs-only gate (check-criteria-observables) green.
+- **Phase**: implement M1
+- **Next step**: M1 — finish T006 (see Handover), then verify.md (scoped gate + review A high, review B, visual pass §B.1, full gate), PR.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1168 | design (spec, plan, tasks) | merged (rebase) | 1952d53a85b21b30b33aa3f0093c4a7d3cb55476 |
 
 Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
@@ -23,7 +24,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | | pending |
+| M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | | in progress |
 | M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | | pending |
 | M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | | pending |
 | M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | | pending |
@@ -56,7 +57,19 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-None.
+M1 implement unit, over 150k context. Done (commit on branch, not pushed, no PR): T001–T005, T007,
+T008 ticked; evidence in `tdd/cycle-log.md`. `LineClamped` is `pub(crate)` with `.tint`; the card's
+title is `LineClamped(CardTitle, 3)`, activity `LineClamped(Body, 2)`; body container `.width(Fill)`
+(else the body shrank to the clamped text and `the_overview_card_anchors_are_the_header_strip_and_the_title`
+failed). Showcase pose `wrapped titles` (catalogue + `showcase_completeness`). User guide updated.
+Tests green: `--lib -- surfaces showcase line_clamp overview_card card_grid review_panel tooltip`
+114, `layout_snapshot` 72, `showcase_completeness` 42.
+
+Next: T006 is open. The fixture was regenerated (`UPDATE_LAYOUT_SNAPSHOT=1`) and is in the commit,
+but its diff moves the overview card's title node and body column *widths* (279.3 → ~55–77; heights
+unchanged), not only heights as T006 expects. Decide: give the body `column` `.width(Length::Fill)`
+in `overview_card.rs` (the title node stays Shrink) and regenerate, or accept and record why; then
+tick T006. Then verify.md from step 1. Base unchanged: origin/main 1952d53a.
 
 ## Open escalation
 

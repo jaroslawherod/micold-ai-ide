@@ -12,7 +12,8 @@
 //! `micold_core::tooltip::clamp_to_lines`, tested there without a renderer; this hands it the
 //! measure.
 //!
-//! Not `pub`: it is the label of `material::Tooltip::max_lines` and nothing else constructs it.
+//! Not `pub`: it is the label of `material::Tooltip::max_lines`, a review row's lines, and an
+//! overview card's title (three lines) and activity (two), tinted (feature 1121, R2).
 
 use std::marker::PhantomData;
 
@@ -23,25 +24,35 @@ use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
 use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Widget};
 use iced::{alignment, Element, Font, Length, Pixels, Rectangle, Size};
+use micold_core::tokens::Rgb;
 use micold_core::tooltip::clamp_to_lines;
 
 /// A wrapping label at a type role, cut to at most `max_lines` lines.
-pub(super) struct LineClamped<M> {
+pub(crate) struct LineClamped<M> {
     content: String,
     role: TypeRole,
     max_lines: usize,
+    /// `None` draws in the surrounding text colour, as a tooltip's label does.
+    tint: Option<Rgb>,
     marker: PhantomData<M>,
 }
 
 impl<M> LineClamped<M> {
     /// `content` at `role`, in the surrounding text colour, on at most `max_lines` lines.
-    pub(super) fn new(content: impl Into<String>, role: TypeRole, max_lines: usize) -> Self {
+    pub(crate) fn new(content: impl Into<String>, role: TypeRole, max_lines: usize) -> Self {
         Self {
             content: content.into(),
             role,
             max_lines,
+            tint: None,
             marker: PhantomData,
         }
+    }
+
+    /// Drawn in `color` rather than the surrounding text colour.
+    pub(crate) fn tint(mut self, color: Rgb) -> Self {
+        self.tint = Some(color);
+        self
     }
 }
 
@@ -126,7 +137,7 @@ where
             &state.paragraph,
             layout,
             viewport,
-            style.text_color,
+            self.tint.map_or(style.text_color, super::style::color),
         );
     }
 }
@@ -144,6 +155,32 @@ where
 }
 
 #[cfg(test)]
+/// `content` at `role` laid out `width` wide on at most `max_lines` lines: what it holds, and
+/// its size.
+pub(super) fn laid_out_at(
+    content: &str,
+    role: TypeRole,
+    max_lines: usize,
+    width: f32,
+) -> (String, Size) {
+    let renderer = super::test_support::renderer();
+    let mut label = LineClamped::<()>::new(content, role, max_lines);
+    let widget: &mut dyn Widget<(), iced::Theme, iced::Renderer> = &mut label;
+    let mut tree = Tree {
+        tag: widget.tag(),
+        state: widget.state(),
+        children: Vec::new(),
+    };
+    let limits = layout::Limits::new(Size::ZERO, Size::new(width, f32::INFINITY));
+    let node = widget.layout(&mut tree, &renderer, &limits);
+    let state = tree
+        .state
+        .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, (String, f32, usize)>>(
+        );
+    (state.fitted.clone(), node.size())
+}
+
+#[cfg(test)]
 mod tests {
     //! The line limit as the tooltip shows it (U68; contracts/rest-tooltip.md §5). The rule is
     //! `micold_core`'s and is held there with a fake measure; what is held here is the real one —
@@ -154,7 +191,7 @@ mod tests {
     use iced::advanced::Shell;
     use iced::{Event, Point, Vector};
     use micold_core::theme::ColorScheme;
-    use micold_core::tokens::{self, spacing};
+    use micold_core::tokens::{self, spacing, Rgb};
 
     const WINDOW: Size = Size::new(800.0, 600.0);
 
@@ -170,20 +207,8 @@ mod tests {
 
     /// A label laid out at the tooltip's width: what it holds, and how tall it is.
     fn laid_out(content: &str, max_lines: usize) -> (String, f32) {
-        let renderer = test_support::renderer();
-        let mut label = LineClamped::<()>::new(content, TypeRole::Caption, max_lines);
-        let widget: &mut dyn Widget<(), iced::Theme, iced::Renderer> = &mut label;
-        let mut tree = Tree {
-            tag: widget.tag(),
-            state: widget.state(),
-            children: Vec::new(),
-        };
-        let limits = layout::Limits::new(Size::ZERO, Size::new(label_width(), f32::INFINITY));
-        let node = widget.layout(&mut tree, &renderer, &limits);
-        let state = tree
-            .state
-            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, (String, f32, usize)>>();
-        (state.fitted.clone(), node.size().height)
+        let (fitted, size) = laid_out_at(content, TypeRole::Caption, max_lines, label_width());
+        (fitted, size.height)
     }
 
     /// The height of the panel a tooltip floats once hovered, for `label` as `build` shapes it.
@@ -232,6 +257,69 @@ mod tests {
         let group = panel.as_overlay_mut().layout(&renderer, WINDOW);
         let panel = group.children().first().expect("the panel in its group");
         panel.size().height
+    }
+
+    /// The card widths feature 1121 names (FR-007).
+    const NARROWEST_CARD: f32 = 280.0;
+
+    /// Feature 1121 T001: a tinted label draws in its tint, not the surrounding text colour.
+    #[test]
+    fn a_tinted_label_draws_in_its_tint() {
+        let tint = Rgb::hex(0x128034);
+        let mut mounted = test_support::Mounted::new(
+            LineClamped::<String>::new("Overview cards", TypeRole::CardTitle, 3).tint(tint),
+        );
+        let painted = mounted.painted_text();
+        assert_eq!(painted.len(), 1, "{painted:?}");
+        assert_eq!(painted[0].color, material::style::color(tint));
+    }
+
+    /// Feature 1121 T001, R2: a line is as tall as `Ellipsized::at_role_spaced` makes it at the
+    /// same role, so a clamped title sits in the card's column as the ellipsized one did.
+    #[test]
+    fn a_line_is_as_tall_as_a_spaced_ellipsized_line_at_the_same_role() {
+        for role in [TypeRole::CardTitle, TypeRole::Body] {
+            let (_, clamped) = laid_out_at("Overview", role, 3, NARROWEST_CARD);
+            let spaced = test_support::size_of(
+                material::Ellipsized::<()>::at_role_spaced("Overview", role, Rgb::hex(0)).into(),
+                Size::new(NARROWEST_CARD, 400.0),
+            );
+            assert_eq!(clamped.height, spaced.height, "{role:?}");
+        }
+    }
+
+    /// Feature 1121 T001, US1 sc.2: a title needing five lines at 280 px takes three, the third
+    /// ending in an ellipsis.
+    #[test]
+    fn a_five_line_title_at_280_takes_three_lines_ending_in_an_ellipsis() {
+        let role = TypeRole::CardTitle;
+        let five =
+            "Overview cards show the full title and the activity without truncation ".repeat(3);
+        let (whole, size) = laid_out_at(&five, role, 10, NARROWEST_CARD);
+        assert!(
+            size.height >= 5.0 * role.line_height_dp() && whole == five,
+            "precondition: the text needs five lines or more: {size:?}",
+        );
+        let (fitted, size) = laid_out_at(&five, role, 3, NARROWEST_CARD);
+        assert_eq!(size.height, 3.0 * role.line_height_dp(), "{fitted:?}");
+        assert!(fitted.ends_with('…'), "{fitted:?}");
+    }
+
+    /// Feature 1121 T001, FR-007: an unbroken run of 120 characters stays within 280 px and ends
+    /// in an ellipsis.
+    #[test]
+    fn an_unbroken_run_stays_within_the_width_and_ends_in_an_ellipsis() {
+        let run = "m".repeat(120);
+        for (role, lines) in [(TypeRole::CardTitle, 3), (TypeRole::Body, 2)] {
+            let (fitted, size) = laid_out_at(&run, role, lines, NARROWEST_CARD);
+            assert!(size.width <= NARROWEST_CARD, "{role:?}: {size:?}");
+            assert_eq!(
+                size.height,
+                lines as f32 * role.line_height_dp(),
+                "{role:?}"
+            );
+            assert!(fitted.ends_with('…'), "{role:?}: {fitted:?}");
+        }
     }
 
     #[test]
