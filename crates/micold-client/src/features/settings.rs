@@ -2583,8 +2583,22 @@ mod reduce_motion_tests {
     /// The draft opens showing what is stored.
     #[test]
     fn the_draft_is_seeded_from_the_stored_setting() {
-        assert!(!open_with(false).settings.settings_draft.unwrap().appearance.reduce_motion);
-        assert!(open_with(true).settings.settings_draft.unwrap().appearance.reduce_motion);
+        assert!(
+            !open_with(false)
+                .settings
+                .settings_draft
+                .unwrap()
+                .appearance
+                .reduce_motion
+        );
+        assert!(
+            open_with(true)
+                .settings
+                .settings_draft
+                .unwrap()
+                .appearance
+                .reduce_motion
+        );
     }
 
     /// Toggling edits only the draft; the applied setting waits for Save.
@@ -2595,7 +2609,10 @@ mod reduce_motion_tests {
         update(&mut state, Msg::ReduceMotionToggled(true));
 
         assert!(draft(&state).appearance.reduce_motion, "the page shows it");
-        assert!(!state.settings.reduce_motion, "nothing is applied before Save");
+        assert!(
+            !state.settings.reduce_motion,
+            "nothing is applied before Save"
+        );
     }
 
     /// Save's validated copy carries the draft's value.
@@ -2607,7 +2624,10 @@ mod reduce_motion_tests {
         let valid = draft(&state).validate().expect("the defaults are valid");
 
         assert!(valid.reduce_motion);
-        assert!(valid.into_settings().reduce_motion, "and it reaches the stored shape");
+        assert!(
+            valid.into_settings().reduce_motion,
+            "and it reaches the stored shape"
+        );
     }
 
     /// Cancel discards the draft, so the next open shows the stored value again.

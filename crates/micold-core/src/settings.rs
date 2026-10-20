@@ -1391,7 +1391,10 @@ mod reduce_motion_tests {
     /// every other field as before.
     #[test]
     fn reduce_motion_defaults_off() {
-        assert!(!Settings::default().reduce_motion, "a fresh installation animates");
+        assert!(
+            !Settings::default().reduce_motion,
+            "a fresh installation animates"
+        );
 
         let dir = tempfile::tempdir().unwrap();
         let store = store_in(&dir);
@@ -1404,7 +1407,10 @@ mod reduce_motion_tests {
         let outcome = store.load();
 
         assert_eq!(outcome.status, LoadStatus::Loaded);
-        assert!(!outcome.settings.reduce_motion, "an older file never asked for it");
+        assert!(
+            !outcome.settings.reduce_motion,
+            "an older file never asked for it"
+        );
         assert_eq!(
             outcome.settings,
             Settings {
