@@ -54,7 +54,7 @@ contrast and type scale of feature 1120 (FR-015); at most one card expanded (FR-
 and `worktree_dir`, `CardText` loses three tooltips, `CardModel` gains `dir`; client: `LineClamped`
 promoted, `OverviewCard` (`expanded`, focus report, page keys, rest/leave messages), `CardGrid`
 (twin, top draw, event priority, rest timer, place), `features::overview` (state, `Msg::Expansion`,
-`Msg::CardPaged`, `Msg::CardScrolled`), `app.rs::on_escape`, `main.rs` (window blur, page scroll),
+`Msg::CardPaged`), `app.rs::on_escape`, `main.rs` (window blur, page scroll),
 `ui/overview.rs` (wiring), showcase, 1 covered state; docs: user guide Overview section
 
 ## Constitution Check
@@ -97,8 +97,8 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
   mouse_interaction and the rest timer per R4–R6. Contract U2–U4.
 - **`src/ui/material/keyboard_focus.rs`**: `TakesTheKeyboard::on_shown_change`, reporting
   keyboard (shown) focus only, so a pointer press expands nothing (U1, FR-002).
-- **`src/features/overview.rs`**: `State.expansion`, `Msg::Expansion(Event)`, `Msg::CardPaged`,
-  `Msg::CardScrolled`; `CardMenuOpened`/`Dismissed`/`EntryChosen` feed it.
+- **`src/features/overview.rs`**: `State.expansion`, `Msg::Expansion(Event)` (the inner scroll's edges
+  arrive as `Event::BodyScrolled`), `Msg::CardPaged`; `CardMenuOpened`/`Dismissed`/`EntryChosen` feed it.
 - **`src/app.rs`**: `on_escape` returns `Msg::Expansion(Event::Escape)` when a card is expanded,
   before `Msg::Closed` (D1, R7).
 - **`src/ui/overview.rs`**: builds each card with its expansion, focus and message wiring and the
@@ -141,12 +141,15 @@ Page Up/Down). Feature 1120's tooltip sentences are removed.
 
 ## Delivery order
 
-1. **M1 core**: `overview_expansion`, `ExpandedText`, `worktree_dir`, `CardModel.dir`, tooltip
-   fields dropped (client call sites follow mechanically).
-2. **M2 card and grid**: `LineClamped` promotion, collapsed clamps, expanded form, grid twin, top
-   draw, event priority, rest timer, place, inner scroll; showcase.
-3. **M3 wiring and docs**: app state and messages, `on_escape`, window blur, page keys, covered
-   state, user guide, visual pass.
+Superseded by the four milestones in [tasks.md](tasks.md#milestones), cut so each one is observable
+and full text is never unreachable on `main` (the tooltips go only when hover expansion ships):
+
+1. **M1** collapsed title on 3 lines, activity on 2.
+2. **M2** `ExpandedText`, `worktree_dir`, `CardModel.dir`, `place`; the card's expanded form and the
+   grid's twin, top draw, event priority, shift, cap and inner scroll; shown in the showcase only.
+3. **M3** `Expansion` and `EXPAND_REST`, the grid's rest timer, app state and hover wiring, menu,
+   close, blur, listing; tooltips dropped; covered state; user guide.
+4. **M4** `on_shown_change`, focus wiring, `page_target` and Page keys, `on_escape` (D1); user guide.
 
 ## Project Structure
 
@@ -176,7 +179,7 @@ crates/micold-core/src/
 crates/micold-client/src/
 ├── app.rs                     # on_escape (D1)
 ├── main.rs                    # window blur, page scroll
-├── features/overview.rs       # State.expansion, Msg::{Expansion, CardPaged, CardScrolled}
+├── features/overview.rs       # State.expansion, Msg::{Expansion, CardPaged}
 ├── ui/overview.rs             # wiring, twin, card_scroll_id, Listed
 ├── ui/material/
 │   ├── line_clamp.rs          # pub(crate), tint
