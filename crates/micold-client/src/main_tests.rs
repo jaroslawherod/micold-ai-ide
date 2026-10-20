@@ -10436,6 +10436,16 @@ mod pr_status {
             })
         }
 
+        fn file_at(
+            &self,
+            _: &micold_core::github::GithubRepo,
+            _: &str,
+            _: &micold_core::review::RelPath,
+            _: u64,
+        ) -> Result<Vec<u8>, micold_core::review::browse::FileReadFailure> {
+            Ok(Vec::new())
+        }
+
         fn list_branches(
             &self,
             _: &micold_core::github::GithubRepo,

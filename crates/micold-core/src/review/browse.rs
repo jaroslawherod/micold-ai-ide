@@ -115,12 +115,14 @@ pub fn read_file(
     source: &FileSource,
     path: &Confined,
     force_large: bool,
-    gh: &dyn PullRequestSource,
+    gh: Option<&dyn PullRequestSource>,
     now: u64,
 ) -> Result<FileText, FileReadFailure> {
     let bytes = match source {
         FileSource::Worktree { dir } => worktree_file(dir, path, force_large)?,
-        FileSource::PrHead { dir, repo, commit } => head_file(dir, repo, commit, path, gh, now)?,
+        FileSource::PrHead { dir, repo, commit } => {
+            head_file(dir, repo, commit, path, force_large, gh, now)?
+        }
     };
     text_of(bytes, force_large)
 }
@@ -165,7 +167,11 @@ fn normalised(path: &Path) -> PathBuf {
 
 /// The worktree file's bytes: the parent directory must resolve inside the root, and a symlink is
 /// read as its target path (what git tracks) only when that target stays inside too (R5).
-fn worktree_file(dir: &Path, path: &Confined, force_large: bool) -> Result<Vec<u8>, FileReadFailure> {
+fn worktree_file(
+    dir: &Path,
+    path: &Confined,
+    force_large: bool,
+) -> Result<Vec<u8>, FileReadFailure> {
     let root = dir.canonicalize().map_err(|e| disk_failure(&e))?;
     let full = dir.join(path.as_str());
     let name = full.file_name().ok_or(FileReadFailure::Missing)?.to_owned();
@@ -204,7 +210,8 @@ fn head_file(
     repo: &GithubRepo,
     commit: &str,
     path: &Confined,
-    gh: &dyn PullRequestSource,
+    force_large: bool,
+    gh: Option<&dyn PullRequestSource>,
     now: u64,
 ) -> Result<Vec<u8>, FileReadFailure> {
     if !is_object_name(commit) {
@@ -218,11 +225,18 @@ fn head_file(
     .is_ok();
     if !local {
         let rel = super::RelPath::from_native(path.as_str()).ok_or(FileReadFailure::Missing)?;
-        return gh.file_at(repo, commit, &rel, now);
+        return gh
+            .ok_or(FileReadFailure::HeadUnavailable)?
+            .file_at(repo, commit, &rel, now);
     }
     let spec = format!("{commit}:{}", path.as_str());
-    if object_sizes(dir, std::slice::from_ref(&spec))[0].is_none() {
-        return Err(FileReadFailure::Missing);
+    // Refused before reading: a huge blob is never pulled into memory unasked.
+    match object_sizes(dir, std::slice::from_ref(&spec))[0] {
+        None => return Err(FileReadFailure::Missing),
+        Some(size) if !force_large && size > limits::MAX_VERSION_BYTES => {
+            return Err(FileReadFailure::TooLarge { bytes: size });
+        }
+        Some(_) => {}
     }
     read_bytes(dir, &["cat-file", "blob", &spec], None).map_err(|_| FileReadFailure::Unreadable)
 }
@@ -239,7 +253,15 @@ mod tests {
 
     #[test]
     fn a_path_that_climbs_or_is_rooted_is_refused() {
-        for bad in ["", "../x", "a/../../x", "/etc/passwd", "\\x", "C:/x", "a/.."] {
+        for bad in [
+            "",
+            "../x",
+            "a/../../x",
+            "/etc/passwd",
+            "\\x",
+            "C:/x",
+            "a/..",
+        ] {
             assert_eq!(
                 Confined::new(bad),
                 Err(FileReadFailure::OutsideRepository),
@@ -251,7 +273,10 @@ mod tests {
     #[test]
     fn text_is_classified_and_sized() {
         assert_eq!(text_of(vec![0, 1], false), Err(FileReadFailure::Binary));
-        assert_eq!(text_of(vec![0xff, 0xfe], false), Err(FileReadFailure::NotUtf8));
+        assert_eq!(
+            text_of(vec![0xff, 0xfe], false),
+            Err(FileReadFailure::NotUtf8)
+        );
         let big = vec![b'a'; (limits::MAX_VERSION_BYTES + 1) as usize];
         assert!(matches!(
             text_of(big.clone(), false),

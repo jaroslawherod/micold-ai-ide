@@ -63,15 +63,15 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 **Goal**: gaps and whole-file on a PR's files show the PR head version.
 
-- [ ] T023 [P] [US3] Write failing unit tests for `PullRequestSource::file_at` args builder (percent-encoded path segments, `Accept: application/vnd.github.raw`), failure mapping to `FileReadFailure`, and the fake's `with_file_answer` in `crates/micold-core/src/pull_request.rs`
-- [ ] T024 [P] [US3] Write failing real-git integration tests in `crates/micold-core/tests/review_browse.rs`: PR-head read equals the commit's blob while the worktree differs, `read_file` failures (Binary, NotUtf8, Missing, TooLarge, `force_large`, worktree symlink escape refused), `..`/absolute/symlink-escape refused, read-only worktree: files and `git status` unchanged and the fake `gh` unused for worktree reads (FR-005, FR-010, FR-014)
-- [ ] T025 [P] [US3] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: selecting a PR file returns `Effect::ReadFile` for the head, no markers until `Msg::FileRead` answers (caption "Reading file…"), stale `seq` or changed source dropped, failure shows the FR-009 message with the diff usable, expansion never applies across worktree/PR/PR
-- [ ] T026 [US3] Implement `PullRequestSource::file_at`, its pure args builder and the fake answer in `crates/micold-core/src/pull_request.rs` (T023 green)
-- [ ] T027 [US3] Create `crates/micold-core/src/review/browse.rs` (register in `review/mod.rs`) with `FileSource`, `Confined`, `FileText`, `FileReadFailure` and `read_file` (worktree via fs, PR head via local `git cat-file` first then `file_at`; 2 MB limit with `force_large`) (T024 green)
-- [ ] T028 [US3] Add `Effect::ReadFile`, `Msg::FileRead { seq, .. }` and PR-side shaping in `crates/micold-client/src/features/changes.rs` (T025 green)
-- [ ] T029 [US3] Run `Effect::ReadFile` on a blocking thread with the `shared_git()` locality gate in `crates/micold-client/src/shell/changes.rs`
-- [ ] T030 [P] [US3] Show the "Reading file…" caption and the FR-009 message in `crates/micold-client/src/ui/changes.rs`
-- [ ] T031 [US3] Document pull-request files (head version, offline limits) in `docs/user-guide/reviewing-changes.md`
+- [x] T023 [P] [US3] Write failing unit tests for `PullRequestSource::file_at` args builder (percent-encoded path segments, `Accept: application/vnd.github.raw`), failure mapping to `FileReadFailure`, and the fake's `with_file_answer` in `crates/micold-core/src/pull_request.rs`
+- [x] T024 [P] [US3] Write failing real-git integration tests in `crates/micold-core/tests/review_browse.rs`: PR-head read equals the commit's blob while the worktree differs, `read_file` failures (Binary, NotUtf8, Missing, TooLarge, `force_large`, worktree symlink escape refused), `..`/absolute/symlink-escape refused, read-only worktree: files and `git status` unchanged and the fake `gh` unused for worktree reads (FR-005, FR-010, FR-014)
+- [x] T025 [P] [US3] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: selecting a PR file returns `Effect::ReadFile` for the head, no markers until `Msg::FileRead` answers (caption "Reading file…"), stale `seq` or changed source dropped, failure shows the FR-009 message with the diff usable, expansion never applies across worktree/PR/PR
+- [x] T026 [US3] Implement `PullRequestSource::file_at`, its pure args builder and the fake answer in `crates/micold-core/src/pull_request.rs` (T023 green)
+- [x] T027 [US3] Create `crates/micold-core/src/review/browse.rs` (register in `review/mod.rs`) with `FileSource`, `Confined`, `FileText`, `FileReadFailure` and `read_file` (worktree via fs, PR head via local `git cat-file` first then `file_at`; 2 MB limit with `force_large`) (T024 green)
+- [x] T028 [US3] Add `Effect::ReadFile`, `Msg::FileRead { seq, .. }` and PR-side shaping in `crates/micold-client/src/features/changes.rs` (T025 green)
+- [x] T029 [US3] Run `Effect::ReadFile` on a blocking thread with the `shared_git()` locality gate in `crates/micold-client/src/shell/changes.rs`
+- [x] T030 [P] [US3] Show the "Reading file…" caption and the FR-009 message in `crates/micold-client/src/ui/changes.rs`
+- [x] T031 [US3] Document pull-request files (head version, offline limits) in `docs/user-guide/reviewing-changes.md`
 
 ## Phase 6: User Story 4 - Pick revealed lines for review comments (P2)
 

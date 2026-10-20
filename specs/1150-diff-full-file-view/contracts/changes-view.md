@@ -4,7 +4,7 @@ Extends `specs/1003-review-worktree-prs/contracts/changes-view.md` and 775/482's
 
 ## 1. Messages and effects (`features::changes`)
 - `Msg::GapToggled(GapKey)`, `Msg::WholeFileToggled`: update the selected file's `Expansion`. For a PR file, selecting it returns `Effect::ReadFile` for its head version (eager, R2); markers appear when `FileRead` answers; toggles before then are ignored.
-- `Msg::FileRead { seq, source, path, result }`: the answer to `Effect::ReadFile { seq, source: FileSource, path, force_large }`; dropped when `seq` is stale or the source changed.
+- `Msg::FileRead { seq, source, path, result }`: the answer to `Effect::ReadFile { seq, project, entry, source: SourceKey, commit, address, path, force_large }`; dropped when `seq` is stale or the source changed.
 - `Msg::TreeRead { seq, source, result }` answering `Effect::ReadTree { seq, source }` (both effects: `Effect::{ReadFile, ReadTree}`).
 - `Msg::BrowseOpen(RelPath)`, `Msg::ReferenceActivated(RelPath, Option<u32>)`, `Msg::BrowseBack`, `Msg::OpenFileDiff`, `Msg::ShowLargeFile` (extends `ShowLarge`), `Msg::PathPickerChanged(String)`.
 - Existing `Msg::DiffRead`/`PullRequestDiffRead`/`ListRead` reconcile expansion (`Expansion::reconcile`) and re-shape; state of ranges that vanished is dropped.

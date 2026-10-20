@@ -142,7 +142,9 @@ lines to hide them again and get the usual hunk back.
 - Added, untracked and deleted files, and files whose contents are not shown as text, have no
   hidden lines and no row.
 - A file over the size limits (see *Large files*) shows its lines only after **Show diff**; its
-  hidden lines are then available like any other file's. A pull request's diff has no such rows yet.
+  hidden lines are then available like any other file's.
+- Reading a pull request, the lines are the pull request's head version of the file, not the
+  worktree's, even when the worktree has moved on. See *Pull request files* below.
 
 ### Showing the whole file
 
@@ -157,6 +159,15 @@ again to go back to the hunks.
   greyed out, and hovering it says why.
 - The lines come from the file as it is on disk, like the hidden lines above. A very long file may
   be left uncoloured rather than make the view wait.
+
+### Pull request files
+
+With a pull request selected, hidden lines and **Whole file** show the pull request's head version
+of the file. The view reads it from this computer's copy of the repository when the head commit is
+there, and from GitHub otherwise, so a head that was never fetched needs the GitHub command-line
+tool signed in and a connection. While it is read the pane says **Reading file…**; if it cannot be
+read (no connection, no sign-in, the file is missing at the head, or it is larger than 2 MB) the
+pane says why above the diff, and the diff itself stays usable. Nothing is written.
 
 ### Binary and non-text files
 

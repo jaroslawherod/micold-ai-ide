@@ -68,9 +68,9 @@ fn the_head_read_is_the_commits_blob_while_the_worktree_differs() {
         repo: repo(),
         commit: head,
     };
-    let from_head = read_file(&source, &path("src/a.rs"), false, &gh, 0).unwrap();
+    let from_head = read_file(&source, &path("src/a.rs"), false, Some(&gh), 0).unwrap();
     assert_eq!(lines_of(&from_head), ["head one", "head two"]);
-    let from_disk = read_file(&worktree(&root), &path("src/a.rs"), false, &gh, 0).unwrap();
+    let from_disk = read_file(&worktree(&root), &path("src/a.rs"), false, Some(&gh), 0).unwrap();
     assert_eq!(lines_of(&from_disk), ["edited"]);
     assert!(gh.file_calls().is_empty(), "a local commit never asks gh");
 }
@@ -84,7 +84,7 @@ fn a_commit_that_is_not_local_is_asked_of_gh_once() {
         repo: repo(),
         commit: "0123456789abcdef0123456789abcdef01234567".into(),
     };
-    let text = read_file(&source, &path("src/a.rs"), false, &gh, 0).unwrap();
+    let text = read_file(&source, &path("src/a.rs"), false, Some(&gh), 0).unwrap();
     assert_eq!(lines_of(&text), ["from github"]);
     let calls = gh.file_calls();
     assert_eq!(calls.len(), 1);
@@ -102,7 +102,7 @@ fn an_unobtainable_head_is_the_head_failure() {
         commit: "0123456789abcdef0123456789abcdef01234567".into(),
     };
     assert_eq!(
-        read_file(&source, &path("src/a.rs"), false, &gh, 0),
+        read_file(&source, &path("src/a.rs"), false, Some(&gh), 0),
         Err(FileReadFailure::HeadUnavailable)
     );
 }
@@ -117,7 +117,7 @@ fn a_path_absent_at_a_local_head_is_missing_without_asking_gh() {
         commit: head,
     };
     assert_eq!(
-        read_file(&source, &path("src/none.rs"), false, &gh, 0),
+        read_file(&source, &path("src/none.rs"), false, Some(&gh), 0),
         Err(FileReadFailure::Missing)
     );
     assert!(gh.file_calls().is_empty());
@@ -133,7 +133,7 @@ fn a_commit_that_could_be_an_option_is_refused() {
         commit: "--output=x".into(),
     };
     assert_eq!(
-        read_file(&source, &path("src/a.rs"), false, &gh, 0),
+        read_file(&source, &path("src/a.rs"), false, Some(&gh), 0),
         Err(FileReadFailure::HeadUnavailable)
     );
 }
@@ -145,7 +145,7 @@ fn a_worktree_file_that_is_not_text_or_not_there_says_why() {
     fs::write(root.join("latin.txt"), [0x66u8, 0xe9, 0x0a]).unwrap();
     let gh = FakePullRequestSource::new();
     let src = worktree(&root);
-    let read = |p: &str, force| read_file(&src, &path(p), force, &gh, 0);
+    let read = |p: &str, force| read_file(&src, &path(p), force, Some(&gh), 0);
     assert_eq!(read("bin.dat", false), Err(FileReadFailure::Binary));
     assert_eq!(read("latin.txt", false), Err(FileReadFailure::NotUtf8));
     assert_eq!(read("nope.rs", false), Err(FileReadFailure::Missing));
@@ -161,10 +161,10 @@ fn a_large_file_waits_for_force_large() {
     let gh = FakePullRequestSource::new();
     let src = worktree(&root);
     assert_eq!(
-        read_file(&src, &path("big.txt"), false, &gh, 0),
+        read_file(&src, &path("big.txt"), false, Some(&gh), 0),
         Err(FileReadFailure::TooLarge { bytes: size })
     );
-    let forced = read_file(&src, &path("big.txt"), true, &gh, 0).unwrap();
+    let forced = read_file(&src, &path("big.txt"), true, Some(&gh), 0).unwrap();
     assert_eq!(forced.bytes, size);
 }
 
@@ -195,15 +195,19 @@ fn a_symlink_that_leaves_the_repository_is_refused() {
     let gh = FakePullRequestSource::new();
     let src = worktree(&root);
     assert_eq!(
-        read_file(&src, &path("link.txt"), false, &gh, 0),
+        read_file(&src, &path("link.txt"), false, Some(&gh), 0),
         Err(FileReadFailure::OutsideRepository)
     );
     assert_eq!(
-        read_file(&src, &path("dirlink/x.txt"), false, &gh, 0),
+        read_file(&src, &path("dirlink/x.txt"), false, Some(&gh), 0),
         Err(FileReadFailure::OutsideRepository)
     );
-    let inside = read_file(&src, &path("inside.txt"), false, &gh, 0).unwrap();
-    assert_eq!(lines_of(&inside), ["src/a.rs"], "a link reads as its target");
+    let inside = read_file(&src, &path("inside.txt"), false, Some(&gh), 0).unwrap();
+    assert_eq!(
+        lines_of(&inside),
+        ["src/a.rs"],
+        "a link reads as its target"
+    );
 }
 
 #[test]
@@ -215,15 +219,35 @@ fn reading_changes_nothing_and_a_worktree_read_never_asks_gh() {
     let before = fs::read(root.join("src/a.rs")).unwrap();
     let gh = FakePullRequestSource::new();
     for p in ["src/a.rs", "new.txt", "missing.txt"] {
-        let _ = read_file(&worktree(&root), &path(p), false, &gh, 0);
+        let _ = read_file(&worktree(&root), &path(p), false, Some(&gh), 0);
     }
     let pr = FileSource::PrHead {
         dir: root.clone(),
         repo: repo(),
         commit: head,
     };
-    let _ = read_file(&pr, &path("src/a.rs"), false, &gh, 0);
+    let _ = read_file(&pr, &path("src/a.rs"), false, Some(&gh), 0);
     assert_eq!(git(&root, &["status", "--porcelain=v2"]), status);
     assert_eq!(fs::read(root.join("src/a.rs")).unwrap(), before);
     assert!(gh.file_calls().is_empty());
+}
+
+#[test]
+fn a_local_head_is_read_without_gh() {
+    let (_dir, root, head) = repo_with_head();
+    let source = FileSource::PrHead {
+        dir: root,
+        repo: repo(),
+        commit: head,
+    };
+    assert!(read_file(&source, &path("src/a.rs"), false, None, 0).is_ok());
+    let far = FileSource::PrHead {
+        dir: _dir.path().to_path_buf(),
+        repo: repo(),
+        commit: "0123456789abcdef0123456789abcdef01234567".into(),
+    };
+    assert_eq!(
+        read_file(&far, &path("src/a.rs"), false, None, 0),
+        Err(FileReadFailure::HeadUnavailable)
+    );
 }
