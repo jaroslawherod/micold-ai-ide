@@ -289,8 +289,8 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
             });
         // The target mark is the top layer, so the header's fill cannot paint over the outline
         // (research R13); its *selected* layer covers the header and the body alike.
-        let mark = container(Space::new().width(Length::Fill).height(Length::Fill)).style(
-            move |_| {
+        let mark =
+            container(Space::new().width(Length::Fill).height(Length::Fill)).style(move |_| {
                 let mut layer = style::color(p.on_body);
                 layer.a = state::SELECTED;
                 container::Style {
@@ -302,8 +302,7 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                     },
                     ..container::Style::default()
                 }
-            },
-        );
+            });
         let face = stack![fill, mark].width(Length::Fill);
         let secondary = card.on_secondary_press;
         let menu = move |content: Element<'a, M>| match secondary {
@@ -611,12 +610,7 @@ mod tests {
         };
         assert_eq!(size_of("Adds"), 17.0);
         assert_eq!(size_of("Feature"), 12.0, "the header's words are Label");
-        for body in [
-            "feat/1120",
-            "3 sessions",
-            "Editing card_grid",
-            "Implement",
-        ] {
+        for body in ["feat/1120", "3 sessions", "Editing card_grid", "Implement"] {
             assert_eq!(size_of(body), 14.0, "{body}");
         }
     }
@@ -798,7 +792,10 @@ mod tests {
                         "{at}: the state starts the header and the type ends it"
                     );
                     let header_bottom = state_word.bounds.y + state_word.bounds.height;
-                    assert!(header_bottom <= title.bounds.y, "{at}: the header is on top");
+                    assert!(
+                        header_bottom <= title.bounds.y,
+                        "{at}: the header is on top"
+                    );
                     for (what, painted, want) in [
                         ("state word", state_word, p.on_header),
                         ("type word", type_word, p.on_header),
@@ -833,10 +830,7 @@ mod tests {
         let m = full(false);
         for width in [280.0, 380.0] {
             let text = mounted_at(&m, width, roles()).painted_text();
-            for (hovered, want) in [
-                (m.state.label(), m.reason.label()),
-                ("Feature", "Feature"),
-            ] {
+            for (hovered, want) in [(m.state.label(), m.reason.label()), ("Feature", "Feature")] {
                 let at = word(&text, hovered).bounds.center();
                 let floated = mounted_at(&m, width, roles()).floated_text(at);
                 assert_eq!(floated, [want], "{width}: hovering {hovered:?}");
@@ -1294,7 +1288,10 @@ mod tests {
         let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
         let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
         for (c, want) in [p.body.r, p.body.g, p.body.b].into_iter().enumerate() {
-            assert!(got[c].abs_diff(want) <= 1, "channel {c}: {got:?} vs the body");
+            assert!(
+                got[c].abs_diff(want) <= 1,
+                "channel {c}: {got:?} vs the body"
+            );
         }
     }
 

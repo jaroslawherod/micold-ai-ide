@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
 - **Phase**: implement M4
-- **Next step**: M4 continued from *Handover*: T035 test, T036 snapshot + anchors, scoped gate, then review A + B + visual pass (T039)
+- **Next step**: M4 review A (high) + review B + visual pass (T039) on the recorded snapshot; then fixes, full gate, PR
 
 ## Pull requests
 
@@ -80,25 +80,7 @@ M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red wa
 
 ## Handover
 
-M4 unit 1 (context cap) — branch reset to origin/main (96ef5d1f), work committed locally, not pushed.
-Done: T031 (contrast tests over new Palette, red proven by compile error, now green), T032 (header
-geometry/pixel/colour test, tooltip test via new `Mounted::new_in` + `Mounted::floated_text` in
-`ui/material/test_support.rs`; ripple/fade/target/focus tests updated), T033 (Palette
-header/on_header/body/on_body/on_body_variant), T034 (header container + body column on a body-fill
-container, target mark as top `stack` layer; ripple/focus layer `on_body`; test helpers skip the
-full-card mark leaf: `pieces()` in overview_card tests, `dedup()` in card_grid `card_boxes`),
-T037, T038 (docs). `cargo test -p micold-client --lib -- overview_card composition_contrast card_grid`:
-73 passed. Also written but not yet run: T035 showcase "five states" CardGrid pose (needs-action
-card taller: activity + progress; catalogue `posed` gains "five states"), T036 `overview-open`
-covered state with `anchors: &[]`.
-Next: (1) `UPDATE_LAYOUT_SNAPSHOT=1 scripts/build-lock.sh cargo test -p micold-client --test
-layout_snapshot`, confirm only `## overview-open` is new in the fixture diff, then add anchors
-`overview.card.header` / `overview.card.title` (paths from the fixture) and regenerate; run
-`--test showcase_completeness`, `layout_text_overflow`, `--test gates` (containment); tick T035,
-T036. (2) Scoped gate + review A (high); then snapshot and return REVIEW-NEEDED for review B +
-visual pass (quickstart §B M4: header row in five states, contrast, both themes; showcase five-state
-grid shows a taller card stretching its row) — T039 evidence to `visual-pass/` and `visual-pass.md`.
-User guide's header colour words (red/amber/accent/green/grey) need the visual pass to confirm.
+None.
 
 ## Open escalation
 
