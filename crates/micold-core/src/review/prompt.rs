@@ -135,7 +135,13 @@ pub fn build_pr(pr: &PrContext, comments: &[ReviewComment], outdated: &[CommentI
 pub fn flatten_title(title: &str) -> String {
     title
         .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| {
+            if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') {
+                ' '
+            } else {
+                c
+            }
+        })
         .take(200)
         .collect()
 }
@@ -739,6 +745,11 @@ Name this.";
         let title = long.split('"').nth(1).expect("quoted title");
         assert_eq!(title.chars().count(), 200);
         assert_eq!(flatten_title("tab\there"), "tab here");
+        assert_eq!(
+            flatten_title("a\u{2028}b\u{2029}c"),
+            "a b c",
+            "line separators too"
+        );
     }
 
     #[test]

@@ -598,6 +598,18 @@ impl EntryReview {
         pr: Option<&PrContext>,
         outdated: &[CommentId],
     ) -> Result<SendSnapshot, ReviewError> {
+        // The scope and the context name the same thing: a pull request's batch is built from a
+        // pull request's drafts only.
+        let agree = match (scope, pr) {
+            (Scope::WorkingTree, None) => true,
+            (Scope::PullRequest(number), Some(pr)) => pr.number == number,
+            _ => false,
+        };
+        if !agree {
+            return Err(ReviewError::Invalid(
+                "a send's pull request and its scope differ".to_owned(),
+            ));
+        }
         if self.sending.is_some() {
             return Err(ReviewError::Busy);
         }
@@ -1271,6 +1283,33 @@ x",
             !snapshot.prompt.contains("Why clone here?"),
             "no trace of the sent one"
         );
+    }
+
+    #[test]
+    fn begin_send_refuses_a_scope_and_context_that_differ() {
+        let mut review = EntryReview::default();
+        let context = PrContext {
+            number: 9,
+            title: "t".into(),
+            head_branch: "b".into(),
+            state: crate::pull_request::BranchPrState::Open,
+            current_head: "a".repeat(40),
+            checked_out: None,
+            unreadable: Vec::new(),
+        };
+        for (scope, pr) in [
+            (Scope::PullRequest(9), None),
+            (Scope::WorkingTree, Some(&context)),
+            (Scope::PullRequest(8), Some(&context)),
+        ] {
+            assert!(
+                matches!(
+                    review.begin_send(EntryKind::Worktree, scope, pr, &[]),
+                    Err(ReviewError::Invalid(_))
+                ),
+                "{scope:?}"
+            );
+        }
     }
 
     #[test]
