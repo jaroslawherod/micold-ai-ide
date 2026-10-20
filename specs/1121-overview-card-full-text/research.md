@@ -48,7 +48,9 @@ Builds on feature 1120's code: `overview_card.rs`, `card_grid.rs` (measure-then-
 ## R4 — Drawing over neighbours without reflow
 
 - **Decision**: `CardGrid::expanded(index, twin)` takes the expanded card and its collapsed twin.
-  `Grid::layout` measures the twin (an extra child, never drawn or sent events) for that card's
+  `Grid::layout` measures the twin (built with no `.id`, focus wiring or messages, kept in its own
+  tree slot after the cards, and skipped by `operate`, `overlay`, `update` and `draw`, so it takes
+  no traversal or `focus(id)` hand-back) for that card's
   `naturals` entry, so `row_heights` and every slot are what they are with nothing expanded
   (FR-009); it lays the expanded card out at its slot's x, width and top with height
   `min(natural expanded, view height)`. `draw` skips the expanded card in the piece loop and draws
@@ -60,15 +62,19 @@ Builds on feature 1120's code: `overview_card.rs`, `card_grid.rs` (measure-then-
   `is_over` is false for it, so hover layers, presses and the context area beneath stay inert.
 - **Alternatives**: remember the row heights from the last unexpanded layout (rejected: stale when
   content changes while expanded).
-- **During a zoom** (feature 970): nothing expands while `ZoomState::ends` is set; the grid
-  publishes no rest and the app drops expansion on `FullScreenToggled` (spec: zoom unaffected).
+- **During a zoom** (feature 970): the grid publishes no rest while `ZoomState::ends` is set. An
+  expansion already held stays through the zoom and in full-screen, which behaves as the normal
+  Overview (Story 1 sc.6, FR-011); there is no zoom `Event`.
 
 ## R5 — Pointer rest
 
 - **Decision**: the grid keeps one `micold_core::tooltip::ShowTimer` for the card under the pointer
   (topmost: the expanded card first), observed on every event with `EXPAND_REST` (400 ms); when it
   opens, the grid publishes that card's `on_rest` message; when the pointer leaves the card it was
-  over, it publishes that card's `on_leave`. It asks for a redraw at `wake_at`. The card under the
+  over, it publishes that card's `on_leave`. When the topmost card under the cursor changes, the
+  grid calls `ShowTimer::reset()` before observing again: `ShowTimer` holds `Open` while `over`
+  stays true, so moving from the expanded card's drawn area straight onto the card beneath would
+  otherwise never rest on it. It asks for a redraw at `wake_at`. The card under the
   pointer is recomputed after a scroll (Edge Case *scrolling under the pointer*).
 - **Rationale**: `ShowTimer` is the tested "wait after entering, not restarted by movement" rule;
   400 ms is under the spec's 0.5 s (SC-006) and near the tooltip wait. The messages are data on
@@ -103,14 +109,18 @@ Builds on feature 1120's code: `overview_card.rs`, `card_grid.rs` (measure-then-
 - **Decision**: `CardModel.dir: PathBuf`, filled in `ui/overview.rs::card` from `Worktree::path`
   (orphan/invalid: the recorded path) and from the project root for *Default*.
 - **Rationale**: the card model is the one place card text is derived from (feature 1120 FR-018).
+- **Alternatives**: derive the directory in the view from `SessionLocation` (rejected: the view
+  would repeat the worktree lookup `card` already does, and `ExpandedText` could not be tested from
+  a `CardModel` alone); resolve it in `ExpandedText::of` from the app state (rejected: core has no
+  app state).
 
 ## R9 — The directory's form (D2, localised)
 
 - **Decision**: `overview_text::worktree_dir(path, home: Option<&Path>) -> String`: a path inside
   `home` is `~` plus the platform separator plus the rest (`Path::strip_prefix`, so separators are
   the platform's), `home` itself is `~`, anything else is shown whole. The client passes the home
-  folder it already resolves (`dirs::home_dir` / the shell helper in use; tasks pick the existing
-  one).
+  folder from `directories::UserDirs::new().home_dir()`, the lookup `shell/workspace.rs::start_dir`
+  already uses.
 - **If jaro picks another D2 option** (relative to the project root, or folder name only): only this
   function and its tests change.
 
@@ -120,3 +130,6 @@ Builds on feature 1120's code: `overview_card.rs`, `card_grid.rs` (measure-then-
   in `tests/support/covered_states.rs`, fixture regenerated; the showcase surfaces section adds an
   expanded card beside the collapsed ones (`unscrolled` grid with `.expanded(0, twin)`); user guide
   per plan *Docs*. The text-overflow and containment gates run on the new state.
+- **Alternatives**: an expanded-by-pointer covered state (rejected: it needs a timed rest; focus gives
+  the same form with no timer); a showcase-only check with no covered state (rejected: the
+  layout snapshot and its gates would not see the expanded form).

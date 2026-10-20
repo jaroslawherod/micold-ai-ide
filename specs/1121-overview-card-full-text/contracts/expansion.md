@@ -12,6 +12,9 @@ Edge Case is a test:
 - Focus A, rest B, window blurred → none; nothing re-expands (Edge Case *Window regains focus*).
 - Escape with A focus-expanded → none, `focused` still A; focus B and back to A → A (Story 3 sc.5).
 - Rest A, Escape → none; further events with the pointer still on A → none; leave A and rest A → A.
+- Focus A, rest A (cause becomes Pointer), Escape, rest B, leave B → none: A was escaped after it
+  last got focus, whatever the cause it was expanded by (FR-005, Edge Case *Hover ends while another
+  card has focus*).
 - Menu open: rest B / focus B → no change; menu closed → rests and focus act again (FR-012).
 - `Listed` without A while A expanded → none; focus hand-back `FocusGained(first)` → first (Edge Case).
 - `Default` (fresh) → none (FR-013).
