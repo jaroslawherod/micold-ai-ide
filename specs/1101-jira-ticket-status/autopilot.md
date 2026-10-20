@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Status chip in the issue picker | #1155 | merged |
-| M2 | T014–T027 | full | Current status on the sidebar | | implemented |
+| M2 | T014–T027 | full | Current status on the sidebar | | gated |
 | M3 | T028–T030 | full | Status on Overview cards | | pending |
 
 ## Decisions
@@ -45,6 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A | 1 | aad5399d8:f11ffb94 | 10 findings; 1 fixed (chip aligned to first line), rest declined/MINOR |
 | M1 review B | 1 | aad5399d8:f11ffb94 | CLEAN (2 MINOR) |
 | M2 review A | 1 | b90ff0c14cecbbde6895835d88fb8fe279889418:d0923323fa64e10532127c327f54ca41bc28e4c8 | 10 findings; fixed: fmt, per-message cost (dormant skip), connection change drops statuses and re-reads (also covers Jira enabled after open), clock doc; rest declined (below) |
+| M2 review B | 1 | 421a6d147b3dcd974dc351c312ad4804fe5e40da:a6da24e84c8e4b28b4081d93e49ac37606053282 | CHANGES: 1 MAJOR (red not recorded; fixed by mutation runs, logged in cycle-log), 1 MINOR (task paths; fixed). Verify green |
 
 ## Declined review findings
 
