@@ -200,6 +200,7 @@ fn other_writers_preserve_the_mapping() {
             "plan_usage_enabled",
             "plan_usage_warn_percent",
             "pr_status_enabled",
+            "reduce_motion",
             "save_terminal_history",
             "scrollback_lines",
             "settings_version",
