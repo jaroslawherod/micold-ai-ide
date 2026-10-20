@@ -75,7 +75,7 @@ When a session is started through MCP without an explicit prompt, the template r
 3. **Given** a template, **When** `create_worktree` is called with `ai_cli` and no `prompt`, **Then** the session receives the rendered template.
 4. **Given** an empty template, **When** `create_session` is called without `prompt`, **Then** behaviour is unchanged (no prompt typed).
 5. **Given** a template, **When** `create_worktree` is called with neither `ai_cli` nor `prompt`, **Then** no session is created, as today.
-6. **Given** an issue worktree whose title and body cannot be obtained, **When** `create_session` renders the template `Fix {issue_title} (#{issue})`, **Then** the session receives `Fix  (#42)`; creation is not delayed past the existing 60 s prompt-delivery window by the lookup.
+6. **Given** an issue worktree whose title and body cannot be obtained, **When** `create_session` renders the template `Fix {issue_title} (#{issue})`, **Then** the session receives `Fix  (#42)`; the lookup is abandoned after 5 s and title and body render empty.
 7. **Given** a worktree for Jira issue ABC-12, **When** `{issue}` renders, **Then** it is `ABC-12`.
 
 ### Edge Cases
@@ -105,14 +105,14 @@ When a session is started through MCP without an explicit prompt, the template r
 - **FR-009**: MCP `create_worktree` MUST apply FR-008 to the session it starts for `ai_cli`/`prompt`, and MUST NOT start a session solely because a template exists.
 - **FR-010**: One template applies to every AI CLI and worktree type; `{type}` lets a template vary text. Per-CLI or per-type templates are out of scope.
 - **FR-011**: The dialog and the MCP tools MUST render identically for the same template and facts.
+- **FR-012**: Rendering MUST NOT block or fail worktree or session creation; any failure yields no prompt.
 - **FR-013**: A stored template that fails validation at load MUST NOT stop the app: it renders as empty, the file keeps its text, and Settings shows the validation error.
 - **FR-014**: For MCP, the facts are the worktree's recorded issue reference, branch, type and name; title and body are looked up from the issue tracker when the reference is known, and are empty when the lookup fails or the worktree has no issue.
-- **FR-012**: Rendering MUST NOT block or fail worktree or session creation; any failure yields no prompt.
 
 ### Key Entities
 
 - **Prompt template**: user text with placeholders, stored in Settings.
-- **Worktree facts**: issue number, title, body, branch, type, name — each optional.
+- **Worktree facts**: issue identifier, title, body, branch, type, name — each optional.
 
 ## Success Criteria *(mandatory)*
 
