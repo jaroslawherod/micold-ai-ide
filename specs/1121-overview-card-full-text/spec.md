@@ -77,7 +77,8 @@ no other card moves, and that leaving it collapses it.
 
 1. **Given** the Overview, **When** the pointer rests on a card, **Then** that card expands in
    place: its top-left corner and width stay where they are, it grows downward over the cards
-   below it, and it shows the full title, the full branch name, the worktree directory and the
+   below it, and it shows the full title, the location's display name (when it differs from the
+   title), the full branch name (when the title is not the branch), the worktree directory and the
    full activity, wrapped, with no ellipsis.
 2. **Given** an expanded card, **When** it is shown, **Then** no other card moves or changes size,
    and the expanded card is drawn above every card it covers, with an elevation that sets it apart
@@ -89,11 +90,14 @@ no other card moves, and that leaving it collapses it.
    time.
 5. **Given** a card near the bottom of the visible area, **When** it expands and would extend below
    the visible area of the Overview, **Then** it is shifted up just enough to be seen whole, still
-   covering its own grid slot; when it is taller than the visible area, its top stays visible and
-   the rest can be reached by scrolling the Overview.
-6. **Given** a card whose rows (sessions, progress, pull requests) are unchanged by expansion,
+   covering its own grid slot.
+6. **Given** a card whose full content is taller than the visible area of the Overview, **When** it
+   expands, **Then** it is as tall as the visible area, its header row and title stay in view, and
+   the rest of its content scrolls inside the card: with the mouse wheel while the pointer is on it,
+   and with Page Up / Page Down while it has keyboard focus (Story 3 scenario 6).
+7. **Given** a card whose rows (sessions, progress, pull requests) are unchanged by expansion,
    **When** it expands, **Then** those rows read as on the collapsed card; only text that was
-   wrapped short or ellipsized grows, and the worktree directory is added.
+   wrapped short or ellipsized grows, and the lines of FR-004 that the collapsed card lacks are added.
 
 ---
 
@@ -125,6 +129,9 @@ and what Escape does.
    activates as today (feature 813 FR-013) with its ripple (feature 971).
 5. **Given** a focused card that the user collapsed with Escape, **When** focus moves to another
    card and back, **Then** the card expands again.
+6. **Given** a focused, expanded card whose content scrolls inside it (Story 2 scenario 6), **When**
+   the user presses Page Down or Page Up, **Then** its content scrolls by about one visible height
+   in that direction, and Home / End are not taken from feature 813's keyboard navigation.
 
 ---
 
@@ -179,6 +186,19 @@ focus through the grid; compare each with the same action on a collapsed card be
   user hovers it or moves keyboard focus onto it.
 - **Pointer on one card, focus on another**: one card is expanded at a time: the one the user
   interacted with last (pointer resting on a card, or a keyboard focus move).
+- **Hover ends while another card has focus**: card A is expanded by focus, the pointer then
+  rests on card B (B expands, A collapses) and leaves B without resting on another card: B
+  collapses and A, which still has keyboard focus, expands again, unless the user collapsed A with
+  Escape since it last received focus.
+- **Window regains focus**: no card expands on that alone; the focused card expands again on the
+  next focus move onto it, and a card under the pointer on the next pointer rest on it.
+- **Escape on a card under the pointer**: Escape collapses the expanded card whichever way it was
+  expanded; a card collapsed by Escape stays collapsed while the pointer stays on it, and expands
+  again only when the pointer leaves it and rests on it again, or keyboard focus moves onto it
+  again.
+- **Scrolling the Overview while a card is expanded**: the expanded card moves with its grid slot,
+  and the upward shift of FR-008 is worked out again for the new position; the card stays
+  expanded while the pointer is still on it.
 - **Scrolling under the pointer**: when scrolling the Overview brings another card under a resting
   pointer, the previous card collapses and the new one expands as for a pointer move.
 - **Orphan / invalid location**: the expanded card shows the worktree directory as recorded and no
@@ -204,24 +224,31 @@ focus through the grid; compare each with the same action on a collapsed card be
   needed for the latter.
 - **FR-003**: An expanded card MUST be drawn in place, above every other card, with an elevation that
   sets it apart: its top-left corner and width are those of its grid slot (shifted up only per
-  FR-008), and its height is what its full content needs.
-- **FR-004**: An expanded card MUST show, in full and wrapped with no ellipsis: the title, the full
-  branch name (when the location has one), the worktree directory, and the activity (when there is
+  FR-008), and its height is what its full content needs, up to the cap of FR-008.
+- **FR-004**: An expanded card MUST show, in full and wrapped with no ellipsis: the title, the
+  location's display name (when it differs from the title), the full branch name (when the location
+  has one and the title is not the branch), the worktree directory, and the activity (when there is
   one); plus every other row the collapsed card shows. The full-text tooltips of the title, branch
-  and activity (feature 1120 FR-006, FR-007, FR-015) are removed, since expansion shows that text;
-  the state-reason and location-type tooltips of the header row stay.
+  and activity on the collapsed card are removed, since expansion shows that text: this replaces
+  the tooltip clauses of feature 1120 FR-006, FR-007 and FR-015. The state-reason and location-type
+  tooltips of the header row stay.
 - **FR-005**: An expanded card MUST collapse when the pointer leaves it (if it was expanded by
   hover), when keyboard focus leaves it (if it was expanded by focus), when the window loses focus,
   when the Overview closes, when another card expands, and when the user presses Escape while it has
-  keyboard focus. [See Story 3 scenario 2 for Escape's effect on the Overview.]
+  keyboard focus or the pointer on it. [See Story 3 scenario 2 for Escape's effect on the
+  Overview.] When the card that collapses was expanded by hover and another card still has keyboard
+  focus (not collapsed by Escape since it received focus), that card MUST expand again; no other
+  collapse re-expands a card (Edge Cases).
 - **FR-006**: At most one card MUST be expanded at any time.
 - **FR-007**: No text on a card MUST be clipped, collapsed or expanded, at card widths of 280, 380
   and 480 px nor at any other width the grid produces; an unbroken run of characters wider than the
   card (a long branch or path) MUST wrap within the card on the expanded card and end in an ellipsis
   on the collapsed one.
 - **FR-008**: An expanded card that would extend below the visible area of the Overview MUST be
-  shifted up so it is seen whole, while still covering its own grid slot; one taller than the
-  visible area MUST keep its top visible.
+  shifted up so it is seen whole, while still covering its own grid slot, and the shift MUST follow
+  the card as the Overview scrolls. An expanded card is at most as tall as the visible area: content
+  beyond that MUST scroll inside the card, with its header row and title kept in view, by the mouse
+  wheel over the card and by Page Up / Page Down while it has keyboard focus.
 - **FR-009**: Expanding or collapsing a card MUST NOT move, resize or reflow any card or grid row,
   and MUST NOT change the Overview's scroll position.
 - **FR-010**: A pointer press, release or secondary click anywhere on an expanded card, including
@@ -253,15 +280,16 @@ focus through the grid; compare each with the same action on a collapsed card be
 
 - **Expanded card**: which card, if any, is expanded, and why (pointer resting on it, or keyboard
   focus); derived from pointer, focus and menu state, not stored across Overview openings.
-- **Card text**: feature 1120's card text, plus the full branch name and the worktree directory for
-  the expanded form.
+- **Card text**: feature 1120's card text, plus the display name (when it differs from the title),
+  the full branch name (when the title is not the branch) and the worktree directory for the
+  expanded form.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: With no pointer use at all, a keyboard user can bring every card's full text on screen,
-  one card per focus move.
+- **SC-001**: With no pointer use at all, a keyboard user can bring every card's full text on screen:
+  one focus move expands the card, and Page Down reaches any content beyond the visible area.
 - **SC-002**: At card widths of 280, 380 and 480 px, in both forms and with every optional row, no
   text on any card is clipped and no text overlaps other text.
 - **SC-003**: Expanding and collapsing a card moves no other card by even one pixel and changes no
@@ -276,8 +304,9 @@ focus through the grid; compare each with the same action on a collapsed card be
 ## Out of scope
 
 - Expanding more than one card at a time, pinning a card open, or a user setting for expansion.
-- Changes to what the collapsed card shows beyond the title and activity line counts (feature 1120
-  stays as shipped otherwise).
+- Changes to what the collapsed card shows beyond the title and activity line counts and the
+  removal of its title, branch and activity tooltips (FR-004); feature 1120 stays as shipped
+  otherwise.
 - Changes to the grid's columns, card widths or row-height rule (features 1024, 1120).
 - Expansion anywhere but the Overview.
 
