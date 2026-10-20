@@ -347,11 +347,44 @@ impl StartProgress {
     }
 }
 
+/// The button on a daemon's row that opened a dialog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowAction {
+    /// The row's Edit button.
+    Edit,
+    /// The row's Details button.
+    Details,
+}
+
+/// The control that opened the daemon dialog: focus returns to it when the dialog closes
+/// (feature 1092, FR-009).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opener {
+    /// The Add daemon button.
+    Add,
+    /// A button on this daemon's row.
+    Row(DaemonId, RowAction),
+}
+
+impl Opener {
+    /// The widget id of the button, which `ui::settings::daemons` puts on it.
+    pub fn widget_id(self) -> iced::advanced::widget::Id {
+        iced::advanced::widget::Id::from(match self {
+            Opener::Add => "daemons-add".to_string(),
+            Opener::Row(id, RowAction::Edit) => format!("daemons-edit-{id:?}"),
+            Opener::Row(id, RowAction::Details) => format!("daemons-details-{id:?}"),
+        })
+    }
+}
+
 /// What the Daemons feature remembers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
     /// The open add/edit form.
     pub draft: Option<Draft>,
+    /// The control that opened the form, so focus goes back to it when the form closes (feature
+    /// 1092, FR-009). View state: set on open, taken by [`State::take_focus_return`].
+    pub opener: Option<Opener>,
     /// The sentence beside the form field the last refused save was about.
     pub form_error: Option<FormError>,
     /// Which section of the form the user opened: the kind's first until a header is pressed. All
@@ -408,6 +441,15 @@ pub struct State {
 }
 
 impl State {
+    /// The opener to give focus back to, once the form has closed: `None` while it is open or
+    /// when nothing is waiting. Taken, so focus moves once per close (FR-009).
+    pub fn take_focus_return(&mut self) -> Option<Opener> {
+        if self.draft.is_some() {
+            return None;
+        }
+        self.opener.take()
+    }
+
     /// Whether `section` is shown open: the kind's first section until the user flips it, and
     /// any section holding the field of a shown error, a refused save's or a required field left
     /// empty, so an error is never hidden (feature 890, FR-004).
@@ -1906,11 +1948,17 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             state.requested.clear();
             begin_add(state);
             state.form_error = None;
+            state.opener = Some(Opener::Add);
         }
         Msg::EditOpened(id) => {
             state.requested.clear();
             state.form_error = None;
             let kube = begin_edit(state, model, id).is_some_and(|d| d.kube_edited);
+            // Only a form that opened has an opener to return to.
+            state.opener = state
+                .draft
+                .is_some()
+                .then_some(Opener::Row(id, RowAction::Edit));
             if kube {
                 return vec![Outcome::KubeContextsRequested];
             }

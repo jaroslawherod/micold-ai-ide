@@ -161,6 +161,10 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     for path in gate {
         let _ = crate::shell::workspace::on_folder_chosen(app, path);
     }
+    // The dialog closed: the keyboard goes back to the button that opened it (FR-009).
+    if let Some(opener) = app.core.daemon_list.take_focus_return() {
+        tasks.push(iced::widget::operation::focus(opener.widget_id()));
+    }
     if wants_hosts {
         tasks.push(Task::perform(
             async {
