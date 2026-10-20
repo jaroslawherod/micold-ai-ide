@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1150
 - **Worktree branch**: feat/1150_show-the-full-file-while-reviewing-a-diff-in-the
 - **Started**: 2026-10-20
-- **Phase**: tasks
-- **Next step**: design PR merged by orchestrator, then milestone M1
+- **Phase**: implement M1
+- **Next step**: continue M1 per Handover
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1151 | Design PR (spec, plan, tasks) | open | |
+| #1151 | Design PR (spec, plan, tasks) | merged | df019910c4b525b25df8b08f3fd1073a11b28f72 |
 
 ## Milestones
 
@@ -56,7 +56,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Unit M1 (T001-T017) hit the 150k context cap mid-implement; no PR yet, nothing pushed. Branch was reset to origin/main by branch-start.sh; WIP is in the working tree (committed as a WIP commit).
+
+Done (uncommitted-then-WIP, code written, NOT all compiled/tested):
+- `crates/micold-core/src/review/expand.rs` (T001-T007): Gap/GapKey/Position/Expansion(toggle, toggle_key, set_whole, is_open, reconcile)/Revealed/Shaped/ShapedRef/gaps()/shape() with unit tests. `mod expand` registered in review/mod.rs. `mise run test-core -- review::` was green (147 pass) except one typo in a diff.rs test, since fixed; expand.rs got ShapedRef + toggle_key afterwards and has not been re-run.
+- `diff.rs` (T008-T009): `unified_rows`, `side_by_side_rows`, `UnifiedIndex::new`, `SideIndex::new` now take `impl Into<ShapedRef<'a>>` (a `&Shaped` or `ShapedRef::unshaped(hunks)`); new `UnifiedRow::Gap{gap,open}` / `SideRow::Gap{gap,open}` (open=true is the collapse row placed where a revealed run starts); tests updated and two new ones added. Needs re-run.
+- `ui/material/diff_view.rs` (T011, T013): `body(diff, Option<&Shaped>, layout)`, `DiffView::shaped(&Shaped)`, `.on_gap(|GapKey| M)`, `gap_row`, `gap_label` ("N hidden lines"), geometry tests appended. NOT compiled yet (client crate still uses old `unified_rows(&diff.diff)` calls in features/changes.rs lines ~561-576, which break).
+
+Next steps:
+1. `cargo fmt`, run `mise run test-core` then fix compile in micold-client (features/changes.rs `row_of_line` uses unified_rows/side_by_side_rows on `&diff.diff`: use ShapedRef::unshaped(hunks) or the view's shaped).
+2. T010/T012 reducer: add to `OpenView` `expansions: BTreeMap<(SourceKey, RelPath), Expansion>` and a cached `shaped: Shaped` for the selected worktree file; `SourceKey::{Worktree, Pr(u64)}`; `revealable(view)` (Changes source, Text diff, `LoadedDiff::new` Some, file kind not Added/Untracked/Deleted); `Msg::GapToggled(GapKey)` (uses `Expansion::toggle_key`); reconcile against `gaps(hunks, new.len())` on DiffRead/refresh; recompute shaped after every non-scroll message (plan: wrap `update`); `file_comments`, `diff_rows`, `row_of_line` must read `shaped.hunks` for Source::Changes. Decision: the existing `Msg::ShowLarge` gate already covers over-2 MB versions (git.rs gates `new` size before reading), so no separate `ShowLargeFile` Msg is added for M1; PR files have `new: None`, so they offer no markers in M1 (PR head read is M3). Write reducer tests first in `crates/micold-client/tests/features_changes.rs`.
+3. T014: in `ui/changes.rs` (~line 515) pass `.shaped(&view.shaped)` and `.on_gap(|key| Message::Changes(Msg::GapToggled(key)))` to DiffView. T015: `highlight_file` in `ui/syntax.rs` (highlight over the full new side so revealed lines are coloured; spans for the whole new side may already exist in `LoadedDiff.spans.new`, check how spans are produced and extend to the full file). T016: gap row in `showcase/sections/review.rs`. T017: "Reading hidden lines" in `docs/user-guide/reviewing-changes.md`.
+4. Tick T001-T017 in tasks.md, then flow per tasks/verify.md, review.md (Review A `high` in the shadow of the scoped gate, Review B once, visual pass), full `mise run gate`, PR (title `feat(1150): expand hidden lines in a diff (#1150)`, body ends `Refs #1150`).
+Note: builds wait on other worktrees' build lock; use `setsid nohup ... & ` plus `scripts/autopilot/hold.sh`, foreground max 250 s.
 
 ## Open escalation
 

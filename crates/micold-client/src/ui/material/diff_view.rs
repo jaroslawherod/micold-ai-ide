@@ -31,7 +31,7 @@ use iced::advanced::{layout, mouse, renderer, Clipboard, Layout, Shell};
 use iced::alignment::Horizontal;
 use iced::keyboard;
 use iced::widget::text::Wrapping;
-use iced::widget::{column, container, rich_text, row, span, text, Sensor, Space};
+use iced::widget::{column, container, mouse_area, rich_text, row, span, text, Sensor, Space};
 use iced::{Alignment, Element, Event, Font, Length, Rectangle, Size};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -41,6 +41,7 @@ use micold_core::review::diff::{
     Cell, DiffLine, FileDiff, Hunk, LineKind, SchemeSpans, SideIndex, SideRow, SideSpans,
     UnifiedIndex, UnifiedRow,
 };
+use micold_core::review::expand::{Gap, GapKey, Shaped, ShapedRef};
 use micold_core::review::{LineRange, Side};
 /// The layout a diff is shown in, re-exported so callers need not reach into the settings module.
 pub use micold_core::settings::DiffLayout;
@@ -100,14 +101,18 @@ enum Body<'a> {
     },
 }
 
-/// What the diff area shows for `diff`.
-fn body(diff: &FileDiff, layout: DiffLayout) -> Body<'_> {
+/// What the diff area shows for `diff`; `shaped` replaces its hunks with the same hunks plus the
+/// lines the reader revealed, and the markers of the lines still hidden.
+fn body<'a>(diff: &'a FileDiff, shaped: Option<&'a Shaped>, layout: DiffLayout) -> Body<'a> {
     match diff {
         FileDiff::Text(hunks) if hunks.is_empty() => Body::Message(NO_CONTENT),
-        FileDiff::Text(_) => match layout {
-            DiffLayout::Unified => Body::Rows(UnifiedIndex::new(diff)),
-            DiffLayout::SideBySide => Body::Side(SideIndex::new(diff)),
-        },
+        FileDiff::Text(hunks) => {
+            let rows = shaped.map_or(ShapedRef::unshaped(hunks), ShapedRef::from);
+            match layout {
+                DiffLayout::Unified => Body::Rows(UnifiedIndex::new(rows)),
+                DiffLayout::SideBySide => Body::Side(SideIndex::new(rows)),
+            }
+        }
         FileDiff::Binary => Body::Message(BINARY),
         FileDiff::NotUtf8 => Body::Message(NOT_UTF8),
         FileDiff::ModeOnly => Body::Message(MODE_ONLY),
@@ -256,7 +261,12 @@ pub struct DiffView<'a, M> {
     slots: BTreeMap<Anchor, Vec<Element<'a, M>>>,
     slot_heights: BTreeMap<Anchor, f32>,
     on_slot_measured: Option<OnMeasured<'a, M>>,
+    shaped: Option<&'a Shaped>,
+    on_gap: Option<OnGap<'a, M>>,
 }
+
+/// What a press on a hidden-lines row sends: the run's key.
+type OnGap<'a, M> = Rc<dyn Fn(GapKey) -> M + 'a>;
 
 impl<'a, M: Clone + 'a> DiffView<'a, M> {
     /// `diff` in `layout`, themed by `roles`, in plain text until [`Self::spans`].
@@ -275,7 +285,22 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
             slots: BTreeMap::new(),
             slot_heights: BTreeMap::new(),
             on_slot_measured: None,
+            shaped: None,
+            on_gap: None,
         }
+    }
+
+    /// Show `shaped` (the diff's hunks with the revealed lines, and a row for each hidden or
+    /// revealed run) in place of the diff's own hunks (feature 1150).
+    pub fn shaped(mut self, shaped: &'a Shaped) -> Self {
+        self.shaped = Some(shaped);
+        self
+    }
+
+    /// What a press on a hidden-lines row, or on the row that hides a revealed run again, sends.
+    pub fn on_gap(mut self, f: impl Fn(GapKey) -> M + 'a) -> Self {
+        self.on_gap = Some(Rc::new(f));
+        self
     }
 
     /// Fill the numbers of lines `range` on `side` (C1).
@@ -496,6 +521,50 @@ static NO_SPANS: SchemeSpans = SchemeSpans {
     new: SideSpans(Vec::new()),
 };
 
+/// What a run of unchanged lines says: how many are hidden, or the way to hide them again.
+pub fn gap_label(len: u32, open: bool) -> String {
+    match (open, len) {
+        (false, 1) => "1 hidden line".to_owned(),
+        (false, n) => format!("{n} hidden lines"),
+        (true, 1) => "Hide the revealed line".to_owned(),
+        (true, n) => format!("Hide the {n} revealed lines"),
+    }
+}
+
+/// The row of a run of unchanged lines: a chevron and [`gap_label`] on the container tone, one
+/// whole-row target that expands (or, `open`, collapses) it.
+fn gap_row<'a, M: Clone + 'a>(
+    gap: &Gap,
+    open: bool,
+    r: Roles,
+    on_gap: Option<&OnGap<'a, M>>,
+) -> Element<'a, M> {
+    let chevron = if open { "\u{25BE}" } else { "\u{25B8}" };
+    let cells = row![
+        container(code(chevron, r.primary))
+            .width(Length::Fixed(NUMBER_WIDTH))
+            .align_x(Horizontal::Right)
+            .padding([0.0, spacing::XS]),
+        code(gap_label(gap.len, open), r.primary),
+    ]
+    .spacing(spacing::SM)
+    .height(Length::Fixed(ROW_HEIGHT))
+    .align_y(Alignment::Center);
+    let shown: Element<'a, M> = container(cells)
+        .height(Length::Fixed(ROW_HEIGHT))
+        .width(Length::Fill)
+        .clip(true)
+        .style(move |_| background(r.surface_container))
+        .into();
+    match on_gap {
+        Some(f) => mouse_area(shown)
+            .on_press(f(gap.key()))
+            .interaction(mouse::Interaction::Pointer)
+            .into(),
+        None => shown,
+    }
+}
+
 /// A hunk's header row: `@@ -a,b +c,d @@ section`, muted, on the container tone.
 fn header_row<'a, M: 'a>(hunk: &'a Hunk, r: Roles) -> Element<'a, M> {
     let mut header = hunk.header();
@@ -711,7 +780,8 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
     fn from(view: DiffView<'a, M>) -> Self {
         let r = view.roles;
         let spans = view.spans;
-        let shown = body(view.diff, view.layout);
+        let shown = body(view.diff, view.shaped, view.layout);
+        let on_gap = view.on_gap;
         let anchors: Vec<Anchor> = view.slots.keys().copied().collect();
         let hung = slot_rows(&shown, &anchors);
         let extras = slot_extras(&hung, &view.slot_heights);
@@ -742,6 +812,9 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
                     let row = match rows.row(index) {
                         Some(UnifiedRow::Header(hunk)) => header_row(hunk, r),
                         Some(UnifiedRow::Line(line)) => line_row(line, Some(spans), r, &gutters),
+                        Some(UnifiedRow::Gap { gap, open }) => {
+                            gap_row(gap, open, r, on_gap.as_ref())
+                        }
                         None => blank(),
                     };
                     slots.under(index, row)
@@ -755,6 +828,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
                         Some(SideRow::Pair { left, right }) => {
                             side_row(left, right, spans, r, &gutters)
                         }
+                        Some(SideRow::Gap { gap, open }) => gap_row(gap, open, r, on_gap.as_ref()),
                         None => blank(),
                     };
                     slots.under(index, row)
@@ -859,7 +933,7 @@ mod tests {
     const TOLERANCE: f32 = 0.5;
 
     fn body_u(diff: &FileDiff) -> Body<'_> {
-        body(diff, DiffLayout::Unified)
+        body(diff, None, DiffLayout::Unified)
     }
 
     /// What the element `view` turns into builds, laid out 800 x 600 px: the height of the spacer
@@ -951,7 +1025,7 @@ mod tests {
             raw.push_str(&format!("+line {i}\n"));
         }
         let diff = parse_unified(raw.as_bytes());
-        let Body::Rows(rows) = body(&diff, DiffLayout::Unified) else {
+        let Body::Rows(rows) = body(&diff, None, DiffLayout::Unified) else {
             panic!("a text diff has rows");
         };
         assert_eq!(rows.len(), 50_001, "one header and 50,000 lines");
@@ -991,7 +1065,7 @@ mod tests {
             removed: 12,
         };
         assert_eq!(
-            body(&diff, DiffLayout::Unified),
+            body(&diff, None, DiffLayout::Unified),
             Body::Large {
                 added: 6_000,
                 removed: 12
@@ -1165,7 +1239,7 @@ mod tests {
             (Side::New, 9),
         ];
         // Unified: header, context 1, removed 2, added 2, context 3.
-        let unified = slot_rows(&body(&diff, DiffLayout::Unified), &anchors);
+        let unified = slot_rows(&body(&diff, None, DiffLayout::Unified), &anchors);
         assert_eq!(
             unified,
             BTreeMap::from([
@@ -1176,7 +1250,7 @@ mod tests {
             "an anchor not in the diff hangs nowhere"
         );
         // Side by side: header, context 1, the removed/added pair, context 3.
-        let side = slot_rows(&body(&diff, DiffLayout::SideBySide), &anchors);
+        let side = slot_rows(&body(&diff, None, DiffLayout::SideBySide), &anchors);
         assert_eq!(
             side.get(&2).map(Vec::len),
             Some(2),
@@ -1194,11 +1268,14 @@ mod tests {
     fn the_side_by_side_layout_shows_the_side_rows() {
         let raw = "@@ -1,2 +1,3 @@\n ctx\n-old\n+new\n+more\n";
         let diff = parse_unified(raw.as_bytes());
-        let Body::Side(rows) = body(&diff, DiffLayout::SideBySide) else {
+        let Body::Side(rows) = body(&diff, None, DiffLayout::SideBySide) else {
             panic!("side by side lays out side rows");
         };
         assert_eq!(rows.len(), 4, "header, context, two paired rows");
-        assert!(matches!(body(&diff, DiffLayout::Unified), Body::Rows(_)));
+        assert!(matches!(
+            body(&diff, None, DiffLayout::Unified),
+            Body::Rows(_)
+        ));
         let spans = SchemeSpans::default();
         let _element: Element<'_, ()> = DiffView::new(&diff, DiffLayout::SideBySide, LIGHT)
             .spans(&spans)
@@ -1255,5 +1332,84 @@ mod tests {
             "the spans sit on the tint"
         );
         assert_eq!(line_spans(&added, Some(&spans)), &[(0..3, red)]);
+    }
+
+    /// The size of a hidden-lines row laid out 800 px wide.
+    fn gap_size(open: bool, pressable: bool) -> Size {
+        let gap = Gap {
+            before_hunk: 1,
+            new_start: 4,
+            len: 1_284,
+            old_start: 4,
+            position: micold_core::review::expand::Position::Between(3),
+        };
+        let on_gap: OnGap<'_, ()> = Rc::new(|_| ());
+        let mut element: Element<'_, ()> = gap_row(&gap, open, LIGHT, pressable.then_some(&on_gap));
+        let renderer = super::super::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        element
+            .as_widget_mut()
+            .layout(
+                &mut tree,
+                &renderer,
+                &layout::Limits::new(Size::ZERO, Size::new(800.0, 600.0)),
+            )
+            .size()
+    }
+
+    #[test]
+    fn a_gap_row_is_one_row_tall_and_a_whole_row_wide_hit_target() {
+        for (open, pressable) in [(false, true), (true, true), (false, false)] {
+            let size = gap_size(open, pressable);
+            assert!(
+                (size.height - ROW_HEIGHT).abs() < TOLERANCE,
+                "{open} {pressable}: {size:?}"
+            );
+            assert!(
+                (size.width - 800.0).abs() < TOLERANCE,
+                "full width: {size:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_gap_says_how_many_lines_are_hidden_and_how_to_hide_them_again() {
+        assert_eq!(gap_label(1_284, false), "1284 hidden lines");
+        assert_eq!(gap_label(1, false), "1 hidden line");
+        assert_eq!(gap_label(7, true), "Hide the 7 revealed lines");
+    }
+
+    #[test]
+    fn gap_rows_count_as_rows_in_both_layouts() {
+        use micold_core::review::expand::{shape, Expansion};
+        let raw = "@@ -9,3 +9,3 @@\n l9\n-old\n+new\n l11\n@@ -29,2 +29,2 @@\n a\n-b\n+c\n";
+        let diff = parse_unified(raw.as_bytes());
+        let FileDiff::Text(hunks) = &diff else {
+            panic!()
+        };
+        let text: String = (1..=40).map(|i| format!("l{i}\n")).collect();
+        let side = micold_core::review::diff::SideLines::from_bytes(text.as_bytes()).unwrap();
+        let closed = shape(hunks, &side, &Expansion::default());
+        // Leading, between and trailing runs: three more rows than the unshaped diff.
+        let (Body::Rows(u), Body::Side(s)) = (
+            body(&diff, Some(&closed), DiffLayout::Unified),
+            body(&diff, Some(&closed), DiffLayout::SideBySide),
+        ) else {
+            panic!()
+        };
+        let (Body::Rows(plain_u), Body::Side(plain_s)) = (
+            body(&diff, None, DiffLayout::Unified),
+            body(&diff, None, DiffLayout::SideBySide),
+        ) else {
+            panic!()
+        };
+        assert_eq!(u.len(), plain_u.len() + 3);
+        assert_eq!(s.len(), plain_s.len() + 3);
+        // The view builds the gap rows within the visible window.
+        let view = DiffView::<()>::new(&diff, DiffLayout::Unified, LIGHT)
+            .shaped(&closed)
+            .on_gap(|_| ())
+            .viewport(600);
+        assert!(built(view).is_some());
     }
 }

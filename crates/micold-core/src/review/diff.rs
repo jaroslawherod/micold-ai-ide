@@ -7,6 +7,9 @@
 //! `review::git` (`GitCli::file_diff`).
 
 use super::changes::{content_of, Content};
+#[cfg(test)]
+use super::expand::Shaped;
+use super::expand::{Gap, ShapedRef};
 use crate::tokens::Rgb;
 
 /// What a diff line is.
@@ -92,6 +95,13 @@ pub enum UnifiedRow<'a> {
     Header(&'a Hunk),
     /// A line.
     Line(&'a DiffLine),
+    /// A run of unchanged lines: hidden (`open` false) or shown and collapsible.
+    Gap {
+        /// The run.
+        gap: &'a Gap,
+        /// Whether its lines are shown.
+        open: bool,
+    },
 }
 
 /// The full text of one side's version, as lines without their endings (data-model `SideLines`):
@@ -334,43 +344,127 @@ pub fn added_file(bytes: &[u8]) -> FileDiff {
     }])
 }
 
-/// The unified layout's rows: each hunk's header, then its lines. None for a diff that is not text.
-pub fn unified_rows(diff: &FileDiff) -> Vec<UnifiedRow<'_>> {
-    let FileDiff::Text(hunks) = diff else {
-        return Vec::new();
-    };
-    let mut rows = Vec::with_capacity(hunks.iter().map(|h| h.lines.len() + 1).sum());
-    for hunk in hunks {
+/// The hunks' lines at which an open run starts, with the run: the places a collapse row goes.
+fn marks<'a>(shaped: ShapedRef<'a>, hunk: usize) -> Vec<(usize, &'a Gap)> {
+    shaped
+        .revealed
+        .iter()
+        .filter(|r| r.hunk == hunk)
+        .map(|r| (r.line, &r.gap))
+        .collect()
+}
+
+/// The hidden runs shown just before shaped hunk `hunk` (`hunks.len()` for the trailing one).
+fn hidden_before<'a>(shaped: ShapedRef<'a>, hunk: usize) -> impl Iterator<Item = &'a Gap> {
+    shaped.gaps.iter().filter(move |g| g.before_hunk == hunk)
+}
+
+/// The unified layout's rows: for each hunk its hidden run (if any), its header, then its lines,
+/// with a row where a revealed run starts; the trailing hidden run last. None for no hunks.
+pub fn unified_rows<'a>(shaped: impl Into<ShapedRef<'a>>) -> Vec<UnifiedRow<'a>> {
+    let shaped = shaped.into();
+    let mut rows = Vec::new();
+    for (h, hunk) in shaped.hunks.iter().enumerate() {
+        rows.extend(hidden_before(shaped, h).map(|gap| UnifiedRow::Gap { gap, open: false }));
         rows.push(UnifiedRow::Header(hunk));
-        rows.extend(hunk.lines.iter().map(UnifiedRow::Line));
+        let marks = marks(shaped, h);
+        for (i, line) in hunk.lines.iter().enumerate() {
+            rows.extend(
+                marks
+                    .iter()
+                    .filter(|(at, _)| *at == i)
+                    .map(|(_, gap)| UnifiedRow::Gap { gap, open: true }),
+            );
+            rows.push(UnifiedRow::Line(line));
+        }
     }
+    rows.extend(
+        hidden_before(shaped, shaped.hunks.len()).map(|gap| UnifiedRow::Gap { gap, open: false }),
+    );
     rows
 }
 
-/// The unified layout's rows, found by index without listing them: one entry per hunk, so a view
-/// that builds only the visible rows costs the hunk count, not the line count (D5).
+/// The unified layout's rows, found by index without listing them: one entry per header, hidden
+/// run, revealed run start and stretch of lines, so a view that builds only the visible rows costs
+/// the hunk count, not the line count (D5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnifiedIndex<'a> {
     hunks: &'a [Hunk],
-    /// The row index of each hunk's header.
-    starts: Vec<usize>,
+    segments: Vec<UnifiedSegment<'a>>,
     len: usize,
 }
 
+/// A stretch of unified rows built the same way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct UnifiedSegment<'a> {
+    /// Its first row.
+    start: usize,
+    kind: UnifiedSegmentKind<'a>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UnifiedSegmentKind<'a> {
+    Gap(&'a Gap, bool),
+    Header(usize),
+    /// `count` lines of hunk `hunk` from `first`.
+    Lines {
+        hunk: usize,
+        first: usize,
+        count: usize,
+    },
+}
+
 impl<'a> UnifiedIndex<'a> {
-    /// The index of `diff`'s rows; empty for a diff that is not text.
-    pub fn new(diff: &'a FileDiff) -> Self {
-        let hunks: &[Hunk] = match diff {
-            FileDiff::Text(hunks) => hunks,
-            _ => &[],
-        };
-        let mut starts = Vec::with_capacity(hunks.len());
+    /// The index of `shaped`'s rows.
+    pub fn new(shaped: impl Into<ShapedRef<'a>>) -> Self {
+        let shaped = shaped.into();
+        let mut segments = Vec::new();
         let mut len = 0;
-        for hunk in hunks {
-            starts.push(len);
-            len += hunk.lines.len() + 1;
+        let mut push = |kind, rows: usize| {
+            segments.push(UnifiedSegment { start: len, kind });
+            len += rows;
+        };
+        for (h, hunk) in shaped.hunks.iter().enumerate() {
+            for gap in hidden_before(shaped, h) {
+                push(UnifiedSegmentKind::Gap(gap, false), 1);
+            }
+            push(UnifiedSegmentKind::Header(h), 1);
+            let mut first = 0;
+            for (at, gap) in marks(shaped, h) {
+                if at > first {
+                    let count = at - first;
+                    push(
+                        UnifiedSegmentKind::Lines {
+                            hunk: h,
+                            first,
+                            count,
+                        },
+                        count,
+                    );
+                    first = at;
+                }
+                push(UnifiedSegmentKind::Gap(gap, true), 1);
+            }
+            if first < hunk.lines.len() {
+                let count = hunk.lines.len() - first;
+                push(
+                    UnifiedSegmentKind::Lines {
+                        hunk: h,
+                        first,
+                        count,
+                    },
+                    count,
+                );
+            }
         }
-        Self { hunks, starts, len }
+        for gap in hidden_before(shaped, shaped.hunks.len()) {
+            push(UnifiedSegmentKind::Gap(gap, false), 1);
+        }
+        Self {
+            hunks: shaped.hunks,
+            segments,
+            len,
+        }
     }
 
     /// How many rows there are.
@@ -388,11 +482,14 @@ impl<'a> UnifiedIndex<'a> {
         if index >= self.len {
             return None;
         }
-        let h = self.starts.partition_point(|&start| start <= index) - 1;
-        let hunk = &self.hunks[h];
-        match index - self.starts[h] {
-            0 => Some(UnifiedRow::Header(hunk)),
-            i => hunk.lines.get(i - 1).map(UnifiedRow::Line),
+        let seg = self.segments[self.segments.partition_point(|s| s.start <= index) - 1];
+        match seg.kind {
+            UnifiedSegmentKind::Gap(gap, open) => Some(UnifiedRow::Gap { gap, open }),
+            UnifiedSegmentKind::Header(h) => Some(UnifiedRow::Header(&self.hunks[h])),
+            UnifiedSegmentKind::Lines { hunk, first, .. } => self.hunks[hunk]
+                .lines
+                .get(first + index - seg.start)
+                .map(UnifiedRow::Line),
         }
     }
 }
@@ -408,12 +505,20 @@ pub struct Cell<'a> {
     pub kind: LineKind,
 }
 
-/// One row of the side-by-side layout: a hunk's header, or the old version's line on the left and
-/// the new version's on the right, either side `None` where the other has no partner.
+/// One row of the side-by-side layout: a hunk's header, a hidden or revealed run's row, or the old
+/// version's line on the left and the new version's on the right, either side `None` where the
+/// other has no partner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SideRow<'a> {
     /// A hunk's header row.
     Header(&'a Hunk),
+    /// A run of unchanged lines: hidden (`open` false) or shown and collapsible.
+    Gap {
+        /// The run.
+        gap: &'a Gap,
+        /// Whether its lines are shown.
+        open: bool,
+    },
     /// A pair of cells.
     Pair {
         /// The old version's line.
@@ -425,36 +530,56 @@ pub enum SideRow<'a> {
 
 /// The side-by-side layout's rows: each hunk's header, then its context lines on both sides and
 /// each run of removed lines paired index by index with the run of added lines that follows it,
-/// the shorter run padded with `None` (US1 s4). None for a diff that is not text.
-pub fn side_by_side_rows(diff: &FileDiff) -> Vec<SideRow<'_>> {
-    let FileDiff::Text(hunks) = diff else {
-        return Vec::new();
-    };
+/// the shorter run padded with `None` (US1 s4); hidden and revealed runs get a row as in the
+/// unified layout.
+pub fn side_by_side_rows<'a>(shaped: impl Into<ShapedRef<'a>>) -> Vec<SideRow<'a>> {
+    let shaped = shaped.into();
     let mut rows = Vec::new();
-    for hunk in hunks {
+    for (h, hunk) in shaped.hunks.iter().enumerate() {
+        rows.extend(hidden_before(shaped, h).map(|gap| SideRow::Gap { gap, open: false }));
         rows.push(SideRow::Header(hunk));
-        let mut lines = hunk.lines.as_slice();
-        while let Some(first) = lines.first() {
-            if first.kind == LineKind::Context {
-                rows.push(SideRow::Pair {
-                    left: side_cell(first, first.old),
-                    right: side_cell(first, first.new),
-                });
-                lines = &lines[1..];
-                continue;
+        let marks = marks(shaped, h);
+        let mut first = 0;
+        for end in marks.iter().map(|(at, _)| *at).chain([hunk.lines.len()]) {
+            if end > first {
+                pair_lines(&hunk.lines[first..end], &mut rows);
+                first = end;
             }
-            let removed = run_of(lines, LineKind::Removed);
-            let added = run_of(&lines[removed.len()..], LineKind::Added);
-            for i in 0..removed.len().max(added.len()) {
-                rows.push(SideRow::Pair {
-                    left: removed.get(i).and_then(|l| side_cell(l, l.old)),
-                    right: added.get(i).and_then(|l| side_cell(l, l.new)),
-                });
-            }
-            lines = &lines[removed.len() + added.len()..];
+            rows.extend(
+                marks
+                    .iter()
+                    .filter(|(at, _)| *at == end && end < hunk.lines.len())
+                    .map(|(_, gap)| SideRow::Gap { gap, open: true }),
+            );
         }
     }
+    rows.extend(
+        hidden_before(shaped, shaped.hunks.len()).map(|gap| SideRow::Gap { gap, open: false }),
+    );
     rows
+}
+
+/// `lines` as pairs: context on both sides, each removed run beside the added run after it.
+fn pair_lines<'a>(mut lines: &'a [DiffLine], rows: &mut Vec<SideRow<'a>>) {
+    while let Some(first) = lines.first() {
+        if first.kind == LineKind::Context {
+            rows.push(SideRow::Pair {
+                left: side_cell(first, first.old),
+                right: side_cell(first, first.new),
+            });
+            lines = &lines[1..];
+            continue;
+        }
+        let removed = run_of(lines, LineKind::Removed);
+        let added = run_of(&lines[removed.len()..], LineKind::Added);
+        for i in 0..removed.len().max(added.len()) {
+            rows.push(SideRow::Pair {
+                left: removed.get(i).and_then(|l| side_cell(l, l.old)),
+                right: added.get(i).and_then(|l| side_cell(l, l.new)),
+            });
+        }
+        lines = &lines[removed.len() + added.len()..];
+    }
 }
 
 /// The leading lines of `lines` that are `kind`.
@@ -476,42 +601,44 @@ fn side_cell(line: &DiffLine, number: Option<u32>) -> Option<Cell<'_>> {
 }
 
 /// The side-by-side layout's rows, found by index without listing them: one entry per header,
-/// context run and change run, so a view that builds only the visible rows does not lay out the
-/// whole file on every redraw (D5).
+/// hidden or revealed run, context run and change run, so a view that builds only the visible rows
+/// does not lay out the whole file on every redraw (D5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SideIndex<'a> {
     hunks: &'a [Hunk],
     /// The runs, in row order.
-    runs: Vec<Run>,
+    runs: Vec<Run<'a>>,
     len: usize,
 }
 
 /// A stretch of side-by-side rows built the same way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Run {
+struct Run<'a> {
     /// Its first row.
     start: usize,
     /// The hunk it is in.
     hunk: usize,
     /// The index of its first line in the hunk.
     first: usize,
-    kind: RunKind,
+    kind: RunKind<'a>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RunKind {
+enum RunKind<'a> {
     /// The hunk's header: one row.
     Header,
+    /// A hidden (`false`) or revealed (`true`) run's row.
+    Gap(&'a Gap, bool),
     /// Context lines, one row each.
     Context(usize),
     /// Removed lines then the added lines after them, paired.
     Change { removed: usize, added: usize },
 }
 
-impl RunKind {
+impl RunKind<'_> {
     fn rows(self) -> usize {
         match self {
-            RunKind::Header => 1,
+            RunKind::Header | RunKind::Gap(..) => 1,
             RunKind::Context(n) => n,
             RunKind::Change { removed, added } => removed.max(added),
         }
@@ -519,15 +646,12 @@ impl RunKind {
 }
 
 impl<'a> SideIndex<'a> {
-    /// The index of `diff`'s rows; empty for a diff that is not text.
-    pub fn new(diff: &'a FileDiff) -> Self {
-        let hunks: &[Hunk] = match diff {
-            FileDiff::Text(hunks) => hunks,
-            _ => &[],
-        };
+    /// The index of `shaped`'s rows.
+    pub fn new(shaped: impl Into<ShapedRef<'a>>) -> Self {
+        let shaped = shaped.into();
         let mut runs = Vec::new();
         let mut len = 0;
-        let mut push = |hunk, first, kind: RunKind| {
+        let mut push = |hunk, first, kind: RunKind<'a>| {
             runs.push(Run {
                 start: len,
                 hunk,
@@ -536,11 +660,24 @@ impl<'a> SideIndex<'a> {
             });
             len += kind.rows();
         };
-        for (h, hunk) in hunks.iter().enumerate() {
+        for (h, hunk) in shaped.hunks.iter().enumerate() {
+            for gap in hidden_before(shaped, h) {
+                push(h, 0, RunKind::Gap(gap, false));
+            }
             push(h, 0, RunKind::Header);
+            let marks = marks(shaped, h);
             let mut first = 0;
             while first < hunk.lines.len() {
-                let rest = &hunk.lines[first..];
+                for (_, gap) in marks.iter().filter(|(at, _)| *at == first) {
+                    push(h, first, RunKind::Gap(gap, true));
+                }
+                // A run never crosses the start of a revealed run.
+                let limit = marks
+                    .iter()
+                    .map(|(at, _)| *at)
+                    .find(|at| *at > first)
+                    .unwrap_or(hunk.lines.len());
+                let rest = &hunk.lines[first..limit];
                 let context = run_of(rest, LineKind::Context).len();
                 let kind = if context > 0 {
                     RunKind::Context(context)
@@ -556,7 +693,14 @@ impl<'a> SideIndex<'a> {
                 };
             }
         }
-        Self { hunks, runs, len }
+        for gap in hidden_before(shaped, shaped.hunks.len()) {
+            push(shaped.hunks.len(), 0, RunKind::Gap(gap, false));
+        }
+        Self {
+            hunks: shaped.hunks,
+            runs,
+            len,
+        }
     }
 
     /// How many rows there are.
@@ -575,11 +719,15 @@ impl<'a> SideIndex<'a> {
             return None;
         }
         let run = self.runs[self.runs.partition_point(|r| r.start <= index) - 1];
-        let hunk = &self.hunks[run.hunk];
         let k = index - run.start;
+        if let RunKind::Gap(gap, open) = run.kind {
+            return Some(SideRow::Gap { gap, open });
+        }
+        let hunk = &self.hunks[run.hunk];
         let at = |i: usize| &hunk.lines[run.first + i];
         Some(match run.kind {
             RunKind::Header => SideRow::Header(hunk),
+            RunKind::Gap(..) => return None,
             RunKind::Context(_) => SideRow::Pair {
                 left: side_cell(at(k), at(k).old),
                 right: side_cell(at(k), at(k).new),
@@ -597,6 +745,13 @@ impl<'a> SideIndex<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn shaped(diff: &FileDiff) -> Shaped {
+        match diff {
+            FileDiff::Text(hunks) => Shaped::unshaped(hunks),
+            _ => Shaped::default(),
+        }
+    }
 
     fn text(diff: FileDiff) -> Vec<Hunk> {
         match diff {
@@ -797,12 +952,14 @@ mod tests {
     #[test]
     fn unified_rows_are_each_header_then_its_lines() {
         let diff = parse_unified(TWO_HUNKS.as_bytes());
-        let rows = unified_rows(&diff);
+        let sh = shaped(&diff);
+        let rows = unified_rows(&sh);
         let shape: Vec<String> = rows
             .iter()
             .map(|row| match row {
                 UnifiedRow::Header(hunk) => hunk.header(),
                 UnifiedRow::Line(line) => line.text.clone(),
+                UnifiedRow::Gap { .. } => unreachable!("nothing is hidden"),
             })
             .collect();
         assert_eq!(
@@ -819,20 +976,22 @@ mod tests {
                 "eleven"
             ]
         );
-        assert!(unified_rows(&FileDiff::Binary).is_empty());
+        assert!(unified_rows(&shaped(&FileDiff::Binary)).is_empty());
     }
 
     #[test]
     fn the_unified_index_finds_each_row_without_listing_them() {
         let diff = parse_unified(TWO_HUNKS.as_bytes());
-        let rows = unified_rows(&diff);
-        let index = UnifiedIndex::new(&diff);
+        let sh = shaped(&diff);
+        let rows = unified_rows(&sh);
+        let index = UnifiedIndex::new(&sh);
         assert_eq!(index.len(), rows.len());
         for (i, row) in rows.iter().enumerate() {
             assert_eq!(index.row(i).as_ref(), Some(row), "row {i}");
         }
         assert_eq!(index.row(rows.len()), None);
-        let binary = UnifiedIndex::new(&FileDiff::Binary);
+        let none = Shaped::default();
+        let binary = UnifiedIndex::new(&none);
         assert_eq!((binary.len(), binary.row(0)), (0, None));
     }
 
@@ -867,12 +1026,13 @@ mod tests {
     #[test]
     fn side_by_side_pairs_removed_runs_with_the_added_run_after_them() {
         let diff = parse_unified(PAIRING.as_bytes());
-        let rows = side_by_side_rows(&diff);
+        let sh = shaped(&diff);
+        let rows = side_by_side_rows(&sh);
         let pairs: Vec<_> = rows
             .iter()
             .filter_map(|row| match row {
                 SideRow::Pair { left, right } => Some((*left, *right)),
-                SideRow::Header(_) => None,
+                SideRow::Header(_) | SideRow::Gap { .. } => None,
             })
             .collect();
         assert!(
@@ -891,22 +1051,23 @@ mod tests {
                 (None, cell(4, "a2", A)),
             ]
         );
-        assert!(side_by_side_rows(&FileDiff::Binary).is_empty());
+        assert!(side_by_side_rows(&shaped(&FileDiff::Binary)).is_empty());
     }
 
     #[test]
     fn side_by_side_shows_the_same_changed_lines_as_unified() {
         for raw in [TWO_HUNKS, PAIRING] {
             let diff = parse_unified(raw.as_bytes());
-            let mut unified: Vec<(LineKind, Option<u32>, Option<u32>, &str)> = unified_rows(&diff)
+            let sh = shaped(&diff);
+            let mut unified: Vec<(LineKind, Option<u32>, Option<u32>, &str)> = unified_rows(&sh)
                 .into_iter()
                 .filter_map(|row| match row {
                     UnifiedRow::Line(l) => Some((l.kind, l.old, l.new, l.text.as_str())),
-                    UnifiedRow::Header(_) => None,
+                    UnifiedRow::Header(_) | UnifiedRow::Gap { .. } => None,
                 })
                 .collect();
             let mut side = Vec::new();
-            for row in side_by_side_rows(&diff) {
+            for row in side_by_side_rows(&sh) {
                 if let SideRow::Pair { left, right } = row {
                     match (left, right) {
                         (Some(l), Some(r)) if l.kind == LineKind::Context => {
@@ -931,15 +1092,125 @@ mod tests {
         big.push_str("-x\n+y\n+z\n c\n-p\n-q\n+r\n c2\n");
         for raw in [TWO_HUNKS, PAIRING, big.as_str()] {
             let diff = parse_unified(raw.as_bytes());
-            let rows = side_by_side_rows(&diff);
-            let index = SideIndex::new(&diff);
+            let sh = shaped(&diff);
+            let rows = side_by_side_rows(&sh);
+            let index = SideIndex::new(&sh);
             assert_eq!(index.len(), rows.len(), "{raw}");
             for (i, row) in rows.iter().enumerate() {
                 assert_eq!(index.row(i).as_ref(), Some(row), "row {i} of {raw}");
             }
             assert_eq!(index.row(rows.len()), None);
         }
-        let binary = SideIndex::new(&FileDiff::Binary);
+        let none = Shaped::default();
+        let binary = SideIndex::new(&none);
         assert_eq!((binary.len(), binary.row(0)), (0, None));
+    }
+
+    /// A 30-line file with one change at line 10 and one at line 20, shaped with `e`.
+    fn two_distant_changes(e: &crate::review::expand::Expansion) -> Shaped {
+        let raw = "@@ -9,3 +9,3 @@\n l9\n-old10\n+l10\n l11\n@@ -19,3 +19,3 @@\n l19\n-old20\n+l20\n l21\n";
+        let FileDiff::Text(hunks) = parse_unified(raw.as_bytes()) else {
+            panic!()
+        };
+        let text: String = (1..=30).map(|i| format!("l{i}\n")).collect();
+        crate::review::expand::shape(&hunks, &SideLines::from_bytes(text.as_bytes()).unwrap(), e)
+    }
+
+    fn unified_shape(rows: &[UnifiedRow<'_>]) -> Vec<String> {
+        rows.iter()
+            .map(|r| match r {
+                UnifiedRow::Header(h) => h.header(),
+                UnifiedRow::Line(l) => l.text.clone(),
+                UnifiedRow::Gap { gap, open } => format!("gap {} {open}", gap.len),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn gap_rows_sit_before_hunks_and_after_the_last_in_both_layouts() {
+        use crate::review::expand::{gaps, Expansion};
+        let closed = two_distant_changes(&Expansion::default());
+        let rows = unified_rows(&closed);
+        let shape = unified_shape(&rows);
+        assert_eq!(shape[0], "gap 8 false");
+        assert_eq!(shape[1], "@@ -9,3 +9,3 @@");
+        assert_eq!(shape[6], "gap 7 false");
+        assert_eq!(shape.last().unwrap(), "gap 9 false");
+        let side = side_by_side_rows(&closed);
+        assert!(matches!(side[0], SideRow::Gap { open: false, .. }));
+        assert!(matches!(
+            side.last(),
+            Some(SideRow::Gap { open: false, .. })
+        ));
+        // Opening the middle run: no gap row between, a collapse row where it starts, the lines are
+        // context rows numbered continuously.
+        let all = gaps(
+            &match parse_unified(
+                b"@@ -9,3 +9,3 @@\n l9\n-o\n+l10\n l11\n@@ -19,3 +19,3 @@\n l19\n-o\n+l20\n l21\n",
+            ) {
+                FileDiff::Text(h) => h,
+                _ => panic!(),
+            },
+            30,
+        );
+        let mut e = Expansion::default();
+        e.toggle(&all[1]);
+        let open = two_distant_changes(&e);
+        let shape = unified_shape(&unified_rows(&open));
+        assert_eq!(
+            &shape[2..8],
+            ["l9", "old10", "l10", "l11", "gap 7 true", "l12"]
+        );
+        assert_eq!(shape.iter().filter(|s| s.starts_with("@@")).count(), 1);
+        let sh = open.clone();
+        let revealed: Vec<_> = unified_rows(&sh)
+            .into_iter()
+            .filter_map(|r| match r {
+                UnifiedRow::Line(l) if (12..=18).contains(&l.new.unwrap_or(0)) => {
+                    Some((l.kind, l.old, l.new))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(revealed.len(), 7);
+        assert!(revealed
+            .iter()
+            .all(|(k, o, n)| *k == LineKind::Context && o.unwrap() == n.unwrap()));
+        let side = side_by_side_rows(&open);
+        assert_eq!(
+            side.iter()
+                .filter(|r| matches!(r, SideRow::Gap { open: true, .. }))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn indexes_match_the_row_lists_with_hidden_and_revealed_runs() {
+        use crate::review::expand::{gaps, Expansion};
+        let probe = two_distant_changes(&Expansion::default());
+        let all = gaps(&probe.hunks, 30);
+        for pick in [vec![], vec![0], vec![1], vec![2], vec![0, 1, 2]] {
+            let mut e = Expansion::default();
+            for i in pick {
+                // Keys of the closed shape's gaps equal the unshaped gaps' keys.
+                e.toggle(&all[i]);
+            }
+            let sh = two_distant_changes(&e);
+            let rows = unified_rows(&sh);
+            let index = UnifiedIndex::new(&sh);
+            assert_eq!(index.len(), rows.len());
+            for (i, row) in rows.iter().enumerate() {
+                assert_eq!(index.row(i).as_ref(), Some(row), "unified row {i}");
+            }
+            assert_eq!(index.row(rows.len()), None);
+            let rows = side_by_side_rows(&sh);
+            let index = SideIndex::new(&sh);
+            assert_eq!(index.len(), rows.len());
+            for (i, row) in rows.iter().enumerate() {
+                assert_eq!(index.row(i).as_ref(), Some(row), "side row {i}");
+            }
+            assert_eq!(index.row(rows.len()), None);
+        }
     }
 }
