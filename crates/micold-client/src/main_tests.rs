@@ -2129,6 +2129,11 @@ fn a_created_worktree_is_bound_to_the_daemon_chosen_in_the_form() {
         )
         .unwrap();
     app.core.settings.daemons = registry;
+    // The chosen daemon must be reachable: a create for a daemon that is down fails (bug 1159).
+    let (tx, _rx_other) = iced::futures::channel::mpsc::unbounded();
+    let links = &mut app.core.settings.links;
+    links.insert(other, micold_core::daemons::DaemonState::Starting);
+    links.connected(other, micold_client::daemon::Outbox::new(tx));
     app.core.workspace.active = Some(project.clone());
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
     app.core
@@ -13548,6 +13553,77 @@ mod two_daemons {
         assert!(rx2.try_recv().is_ok(), "the bound daemon got the op");
         assert!(rx1.try_recv().is_err(), "the other daemon heard nothing");
         assert_eq!(app.pending_daemon.values().next(), Some(&DaemonId(2)));
+    }
+
+    /// Bug 1159: a session started at a worktree bound to the container daemon is created there,
+    /// whichever session happens to be on display (here none, so the active key is the Default's,
+    /// which resolves to the host).
+    #[test]
+    fn a_session_start_goes_to_the_daemon_its_location_is_bound_to() {
+        let (mut app, mut rx1, mut rx2) = two_connected();
+        let project = PathBuf::from("/repo/p");
+        app.core.workspace.active = Some(project.clone());
+        app.core.workspace.bind(&project, "w", DaemonId(2));
+        let _ = crate::shell::daemon_sync::on_session_start_requested(
+            &mut app,
+            micold_core::session::SessionLocation::Worktree("w".into()),
+            micold_core::session::AiCli::ClaudeCode,
+            micold_core::session::SessionKind::default(),
+            true,
+        );
+        let created = |rx: &mut SentRx| {
+            drain(rx)
+                .into_iter()
+                .any(|m| matches!(m, ClientMsg::SessionCreate { .. }))
+        };
+        assert!(created(&mut rx2), "the container daemon got the create");
+        assert!(!created(&mut rx1), "the host daemon heard nothing");
+    }
+
+    /// Bug 1159: with the bound daemon down, the start fails visibly and reaches no other daemon.
+    #[test]
+    fn a_session_start_for_a_down_daemon_fails_visibly_and_does_not_fall_back() {
+        let (mut app, mut rx1, _rx2) = two_connected();
+        let project = PathBuf::from("/repo/p");
+        app.core.workspace.active = Some(project.clone());
+        app.core.workspace.bind(&project, "w", DaemonId(2));
+        let _ = app.core.settings.links.lost(DaemonId(2), "test");
+        let _ = crate::shell::daemon_sync::on_session_start_requested(
+            &mut app,
+            micold_core::session::SessionLocation::Worktree("w".into()),
+            micold_core::session::AiCli::ClaudeCode,
+            micold_core::session::SessionKind::default(),
+            true,
+        );
+        assert!(drain(&mut rx1).is_empty(), "nothing fell back to the host");
+        assert!(app.core.notifications.queue.is_active());
+    }
+
+    /// Bug 1159: a worktree created with the container daemon chosen in the form is created there.
+    #[test]
+    fn a_worktree_create_goes_to_the_daemon_chosen_in_the_form() {
+        let (mut app, mut rx1, mut rx2) = two_connected();
+        let project = PathBuf::from("/repo/p");
+        app.core.workspace.active = Some(project.clone());
+        app.core.update(Message::WorktreeForm(FormMsg::Opened));
+        app.core
+            .update(Message::WorktreeForm(FormMsg::DaemonChosen(DaemonId(2))));
+        crate::shell::daemon_sync::send_worktree_create(
+            &mut app,
+            project,
+            micold_core::naming::DerivedNames {
+                dir_name: "feat-x".into(),
+                branch: "feat/x".into(),
+            },
+            micold_core::worktree::CreateMode::NewBranch,
+        );
+        let created = |rx: &mut SentRx| {
+            drain(rx)
+                .into_iter()
+                .any(|m| matches!(m, ClientMsg::WorktreeCreate { .. }))
+        };
+        assert!(created(&mut rx2), "the container daemon got the create");
+        assert!(!created(&mut rx1), "the host daemon heard nothing");
     }
 
     #[test]

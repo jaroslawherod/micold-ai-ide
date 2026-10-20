@@ -2644,6 +2644,9 @@ pub fn on_session_start_requested(
         // default-vs-override resolution happened in `features/session.rs`, which a test
         // can link; this handler is in the GUI binary, which no integration test can, and a
         // branch that drifted in here would become the feature's untestable mirror.
+        // Bound by the location the session starts at, not by the session on display: that one may
+        // be another worktree's, or none, and sits on a different daemon (bug 1159).
+        let binding = app.location_binding(&project, &location);
         let op = PendingOp::CreateSession {
             project: project.clone(),
             location,
@@ -2652,7 +2655,7 @@ pub fn on_session_start_requested(
             additional: false,
             automatic,
         };
-        send_op(app, op, |req| ClientMsg::SessionCreate {
+        send_op_bound(app, binding, op, |req| ClientMsg::SessionCreate {
             req,
             project,
             worktree_dir,
@@ -2714,7 +2717,8 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
             additional: true,
             automatic: false,
         };
-        send_op(app, op, move |req| {
+        let binding = app.location_binding(&project, &location);
+        send_op_bound(app, binding, op, move |req| {
             additional_session_request(req, project, &location, provider, kind)
         });
     }
@@ -3534,12 +3538,20 @@ pub fn send_worktree_create(
         .and_then(|f| f.session_definition());
     // The mode is not duplicated here: `WorktreeCreateStarted` above already put it on the form,
     // which is where the stage label reads it from (FR-024).
-    send_op(
+    // The form's chosen daemon runs the create (and the session defined with it), not the daemon
+    // of whatever session is on display (bug 1159).
+    let chosen = app.core.worktree_form.form.as_ref().and_then(|f| f.daemon);
+    let binding = chosen.map_or_else(
+        || app.active_binding(),
+        micold_core::daemons::Binding::Bound,
+    );
+    send_op_bound(
         app,
+        binding,
         PendingOp::WorktreeCreate {
             dir_name: dir_name.clone(),
             project: project.clone(),
-            daemon: app.core.worktree_form.form.as_ref().and_then(|f| f.daemon),
+            daemon: chosen,
         },
         move |req| ClientMsg::WorktreeCreate {
             req,

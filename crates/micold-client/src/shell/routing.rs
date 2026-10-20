@@ -73,6 +73,12 @@ impl App {
             .map(|project| (project, self.active_binding()))
     }
 
+    /// The binding of `location` in `project`: the daemon a session started there runs on, whichever
+    /// session is on display (bug 1159).
+    pub(crate) fn location_binding(&self, project: &Path, location: &SessionLocation) -> Binding {
+        self.binding_of(project, location_key(location))
+    }
+
     /// The binding of the active project's active location. `NoDaemon` with no active project.
     pub(crate) fn active_binding(&self) -> Binding {
         // With no project open there is no stored binding to read, and a location resolves to the
