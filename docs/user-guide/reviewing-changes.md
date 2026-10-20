@@ -343,6 +343,24 @@ comments were written, one names the commits they were written against and the h
 comment then also says which commit its code is from, if they differ); and when a commit the
 comments were written against is not in the worktree, one says so.
 
+### When the pull request moves
+
+A pull request's branch can gain commits (the agent's push, a colleague's) or be force-pushed while
+your comments are drafts. When the pull request list refreshes and shows a new head for the
+pull request you are looking at, its diff is read again; the file you had selected stays selected.
+
+Each comment keeps the commit it was written against. It follows its code: where the quoted lines
+are still in the new diff the comment stays or moves with them, and where they are gone the comment
+is marked **outdated** and stays at its last place in the file. The same mark shows when the file is
+no longer part of the pull request. Because a pull request's diff shows only the changed lines and
+a few around them, quoted code that is no longer among those lines reads as outdated too, even when
+the code itself is unchanged.
+
+An outdated comment is still sent. The message names the commit the comments were written against
+and the head now, and each comment carries its quoted code and line range, so the agent can find the
+code. A merged or closed pull request keeps its comments visible and editable, and **Send review**
+stays available; the message says the pull request is merged or closed.
+
 ### The review message
 
 The message asks the session to address the comments. This is one for a worktree with three

@@ -1084,7 +1084,7 @@ fn a_refresh_changing_the_selected_ones_state_updates_the_header_without_a_read(
 mod review_comments {
     use super::*;
     use micold_client::features::changes::{
-        can_pick, file_comments, jump_target, panel_groups, panel_rows, pending_counts,
+        can_pick, card_model, file_comments, jump_target, panel_groups, panel_rows, pending_counts,
         review_toolbar_label, send_action, status_counts, tidy_actions, Jump, PanelGroup,
     };
     use micold_core::protocol::messages::{PrSend, ReviewEditOp};
@@ -1375,7 +1375,7 @@ mod review_comments {
         push(
             &mut state,
             vec![
-                comment_on(Some(7), "a.rs", Side::New, 2, CommentState::Draft),
+                quoting(2, "new"),
                 comment_on(Some(7), "a.rs", Side::New, 1, CommentState::Sent { at: 5 }),
                 comment_on(Some(8), "a.rs", Side::New, 1, CommentState::Draft),
                 comment_on(None, "a.rs", Side::New, 1, CommentState::Draft),
@@ -1433,5 +1433,237 @@ mod review_comments {
             "the working tree has nothing to send"
         );
         assert_eq!(changes::update(&mut state, Msg::SendPressed), Effect::None);
+    }
+
+    // ---- 1149 M3: the comments follow the pull request's head ----
+
+    const NEWER: &str = "fedcba9876543210fedcba9876543210fedcba98";
+
+    fn patch_a(start: u32, added: &str) -> String {
+        format!(
+            "diff --git a/a.rs b/a.rs\nindex 1..2 100644\n--- a/a.rs\n+++ b/a.rs\n@@ -{start},2 +{start},2 @@\n keep\n-old\n+{added}\n"
+        )
+    }
+
+    fn quoting(line: u32, quote: &str) -> ReviewComment {
+        ReviewComment {
+            quote: vec![quote.into()],
+            ..comment_on(Some(7), "a.rs", Side::New, line, CommentState::Draft)
+        }
+    }
+
+    /// The list read that shows pull request 7 at head `NEWER`; its effect.
+    fn head_moves(state: &mut State) -> Effect {
+        let seq = seq_of(wanted(state, Some("feat/a")));
+        changes::update(
+            state,
+            Msg::PullRequestsRead {
+                seq,
+                read_at: 2,
+                result: Ok(vec![
+                    BranchPullRequest {
+                        head: NEWER.into(),
+                        ..listed_pr(7)
+                    },
+                    listed_pr(8),
+                ]),
+            },
+        )
+    }
+
+    fn answer_head(state: &mut State, effect: Effect, raw: &str) -> Effect {
+        let seq = diff_seq(effect, 7);
+        changes::update(
+            state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number: 7,
+                result: Ok(split_pr_diff(raw)),
+            },
+        )
+    }
+
+    fn shown(state: &State) -> &micold_client::features::changes::PullRequestView {
+        match source(state) {
+            Source::PullRequest(pr) => pr,
+            Source::Changes => panic!("a pull request is shown"),
+        }
+    }
+
+    // US4 s1, FR-012: a new head in the list re-reads the diff keeping the selected file; the head
+    // is set when the answer is ready.
+    #[test]
+    fn a_new_head_rereads_the_diff_keeping_the_selected_file() {
+        let mut state = showing_seven();
+        let effect = head_moves(&mut state);
+        assert_eq!(shown(&state).head, HEAD, "not before the answer");
+        assert!(matches!(shown(&state).diff, PrDiffLoad::Ready { .. }));
+        answer_head(&mut state, effect, &patch_a(1, "newer"));
+        let pr = shown(&state);
+        assert_eq!(pr.head, NEWER);
+        assert_eq!(pr.selected, Some(RelPath::from_native("a.rs").unwrap()));
+        assert!(pr.file.is_some());
+        // A second list read of the same head asks for nothing.
+        assert_eq!(head_moves(&mut state), Effect::None);
+    }
+
+    #[test]
+    fn a_list_read_while_the_reread_runs_asks_once() {
+        let mut state = showing_seven();
+        let first = head_moves(&mut state);
+        assert!(matches!(first, Effect::ReadPullRequestDiff { .. }));
+        assert_eq!(head_moves(&mut state), Effect::None);
+    }
+
+    #[test]
+    fn a_failed_reread_keeps_the_diff_and_the_head() {
+        let mut state = showing_seven();
+        let seq = diff_seq(head_moves(&mut state), 7);
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number: 7,
+                result: Err(DiffReadFailure::Failed(ReadingFailure::Passing)),
+            },
+        );
+        assert_eq!(shown(&state).head, HEAD);
+        assert!(matches!(shown(&state).diff, PrDiffLoad::Ready { .. }));
+        assert!(matches!(
+            head_moves(&mut state),
+            Effect::ReadPullRequestDiff { .. }
+        ));
+    }
+
+    // US4 s1: comments keep their recorded commit; the next one records the new head.
+    #[test]
+    fn comments_keep_their_commit_and_a_send_names_the_new_head() {
+        let mut state = showing_seven();
+        push(&mut state, vec![quoting(2, "new")]);
+        let effect = head_moves(&mut state);
+        answer_head(&mut state, effect, &patch_a(1, "new"));
+        let Effect::ReviewSend { pr, .. } = changes::update(&mut state, Msg::SendPressed) else {
+            panic!("a send");
+        };
+        assert_eq!(pr.map(|p| p.current_head), Some(NEWER.to_string()));
+        let view = state.open.as_ref().unwrap();
+        let reviews = state.reviews.values().next().expect("comments");
+        assert_eq!(
+            reviews.comments[0]
+                .pr
+                .as_ref()
+                .map(|p| p.head_commit.as_str()),
+            Some(HEAD)
+        );
+        assert!(!micold_client::features::changes::is_outdated(
+            view,
+            &reviews.comments[0]
+        ));
+    }
+
+    // SC-004: unchanged code still shown keeps its place and is not outdated.
+    #[test]
+    fn a_comment_whose_code_stays_keeps_its_place() {
+        let mut state = showing_seven();
+        let comment = quoting(2, "new");
+        push(&mut state, vec![comment.clone()]);
+        let effect = head_moves(&mut state);
+        let effect = answer_head(&mut state, effect, &patch_a(1, "new"));
+        assert_eq!(effect, Effect::None);
+        let view = state.open.as_ref().unwrap();
+        assert!(!micold_client::features::changes::is_outdated(
+            view, &comment
+        ));
+    }
+
+    // W21, SC-004: moved code follows and the move is persisted with a Reanchor.
+    #[test]
+    fn a_comment_whose_code_moved_follows_it_and_sends_a_reanchor() {
+        let mut state = showing_seven();
+        let comment = quoting(2, "new");
+        push(&mut state, vec![comment.clone()]);
+        let effect = head_moves(&mut state);
+        let effect = answer_head(&mut state, effect, &patch_a(4, "new"));
+        let ReviewEditOp::Reanchor { moves } = add_of(effect) else {
+            panic!("a reanchor");
+        };
+        assert_eq!(moves.len(), 1);
+        assert_eq!(moves[0].to(), LineRange::new(5, 5).unwrap());
+        let view = state.open.as_ref().unwrap();
+        assert_eq!(
+            micold_client::features::changes::shown_range(view, &comment),
+            LineRange::new(5, 5).unwrap()
+        );
+        assert!(!micold_client::features::changes::is_outdated(
+            view, &comment
+        ));
+    }
+
+    // SC-004: gone code, and (recorded limitation, research R4) code outside every hunk, are
+    // marked outdated and stay where they were.
+    #[test]
+    fn gone_code_and_code_outside_the_hunks_are_outdated() {
+        for quote in ["replaced", "unchanged context outside the hunks"] {
+            let mut state = showing_seven();
+            let comment = quoting(2, quote);
+            push(&mut state, vec![comment.clone()]);
+            let effect = head_moves(&mut state);
+            let effect = answer_head(&mut state, effect, &patch_a(1, "newer"));
+            assert_eq!(effect, Effect::None, "no move for gone code");
+            let view = state.open.as_ref().unwrap();
+            assert!(micold_client::features::changes::is_outdated(
+                view, &comment
+            ));
+            assert_eq!(
+                micold_client::features::changes::shown_range(view, &comment),
+                LineRange::new(2, 2).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn a_comment_on_a_file_the_pull_request_dropped_is_outdated() {
+        let mut state = showing_seven();
+        let comment = quoting(2, "new");
+        push(&mut state, vec![comment.clone()]);
+        let effect = head_moves(&mut state);
+        let other = patch_a(1, "x").replace("a.rs", "c.rs");
+        answer_head(&mut state, effect, &other);
+        assert_eq!(shown(&state).selected, None);
+        let view = state.open.as_ref().unwrap();
+        assert!(micold_client::features::changes::is_outdated(
+            view, &comment
+        ));
+    }
+
+    // US4 s3, FR-012: a merged or closed pull request keeps its comments visible, editable and
+    // sendable.
+    #[test]
+    fn a_merged_or_closed_pull_request_keeps_its_comments_editable_and_sendable() {
+        for end in [BranchPrState::Merged, BranchPrState::Closed] {
+            let mut state = showing_seven();
+            let comment = quoting(2, "new");
+            push(&mut state, vec![comment.clone()]);
+            let seq = seq_of(wanted(&mut state, Some("feat/a")));
+            changes::update(
+                &mut state,
+                Msg::PullRequestsRead {
+                    seq,
+                    read_at: 2,
+                    result: Ok(vec![BranchPullRequest {
+                        state: end,
+                        ..listed_pr(7)
+                    }]),
+                },
+            );
+            assert!(card_model(&comment, false).editable);
+            let action = send_action(&state).expect("send stays offered");
+            assert!(action.enabled);
+            let Effect::ReviewSend { pr, .. } = changes::update(&mut state, Msg::SendPressed)
+            else {
+                panic!("a send");
+            };
+            assert_eq!(pr.map(|p| p.state), Some(end));
+        }
     }
 }

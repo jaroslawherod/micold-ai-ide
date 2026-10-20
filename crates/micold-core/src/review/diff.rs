@@ -6,10 +6,12 @@
 //! and [`unified_rows`] lays a diff out as the unified view's rows. The git half is
 //! `review::git` (`GitCli::file_diff`).
 
+use super::anchor::Lines;
 use super::changes::{content_of, Content};
 #[cfg(test)]
 use super::expand::Shaped;
 use super::expand::{Gap, ShapedRef};
+use super::Side;
 use crate::tokens::Rgb;
 
 /// What a diff line is.
@@ -130,6 +132,40 @@ impl SideLines {
     /// No lines (an empty file).
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+}
+
+/// The lines of one side that a text diff's hunks number, and nothing else: what a pull request's
+/// diff holds, since it carries no full file (1149 R4). A line outside every hunk reads as absent.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HunkLines(std::collections::BTreeMap<u32, String>);
+
+impl HunkLines {
+    /// The lines `diff`'s hunks number on `side`; none for a diff that is not text.
+    pub fn new(diff: &FileDiff, side: Side) -> Self {
+        let FileDiff::Text(hunks) = diff else {
+            return Self::default();
+        };
+        let numbered = hunks.iter().flat_map(|h| &h.lines).filter_map(|line| {
+            let number = match side {
+                Side::Old => line.old,
+                Side::New => line.new,
+            };
+            number.map(|n| (n, line.text.clone()))
+        });
+        Self(numbered.collect())
+    }
+}
+
+impl Lines for HunkLines {
+    fn line(&self, number: u32) -> Option<&str> {
+        self.0.get(&number).map(String::as_str)
+    }
+
+    fn len(&self) -> usize {
+        self.0
+            .last_key_value()
+            .map_or(0, |(n, _)| usize::try_from(*n).unwrap_or(usize::MAX))
     }
 }
 

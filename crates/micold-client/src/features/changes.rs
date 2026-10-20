@@ -20,8 +20,8 @@ use micold_core::review::comment::{
     CommentId, CommentState, Move, Outcome, PrAnchor, ReviewComment, Scope, Status,
 };
 use micold_core::review::diff::{
-    parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, LoadedDiff, SideRow, Spans,
-    UnifiedRow,
+    parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines, LoadedDiff, SideRow,
+    Spans, UnifiedRow,
 };
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::pr_diff::PrDiff;
@@ -168,6 +168,9 @@ pub struct PullRequestView {
     /// Its head commit when the diff read started (1149, R3): what a comment written on this
     /// diff records as `head_commit`. Empty when the list did not hold the number.
     pub head: String,
+    /// A re-read of the diff under way because the list shows a newer head: its `seq` and the
+    /// head it reads (1149 FR-012). The diff on screen stays until it answers.
+    pub refresh: Option<(u64, String)>,
     /// Its diff as read.
     pub diff: PrDiffLoad,
     /// The selected file.
@@ -1351,23 +1354,36 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Source::PullRequest(pr) = &mut view.source else {
                 return Effect::None;
             };
-            if pr.number != number || pr.diff != (PrDiffLoad::Loading { seq }) {
+            if pr.number != number {
                 return Effect::None;
             }
-            pr.diff = match result {
-                Ok(diff) => {
-                    let mut files = Vec::with_capacity(diff.files.len());
-                    let mut patches = BTreeMap::new();
-                    for file in diff.files {
-                        patches.insert(file.file.path.clone(), file.patch);
-                        files.push(file.file);
-                    }
-                    PrDiffLoad::Ready { files, patches }
+            if pr.refresh.as_ref().is_some_and(|(s, _)| *s == seq) {
+                let head = pr.refresh.take().map(|(_, head)| head).unwrap_or_default();
+                // A failed re-read keeps the diff on screen; the next list read asks again.
+                let Ok(diff) = result else {
+                    return Effect::None;
+                };
+                pr.diff = pr_diff_ready(diff);
+                pr.head = head;
+                let dropped = pr.selected.as_ref().is_some_and(|p| !pr_lists(pr, p));
+                if dropped {
+                    pr.selected = None;
                 }
-                Err(DiffReadFailure::TooLarge) => PrDiffLoad::TooLarge,
-                Err(DiffReadFailure::Failed(_)) => PrDiffLoad::Failed,
-            };
-            Effect::None
+                pr.file = pr_file_diff(pr);
+                if dropped {
+                    reset_diff_pane(view);
+                }
+            } else if pr.diff == (PrDiffLoad::Loading { seq }) {
+                pr.diff = match result {
+                    Ok(diff) => pr_diff_ready(diff),
+                    Err(DiffReadFailure::TooLarge) => PrDiffLoad::TooLarge,
+                    Err(DiffReadFailure::Failed(_)) => PrDiffLoad::Failed,
+                };
+            } else {
+                return Effect::None;
+            }
+            let moves = judge_anchors(state);
+            reanchor_effect(state, moves)
         }
         Msg::PullRequestOpenRequested(_) => Effect::None,
         Msg::PullRequestSettingChanged(enabled) => {
@@ -2282,6 +2298,52 @@ fn pr_file_diff(pr: &PullRequestView) -> Option<LoadedDiff> {
     })
 }
 
+/// The ready state of a pull request's diff read: its rows and each file's patch.
+fn pr_diff_ready(diff: PrDiff) -> PrDiffLoad {
+    let mut files = Vec::with_capacity(diff.files.len());
+    let mut patches = BTreeMap::new();
+    for file in diff.files {
+        patches.insert(file.file.path.clone(), file.patch);
+        files.push(file.file);
+    }
+    PrDiffLoad::Ready { files, patches }
+}
+
+/// Whether the read diff of `pr` lists `path`.
+fn pr_lists(pr: &PullRequestView, path: &RelPath) -> bool {
+    matches!(&pr.diff, PrDiffLoad::Ready { files, .. } if files.iter().any(|f| &f.path == path))
+}
+
+/// The shown pull request's head moved in the list (a push): read its diff again, keeping the
+/// selected file and the diff on screen meanwhile (1149 FR-012). Nothing while no diff is ready,
+/// or a read of that head is already under way.
+fn follow_head(state: &mut State) -> Option<Effect> {
+    let seq = state.next_seq;
+    let view = state.open.as_mut()?;
+    let Source::PullRequest(pr) = &view.source else {
+        return None;
+    };
+    let number = pr.number;
+    let listed = listed_pull_request(view, number)?.head.clone();
+    if listed.is_empty()
+        || listed == pr.head
+        || !matches!(pr.diff, PrDiffLoad::Ready { .. })
+        || pr.refresh.as_ref().is_some_and(|(_, head)| *head == listed)
+    {
+        return None;
+    }
+    let Source::PullRequest(pr) = &mut view.source else {
+        return None;
+    };
+    pr.refresh = Some((seq, listed));
+    state.next_seq += 1;
+    Some(Effect::ReadPullRequestDiff {
+        seq,
+        project: view.project.clone(),
+        number,
+    })
+}
+
 /// What a change of source resets in the diff pane: picks, the composer, scroll and slot heights
 /// belong to the file that was shown.
 fn reset_diff_pane(view: &mut OpenView) {
@@ -2319,6 +2381,7 @@ fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
     view.source = Source::PullRequest(Box::new(PullRequestView {
         number,
         head,
+        refresh: None,
         diff: PrDiffLoad::Loading { seq },
         selected: None,
         file: None,
@@ -2346,7 +2409,7 @@ fn reconcile_source(state: &mut State, numbers: &[u64], again: bool) -> Option<E
             state.remembered.remove(&key);
             None
         }
-        Source::PullRequest(_) => None,
+        Source::PullRequest(_) => (!again).then(|| follow_head(state)).flatten(),
         Source::Changes => {
             let wanted = state.remembered.get(&key).copied()?;
             if !numbers.contains(&wanted) {
@@ -2548,15 +2611,22 @@ fn judge_anchors(state: &mut State) -> Vec<Move> {
         .map(|(id, anchor)| (*id, *anchor))
         .collect();
     let mut moves = Vec::new();
+    let shown_pr = match &view.source {
+        Source::PullRequest(pr) => Some(pr.as_ref()),
+        Source::Changes => None,
+    };
     for comment in comments {
         if comment.pr.is_some() {
-            // A pull request comment keeps its stored place until the head-follow work (M3).
+            // A pull request comment is judged against the shown pull request's patches; any
+            // other keeps its last anchor.
+            let held = anchors.get(&comment.id).map_or(comment.range, |a| a.shown);
+            let judged = shown_pr.and_then(|pr| judge_pr_comment(pr, comment, held, &mut moves));
             anchors.insert(
                 comment.id,
-                Anchor {
-                    shown: comment.range,
-                    outdated: false,
-                },
+                judged.unwrap_or(Anchor {
+                    shown: held,
+                    outdated: anchors.get(&comment.id).is_some_and(|a| a.outdated),
+                }),
             );
             continue;
         }
@@ -2609,15 +2679,59 @@ fn judge_anchors(state: &mut State) -> Vec<Move> {
     moves
 }
 
-/// The `Reanchor` edit for `moves` (research R3), only while the shown new side is the working
-/// tree: the Default entry, or the Uncommitted toggle on, and never for a pull request's diff.
+/// Where pull request comment `comment` is on `pr`'s diff (1149 R4), located in the lines of its
+/// file's hunks; a move of a new-side comment is pushed to `moves`. `None` when the diff is not
+/// ready, does not hold the comment's pull request, or the file waits for **Show diff**.
+fn judge_pr_comment(
+    pr: &PullRequestView,
+    comment: &ReviewComment,
+    held: LineRange,
+    moves: &mut Vec<Move>,
+) -> Option<Anchor> {
+    let PrDiffLoad::Ready { files, patches } = &pr.diff else {
+        return None;
+    };
+    if comment.pr.as_ref().map(|p| p.number) != Some(pr.number) {
+        return None;
+    }
+    let status = comment.state.status();
+    let pending = matches!(status, Status::Draft | Status::Sent);
+    let Some(file) = files.iter().find(|f| f.path == comment.path) else {
+        return Some(Anchor {
+            shown: held,
+            outdated: pending,
+        });
+    };
+    if file.large && !pr.shown_large.contains(&comment.path) {
+        return None;
+    }
+    let diff = parse_unified(patches.get(&comment.path).map_or(&[][..], Vec::as_slice));
+    let lines = HunkLines::new(&diff, comment.side);
+    let located = locate(&comment.quote, comment.range, &lines);
+    if let (Located::Moved(to), Side::New) = (&located, comment.side) {
+        moves.extend(Move::new(comment.id, comment.range, *to));
+    }
+    Some(Anchor {
+        shown: located.shown(comment.range, anchor::Lines::len(&lines)),
+        outdated: anchor::is_outdated(&located, status),
+    })
+}
+
+/// The `Reanchor` edit for `moves` (research R3): a working-tree comment's only while the shown
+/// new side is the working tree (the Default entry, or the Uncommitted toggle on); a pull request
+/// comment's always, since its diff is the one it was judged on (1149 W21).
 fn reanchor_effect(state: &State, moves: Vec<Move>) -> Effect {
     let Some(view) = state.open.as_ref() else {
         return Effect::None;
     };
     let working_tree = view.source == Source::Changes
         && (view.entry == SessionLocation::Default || view.toggles.uncommitted);
-    if moves.is_empty() || !working_tree {
+    let comments = review_of(state, view).map_or(&[][..], |r| r.comments.as_slice());
+    let moves: Vec<Move> = moves
+        .into_iter()
+        .filter(|m| working_tree || comments.iter().any(|c| c.id == m.id() && c.pr.is_some()))
+        .collect();
+    if moves.is_empty() {
         return Effect::None;
     }
     review_edit(view, ReviewEditOp::Reanchor { moves })
