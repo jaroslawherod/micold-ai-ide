@@ -86,18 +86,6 @@ impl<'a> Mounted<'a> {
         )
     }
 
-    /// The frame tick every widget sees. iced delivers `RedrawRequested` through `update` like any
-    /// other event, which is what gives a widget somewhere to publish from after an *operation* has
-    /// changed something — an operation carries no shell and can say nothing itself.
-    fn redraw(&mut self) -> Vec<String> {
-        self.send(
-            Event::Window(iced::window::Event::RedrawRequested(
-                std::time::Instant::now(),
-            )),
-            mouse::Cursor::Unavailable,
-        )
-    }
-
     /// Press a named key, with the pointer nowhere near — a keyboard interaction has to work
     /// without the mouse resting helpfully on the control, or it is not a keyboard interaction.
     fn press_key(&mut self, key: iced::keyboard::key::Named) -> Vec<String> {

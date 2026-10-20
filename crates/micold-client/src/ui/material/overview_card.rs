@@ -413,8 +413,9 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                     (keyboard::key::Named::PageDown, true),
                     (keyboard::key::Named::PageUp, false),
                 ] {
+                    // Unmodified only: Ctrl/Cmd+Shift+Page keys are the project chords (keymap.rs).
                     if let Some(message) = page(down) {
-                        focusable = focusable.key(key, message);
+                        focusable = focusable.chord(key, keyboard::Modifiers::empty(), message);
                     }
                 }
             }
@@ -1804,6 +1805,20 @@ mod tests {
             (vec![], false),
             "a declined direction is not claimed"
         );
+        // Review A F2 (M4): a modified Page key is a project chord (keymap NAV_CHORDS), not a page.
+        for modifiers in [
+            iced::keyboard::Modifiers::CTRL | iced::keyboard::Modifiers::SHIFT,
+            iced::keyboard::Modifiers::LOGO | iced::keyboard::Modifiers::SHIFT,
+        ] {
+            assert_eq!(
+                focused.send_captured(
+                    super::super::test_support::key_with(Named::PageDown, modifiers),
+                    cursor
+                ),
+                (vec![], false),
+                "{modifiers:?}+PageDown passes through"
+            );
+        }
         let mut unfocused = card(true);
         assert_eq!(
             unfocused.send_captured(named_key(Named::PageDown), cursor),
@@ -1821,7 +1836,6 @@ mod tests {
     /// keyboard, and nothing when a press does (FR-002).
     #[test]
     fn keyboard_focus_publishes_on_tab_and_not_on_a_press() {
-        let cursor = iced::advanced::mouse::Cursor::Unavailable;
         let card = || {
             Mounted::new(
                 OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
@@ -1831,10 +1845,7 @@ mod tests {
         };
         let mut tabbed = card();
         tabbed.focus_next();
-        let redraw = iced::Event::Window(iced::window::Event::RedrawRequested(
-            std::time::Instant::now(),
-        ));
-        assert_eq!(tabbed.send(redraw, cursor), ["keyboard true"]);
+        assert_eq!(tabbed.redraw(), ["keyboard true"]);
         let mut pressed = card();
         let at = pressed.container().center();
         assert!(

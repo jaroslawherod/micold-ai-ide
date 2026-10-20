@@ -31,6 +31,9 @@ pub enum Event {
     FocusGained(SessionLocation),
     /// A card lost keyboard focus.
     FocusLost(SessionLocation),
+    /// The Overview opened and put the keyboard on this card (research R13): the focus it reports
+    /// next expands nothing (FR-013), and the card stays collapsed until focus moves.
+    OpenFocused(SessionLocation),
     /// Escape, with a card expanded (D1).
     Escape,
     /// The window lost focus.
@@ -64,6 +67,8 @@ pub struct Expansion {
     rest_held: bool,
     /// Keyboard focus moved while a menu was open: it settles once the menu closes.
     focus_held: bool,
+    /// The card the Overview's opening put the keyboard on, until its focus report arrives.
+    open_focus: Option<SessionLocation>,
     body_edges: (bool, bool),
 }
 
@@ -113,23 +118,39 @@ impl Expansion {
                 }
             }
             Event::FocusGained(location) => {
+                // The opening's own focus (R13): focused, and collapsed as Escape leaves a card,
+                // so nothing expands until focus moves (FR-013, review A F1, M4).
+                let opening = self.open_focus.take().as_ref() == Some(&location);
                 self.focused = Some(location.clone());
-                self.focus_escaped = false;
+                self.focus_escaped = opening;
+                if opening {
+                    return;
+                }
                 self.focus_held |= self.menu_open;
                 if !self.menu_open {
                     self.expand(location, Cause::Focus);
                 }
             }
             Event::FocusLost(location) => {
+                self.open_focus = None;
                 if self.focused.as_ref() == Some(&location) {
                     self.focused = None;
                     self.focus_escaped = false;
                 }
                 self.focus_held |= self.menu_open;
-                if self.expanded == Some((location, Cause::Focus)) && !self.menu_open {
-                    self.collapse();
+                if self.expanded == Some((location.clone(), Cause::Focus)) && !self.menu_open {
+                    // A press on the card (its inner scrollbar) hides the focus with the pointer
+                    // still resting on it: hovered, so it stays, by the pointer (review A F3, M4).
+                    let hovered =
+                        !self.pointer_escaped && self.pointer_on.as_ref() == Some(&location);
+                    if hovered {
+                        self.expanded = Some((location, Cause::Pointer));
+                    } else {
+                        self.collapse();
+                    }
                 }
             }
+            Event::OpenFocused(location) => self.open_focus = Some(location),
             Event::Escape => {
                 if let Some((location, _)) = self.expanded.take() {
                     self.body_edges = (false, false);
@@ -432,6 +453,44 @@ mod tests {
             shown(&after([focus("a"), Event::FocusLost(loc("a"))])),
             None
         );
+    }
+
+    /// FR-013, R13 (review A F1, M4): the focus the Overview's opening puts on its first card
+    /// expands nothing, nor does a hover ending elsewhere; focus moving on expands as usual, and
+    /// moving back onto that card expands it.
+    #[test]
+    fn the_opening_focus_expands_nothing() {
+        let opened = || [Event::OpenFocused(loc("a")), focus("a")];
+        assert_eq!(shown(&after(opened())), None);
+        let hovered = opened().into_iter().chain([rest("b"), leave("b")]);
+        assert_eq!(shown(&after(hovered)), None);
+        let lost = || {
+            opened()
+                .into_iter()
+                .chain([Event::FocusLost(loc("a")), focus("b")])
+        };
+        assert_eq!(shown(&after(lost())), Some("b".into()));
+        let back = lost().chain([Event::FocusLost(loc("b")), focus("a")]);
+        assert_eq!(shown(&after(back)), Some("a".into()));
+    }
+
+    /// FR-005 (review A F3, M4): a press on the focus-expanded card it rests on (its inner
+    /// scrollbar) hides the focus but leaves the pointer on it: the card stays expanded, now by
+    /// the pointer, and collapses when the pointer leaves. Off the card, the focus loss collapses.
+    #[test]
+    fn a_focus_loss_under_the_resting_pointer_keeps_the_card_by_hover() {
+        let pressed = after([rest("a"), focus("a"), Event::FocusLost(loc("a"))]);
+        assert_eq!(shown(&pressed), Some("a".into()));
+        assert_eq!(pressed.cause(), Some(Cause::Pointer));
+        let left = after([
+            rest("a"),
+            focus("a"),
+            Event::FocusLost(loc("a")),
+            leave("a"),
+        ]);
+        assert_eq!(shown(&left), None);
+        let elsewhere = after([rest("b"), focus("a"), Event::FocusLost(loc("a"))]);
+        assert_eq!(shown(&elsewhere), None);
     }
 
     /// K1, FR-005: a hover ending without a rest elsewhere re-expands the focused card, unless

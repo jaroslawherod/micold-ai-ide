@@ -686,11 +686,12 @@ fn card_focus_return(app: &mut App) -> Option<Task<Message>> {
     Some(iced::widget::operation::focus(card_id(&target)))
 }
 
-/// Focus the Overview's first card, as it opens (research R13); nothing with no cards.
-fn first_card_focus(app: &App) -> Task<Message> {
-    use micold_client::ui::overview::{card_id, cards};
-    match cards(&app.core).first() {
-        Some(first) => iced::widget::operation::focus(card_id(&first.location)),
+/// Focus the Overview's first card, as it opens (research R13), expanding none (FR-013); nothing
+/// with no cards.
+fn first_card_focus(app: &mut App) -> Task<Message> {
+    use micold_client::ui::overview::{card_id, open_focus};
+    match open_focus(&mut app.core) {
+        Some(first) => iced::widget::operation::focus(card_id(&first)),
         None => Task::none(),
     }
 }

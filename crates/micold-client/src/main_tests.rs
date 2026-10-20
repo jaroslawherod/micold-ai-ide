@@ -185,9 +185,45 @@ fn expansion_window_blurred_collapses_and_refocus_expands_none() {
     assert_eq!(app.core.overview.expansion.expanded(), None);
 }
 
+/// Review A F1 (M4), FR-013: opening the Overview through the app puts the keyboard on the first
+/// card, and that card's focus report, which follows on the next frame, expands nothing.
+#[test]
+fn expansion_none_after_the_opening_focus() {
+    use micold_client::features::overview::Msg as OverviewMsg;
+    use micold_core::overview_expansion::Event;
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::SessionLocation;
+
+    let mut app = base_app();
+    let path = PathBuf::from("repo");
+    app.core.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    app.core.workspace.active = Some(path);
+    let opened = update_inner(
+        &mut app,
+        Message::Overview(OverviewMsg::Toggled {
+            settings_open: false,
+        }),
+    );
+    assert!(app.core.overview.open);
+    assert!(opened.units() > 0, "the opening focuses the first card");
+    let _ = update_inner(
+        &mut app,
+        Message::Overview(OverviewMsg::Expansion(Event::FocusGained(
+            SessionLocation::Default,
+        ))),
+    );
+    assert_eq!(app.core.overview.expansion.expanded(), None);
+}
+
 /// Feature 1121 T038/T043, FR-008: `CardPaged` on an expanded card answers with a task that pages
-/// its body (`ui::overview::page_body`, one visible height, pinned in `ui/overview.rs`); with no
-/// card expanded it answers with nothing.
+/// its body; with no card expanded it answers with nothing. What that task does, one visible
+/// height down or up on the expanded card's `card_scroll_id` and no other scrollable, is
+/// `ui/overview.rs` `a_page_scrolls_the_named_body_by_its_visible_height` (review B F1, M4).
 #[test]
 fn expansion_card_paged_scrolls() {
     use micold_client::features::overview::Msg as OverviewMsg;
