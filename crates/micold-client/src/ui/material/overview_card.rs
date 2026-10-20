@@ -16,12 +16,15 @@ use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::line_clamp::LineClamped;
-use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Ripple, Text, Tooltip, TypeRole};
+use crate::ui::material::{
+    style, Ellipsized, Glyph, ProgressBar, Ripple, Scrollable, Text, Tooltip, TypeRole,
+};
+use iced::widget::text::Wrapping;
 use iced::widget::{button, column, container, row, stack, Space};
 use iced::{keyboard, Alignment, Element, Length};
 use micold_core::overview::{CardModel, CardState, LocationType};
-use micold_core::overview_text::CardText;
-use micold_core::tokens::{spacing, state, Rgb, Roles};
+use micold_core::overview_text::{CardText, ExpandedText};
+use micold_core::tokens::{elevation, spacing, state, Rgb, Roles};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -128,6 +131,9 @@ pub struct OverviewCard<'a, M> {
     targeted: bool,
     menu_open: bool,
     id: Option<iced::advanced::widget::Id>,
+    expanded: bool,
+    scroll_id: Option<iced::advanced::widget::Id>,
+    on_body_scroll: Option<Rc<dyn Fn(bool, bool) -> M + 'a>>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -149,6 +155,9 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             targeted: false,
             menu_open: false,
             id: None,
+            expanded: false,
+            scroll_id: None,
+            on_body_scroll: None,
             _marker: PhantomData,
         }
     }
@@ -194,6 +203,31 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         self
     }
 
+    /// Draw the card in its expanded form (feature 1121, research R3, contract U1): the header
+    /// row and the title wrapped in full, then an inner scrollable with the display name (when it
+    /// differs from the title), the full branch (when the title is not the branch), the worktree
+    /// directory, the sessions line, the full activity, progress and pull requests, every line
+    /// wrapped with no ellipsis; the card casts the menu elevation's shadow. The wrappers around
+    /// the face (context area, ripple, keyboard, button) are those of the collapsed card, so focus
+    /// and ripple carry over an expand and a collapse (FR-011).
+    pub fn expanded(mut self, expanded: bool) -> Self {
+        self.expanded = expanded;
+        self
+    }
+
+    /// Name the expanded card's inner scrollable, so the application can page it (FR-008).
+    pub fn scroll_id(mut self, id: iced::advanced::widget::Id) -> Self {
+        self.scroll_id = Some(id);
+        self
+    }
+
+    /// Publish `f(up, down)` whenever the expanded card's inner scrollable moves or is laid out:
+    /// whether content lies above and below its view (feeds `body_edges`, contract K4).
+    pub fn on_body_scroll(mut self, f: impl Fn(bool, bool) -> M + 'a) -> Self {
+        self.on_body_scroll = Some(Rc::new(f));
+        self
+    }
+
     /// Name the card so the application can move the keyboard to it.
     pub fn id(mut self, id: iced::advanced::widget::Id) -> Self {
         self.id = Some(id);
@@ -206,7 +240,6 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let roles = card.roles;
         let p = palette(card.model.state, &roles);
         let w = words(&card.model);
-        let text = CardText::of(&card.model);
         // A glyph and its word, in the header's colour, carrying `tooltip`. The word shortens with
         // an ellipsis when a narrow card leaves it too little room; the state's, laid out first,
         // keeps its width before the type's gives way.
@@ -246,53 +279,21 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
             },
             ..container::Style::default()
         });
-        let line = |words: String, tooltip: Option<String>| -> Element<'a, M> {
-            let shown = Ellipsized::<M>::at_role_spaced(words, TypeRole::Body, p.on_body_variant);
-            match tooltip {
-                Some(tip) => Tooltip::new(shown, tip, roles).into(),
-                None => shown.into(),
-            }
+        let content: Element<'a, M> = if card.expanded {
+            expanded_body(&card, p)
+        } else {
+            collapsed_body(&card, p)
         };
-        // The title wraps onto three lines and the activity onto two before an ellipsis (feature
-        // 1121, FR-001); the branch stays one line.
-        let mut body = column![Tooltip::new(
-            LineClamped::<M>::new(text.title, TypeRole::CardTitle, 3)
-                .tint(p.on_body)
-                .width(Length::Fill),
-            text.title_tooltip,
-            roles
-        )]
-        .spacing(spacing::XS);
-        if let Some(branch) = text.branch {
-            body = body.push(line(branch.text, Some(branch.tooltip)));
-        }
-        body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
-        if let Some(activity) = text.activity {
-            body = body.push(Tooltip::new(
-                LineClamped::<M>::new(activity.text, TypeRole::Body, 2)
-                    .tint(p.on_body_variant)
-                    .width(Length::Fill),
-                activity.tooltip,
-                roles,
-            ));
-        }
-        if let Some(row) = text.progress {
-            body = body.push(Text::new(row.text, TypeRole::Body, roles).tint(p.on_body_variant));
-            if let Some(ratio) = row.bar {
-                body = body.push(ProgressBar::new(ratio, roles));
-            }
-        }
-        if let Some((text, tooltip)) = text.prs {
-            let line = Text::new(text, TypeRole::Body, roles).tint(p.on_body_variant);
-            body = match tooltip {
-                Some(reason) => body.push(Tooltip::new(line, reason, roles)),
-                None => body.push(line),
-            };
-        }
         let targeted = card.targeted;
-        let fill = container(column![header, container(body).padding(spacing::MD)])
+        let shadow = if card.expanded {
+            style::elevation_shadow(roles, elevation::MENU)
+        } else {
+            iced::Shadow::default()
+        };
+        let fill = container(column![header, content])
             .width(Length::Fill)
             .style(move |_| container::Style {
+                shadow,
                 background: Some(iced::Background::Color(style::color(p.body))),
                 border: iced::Border {
                     radius: RADIUS.into(),
@@ -365,6 +366,131 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 .into(),
         )
     }
+}
+
+/// The collapsed card's body, under its header (feature 1120, feature 1121 FR-001).
+fn collapsed_body<'a, M: 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
+    let roles = card.roles;
+    let text = CardText::of(&card.model);
+    let line = |words: String, tooltip: Option<String>| -> Element<'a, M> {
+        let shown = Ellipsized::<M>::at_role_spaced(words, TypeRole::Body, p.on_body_variant);
+        match tooltip {
+            Some(tip) => Tooltip::new(shown, tip, roles).into(),
+            None => shown.into(),
+        }
+    };
+    // The title wraps onto three lines and the activity onto two before an ellipsis (feature
+    // 1121, FR-001); the branch stays one line.
+    let mut body = column![Tooltip::new(
+        LineClamped::<M>::new(text.title, TypeRole::CardTitle, 3)
+            .tint(p.on_body)
+            .width(Length::Fill),
+        text.title_tooltip,
+        roles
+    )]
+    .spacing(spacing::XS);
+    if let Some(branch) = text.branch {
+        body = body.push(line(branch.text, Some(branch.tooltip)));
+    }
+    body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
+    if let Some(activity) = text.activity {
+        body = body.push(Tooltip::new(
+            LineClamped::<M>::new(activity.text, TypeRole::Body, 2)
+                .tint(p.on_body_variant)
+                .width(Length::Fill),
+            activity.tooltip,
+            roles,
+        ));
+    }
+    if let Some(row) = text.progress {
+        body = body.push(Text::new(row.text, TypeRole::Body, roles).tint(p.on_body_variant));
+        if let Some(ratio) = row.bar {
+            body = body.push(ProgressBar::new(ratio, roles));
+        }
+    }
+    if let Some((text, tooltip)) = text.prs {
+        let line = Text::new(text, TypeRole::Body, roles).tint(p.on_body_variant);
+        body = match tooltip {
+            Some(reason) => body.push(Tooltip::new(line, reason, roles)),
+            None => body.push(line),
+        };
+    }
+    container(body).padding(spacing::MD).into()
+}
+
+/// A body line of the expanded card: wrapped in full, at `role`, in `tint`.
+fn wrapped<'a, M: 'a>(words: String, role: TypeRole, tint: Rgb, roles: Roles) -> Element<'a, M> {
+    Text::new(words, role, roles)
+        .tint(tint)
+        .width(Length::Fill)
+        .wrapping(Wrapping::WordOrGlyph)
+        .into()
+}
+
+/// The expanded card's body, under its header (feature 1121, research R3): the title outside the
+/// inner scrollable, so it stays in view (FR-008), and every other line inside it.
+fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
+    let roles = card.roles;
+    let full = ExpandedText::of(
+        &card.model,
+        directories::UserDirs::new().as_ref().map(|u| u.home_dir()),
+    );
+    let text = CardText::of(&card.model);
+    let body_line = |words: String| wrapped::<M>(words, TypeRole::Body, p.on_body_variant, roles);
+    let mut rest = column![].spacing(spacing::XS);
+    for words in [full.display_name, full.branch, Some(full.dir)]
+        .into_iter()
+        .flatten()
+    {
+        rest = rest.push(body_line(words));
+    }
+    rest = rest.push(body_line(text.sessions));
+    if let Some(activity) = full.activity {
+        rest = rest.push(body_line(activity));
+    }
+    if let Some(row) = text.progress {
+        rest = rest.push(body_line(row.text));
+        if let Some(ratio) = row.bar {
+            rest = rest.push(ProgressBar::new(ratio, roles));
+        }
+    }
+    if let Some((words, _)) = text.prs {
+        rest = rest.push(body_line(words));
+    }
+    let mut scroll = Scrollable::new(
+        container(rest).padding(iced::Padding {
+            top: spacing::XS,
+            right: spacing::MD,
+            bottom: spacing::MD,
+            left: spacing::MD,
+        }),
+        roles,
+    );
+    if let Some(id) = card.scroll_id.clone() {
+        scroll = scroll.id(id);
+    }
+    if let Some(f) = card.on_body_scroll.clone() {
+        scroll = scroll.on_scroll_metrics(move |offset, view, content| {
+            f(offset > 0, offset.saturating_add(view) < content)
+        });
+    }
+    column![
+        container(wrapped::<M>(
+            full.title,
+            TypeRole::CardTitle,
+            p.on_body,
+            roles
+        ))
+        .padding(iced::Padding {
+            top: spacing::MD,
+            right: spacing::MD,
+            bottom: 0.0,
+            left: spacing::MD,
+        }),
+        scroll,
+    ]
+    .width(Length::Fill)
+    .into()
 }
 
 #[cfg(test)]
@@ -740,6 +866,125 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A card whose every text is longer than any card is wide: a long title, a display name
+    /// apart from it, and an unbroken 120-character branch and directory.
+    fn overlong() -> CardModel {
+        let mut m = full(true);
+        m.display_name = "feat-1121_overview-card-full-text".into();
+        m.branch = Some(format!("feat/{}", "b".repeat(115)));
+        m.dir = std::path::PathBuf::from(format!("/{}", "d".repeat(119)));
+        m
+    }
+
+    /// What `model`'s expanded card paints `width` wide, and the card's size.
+    fn expanded_at(
+        model: &CardModel,
+        width: f32,
+        roles: Roles,
+    ) -> (Vec<super::super::test_support::Painted>, Size) {
+        let mut mounted = Mounted::new_in(
+            container(
+                OverviewCard::<String>::new(model, roles)
+                    .on_press("open".to_string())
+                    .expanded(true),
+            )
+            .width(Length::Fixed(width)),
+            Size::new(width, 4000.0),
+        );
+        let painted = mounted.painted_text();
+        (painted, mounted.node.size())
+    }
+
+    /// Feature 1121 U1, FR-004, FR-007, US2 sc.1, sc.7: at 280, 380 and 480 px the expanded card
+    /// shows the full title, the display name, the full branch, the worktree directory, the
+    /// sessions line, the full activity, progress and pull requests, none ellipsized, every line
+    /// inside the card.
+    #[test]
+    fn an_expanded_card_shows_every_text_in_full_inside_it() {
+        let m = overlong();
+        let words = micold_core::overview_text::ExpandedText::of(&m, None);
+        for width in WIDTHS {
+            let (painted, card) = expanded_at(&m, width, roles());
+            let shown: Vec<&str> = painted.iter().map(|p| p.content.as_str()).collect();
+            for want in [
+                words.title.as_str(),
+                words.display_name.as_deref().expect("a display name"),
+                words.branch.as_deref().expect("a branch"),
+                words.dir.as_str(),
+                words.activity.as_deref().expect("an activity"),
+                "3 sessions \u{b7} 2 running",
+                "Implement \u{b7} 6/10",
+            ] {
+                assert!(shown.contains(&want), "{width}: {want:?} not in {shown:?}");
+            }
+            for p in &painted {
+                assert!(!p.content.ends_with('\u{2026}'), "{width}: {p:?}");
+                let b = p.bounds;
+                assert!(
+                    b.x >= -0.01
+                        && b.x + b.width <= card.width + 0.01
+                        && b.y + b.height <= card.height + 0.01,
+                    "{width}: {p:?} leaves the card {card:?}"
+                );
+            }
+        }
+    }
+
+    /// Feature 1121 FR-015: in every state and both schemes each text of the expanded card is
+    /// in the colour the same text has on the collapsed card.
+    #[test]
+    fn an_expanded_cards_texts_keep_the_collapsed_cards_colours() {
+        for r in [roles(), super::super::test_support::dark_roles()] {
+            for state in CardState::ALL {
+                let m = model(state, "feat-a");
+                let collapsed = mounted_at(&m, 380.0, r).painted_text();
+                let (expanded, _) = expanded_at(&m, 380.0, r);
+                // The short branch is the one text the expanded card replaces (by the full one).
+                let mut same = 0;
+                for p in collapsed.iter().filter(|p| p.content != "feat/813") {
+                    let twin = expanded
+                        .iter()
+                        .find(|e| e.content == p.content)
+                        .unwrap_or_else(|| panic!("{state:?}: no {:?} expanded", p.content));
+                    assert_eq!(twin.color, p.color, "{state:?}: {:?}", p.content);
+                    same += 1;
+                }
+                assert_eq!(same, collapsed.len() - 1, "{state:?}: {collapsed:?}");
+                let full = expanded
+                    .iter()
+                    .find(|e| e.content == "feat/813-overview")
+                    .expect("the full branch");
+                let short = collapsed.iter().find(|p| p.content == "feat/813");
+                assert_eq!(Some(full.color), short.map(|p| p.color), "{state:?}");
+            }
+        }
+    }
+
+    /// Feature 1121 FR-011, US4 sc.1: the expanded card takes the keyboard, and a click or Enter
+    /// on it publishes its message as on the collapsed card.
+    #[test]
+    fn an_expanded_card_activates_as_the_collapsed_one() {
+        use iced::advanced::mouse::{Button, Cursor, Event as Mouse};
+        let mut card = Mounted::new(
+            OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
+                .on_press("open".to_string())
+                .expanded(true),
+        );
+        assert_eq!(card.drive(Focusables(0)), Some(1));
+        let at = card.node.bounds().center();
+        card.press(at);
+        let released = card.send(
+            iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+            Cursor::Available(at),
+        );
+        assert_eq!(released, ["open"]);
+        assert_eq!(
+            card.send(named_key(Named::Enter), Cursor::Unavailable),
+            ["open"],
+            "the press gave the expanded card the keyboard"
+        );
     }
 
     /// FR-015: the tooltips of a long title, branch and activity hold their full text.

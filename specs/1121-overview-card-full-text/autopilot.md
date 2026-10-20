@@ -63,22 +63,20 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-M2 unit 1 stopped at the context cap (131k after the task files and the core cycles).
-
-- **Done** (commit 33441e78, not pushed; no PR): T009–T012, T016–T018 — `worktree_dir`,
-  `ExpandedText::of` (activity = `activity_line(..).text`, so the todo ratio shows as on the
-  collapsed card), `CardModel.dir` (Default: `app.workspace.active`; worktree/orphan:
-  `Worktree::path`), new `micold_core::overview_expansion` with `Placement`/`place` only (M3 adds
-  `Expansion` and the rest). Cycle log has the M2 rows. M1 PR #1169 recorded.
-- **Next step**: T013 (overview_card `.expanded` tests) → T019; T014, T015 (card_grid tests) →
-  T020, T021; T022 showcase; then verify.md (scoped gate + review A high, review B, visual pass
-  §B.1–§B.2 via REVIEW-NEEDED return) and the full gate (`scripts/gate.sh`, cloud notes).
-- **Open**: K3's "covers its slot" invariant cannot hold for a slot ending below the view (the
-  shift to the view's bottom wins); the test sweeps slots ending inside the view, noted in the
-  cycle log. Locally `micold-core` test `settings_refuses_save_over_failed_read` is red because
-  the run is root (unrelated, pre-existing).
+M2 unit 2 stopped at the context cap (~140k; the task files and the card's code take ~120k).
+- **Done** (not pushed; no PR): T009–T012, T016–T018 (unit 1, 33441e78), and T013/T019 in part
+  (this unit's commit): `OverviewCard::expanded`, `.scroll_id`, `.on_body_scroll`, `expanded_body`
+  in `ui/material/overview_card.rs`, with three tests `an_expanded_*` (cycle log row).
+- **Next step**: finish T013 — tests still missing: header row and title outside the inner
+  scrollable (FR-008); the `elevation::MENU` shadow (FR-003); focus ring / ripple / target mark
+  bounds equal the expanded card's drawn bounds; `.on_body_scroll` `(up, down)` at top, end and
+  with no overflow. Then tick T013/T019; T014, T015 → T020, T021 (card_grid); T022 showcase; then
+  verify.md (scoped gate + review A high, review B, visual pass §B.1–§B.2 via REVIEW-NEEDED) and
+  the full gate (`scripts/gate.sh`).
+- **Open**: K3's cover invariant vs. a slot ending below the view (cycle log). Locally `micold-core`
+  `settings_refuses_save_over_failed_read` is red because the run is root (pre-existing).
 - Build env: detached runs with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
-  CARGO_PROFILE_TEST_DEBUG=0` + `scripts/autopilot/hold.sh` (foreground calls are capped at 250 s).
+  CARGO_PROFILE_TEST_DEBUG=0` + `scripts/autopilot/hold.sh --long`.
 
 ## Open escalation
 
