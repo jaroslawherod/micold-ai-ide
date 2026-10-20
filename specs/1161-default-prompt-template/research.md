@@ -10,9 +10,9 @@
 - **Rejected**: sequential `str::replace` per placeholder (re-expands inserted bodies, order-dependent); regex (new dependency, same result).
 
 ## R3 Where the template is stored and reaches the daemon
-- **Decision**: `Settings.default_prompt_template: String` (`#[serde(default)]`), carried to the daemon in the existing `DaemonSettings` wire (`catalog.settings_wire()`), as `default_ai_cli` is.
+- **Decision**: `Settings.default_prompt_template: String` (`#[serde(default)]`), service-owned like `default_ai_cli`: a new `Option<String>` field on the client-to-daemon set-settings message (`protocol/messages.rs`), a `server.rs` handler arm, `state`/`catalog.set_default_prompt_template`, and a `DaemonSettings` field returned by `settings_wire()` (so an unrelated settings change does not revert it). The client sends it on save.
 - **Rationale**: the daemon already holds a copy of the settings it needs and updates it when they change; remote daemons then need no file access (spec edge case).
-- **Rejected**: daemon reading the client's file (breaks remote daemons); a new protocol message (the wire already exists).
+- **Rejected**: daemon reading the client's file (breaks remote daemons); a new message kind (an optional field on the existing one suffices).
 
 ## R4 Validation and bad stored text
 - **Decision**: `PromptTemplate::parse(&str) -> Result<PromptTemplate, TemplateError>`; `SettingsDraft::validate` refuses on `Err` (the save path writes only on `Ok`, so the stored value is kept). At load the string is stored untouched; users of it call `parse` and treat `Err` as empty (FR-013). Opening Settings validates the stored text and shows the error.
@@ -27,7 +27,7 @@
 - **Rejected**: comparing field text to the last rendering (a user retyping the same text then loses it to a refresh); rendering only at submit (user could not see or edit it).
 
 ## R7 Settings field widget
-- **Decision**: reuse the existing multi-line text input already used by Settings (`ui/cdk`); grep in the tasks unit for the exact primitive. If none is multi-line, promote one to `cdk` with a builder API (principle VIII) rather than adding a private widget.
+- **Decision**: reuse `ui/material/text_area.rs` (wraps iced `text_editor`). The draft holds a `text_editor::Content`; `SettingsDraft::validate` extracts its text. No new widget.
 
 ## R8 Explicit prompt wins
 - **Decision**: `first_prompt_for(explicit: Option<String>, template, facts)`: a non-blank explicit prompt is returned untouched and the template is not parsed or looked up; otherwise render. A blank explicit prompt falls through to the template (spec US4). Today `prompt: Some("")` counts as given; SC-003 compares only the empty-template case, so unchanged.

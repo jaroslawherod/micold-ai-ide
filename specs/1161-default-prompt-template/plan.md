@@ -79,17 +79,19 @@ specs/1161-default-prompt-template/
 ```text
 crates/micold-core/src/
 ├── prompt_template.rs      # NEW: PromptTemplate, WorktreeFacts, TemplateError, validate, render
-├── settings.rs             # Settings.default_prompt_template (+ DaemonSettings wire, load check)
+├── settings.rs             # Settings.default_prompt_template + DaemonSettings field (daemon-to-client)
+├── protocol/messages.rs    # NEW Option<String> field on the set-settings message (client-to-daemon)
 ├── github.rs               # IssueSnapshot.body_text, Issue.body (full plain text), query adds bodyText
 └── lib.rs                  # pub mod prompt_template
 crates/micold-client/src/
 ├── features/worktree_form.rs  # first_prompt_edited flag, prefill on CLI/issue/type/name/details change
-├── features/settings.rs       # draft field + validation in SettingsDraft::validate
-└── ui/settings/               # multi-line field, placeholder list, error line (glue)
+├── features/settings.rs       # draft field (text_editor::Content; string extracted for validate) + validation in SettingsDraft::validate; send path to daemon
+└── ui/settings/               # reuses ui/material/text_area.rs; placeholder list, error line (glue)
 crates/micold-daemon/src/
 ├── mcp/tools.rs            # resolve_first_prompt in create_session / start in create_worktree
 ├── ops.rs                  # facts gathering with 5 s bound (reuses IssueLookup)
-└── catalog.rs / state.rs   # settings_wire carries the template; accessor on DaemonState
+├── server.rs               # NEW handler arm, as for default_ai_cli
+└── catalog.rs / state.rs   # NEW set_default_prompt_template; settings_wire carries it; accessor on DaemonState
 docs/user-guide/{settings,worktrees-and-sessions,agent-tools}.md
 ```
 
@@ -99,7 +101,7 @@ docs/user-guide/{settings,worktrees-and-sessions,agent-tools}.md
 
 | FR | Where |
 |---|---|
-| FR-001 | `Settings.default_prompt_template: String`, `#[serde(default)]`; data-model §1 |
+| FR-001 | `Settings.default_prompt_template: String`, `#[serde(default)]`; service-owned, written via the set-settings message (research R3); data-model §1 |
 | FR-002 | `ui/settings/` field + list of `PromptTemplate::PLACEHOLDERS` |
 | FR-003, FR-004 | `prompt_template::render`, contracts/prompt-template.md |
 | FR-005 | `PromptTemplate::validate` called from `SettingsDraft::validate`; refusal keeps stored value (existing save path writes only on `Ok`) |
@@ -110,7 +112,7 @@ docs/user-guide/{settings,worktrees-and-sessions,agent-tools}.md
 | FR-011 | both call `prompt_template::render` |
 | FR-012 | render is total; MCP lookup wrapped in `tokio::time::timeout(5 s)`; any error gives `None` |
 | FR-013 | settings load keeps the text; `PromptTemplate::validate` at use gives `Err` so callers treat as empty; Settings draft validates on open and shows the error |
-| FR-014 | facts from the worktree dir name (`naming::ticket`, `naming::parse_tags` type), name, branch; title/body via `IssueLookup` |
+| FR-014 | MCP facts: `{issue}` = `naming::ticket(dir)`; `{type}` = the `Tag::Type` of `naming::parse_tags(dir)`, empty if none; `{name}` = `naming::display_name`-style descriptive remainder of the dir name (`split_name` desc, joined with spaces), the dir name when empty; `{branch}` = the worktree's branch from the catalog (empty if unknown); title/body via `IssueLookup`. Dialog facts: from the form (`picked_issue`, `type_`, name field, derived branch). Neither new field (`Issue.body`, `IssueSnapshot.body_text`) is persisted or serialised; `tests/github_privacy.rs` and `jira_is_requested_only_on_named_events.rs` are updated for the added field |
 
 ## Test strategy
 
@@ -120,6 +122,9 @@ docs/user-guide/{settings,worktrees-and-sessions,agent-tools}.md
 | FR-001, FR-013, US3 s2 | core unit (settings round trip, old file, invalid stored text) |
 | FR-007, US1 s1-5 | client reducer tests (`tests/features_worktree_form.rs`) |
 | FR-005 in Settings, FR-002 | client `tests/features_settings.rs` (draft validate); layout is glue, quickstart §B |
+| FR-001 service-owned path | daemon test like `tests/settings_default_ai_cli.rs`: set via message; an unrelated settings change does not revert it; wire carries it |
+| FR-011 | one core test fixture renders the same template/facts; dialog and daemon tests assert against that fixture's output |
+| SC-004 dialog half | client reducer test: an explicit edited prompt reaches `session_definition` unchanged |
 | FR-008, FR-009, US4, SC-004 | daemon tests beside `mcp_create_session.rs` with a fake `IssueLookup` (incl. timeout/failure, Jira key) |
 | SC-003 | existing dialog and MCP tests unchanged with empty template |
 | Look of the Settings field and the pre-filled prompt | quickstart §B visual pass |
