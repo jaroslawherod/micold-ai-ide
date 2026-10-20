@@ -72,7 +72,7 @@ A reviewer picks revealed lines exactly as they pick lines of the diff, wherever
 
 1. **Given** picking is allowed for the shown diff, **When** the reviewer picks revealed lines (alone or together with diff lines), **Then** the pick is accepted and addresses the lines by the same file and line numbers as picked diff lines.
 2. **Given** picking is not allowed for the shown diff, **When** lines are revealed, **Then** they are not pickable.
-3. **Given** a browsed file the change does not touch, **When** the reviewer tries to pick lines, **Then** picking works only where #1149 allows picking in the shown source and context [NEEDS CLARIFICATION: does #1149 allow comments on lines of files outside the change, and on which anchor?]; otherwise the lines are not pickable.
+3. **Given** a browsed file the change does not touch, **When** the reviewer tries to pick lines, **Then** picking works only where #1149 allows picking in the shown source and context (#1149 is open and has no spec yet, so this feature defines no anchor of its own); otherwise the lines are not pickable.
 
 ### User Story 5 - Browse any file of the repository and return to the diff (Priority: P2)
 
@@ -96,7 +96,7 @@ A reviewer opens a file the change does not touch, from a file tree or path pick
 - Added file: the diff already shows every line; no markers and the whole-file toggle is hidden.
 - Deleted file: there is no current version; expansion is not offered and the removed lines show as they do today.
 - Binary or non-text file: expansion is not offered.
-- Very large file: the reveal does not freeze the interface; lines show progressively or the reveal is bounded with a clear note [NEEDS CLARIFICATION: size limit above which a file is not fully expanded, and what the user sees].
+- Very large file: the reveal does not freeze the interface; lines show progressively or the reveal is bounded with a clear note; a file whose shown version exceeds 2 MB (the limit the Changes view already uses, 482 R8) is not expanded or browsed automatically: a clear note says it is large and offers a per-file "Show anyway" that lasts while the view is open.
 - File content cannot be obtained (read error, PR head unreachable offline, file missing on the PR head): the reviewer sees a clear error on that file; the diff stays usable.
 - The file changes on disk (agent sessions edit the worktree concurrently, Principle II) while a gap is expanded: the diff refreshes, and expansion state is kept for gaps that still exist; no stale lines are shown against new numbering.
 - Switching between files, between worktree changes and a PR, or between PRs: expansion state of one file never leaks into another source's diff of the same path.
@@ -125,7 +125,7 @@ A reviewer opens a file the change does not touch, from a file tree or path pick
 - **FR-009**: Files for which no text version exists (binary, deleted, unreadable) MUST NOT offer expansion; an unobtainable version MUST show a clear message on that file without breaking the rest of the diff.
 - **FR-010**: Expanding MUST NOT modify any file, the diff, or any stored review state, and MUST work offline for worktree changes.
 - **FR-011**: The reviewer MUST be able to open any text file of the repository (tracked files of the shown source; untracked and git-ignored files only for worktree changes when they exist on disk, never for a PR), including files the change does not affect, from a file tree or path picker, and see it with line numbers and syntax colouring as in the diff.
-- **FR-012**: A path or import string in a diff line that names an existing repository file MUST be activatable (click or tap) and open that file, at the referenced line when the text gives one; text that names no existing file MUST NOT be activatable. Symbol definition lookup is [NEEDS CLARIFICATION: in scope or out? If in, for which languages].
+- **FR-012**: A path or import string in a diff line that names an existing repository file MUST be activatable (click or tap) and open that file, at the referenced line when the text gives one; text that names no existing file MUST NOT be activatable. Symbol definition lookup is out of scope.
 - **FR-013**: A back action MUST return from a browsed file to the previous view with its file, scroll position and expansion state; browsing MUST NOT lose diff state.
 - **FR-014**: Browsed files MUST be read at the PR head version when a pull request is selected, and at the worktree's current version otherwise; paths MUST NOT resolve outside the repository.
 - **FR-015**: Browsed files MUST be pickable for review comments only where #1149 allows picking in the shown source and context (see Story 4 scenario 3), and offer a way to open that file's diff when the change modifies it.
@@ -152,6 +152,8 @@ A reviewer opens a file the change does not touch, from a file tree or path pick
 
 ## Assumptions
 
+- Large-file limit reuses the Changes view's 2 MB per-version limit (`review::limits::MAX_VERSION_BYTES`).
+
 - Line picking, comments, and where picking is allowed are defined by #1149. This feature adds no picking rules of its own; it depends on #1149 being delivered, and until then revealed and browsed lines are simply not pickable.
 - The pull request's head content is obtainable the way the PR diff itself is (1003); no new credentials.
 - "A few lines of context" stays as today when nothing is expanded.
@@ -159,6 +161,14 @@ A reviewer opens a file the change does not touch, from a file tree or path pick
 
 ## Out of scope
 
-- Editing files; semantic code intelligence beyond path and import references (find-references, search across files; symbol definition lookup pending clarification).
+- Editing files; semantic code intelligence beyond path and import references (find-references, search across files; symbol definition lookup).
 - Changing which lines the diff marks as changed, or the context size.
 - Expanding to show a file's version at the PR base or other revisions.
+
+## Clarifications
+
+### Session 2026-10-20
+
+- Q: Size limit above which a file is not fully expanded? → A: 2 MB per version, with a per-file "Show anyway", as the Changes view does. _(agent-resolved: specs/482-worktree-changes-review/research.md#R8)_
+- Q: Is symbol definition lookup in scope? → A: No; the issue asks only for opening files and following references from the diff. _(agent-resolved: issue #1150 Wanted; spec.md#Out of scope)_
+- Q: Can lines of files outside the change be picked for comments? → A: Only where #1149 allows; this feature adds no picking rule or anchor, and until #1149 delivers they are not pickable. _(agent-resolved: spec.md#Assumptions; issue #1150 Wanted)_
