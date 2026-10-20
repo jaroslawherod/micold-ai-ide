@@ -385,7 +385,12 @@ fn revealable(view: &OpenView, path: &RelPath) -> bool {
 /// The whole-file toggle of the selected file: hidden for an added file, disabled when there is no
 /// text version to show, else on or off (FR-004).
 pub fn whole_file(view: &OpenView) -> WholeFile {
-    let Some(path) = view.selected.as_ref() else {
+    // A pull request's files have no head version to show before M3 (#1150): no toggle yet.
+    let Some(path) = view
+        .selected
+        .as_ref()
+        .filter(|_| view.source == Source::Changes)
+    else {
         return WholeFile::Hidden;
     };
     if matches!(
