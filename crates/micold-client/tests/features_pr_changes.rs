@@ -4,8 +4,9 @@
 use std::path::PathBuf;
 
 use micold_client::features::changes::{
-    self, adjacent, base_line, check_mark, diff_body, list_body, pr_header, pr_mark, section,
-    DiffBody, Effect, ListBody, Msg, PrDiffLoad, PrList, PrSection, Source, State, Step,
+    self, adjacent, base_line, check_mark, diff_body, head_note, list_body, pr_header, pr_mark,
+    section, whole_file, DiffBody, Effect, ListBody, Msg, PrDiffLoad, PrList, PrSection, Source,
+    SourceKey, State, Step, WholeFile, READING_FILE,
 };
 use micold_client::ui::PrMark;
 use micold_core::pull_request::{
@@ -509,7 +510,7 @@ fn choosing_a_pull_request_reads_its_diff_and_lists_its_files() {
 }
 
 #[test]
-fn selecting_a_file_of_a_pull_request_reads_nothing() {
+fn selecting_a_file_of_a_pull_request_parses_its_patch_and_asks_for_the_head() {
     let mut state = opened(true);
     listed(&mut state, vec![pr(7, BranchPrState::Open)]);
     chosen(&mut state, 7);
@@ -517,7 +518,10 @@ fn selecting_a_file_of_a_pull_request_reads_nothing() {
         &mut state,
         Msg::FileSelected(RelPath::from_native("a.rs").unwrap()),
     );
-    assert_eq!(effect, Effect::None, "the patch is parsed, not read");
+    assert!(
+        matches!(effect, Effect::ReadFile { .. }),
+        "the head version is read: {effect:?}"
+    );
     let view = state.open.as_ref().expect("open");
     let DiffBody::Diff(loaded) = diff_body(view) else {
         panic!("the file's diff");
@@ -1730,5 +1734,215 @@ mod review_comments {
             };
             assert_eq!(pr.map(|p| p.state), Some(end));
         }
+    }
+}
+
+/// Feature 1150 (M3, FR-005, FR-009, FR-014, SC-003): a pull request's revealed lines are its
+/// head version, read once on selection and shaped when it answers.
+mod head_version {
+    use super::*;
+    use micold_core::review::browse::{FileReadFailure, FileText};
+    use micold_core::review::diff::SideLines;
+
+    /// The pull request's `a.rs` at its head: the diff covers lines 1 and 2, lines 3 to 6 hide.
+    const HEAD: &str = "keep\nnew\nl3\nl4\nl5\nl6\n";
+
+    fn text(body: &str) -> FileText {
+        FileText {
+            lines: SideLines::from_bytes(body.as_bytes()).expect("text"),
+            bytes: body.len() as u64,
+        }
+    }
+
+    fn select(state: &mut State, file: &str) -> Effect {
+        changes::update(
+            state,
+            Msg::FileSelected(RelPath::from_native(file).unwrap()),
+        )
+    }
+
+    /// The read the effect asks for: its sequence number, after checking what it names.
+    fn asked(effect: Effect, number: u64, file: &str) -> u64 {
+        match effect {
+            Effect::ReadFile {
+                seq,
+                project: p,
+                source,
+                commit,
+                address,
+                path,
+                force_large,
+                ..
+            } => {
+                assert_eq!(p, project());
+                assert_eq!(source, SourceKey::Pr(number));
+                assert_eq!(commit, "abc", "the head commit the list holds");
+                assert_eq!(
+                    address,
+                    format!("https://github.com/acme/widgets/pull/{number}")
+                );
+                assert_eq!(path.as_str(), file);
+                assert!(!force_large);
+                seq
+            }
+            other => panic!("expected ReadFile, got {other:?}"),
+        }
+    }
+
+    fn answer(state: &mut State, seq: u64, number: u64, file: &str, result: Result<FileText, FileReadFailure>) {
+        changes::update(
+            state,
+            Msg::FileRead {
+                seq,
+                source: SourceKey::Pr(number),
+                path: RelPath::from_native(file).unwrap(),
+                result,
+            },
+        );
+    }
+
+    fn view(state: &State) -> &changes::OpenView {
+        state.open.as_ref().expect("open")
+    }
+
+    /// Pull request 7 chosen and `a.rs` selected; the head read is asked for, not yet answered.
+    fn waiting() -> (State, u64) {
+        let mut state = opened(true);
+        listed(&mut state, vec![pr(7, BranchPrState::Open), pr(8, BranchPrState::Open)]);
+        chosen(&mut state, 7);
+        let effect = select(&mut state, "a.rs");
+        let seq = asked(effect, 7, "a.rs");
+        (state, seq)
+    }
+
+    #[test]
+    fn no_marker_shows_until_the_head_answers() {
+        let (state, _) = waiting();
+        assert!(view(&state).shaped.gaps.is_empty());
+        assert_eq!(head_note(view(&state)).as_deref(), Some(READING_FILE));
+        assert_eq!(whole_file(view(&state)), WholeFile::Hidden);
+    }
+
+    #[test]
+    fn the_answer_shapes_the_pull_requests_head_not_the_worktree() {
+        let (mut state, seq) = waiting();
+        answer(&mut state, seq, 7, "a.rs", Ok(text(HEAD)));
+        assert_eq!(head_note(view(&state)), None);
+        assert_eq!(view(&state).shaped.gaps.len(), 1);
+        assert_eq!(view(&state).shaped.gaps[0].len, 4);
+        assert_eq!(whole_file(view(&state)), WholeFile::Available { on: false });
+        let key = view(&state).shaped.gaps[0].key();
+        changes::update(&mut state, Msg::GapToggled(key));
+        let shown: Vec<_> = view(&state)
+            .shaped
+            .hunks
+            .iter()
+            .flat_map(|h| h.lines.iter().map(|l| l.text.clone()))
+            .collect();
+        assert!(shown.ends_with(&["l3".into(), "l4".into(), "l5".into(), "l6".into()]), "{shown:?}");
+        assert!(view(&state).shaped.gaps.is_empty());
+    }
+
+    #[test]
+    fn whole_file_mode_shows_every_head_line() {
+        let (mut state, seq) = waiting();
+        answer(&mut state, seq, 7, "a.rs", Ok(text(HEAD)));
+        changes::update(&mut state, Msg::WholeFileToggled);
+        assert_eq!(whole_file(view(&state)), WholeFile::Available { on: true });
+        let new_lines = view(&state)
+            .shaped
+            .hunks
+            .iter()
+            .flat_map(|h| &h.lines)
+            .filter(|l| l.new.is_some())
+            .count();
+        assert_eq!(new_lines, 6);
+    }
+
+    #[test]
+    fn a_stale_or_foreign_answer_is_dropped() {
+        let (mut state, seq) = waiting();
+        answer(&mut state, seq + 100, 7, "a.rs", Ok(text(HEAD)));
+        assert!(view(&state).shaped.gaps.is_empty(), "another read's answer");
+        answer(&mut state, seq, 8, "a.rs", Ok(text(HEAD)));
+        assert!(view(&state).shaped.gaps.is_empty(), "another source's answer");
+        answer(&mut state, seq, 7, "b.rs", Ok(text(HEAD)));
+        assert!(view(&state).shaped.gaps.is_empty(), "another file's answer");
+        assert_eq!(head_note(view(&state)).as_deref(), Some(READING_FILE));
+        answer(&mut state, seq, 7, "a.rs", Ok(text(HEAD)));
+        assert_eq!(view(&state).shaped.gaps.len(), 1);
+    }
+
+    #[test]
+    fn an_unobtainable_head_says_so_and_leaves_the_diff_usable() {
+        let (mut state, seq) = waiting();
+        answer(&mut state, seq, 7, "a.rs", Err(FileReadFailure::HeadUnavailable));
+        assert_eq!(
+            head_note(view(&state)),
+            Some(FileReadFailure::HeadUnavailable.message())
+        );
+        assert!(view(&state).shaped.gaps.is_empty());
+        assert_eq!(whole_file(view(&state)), WholeFile::Unavailable);
+        let DiffBody::Diff(loaded) = diff_body(view(&state)) else {
+            panic!("the diff stays");
+        };
+        assert!(matches!(&loaded.diff, FileDiff::Text(_)));
+        // Toggling before a head exists changes nothing and asks nothing.
+        assert_eq!(changes::update(&mut state, Msg::WholeFileToggled), Effect::None);
+    }
+
+    #[test]
+    fn an_added_file_reads_nothing() {
+        let (mut state, _) = waiting();
+        assert_eq!(select(&mut state, "b.rs"), Effect::None);
+        assert_eq!(head_note(view(&state)), None);
+        assert_eq!(whole_file(view(&state)), WholeFile::Hidden);
+    }
+
+    #[test]
+    fn expansion_never_applies_across_sources() {
+        let (mut state, seq) = waiting();
+        answer(&mut state, seq, 7, "a.rs", Ok(text(HEAD)));
+        let key = view(&state).shaped.gaps[0].key();
+        changes::update(&mut state, Msg::GapToggled(key));
+        assert!(view(&state).shaped.gaps.is_empty());
+
+        // The other pull request's file starts closed.
+        let effect = changes::update(&mut state, Msg::SourceChosen(Some(8)));
+        let diff = diff_seq(effect, 8);
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq: diff,
+                number: 8,
+                result: Ok(split_pr_diff(DIFF)),
+            },
+        );
+        let seq8 = asked(select(&mut state, "a.rs"), 8, "a.rs");
+        answer(&mut state, seq8, 8, "a.rs", Ok(text(HEAD)));
+        assert_eq!(view(&state).shaped.gaps.len(), 1, "closed in the other PR");
+
+        // And the first one keeps its own state.
+        let effect = changes::update(&mut state, Msg::SourceChosen(Some(7)));
+        let diff = diff_seq(effect, 7);
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq: diff,
+                number: 7,
+                result: Ok(split_pr_diff(DIFF)),
+            },
+        );
+        let seq7 = asked(select(&mut state, "a.rs"), 7, "a.rs");
+        answer(&mut state, seq7, 7, "a.rs", Ok(text(HEAD)));
+        assert!(view(&state).shaped.gaps.is_empty(), "still open in its own");
+
+        // The working tree has no such state.
+        changes::update(&mut state, Msg::SourceChosen(None));
+        assert!(view(&state).shaped.gaps.is_empty());
+        assert!(!view(&state).expansions.contains_key(&(
+            SourceKey::Worktree,
+            RelPath::from_native("a.rs").unwrap()
+        )));
     }
 }

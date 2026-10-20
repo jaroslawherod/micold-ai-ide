@@ -23,6 +23,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use iced::Task;
@@ -35,7 +36,9 @@ use micold_core::git::GitRemote;
 use micold_core::github::{choose_remote, env_include_path, RemoteChoice};
 use micold_core::overview::PrCounts;
 use micold_core::protocol::messages::{BranchContainment, ClientMsg, MergedBranchQuery};
-use micold_core::pull_request::{DiffReadFailure, PrState, PullRequestStatus, ReadingFailure};
+use micold_core::pull_request::{
+    DiffReadFailure, PrState, PullRequestSource, PullRequestStatus, ReadingFailure,
+};
 use micold_core::review::pr_diff::split_pr_diff;
 use micold_core::session::SessionLocation;
 use micold_core::worktree_branches::read_branch_set;
@@ -274,24 +277,14 @@ pub fn on_remotes(
             finished(seq, Outcome::Err(ReadingFailure::Unavailable)),
         );
     };
-    let tooling = app.caps.issue_tooling();
-    let cached = app.env_include_cache.get(&project).cloned();
-    let resolver = app.caps.env_include_shared();
-    let enabled = app.env_include_enabled;
-    let script = app.env_include_script_path.clone();
-    let timeout_secs = app.env_include_timeout_secs;
+    let source = pull_request_source(app, &project);
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
-                // `gh` from a version manager is often only on the include's `PATH`
-                // (`shell/issues.rs`, "Why the environment include is resolved inside the load").
-                let snapshot = cached.unwrap_or_else(|| {
-                    resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
-                });
-                let Some(gh) = (tooling.locate_gh)(env_include_path(&snapshot.vars)) else {
+                let Some(source) = source() else {
                     return finished(seq, Outcome::Err(ReadingFailure::Unavailable));
                 };
-                match (tooling.pull_requests)(gh).read(&repo, &branches, now()) {
+                match source.read(&repo, &branches, now()) {
                     Ok(reading) => Msg::StatusesRead {
                         seq,
                         statuses: reading.statuses,
@@ -403,32 +396,47 @@ pub fn on_list_remotes(
     let RemoteChoice::Github { repo, .. } = choose_remote(&remotes) else {
         return Task::done(answer(Err(ReadingFailure::Unavailable)));
     };
-    let tooling = app.caps.issue_tooling();
-    let cached = app.env_include_cache.get(&project).cloned();
-    let resolver = app.caps.env_include_shared();
-    let enabled = app.env_include_enabled;
-    let script = app.env_include_script_path.clone();
-    let timeout_secs = app.env_include_timeout_secs;
+    let source = pull_request_source(app, &project);
     let local = crate::shell::changes::local(app, &entry).ok();
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
-                let snapshot = cached.unwrap_or_else(|| {
-                    resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
-                });
-                let Some(gh) = (tooling.locate_gh)(env_include_path(&snapshot.vars)) else {
+                let Some(source) = source() else {
                     return Err(ReadingFailure::Unavailable);
                 };
                 let branches = match local {
                     Some((dir, git)) => read_branch_set(&*git, &dir, current.as_deref()),
                     None => current.into_iter().collect(),
                 };
-                (tooling.pull_requests)(gh).list_branches(&repo, &branches, now())
+                source.list_branches(&repo, &branches, now())
             })
             .await
         },
         move |joined| answer(joined.unwrap_or(Err(ReadingFailure::Passing))),
     )
+}
+
+/// The pull request source running the user's `gh`, to be built on a blocking thread: `gh` from a
+/// version manager is often only on the environment include's `PATH` (`shell/issues.rs`, "Why the
+/// environment include is resolved inside the load"). `None` when no `gh` is found.
+pub fn pull_request_source(
+    app: &App,
+    project: &std::path::Path,
+) -> impl FnOnce() -> Option<Arc<dyn PullRequestSource + Send + Sync>> + Send + 'static {
+    let tooling = app.caps.issue_tooling();
+    let cached = app.env_include_cache.get(project).cloned();
+    let resolver = app.caps.env_include_shared();
+    let enabled = app.env_include_enabled;
+    let script = app.env_include_script_path.clone();
+    let timeout_secs = app.env_include_timeout_secs;
+    let project = project.to_path_buf();
+    move || {
+        let snapshot = cached.unwrap_or_else(|| {
+            resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
+        });
+        let gh = (tooling.locate_gh)(env_include_path(&snapshot.vars))?;
+        Some((tooling.pull_requests)(gh))
+    }
 }
 
 /// A Changes view asked for pull request `number`'s diff (feature 775, contracts §2). Like
@@ -495,22 +503,14 @@ pub fn on_diff_remotes(
     let RemoteChoice::Github { repo, .. } = choose_remote(&remotes) else {
         return failed(ReadingFailure::Unavailable);
     };
-    let tooling = app.caps.issue_tooling();
-    let cached = app.env_include_cache.get(&project).cloned();
-    let resolver = app.caps.env_include_shared();
-    let enabled = app.env_include_enabled;
-    let script = app.env_include_script_path.clone();
-    let timeout_secs = app.env_include_timeout_secs;
+    let source = pull_request_source(app, &project);
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
-                let snapshot = cached.unwrap_or_else(|| {
-                    resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
-                });
-                let Some(gh) = (tooling.locate_gh)(env_include_path(&snapshot.vars)) else {
+                let Some(source) = source() else {
                     return Err(DiffReadFailure::Failed(ReadingFailure::Unavailable));
                 };
-                (tooling.pull_requests)(gh)
+                source
                     .diff(&repo, number, now())
                     .map(|raw| split_pr_diff(&raw))
             })

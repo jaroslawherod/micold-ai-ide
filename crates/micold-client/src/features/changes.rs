@@ -15,13 +15,14 @@ use micold_core::pull_request::{
 };
 use micold_core::review::anchor::{self, locate, Located};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
+use micold_core::review::browse::{FileReadFailure, FileText};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
 use micold_core::review::comment::{
     CommentId, CommentState, Move, Outcome, PrAnchor, ReviewComment, Scope, Status,
 };
 use micold_core::review::diff::{
-    parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines, LoadedDiff, SideRow,
-    Spans, UnifiedRow,
+    parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines, LoadedDiff, SideLines,
+    SideRow, Spans, UnifiedRow,
 };
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::pr_diff::PrDiff;
@@ -179,6 +180,41 @@ pub struct PullRequestView {
     pub file: Option<LoadedDiff>,
     /// Files over the size limits the user asked to see.
     pub shown_large: BTreeSet<RelPath>,
+    /// The selected file's head version, which revealed lines come from (feature 1150, FR-005).
+    pub head_text: HeadText,
+}
+
+/// The selected pull request file's version at the pull request's head (feature 1150, FR-005).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum HeadText {
+    /// Not asked for: nothing selected, or a file with no head version to show.
+    #[default]
+    NotRead,
+    /// Read `seq` is under way.
+    Reading {
+        /// The read's sequence number; an answer with another is dropped.
+        seq: u64,
+    },
+    /// The head version's lines.
+    Ready(SideLines),
+    /// The head version could not be obtained; the diff stays usable (FR-009).
+    Failed(FileReadFailure),
+}
+
+/// The note above a pull request file's diff while its head version is read.
+pub const READING_FILE: &str = "Reading file\u{2026}";
+
+/// What the note above the shown pull request file says of its head version: that it is being
+/// read, or why it cannot be shown (FR-009); `None` when there is nothing to say.
+pub fn head_note(view: &OpenView) -> Option<String> {
+    let Source::PullRequest(pr) = &view.source else {
+        return None;
+    };
+    match &pr.head_text {
+        HeadText::Reading { .. } => Some(READING_FILE.to_owned()),
+        HeadText::Failed(why) => Some(why.message()),
+        HeadText::NotRead | HeadText::Ready(_) => None,
+    }
 }
 
 /// A pull request's diff, read once on selection (FR-004).
@@ -364,20 +400,30 @@ pub enum WholeFile {
 /// The tooltip of a disabled whole-file toggle.
 pub const WHOLE_FILE_UNAVAILABLE: &str = "No text version of this file to show";
 
-/// The kind the list gives the selected file of the entry's changes.
-fn changes_kind<'a>(view: &'a OpenView, path: &RelPath) -> Option<&'a ChangeKind> {
-    if view.source != Source::Changes {
-        return None;
+/// The selected file and the source its expansion belongs to.
+fn selected_key(view: &OpenView) -> Option<(SourceKey, RelPath)> {
+    match &view.source {
+        Source::Changes => view.selected.clone().map(|p| (SourceKey::Worktree, p)),
+        Source::PullRequest(pr) => pr.selected.clone().map(|p| (SourceKey::Pr(pr.number), p)),
     }
-    shown_list(view)
-        .and_then(|list| list.files.iter().find(|f| &f.path == path))
-        .map(|f| &f.kind)
 }
 
-/// Whether the selected file of the entry's changes can have hidden lines revealed: it is listed
-/// with a text version on both sides, so not added, untracked or deleted (FR-009).
+/// The kind the shown list gives `path`: the entry's changes, or the pull request's files.
+fn file_kind<'a>(view: &'a OpenView, path: &RelPath) -> Option<&'a ChangeKind> {
+    let files: &[ChangedFile] = match &view.source {
+        Source::Changes => &shown_list(view)?.files,
+        Source::PullRequest(pr) => match &pr.diff {
+            PrDiffLoad::Ready { files, .. } => files,
+            _ => return None,
+        },
+    };
+    files.iter().find(|f| &f.path == path).map(|f| &f.kind)
+}
+
+/// Whether the selected file can have hidden lines revealed: it is listed with a text version on
+/// both sides, so not added, untracked or deleted (FR-009).
 fn revealable(view: &OpenView, path: &RelPath) -> bool {
-    changes_kind(view, path).is_some_and(|kind| {
+    file_kind(view, path).is_some_and(|kind| {
         !matches!(
             kind,
             ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Deleted
@@ -385,57 +431,69 @@ fn revealable(view: &OpenView, path: &RelPath) -> bool {
     })
 }
 
-/// The whole-file toggle of the selected file: hidden for an added file, disabled when there is no
-/// text version to show, else on or off (FR-004).
+/// The lines revealed ones come from: the diff's new side for the entry's changes, the pull
+/// request's head version for a pull request (FR-005).
+fn new_side(view: &OpenView) -> Option<&SideLines> {
+    match &view.source {
+        Source::Changes => match diff_body(view) {
+            DiffBody::Diff(LoadedDiff { new, .. }) => new.as_ref(),
+            _ => None,
+        },
+        Source::PullRequest(pr) => match &pr.head_text {
+            HeadText::Ready(lines) => Some(lines),
+            _ => None,
+        },
+    }
+}
+
+/// The whole-file toggle of the selected file: hidden for an added file or while a pull request's
+/// head version is read, disabled when there is no text version to show, else on or off (FR-004).
 pub fn whole_file(view: &OpenView) -> WholeFile {
-    // A pull request's files have no head version to show before M3 (#1150): no toggle yet.
-    let Some(path) = view
-        .selected
-        .as_ref()
-        .filter(|_| view.source == Source::Changes)
-    else {
+    let Some((key, path)) = selected_key(view) else {
         return WholeFile::Hidden;
     };
     if matches!(
-        changes_kind(view, path),
+        file_kind(view, &path),
         Some(ChangeKind::Added | ChangeKind::Untracked)
     ) {
         return WholeFile::Hidden;
+    }
+    if let Source::PullRequest(pr) = &view.source {
+        if matches!(pr.head_text, HeadText::NotRead | HeadText::Reading { .. })
+            && matches!(diff_body(view), DiffBody::Diff(LoadedDiff { diff: FileDiff::Text(_), .. }))
+            && revealable(view, &path)
+        {
+            return WholeFile::Hidden;
+        }
     }
     let text = matches!(
         diff_body(view),
         DiffBody::Diff(LoadedDiff {
             diff: FileDiff::Text(_),
-            new: Some(_),
             ..
         })
     );
-    if !(text && revealable(view, path)) {
+    if !(text && revealable(view, &path) && new_side(view).is_some()) {
         return WholeFile::Unavailable;
     }
-    let on = view
-        .expansions
-        .get(&(SourceKey::Worktree, path.clone()))
-        .is_some_and(|e| e.whole);
+    let on = view.expansions.get(&(key, path)).is_some_and(|e| e.whole);
     WholeFile::Available { on }
 }
 
 /// Recompute `view.shaped` from the diff on screen and the file's expansion, dropping open runs
 /// that no longer exist (FR-008).
 fn reshape(view: &mut OpenView) {
-    let shaped = match (&view.source, view.selected.clone(), diff_body(view)) {
+    let shaped = match (selected_key(view), diff_body(view)) {
         (
-            Source::Changes,
-            Some(path),
+            Some((source, path)),
             DiffBody::Diff(LoadedDiff {
                 diff: FileDiff::Text(hunks),
-                new,
                 ..
             }),
-        ) => match new {
+        ) => match new_side(view) {
             Some(new) if revealable(view, &path) => {
                 let total = u32::try_from(new.len()).unwrap_or(u32::MAX);
-                let key = (SourceKey::Worktree, path);
+                let key = (source, path);
                 let current = view.expansions.get(&key).cloned().unwrap_or_default();
                 let kept = current.reconcile(&gaps(hunks, total));
                 let shaped = shape(hunks, new, &kept);
@@ -453,19 +511,9 @@ fn reshape(view: &mut OpenView) {
     view.shaped = shaped;
 }
 
-/// The hunks the shown diff displays: the file's shaped hunks for the entry's changes, the pull
-/// request file's own otherwise.
+/// The hunks the shown diff displays: the selected file's shaped hunks, whichever the source.
 fn shown_hunks(view: &OpenView) -> &[Hunk] {
-    if view.source == Source::Changes {
-        return &view.shaped.hunks;
-    }
-    match diff_body(view) {
-        DiffBody::Diff(LoadedDiff {
-            diff: FileDiff::Text(hunks),
-            ..
-        }) => hunks,
-        _ => &[],
-    }
+    &view.shaped.hunks
 }
 
 /// The review panel's state (feature 946, FR-016 to FR-019).
@@ -947,6 +995,18 @@ pub enum Msg {
     GapToggled(GapKey),
     /// The selected file's whole-file toggle was pressed (feature 1150, FR-004).
     WholeFileToggled,
+    /// Read `seq` of a file's text ended (feature 1150, FR-005); dropped when it is no longer the
+    /// read the view waits for.
+    FileRead {
+        /// The read it answers.
+        seq: u64,
+        /// The source it was asked of.
+        source: SourceKey,
+        /// The file.
+        path: RelPath,
+        /// The text, or why there is none.
+        result: Result<FileText, FileReadFailure>,
+    },
     /// The diff scrolled or was resized.
     DiffScrolled {
         /// Offset from the top, pixels.
@@ -1142,6 +1202,26 @@ pub enum Effect {
         project: PathBuf,
         /// The pull request's number.
         number: u64,
+    },
+    /// Read one file's text at a pull request's head as read `seq` (feature 1150, FR-005): the
+    /// shell tries the entry's local objects, then GitHub through `address`'s repository.
+    ReadFile {
+        /// The read's sequence number.
+        seq: u64,
+        /// The project.
+        project: PathBuf,
+        /// The entry whose directory holds the objects.
+        entry: SessionLocation,
+        /// Whose version: the pull request.
+        source: SourceKey,
+        /// The head commit.
+        commit: String,
+        /// The pull request's address, which names its repository.
+        address: String,
+        /// The file.
+        path: RelPath,
+        /// Read it even over the size limit.
+        force_large: bool,
     },
     /// Scroll the diff to this offset, in pixels (a panel jump).
     ScrollDiff {
@@ -1434,8 +1514,9 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 // A pull request's patches are held: choosing a file parses one, reads nothing.
                 pr.selected = Some(path);
                 pr.file = pr_file_diff(pr);
+                pr.head_text = HeadText::NotRead;
                 reset_diff_pane(view);
-                return Effect::None;
+                return request_head(view, &mut state.next_seq);
             }
             // The file already shown keeps its diff and scroll; only a failed read is retried.
             if view.selected.as_ref() == Some(&path) && !matches!(view.diff, Load::Failed(_)) {
@@ -1458,7 +1539,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     pr.shown_large.insert(path);
                     pr.file = pr_file_diff(pr);
                 }
-                return Effect::None;
+                return request_head(view, &mut state.next_seq);
             }
             let Some(path) = view.selected.clone() else {
                 return Effect::None;
@@ -1468,24 +1549,39 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::GapToggled(key) => {
             if let Some(view) = state.open.as_mut() {
-                if let Some(path) = view.selected.clone().filter(|p| revealable(view, p)) {
-                    view.expansions
-                        .entry((SourceKey::Worktree, path))
-                        .or_default()
-                        .toggle_key(key);
+                if let Some(at) = selected_key(view).filter(|(_, p)| revealable(view, p)) {
+                    if new_side(view).is_some() {
+                        view.expansions.entry(at).or_default().toggle_key(key);
+                    }
                 }
             }
             Effect::None
         }
         Msg::WholeFileToggled => {
             if let Some(view) = state.open.as_mut() {
-                if let (WholeFile::Available { on }, Some(path)) =
-                    (whole_file(view), view.selected.clone())
+                if let (WholeFile::Available { on }, Some(at)) =
+                    (whole_file(view), selected_key(view))
                 {
-                    view.expansions
-                        .entry((SourceKey::Worktree, path))
-                        .or_default()
-                        .set_whole(!on);
+                    view.expansions.entry(at).or_default().set_whole(!on);
+                }
+            }
+            Effect::None
+        }
+        Msg::FileRead {
+            seq,
+            source,
+            path,
+            result,
+        } => {
+            if let Some(Source::PullRequest(pr)) = state.open.as_mut().map(|v| &mut v.source) {
+                let current = source == SourceKey::Pr(pr.number)
+                    && pr.selected.as_ref() == Some(&path)
+                    && pr.head_text == (HeadText::Reading { seq });
+                if current {
+                    pr.head_text = match result {
+                        Ok(text) => HeadText::Ready(text.lines),
+                        Err(why) => HeadText::Failed(why),
+                    };
                 }
             }
             Effect::None
@@ -2344,6 +2440,47 @@ fn follow_head(state: &mut State) -> Option<Effect> {
     })
 }
 
+/// Ask for the head version of the selected pull request file when it has one to show: a text
+/// file that is neither added nor deleted (FR-009). A pull request the list does not hold has no
+/// head commit to ask for, which the file's note says.
+fn request_head(view: &mut OpenView, next_seq: &mut u64) -> Effect {
+    let Source::PullRequest(pr) = &view.source else {
+        return Effect::None;
+    };
+    let (Some(path), Some(LoadedDiff { diff: FileDiff::Text(_), .. })) =
+        (pr.selected.clone(), &pr.file)
+    else {
+        return Effect::None;
+    };
+    if !revealable(view, &path) {
+        return Effect::None;
+    }
+    let number = pr.number;
+    let commit = pr.head.clone();
+    let address = listed_pull_request(view, number).map(|listed| listed.url.clone());
+    let (project, entry) = (view.project.clone(), view.entry.clone());
+    let Source::PullRequest(pr) = &mut view.source else {
+        return Effect::None;
+    };
+    let Some(address) = address.filter(|_| !commit.is_empty()) else {
+        pr.head_text = HeadText::Failed(FileReadFailure::HeadUnavailable);
+        return Effect::None;
+    };
+    let seq = *next_seq;
+    *next_seq += 1;
+    pr.head_text = HeadText::Reading { seq };
+    Effect::ReadFile {
+        seq,
+        project,
+        entry,
+        source: SourceKey::Pr(number),
+        commit,
+        address,
+        path,
+        force_large: false,
+    }
+}
+
 /// What a change of source resets in the diff pane: picks, the composer, scroll and slot heights
 /// belong to the file that was shown.
 fn reset_diff_pane(view: &mut OpenView) {
@@ -2386,6 +2523,7 @@ fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
         selected: None,
         file: None,
         shown_large: BTreeSet::new(),
+        head_text: HeadText::NotRead,
     }));
     reset_diff_pane(view);
     state.next_seq += 1;
