@@ -2027,6 +2027,19 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // Feature 1120 (FR-015, FR-019, research R14): the Overview open over the fixture project,
+        // one card per worktree and the Default card, in the card's header-row layout. The
+        // text-overflow and containment gates run on the real cards here, which no other state
+        // reaches.
+        CoveredState {
+            name: "overview-open",
+            build: || {
+                let mut state = with_project();
+                state.overview.open = true;
+                StateUnderTest::new(state)
+            },
+            anchors: &[],
+        },
     ]
 }
 

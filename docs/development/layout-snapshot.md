@@ -88,9 +88,11 @@ Cargo makes one binary per file directly under `tests/`, and a cache cannot cros
 
 ## What is covered
 
-Eleven states, listed in one place: `crates/micold-client/tests/support/covered_states.rs`. Feature
+The states are listed in one place: `crates/micold-client/tests/support/covered_states.rs`. Feature
 017's reduced parity set, plus the empty and error layouts no manual walkthrough reliably reached,
-the Settings dialog, and the add-worktree dialog with its type dropdown open.
+the Settings dialog, the add-worktree dialog with its type dropdown open, and the Overview open
+over the fixture project (`overview-open`, feature 1120): its cards, header row and title, the only
+state the text-overflow and containment gates reach the Overview's cards in.
 
 Every state resolves at one canonical window size, 1280×800, from fixed invented data. Nothing reads
 your workspace, configuration or session store — a fixture recording the author's own machine would

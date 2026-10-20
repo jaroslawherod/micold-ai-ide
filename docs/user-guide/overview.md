@@ -63,13 +63,18 @@ nor across restarts.
 
 ## One card per location
 
-Each card shows:
+Each card has a **header row** across its top, tinted in its state's colour (see [The five states, worst first](#the-five-states-worst-first)), over a body that is the same neutral colour on every card.
 
-- the location's **type**, as an icon and a word (the word leads the footer line, and is also the icon's tooltip);
+The header row shows:
+
+- at its start, the card's **state**, as an icon and a word. Hover it for the reason;
+- at its end, the location's **type**, as an icon and a word (see the table below). Hover it for the type's word.
+
+The body below it shows:
+
 - its **title**, which says what the location is for (see [Title](#title)); hover it for the full title and the location's name;
 - below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. Hover it for the full branch name. A card whose title already is the branch does not repeat it;
 - its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
-- its **state**, as an icon and a word. Hover for the reason;
 - when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
 - a **progress row**, when there is progress to show (see [Feature progress](#feature-progress));
 - for a card with a branch, its **pull request counts** (see [Pull request counts](#pull-request-counts)).
@@ -178,6 +183,11 @@ Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Ta
 
 Cards are ordered by state, worst first, and in the sidebar's order within a state. The first row
 below that matches decides the state.
+
+The state's colour is the card's header row: red for **Needs action**, amber for **Needs
+attention**, the accent colour for **Working**, green for **Done**, and grey for **Idle**, so an
+Idle card stands back beside the others. The body of every card keeps one neutral colour, and its
+text reads the same in every state, in the light and the dark theme.
 
 | State | Icon | What puts a location here (the tooltip reason) |
 |-------|------|------------------------------------------------|

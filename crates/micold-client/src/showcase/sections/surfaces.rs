@@ -508,7 +508,8 @@ fn card_model(
     }
 }
 
-/// `OverviewCard` in each of the five states, the Default (project root) card and an orphan.
+/// `OverviewCard` in each of the five states (in a `CardGrid`, so the even row height shows), the
+/// Default (project root) card and an orphan.
 pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
     let card = |m: micold_core::overview::CardModel| {
@@ -554,6 +555,28 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         ratio: Some(micold_core::task_progress::Ratio { done: 2, total: 5 }),
     });
     with_activity.progress = with_progress.progress;
+    // The five states in one grid (feature 1120, T035): Needs action carries an activity and
+    // progress, so its row is taller than its sparse neighbours need and they stretch to it.
+    let mut needs_action = card_model("needs-action", T::Feature, S::NeedsAction, R::NeedsPermission);
+    needs_action.activity = with_activity.activity.clone();
+    needs_action.progress = with_progress.progress;
+    let mut done = card_model("done", T::Other, S::Done, R::Merged);
+    done.prs = micold_core::overview::PrDisplay::Hidden;
+    let five = iced::widget::container(Element::from(material::CardGrid::new(
+        [
+            needs_action,
+            card_model("needs-attention", T::Bugfix, S::NeedsAttention, R::ChecksFailing),
+            card_model("working", T::Chore, S::Working, R::Working),
+            done,
+            card_model("idle", T::Included, S::Idle, R::Idle),
+        ]
+        .iter()
+        .map(|m| material::OverviewCard::<Message>::new(m, roles).on_press(Message::NoOp))
+        .collect(),
+        roles,
+    )))
+    .width(Length::Fill)
+    .height(Length::Fixed(480.0));
     arrange(
         vec![
             posed("with progress", card(with_progress), roles),
@@ -563,41 +586,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
                 card(card_model("without-progress", T::Feature, S::Idle, R::Idle)),
                 roles,
             ),
-            posed(
-                "Needs action",
-                card(card_model(
-                    "needs-action",
-                    T::Feature,
-                    S::NeedsAction,
-                    R::NeedsPermission,
-                )),
-                roles,
-            ),
-            posed(
-                "Needs attention",
-                card(card_model(
-                    "needs-attention",
-                    T::Bugfix,
-                    S::NeedsAttention,
-                    R::ChecksFailing,
-                )),
-                roles,
-            ),
-            posed(
-                "Working",
-                card(card_model("working", T::Chore, S::Working, R::Working)),
-                roles,
-            ),
-            posed(
-                "Done",
-                card(card_model("done", T::Other, S::Done, R::Merged)),
-                roles,
-            ),
-            posed(
-                "Idle",
-                card(card_model("idle", T::Included, S::Idle, R::Idle)),
-                roles,
-            ),
+            posed("five states", five, roles),
             posed("Default", card(default), roles),
             posed("orphan", card(orphan), roles),
             posed("unknown counts", card(unknown), roles),

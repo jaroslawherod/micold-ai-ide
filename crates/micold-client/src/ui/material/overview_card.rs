@@ -1,12 +1,14 @@
 //! `OverviewCard`: one location of the project Overview (feature 813, FR-005, FR-006, FR-021).
 //!
-//! The type icon and the title (ellipsized, the display name in a tooltip), the state icon and
-//! word (the reason is the word's tooltip), the short branch when it has one, the sessions footer,
-//! and the activity, progress and pull request rows when they have something to say. What each
-//! line says is [`CardText`], tested in the core (feature 1120, FR-018). Every colour comes from the
-//! theme's roles through [`palette`]: Needs action is the `error` family, Needs attention
-//! `warning`, Working `primary`, Done `success`, and Idle sits on the de-emphasised
-//! `surface_container_low`. With a press (`on_press`) the card is a control: a
+//! A header row in the state's colour, with the state icon and word at its start (the reason is
+//! their tooltip) and the location type's icon and word at its end (the word is their tooltip),
+//! over one neutral body: the title (ellipsized, the display name in a tooltip), the short branch
+//! when it has one, the sessions line, and the activity, progress and pull request rows when they
+//! have something to say (feature 1120, contracts K1). What each line says is [`CardText`], tested
+//! in the core (FR-018). Every colour comes from the theme's roles through [`palette`]: the header
+//! of Needs action is the `error` container, Needs attention `warning`, Working `primary`, Done
+//! `success`, and Idle's is the grey `surface_variant`; the body is `surface_container_low` in
+//! every state. With a press (`on_press`) the card is a control: a
 //! click, or Enter or Space on the focused card, publishes the message, and it takes the keyboard
 //! like a `Button` (research R13); without one it is informational and not focusable.
 
@@ -14,7 +16,7 @@ use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Ripple, Text, Tooltip, TypeRole};
-use iced::widget::{button, column, container, row};
+use iced::widget::{button, column, container, row, stack, Space};
 use iced::{keyboard, Alignment, Element, Length};
 use micold_core::overview::{CardModel, CardState, LocationType};
 use micold_core::overview_text::CardText;
@@ -27,30 +29,37 @@ use std::rc::Rc;
 /// every card of a row at the row's tallest (FR-014).
 pub const MIN_HEIGHT: f32 = 172.0;
 
-/// The colours one card state is drawn in.
+/// The colours one card state is drawn in (feature 1120, data-model *Palette*).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Palette {
-    /// The card's fill.
-    pub fill: Rgb,
-    /// The words on the fill.
-    pub text: Rgb,
-    /// The icons on the fill.
-    pub icon: Rgb,
+    /// The header row's fill: the state's colour.
+    pub header: Rgb,
+    /// The header's icons and words.
+    pub on_header: Rgb,
+    /// The body's fill, the same in every state.
+    pub body: Rgb,
+    /// The title, and the card's ripple, focus and *selected* layers.
+    pub on_body: Rgb,
+    /// Every body line but the title.
+    pub on_body_variant: Rgb,
 }
 
-/// The fill, text and icon roles of `state` (research R11).
+/// The roles `state`'s card is drawn in (research R9): the header in the state's container pair,
+/// Idle's in the grey `surface_variant` pair; the body in the surface roles.
 pub fn palette(state: CardState, r: &Roles) -> Palette {
-    let (fill, on) = match state {
+    let (header, on_header) = match state {
         CardState::NeedsAction => (r.error_container, r.on_error_container),
         CardState::NeedsAttention => (r.warning_container, r.on_warning_container),
         CardState::Working => (r.primary_container, r.on_primary_container),
         CardState::Done => (r.success_container, r.on_success_container),
-        CardState::Idle => (r.surface_container_low, r.on_surface_variant),
+        CardState::Idle => (r.surface_variant, r.on_surface_variant),
     };
     Palette {
-        fill,
-        text: on,
-        icon: on,
+        header,
+        on_header,
+        body: r.surface_container_low,
+        on_body: r.on_surface,
+        on_body_variant: r.on_surface_variant,
     }
 }
 
@@ -83,7 +92,7 @@ pub fn type_icon(kind: LocationType) -> Icon {
 pub struct Words {
     /// The type icon.
     pub type_icon: Icon,
-    /// The type's word: the footer's first words and the type icon's tooltip.
+    /// The type's word: the end of the header row, and its tooltip.
     pub type_label: &'static str,
     /// The state icon.
     pub state_icon: Icon,
@@ -168,7 +177,7 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
     }
 
     /// Mark the card as the target of its open context menu (feature 972, FR-006, research R7): a
-    /// 2dp `primary` outline and the *selected* state layer over the fill, which neither hover (a
+    /// 2dp `primary` outline and the *selected* state layer over the header and the body, which neither hover (a
     /// layer alone) nor the focus ring (`secondary`, inset) draws. While targeted, Enter and Space
     /// belong to the menu, so the card drops its claims on them (FR-013).
     pub fn targeted(mut self, targeted: bool) -> Self {
@@ -197,81 +206,105 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let p = palette(card.model.state, &roles);
         let w = words(&card.model);
         let text = CardText::of(&card.model);
-        let glyph =
-            |icon: Icon| Element::from(Glyph::<M>::new(icon, TypeRole::Title, roles).tint(p.icon));
-        let header = row![
-            Tooltip::new(glyph(w.type_icon), w.type_label, roles),
-            Tooltip::new(
-                Ellipsized::<M>::at_role_spaced(text.title, TypeRole::CardTitle, p.text),
-                text.title_tooltip,
-                roles
-            ),
+        // A glyph and its word, in the header's colour, carrying `tooltip`.
+        let cluster = |icon: Icon, word: &'static str, tooltip: &'static str| {
             Tooltip::new(
                 row![
-                    glyph(w.state_icon),
-                    Text::new(w.state_label, TypeRole::Label, roles).tint(p.text)
+                    Glyph::<M>::new(icon, TypeRole::Label, roles).tint(p.on_header),
+                    Text::new(word, TypeRole::Label, roles).tint(p.on_header)
                 ]
                 .spacing(spacing::XS)
                 .align_y(Alignment::Center),
-                w.reason_tooltip,
-                roles
-            ),
-        ]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
-        let mut body = column![header].spacing(spacing::XS);
-        if let Some(branch) = text.branch {
-            body = body.push(Tooltip::new(
-                Ellipsized::<M>::at_role_spaced(branch.text, TypeRole::Body, p.text),
-                branch.tooltip,
-                roles,
-            ));
-        }
-        body = body.push(
-            Text::new(
-                format!("{} \u{b7} {}", w.type_label, text.sessions),
-                TypeRole::Body,
+                tooltip,
                 roles,
             )
-            .tint(p.text),
-        );
+        };
+        let header = container(
+            row![
+                cluster(w.state_icon, w.state_label, w.reason_tooltip),
+                Space::new().width(Length::Fill),
+                cluster(w.type_icon, w.type_label, w.type_label),
+            ]
+            .spacing(spacing::SM)
+            .align_y(Alignment::Center),
+        )
+        .width(Length::Fill)
+        .padding([spacing::SM, spacing::MD])
+        .style(move |_| container::Style {
+            background: Some(iced::Background::Color(style::color(p.header))),
+            border: iced::Border {
+                radius: iced::border::Radius {
+                    top_left: RADIUS,
+                    top_right: RADIUS,
+                    bottom_right: 0.0,
+                    bottom_left: 0.0,
+                },
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        });
+        let line = |words: String, tooltip: Option<String>| -> Element<'a, M> {
+            let shown = Ellipsized::<M>::at_role_spaced(words, TypeRole::Body, p.on_body_variant);
+            match tooltip {
+                Some(tip) => Tooltip::new(shown, tip, roles).into(),
+                None => shown.into(),
+            }
+        };
+        let mut body = column![Tooltip::new(
+            Ellipsized::<M>::at_role_spaced(text.title, TypeRole::CardTitle, p.on_body),
+            text.title_tooltip,
+            roles
+        )]
+        .spacing(spacing::XS);
+        if let Some(branch) = text.branch {
+            body = body.push(line(branch.text, Some(branch.tooltip)));
+        }
+        body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
         if let Some(activity) = text.activity {
-            body = body.push(Tooltip::new(
-                Ellipsized::<M>::at_role_spaced(activity.text, TypeRole::Body, p.text),
-                activity.tooltip,
-                roles,
-            ));
+            body = body.push(line(activity.text, Some(activity.tooltip)));
         }
         if let Some(row) = text.progress {
-            body = body.push(Text::new(row.text, TypeRole::Body, roles).tint(p.text));
+            body = body.push(Text::new(row.text, TypeRole::Body, roles).tint(p.on_body_variant));
             if let Some(ratio) = row.bar {
                 body = body.push(ProgressBar::new(ratio, roles));
             }
         }
         if let Some((text, tooltip)) = text.prs {
-            let line = Text::new(text, TypeRole::Body, roles).tint(p.text);
+            let line = Text::new(text, TypeRole::Body, roles).tint(p.on_body_variant);
             body = match tooltip {
                 Some(reason) => body.push(Tooltip::new(line, reason, roles)),
                 None => body.push(line),
             };
         }
         let targeted = card.targeted;
-        let face = container(body)
+        let fill = container(column![header, container(body).padding(spacing::MD)])
             .width(Length::Fill)
-            .padding(spacing::MD)
             .style(move |_| container::Style {
-                background: Some(iced::Background::Color(if targeted {
-                    style::state_layer(style::color(p.fill), style::color(p.text), state::SELECTED)
-                } else {
-                    style::color(p.fill)
-                })),
+                background: Some(iced::Background::Color(style::color(p.body))),
                 border: iced::Border {
                     radius: RADIUS.into(),
-                    color: style::color(roles.primary),
-                    width: if targeted { TARGET_WIDTH } else { 0.0 },
+                    ..iced::Border::default()
                 },
                 ..container::Style::default()
             });
+        // The target mark is the top layer, so the header's fill cannot paint over the outline
+        // (research R13); its *selected* layer covers the header and the body alike.
+        let mark = container(Space::new().width(Length::Fill).height(Length::Fill)).style(
+            move |_| {
+                let mut layer = style::color(p.on_body);
+                layer.a = state::SELECTED;
+                container::Style {
+                    background: targeted.then_some(iced::Background::Color(layer)),
+                    border: iced::Border {
+                        radius: RADIUS.into(),
+                        color: style::color(roles.primary),
+                        width: if targeted { TARGET_WIDTH } else { 0.0 },
+                    },
+                    ..container::Style::default()
+                }
+            },
+        );
+        let face = stack![fill, mark].width(Length::Fill);
         let secondary = card.on_secondary_press;
         let menu = move |content: Element<'a, M>| match secondary {
             Some(f) => ContextArea::new(content)
@@ -304,13 +337,13 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         }
         let focusable = focusable.indicator(Indicator {
             outline: roles.secondary,
-            layer: p.text,
+            layer: p.on_body,
             radius: RADIUS,
         });
         // The ripple is the card's only state layer while it runs (feature 971, D1); the context
         // area outside it takes only the secondary press, which the ripple ignores (feature 972).
         menu(
-            Ripple::new(focusable, p.text, RADIUS)
+            Ripple::new(focusable, p.on_body, RADIUS)
                 .centred_on_keys()
                 .into(),
         )
@@ -446,7 +479,7 @@ mod tests {
             "neither the full branch nor the display name is shown: {text:?}"
         );
         assert!(
-            text.contains(&"Feature \u{b7} 1 session \u{b7} 1 running".to_string()),
+            text.contains(&"1 session \u{b7} 1 running".to_string()),
             "{text:?}"
         );
         let words = micold_core::overview_text::CardText::of(&m);
@@ -524,7 +557,7 @@ mod tests {
                     node.size()
                 );
                 assert_eq!(node.size().width, width);
-                let parts = leaves(&node);
+                let parts = pieces(&node);
                 for (i, a) in parts.iter().enumerate() {
                     assert!(
                         a.x >= -0.01
@@ -577,9 +610,10 @@ mod tests {
                 .size
         };
         assert_eq!(size_of("Adds"), 17.0);
+        assert_eq!(size_of("Feature"), 12.0, "the header's words are Label");
         for body in [
             "feat/1120",
-            "Feature \u{b7}",
+            "3 sessions",
             "Editing card_grid",
             "Implement",
         ] {
@@ -607,6 +641,14 @@ mod tests {
         assert!(natural.height < MIN_HEIGHT, "{natural:?}");
     }
 
+    /// The card's leaves but the target-mark layer, which is stacked over the whole card (K1).
+    fn pieces(node: &iced::advanced::layout::Node) -> Vec<Rectangle> {
+        leaves(node)
+            .into_iter()
+            .filter(|l| l.size() != node.size())
+            .collect()
+    }
+
     fn card(model: &CardModel) -> Element<'static, ()> {
         OverviewCard::<()>::new(model, tokens::roles(ColorScheme::Light)).into()
     }
@@ -625,7 +667,7 @@ mod tests {
                 m.title = text.into();
                 m.branch = Some(format!("feat/{text}"));
                 let node = super::super::test_support::laid_out(card(&m), Size::new(width, 400.0));
-                let parts = leaves(&node);
+                let parts = pieces(&node);
                 let whole = Rectangle::new(iced::Point::ORIGIN, node.size());
                 for (i, a) in parts.iter().enumerate() {
                     assert!(
@@ -684,11 +726,122 @@ mod tests {
         for (i, a) in icons.iter().enumerate() {
             assert!(!icons[i + 1..].contains(a), "{a:?} stands for two types");
         }
+        let text = painted(&model(CardState::Idle, "n"));
         assert!(
-            painted(&model(CardState::Idle, "n"))
-                .contains(&"Feature \u{b7} 3 sessions \u{b7} 2 running".to_string()),
-            "FR-002: the type's word is visible text on the card, not only a tooltip"
+            text.contains(&"Feature".to_string()) && text.contains(&"Idle".to_string()),
+            "FR-001: the type's and the state's words are visible text on the card: {text:?}"
         );
+        assert!(
+            text.contains(&"3 sessions \u{b7} 2 running".to_string()),
+            "the type word left the sessions line: {text:?}"
+        );
+    }
+
+    /// The paragraph that says exactly `word`.
+    fn word<'p>(
+        text: &'p [super::super::test_support::Painted],
+        word: &str,
+    ) -> &'p super::super::test_support::Painted {
+        text.iter()
+            .find(|p| p.content == word)
+            .unwrap_or_else(|| panic!("no {word:?}: {text:?}"))
+    }
+
+    /// `model`'s card mounted `width` wide in a room that holds it.
+    fn mounted_at(model: &CardModel, width: f32, roles: Roles) -> Mounted<'static> {
+        Mounted::new_in(
+            container(OverviewCard::<String>::new(model, roles)).width(Length::Fixed(width)),
+            Size::new(500.0, 1000.0),
+        )
+    }
+
+    /// The pixel at `(x, y)` of a drawn buffer `width` wide is `want`, give or take rounding.
+    fn is_colour(pixels: &[u8], width: u32, (x, y): (f32, f32), want: Rgb) -> bool {
+        let i = ((y as u32 * width + x as u32) * 4) as usize;
+        [want.r, want.g, want.b]
+            .iter()
+            .zip(&pixels[i..i + 3])
+            .all(|(w, g)| w.abs_diff(*g) <= 2)
+    }
+
+    /// T032 (K1, K4 — FR-001, FR-002, FR-003, US1.1, SC-005): at 280, 380 and 480 px, in both
+    /// schemes and the five states, the header row spans the card's width at its top in the
+    /// state's `header` fill, the state's glyph and word end left of where the type's start, the
+    /// words are in `on_header`; the body below is the one `body` fill with the title in `on_body`
+    /// and the other lines in `on_body_variant`; the type word is no longer in the sessions line.
+    #[test]
+    fn the_header_row_carries_the_state_at_the_start_and_the_type_at_the_end() {
+        for r in [roles(), super::super::test_support::dark_roles()] {
+            for state in CardState::ALL {
+                let mut m = full(false);
+                m.state = state;
+                let p = palette(state, &r);
+                for width in WIDTHS {
+                    let mut card = mounted_at(&m, width, r);
+                    let text = card.painted_text();
+                    let state_word = word(&text, state.label());
+                    let type_word = word(&text, "Feature");
+                    let title = text
+                        .iter()
+                        .find(|t| t.content.starts_with("Adds"))
+                        .expect("a title");
+                    let sessions = word(&text, "3 sessions \u{b7} 2 running");
+                    let at = format!("{state:?} at {width}");
+                    assert!(
+                        state_word.bounds.x + state_word.bounds.width < type_word.bounds.x,
+                        "{at}: the state {:?} does not end left of the type {:?}",
+                        state_word.bounds,
+                        type_word.bounds
+                    );
+                    assert!(
+                        state_word.bounds.x < width / 2.0 && type_word.bounds.x > width / 2.0,
+                        "{at}: the state starts the header and the type ends it"
+                    );
+                    let header_bottom = state_word.bounds.y + state_word.bounds.height;
+                    assert!(header_bottom <= title.bounds.y, "{at}: the header is on top");
+                    for (what, painted, want) in [
+                        ("state word", state_word, p.on_header),
+                        ("type word", type_word, p.on_header),
+                        ("title", title, p.on_body),
+                        ("sessions line", sessions, p.on_body_variant),
+                    ] {
+                        assert_eq!(painted.color, style::color(want), "{at}: the {what}");
+                    }
+                    let (pixels, w) = card.drawn(style::color(r.surface));
+                    let h = card.node.size().height;
+                    let band = header_bottom + 3.0;
+                    for x in [1.0, width / 2.0, width - 2.0] {
+                        assert!(
+                            is_colour(&pixels, w, (x, band), p.header),
+                            "{at}: ({x}, {band}) is not the header fill"
+                        );
+                    }
+                    for spot in [(4.0, title.bounds.center_y()), (width / 2.0, h - 4.0)] {
+                        assert!(
+                            is_colour(&pixels, w, spot, p.body),
+                            "{at}: {spot:?} is not the body fill"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// T032 (US1.4): hovering the state word shows the reason, hovering the type word its word.
+    #[test]
+    fn the_header_words_carry_the_reason_and_the_type_as_tooltips() {
+        let m = full(false);
+        for width in [280.0, 380.0] {
+            let text = mounted_at(&m, width, roles()).painted_text();
+            for (hovered, want) in [
+                (m.state.label(), m.reason.label()),
+                ("Feature", "Feature"),
+            ] {
+                let at = word(&text, hovered).bounds.center();
+                let floated = mounted_at(&m, width, roles()).floated_text(at);
+                assert_eq!(floated, [want], "{width}: hovering {hovered:?}");
+            }
+        }
     }
 
     /// How many controls take the keyboard in the card.
@@ -824,8 +977,9 @@ mod tests {
         };
         let mut card = mounted(true);
         let (rest, width) = card.drawn(backdrop);
-        // Mid-top edge, inside the stroke (centred half a ring width in), which antialiasing
-        // blends with the fill: so closeness, not equality.
+        // Mid-top edge, over the header row (feature 1120, FR-016), inside the stroke (centred
+        // half a ring width in), which antialiasing blends with the fill: so closeness, not
+        // equality.
         let i = ((width + width / 2) * 4) as usize;
         card.focus_next();
         let (focused, _) = card.drawn(backdrop);
@@ -858,7 +1012,7 @@ mod tests {
         focused_card.focus_next();
         let (focused, _) = focused_card.drawn(backdrop);
         let px = |x: u32, y: u32| ((y * width + x) * 4) as usize;
-        // Mid-top edge, both rows of the 2dp outline.
+        // Mid-top edge, over the header row (feature 1120), both rows of the 2dp outline.
         for row in [0, 1] {
             let i = px(width / 2, row);
             assert!(
@@ -871,13 +1025,16 @@ mod tests {
                 "an untargeted card draws an outline"
             );
         }
-        // Inside the padding, left of the text: only the selected layer changes the fill.
+        // Inside the padding, left of the text, in the body and in the header (feature 1120,
+        // FR-016): only the selected layer changes the fill.
         let inside = px(5, 80);
-        assert_ne!(
-            targeted[inside..inside + 3],
-            rest[inside..inside + 3],
-            "no selected layer over the fill"
-        );
+        for (what, at) in [("body", inside), ("header", px(5, 20))] {
+            assert_ne!(
+                targeted[at..at + 3],
+                rest[at..at + 3],
+                "no selected layer over the {what}"
+            );
+        }
         assert_ne!(
             targeted, focused,
             "the target mark must differ from the focus ring"
@@ -1055,15 +1212,16 @@ mod tests {
         }
     }
 
-    /// T003 (US1-4, FR-003): mid-ripple the pixel at the press point has moved from the fill
-    /// toward the state's content colour, and no further than it.
+    /// T003 (US1-4, FR-003; feature 1120, R9): mid-ripple the pixel at the press point has moved
+    /// from the body's fill toward its content colour `on_body`, and no further than it.
     #[test]
     fn the_ripple_is_drawn_in_the_states_content_colour() {
         let roles = tokens::roles(ColorScheme::Light);
         for state in CardState::ALL {
             let p = palette(state, &roles);
             let mut m = activatable(&model(state, "feat-a"));
-            let at = Point::new(20.0, 100.0);
+            // In the body's left padding, clear of any line.
+            let at = Point::new(6.0, 100.0);
             m.press(at);
             m.tree
                 .state
@@ -1073,8 +1231,8 @@ mod tests {
             let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
             let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
             let (fill, text) = (
-                [p.fill.r, p.fill.g, p.fill.b],
-                [p.text.r, p.text.g, p.text.b],
+                [p.body.r, p.body.g, p.body.b],
+                [p.on_body.r, p.on_body.g, p.on_body.b],
             );
             let mut moved = false;
             for c in 0..3 {
@@ -1126,7 +1284,8 @@ mod tests {
         let roles = tokens::roles(ColorScheme::Light);
         let p = palette(CardState::Working, &roles);
         let mut m = activatable(&model(CardState::Working, "feat-a"));
-        let at = Point::new(20.0, 100.0);
+        // In the body's left padding, clear of any line.
+        let at = Point::new(6.0, 100.0);
         m.press(at);
         assert!(!ripple(&m).is_idle());
         settle(&mut m);
@@ -1134,8 +1293,8 @@ mod tests {
         let (pixels, width) = m.drawn(iced::Color::BLACK);
         let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
         let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
-        for (c, want) in [p.fill.r, p.fill.g, p.fill.b].into_iter().enumerate() {
-            assert!(got[c].abs_diff(want) <= 1, "channel {c}: {got:?} vs fill");
+        for (c, want) in [p.body.r, p.body.g, p.body.b].into_iter().enumerate() {
+            assert!(got[c].abs_diff(want) <= 1, "channel {c}: {got:?} vs the body");
         }
     }
 

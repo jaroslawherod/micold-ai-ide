@@ -200,13 +200,19 @@ pub struct Mounted<'a> {
 
 impl<'a> Mounted<'a> {
     pub fn new(element: impl Into<Element<'a, String>>) -> Self {
+        Self::new_in(element, WINDOW)
+    }
+
+    /// [`Self::new`] with `room` in place of [`WINDOW`] for the first layout: an element wider than
+    /// the window, such as a 480 px card (feature 1120).
+    pub fn new_in(element: impl Into<Element<'a, String>>, room: Size) -> Self {
         let mut element = element.into();
         let renderer = renderer();
         let mut tree = Tree::new(element.as_widget());
         let node = element.as_widget_mut().layout(
             &mut tree,
             &renderer,
-            &layout::Limits::new(Size::ZERO, WINDOW),
+            &layout::Limits::new(Size::ZERO, room),
         );
         Self {
             element,
@@ -299,8 +305,42 @@ impl<'a> Mounted<'a> {
     /// face and colour, and where — what `tests/support/layout.rs::painted_text` reads, for the
     /// in-crate tests that cannot reach it (feature 890, T001).
     pub fn painted_text(&mut self) -> Vec<Painted> {
-        use iced::advanced::text::Paragraph as _;
         self.paint();
+        self.paragraphs()
+    }
+
+    /// The words of whatever floats over the element with the pointer resting at `at`, a tooltip
+    /// say: empty when nothing floats (feature 1120, T032).
+    pub fn floated_text(&mut self, at: Point) -> Vec<String> {
+        self.hover(at);
+        let viewport = Rectangle::with_size(WINDOW);
+        self.renderer.reset(viewport);
+        let Some(mut floated) = self.element.as_widget_mut().overlay(
+            &mut self.tree,
+            Layout::new(&self.node),
+            &self.renderer,
+            &viewport,
+            iced::Vector::ZERO,
+        ) else {
+            return Vec::new();
+        };
+        let node = floated.as_overlay_mut().layout(&self.renderer, WINDOW);
+        floated.as_overlay().draw(
+            &mut self.renderer,
+            &super::theme(micold_core::theme::ColorScheme::Light),
+            &iced::advanced::renderer::Style {
+                text_color: iced::Color::BLACK,
+            },
+            Layout::new(&node),
+            mouse::Cursor::Available(at),
+        );
+        drop(floated);
+        self.paragraphs().into_iter().map(|p| p.content).collect()
+    }
+
+    /// Every paragraph in the renderer's layers, in draw order.
+    fn paragraphs(&mut self) -> Vec<Painted> {
+        use iced::advanced::text::Paragraph as _;
         let iced_renderer::fallback::Renderer::Secondary(cpu) = &mut self.renderer else {
             panic!("reading painted text needs the CPU rasteriser; see `renderer`")
         };
