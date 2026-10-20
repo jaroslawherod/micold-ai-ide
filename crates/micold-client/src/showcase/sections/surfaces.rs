@@ -621,6 +621,43 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             .wrap(),
     ]
     .spacing(spacing::MD);
+    // The first card expanded over its neighbours, with every text longer than a card (feature
+    // 1121, FR-015, quickstart B.2); its row keeps the height its collapsed twin gives it (FR-009).
+    let mut long = card_model("expanded-display-name", T::Feature, S::Working, R::Working);
+    long.title = "Overview cards: full text without truncation, the whole title shown once the \
+        card expands in place over its neighbours"
+        .to_string();
+    long.branch = Some("feat/1121_overview-card-full-text-expanded-in-place-on-hover".to_string());
+    long.dir = std::path::PathBuf::from(
+        "/home/dev/code/micold-ai-ide/.worktrees/1121-overview-card-full-text-expanded",
+    );
+    long.activity = Some(micold_core::hook_activity::CurrentActivity {
+        line: long_activity.to_string(),
+        ratio: None,
+    });
+    long.progress = with_progress.progress;
+    let expanded = iced::widget::container(Element::from(
+        material::CardGrid::new(
+            std::iter::once(
+                material::OverviewCard::<Message>::new(&long, roles)
+                    .on_press(Message::NoOp)
+                    .expanded(true),
+            )
+            .chain(
+                ["one", "two", "three", "four", "five"]
+                    .map(|name| card_model(name, T::Chore, S::Idle, R::Idle))
+                    .iter()
+                    .map(|m| {
+                        material::OverviewCard::<Message>::new(m, roles).on_press(Message::NoOp)
+                    }),
+            )
+            .collect(),
+            roles,
+        )
+        .expanded(0, material::OverviewCard::<Message>::new(&long, roles))
+        .unscrolled(),
+    ))
+    .width(Length::Fill);
     let mut done = card_model("done", T::Other, S::Done, R::Merged);
     done.prs = micold_core::overview::PrDisplay::Hidden;
     // Unscrolled: the showcase page scrolls, and a grid with its own scrollable fills a height
@@ -662,6 +699,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             posed("unknown counts", card(unknown), roles),
             posed("targeted", targeted, roles),
             posed("wrapped titles", wrapped, roles),
+            posed("expanded", expanded, roles),
         ],
         Layout::FullWidth,
     )

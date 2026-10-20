@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M2
-- **Next step**: M2 — continue from *Handover*: 2 red grid tests, tick T014/T015/T020/T021, T022, then verify and PR.
+- **Next step**: M2 — T023 visual pass (worker), then verify.md and PR (see *Handover*).
 
 ## Pull requests
 
@@ -64,28 +64,22 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-M2 unit 3 stopped at the context cap (~155k). Nothing pushed; no PR.
-- **Done**: T013, T019 ticked (4e9c14d4: header/title outside the scroll, shadow, ring/mark/ripple
-  bounds, body edges; `Focusables` moved to `test_support`). T014/T015 tests written (red logged)
-  and T020/T021 implemented in `card_grid.rs` (6b1804d3): `CardGrid::expanded(index, twin)`, twin
-  tree after the cards, measured for `naturals`; expanded node capped at the view (room height
-  when finite, else `ZoomState::view` from the last draw/update, `invalidate_layout` on a change);
-  `placed()` moves it by `place` (no shift while its slot is below the view); drawn last in
-  `with_layer(viewport)` via `Layout::with_offset`; update/mouse/operate/overlay use the placed
-  layout; others get `cursor.levitate()` over it. `card_grid overview_card`: 86 passed, 2 red.
-- **Next step**: fix the 2 reds, then tick T014, T015, T020, T021; T022 showcase; then verify.md.
-  1. `an_expanded_card_takes_new_text_in_place`: "the new activity is not painted" — the test
-     expects `activity.line.trim()`; use `ExpandedText::of(&longer, None).activity` instead
-     (likely a test bug, check the painted list).
-  2. `a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview`: the third wheel
-     publishes `[]`, not `grid`: iced's scrollable keeps capturing wheels during a scroll
-     *transaction* (`last_scrolled`, `iced_widget-0.14.2/src/scrollable.rs` ~l.895) even at its
-     end, so R6's "captures only when it scrolled" is only true once the transaction lapses.
-     Check the timeout there; in the test, wait it out (or clear it with a mouse move) and
-     record the finding in research R6 / cycle log.
-- **Open**: K4 — iced never calls `on_scroll` without overflow, so `on_body_scroll` never sends
-  `(false, false)`; M4 must reset `body_edges` to `(false, false)` on expand (cycle log T013 row).
-  K3's cover invariant vs. a slot ending below the view (cycle log). Locally `micold-core`
+M2 unit 4 (not over the cap; handing back for T023's worker). Nothing pushed; no PR.
+- **Done**: T014, T015, T020, T021 ticked (2bf9de5c): both red grid tests were test-side —
+  *new text in place* compared `activity.line.trim()` and used `long(1)`, whose body overran the
+  harness's paint viewport (the grid node) and was clipped; *wheel*: iced latches the wheel on
+  the inner body for the rest of a gesture, so the test now asserts the latch and then, after a
+  pointer move 120 ms later, the chain to the Overview (decision D4, research R6 amended).
+  T022 ticked: `expanded` pose in `showcase/sections/surfaces.rs` (card 0 of 6 expanded with a
+  long title, branch, directory, activity, progress); `showcase_completeness` 42 passed; clippy
+  `-p micold-client --all-targets -D warnings` clean (a stray empty doc line in
+  `overview_card.rs` tests removed). `card_grid overview_card`: 88 passed.
+- **Next step**: T023 visual pass (worker: `visual-pass` on the showcase, quickstart §B.1–§B.2,
+  both themes, scale 1.0 and 2.0, evidence in `specs/1121-overview-card-full-text/visual-pass/`);
+  then verify.md (gate, reviews, PR for M2).
+- **Open for M4**: K4 — iced never calls `on_scroll` without overflow, so `on_body_scroll` never
+  sends `(false, false)`; M4 MUST reset `body_edges` to `(false, false)` on expand (cycle log T013
+  row). K3's cover invariant vs. a slot ending below the view (cycle log). Locally `micold-core`
   `settings_refuses_save_over_failed_read` is red because the run is root (pre-existing).
 - Build env: detached runs with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
   CARGO_PROFILE_TEST_DEBUG=0` + `scripts/autopilot/hold.sh`.
