@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1137 | Design | merged | 0db3cf9ccbebc1b98662a5becfc4f2c4c3b96504 |
 | #1160 | M1 | merged | 08cb6ea11959288eb6832df9cce396a0589238f1 |
 | #1170 | M2 | merged | e8055c90fa21a43bcfcc6fa33187f3ca3d39c5db |
+| #1174 | M3 | open | - |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T014, T016, T017, T019, T020 | full | Add/Edit daemon in a modal dialog, own Save/Cancel, in-dialog confirmation, no inline form | #1160 | merged |
 | M2 | T015, T018, T021–T023 | full | Add-path tests, focus return | #1170 | merged |
-| M3 | T024–T029 | light | Details in a dialog | - | PR open |
+| M3 | T024–T029 | light | Details in a dialog | #1174 | PR open |
 
 ## Decisions
 
