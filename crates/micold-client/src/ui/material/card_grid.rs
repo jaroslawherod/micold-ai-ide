@@ -169,6 +169,21 @@ fn row_count(pieces: &[Piece]) -> usize {
     pieces.iter().map(|p| p.row + 1).max().unwrap_or(0)
 }
 
+/// The narrowest piece that counts toward its row's height. A zoom slides a card through a row
+/// end, so for a frame a tall card can show a sub-pixel sliver in the next row; letting that sliver
+/// stretch the whole row would make every row below it jump mid-zoom. Such a piece is still drawn.
+const ROW_PIECE: f32 = 1.0;
+
+/// Each row's height: the tallest `naturals[card]` among the cards with a piece at least
+/// [`ROW_PIECE`] wide in it, and never under the minimum card height (feature 1120, FR-014, R12).
+fn row_heights(pieces: &[Piece], naturals: &[f32]) -> Vec<f32> {
+    let mut heights = vec![MIN_CARD_HEIGHT; row_count(pieces)];
+    for piece in pieces.iter().filter(|p| p.rect.width >= ROW_PIECE) {
+        heights[piece.row] = heights[piece.row].max(naturals[piece.card]);
+    }
+    heights
+}
+
 /// Stacks the rows top to bottom, row `r` being `heights[r]` tall and a `gap` below the one
 /// before: the vertical half of the ribbon (feature 1120, FR-014).
 fn stack_rows(pieces: &mut [Piece], heights: &[f32], gap: f32) {
@@ -429,11 +444,8 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             .zip(&mut tree.children)
             .map(|(card, card_tree)| card.as_widget_mut().layout(card_tree, renderer, &measure))
             .collect();
-        let mut heights = vec![MIN_CARD_HEIGHT; row_count(&pieces)];
-        for piece in &pieces {
-            let natural = nodes[piece.card].size().height;
-            heights[piece.row] = heights[piece.row].max(natural);
-        }
+        let naturals: Vec<f32> = nodes.iter().map(|n| n.size().height).collect();
+        let heights = row_heights(&pieces, &naturals);
         stack_rows(&mut pieces, &heights, gap);
         let mut card_heights = vec![MIN_CARD_HEIGHT; self.cards.len()];
         for piece in &pieces {
@@ -1020,6 +1032,23 @@ mod tests {
         assert!((boxes[3].height - MIN_HEIGHT).abs() < EPS, "{:?}", boxes[3]);
         assert!((boxes[3].y - (tall + GAP)).abs() < EPS, "{:?}", boxes[3]);
         assert!((height - (tall + GAP + MIN_HEIGHT)).abs() < EPS, "{height}");
+    }
+
+    /// Review A F1 (M3): a tall card's sub-pixel sliver at the start of the next row, mid-zoom,
+    /// does not stretch that row; the same card's full piece still sets its own row.
+    #[test]
+    fn a_sliver_does_not_stretch_its_row() {
+        let pieces = ribbon_rows(2, 100.0, 0.0, 199.5);
+        let sliver = pieces
+            .iter()
+            .find(|p| p.card == 1 && p.row == 1)
+            .expect("card 1 runs half a pixel into row 1");
+        assert!(sliver.rect.width < ROW_PIECE, "{sliver:?}");
+        let tall = MIN_HEIGHT + 100.0;
+        let heights = row_heights(&pieces, &[MIN_HEIGHT, tall]);
+        assert_eq!(heights.len(), 2);
+        assert!((heights[0] - tall).abs() < EPS, "{heights:?}");
+        assert!((heights[1] - MIN_HEIGHT).abs() < EPS, "{heights:?}");
     }
 
     /// Spec edge case "Pane narrower than one minimum-width card": at 200 px every card has a row

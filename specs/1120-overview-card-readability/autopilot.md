@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: verify M3
-- **Next step**: M3 verify: review A + snapshot (see *Handover*)
+- **Phase**: verify M3 (full gate)
+- **Next step**: M3 full gate (`scripts/gate.sh`), push, PR files
 
 ## Pull requests
 
@@ -62,6 +62,9 @@ inequality + visual pass).
 | M2 review A | 1 | 4a0f489eaa18bed6412195bd51512c5d9f8f3226:1751ce27ce85ca46c61ef2b4dae2994d350bac63 | CLEAN, 3 MINOR (code-review high). F1 R7/C1 amended: removal repeats until no tag is left, `None` only when nothing is left (`Vec<Vec<u8>>` reads `Vec`, `<<b>a>` still `None`; new C1 row and test); FR-013 wording follows. F2 todo content and `activeForm` sanitised before clipping, a markup-only todo skipped (C10 note, R8, core test). F3 guard test gives the main session a markup-only prompt. Only MINORs: no round 2 |
 | M2 review B | 1 | 4a0f489eaa18bed6412195bd51512c5d9f8f3226:1751ce27ce85ca46c61ef2b4dae2994d350bac63 | CLEAN (sonnet). F1 MINOR blank line after the table: fixed, prose only |
 | M2 visual pass | 1 | 4a0f489eaa18bed6412195bd51512c5d9f8f3226:1751ce27ce85ca46c61ef2b4dae2994d350bac63 | PASS §B6 M2 part (`visual-pass.md`): "with activity" reads `Continue M2 · 2/5`, no markup on any of 12 cards |
+| M3 review A | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | CLEAN, 3 MINOR (code-review high, run by orchestrator). F1 row height ignores pieces under 1 px (`row_heights`, `ROW_PIECE`, test `a_sliver_does_not_stretch_its_row`). F2 card lines use the role's line height (`Ellipsized::at_role_spaced`; sidebar keeps `at_role`). F3 recorded as an accepted spec edge case (anchor only during a zoom; feature 970's at-rest tests publish nothing). Only MINORs: no round 2 |
+| M3 review B | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | CLEAN (sonnet). Verify: client `even_row card_grid overview_card type_role_mapping` 68 pass, cdk_no_appearance 3, core tokens_scales 17. F1 plan.md "Amended in M3" note, quickstart filter drops `even_row`: fixed, prose only. F2 T023/T028 ticked, keep "Superseded" |
+| M3 visual pass | 1 | 35292da21ab022a9c2ee334010f9c9a85382f7ea:d544ff00de71ccdb29113091a978e247277b0868 | PASS §B6 M3 part (`visual-pass.md`); equal row heights only by unit test (showcase grid cards equal), M4's T035 grid can pose a taller card |
 
 M2 full gate (`scripts/gate.sh`) green at 500e8fa2 after the review fixes (and at 1751ce27 before them); its scoped gate's one red was the same root-only settings test.
 M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red was the root-only settings test that `scripts/gate.sh` runs unprivileged).
@@ -73,9 +76,7 @@ M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red wa
 
 ## Handover
 
-M3 unit 2 handed over at the 150k cap. **Implement is done**: T024, T025, T029, T030 ticked; T023/T028 marked superseded (Decisions #2; K2/K3, R12, data-model amended, prose). Commits f8a595ec + the handover commit (ribbon moved into `card_grid.rs` tests because `anatomy_call_sites` forbids a mid-file `#[cfg(test)]`; `CardTitle` added to the showcase catalogue's `Text` variants, which `showcase_completeness` asked for since T027).
-Scoped gate: fmt, clippy green; tests: every `micold-client` binary green (card_grid, overview_card, 970 zoom tests, showcase_completeness, anatomy_call_sites). Remaining red is env-only: `micold-core` permission tests (`settings_refuses_save_over_failed_read`, `settings_write_is_logged`, `worktree_leftovers`, a worktree-delete test) fail because the container runs as uid 0, so a mode-000 file stays readable; this branch does not touch micold-core code. The last run, `$SCRATCHPAD/tests-5.log` (`cargo test --workspace --no-fail-fast`), may still have been running at handover.
-**Next step**: verify.md step 1: take a review snapshot, record it under *Review rounds*, commit and push, then return REVIEW-NEEDED for review A (code-review high) on origin/main...HEAD. After that: B and the visual pass (card text 17/14 px, rows even, a full card taller than 172 in the showcase), then the full gate (`scripts/gate.sh`; expect the uid-0 core failures, which are env-only), then the PR files.
+None.
 
 ## Open escalation
 

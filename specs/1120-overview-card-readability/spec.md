@@ -228,6 +228,10 @@ the cards of a row share one height.
   macOS and Windows in the bundled UI font, at display scale 1.0 and 2.0 (logical-pixel layout, R14).
 - **Pane narrower than one minimum-width card** (under 280 px): one card per row as feature 1024
   defines; text ellipsizes, nothing overlaps.
+- **A card above the viewport changes height at rest** (a line appears or goes, so its row grows or
+  shrinks): the cards below move by that much under a scrolled user. Accepted: the grid keeps its
+  scroll anchor only during a zoom (feature 970, R6); a card's height changes only when its content
+  does, and the move is at most a few lines.
 
 ## Requirements *(mandatory)*
 

@@ -35,6 +35,9 @@ pub struct Ellipsized<M> {
     /// `None` means "whatever the application draws text in" — the renderer's own default. A face
     /// is named only when a call site asked for a role that carries one.
     font: Option<Font>,
+    /// The renderer's default unless a call site asked for its role's line height
+    /// ([`Self::at_role_spaced`]).
+    line_height: text::LineHeight,
     color: Rgb,
     marker: PhantomData<M>,
 }
@@ -50,6 +53,7 @@ impl<M> Ellipsized<M> {
             content: content.into(),
             size,
             font: None,
+            line_height: text::LineHeight::default(),
             color,
             marker: PhantomData,
         }
@@ -77,6 +81,17 @@ impl<M> Ellipsized<M> {
             ..Self::new(content, role.size(), color)
         }
     }
+
+    /// [`Self::at_role`] with the role's line height too, so the line is as tall as a `Text` at the
+    /// same role (feature 1120: an overview card's ellipsized title, branch and activity lines sit
+    /// in a column of `Text` lines). Not the default: the sidebar's rows are sized on the
+    /// renderer's line height, and moving them is not this widget's call.
+    pub fn at_role_spaced(content: impl Into<String>, role: TypeRole, color: Rgb) -> Self {
+        Self {
+            line_height: role.line_height(),
+            ..Self::at_role(content, role, color)
+        }
+    }
 }
 
 /// What a cached paragraph was shaped for — the inputs that decide its outcome.
@@ -90,6 +105,7 @@ struct Shaped {
     width: f32,
     size: f32,
     font: Font,
+    line_height: text::LineHeight,
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Ellipsized<Message>
@@ -128,7 +144,7 @@ where
             content: (),
             bounds: Size::INFINITE,
             size: Pixels(self.size),
-            line_height: text::LineHeight::default(),
+            line_height: self.line_height,
             font,
             align_x: text::Alignment::Left,
             align_y: alignment::Vertical::Top,
@@ -141,6 +157,7 @@ where
             width: available,
             size: self.size,
             font,
+            line_height: self.line_height,
         };
         if !state.holds(&key) {
             let measure = |candidate: &str| {
@@ -395,6 +412,18 @@ mod tests {
         assert_eq!(Ellipsized::<()>::new("main", 12.0, INK).font, None);
     }
 
+    /// Feature 1120 (review A F2): an overview card's ellipsized lines take their role's line
+    /// height, as `Text` does, so a card title is a 24 px line and not the renderer's default; the
+    /// plain role constructor keeps the renderer's, so the sidebar does not move.
+    #[test]
+    fn a_spaced_label_takes_its_roles_line_height() {
+        let spaced = Ellipsized::<()>::at_role_spaced("Title", TypeRole::CardTitle, INK);
+        let plain = Ellipsized::<()>::at_role("Title", TypeRole::CardTitle, INK);
+
+        assert_eq!(spaced.line_height, TypeRole::CardTitle.line_height());
+        assert_eq!(plain.line_height, text::LineHeight::default());
+    }
+
     /// Shaping is cached, and the cache is what would have swallowed the fix.
     ///
     /// The key is content, width and size — and the two sidebar roles share a size. So a row that
@@ -410,6 +439,7 @@ mod tests {
             width: 180.0,
             size: 12.0,
             font,
+            line_height: text::LineHeight::default(),
         };
         assert!(
             shaped(regular) != shaped(medium),

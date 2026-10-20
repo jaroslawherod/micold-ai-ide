@@ -5,7 +5,7 @@
 | Command | Proves |
 |---|---|
 | `mise run test-core` | contracts C1–C10: title, short branch, branch line, sessions line, progress row, pull request row, sanitiser, slash sentence, hook prompt (FR-006–FR-013, FR-018) |
-| `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card card_grid even_row composition_contrast type_role_mapping` (several filters go after `--`) | K1–K4: header and body, 4.5:1 in 10 state-theme pairs, 17/14/12 px, no overlap at 280/380/480, equal row height and the 172 px minimum (FR-001–FR-005, FR-014–FR-016) |
+| `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card card_grid composition_contrast type_role_mapping` (several filters go after `--`) | K1–K4: header and body, 4.5:1 in 10 state-theme pairs, 17/14/12 px, no overlap at 280/380/480, equal row height and the 172 px minimum (FR-001–FR-005, FR-014–FR-016) |
 | `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot` | the `overview-open` covered state matches the regenerated fixture; text-overflow and containment gates pass on it (FR-015, FR-019) |
 | `scripts/build-lock.sh cargo test -p micold-client --test showcase_completeness` | the card is still shown in the showcase (FR-017) |
 | `! grep -nE 'tracing::\|log::\|println!\|eprintln!\|dbg!' crates/micold-core/src/{markup,overview_text,hook_activity}.rs` | no prompt or label is logged (FR-020) |
