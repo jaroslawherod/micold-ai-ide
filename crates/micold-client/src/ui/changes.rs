@@ -21,8 +21,9 @@ use crate::features::changes::{
     self as changes, adjacent, base_line, can_pick, card_model, committed_available,
     composer_placed, diff_body, discard_prompt, file_comments, list_body, panel_rows,
     pending_counts, pr_header, review_of, review_toolbar_label, section, selected_file,
-    send_action, status_counts, tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView,
-    PrSection, Source, Step, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
+    send_action, status_counts, tidy_actions, whole_file, ComposerTarget, DiffBody, ListBody, Msg,
+    OpenView, PrSection, Source, Step, WholeFile, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
+    WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -498,6 +499,27 @@ fn diff_pane_body<'a>(
         .active(layout == DiffLayout::SideBySide),
     ]
     .spacing(spacing::SM);
+    // FR-004: the file's whole-file toggle sits with the layout choice.
+    let layouts: Element<'a, Message> = match whole_file(view) {
+        WholeFile::Hidden => layouts.into(),
+        WholeFile::Unavailable => row![
+            layouts,
+            Tooltip::new(
+                ToggleChip::new("Whole file", Message::Changes(Msg::WholeFileToggled), r)
+                    .disabled(true),
+                WHOLE_FILE_UNAVAILABLE,
+                r,
+            ),
+        ]
+        .spacing(spacing::SM)
+        .into(),
+        WholeFile::Available { on } => row![
+            layouts,
+            ToggleChip::new("Whole file", Message::Changes(Msg::WholeFileToggled), r).active(on),
+        ]
+        .spacing(spacing::SM)
+        .into(),
+    };
     let content: Element<'a, Message> = match diff_body(view) {
         DiffBody::NoSelection => Text::new("Select a file", TypeRole::Body, r).muted().into(),
         DiffBody::Loading => StageProgress::new("Loading diff…", r).into(),

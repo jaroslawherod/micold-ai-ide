@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use micold_client::features::changes::{
     self, base_line, can_pick, committed_available, diff_body, list_body, DiffBody, Effect,
-    ListBody, Load, Msg, State, BOTH_HIDDEN, DEFAULT_ENTRY_NOTE,
+    ListBody, Load, Msg, State, WholeFile, BOTH_HIDDEN, DEFAULT_ENTRY_NOTE,
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
@@ -2562,4 +2562,127 @@ fn collapsing_a_run_drops_a_pick_on_its_lines() {
     let key = view_of(&state).shaped.revealed[0].gap.key();
     changes::update(&mut state, Msg::GapToggled(key));
     assert!(pick(&state).is_none());
+}
+
+// Feature 1150, M2: the whole-file toggle.
+
+fn toggle_whole(state: &mut State) {
+    changes::update(state, Msg::WholeFileToggled);
+}
+
+fn whole_of(state: &State) -> WholeFile {
+    changes::whole_file(view_of(state))
+}
+
+/// FR-004, US2 scenario 1-2. On, every line of the file shows once and in order, the removed line
+/// in its place; off, the hunk form returns.
+#[test]
+fn whole_file_shows_every_line_once_and_off_restores_hunks() {
+    let mut state = showing(long_file("X"));
+    assert_eq!(whole_of(&state), WholeFile::Available { on: false });
+    let closed = view_of(&state).shaped.hunks.clone();
+    toggle_whole(&mut state);
+    assert_eq!(whole_of(&state), WholeFile::Available { on: true });
+    let lines: Vec<_> = view_of(&state)
+        .shaped
+        .hunks
+        .iter()
+        .flat_map(|h| &h.lines)
+        .collect();
+    let news: Vec<u32> = lines.iter().filter_map(|l| l.new).collect();
+    assert_eq!(news, (1..=20).collect::<Vec<_>>());
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| l.old.is_some() && l.new.is_none())
+            .count(),
+        1
+    );
+    assert!(view_of(&state).shaped.gaps.is_empty());
+    toggle_whole(&mut state);
+    assert_eq!(whole_of(&state), WholeFile::Available { on: false });
+    assert_eq!(view_of(&state).shaped.hunks, closed);
+    assert!(view_of(&state).expansions.is_empty());
+}
+
+/// FR-004. Added and untracked files hide the toggle; a file with no text version is disabled and
+/// a press reveals nothing.
+#[test]
+fn whole_file_is_hidden_for_added_files_and_disabled_without_a_text_version() {
+    for kind in [ChangeKind::Added, ChangeKind::Untracked] {
+        let mut state = ready(&["b.rs"]);
+        let mut files = list(&["b.rs"]);
+        files.files[0].kind = kind.clone();
+        if let Some(view) = state.open.as_mut() {
+            view.list = Load::Ready(files);
+        }
+        let (seq, _) = select(&mut state, "b.rs");
+        changes::update(
+            &mut state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(long_file("X")),
+            },
+        );
+        assert_eq!(whole_of(&state), WholeFile::Hidden, "{kind:?}");
+        toggle_whole(&mut state);
+        assert!(view_of(&state).expansions.is_empty(), "{kind:?}");
+    }
+    let mut state = ready(&["b.rs"]);
+    let mut files = list(&["b.rs"]);
+    files.files[0].kind = ChangeKind::Deleted;
+    if let Some(view) = state.open.as_mut() {
+        view.list = Load::Ready(files);
+    }
+    let (seq, _) = select(&mut state, "b.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(long_file("X")),
+        },
+    );
+    assert_eq!(whole_of(&state), WholeFile::Unavailable);
+    toggle_whole(&mut state);
+    assert!(view_of(&state).expansions.is_empty());
+    let state = showing(loaded(FileDiff::Binary));
+    assert_eq!(whole_of(&state), WholeFile::Unavailable);
+    let state = ready(&["b.rs"]);
+    assert_eq!(whole_of(&state), WholeFile::Hidden, "no file selected");
+}
+
+/// FR-004, FR-008. The mode belongs to its file: another file stays in hunks, and the file is
+/// whole again when selected; a refresh keeps it.
+#[test]
+fn whole_file_state_is_per_file_and_survives_a_refresh() {
+    let mut state = showing(long_file("X"));
+    toggle_whole(&mut state);
+    let (seq, _) = select(&mut state, "a.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(long_file("X")),
+        },
+    );
+    assert_eq!(whole_of(&state), WholeFile::Available { on: false });
+    let (seq, _) = select(&mut state, "b.rs");
+    changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(long_file("X")),
+        },
+    );
+    assert_eq!(whole_of(&state), WholeFile::Available { on: true });
+    refresh(&mut state, &["a.rs", "b.rs"], long_file("Y"));
+    assert_eq!(whole_of(&state), WholeFile::Available { on: true });
+    let news = view_of(&state)
+        .shaped
+        .hunks
+        .iter()
+        .flat_map(|h| &h.lines)
+        .filter(|l| l.new.is_some())
+        .count();
+    assert_eq!(news, 20);
 }

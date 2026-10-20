@@ -292,6 +292,19 @@ mod tests {
         assert!(!spans.dark.new.line(1).is_empty());
     }
 
+    /// FR-004: the whole-file colouring gives up under a spent budget, and colours every line of a
+    /// long file under a roomy one.
+    #[test]
+    fn highlight_file_runs_under_its_budget() {
+        let text: String = (1..=500).map(|n| format!("let v{n} = {n};\n")).collect();
+        let lines = SideLines::from_bytes(text.as_bytes()).unwrap();
+        let spent = Some(Instant::now());
+        assert!(highlight_file(&lines, "x.rs", ColorScheme::Dark, spent).is_none());
+        let roomy = Some(Instant::now() + Duration::from_secs(60));
+        let spans = highlight_file(&lines, "x.rs", ColorScheme::Dark, roomy).expect("colours");
+        assert!(!spans.line(500).is_empty());
+    }
+
     #[test]
     fn legible_leaves_a_colour_that_already_reads() {
         for scheme in [ColorScheme::Light, ColorScheme::Dark] {
