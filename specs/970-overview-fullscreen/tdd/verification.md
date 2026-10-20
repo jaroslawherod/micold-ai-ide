@@ -131,3 +131,13 @@ Every named test in `test-list.md` exists (all 17 resolved by `grep`); U18-U32 t
 - The `micold-daemon` and sandbox acceptance suites beyond the one workspace run; `attention_error_notice` failure cause was not diagnosed.
 - Visual pass (T042) and the full gate (T043) are open tasks and were not run.
 - Performance beyond wall time; docs content (FR-013) was not read.
+
+## Resolution (close unit, 2026-10-20)
+
+The audit above is kept as written (verdict at `5f54853a`). Remediation: findings 1-9 by T044-T051, 10-12 by
+T052-T054, each surviving mutant proven red then restored (`cycle-log.md`, Cycle 5). Not remediated, by decision:
+- Finding 12, keyboard half (header toggle in tab order): no focus harness exists for the header; it stays with the
+  visual pass (`visual-pass.md`: Tab reaches the button).
+- Finding 13 / T055 (user-guide guard test): the docs carry no behaviour; a guard that greps prose duplicates
+  `scripts/tests/documentation-set.test.sh` territory. Deferred, not a gap in the feature's behaviour.
+- Test-after on U18-U32 stays a fact of history; red was shown by mutation afterwards.

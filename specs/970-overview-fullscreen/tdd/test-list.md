@@ -61,4 +61,4 @@ No `/speckit-tdd-plan` list was derived: the tasks' own red phase (T001–T007) 
 |---|---|---|---|
 | U33 | Full screen retracts the drawer, otherwise not | `ui/drawer_flags_tests.rs::full_screen_retracts_the_drawer`, `outside_full_screen_the_drawer_is_not_retracted` | FR-002, FR-009 |
 | U34 | Reduce motion makes the drawer instant, otherwise not | `ui/drawer_flags_tests.rs::reduce_motion_makes_the_drawer_instant`, `without_reduce_motion_the_drawer_animates` | FR-008, SC-003 |
-| U35 | The Changes view taking the main area leaves full screen (real message) | `overview.rs::opening_changes_leaves_full_screen` | FR-010 |
+| U35 | The Changes exit (`ChangesRequested`) leaves full screen (real message; Compare and `MainAreaTaken` not app-tested) | `overview.rs::opening_changes_leaves_full_screen` | FR-010 |

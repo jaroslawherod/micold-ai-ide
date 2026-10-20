@@ -128,3 +128,41 @@ whether the zoom is visibly smooth with it off.
 
 ## Screenshots
 `specs/970-overview-fullscreen/visual-pass/` 20-29 (23-29 downscaled to 50% / 40%).
+
+
+# Visual pass — close (T042)
+
+Run 2026-10-20, private Xvfb (1400x1000 window), `ICED_BACKEND=tiny-skia`, XTest via ctypes, binaries
+copied from `target-shared/debug` (built after the last source edit; no rebuild was possible in this
+session). Fixtures: project "fixture" (13 cards) and a second empty project "second" (1 card). Waited
+~12 s after each click. Not repeating the M1–M4 passes.
+
+| Item | Result |
+|---|---|
+| 1 Top bar in full screen (FR-003): project switcher opens, switching project keeps full screen; ⋮ menu opens, About dialog opens/closes over it; Overview button toggles back | PASS (40-close-topbar-fullscreen-project-switched, 40-close-overview-toggle-back) |
+| 2 Sidebar and Overview edges touch, no gap (SC-002) | PASS at rest in windowed Overview and on the first frame after leaving full screen: sidebar edge, 1 px divider, page background, no strip (40-close-edge-flush-zoom). Mid-slide frames: see not observed |
+| 3 Connection lost in full screen (daemon killed, respawn blocked) | PASS: red banner "Not connected to the session service" sits under the top bar and pushes the Overview down, no overlap; "Exit full screen" and "Full screen" still work and the sidebar returns/leaves; Overview button still toggles (40-close-conn-lost-fullscreen) |
+| 4 Very narrow (650 px) windowed | PASS: Overview shows 1 column, no clipping or overlap, top bar fits |
+| 4 Very narrow (650 px) full screen | PASS: 2 columns, no clipping, button and top bar fit (40-close-narrow-650-windowed-and-fullscreen, left windowed, right full screen) |
+| 5 Showcase NavigationDrawer section | FAIL (still blank): heading and caption ("posed: open, closed (the rail), retracted … retracting") then an empty gap before TerminalPane; none of the four poses draws (40-close-drawer-section-blank). Unchanged after 30 s and many pointer moves, so not render lag |
+
+## Findings
+
+1. The showcase NavigationDrawer section still draws nothing (follow-up from M1 open). All four poses
+   are missing, including the long-standing "open" and "closed", so it is not specific to the 970
+   `retracted` poses; the section's code is at `surfaces.rs:820`. Cause not diagnosed.
+2. Connection-lost banner takes about 40 px of height in full screen; the Overview and the
+   Exit/Full-screen button move down by that amount. Expected, noted for completeness.
+
+## Not observed
+
+- Mid-slide frames for SC-002: the renderer drew no intermediate frames in 12 captures 0.6 s apart,
+  so "no gap on every frame" is judged on rest frames and the first frame after exit only.
+- Narrow window at widths other than 650 px (600 and 700 not tried); the sidebar at 420 px wide in a
+  narrow window.
+- Reconnect after the daemon returns (it was blocked on purpose; the client was restarted for item 4).
+- Grey veils, ghost menu rectangles and stale tint after menus close are the software backend's
+  partial redraw (as in M1 finding 13), not judged.
+
+## Screenshots
+`specs/970-overview-fullscreen/visual-pass/` 40-close-*.png.
