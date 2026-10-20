@@ -28,6 +28,30 @@ flow:feature. Builds on feature 1120 (`specs/1120-overview-card-readability`, sh
 - **Clipped text**: text cut off by an edge so that part of a glyph or a line is not drawn, with no
   ellipsis to say text is missing. An ellipsis is not clipping.
 
+## Clarifications
+
+### Session 2026-10-20
+
+- Q: Today Escape closes the Overview (feature 813 FR-014). Should the first Escape only collapse an
+  expanded card, with a second Escape closing the Overview, or should one Escape both collapse the
+  card and close the Overview? → A: The first Escape only collapses the expanded card, which keeps
+  keyboard focus; an Escape while no card is expanded closes the Overview as today. _(orchestrator
+  default, the recommended option; pending the user's confirmation)_
+- Q: Which form of the worktree directory does the expanded card show: the full path with the home
+  folder shortened to `~`, the path relative to the project root, or the folder name only? → A: The
+  full path, with the user's home folder shown as `~`. _(orchestrator default, the recommended
+  option; pending the user's confirmation)_
+- Q: Does an Escape that closes an open card menu also collapse the card? → A: No. With a card menu
+  open, Escape only closes the menu (feature 972 FR-007) and the card keeps its form (FR-012); a
+  further Escape follows FR-005. _(agent-resolved:
+  specs/972-overview-card-context-menu/spec.md#FR-007)_
+- Q: FR-005 said any collapse of a hover-expanded card re-expands the card that has keyboard focus,
+  but the Edge Cases say only the pointer leaving does (window blur, Overview close and Escape do
+  not). Which holds? → A: Only the pointer leaving a hover-expanded card without resting on another
+  card re-expands the focused card; FR-005 now says so. _(agent-resolved:
+  specs/1121-overview-card-full-text/spec.md#Edge Cases, "Hover ends while another card has focus"
+  and "Window regains focus")_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Read more of a card without doing anything (Priority: P1)
@@ -119,10 +143,8 @@ and what Escape does.
    Shift+Tab or an arrow key, **Then** that card expands as in Story 2, and the card that lost
    focus collapses.
 2. **Given** a card expanded because it has keyboard focus, **When** the user presses Escape,
-   **Then** the card collapses and keeps keyboard focus. [NEEDS CLARIFICATION: Today Escape closes
-   the Overview (feature 813 FR-014). Should the first Escape only collapse a focus-expanded card,
-   with a second Escape closing the Overview (recommended), or should one Escape both collapse the
-   card and close the Overview, as today?]
+   **Then** the card collapses and keeps keyboard focus, and the Overview stays open; a second
+   Escape, with no card expanded, closes the Overview as today (feature 813 FR-014).
 3. **Given** a card expanded because it has keyboard focus, **When** focus leaves it (to another
    card, out of the grid, or because the window loses focus), **Then** it collapses.
 4. **Given** a focused, expanded card, **When** the user presses Enter or Space, **Then** the card
@@ -235,10 +257,13 @@ focus through the grid; compare each with the same action on a collapsed card be
 - **FR-005**: An expanded card MUST collapse when the pointer leaves it (if it was expanded by
   hover), when keyboard focus leaves it (if it was expanded by focus), when the window loses focus,
   when the Overview closes, when another card expands, and when the user presses Escape while it has
-  keyboard focus or the pointer on it. [See Story 3 scenario 2 for Escape's effect on the
-  Overview.] When the card that collapses was expanded by hover and another card still has keyboard
-  focus (not collapsed by Escape since it received focus), that card MUST expand again; no other
-  collapse re-expands a card (Edge Cases).
+  keyboard focus or the pointer on it. An Escape that collapses a card does nothing else: the
+  Overview stays open, and full-screen mode (feature 970) stays on. Escape closes the Overview
+  (feature 813 FR-014, feature 970 FR-010) only when no card is expanded; with a card menu open,
+  Escape only closes the menu (feature 972 FR-007). When a card expanded by hover collapses because
+  the pointer leaves it without resting on another card, and another card still has keyboard focus
+  (not collapsed by Escape since it received focus), that card MUST expand again; no other collapse
+  re-expands a card (Edge Cases).
 - **FR-006**: At most one card MUST be expanded at any time.
 - **FR-007**: No text on a card MUST be clipped, collapsed or expanded, at card widths of 280, 380
   and 480 px nor at any other width the grid produces; an unbroken run of characters wider than the
@@ -262,9 +287,9 @@ focus through the grid; compare each with the same action on a collapsed card be
 - **FR-012**: While a card menu is open, the target card MUST keep its expanded or collapsed form,
   and no other card MUST expand.
 - **FR-013**: Opening the Overview MUST NOT expand a card by itself.
-- **FR-014**: The worktree directory MUST be shown as [NEEDS CLARIFICATION: which form of the
-  worktree directory — its full path with the home folder shortened to `~` (recommended), the path
-  relative to the project root, or the folder name only?].
+- **FR-014**: The worktree directory MUST be shown as its full absolute path, in the platform's
+  separators, with the user's home folder at its start shown as `~` (`~/code/app/.worktrees/x`); a
+  path outside the home folder is shown in full.
 - **FR-015**: The expanded card MUST meet the contrast of feature 1120 FR-003 and the type scale of
   feature 1120 FR-004 in every card state and both themes, and MUST be built from the shared UI
   components with every colour and elevation from the theme's roles (Principle VIII); the

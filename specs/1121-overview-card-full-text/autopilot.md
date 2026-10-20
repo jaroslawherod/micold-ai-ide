@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers (Escape semantics, worktree directory form)
+- **Phase**: plan
+- **Next step**: plan unit (clarify CLEAN; D1/D2 are defaults pending jaro's confirmation)
 
 ## Pull requests
 
@@ -28,6 +28,9 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D1 | clarify | Escape on an expanded card (Story 3 sc.2, FR-005) | First Escape only collapses it (focus kept, Overview and full-screen stay); Escape with no card expanded closes the Overview | orchestrator default (recommended), pending jaro's confirmation on the decision card | spec.md#Clarifications |
+| D2 | clarify | Worktree directory form (FR-014) | Full absolute path, home folder shown as `~` | orchestrator default (recommended), pending jaro's confirmation on the decision card | spec.md#Clarifications |
+| D3 | clarify | Escape with a card menu open; which collapse re-expands the focused card | Escape only closes the menu; only the pointer leaving a hover-expanded card re-expands the focused card | agent | specs/972-overview-card-context-menu/spec.md#FR-007; spec.md#Edge Cases |
 
 ## Review rounds
 
