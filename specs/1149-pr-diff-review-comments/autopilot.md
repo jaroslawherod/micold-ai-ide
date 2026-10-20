@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1149
 - **Worktree branch**: feat/1149_review-comments-on-a-pull-request-s-diff-sent-to
 - **Started**: 2026-10-20
-- **Phase**: implement (M2, full gate)
-- **Next step**: M2 full gate, PR
+- **Phase**: implement (M2, PR open)
+- **Next step**: orchestrator waits on CI and merges M2 PR
 
 ## Pull requests
 
