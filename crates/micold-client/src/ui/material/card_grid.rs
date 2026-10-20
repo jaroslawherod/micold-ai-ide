@@ -5,17 +5,19 @@
 //! The cards share the width equally, so a wider grid makes wider cards, and the grid scrolls
 //! vertically.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use crate::ui::cdk::motion::Progress;
+use crate::ui::cdk::motion::{self, Progress};
 use crate::ui::material::navigation_drawer::SLIDE;
 use crate::ui::material::{OverviewCard, Scrollable};
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Id, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::widget::scrollable::AbsoluteOffset;
-use iced::{Element, Event, Length, Point, Rectangle, Size, Vector};
+use iced::{window, Element, Event, Length, Point, Rectangle, Size, Vector};
+use micold_core::overview_expansion::EXPAND_REST;
 use micold_core::tokens::motion::duration;
+use micold_core::tooltip::ShowTimer;
 use micold_core::tokens::{spacing, Roles};
 
 /// The narrowest a card is drawn.
@@ -234,6 +236,10 @@ struct ZoomState {
     /// unbounded (in a scrollable): `update` lays out again when the view's height is another
     /// (review A F1, M2). `INFINITY` when that layout had no view yet.
     capped_at: Option<f32>,
+    /// The pointer's rest on the topmost card under it (feature 1121, R5, U3).
+    rest: ShowTimer,
+    /// That card, and whether its rest was published.
+    resting: Option<(usize, bool)>,
 }
 
 impl ZoomState {
@@ -249,6 +255,8 @@ impl ZoomState {
             view: std::cell::Cell::new(None),
             expanded: None,
             capped_at: None,
+            rest: ShowTimer::default(),
+            resting: None,
         }
     }
 
@@ -365,6 +373,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
         Grid {
             expanded,
             twin,
+            rests: self.cards.iter().map(OverviewCard::rest_messages).collect(),
             cards: self
                 .cards
                 .iter()
@@ -393,6 +402,8 @@ struct Grid<'a, M> {
     /// That card collapsed: measured for its row, never drawn, focused or sent events. Its tree
     /// is the one after the cards'.
     twin: Option<Element<'a, M>>,
+    /// Each card's `on_rest` and `on_leave` messages (feature 1121, R5).
+    rests: Vec<(Option<M>, Option<M>)>,
 }
 
 /// The expanded card's layout where it is drawn: its slot's node moved up by `place` (K3) to lie
@@ -415,6 +426,62 @@ fn placed<'n>(node: &'n layout::Node, origin: Point, view: Rectangle) -> Layout<
 /// The view the grid was last updated or drawn in, in its own coordinates; its bounds before any.
 fn last_view(state: &ZoomState, layout: Layout<'_>) -> Rectangle {
     state.view.get().unwrap_or(layout.bounds())
+}
+
+impl<M: Clone> Grid<'_, M> {
+    /// Feature 1121 R5, U3: time the pointer's rest on the topmost card under it (the expanded
+    /// card first), publishing that card's `on_rest` once it has rested `EXPAND_REST` and its
+    /// `on_leave` when the pointer leaves it after. A change of the card under the pointer starts
+    /// the wait again, even with no frame outside every card. Nothing happens while a zoom runs.
+    fn observe_rest(
+        &self,
+        state: &mut ZoomState,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        over_expanded: bool,
+        shell: &mut Shell<'_, M>,
+    ) {
+        let now = match event {
+            Event::Window(window::Event::RedrawRequested(now)) => *now,
+            Event::Mouse(_) => Instant::now(),
+            _ => return,
+        };
+        if state.ends.is_some() {
+            return;
+        }
+        let topmost = if over_expanded {
+            self.expanded
+        } else {
+            cursor.position().and_then(|at| {
+                layout
+                    .children()
+                    .take(self.cards.len())
+                    .position(|card| card.bounds().contains(at))
+            })
+        };
+        if topmost != state.resting.map(|(card, _)| card) {
+            if let Some((left, true)) = state.resting {
+                if let Some((_, Some(on_leave))) = self.rests.get(left) {
+                    shell.publish(on_leave.clone());
+                }
+            }
+            state.rest.reset();
+            state.resting = topmost.map(|card| (card, false));
+        }
+        let rest = state.rest.observe(topmost.is_some(), now, EXPAND_REST);
+        if let Some((card, rested @ false)) = state.resting.as_mut() {
+            if rest.open {
+                *rested = true;
+                if let Some((Some(on_rest), _)) = self.rests.get(*card) {
+                    shell.publish(on_rest.clone());
+                }
+            }
+        }
+        if let Some(wake) = rest.wake_at {
+            motion::wake_at(shell, wake);
+        }
+    }
 }
 
 impl<M> Grid<'_, M> {
@@ -459,7 +526,7 @@ impl<M> Grid<'_, M> {
     }
 }
 
-impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
+impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<ZoomState>()
     }
@@ -705,6 +772,8 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
                 viewport,
             );
         }
+        let state = tree.state.downcast_mut::<ZoomState>();
+        self.observe_rest(state, event, layout, cursor, over_expanded, shell);
     }
 
     fn mouse_interaction(
@@ -2425,5 +2494,97 @@ mod tests {
                 p.bounds
             );
         }
+    }
+
+    /// `grid` with every card publishing `rest i` on a rest and `leave i` on leaving.
+    fn with_rests(mut grid: CardGrid<'static, String>) -> CardGrid<'static, String> {
+        grid.cards = grid
+            .cards
+            .into_iter()
+            .enumerate()
+            .map(|(i, card)| card.on_rest(format!("rest {i}")).on_leave(format!("leave {i}")))
+            .collect();
+        grid
+    }
+
+    /// A frame at `now` with the pointer at `at`: what the grid publishes.
+    fn frame_at(m: &mut Mounted<'_>, at: Point, now: std::time::Instant) -> Vec<String> {
+        m.send(
+            Event::Window(iced::window::Event::RedrawRequested(now)),
+            mouse::Cursor::Available(at),
+        )
+    }
+
+    const NOTHING: [&str; 0] = [];
+
+    /// Feature 1121 U3, R5, FR-002, SC-006: a pointer resting on a card publishes its `on_rest`
+    /// once, after `EXPAND_REST` and not before; leaving it publishes its `on_leave`.
+    #[test]
+    fn a_resting_pointer_publishes_the_cards_rest_then_its_leave() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let mut m = mounted(with_rests(plain_grid(&models)), 900.0, 4000.0);
+        let slot = slots(&m.node, 6)[1];
+        let (on, t0) = (slot.center(), std::time::Instant::now());
+        assert_eq!(frame_at(&mut m, on, t0), NOTHING);
+        let early = t0 + EXPAND_REST - std::time::Duration::from_millis(1);
+        assert_eq!(frame_at(&mut m, on, early), NOTHING, "rested too early");
+        assert_eq!(frame_at(&mut m, on, t0 + EXPAND_REST), ["rest 1"]);
+        assert_eq!(frame_at(&mut m, on, t0 + EXPAND_REST * 3), NOTHING, "rested twice");
+        let gap = Point::new(slot.x - GAP / 2.0, slot.center_y());
+        assert_eq!(frame_at(&mut m, gap, t0 + EXPAND_REST * 4), ["leave 1"]);
+        assert_eq!(frame_at(&mut m, gap, t0 + EXPAND_REST * 6), NOTHING);
+    }
+
+    /// Feature 1121 U3, R5: from the expanded card's drawn area straight onto the card beneath it,
+    /// with no frame outside every card, the expanded card is left and the one beneath rests.
+    #[test]
+    fn moving_off_the_expanded_card_onto_the_card_beneath_rests_on_it() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let grid = with_rests(expanded_grid(&models, 1, &rich(1), false));
+        let mut m = mounted(grid, 900.0, 4000.0);
+        let (drawn, under) = (slots(&m.node, 6)[1], slots(&m.node, 6)[4]);
+        let over_both = Point::new(drawn.center_x(), under.y + 2.0);
+        let beneath = Point::new(drawn.center_x(), drawn.y + drawn.height + 2.0);
+        assert!(drawn.contains(over_both), "the expanded card does not reach over card 4");
+        assert!(under.contains(beneath), "card 4 does not show below the expanded card");
+        let t0 = std::time::Instant::now();
+        assert_eq!(frame_at(&mut m, over_both, t0), NOTHING);
+        assert_eq!(frame_at(&mut m, over_both, t0 + EXPAND_REST), ["rest 1"]);
+        let t1 = t0 + EXPAND_REST * 2;
+        assert_eq!(frame_at(&mut m, beneath, t1), ["leave 1"]);
+        assert_eq!(frame_at(&mut m, beneath, t1 + EXPAND_REST), ["rest 4"]);
+    }
+
+    /// Feature 1121 Edge Case *scrolling under the pointer*: a scroll that brings another card
+    /// under a pointer at rest leaves the old card and rests on the new one, with no mouse event.
+    #[test]
+    fn a_scroll_bringing_another_card_under_the_pointer_rests_on_it() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let mut m = mounted(with_rests(plain_grid(&models)), 900.0, 4000.0);
+        let (first, next) = (slots(&m.node, 6)[1].center(), slots(&m.node, 6)[4].center());
+        let t0 = std::time::Instant::now();
+        frame_at(&mut m, first, t0);
+        assert_eq!(frame_at(&mut m, first, t0 + EXPAND_REST), ["rest 1"]);
+        // The window does not move; the content scrolled, so the pointer is over card 4 now.
+        let t1 = t0 + EXPAND_REST * 2;
+        assert_eq!(frame_at(&mut m, next, t1), ["leave 1"]);
+        assert_eq!(frame_at(&mut m, next, t1 + EXPAND_REST), ["rest 4"]);
+    }
+
+    /// Feature 1121 R5, US4 sc.6: nothing rests while a zoom runs.
+    #[test]
+    fn nothing_rests_while_a_zoom_runs() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let models: Vec<CardModel> = (0..6).map(titled).collect();
+        let mut m = mounted(with_rests(plain_grid(&models)), 900.0, 4000.0);
+        m.tree.state.downcast_mut::<ZoomState>().ends = Some((900.0, 1200.0));
+        let on = slots(&m.node, 6)[1].center();
+        let t0 = std::time::Instant::now();
+        let mut published = frame_at(&mut m, on, t0);
+        published.extend(frame_at(&mut m, on, t0 + EXPAND_REST * 2));
+        assert_eq!(published, NOTHING);
     }
 }

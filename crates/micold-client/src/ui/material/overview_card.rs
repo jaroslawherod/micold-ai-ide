@@ -134,6 +134,8 @@ pub struct OverviewCard<'a, M> {
     expanded: bool,
     scroll_id: Option<iced::advanced::widget::Id>,
     on_body_scroll: Option<Rc<dyn Fn(bool, bool) -> M + 'a>>,
+    on_rest: Option<M>,
+    on_leave: Option<M>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -158,6 +160,8 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             expanded: false,
             scroll_id: None,
             on_body_scroll: None,
+            on_rest: None,
+            on_leave: None,
             _marker: PhantomData,
         }
     }
@@ -226,6 +230,30 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
     pub fn on_body_scroll(mut self, f: impl Fn(bool, bool) -> M + 'a) -> Self {
         self.on_body_scroll = Some(Rc::new(f));
         self
+    }
+
+    /// Publish `message` when the pointer has rested on the card for
+    /// [`micold_core::overview_expansion::EXPAND_REST`] (feature 1121, FR-002, research R5). The
+    /// [`CardGrid`](super::CardGrid) holding the card keeps the timer; a card on its own publishes
+    /// nothing.
+    pub fn on_rest(mut self, message: M) -> Self {
+        self.on_rest = Some(message);
+        self
+    }
+
+    /// Publish `message` when the pointer leaves the card after resting on it (feature 1121,
+    /// FR-005): published by the [`CardGrid`](super::CardGrid), as [`Self::on_rest`].
+    pub fn on_leave(mut self, message: M) -> Self {
+        self.on_leave = Some(message);
+        self
+    }
+
+    /// The messages of [`Self::on_rest`] and [`Self::on_leave`], for the grid's rest timer.
+    pub(crate) fn rest_messages(&self) -> (Option<M>, Option<M>)
+    where
+        M: Clone,
+    {
+        (self.on_rest.clone(), self.on_leave.clone())
     }
 
     /// Name the card so the application can move the keyboard to it.
