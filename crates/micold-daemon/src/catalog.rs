@@ -281,6 +281,7 @@ impl Catalog {
             env_include_script_path: self.settings.env_include_script_path.clone(),
             env_include_timeout_secs: self.settings.env_include_timeout_secs,
             default_ai_cli: self.settings.default_ai_cli,
+            default_prompt_template: self.settings.default_prompt_template.clone(),
             pi_activity_component: self.settings.pi_activity_component,
             save_terminal_history: self.settings.save_terminal_history,
             tool_server_enabled: self.settings.tool_server_enabled,
@@ -441,6 +442,8 @@ impl Catalog {
                 on_disk.env_include_script_path = self.settings.env_include_script_path.clone();
                 on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
                 on_disk.default_ai_cli = self.settings.default_ai_cli;
+                on_disk.default_prompt_template =
+                    self.settings.default_prompt_template.clone();
                 on_disk.pi_activity_component = self.settings.pi_activity_component;
                 on_disk.save_terminal_history = self.settings.save_terminal_history;
                 on_disk.tool_server_enabled = self.settings.tool_server_enabled;
@@ -521,6 +524,13 @@ impl Catalog {
     /// uninstalled CLI is the requirement, not an oversight (FR-004, research R11).
     pub fn set_default_ai_cli(&mut self, which: AiCli) -> io::Result<()> {
         self.settings.default_ai_cli = which;
+        self.persist_service_settings()
+    }
+
+    /// Set the default prompt template (feature 1161, FR-001). Stored verbatim: text that does not
+    /// parse is kept (FR-013); the Settings draft is what refuses it.
+    pub fn set_default_prompt_template(&mut self, text: String) -> io::Result<()> {
+        self.settings.default_prompt_template = text;
         self.persist_service_settings()
     }
 

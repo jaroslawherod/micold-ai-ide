@@ -338,6 +338,7 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         env_include_script_path: app.env_include_script_path.clone(),
         env_include_timeout_secs: app.env_include_timeout_secs,
         default_ai_cli: app.core.session.default_ai_cli,
+        default_prompt_template: app.core.session.default_prompt_template.clone(),
         pi_activity_component: app.core.session.pi_activity_component,
         save_terminal_history: app.core.session.save_terminal_history,
         tool_server_enabled: app.core.session.tool_server_enabled,
@@ -434,6 +435,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
                     },
             },
         default_ai_cli: _,
+        default_prompt_template: _,
         pi_activity_component: _,
         save_terminal_history: _,
         tool_server_enabled: _,
@@ -487,6 +489,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(daemon.sandbox.survive_logout);
     set!(daemon.sandbox.ai_clis);
     set!(default_ai_cli);
+    set!(default_prompt_template);
     set!(pi_activity_component);
     set!(save_terminal_history);
     set!(tool_server_enabled);
@@ -517,6 +520,7 @@ struct ServiceChanges {
     env_include_script_path: Option<String>,
     env_include_timeout_secs: Option<u64>,
     default_ai_cli: Option<micold_core::session::AiCli>,
+    default_prompt_template: Option<String>,
     pi_activity_component: Option<bool>,
     save_terminal_history: Option<bool>,
     tool_server_enabled: Option<bool>,
@@ -542,6 +546,7 @@ impl ServiceChanges {
             env_include_script_path: self.env_include_script_path,
             env_include_timeout_secs: self.env_include_timeout_secs,
             default_ai_cli: self.default_ai_cli,
+            default_prompt_template: self.default_prompt_template,
             pi_activity_component: self.pi_activity_component,
             save_terminal_history: self.save_terminal_history,
             tool_server_enabled: self.tool_server_enabled,
@@ -575,6 +580,7 @@ fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<Serv
         env_include_script_path: changed!(env_include_script_path),
         env_include_timeout_secs: changed!(env_include_timeout_secs),
         default_ai_cli: changed!(default_ai_cli),
+        default_prompt_template: changed!(default_prompt_template),
         pi_activity_component: changed!(pi_activity_component),
         save_terminal_history: changed!(save_terminal_history),
         tool_server_enabled: changed!(tool_server_enabled),
@@ -692,6 +698,7 @@ pub(crate) fn save_and_prepare_check(
     app.env_include_script_path = window.env_include_script_path;
     app.env_include_timeout_secs = window.env_include_timeout_secs;
     app.core.session.default_ai_cli = window.default_ai_cli;
+    app.core.session.default_prompt_template = window.default_prompt_template;
     app.core.session.pi_activity_component = window.pi_activity_component;
     app.core.session.save_terminal_history = window.save_terminal_history;
     app.core.session.tool_server_enabled = window.tool_server_enabled;
@@ -1168,6 +1175,7 @@ mod tests {
             env_include_timeout_secs: 42,
             daemon: Default::default(),
             default_ai_cli: AiCli::Copilot,
+            default_prompt_template: String::new(),
             pi_activity_component: false,
             save_terminal_history: true,
             tool_server_enabled: true,

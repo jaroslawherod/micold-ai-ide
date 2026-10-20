@@ -258,6 +258,12 @@ pub struct Settings {
     /// (research R11).
     #[serde(default)]
     pub default_ai_cli: AiCli,
+    /// Template for the first prompt of a new worktree's session (feature 1161, FR-001). Stored
+    /// verbatim, newlines kept; text that fails `PromptTemplate::parse` is kept too (FR-013) and
+    /// treated as empty by whoever renders it. Service-owned beside `default_ai_cli`, because the
+    /// MCP tools render it in the service. Empty means no default prompt.
+    #[serde(default)]
+    pub default_prompt_template: String,
     /// Whether a Pi session is started with this application's activity component loaded into it
     /// (feature 029, FR-012e). On by default, so the badge works unconfigured.
     ///
@@ -399,6 +405,7 @@ impl Default for Settings {
             next_daemon_id: 2,
             legacy_default_daemon: Some(crate::daemons::DaemonId(1)),
             default_ai_cli: AiCli::default(),
+            default_prompt_template: String::new(),
             pi_activity_component: default_pi_activity_component(),
             save_terminal_history: default_save_terminal_history(),
             tool_server_enabled: default_tool_server_enabled(),
@@ -775,6 +782,9 @@ struct StoredSettings {
     /// number for the same reason: a bump would cost a migration path to express a default.
     #[serde(default)]
     default_ai_cli: AiCli,
+    /// Missing in files written before 1161 → empty. Additive, so `settings_version` stays.
+    #[serde(default)]
+    default_prompt_template: String,
     /// Missing in pre-029 files → on, the requirement's default (FR-012e). Additive and defaulted,
     /// so `settings_version` does not move for it either.
     #[serde(default = "default_pi_activity_component")]
@@ -883,6 +893,7 @@ impl StoredSettings {
             next_daemon_id: settings.next_daemon_id,
             legacy_default_daemon: settings.legacy_default_daemon,
             default_ai_cli: settings.default_ai_cli,
+            default_prompt_template: settings.default_prompt_template.clone(),
             pi_activity_component: settings.pi_activity_component,
             save_terminal_history: settings.save_terminal_history,
             tool_server_enabled: settings.tool_server_enabled,
@@ -939,6 +950,7 @@ impl StoredSettings {
             // there is no invalid value to repair — only a CLI that may not be installed today,
             // which is the user's choice to keep (research R11).
             default_ai_cli: self.default_ai_cli,
+            default_prompt_template: self.default_prompt_template,
             pi_activity_component: self.pi_activity_component,
             save_terminal_history: self.save_terminal_history,
             tool_server_enabled: self.tool_server_enabled,

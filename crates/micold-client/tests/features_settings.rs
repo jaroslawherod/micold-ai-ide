@@ -1876,6 +1876,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
             env_include_script_path,
             env_include_timeout_secs,
             default_ai_cli,
+            default_prompt_template,
             pi_activity_component,
             save_terminal_history,
             tool_server_enabled,
@@ -1899,6 +1900,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
                     && env_include_script_path.is_none()
                     && env_include_timeout_secs.is_none()
                     && default_ai_cli.is_none()
+                    && default_prompt_template.is_none()
                     && pi_activity_component.is_none()
                     && save_terminal_history.is_none()
                     && tool_server_enabled.is_none()
@@ -3266,4 +3268,32 @@ mod github_access_tokens {
             .join(" ")
             .contains("cannot verify which other repositories"));
     }
+}
+
+/// Feature 1161, T011: the default prompt template is edited in a multi-line editor; the draft
+/// opens with the stored text and a save carries the text the editor holds.
+#[test]
+fn the_default_prompt_template_opens_with_the_stored_text_and_saves_the_edited_one() {
+    let stored = micold_core::settings::Settings {
+        default_prompt_template: "/speckit-autopilot #{issue}\nthen {branch}".into(),
+        ..micold_core::settings::Settings::default()
+    };
+    let mut draft = SettingsDraft::from_settings(&stored);
+    assert_eq!(
+        draft.environment.default_prompt_editor.content().text(),
+        "/speckit-autopilot #{issue}\nthen {branch}"
+    );
+
+    draft.environment.set_default_prompt_template("Fix {issue_title}\n\nline".into());
+
+    let saved = draft.validate().expect("the stored numbers are in range").into_settings();
+    assert_eq!(saved.default_prompt_template, "Fix {issue_title}\n\nline");
+}
+
+/// Feature 1161, FR-001: no template is the empty string.
+#[test]
+fn an_empty_template_saves_as_empty() {
+    let draft = SettingsDraft::from_settings(&micold_core::settings::Settings::default());
+    let saved = draft.validate().unwrap().into_settings();
+    assert_eq!(saved.default_prompt_template, "");
 }

@@ -49,6 +49,7 @@
 
 use std::path::PathBuf;
 
+use crate::app::{Editor, EditorAction};
 use crate::features::session::CliAvailability;
 use crate::features::window::FieldId;
 pub mod github_tokens;
@@ -307,6 +308,14 @@ pub struct TerminalDraft {
     pub save_terminal_history: bool,
 }
 
+impl EnvironmentDraft {
+    /// Replace the default prompt template, text and editor together (feature 1161).
+    pub fn set_default_prompt_template(&mut self, text: String) {
+        self.default_prompt_editor = Editor::new(&text);
+        self.default_prompt_template = text;
+    }
+}
+
 /// The Environment section's fields (feature 011).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnvironmentDraft {
@@ -326,6 +335,11 @@ pub struct EnvironmentDraft {
     /// governs — "what each session inherits before the agent starts" — and which agent starts is
     /// the first thing in that sentence.
     pub default_ai_cli: AiCli,
+    /// The default prompt template as typed (feature 1161, FR-001): kept as text beside its editor,
+    /// so the draft compares by this string and a save reads it.
+    pub default_prompt_template: String,
+    /// The multi-line editor showing [`Self::default_prompt_template`] (feature 1161, FR-002).
+    pub default_prompt_editor: Editor,
     /// Whether a Pi session is started with this application's activity component loaded
     /// (feature 029, FR-012e). One application-wide switch — there is no per-project or
     /// per-session form of it. Holds the value only; the default-on comes from `Settings`.
@@ -365,6 +379,8 @@ impl Default for EnvironmentDraft {
             script_path: Default::default(),
             timeout_secs: Default::default(),
             default_ai_cli: Default::default(),
+            default_prompt_template: Default::default(),
+            default_prompt_editor: Default::default(),
             pi_activity_component: Default::default(),
             tool_server_enabled: Default::default(),
             desktop_notifications: Default::default(),
@@ -729,6 +745,8 @@ pub struct ValidSettings {
     pub env_include_timeout_secs: u64,
     /// Environment.
     pub default_ai_cli: AiCli,
+    /// Environment: the default prompt template, verbatim (feature 1161).
+    pub default_prompt_template: String,
     /// Environment.
     pub pi_activity_component: bool,
     /// Terminal (feature 041).
@@ -775,6 +793,7 @@ impl ValidSettings {
             env_include_script_path: self.env_include_script_path,
             env_include_timeout_secs: self.env_include_timeout_secs,
             default_ai_cli: self.default_ai_cli,
+            default_prompt_template: self.default_prompt_template,
             pi_activity_component: self.pi_activity_component,
             save_terminal_history: self.save_terminal_history,
             tool_server_enabled: self.tool_server_enabled,
@@ -1149,6 +1168,7 @@ impl SettingsDraft {
             env_include_script_path: self.environment.script_path.clone(),
             env_include_timeout_secs,
             default_ai_cli: self.environment.default_ai_cli,
+            default_prompt_template: self.environment.default_prompt_template.clone(),
             pi_activity_component: self.environment.pi_activity_component,
             save_terminal_history: self.terminal.save_terminal_history,
             tool_server_enabled: self.environment.tool_server_enabled,
@@ -1500,6 +1520,8 @@ impl SettingsDraft {
                     script_path: _,
                     timeout_secs: _,
                     default_ai_cli: _,
+                    default_prompt_template: _,
+                    default_prompt_editor: _,
                     pi_activity_component: _,
                     tool_server_enabled: _,
                     desktop_notifications: _,
@@ -1555,6 +1577,11 @@ impl SettingsDraft {
                     self.$part.$field = fresh.$part.$field.clone();
                 }
             )+};
+        }
+        // The template has an editor to keep in step, so it is refreshed by hand (feature 1161).
+        if self.environment.default_prompt_template == opened.environment.default_prompt_template {
+            self.environment
+                .set_default_prompt_template(fresh.environment.default_prompt_template.clone());
         }
         refresh!(
             appearance.theme,
@@ -1612,6 +1639,8 @@ impl SettingsDraft {
                 script_path: settings.env_include_script_path.clone(),
                 timeout_secs: settings.env_include_timeout_secs.to_string(),
                 default_ai_cli: settings.default_ai_cli,
+                default_prompt_template: settings.default_prompt_template.clone(),
+                default_prompt_editor: Editor::new(&settings.default_prompt_template),
                 pi_activity_component: settings.pi_activity_component,
                 tool_server_enabled: settings.tool_server_enabled,
                 desktop_notifications: settings.desktop_notifications,
@@ -1724,6 +1753,8 @@ pub enum Msg {
     EnvIncludeTimeoutChanged(String),
     /// The Settings **Default AI CLI** select changed (feature 026, FR-003).
     DefaultAiCliChanged(AiCli),
+    /// The default prompt template editor received an action (feature 1161, FR-002).
+    DefaultPromptTemplateAction(EditorAction),
     /// The Settings **Pi activity component** switch was toggled (feature 029, FR-012e).
     PiActivityComponentToggled(bool),
     /// Terminal: the **Save terminal history** checkbox (feature 041, FR-026).
@@ -1858,6 +1889,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::EnvIncludePathChanged(text) => env_include_path_changed(state, text),
         Msg::EnvIncludeTimeoutChanged(text) => env_include_timeout_changed(state, text),
         Msg::DefaultAiCliChanged(which) => default_ai_cli_changed(state, which),
+        Msg::DefaultPromptTemplateAction(action) => {
+            default_prompt_template_action(state, &action);
+        }
         Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
         Msg::SaveTerminalHistoryToggled(on) => save_terminal_history_toggled(state, on),
         Msg::ToolServerToggled(on) => tool_server_toggled(state, on),
@@ -2076,6 +2110,14 @@ pub fn env_include_timeout_changed(state: &mut crate::app::State, text: String) 
 /// Environment: the **Default AI CLI** select changed (feature 026, FR-003).
 pub fn default_ai_cli_changed(state: &mut crate::app::State, which: AiCli) {
     edit(state, |draft| draft.environment.default_ai_cli = which);
+}
+
+/// Environment: the default prompt template editor received an action (feature 1161, FR-002).
+pub fn default_prompt_template_action(state: &mut crate::app::State, action: &EditorAction) {
+    edit(state, |draft| {
+        draft.environment.default_prompt_template =
+            draft.environment.default_prompt_editor.perform(action);
+    });
 }
 
 /// Environment: the **Pi activity component** switch was toggled (feature 029, FR-012e).
@@ -2527,6 +2569,7 @@ pub fn diff_layout_set(
         env_include_script_path: None,
         env_include_timeout_secs: None,
         default_ai_cli: None,
+        default_prompt_template: None,
         pi_activity_component: None,
         save_terminal_history: None,
         tool_server_enabled: None,

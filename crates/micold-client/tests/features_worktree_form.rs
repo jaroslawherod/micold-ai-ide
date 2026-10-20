@@ -429,3 +429,158 @@ mod github_issues_switch {
         assert!(state.worktree_form.awaited_issue_load().is_some());
     }
 }
+
+// Feature 1161, M1: the first-prompt field follows the default prompt template until the user
+// edits it (FR-007). These go through the form alone, like the rest of this file.
+mod default_prompt_template {
+    use std::path::PathBuf;
+
+    use micold_client::features::worktree_form::{
+        BranchSource, GithubAvailability, IssueList, SearchState, WorktreeForm,
+    };
+    use micold_core::github::{GithubRepo, Issue, IssueListing};
+    use micold_core::naming::ConventionalType;
+    use micold_core::prompt_template::shared_fixture;
+    use micold_core::session::AiCli;
+
+    /// A form with a CLI chosen and `template` stored, refreshed as the dialog does on opening.
+    fn form(template: &str) -> WorktreeForm {
+        let mut form = WorktreeForm {
+            default_prompt_template: template.to_string(),
+            session_cli: Some(AiCli::ClaudeCode),
+            ..WorktreeForm::default()
+        };
+        form.refresh_default_prompt();
+        form
+    }
+
+    fn with_issue_42(mut form: WorktreeForm) -> WorktreeForm {
+        let issue = Issue::new(
+            42,
+            "Crash on save".to_string(),
+            vec![],
+            "2026-01-01T00:00:00Z".to_string(),
+        )
+        .described("It crashes. {issue}");
+        form.source = BranchSource::Issue;
+        form.github = GithubAvailability::Available(
+            GithubRepo::from_remote_url("git@github.com:octo/widgets.git").unwrap(),
+        );
+        form.issues = IssueList::Loaded {
+            listing: IssueListing {
+                total_open: 1,
+                complete: true,
+                issues: vec![issue],
+            },
+            gh: PathBuf::from("/usr/bin/gh"),
+            searched: vec![],
+            search: SearchState::Idle,
+            descriptions: Default::default(),
+        };
+        form.ticket = "42".into();
+        form.picked_issue = Some(42);
+        form.refresh_default_prompt();
+        form
+    }
+
+    #[test]
+    fn a_chosen_cli_and_an_issue_fill_the_field_from_the_template() {
+        // US1 s1.
+        let mut form = form("/speckit-autopilot #{issue}");
+        form.ticket = "42".into();
+        form.refresh_default_prompt();
+        assert_eq!(form.first_prompt, "/speckit-autopilot #42");
+    }
+
+    #[test]
+    fn an_edited_prompt_is_what_the_session_receives() {
+        // US1 s2, SC-004 dialog half.
+        let mut form = form("/speckit-autopilot #{issue}");
+        form.edit_first_prompt("do it my way".into());
+        form.ticket = "7".into();
+        form.refresh_default_prompt();
+        let definition = form.session_definition().expect("a CLI is chosen");
+        assert_eq!(definition.prompt.as_deref(), Some("do it my way"));
+    }
+
+    #[test]
+    fn a_cleared_field_stays_empty() {
+        // US1 s3.
+        let mut form = form("/speckit-autopilot #{issue}");
+        form.edit_first_prompt(String::new());
+        form.refresh_default_prompt();
+        assert_eq!(form.first_prompt, "");
+    }
+
+    #[test]
+    fn an_empty_template_leaves_the_field_empty() {
+        // US1 s4, SC-003.
+        let mut form = form("");
+        form.ticket = "42".into();
+        form.refresh_default_prompt();
+        assert_eq!(form.first_prompt, "");
+    }
+
+    #[test]
+    fn typed_text_survives_a_change_of_issue_type_or_name_and_an_unedited_field_follows() {
+        // US1 s5.
+        let mut followed = form("{type} {name} #{issue}");
+        followed.type_ = Some(ConventionalType::Fix);
+        followed.name = "crash".into();
+        followed.ticket = "9".into();
+        followed.refresh_default_prompt();
+        assert_eq!(followed.first_prompt, "fix crash #9");
+
+        let mut typed = form("{type} {name} #{issue}");
+        typed.edit_first_prompt("mine".into());
+        typed.type_ = Some(ConventionalType::Feat);
+        typed.name = "other".into();
+        typed.ticket = "10".into();
+        typed.refresh_default_prompt();
+        assert_eq!(typed.first_prompt, "mine");
+    }
+
+    #[test]
+    fn no_issue_renders_the_issue_placeholder_empty() {
+        // US2 s1 and s2 through the form.
+        let form = form("/speckit-autopilot #{issue}");
+        assert_eq!(form.first_prompt, "/speckit-autopilot #");
+    }
+
+    #[test]
+    fn the_picked_issues_title_and_body_arrive_with_the_listing() {
+        let mut form = with_issue_42(form("{issue_title}|{issue_body}"));
+        assert_eq!(form.first_prompt, "Crash on save|It crashes. {issue}");
+        form.picked_issue = None;
+        form.refresh_default_prompt();
+        assert_eq!(form.first_prompt, "|");
+    }
+
+    #[test]
+    fn the_dialog_renders_what_the_shared_fixture_says() {
+        // FR-011: the same template and facts as the daemon's tests.
+        let mut form = with_issue_42(form(shared_fixture::TEMPLATE));
+        form.type_ = Some(ConventionalType::Fix);
+        form.name = "crash".into();
+        form.refresh_default_prompt();
+        assert_eq!(form.first_prompt, shared_fixture::OUTPUT);
+    }
+
+    #[test]
+    fn choosing_a_cli_after_none_follows_the_template_again() {
+        let mut form = form("#{issue}");
+        form.edit_first_prompt("typed".into());
+        form.choose_session_cli(None);
+        assert_eq!(form.first_prompt, "");
+        form.ticket = "5".into();
+        form.choose_session_cli(Some(AiCli::Copilot));
+        assert_eq!(form.first_prompt, "#5");
+    }
+
+    #[test]
+    fn a_template_that_does_not_parse_gives_no_prompt() {
+        // FR-012, FR-013.
+        let form = form("oops {issu}");
+        assert_eq!(form.first_prompt, "");
+    }
+}

@@ -76,6 +76,7 @@ fn save_and_remove_keep_the_token_in_its_file_alone() {
         env_include_script_path: None,
         env_include_timeout_secs: None,
         default_ai_cli: None,
+        default_prompt_template: None,
         pi_activity_component: None,
         save_terminal_history: None,
         tool_server_enabled: None,

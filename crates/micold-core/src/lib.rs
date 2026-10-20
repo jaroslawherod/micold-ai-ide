@@ -63,6 +63,7 @@ pub mod permission_failure;
 pub mod plan_usage;
 pub mod pr_list;
 pub mod process;
+pub mod prompt_template;
 pub mod project;
 pub mod protocol;
 pub mod provider;

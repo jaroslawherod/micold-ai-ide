@@ -227,7 +227,11 @@
 /// `CompactBoundary`, `ConversationReset` and the daemon notes `CommandsReported`, `ModelChanged`,
 /// `ModelRefused`, `KindSwitched`, and `Init`, `Assistant` and `User` gain fields, which shift the
 /// postcard layout `StructuredEvents` carries.
-pub const PROTOCOL_VERSION: u32 = 64;
+
+///
+/// And 64 → 65 for feature 1161's default prompt template (contracts/prompt-template.md):
+/// `default_prompt_template` on `DaemonSettings` and on `ClientMsg::SettingsSet`.
+pub const PROTOCOL_VERSION: u32 = 65;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

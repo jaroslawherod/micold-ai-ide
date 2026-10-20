@@ -1005,6 +1005,11 @@ impl DaemonState {
         self.lock().catalog.settings_wire().default_ai_cli
     }
 
+    /// The default prompt template text (feature 1161); empty when none is set.
+    pub fn default_prompt_template(&self) -> String {
+        self.lock().catalog.settings_wire().default_prompt_template
+    }
+
     /// Hear of every session start that finishes from now on (see `session_started`).
     pub fn subscribe_session_started(&self) -> tokio::sync::broadcast::Receiver<SessionId> {
         self.session_started.subscribe()
@@ -2234,6 +2239,11 @@ impl DaemonState {
     /// Set the default AI CLI and push `SettingsChanged` to every client (feature 026, FR-003).
     pub fn set_default_ai_cli(&self, which: AiCli) -> std::io::Result<()> {
         self.change_settings(|catalog| catalog.set_default_ai_cli(which))
+    }
+
+    /// Set the default prompt template and push `SettingsChanged` to every client (feature 1161).
+    pub fn set_default_prompt_template(&self, text: String) -> std::io::Result<()> {
+        self.change_settings(|catalog| catalog.set_default_prompt_template(text))
     }
 
     /// Turn the Pi activity component on or off and push `SettingsChanged` to every client

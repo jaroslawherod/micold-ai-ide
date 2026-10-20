@@ -379,6 +379,9 @@ pub struct Issue {
     reporter: String,
     /// The start of the body as plain text ([`description_from`]); empty when there is none.
     description: String,
+    /// The whole body as plain text ([`Issue::described`]), for a prompt template's
+    /// `{issue_body}` (feature 1161). Never persisted or serialised; `Debug` leaves it out.
+    body: String,
     row_text: String,
     /// The Jira key (`ABC-123`) of an issue read from Jira; `None` for a GitHub issue.
     key: Option<String>,
@@ -428,6 +431,7 @@ impl Issue {
             updated_at,
             reporter: GHOST_LOGIN.to_string(),
             description: String::new(),
+            body: String::new(),
             row_text: String::new(),
             key: None,
             type_name: None,
@@ -504,7 +508,13 @@ impl Issue {
     /// [`description_from`] gives it. The match text is unchanged (038 FR-014).
     pub fn described(mut self, body_text: &str) -> Issue {
         self.description = description_from(body_text);
+        self.body = body_text.to_string();
         self
+    }
+
+    /// The issue's whole body as plain text; empty when there is none (feature 1161, FR-003).
+    pub fn body(&self) -> &str {
+        &self.body
     }
 
     /// The start of the issue's body as one plain paragraph, at most [`DESCRIPTION_MAX_CHARS`]

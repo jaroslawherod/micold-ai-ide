@@ -49,6 +49,18 @@ fn debug_output_redacts_the_reporter() {
     );
 }
 
+/// Feature 1161, T008: the issue holds its whole body for a prompt template, and `Debug` still
+/// does not print it.
+#[test]
+fn the_whole_body_is_held_and_never_printed() {
+    const BODY: &str = "first line\n\nsecond paragraph with a-private-detail";
+    let issue = Issue::new(7, "T".to_string(), vec![], "t".to_string()).described(BODY);
+    assert_eq!(issue.body(), BODY);
+    for debug in [format!("{issue:?}"), format!("{issue:#?}")] {
+        assert!(!debug.contains("a-private-detail"), "{debug}");
+    }
+}
+
 /// U28 — `{:?}` does not print what the issue's body says.
 #[test]
 fn debug_output_redacts_the_description() {
