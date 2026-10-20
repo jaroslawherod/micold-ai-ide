@@ -987,6 +987,168 @@ mod tests {
         );
     }
 
+    /// `model`'s expanded card, `width` wide and `height` tall, publishing `"<up> <down>"` on a
+    /// scroll of its inner body.
+    fn expanded_in(model: &CardModel, width: f32, height: f32) -> Mounted<'static> {
+        Mounted::new_in(
+            container(
+                OverviewCard::<String>::new(model, roles())
+                    .on_press("open".to_string())
+                    .on_body_scroll(|up, down| format!("{up} {down}"))
+                    .expanded(true),
+            )
+            .width(Length::Fixed(width))
+            .height(Length::Fixed(height)),
+            Size::new(width, height),
+        )
+    }
+
+    /// A wheel turn of `dy` pixels (negative: toward the end) with the pointer at `at`.
+    fn wheel(m: &mut Mounted<'_>, at: Point, dy: f32) -> Vec<String> {
+        use iced::advanced::mouse::{Cursor, Event as Mouse, ScrollDelta};
+        m.send(
+            iced::Event::Mouse(Mouse::WheelScrolled {
+                delta: ScrollDelta::Pixels { x: 0.0, y: dy },
+            }),
+            Cursor::Available(at),
+        )
+    }
+
+    /// Where `m` paints the paragraph that says `content`.
+    fn top_of(m: &mut Mounted<'_>, content: &str) -> f32 {
+        m.painted_text()
+            .into_iter()
+            .find(|p| p.content == content)
+            .unwrap_or_else(|| panic!("{content:?} is not painted"))
+            .bounds
+            .y
+    }
+
+    /// Feature 1121 FR-008, R3: the header row and the title lie outside the inner scrollable:
+    /// with the body scrolled to its end, its first line is scrolled out of view and no longer
+    /// painted, while the header and the title are painted where they were.
+    #[test]
+    fn an_expanded_cards_header_and_title_stay_while_its_body_scrolls() {
+        let m = overlong();
+        let full = micold_core::overview_text::ExpandedText::of(&m, None);
+        let mut card = expanded_in(&m, 280.0, 260.0);
+        let stays = [full.title.as_str(), words(&m).state_label];
+        let first = full.display_name.expect("a display name");
+        let before = stays.map(|c| top_of(&mut card, c));
+        assert!(card.painted_text().iter().any(|p| p.content == first));
+        wheel(&mut card, Point::new(140.0, 250.0), -10_000.0);
+        assert_eq!(
+            stays.map(|c| top_of(&mut card, c)),
+            before,
+            "the header or title moved"
+        );
+        assert!(
+            !card.painted_text().iter().any(|p| p.content == first),
+            "the body's first line did not scroll out of view"
+        );
+    }
+
+    /// Feature 1121 K4: the inner body publishes `(up, down)` = `(true, false)` at its end and
+    /// `(false, true)` back at its top; with nothing to scroll it publishes nothing, so the
+    /// application's `body_edges` keep the `(false, false)` an expand starts them at.
+    #[test]
+    fn an_expanded_cards_body_publishes_its_scroll_edges() {
+        let at = Point::new(140.0, 250.0);
+        let mut card = expanded_in(&overlong(), 280.0, 260.0);
+        assert_eq!(wheel(&mut card, at, -10_000.0), ["true false"]);
+        assert_eq!(wheel(&mut card, at, 10_000.0), ["false true"]);
+        let mut short = expanded_in(&model(CardState::Idle, "feat-a"), 380.0, 600.0);
+        assert!(wheel(&mut short, at, -10_000.0).is_empty());
+    }
+
+    /// The card of `model` expanded, `on_press` set, in a `width` column as tall as it needs.
+    fn expanded_card(model: &CardModel, targeted: bool, width: f32) -> Mounted<'static> {
+        Mounted::new_in(
+            OverviewCard::<String>::new(model, tokens::roles(ColorScheme::Light))
+                .on_press("pressed".to_string())
+                .targeted(targeted)
+                .expanded(true),
+            Size::new(width, 4000.0),
+        )
+    }
+
+    /// Feature 1121 FR-003: the expanded card casts the menu elevation's shadow below it; the
+    /// collapsed card casts none.
+    #[test]
+    fn an_expanded_card_casts_the_menu_shadow() {
+        let r = roles();
+        let backdrop = style::color(r.surface);
+        let m = model(CardState::Idle, "feat-a");
+        let below = |expanded: bool| {
+            let mut card = Mounted::new_in(
+                container(
+                    OverviewCard::<String>::new(&m, r)
+                        .on_press("open".to_string())
+                        .expanded(expanded),
+                )
+                .padding(24)
+                .width(Length::Fixed(380.0)),
+                Size::new(380.0, 4000.0),
+            );
+            let (pixels, width) = card.drawn(backdrop);
+            let bottom = card.node.size().height as u32 - 24;
+            let i = (((bottom + 4) * width + width / 2) * 4) as usize;
+            pixels[i..i + 3].to_vec()
+        };
+        let plain = [backdrop.r, backdrop.g, backdrop.b].map(|c| (c * 255.0).round() as u8);
+        assert_eq!(below(false), plain, "the collapsed card casts a shadow");
+        assert_ne!(below(true), plain, "the expanded card casts no shadow");
+    }
+
+    /// Feature 1121 FR-011: the focus ring, the target mark and the ripple of an expanded card
+    /// cover its whole drawn bounds: the ring and the mark reach its bottom edge, and a press in
+    /// its bottom-right corner ripples from there.
+    #[test]
+    fn an_expanded_cards_ring_mark_and_ripple_cover_its_bounds() {
+        let r = tokens::roles(ColorScheme::Light);
+        let backdrop = style::color(r.surface);
+        let m = overlong();
+        let near = |want: Rgb, p: &[u8]| -> f32 {
+            let want = style::color(want);
+            [want.r, want.g, want.b]
+                .iter()
+                .zip(p)
+                .map(|(w, got)| (w * 255.0 - f32::from(*got)).abs())
+                .sum()
+        };
+        let mut card = expanded_card(&m, false, 280.0);
+        let size = card.node.size();
+        let (rest, width) = card.drawn(backdrop);
+        let bottom = |row_from_end: u32| {
+            (((size.height.ceil() as u32 - row_from_end) * width + width / 2) * 4) as usize
+        };
+        card.focus_next();
+        let (focused, _) = card.drawn(backdrop);
+        let i = bottom(2);
+        assert!(
+            near(r.secondary, &focused[i..i + 3]) + 60.0 < near(r.secondary, &rest[i..i + 3]),
+            "no focus ring at the expanded card's bottom edge: {:?}",
+            &focused[i..i + 3]
+        );
+        let (targeted, _) = expanded_card(&m, true, 280.0).drawn(backdrop);
+        let i = bottom(1);
+        assert!(
+            near(r.primary, &targeted[i..i + 3]) < 12.0,
+            "no target mark at the expanded card's bottom edge: {:?}",
+            &targeted[i..i + 3]
+        );
+        let corner = Point::new(size.width - 0.5, size.height - 0.5);
+        let mut pressed = expanded_card(&m, false, 280.0);
+        pressed.press(corner);
+        let origin = ripple(&pressed)
+            .origin()
+            .expect("the press started a ripple");
+        assert!(
+            (origin.x - corner.x).abs() <= 1.0 && (origin.y - corner.y).abs() <= 1.0,
+            "pressed {corner:?}, rippled from {origin:?}"
+        );
+    }
+
     /// FR-015: the tooltips of a long title, branch and activity hold their full text.
     #[test]
     fn the_tooltips_of_a_long_card_hold_the_full_text() {
