@@ -88,7 +88,9 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-None.
+M4 unit 1 stopped at the context cap (checkpoint 220k). Done: T036–T045 ticked (TDD, cycle-log rows T037… onward), M3 row set to #1177 merged, full gate GREEN at 78dc827a, branch pushed at 69b77c74. Ledger follow-ups picked up: K4 (pinned by `an_expand_resets_the_body_edges`), focus under an open menu settles on `MenuClosed` (core `focus_held`/`settle_focus`), the Menu-key note and the §B.4 wheel order are criteria 6 and 4 of the visual-pass prompt.
+Next: review A, review B and the T046 visual pass, round 1, snapshot 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8; prompts in the scratchpad: m4-prompt-review-a.md, m4-prompt-review-b.md, m4-prompt-visual.md. Then: record verdicts in *Review rounds*, fix real findings (scoped gate), tick T046 on a visual PASS (commit its evidence under visual-pass/m4/), full gate once on the final tree, pr.md: scratchpad pr-title.txt `#1121: Overview cards: full text without truncation — M4 of 4: keyboard focus expands a card, Escape collapses first, Page keys scroll` and pr-body.md ending `Refs #1121`.
+Open findings: none yet. PR: none opened.
 
 ## Open escalation
 
