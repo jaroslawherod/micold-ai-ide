@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1149_review-comments-on-a-pull-request-s-diff-sent-to
 - **Started**: 2026-10-20
 - **Phase**: tasks
-- **Next step**: review tasks, gate, open design PR
+- **Next step**: M1 (after design PR merges)
 
 ## Pull requests
 
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 9da7410d0fbbfa3b1efa48b7b2efc964b3c3010b:dc70782b6bf0193f8b7575e71e273abb07ee59f6 | CHANGES (2 MAJOR, 3 MINOR, all fixed) |
 | Plan | 2 | c3f8e55734895dfd9d4f21aa89c678c63359b917:dc70782b6bf0193f8b7575e71e273abb07ee59f6 | CLEAN (2 MINOR, fixed, prose only) |
 | Tasks | 1 | 2e2a21d914c701e16939ae8cc0f2572fcee721b1:18eb11b47a1f2d64bcfddf0c3eb39eeee17c4324 | CHANGES (2 MAJOR, 2 MINOR, all fixed: test-first order of T020/T021, W21 test into T006) |
+| Tasks | 2 | diff HEAD~2 | CLEAN (2 MINOR, no action) |
 
 ## Declined review findings
 
