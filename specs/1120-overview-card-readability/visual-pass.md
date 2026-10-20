@@ -69,3 +69,13 @@ card per row; its label sits below it and the "Default" pose starts below that, 
 
 Left for the close unit or later: tooltips (B4), focus and ripple (B5, the outline is covered
 above), the resize sweep (B7), and a zoom with a targeted card.
+
+## Close (quickstart §B4, B5, B7, zoom with targeted cards), 2026-10-20, light, showcase (Xvfb, lavapipe), cb4cca54
+
+| Check | Result |
+|---|---|
+| B4 tooltips | PASS: the state word shows its reason ("needs permission"), the type word "Feature"; legible, not clipped (`b-close-b4-state-tooltip.png`, `b-close-b4-type-tooltip.png`) |
+| B5 ripple | PASS: the ripple spreads over the header band and the body and stays inside the rounded card (`b-close-b5-ripple-header-body.png`) |
+| B5 focus ring | Not seen at a display: the showcase has no Tab traversal (only the client binds it). Covered by the unit test `overview_card::tests::the_focused_card_draws_the_focus_ring`, which probes the card's top edge over the header row |
+| B7 resize sweep | PASS at about 284, 365 and 482 px cards (window 640, 830, 540), "five states" grid and CardGrid entry: no overlap, a long title ends in "…" at 284 px, cards in a row share one height (`b-close-b7-*.png`). At 482 px the grid is one column, so even rows show at 284 and 365 px only |
+| Zoom with targeted cards | FAIL at cb4cca54: at rest both ways the outlines are whole, and mid-flight the outline and tint stay inside each split piece, but a split piece in the lower row painted its card below the grid's bottom edge, over the pose's label (`b-close-zoom-{in,out}-midflight-*.png`). Cause: an iced layer does not inherit its parent's clip, and `CardGrid::draw` opened a split piece's layer on the piece's whole rectangle. Fixed: the layer is the piece cut to the viewport. Test `card_grid::tests::a_split_card_mid_zoom_paints_only_inside_its_pieces` (17661 pixels below the grid before the fix, none after) |
