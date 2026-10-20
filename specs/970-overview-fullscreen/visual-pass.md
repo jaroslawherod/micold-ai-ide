@@ -100,3 +100,31 @@ full screen with the button, not the chord (the chord was not run for this item)
 | 7 Card 20 as the very first card in the viewport | not observed: see above; the scroll offset in px was not read, only the visible rows |
 
 Screenshots: `specs/970-overview-fullscreen/visual-pass/30-m3-*.png` (downscaled to 60%).
+
+# Visual pass — M4 (Reduce motion), quickstart Part B item 6
+
+Run 2026-10-20 on a private Xvfb (1400x1000), `ICED_BACKEND=tiny-skia`, client and daemon built from the
+working tree (HEAD 1c94608e + uncommitted M4) and copied out of `target-shared/`, own `XDG_DATA_HOME`.
+Fixture: one git project, 12 worktrees + the root = 13 cards (3 columns windowed, 4 full screen).
+
+**Method for "first frame".** The renderer applies an input seconds after it arrives, so a single
+capture right after a key shows the old state. Instead: send the chord, capture 40-60 frames back to
+back (about 0.15 s apart), and compare each with a windowed and a full-screen reference
+(`compare -fuzz 3%`). One step means every frame is exactly one reference or the other.
+
+| Check | Result |
+|---|---|
+| (a) Appearance page: Theme select + *Reduce motion* checkbox, note "Switch the Overview's full-screen zoom in one step", unchecked by default, no overlap/clipping | PASS (20) |
+| (b) On + Save (`settings.json` gains `"reduce_motion": true`): enter with Ctrl+Shift+F | PASS: 9 frames exactly windowed, then every later frame exactly the full-screen layout (sidebar gone, 4 columns); none in between (28, 29) |
+| (b) Leave with Ctrl+Shift+F | PASS: 30 frames full screen, then 10 frames exactly windowed; none in between |
+| (b) Entry via the header button with it on | not run (chord only) |
+| (c) Off: zoom still animates | PASS, weakly: with it off, the first six captures after the button press (about 1 s) were unchanged, then a capture at 12 s showed a torn mid-zoom frame (cards offset, clipped at the left, 24), then settled (25). With it on, no such frame in 100 captures. Smoothness not judgeable |
+| (d) Tick, Cancel, reopen Settings | PASS: Cancel closes Settings, the checkbox is unchecked again (21, 22) |
+
+## Findings
+
+None. Not judged: the sidebar's own hide/show still sliding with it on (item 6, second half), and
+whether the zoom is visibly smooth with it off.
+
+## Screenshots
+`specs/970-overview-fullscreen/visual-pass/` 20-29 (23-29 downscaled to 50% / 40%).

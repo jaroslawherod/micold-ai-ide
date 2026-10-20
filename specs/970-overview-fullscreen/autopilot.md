@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: M4 implemented, scoped gate and reviews next
-- **Next step**: M4 scoped gate, review A, review B, visual pass, full gate, PR text
+- **Phase**: M4 reviewed, full gate next
+- **Next step**: M4 full gate, push, PR text
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | #1074 | merged |
 | M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | #1143 | merged |
 | M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | #1144 | merged |
-| M4 | T032–T041 | full | Reduce motion (US3) | — | implemented (T032–T041 ticked), scoped gate and reviews next |
+| M4 | T032–T041 | full | Reduce motion (US3) | — | reviewed, full gate next |
 
 Polish T042–T043 (visual pass, final gate) changes no code: close unit. M1 keeps US1 whole at 15
 tasks (+ US4's 2): toggle, drawer retraction and exits are one state change, and no split along a
@@ -68,6 +68,9 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 | M3 review A (code-review high) | 1 | c8483b7d07bdf0a4a36969e4f8711dd9aeaa4761:34fccd299512b1ea90e592c8a920a631ba26ebf7 | CLEAN |
 | M3 review B (conformance, sonnet) | 1 | 3cd7cdcfe0ecbcc3c43be3158a6a371c6687c908:34fccd299512b1ea90e592c8a920a631ba26ebf7 | CLEAN (2 MINOR: tests-after-code gap, recorded in the cycle-log; T030 names app.rs, the Task is in main.rs, recorded under Where things went) |
 | M3 visual pass | 1 | — | PASS (30 cards, scrolled to the bottom, card 20 stays in its row after entering full screen; no overlap mid-zoom). Not observed: card 20 as the very first card, exit, the chord |
+| M4 review A (code-review high) | 1 | afd2fd0973e0969385ee1ea0e807f62d72e0da6f:a0883430df135c44ac6b91bd5a0cb7ec2db8c089 | CLEAN |
+| M4 review B (conformance, sonnet) | 1 | afd2fd0973e0969385ee1ea0e807f62d72e0da6f:a0883430df135c44ac6b91bd5a0cb7ec2db8c089 | CLEAN (3 MINOR: no red for the persist and grid tests, Esc route untested (Esc maps to `Cancelled`), plan D4/T039 still said `LabelledToggle`: the last fixed, prose only) |
+| M4 visual pass | 1 | — | PASS (Appearance page, Save/Cancel, on: no intermediate frame entering or leaving, off: still animates). Not exercised: header button with the setting on, the sidebar's own slide with it on |
 
 ## Declined review findings
 
