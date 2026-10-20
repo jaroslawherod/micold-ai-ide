@@ -41,6 +41,8 @@ fn freed_width_counts_the_handle_only_when_the_sidebar_is_expanded() {
         freed_width(&state),
         f32::from(state.sidebar_width_px()) + crate::ui::material::RESIZE_HANDLE_WIDTH
     );
-    crate::features::sidebar::toggled(&mut state);
+    state.update(crate::app::Message::Sidebar(
+        crate::features::sidebar::Msg::Toggled,
+    ));
     assert_eq!(freed_width(&state), crate::ui::sidebar::STRIP_WIDTH);
 }
