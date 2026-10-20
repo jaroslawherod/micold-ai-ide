@@ -996,6 +996,7 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     // Service-owned, so the daemon's echo is what applies it (feature 026, FR-003). The client's
     // own write is a courtesy to the next boot; this is the value in force.
     app.core.session.default_ai_cli = settings.default_ai_cli;
+    app.core.session.default_prompt_template = settings.default_prompt_template;
     app.core.session.pi_activity_component = settings.pi_activity_component;
     app.core.session.save_terminal_history = settings.save_terminal_history;
     app.core.session.tool_server_enabled = settings.tool_server_enabled;

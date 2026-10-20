@@ -248,6 +248,7 @@ fn boot() -> (App, Task<Message>) {
     // here so the first frame has the user's own default rather than `ClaudeCode` (feature 026,
     // FR-003).
     core.session.default_ai_cli = loaded.settings.default_ai_cli;
+    core.session.default_prompt_template = loaded.settings.default_prompt_template.clone();
     core.session.pi_activity_component = loaded.settings.pi_activity_component;
     core.session.save_terminal_history = loaded.settings.save_terminal_history;
     core.session.tool_server_enabled = loaded.settings.tool_server_enabled;

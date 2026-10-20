@@ -939,8 +939,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_64() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 64);
+fn the_protocol_version_is_65() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 65);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a

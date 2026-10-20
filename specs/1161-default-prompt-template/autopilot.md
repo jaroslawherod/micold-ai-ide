@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1161
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
-- **Phase**: design-pr
-- **Next step**: merge design PR, then M1
+- **Phase**: milestone M1
+- **Next step**: M1 implement, verify, review, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1163 | Design | open | … |
+| #1163 | Design | merged | 7406e4cdc61cbf75bc88c92a2bee08913b6bdf71 |
 
 ## Milestones
 
@@ -49,8 +49,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 (T001-T014) partly done by unit 1, committed as WIP (not gated, not pushed, no PR). Branch is on origin/main after design PR #1163 (merge SHA 7406e4cd).
+Done and green: T001-T003 (`crates/micold-core/src/prompt_template.rs` + `shared_fixture` module + tests/prompt_template.rs, 9 tests pass); T004-T005 (Settings.default_prompt_template, tests pass); T006-T007 (daemon test tests/settings_default_prompt_template.rs, catalog/state/server arms, SettingsSet and DaemonSettings fields, PROTOCOL_VERSION 57 -> 58 with tests updated); T008 (Issue.body set by `described()`, `Issue::body()`, github_privacy test passes); T011-T012 (EnvironmentDraft.default_prompt_template + default_prompt_editor (app::Editor), `Msg::DefaultPromptTemplateAction`, ValidSettings/into_settings, persist.rs ServiceChanges/set_changed/window_settings, daemon_sync, startup, `session.default_prompt_template`; tests appended to tests/features_settings.rs, not yet run). All struct literals across workspace were patched; last full `cargo build --workspace --all-targets` had only features_settings/main_tests errors, which were then fixed (rebuild to confirm).
+NOT done: T009 tests are written (module `default_prompt_template` at the end of crates/micold-client/tests/features_worktree_form.rs) but red/uncompiled. T010 to implement in `crates/micold-client/src/features/worktree_form.rs`: `WorktreeForm.default_prompt_template: String` (copied from `state.session.default_prompt_template` in `opened()`), `first_prompt_edited: bool`, methods `refresh_default_prompt(&mut self)` (only when !edited and session_cli set; facts: issue=ticket.trim(), title/body from `issues.held()` issue with number == picked_issue, branch=preview().ok().branch, type=type_.as_str(), name; use `micold_core::prompt_template::render_text`, None gives empty), `edit_first_prompt(String)` (sets edited, ignored without CLI), `choose_session_cli(Option<AiCli>)` (None clears prompt; newly chosen from none clears edited and refreshes). Wire into session_cli_chosen, first_prompt_changed, type_selected, ticket_changed, name_changed, issue_picked, issue_details_loaded/issues loaded, opened. Test needs `GithubAvailability`, `IssueList`, `SearchState` public in that module and `SessionDefinition.prompt`. T013 (ui/settings/mod.rs: multi-line field via ui/material/text_area.rs bound to `Msg::DefaultPromptTemplateAction`, plus placeholder list from `PromptTemplate::PLACEHOLDERS`; find where Environment section is rendered, ui/settings/environment.rs). T014 docs (docs/user-guide/settings.md, worktrees-and-sessions.md). Then tick tasks in tasks.md, tdd cycle log not kept (no tdd/test-list.md exists; tasks.md already orders tests first), then verify.md steps: scoped gate, review A (high) and B, visual pass (quickstart section B steps 1 second half, 2, 3), full gate, PR "feat(1161): ... (#1161)".
 
 ## Open escalation
 

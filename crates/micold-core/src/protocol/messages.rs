@@ -724,6 +724,8 @@ pub enum ClientMsg {
         env_include_timeout_secs: Option<u64>,
         /// New default AI CLI, or `None` to leave unchanged (feature 026, FR-003).
         default_ai_cli: Option<AiCli>,
+        /// New default prompt template, or `None` to leave unchanged (feature 1161, FR-001).
+        default_prompt_template: Option<String>,
         /// Load Pi's activity component into new Pi sessions, or `None` to leave unchanged
         /// (feature 029, FR-012e).
         pi_activity_component: Option<bool>,
@@ -1925,6 +1927,9 @@ pub struct DaemonSettings {
     /// so a client-written field is reverted by the next unrelated settings change. That is
     /// already true of `theme`; this preference must not inherit it.
     pub default_ai_cli: AiCli,
+    /// Template for a new worktree's first prompt (feature 1161, FR-001). Service-owned like the
+    /// default CLI, because the MCP tools render it in the service. Empty means none.
+    pub default_prompt_template: String,
     /// Whether a Pi session is started with this application's activity component loaded
     /// (feature 029, FR-012e). Service-owned like the default CLI, because the spawn reads it.
     pub pi_activity_component: bool,
@@ -2436,6 +2441,7 @@ mod desktop_notifications_wire_tests {
             env_include_script_path: String::new(),
             env_include_timeout_secs: 10,
             default_ai_cli: AiCli::ClaudeCode,
+            default_prompt_template: String::new(),
             pi_activity_component: true,
             save_terminal_history: true,
             tool_server_enabled: true,
@@ -2478,6 +2484,7 @@ mod desktop_notifications_wire_tests {
                 env_include_script_path: None,
                 env_include_timeout_secs: None,
                 default_ai_cli: None,
+                default_prompt_template: None,
                 pi_activity_component: None,
                 save_terminal_history: None,
                 tool_server_enabled: None,

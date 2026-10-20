@@ -1463,6 +1463,7 @@ where
                 env_include_script_path,
                 env_include_timeout_secs,
                 default_ai_cli,
+                default_prompt_template,
                 pi_activity_component,
                 save_terminal_history,
                 tool_server_enabled,
@@ -1499,6 +1500,10 @@ where
                 })
                 .and_then(|()| match default_ai_cli {
                     Some(which) => state.set_default_ai_cli(which),
+                    None => Ok(()),
+                })
+                .and_then(|()| match default_prompt_template {
+                    Some(text) => state.set_default_prompt_template(text),
                     None => Ok(()),
                 })
                 .and_then(|()| match pi_activity_component {

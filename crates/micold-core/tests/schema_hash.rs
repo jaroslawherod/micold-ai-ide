@@ -321,7 +321,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 63 → 64 for #943's `StructuredEvent` additions (M1): `CompactBoundary`, `ConversationReset`,
 /// `CommandsReported`, `ModelChanged`, `ModelRefused`, `KindSwitched` and the new `Init`,
 /// `Assistant` and `User` fields, which shift the postcard layout `StructuredEvents` carries.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 64;
+
+///
+/// And 64 → 65 for feature 1161's `default_prompt_template` on `DaemonSettings` and `SettingsSet`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 65;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

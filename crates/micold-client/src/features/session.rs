@@ -204,6 +204,10 @@ pub struct State {
     /// Service-owned: this mirrors what the daemon reported in `DaemonSettings`, and is written
     /// only from a `SettingsChanged` or the boot-time settings load.
     pub default_ai_cli: AiCli,
+    /// The default prompt template (feature 1161, FR-001): mirrors the daemon's value, written
+    /// only from its settings or the boot-time load, and read by the create-worktree dialog.
+    /// Empty means none.
+    pub default_prompt_template: String,
     /// Whether new Pi sessions load this application's activity component (feature 029, FR-012e).
     ///
     /// Service-owned and mirrored exactly like [`Self::default_ai_cli`]: written only from the

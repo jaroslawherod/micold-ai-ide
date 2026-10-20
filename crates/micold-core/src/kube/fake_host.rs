@@ -136,6 +136,7 @@ pub fn welcoming_bridge() -> SshStdio {
             env_include_script_path: String::new(),
             env_include_timeout_secs: crate::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
             default_ai_cli: crate::session::AiCli::ClaudeCode,
+            default_prompt_template: String::new(),
             pi_activity_component: true,
             save_terminal_history: true,
             tool_server_enabled: true,
