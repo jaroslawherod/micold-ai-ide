@@ -77,7 +77,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review B M3 | 2 | same | CLEAN, 1 MINOR, fixed (prose only): cycle-log M3 row T027/T030/T032 said `WindowBlurred` in `main.rs`; now `.on_window_blur` in `ui/overview.rs`. Verify re-run: core `overview_` 36, client `card_grid overview` 118, `--test overview` 58, `idle_requests_no_frames` 14, `expansion_` 1, FR-018 grep empty |
 | Full gate M3 | G | 4d9894e3 + round 2 fixes | GREEN (first run red on `cargo fmt` of the new card_grid test; formatted, re-run green) |
 | Full gate M4 | A | 78dc827a | GREEN (first run) |
-| Review A / Review B / Visual pass §B.5–B.6 M4 | 1 | 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8 | pending (dispatched by the orchestrator) |
+| Review A / Review B / Visual pass §B.5–B.6 M4 | 1 | 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8 | Review A CHANGES: 2 MAJOR (F1 open-time focus expands the first card, FR-013; F2 Page keys swallow Ctrl/Cmd+Shift+PageUp/PageDown project chords), 3 MINOR (F3 scrollbar press collapses a focus-expanded card; F4 card trees keyed by index, focus state moves on reorder; F5 double map in `view` + 3 redraw helpers). Review B CLEAN, 1 MINOR (F1 `expansion_card_paged_scrolls` asserts only a task). Visual pass PASS every criterion (4 dark/light × 1x/2x; full-screen dark-1x only), evidence visual-pass/m4/ (180 PNGs); confirms A F1 by eye; observations: a fast 12-notch wheel burst scrolled body then Overview in one burst; a resting pointer on another card beats keyboard focus |
 
 ## Declined review findings
 
@@ -88,9 +88,12 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
+None.
+
+<!-- previous handover (M4 unit 1), done:
 M4 unit 1 stopped at the context cap (checkpoint 220k). Done: T036–T045 ticked (TDD, cycle-log rows T037… onward), M3 row set to #1177 merged, full gate GREEN at 78dc827a, branch pushed at 69b77c74. Ledger follow-ups picked up: K4 (pinned by `an_expand_resets_the_body_edges`), focus under an open menu settles on `MenuClosed` (core `focus_held`/`settle_focus`), the Menu-key note and the §B.4 wheel order are criteria 6 and 4 of the visual-pass prompt.
 Next: review A, review B and the T046 visual pass, round 1, snapshot 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8; prompts in the scratchpad: m4-prompt-review-a.md, m4-prompt-review-b.md, m4-prompt-visual.md. Then: record verdicts in *Review rounds*, fix real findings (scoped gate), tick T046 on a visual PASS (commit its evidence under visual-pass/m4/), full gate once on the final tree, pr.md: scratchpad pr-title.txt `#1121: Overview cards: full text without truncation — M4 of 4: keyboard focus expands a card, Escape collapses first, Page keys scroll` and pr-body.md ending `Refs #1121`.
-Open findings: none yet. PR: none opened.
+Open findings: none yet. PR: none opened. -->
 
 ## Open escalation
 
