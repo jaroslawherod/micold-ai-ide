@@ -28,3 +28,10 @@ list, and each row names the task pair it covers. Append only.
 | T018 | showcase sample card's activity is an `<agent-message>` wrapper | structural | client `overview` lib 49, `tests/overview` 44 passed |
 | T019 | user guide *What the agent is doing now* | docs | — |
 | T020 | FR-020 grep over `markup`, `overview_text`, `hook_activity` | — | no match |
+
+## M3 (US4: larger type, cards that grow, even rows)
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T021, T026 | `typography::OVERVIEW_CARD_TITLE` 17/24/500 in `SCOPED`, not in `ALL` | `cargo test -p micold-core --test tokens_scales the_overview_card_title`: `error[E0425]: cannot find value OVERVIEW_CARD_TITLE in module typography` (and `SCOPED`) | `tokens_scales` 17 passed |
+| T022, T027 | `TypeRole::CardTitle` → `OVERVIEW_CARD_TITLE`; `no_role_invents_a_size_outside_the_scale` admits `SCOPED` by name | `cargo test -p micold-client --lib --no-run`: `error[E0599]: no variant … named CardTitle found for enum TypeRole` (type_role_mapping.rs:41, :208) | `cargo test -p micold-client --lib -- type_role_mapping atoms`: 8 passed |
