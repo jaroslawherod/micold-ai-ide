@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1092
 - **Worktree branch**: feat/1092_daemon-settings-should-open-in-an-overlay-with-its
 - **Started**: 2026-10-19
-- **Phase**: milestone M2 (implemented, gating and reviewing)
-- **Next step**: review A and B, full gate, open the M2 PR
+- **Phase**: milestone M2 (PR open)
+- **Next step**: wait for CI, merge, then M3
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1137 | Design | merged | 0db3cf9ccbebc1b98662a5becfc4f2c4c3b96504 |
 | #1160 | M1 | merged | 08cb6ea11959288eb6832df9cce396a0589238f1 |
+| #1170 | M2 | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014, T016, T017, T019, T020 | full | Add/Edit daemon in a modal dialog, own Save/Cancel, in-dialog confirmation, no inline form | #1160 | merged |
-| M2 | T015, T018, T021–T023 | full | Add-path tests, focus return | - | pending |
+| M2 | T015, T018, T021–T023 | full | Add-path tests, focus return | #1170 | PR open |
 | M3 | T024–T029 | light | Details in a dialog | - | pending |
 
 ## Decisions
