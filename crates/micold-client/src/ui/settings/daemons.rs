@@ -135,7 +135,7 @@ fn stop_button<'a>(view: &DaemonView, roles: Roles) -> Button<'a, Message> {
     }
 }
 
-fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Element<'a, Message> {
+fn actions<'a>(view: &DaemonView, kube: bool, roles: Roles) -> Element<'a, Message> {
     let id = view.id;
     let mut buttons = row![].spacing(spacing::XS);
     match view.state {
@@ -191,8 +191,9 @@ fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Eleme
                 .on_press(Message::Daemons(DaemonsMsg::EditOpened(id))),
         )
         .push(
-            Button::text(if open { "Hide details" } else { "Details" }, roles)
-                .on_press(Message::Daemons(DaemonsMsg::DetailsToggled(id))),
+            Button::text("Details", roles)
+                .id(opener_id(Opener::Row(id, RowAction::Details)))
+                .on_press(Message::Daemons(DaemonsMsg::DetailsOpened(id))),
         )
         .push(
             Button::text("Remove", roles)
@@ -234,7 +235,6 @@ fn daemon_row<'a>(
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
-    let open = state.details_shown.contains(&view.id);
     let header = row![
         crate::ui::material::Text::new(
             view.name.clone(),
@@ -300,13 +300,7 @@ fn daemon_row<'a>(
             None => {}
         }
     }
-    body = body.push(actions(&view, open, kube, roles));
-    if open {
-        body = body.push(details_block(
-            crate::features::daemons::details(state, view.id),
-            roles,
-        ));
-    }
+    body = body.push(actions(&view, kube, roles));
     body.into()
 }
 

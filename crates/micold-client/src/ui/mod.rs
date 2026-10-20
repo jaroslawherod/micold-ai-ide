@@ -16,6 +16,7 @@ pub(crate) mod confirm_forget;
 pub(crate) mod confirm_link_open;
 pub(crate) mod confirm_pick_run;
 pub(crate) mod confirm_session_remove;
+pub mod daemon_details_dialog;
 pub mod daemon_form_dialog;
 mod focus;
 /// The install-me screen (feature 028, FR-019): shown instead of everything else when this copy
