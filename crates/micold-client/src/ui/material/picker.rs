@@ -22,6 +22,7 @@ use std::ops::Range;
 
 use super::style;
 use super::text::TypeRole;
+use super::StatusChip;
 use crate::icons::Icon;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
@@ -29,6 +30,7 @@ use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Widget};
 use iced::widget::{button, column, opaque, row, Space};
 use iced::{alignment, Element, Length, Pixels, Rectangle, Size};
+use micold_core::jira_status::TicketStatus;
 use micold_core::tokens::{density, motion::duration, shape, spacing, Rgb, Roles};
 use micold_core::typeahead::fit_around;
 use std::time::Duration;
@@ -61,6 +63,8 @@ pub struct Row {
     /// Keep each line of the row to one line, cut with "…" where the width runs out, instead of
     /// wrapping. See [`Row::single_line`].
     pub single_line: bool,
+    /// A Jira ticket's status, drawn as a chip beside the label's first line. See [`Row::status`].
+    pub status: Option<TicketStatus>,
 }
 
 impl Row {
@@ -74,6 +78,7 @@ impl Row {
             tooltip: None,
             key: None,
             single_line: false,
+            status: None,
         }
     }
 
@@ -113,6 +118,13 @@ impl Row {
     /// closes and waits again for the one that arrived (038 FR-017).
     pub fn key(mut self, key: u64) -> Self {
         self.key = Some(key);
+        self
+    }
+
+    /// Show a Jira ticket's status as a chip beside the label. `None` draws no chip and leaves the
+    /// row as it was (1101 FR-009). Only a row with [`Row::details`] shows it.
+    pub fn status(mut self, status: Option<TicketStatus>) -> Self {
+        self.status = status;
         self
     }
 
@@ -243,7 +255,17 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
             let marker = iced::widget::container(marker(selected, r))
                 .height(Length::Fixed(ROW_ROLE.line_height_dp()))
                 .align_y(alignment::Vertical::Center);
-            let lines = row![marker, column![label, details].width(Length::Fill)]
+            // The chip stands beside the label's first line and takes only its own width, so the
+            // label wraps in what is left; a row without a status has the label alone, as before.
+            let first_line: Element<'a, M> = match StatusChip::maybe(item.status.as_ref(), false, r)
+            {
+                Some(chip) => row![label, chip]
+                    .spacing(spacing::XS)
+                    .align_y(alignment::Vertical::Center)
+                    .into(),
+                None => label.into(),
+            };
+            let lines = row![marker, column![first_line, details].width(Length::Fill)]
                 .spacing(spacing::SM)
                 .align_y(alignment::Vertical::Top)
                 .width(Length::Fill);

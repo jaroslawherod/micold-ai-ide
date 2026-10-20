@@ -469,6 +469,7 @@ pub fn issue_rows(form: &WorktreeForm) -> (Vec<TypeaheadRow>, Option<usize>) {
             TypeaheadRow::new(issue.title_line(), emphasis.title)
                 .details(issue.details_line(), emphasis.details)
                 .key(issue.number())
+                .status(issue.status().cloned())
                 .tooltip(issue.description()),
         );
     }

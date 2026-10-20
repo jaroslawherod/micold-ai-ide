@@ -30,13 +30,14 @@ const PAGE_SIZE: u32 = 100;
 const SEARCH_SIZE: u32 = 50;
 
 /// The fields a listing reads, and nothing more (contracts/jira-cloud-source.md §3).
-const FIELDS: [&str; 6] = [
+const FIELDS: [&str; 7] = [
     "summary",
     "labels",
     "issuetype",
     "reporter",
     "description",
     "updated",
+    "status",
 ];
 
 /// Jira Cloud over HTTPS, with the user's account email and API token.
@@ -148,5 +149,21 @@ impl JiraSource for JiraCloud {
         };
         let body = request_body(&jql, None, SEARCH_SIZE);
         parse_page(&self.post(conn, token, &body)?).map(|page| page.issues)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn list_and_search_bodies_ask_for_the_status() {
+        for body in [
+            request_body("project = ABC", None, PAGE_SIZE),
+            request_body("project = ABC", None, SEARCH_SIZE),
+        ] {
+            let fields = body["fields"].as_array().expect("fields");
+            assert!(fields.iter().any(|f| f == "status"), "{fields:?}");
+        }
     }
 }

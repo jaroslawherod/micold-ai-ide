@@ -384,6 +384,9 @@ pub struct Issue {
     key: Option<String>,
     /// The Jira issue type's name (`Bug`); `None` for a GitHub issue and for one without a type.
     type_name: Option<String>,
+    /// The Jira ticket's current status; `None` for a GitHub issue and for a ticket Jira reported
+    /// none for. Takes no part in matching or ordering (1101 FR-011).
+    status: Option<crate::jira_status::TicketStatus>,
 }
 
 /// Where a match's emphasis lands on a row's two lines (038 data-model §3): byte ranges of
@@ -428,6 +431,7 @@ impl Issue {
             row_text: String::new(),
             key: None,
             type_name: None,
+            status: None,
         };
         issue.row_text = issue.match_text();
         issue
@@ -452,6 +456,17 @@ impl Issue {
     pub fn with_type_name(mut self, name: &str) -> Issue {
         self.type_name = Some(name.to_string());
         self
+    }
+
+    /// The same issue with its Jira status.
+    pub fn with_status(mut self, status: Option<crate::jira_status::TicketStatus>) -> Issue {
+        self.status = status;
+        self
+    }
+
+    /// The Jira ticket's status, when Jira reported a usable one.
+    pub fn status(&self) -> Option<&crate::jira_status::TicketStatus> {
+        self.status.as_ref()
     }
 
     /// The Jira key, when the issue comes from Jira.
