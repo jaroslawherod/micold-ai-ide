@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1149
 - **Worktree branch**: feat/1149_review-comments-on-a-pull-request-s-diff-sent-to
 - **Started**: 2026-10-20
-- **Phase**: implement (M1, PR open)
-- **Next step**: M2 after the M1 PR merges
+- **Phase**: implement (M2, handover)
+- **Next step**: M2 gate, review B, full gate, PR (see Handover)
 
 ## Pull requests
 
@@ -23,8 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Write, list, tidy PR comments on a PR's diff (whole wire delta, Send for PR not yet offered) | #1158 | in review |
-| M2 | T012–T022 | full | Send review on a PR: build_pr batch, branch/commit reads, daemon delivery | | pending |
+| M1 | T001–T011 | full | Write, list, tidy PR comments on a PR's diff (whole wire delta, Send for PR not yet offered) | #1158 | merged |
+| M2 | T012–T022 | full | Send review on a PR: build_pr batch, branch/commit reads, daemon delivery | | in progress |
 | M3 | T023–T027 | full | Anchoring on hunks, head-follow, outdated | | pending |
 
 ## Decisions
@@ -56,7 +56,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 T012-T022 implemented and ticked (commit 02778b2dd: core build_pr, GitCli::checked_out_branch/has_commit, daemon W20 in state.rs/review.rs, client send_action/Effect::ReviewSend.pr, user guide; tests in review_send.rs, review_reports.rs, review_git.rs, features_pr_changes.rs (client tests are there, not features_changes.rs, beside M1's PR fixtures)). Passing: core prompt, review_git, review_send (20), client features tests. Uncommitted at handover: review A fixes (begin_send refuses scope/context mismatch + test in comment.rs; flatten_title also maps U+2028/2029 + test in prompt.rs).
+Review A (code-review high, round 1): fixed F1 (scope/pr mismatch), F4 (U+2028/9). Declined: unreadable computed from pre-begin_send snapshot (race of ms, note advisory); branch compared by name only (contract P-3 says so; fork case is a follow-up); Send hidden when PR not listed or head empty (spec FR-013 / T017 says None); outdated for PR comments is the client's verdict (spec); one git spawn per commit (bounded, minor).
+Next: commit the fixes; run `cargo test -p micold-core --lib review::` and daemon review_send/review_reports/review_edit (review_reports + review_edit not yet run after the change: run them); scoped gate (an earlier one was started on the pre-fix tree and may still run; log in scratchpad sgate.log); review B (conformance, sonnet) with brief.py milestone M2 - note FR-007 wants the head commit named in the preamble but contract P-1 names it only via note 2 when the head moved (decide: accept per contract, or add the commit to P-1 and the docs); full gate (GIT_CONFIG_GLOBAL=/dev/null mise run gate); rebase on origin/main if behind; push, open PR "feat(1149): send a pull request's review comments to the agent (#1149)", body ends Refs #1149. Review rounds table: add M2 diff A round 1 (snapshot 1d57567e3f7e078839c0ccea65cb6b2726802d4e:d9c2e378c1ef6e6a8f142a5369dd16c856e9324c, CHANGES->fixed, 7 findings: 2 fixed, 5 declined).
 
 ## Open escalation
 
