@@ -94,6 +94,8 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     }
     let grid = grid
         .on_scroll(Message::Overview(Msg::GridScrolled))
+        // The window losing focus collapses the expanded card; regaining it expands none (FR-005).
+        .on_window_blur(Message::Overview(Msg::Expansion(Event::WindowBlurred)))
         .scroll_id(GRID_SCROLL_ID.clone())
         .on_reflow(|offset| Message::Overview(Msg::Reflowed(offset.y)))
         .zoom(Zoom {

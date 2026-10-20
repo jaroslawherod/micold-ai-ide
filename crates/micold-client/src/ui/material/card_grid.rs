@@ -45,6 +45,7 @@ pub struct CardGrid<'a, M> {
     scroll_id: Option<Id>,
     unscrolled: bool,
     expanded: Option<(usize, OverviewCard<'a, M>)>,
+    on_window_blur: Option<M>,
 }
 
 /// What a grid asks its owner when a zoom moves the card at the top of the view.
@@ -65,6 +66,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             scroll_id: None,
             unscrolled: false,
             expanded: None,
+            on_window_blur: None,
         }
     }
 
@@ -90,6 +92,13 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
     /// scrolled beneath (feature 972, FR-012).
     pub fn on_scroll(mut self, message: M) -> Self {
         self.on_scroll = Some(message);
+        self
+    }
+
+    /// Publish `message` when the window loses focus, so the owner can collapse an expanded card
+    /// through its own message (feature 1121, FR-005, contract U4).
+    pub fn on_window_blur(mut self, message: M) -> Self {
+        self.on_window_blur = Some(message);
         self
     }
 }
@@ -374,6 +383,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             expanded,
             twin,
             rests: self.cards.iter().map(OverviewCard::rest_messages).collect(),
+            on_window_blur: self.on_window_blur,
             cards: self
                 .cards
                 .iter()
@@ -404,6 +414,8 @@ struct Grid<'a, M> {
     twin: Option<Element<'a, M>>,
     /// Each card's `on_rest` and `on_leave` messages (feature 1121, R5).
     rests: Vec<(Option<M>, Option<M>)>,
+    /// Published when the window loses focus (feature 1121, FR-005).
+    on_window_blur: Option<M>,
 }
 
 /// The expanded card's layout where it is drawn: its slot's node moved up by `place` (K3) to lie
@@ -692,6 +704,11 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         shell: &mut Shell<'_, M>,
         viewport: &Rectangle,
     ) {
+        if let (Event::Window(window::Event::Unfocused), Some(on_blur)) =
+            (event, &self.on_window_blur)
+        {
+            shell.publish(on_blur.clone());
+        }
         let zooming = tree.state.downcast_ref::<ZoomState>().ends.is_some();
         // The widths move with the sidebar and the zoom ends on a layout, so ask for both while it
         // runs; nothing is asked for at rest.
@@ -2587,6 +2604,24 @@ mod tests {
         let t1 = t0 + EXPAND_REST * 2;
         assert_eq!(frame_at(&mut m, next, t1), ["leave 1"]);
         assert_eq!(frame_at(&mut m, next, t1 + EXPAND_REST), ["rest 4"]);
+    }
+
+    /// Feature 1121 FR-005, U4: the window losing focus publishes the grid's `on_window_blur`,
+    /// and regaining it publishes nothing.
+    #[test]
+    fn the_window_losing_focus_publishes_on_window_blur() {
+        let models: Vec<CardModel> = (0..3).map(titled).collect();
+        let grid = plain_grid(&models).on_window_blur("blur".to_string());
+        let mut m = mounted(grid, 900.0, 4000.0);
+        let away = mouse::Cursor::Unavailable;
+        assert_eq!(
+            m.send(Event::Window(iced::window::Event::Unfocused), away),
+            ["blur"]
+        );
+        assert_eq!(
+            m.send(Event::Window(iced::window::Event::Focused), away),
+            NOTHING
+        );
     }
 
     /// Feature 1121 R5, US4 sc.6: nothing rests while a zoom runs.
