@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M3
-- **Next step**: M3 — review A r2 and review B r2 (sonnet, fix diff), then PR.
+- **Next step**: M3 — review A r2 and review B r2 (sonnet, fix diff from round-1 snapshot 0a4547560bec594c020ff529e18c24c9b260ec0c:330bf0031533a0f591c99bb52f3ebae2cdac4322; round-2 snapshot b9ac5975a159891e08788042b0574271515ff555:a6fbf63e2e0b99811fada73d9c79ee9790a9dacc), then PR files.
 
 ## Pull requests
 
@@ -71,6 +71,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review A M3 | 1 | 0a4547560bec594c020ff529e18c24c9b260ec0c:330bf0031533a0f591c99bb52f3ebae2cdac4322 | CHANGES: 2 MAJOR, 3 MINOR, all fixed. F1 grid rest keyed on the card's `SessionLocation` (`rest_messages` carries it), test `a_reorder_under_a_resting_pointer_leaves_the_card_and_rests_on_the_new_one`; F2 `MenuClosed` ends a hover whose pointer left (`end_hover`, FR-005 re-expands focus), test `a_leave_during_an_open_menu_collapses_on_close`; F3 a rest under a menu records `pointer_on` + `rest_held`, expanded on `MenuClosed`, test `a_rest_during_an_open_menu_expands_on_close`; F4 = B F1; F5 CALLERS reason names `ShowTimer` |
 | Review B M3 | 1 | same | CHANGES: 1 MAJOR, 2 MINOR, all fixed. F1 mounted `ui/overview.rs` test `the_window_losing_focus_publishes_the_expansion_blur` (red by mutant: wiring line deleted); main_tests test renamed `expansion_window_blurred_collapses_and_refocus_expands_none`, `WindowFocusChanged(false)` dropped; F2 cycle log: T031 red by three one-off tooltip mutants, T033 note; F3 T027/T032 texts amended (fixed, prose only) |
 | Visual pass §B.3, B.4, B.6–B.8 M3 (T035) | 1 | 76570558 | PASS every criterion, light+dark, 1x+2x (tall-view case 1x only); §B.4 wheel order "inside first, then Overview" inferred, not shown; evidence visual-pass/m3/ (53 PNGs). Note: the Menu key opens the keyboard-focused card's menu while a different hover-expanded card stays expanded — checked against FR-012/US4: no card expands (the hovered one already was) and the Menu key's target is the focused card as before (feature 972), so M3 conforms; M4 makes focus expand, see Follow-ups |
+| Full gate M3 | F | a6fbf63e | GREEN (after review round 1 fixes) |
 
 ## Declined review findings
 
