@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: plan
-- **Next step**: plan unit (clarify CLEAN; D1/D2 are defaults pending jaro's confirmation)
+- **Next step**: plan unit: review A plan round 1 (plan artifacts written, not yet reviewed)
 
 ## Pull requests
 
@@ -38,6 +38,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 |---|---|---|---|
 | Review A spec | 1 | fcb294c971d5b41839f3951557abff60660340ac:4a36fba89f36082ced2076392fc14ec5e2ba3aee | CHANGES: 2 MAJOR, 3 MINOR (F1–F5 all fixed) |
 | Review A spec | 2 | fa37323a95555838f59f8feff82ea0ed01600972:550978508146ad5978bd9ee1a9688b19118d5ca0 | CLEAN (2 MINOR, both fixed) |
+| Review A plan | 1 | 87d13a0a2d57de09847732a4e464bd243ec8a49f:efe4e646959dbdee73bf65a2b7f4d65fa0d75299 | pending |
 
 ## Declined review findings
 
@@ -46,7 +47,13 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
 ## Handover
 
-None.
+Plan unit handed over at the 150k cap after `speckit-plan` (step 1 of tasks/plan.md). Done:
+plan.md, research.md (R1–R10), data-model.md, contracts/expansion.md (K1–K6),
+contracts/card-grid.md (U1–U4), quickstart.md. No before/after_plan hooks registered. D1 is
+localised to one `on_escape` arm (research R7), D2 to `overview_text::worktree_dir` (R9).
+Next: review A plan round 1 (rubric `rubrics/plan.md`, snapshot in *Review rounds*, model:
+session default), act on it per tasks/review-rounds.md, then set **Next step** to `tasks unit`.
+Open findings: none yet. PR: none.
 
 ## Open escalation
 
