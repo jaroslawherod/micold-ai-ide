@@ -131,9 +131,14 @@ impl Expansion {
                     self.body_edges = (false, false);
                     self.focus_escaped |= self.focused.as_ref() == Some(&location);
                     self.pointer_escaped |= self.pointer_on.as_ref() == Some(&location);
+                    // A rest the menu held back does not undo this collapse on close.
+                    self.rest_held = false;
                 }
             }
-            Event::WindowBlurred => self.collapse(),
+            Event::WindowBlurred => {
+                self.rest_held = false;
+                self.collapse();
+            }
             Event::MenuOpened => self.menu_open = true,
             Event::MenuClosed => {
                 self.menu_open = false;
@@ -528,6 +533,23 @@ mod tests {
             Event::MenuClosed,
         ];
         assert_eq!(shown(&after(escaped)), None);
+    }
+
+    /// K1, FR-012 (review A F1, M3 round 2): a rest held back by an open menu does not expand on
+    /// close once Escape or a window blur collapsed the card under the menu.
+    #[test]
+    fn a_rest_held_by_the_menu_is_dropped_by_escape_or_blur() {
+        for dismiss in [Event::Escape, Event::WindowBlurred] {
+            let events = [
+                rest("a"),
+                Event::MenuOpened,
+                leave("a"),
+                rest("a"),
+                dismiss.clone(),
+                Event::MenuClosed,
+            ];
+            assert_eq!(shown(&after(events)), None, "after {dismiss:?}");
+        }
     }
 
     /// K1, Edge Case *card removed*: a listing without the expanded card collapses it; a focus
