@@ -331,7 +331,7 @@ as in [Sending a review](#sending-a-review); the comments become **sent** once i
 stay drafts, with an error, when it is not. The agent's reports show on the comments as for the
 working tree's.
 
-The message names the pull request (number, title and head branch) and says it is merged or closed
+The message names the pull request (number, title, head branch and head commit) and says it is merged or closed
 when it is. It asks the agent to make each change or explain why not, to commit the changes and to
 push them to the pull request's head branch. It asks for nothing to be posted: **nothing is posted
 to GitHub** by Micold or by the message, and the agent's push is what updates the pull request.
@@ -376,7 +376,7 @@ Name this.
 ````
 
 A pull request's message has the same blocks. Its first paragraph reads "Please work through these
-review comments on pull request #12 "Add retry" (head branch feat/retry). Each block below is one
+review comments on pull request #12 "Add retry" (head branch feat/retry, head commit 3f2a9c1…). Each block below is one
 comment: …" (", which is merged" or ", which is closed" follows the branch for those states, and the
 title is cut to one line of at most 200 characters), and its second reads "For each comment, either
 make the change it asks for, or explain why you are not making it. Commit the changes you make and

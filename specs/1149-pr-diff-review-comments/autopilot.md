@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1149
 - **Worktree branch**: feat/1149_review-comments-on-a-pull-request-s-diff-sent-to
 - **Started**: 2026-10-20
-- **Phase**: implement (M2, handover)
-- **Next step**: M2 gate, review B, full gate, PR (see Handover)
+- **Phase**: implement (M2, full gate)
+- **Next step**: M2 full gate, PR
 
 ## Pull requests
 
@@ -44,6 +44,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 2e2a21d914c701e16939ae8cc0f2572fcee721b1:18eb11b47a1f2d64bcfddf0c3eb39eeee17c4324 | CHANGES (2 MAJOR, 2 MINOR, all fixed: test-first order of T020/T021, W21 test into T006) |
 | Tasks | 2 | diff HEAD~2 | CLEAN (2 MINOR, no action) |
 | M1 diff A (high) | 1 | 2e3a3f4c226dc859315e8577b0fcaf465ad7ef51:7e012c8f1ccd04b1474bd10452a0c78b3493a831 | CLEAN (3 MINOR; F2 fixed) |
+| M2 diff A (high) | 1 | 1d57567e3f7e078839c0ccea65cb6b2726802d4e:d9c2e378c1ef6e6a8f142a5369dd16c856e9324c | CHANGES, fixed (7 findings: 2 fixed, 5 declined) |
+| M2 diff B (conformance) | 1 | 9aaa2a907f335506a49db36354855054ffc941c6:a673841f4d04a9ee5f0e2f92821a8f1c868ffd6d | CHANGES (1 MAJOR: FR-007 head commit not in preamble; fixed by naming the current head commit in P-1, contract, tests, user guide; 1 MINOR no action) |
 | M1 diff B (conformance) | 1 | 1d902dec2d126f965bf0b7be9a7a95485058dc3c:7e012c8f1ccd04b1474bd10452a0c78b3493a831 | CLEAN (3 MINOR) |
 
 ## Declined review findings
@@ -56,9 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 T012-T022 implemented and ticked (commit 02778b2dd: core build_pr, GitCli::checked_out_branch/has_commit, daemon W20 in state.rs/review.rs, client send_action/Effect::ReviewSend.pr, user guide; tests in review_send.rs, review_reports.rs, review_git.rs, features_pr_changes.rs (client tests are there, not features_changes.rs, beside M1's PR fixtures)). Passing: core prompt, review_git, review_send (20), client features tests. Uncommitted at handover: review A fixes (begin_send refuses scope/context mismatch + test in comment.rs; flatten_title also maps U+2028/2029 + test in prompt.rs).
-Review A (code-review high, round 1): fixed F1 (scope/pr mismatch), F4 (U+2028/9). Declined: unreadable computed from pre-begin_send snapshot (race of ms, note advisory); branch compared by name only (contract P-3 says so; fork case is a follow-up); Send hidden when PR not listed or head empty (spec FR-013 / T017 says None); outdated for PR comments is the client's verdict (spec); one git spawn per commit (bounded, minor).
-Next: commit the fixes; run `cargo test -p micold-core --lib review::` and daemon review_send/review_reports/review_edit (review_reports + review_edit not yet run after the change: run them); scoped gate (an earlier one was started on the pre-fix tree and may still run; log in scratchpad sgate.log); review B (conformance, sonnet) with brief.py milestone M2 - note FR-007 wants the head commit named in the preamble but contract P-1 names it only via note 2 when the head moved (decide: accept per contract, or add the commit to P-1 and the docs); full gate (GIT_CONFIG_GLOBAL=/dev/null mise run gate); rebase on origin/main if behind; push, open PR "feat(1149): send a pull request's review comments to the agent (#1149)", body ends Refs #1149. Review rounds table: add M2 diff A round 1 (snapshot 1d57567e3f7e078839c0ccea65cb6b2726802d4e:d9c2e378c1ef6e6a8f142a5369dd16c856e9324c, CHANGES->fixed, 7 findings: 2 fixed, 5 declined).
+None.
 
 ## Open escalation
 
