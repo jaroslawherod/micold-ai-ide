@@ -761,6 +761,18 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
             .update(Message::Overview(Msg::CardMenuEntryChosen(inner.clone())));
         return update_inner(app, *inner);
     }
+    // Page Down / Page Up on the expanded card: page its body by one visible height (1121 FR-008).
+    if let Msg::CardPaged { down } = msg {
+        return match app.core.overview.expansion.expanded() {
+            Some(location) => {
+                iced::advanced::widget::operate(micold_client::ui::overview::page_body(
+                    micold_client::ui::overview::card_scroll_id(location),
+                    down,
+                ))
+            }
+            None => Task::none(),
+        };
+    }
     // A zoom moved the first visible card: scroll the grid to keep it in view (feature 970).
     if let Msg::Reflowed(y) = msg {
         app.core.update(Message::Overview(Msg::Reflowed(y)));

@@ -9,6 +9,7 @@ use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{Button, CardGrid, MenuItem, OverviewCard, Tooltip, Zoom};
+use iced::advanced::widget::Operation;
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
 use micold_core::location_state::location_state;
@@ -17,7 +18,7 @@ use micold_core::overview::{
     activation, card_state, location_type, order, session_counts, CardModel, CardSignals,
     CardState, CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
 };
-use micold_core::overview_expansion::{Event, Expansion};
+use micold_core::overview_expansion::{page_target, Event, Expansion};
 use micold_core::session::{Session, SessionLocation};
 use micold_core::task_progress::{self, Progress, Source};
 use micold_core::theme::ColorScheme;
@@ -47,6 +48,44 @@ pub fn card_scroll_id(location: &SessionLocation) -> iced::advanced::widget::Id 
     })
 }
 
+/// Scroll the scrollable named `id` by one of its own visible heights, down or up (feature 1121,
+/// FR-008, research R6): Page Down / Page Up on the expanded card's body. Its own operation rather
+/// than `scroll_by`, because only the scrollable knows how tall its view is.
+pub fn page_body<T>(id: iced::advanced::widget::Id, down: bool) -> impl Operation<T> {
+    struct PageBody {
+        id: iced::advanced::widget::Id,
+        down: bool,
+    }
+    impl<T> Operation<T> for PageBody {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self);
+        }
+
+        fn scrollable(
+            &mut self,
+            id: Option<&iced::advanced::widget::Id>,
+            bounds: iced::Rectangle,
+            content_bounds: iced::Rectangle,
+            _translation: iced::Vector,
+            state: &mut dyn iced::advanced::widget::operation::Scrollable,
+        ) {
+            if id == Some(&self.id) {
+                let page = if self.down {
+                    bounds.height
+                } else {
+                    -bounds.height
+                };
+                state.scroll_by(
+                    iced::widget::scrollable::AbsoluteOffset { x: 0.0, y: page },
+                    bounds,
+                    content_bounds,
+                );
+            }
+        }
+    }
+    PageBody { id, down }
+}
+
 /// The Overview: a grid with one card per location of the active project.
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
@@ -73,6 +112,16 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                 .on_leave(expansion(Event::PointerLeft(location.clone())))
                 .scroll_id(card_scroll_id(&location))
                 .on_body_scroll(move |up, down| expansion(Event::BodyScrolled { up, down }))
+                .on_keyboard_focus({
+                    let location = location.clone();
+                    move |shown| {
+                        expansion(if shown {
+                            Event::FocusGained(location.clone())
+                        } else {
+                            Event::FocusLost(location.clone())
+                        })
+                    }
+                })
                 .on_press(Message::Overview(Msg::ActivationRequested(
                     model.activation.clone(),
                 )))
@@ -84,6 +133,20 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                         origin: MenuOrigin::Pointer,
                     })
                 })
+        })
+        .collect::<Vec<_>>();
+    // Page Up / Page Down go to the expanded card only while `page_target` gives them to it (K4).
+    let paging = |down: bool| page_target(&state.overview.expansion, down).is_some();
+    let paging = (paging(false), paging(true));
+    let cards = cards
+        .into_iter()
+        .enumerate()
+        .map(|(index, card)| match expanded_at {
+            Some(at) if at == index && (paging.0 || paging.1) => card.on_page(move |down| {
+                let claimed = if down { paging.1 } else { paging.0 };
+                claimed.then_some(Message::Overview(Msg::CardPaged { down }))
+            }),
+            _ => card,
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
@@ -672,6 +735,199 @@ mod tests {
         );
         let focus = iced::Event::Window(iced::window::Event::Focused);
         assert!(mounted.send(focus, away).is_empty());
+    }
+
+    /// An open Overview of the root and `n` worktrees.
+    fn overview_of(n: usize) -> State {
+        use micold_core::project::{Availability, Project};
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state
+            .workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        state.workspace.active = Some(path);
+        state.worktree.worktrees = (0..n)
+            .map(|i| Worktree {
+                dir_name: format!("feat-{i}"),
+                path: format!("/repo/.claude/worktrees/feat-{i}").into(),
+                branch: Some(format!("feat/{i}")),
+                status: WorktreeStatus::Valid,
+                included: false,
+            })
+            .collect();
+        state.overview.open = true;
+        state
+    }
+
+    fn mount(state: &State) -> Mounted<'static> {
+        Mounted::new(view(state, ColorScheme::Dark).map(|m| format!("{m:?}")))
+    }
+
+    fn expansion_message(event: Event) -> String {
+        format!(
+            "{:?}",
+            Message::Overview(crate::features::overview::Msg::Expansion(event))
+        )
+    }
+
+    /// The frame after a traversal, where the cards report what it did.
+    fn redraw(mounted: &mut Mounted<'_>) -> Vec<String> {
+        mounted.send(
+            iced::Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            iced::mouse::Cursor::Unavailable,
+        )
+    }
+
+    /// The focus messages of `moves` Tab moves through the mounted Overview, in order.
+    fn focus_moves(mounted: &mut Mounted<'_>, moves: usize) -> Vec<String> {
+        (0..moves)
+            .flat_map(|_| {
+                mounted.focus_next();
+                let mut reported = redraw(mounted);
+                // Within one frame, the card that lost focus first.
+                reported.sort_by_key(|m| !m.contains("FocusLost"));
+                reported
+            })
+            .filter(|m| m.contains("Focus"))
+            .collect()
+    }
+
+    /// Feature 1121 T038, Story 3 sc.1/sc.3, FR-002: a Tab move onto a card reports its focus to
+    /// the expansion, and moving on reports the loss and the next card's gain.
+    #[test]
+    fn tab_moves_report_card_focus_to_the_expansion() {
+        let state = overview_of(1);
+        let locations: Vec<_> = cards(&state).into_iter().map(|c| c.location).collect();
+        let mut mounted = mount(&state);
+        let moves = focus_moves(&mut mounted, 8);
+        let first = expansion_message(Event::FocusGained(locations[0].clone()));
+        let at = moves
+            .iter()
+            .position(|m| *m == first)
+            .unwrap_or_else(|| panic!("no card took focus: {moves:?}"));
+        assert_eq!(
+            moves[at + 1..at + 3],
+            [
+                expansion_message(Event::FocusLost(locations[0].clone())),
+                expansion_message(Event::FocusGained(locations[1].clone())),
+            ]
+        );
+    }
+
+    /// T038, FR-002: a press on a card takes the keyboard but reports no focus: nothing expands.
+    #[test]
+    fn a_press_on_a_card_reports_no_focus() {
+        let mut mounted = mount(&overview_of(1));
+        let at = iced::Point::new(100.0, 120.0);
+        let mut published = mounted.press(at);
+        published.extend(redraw(&mut mounted));
+        assert!(
+            !published.iter().any(|m| m.contains("Focus")),
+            "{published:?}"
+        );
+    }
+
+    /// T038, Edge Case (feature 972 FR-011): the focus hand-back to a card, by its id, reports
+    /// that card's focus, so it expands.
+    #[test]
+    fn a_focus_hand_back_reports_the_cards_focus() {
+        let state = overview_of(2);
+        let target = SessionLocation::Worktree("feat-1".into());
+        let mut mounted = mount(&state);
+        mounted.drive(iced::advanced::widget::operation::focusable::focus::<()>(
+            card_id(&target),
+        ));
+        assert_eq!(
+            redraw(&mut mounted),
+            [expansion_message(Event::FocusGained(target))]
+        );
+    }
+
+    /// T038, US4 sc.4: Tab visits the cards in the same order with a card expanded as without.
+    #[test]
+    fn tab_order_is_the_same_with_a_card_expanded() {
+        let gained = |state: &State| -> Vec<String> {
+            focus_moves(&mut mount(state), 12)
+                .into_iter()
+                .filter(|m| m.contains("FocusGained"))
+                .collect()
+        };
+        let plain = overview_of(3);
+        let mut expanded = plain.clone();
+        expanded
+            .overview
+            .expansion
+            .apply(Event::PointerRested(SessionLocation::Worktree(
+                "feat-1".into(),
+            )));
+        let order = gained(&plain);
+        assert!(order.len() >= 4, "every card takes focus: {order:?}");
+        assert_eq!(gained(&expanded), order);
+    }
+
+    /// T038, FR-008: a focused card expanded by focus, whose body can scroll down, sends
+    /// `CardPaged { down: true }` on Page Down; at its top, Page Up is not claimed.
+    #[test]
+    fn page_down_on_a_focus_expanded_card_pages_it() {
+        use iced::keyboard::key::Named;
+        let mut state = overview_of(0);
+        state
+            .overview
+            .expansion
+            .apply(Event::FocusGained(SessionLocation::Default));
+        state.overview.expansion.apply(Event::BodyScrolled {
+            up: false,
+            down: true,
+        });
+        let mut mounted = mount(&state);
+        mounted.drive(iced::advanced::widget::operation::focusable::focus::<()>(
+            card_id(&SessionLocation::Default),
+        ));
+        redraw(&mut mounted);
+        let cursor = iced::mouse::Cursor::Unavailable;
+        use crate::ui::material::test_support::named_key;
+        assert_eq!(
+            mounted.send_captured(named_key(Named::PageDown), cursor),
+            (
+                vec![format!(
+                    "{:?}",
+                    Message::Overview(crate::features::overview::Msg::CardPaged { down: true })
+                )],
+                true
+            )
+        );
+        assert!(!mounted.send_captured(named_key(Named::PageUp), cursor).1);
+    }
+
+    /// T043, R6: the page operation scrolls the named scrollable by one of its own visible
+    /// heights, down or up, and leaves any other scrollable alone.
+    #[test]
+    fn a_page_scrolls_the_named_body_by_its_visible_height() {
+        use crate::ui::material::Scrollable;
+        use iced::widget::text;
+        let id = iced::advanced::widget::Id::new("paged");
+        let tall = column((0..60).map(|i| text(format!("line {i}")).into()));
+        let body = Scrollable::new(tall, tokens::roles(ColorScheme::Dark))
+            .id(id.clone())
+            .on_scroll_metrics(|offset, view, _| format!("{offset} {view}"))
+            .height(Length::Fixed(200.0));
+        let mut mounted = Mounted::new(body);
+        let metrics = |mounted: &mut Mounted<'_>| redraw(mounted).pop();
+        let before = metrics(&mut mounted).expect("an overflowing body reports");
+        assert_eq!(before, "0 200");
+        mounted.drive(page_body::<()>(id.clone(), true));
+        assert_eq!(metrics(&mut mounted).as_deref(), Some("200 200"));
+        mounted.drive(page_body::<()>(id.clone(), false));
+        assert_eq!(metrics(&mut mounted).as_deref(), Some("0 200"));
+        mounted.drive(page_body::<()>(
+            iced::advanced::widget::Id::new("other"),
+            true,
+        ));
+        assert_eq!(metrics(&mut mounted), None, "another id moved it");
     }
 
     // Feature 970 (FR-012, contracts/ui.md *Overview header*): the full-screen toggle's words and

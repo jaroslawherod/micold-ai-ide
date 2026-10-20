@@ -1530,6 +1530,68 @@ mod expansion {
         assert!(state.overview.card_menu.is_none());
     }
 
+    /// Feature 1121 T038, Story 3 sc.1/sc.3: keyboard focus expands its card; the focus moving
+    /// on expands the next and collapses the first; focus leaving the grid collapses it.
+    #[test]
+    fn keyboard_focus_expands_a_card_and_its_loss_collapses_it() {
+        let mut state = two_cards();
+        apply(&mut state, Event::FocusGained(wt("feat-a")));
+        assert_eq!(expanded(&state), Some(wt("feat-a")));
+        apply(&mut state, Event::FocusGained(wt("feat-b")));
+        apply(&mut state, Event::FocusLost(wt("feat-a")));
+        assert_eq!(expanded(&state), Some(wt("feat-b")));
+        apply(&mut state, Event::FocusLost(wt("feat-b")));
+        assert_eq!(expanded(&state), None);
+    }
+
+    /// T038, Edge Case: the focused card is removed; the focus hand-back (feature 972 FR-011)
+    /// gives another card the keyboard, and that card expands.
+    #[test]
+    fn the_focus_hand_back_from_a_removed_card_expands_the_card_it_reaches() {
+        let mut state = two_cards();
+        apply(&mut state, Event::FocusGained(wt("feat-b")));
+        state.worktree.worktrees.retain(|w| w.dir_name != "feat-b");
+        state.update(Message::Overview(Msg::GridScrolled));
+        assert_eq!(expanded(&state), None);
+        apply(&mut state, Event::FocusGained(wt("feat-a")));
+        assert_eq!(expanded(&state), Some(wt("feat-a")));
+    }
+
+    /// T039 (D1), Story 3 sc.2, FR-005: Escape with a card expanded only collapses it: the
+    /// Overview and full-screen mode stay; a second Escape closes the Overview.
+    #[test]
+    fn escape_collapses_an_expanded_card_before_it_closes_the_overview() {
+        for full_screen in [false, true] {
+            let mut state = two_cards();
+            if full_screen {
+                toggle_full_screen(&mut state);
+            }
+            apply(&mut state, Event::FocusGained(wt("feat-a")));
+            state.update(Message::EscapePressed);
+            assert_eq!(expanded(&state), None, "full screen {full_screen}");
+            assert!(state.overview.open, "the first Escape closed the Overview");
+            assert_eq!(state.overview.full_screen(), full_screen);
+            state.update(Message::EscapePressed);
+            assert!(!state.overview.open, "the second Escape closes it");
+        }
+    }
+
+    /// T039 (D3): with a card menu open, Escape only closes the menu; the card keeps its form.
+    #[test]
+    fn escape_with_a_card_menu_open_only_closes_the_menu() {
+        let mut state = two_cards();
+        apply(&mut state, Event::FocusGained(wt("feat-a")));
+        state.update(Message::Overview(Msg::CardMenuOpened {
+            location: wt("feat-a"),
+            anchor: (10, 10),
+            origin: MenuOrigin::Keyboard,
+        }));
+        state.update(Message::EscapePressed);
+        assert!(state.overview.card_menu.is_none(), "the menu closed");
+        assert_eq!(expanded(&state), Some(wt("feat-a")));
+        assert!(state.overview.open);
+    }
+
     /// A project switch forgets the expansion with the rest of what the Overview read.
     #[test]
     fn a_project_switch_resets_the_expansion() {

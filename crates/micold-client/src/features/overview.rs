@@ -231,6 +231,12 @@ pub enum Msg {
     /// Something that decides which card is expanded happened: a pointer rest or leave, a focus
     /// move, Escape, the inner scroll of the expanded card (feature 1121, contract U4).
     Expansion(Event),
+    /// Page Down (`down`) or Page Up on the focused, expanded card whose body can move that way
+    /// (feature 1121, FR-008, contract K4): the root scrolls the body by one visible height.
+    CardPaged {
+        /// Page Down; `false` for Page Up.
+        down: bool,
+    },
 }
 
 // `Reflowed` holds a float, so `Eq` cannot be derived; the offset is a finite scroll position
@@ -331,6 +337,8 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         // The root answers it with the shared scroll-beneath rule; nothing of the Overview's own.
         Msg::GridScrolled => {}
         Msg::Expansion(event) => state.expansion.apply(event),
+        // The root pages the body (a task, not state).
+        Msg::CardPaged { .. } => {}
         // The root scrolls the grid to the offset (a task, not state).
         Msg::Reflowed(_) => {}
         // The root answers these two with the measured card and the highlighted entry.

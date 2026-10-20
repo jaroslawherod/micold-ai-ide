@@ -1405,6 +1405,12 @@ pub fn on_escape(state: &State) -> Option<Message> {
         None if state.settings.settings_draft.is_some() => {
             Some(Message::Settings(crate::features::settings::Msg::Cancelled))
         }
+        // Feature 1121 (D1, R7): an expanded card collapses first; the Overview stays open.
+        None if state.overview.expansion.expanded().is_some() => Some(Message::Overview(
+            crate::features::overview::Msg::Expansion(
+                micold_core::overview_expansion::Event::Escape,
+            ),
+        )),
         // Feature 813 (FR-014): last, so a dialog or the Settings draft over it is answered first.
         None => state
             .overview

@@ -185,6 +185,45 @@ fn expansion_window_blurred_collapses_and_refocus_expands_none() {
     assert_eq!(app.core.overview.expansion.expanded(), None);
 }
 
+/// Feature 1121 T038/T043, FR-008: `CardPaged` on an expanded card answers with a task that pages
+/// its body (`ui::overview::page_body`, one visible height, pinned in `ui/overview.rs`); with no
+/// card expanded it answers with nothing.
+#[test]
+fn expansion_card_paged_scrolls() {
+    use micold_client::features::overview::Msg as OverviewMsg;
+    use micold_core::overview_expansion::Event;
+    use micold_core::session::SessionLocation;
+
+    use micold_core::project::{Availability, Project};
+
+    let mut app = base_app();
+    // A project, so the Default card is listed and its expansion stands.
+    let path = PathBuf::from("repo");
+    app.core.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    app.core.workspace.active = Some(path);
+    app.core.overview.open = true;
+    let paged = |app: &mut App| {
+        update_inner(
+            app,
+            Message::Overview(OverviewMsg::CardPaged { down: true }),
+        )
+        .units()
+    };
+    assert_eq!(paged(&mut app), 0, "nothing expanded: nothing to page");
+    let _ = update_inner(
+        &mut app,
+        Message::Overview(OverviewMsg::Expansion(Event::FocusGained(
+            SessionLocation::Default,
+        ))),
+    );
+    assert!(paged(&mut app) > 0, "the expanded card's body is paged");
+}
+
 #[test]
 fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
     // Reproduces the reported bug: a freshly spawned session used to always start at the
