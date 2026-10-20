@@ -476,14 +476,22 @@ compilation, not test time (`Finished test profile ... in 4m 55s` against `8m 27
 step now emits a `Windows build cache` notice annotation with `cache-hit`, the restored `target` size,
 the `deps` file count, the CPU model and the core count. Seven runs after it restored the identical
 cache (exact hit, 9769 MB, 2920 deps files); the one on an Intel Xeon Platinum 8573C took 587 s
-for the daemon step, the six on AMD EPYC 7763 took 670-714 s. The split is the runner's hardware,
-which GitHub assigns. Even on a full hit the daemon's ~150 integration-test binaries recompile on
+for the daemon step, the six on AMD EPYC 7763 took 670-714 s. Later runs ruled the CPU model out
+(below). Even on a full hit the daemon's ~150 integration-test binaries recompile on
 every run, because rust-cache drops the workspace's own crates before it saves.
 
 **Reverted** (2026-10-20): the median kept rising (1600 s before, 1660 s with the Dev Drive, 1809 s
 with Defender exclusions, ~1950 s over the seven runs above), so both steps were removed to see
-whether they caused it; the annotation stays. **After**: not yet measured; take 10 `main` runs and
-compare with the ~1950 s above.
+whether they caused it; the annotation stays. **After**: 14 `main` runs, median 1684 s, min 1254 s,
+max 2003 s. The two steps were most likely costing time, and the job is back near its baseline.
+All 14 restored the identical cache (exact hit, 9776 MB, 2920 deps files), and AMD EPYC 7763
+runners gave both the fastest (434 s) and the slowest (740 s) daemon step, so neither the cache nor
+the CPU model explains the spread: it is run-to-run variation of the shared hosted runners.
+
+**Conclusion** (issue 958 closed): no step-level change to the Windows leg reduced its time or
+spread. The remaining lever is compile work: the daemon's ~150 integration-test files each build
+their own test binary, recompiled on every run. Combining them into a few binaries is tracked in
+issue 1175.
 
 ## Real-runtime daemon tests build only their own targets
 
