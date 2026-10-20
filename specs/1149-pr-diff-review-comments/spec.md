@@ -27,7 +27,8 @@ This feature removes that gap for pull requests. It keeps everything 482, 946 an
 
 ### Session 2026-10-20
 
-_None yet; open questions are marked below for the clarify unit._
+- Q: Worktree's checked-out branch is not the PR branch on Send review: deliver or refuse? → A: Deliver anyway; the preamble tells the agent to switch to the PR branch first. _(decided by user)_
+- Q: Send review for a merged or closed PR: block or allow? → A: Allow, and state "merged" or "closed" in the batch. _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -79,7 +80,7 @@ The batch must reach an agent working on the PR branch, so a push goes where the
 **Acceptance Scenarios**:
 
 1. **Given** the worktree's checked-out branch is the PR branch and a session of the worktree runs, **When** the user presses Send review, **Then** the batch is delivered to the session 482 FR-016 picks.
-2. **Given** the worktree's checked-out branch is not the PR branch (the worktree moved on to a later branch), **When** the user presses Send review, **Then** [NEEDS CLARIFICATION: deliver anyway with the preamble telling the agent to switch to the PR branch first, or refuse with a message naming the branch to check out?].
+2. **Given** the worktree's checked-out branch is not the PR branch (the worktree moved on to a later branch), **When** the user presses Send review, **Then** the batch is delivered anyway, and its preamble tells the agent to switch to the PR branch first.
 3. **Given** no session of the worktree runs, **When** the user presses Send review, **Then** a session starts and receives the batch as its first input, as 482 FR-016 does.
 4. **Given** delivery fails, **When** the user looks at the comments, **Then** they are still Draft and an error is shown (482 FR-017).
 
@@ -97,7 +98,7 @@ The PR branch can gain commits (the agent's push, a human's push) or be force-pu
 
 1. **Given** a draft PR comment, **When** the pull request's head moves to a new commit, **Then** the comment keeps its recorded PR head commit, is shown on the new diff where its quoted code still is (946 re-anchoring rules), and is marked outdated when it no longer is.
 2. **Given** a draft PR comment whose recorded PR head commit is no longer the pull request's head, **When** the user presses Send review, **Then** the batch states both the recorded commit and the current head and each block carries its recorded quote and line range, so the agent can find the code.
-3. **Given** the pull request is merged or closed, **When** the user looks at its draft comments, **Then** they stay visible and editable, and Send review states in the batch that the pull request is merged or closed. [NEEDS CLARIFICATION: block Send review on a merged pull request, or allow it?]
+3. **Given** the pull request is merged or closed, **When** the user looks at its draft comments, **Then** they stay visible and editable, and Send review stays allowed and states in the batch that the pull request is merged or closed.
 
 ---
 
@@ -128,7 +129,7 @@ The PR branch can gain commits (the agent's push, a human's push) or be force-pu
 - **FR-006**: Send review MUST act on one pull request at a time: it MUST build one PR review batch from exactly the draft comments of the pull request being shown, and MUST leave the drafts of other pull requests and of the working tree untouched. On the working-tree diff it MUST build the working-tree batch from working-tree drafts only.
 - **FR-007**: The PR review batch MUST open with a preamble naming the pull request (number, title, head branch), the PR head commit the comments are anchored to, and, when different, the pull request's current head commit. It MUST ask the agent to apply each requested change (or reply with an explanation, as 946 FR-011), commit the changes, and push them to the pull request's head branch. It MUST NOT ask the agent to post anything to GitHub.
 - **FR-008**: The PR review batch's comment blocks MUST keep the 946 block format (reference, file, side, line range, quoted code, text), the quoted code and line numbers being those of the PR head commit's version, and MUST be ordered as 482 FR-015.
-- **FR-009**: The batch MUST be delivered to a session of the entry as 482 FR-016 specifies. When the entry's checked-out branch is not the PR branch, [NEEDS CLARIFICATION: see Story 3 scenario 2]. When the PR branch is the checked-out branch, the batch needs no branch-switch instruction.
+- **FR-009**: The batch MUST be delivered to a session of the entry as 482 FR-016 specifies. When the entry's checked-out branch is not the PR branch, the batch MUST still be delivered and its preamble MUST tell the agent to switch to the PR branch first. When the PR branch is the checked-out branch, the batch needs no branch-switch instruction.
 - **FR-010**: Comments MUST become Sent only once their batch is delivered; on failure they MUST stay Draft and the user MUST see an error (482 FR-017); a send in progress MUST make Send review unavailable for that entry in every window (482 FR-018).
 - **FR-011**: A report from the agent on a PR comment MUST be accepted and shown exactly as for a working-tree comment (946 FR-003 to FR-007).
 - **FR-012**: When the pull request's head moves, a PR comment MUST keep its recorded PR head commit, be re-anchored on the new diff by its quoted code, and be marked outdated when its code is gone (946 FR-020, FR-021).

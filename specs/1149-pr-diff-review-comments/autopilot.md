@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1149
 - **Worktree branch**: feat/1149_review-comments-on-a-pull-request-s-diff-sent-to
 - **Started**: 2026-10-20
-- **Phase**: spec
-- **Next step**: clarify unit (escalated, awaiting answers): resolve the 2 [NEEDS CLARIFICATION] markers in spec.md (wrong-branch delivery, merged/closed PR)
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- Clarify: wrong branch on Send review delivers with a switch-branch preamble; merged/closed PR allows Send review and states the state in the batch (decided by user).
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -44,10 +46,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1 (repo does not settle either; product decisions):
-1. Wrong checked-out branch on Send review (Story 3 sc.2, FR-009): deliver with a switch-branch preamble (Recommended) or refuse.
-2. Merged/closed PR on Send review (Story 4 sc.3): allow with a state line in the batch (Recommended) or block.
-On answers: record `_(decided by user)_` in spec.md Clarifications, replace both markers, no new round unless a requirement changes.
+None.
 
 ## Follow-ups not done
 

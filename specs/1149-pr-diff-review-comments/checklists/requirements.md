@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 open, for the clarify unit: wrong-branch delivery, merged/closed pull request)
-- [ ] Requirements are testable and unambiguous (open until the 2 markers are resolved)
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic
 - [x] All acceptance scenarios are defined
