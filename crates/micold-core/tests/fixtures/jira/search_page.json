@@ -8,6 +8,7 @@
       "fields": {
         "summary": "Add login rate limit",
         "issuetype": { "id": "10004", "name": "Bug", "subtask": false },
+        "status": { "name": "In Review", "statusCategory": { "key": "indeterminate" } },
         "labels": ["backend", "security"],
         "reporter": {
           "accountId": "5b10a2844c20165700ede21g",
@@ -49,6 +50,7 @@
       "fields": {
         "summary": "Tidy the docs",
         "issuetype": { "name": "Task" },
+        "status": { "name": "To Do", "statusCategory": { "key": "new" } },
         "labels": [],
         "reporter": {
           "accountId": "5b10a2844c20165700ede21h",
@@ -64,6 +66,7 @@
       "fields": {
         "summary": "Reporter is gone",
         "issuetype": { "name": "Story" },
+        "status": { "name": "Done", "statusCategory": { "key": "done" } },
         "labels": ["ui"],
         "reporter": null,
         "description": null,

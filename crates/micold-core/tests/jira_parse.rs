@@ -145,3 +145,20 @@ fn a_deeply_nested_description_does_not_overflow_the_stack() {
         Err(e) => assert_eq!(e, IssueLoadError::NotJiraCloud),
     }
 }
+
+#[test]
+fn the_status_name_and_category_are_read_and_a_missing_status_is_none() {
+    use micold_core::jira_status::StatusCategory;
+    let page = page();
+    let review = by_key(&page.issues, "ABC-123").status().expect("a status");
+    assert_eq!(review.name, "In Review");
+    assert_eq!(review.category, Some(StatusCategory::InProgress));
+    let todo = by_key(&page.issues, "ABC-124").status().expect("a status");
+    assert_eq!(
+        (todo.name.as_str(), todo.category),
+        ("To Do", Some(StatusCategory::ToDo))
+    );
+    let done = by_key(&page.issues, "ABC-125").status().expect("a status");
+    assert_eq!(done.category, Some(StatusCategory::Done));
+    assert_eq!(by_key(&page.issues, "ABC-126").status(), None);
+}

@@ -10,6 +10,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage, GHOST_LOGIN};
+use crate::jira_status::TicketStatus;
 use crate::settings::Settings;
 
 /// Which field of a connection a [`FieldProblem`] is about.
@@ -444,6 +445,10 @@ fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
     if let Some(name) = fields["issuetype"]["name"].as_str() {
         issue = issue.with_type_name(name);
     }
+    issue = issue.with_status(TicketStatus::from_jira(
+        fields["status"]["name"].as_str(),
+        fields["status"]["statusCategory"]["key"].as_str(),
+    ));
     let mut text = String::new();
     flatten_adf(&fields["description"], 0, &mut text);
     Some(

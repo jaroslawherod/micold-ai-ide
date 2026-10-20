@@ -9,6 +9,7 @@
 /// Headless layout measurement (feature 019). Kept in its own module because it needs a renderer,
 /// while everything else here is render-free core scaffolding.
 pub mod covered_states;
+pub mod jira_picker;
 pub mod layout;
 /// The modal table the overlay tests share (issue #700).
 pub mod modals;

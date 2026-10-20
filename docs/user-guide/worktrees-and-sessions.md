@@ -710,6 +710,11 @@ loaded and offers **Retry**. Pick an issue
 with the pointer or with the arrow keys and Enter; a pick replaces the ticket and name, which stay
 editable.
 
+**Status.** Each issue in the list, and in search results, shows its current Jira status as a chip
+beside the key. The chip's tint follows Jira's status group (To Do, In Progress, Done); the name is
+always written out, and hovering the chip repeats it. A long status name ends in an ellipsis. An
+issue for which Jira reported no status shows no chip.
+
 **The type.** The issue's type name and labels are matched against the label-to-type list in
 **Settings → GitHub** (see [GitHub issues](settings.md#github-issues)); the entry nearest the top
 wins. With the defaults, a `Bug` issue selects fix. When nothing matches, the type is left for you

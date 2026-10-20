@@ -10,28 +10,28 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `crates/micold-core/src/jira_status.rs` as an empty module and register it in `crates/micold-core/src/lib.rs` (`pub mod jira_status;`)
+- [X] T001 Create `crates/micold-core/src/jira_status.rs` as an empty module and register it in `crates/micold-core/src/lib.rs` (`pub mod jira_status;`)
 
 ## Phase 2: Foundational (types and parsing shared by every story)
 
-- [ ] T002 [P] Write failing core unit tests in `crates/micold-core/src/jira_status.rs` for `TicketStatus::from_jira(name, category_key)` and `StatusCategory`: `new`/`indeterminate`/`done` map to ToDo/InProgress/Done, unknown key gives `category: None`, blank or missing name gives `None`, name is trimmed; `accessible_text(false/true)` gives "In Review" / "In Review, may be out of date" (FR-001, FR-009, FR-013)
-- [ ] T003 Implement `StatusCategory` (enum `ToDo | InProgress | Done`) and `TicketStatus { name: String (trimmed, non-empty), category: Option<StatusCategory> }` with `from_jira` and `accessible_text(stale: bool)` ("In Review" / "In Review, may be out of date", FR-013) in `crates/micold-core/src/jira_status.rs`
-- [ ] T004 [P] Write failing tests in `crates/micold-core/src/jira.rs` (and `github.rs` where `Issue` lives): `parse_page` reads `fields.status.name` and `statusCategory.key` into `Issue::status`; a missing status gives `None`; `list_jql`/`search_jql` are unchanged (FR-001, FR-011)
-- [ ] T005 Add `status: Option<TicketStatus>` and `Issue::with_status` to `Issue` in `crates/micold-core/src/github.rs` (None for GitHub issues; no effect on matching or ordering); make `parse_page` in `crates/micold-core/src/jira.rs` set it
-- [ ] T006 Write a failing test in `crates/micold-client/src/shell/jira_http.rs` that the list and search request bodies ask for `status`, then add `"status"` to `FIELDS` (now `[&str; 7]`) there
+- [X] T002 [P] Write failing core unit tests in `crates/micold-core/src/jira_status.rs` for `TicketStatus::from_jira(name, category_key)` and `StatusCategory`: `new`/`indeterminate`/`done` map to ToDo/InProgress/Done, unknown key gives `category: None`, blank or missing name gives `None`, name is trimmed; `accessible_text(false/true)` gives "In Review" / "In Review, may be out of date" (FR-001, FR-009, FR-013)
+- [X] T003 Implement `StatusCategory` (enum `ToDo | InProgress | Done`) and `TicketStatus { name: String (trimmed, non-empty), category: Option<StatusCategory> }` with `from_jira` and `accessible_text(stale: bool)` ("In Review" / "In Review, may be out of date", FR-013) in `crates/micold-core/src/jira_status.rs`
+- [X] T004 [P] Write failing tests in `crates/micold-core/src/jira.rs` (and `github.rs` where `Issue` lives): `parse_page` reads `fields.status.name` and `statusCategory.key` into `Issue::status`; a missing status gives `None`; `list_jql`/`search_jql` are unchanged (FR-001, FR-011)
+- [X] T005 Add `status: Option<TicketStatus>` and `Issue::with_status` to `Issue` in `crates/micold-core/src/github.rs` (None for GitHub issues; no effect on matching or ordering); make `parse_page` in `crates/micold-core/src/jira.rs` set it
+- [X] T006 Write a failing test in `crates/micold-client/src/shell/jira_http.rs` that the list and search request bodies ask for `status`, then add `"status"` to `FIELDS` (now `[&str; 7]`) there
 
 ## Phase 3: User Story 1 - status in the issue picker (P1) 🎯 MVP
 
 **Goal**: picker rows (list and search) show the ticket's status chip.
 **Independent test**: open the form with the fake Jira source; rows show To Do, In Progress, In Review.
 
-- [ ] T007 [P] [US1] Write failing client unit test in `crates/micold-client/src/ui/material/status_chip.rs`: `StatusChip` tint class differs for ToDo, InProgress, Done and no-category (FR-004); `None` status draws nothing (FR-009); the chip's tooltip equals `accessible_text` (FR-013)
-- [ ] T008 [P] [US1] Write failing client integration test in `crates/micold-client/tests/jira_status_picker.rs` with `FakeJiraSource`: list and search rows each show their status name, a Jira row without status shows no chip, GitHub rows are unchanged (US1 scenarios 1-4, FR-002)
-- [ ] T009 [P] [US1] Write failing geometry test in `crates/micold-client/tests/jira_status_geometry.rs`: a long status name truncates without moving key/title; a row without a chip has unchanged layout (FR-009, edge case)
-- [ ] T010 [US1] Implement `StatusChip::new(&TicketStatus).stale(bool)` built on `Tag` in `crates/micold-client/src/ui/material/status_chip.rs` (ToDo = secondary role, InProgress = primary, Done = tertiary, none = neutral; stale = dimmed; `Ellipsized` within a max width; accessible text as tooltip), and export it from `crates/micold-client/src/ui/material/mod.rs`
-- [ ] T011 [US1] Draw the chip beside the key in the picker row in `crates/micold-client/src/ui/worktree_form.rs` from `Issue::status`
-- [ ] T012 [P] [US1] Update `crates/micold-client/examples/fake_jira.rs` to report statuses (To Do, In Progress, In Review, Done) with categories on list and search
-- [ ] T013 [US1] Update `docs/user-guide/worktrees-and-sessions.md` (picker shows each Jira ticket's status)
+- [X] T007 [P] [US1] Write failing client unit test in `crates/micold-client/src/ui/material/status_chip.rs`: `StatusChip` tint class differs for ToDo, InProgress, Done and no-category (FR-004); `None` status draws nothing (FR-009); the chip's tooltip equals `accessible_text` (FR-013)
+- [X] T008 [P] [US1] Write failing client integration test in `crates/micold-client/tests/jira_status_picker.rs` with `FakeJiraSource`: list and search rows each show their status name, a Jira row without status shows no chip, GitHub rows are unchanged (US1 scenarios 1-4, FR-002)
+- [X] T009 [P] [US1] Write failing geometry test in `crates/micold-client/tests/jira_status_geometry.rs`: a long status name truncates without moving key/title; a row without a chip has unchanged layout (FR-009, edge case)
+- [X] T010 [US1] Implement `StatusChip::new(&TicketStatus).stale(bool)` built on `Tag` in `crates/micold-client/src/ui/material/status_chip.rs` (ToDo = secondary role, InProgress = primary, Done = tertiary, none = neutral; stale = dimmed; `Ellipsized` within a max width; accessible text as tooltip), and export it from `crates/micold-client/src/ui/material/mod.rs`
+- [X] T011 [US1] Draw the chip beside the key in the picker row in `crates/micold-client/src/ui/worktree_form.rs` from `Issue::status`
+- [X] T012 [P] [US1] Update `crates/micold-client/examples/fake_jira.rs` to report statuses (To Do, In Progress, In Review, Done) with categories on list and search
+- [X] T013 [US1] Update `docs/user-guide/worktrees-and-sessions.md` (picker shows each Jira ticket's status)
 
 ## Phase 4: User Story 2 - linked ticket's current status on the sidebar (P1)
 

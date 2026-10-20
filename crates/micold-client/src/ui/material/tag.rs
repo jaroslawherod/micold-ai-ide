@@ -9,7 +9,7 @@
 use crate::ui::material::style;
 use crate::ui::material::TypeRole;
 use iced::widget::{container, text};
-use iced::{Element, Padding};
+use iced::{Element, Length, Padding};
 use micold_core::tokens::{spacing, Rgb};
 use std::marker::PhantomData;
 
@@ -21,6 +21,7 @@ pub struct Tag<'a, M> {
     accent: Rgb,
     on_accent: Option<Rgb>,
     role: TypeRole,
+    truncate_to: Option<f32>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -32,6 +33,7 @@ impl<'a, M: 'a> Tag<'a, M> {
             accent,
             on_accent: None,
             role: TypeRole::SidebarTag,
+            truncate_to: None,
             _marker: PhantomData,
         }
     }
@@ -44,6 +46,14 @@ impl<'a, M: 'a> Tag<'a, M> {
     /// the former; see [`style::chip_solid`].
     pub fn solid(mut self, on_accent: Rgb) -> Self {
         self.on_accent = Some(on_accent);
+        self
+    }
+
+    /// Fix the chip at `width` dp and end its label in an ellipsis when it does not fit, so a long
+    /// label cannot push what stands beside it. For a label of unknown length; a short one is better
+    /// left to size itself.
+    pub fn truncate_to(mut self, width: f32) -> Self {
+        self.truncate_to = Some(width);
         self
     }
 
@@ -62,18 +72,24 @@ impl<'a, M: 'a> From<Tag<'a, M>> for Element<'a, M> {
         // Taken apart rather than built with `Text`, because a tag carries an accent colour instead
         // of a `Roles` set and `Text` needs one. Still a role, so the weight and line height come
         // from the scale rather than from the renderer's defaults.
-        let chip = container(
-            text(t.label)
+        let label: Element<'a, M> = match t.truncate_to {
+            Some(_) => {
+                super::Ellipsized::at_role(t.label, t.role, t.on_accent.unwrap_or(t.accent)).into()
+            }
+            None => text(t.label)
                 .size(t.role.size())
                 .font(t.role.font())
-                .line_height(t.role.line_height()),
-        )
-        .padding(Padding {
-            top: 0.0,
-            bottom: 0.0,
-            left: spacing::XS,
-            right: spacing::XS,
-        });
+                .line_height(t.role.line_height())
+                .into(),
+        };
+        let chip = container(label)
+            .width(t.truncate_to.map_or(Length::Shrink, Length::Fixed))
+            .padding(Padding {
+                top: 0.0,
+                bottom: 0.0,
+                left: spacing::XS,
+                right: spacing::XS,
+            });
         // Styled in each arm rather than boxing one closure: the two style functions have different
         // types, and a `Box<dyn Fn>` here buys nothing the match does not.
         match t.on_accent {
