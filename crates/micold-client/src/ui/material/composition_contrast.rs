@@ -349,7 +349,10 @@ fn an_overview_cards_header_and_body_text_is_legible_on_their_fills() {
                     ));
                 }
             }
-            assert_eq!(p.body, idle.body, "{scheme:?} / {state:?}: FR-002, one body");
+            assert_eq!(
+                p.body, idle.body,
+                "{scheme:?} / {state:?}: FR-002, one body"
+            );
             if state != CardState::Idle {
                 assert_ne!(
                     p.header, idle.header,
@@ -360,7 +363,10 @@ fn an_overview_cards_header_and_body_text_is_legible_on_their_fills() {
         assert_eq!(idle.header, r.surface_variant, "{scheme:?}: Idle's header");
         assert_eq!(idle.on_header, r.on_surface_variant, "{scheme:?}");
         assert_eq!(idle.body, r.surface_container_low, "{scheme:?}: the body");
-        assert_ne!(idle.header, idle.body, "{scheme:?}: Idle's header is a band");
+        assert_ne!(
+            idle.header, idle.body,
+            "{scheme:?}: Idle's header is a band"
+        );
     }
     assert!(
         violations.is_empty(),

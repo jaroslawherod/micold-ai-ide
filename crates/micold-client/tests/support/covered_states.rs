@@ -2038,7 +2038,18 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.overview.open = true;
                 StateUnderTest::new(state)
             },
-            anchors: &[],
+            // The first card's header row and its title line, taken from the resolved geometry:
+            // the card is the grid's first cell, its column holds the header then the body.
+            anchors: &[
+                Anchor {
+                    name: "overview.card.header",
+                    path: &[0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0],
+                },
+                Anchor {
+                    name: "overview.card.title",
+                    path: &[0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0],
+                },
+            ],
         },
     ]
 }

@@ -557,7 +557,12 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     with_activity.progress = with_progress.progress;
     // The five states in one grid (feature 1120, T035): Needs action carries an activity and
     // progress, so its row is taller than its sparse neighbours need and they stretch to it.
-    let mut needs_action = card_model("needs-action", T::Feature, S::NeedsAction, R::NeedsPermission);
+    let mut needs_action = card_model(
+        "needs-action",
+        T::Feature,
+        S::NeedsAction,
+        R::NeedsPermission,
+    );
     needs_action.activity = with_activity.activity.clone();
     needs_action.progress = with_progress.progress;
     let mut done = card_model("done", T::Other, S::Done, R::Merged);
@@ -565,7 +570,12 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     let five = iced::widget::container(Element::from(material::CardGrid::new(
         [
             needs_action,
-            card_model("needs-attention", T::Bugfix, S::NeedsAttention, R::ChecksFailing),
+            card_model(
+                "needs-attention",
+                T::Bugfix,
+                S::NeedsAttention,
+                R::ChecksFailing,
+            ),
             card_model("working", T::Chore, S::Working, R::Working),
             done,
             card_model("idle", T::Included, S::Idle, R::Idle),

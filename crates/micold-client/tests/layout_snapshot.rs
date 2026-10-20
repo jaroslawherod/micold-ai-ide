@@ -456,6 +456,86 @@ fn the_action_row_anchors_are_action_rows() {
     );
 }
 
+/// `overview.card.header` is the strip across the top of a card, and `overview.card.title` is the
+/// first line of the body under it.
+///
+/// The header is the first child of the card's column, and its sibling — the body — starts where
+/// it ends at the same x and width: a strip on top of a body, which no line *inside* the body is.
+/// The title is the first line of that body's text column, below the header and inset from its
+/// edge, and taller than the line after it, because it is set in the larger title role.
+#[test]
+fn the_overview_card_anchors_are_the_header_strip_and_the_title() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let records = records_named(all, "overview-open");
+    let state = covered_states()
+        .iter()
+        .find(|s| s.name == "overview-open")
+        .expect("looked up above");
+    let at = |name: &str| {
+        let anchor = state
+            .anchors
+            .iter()
+            .find(|a| a.name == name)
+            .unwrap_or_else(|| panic!("overview-open declares no {name:?} anchor"));
+        records
+            .iter()
+            .find(|r| r.path == anchor.path)
+            .expect("resolution is asserted separately")
+    };
+    let sibling = |path: &[usize], index: usize| {
+        let mut path = path.to_vec();
+        *path.last_mut().expect("anchors are not the root") = index;
+        records
+            .iter()
+            .find(|r| r.path == path)
+            .unwrap_or_else(|| panic!("no node at {}", lay::path_token(&path)))
+    };
+
+    let header = at("overview.card.header");
+    assert_eq!(
+        header.path.last(),
+        Some(&0),
+        "the header leads its card's column"
+    );
+    let body = sibling(&header.path, 1);
+    assert!(
+        (body.y - (header.y + header.height)).abs() <= 0.5
+            && body.x == header.x
+            && body.width == header.width,
+        "the node after overview.card.header is {:.1}x{:.1} at ({:.1}, {:.1}), not the card body \
+         directly under a {:.1}x{:.1} header at ({:.1}, {:.1})",
+        body.width,
+        body.height,
+        body.x,
+        body.y,
+        header.width,
+        header.height,
+        header.x,
+        header.y
+    );
+
+    let title = at("overview.card.title");
+    assert!(
+        title.path.starts_with(&body.path) && title.path.last() == Some(&0),
+        "overview.card.title is not the first line inside the card body under the header"
+    );
+    assert!(
+        title.y >= header.y + header.height && title.x > header.x,
+        "overview.card.title at ({:.1}, {:.1}) is not below and inset from the header",
+        title.x,
+        title.y
+    );
+    let next = sibling(&title.path, 1);
+    assert!(
+        title.height > next.height,
+        "overview.card.title is {:.1}px tall, not taller than the {:.1}px line after it: it is \
+         not set in the title role",
+        title.height,
+        next.height
+    );
+}
+
 // --- 837: the picked issue's details leave Create and the footer in place -------------------------
 
 /// The records of the covered state called `name`.
