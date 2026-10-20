@@ -52,9 +52,9 @@ part-way and the motion reverses from where it is. The card at the top of your v
 through the motion, even when the cards move to another row. To have no motion at all, turn on
 [Reduce motion](settings.md#reduce-motion) in Settings: full screen then switches in one step.
 
-Leaving the Overview leaves full screen in the same step: activating a card, **Escape**, the
-top-bar **Overview** button or **Ctrl+Shift+O** close the Overview and bring the sidebar back. The
-sidebar always returns exactly as you left it: collapsed or expanded, at the same width. Full
+Leaving the Overview leaves full screen in the same step: activating a card, **Escape** (with no
+card expanded), the top-bar **Overview** button or **Ctrl+Shift+O** close the Overview and bring the
+sidebar back. The sidebar always returns exactly as you left it: collapsed or expanded, at the same width. Full
 screen never changes the sidebar itself.
 
 Opening and closing [Settings](settings.md) keeps full screen, and so does switching project. The
@@ -89,7 +89,7 @@ Titles come from the issues the New-worktree form already loaded, or from one re
 
 ## Reading a card in full
 
-Rest the pointer on a card for a moment and it **expands in place**: its top-left corner and width stay where they are, and it grows downward, drawn over the cards below it with a shadow that sets it apart. No other card moves. The expanded card shows, wrapped and with no ellipsis:
+Rest the pointer on a card for a moment, or move the keyboard to it, and it **expands in place**: its top-left corner and width stay where they are, and it grows downward, drawn over the cards below it with a shadow that sets it apart. No other card moves. The expanded card shows, wrapped and with no ellipsis:
 
 - the full **title**, and the location's name when it differs from the title;
 - the full **branch** name, when the title is not the branch;
@@ -97,7 +97,9 @@ Rest the pointer on a card for a moment and it **expands in place**: its top-lef
 - the full **activity line**;
 - every other row of the card, as it reads collapsed.
 
-Move the pointer off the card and it **collapses**; rest it on another card and that one expands instead, so at most one card is expanded at a time. A card near the bottom of the Overview is moved up just enough to be seen whole. A card taller than the Overview is as tall as the Overview, keeps its header row and title in view, and scrolls the rest inside the card with the mouse wheel; once its content is at its end, the next wheel gesture scrolls the Overview.
+Move the pointer off the card, or the keyboard to another card, and it **collapses**; rest the pointer on another card, or move the keyboard there, and that one expands instead, so at most one card is expanded at a time. When the pointer leaves a card it expanded and rests on no other, the card with the keyboard expands again. A click takes the keyboard to a card without expanding it. **Escape** collapses the expanded card and leaves the keyboard on it; the Overview stays open, in full screen too. A second **Escape**, with no card expanded, closes the Overview. A card you collapsed with Escape expands again once the keyboard leaves it and comes back.
+
+A card near the bottom of the Overview is moved up just enough to be seen whole. A card taller than the Overview is as tall as the Overview, keeps its header row and title in view, and scrolls the rest inside the card with the mouse wheel, or with **Page Down** and **Page Up** while the card has the keyboard, about one visible height per press. Once its content is at its end, the next wheel gesture scrolls the Overview, and Page Down or Page Up that way does what it does on a collapsed card.
 
 While a card menu is open (see [Acting on a card](#acting-on-a-card)), the card it is for keeps its form, expanded or not, and no other card expands until the menu closes. Switching to another window, or closing the Overview, collapses the card; reopening the Overview shows every card collapsed.
 
@@ -193,7 +195,7 @@ too, or to the first card if that one is gone. With no card focused the keys do 
 
 ## Keyboard
 
-Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Menu** or **Shift+F10** opens its menu (see *Acting on a card*). **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS) enters and leaves [full screen](#full-screen) while the Overview is open. While a terminal has the keyboard, the arrow keys, Escape and the full-screen shortcut go to the terminal.
+Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. The focused card expands (see [Reading a card in full](#reading-a-card-in-full)); **Page Down** and **Page Up** scroll a long expanded card. **Menu** or **Shift+F10** opens its menu (see *Acting on a card*). **Escape** first collapses an expanded card; with no card expanded it closes the Overview. A dialog or unsaved Settings draft that Escape would close, or an open card menu, comes first. **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS) enters and leaves [full screen](#full-screen) while the Overview is open. While a terminal has the keyboard, the arrow keys, Escape and the full-screen shortcut go to the terminal.
 
 ## The five states, worst first
 
