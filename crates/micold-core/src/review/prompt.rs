@@ -70,7 +70,7 @@ pub fn build(entry: EntryKind, comments: &[ReviewComment], outdated: &[CommentId
 }
 
 /// The pull request's batch (feature 1149, contracts/batch-format.md P-1 to P-4): a preamble
-/// naming the pull request and head branch, the apply, commit and push request, the notes that
+/// naming the pull request, head branch and head commit, the apply, commit and push request, the notes that
 /// apply, then one block per comment as [`build`] makes them. It never asks for anything to be
 /// posted. The title is flattened here, so any text is safe.
 pub fn build_pr(pr: &PrContext, comments: &[ReviewComment], outdated: &[CommentId]) -> String {
@@ -83,11 +83,12 @@ pub fn build_pr(pr: &PrContext, comments: &[ReviewComment], outdated: &[CommentI
     let mut blocks = vec![
         format!(
             "Please work through these review comments on pull request #{} \"{}\" (head branch \
-             {head}){state}. Each block below is one comment: its reference, the file (relative to \
+             {head}, head commit {}){state}. Each block below is one comment: its reference, the file (relative to \
              the worktree root), the lines it is about, the code on those lines at the pull \
              request's head commit when the comment was written, and the comment itself.",
             pr.number,
             flatten_title(&pr.title),
+            pr.current_head,
         ),
         format!(
             "For each comment, either make the change it asks for, or explain why you are not \
@@ -608,7 +609,7 @@ Name this.";
         on_pr(one(n, "src/a.rs", Side::New, n as u32, n as u64), commit)
     }
 
-    const PR_PREAMBLE_1: &str = "Please work through these review comments on pull request #12 \"Add retry\" (head branch feat/retry). Each block below is one comment: its reference, the file (relative to the worktree root), the lines it is about, the code on those lines at the pull request's head commit when the comment was written, and the comment itself.";
+    const PR_PREAMBLE_1: &str = "Please work through these review comments on pull request #12 \"Add retry\" (head branch feat/retry, head commit 2222222222222222222222222222222222222222). Each block below is one comment: its reference, the file (relative to the worktree root), the lines it is about, the code on those lines at the pull request's head commit when the comment was written, and the comment itself.";
     const PR_PREAMBLE_2: &str = "For each comment, either make the change it asks for, or explain why you are not making it. Commit the changes you make and push them to the branch feat/retry. Then report each outcome by the comment's reference with the report_review_comment tool of the micold tool server: outcome \"applied\" when you made the change (a reply is optional), or \"answered\" with your explanation as the reply. If you cannot use that tool, answer each comment by its reference in your reply instead.";
 
     /// P-5: the documented bytes; they change only together with "The review message" in
@@ -648,12 +649,19 @@ Name this.";
             batch.lines().next().expect("a preamble").to_owned()
         };
         for open in [BranchPrState::Open, BranchPrState::Draft] {
-            assert!(state_of(open).contains("(head branch feat/retry). Each"));
+            assert!(state_of(open).contains(&format!(
+                "(head branch feat/retry, head commit {}). Each",
+                sha('2')
+            )));
         }
-        assert!(state_of(BranchPrState::Merged)
-            .contains("(head branch feat/retry), which is merged. Each"));
-        assert!(state_of(BranchPrState::Closed)
-            .contains("(head branch feat/retry), which is closed. Each"));
+        assert!(state_of(BranchPrState::Merged).contains(&format!(
+            "(head branch feat/retry, head commit {}), which is merged. Each",
+            sha('2')
+        )));
+        assert!(state_of(BranchPrState::Closed).contains(&format!(
+            "(head branch feat/retry, head commit {}), which is closed. Each",
+            sha('2')
+        )));
     }
 
     #[test]
