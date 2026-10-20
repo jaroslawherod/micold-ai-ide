@@ -1058,6 +1058,7 @@ mod tests {
         for retracting in [true, false] {
             let mut harness = Harness::new(true, !retracting);
             let mut last = harness.width();
+            let mut translated_steps = 0;
             for (step, at) in (0..=SETTLED_BY).step_by(16).enumerate() {
                 harness.frame(true, retracting, at);
                 // A track's first frame steps one 16 ms frame; later gaps are measured.
@@ -1080,6 +1081,7 @@ mod tests {
                     assert!(width >= last, "monotone at {at} ms: {last} then {width}");
                 }
                 if width > 0.0 {
+                    translated_steps += 1;
                     assert!(
                         (harness.child_x(0) - (width - full)).abs() <= 0.01,
                         "at {at} ms the panel is translated left by what is hidden"
@@ -1087,6 +1089,11 @@ mod tests {
                 }
                 last = width;
             }
+            // The translation check must really have run, not been skipped on every step.
+            assert!(
+                translated_steps >= 10,
+                "retracting {retracting}: only {translated_steps} steps had a width"
+            );
             let settled = if retracting { 0.0 } else { full };
             assert_eq!(harness.width(), settled, "settled by {SETTLED_BY} ms");
         }
@@ -1131,9 +1138,8 @@ mod tests {
 
     /// Feature 970, FR-008 (Story 3 #1, #3, SC-003): reduced motion snaps the retraction.
     #[test]
-    fn an_instant_drawer_snaps_its_presence() {
+    fn an_instant_drawer_retracts_and_shows_at_once() {
         let full = PANEL_WIDTH + crate::ui::material::resize_handle::WIDTH;
-
         let mut harness = Harness::new(true, false);
         harness.instant = true;
         assert_eq!(
@@ -1147,8 +1153,12 @@ mod tests {
             full,
             "shows at once"
         );
+    }
 
-        // Turned on 200 ms into a retraction that was easing: it completes in one step.
+    /// Turned on 200 ms into a retraction that was easing: it completes in one step.
+    #[test]
+    fn turning_instant_on_mid_retraction_completes_it_in_one_step() {
+        let full = PANEL_WIDTH + crate::ui::material::resize_handle::WIDTH;
         let mut harness = Harness::new(true, false);
         for at in (0..=200).step_by(16) {
             harness.frame(true, true, at);
@@ -1161,8 +1171,12 @@ mod tests {
             0.0,
             "completes in one step"
         );
+    }
 
-        // Only the retraction snaps: opening and closing the panel still slide.
+    /// Only the retraction snaps: opening and closing the panel still slide.
+    #[test]
+    fn an_instant_drawer_still_slides_the_panel_open() {
+        let full = PANEL_WIDTH + crate::ui::material::resize_handle::WIDTH;
         let mut harness = Harness::new(false, false);
         harness.instant = true;
         let first = harness.frame(true, false, 16).size().width;

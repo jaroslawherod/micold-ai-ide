@@ -998,6 +998,7 @@ mod tests {
     /// card width stays between its two end values.
     #[test]
     fn ribbon_pieces_never_overlap_and_stay_in_range() {
+        let mut two_piece_cards = 0;
         for (start, end) in both_ways() {
             for count in [1, 7, 30] {
                 for step in 0..=20 {
@@ -1015,6 +1016,7 @@ mod tests {
                         let total: f32 = own.iter().map(|p| p.rect.width).sum();
                         assert!(total <= w + EPS && total >= w - GAP - EPS, "{total} vs {w}");
                         if let [a, b] = own[..] {
+                            two_piece_cards += 1;
                             assert!(near(b.rect.y - a.rect.y, H + GAP), "{a:?} {b:?}");
                         }
                     }
@@ -1033,6 +1035,10 @@ mod tests {
                 }
             }
         }
+        assert!(
+            two_piece_cards > 0,
+            "some card ran through a row end, so the two-piece check ran"
+        );
     }
 
     /// A tree kept across layouts, as the running application keeps it: the zoom is state that
@@ -1214,13 +1220,47 @@ mod tests {
         assert_same(&rig.pieces(), &ribbon(7, rest(1300.0), GAP, 1300.0, H));
     }
 
+    /// The seven-card zoom from 1150 to 1450 at f = 0.5, worked by hand and written out so the
+    /// expectation does not call `ribbon`.
+    ///
+    /// Rest widths: 1150 holds `floor(1166 / 296)` = 3 columns, so a card is (1150 - 32) / 3 =
+    /// 372.667; 1450 holds `floor(1466 / 296)` = 4, so (1450 - 48) / 4 = 350.5. Half way the window
+    /// is 1300 wide (a row plus its gap is 1316) and a card 361.583 wide, one pitch (card plus
+    /// gap) being 377.583. Card `i` starts `i` pitches along the ribbon: 0, 377.583, 755.167,
+    /// 1132.75, 1510.333, 1887.917, 2265.5. Cards 0-2 sit on row 0. Card 3 starts at 1132.75 and
+    /// runs 1494.333, past the 1300 edge: 167.25 stay on row 0 and 178.333 (to 1494.333 - 1316)
+    /// continue at x 0 of row 1, which starts 172 + 16 = 188 down. Cards 4-6 start on row 1 at
+    /// x = start - 1316; card 6 is cut at 1300 (350.5 wide).
+    fn seven_cards_at_half_way() -> Vec<Piece> {
+        // (card, x, y, width, origin x), every piece 172 tall.
+        let table: [(usize, f32, f32, f32, f32); 8] = [
+            (0, 0.0, 0.0, 361.583, 0.0),
+            (1, 377.583, 0.0, 361.583, 377.583),
+            (2, 755.167, 0.0, 361.583, 755.167),
+            (3, 1132.75, 0.0, 167.25, 1132.75),
+            (3, 0.0, 188.0, 178.333, -183.25),
+            (4, 194.333, 188.0, 361.583, 194.333),
+            (5, 571.917, 188.0, 361.583, 571.917),
+            (6, 949.5, 188.0, 350.5, 949.5),
+        ];
+        table
+            .iter()
+            .map(|&(card, x, y, width, origin_x)| Piece {
+                card,
+                rect: Rectangle::new(Point::new(x, y), Size::new(width, H)),
+                origin: Point::new(origin_x, y),
+                node: 0,
+            })
+            .collect()
+    }
+
     /// U22 (970, FR-004, FR-006): a flip starts a zoom whose ends are the width before the flip and
     /// that width plus the freed width; the frame between them is the ribbon at that fraction.
     #[test]
     fn a_flip_starts_a_zoom_between_the_two_end_widths() {
         let mut rig = midway();
         assert_eq!(rig.state().ends, Some((1150.0, 1450.0)));
-        assert_same(&rig.pieces(), &ribbon_at(7, 1150.0, 1450.0, 0.5));
+        assert_same(&rig.pieces(), &seven_cards_at_half_way());
         rig.lay(cards(7), full(300.0), 1450.0);
         assert_eq!(rig.state().ends, None, "the zoom ends at its end width");
         assert_same(&rig.pieces(), &ribbon(7, rest(1450.0), GAP, 1450.0, H));
@@ -1248,24 +1288,32 @@ mod tests {
         assert_same(&rig.pieces(), &ribbon(7, rest(1300.0), GAP, 1300.0, H));
     }
 
-    /// Feature 970, Story 3 #1-3 (FR-008): when the drawer snaps (*Reduce motion*), the first
-    /// layout after the flip, or the next one mid-zoom, is already at the end width; the zoom ends
-    /// there and the grid is the rest grid of that width, the animated route's end.
+    /// Feature 970, Story 3 #1 (FR-008): when the drawer snaps (*Reduce motion*), a flip whose
+    /// first layout is already at the end width runs no zoom; the grid is the rest grid.
     #[test]
-    fn a_snapped_width_ends_the_zoom_on_the_next_layout() {
-        // A flip whose layout is already at the end width: no zoom at all.
+    fn a_flip_laid_out_at_the_end_width_runs_no_zoom() {
         let mut rig = Rig::new();
         rig.lay(cards(7), normal(300.0), 1150.0);
         rig.lay(cards(7), full(300.0), 1450.0);
         assert_eq!(rig.state().ends, None, "no zoom runs");
         assert_same(&rig.pieces(), &ribbon(7, rest(1450.0), GAP, 1450.0, H));
+    }
 
-        // And back: leaving full screen onto the start width.
+    /// Story 3 #2: and back, leaving full screen onto the start width.
+    #[test]
+    fn leaving_full_screen_onto_the_start_width_runs_no_zoom() {
+        let mut rig = Rig::new();
+        rig.lay(cards(7), normal(300.0), 1150.0);
+        rig.lay(cards(7), full(300.0), 1450.0);
         rig.lay(cards(7), normal(300.0), 1150.0);
         assert_eq!(rig.state().ends, None);
         assert_same(&rig.pieces(), &ribbon(7, rest(1150.0), GAP, 1150.0, H));
+    }
 
-        // A zoom at f = 0.4 whose next layout comes at the end width (the drawer snapped).
+    /// Story 3 #3: a zoom at f = 0.4 whose next layout comes at the end width (the drawer
+    /// snapped) ends there.
+    #[test]
+    fn a_snapped_width_mid_zoom_ends_the_zoom_on_the_next_layout() {
         let mut rig = Rig::new();
         rig.lay(cards(7), normal(300.0), 1150.0);
         rig.lay(cards(7), full(300.0), 1270.0);

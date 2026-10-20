@@ -296,3 +296,20 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   navigation_drawer card_grid persist settings_sections`; quickstart §B 6
 - **Depends on**: M1, M2
 - **Tier**: full
+
+## Phase 9: TDD remediation
+
+Audit `tdd/verification.md` at `5f54853a`: verdict FAIL. The feature is not done until T044 and T045 (the two surviving mutants) are cleared.
+
+- [x] T044 Finding 1: pin the Reduce motion wiring. Add a test through `ui::view` (or a render-free seam that `ui/mod.rs:406` calls) showing `state.settings.reduce_motion = true` builds an instant drawer. Mutant `.instant(false)` at `crates/micold-client/src/ui/mod.rs:406` must fail it. Prove it: apply the mutant, `cargo test -p micold-client --lib` fails, restore, green.
+- [x] T045 Finding 2: pin the retraction wiring. Add a test showing `state.overview.full_screen()` true retracts the drawer, false does not (`crates/micold-client/src/ui/mod.rs:403`). Prove it the same way with `.retracted(false)`.
+- [x] T046 Finding 3: give the zoom layout tests an expectation that does not call `ribbon`: hard-coded piece rectangles for one 7-card zoom at f 0.5 (1150 to 1450) in `card_grid.rs:1220-1227`, worked by hand and commented. `cargo test -p micold-client --lib card_grid` passes; a mutant on `ribbon`'s row split fails it.
+- [x] T047 Finding 5: split `an_instant_drawer_snaps_its_presence` (`navigation_drawer.rs:1134`) and `a_snapped_width_ends_the_zoom_on_the_next_layout` (`card_grid.rs:1255`) into one test per scenario. `cargo test -p micold-client --lib navigation_drawer card_grid` passes.
+- [x] T048 Finding 4: replace `if width > 0.0` (`navigation_drawer.rs:1082`) and `if let [a, b]` (`card_grid.rs:1018`) with assertions that cannot be skipped (assert the count of positive-width steps, assert the two-piece cards exist). Same command as T047.
+- [x] T049 Finding 6: restore an exact match in `crates/micold-client/tests/overlay_registry.rs:596-625` (compare the whole message name after whitespace removal, no 80-character cut). `cargo test -p micold-client --test overlay_registry` passes.
+- [x] T050 Finding 8: extend `tdd/test-list.md` with U18-U32 (tests, traces) from `cycle-log.md`. Check: each named test exists via `grep -n`.
+- [x] T051 Findings 7 and 9: decide to keep or drop `the_mode_writes_no_sidebar_state` (`tests/overview.rs:1257`) as redundant with U16/U17, and replace the direct `s.open = false` (`tests/features_overview.rs:133`) with the real `app.rs` exit message if one is reachable. `cargo test -p micold-client --test overview --test features_overview` passes.
+- [ ] T052 Finding 10: pin `freed_width` (`crates/micold-client/src/ui/mod.rs:1407`): a test that the expanded sidebar frees `sidebar_width_px() + RESIZE_HANDLE_WIDTH` and the collapsed one `STRIP_WIDTH`. Mutant dropping the handle term must fail it. `cargo test -p micold-client --lib freed_width`.
+- [ ] T053 Finding 11: pin the zoom's end tolerance (`card_grid.rs:261`): a layout 2 px short of the end width still reports a running zoom (`ends` is `Some`). Mutant `END_REACHED = 5.0` must fail it. `cargo test -p micold-client --lib card_grid`.
+- [ ] T054 Finding 12: automated checks for FR-003 and SC-006's keyboard half: a view-level test that the top bar's Overview button is still built in full screen, and that the header toggle takes focus in tab order. `cargo test -p micold-client --lib overview`.
+- [ ] T055 Finding 13: a guard that `docs/user-guide/overview.md` names *Full screen* and the platform chords, and `settings.md` names *Reduce motion* (FR-013), following `scripts/tests/*.test.sh`. `mise run gate` (cloud: `scripts/gate.sh`).

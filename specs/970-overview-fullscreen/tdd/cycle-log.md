@@ -75,3 +75,12 @@ failed before the implementation.
 - deviation: plan D4 named a `LabelledToggle` (an icon button); the page uses a `Checkbox` with a
   `field_note` like the other switches. Drawer snaps in `layout` (so the frame after the flip is the end).
 - scoped gate: `field_focus_call_sites` demanded `.track_focus(FieldId::SettingsReduceMotion, ..)`, so `appearance::view` takes `focused`; `layout_snapshot` fixture regenerated (six rows, the new checkbox on Appearance).
+
+## Cycle 5: remediation T044-T051 (tdd-verify findings)
+
+- T044 (U34): `drawer_flags(..)` seam in `ui/mod.rs` (the view calls it); mutant `instant: false` -> `reduce_motion_makes_the_drawer_instant` FAILED; restored, green.
+- T045 (U33): same seam; mutant `retracted: false` -> `full_screen_retracts_the_drawer` FAILED; restored, green.
+- T046: hand-worked 7-card f 0.5 frame (`seven_cards_at_half_way`); mutant `ribbon`'s `.min(width)` -> `.min(width + gap)` -> `a_flip_starts_a_zoom_between_the_two_end_widths` and the overlap test FAILED; restored, green. (A first mutant, `first` row index +1 px, was equivalent for these widths and survived.)
+- T047/T048: eager drawer and grid tests split one per scenario; the skippable `if width > 0.0` and `if let [a, b]` now also assert their branch ran (`translated_steps >= 10`, `two_piece_cards > 0`).
+- T049: `overlay_registry.rs` compares the whole whitespace-free message name against an exact `EXEMPT` list (no 80-character cut).
+- T050: test-list.md extended with U18-U35. T051: `the_mode_writes_no_sidebar_state` kept (explicit FR-009 guard, cheap); `features_overview.rs`'s direct `s.open = false` removed, the app exit is `overview.rs::opening_changes_leaves_full_screen` through `ReviewChangesRequested`.
