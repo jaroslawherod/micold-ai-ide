@@ -383,7 +383,7 @@ fn wake_at_has_only_listed_callers() {
         ),
         (
             "ui/material/card_grid.rs",
-            "asks only while its expand `RestTimer` is waiting on a hovered card, for the instant \
+            "asks only while its expand `ShowTimer` is waiting on a hovered card, for the instant \
              the rest ends (1121 FR-002)",
         ),
     ];

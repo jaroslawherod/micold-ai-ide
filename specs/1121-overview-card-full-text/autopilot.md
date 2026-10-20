@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: implement M3
-- **Next step**: M3 — review A, review B and visual pass T035 (round 1), then PR.
+- **Next step**: M3 — review A r2 and review B r2 (sonnet, fix diff), then PR.
 
 ## Pull requests
 
@@ -68,6 +68,9 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Full gate M3 | C | 44a94760 | RED: `root_vocabulary_is_cross_cutting::no_root_variant_belongs_to_one_feature` — "`Message::WindowFocusChanged` — `overview`": M3's main.rs focus arm sent `Overview(Expansion(WindowBlurred))`. Fixed (recommended route, test not weakened): root arm change dropped; `CardGrid::on_window_blur(M)` publishes on iced's `window::Event::Unfocused`, wired in ui/overview.rs to `Msg::Expansion(Event::WindowBlurred)`; pinned by card_grid `the_window_losing_focus_publishes_on_window_blur`; main_tests `expansion_window_blur_collapses` now drives the Overview message |
 | Full gate M3 | D | 330bf003 | RED: `micold-daemon --test structured_session` `messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` timed out (`Elapsed`); untouched by this branch, 3/3 green in isolation: load flake |
 | Full gate M3 | E | 330bf003 | GREEN |
+| Review A M3 | 1 | 0a4547560bec594c020ff529e18c24c9b260ec0c:330bf0031533a0f591c99bb52f3ebae2cdac4322 | CHANGES: 2 MAJOR, 3 MINOR, all fixed. F1 grid rest keyed on the card's `SessionLocation` (`rest_messages` carries it), test `a_reorder_under_a_resting_pointer_leaves_the_card_and_rests_on_the_new_one`; F2 `MenuClosed` ends a hover whose pointer left (`end_hover`, FR-005 re-expands focus), test `a_leave_during_an_open_menu_collapses_on_close`; F3 a rest under a menu records `pointer_on` + `rest_held`, expanded on `MenuClosed`, test `a_rest_during_an_open_menu_expands_on_close`; F4 = B F1; F5 CALLERS reason names `ShowTimer` |
+| Review B M3 | 1 | same | CHANGES: 1 MAJOR, 2 MINOR, all fixed. F1 mounted `ui/overview.rs` test `the_window_losing_focus_publishes_the_expansion_blur` (red by mutant: wiring line deleted); main_tests test renamed `expansion_window_blurred_collapses_and_refocus_expands_none`, `WindowFocusChanged(false)` dropped; F2 cycle log: T031 red by three one-off tooltip mutants, T033 note; F3 T027/T032 texts amended (fixed, prose only) |
+| Visual pass §B.3, B.4, B.6–B.8 M3 (T035) | 1 | 76570558 | PASS every criterion, light+dark, 1x+2x (tall-view case 1x only); §B.4 wheel order "inside first, then Overview" inferred, not shown; evidence visual-pass/m3/ (53 PNGs). Note: the Menu key opens the keyboard-focused card's menu while a different hover-expanded card stays expanded — checked against FR-012/US4: no card expands (the hovered one already was) and the Menu key's target is the focused card as before (feature 972), so M3 conforms; M4 makes focus expand, see Follow-ups |
 
 ## Declined review findings
 
@@ -78,11 +81,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-M3 part 3. Full gate green on 330bf003, pushed. Review snapshot for A/B/visual round 1: 0a4547560bec594c020ff529e18c24c9b260ec0c:330bf0031533a0f591c99bb52f3ebae2cdac4322.
-Next: orchestrator dispatches review A (code-review high), review B (conformance, sonnet) and the
-visual pass T035 (quickstart §B.3, §B.4, §B.6–§B.8); then act on verdicts, tick T035, write PR files.
-Open for M4 (carried from M2): K4 — M4 MUST reset `body_edges` to `(false, false)` on expand
-(cycle log T013 row). `settings_refuses_save_over_failed_read` red as root only (pre-existing).
+None.
 
 ## Open escalation
 
@@ -91,4 +90,6 @@ None.
 ## Follow-ups not done
 
 - Review A M1 F3 (MINOR): during a zoom `card_width` is interpolated each frame, so a wrapping title can change line count mid-zoom and its row height jumps a line; measure naturals at the zoom's end width, or pin the jump in a test. Not in M1's tasks or FRs.
-
+- For M4 (carried from M2): K4 — M4 MUST reset `body_edges` to `(false, false)` on expand (cycle log T013 row). `settings_refuses_save_over_failed_read` red as root only (pre-existing).
+- For M4 (M3 visual note): with focus expansion, the Menu key on the focused card must find it expanded (focus expanded it, the hovered card collapsed, FR-006) and keep that form under the menu (FR-012); add it to the M4 visual pass (§B.5/§B.6 Menu key with a different card hovered). Also: `FocusLost`/`FocusGained` under an open menu are not settled on `MenuClosed` the way M3 now settles the pointer (review A F2/F3) — M4's keyboard work should do the same for focus.
+- M3 visual §B.4: the wheel's "inside first, then Overview" order at the card's end was inferred, not shown; re-check in M4's Page-key/scroll visual pass.
