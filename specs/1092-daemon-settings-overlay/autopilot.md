@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1092
 - **Worktree branch**: feat/1092_daemon-settings-should-open-in-an-overlay-with-its
 - **Started**: 2026-10-19
-- **Phase**: milestone M3 (gate green, PR next)
-- **Next step**: wait for CI, merge, then close unit (T030)
+- **Phase**: milestone M4 (cut by the close unit)
+- **Next step**: run M4, then a new close unit (T030 quickstart results; set spec Status Closed)
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1137 | Design | merged | 0db3cf9ccbebc1b98662a5becfc4f2c4c3b96504 |
 | #1160 | M1 | merged | 08cb6ea11959288eb6832df9cce396a0589238f1 |
 | #1170 | M2 | merged | e8055c90fa21a43bcfcc6fa33187f3ca3d39c5db |
-| #1174 | M3 | open | - |
+| #1174 | M3 | merged | b56bf28d79e4eac5de6ee35510e7a0731e66e864 |
 
 ## Milestones
 
@@ -27,7 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T014, T016, T017, T019, T020 | full | Add/Edit daemon in a modal dialog, own Save/Cancel, in-dialog confirmation, no inline form | #1160 | merged |
 | M2 | T015, T018, T021–T023 | full | Add-path tests, focus return | #1170 | merged |
-| M3 | T024–T029 | light | Details in a dialog | #1174 | PR open |
+| M3 | T024–T029 | light | Details in a dialog | #1174 | merged |
+| M4 | T031–T033, T035–T039 | full | Test strength (tdd-verify F2-F8) and drift prompts wait while Details is open (converge) | - | pending |
 
 ## Decisions
 
@@ -70,3 +71,9 @@ None.
 - `navigation_drawer.rs` lines ~349 and ~447 call `with_layer(bounds)` without intersecting the viewport, the same class of bug as the `expand` one fixed in M1; not hit by this feature.
 
 None.
+
+## Close unit findings (1st close)
+
+- Close unit 1: tdd-verify FAIL (tdd/verification.md); converge found one partial behaviour (drift prompt can open over Details). Both cut into M4. T034 accepted: no TDD extension was run, so red-phase evidence is missing for M1-M3.
+- Visual pass steps 6-7 (headless sway, wtype): Details shows errors/log, Close/Escape/outside click close it, no Hide details: Pass. Live log line, Tab cycle: not judged (daemon unreachable; screenshots cannot show focus). Focus ring on the opener after Close/outside click: seen; after Escape on Details: unclear. Possible stale "This field is required" on a reopened Add dialog after a blur + Escape: unconfirmed, look at it in M4 visual or the next close pass.
+- Stale-daemon wording differs: daemons.rs:989 "That daemon no longer exists." vs :1213 "This daemon no longer exists" (cosmetic, not fixed).
