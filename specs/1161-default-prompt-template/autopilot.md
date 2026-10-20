@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1161
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
-- **Phase**: clarify
-- **Next step**: Run the plan unit
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -36,6 +36,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 2da4e91e074c34b2608429055921e3a617527a46:d9c2e378c1ef6e6a8f142a5369dd16c856e9324c | CHANGES: 3 MAJOR |
 | Spec | 2 | 3399ba1e782776dc6bc887373536e91692f57891:e62f06e9aef3c487cbfc825ed1ce3e1a9e3a7437 | CLEAN (3 MINOR fixed, prose only) |
+| Plan | 1 | 9c1a3ea4c4eafd8fac474ff9036262b2110d35ce:3f9fcba65f32e6fe61a0c04eb2b35443fbcb36f1 | CHANGES: 2 MAJOR, 2 MINOR (all fixed) |
+| Plan | 2 | 67a3b302e232e0f97f90ca37f8ed269e5ed8e9c9:4bbf066bfe6165d2de73d7111a10784a402091ba | CLEAN |
 
 ## Declined review findings
 
