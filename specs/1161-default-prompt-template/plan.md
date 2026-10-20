@@ -112,7 +112,7 @@ docs/user-guide/{settings,worktrees-and-sessions,agent-tools}.md
 | FR-011 | both call `prompt_template::render` |
 | FR-012 | render is total; MCP lookup wrapped in `tokio::time::timeout(5 s)`; any error gives `None` |
 | FR-013 | settings load keeps the text; `PromptTemplate::validate` at use gives `Err` so callers treat as empty; Settings draft validates on open and shows the error |
-| FR-014 | MCP facts: `{issue}` = `naming::ticket(dir)`; `{type}` = the `Tag::Type` of `naming::parse_tags(dir)`, empty if none; `{name}` = `naming::display_name`-style descriptive remainder of the dir name (`split_name` desc, joined with spaces), the dir name when empty; `{branch}` = the worktree's branch from the catalog (empty if unknown); title/body via `IssueLookup`. Dialog facts: from the form (`picked_issue`, `type_`, name field, derived branch). Neither new field (`Issue.body`, `IssueSnapshot.body_text`) is persisted or serialised; `tests/github_privacy.rs` and `jira_is_requested_only_on_named_events.rs` are updated for the added field |
+| FR-014 | MCP facts: `{issue}` = `naming::ticket(dir)`; `{type}` = the `Tag::Type` of `naming::parse_tags(dir)`, empty if none; `{name}` = `naming::display_name(dir)` (public; its own fallback applies); `{branch}` = the worktree's branch from the catalog (empty if unknown); title/body via `IssueLookup`. Dialog facts: from the form (`picked_issue`, `type_`, name field, derived branch). Neither new field (`Issue.body`, `IssueSnapshot.body_text`) is persisted or serialised; `tests/github_privacy.rs` and `jira_is_requested_only_on_named_events.rs` are updated for the added field |
 
 ## Test strategy
 
