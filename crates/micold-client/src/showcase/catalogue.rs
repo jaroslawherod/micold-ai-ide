@@ -218,6 +218,19 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::atoms::tag,
     },
     Entry {
+        // Feature 1101: a Jira ticket's status, tinted by its category.
+        module: "material/status_chip.rs",
+        component: "StatusChip",
+        variants: &[],
+        density: &[],
+        posed: &["To Do", "In Progress", "Done", "no category", "stale", "long name"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::atoms::status_chip,
+    },
+    Entry {
         module: "material/icon_label.rs",
         component: "IconLabel",
         variants: &[],
