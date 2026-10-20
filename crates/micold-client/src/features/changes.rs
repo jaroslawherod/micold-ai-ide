@@ -1031,6 +1031,15 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
     if !scroll {
         if let Some(view) = state.open.as_mut() {
             reshape(view);
+            // R2: a pick stays only while its lines are still rows of the diff (a collapsed
+            // revealed run takes its rows away too).
+            if let Some(pick) = view.pick {
+                let rows = diff_rows(view);
+                let shown = |line| rows.contains(&(pick.side, line));
+                if !(shown(pick.anchor) && shown(pick.head)) {
+                    view.pick = None;
+                }
+            }
         }
     }
     effect
@@ -1314,15 +1323,6 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                         Ok(diff) => Load::Ready(diff),
                         Err(message) => Load::Failed(message),
                     };
-                    reshape(view);
-                    // R2: a pick stays only while its lines are still rows of the diff.
-                    if let Some(pick) = view.pick {
-                        let rows = diff_rows(view);
-                        let shown = |line| rows.contains(&(pick.side, line));
-                        if !(shown(pick.anchor) && shown(pick.head)) {
-                            view.pick = None;
-                        }
-                    }
                 }
             }
             let moves = judge_anchors(state);
