@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: pr M3
-- **Next step**: orchestrator re-runs the flaked CI job on #1157 (daemon `structured_session` timeout, not this PR), waits on CI and merges; then M4 (T031–T039)
+- **Phase**: implement M4
+- **Next step**: M4 continued from *Handover*: T035 test, T036 snapshot + anchors, scoped gate, then review A + B + visual pass (T039)
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1129 | design (spec, plan, tasks) | merged | 5e78699ef85a34cc921da1f4c5e89ecd70b9f1f7 |
 | #1136 | M1 | merged | a658e7575682acda7e881561c13762690df4c428 |
 | #1141 | M2 | merged | 62825f0c831f75a3863fc62d0a4aa5cd137fd2c4 |
+| #1157 | M3 | merged (rebase; one CI flake in micold-daemon `structured_session`, passed on re-run) | 96ef5d1fe006d357e47e31a5786c72f8f4cf3ae6 |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Card content from core text rules: issue title, `type/number` branch, sessions line, no empty rows (US2) | #1136 | merged |
 | M2 | T012–T020 | full | Activity line without markup; slash commands as sentences (US3) | #1141 | merged |
-| M3 | T021–T030 | full | Larger type, cards grow to fit, even rows (US4) | #1157 | open, CI red once by a daemon flake |
-| M4 | T031–T039 | full | Tinted header row over a neutral body; showcase, layout snapshot, visual pass (US1) | — | planned |
+| M3 | T021–T030 | full | Larger type, cards grow to fit, even rows (US4) | #1157 | merged |
+| M4 | T031–T039 | full | Tinted header row over a neutral body; showcase, layout snapshot, visual pass (US1) | — | in progress |
 
 Milestone order note: US4 (P2) ships before US1 (P1) because US1's header band and 14 px body need
 US4's grow-to-fit (milestones rule 5 over rule 2's priority order). US2 is the MVP. T040 (quickstart
@@ -46,6 +47,7 @@ inequality + visual pass).
 |---|---|---|---|---|---|
 | 1 | clarify | FR-012: one generic sentence for every slash command, or special wording / hiding for built-ins? | A: one generic sentence for every command, built-ins included | A, orchestrator default (recommended), confirmed by jaro 2026-10-19T19:09Z | spec.md Clarifications; specs/032-untitled-session-labels/contracts/first-turn-label.md C3.5a |
 | 2 | implement M3 | K2/K3 `cdk::EvenRow` cannot sit in feature 970's single ribbon `Grid` | Even rows by measure-then-stretch in `Grid::layout`; T023/T028 superseded; K2/K3, R12, data-model amended (prose) | M3 unit (design only, FR-014 unchanged) | contracts/overview-card.md K2; research.md R12 |
+| 3 | implement M4 | T037 says the layout-snapshot doc should count "twelve states", but its "Eleven states" was stale (50+ covered states) | Doc drops the count and names `overview-open` instead | M4 unit (docs wording) | `grep -c '^            name: "' tests/support/covered_states.rs` |
 
 ## Review rounds
 
@@ -78,7 +80,25 @@ M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red wa
 
 ## Handover
 
-None.
+M4 unit 1 (context cap) — branch reset to origin/main (96ef5d1f), work committed locally, not pushed.
+Done: T031 (contrast tests over new Palette, red proven by compile error, now green), T032 (header
+geometry/pixel/colour test, tooltip test via new `Mounted::new_in` + `Mounted::floated_text` in
+`ui/material/test_support.rs`; ripple/fade/target/focus tests updated), T033 (Palette
+header/on_header/body/on_body/on_body_variant), T034 (header container + body column on a body-fill
+container, target mark as top `stack` layer; ripple/focus layer `on_body`; test helpers skip the
+full-card mark leaf: `pieces()` in overview_card tests, `dedup()` in card_grid `card_boxes`),
+T037, T038 (docs). `cargo test -p micold-client --lib -- overview_card composition_contrast card_grid`:
+73 passed. Also written but not yet run: T035 showcase "five states" CardGrid pose (needs-action
+card taller: activity + progress; catalogue `posed` gains "five states"), T036 `overview-open`
+covered state with `anchors: &[]`.
+Next: (1) `UPDATE_LAYOUT_SNAPSHOT=1 scripts/build-lock.sh cargo test -p micold-client --test
+layout_snapshot`, confirm only `## overview-open` is new in the fixture diff, then add anchors
+`overview.card.header` / `overview.card.title` (paths from the fixture) and regenerate; run
+`--test showcase_completeness`, `layout_text_overflow`, `--test gates` (containment); tick T035,
+T036. (2) Scoped gate + review A (high); then snapshot and return REVIEW-NEEDED for review B +
+visual pass (quickstart §B M4: header row in five states, contrast, both themes; showcase five-state
+grid shows a taller card stretching its row) — T039 evidence to `visual-pass/` and `visual-pass.md`.
+User guide's header colour words (red/amber/accent/green/grey) need the visual pass to confirm.
 
 ## Open escalation
 

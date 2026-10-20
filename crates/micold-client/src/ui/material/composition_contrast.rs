@@ -323,46 +323,55 @@ fn warning_and_success_roles_are_legible_on_their_fills() {
     );
 }
 
-/// Overview cards (feature 813, T013 — FR-005, FR-006, SC-005): each state's words read at 4.5:1 and
-/// its icon at 3:1 on the card's own fill, both schemes. The roles come from the card's `palette`,
-/// the function the card is drawn with, so a role changed there is the one checked here.
+/// Overview cards (feature 1120, T031 — FR-002, FR-003, FR-005, SC-001): in both schemes and the
+/// five states, the header's words and icons read at 4.5:1 on the header, and the title and the
+/// other body lines at 4.5:1 on the body; the body is one fill for every state, and Idle's grey
+/// header differs from the body and from every coloured header, so Idle stays de-emphasised by its
+/// header alone. The roles come from the card's `palette`, the function the card is drawn with.
 #[test]
-fn an_overview_cards_text_and_icon_are_legible_on_its_state_fill() {
+fn an_overview_cards_header_and_body_text_is_legible_on_their_fills() {
     use micold_core::overview::CardState;
     let mut violations: Vec<String> = Vec::new();
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
         let r = tokens::roles(scheme);
+        let idle = super::overview_card::palette(CardState::Idle, &r);
         for state in CardState::ALL {
             let p = super::overview_card::palette(state, &r);
-            let text = contrast(p.text, p.fill);
-            if text < AA_TEXT {
-                violations.push(format!(
-                    "{scheme:?} / {state:?} text: {text:.2}:1 (needs {AA_TEXT})"
-                ));
+            for (what, ink, ground) in [
+                ("header text", p.on_header, p.header),
+                ("title", p.on_body, p.body),
+                ("body line", p.on_body_variant, p.body),
+            ] {
+                let ratio = contrast(ink, ground);
+                if ratio < AA_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / {state:?} {what}: {ratio:.2}:1 (needs {AA_TEXT})"
+                    ));
+                }
             }
-            let icon = contrast(p.icon, p.fill);
-            if icon < AA_NON_TEXT {
-                violations.push(format!(
-                    "{scheme:?} / {state:?} icon: {icon:.2}:1 (needs {AA_NON_TEXT})"
-                ));
+            assert_eq!(p.body, idle.body, "{scheme:?} / {state:?}: FR-002, one body");
+            if state != CardState::Idle {
+                assert_ne!(
+                    p.header, idle.header,
+                    "{scheme:?} / {state:?}: Idle's header must differ (FR-005)"
+                );
             }
         }
-        let idle = super::overview_card::palette(CardState::Idle, &r);
-        assert_eq!(
-            idle.fill, r.surface_container_low,
-            "Idle is the de-emphasised surface"
-        );
-        assert_eq!(idle.text, r.on_surface_variant);
+        assert_eq!(idle.header, r.surface_variant, "{scheme:?}: Idle's header");
+        assert_eq!(idle.on_header, r.on_surface_variant, "{scheme:?}");
+        assert_eq!(idle.body, r.surface_container_low, "{scheme:?}: the body");
+        assert_ne!(idle.header, idle.body, "{scheme:?}: Idle's header is a band");
     }
     assert!(
         violations.is_empty(),
-        "an Overview card cannot be read on its fill:\n  {}",
+        "an Overview card cannot be read:\n  {}",
         violations.join("\n  ")
     );
 }
 
-/// Overview card target mark (feature 972, T015 — FR-006): the `primary` outline reads at 3:1
-/// against each card state's fill with the selected layer over it, both schemes.
+/// Overview card target mark (feature 972, T015 — FR-006; feature 1120, T031): the `primary`
+/// outline reads at 3:1 against each card state's header and body, bare and with the selected
+/// layer over them, both schemes.
 #[test]
 fn the_card_target_outline_is_visible_on_every_state_fill() {
     use micold_core::overview::CardState;
@@ -371,8 +380,13 @@ fn the_card_target_outline_is_visible_on_every_state_fill() {
         let r = tokens::roles(scheme);
         for state in CardState::ALL {
             let p = super::overview_card::palette(state, &r);
-            let layered = tokens::over(p.text, f64::from(tokens::state::SELECTED), p.fill);
-            for (what, ground) in [("fill", p.fill), ("fill + selected layer", layered)] {
+            let layer = |fill| tokens::over(p.on_body, f64::from(tokens::state::SELECTED), fill);
+            for (what, ground) in [
+                ("header", p.header),
+                ("header + selected layer", layer(p.header)),
+                ("body", p.body),
+                ("body + selected layer", layer(p.body)),
+            ] {
                 let ratio = contrast(r.primary, ground);
                 if ratio < AA_NON_TEXT {
                     violations.push(format!(

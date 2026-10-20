@@ -354,6 +354,7 @@ pub const COMPONENTS: &[Entry] = &[
             "Working",
             "Done",
             "Idle",
+            "five states",
             "Default",
             "orphan",
             "with progress",

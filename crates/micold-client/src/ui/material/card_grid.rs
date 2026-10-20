@@ -801,6 +801,8 @@ mod tests {
         }
         let mut out = Vec::new();
         walk(node, iced::Vector::ZERO, &mut out);
+        // A card's fill and its target-mark layer, stacked over it, are each such a box (1120).
+        out.dedup();
         out
     }
 
