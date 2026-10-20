@@ -256,7 +256,9 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         // The title wraps onto three lines and the activity onto two before an ellipsis (feature
         // 1121, FR-001); the branch stays one line.
         let mut body = column![Tooltip::new(
-            LineClamped::<M>::new(text.title, TypeRole::CardTitle, 3).tint(p.on_body),
+            LineClamped::<M>::new(text.title, TypeRole::CardTitle, 3)
+                .tint(p.on_body)
+                .width(Length::Fill),
             text.title_tooltip,
             roles
         )]
@@ -267,7 +269,9 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
         if let Some(activity) = text.activity {
             body = body.push(Tooltip::new(
-                LineClamped::<M>::new(activity.text, TypeRole::Body, 2).tint(p.on_body_variant),
+                LineClamped::<M>::new(activity.text, TypeRole::Body, 2)
+                    .tint(p.on_body_variant)
+                    .width(Length::Fill),
                 activity.tooltip,
                 roles,
             ));
@@ -286,20 +290,16 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
             };
         }
         let targeted = card.targeted;
-        // The body spans the card: a clamped line is only as wide as its text (feature 1121).
-        let fill = container(column![
-            header,
-            container(body).padding(spacing::MD).width(Length::Fill)
-        ])
-        .width(Length::Fill)
-        .style(move |_| container::Style {
-            background: Some(iced::Background::Color(style::color(p.body))),
-            border: iced::Border {
-                radius: RADIUS.into(),
-                ..iced::Border::default()
-            },
-            ..container::Style::default()
-        });
+        let fill = container(column![header, container(body).padding(spacing::MD)])
+            .width(Length::Fill)
+            .style(move |_| container::Style {
+                background: Some(iced::Background::Color(style::color(p.body))),
+                border: iced::Border {
+                    radius: RADIUS.into(),
+                    ..iced::Border::default()
+                },
+                ..container::Style::default()
+            });
         // The target mark is the top layer, so the header's fill cannot paint over the outline
         // (research R13); its *selected* layer covers the header and the body alike. Only a
         // targeted card stacks it, so no other card opens a renderer layer for nothing.
