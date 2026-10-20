@@ -468,8 +468,22 @@ Dev Drive, adds Defender exclusion paths for the workspace, `~/.cargo`, `~/.rust
 and the tool cache, and exclusion processes for `cargo`, `rustc`, `rustdoc` and `link`. The runner is
 discarded after the job, so nothing outside it is affected. The step writes to the run summary
 whether real-time protection was on; if it reads `False`, Defender cannot be the cause and the
-exclusions do nothing. **After**: not yet measured; take 10 `main` runs after the merge with the same
-query and add them here.
+exclusions do nothing. **After**: 11 `main` runs, median 1809 s, min 1292 s, max 2145 s, standard
+deviation 251 s. No gain.
+
+**What the two modes are** (2026-10-20): the daemon test step's ~440 s / ~670 s split is test-profile
+compilation, not test time (`Finished test profile ... in 4m 55s` against `8m 27s`). The rust-cache
+step now emits a `Windows build cache` notice annotation with `cache-hit`, the restored `target` size,
+the `deps` file count, the CPU model and the core count. Seven runs after it restored the identical
+cache (exact hit, 9769 MB, 2920 deps files); the one on an Intel Xeon Platinum 8573C took 587 s
+for the daemon step, the six on AMD EPYC 7763 took 670-714 s. The split is the runner's hardware,
+which GitHub assigns. Even on a full hit the daemon's ~150 integration-test binaries recompile on
+every run, because rust-cache drops the workspace's own crates before it saves.
+
+**Reverted** (2026-10-20): the median kept rising (1600 s before, 1660 s with the Dev Drive, 1809 s
+with Defender exclusions, ~1950 s over the seven runs above), so both steps were removed to see
+whether they caused it; the annotation stays. **After**: not yet measured; take 10 `main` runs and
+compare with the ~1950 s above.
 
 ## Real-runtime daemon tests build only their own targets
 
