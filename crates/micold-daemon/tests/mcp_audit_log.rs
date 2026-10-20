@@ -206,10 +206,11 @@ impl Fixture {
                     end: 1,
                     quote: vec!["line 1".into()],
                     text: "Audit me.".into(),
+                    pr: None,
                 },
             )
             .expect("a valid comment is accepted");
-        let sent = self.state.review_send(project, "b", &[]).await;
+        let sent = self.state.review_send(project, "b", &[], None).await;
         assert!(sent.is_ok(), "the send is delivered: {sent:?}");
         let reference = self
             .state

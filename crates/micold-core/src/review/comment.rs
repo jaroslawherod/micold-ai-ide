@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::diff::SideLines;
-use super::prompt::{self, EntryKind};
+use super::prompt::{self, EntryKind, PrContext};
 use super::{LineRange, RelPath, Side};
 
 /// A comment's identity: a v4 UUID the daemon assigns.
@@ -342,6 +342,54 @@ pub fn fresh_id(entry: &EntryReview, mut draw: impl FnMut() -> CommentId) -> Com
     }
 }
 
+/// The pull request a comment was written on (feature 1149, data-model § `PrAnchor`): its number
+/// and head branch, and the head commit of the diff shown when the comment was written.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PrAnchor {
+    /// The pull request's number, above 0.
+    pub number: u64,
+    /// Its head branch: non-empty, no control characters.
+    pub head_branch: String,
+    /// The commit of the diff shown: 40 or 64 lowercase hex digits.
+    pub head_commit: String,
+}
+
+impl PrAnchor {
+    /// The anchor, or the rule it breaks (W18): `number` above 0, a non-empty `head_branch`
+    /// without control characters, `head_commit` 40 or 64 hex digits (stored lower-cased).
+    pub fn checked(number: u64, head_branch: &str, head_commit: &str) -> Result<Self, ReviewError> {
+        let invalid = |why: &str| Err(ReviewError::Invalid(why.to_owned()));
+        if number == 0 {
+            return invalid("a pull request number is above 0");
+        }
+        if head_branch.is_empty() || head_branch.chars().any(char::is_control) {
+            return invalid("a pull request's head branch is a name without control characters");
+        }
+        if !is_commit_id(head_commit) {
+            return invalid("a head commit is 40 or 64 hex digits");
+        }
+        Ok(Self {
+            number,
+            head_branch: head_branch.to_owned(),
+            head_commit: head_commit.to_ascii_lowercase(),
+        })
+    }
+}
+
+/// Whether `text` is a git object id: 40 or 64 hex digits.
+pub fn is_commit_id(text: &str) -> bool {
+    matches!(text.len(), 40 | 64) && text.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Which comments of an entry an operation acts on (feature 1149, data-model § `Scope`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Scope {
+    /// The working-tree comments: those without a pull request.
+    WorkingTree,
+    /// The comments of pull request `number`.
+    PullRequest(u64),
+}
+
 /// One comment on a line range of one side of one file (FR-011, FR-012).
 ///
 /// Serialised through [`StoredComment`], which spells the range as top-level `start` and `end`
@@ -366,9 +414,18 @@ pub struct ReviewComment {
     pub state: CommentState,
     /// When it was made (Unix seconds).
     pub created: u64,
+    /// The pull request it was written on; `None` for a working-tree comment (feature 1149).
+    pub pr: Option<PrAnchor>,
 }
 
 impl ReviewComment {
+    /// The scope it belongs to: its pull request, else the working tree.
+    pub fn scope(&self) -> Scope {
+        self.pr
+            .as_ref()
+            .map_or(Scope::WorkingTree, |pr| Scope::PullRequest(pr.number))
+    }
+
     /// Its short reference, `C-xxxxxxxx` (FR-014).
     pub fn reference(&self) -> CommentRef {
         CommentRef::of(self.id)
@@ -397,6 +454,9 @@ struct StoredComment {
     text: String,
     state: CommentState,
     created: u64,
+    /// Absent in versions 1 and 2 (feature 1149); always present on the wire.
+    #[serde(default)]
+    pr: Option<PrAnchor>,
 }
 
 impl TryFrom<StoredComment> for ReviewComment {
@@ -418,6 +478,7 @@ impl TryFrom<StoredComment> for ReviewComment {
             text: stored.text,
             state: stored.state,
             created: stored.created,
+            pr: stored.pr,
         })
     }
 }
@@ -434,6 +495,7 @@ impl From<ReviewComment> for StoredComment {
             text: comment.text,
             state: comment.state,
             created: comment.created,
+            pr: comment.pr,
         }
     }
 }
@@ -490,6 +552,8 @@ pub struct Draft {
     pub quote: Vec<String>,
     /// What the user wrote (trimmed when stored).
     pub text: String,
+    /// The pull request it is written on; `None` for the working tree (feature 1149).
+    pub pr: Option<PrAnchor>,
 }
 
 /// The comments one send carries, taken when it begins (data-model `SendSnapshot`).
@@ -523,20 +587,29 @@ impl EntryReview {
         self.sending.is_some()
     }
 
-    /// Open a send of every draft comment (W6): `NothingPending` with none, `Busy` while
-    /// another send is open. Until it finishes or aborts, its comments refuse edits (`InSend`).
+    /// Open a send of every draft comment of `scope` (W6, W20): `NothingPending` with none in that
+    /// scope, `Busy` while any send of the entry is open. Until it finishes or aborts, its
+    /// comments refuse edits (`InSend`). `pr` is the pull request's context for a pull request
+    /// scope; its batch (`build_pr`) arrives with the send (milestone M2), so only `None` is sent
+    /// for now.
     pub fn begin_send(
         &mut self,
         entry: EntryKind,
+        scope: Scope,
+        pr: Option<&PrContext>,
         outdated: &[CommentId],
     ) -> Result<SendSnapshot, ReviewError> {
+        debug_assert!(
+            pr.is_none(),
+            "the pull request batch arrives in milestone M2"
+        );
         if self.sending.is_some() {
             return Err(ReviewError::Busy);
         }
         let pending: Vec<ReviewComment> = self
             .comments
             .iter()
-            .filter(|comment| comment.state == CommentState::Draft)
+            .filter(|comment| comment.state == CommentState::Draft && comment.scope() == scope)
             .cloned()
             .collect();
         if pending.is_empty() {
@@ -603,6 +676,7 @@ impl EntryReview {
             text,
             state: CommentState::Draft,
             created,
+            pr: draft.pr,
         });
         Ok(())
     }
@@ -622,18 +696,20 @@ impl EntryReview {
         Ok(())
     }
 
-    /// Remove every sent or reported comment (W4); drafts stay.
-    pub fn clear_sent(&mut self) {
+    /// Remove every sent or reported comment of `scope` (W4, W19); drafts and other scopes stay.
+    pub fn clear_sent(&mut self, scope: Scope) {
         self.comments
-            .retain(|comment| comment.state == CommentState::Draft);
+            .retain(|comment| comment.state == CommentState::Draft || comment.scope() != scope);
     }
 
-    /// Remove every pending comment not inside an open send (W4); sent ones and those the send
-    /// holds stay.
-    pub fn discard_pending(&mut self) {
+    /// Remove every pending comment of `scope` not inside an open send (W4, W19); sent ones, those
+    /// the send holds and other scopes' stay.
+    pub fn discard_pending(&mut self, scope: Scope) {
         let sending = self.sending.as_deref().unwrap_or_default();
         self.comments.retain(|comment| {
-            comment.state != CommentState::Draft || sending.contains(&comment.id)
+            comment.state != CommentState::Draft
+                || comment.scope() != scope
+                || sending.contains(&comment.id)
         });
     }
 
@@ -802,6 +878,7 @@ mod tests {
             text: "Why clone here?".into(),
             state,
             created: 1_790_000_000,
+            pr: None,
         }
     }
 
@@ -812,6 +889,7 @@ mod tests {
             range: LineRange::new(start, end).expect("a valid range"),
             quote: quote.iter().map(|line| (*line).to_owned()).collect(),
             text: text.to_owned(),
+            pr: None,
         }
     }
 
@@ -981,6 +1059,7 @@ mod tests {
                 "text": "Why clone here?",
                 "state": { "draft": null },
                 "created": 1_790_000_000u64,
+                "pr": null,
             }),
             "the comment is stored in the shape data-model.md § Core: persistence gives"
         );
@@ -1041,6 +1120,122 @@ mod tests {
         EntryReview::from_comments(comments)
     }
 
+    fn pr_anchor(number: u64) -> PrAnchor {
+        PrAnchor {
+            number,
+            head_branch: format!("feat/{number}"),
+            head_commit: "b".repeat(40),
+        }
+    }
+
+    fn pr_draft(number: u64, text: &str) -> Draft {
+        Draft {
+            pr: Some(pr_anchor(number)),
+            ..draft(1, 1, &["x"], text)
+        }
+    }
+
+    #[test]
+    fn add_stores_the_pull_request_and_the_scope_follows_it() {
+        let mut review = EntryReview::default();
+        review.add(pr_draft(7, "on pr"), id(1), NOW).expect("added");
+        review
+            .add(draft(1, 1, &["x"], "on tree"), id(2), NOW)
+            .expect("added");
+        let comments = review.comments();
+        assert_eq!(comments[0].pr, Some(pr_anchor(7)));
+        assert_eq!(comments[0].scope(), Scope::PullRequest(7));
+        assert_eq!(comments[1].pr, None);
+        assert_eq!(comments[1].scope(), Scope::WorkingTree);
+    }
+
+    #[test]
+    fn checked_anchor_enforces_the_rules_and_lower_cases_the_commit() {
+        let upper = "AB".repeat(20);
+        let ok = PrAnchor::checked(3, "feat/x", &upper).expect("40 hex digits");
+        assert_eq!(ok.head_commit, upper.to_lowercase());
+        assert!(
+            PrAnchor::checked(3, "f", &"c".repeat(64)).is_ok(),
+            "64 digits"
+        );
+        for (n, b, c) in [
+            (0, "f", "a".repeat(40)),
+            (1, "", "a".repeat(40)),
+            (
+                1,
+                "f
+x",
+                "a".repeat(40),
+            ),
+            (1, "f", "a".repeat(39)),
+            (1, "f", "g".repeat(40)),
+        ] {
+            assert!(
+                matches!(PrAnchor::checked(n, b, &c), Err(ReviewError::Invalid(_))),
+                "{n} {b:?} {c}"
+            );
+        }
+    }
+
+    fn scoped_review() -> EntryReview {
+        let mut review = EntryReview::default();
+        review
+            .add(pr_draft(7, "pr7 draft"), id(1), NOW)
+            .expect("added");
+        review
+            .add(pr_draft(8, "pr8 draft"), id(2), NOW)
+            .expect("added");
+        review
+            .add(draft(1, 1, &["x"], "tree draft"), id(3), NOW)
+            .expect("added");
+        let mut comments = review.comments().to_vec();
+        for (n, number) in [(4, Some(7)), (5, Some(8)), (6, None)] {
+            let mut sent = sample(CommentState::Sent { at: NOW });
+            sent.id = id(n);
+            sent.pr = number.map(pr_anchor);
+            comments.push(sent);
+        }
+        EntryReview::from_comments(comments)
+    }
+
+    fn ids(review: &EntryReview) -> Vec<CommentId> {
+        review.comments().iter().map(|c| c.id).collect()
+    }
+
+    #[test]
+    fn clear_sent_and_discard_pending_touch_only_their_scope() {
+        let mut review = scoped_review();
+        review.clear_sent(Scope::PullRequest(7));
+        assert_eq!(ids(&review), vec![id(1), id(2), id(3), id(5), id(6)]);
+        review.discard_pending(Scope::PullRequest(8));
+        assert_eq!(ids(&review), vec![id(1), id(3), id(5), id(6)]);
+        review.clear_sent(Scope::WorkingTree);
+        review.discard_pending(Scope::WorkingTree);
+        assert_eq!(ids(&review), vec![id(1), id(5)]);
+    }
+
+    #[test]
+    fn begin_send_snapshots_only_the_scopes_drafts() {
+        let mut review = scoped_review();
+        let snapshot = review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("the working tree has a draft");
+        assert_eq!(snapshot.ids, vec![id(3)]);
+        assert_eq!(
+            review.begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[]),
+            Err(ReviewError::Busy),
+            "any open send makes the entry busy"
+        );
+        review.abort_send();
+        assert_eq!(
+            review
+                .begin_send(EntryKind::Worktree, Scope::PullRequest(9), None, &[])
+                .map(|s| s.ids),
+            Err(ReviewError::NothingPending),
+            "other scopes' drafts are not sent"
+        );
+    }
+
     fn state_of(review: &EntryReview, n: u128) -> CommentState {
         review
             .comments()
@@ -1055,7 +1250,7 @@ mod tests {
     fn begin_send_snapshots_exactly_the_pending_comments() {
         let mut review = three_pending_one_sent();
         let snapshot = review
-            .begin_send(EntryKind::Worktree, &[])
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
             .expect("pending comments can be sent");
         assert_eq!(
             snapshot.ids,
@@ -1084,7 +1279,7 @@ mod tests {
     fn begin_send_with_nothing_pending_or_a_send_open_is_refused() {
         let mut empty = EntryReview::from_comments(vec![sample(CommentState::Sent { at: NOW })]);
         assert_eq!(
-            empty.begin_send(EntryKind::Worktree, &[]),
+            empty.begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[]),
             Err(ReviewError::NothingPending),
             "only sent comments: nothing to send (US2 s5)"
         );
@@ -1092,10 +1287,10 @@ mod tests {
 
         let mut review = three_pending_one_sent();
         review
-            .begin_send(EntryKind::Worktree, &[])
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
             .expect("first send");
         assert_eq!(
-            review.begin_send(EntryKind::Worktree, &[]),
+            review.begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[]),
             Err(ReviewError::Busy),
             "a second send while one is open is Busy (FR-018)"
         );
@@ -1104,7 +1299,9 @@ mod tests {
     #[test]
     fn comments_in_an_open_send_refuse_edits_and_others_do_not() {
         let mut review = three_pending_one_sent();
-        review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("send");
         assert_eq!(review.set_text(id(1), "new"), Err(ReviewError::InSend));
         assert_eq!(review.delete(id(2)), Err(ReviewError::InSend));
         review
@@ -1119,7 +1316,9 @@ mod tests {
     #[test]
     fn finish_send_marks_only_the_snapshot_sent() {
         let mut review = three_pending_one_sent();
-        let snapshot = review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        let snapshot = review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("send");
         review
             .add(draft(5, 5, &["y"], "added meanwhile"), id(5), NOW)
             .expect("valid");
@@ -1144,7 +1343,9 @@ mod tests {
     #[test]
     fn abort_send_leaves_every_comment_pending_and_editable() {
         let mut review = three_pending_one_sent();
-        review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("send");
         review.abort_send();
         for n in 1..=3 {
             assert_eq!(state_of(&review, n), CommentState::Draft, "FR-017");
@@ -1152,14 +1353,14 @@ mod tests {
         assert!(!review.sending(), "the send is closed");
         review.set_text(id(1), "edit").expect("edits work again");
         review
-            .begin_send(EntryKind::Worktree, &[])
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
             .expect("a new send can begin");
     }
 
     #[test]
     fn clear_sent_removes_sent_comments_only() {
         let mut review = three_pending_one_sent();
-        review.clear_sent();
+        review.clear_sent(Scope::WorkingTree);
         let ids: Vec<_> = review.comments().iter().map(|comment| comment.id).collect();
         assert_eq!(ids, vec![id(1), id(2), id(3)], "pending stay (US4 s3)");
         assert!(review
@@ -1171,16 +1372,18 @@ mod tests {
     #[test]
     fn discard_pending_removes_pending_comments_not_in_an_open_send() {
         let mut review = three_pending_one_sent();
-        review.discard_pending();
+        review.discard_pending(Scope::WorkingTree);
         let ids: Vec<_> = review.comments().iter().map(|comment| comment.id).collect();
         assert_eq!(ids, vec![id(9)], "only the sent one stays (FR-019)");
 
         let mut sending = three_pending_one_sent();
-        sending.begin_send(EntryKind::Worktree, &[]).expect("send");
+        sending
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("send");
         sending
             .add(draft(5, 5, &["y"], "added meanwhile"), id(5), NOW)
             .expect("valid");
-        sending.discard_pending();
+        sending.discard_pending(Scope::WorkingTree);
         let ids: Vec<_> = sending
             .comments()
             .iter()
@@ -1474,7 +1677,9 @@ mod tests {
     fn reanchor_moves_a_comment_in_the_open_send() {
         let range = |a, b| LineRange::new(a, b).expect("valid");
         let mut review = three_pending_one_sent();
-        review.begin_send(EntryKind::Worktree, &[]).expect("opens");
+        review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("opens");
         let m = Move::new(id(2), range(2, 2), range(6, 6)).expect("move");
         assert_eq!(review.reanchor(&[m]), 1);
         assert!(review.sending(), "the send stays open");
@@ -1488,7 +1693,7 @@ mod tests {
         let mut comments = review.comments().to_vec();
         comments.push(answered);
         review = EntryReview::from_comments(comments);
-        review.clear_sent();
+        review.clear_sent(Scope::WorkingTree);
         let ids: Vec<_> = review.comments().iter().map(|comment| comment.id).collect();
         assert_eq!(
             ids,
@@ -1653,7 +1858,9 @@ mod tests {
     #[test]
     fn a_comment_in_the_open_send_refuses_a_report() {
         let mut review = one_sent_one_draft();
-        review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("send");
         let before = review.clone();
         assert_eq!(
             review.report(CommentRef::of(id(1)), Outcome::Applied, "", agent(), NOW),
@@ -1737,7 +1944,9 @@ mod tests {
     #[test]
     fn a_comment_in_the_open_send_refuses_a_mark() {
         let mut review = one_sent_one_draft();
-        review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("send");
         let before = review.clone();
         assert_eq!(
             review.mark(id(1), Outcome::Applied, "", NOW),
@@ -1763,7 +1972,7 @@ mod tests {
             ("mark", |r| {
                 let _ = r.mark(id(9), Outcome::Answered, "no", NOW);
             }),
-            ("clear_sent", |r| r.clear_sent()),
+            ("clear_sent", |r| r.clear_sent(Scope::WorkingTree)),
             ("set_text", |r| {
                 let _ = r.set_text(id(9), "again");
             }),

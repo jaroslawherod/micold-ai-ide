@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::protocol::messages::{DaemonMsg, ErrorKind, ReviewEditOp};
 use micold_core::review::comment::{
-    fresh_id, CommentId, CommentRef, Draft, EntryReview, Outcome, Reporter, ReviewComment,
-    ReviewError, SendSnapshot, Status,
+    fresh_id, CommentId, CommentRef, Draft, EntryReview, Outcome, PrAnchor, Reporter,
+    ReviewComment, ReviewError, Scope, SendSnapshot, Status,
 };
 use micold_core::review::prompt::EntryKind;
 use micold_core::review::store::ReviewFile;
@@ -108,8 +108,25 @@ impl Reviews {
                 end,
                 quote,
                 text,
+                pr,
             } => {
+                // W18: a pull request anchor is checked, and the Default entry has no pull requests.
+                let pr = match pr {
+                    None => None,
+                    Some(_) if dir.is_empty() => {
+                        return Err(Refusal::new(
+                            ErrorKind::InvalidInput,
+                            "the project root has no pull request to comment on".to_owned(),
+                        ))
+                    }
+                    Some(pr) => Some(PrAnchor::checked(
+                        pr.number,
+                        &pr.head_branch,
+                        &pr.head_commit,
+                    )?),
+                };
                 let draft = Draft {
+                    pr,
                     path: checked_path(&path)?,
                     side,
                     range: LineRange::new(start, end).ok_or_else(|| {
@@ -126,8 +143,19 @@ impl Reviews {
             }
             ReviewEditOp::SetText { id, text } => edited.set_text(id, &text)?,
             ReviewEditOp::Delete { id } => edited.delete(id)?,
-            ReviewEditOp::ClearSent => edited.clear_sent(),
-            ReviewEditOp::DiscardPending => edited.discard_pending(),
+            // W19: only the scope's comments, and no write or push when nothing changed.
+            ReviewEditOp::ClearSent { scope } => {
+                edited.clear_sent(scope);
+                if edited == entries.get(dir).cloned().unwrap_or_default() {
+                    return Ok(None);
+                }
+            }
+            ReviewEditOp::DiscardPending { scope } => {
+                edited.discard_pending(scope);
+                if edited == entries.get(dir).cloned().unwrap_or_default() {
+                    return Ok(None);
+                }
+            }
             ReviewEditOp::Mark { id, outcome, note } => edited.mark(id, outcome, &note, now)?,
             // W15: compare-and-set, so a repeat from another window changes nothing.
             ReviewEditOp::Reanchor { moves } => {
@@ -190,7 +218,7 @@ impl Reviews {
             .project(catalog, project)
             .get_mut(dir)
             .ok_or(ReviewError::NothingPending)?;
-        let snapshot = review.begin_send(kind, outdated)?;
+        let snapshot = review.begin_send(kind, Scope::WorkingTree, None, outdated)?;
         let msg = changed(project, dir, review);
         tracing::info!(
             project = %project.display(),
@@ -456,7 +484,11 @@ pub fn relocate(root: &Path, drafts: &[ReviewComment]) -> Relocated {
 
     let mut found = Relocated::default();
     let mut files: HashMap<&str, Option<SideLines>> = HashMap::new();
-    for comment in drafts.iter().filter(|c| c.side == Side::New) {
+    // A pull request comment is placed against its pull request's diff, never the working tree.
+    for comment in drafts
+        .iter()
+        .filter(|c| c.side == Side::New && c.pr.is_none())
+    {
         let lines = files.entry(comment.path.as_str()).or_insert_with(|| {
             std::fs::read(root.join(comment.path.as_str()))
                 .ok()

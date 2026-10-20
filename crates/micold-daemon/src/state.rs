@@ -2384,8 +2384,16 @@ impl DaemonState {
         project: &Path,
         worktree_dir: &str,
         outdated: &[micold_core::review::comment::CommentId],
+        pr: Option<&micold_core::protocol::messages::PrSend>,
     ) -> Result<micold_core::protocol::messages::OperationResult, crate::review::Refusal> {
         use micold_core::protocol::messages::{ErrorKind, OperationResult};
+        // Sending a pull request's review arrives with milestone M2 (W20).
+        if pr.is_some() {
+            return Err(crate::review::Refusal {
+                kind: ErrorKind::InvalidInput,
+                message: "sending a pull request's review is not available yet".into(),
+            });
+        }
         use micold_core::review::prompt::EntryKind;
         let asked = tokio::time::Instant::now();
         let kind = if worktree_dir.is_empty() {

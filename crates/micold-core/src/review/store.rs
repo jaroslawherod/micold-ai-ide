@@ -8,12 +8,16 @@ use serde::{Deserialize, Serialize};
 
 use super::comment::{fresh_id, CommentId, EntryReview, ReviewComment};
 
-/// The version this build writes (feature 946, S2). It also reads 482's version 1, whose
-/// `pending` state loads as Draft.
-pub const REVIEW_FILE_VERSION: u32 = 2;
+/// The newest version this build writes (feature 1149, S3): 3, and only while some comment has a
+/// pull request; otherwise 2 (feature 946, S2), so a file without PR comments stays readable by an
+/// older build. It also reads 482's version 1, whose `pending` state loads as Draft.
+pub const REVIEW_FILE_VERSION: u32 = 3;
+
+/// The version written while no comment has a pull request.
+const PLAIN_FILE_VERSION: u32 = 2;
 
 /// The versions this build reads.
-const READABLE_VERSIONS: [u32; 2] = [1, REVIEW_FILE_VERSION];
+const READABLE_VERSIONS: [u32; 3] = [1, PLAIN_FILE_VERSION, REVIEW_FILE_VERSION];
 
 /// Every entry's comments of one project, keyed by worktree directory name; `""` is the Default
 /// entry (the project root), as on the wire.
@@ -59,8 +63,17 @@ impl ReviewFile {
                 comments: comments.clone(),
             })
             .collect();
+        let with_pr = self
+            .entries
+            .values()
+            .flatten()
+            .any(|comment| comment.pr.is_some());
         let stored = StoredReviews {
-            version: REVIEW_FILE_VERSION,
+            version: if with_pr {
+                REVIEW_FILE_VERSION
+            } else {
+                PLAIN_FILE_VERSION
+            },
             entries,
         };
         // Every field is a string, a number or a list of them: serialising cannot fail.
@@ -123,6 +136,7 @@ mod tests {
             text: "Why?".into(),
             state,
             created: 1_790_000_000,
+            pr: None,
         }
     }
 
@@ -189,7 +203,7 @@ mod tests {
             "garbage is refused"
         );
         assert!(
-            ReviewFile::from_json(r#"{ "version": 3, "entries": [] }"#).is_err(),
+            ReviewFile::from_json(r#"{ "version": 4, "entries": [] }"#).is_err(),
             "a version this build does not know is refused rather than misread"
         );
     }
@@ -198,7 +212,8 @@ mod tests {
     fn stored_comment(id: &str, state: serde_json::Value) -> serde_json::Value {
         json!({
             "id": id, "path": "src/a.rs", "side": "new", "start": 12, "end": 13,
-            "quote": ["a", "b"], "text": "Why?", "state": state, "created": 1_790_000_000u64
+            "quote": ["a", "b"], "text": "Why?", "state": state, "created": 1_790_000_000u64,
+            "pr": null
         })
     }
 
@@ -288,6 +303,49 @@ mod tests {
         assert_eq!(again.to_json(), written, "and writes back byte-equal");
     }
 
+    fn pr_comment(n: u128) -> ReviewComment {
+        let mut c = comment(n, CommentState::Draft);
+        c.pr = Some(crate::review::comment::PrAnchor {
+            number: 7,
+            head_branch: "feat/x".into(),
+            head_commit: "a".repeat(40),
+        });
+        c
+    }
+
+    #[test]
+    fn a_file_with_a_pull_request_comment_is_version_3_and_round_trips_it() {
+        let mut file = sample();
+        file.entries
+            .get_mut("feature-x")
+            .expect("entry")
+            .push(pr_comment(5));
+        let json = file.to_json();
+        let value: serde_json::Value = serde_json::from_str(&json).expect("JSON");
+        assert_eq!(value["version"], json!(3));
+        assert_eq!(
+            value["entries"][1]["comments"][2]["pr"],
+            json!({ "number": 7, "head_branch": "feat/x", "head_commit": "a".repeat(40) })
+        );
+        assert_eq!(ReviewFile::from_json(&json).expect("loads"), file);
+    }
+
+    #[test]
+    fn a_file_without_pull_request_comments_is_written_as_version_2() {
+        let value: serde_json::Value = serde_json::from_str(&sample().to_json()).expect("JSON");
+        assert_eq!(value["version"], json!(2));
+    }
+
+    #[test]
+    fn versions_1_and_2_load_with_no_pull_request() {
+        for version in [1, 2] {
+            let mut comment = stored_comment(ID_1, json!({ "draft": null }));
+            comment.as_object_mut().expect("object").remove("pr");
+            let file = ReviewFile::from_json(&file_of(version, vec![comment])).expect("loads");
+            assert_eq!(file.entries["feature-x"][0].pr, None, "version {version}");
+        }
+    }
+
     #[test]
     fn a_colliding_reference_gets_a_fresh_id_on_load() {
         let earlier = "1a2b3c4d-0000-4000-8000-000000000001";
@@ -366,7 +424,7 @@ mod tests {
         let project = Path::new("/repo");
         let path = store.reviews_path(project);
         std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
-        let text = file_of(3, Vec::new());
+        let text = file_of(4, Vec::new());
         std::fs::write(&path, &text).expect("written");
         assert_eq!(store.load_reviews(project), ReviewFile::default());
         let mut aside = path.as_os_str().to_os_string();
@@ -374,7 +432,7 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&aside).ok(),
             Some(text),
-            "a version 3 file is quarantined as 482's"
+            "a version 4 file is quarantined as 482's"
         );
     }
 

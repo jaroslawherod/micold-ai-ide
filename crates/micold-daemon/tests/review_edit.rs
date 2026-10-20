@@ -26,7 +26,9 @@ use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ClientMsg, DaemonMsg, ErrorKind, OperationResult, ReviewEditOp,
 };
-use micold_core::review::comment::{CommentId, CommentState, Outcome, Reporter, ReviewComment};
+use micold_core::review::comment::{
+    CommentId, CommentState, Outcome, PrAnchor, Reporter, ReviewComment, Scope,
+};
 use micold_core::review::store::ReviewFile;
 use micold_core::review::Side;
 use micold_core::settings::JsonFileSettingsStore;
@@ -223,6 +225,23 @@ fn add(path: &str, side: Side, start: u32, end: u32, quote: &[&str], text: &str)
         end,
         quote: quote.iter().map(|line| (*line).to_owned()).collect(),
         text: text.into(),
+        pr: None,
+    }
+}
+
+fn anchor(number: u64) -> PrAnchor {
+    PrAnchor {
+        number,
+        head_branch: format!("feat/{number}"),
+        head_commit: "ab".repeat(20),
+    }
+}
+
+/// An `Add` on pull request `pr`.
+fn add_on(pr: PrAnchor, text: &str) -> ReviewEditOp {
+    ReviewEditOp::Add {
+        pr: Some(pr),
+        ..add("src/a.rs", Side::New, 2, 2, &["two"], text)
     }
 }
 
@@ -732,7 +751,16 @@ async fn w4_clear_sent_removes_sent_comments_and_discard_pending_the_pending_one
     attach(&mut a, &f.project()).await;
     let mut b = connect(&state).await;
 
-    let (result, _) = edit(&mut a, 1, &f.project(), "feat", ReviewEditOp::ClearSent).await;
+    let (result, _) = edit(
+        &mut a,
+        1,
+        &f.project(),
+        "feat",
+        ReviewEditOp::ClearSent {
+            scope: Scope::WorkingTree,
+        },
+    )
+    .await;
     result.expect("clear sent is accepted (W4)");
     assert_eq!(
         f.on_disk().entries.get("feat").map(Vec::as_slice),
@@ -751,7 +779,9 @@ async fn w4_clear_sent_removes_sent_comments_and_discard_pending_the_pending_one
         2,
         &f.project(),
         "feat",
-        ReviewEditOp::DiscardPending,
+        ReviewEditOp::DiscardPending {
+            scope: Scope::WorkingTree,
+        },
     )
     .await;
     result.expect("discard pending is accepted (W4)");
@@ -970,4 +1000,237 @@ async fn removing_the_project_from_the_catalog_deletes_its_review_file() {
         "the project is removed: {answer:?}"
     );
     assert!(!file.exists(), "its reviews/ file is deleted (W11)");
+}
+
+// ---- Feature 1149: comments on a pull request's diff (W18, W19, W21) ----
+
+/// `anchor(number)` as a comment of entry `feat`, in `state`.
+fn stored_pr(n: u128, state: CommentState, number: u64) -> ReviewComment {
+    ReviewComment {
+        pr: Some(anchor(number)),
+        ..stored(n, state)
+    }
+}
+
+/// W18: each refusal is `InvalidInput`, nothing is stored or pushed; a valid anchor is stored
+/// with the commit lower-cased.
+#[tokio::test]
+async fn w18_a_pull_request_add_is_checked_and_stored_with_its_anchor() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut client = connect(&state).await;
+    attach(&mut client, &f.project()).await;
+
+    let with = |f: fn(&mut PrAnchor)| {
+        let mut pr = anchor(7);
+        f(&mut pr);
+        add_on(pr, "t")
+    };
+    let refused: [(&str, &str, ReviewEditOp); 6] = [
+        ("the Default entry", "", add_on(anchor(7), "t")),
+        ("number 0", "feat", with(|p| p.number = 0)),
+        ("an empty branch", "feat", with(|p| p.head_branch.clear())),
+        (
+            "a control character",
+            "feat",
+            with(|p| p.head_branch = "a\nb".into()),
+        ),
+        (
+            "a short commit",
+            "feat",
+            with(|p| p.head_commit = "ab".repeat(10)),
+        ),
+        (
+            "a non-hex commit",
+            "feat",
+            with(|p| p.head_commit = "zz".repeat(20)),
+        ),
+    ];
+    for (n, (why, dir, op)) in refused.into_iter().enumerate() {
+        let (result, seen) = edit(&mut client, n as u64 + 1, &f.project(), dir, op).await;
+        assert_eq!(result.expect_err(why).0, ErrorKind::InvalidInput, "{why}");
+        assert!(seen.is_empty(), "{why}: nothing is pushed");
+    }
+    assert_eq!(f.on_disk(), ReviewFile::default(), "nothing was stored");
+
+    let mut upper = anchor(7);
+    upper.head_commit = "AB".repeat(20);
+    let (result, seen) = edit(&mut client, 9, &f.project(), "feat", add_on(upper, "kept")).await;
+    result.expect("a valid anchor is accepted");
+    let comment = seen.last().expect("pushed").comments[0].clone();
+    assert_eq!(comment.pr, Some(anchor(7)), "stored lower-cased");
+    assert_eq!(f.on_disk().entries["feat"], vec![comment], "and on disk");
+}
+
+/// W19, US1 s2, FR-005: scoped tidy touches only its scope and writes nothing when nothing
+/// changed; a pull request scope on the Default entry is a no-op `Ack`.
+#[tokio::test]
+async fn w19_scoped_clear_and_discard_isolate_scopes_and_skip_no_op_writes() {
+    let f = Fixture::new();
+    let sent = CommentState::Sent { at: 1_790_000_100 };
+    seed(
+        &f,
+        vec![
+            stored_pr(1, sent.clone(), 7),
+            stored_pr(2, CommentState::Draft, 7),
+            stored_pr(3, sent.clone(), 8),
+            stored(4, sent),
+        ],
+    );
+    let state = f.service();
+    let mut client = connect(&state).await;
+    attach(&mut client, &f.project()).await;
+
+    let (result, _) = edit(
+        &mut client,
+        1,
+        &f.project(),
+        "feat",
+        ReviewEditOp::ClearSent {
+            scope: Scope::PullRequest(7),
+        },
+    )
+    .await;
+    result.expect("accepted");
+    let ids = |f: &Fixture| -> Vec<u128> {
+        f.on_disk().entries["feat"]
+            .iter()
+            .map(|c| c.id.0.as_u128() >> 96)
+            .collect()
+    };
+    assert_eq!(ids(&f), vec![2, 3, 4], "only PR 7's sent comment went");
+
+    let before = f.on_disk();
+    for (req, dir, op) in [
+        (
+            2,
+            "feat",
+            ReviewEditOp::ClearSent {
+                scope: Scope::PullRequest(9),
+            },
+        ),
+        (
+            3,
+            "feat",
+            ReviewEditOp::DiscardPending {
+                scope: Scope::WorkingTree,
+            },
+        ),
+        (
+            4,
+            "",
+            ReviewEditOp::DiscardPending {
+                scope: Scope::PullRequest(7),
+            },
+        ),
+    ] {
+        let (result, seen) = edit(&mut client, req, &f.project(), dir, op).await;
+        result.expect("a no-op is acknowledged");
+        assert!(seen.is_empty(), "nothing changed, nothing pushed");
+        assert_eq!(f.on_disk(), before, "nothing changed, nothing written");
+    }
+
+    let (result, _) = edit(
+        &mut client,
+        5,
+        &f.project(),
+        "feat",
+        ReviewEditOp::DiscardPending {
+            scope: Scope::PullRequest(7),
+        },
+    )
+    .await;
+    result.expect("accepted");
+    assert_eq!(ids(&f), vec![3, 4], "PR 7's draft went, the rest stayed");
+}
+
+/// US1 s2: a PR comment is edited and deleted as a working-tree one, and goes with its worktree.
+#[tokio::test]
+async fn a_pull_request_comment_is_edited_deleted_and_forgotten_with_its_worktree() {
+    let f = Fixture::new();
+    seed(
+        &f,
+        vec![
+            stored_pr(1, CommentState::Draft, 7),
+            stored_pr(2, CommentState::Draft, 7),
+        ],
+    );
+    let state = f.service();
+    let mut client = connect(&state).await;
+    attach(&mut client, &f.project()).await;
+    let id = |n: u128| CommentId(uuid::Uuid::from_u128(n << 96));
+
+    let (result, _) = edit(
+        &mut client,
+        1,
+        &f.project(),
+        "feat",
+        ReviewEditOp::SetText {
+            id: id(1),
+            text: " new ".into(),
+        },
+    )
+    .await;
+    result.expect("edited");
+    let (result, _) = edit(
+        &mut client,
+        2,
+        &f.project(),
+        "feat",
+        ReviewEditOp::Delete { id: id(2) },
+    )
+    .await;
+    result.expect("deleted");
+    let kept = f.on_disk().entries["feat"].clone();
+    assert_eq!((kept.len(), kept[0].text.as_str()), (1, "new"));
+    assert_eq!(kept[0].pr, Some(anchor(7)), "the anchor stays");
+
+    let (answer, _) = request(
+        &mut client,
+        3,
+        ClientMsg::WorktreeDelete {
+            req: 3,
+            project: f.project(),
+            dir_name: "feat".into(),
+            stop_sessions: true,
+            delete_branch: true,
+        },
+    )
+    .await;
+    assert!(
+        matches!(answer, DaemonMsg::OperationOk { .. }),
+        "{answer:?}"
+    );
+    assert!(
+        f.on_disk().entries.get("feat").is_none_or(Vec::is_empty),
+        "FR-005: the worktree's PR comments go with it"
+    );
+}
+
+/// W21: `Reanchor` of a PR comment is compare-and-set on `from`.
+#[tokio::test]
+async fn w21_reanchor_moves_a_pull_request_comment_once() {
+    use micold_core::review::comment::Move;
+    use micold_core::review::LineRange;
+
+    let f = Fixture::new();
+    let c = stored_pr(1, CommentState::Draft, 7);
+    seed(&f, vec![c.clone()]);
+    let state = f.service();
+    let mut client = connect(&state).await;
+    attach(&mut client, &f.project()).await;
+    let range = |n| LineRange::new(n, n).unwrap();
+    let op = |from, to| ReviewEditOp::Reanchor {
+        moves: vec![Move::new(c.id, range(from), range(to)).unwrap()],
+    };
+
+    let (result, seen) = edit(&mut client, 1, &f.project(), "feat", op(2, 6)).await;
+    result.expect("acknowledged");
+    assert_eq!(seen.len(), 1);
+    assert_eq!(f.on_disk().entries["feat"][0].range, range(6));
+    let after = f.on_disk();
+    let (result, seen) = edit(&mut client, 2, &f.project(), "feat", op(2, 9)).await;
+    result.expect("a stale `from` is skipped");
+    assert!(seen.is_empty());
+    assert_eq!(f.on_disk(), after);
 }

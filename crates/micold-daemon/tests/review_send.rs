@@ -287,6 +287,7 @@ async fn add(
                 end,
                 quote: quote.iter().map(|line| (*line).to_owned()).collect(),
                 text: text.into(),
+                pr: None,
             },
         },
     )
@@ -310,6 +311,7 @@ fn send_msg(req: u64, project: &Path, dir: &str) -> ClientMsg {
         project: project.to_path_buf(),
         worktree_dir: dir.into(),
         outdated: Vec::new(),
+        pr: None,
     }
 }
 
@@ -935,6 +937,7 @@ async fn send_with(
         project: project.to_path_buf(),
         worktree_dir: dir.into(),
         outdated,
+        pr: None,
     };
     request(client, req, msg).await
 }
@@ -1028,6 +1031,7 @@ async fn w16_the_daemon_judges_current_side_drafts_and_the_client_removed_side_o
                     end: 4,
                     quote: vec!["old line".into()],
                     text: "Removed side.".into(),
+                    pr: None,
                 },
             },
         )

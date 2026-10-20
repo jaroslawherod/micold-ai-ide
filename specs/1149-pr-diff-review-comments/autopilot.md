@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1149
 - **Worktree branch**: feat/1149_review-comments-on-a-pull-request-s-diff-sent-to
 - **Started**: 2026-10-20
-- **Phase**: tasks
+- **Phase**: implement (M1)
 - **Next step**: M1 (after design PR merges)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1153 | Design (spec, clarify, plan, tasks) | open | |
+| #1153 | Design (spec, clarify, plan, tasks) | merged | 0ebf14ba355194296f2d6d1b0c51597140a601d3 |
 
 ## Milestones
 
@@ -50,7 +50,52 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Unit M1 handed over at 150k (no PR yet; WIP committed locally, not pushed; gate not run; no review run).
+
+Done (compiles and passes `cargo test -p micold-core --all-targets`): T001-T005 in `crates/micold-core`
+(`BranchPrState` serde, `PrAnchor`/`Scope`/`ReviewComment.pr`/`Draft.pr`, scoped
+`begin_send(entry, scope, pr, outdated)`/`clear_sent(scope)`/`discard_pending(scope)`, `PrContext` in
+`review/prompt.rs`, store v3 written only with PR comments, wire `Add.pr`, `ClearSent{scope}`,
+`DiscardPending{scope}`, `ReviewSend.pr: Option<PrSend>`, `PrSend`, PROTOCOL_VERSION 57 and pins updated).
+Daemon source done (T007): `crates/micold-daemon/src/review.rs` (W18 anchor check, W19 scoped tidy with
+no-op `Ok(None)`, `relocate` skips PR comments), `state.rs` `review_send(.., pr)` answers InvalidInput for
+`Some`, `server.rs` passes `pr`. Daemon tests (T006) written in `tests/review_edit.rs` (W18, W19, edit/delete/
+forget, W21), existing tests in review_send/review_reports/mcp_audit_log/review_edit patched for the new
+fields; NOT yet compiled or run because `micold-daemon` tests depend on `micold-client`, which does not
+compile yet.
+
+Next (client, T008-T011; `crates/micold-client/src/features/changes.rs` has 3 compile errors at the
+`ReviewEditOp::ClearSent` (~1369), `DiscardPending` (~1393), `Add` (~1638) sites):
+- `PullRequestView.head: String` set in `read_pull_request_diff` from `view.pull_requests.shown()` entry
+  `.head` for `number` (R3: head when the read started); `view_scope(view) -> Scope`.
+- `can_pick`: true for `Source::PullRequest` with `pr_file_diff` = `FileDiff::Text` (use `diff_body(view)`),
+  and for `Source::Changes` as now. `GutterPressed` already uses `can_pick`.
+- `composer_saved`: file = `selected_file(view)`, diff = `diff_body(view)`; for a PR the diff has
+  `old: None, new: None`, so take the quote from the hunks' `DiffLine`s (`line.new`/`line.old` + `text`),
+  return `Effect::None` if a picked line is not in a hunk; set `pr: Some(PrAnchor{number, head_branch
+  (from listed PR), head_commit: pr.head})`.
+- Scope everything by `view_scope`: `file_comments` (drop the `Source::Changes` early return; filter
+  `comment.scope()==view_scope`), `pending_counts`, `status_counts`/`review_toolbar_label` (shown scope),
+  `jump_target`, `tidy_actions` + `ClearSentPressed`/`DiscardConfirmed` emit `ClearSent/DiscardPending
+  { scope: view_scope }`, `send_action` count the shown scope and be `None`/disabled for a PR until M2,
+  `Effect::ReviewSend` and `shell/changes.rs` (~202-211) add `pr: None`; `judge_anchors`: PR comments keep
+  their stored range and are never outdated or moved in M1 (M3 does the hunk work); `reanchor_effect`
+  unchanged (working tree only).
+- `panel_rows`: `PanelRow.scope`, ordered working tree then PRs by number; add `PanelGroup { scope,
+  title: Option<String>, listed: bool }` (title from `view.pull_requests.shown()`; `listed:false` when the
+  number is not in the list) and a function giving the groups; a not-listed scope has `send_action` None.
+- `ui/changes.rs`: group heading per PR in the panel (existing `Text` styles, "not in the list" flag).
+- Tests-first T008 in `crates/micold-client/tests/features_changes.rs` (existing fixtures `comment()`,
+  `quoting()` construct `ReviewComment` and `ReviewEditOp::Add`/`ClearSent`/`DiscardPending`: add `pr:
+  None` / `scope: Scope::WorkingTree`); also fix `tests/support/modals.rs` (~188, ~219) and
+  `src/showcase` if they build `ReviewComment`.
+- T011 user guide `docs/user-guide/reviewing-changes.md`.
+- Then: tick T001-T011 in `specs/1149-pr-diff-review-comments/tasks.md`, run the daemon tests
+  (`cargo test -p micold-daemon --test review_edit --test review_send --test review_reports --test
+  mcp_audit_log` via `scripts/build-lock.sh`), then follow verify.md (scoped gate, review A high, review B
+  once, full gate) and pr.md. Run builds detached with `scripts/autopilot/hold.sh` (foreground cap 250 s).
+  `cargo fmt --all` before the gate.
+
 
 ## Open escalation
 

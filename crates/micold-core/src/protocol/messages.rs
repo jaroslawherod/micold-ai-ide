@@ -29,7 +29,8 @@ use crate::mcp::policy::CrossSessionAccess;
 use crate::naming::WorktreeNaming;
 use crate::plan_usage::UsageReading;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
-use crate::review::comment::{CommentId, Move, Outcome, ReviewComment};
+use crate::pull_request::BranchPrState;
+use crate::review::comment::{CommentId, Move, Outcome, PrAnchor, ReviewComment, Scope};
 use crate::review::Side;
 use crate::runs::{GroupId, Integration, RunGroup};
 use crate::scoped_credential::{SecretToken, UnixTime};
@@ -775,6 +776,9 @@ pub enum ClientMsg {
         worktree_dir: String,
         /// The comments the client judged outdated (R14), used only for the prompt's wording.
         outdated: Vec<CommentId>,
+        /// The pull request to send the Drafts of; `None` sends the working tree's (feature 1149,
+        /// W20).
+        pr: Option<PrSend>,
     },
 
     // --- Parallel runs (feature 483, contracts/run-group-wire.md) ---
@@ -1649,6 +1653,21 @@ pub struct DaemonSettings {
     pub plan_usage_warn_percent: u8,
 }
 
+/// The pull request a `ReviewSend` is for (feature 1149, W20): what the batch says about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrSend {
+    /// The pull request's number.
+    pub number: u64,
+    /// Its title, any text.
+    pub title: String,
+    /// Its head branch.
+    pub head_branch: String,
+    /// Open, draft, merged or closed.
+    pub state: BranchPrState,
+    /// The head commit the list shows now.
+    pub current_head: String,
+}
+
 /// One change to an entry's review comments (feature 482, contracts/review-wire.md W1–W4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReviewEditOp {
@@ -1666,6 +1685,9 @@ pub enum ReviewEditOp {
         quote: Vec<String>,
         /// What the user wrote.
         text: String,
+        /// The pull request whose diff the lines are on; `None` for the working tree (feature
+        /// 1149, W18).
+        pr: Option<PrAnchor>,
     },
     /// Replace a pending comment's text.
     SetText {
@@ -1679,10 +1701,16 @@ pub enum ReviewEditOp {
         /// The comment.
         id: CommentId,
     },
-    /// Remove every sent comment of the entry (W4).
-    ClearSent,
-    /// Remove every pending comment not inside an open send (W4).
-    DiscardPending,
+    /// Remove every sent comment of the entry in `scope` (W4, W19).
+    ClearSent {
+        /// The comments to act on.
+        scope: Scope,
+    },
+    /// Remove every pending comment in `scope` not inside an open send (W4, W19).
+    DiscardPending {
+        /// The comments to act on.
+        scope: Scope,
+    },
     /// Mark a Sent comment Applied or Answered by hand (feature 946, W14); `note` is required
     /// for `Answered`.
     Mark {

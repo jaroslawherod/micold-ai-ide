@@ -802,7 +802,8 @@ impl fmt::Debug for BranchPullRequest {
 
 /// The state of a listed pull request. [`PrState`] is not reused: its open and draft carry a check
 /// status this list does not read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum BranchPrState {
     /// Open and ready for review.
     Open,
@@ -1241,5 +1242,27 @@ impl PullRequestSource for FakePullRequestSource {
         self.lock_diff_script()
             .pop_front()
             .unwrap_or(Err(DiffReadFailure::Failed(ReadingFailure::Passing)))
+    }
+}
+
+#[cfg(test)]
+mod branch_pr_state_serde_tests {
+    use super::BranchPrState;
+
+    #[test]
+    fn every_state_round_trips_with_its_lower_case_name() {
+        for (state, name) in [
+            (BranchPrState::Open, "open"),
+            (BranchPrState::Draft, "draft"),
+            (BranchPrState::Merged, "merged"),
+            (BranchPrState::Closed, "closed"),
+        ] {
+            let json = serde_json::to_string(&state).expect("serialises");
+            assert_eq!(json, format!("\"{name}\""));
+            assert_eq!(
+                serde_json::from_str::<BranchPrState>(&json).ok(),
+                Some(state)
+            );
+        }
     }
 }

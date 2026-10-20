@@ -28,7 +28,7 @@ use mcp_support::{
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{DaemonMsg, OperationResult, ReviewEditOp};
-use micold_core::review::comment::{CommentState, Outcome, Reporter, ReviewComment};
+use micold_core::review::comment::{CommentState, Outcome, Reporter, ReviewComment, Scope};
 use micold_core::review::Side;
 use micold_core::session::{AiCli, SessionId, TerminalMode};
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -136,6 +136,7 @@ impl Sandbox {
                     end: start + lines - 1,
                     quote,
                     text: text.into(),
+                    pr: None,
                 },
             )
             .expect("a valid comment is accepted");
@@ -171,7 +172,10 @@ impl Sandbox {
 
     /// Send entry `dir`'s Drafts; the send delivers them to the session it starts.
     async fn send(&self, dir: &str) {
-        let result = self.state.review_send(&self.project(), dir, &[]).await;
+        let result = self
+            .state
+            .review_send(&self.project(), dir, &[], None)
+            .await;
         assert!(
             matches!(result, Ok(OperationResult::ReviewSent { .. })),
             "the send is delivered: {result:?}"
@@ -439,7 +443,13 @@ async fn refusals_follow_the_contracts_order_and_change_nothing() {
 
     // 5b: a cleared comment is gone.
     s.state
-        .review_edit(&s.project(), "wt", ReviewEditOp::ClearSent)
+        .review_edit(
+            &s.project(),
+            "wt",
+            ReviewEditOp::ClearSent {
+                scope: Scope::WorkingTree,
+            },
+        )
         .unwrap();
     let error = s.report_err(sid(1), report(&sent, "applied", "")).await;
     assert_eq!(error["category"], "not_found", "{error}");
@@ -493,7 +503,7 @@ async fn s6_a_comment_inside_an_open_send_is_a_conflict() {
     let sending = {
         let state = Arc::clone(&s.state);
         let project = s.project();
-        tokio::spawn(async move { state.review_send(&project, "wt", &[]).await })
+        tokio::spawn(async move { state.review_send(&project, "wt", &[], None).await })
     };
     let opened = async {
         while let Some(frame) = window.recv().await {
