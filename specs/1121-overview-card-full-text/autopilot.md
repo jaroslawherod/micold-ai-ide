@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: spec
-- **Next step**: act on review A spec round 2 verdict (tasks/review-rounds.md), then commit; next unit clarify
+- **Phase**: clarify
+- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers (Escape semantics, worktree directory form)
 
 ## Pull requests
 
@@ -34,7 +34,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Review A spec | 1 | fcb294c971d5b41839f3951557abff60660340ac:4a36fba89f36082ced2076392fc14ec5e2ba3aee | CHANGES: 2 MAJOR, 3 MINOR (F1–F5 all fixed) |
-| Review A spec | 2 | fa37323a95555838f59f8feff82ea0ed01600972:550978508146ad5978bd9ee1a9688b19118d5ca0 | pending |
+| Review A spec | 2 | fa37323a95555838f59f8feff82ea0ed01600972:550978508146ad5978bd9ee1a9688b19118d5ca0 | CLEAN (2 MINOR, both fixed) |
 
 ## Declined review findings
 
