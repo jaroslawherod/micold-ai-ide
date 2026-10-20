@@ -213,6 +213,7 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                     project,
                     worktree_dir,
                     outdated,
+                    pr: None,
                 }
             });
             Task::none()

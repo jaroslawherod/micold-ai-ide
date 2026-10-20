@@ -239,10 +239,11 @@ fn anchor(number: u64) -> PrAnchor {
 
 /// An `Add` on pull request `pr`.
 fn add_on(pr: PrAnchor, text: &str) -> ReviewEditOp {
-    ReviewEditOp::Add {
-        pr: Some(pr),
-        ..add("src/a.rs", Side::New, 2, 2, &["two"], text)
+    let mut op = add("src/a.rs", Side::New, 2, 2, &["two"], text);
+    if let ReviewEditOp::Add { pr: slot, .. } = &mut op {
+        *slot = Some(pr);
     }
+    op
 }
 
 /// Add one valid comment to `feat` and return it as pushed.

@@ -4,6 +4,7 @@
 //! is decided by the render-free `features::changes`; this module lays it out from library
 //! components. It stands in the terminal pane's place while open (V1).
 
+use micold_core::review::comment::Scope;
 use std::collections::BTreeMap;
 
 use iced::widget::{column, container, row, text_editor, Space};
@@ -19,7 +20,7 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
     self as changes, adjacent, base_line, can_pick, card_model, committed_available,
-    composer_placed, diff_body, discard_prompt, file_comments, list_body, panel_rows,
+    composer_placed, diff_body, discard_prompt, file_comments, list_body, panel_groups, panel_rows,
     pending_counts, pr_header, review_of, review_toolbar_label, section, selected_file,
     send_action, status_counts, tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView,
     PrSection, Source, Step, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
@@ -178,6 +179,11 @@ fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'
         pane = pane.push(Text::new(why.message(), TypeRole::Body, r));
     }
     let rows = panel_rows(&state.changes);
+    // `VirtualRows` has one row height, so a pull request's heading leads each of its rows.
+    let headings: BTreeMap<Scope, String> = panel_groups(&state.changes)
+        .into_iter()
+        .filter_map(|group| Some((group.scope, group.heading()?)))
+        .collect();
     if rows.is_empty() {
         return pane
             .push(Text::new(PANEL_EMPTY_TEXT, TypeRole::Body, r).muted())
@@ -190,8 +196,12 @@ fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'
             let Some(item) = rows.get(index) else {
                 return Space::new().into();
             };
+            let place = format!("{} · {}", item.path.as_str(), item.lines);
             let mut card = ReviewPanelRow::new(
-                format!("{} · {}", item.path.as_str(), item.lines),
+                match headings.get(&item.scope) {
+                    Some(heading) => format!("{heading} · {place}"),
+                    None => place,
+                },
                 item.text.clone(),
                 item.status,
                 r,

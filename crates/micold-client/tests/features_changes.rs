@@ -754,7 +754,7 @@ use micold_client::features::changes::{
     file_comments, pending_counts, ComposerTarget, Pick, ReviewView,
 };
 use micold_core::protocol::messages::ReviewEditOp;
-use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+use micold_core::review::comment::{CommentId, CommentState, ReviewComment, Scope};
 use micold_core::review::{LineRange, Side};
 
 /// Old `a b c x`, new `a B c d`: context 1 and 3, `b`→`B` at 2, `x`→`d` at 4.
@@ -799,6 +799,7 @@ fn comment(p: &str, side: Side, start: u32, end: u32, state: CommentState) -> Re
         text: format!("about {p}:{start}"),
         state,
         created: 1,
+        pr: None,
     }
 }
 
@@ -911,6 +912,7 @@ fn save_sends_the_comment_with_the_quote_from_the_loaded_lines() {
                 end: 4,
                 quote: vec!["b".into(), "c".into(), "x".into()],
                 text: "  removed too much ".into(),
+                pr: None,
             },
         }
     );
@@ -1610,7 +1612,9 @@ fn clear_sent_sends_clear_sent_for_the_open_entry() {
         Effect::ReviewEdit {
             project: project(),
             worktree_dir: "feat-a".into(),
-            edit: ReviewEditOp::ClearSent,
+            edit: ReviewEditOp::ClearSent {
+                scope: Scope::WorkingTree,
+            },
         }
     );
 }
@@ -1661,7 +1665,9 @@ fn discard_pending_asks_first_and_only_the_confirm_sends_it() {
         Effect::ReviewEdit {
             project: project(),
             worktree_dir: "feat-a".into(),
-            edit: ReviewEditOp::DiscardPending,
+            edit: ReviewEditOp::DiscardPending {
+                scope: Scope::WorkingTree,
+            },
         }
     );
     assert_eq!(discard_prompt(&state), None, "the confirm closes it");

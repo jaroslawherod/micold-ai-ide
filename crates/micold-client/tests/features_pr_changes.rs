@@ -1078,3 +1078,293 @@ fn a_refresh_changing_the_selected_ones_state_updates_the_header_without_a_read(
     assert_eq!(header.check, Some(micold_client::ui::CheckMark::Passing));
     assert_eq!(shown_paths(&state), ["a.rs", "b.rs"]);
 }
+
+// ---- 1149 M1: review comments on a pull request's diff ----
+
+mod review_comments {
+    use super::*;
+    use micold_client::features::changes::{
+        can_pick, file_comments, jump_target, panel_groups, panel_rows, pending_counts,
+        review_toolbar_label, send_action, status_counts, tidy_actions, Jump, PanelGroup,
+    };
+    use micold_core::protocol::messages::ReviewEditOp;
+    use micold_core::review::comment::{
+        CommentId, CommentState, PrAnchor, ReviewComment, Scope, Status,
+    };
+    use micold_core::review::{LineRange, Side};
+
+    const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    fn listed_pr(number: u64) -> BranchPullRequest {
+        BranchPullRequest {
+            head: HEAD.into(),
+            ..pr(number, BranchPrState::Open)
+        }
+    }
+
+    fn comment_on(
+        number: Option<u64>,
+        file: &str,
+        side: Side,
+        line: u32,
+        state: CommentState,
+    ) -> ReviewComment {
+        ReviewComment {
+            id: CommentId::new(),
+            path: RelPath::from_native(file).unwrap(),
+            side,
+            range: LineRange::new(line, line).unwrap(),
+            quote: vec!["q".into()],
+            text: format!("about {file}:{line}"),
+            state,
+            created: 1,
+            pr: number.map(|number| PrAnchor {
+                number,
+                head_branch: "feat/a".into(),
+                head_commit: HEAD.into(),
+            }),
+        }
+    }
+
+    fn push(state: &mut State, comments: Vec<ReviewComment>) {
+        changes::update(
+            state,
+            Msg::ReviewChanged {
+                project: project(),
+                worktree_dir: "feat-a".into(),
+                comments,
+                sending: false,
+            },
+        );
+    }
+
+    /// Pull request 7 shown with `a.rs` selected, 8 also listed.
+    fn showing_seven() -> State {
+        let mut state = opened(true);
+        listed(&mut state, vec![listed_pr(7), listed_pr(8)]);
+        chosen(&mut state, 7);
+        changes::update(
+            &mut state,
+            Msg::FileSelected(RelPath::from_native("a.rs").unwrap()),
+        );
+        state
+    }
+
+    fn add_of(effect: Effect) -> ReviewEditOp {
+        let Effect::ReviewEdit { edit, .. } = effect else {
+            panic!("an edit, got {effect:?}");
+        };
+        edit
+    }
+
+    // US1 s1, FR-001, FR-002: a pick on a pull request's text file adds a comment carrying the
+    // pull request's anchor, quoting the hunk's lines.
+    #[test]
+    fn a_pick_on_a_pull_request_file_builds_an_add_with_its_anchor() {
+        let mut state = showing_seven();
+        assert!(can_pick(state.open.as_ref().unwrap()));
+        changes::update(
+            &mut state,
+            Msg::GutterPressed {
+                old: Some(2),
+                new: None,
+                extend: false,
+            },
+        );
+        changes::update(
+            &mut state,
+            Msg::GutterPressed {
+                old: None,
+                new: Some(2),
+                extend: false,
+            },
+        );
+        changes::update(&mut state, Msg::AddComment);
+        changes::update(&mut state, Msg::ComposerEdited("rename".into()));
+        let edit = add_of(changes::update(&mut state, Msg::ComposerSaved));
+        assert_eq!(
+            edit,
+            ReviewEditOp::Add {
+                path: "a.rs".into(),
+                side: Side::New,
+                start: 2,
+                end: 2,
+                quote: vec!["new".into()],
+                text: "rename".into(),
+                pr: Some(PrAnchor {
+                    number: 7,
+                    head_branch: "feat/a".into(),
+                    head_commit: HEAD.into(),
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn a_range_on_the_old_side_quotes_the_removed_and_context_lines() {
+        let mut state = showing_seven();
+        for (line, extend) in [(1, false), (2, true)] {
+            changes::update(
+                &mut state,
+                Msg::GutterPressed {
+                    old: Some(line),
+                    new: None,
+                    extend,
+                },
+            );
+        }
+        changes::update(&mut state, Msg::AddComment);
+        changes::update(&mut state, Msg::ComposerEdited("why".into()));
+        let ReviewEditOp::Add { quote, side, .. } =
+            add_of(changes::update(&mut state, Msg::ComposerSaved))
+        else {
+            panic!("an add");
+        };
+        assert_eq!(
+            (side, quote),
+            (Side::Old, vec!["keep".into(), "old".into()])
+        );
+    }
+
+    // FR-014: nothing can be picked while the diff or the file is not a ready text diff.
+    #[test]
+    fn nothing_is_picked_on_a_pull_request_diff_that_is_not_ready_text() {
+        let mut state = opened(true);
+        listed(&mut state, vec![listed_pr(7)]);
+        let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(7))), 7);
+        assert!(!can_pick(state.open.as_ref().unwrap()), "still loading");
+        let binary = "diff --git a/p.png b/p.png\nnew file mode 100644\nindex 0..3\nBinary files /dev/null and b/p.png differ\n";
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number: 7,
+                result: Ok(split_pr_diff(binary)),
+            },
+        );
+        changes::update(
+            &mut state,
+            Msg::FileSelected(RelPath::from_native("p.png").unwrap()),
+        );
+        assert!(!can_pick(state.open.as_ref().unwrap()), "binary");
+        let effect = changes::update(
+            &mut state,
+            Msg::GutterPressed {
+                old: None,
+                new: Some(1),
+                extend: false,
+            },
+        );
+        assert_eq!(effect, Effect::None);
+        assert_eq!(state.open.as_ref().unwrap().pick, None);
+    }
+
+    // US1 s4, FR-003: a comment shows on its own pull request's diff only.
+    #[test]
+    fn comments_are_filtered_by_the_shown_scope() {
+        let mut state = showing_seven();
+        let mine = comment_on(Some(7), "a.rs", Side::New, 2, CommentState::Draft);
+        let other = comment_on(Some(8), "a.rs", Side::New, 2, CommentState::Draft);
+        let tree = comment_on(None, "a.rs", Side::New, 2, CommentState::Draft);
+        let ids = (mine.id, other.id, tree.id);
+        push(&mut state, vec![mine, other, tree]);
+
+        let placed = file_comments(&state);
+        let under: Vec<_> = placed.under(Side::New, 2).iter().map(|c| c.id).collect();
+        assert_eq!(under, vec![ids.0]);
+        assert_eq!(pending_counts(&state).values().sum::<usize>(), 1);
+        assert_eq!(review_toolbar_label(&state), "Review (1)");
+        assert_eq!(status_counts(&state)[0], (Status::Draft, 1));
+        assert!(jump_target(&state, ids.0).is_some());
+        assert_eq!(jump_target(&state, ids.1), None);
+        assert_eq!(jump_target(&state, ids.2), None);
+
+        changes::update(&mut state, Msg::SourceChosen(None));
+        changes::update(
+            &mut state,
+            Msg::FileSelected(RelPath::from_native("a.rs").unwrap()),
+        );
+        assert_eq!(review_toolbar_label(&state), "Review (1)");
+        assert_eq!(pending_counts(&state).values().sum::<usize>(), 1);
+        assert!(matches!(jump_target(&state, ids.2), Some(Jump::Hidden(_))));
+    }
+
+    // FR-004, FR-013: working tree first, then pull requests by number; unlisted flagged.
+    #[test]
+    fn the_panel_groups_the_working_tree_first_then_pull_requests_by_number() {
+        let mut state = showing_seven();
+        push(
+            &mut state,
+            vec![
+                comment_on(Some(9), "a.rs", Side::New, 1, CommentState::Draft),
+                comment_on(Some(8), "a.rs", Side::New, 1, CommentState::Draft),
+                comment_on(None, "z.rs", Side::New, 1, CommentState::Draft),
+                comment_on(Some(7), "a.rs", Side::New, 1, CommentState::Draft),
+            ],
+        );
+        let scopes: Vec<_> = panel_rows(&state).iter().map(|r| r.scope).collect();
+        assert_eq!(
+            scopes,
+            [
+                Scope::WorkingTree,
+                Scope::PullRequest(7),
+                Scope::PullRequest(8),
+                Scope::PullRequest(9)
+            ]
+        );
+        let group = |scope, title: Option<&str>, listed| PanelGroup {
+            scope,
+            title: title.map(str::to_string),
+            listed,
+        };
+        assert_eq!(
+            panel_groups(&state),
+            vec![
+                group(Scope::WorkingTree, None, true),
+                group(Scope::PullRequest(7), Some("title 7"), true),
+                group(Scope::PullRequest(8), Some("title 8"), true),
+                group(Scope::PullRequest(9), None, false),
+            ]
+        );
+        assert!(panel_groups(&state)[3]
+            .heading()
+            .unwrap()
+            .contains("not in the list"));
+        assert_eq!(panel_rows(&state).len(), 4, "the unlisted comment is kept");
+    }
+
+    // FR-015: tidy acts on the shown scope; Send is not offered for a pull request yet.
+    #[test]
+    fn tidy_emits_the_shown_scope_and_send_is_not_offered_on_a_pull_request() {
+        let mut state = showing_seven();
+        push(
+            &mut state,
+            vec![
+                comment_on(Some(7), "a.rs", Side::New, 2, CommentState::Draft),
+                comment_on(Some(7), "a.rs", Side::New, 1, CommentState::Sent { at: 5 }),
+                comment_on(None, "a.rs", Side::New, 1, CommentState::Draft),
+            ],
+        );
+        let tidy = tidy_actions(&state).unwrap();
+        assert!(tidy.clear_sent && tidy.discard_pending);
+        assert_eq!(send_action(&state), None);
+        assert_eq!(changes::update(&mut state, Msg::SendPressed), Effect::None);
+        assert_eq!(
+            add_of(changes::update(&mut state, Msg::ClearSentPressed)),
+            ReviewEditOp::ClearSent {
+                scope: Scope::PullRequest(7)
+            }
+        );
+        changes::update(&mut state, Msg::DiscardPendingPressed);
+        assert_eq!(
+            add_of(changes::update(&mut state, Msg::DiscardConfirmed)),
+            ReviewEditOp::DiscardPending {
+                scope: Scope::PullRequest(7)
+            }
+        );
+        // Another pull request without comments has nothing to tidy.
+        changes::update(&mut state, Msg::SourceChosen(Some(8)));
+        let tidy = tidy_actions(&state).unwrap();
+        assert!(!tidy.clear_sent && !tidy.discard_pending);
+    }
+}
