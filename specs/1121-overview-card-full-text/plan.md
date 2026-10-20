@@ -26,7 +26,7 @@ activity go. Showcase, layout snapshot, user guide follow. Design decisions: [re
 
 **Primary Dependencies**: iced 0.14 (`advanced::Widget`, `mouse::Cursor::levitate`,
 `Layout::with_offset`, `renderer.with_layer`, `scrollable`); no new crate. Home folder from the
-existing `dirs`/`std::env` lookup the client already uses (R9).
+`directories::UserDirs`, the lookup the client already uses (R9).
 
 **Storage**: none. `Expansion` is in-memory and reset when the Overview closes (FR-013); nothing
 persisted, paths and prompts never logged (FR-018).
@@ -90,17 +90,20 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 - **`src/ui/material/line_clamp.rs`**: `pub(crate)`, `.tint(Rgb)` and the role's line spacing, so
   the card uses it at `CardTitle` (3 lines) and `Body` (2 lines) (R2).
 - **`src/ui/material/overview_card.rs`**: collapsed form with the clamps and without the three
-  tooltips; `.expanded(bool)` builds the expanded form (R3); `.focused`, `.on_focus_change`,
+  tooltips; `.expanded(bool)` builds the expanded form (R3); `.on_keyboard_focus`,
   `.on_page`, `.on_rest`, `.on_leave`, `.scroll_id`, `.on_body_scroll` builders. Contract
   [contracts/card-grid.md](contracts/card-grid.md) U1.
 - **`src/ui/material/card_grid.rs`**: `.expanded(index, twin)`; layout, draw, update,
   mouse_interaction and the rest timer per R4–R6. Contract U2–U4.
+- **`src/ui/material/keyboard_focus.rs`**: `TakesTheKeyboard::on_shown_change`, reporting
+  keyboard (shown) focus only, so a pointer press expands nothing (U1, FR-002).
 - **`src/features/overview.rs`**: `State.expansion`, `Msg::Expansion(Event)`, `Msg::CardPaged`,
-  `Msg::CardScrolled`; `CardMenuOpened`/`Dismissed`/`EntryChosen`, `Closed`, `Toggled` feed it.
+  `Msg::CardScrolled`; `CardMenuOpened`/`Dismissed`/`EntryChosen` feed it.
 - **`src/app.rs`**: `on_escape` returns `Msg::Expansion(Event::Escape)` when a card is expanded,
   before `Msg::Closed` (D1, R7).
 - **`src/ui/overview.rs`**: builds each card with its expansion, focus and message wiring and the
-  twin; `settle_card_menu` also feeds `Event::Listed` (card removed). `card_scroll_id(location)`.
+  twin; `settle_card_menu` resets the expansion when the Overview is closed (every way of closing)
+  and otherwise feeds `Event::Listed` (card removed). `card_scroll_id(location)`.
 - **`src/main.rs`**: `WindowFocusChanged(false)` → `Event::WindowBlurred`; `Msg::CardPaged` → a
   `scrollable::scroll_by` on the card's scroll id (R6).
 - **`src/showcase/sections/surfaces.rs`**: a collapsed and an expanded card (FR-015).
@@ -129,7 +132,7 @@ Page Up/Down). Feature 1120's tooltip sentences are removed.
 | FR-010 events to the expanded card | grid levitates others' cursor R4 | client: press over the overlapped neighbour publishes the expanded card's message only |
 | FR-011 behaviour unchanged | existing focus, ripple, menu tests run on an expanded card too | client |
 | FR-012 menu freezes expansion | `Expansion` menu flag | core unit |
-| FR-013 none on open | `Expansion::default` on open, reset on close | core unit; app test |
+| FR-013 none on open | `Expansion::default` in `settle_card_menu`'s `!open` branch | core unit; app test: activate a card, reopen → none expanded |
 | FR-014 directory with `~` | `worktree_dir`, R9 | core unit (inside home, outside, home itself, Windows separators as given) |
 | FR-015 contrast, type, components, showcase | palette unchanged, `elevation::MENU` | `composition_contrast.rs` kept; `showcase_completeness`; §B |
 | FR-016 rules render-free | `overview_expansion`, `overview_text` | `mise run test-core` |
