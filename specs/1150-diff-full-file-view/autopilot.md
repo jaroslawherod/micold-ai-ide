@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1151 | Design PR (spec, plan, tasks) | merged | df019910c4b525b25df8b08f3fd1073a11b28f72 |
 | #1156 | M1 expand hidden lines | merged | 25e95c33ff20a6a07f72abaa4d0aad4aee683cd2 |
-| PRN | M2 whole-file toggle | open | |
+| #1162 | M2 whole-file toggle | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Expand hidden lines in a diff (MVP) | #1156 | merged |
-| M2 | T018–T022 | light | Whole-file toggle | PRN | in review |
+| M2 | T018–T022 | light | Whole-file toggle | #1162 | in review |
 | M3 | T023–T031 | full | Pull request head version | | pending |
 | M4 | T032–T035 | light | Pick revealed lines | | pending |
 | M5 | T036–T046 | full | Browse repository files | | pending |
