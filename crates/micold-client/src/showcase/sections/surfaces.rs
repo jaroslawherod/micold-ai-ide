@@ -613,17 +613,20 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
 /// The width the zoom pose's drawer gives the grid when it retracts.
 const ZOOM_DRAWER_WIDTH: f32 = 200.0;
 
-/// `CardGrid` with 1, 3 and 30 cards, and in a narrow room.
+/// `CardGrid` with 1, 3 and 30 cards, in a narrow room, and zooming with targeted cards.
 pub fn card_grid<'a>(showcase: &'a Showcase, roles: Roles, index: usize) -> Element<'a, Message> {
     use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
     let zoomed = |n: usize, width: Length, zoom: material::Zoom| {
         let cards = (0..n)
             .map(|i| {
                 let state = S::ALL[i % S::ALL.len()];
+                // The zoom pose targets every third card, so a mid-flight frame shows a
+                // targeted card split across two rows (1120: its mark stays inside each piece).
                 material::OverviewCard::<Message>::new(
                     &card_model(&format!("worktree-{i}"), T::Feature, state, R::Working),
                     roles,
                 )
+                .targeted(zoom.freed > 0.0 && i % 3 == 1)
             })
             .collect();
         iced::widget::container(Element::from(
