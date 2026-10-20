@@ -310,7 +310,7 @@ fn only_the_motion_primitive_asks_for_frames() {
 ///    be able to change shape unnoticed.
 /// 2. `request_redraw_at(..)`, one frame at a stated instant (feature 038, FR-018): the body of
 ///    `wake_at`, and nowhere else. A timed wake is not a loop — it asks once and is answered once —
-///    so what holds it is who may call it: `wake_at_has_one_caller` below.
+///    so what holds it is who may call it: `wake_at_has_only_listed_callers` below.
 #[test]
 fn the_frame_requests_are_the_guarded_one_and_the_timed_one() {
     let src = strip_comments(
@@ -368,18 +368,25 @@ fn the_frame_requests_are_the_guarded_one_and_the_timed_one() {
     );
 }
 
-/// The timed door has one caller: the tooltip's rest mode.
+/// The timed door has two callers: the tooltip's rest mode and the card grid's expand rest.
 ///
 /// `wake_at` cannot spin by itself, but a component that called it on every frame with an instant
 /// a frame away would be a frame loop in two steps. So a new caller is a decision, made here: add
 /// the file to this list with the reason it stops asking.
 #[test]
-fn wake_at_has_one_caller() {
+fn wake_at_has_only_listed_callers() {
     /// Who may ask for a timed wake, and why it ends.
-    const CALLERS: &[(&str, &str)] = &[(
-        "ui/cdk/tooltip.rs",
-        "asks only while its `RestTimer` or `ShowTimer` is waiting, for the instant the wait ends",
-    )];
+    const CALLERS: &[(&str, &str)] = &[
+        (
+            "ui/cdk/tooltip.rs",
+            "asks only while its `RestTimer` or `ShowTimer` is waiting, for the instant the wait ends",
+        ),
+        (
+            "ui/material/card_grid.rs",
+            "asks only while its expand `RestTimer` is waiting on a hovered card, for the instant \
+             the rest ends (1121 FR-002)",
+        ),
+    ];
 
     let mut sites = Vec::new();
     for (path, src) in ui_sources() {
