@@ -469,13 +469,9 @@ mod tests {
     fn the_card_shows_the_title_the_short_branch_and_the_sessions_line() {
         let m = titled();
         let text = painted(&m);
-        let title = "Overview cards: readable layout";
         assert!(
-            text.iter().any(|t| {
-                let shown = t.trim_end_matches('\u{2026}');
-                shown.starts_with("Overview cards") && title.starts_with(shown)
-            }),
-            "the issue title is the title, ellipsized at most: {text:?}"
+            text.contains(&"Overview cards: readable layout".to_string()),
+            "the issue title is shown whole when it fits: {text:?}"
         );
         assert!(text.contains(&"feat/1120".to_string()), "{text:?}");
         assert!(
@@ -547,14 +543,12 @@ mod tests {
         .painted_text()
     }
 
-    /// FR-014, FR-015, US4.1, SC-002: with every optional row, at 280, 380 and 480 px, no two
-    /// pieces of the card overlap, every piece sits inside the card, and the card is at least
-    /// `MIN_HEIGHT` tall; a long title, branch and activity end in an ellipsis and the tooltips
-    /// hold the full text.
+    /// FR-014, FR-015, US4.1, SC-002: with every optional row, short or long, at 280, 380 and
+    /// 480 px, no two pieces of the card overlap, every piece sits inside the card, and the card
+    /// is at least `MIN_HEIGHT` tall.
     #[test]
     fn a_card_with_every_row_fits_at_every_card_width() {
-        for long in [false, true] {
-            let m = full(long);
+        for m in [full(false), full(true)] {
             for width in WIDTHS {
                 let node = super::super::test_support::laid_out(card(&m), Size::new(width, 1000.0));
                 assert!(
@@ -577,27 +571,37 @@ mod tests {
                         assert!(!overlap(a, b), "{width}: {a:?} overlaps {b:?}");
                     }
                 }
-                if long {
-                    let text = painted_at(&m, width);
-                    for start in ["Adds", "topic-", "Editing"] {
-                        let line = text
-                            .iter()
-                            .find(|p| p.content.starts_with(start))
-                            .unwrap_or_else(|| panic!("{width}: no {start:?} line: {text:?}"));
-                        assert!(line.content.ends_with('\u{2026}'), "{width}: {line:?}");
-                    }
-                }
-            }
-            if long {
-                let words = CardText::of(&m);
-                assert!(words.title_tooltip.starts_with(&m.title));
-                assert_eq!(words.branch.map(|b| b.tooltip), m.branch.clone());
-                let activity = words.activity.expect("an activity row");
-                assert!(activity
-                    .tooltip
-                    .contains(&m.activity.as_ref().unwrap().line));
             }
         }
+    }
+
+    /// FR-015: at every card width a long title, branch and activity end in an ellipsis.
+    #[test]
+    fn a_long_title_branch_and_activity_end_in_an_ellipsis_at_every_width() {
+        let m = full(true);
+        for width in WIDTHS {
+            let text = painted_at(&m, width);
+            for start in ["Adds", "topic-", "Editing"] {
+                let line = text
+                    .iter()
+                    .find(|p| p.content.starts_with(start))
+                    .unwrap_or_else(|| panic!("{width}: no {start:?} line: {text:?}"));
+                assert!(line.content.ends_with('\u{2026}'), "{width}: {line:?}");
+            }
+        }
+    }
+
+    /// FR-015: the tooltips of a long title, branch and activity hold their full text.
+    #[test]
+    fn the_tooltips_of_a_long_card_hold_the_full_text() {
+        let m = full(true);
+        let words = CardText::of(&m);
+        assert!(words.title_tooltip.starts_with(&m.title));
+        assert_eq!(words.branch.map(|b| b.tooltip), m.branch.clone());
+        let activity = words.activity.expect("an activity row");
+        assert!(activity
+            .tooltip
+            .contains(&m.activity.as_ref().unwrap().line));
     }
 
     /// FR-004, SC-004: the title is 17 px, the body lines 14 px, and nothing on the card under
@@ -705,10 +709,15 @@ mod tests {
         let mut state_icons = Vec::new();
         for state in CardState::ALL {
             let w = words(&model(state, "n"));
-            assert_eq!(w.state_label, state.label());
             assert_eq!(w.reason_tooltip, CardReason::Working.label());
-            assert_eq!(w.type_label, LocationType::Feature.label());
             assert_eq!(w.type_icon, Icon::TypeFeature);
+            let text = painted(&model(state, "n"));
+            for word in [state.label(), LocationType::Feature.label()] {
+                assert!(
+                    text.iter().any(|t| t == word),
+                    "{state:?}: the card paints {word:?}: {text:?}"
+                );
+            }
             state_icons.push(w.state_icon);
         }
         let distinct: std::collections::BTreeSet<String> =
@@ -1262,43 +1271,48 @@ mod tests {
         }
     }
 
-    /// T003 (US1-4, FR-003; feature 1120, R9): mid-ripple the pixel at the press point has moved
-    /// from the body's fill toward its content colour `on_body`, and no further than it.
+    /// T003 (US1-4, US1.5, FR-003; feature 1120, R9): mid-ripple the pixel at the press point,
+    /// in the body's padding and in the header's, has moved from that row's fill toward the
+    /// content colour `on_body`, and no further than it.
     #[test]
     fn the_ripple_is_drawn_in_the_states_content_colour() {
         let roles = tokens::roles(ColorScheme::Light);
         for state in CardState::ALL {
             let p = palette(state, &roles);
-            let mut m = activatable(&model(state, "feat-a"));
-            // In the body's left padding, clear of any line.
-            let at = Point::new(6.0, 100.0);
-            m.press(at);
-            m.tree
-                .state
-                .downcast_mut::<RippleState>()
-                .advance(EXPAND, FADE);
-            let (pixels, width) = m.drawn(iced::Color::BLACK);
-            let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
-            let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
-            let (fill, text) = (
-                [p.body.r, p.body.g, p.body.b],
-                [p.on_body.r, p.on_body.g, p.on_body.b],
-            );
-            let mut moved = false;
-            for c in 0..3 {
-                let (lo, hi) = (fill[c].min(text[c]), fill[c].max(text[c]));
-                assert!(
-                    u16::from(got[c]) + 2 >= u16::from(lo)
-                        && u16::from(got[c]) <= u16::from(hi) + 2,
-                    "{state:?}: channel {c} is {} outside {lo}..{hi}",
-                    got[c]
+            // In the left padding, clear of any line: below the header, and inside it.
+            for (what, at, base) in [
+                ("body", Point::new(6.0, 100.0), p.body),
+                ("header", Point::new(5.0, 20.0), p.header),
+            ] {
+                let mut m = activatable(&model(state, "feat-a"));
+                m.press(at);
+                m.tree
+                    .state
+                    .downcast_mut::<RippleState>()
+                    .advance(EXPAND, FADE);
+                let (pixels, width) = m.drawn(iced::Color::BLACK);
+                let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
+                let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
+                let (fill, text) = (
+                    [base.r, base.g, base.b],
+                    [p.on_body.r, p.on_body.g, p.on_body.b],
                 );
-                moved |= got[c].abs_diff(fill[c]) > 2;
+                let mut moved = false;
+                for c in 0..3 {
+                    let (lo, hi) = (fill[c].min(text[c]), fill[c].max(text[c]));
+                    assert!(
+                        u16::from(got[c]) + 2 >= u16::from(lo)
+                            && u16::from(got[c]) <= u16::from(hi) + 2,
+                        "{state:?} {what}: channel {c} is {} outside {lo}..{hi}",
+                        got[c]
+                    );
+                    moved |= got[c].abs_diff(fill[c]) > 2;
+                }
+                assert!(
+                    moved,
+                    "{state:?} {what}: the ripple left the fill unchanged: {got:?}"
+                );
             }
-            assert!(
-                moved,
-                "{state:?}: the ripple left the fill unchanged: {got:?}"
-            );
         }
     }
 

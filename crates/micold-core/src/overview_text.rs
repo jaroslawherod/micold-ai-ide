@@ -324,20 +324,26 @@ mod tests {
     /// C8, US2.6: no row with neither a phase nor a ratio; a bar only with a ratio.
     #[test]
     fn the_progress_row_is_hidden_without_a_phase_or_a_ratio() {
-        assert_eq!(progress_row(&progress(None, None)), None);
+        assert_eq!(
+            progress_row(&progress(None, None)),
+            None,
+            "C8: no phase and no ratio hides the row"
+        );
         assert_eq!(
             progress_row(&progress(Some(Phase::Implement), Some(ratio(6, 10)))),
             Some(ProgressRow {
                 text: "Implement \u{b7} 6/10".into(),
                 bar: Some(ratio(6, 10)),
-            })
+            }),
+            "C8: phase and ratio show text and bar"
         );
         assert_eq!(
             progress_row(&progress(None, Some(ratio(6, 10)))),
             Some(ProgressRow {
                 text: "6/10".into(),
                 bar: Some(ratio(6, 10)),
-            })
+            }),
+            "C8: a ratio alone shows the ratio and a bar"
         );
         assert_eq!(
             progress_row(&progress(Some(Phase::Plan), None)),
@@ -508,7 +514,8 @@ mod tests {
                     text: "Writing tests".into(),
                     tooltip: "Writing tests".into(),
                 }),
-            }
+            },
+            "CardText: each field comes from its rule"
         );
     }
 }
