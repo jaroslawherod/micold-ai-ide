@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: implement M3
-- **Next step**: M3 — orchestrator opens the M3 PR from the scratchpad's pr-title.txt / pr-body.md, waits on CI and merges; then M4.
+- **Phase**: implement M4
+- **Next step**: M4 — implement T036–T046 (TDD), then verify, reviews, gate, PR files.
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1168 | design (spec, plan, tasks) | merged (rebase) | 1952d53a85b21b30b33aa3f0093c4a7d3cb55476 |
 | #1169 | M1 | merged (rebase) | b8f4adfbbf5cbfe5bbd2cd190a54988d53323e73 |
 | #1173 | M2 | merged | 4eaa990fb3210d90c85451cc447b58584a7a492c |
+| #1177 | M3 | merged | 7dd8a2f11fcc303735a4c70abc6be52c30246676 |
 
 Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
@@ -28,7 +29,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | #1169 | merged |
 | M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | #1173 | merged |
-| M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | pending | pending |
+| M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | #1177 | merged |
 | M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | | pending |
 
 US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachable until M3) and its hover wiring (M3). Polish T047–T048 is code-free: close unit. speckit-analyze (14 findings, 1 HIGH) fixed in tasks.md; it also found plan.md's *Delivery order* (3 steps) out of line with the milestones: plan fixed (Delivery order superseded by the 4 milestones; `Msg::CardScrolled` → `Event::BodyScrolled` in plan and research).

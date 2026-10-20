@@ -1,5 +1,5 @@
 //! Which Overview card is expanded and where it is drawn (feature 1121, research R1/R6,
-//! contracts K1–K3).
+//! contracts K1–K4).
 //!
 //! Pure: no I/O and no logging (FR-016, FR-018). The client only feeds events in and draws the card
 //! this names at the place computed here, so the rules are tested without the GUI.
@@ -62,6 +62,8 @@ pub struct Expansion {
     menu_open: bool,
     /// The pointer rested on `pointer_on` while a menu was open: it expands once the menu closes.
     rest_held: bool,
+    /// Keyboard focus moved while a menu was open: it settles once the menu closes.
+    focus_held: bool,
     body_edges: (bool, bool),
 }
 
@@ -113,6 +115,7 @@ impl Expansion {
             Event::FocusGained(location) => {
                 self.focused = Some(location.clone());
                 self.focus_escaped = false;
+                self.focus_held |= self.menu_open;
                 if !self.menu_open {
                     self.expand(location, Cause::Focus);
                 }
@@ -122,6 +125,7 @@ impl Expansion {
                     self.focused = None;
                     self.focus_escaped = false;
                 }
+                self.focus_held |= self.menu_open;
                 if self.expanded == Some((location, Cause::Focus)) && !self.menu_open {
                     self.collapse();
                 }
@@ -137,6 +141,7 @@ impl Expansion {
             }
             Event::WindowBlurred => {
                 self.rest_held = false;
+                self.focus_held = false;
                 self.collapse();
             }
             Event::MenuOpened => self.menu_open = true,
@@ -155,6 +160,10 @@ impl Expansion {
                     if let Some(location) = self.pointer_on.clone() {
                         self.expand(location, Cause::Pointer);
                     }
+                }
+                // A focus move it held back settles now, as the pointer's does (M3 follow-up).
+                if std::mem::take(&mut self.focus_held) {
+                    self.settle_focus();
                 }
             }
             Event::Listed(listed) => {
@@ -199,11 +208,42 @@ impl Expansion {
         }
     }
 
+    /// After focus moved under a menu: a card focus left collapses, and with no card expanded the
+    /// focused one expands, unless Escape collapsed it since it got focus.
+    fn settle_focus(&mut self) {
+        let stale = self.expanded.as_ref().is_some_and(|(location, cause)| {
+            *cause == Cause::Focus && self.focused.as_ref() != Some(location)
+        });
+        if stale {
+            self.collapse();
+        }
+        if self.expanded.is_none() {
+            if let Some(focused) = self.focused.clone().filter(|_| !self.focus_escaped) {
+                self.expand(focused, Cause::Focus);
+            }
+        }
+    }
+
     /// Collapse the expanded card, if any.
     fn collapse(&mut self) {
         self.expanded = None;
         self.body_edges = (false, false);
     }
+}
+
+/// What Page Up / Page Down scroll while a card has the keyboard (K4, FR-008).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageTarget {
+    /// The expanded card's inner body.
+    Card,
+}
+
+/// Whether Page Down (`down`) or Page Up goes to the expanded card (K4): only to a card expanded
+/// by focus whose body can still move that way; else `None`, and the key behaves as today.
+pub fn page_target(expansion: &Expansion, down: bool) -> Option<PageTarget> {
+    let (up_room, down_room) = expansion.body_edges();
+    let room = if down { down_room } else { up_room };
+    (expansion.cause() == Some(Cause::Focus) && room).then_some(PageTarget::Card)
 }
 
 /// Where an expanded card is drawn, in the grid's coordinates (data-model *Placement*).
@@ -585,6 +625,90 @@ mod tests {
             assert_eq!(expansion.body_edges(), (false, false), "{label}");
         }
         assert_eq!(after([rest("a"), edges]).body_edges(), (true, true));
+    }
+
+    fn edges(up: bool, down: bool) -> Event {
+        Event::BodyScrolled { up, down }
+    }
+
+    /// K4, FR-008: Page Down / Page Up go to the card only while it is expanded by focus and its
+    /// body can move that way.
+    #[test]
+    fn page_keys_target_a_focus_expanded_card_that_can_move_that_way() {
+        let focused = after([focus("a"), edges(false, true)]);
+        assert_eq!(page_target(&focused, true), Some(PageTarget::Card));
+        assert_eq!(page_target(&focused, false), None, "at its top");
+        let at_end = after([focus("a"), edges(true, false)]);
+        assert_eq!(page_target(&at_end, true), None, "at its end");
+        assert_eq!(page_target(&at_end, false), Some(PageTarget::Card));
+    }
+
+    /// K4: no card expanded, a card expanded by the pointer, or a body that does not overflow:
+    /// the keys are not the card's.
+    #[test]
+    fn page_keys_are_not_the_cards_without_a_focus_expanded_overflowing_body() {
+        let cases = [
+            ("nothing expanded", after([])),
+            ("pointer cause", after([rest("a"), edges(true, true)])),
+            ("no overflow", after([focus("a")])),
+        ];
+        for (label, expansion) in cases {
+            for down in [false, true] {
+                assert_eq!(page_target(&expansion, down), None, "{label}, down {down}");
+            }
+        }
+    }
+
+    /// K4 (carried from M2): an expand starts the body's edges at `(false, false)`, so a page
+    /// claim never follows the edges of a card expanded before.
+    #[test]
+    fn an_expand_resets_the_body_edges() {
+        let refocused = after([focus("a"), edges(true, true), focus("b")]);
+        assert_eq!(refocused.body_edges(), (false, false));
+        let again = after([
+            focus("a"),
+            edges(true, true),
+            Event::Escape,
+            Event::FocusLost(loc("a")),
+            focus("a"),
+        ]);
+        assert_eq!(again.body_edges(), (false, false));
+    }
+
+    /// FR-005, FR-012 (M3 review A F2/F3 for focus): focus that moved under an open menu settles
+    /// when it closes: the card focus left collapses, the card it reached expands.
+    #[test]
+    fn focus_moved_under_an_open_menu_settles_on_close() {
+        let moved = [
+            focus("a"),
+            Event::MenuOpened,
+            Event::FocusLost(loc("a")),
+            focus("b"),
+        ];
+        let held = after(moved.clone());
+        assert_eq!(shown(&held), Some("a".into()), "frozen while open");
+        let closed = after(moved.into_iter().chain([Event::MenuClosed]));
+        assert_eq!(shown(&closed), Some("b".into()));
+        assert_eq!(closed.cause(), Some(Cause::Focus));
+        let left = after([
+            focus("a"),
+            Event::MenuOpened,
+            Event::FocusLost(loc("a")),
+            Event::MenuClosed,
+        ]);
+        assert_eq!(shown(&left), None, "focus left the grid under the menu");
+    }
+
+    /// FR-005: a window blur under the menu drops what focus did there: nothing expands on close.
+    #[test]
+    fn focus_held_by_the_menu_is_dropped_by_a_blur() {
+        let blurred = after([
+            Event::MenuOpened,
+            focus("b"),
+            Event::WindowBlurred,
+            Event::MenuClosed,
+        ]);
+        assert_eq!(shown(&blurred), None);
     }
 
     /// K2, SC-006: a card expands within half a second of the pointer resting on it.
