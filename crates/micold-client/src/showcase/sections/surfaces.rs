@@ -1069,7 +1069,12 @@ mod tests {
                 .iter()
                 .filter(|p| p.content == state.label() && grid.contains(p.bounds.center()))
                 .count();
-            assert_eq!(n, 1, "the five-state grid paints \"{}\" {n} times", state.label());
+            assert_eq!(
+                n,
+                1,
+                "the five-state grid paints \"{}\" {n} times",
+                state.label()
+            );
         }
     }
 }

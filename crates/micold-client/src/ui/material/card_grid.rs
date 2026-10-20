@@ -1190,20 +1190,21 @@ mod tests {
             &window,
         );
         let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
-        let pixels = m
-            .renderer
-            .screenshot(Size::new(w, h), 1.0, iced::Color::from_rgb(1.0, 0.0, 1.0));
+        let pixels =
+            m.renderer
+                .screenshot(Size::new(w, h), 1.0, iced::Color::from_rgb(1.0, 0.0, 1.0));
         // A pixel counts as inside a piece within 2 px of it (antialiasing), above the grid's edge.
         // The scrollable's own bar, along the right edge above that edge, is not a card's.
         let bar = |x: f32, y: f32| x > size.width - SCROLLBAR && y < VIEW_H;
         let inside = |x: f32, y: f32| {
-            bar(x, y) || y < VIEW_H + 2.0
-                && pieces.iter().any(|p| {
-                    x > p.rect.x - 2.0
-                        && x < p.rect.x + p.rect.width + 2.0
-                        && y > p.rect.y - 2.0
-                        && y < p.rect.y + p.rect.height + 2.0
-                })
+            bar(x, y)
+                || y < VIEW_H + 2.0
+                    && pieces.iter().any(|p| {
+                        x > p.rect.x - 2.0
+                            && x < p.rect.x + p.rect.width + 2.0
+                            && y > p.rect.y - 2.0
+                            && y < p.rect.y + p.rect.height + 2.0
+                    })
         };
         let stray: Vec<(u32, u32)> = (0..h)
             .flat_map(|y| (0..w).map(move |x| (x, y)))

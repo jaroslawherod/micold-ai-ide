@@ -9,7 +9,11 @@ use std::fs;
 use std::path::Path;
 
 /// The files that see prompt or label text.
-const FILES: &[&str] = &["src/markup.rs", "src/overview_text.rs", "src/hook_activity.rs"];
+const FILES: &[&str] = &[
+    "src/markup.rs",
+    "src/overview_text.rs",
+    "src/hook_activity.rs",
+];
 
 /// A log or print in Rust source.
 const LOGGING: &[&str] = &["tracing::", "log::", "println!", "eprintln!", "dbg!"];
