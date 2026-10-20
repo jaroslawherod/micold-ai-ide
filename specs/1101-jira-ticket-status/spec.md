@@ -63,7 +63,7 @@ A ticket that already appears in other places in the window shows its status chi
 **Acceptance Scenarios**:
 
 1. **Given** a ticket shown in two places, **When** both are drawn, **Then** they show the same status.
-2. **Given** the Overview shows a card for a worktree linked to a Jira ticket, **When** it is drawn, **Then** the card shows the ticket's status chip [NEEDS CLARIFICATION: does the Overview card (feature 813) show the status, or only the sidebar row and the picker? Recommended: it does, from the same status as the sidebar; if not, move it to Out of Scope and drop this scenario].
+2. **Given** the Overview shows a card for a worktree linked to a Jira ticket, **When** it is drawn, **Then** the card shows the ticket's status chip.
 
 ---
 
@@ -81,6 +81,13 @@ A ticket that already appears in other places in the window shows its status chi
 - **Status renamed by an admin**: the new name appears at the next refresh.
 - **Worktree with a numeric (GitHub) ticket**: unaffected.
 
+## Clarifications
+
+### Session 2026-10-20
+
+- Q: Which events refresh a linked ticket's status? → A: Project open and window focus when the last read is over 5 minutes old; no timer. _(decided by user)_
+- Q: Does the Overview card (feature 813) show the status chip? → A: Yes, from the same status as the sidebar. _(decided by user)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -89,7 +96,7 @@ A ticket that already appears in other places in the window shows its status chi
 - **FR-002**: Every Jira ticket row in the New worktree form's picker, listing and search results alike, MUST show the ticket's status name.
 - **FR-003**: A worktree linked to a Jira ticket MUST show the ticket's status name beside its key tag on its sidebar row.
 - **FR-004**: The chip MUST be tinted by status category (To Do, In Progress, Done, each visibly distinct) and MUST show the status name as text.
-- **FR-005**: The status shown for a linked ticket MUST be refreshed so it reflects Jira's current value on these events only: the project opening, the window regaining focus when the last read is older than 5 minutes [NEEDS CLARIFICATION: are these the right events, or should a timer also refresh while the window stays focused? Recommended: these two events, no timer].
+- **FR-005**: The status shown for a linked ticket MUST be refreshed so it reflects Jira's current value on these events only: the project opening, the window regaining focus when the last read is older than 5 minutes.
 - **FR-006**: A status refresh MUST NOT run unless the Jira integration is on and the project connected, and MUST NOT run on any event other than those of FR-005.
 - **FR-006b**: This feature amends feature 533 FR-020 and FR-005b: Jira requests are also allowed with the New worktree dialog closed, for a status refresh, and then carry the project key, the linked tickets' keys and the credentials. The Settings and picker disclosure of what is sent MUST say so. No other Jira request rule changes, so feature 533's named-events test is extended to the FR-005 events.
 - **FR-007**: A linked ticket may already be done, which the picker's list leaves out, so a refresh MUST read the linked tickets by key, whatever their status, and the tickets of many worktrees MUST be read together, not one request per worktree.
@@ -121,7 +128,7 @@ A ticket that already appears in other places in the window shows its status chi
 - The picker's list stays limited to tickets not yet done; a Done status appears only on already-linked worktrees.
 - Status names are shown as the project defines them; they are not translated or mapped.
 - Linked tickets are the worktrees' Jira keys already parsed for the sidebar tag.
-- Showing status on the Overview, the thread list or any place beyond those named is covered by the open clarification and otherwise out of scope.
+- Showing status on the thread list or any place beyond the picker, the sidebar and the Overview cards is out of scope.
 
 ## Out of Scope
 

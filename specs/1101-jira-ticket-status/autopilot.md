@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1101
 - **Worktree branch**: feat/1101_show-a-jira-ticket-s-current-status
 - **Started**: 2026-10-20
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers in spec.md (FR-005 events; Overview card scope in US3)
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -45,7 +45,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1 (2 questions, repo does not settle either): (1) FR-005 refresh events: project open + focus regain after 5 min, no timer (Recommended) vs add a timer. (2) US3 Overview card (feature 813, FR-002/FR-015 show name/branch/issue title but no ticket status): show status chip (Recommended) vs move to Out of Scope.
+None.
 
 ## Follow-ups not done
 
