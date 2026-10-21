@@ -111,7 +111,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Converge close | — | — | skipped: review B CLEAN for M1–M5 (close.md step 1) |
 | Full gate close | 1 | fd2a64ef | RED: feature 942's `structured_permission::a_pending_request_marks_its_session_waiting_until_the_last_is_decided` (3.0 s under load); passes 5/5 alone |
 | Full gate close | 2 | fd2a64ef | GREEN (T051) |
-| TDD verify close | 1 | 6f552538a137b82b74c095c00793ecaef9b68684:fd2a64ef85925313a77d395156792aed6ece370a | pending (sonnet, autopilot-worker) |
+| TDD verify close | 1 | 78bb84ab25e7d5d007194a6d82187d46637e88c7:a847dfee7d0347117789e2b51da34f517835239c | pending (sonnet, autopilot-worker) |
 
 
 ### M4 r1 verdicts (verbatim)
