@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M2
-- **Next step**: M2 scoped gate + review A, review B, full gate, PR
+- **Next step**: M2 full gate, push, PR body
 
 ## Pull requests
 
@@ -51,11 +51,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 (conformance, sonnet) | 1 | c52ec378bfd53e2b9e289fa241e1faced7b8f684:4009ce61770beaba9d569a6c263284283ca295fb | CHANGES: 2 MAJOR (cycle log untracked → committed; fence red not shown → shown against a stub, logged), 1 MINOR (batched cycles; noted). Verify: subset 18, stream 4, lib 10 passed |
 | Review A M1 (code-review, sonnet) | 2 | aa1daa152374351708fc813c0750520c06544c37:57b9034cc9b18594488478b04fa6f02cef99ef3c | CLEAN: 1 MINOR (duplicate-label definition inside a container stays hidden; not fixed) |
 | Review B M1 (conformance, sonnet) | 2 | aa1daa152374351708fc813c0750520c06544c37:57b9034cc9b18594488478b04fa6f02cef99ef3c | CLEAN; Verify re-run green |
+| Review A M2 (code-review high) | 1 | 91f29aa19fb9dce4c7014317aa0c19aa654c0b06:d3939ee9054b6be493d62dcb528ed054caa5b87d | CLEAN: 1 MINOR (Cargo.lock windows-sys churn; declined) |
+| Review B M2 (conformance, sonnet) | 1 | 91f29aa19fb9dce4c7014317aa0c19aa654c0b06:d3939ee9054b6be493d62dcb528ed054caa5b87d | CLEAN: 2 MINOR (lock churn, declined; CRLF-only note unpinned in test, fixed: pinned `None`). Verify: edit_diff 15 passed |
 
 ## Declined review findings
 
 - Review A M1 #8 (`code_blocks` builds a Vec, `code` scans): MINOR; ids are few per reply and the renderer reads them from M3's cache, not per frame.
 - Review A M1 #9 (lone trailing `\r` read as a complete line ending): a lone `\r` is a CommonMark line ending; the `\n` that may follow only completes the same CRLF ending, so the line before it is complete either way.
+- Review A/B M2 (Cargo.lock re-picks Windows-only `windows-sys`/`getrandom` edges): `cargo update -p similar --precise` cannot run before `similar` is in the lock, and `cargo update --workspace` from origin/main's lock gives the same result; hand-editing the lock is not allowed. Windows-only edges, no effect on the Linux/macOS builds.
+- Scoped gate M2: `settings_refuses_save_over_failed_read` fails as root (root reads a 0o000 file); pre-existing, unrelated; `scripts/gate.sh` runs it unprivileged (`root_only`).
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

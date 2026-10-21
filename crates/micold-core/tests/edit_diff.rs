@@ -312,6 +312,10 @@ fn a_line_ending_only_difference_is_no_change() {
     );
     assert_eq!((d.added, d.removed), (0, 0));
     assert_eq!(hunk.old_no_newline, hunk.new_no_newline);
+    assert_eq!(
+        hunk.note, None,
+        "the texts differ, so the lines are shown, all unchanged"
+    );
 }
 
 #[test]
