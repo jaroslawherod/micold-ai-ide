@@ -275,11 +275,55 @@ fn an_open_thread_is_rebuilt_after_the_bound_drops_its_events() {
     let fillers = seq(4, (0..MAX_EVENTS).map(|_| user_text("filler")));
     w.apply(s, 0, &fillers, true);
     assert!(w.main(s).omitted_notice().is_some());
-    assert_thread_is_nested(&w, s, "p");
     assert!(
-        entries(w.insights.thread(s, "p").unwrap()).is_empty(),
-        "its events left"
+        w.insights.thread(s, "p").is_none(),
+        "its events left, so it folds as #939 folds a card that left"
     );
+}
+
+#[test]
+fn an_open_thread_holds_only_its_own_events() {
+    let (mut w, s) = two_threads();
+    w.toggle_thread(s, "p");
+    let main_events = seq(4, (0..10).map(|_| user_text("main")));
+    w.apply(s, 0, &main_events, true);
+    w.apply(s, 0, &seq(14, [sub_text("r says two", "r")]), true);
+    let thread = w.insights.thread(s, "p").unwrap();
+    assert_eq!(
+        thread.held(),
+        w.main(s).subagent_events("p").count(),
+        "the main session's and other threads' events are not the thread's"
+    );
+    assert_thread_is_nested(&w, s, "p");
+}
+
+#[test]
+fn an_open_thread_survives_an_eviction_that_leaves_its_events() {
+    let (mut w, s) = two_threads();
+    let fillers = seq(4, (0..MAX_EVENTS - 4).map(|_| user_text("filler")));
+    w.apply(s, 0, &fillers, true);
+    w.apply(
+        s,
+        0,
+        &seq(
+            MAX_EVENTS as u64,
+            [tool_use("q", "Agent", "{}"), sub_text("q one", "q")],
+        ),
+        true,
+    );
+    w.toggle_thread(s, "q");
+    w.apply(
+        s,
+        0,
+        &seq(MAX_EVENTS as u64 + 2, [sub_text("q two", "q")]),
+        true,
+    );
+    assert!(
+        w.main(s).omitted_notice().is_some(),
+        "the bound dropped events"
+    );
+    assert_thread_is_nested(&w, s, "q");
+    assert_eq!(entries(w.insights.thread(s, "q").unwrap()).len(), 2);
 }
 
 #[test]

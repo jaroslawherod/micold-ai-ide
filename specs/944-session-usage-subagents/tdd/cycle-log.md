@@ -160,3 +160,12 @@ Each test was written and run red before its implementation, recorded here as it
   `features_structured_transcript` 19/19. The shell's routing test (`main_tests.rs` mod
   `structured_transcript`) extended: the same message reaches the insights, closing the session
   drops both, an `InsightsMsg` folds without a scroll task.
+- **Red, review A M5 F1/F3**: new `an_open_thread_holds_only_its_own_events` fails (`left: 12,
+  right: 1`: the open thread stored the main session's and another thread's events);
+  `an_open_thread_is_rebuilt_after_the_bound_drops_its_events`, changed to expect the thread
+  folded once its events all left, fails ("its events left, so it folds"). **Green**: only the
+  thread's own events are appended (new core `transcript::is_subagent_event`, which
+  `subagent_events` now uses); an eviction rebuilds a thread only when it holds more events than
+  `main` still does (F2), and a thread the insights no longer hold folds → `features_structured_insights`
+  21/21 (with `an_open_thread_survives_an_eviction_that_leaves_its_events`, test-after: it guards
+  the F2 narrowing), `features_structured_transcript` 19/19.
