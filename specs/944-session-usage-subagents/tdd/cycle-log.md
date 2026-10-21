@@ -134,3 +134,9 @@ Each test was written and run red before its implementation, recorded here as it
   `icons_font` 12/12. Showcase entry gains "6/10, marker 8/10" and "9/10, marker 8/10, warning";
   `showcase_completeness`, `showcase_captions`, `material_builder_api` green; `layout_snapshot`
   green unchanged (its curated states hold no `ProgressBar`, so nothing to regenerate).
+- **Red, review A M4 F1** (tick coloured whole by its centre): new
+  `a_marker_on_the_fills_edge_shows_in_both_halves` fails ("the tick's half over the track is in
+  the fill's colour"): at 8/10 with the marker at 8/10 both tick pixels were track on track at 160.
+  **Green**: the tick is split at the fill's edge, track colour over the fill and fill colour over
+  the track → `--lib -- ui::material::progress_bar` 6/6. F4: `without_a_marker_or_warning…` now
+  also pins the fill to columns 0..120 instead of comparing two new renders only.

@@ -136,25 +136,26 @@ where
             paint_fill(renderer, Rectangle { width, ..bounds }, fill);
         }
         if let Some(at) = self.marker {
+            // The tick's part over the fill takes the track's colour, its part over the empty track
+            // the fill's, so a tick the fill's edge splits still shows in both halves.
             let x = marker_x(at, bounds.width);
-            // On the filled part the tick takes the track's colour, on the empty part the fill's.
-            let on_fill = width >= x + MARKER_WIDTH / 2.0;
-            let color = if on_fill {
-                track_color(&self.roles)
-            } else {
-                fill
-            };
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: Rectangle {
-                        x: bounds.x + x,
-                        width: MARKER_WIDTH.min(bounds.width),
-                        ..bounds
-                    },
-                    ..Default::default()
-                },
-                iced::Background::Color(style::color(color)),
-            );
+            let end = (x + MARKER_WIDTH).min(bounds.width);
+            let split = width.clamp(x, end);
+            for (from, to, color) in [(x, split, track_color(&self.roles)), (split, end, fill)] {
+                if to > from {
+                    renderer.fill_quad(
+                        renderer::Quad {
+                            bounds: Rectangle {
+                                x: bounds.x + from,
+                                width: to - from,
+                                ..bounds
+                            },
+                            ..Default::default()
+                        },
+                        iced::Background::Color(style::color(color)),
+                    );
+                }
+            }
         }
     }
 }
@@ -331,11 +332,34 @@ mod tests {
         );
     }
 
-    /// Without either step the bar draws as before: `.warning(false)` and no marker change no pixel.
+    /// Without either step the bar draws as before: the first 120 columns in `primary`, the rest
+    /// in the track's colour, and `.warning(false)` changes no pixel.
     #[test]
     fn without_a_marker_or_warning_the_bar_draws_as_before() {
+        let (fill, track) = (roles().primary, roles().secondary_container);
+        let row = middle_row(bar(6, 10));
+        assert_eq!(nearer(&row, fill, track), (0..120).collect::<Vec<_>>());
         let plain = Mounted::new(bar(6, 10)).drawn(style::color(roles().surface));
         let off = Mounted::new(bar(6, 10).warning(false)).drawn(style::color(roles().surface));
         assert_eq!(plain, off);
+    }
+
+    /// A marker the fill's edge splits shows in both halves: the half over the fill in the track's
+    /// colour, the half over the track in the fill's, so it is never drawn colour on same colour.
+    #[test]
+    fn a_marker_on_the_fills_edge_shows_in_both_halves() {
+        let (fill, track) = (roles().primary, roles().secondary_container);
+        let row = middle_row(bar(8, 10).marker(Ratio { done: 8, total: 10 }));
+        let filled = nearer(&row, fill, track);
+        assert!(filled.contains(&158), "the fill reaches the tick");
+        assert!(
+            !filled.contains(&159),
+            "the tick's half over the fill is in the track's colour"
+        );
+        assert!(
+            filled.contains(&160),
+            "the tick's half over the track is in the fill's colour"
+        );
+        assert!(!filled.contains(&161), "the track follows the tick");
     }
 }
