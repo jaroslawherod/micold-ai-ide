@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #940
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve FR-020 and FR-021 markers in spec.md
+- **Phase**: plan
+- **Next step**: plan unit: write plan.md (clarify CLEAN after one round)
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- Clarify round 1 (2026-10-21): FR-020 Edit/MultiEdit/Write cards start folded (#939 FR-010); FR-021 no tool result gets rich rendering (issue #940 scope; sub-agent output is #944). Both agent-resolved, no requirement added; unit ends CLEAN.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
@@ -49,4 +50,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- Possible later issue: draw Task (sub-agent) results as markdown and highlight Read results (out of #940 scope, FR-021).
