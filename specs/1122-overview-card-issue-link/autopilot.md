@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: spec
-- **Next step**: Review A of spec.md, round 1 (orchestrator dispatches; prompt in the scratchpad).
+- **Next step**: Review A of spec.md, round 2 (fix diff, sonnet; orchestrator dispatches; prompt in the scratchpad). FR-001/FR-010 markers stay for the clarify unit.
 
 ## Pull requests
 
@@ -33,7 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Review A spec | 1 | 399604367e0651717c12d766941fef7e892d58e9:48d810a53d17d50a45ab3b3ffaabec63220e6048 | pending |
+| Review A spec | 1 | 399604367e0651717c12d766941fef7e892d58e9:48d810a53d17d50a45ab3b3ffaabec63220e6048 | CHANGES: 5 MAJOR, 3 MINOR (F1–F8), all fixed in spec.md, none declined |
+| Review A spec | 2 | (fix-diff re-review, sonnet; snapshot = round 1's) | pending |
 
 ## Declined review findings
 
