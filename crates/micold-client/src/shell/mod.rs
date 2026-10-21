@@ -53,5 +53,6 @@ pub mod settings;
 pub mod startup;
 pub mod subscriptions;
 pub mod time_zone;
+pub mod transcript;
 pub mod window_raise;
 pub mod workspace;

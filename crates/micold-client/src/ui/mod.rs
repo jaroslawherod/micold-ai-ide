@@ -95,6 +95,7 @@ pub(crate) mod parallel_dialog;
 pub mod syntax;
 pub mod terminal;
 mod toolbar;
+pub mod transcript;
 pub(crate) mod worktree_form;
 /// The issue picker's rows, named individually for `tests/issue_picker_rows.rs` (feature 038): the
 /// test reads what the view hands the picker for each issue, and the module stays `pub(crate)`.

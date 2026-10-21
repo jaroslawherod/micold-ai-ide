@@ -1176,16 +1176,14 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 app.core.plan_usage.received(reading);
             }
         }
-        // Feature 938 (FR-022a): a structured session's events become lines of its read-only log.
+        // Feature 938 (FR-022a): a structured session's events become lines of its read-only log,
+        // and (feature 939) entries of its transcript.
         DaemonMsg::StructuredEvents {
             session,
             omitted,
             events,
             live,
-        } => app
-            .core
-            .structured_log
-            .apply(session, omitted, &events, live),
+        } => app.core.structured_events(session, omitted, &events, live),
         DaemonMsg::SettingsChanged { settings } => {
             let pr_status_enabled = settings.pr_status_enabled;
             if let Some(job) = on_settings_changed(app, settings) {
@@ -2764,7 +2762,7 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
     // and a session being archived will take no more input. Never on a mere detach — the
     // counter must survive a reconnect for loss detection to hold.
     app.stamper.forget(id);
-    app.core.structured_log.forget(id);
+    app.core.forget_structured(id);
     // Addressed to the daemon the session runs on, whichever location is in view.
     let binding = app.session_binding_of(id);
     send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
@@ -2816,7 +2814,7 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
         app.scrollback_inflight
             .retain(|_, (session, _)| *session != id);
         app.stamper.forget(id); // T114, as in the close path above.
-        app.core.structured_log.forget(id);
+        app.core.forget_structured(id);
         let binding = app.session_binding_of(id);
         send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
             ClientMsg::SessionDelete { req, session: id }

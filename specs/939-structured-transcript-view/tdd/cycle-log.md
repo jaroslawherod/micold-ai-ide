@@ -29,3 +29,17 @@ implementation task, run red, then made green.
   after each pushed event) implemented; `structured_transcript` 36/36.
 - **Refactor**: the streaming-flag match shared by `grow` and `close` (`is_streaming`,
   `streaming_flag`); `cargo fmt`.
+
+## M3 (T020–T023) — the window's transcript state
+
+- **Red**: T020/T021 written first in `tests/features_structured_transcript.rs`, against
+  `features/structured_transcript.rs` with every `State` operation and `Follow::scrolled` stubbed
+  (`todo!()`): 1 passed (the scroll id), 16 failed, each on its stub.
+- **Green**: T022 (the feature: fold set, `Follow`, `END_SLACK`, `FollowChange`, `Scroll`,
+  `TranscriptMsg`) and T023 (`app::State::structured_events` / `forget_structured` /
+  `update_transcript`, `session::Msg::Transcript`, `shell/transcript.rs`, `ui::transcript::
+  transcript_scroll_id`); `features_structured_transcript` 17/17. The binary-side half of T021
+  (the wire's `StructuredEvents`, the scroll tasks' presence via `Task::units`, the close path) is
+  in `src/main_tests.rs::structured_transcript`, because the shell lives in the binary: 3/3, written
+  with the wiring.
+- **Refactor**: none beyond `cargo fmt`.

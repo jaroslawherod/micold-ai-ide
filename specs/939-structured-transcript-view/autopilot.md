@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #939
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
-- **Phase**: milestone M2
-- **Next step**: M2 PR open — orchestrator opens it from the pushed branch, waits on CI and merges; then M3
+- **Phase**: milestone M3
+- **Next step**: M3 verify: scoped gate + review A, review B, full gate, PR
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1183 | Design: spec, clarify, plan, research, contracts, tasks | merged (rebase) | cee4e71942a66b77ba2d7107e57fd6e433d38b7e |
 | #1189 | M1: transcript model for finished events | merged (rebase) | 1348549cf021492216ffa03a63f1ae9faee0e03d |
+| #1192 | M2: streaming, supersede, bound and re-sync | merged (rebase) | 061d8805a1f11b934d72e4c5f606e8e972738e8a |
 
 ## Milestones
 
