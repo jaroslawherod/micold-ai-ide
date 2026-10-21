@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M4
-- **Next step**: M4 r1 verdicts acted on (review A F1–F4 fixed; visual criteria 1, 6, 7 fixed: the root hands the keyboard back to the link when its card changes form). Full gate on the final tree, then review A r2 (sonnet, fix diff) and visual pass r2 (criteria 1, 6, 7; regression 2, 4); then PR text.
+- **Next step**: M4 r1 verdicts acted on (review A F1–F4 fixed; visual criteria 1, 6, 7 fixed by the root handing the keyboard back to the link when its card changes form); full gate r3 GREEN on 4faae67f. Review A r2 (sonnet) and visual pass r2 requested (scratchpad 1122-m4-prompt-review-a-r2.md, 1122-m4-prompt-visual-r2.md). Then: tick T038 on a visual PASS, PR text (title "#1122: Overview cards: link to the worktree's issue — M4: issue links by keyboard", no docs-not-needed label).
 
 ## Pull requests
 
@@ -94,6 +94,9 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | CHANGES: 2 MAJOR (F1 an unchanged `Listed` ends the Tab pairing, F2 link hand-off fires on a project switch), 2 MINOR (F3 blur keeps a held link focused, F4 `focus_return_link` a separate bool); all fixed test-first, none declined (verdict verbatim below) |
 | Review B M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | VERDICT: CLEAN |
 | Visual pass M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | FAIL on criteria 1 (reverse half), 6 and 7 (after-Escape half); 2–5, 8, 9 PASS (verdict verbatim below; evidence visual-pass/m4/). Root cause: the link sits in a different place in the collapsed and expanded body, so a change of form rebuilds its focus state; fixed by the root handing the keyboard back to the link (`link_focus_after`) |
+| Full gate M4 | 3 | 4faae67f | GREEN (after the r1 fixes) |
+| Review A M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | requested (sonnet, fix diff c04408a4..4faae67f -- crates) |
+| Visual pass M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | requested (criteria 1, 6, 7; regression 2, 4) |
 
 
 ### M4 r1 verdicts (verbatim)
