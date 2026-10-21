@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: implement M1
-- **Next step**: M1 verify: scoped gate, review A (code-review high) round 1. T001–T009 implemented and ticked. D3, D4 still defaults awaiting the owner.
+- **Next step**: M1 verify: review A round 1 (prompt 1122-m1-prompt-review-a-r1.md) dispatched by the orchestrator; then review B + visual pass of the showcase `TextLink`. Full gate green at 50a09809.
 
 ## Pull requests
 
@@ -49,6 +49,9 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A plan | 2 | dbc05dbcce3d2007986d9a9952f95f8041e77c0f:f8b66178b945888957cd553d9d889aff3a718669 (fix diff 29f7e6c7..f8b66178, sonnet) | CLEAN, 2 MINOR (F1 card-id fallback ends the menu hold, F2 deferred loss under an open menu); both fixed in data-model + K5, prose and test list only, no round 3 |
 | Review A tasks | 1 | 1922d8f94766790a9b58f3c179918ec99ab12f8a:989fdbface58399752e833df82bfadf17c1174a6 | CHANGES: 4 MAJOR (F1 M3 Tab stop half-wired, F2 adopt test in a binary-only fn, F3 link-focus hand-offs untasked, F4 [P] tasks share files), 3 MINOR (F5 literals, F6 private daemon helpers, F7 D3/D4 tags); all fixed (F1 by keeping the link out of the Tab order until M4: contract U1 `.focusable`, U3), none declined |
 | Review A tasks | 2 | 0368cc294df0c6db78913928089c602e7870219f:69649f215a54be0ba4162c45fea1cf8a177d54f7 (fix diff 989fdbfa..69649f21, sonnet) | CLEAN, 1 MINOR (F1 T033/T036 link-focus hand-off not tagged D3); fixed: tagged (D3) and added to the header list, prose only, no round 3 |
+| Scoped gate M1 | 1 | 79f14e6c | RED: `idle_requests_no_frames` (TextLink's own `shell.request_redraw()`); fixed in 50a09809 (click via the stack's button) |
+| Full gate M1 | 1 | 50a09809 | RED: flaky `micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (untouched; 5/5 green alone); rerun GREEN |
+| Review A M1 | 1 | 32c67355331e1a393de36645923df016972978d9:50a09809fe5596886ff266bd8cabaa061a0b467f | pending (dispatched by the orchestrator) |
 
 ## Declined review findings
 
