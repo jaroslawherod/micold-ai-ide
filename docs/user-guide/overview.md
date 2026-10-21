@@ -73,7 +73,7 @@ The header row shows:
 The body below it shows:
 
 - its **title**, which says what the location is for (see [Title](#title)), on up to three lines;
-- below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. A card whose title already is the branch does not repeat it;
+- below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. A card whose title already is the branch does not repeat it. A worktree named after a GitHub issue shows a link to it at the end of this line (see [Opening a worktree's issue](#opening-a-worktrees-issue));
 - its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
 - when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
 - a **progress row**, when there is progress to show (see [Feature progress](#feature-progress));
@@ -86,6 +86,18 @@ A row with nothing to say is not shown.
 For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. Otherwise it is the **branch**, or the location's name when there is no branch: Default's title is *Default*. A long title wraps onto up to **three lines**, and a title longer than that ends in an ellipsis (…) on the third. To read it in full, see [Reading a card in full](#reading-a-card-in-full).
 
 Titles come from the issues the New-worktree form already loaded, or from one read of each issue when the Overview opens, when the project is on GitHub and `gh` is available. A Jira ticket, an offline machine, a closed issue or a missing `gh` leave the branch as the title. Each title is read once while the app runs, and is never written to a log.
+
+## Opening a worktree's issue
+
+A worktree named after a GitHub issue number, such as `feat-1122_overview-issue-link`, shows the link **Issue #1122** at the end of its card's branch line, collapsed and expanded. On a card with no branch line (its title is the branch) the link has a line of its own in the branch line's place. The link is always shown whole: a long branch is shortened first.
+
+The link is shown while the project has a GitHub repository (its `origin`, or else its first remote on github.com) and the **GitHub issues** switch in Settings is on. Turn the switch off and the links go; turn it on and they come back, without a restart. Default, a worktree whose name carries no issue number, and a project with no GitHub repository show no link. Showing the links asks GitHub for nothing: the repository comes from the project's own git remotes.
+
+- **Click** the link to open the issue's page (`https://github.com/<owner>/<repo>/issues/1122`) in your browser. The card is not activated: there is no ripple, nothing is selected, and the Overview stays open. If the browser cannot be opened, a notification names the address and the reason.
+- A press that starts on the link and ends off it, or the reverse, opens nothing and activates nothing.
+- The pointer **resting** on the link of a collapsed card does not expand it, so the link stays under the pointer; rest on the rest of the card to expand it. An expanded card stays expanded while the pointer is on its link.
+- A **right-click** on the link opens the card's menu, as anywhere else on the card.
+- The **arrow keys** still move from card to card, and **Tab** does not stop on the link.
 
 ## Reading a card in full
 

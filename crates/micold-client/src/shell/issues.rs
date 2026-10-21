@@ -692,41 +692,71 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
         }
     }
     // Feature 1102: with the switch off no title is read, and none is recorded as unavailable, so
-    // turning it back on reads them on the next open.
-    if !app.core.settings.github_issues_enabled {
+    // turning it back on reads them on the next open. The repository is read all the same: the
+    // issue links need it, and remotes are a git read, not a GitHub one (feature 1122, R2).
+    let routed = has_route(app);
+    let wanted = if app.core.settings.github_issues_enabled {
+        titles_to_fetch(&app.core.overview, &dirs, routed)
+    } else {
+        Vec::new()
+    };
+    if wanted.is_empty() {
+        read_repo(app);
         return Task::none();
     }
-    let binding = app.active_binding();
-    let routed = matches!(
-        app.route(binding),
-        micold_client::links::Route::To(id) if app.outbox_for(id).is_some()
-    );
-    let wanted = titles_to_fetch(&app.core.overview, &dirs, routed);
-    let Some(project) = app
-        .core
-        .workspace
-        .active
-        .clone()
-        .filter(|_| !wanted.is_empty())
-    else {
+    let Some(project) = app.core.workspace.active.clone() else {
         return Task::none();
     };
     // `wanted` is empty unless `routed` held just above (a route to a daemon with an outbox), which
     // is exactly what `send_op` needs, so the request below is always sent and marking the titles
     // pending first cannot strand them. A daemon lost afterwards resolves the op as unknown
-    // (`on_title_remotes(None)`), which settles them as unavailable.
+    // (`on_title_remotes(None)`), which settles them as unavailable. Its answer also records the
+    // repository, so no second read is asked for.
     app.core
         .update(Message::Overview(Msg::TitlesRequested(wanted.clone())));
+    send_remotes_read(app, project, wanted);
+    Task::none()
+}
+
+/// Whether the window has a route to a daemon with an outbox, which [`send_op`] needs.
+fn has_route(app: &App) -> bool {
+    let binding = app.active_binding();
+    matches!(
+        app.route(binding),
+        micold_client::links::Route::To(id) if app.outbox_for(id).is_some()
+    )
+}
+
+/// Ask the daemon for `project`'s remotes on behalf of the Overview: the titles `numbers` and,
+/// while it is unknown, the repository the issue links need (feature 1122, R2).
+fn send_remotes_read(app: &mut App, project: PathBuf, numbers: Vec<u64>) {
+    use micold_client::features::overview::RepoLookup;
+    if app.core.overview.repo == RepoLookup::Unknown {
+        app.core.overview.repo = RepoLookup::Asked;
+    }
     let asked_for = project.clone();
     send_op(
         app,
         PendingOp::TitleRemotes {
             project: asked_for,
-            numbers: wanted,
+            numbers,
         },
         move |req| ClientMsg::RemoteList { req, project },
     );
-    Task::none()
+}
+
+/// Read the active project's GitHub repository while the Overview does not know it (feature 1122,
+/// R2): the titles' remotes request with no title numbers, so its answer records the repository
+/// and reads nothing. Called when the Overview opens and when the active project's daemon attaches
+/// with the Overview open (a project switch made there). A window with no route asks nothing.
+pub fn read_repo(app: &mut App) {
+    use micold_client::features::overview::RepoLookup;
+    if app.core.overview.repo != RepoLookup::Unknown || !has_route(app) {
+        return;
+    }
+    if let Some(project) = app.core.workspace.active.clone() {
+        send_remotes_read(app, project, Vec::new());
+    }
 }
 
 /// The daemon answered the titles' `RemoteList` (`None`: it failed). Reads each title on a blocking
@@ -753,10 +783,32 @@ pub fn on_title_remotes(
     if app.core.workspace.active.as_deref() != Some(project.as_path()) {
         return Task::none();
     }
+    // Feature 1122 (R2): the repository the issue links need, recorded before the switch's gate.
+    let choice = remotes.as_deref().map(micold_core::github::choose_remote);
+    match &choice {
+        Some(choice) => {
+            let repo = match choice {
+                micold_core::github::RemoteChoice::Github { repo, .. } => Some(repo.clone()),
+                micold_core::github::RemoteChoice::NoGithubRemote => None,
+            };
+            app.core.update(Message::Overview(Msg::RepoRead {
+                project: project.clone(),
+                repo,
+            }));
+        }
+        // Not read: asked again on the next open or attach.
+        None => {
+            if app.core.overview.repo == micold_client::features::overview::RepoLookup::Asked {
+                app.core.overview.repo = micold_client::features::overview::RepoLookup::Unknown;
+            }
+        }
+    }
+    if numbers.is_empty() {
+        return Task::none();
+    }
     // Feature 1102: an issue title is a GitHub issue read, so the switch gates it too.
-    let Some(micold_core::github::RemoteChoice::Github { repo, .. }) = remotes
-        .filter(|_| app.core.settings.github_issues_enabled)
-        .map(|remotes| micold_core::github::choose_remote(&remotes))
+    let Some(micold_core::github::RemoteChoice::Github { repo, .. }) =
+        choice.filter(|_| app.core.settings.github_issues_enabled)
     else {
         return unavailable(numbers);
     };

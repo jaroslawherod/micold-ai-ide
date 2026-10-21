@@ -1270,13 +1270,15 @@ fn overview_arrow_listener() -> Subscription<Message> {
     iced::keyboard::listen().filter_map(overview_arrow)
 }
 
-/// [`Message::FocusMoved`] for an arrow key, and nothing for any other key. A named function for
-/// the same `TypeId` reason as [`escape_message`].
+/// The Overview's step to the next or previous card for an arrow key, and nothing for any other
+/// key: a card step, not [`Message::FocusMoved`], so the arrows never stop on an issue link
+/// (feature 1122, R9). A named function for the same `TypeId` reason as [`escape_message`].
 fn overview_arrow(event: iced::keyboard::Event) -> Option<Message> {
     let iced::keyboard::Event::KeyPressed { key, .. } = event else {
         return None;
     };
-    crate::ui::overview::arrow_focus(&key).map(|forward| Message::FocusMoved { forward })
+    crate::ui::overview::arrow_focus(&key)
+        .map(|forward| Message::Overview(crate::features::overview::Msg::CardStepped { forward }))
 }
 
 /// Up, Down, Enter and Space, heard while a card menu is open. Only keys no widget took, so a
@@ -1440,5 +1442,38 @@ pub(crate) fn freed_width(state: &State) -> f32 {
         crate::ui::sidebar::STRIP_WIDTH
     } else {
         f32::from(state.sidebar_width_px()) + crate::ui::material::RESIZE_HANDLE_WIDTH
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Feature 1122, R9: the Overview's arrow keys ask the root to step between cards, not to
+    /// move the keyboard through every focusable (which would stop on issue links).
+    #[test]
+    fn the_overview_arrows_step_between_cards() {
+        use crate::features::overview::Msg;
+        use iced::keyboard::key::Named;
+        let arrow = |named: Named| {
+            let iced::Event::Keyboard(event) = crate::ui::material::test_support::named_key(named)
+            else {
+                unreachable!("a key press is a keyboard event")
+            };
+            overview_arrow(event)
+        };
+        for (named, forward) in [
+            (Named::ArrowRight, true),
+            (Named::ArrowDown, true),
+            (Named::ArrowLeft, false),
+            (Named::ArrowUp, false),
+        ] {
+            assert_eq!(
+                arrow(named),
+                Some(Message::Overview(Msg::CardStepped { forward })),
+                "{named:?}"
+            );
+        }
+        assert_eq!(arrow(Named::Enter), None);
     }
 }

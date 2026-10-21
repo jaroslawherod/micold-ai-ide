@@ -1605,3 +1605,130 @@ mod expansion {
         assert_eq!(expanded(&state), None);
     }
 }
+
+/// Feature 1122: the issue link on the cards, and the repository it needs (R2, U6).
+mod issue_link {
+    use super::*;
+    use micold_client::features::overview::RepoLookup;
+    use micold_client::ui::overview::issue_link_for;
+    use micold_core::github::GithubRepo;
+    use micold_core::issue_link::IssueLink;
+
+    const LINKED: &str = "feat-1122_overview-issue-link";
+
+    fn o_r() -> GithubRepo {
+        GithubRepo::from_remote_url("git@github.com:o/r.git").expect("a GitHub remote")
+    }
+
+    fn repo_read(state: &mut State, project: PathBuf, repo: Option<GithubRepo>) {
+        state.update(Message::Overview(Msg::RepoRead { project, repo }));
+    }
+
+    /// A worktree of the project, its path built with `Path::join` (G1).
+    fn named(dir: &str) -> Worktree {
+        Worktree {
+            dir_name: dir.to_string(),
+            path: project_path().join(".claude").join("worktrees").join(dir),
+            branch: Some(format!("feat/{dir}")),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }
+    }
+
+    /// The project on `o/r` with the GitHub issues switch on, and a GitHub ticket, no ticket and a
+    /// Jira key among its worktrees.
+    fn linked_project() -> State {
+        let mut state = project_with(
+            [LINKED, "feat_no-ticket", "feat-mic-87_add-login"]
+                .into_iter()
+                .map(named)
+                .collect(),
+        );
+        state.settings.github_issues_enabled = true;
+        state.settings.jira_enabled = true;
+        state.overview.repo = RepoLookup::Known(Some(o_r()));
+        state
+    }
+
+    fn link_of(state: &State, location: &SessionLocation) -> Option<IssueLink> {
+        card(&cards(state), location).issue_link.clone()
+    }
+
+    /// R2: the read is kept for the active project and dropped for one the window has left.
+    #[test]
+    fn a_repo_read_is_recorded_for_the_active_project_and_dropped_for_another() {
+        let mut state = project_with(vec![]);
+        repo_read(&mut state, PathBuf::from("/elsewhere"), Some(o_r()));
+        assert_eq!(state.overview.repo, RepoLookup::Unknown);
+        repo_read(&mut state, project_path(), Some(o_r()));
+        assert_eq!(state.overview.repo, RepoLookup::Known(Some(o_r())));
+        repo_read(&mut state, project_path(), None);
+        assert_eq!(state.overview.repo, RepoLookup::Known(None));
+    }
+
+    /// R2: a project switch forgets the repository; the new project's is read anew.
+    #[test]
+    fn a_project_switch_forgets_the_repo() {
+        let mut state = project_with(vec![]);
+        repo_read(&mut state, project_path(), Some(o_r()));
+        state.update(Message::Overview(Msg::ProjectSwitched));
+        assert_eq!(state.overview.repo, RepoLookup::Unknown);
+    }
+
+    /// Story 1 sc.1, FR-002, FR-004: a GitHub ticket on a project on `o/r` gives its card the link.
+    #[test]
+    fn a_github_ticketed_card_carries_its_issue_link() {
+        let state = linked_project();
+        let link = link_of(&state, &wt(LINKED)).expect("the card has its issue link");
+        assert_eq!(link.label, "Issue #1122");
+        assert_eq!(link.address, "https://github.com/o/r/issues/1122");
+        assert_eq!(issue_link_for(&state, &wt(LINKED)), Some(link));
+    }
+
+    /// Story 1 sc.4, FR-001: no link on Default, without a ticket, or for a Jira key while no
+    /// Jira base URL is known (M5).
+    #[test]
+    fn no_issue_link_on_default_without_a_ticket_or_for_a_jira_key() {
+        let state = linked_project();
+        for location in [
+            SessionLocation::Default,
+            wt("feat_no-ticket"),
+            wt("feat-mic-87_add-login"),
+        ] {
+            assert_eq!(link_of(&state, &location), None, "{location:?}");
+            assert_eq!(issue_link_for(&state, &location), None, "{location:?}");
+        }
+    }
+
+    /// Story 1 sc.5, sc.6, FR-001 (D3): no GitHub link with the switch off, with no GitHub
+    /// repository, or while the repository is not known yet.
+    #[test]
+    fn no_github_issue_link_with_the_switch_off_or_no_repository_known() {
+        let cases = [
+            (false, RepoLookup::Known(Some(o_r()))),
+            (true, RepoLookup::Known(None)),
+            (true, RepoLookup::Unknown),
+            (true, RepoLookup::Asked),
+        ];
+        for (on, repo) in cases {
+            let mut state = linked_project();
+            state.settings.github_issues_enabled = on;
+            state.overview.repo = repo.clone();
+            assert_eq!(link_of(&state, &wt(LINKED)), None, "{on} {repo:?}");
+            assert_eq!(issue_link_for(&state, &wt(LINKED)), None, "{on} {repo:?}");
+        }
+    }
+
+    /// FR-005, FR-013: activating the link changes no Overview state and selects nothing; the root
+    /// opens the address (`main_tests.rs`).
+    #[test]
+    fn activating_an_issue_link_changes_no_overview_state() {
+        let mut state = linked_project();
+        open_overview(&mut state);
+        let before = state.overview.clone();
+        state.update(Message::Overview(Msg::IssueLinkActivated(wt(LINKED))));
+        assert_eq!(state.overview, before);
+        assert!(state.overview.open);
+        assert_eq!(state.sidebar.revealed, None);
+    }
+}

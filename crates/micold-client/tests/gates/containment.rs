@@ -211,6 +211,34 @@ fn is_issue_details_scroll(state: &str, escape: &lay::Escape) -> bool {
         && escape.edge == "bottom"
 }
 
+/// An **inline issue link's focus gutter** (feature 1122, contract U1 `TextLink::inline`).
+///
+/// Not a clip and not a scroll: a different mechanism again, kept apart for the reason the lists
+/// above are. An inline link reports the box of its label, so a line holding it keeps the line's
+/// height (FR-003, R11), and lays its body out one gutter larger on every side, the room its focus
+/// ring is drawn in. Nothing is painted there but that ring, and only under shown keyboard focus,
+/// where a ring overlapping its neighbours is the point. The records report each overhang once,
+/// past one edge, by exactly the gutter.
+///
+/// It arrived with `overview-issue-link` (T028), the only covered state with a link: the link
+/// alone in the branch line's place on the first card, and after the branch on the second. It
+/// holds only there and only by the gutter, so a link that grew past its gutter still fires.
+const INLINE_LINK_GUTTER: &[&str] = &[
+    "0/0/0/1/1/0/1/0/1/0/0/1/0/1/0",
+    "0/0/0/1/1/0/1/0/2/0/0/1/0/1/1/0",
+];
+
+/// The gutter of [`INLINE_LINK_GUTTER`]: twice the focus ring's width (`text_link.rs`).
+const LINK_GUTTER: f32 = 6.0;
+
+/// Whether `escape`, in the covered state `state`, is an inline link's focus gutter, which is the
+/// only overhang [`INLINE_LINK_GUTTER`] allows.
+fn is_inline_link_gutter(state: &str, escape: &lay::Escape) -> bool {
+    state == "overview-issue-link"
+        && INLINE_LINK_GUTTER.contains(&escape.child_path.as_str())
+        && (escape.overhang - LINK_GUTTER).abs() <= TOLERANCE
+}
+
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
 fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str> {
     let child_path = escape.child_path.as_str();
@@ -226,6 +254,8 @@ fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str>
         Some("SETTINGS_PAGE_CONTENT")
     } else if is_issue_details_scroll(state, escape) {
         Some("ISSUE_DETAILS_CONTENT")
+    } else if is_inline_link_gutter(state, escape) {
+        Some("INLINE_LINK_GUTTER")
     } else {
         None
     }
@@ -265,6 +295,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(PICKER_LIST_CONTENT)
         .chain(SETTINGS_PAGE_CONTENT)
         .chain(ISSUE_DETAILS_CONTENT)
+        .chain(INLINE_LINK_GUTTER)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(

@@ -2078,6 +2078,36 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: &[],
         },
+        // Feature 1122 (FR-017, SC-004, G6): cards with an issue link, so the link passes the
+        // text-overflow and containment gates in both schemes: alone in the branch line's place
+        // (the title is the branch), after a 120-character branch that gives way to it (the title
+        // is the issue's), and a card with no ticket beside them.
+        CoveredState {
+            name: "overview-issue-link",
+            build: || {
+                use micold_client::features::overview::{RepoLookup, TitleLookup};
+                let mut state = with_project();
+                let long_branch = format!("release-train-{}", "x".repeat(106));
+                state.worktree.worktrees = vec![
+                    worktree(
+                        "feat-1122_overview-issue-link",
+                        "feat/1122_overview-issue-link",
+                    ),
+                    worktree("feat-1124_long-branch", &long_branch),
+                    worktree("feat_no-ticket", "feat/no-ticket"),
+                ];
+                state.overview.titles.insert(
+                    1124,
+                    TitleLookup::Known("Cards keep their issue link whole".into()),
+                );
+                state.overview.repo =
+                    RepoLookup::Known(GithubRepo::from_remote_url("git@github.com:o/r.git"));
+                state.settings.github_issues_enabled = true;
+                state.overview.open = true;
+                StateUnderTest::new(state)
+            },
+            anchors: &[],
+        },
     ]
 }
 

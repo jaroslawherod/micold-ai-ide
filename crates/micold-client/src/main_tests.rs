@@ -7328,17 +7328,17 @@ mod issue_source {
         rig
     }
 
-    /// Off: opening the Overview asks the daemon for no remotes, reads no title, and records
-    /// nothing, not even "unavailable", so turning the switch on reads them next time.
+    /// Off: opening the Overview reads no title and records none, not even "unavailable", so
+    /// turning the switch on reads them next time. The remotes are still asked for once, for the
+    /// issue links' repository (feature 1122, R2), and their answer reads no title.
     #[test]
     fn with_the_switch_off_opening_the_overview_reads_no_title() {
         let mut rig = titles_rig(false);
         let work = crate::shell::issues::on_overview_opened(&mut rig.app);
         settle(&mut rig.app, work);
-        assert!(
-            remote_lists_sent(&mut rig.rx).is_empty(),
-            "no remotes asked"
-        );
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(sent.len(), 1, "the repository is asked for");
+        answer_remotes(&mut rig.app, sent[0].0, github_remote());
         assert!(rig.app.core.overview.titles.is_empty(), "nothing recorded");
         assert!(rig.located_with.lock().unwrap().is_empty(), "no gh lookup");
         assert!(rig.source.lookup_calls().is_empty(), "no title read");
@@ -7385,6 +7385,126 @@ mod issue_source {
                 "Crash when opening empty project".into()
             ) == rig.app.core.overview.titles[&42]
         );
+    }
+
+    // --- 1122: the issue links' repository (R2) and opening a link (R10) -------------------------
+
+    fn repo_named(url: &str) -> micold_client::features::overview::RepoLookup {
+        micold_client::features::overview::RepoLookup::Known(
+            micold_core::github::GithubRepo::from_remote_url(url),
+        )
+    }
+
+    /// R2: opening the Overview with the repository unknown asks for the remotes even with the
+    /// GitHub issues switch off, and the answer records the repository before the switch's gate.
+    #[test]
+    fn repo_read_on_overview_open() {
+        let mut rig = titles_rig(false);
+        rig.app.core.overview.open = true;
+        let work = crate::shell::issues::on_overview_opened(&mut rig.app);
+        settle(&mut rig.app, work);
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(sent.len(), 1, "the repository is asked for once");
+        assert_eq!(
+            rig.app.core.overview.repo,
+            micold_client::features::overview::RepoLookup::Asked
+        );
+        let again = crate::shell::issues::on_overview_opened(&mut rig.app);
+        settle(&mut rig.app, again);
+        assert!(remote_lists_sent(&mut rig.rx).is_empty(), "asked only once");
+        answer_remotes(&mut rig.app, sent[0].0, github_remote());
+        assert_eq!(
+            rig.app.core.overview.repo,
+            repo_named("git@github.com:o/r.git")
+        );
+        assert!(rig.source.lookup_calls().is_empty(), "no title read");
+    }
+
+    /// R2, U6: a project switch with the Overview open forgets the repository; the new project's
+    /// `Attached` reads it, and its cards then link to the new repository.
+    #[test]
+    fn repo_reread_on_attach() {
+        let other = PathBuf::from("/repo/other");
+        let mut rig = titles_rig(true);
+        rig.app.core.overview.open = true;
+        let work = crate::shell::issues::on_overview_opened(&mut rig.app);
+        settle(&mut rig.app, work);
+        for (req, _) in remote_lists_sent(&mut rig.rx) {
+            answer_remotes(&mut rig.app, req, github_remote());
+        }
+        assert_eq!(
+            rig.app.core.overview.repo,
+            repo_named("git@github.com:o/r.git")
+        );
+        crate::shell::daemon_sync::switch_daemon_attachment(
+            &mut rig.app,
+            Some((
+                PathBuf::from(PROJECT),
+                micold_core::daemons::Binding::Bound(micold_core::daemons::DaemonId(1)),
+            )),
+            &other,
+        );
+        rig.app.core.workspace.active = Some(other.clone());
+        assert_eq!(
+            rig.app.core.overview.repo,
+            micold_client::features::overview::RepoLookup::Unknown
+        );
+        let _ = drain(&mut rig.rx);
+        let work = crate::shell::daemon_sync::on_daemon_event(
+            &mut rig.app,
+            micold_core::daemons::DaemonId(1),
+            DaemonMsg::Attached {
+                project: other.clone(),
+                sessions: vec![],
+            },
+        );
+        settle(&mut rig.app, work);
+        let sent = remote_lists_sent(&mut rig.rx);
+        let read = sent
+            .iter()
+            .find(|(_, project)| *project == other)
+            .expect("Attached reads the new project's repository");
+        let new_remote = vec![GitRemote {
+            name: "origin".into(),
+            url: "git@github.com:o/s.git".into(),
+        }];
+        answer_remotes(&mut rig.app, read.0, new_remote);
+        let link = micold_client::ui::overview::issue_link_for(
+            &rig.app.core,
+            &micold_core::session::SessionLocation::Worktree("feat-42_crash".into()),
+        )
+        .expect("the new project's card links to its issue");
+        assert_eq!(link.address, "https://github.com/o/s/issues/42");
+    }
+
+    /// R10, FR-004: a click on a card's issue link hands the address recomputed from state to the
+    /// link opener; with the link gone (the switch off) nothing is opened.
+    #[test]
+    fn issue_link_activated_opens_the_address() {
+        let opener = Arc::new(super::pr_status_open::Recording::default());
+        let mut rig = titles_rig(true);
+        rig.app.caps = rig.app.caps.clone().with_link_opener(opener.clone());
+        rig.app.core.overview.open = true;
+        rig.app.core.overview.repo = repo_named("git@github.com:o/r.git");
+        let location = micold_core::session::SessionLocation::Worktree("feat-42_crash".into());
+        let click = |app: &mut App| {
+            let work = update_inner(
+                app,
+                Message::Overview(micold_client::features::overview::Msg::IssueLinkActivated(
+                    location.clone(),
+                )),
+            );
+            settle(app, work);
+        };
+        click(&mut rig.app);
+        assert_eq!(
+            opener.opened.lock().unwrap().clone(),
+            vec!["https://github.com/o/r/issues/42".to_string()]
+        );
+        assert!(rig.app.core.overview.open, "the Overview stays open");
+        rig.app.core.settings.github_issues_enabled = false;
+        click(&mut rig.app);
+        assert_eq!(opener.opened.lock().unwrap().len(), 1, "the link is gone");
     }
 
     // --- 837: the picked issue's details (US2, US3) ---------------------------------------------
@@ -12166,8 +12286,8 @@ mod pr_status_open {
     use std::sync::Mutex;
 
     #[derive(Default)]
-    struct Recording {
-        opened: Mutex<Vec<String>>,
+    pub(super) struct Recording {
+        pub(super) opened: Mutex<Vec<String>>,
         fail: bool,
     }
 

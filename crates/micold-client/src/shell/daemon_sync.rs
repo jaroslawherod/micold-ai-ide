@@ -1974,6 +1974,11 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     app,
                     micold_client::features::pr_status::Msg::Held,
                 );
+                // Feature 1122 (R2): a project switched to with the Overview open, or a route
+                // regained, reads the repository the issue links need.
+                if app.core.overview.open {
+                    crate::shell::issues::read_repo(app);
+                }
             }
         }
         // An agent's destructive request (feature 034, FR-014): every window shows it until one
