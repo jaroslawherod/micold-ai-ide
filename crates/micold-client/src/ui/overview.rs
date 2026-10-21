@@ -343,7 +343,6 @@ pub fn settle_card_menu(state: &mut State) {
     if !state.overview.open {
         state.overview.card_menu = None;
         state.overview.focus_return = None;
-        state.overview.focus_return_link = false;
         state.overview.focus_landed = None;
         // Closing the Overview collapses the card, and reopening expands none (FR-005, FR-013).
         state.overview.expansion = Expansion::default();
@@ -371,7 +370,6 @@ pub fn settle_card_menu(state: &mut State) {
     if target.is_some_and(|target| !listed.contains(&target)) {
         state.overview.card_menu = None;
         state.overview.focus_return = None;
-        state.overview.focus_return_link = false;
         state.overview.expansion.apply(Event::MenuClosed);
     }
 }

@@ -474,7 +474,7 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let snapshot_before = Closing::of(&app.core);
     let dialog_before = snapshot_before.as_ref().map(Closing::id);
 
-    let held_link = shown_focused_link(app);
+    let link_before = LinkFocus::of(app);
     let task = update_inner(app, message);
     // Feature 1101: the statuses follow the Jira switch and connection, and the project's open
     // read starts once its worktrees are known. Here because both come from many messages.
@@ -518,9 +518,10 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         Some(focus) => Task::batch([task, focus]),
         None => task,
     };
-    // Feature 1122 (spec Edge Cases): the link that held the keyboard went; its card takes it.
-    let task = match link_focus_handoff(app, held_link) {
-        Some(card) => Task::batch([task, iced::widget::operation::focus(card)]),
+    // Feature 1122: the link that held the keyboard went (its card takes it, spec Edge Cases), or
+    // its card changed form under it (the link takes it back).
+    let task = match link_focus_after(app, &link_before) {
+        Some(control) => Task::batch([task, iced::widget::operation::focus(control)]),
         None => task,
     };
 
@@ -696,8 +697,8 @@ fn card_focus_return_id(app: &mut App) -> Option<iced::advanced::widget::Id> {
             return Some(card_id(&target));
         }
     }
-    let location = app.core.overview.focus_return.take()?;
-    let to_link = std::mem::take(&mut app.core.overview.focus_return_link);
+    let micold_client::features::overview::FocusReturn { location, to_link } =
+        app.core.overview.focus_return.take()?;
     let target = focus_return_target(&app.core, &location)?;
     app.core.overview.focus_landed = Some(target.clone());
     let link = to_link && target == location && issue_link_for(&app.core, &target).is_some();
@@ -717,6 +718,46 @@ fn shown_focused_link(app: &App) -> Option<SessionLocation> {
         .focused_link()
         .filter(|_| overview.open)?;
     micold_client::ui::overview::issue_link_for(&app.core, location).map(|_| location.clone())
+}
+
+/// What the link's keyboard hand-offs compare across one update (feature 1122).
+#[derive(Debug, Clone, PartialEq)]
+struct LinkFocus {
+    /// The card whose issue link held the keyboard, while shown ([`shown_focused_link`]).
+    link: Option<SessionLocation>,
+    /// The active project: a switch moves no focus (972; review A F2, M4).
+    project: Option<PathBuf>,
+    /// The expanded card.
+    expanded: Option<SessionLocation>,
+}
+
+impl LinkFocus {
+    fn of(app: &App) -> Self {
+        Self {
+            link: shown_focused_link(app),
+            project: app.core.workspace.active.clone(),
+            expanded: app.core.overview.expansion.expanded().cloned(),
+        }
+    }
+}
+
+/// The control the keyboard moves to after an update, given [`LinkFocus`] before it (feature
+/// 1122): none across a project switch; the card when the update took away the link that held
+/// the keyboard ([`link_focus_handoff`]); the link again when its card changed form under it.
+fn link_focus_after(app: &mut App, before: &LinkFocus) -> Option<iced::advanced::widget::Id> {
+    if app.core.workspace.active != before.project {
+        return None;
+    }
+    if let Some(card) = link_focus_handoff(app, before.link.clone()) {
+        return Some(card);
+    }
+    // The link sits in a different place in the collapsed and the expanded card, so a change of
+    // form rebuilds it without the keyboard (visual pass r1, M4): Shift+Tab onto the previous
+    // card's link expands that card, and Escape on a link collapses its card.
+    let link = shown_focused_link(app)?;
+    let was = before.expanded.as_ref() == Some(&link);
+    let is = app.core.overview.expansion.expanded() == Some(&link);
+    (was != is).then(|| micold_client::ui::overview::card_link_id(&link))
 }
 
 /// The control the keyboard moves to when the update took away the link that held it (feature

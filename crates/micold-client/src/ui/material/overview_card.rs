@@ -2583,6 +2583,40 @@ mod tests {
         m
     }
 
+    /// FR-008 (visual pass r1, M4, criteria 1 and 6): the link sits in a different place in the
+    /// collapsed and the expanded body, so a change of form rebuilds its focus state and the
+    /// keyboard is dropped: the root has to hand it back by the link's id, which shows the ring
+    /// and reports the focus again.
+    #[test]
+    fn a_change_of_form_drops_the_links_focus_and_its_id_takes_it_back() {
+        use iced::advanced::widget::operation::focusable::{self, focus};
+        let card = |expanded: bool| {
+            container(
+                linked(&with_link(Some("feat/1122_x")), expanded)
+                    .on_link_keyboard_focus(|f| format!("link focus {f}")),
+            )
+            .width(Length::Fixed(380.0))
+            .height(Length::Fixed(300.0))
+        };
+        for from in [false, true] {
+            let mut m = Mounted::new_in(card(from), Size::new(380.0, 300.0));
+            m.drive(focus::<()>(iced::advanced::widget::Id::new("link")));
+            assert_eq!(m.redraw(), ["link focus true"], "from expanded {from}");
+            m.element = card(!from).into();
+            m.tree.diff(m.element.as_widget());
+            m.relayout();
+            let count = m.drive(focusable::count()).expect("counted");
+            assert_eq!(
+                count.focused, None,
+                "from expanded {from}: the focus survived"
+            );
+            m.drive(focus::<()>(iced::advanced::widget::Id::new("link")));
+            assert_eq!(m.redraw(), ["link focus true"], "from expanded {from}");
+            let count = m.drive(focusable::count()).expect("counted");
+            assert_eq!(count.focused, Some(1), "from expanded {from}: the link");
+        }
+    }
+
     /// FR-009, R9: the Menu key and Shift+F10 on the focused link publish the link's menu
     /// message, captured, and not the card's; collapsed and expanded.
     #[test]

@@ -173,7 +173,8 @@ fn dismissing_closes_and_arms_focus_return_only_for_a_keyboard_menu() {
         assert_eq!(overview.card_menu, None, "{origin:?}: dismissal closes it");
         assert!(outcomes.is_empty(), "{origin:?}: dismissal runs nothing");
         assert_eq!(
-            overview.focus_return, expected,
+            overview.focus_return.map(|r| r.location),
+            expected,
             "{origin:?}: only a keyboard-opened menu hands focus back to its card (FR-011)"
         );
     }
@@ -194,7 +195,11 @@ fn choosing_an_entry_closes_and_arms_focus_return_only_for_a_keyboard_menu() {
             )))),
         );
         assert_eq!(overview.card_menu, None, "{origin:?}: choosing closes it");
-        assert_eq!(overview.focus_return, expected, "{origin:?}");
+        assert_eq!(
+            overview.focus_return.map(|r| r.location),
+            expected,
+            "{origin:?}"
+        );
     }
 }
 

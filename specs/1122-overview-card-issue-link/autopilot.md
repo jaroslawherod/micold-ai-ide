@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M4
-- **Next step**: M4 T031–T037 done, full gate r2 GREEN on c04408a4; review A r1, review B r1 and the visual pass r1 (T038) requested together (prompts in the scratchpad, 1122-m4-prompt-*-r1.md). Then act on the verdicts, full gate on the final tree, PR text.
+- **Next step**: M4 r1 verdicts acted on (review A F1–F4 fixed; visual criteria 1, 6, 7 fixed: the root hands the keyboard back to the link when its card changes form). Full gate on the final tree, then review A r2 (sonnet, fix diff) and visual pass r2 (criteria 1, 6, 7; regression 2, 4); then PR text.
 
 ## Pull requests
 
@@ -91,9 +91,79 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A M3 | 2 | 41736a28..7103e7a0 (fix commit; r1 snapshot stale after the rebase) | CLEAN (sonnet, fix diff) |
 | Full gate M4 | 1 | 1ccd6669 | RED: clippy (`unused_mut` in an overview_card test, `cloned_ref_to_slice_refs` in a ui/overview test, `type_complexity` in a main_tests table) |
 | Full gate M4 | 2 | c04408a4 | GREEN |
-| Review A M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | requested (with review B r1 and the visual pass r1) |
-| Review B M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | requested |
-| Visual pass M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | requested (T038) |
+| Review A M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | CHANGES: 2 MAJOR (F1 an unchanged `Listed` ends the Tab pairing, F2 link hand-off fires on a project switch), 2 MINOR (F3 blur keeps a held link focused, F4 `focus_return_link` a separate bool); all fixed test-first, none declined (verdict verbatim below) |
+| Review B M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | VERDICT: CLEAN |
+| Visual pass M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | FAIL on criteria 1 (reverse half), 6 and 7 (after-Escape half); 2–5, 8, 9 PASS (verdict verbatim below; evidence visual-pass/m4/). Root cause: the link sits in a different place in the collapsed and expanded body, so a change of form rebuilds its focus state; fixed by the root handing the keyboard back to the link (`link_focus_after`) |
+
+
+### M4 r1 verdicts (verbatim)
+
+<details><summary>Review A M4 r1</summary>
+
+#### 1122 M4 review A r1 (snapshot f2307f9a..c04408a4)
+
+VERDICT: CHANGES
+F1 [MAJOR] crates/micold-client/src/ui/overview.rs:365 (with crates/micold-core/src/overview_expansion.rs:154) — The forward-Tab pairing breaks whenever a card is still expanded after the card's `FocusLost`. `App::update` calls `settle_card_menu` after every outermost update (app.rs:1121). When `expansion.expanded().is_some()`, `settle_card_menu` applies `Event::Listed`. `apply` takes `just_lost` on every event, so `Listed` uses up the one-event snapshot that sits between `FocusLost(A)` and `LinkFocusGained(A)`, and the link's gain then counts as a new focus. Example: Escape collapses focused card A, and the pointer rests on card B, which expands by pointer. Tab from A to its link should keep A collapsed and B expanded (FR-008, K5). Instead A re-expands with `Cause::Focus`, `focus_escaped` is cleared, and B collapses under the pointer. The tests miss this because no card is expanded during their Tab.
+   Evidence: `let watched = expansion.expanded().is_some() || expansion.focused_link().is_some(); … if watched { state.overview.expansion.apply(Event::Listed(listed.clone())); }` and `let just_lost = self.just_lost.take();` at the top of `apply`.
+   Fix: make `Listed` keep `just_lost` (put it back when nothing in the snapshot is gone), or have `settle_card_menu` skip `Listed` when the listing is unchanged. Add a K5 test where B is expanded by pointer: `focus(a)`, `Escape`, `rest(b)`, `FocusLost(a)`, `Listed([a,b])`, `LinkFocusGained(a)`. It should end with B expanded and A escaped.
+F2 [MAJOR] crates/micold-client/src/main.rs:737-741 — `link_focus_handoff` fires on a project switch. If a link holds the keyboard when the project changes, `held_link` is the old project's location. After the update, `focus_return_target` cannot find that card among the new project's cards and returns the new first card, and the hand-off focuses it. No `OpenFocused` precedes that focus (and `ProjectSwitched` reset the expansion), so the first card's `FocusGained` is a new focus and it expands. The 972 card path moves no focus on a switch, and the Overview's own opening expands none (FR-013).
+   Evidence: `let target = focus_return_target(&app.core, &location)?; if target != location { return Some(card_id(&target)); }`. Nothing here checks that the project is still the same.
+   Fix: in `update`, record the active project next to `held_link`. Skip the hand-off when the project changed, or when `held` is not a location of the current project. Add a main_tests case: link focused, then switch project, and no focus task follows.
+F3 [MINOR] crates/micold-core/src/overview_expansion.rs:231-235 — `WindowBlurred` clears `link_held` without applying the deferred loss. This leaves `focused = A`, `focus_part = Link` while the link's menu still holds the keyboard (the blur does not close the menu). `focused_link()` then returns `Some(A)`, so `shown_focused_link` and `link_focus_handoff` treat the link as focused under the open menu. If a choice is then made, the card's gain turns the part into `Both` even though the link never got the keyboard back. A later press elsewhere drops only the card's part, so A stays "focused" and expanded by `Cause::Focus` with nothing holding the keyboard.
+   Evidence: `Event::WindowBlurred => { …; self.link_held = None; self.collapse(); }`, which never calls `lost_plain(held)`.
+   Fix: in `WindowBlurred`, call `if let Some(held) = self.link_held.take() { self.lost_plain(held) }`, or keep `link_held` across the blur. Add a K5 test: `LinkFocusGained(a)`, `MenuOpened`, `LinkFocusLost(a)`, `WindowBlurred`, then `focused_link()` is `None`.
+F4 [MINOR] crates/micold-client/src/features/overview.rs:81 — `focus_return_link` is a separate bool that has to be cleared at the same moment as `focus_return` at four sites. Any future site that clears `focus_return` and forgets the bool leaves a stale `true`, and a later card-menu return then goes to the link.
+   Evidence: `state.focus_return = None; state.focus_return_link = false;` is repeated in ProjectSwitched, twice in `settle_card_menu`, and in the dismiss arm.
+   Fix: fold the two into `focus_return: Option<(SessionLocation, ReturnTo)>`, or a small struct.
+
+</details>
+
+<details><summary>Review B M4 r1</summary>
+
+VERDICT: CLEAN
+
+</details>
+
+<details><summary>Visual pass M4 r1</summary>
+
+#### 1122 M4 visual pass r1 (T038, HEAD 622b9f8e)
+
+VISUAL PASS M4 (T038) r1: FAIL on criteria 1 (reverse half), 6 and 7 (after-Escape half); the rest PASS. 170 PNGs in /home/user/micold-ai-ide/specs/1122-overview-card-issue-link/visual-pass/m4/, named <theme>-<scale>-<phase>-<n>-<what>.png. Client and daemon were built from the worktree at HEAD 622b9f8e (source = c04408a4; later commits are docs). Run on Xvfb :77 with lavapipe and a throwaway HOME and data dir. Pointer parked at the screen corner after opening the Overview. All four theme x scale combos were run for every criterion except where noted.
+
+1. FAIL (forward half PASS; scale 1.0 and 2.0, light and dark)
+   - Forward: Tab onto card 1122 expands it; Tab again puts the ring on the link with the card still expanded; Tab again moves to card 1124, which expands, and 1122 collapses. Files: light-1.0-1-1, 1-2, 1-3. Shift+Tab from the link goes back to its own card, then to Default (light-1.0-1-6, 1-7).
+   - Reverse from a card onto the previous card's link does not work. Shift+Tab from card 1124 expands card 1122 but draws no ring on its link. Return, Space and the Menu key do nothing, and focus is lost. The next Shift+Tab wraps to the last card (`feat_no-ticket`). See light-1.0-1-4 and 1-5, and the same in dark and at 2.0.
+   - The same happens from card 1125 onto link 1124 (checked once, not captured). The card looks expanded but the link is not focused.
+
+2. PASS: the ring sits in the link's gutter, clear of the label, with no underline and no pointer. Zooms: light-1.0-2-ring-zoom.png and light-2.0-2-ring-zoom.png, crisp and aligned at 2.0. Dark checked in dark-1.0-3-2 and dark-2.0-8-4.
+
+3. PASS: on 1125 expanded with its link focused, the ring directly under the title is whole, with its top edge visible. Files: <theme>-<scale>-3-2-tab-link1125-focused-first-row.png, checked in light 1.0 and 2.0 and dark 1.0.
+
+4. PASS: Enter on the link gives xdg-open exactly `https://github.com/o/r/issues/1125`, one call. Space gives one more identical call, and the same for 1122. The Overview stays open, no ripple (frames at +0.12 s) and nothing selected. Files: 4-1 to 4-5. Also holds in full screen (9-2).
+
+5. PASS: from the focused link of 1122, Right and Down go to card 1124 and Left and Up go to Default; none lands on a link. Files: 5-1 to 5-4.
+
+6. FAIL
+   - Escape on the focused link collapses the card, but the ring does not stay on the link; no ring is drawn anywhere (6-1).
+   - Shift+Tab then wraps to the last card (6-2), and Tab does not return to the link (6-3).
+   - Escape with nothing expanded closes the Overview (6-4), which PASSES.
+
+7. FAIL on the after-Escape half; the rest PASS.
+   - Menu key and Shift+F10 on the expanded link open the card menu anchored at the link, first entry "Open" highlighted. Escape closes it and the ring is back on the link with the card still expanded (7-1, 7-2, 7-5, 7-6).
+   - After an Escape-collapse, the Menu key opens nothing because focus is lost (7-3, 7-4).
+
+8. PASS: the card 1124 body scrolls, and Tab onto its link keeps the link in view with its ring. Page Down and Page Up from the link scroll the body like from the card (8-1 to 8-7). The link was already visible before the Tab, so no scroll was needed. At 2.0 the 120-char card is wide, so check dark-2.0-8-* and light-2.0-8-* for overflow.
+
+9. PASS: in full screen, forward Tab, Enter and Menu hold (9-0 to 9-4); the reverse failure is the same as in criterion 1.
+
+Observations:
+- The reverse and Escape failures share one pattern: whenever a card's expansion changes without the user having tabbed forward onto the link, the link loses keyboard focus. The card's layout appears to change when it expands or collapses, which resets the focus state, but I did not trace the code.
+- `feat-1125_first` as a branch does not make the link the first row. The display name derives to "First", shows as its own row, and a worktree name override equal to the directory name is ignored. I used branch `feat/1125_first` with a name override of `feat/1125_first`, so title = branch = name and the link is the first row.
+- At scale 2.0 the grid is a single column and scrolls.
+- Default holds keyboard focus on fresh open.
+- Cleanup: Xvfb, client, daemon, the run directory and temp data are removed.
+
+</details>
 
 ## Declined review findings
 
@@ -105,9 +175,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-- **Done**: M4 T031–T037 (core K5 focus part + menu hold, card `.on_link_menu_key` + page keys on the link, root `KeyboardFromLink` menu / focus return to the link / link→card hand-off, user guide) and the deferred review A M2 F4 gutter fix. Full gate r2 GREEN on c04408a4; pushed (branch at the ledger commit after it). No PR yet.
-- **Next step**: the orchestrator runs review A r1 (session model), review B r1 (sonnet) and the visual pass r1 (T038, sonnet, autopilot-worker) from the scratchpad prompts `1122-m4-prompt-review-a-r1.md`, `1122-m4-prompt-review-b-r1.md`, `1122-m4-prompt-visual-r1.md` (snapshot f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386). A fresh milestone unit acts on the verdicts (review-rounds.md), ticks T038 when the visual pass passes (evidence in visual-pass/m4/), runs the full gate on the final tree if code changed, and writes the PR text (title "#1122: Overview cards: link to the worktree's issue — M4: issue links by keyboard", body per pr.md with `Refs #1122`) to the scratchpad.
-- **Open findings**: none yet.
+None.
 
 ## Open escalation
 

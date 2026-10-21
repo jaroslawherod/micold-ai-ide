@@ -14025,7 +14025,10 @@ fn the_card_focus_return_waits_for_a_dialog_then_follows_the_card_or_the_first()
     use micold_client::features::worktree::Msg as WorktreeMsg;
     let b = SessionLocation::Worktree("feat-b".into());
     let mut app = app_in_overview_with(&["feat-a", "feat-b"]);
-    app.core.overview.focus_return = Some(b.clone());
+    app.core.overview.focus_return = Some(micold_client::features::overview::FocusReturn {
+        location: b.clone(),
+        to_link: false,
+    });
     let _ = update_inner(
         &mut app,
         Message::Worktree(WorktreeMsg::DeleteRequested("feat-b".into())),
@@ -14035,8 +14038,8 @@ fn the_card_focus_return_waits_for_a_dialog_then_follows_the_card_or_the_first()
         "a dialog is up: no focus move"
     );
     assert_eq!(
-        app.core.overview.focus_return,
-        Some(b.clone()),
+        app.core.overview.focus_return.as_ref().map(|r| &r.location),
+        Some(&b),
         "and the return stays armed"
     );
 
@@ -14284,11 +14287,11 @@ fn link_focus_moves_to_card_when_link_goes() {
     for way in ["switch off", "no repository"] {
         let mut app = app_with_links(&["feat-1122_x"]);
         tab_onto_link(&mut app, "feat-1122_x");
-        let held = shown_focused_link(&app);
-        assert_eq!(held, Some(l.clone()), "{way}");
+        let held = LinkFocus::of(&app);
+        assert_eq!(held.link, Some(l.clone()), "{way}");
         remove(&mut app, way);
         assert_eq!(
-            link_focus_handoff(&mut app, held),
+            link_focus_after(&mut app, &held),
             Some(card_id(&l)),
             "{way}"
         );
@@ -14302,8 +14305,8 @@ fn link_focus_moves_to_card_when_link_goes() {
     }
     let mut kept = app_with_links(&["feat-1122_x"]);
     tab_onto_link(&mut kept, "feat-1122_x");
-    let held = shown_focused_link(&kept);
-    assert_eq!(link_focus_handoff(&mut kept, held), None, "the link stays");
+    let held = LinkFocus::of(&kept);
+    assert_eq!(link_focus_after(&mut kept, &held), None, "the link stays");
 }
 
 /// Spec Edge Case *Card goes away*, contract U6: a listing without the card whose link holds
@@ -14315,7 +14318,7 @@ fn link_focus_follows_removed_card() {
     let gone = SessionLocation::Worktree("feat-1122_x".into());
     let mut app = app_with_links(&["feat-7_y", "feat-1122_x"]);
     tab_onto_link(&mut app, "feat-1122_x");
-    let held = shown_focused_link(&app);
+    let held = LinkFocus::of(&app);
     app.core
         .worktree
         .worktrees
@@ -14324,5 +14327,83 @@ fn link_focus_follows_removed_card() {
     assert_eq!(app.core.overview.expansion.focused_link(), None);
     let target = focus_return_target(&app.core, &gone).expect("a card is left");
     assert_ne!(target, gone);
-    assert_eq!(link_focus_handoff(&mut app, held), Some(card_id(&target)));
+    assert_eq!(link_focus_after(&mut app, &held), Some(card_id(&target)));
+}
+
+/// One expansion event through the root's update, returning the control the keyboard is moved
+/// to after it, as `update` does.
+fn expansion_focus_move(
+    app: &mut App,
+    event: micold_core::overview_expansion::Event,
+) -> Option<iced::advanced::widget::Id> {
+    use micold_client::features::overview::Msg;
+    let before = LinkFocus::of(app);
+    let _ = update_inner(app, Message::Overview(Msg::Expansion(event)));
+    link_focus_after(app, &before)
+}
+
+/// Review A F2 (M4): a project switch with a link holding the keyboard moves no focus: the
+/// first card of the new project is not focused (and so not expanded, FR-013).
+#[test]
+fn a_project_switch_moves_no_focus_from_a_link() {
+    use micold_client::features::overview::Msg;
+    let mut app = app_with_links(&["feat-1122_x"]);
+    tab_onto_link(&mut app, "feat-1122_x");
+    let before = LinkFocus::of(&app);
+    assert!(
+        before.link.is_some(),
+        "fixture: the link holds the keyboard"
+    );
+    app.core.workspace.active = Some(PathBuf::from("/other"));
+    let _ = update_inner(&mut app, Message::Overview(Msg::ProjectSwitched));
+    assert_eq!(link_focus_after(&mut app, &before), None);
+}
+
+/// FR-008 (visual pass r1, M4, criterion 1): Shift+Tab from card N+1 onto card N's link expands
+/// card N, which rebuilds the link: the root hands the keyboard back to the link. The loss of
+/// card N+1 that follows moves nothing.
+#[test]
+fn shift_tab_onto_the_previous_cards_link_keeps_the_keyboard_on_it() {
+    use micold_client::ui::overview::card_link_id;
+    use micold_core::overview_expansion::Event;
+    let (a, b) = (
+        SessionLocation::Worktree("feat-1122_x".into()),
+        SessionLocation::Worktree("feat-1124_y".into()),
+    );
+    let mut app = app_with_links(&["feat-1122_x", "feat-1124_y"]);
+    let _ = expansion_focus_move(&mut app, Event::FocusGained(b.clone()));
+    assert_eq!(app.core.overview.expansion.expanded(), Some(&b), "fixture");
+    assert_eq!(
+        expansion_focus_move(&mut app, Event::LinkFocusGained(a.clone())),
+        Some(card_link_id(&a))
+    );
+    assert_eq!(app.core.overview.expansion.expanded(), Some(&a));
+    assert_eq!(expansion_focus_move(&mut app, Event::FocusLost(b)), None);
+    assert_eq!(app.core.overview.expansion.focused_link(), Some(&a));
+}
+
+/// FR-008 (visual pass r1, M4, criteria 6 and 7): Escape on the focused link collapses its card,
+/// which rebuilds the link: the root hands the keyboard back to it, so Tab, Shift+Tab and the
+/// Menu key go on from the link.
+#[test]
+fn escape_on_the_link_keeps_the_keyboard_on_it() {
+    use micold_client::ui::overview::card_link_id;
+    use micold_core::overview_expansion::Event;
+    let a = SessionLocation::Worktree("feat-1122_x".into());
+    let mut app = app_with_links(&["feat-1122_x"]);
+    tab_onto_link(&mut app, "feat-1122_x");
+    assert_eq!(app.core.overview.expansion.expanded(), Some(&a), "fixture");
+    assert_eq!(
+        expansion_focus_move(&mut app, Event::Escape),
+        Some(card_link_id(&a))
+    );
+    let expansion = &app.core.overview.expansion;
+    assert_eq!(expansion.expanded(), None);
+    assert_eq!(expansion.focused_link(), Some(&a));
+    // The hand-back's own report changes nothing.
+    assert_eq!(
+        expansion_focus_move(&mut app, Event::LinkFocusGained(a)),
+        None
+    );
+    assert_eq!(app.core.overview.expansion.expanded(), None);
 }
