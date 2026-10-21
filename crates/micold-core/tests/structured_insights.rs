@@ -13,11 +13,11 @@ use std::collections::HashMap;
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
-use stream_json::{events_of, lines_of, tool_use, user_text, with_parent, RECORDED, RECORDED_944};
+use stream_json::{events_of, lines_of, tool_use, user_text, with_parent, RECORDED};
 
 /// Every fixture recorded from a real `claude`.
 fn recorded() -> impl Iterator<Item = &'static str> {
-    RECORDED.into_iter().chain(RECORDED_944)
+    RECORDED.into_iter()
 }
 
 /// Insights built from `events` in one history message after `omitted` earlier events.

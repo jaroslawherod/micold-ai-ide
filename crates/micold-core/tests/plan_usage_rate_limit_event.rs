@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
-use stream_json::{lines_of, RECORDED, RECORDED_944};
+use stream_json::{lines_of, RECORDED};
 
 /// Before every reset time the recorded events carry (2026-10-18 05:06 UTC).
 const OBTAINED: i64 = 1_792_300_000;
@@ -39,7 +39,7 @@ fn rate_limit_lines(name: &str) -> Vec<String> {
 
 #[test]
 fn every_recorded_event_parses_to_its_two_windows() {
-    for name in RECORDED.into_iter().chain(RECORDED_944) {
+    for name in RECORDED {
         let lines = rate_limit_lines(name);
         assert!(!lines.is_empty(), "{name} records a plan-limit event");
         for line in lines {

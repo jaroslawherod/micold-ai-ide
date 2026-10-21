@@ -696,8 +696,17 @@ fn replaying_a_recorded_fixture_one_event_at_a_time_changes_only_the_streamed_en
             .entries()
             .map(|e| settled(e.kind()))
             .collect();
+        // A raw row that arrives while a block streams sits after that block's entry, which
+        // opened at its first delta, but before it when only the finished message is held
+        // (the 944 recordings' `thinking_tokens`): the conversation and the raw rows are each
+        // identical, in order; only how the two interleave may differ.
+        let is_raw = |k: &EntryKind| matches!(k, EntryKind::Raw { .. });
+        let split = |all: &[EntryKind]| -> (Vec<EntryKind>, Vec<EntryKind>) {
+            all.iter().cloned().partition(|k| !is_raw(k))
+        };
         assert_eq!(
-            streamed, finished,
+            split(&streamed),
+            split(&finished),
             "{name}: SC-002, no text duplicated or lost"
         );
         assert!(
@@ -714,6 +723,31 @@ fn replaying_a_recorded_fixture_one_event_at_a_time_changes_only_the_streamed_en
                 .map(|(key, _, kind)| (key, kind))
                 .collect::<Vec<_>>(),
             "{name}: one event at a time builds what one message builds"
+        );
+    }
+}
+
+/// The recordings in which no unmodelled event arrives while a block streams: #938's five.
+const NO_RAW_MID_STREAM: [&str; 5] = [
+    "text-turn",
+    "tool-turn",
+    "partial-deltas",
+    "error-result",
+    "resume-init",
+];
+
+#[test]
+fn a_recording_with_no_raw_row_mid_stream_streams_into_its_turn_without_deltas_exactly() {
+    // SC-002 (the partial-message fixture among them): with no raw row arriving mid-stream, even
+    // the order of every entry is the same.
+    let settled_kinds = |transcript: Transcript| -> Vec<EntryKind> {
+        transcript.entries().map(|e| settled(e.kind())).collect()
+    };
+    for name in NO_RAW_MID_STREAM {
+        assert_eq!(
+            settled_kinds(built(&events_of(&lines_of(name)))),
+            settled_kinds(built(&finished_events_of(name))),
+            "{name}: SC-002, the streamed turn is the finished turn, entry for entry"
         );
     }
 }
@@ -1041,6 +1075,22 @@ fn a_sub_agents_deltas_are_absorbed_not_counted() {
 }
 
 /// Whether an entry was opened by the event `seq`.
+/// The parent tool use a sub-agent's event names (FR-024).
+fn subagent_parent(event: &StructuredEvent) -> Option<&str> {
+    match event {
+        StructuredEvent::Assistant {
+            parent_tool_use_id, ..
+        }
+        | StructuredEvent::User {
+            parent_tool_use_id, ..
+        }
+        | StructuredEvent::StreamDelta {
+            parent_tool_use_id, ..
+        } => parent_tool_use_id.as_deref(),
+        _ => None,
+    }
+}
+
 fn opened_by(transcript: &Transcript, seq: u64) -> bool {
     transcript.entries().any(|e| e.opened_at() == seq)
 }
@@ -1059,8 +1109,25 @@ fn every_event_of_every_recorded_fixture_is_accounted_for() {
         let transcript = built(&events);
         let all = kinds(&transcript);
         let mut uses = HashSet::new();
+        let mut subagent_messages = 0;
         for SequencedEvent { seq, event } in &events {
             let at = format!("{name} seq {seq}");
+            if let Some(parent) = subagent_parent(event) {
+                // FR-024: a sub-agent's event opens no entry of its own; its messages are
+                // counted on the card it names, or on the one notice when none is held.
+                assert!(
+                    transcript.entries().all(|e| e.opened_at() != *seq
+                        || matches!(e.kind(), EntryKind::SubagentNotice { .. })),
+                    "{at}: a sub-agent event of {parent} is not shown"
+                );
+                if matches!(
+                    event,
+                    StructuredEvent::Assistant { .. } | StructuredEvent::User { .. }
+                ) {
+                    subagent_messages += 1;
+                }
+                continue;
+            }
             match event {
                 StructuredEvent::StreamDelta {
                     event_type, delta, ..
@@ -1068,13 +1135,21 @@ fn every_event_of_every_recorded_fixture_is_accounted_for() {
                     "content_block_start" => {
                         assert!(opened_by(&transcript, *seq), "{at}: its streamed entry");
                     }
-                    "content_block_delta" => assert!(
-                        delta.as_ref().is_some_and(|d| !matches!(
-                            d,
-                            micold_core::structured::Delta::Other { .. }
-                        )),
-                        "{at}: a typed delta, grown into its entry"
-                    ),
+                    "content_block_delta" => match delta {
+                        // A thinking block's signature carries no text: absorbed.
+                        Some(micold_core::structured::Delta::Other { raw })
+                            if raw.contains("\"signature_delta\"") =>
+                        {
+                            assert!(!opened_by(&transcript, *seq), "{at}: a signature, absorbed")
+                        }
+                        Some(micold_core::structured::Delta::Other { .. }) | None => {
+                            assert!(opened_by(&transcript, *seq), "{at}: a raw row")
+                        }
+                        Some(_) => assert!(
+                            !opened_by(&transcript, *seq),
+                            "{at}: a typed delta, grown into its entry"
+                        ),
+                    },
                     other => assert!(
                         ABSORBED.contains(&other) || opened_by(&transcript, *seq),
                         "{at}: {other} absorbed or a raw row"
@@ -1127,6 +1202,18 @@ fn every_event_of_every_recorded_fixture_is_accounted_for() {
             .filter(|k| matches!(k, EntryKind::ToolCall(_)))
             .count();
         assert_eq!(cards, uses.len(), "{name}: one card per tool use");
+        let counted: u64 = all
+            .iter()
+            .map(|k| match k {
+                EntryKind::ToolCall(card) => card.subagent_messages,
+                EntryKind::SubagentNotice { count } => *count,
+                _ => 0,
+            })
+            .sum();
+        assert_eq!(
+            counted, subagent_messages,
+            "{name}: every sub-agent message counted once (FR-024)"
+        );
     }
 }
 
