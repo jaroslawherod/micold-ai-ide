@@ -562,8 +562,7 @@ pub fn transcript_pane_rich() -> State {
         .transcript(id)
         .and_then(|t| {
             t.entries()
-                .filter(|e| matches!(e.kind(), EntryKind::ToolCall(c) if c.name == "Edit"))
-                .last()
+                .rfind(|e| matches!(e.kind(), EntryKind::ToolCall(c) if c.name == "Edit"))
                 .map(|e| e.key().clone())
         })
         .expect("the edit turn holds an Edit card");

@@ -288,6 +288,11 @@ fn sessions_and_windows_share_nothing() {
         1,
         "so does another window"
     );
+    assert_eq!(
+        text_doc(&cache, a, &key),
+        text_doc(&other_window, a, &key),
+        "two windows on one session draw the same formatting"
+    );
     let code = text_doc(&cache, a, &key).code_blocks().next().unwrap().0;
     cache.copy(a, &key, code).expect("copies");
     assert!(cache.get(b, &key).unwrap().copy.is_empty());
