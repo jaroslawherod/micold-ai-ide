@@ -76,7 +76,24 @@ permission or asks the user a question must run unchanged in a structured sessio
 
 ## Clarifications
 
-_None yet. Open questions are marked in the requirements._
+### Session 2026-10-21
+
+- Q: Can a running structured session's permission mode be changed, or only chosen at creation? →
+  A: Any time. The change reaches the running CLI through a stream-json control request, takes
+  effect for the next tool request, and needs no restart; choosing Bypass still needs its
+  confirmation. _(decided by user)_
+- Q: Where does Always allow put its rule: this session only, or the location's Claude settings? →
+  A: This session only (the CLI's `session` destination). Nothing is written to the user's Claude
+  settings files; later sessions, terminal ones included, do not inherit the rule. _(decided by
+  user)_
+- Q: Does a mode change affect a request already pending? → A: No. It applies from the next tool
+  request; a pending request stays pending and is answered as it is. _(agent-resolved: this spec
+  FR-017 "for the next tool request", FR-003)_
+- Q: What does a mode change do to a session that is not running? → A: It is saved and used at the
+  next launch, like a mode chosen at creation. _(agent-resolved: this spec FR-015)_
+- Q: Which rule does Always allow return when the CLI sent no suggestions? → A: Deferred to the
+  plan (research on the recorded fixtures, FR-020); the rule stays session-scoped either way.
+  _(agent-resolved: deferral to plan)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -140,9 +157,9 @@ the CLI is launched in that mode, the mode is shown to clients and survives a re
    restarts and resumes it, **Then** it runs in the same mode.
 4. **Given** the user chooses Bypass, **When** they confirm the choice, **Then** the session runs
    without asking for any tool use, and its view says so plainly.
-5. **Given** a running session, **When** the user changes its mode, **Then**
-   [NEEDS CLARIFICATION: can the mode be changed while a session runs (taking effect at once, for
-   the next tool request), or only chosen when the session is created?].
+5. **Given** a running session, **When** the user changes its mode (confirming, for Bypass),
+   **Then** the CLI uses the new mode from its next tool request on, without a restart and with the
+   conversation kept, and every client shows the new mode.
 
 ---
 
@@ -323,9 +340,9 @@ client is told the request is withdrawn and an answer sent afterwards is refused
   - **Allow** returns allow with the original input unchanged.
   - **Deny** returns deny with the user's message, or a standard message when none was given.
   - **Always allow** returns allow and a permission rule for the request, taken from the
-    suggestions the CLI sent with it when it sent any, scoped
-    [NEEDS CLARIFICATION: to this session only, or written to the location's Claude settings so
-    that later sessions, terminal ones included, inherit it?].
+    suggestions the CLI sent with it when it sent any, scoped to this session only (the CLI's
+    `session` destination). The daemon MUST NOT write the rule to any Claude settings file, so
+    later sessions, terminal ones included, do not inherit it.
   - A plan approval's **Approve and accept edits** and **Approve** return allow and set the
     session's mode to Accept edits and Default respectively, whatever mode the session had before
     Plan; **Keep planning** returns deny with the
@@ -350,17 +367,21 @@ client is told the request is withdrawn and an answer sent afterwards is refused
   in the session's view, and used on every launch of it (restart, resume, daemon restart).
 - **FR-016**: The mode MUST follow what Claude reports: when a plan approval is approved (FR-010)
   or the CLI reports a mode change in its events, the shown and persisted mode MUST change to it.
-- **FR-017**: Changing the mode of a running session: governed by the answer to user story 2's
-  clarification; if it is allowed, the change MUST take effect for the next tool request without
-  restarting the CLI and without losing the conversation.
+- **FR-017**: A user MUST be able to change a structured session's mode at any time from the
+  session's view, choosing Bypass only after the FR-014 confirmation. For a running session the
+  daemon MUST pass the change to the CLI as a stream-json control request, so that it takes effect
+  for the next tool request without restarting the CLI and without losing the conversation; a
+  request already pending is unaffected. The new mode MUST then be persisted and shown as FR-015
+  says; for a session that is not running it is used at its next launch. A change the CLI refuses
+  MUST leave the shown and persisted mode unchanged and tell the user why.
 
 **Scope, tests and docs**
 
 - **FR-018**: Terminal sessions MUST be unchanged: no change to how they raise permission requests, no permission-mode override, and
   every existing terminal-session test passes unchanged.
 - **FR-019**: Request handling, decisions of every kind, first-decision-wins across two clients,
-  withdrawal on stop, process end and interrupt, attach with a request pending, and the mode at
-  launch MUST be covered by integration tests that run the daemon against the stand-in CLI
+  withdrawal on stop, process end and interrupt, attach with a request pending, the mode at
+  launch and a mode change while running MUST be covered by integration tests that run the daemon against the stand-in CLI
   (feature 938 FR-025) extended to make prompt-tool calls, so no real CLI, network or account is
   needed in CI.
 - **FR-020**: The request shapes the parser and the decision shapes the daemon returns MUST be
@@ -399,7 +420,8 @@ client is told the request is withdrawn and an answer sent afterwards is refused
   multi-question) are classified as their kind, and each decision the daemon returns for them
   matches the decision recorded from the real CLI in the same fixture.
 - **SC-005**: A structured session launched in each of the four modes runs in that mode, and keeps
-  it after a restart and a daemon restart, in 100% of test runs.
+  it after a restart and a daemon restart, in 100% of test runs. A mode changed while the session runs is the mode of its next tool request, in 100% of
+  test runs.
 - **SC-006**: A user can answer a tool request, a plan approval and a two-question request in the
   window without leaving the session's view, each in at most three clicks or key presses beyond
   choosing the answers (counted in the quickstart walk-through).
