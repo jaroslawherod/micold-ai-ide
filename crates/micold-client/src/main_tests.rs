@@ -13989,3 +13989,80 @@ fn reduce_motion_is_applied_by_save_and_discarded_by_cancel() {
         "and writes it"
     );
 }
+
+/// T021 (feature 939, research R9): the shell routes a structured session's events to its
+/// transcript beside the plain log, performs the transcript view's scroll requests, and drops the
+/// transcript with the session.
+mod structured_transcript {
+    use super::*;
+    use micold_client::features::structured_transcript::{Follow, TranscriptMsg};
+    use micold_core::structured::{SequencedEvent, StructuredEvent};
+
+    fn with_events() -> (App, SessionId) {
+        let mut app = base_app();
+        let _ = connect(&mut app, snapshot_with("/repo/demo", Vec::new()));
+        let session = SessionId::new();
+        let _ = update_inner(
+            &mut app,
+            Message::Connection(ConnectionMsg::Event(DaemonMsg::StructuredEvents {
+                session,
+                omitted: 0,
+                events: vec![SequencedEvent {
+                    seq: 0,
+                    event: StructuredEvent::Unreadable { text: "hi".into() },
+                }],
+                live: false,
+            })),
+        );
+        (app, session)
+    }
+
+    fn send(app: &mut App, msg: TranscriptMsg) -> usize {
+        update_inner(app, Message::Session(SessionMsg::Transcript(msg))).units()
+    }
+
+    #[test]
+    fn structured_events_reach_the_transcript_and_the_plain_log() {
+        let (app, s) = with_events();
+        let transcript = app.core.structured_transcript.transcript(s);
+        assert_eq!(transcript.map(|t| t.entries().len()), Some(1));
+        assert_eq!(app.core.structured_log.rows(s).count(), 1);
+    }
+
+    #[test]
+    fn the_view_messages_scroll_only_when_following_needs_it() {
+        let (mut app, session) = with_events();
+        let scrolled = |offset| TranscriptMsg::Scrolled {
+            session,
+            offset,
+            viewport: 200,
+            content: 1000,
+        };
+        assert!(
+            send(&mut app, TranscriptMsg::Shown { session }) > 0,
+            "snap to the end"
+        );
+        assert_eq!(send(&mut app, scrolled(10)), 0, "detaching moves nothing");
+        assert_eq!(
+            app.core.structured_transcript.follow(session),
+            Follow::Detached { offset: 10 }
+        );
+        assert!(
+            send(&mut app, TranscriptMsg::Shown { session }) > 0,
+            "back to the offset"
+        );
+        assert!(
+            send(&mut app, scrolled(800)) > 0,
+            "resumed: snap to the end"
+        );
+        assert!(send(&mut app, TranscriptMsg::JumpToLatest { session }) > 0);
+    }
+
+    #[test]
+    fn closing_a_session_drops_its_transcript_and_log() {
+        let (mut app, s) = with_events();
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::CloseRequested(s)));
+        assert!(app.core.structured_transcript.transcript(s).is_none());
+        assert_eq!(app.core.structured_log.rows(s).count(), 0);
+    }
+}

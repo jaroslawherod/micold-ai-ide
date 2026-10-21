@@ -353,6 +353,9 @@ pub struct State {
     /// The structured sessions' read-only logs (feature 938) -- see
     /// [`crate::features::structured_log::State`].
     pub structured_log: crate::features::structured_log::State,
+    /// The structured sessions' transcripts and their view state (feature 939) -- see
+    /// [`crate::features::structured_transcript::State`].
+    pub structured_transcript: crate::features::structured_transcript::State,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
@@ -900,6 +903,35 @@ impl State {
         crate::features::changes::update(&mut self.changes, msg)
     }
 
+    /// Take one `StructuredEvents` message for `session` (feature 938 wire.md): its events reach
+    /// both the plain log and the transcript (feature 939).
+    pub fn structured_events(
+        &mut self,
+        session: micold_core::session::SessionId,
+        omitted: u64,
+        events: &[micold_core::structured::SequencedEvent],
+        live: bool,
+    ) {
+        self.structured_log.apply(session, omitted, events, live);
+        self.structured_transcript
+            .apply(session, omitted, events, live);
+    }
+
+    /// Forget a closed or removed session's log and transcript.
+    pub fn forget_structured(&mut self, session: micold_core::session::SessionId) {
+        self.structured_log.forget(session);
+        self.structured_transcript.forget(session);
+    }
+
+    /// Apply a message of the transcript view and hand back the scroll it asks for, which only
+    /// the shell can perform (feature 939, research R9).
+    pub fn update_transcript(
+        &mut self,
+        msg: crate::features::structured_transcript::TranscriptMsg,
+    ) -> Option<crate::features::structured_transcript::Scroll> {
+        self.structured_transcript.update(msg)
+    }
+
     /// The read an outcome started while the root interpreted it (opening the view from the
     /// sidebar), taken once by the shell right after the message that caused it.
     pub fn take_changes_effect(&mut self) -> Option<crate::features::changes::Effect> {
@@ -1037,6 +1069,11 @@ impl State {
             Message::Sidebar(msg) => {
                 let outcomes = crate::features::sidebar::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
+            }
+            // Feature 939: the transcript view's messages are the transcript feature's; the
+            // scroll they ask for is the shell's (`shell/transcript.rs`), so here it is dropped.
+            Message::Session(crate::features::session::Msg::Transcript(msg)) => {
+                let _ = self.update_transcript(msg);
             }
             Message::Session(msg) => {
                 let outcomes = crate::features::session::update(self, msg);

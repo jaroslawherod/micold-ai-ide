@@ -239,7 +239,7 @@ wire beside the plain log.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T020 [US2] Reducer tests in `crates/micold-client/tests/features_structured_transcript.rs`
+- [X] T020 [US2] Reducer tests in `crates/micold-client/tests/features_structured_transcript.rs`
   for data-model.md *View state*: `apply` then `transcript(session)` holds the entries; every card
   starts folded and `toggle` opens and folds it (FR-010); an open card stays open across new events
   and a session switch, and after a rebuild only keys still present stay open (FR-013, FR-021);
@@ -247,7 +247,7 @@ wire beside the plain log.
   `Detached { offset }` and `FollowChange::Detached`, back within `END_SLACK = 4` px of the end →
   `Following` and `FollowChange::Resumed` (SC-003, FR-017); `jump_to_latest` → `Following`; two
   sessions share no entries, fold or follow state (FR-019); `forget` drops a session
-- [ ] T021 [US3] Shell tests in `crates/micold-client/tests/features_structured_transcript.rs`
+- [X] T021 [US3] Shell tests in `crates/micold-client/tests/features_structured_transcript.rs`
   (after T020, same file) driving the app's update: a `DaemonMsg::StructuredEvents` reaches the
   session's transcript (and still the plain log); `TranscriptMsg::Toggle` toggles;
   `TranscriptMsg::Scrolled` updates follow; `JumpToLatest`, a `Resumed` change and `Shown` while
@@ -257,12 +257,12 @@ wire beside the plain log.
 
 ### Implementation
 
-- [ ] T022 [US2] Implement `crates/micold-client/src/features/structured_transcript.rs`
+- [X] T022 [US2] Implement `crates/micold-client/src/features/structured_transcript.rs`
   (render-free, as `features/structured_log.rs`): `State { sessions: HashMap<SessionId,
   SessionTranscript> }`, `SessionTranscript { transcript, open: HashSet<EntryKey>, follow }`,
   `Follow::{Following, Detached { offset: u32 }}`, `END_SLACK`, `FollowChange`, and the operations
   of data-model.md; register it in `crates/micold-client/src/features/mod.rs`; T020 passes
-- [ ] T023 [US3] Wire it: `State.structured_transcript` in `crates/micold-client/src/app.rs`
+- [X] T023 [US3] Wire it: `State.structured_transcript` in `crates/micold-client/src/app.rs`
   beside `structured_log`; `crates/micold-client/src/shell/daemon_sync.rs` applies each
   `StructuredEvents` message to both and its two forget paths forget both; `TranscriptMsg`
   (data-model.md *Messages*) in the session message family with its handling and the

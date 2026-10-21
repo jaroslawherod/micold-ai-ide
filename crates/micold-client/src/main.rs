@@ -1060,6 +1060,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(SessionMsg::CloseRequested(id)) => {
             shell::daemon_sync::on_session_close_requested(app, id)
         }
+        // Feature 939 (R9): the transcript view's messages, and the scroll they ask for.
+        Message::Session(SessionMsg::Transcript(msg)) => shell::transcript::update(app, msg),
         // Feature 776 (FR-016): the confirmed request goes on the wire as an explicit additional
         // session; the created one is selected by the reply as any created session is.
         Message::Session(SessionMsg::AdditionalConfirmed) => {
