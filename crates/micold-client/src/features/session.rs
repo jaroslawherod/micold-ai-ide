@@ -1647,6 +1647,10 @@ pub enum Msg {
     /// a scroll report, jump to latest, or the view shown. Routed by the root to
     /// [`crate::features::structured_transcript`], never to this reducer.
     Transcript(crate::features::structured_transcript::TranscriptMsg),
+    /// A subagent thread or the background-task list of a structured session was folded or
+    /// unfolded (feature 944). Routed by the root to [`crate::features::structured_insights`],
+    /// never to this reducer.
+    Insights(crate::features::structured_insights::InsightsMsg),
     /// Start a new session at the given location — a worktree or, as of feature 010, the
     /// project root ("Default", FR-001) — (FR-010). The binary spawns the named AI CLI.
     StartRequested {
@@ -2163,7 +2167,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::LinkOpenDeclined => link_open_declined(state),
         Msg::LinkOpenFinished { address, result } => link_open_finished(state, &address, result),
         // The root routes these to the transcript feature before this reducer (`app::State::update`).
-        Msg::Transcript(_) => {}
+        Msg::Transcript(_) | Msg::Insights(_) => {}
     }
     Vec::new()
 }

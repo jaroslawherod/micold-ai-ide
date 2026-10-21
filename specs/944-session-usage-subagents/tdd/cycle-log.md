@@ -140,3 +140,23 @@ Each test was written and run red before its implementation, recorded here as it
   **Green**: the tick is split at the fill's edge, track colour over the fill and fill colour over
   the track → `--lib -- ui::material::progress_bar` 6/6. F4: `without_a_marker_or_warning…` now
   also pins the fill to columns 0..120 instead of comparing two new renders only.
+
+## M5 — the window's insights state (T034–T036)
+
+- **Red, T034/T036** (`features::structured_insights` stubbed: `apply` only inserts an empty
+  `SessionInsights`, every reader returns `None`/`false`/`0`, toggles and `forget` do nothing;
+  `InsightsMsg`, `Msg::Insights`, `State.structured_insights` and the routing in place):
+  `cargo test -p micold-client --test features_structured_insights` → 1 passed, 18 failed, e.g.
+  `the_insights_are_the_cores_for_every_recording` ("text-turn": an empty `SessionInsights` against
+  the core's), `a_thread_starts_folded_and_toggle_opens_it_as_its_nested_transcript` ("the thread
+  is open"), `a_turns_figures_are_found_by_its_footers_key` ("the turn's figures"),
+  `a_thread_without_a_running_cli_shows_as_ended` (`None.unwrap()`),
+  `forgetting_a_structured_session_drops_it_from_both_features`. The one pass,
+  `a_thread_that_is_not_held_does_not_open`, holds on any stub that opens nothing.
+- **Green, T035**: `apply` folds the core insights and keeps open threads with the main transcript
+  (rebuilt from `subagent_events` when `rebuilds()`/`omitted_notice()` changed, else appended to);
+  `toggle_thread` opens only a thread the insights hold; `thread_view`/`running_background` take
+  `cli_running` → `features_structured_insights` 19/19, `features_are_render_free` 2/2,
+  `features_structured_transcript` 19/19. The shell's routing test (`main_tests.rs` mod
+  `structured_transcript`) extended: the same message reaches the insights, closing the session
+  drops both, an `InsightsMsg` folds without a scroll task.

@@ -14572,6 +14572,26 @@ mod structured_transcript {
             Some(1),
             "a structured events message lands in the session's transcript as one entry"
         );
+        // Feature 944 T036: the insights take the same message after the transcript.
+        assert_eq!(
+            app.core.structured_insights.insights(s).map(|i| i.held()),
+            Some(1),
+            "the same message reaches the session's insights"
+        );
+    }
+
+    /// Feature 944 T036: the shell hands the insights' fold messages to the feature.
+    #[test]
+    fn the_insights_messages_fold_without_scrolling() {
+        use micold_client::features::structured_insights::InsightsMsg;
+        let (mut app, session) = with_events();
+        let msg = InsightsMsg::ToggleBackgroundTasks { session };
+        let tasks = update_inner(&mut app, Message::Session(SessionMsg::Insights(msg))).units();
+        assert_eq!(tasks, 0, "a fold scrolls nothing");
+        assert!(
+            app.core.structured_insights.tasks_open(session),
+            "the background-task list unfolded"
+        );
     }
 
     #[test]
@@ -14614,6 +14634,10 @@ mod structured_transcript {
         assert!(
             app.core.structured_transcript.transcript(s).is_none(),
             "closing a session drops its transcript"
+        );
+        assert!(
+            app.core.structured_insights.insights(s).is_none(),
+            "closing a session drops its insights (feature 944)"
         );
     }
 }

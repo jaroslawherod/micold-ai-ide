@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: pr M4
-- **Next step**: M4 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI
+- **Phase**: implement M5
+- **Next step**: M5 verify — scoped gate, review A, review B, full gate, PR files
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1199 | M1 — core insights | merged (rebase) | 558cb726092ef4b32a536179ccbe0a0f575c1135 |
 | #1202 | M2 — structured sessions feed plan usage | merged (rebase) | cdbd2c7badf911b6d8ff6b5d93bb8bd75941efb4 |
 | #1205 | M3 — task table and subagent thread index | merged (rebase) | 46f4bdabc5a4316f2a192dffd12f679039c7a96e |
+| #1211 | M4 — meter parts and icons | merged (rebase) | 9160cab121845e7ebee2514f569e93ff21b111c1 |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | #1199 | merged |
 | M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | #1202 | merged |
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | #1205 | merged |
-| M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | PR files written, gate green at 39b563b5 |
-| M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | blocked on **#939 M3** (and M3) |
+| M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | #1211 | merged |
+| M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | implemented; verify |
 | M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | blocked on **#939 M4, M5, M6** (and M4, M5) |
 
 ## Decisions
@@ -52,6 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D14 | implement M2 | The daemon test's reset times | `text-turn.jsonl`'s 5-hour reset (2026-10-18) is already past, so `plan_usage_structured.rs` replays a copy with both reset times moved to after the test's clock; utilizations, keys and every other byte unchanged | agent | `date -u -d @1792363200` |
 | D15 | implement M3 | Points data-model.md leaves open in the task table and thread index | (a) A terminal state changes only by a later `task_started` (data-model): a report after `EndedWithoutReport` still sets the outcome, not the state. (b) `threads_owned_by` takes the main `Transcript` too (`Main`/`Unknown` need it); data-model operations line updated. (c) `thread_view` with no subagent task and no card status → `Running` (as a card with no result), the client's `cli_running` overlay ends it. (d) `task_label` joins the outcome as `"<State> · <outcome>"`. (e) A tool call id already held by a thread is not counted again | agent | data-model.md *TaskTable*, *ThreadIndex*; tasks.md T025 |
 | D16 | verify M3 | Which `init` means the CLI restarted (FR-022)? | The CLI writes an `init` at the start of every turn of one process; 2.1.306 adds `startup_timing` only to a process's first. Only that one ends running tasks; contract, data-model and research R6 updated. Also: a report after an inferred `EndedWithoutReport` sets the reported state (data-model transitions), and `running_background` takes `cli_running` | agent | `background-command.jsonl` / `background-subagent.jsonl`: two inits each, `startup_timing` on the first only; every other recording's single init has it; review A M3 F1, F3, F4 |
+| D17 | implement M5 | #939's real seam differs from plan R10 / T036 | (a) #939 routes `StructuredEvents` in `app::State::structured_events` (called by `shell/daemon_sync.rs`), not in daemon_sync itself; the insights are applied there right after the transcript, and `forget_structured` drops both, so #939's two forget paths (close, remove) cover it. (b) #939's shell routing test lives in `main_tests.rs` mod `structured_transcript`; T036 extends it there. (c) `InsightsMsg` is `session::Msg::Insights`, routed by the root (`app.rs`) and the shell (`main.rs`) to `App::update_insights`, which passes the session's main transcript (an empty one if none). (d) Beyond data-model's operations: `insights`, `turn(session, &EntryKey)`, `tasks_open`, `thread_view(.., cli_running)` (Running → EndedWithoutResult, D15c) and `running_background(.., cli_running)`. (e) Open threads not rebuilt are appended to as live, so a history split over several messages keeps them whole. No user-visible change | agent | `app.rs` `structured_events`; `main_tests.rs` `mod structured_transcript` |
 
 ## Review rounds
 
