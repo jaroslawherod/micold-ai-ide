@@ -9,18 +9,14 @@ use micold_core::structured::{
 };
 use serde_json::{json, Value};
 
-/// The fixtures recorded from a real `claude` (`tests/fixtures/stream-json/README.md`).
-pub const RECORDED: [&str; 5] = [
+/// The fixtures recorded from a real `claude` (`tests/fixtures/stream-json/README.md`); the last
+/// four are feature 944's, with sub-agents and background tasks (944 research R11).
+pub const RECORDED: [&str; 9] = [
     "text-turn",
     "tool-turn",
     "partial-deltas",
     "error-result",
     "resume-init",
-];
-
-/// The fixtures feature 944 recorded with subagents and background tasks (research R11). Kept
-/// apart from [`RECORDED`]: #939's transcript guarantees are stated over its own five.
-pub const RECORDED_944: [&str; 4] = [
     "subagent-turn",
     "nested-subagent",
     "background-command",

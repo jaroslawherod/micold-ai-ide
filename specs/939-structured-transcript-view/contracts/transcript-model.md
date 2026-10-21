@@ -49,7 +49,11 @@ events are ignored. "No parent" in the rules below reads "top-level" under eithe
   absorption or a count; every tool use is one card holding its result.
 - **G2 Streaming (SC-002)**: replaying a fixture one event at a time, after each event every entry
   before the streamed one is equal (key, revision, content) to before; the final entries equal those
-  built from the same fixture with its `StreamDelta` lines removed, `streaming` flags aside.
+  built from the same fixture with its `StreamDelta` lines removed, `streaming` flags aside. Where
+  an unmodelled event arrives while a block streams (#944's recordings: `thinking_tokens` inside a
+  thinking block), its raw row follows the streamed entry, which opened at its first partial event,
+  but precedes the finished one: there the conversation entries and the raw rows are each equal in
+  order, and only how they interleave differs. #938's five recordings are equal entry for entry.
 - **G3 Stable keys (FR-013, FR-021)**: rebuilding from the same history yields the same keys.
 - **G4 Bound (FR-020)**: at most `MAX_EVENTS` held; `omitted` counts every dropped event.
 - **G5 Sub-agents (FR-024)**: removing every event with a parent from a fixture leaves the entries
