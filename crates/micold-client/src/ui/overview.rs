@@ -446,6 +446,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         prs: pr_display(&app.pr_status, branch_ref),
         activation,
         dir,
+        issue_link: None,
     }
 }
 

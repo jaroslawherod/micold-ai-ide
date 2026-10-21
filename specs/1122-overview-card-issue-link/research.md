@@ -258,11 +258,19 @@ stale card could open a link the settings have since removed).
 
 ## R11 — Card layout (FR-003)
 
-**Decision**: collapsed: the branch line becomes `row![Ellipsized(short branch).shrink(), link]`
-(the link at its natural width, the branch giving way first); expanded: `row![wrapped full branch
-(Fill), link]` with the link top-aligned after it; with no branch line (title is the branch,
-orphan or invalid) the link alone in the branch line's place. The link is drawn at `TypeRole::Body`,
-the branch line's role (FR-015).
+**Decision**: collapsed: the branch line becomes `row![Ellipsized(short branch) (Fill), link]`,
+centred (the link at its natural width at the line's end, the branch ellipsized into what it leaves,
+so the branch gives way first); expanded: `row![wrapped full branch (Fill), link]` with the link
+top-aligned after it, so the link sits at the same place in both forms; with no branch line (title
+is the branch, orphan or invalid) the link alone in the branch line's place. The link is drawn at
+`TypeRole::Body`, the branch line's role (FR-015), and laid out `TextLink::inline(true)`: at its
+label's box, its focus gutter spilling over its neighbours, so the branch line keeps its height and
+a link alone lines up with the lines around it (M2).
+
+*Amended in M2*: the design said `Ellipsized(short branch).shrink()`. iced's row lays its
+non-fill children out in order, each in the room the earlier ones left, so a long short branch took
+the whole line and left the link none (`the_link_is_whole_inside_the_card_at_every_width` failed);
+a fill branch is laid out after the link.
 
 **Why**: FR-003's ellipsis order and "never clipped" at 280 px: the link text is at most
 "Issue " plus a key, short enough for the narrowest card.

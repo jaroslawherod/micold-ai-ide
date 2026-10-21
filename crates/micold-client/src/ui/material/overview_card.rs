@@ -14,10 +14,11 @@
 
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
+use crate::ui::cdk::control_overlay::ControlOverlay;
 use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::line_clamp::LineClamped;
 use crate::ui::material::{
-    style, Ellipsized, Glyph, ProgressBar, Ripple, Scrollable, Text, Tooltip, TypeRole,
+    style, Ellipsized, Glyph, ProgressBar, Ripple, Scrollable, Text, TextLink, Tooltip, TypeRole,
 };
 use iced::widget::text::Wrapping;
 use iced::widget::{button, column, container, row, stack, Space};
@@ -120,6 +121,20 @@ pub fn words(model: &CardModel) -> Words {
 /// What a secondary press becomes, built from the press point in window pixels.
 type PressAt<'a, M> = Rc<dyn Fn((u16, u16)) -> M + 'a>;
 
+/// What the [`CardGrid`](super::CardGrid) reads of a card: [`OverviewCard::rest_messages`].
+pub(crate) struct RestMessages<M> {
+    /// The card's location.
+    pub at: micold_core::session::SessionLocation,
+    /// [`OverviewCard::on_rest`].
+    pub on_rest: Option<M>,
+    /// [`OverviewCard::on_leave`].
+    pub on_leave: Option<M>,
+    /// [`OverviewCard::on_link_rest`].
+    pub on_link_rest: Option<M>,
+    /// The id of the link the card shows, when it shows one.
+    pub link_id: Option<iced::advanced::widget::Id>,
+}
+
 /// The card. See the module documentation.
 #[derive(Clone)]
 pub struct OverviewCard<'a, M> {
@@ -138,6 +153,10 @@ pub struct OverviewCard<'a, M> {
     on_leave: Option<M>,
     on_keyboard_focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
     on_page: Option<Rc<dyn Fn(bool) -> Option<M> + 'a>>,
+    on_issue_link: Option<M>,
+    link_id: Option<iced::advanced::widget::Id>,
+    on_link_rest: Option<M>,
+    on_link_keyboard_focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -166,6 +185,10 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             on_leave: None,
             on_keyboard_focus: None,
             on_page: None,
+            on_issue_link: None,
+            link_id: None,
+            on_link_rest: None,
+            on_link_keyboard_focus: None,
             _marker: PhantomData,
         }
     }
@@ -252,19 +275,23 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         self
     }
 
-    /// The card's location and the messages of [`Self::on_rest`] and [`Self::on_leave`], for the
-    /// grid's rest timer, which follows the card by its location.
-    pub(crate) fn rest_messages(
-        &self,
-    ) -> (micold_core::session::SessionLocation, Option<M>, Option<M>)
+    /// The card's location, its rest messages and its link's id, for the grid's rest timer, which
+    /// follows the card by its location, and for its press routing (feature 1122, R7, R8).
+    pub(crate) fn rest_messages(&self) -> RestMessages<M>
     where
         M: Clone,
     {
-        (
-            self.model.location.clone(),
-            self.on_rest.clone(),
-            self.on_leave.clone(),
-        )
+        RestMessages {
+            at: self.model.location.clone(),
+            on_rest: self.on_rest.clone(),
+            on_leave: self.on_leave.clone(),
+            on_link_rest: self.on_link_rest.clone(),
+            link_id: self
+                .on_issue_link
+                .as_ref()
+                .and(self.model.issue_link.as_ref())
+                .and(self.link_id.clone()),
+        }
     }
 
     /// Publish `f(true)` when the card gets keyboard focus (Tab, Shift+Tab, an arrow move, a
@@ -281,6 +308,35 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
     /// FR-008, contract K4).
     pub fn on_page(mut self, f: impl Fn(bool) -> Option<M> + 'a) -> Self {
         self.on_page = Some(Rc::new(f));
+        self
+    }
+
+    /// Show `model.issue_link` on the branch line as a link publishing `message` when clicked, or
+    /// activated by key while it holds the keyboard (feature 1122, contract U3).
+    pub fn on_issue_link(mut self, message: M) -> Self {
+        self.on_issue_link = Some(message);
+        self
+    }
+
+    /// Name the link, so the grid can find its bounds and the application can focus it.
+    pub fn link_id(mut self, id: iced::advanced::widget::Id) -> Self {
+        self.link_id = Some(id);
+        self
+    }
+
+    /// Publish `message` when the pointer has rested on the link for
+    /// [`micold_core::overview_expansion::EXPAND_REST`]: kept by the [`CardGrid`](super::CardGrid),
+    /// as [`Self::on_rest`] (research R8).
+    pub fn on_link_rest(mut self, message: M) -> Self {
+        self.on_link_rest = Some(message);
+        self
+    }
+
+    /// Make the link a Tab stop right after the card, publishing `f(true)` when keyboard focus
+    /// arrives on it and `f(false)` when it leaves (FR-008). Without it the link is no Tab stop,
+    /// and a click still opens it (contract U3).
+    pub fn on_link_keyboard_focus(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
+        self.on_link_keyboard_focus = Some(Rc::new(f));
         self
     }
 
@@ -389,10 +445,11 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let Some(message) = card.on_press else {
             return menu(face);
         };
-        // The card is its own fill, so the button around it draws nothing.
-        let pressable = button(face)
+        // The card's face is drawn by the overlay below; the button over it draws nothing.
+        let pressable = button(Space::new().width(Length::Fill).height(Length::Fill))
             .padding(0)
             .width(Length::Fill)
+            .height(Length::Fill)
             .style(|_, _| button::Style::default())
             .on_press(message.clone());
         let mut focusable = TakesTheKeyboard::new(pressable, true);
@@ -430,16 +487,37 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         });
         // The ripple is the card's only state layer while it runs (feature 971, D1); the context
         // area outside it takes only the secondary press, which the ripple ignores (feature 972).
-        menu(
-            Ripple::new(focusable, p.on_body, RADIUS)
-                .centred_on_keys()
-                .into(),
-        )
+        // The control chain is a layer over the face, which sees every event first: a press its
+        // link captures never reaches the card, and the card neither hovers nor activates over the
+        // link (feature 1122, R6). Focus order: the card, then its link.
+        let control = Ripple::new(focusable, p.on_body, RADIUS).centred_on_keys();
+        menu(ControlOverlay::new(face, control).into())
     }
 }
 
+/// The card's issue link (feature 1122, contract U3): `model.issue_link` drawn as a [`TextLink`] at
+/// the branch line's role, only when [`OverviewCard::on_issue_link`] is set. A click on it leaves the
+/// keyboard where it was (R7), and it is a Tab stop only once its focus reports are wired.
+fn issue_link<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>) -> Option<Element<'a, M>> {
+    let (Some(link), Some(message)) = (&card.model.issue_link, &card.on_issue_link) else {
+        return None;
+    };
+    let mut link = TextLink::new(link.label.clone(), message.clone(), card.roles)
+        .role(TypeRole::Body)
+        .inline(true)
+        .focus_on_press(false)
+        .focusable(card.on_link_keyboard_focus.is_some());
+    if let Some(id) = card.link_id.clone() {
+        link = link.id(id);
+    }
+    if let Some(f) = card.on_link_keyboard_focus.clone() {
+        link = link.on_keyboard_focus(move |shown| f(shown));
+    }
+    Some(link.into())
+}
+
 /// The collapsed card's body, under its header (feature 1120, feature 1121 FR-001).
-fn collapsed_body<'a, M: 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
+fn collapsed_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
     let roles = card.roles;
     let text = CardText::of(&card.model);
     // The title wraps onto three lines and the activity onto two before an ellipsis (feature
@@ -449,12 +527,23 @@ fn collapsed_body<'a, M: 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<
         .tint(p.on_body)
         .width(Length::Fill)]
     .spacing(spacing::XS);
-    if let Some(branch) = text.branch {
-        body = body.push(Ellipsized::<M>::at_role_spaced(
-            branch,
-            TypeRole::Body,
-            p.on_body_variant,
-        ));
+    // The branch line (R11): the link at its natural width at the line's end, the short branch
+    // ellipsized into what it leaves; alone in the line's place when there is no branch line.
+    let link = issue_link(card);
+    match (text.branch, link) {
+        (Some(branch), link) => {
+            let branch = Ellipsized::<M>::at_role_spaced(branch, TypeRole::Body, p.on_body_variant);
+            body = match link {
+                Some(link) => body.push(
+                    row![branch, link]
+                        .spacing(spacing::SM)
+                        .align_y(Alignment::Center),
+                ),
+                None => body.push(branch),
+            };
+        }
+        (None, Some(link)) => body = body.push(link),
+        (None, None) => {}
     }
     body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
     if let Some(activity) = text.activity {
@@ -515,12 +604,20 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
     let text = CardText::of(&card.model);
     let body_line = |words: String| wrapped::<M>(words, TypeRole::Body, p.on_body_variant, roles);
     let mut rest = column![].spacing(spacing::XS);
-    for words in [full.display_name, full.branch, Some(full.dir)]
-        .into_iter()
-        .flatten()
-    {
-        rest = rest.push(body_line(words));
+    if let Some(name) = full.display_name {
+        rest = rest.push(body_line(name));
     }
+    // The branch line wraps in full with the link at its end, on its first line (R11); alone in
+    // the line's place when there is no branch line.
+    match (full.branch, issue_link(card)) {
+        (Some(branch), Some(link)) => {
+            rest = rest.push(row![body_line(branch), link].spacing(spacing::SM));
+        }
+        (Some(branch), None) => rest = rest.push(body_line(branch)),
+        (None, Some(link)) => rest = rest.push(link),
+        (None, None) => {}
+    }
+    rest = rest.push(body_line(full.dir));
     rest = rest.push(body_line(text.sessions));
     if let Some(activity) = full.activity {
         rest = rest.push(body_line(activity));
@@ -606,6 +703,7 @@ mod tests {
             activity: None,
             activation: Activation::OpenSession(SessionId::new()),
             dir: std::path::PathBuf::from("/repo/.worktrees/x"),
+            issue_link: None,
         }
     }
 
@@ -1993,6 +2091,7 @@ mod tests {
     // ---- Feature 971: the pointer ripple (FR-001, FR-003, FR-004, FR-005, FR-006) ----
 
     use crate::ui::cdk::ripple::Ripple as RippleState;
+    use iced::advanced::widget::tree::{Tag, Tree};
     use iced::{mouse, Point};
     use micold_core::tokens::motion::duration;
     use std::time::Duration;
@@ -2008,12 +2107,37 @@ mod tests {
         )
     }
 
+    /// The tree of the card's ripple, wherever the card's wrappers put it.
+    fn ripple_tree(tree: &Tree) -> Option<&Tree> {
+        if tree.tag == Tag::of::<RippleState>() {
+            return Some(tree);
+        }
+        tree.children.iter().find_map(ripple_tree)
+    }
+
+    fn ripple_tree_mut(tree: &mut Tree) -> Option<&mut Tree> {
+        if tree.tag == Tag::of::<RippleState>() {
+            return Some(tree);
+        }
+        tree.children.iter_mut().find_map(ripple_tree_mut)
+    }
+
     fn ripple<'m>(m: &'m Mounted<'_>) -> &'m RippleState {
-        m.tree.state.downcast_ref::<RippleState>()
+        ripple_tree(&m.tree)
+            .expect("the card ripples")
+            .state
+            .downcast_ref::<RippleState>()
+    }
+
+    fn ripple_mut<'m>(m: &'m mut Mounted<'_>) -> &'m mut RippleState {
+        ripple_tree_mut(&mut m.tree)
+            .expect("the card ripples")
+            .state
+            .downcast_mut::<RippleState>()
     }
 
     fn settle(m: &mut Mounted<'_>) {
-        let state = m.tree.state.downcast_mut::<RippleState>();
+        let state = ripple_mut(m);
         for _ in 0..120 {
             state.advance(EXPAND, FADE);
         }
@@ -2059,10 +2183,7 @@ mod tests {
             ] {
                 let mut m = activatable(&model(state, "feat-a"));
                 m.press(at);
-                m.tree
-                    .state
-                    .downcast_mut::<RippleState>()
-                    .advance(EXPAND, FADE);
+                ripple_mut(&mut m).advance(EXPAND, FADE);
                 let (pixels, width) = m.drawn(iced::Color::BLACK);
                 let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
                 let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
@@ -2096,10 +2217,7 @@ mod tests {
             &model(CardState::Idle, "feat-a"),
             tokens::roles(ColorScheme::Light),
         ));
-        assert_ne!(
-            plain.tree.tag,
-            iced::advanced::widget::tree::Tag::of::<RippleState>()
-        );
+        assert!(ripple_tree(&plain.tree).is_none());
         assert!(plain.press(Point::new(20.0, 20.0)).is_empty());
     }
 
@@ -2144,10 +2262,7 @@ mod tests {
         let mut a = activatable(&model(CardState::Working, "a"));
         let b = activatable(&model(CardState::Working, "b"));
         a.press(Point::new(10.0, 10.0));
-        a.tree
-            .state
-            .downcast_mut::<RippleState>()
-            .advance(EXPAND, FADE);
+        ripple_mut(&mut a).advance(EXPAND, FADE);
         assert!(ripple(&b).is_idle(), "pressing A rippled B");
         let mid = ripple(&a).expansion();
         a.press(Point::new(100.0, 100.0));
@@ -2227,5 +2342,329 @@ mod tests {
         assert!(ripple(&m).is_idle());
         let other = activatable(&model(CardState::Idle, "feat-b"));
         assert!(ripple(&other).is_idle());
+    }
+
+    // ---- Feature 1122: the issue link on the card (contract U3; FR-003, FR-005, FR-006, FR-015) ----
+
+    use micold_core::issue_link::IssueLink;
+
+    const LINK: &str = "Issue #1122";
+
+    /// `titled()` with an issue link and a branch of `branch`.
+    fn with_link(branch: Option<&str>) -> CardModel {
+        let mut m = titled();
+        m.branch = branch.map(str::to_string);
+        m.issue_link = Some(IssueLink {
+            label: LINK.into(),
+            address: "https://github.com/o/r/issues/1122".into(),
+        });
+        m
+    }
+
+    /// The card of `model` with every message a link test reads, collapsed or `expanded`.
+    fn linked(model: &CardModel, expanded: bool) -> OverviewCard<'static, String> {
+        OverviewCard::<String>::new(model, tokens::roles(ColorScheme::Light))
+            .on_press("open".to_string())
+            .on_secondary_press(|(x, y)| format!("menu at {x},{y}"))
+            .on_issue_link("link".to_string())
+            .link_id(iced::advanced::widget::Id::new("link"))
+            .expanded(expanded)
+    }
+
+    /// `card` in a 380 x 400 room (an expanded card fills its height, as in the grid).
+    fn in_room(card: OverviewCard<'static, String>, width: f32) -> Mounted<'static> {
+        Mounted::new_in(
+            container(card).width(Length::Fixed(width)),
+            Size::new(width, 400.0),
+        )
+    }
+
+    /// Where the paragraph that says `content` is painted, if anywhere.
+    fn painted_where(m: &mut Mounted<'_>, content: &str) -> Option<Rectangle> {
+        m.painted_text()
+            .into_iter()
+            .find(|p| p.content == content)
+            .map(|p| p.bounds)
+    }
+
+    fn link_point(m: &mut Mounted<'_>) -> Point {
+        painted_where(m, LINK)
+            .unwrap_or_else(|| panic!("{LINK:?} is not painted"))
+            .center()
+    }
+
+    /// A point in the body's left padding, clear of every line and of the link.
+    fn off_link(m: &Mounted<'_>) -> Point {
+        Point::new(6.0, m.node.bounds().height * 0.6)
+    }
+
+    fn release(m: &mut Mounted<'_>, at: Point) -> Vec<String> {
+        m.send(
+            iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            mouse::Cursor::Available(at),
+        )
+    }
+
+    /// U3, FR-005, SC-003: a click on the link publishes only the link's message, starts no
+    /// ripple and leaves the card without the keyboard, collapsed and expanded.
+    #[test]
+    fn a_click_on_the_link_publishes_only_the_links_message() {
+        for expanded in [false, true] {
+            let mut m = in_room(linked(&with_link(Some("feat/1122_x")), expanded), 380.0);
+            let at = link_point(&mut m);
+            assert!(m.press(at).is_empty(), "expanded {expanded}");
+            assert!(
+                ripple(&m).is_idle(),
+                "expanded {expanded}: the press rippled"
+            );
+            assert_eq!(release(&mut m, at), ["link"], "expanded {expanded}");
+            assert!(
+                m.send(named_key(Named::Enter), mouse::Cursor::Unavailable)
+                    .is_empty(),
+                "expanded {expanded}: the click gave the card the keyboard"
+            );
+        }
+    }
+
+    /// FR-005: a press on the card released on the link activates nothing, and its ripple fades.
+    #[test]
+    fn a_press_on_the_card_released_on_the_link_activates_nothing() {
+        for expanded in [false, true] {
+            let mut m = in_room(linked(&with_link(Some("feat/1122_x")), expanded), 380.0);
+            let (on, off) = (link_point(&mut m), off_link(&m));
+            m.press(off);
+            assert!(!ripple(&m).is_idle(), "expanded {expanded}");
+            m.hover(on);
+            assert!(release(&mut m, on).is_empty(), "expanded {expanded}");
+            settle(&mut m);
+            assert!(
+                ripple(&m).is_idle(),
+                "expanded {expanded}: the ripple did not fade"
+            );
+        }
+    }
+
+    /// Story 4 sc. 5: a press on the link released elsewhere on the card activates nothing.
+    #[test]
+    fn a_press_on_the_link_released_on_the_card_activates_nothing() {
+        for expanded in [false, true] {
+            let mut m = in_room(linked(&with_link(Some("feat/1122_x")), expanded), 380.0);
+            let (on, off) = (link_point(&mut m), off_link(&m));
+            m.press(on);
+            m.hover(off);
+            assert!(release(&mut m, off).is_empty(), "expanded {expanded}");
+        }
+    }
+
+    /// Story 4 sc. 1: a click on the card outside the link activates it with its ripple.
+    #[test]
+    fn a_click_on_the_card_outside_the_link_activates_it_as_before() {
+        for expanded in [false, true] {
+            let mut m = in_room(linked(&with_link(Some("feat/1122_x")), expanded), 380.0);
+            let off = off_link(&m);
+            m.press(off);
+            assert!(!ripple(&m).is_idle(), "expanded {expanded}");
+            assert_eq!(release(&mut m, off), ["open"], "expanded {expanded}");
+        }
+    }
+
+    /// FR-006, Story 4 sc. 4: a secondary press on the link opens the card's menu there.
+    #[test]
+    fn a_secondary_press_on_the_link_opens_the_cards_menu() {
+        for expanded in [false, true] {
+            let mut m = in_room(linked(&with_link(Some("feat/1122_x")), expanded), 380.0);
+            let at = link_point(&mut m);
+            m.hover(at);
+            let got = m.send(
+                iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+                mouse::Cursor::Available(at),
+            );
+            assert_eq!(
+                got,
+                [format!("menu at {},{}", at.x as u16, at.y as u16)],
+                "expanded {expanded}"
+            );
+        }
+    }
+
+    /// FR-008, contract U3: with `.on_link_keyboard_focus`, Tab goes card, its link, the next
+    /// card; Shift+Tab goes back; Enter on the link opens it without the card's ripple, and Enter
+    /// on the card activates the card.
+    #[test]
+    fn tab_reaches_the_link_right_after_its_card() {
+        use iced::advanced::widget::operation::focusable;
+        for expanded in [false, true] {
+            let mut m = Mounted::new_in(
+                iced::widget::column![
+                    container(
+                        linked(&with_link(Some("feat/1122_x")), expanded)
+                            .on_link_keyboard_focus(|f| format!("link focus {f}"))
+                    )
+                    .height(Length::Fixed(300.0)),
+                    OverviewCard::<String>::new(&titled(), roles()).on_press("next".to_string()),
+                ],
+                Size::new(380.0, 2000.0),
+            );
+            let none = mouse::Cursor::Unavailable;
+            m.focus_next();
+            assert!(m.redraw().is_empty(), "expanded {expanded}");
+            m.focus_next();
+            assert_eq!(m.redraw(), ["link focus true"], "expanded {expanded}");
+            assert_eq!(m.send(named_key(Named::Enter), none), ["link"]);
+            assert!(
+                ripple(&m).is_idle(),
+                "expanded {expanded}: Enter on the link rippled"
+            );
+            m.focus_next();
+            assert_eq!(m.redraw(), ["link focus false"], "expanded {expanded}");
+            assert_eq!(m.send(named_key(Named::Enter), none), ["next"]);
+            m.drive(focusable::focus_previous::<()>());
+            assert_eq!(m.redraw(), ["link focus true"], "expanded {expanded}");
+            m.drive(focusable::focus_previous::<()>());
+            assert_eq!(m.redraw(), ["link focus false"], "expanded {expanded}");
+            assert_eq!(m.send(named_key(Named::Enter), none), ["open"]);
+            assert!(
+                !ripple(&m).is_idle(),
+                "expanded {expanded}: Enter on the card"
+            );
+        }
+    }
+
+    /// Contract U3: without `.on_link_keyboard_focus` the link is no Tab stop, so Tab goes from the
+    /// card straight to the next one.
+    #[test]
+    fn without_link_focus_reports_the_link_is_no_tab_stop() {
+        for expanded in [false, true] {
+            let mut bare = in_room(linked(&with_link(Some("feat/1122_x")), expanded), 380.0);
+            assert_eq!(bare.drive(Focusables(0)), Some(1), "expanded {expanded}");
+            let mut wired = in_room(
+                linked(&with_link(Some("feat/1122_x")), expanded)
+                    .on_link_keyboard_focus(|f| format!("{f}")),
+                380.0,
+            );
+            assert_eq!(wired.drive(Focusables(0)), Some(2), "expanded {expanded}");
+        }
+    }
+
+    /// The width `LINK` is painted at with nothing in its way.
+    fn link_alone_width() -> f32 {
+        let mut alone = Mounted::new(super::super::TextLink::new(LINK, String::new(), roles()));
+        painted_where(&mut alone, LINK).expect("painted").width
+    }
+
+    /// FR-003, SC-004: at 280, 380 and 480 px, with a 120-character branch, the link is painted
+    /// whole inside the card, at the branch line's role (FR-015), and the collapsed card's short
+    /// branch ends in an ellipsis.
+    #[test]
+    fn the_link_is_whole_inside_the_card_at_every_width() {
+        // Not a conventional branch, which shows as `type/number` (FR-007): 120 characters.
+        let branch = format!("topic-{}", "x".repeat(114));
+        let whole = link_alone_width();
+        for expanded in [false, true] {
+            for width in WIDTHS {
+                let mut m = in_room(linked(&with_link(Some(&branch)), expanded), width);
+                let card = m.node.bounds();
+                let text = m.painted_text();
+                let link = text
+                    .iter()
+                    .find(|p| p.content == LINK)
+                    .unwrap_or_else(|| panic!("{width} expanded {expanded}: no link {text:?}"));
+                assert!(
+                    (link.bounds.width - whole).abs() < 0.5,
+                    "{width} expanded {expanded}: {link:?} is cut from {whole}"
+                );
+                assert!(
+                    card.contains(link.bounds.position())
+                        && link.bounds.x + link.bounds.width <= card.x + card.width
+                        && link.bounds.y + link.bounds.height <= card.y + card.height,
+                    "{width} expanded {expanded}: {link:?} leaves {card:?}"
+                );
+                assert_eq!(link.size, TypeRole::Body.size(), "FR-015");
+                if !expanded {
+                    let short = text
+                        .iter()
+                        .find(|p| p.content.contains("xxxx"))
+                        .unwrap_or_else(|| panic!("{width}: no branch {text:?}"));
+                    assert!(short.content.ends_with('\u{2026}'), "{width}: {short:?}");
+                }
+            }
+        }
+    }
+
+    /// FR-003: the link sits on the branch line, centred on it, and keeps its height: the card is
+    /// as tall with the link as without it (the link's focus gutter spills over its neighbours).
+    #[test]
+    fn the_link_sits_on_the_branch_line_and_keeps_its_height() {
+        let linked_model = with_link(Some("feat/1122_x"));
+        let mut plain_model = linked_model.clone();
+        plain_model.issue_link = None;
+        let mut m = in_room(linked(&linked_model, false), 380.0);
+        let plain = in_room(linked(&plain_model, false), 380.0);
+        assert_eq!(m.node.bounds().height, plain.node.bounds().height);
+        let branch = painted_where(&mut m, "feat/1122").expect("the short branch is painted");
+        let link = painted_where(&mut m, LINK).expect("the link is painted");
+        assert!(
+            (branch.center_y() - link.center_y()).abs() <= 0.5,
+            "{branch:?} vs {link:?}"
+        );
+        assert!(
+            link.x > branch.x + branch.width,
+            "the link follows the branch"
+        );
+    }
+
+    /// FR-003: with no branch line (the title is the branch, or there is no branch) the link sits
+    /// alone in its place, flush with the lines around it.
+    #[test]
+    fn with_no_branch_line_the_link_sits_alone_in_its_place() {
+        let mut titled_by_branch = with_link(Some("feat/1122_x"));
+        titled_by_branch.title = "feat/1122_x".into();
+        for model in [titled_by_branch, with_link(None)] {
+            for expanded in [false, true] {
+                let mut m = in_room(linked(&model, expanded), 380.0);
+                let text = m.painted_text();
+                let link = text.iter().find(|p| p.content == LINK).expect("link");
+                let sessions = text
+                    .iter()
+                    .find(|p| p.content.contains("session"))
+                    .expect("sessions line");
+                assert!(
+                    (link.bounds.x - sessions.bounds.x).abs() <= 0.5,
+                    "expanded {expanded}: {link:?} vs {sessions:?}"
+                );
+                assert!(
+                    link.bounds.y < sessions.bounds.y,
+                    "expanded {expanded}: the link sits above the sessions line"
+                );
+            }
+        }
+    }
+
+    /// Contract U3: without `.on_issue_link`, or with no link in the model, the card lays out
+    /// exactly as before, with no extra node.
+    #[test]
+    fn a_card_without_a_link_lays_out_as_before() {
+        use super::super::test_support::all_bounds;
+        let mut none = with_link(Some("feat/1122_x"));
+        none.issue_link = None;
+        for expanded in [false, true] {
+            let before = Mounted::new(
+                OverviewCard::<String>::new(&none, roles())
+                    .on_press("open".to_string())
+                    .expanded(expanded),
+            );
+            for card in [
+                OverviewCard::<String>::new(&with_link(Some("feat/1122_x")), roles())
+                    .on_press("open".to_string())
+                    .expanded(expanded),
+                OverviewCard::<String>::new(&none, roles())
+                    .on_press("open".to_string())
+                    .on_issue_link("link".to_string())
+                    .expanded(expanded),
+            ] {
+                let after = Mounted::new(card);
+                assert_eq!(all_bounds(&after.node), all_bounds(&before.node));
+            }
+        }
     }
 }

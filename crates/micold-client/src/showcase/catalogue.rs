@@ -1189,6 +1189,15 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  section poses.",
     },
     Exemption {
+        module: "cdk/control_overlay.rs",
+        component: "ControlOverlay",
+        reason: "a behaviour-layer wrapper with no appearance: it lays a control over content \
+                 that sees every event first, so a press on a link inside a card reaches the link \
+                 alone (feature 1122, R6). It draws its two children and nothing else; the \
+                 `OverviewCard` entry's issue-link poses show it at work, and its rules are held \
+                 by its own unit tests.",
+    },
+    Exemption {
         module: "cdk/reflow.rs",
         component: "Reflow",
         reason: "a layout-only wrapper with no appearance: it measures a trailing cluster and \
