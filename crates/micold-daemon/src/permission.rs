@@ -74,8 +74,25 @@ pub struct Decided {
     pub resolved: DaemonMsg,
     /// No other request of the session is pending.
     pub last_of_session: bool,
-    /// The mode an approved plan sets (R7).
-    pub mode_change: Option<PermissionMode>,
+    /// An approved plan, whose answer waits until its mode is set (R7):
+    /// [`DaemonState::finish_plan_approval`].
+    pub plan: Option<PlanApproved>,
+}
+
+/// An approved plan's mode and the CLI's allow answer, held until the mode is set (R7).
+#[derive(Debug)]
+pub struct PlanApproved {
+    /// The mode the approval chose: Accept edits or Default.
+    pub mode: PermissionMode,
+    answer: oneshot::Sender<Value>,
+    reply: Value,
+}
+
+impl PlanApproved {
+    /// Answer the waiting call: Claude goes on.
+    pub fn answer(self) {
+        let _ = self.answer.send(self.reply);
+    }
 }
 
 impl PromptRegistry {
@@ -146,15 +163,25 @@ impl PromptRegistry {
         }
         let entry = self.pending.remove(&id).expect("looked up above");
         let reply = answer(&entry.call, &entry.request.kind, choice);
-        let _ = entry.answer.send(reply);
+        let (resolution, mode_change) = resolution_of(choice);
+        let plan = match mode_change {
+            Some(mode) => Some(PlanApproved {
+                mode,
+                answer: entry.answer,
+                reply,
+            }),
+            None => {
+                let _ = entry.answer.send(reply);
+                None
+            }
+        };
         if let Some(rule) = rule {
             self.rules.entry(session).or_default().push(rule);
         }
-        let (resolution, mode_change) = resolution_of(choice);
         Ok(Decided {
             resolved: resolved(&entry.request, resolution),
             last_of_session: !self.has_pending(session),
-            mode_change,
+            plan,
         })
     }
 

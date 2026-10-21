@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M4 PR
-- **Next step**: orchestrator opens the M4 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M5
+- **Phase**: M5 PR
+- **Next step**: orchestrator waits on the M5 PR's CI and merges it; then milestone M6
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1201 | M1: core request kinds, answers, rules, modes, control lines | merged (rebase; rebased onto main first, one conflict in `tests/support/stream_json.rs` with #944, both lists kept) | a689c4c4a89cd1ab9da5206afd4f0c913e94437d |
 | #1204 | M2: daemon holds and decides prompt requests (switch off) | merged (rebase) | 0c33edd153cba2c02c9f41dfe584253b6a15056b |
 | #1208 | M3: daemon waiting activity and withdrawal | merged (rebase) | 802f46ebcbd3379fb50758ac94fde18e757e11b2 |
+| #1224 | M4: daemon mode persisted, created, launched | merged (rebase) | 4780eb3eaf8e292a0d9258ded2a646ea855a3756 |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | #1201 | merged |
 | M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | #1204 | merged |
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | #1208 | merged |
-| M4 | T039–T042 | full | Daemon: mode persisted, created, launched | pending (orchestrator opens) | rebased onto origin/main f1d54d86; gate green at ed07ed27 (scripts/gate.sh, 2nd run; 1st hit the known `attention_error_notice` flake, 5/5 isolated passes), reviews clean; TDD red: core tests failed to compile (no `permission_mode`), daemon launch tests failed with the launch still Default |
-| M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | — | pending |
+| M4 | T039–T042 | full | Daemon: mode persisted, created, launched | #1224 | merged |
+| M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | pending (draft) | full gate green (scripts/gate.sh, first run), reviews A and B clean; TDD red: the new tests did not compile (no `spawn_mode_reports`, `CONTROL_ANSWER_BOUND`, `DaemonState::set_permission_mode`) |
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | pending |
 | M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1) | — | pending |
 | M8 | T064–T069 | full | Window composer side, switch on, user guide, Part B; needs #941 on main (I-2) | — | pending |
@@ -75,6 +76,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M3 (conformance, sonnet) | 1 | edf8b82347414b400af69e760bf7e3b7553198b0:275254ee26bcb14aaa85d5153e121405c7ada690 | CLEAN; Verify 23 passed, 0 failed; 1 MINOR (F1 ledger 17 "before the kill" — declined) |
 | Review A M4 (code-review high) | 1 | f8700e0a018d6a318ee5f4a40732448129c58b9c:3196a9e7f9874a86042c6a3a1ed57e42270b8ef0 | CLEAN: 1 MINOR (F1 `stop_session` called on the async test thread — declined). Its first two dispatches had every Bash and scratchpad Read refused and returned an empty CLEAN; the counted round had the diff inline |
 | Review B M4 (conformance, sonnet) | 1 | f8700e0a018d6a318ee5f4a40732448129c58b9c:3196a9e7f9874a86042c6a3a1ed57e42270b8ef0 | CLEAN: 2 MINOR (F1 cycle log uncommitted — fixed, committed; F2 Verify not run, its `cargo test` refused — the unit ran Verify: 5 passed; 8 and 39 passed) |
+| Review A M5 (code-review high) | 1 | f87c133e430c27b98cb5cc16d987e545768d27ea:4780eb3eaf8e292a0d9258ded2a646ea855a3756 | CLEAN: 3 MINOR (F1 a stale `status` report applied after a change — comment, declined; F2 plan resolution broadcast after the mode change — comment, declined; F3 stand-in formats JSON by hand — declined). `claude -p` with the brief and diff inline, 0 permission denials |
+| Review B M5 (conformance, sonnet) | 1 | f87c133e430c27b98cb5cc16d987e545768d27ea:4780eb3eaf8e292a0d9258ded2a646ea855a3756 | CLEAN: 1 MINOR (F1 T048 text still said `mode_change` — fixed, prose only). Verify output given inline (13 and 29 passed), 0 permission denials |
 
 ## Declined review findings
 
@@ -92,6 +95,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | Review A r1 | F3 MINOR: an agent hang-up withdraws with no activity change | R8 and T036: "a withdrawal applies nothing" — the turn's own events decide the activity |
 | M3 | Review B r1 | F1 MINOR: ledger 17 says stop withdraws before the kill, the code after | `stop_session_gated` only takes the live entry out of the map under the lock; `end_processes`, which kills, runs after `withdraw_session_prompts` |
 | M4 | Review A r1 | F1 MINOR: `each_mode_on_create_is_listed_launched_and_kept_across_a_restart` calls `stop_session` on the async test thread | Taste: `structured_resume.rs` does the same in its `multi_thread` tests, and the stand-in exits at once on stdin close |
+| M5 | Review A r1 | F1 MINOR: a `status` report the CLI wrote just before a change's `success` can be applied after the change and revert it | The CLI writes `status` with the new mode right after its `success` (P-9), which restores it; ordering reports against control answers would need sequence numbers across the feed. Commented in `spawn_structured` |
+| M5 | Review A r1 | F2 MINOR: an approved plan's `PermissionResolved` waits for the mode change (≤ 10 s) | Deliberate: the broadcast names the mode the session has after the change (`Resolution::PlanApproved { mode }`); another client's decision meanwhile is refused as no longer pending, as for any request decided first. Commented in `decide_prompt` |
+| M5 | Review A r1 | F3 MINOR: the stand-in formats `control_response` JSON by hand | The stand-in is compiled by plain `rustc` with no crates (no serde); the tests pass it only plain text |
 
 ## Handover
 

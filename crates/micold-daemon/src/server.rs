@@ -230,6 +230,7 @@ pub async fn run() -> io::Result<()> {
     spawn_supervisor(Arc::clone(&state));
     spawn_history_saver(Arc::clone(&state));
     spawn_plan_usage_feed(Arc::clone(&state));
+    spawn_mode_reports(Arc::clone(&state));
 
     // The loopback activity-hook receiver (US2, T045/T046): bind an ephemeral 127.0.0.1 port and
     // record it on the shared state so AI-CLI spawns point `claude`'s lifecycle hooks at it. A bind
@@ -333,6 +334,34 @@ fn spawn_history_saver(state: Arc<DaemonState>) {
 pub fn spawn_plan_usage_feed(state: Arc<DaemonState>) {
     if let Some(feed) = state.plan_usage_feed().take_receiver() {
         tokio::spawn(crate::plan_usage::drain(state, feed));
+    }
+}
+
+/// `OperationOk` for `req`, or `OperationError` with the refusal's sentence.
+fn ack_or_refused(req: u64, outcome: Result<(), String>) -> DaemonMsg {
+    match outcome {
+        Ok(()) => DaemonMsg::OperationOk {
+            req,
+            result: OperationResult::Ack,
+        },
+        Err(message) => DaemonMsg::OperationError {
+            req,
+            kind: ErrorKind::Refused,
+            message,
+            detail: None,
+        },
+    }
+}
+
+/// Spawn the task that applies the permission modes structured sessions' CLIs report (#942
+/// FR-016). Once per service: a second call finds the feed taken and does nothing.
+pub fn spawn_mode_reports(state: Arc<DaemonState>) {
+    if let Some(mut reports) = state.mode_reports().take_receiver() {
+        tokio::spawn(async move {
+            while let Some((session, mode)) = reports.recv().await {
+                state.follow_reported_mode(session, mode);
+            }
+        });
     }
 }
 
@@ -747,19 +776,28 @@ where
                 id: prompt,
                 choice,
             } => {
-                let answer = match state.decide_prompt(session, prompt, &choice) {
-                    Ok(_) => DaemonMsg::OperationOk {
-                        req,
-                        result: OperationResult::Ack,
-                    },
-                    Err(refusal) => DaemonMsg::OperationError {
-                        req,
-                        kind: ErrorKind::Refused,
-                        message: refusal.to_string(),
-                        detail: None,
-                    },
-                };
-                state.send(id, answer)
+                match state.decide_prompt(session, prompt, &choice) {
+                    // An approved plan sets the mode first, which waits on the CLI (R7): off the
+                    // connection loop.
+                    Ok(decided) if decided.plan.is_some() => {
+                        let state = Arc::clone(state);
+                        tokio::spawn(async move {
+                            let set = state.finish_plan_approval(session, decided).await;
+                            state.send(id, ack_or_refused(req, set));
+                        });
+                    }
+                    Ok(_) => state.send(id, ack_or_refused(req, Ok(()))),
+                    Err(refusal) => state.send(id, ack_or_refused(req, Err(refusal.to_string()))),
+                }
+            }
+            // A running session's CLI is asked and may take up to 10 s to answer (FR-017): off
+            // the connection loop.
+            ClientMsg::SetPermissionMode { req, session, mode } => {
+                let state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let set = state.set_permission_mode(session, mode).await;
+                    state.send(id, ack_or_refused(req, set));
+                });
             }
             ClientMsg::PermissionInput {
                 req,

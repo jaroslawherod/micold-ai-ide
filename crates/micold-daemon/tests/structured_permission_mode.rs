@@ -3,6 +3,12 @@
 //! a restart and a daemon restart (US2 scenarios 1–3, FR-013, FR-015, SC-005). A terminal session
 //! cannot be given one, and its launch and binding carry none (FR-018).
 //!
+//! Milestone M5 (T044, T045): `SetPermissionMode` changes a running session's mode through a
+//! stream-json control request, kept only when the CLI answers `success` (US2 scenario 5, FR-017),
+//! and the mode follows what the CLI reports in its `init` and `status` lines (FR-016). The cases
+//! that need a permission request (one pending across a change, one raised after it) are in
+//! `structured_permission.rs`, beside its prompt-tool harness.
+//!
 //! The stand-in of `support/structured.rs` records its argv in the session's folder. A conversation
 //! is "recorded" as `structured_resume.rs` records one: a transcript file in `claude`'s layout under
 //! `CLAUDE_CONFIG_DIR`, which this binary points at a directory of its own, once.
@@ -12,6 +18,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use futures_util::SinkExt;
 use micold_core::occupancy::Additional;
@@ -409,4 +416,315 @@ fn the_catalog_sets_a_structured_sessions_mode_and_refuses_a_terminal_one() {
         Some(PermissionMode::Default),
         "unchanged"
     );
+}
+
+/// A daemon over a saved catalog in `store` holding one structured session of `project` in `mode`.
+struct Saved {
+    store: tempfile::TempDir,
+    project: tempfile::TempDir,
+    state: Arc<DaemonState>,
+    id: SessionId,
+}
+
+impl Saved {
+    fn new(mode: PermissionMode) -> Self {
+        setup();
+        let store = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        save_project(store.path(), project.path());
+        let state = daemon(store.path());
+        micold_daemon::server::spawn_mode_reports(Arc::clone(&state));
+        let id = state
+            .create_session_in_mode(
+                project.path(),
+                "",
+                AiCli::ClaudeCode,
+                SessionKind::Structured,
+                mode,
+                Additional::Yes,
+            )
+            .expect("created");
+        Self {
+            store,
+            project,
+            state,
+            id,
+        }
+    }
+
+    fn dir(&self) -> &Path {
+        self.project.path()
+    }
+
+    /// Start the session with `script`, once its stand-in recorded its argv.
+    async fn start(&self, script: &str) -> Vec<String> {
+        clear_records(self.dir());
+        stream_script(self.dir(), script);
+        let (state, id) = (Arc::clone(&self.state), self.id);
+        tokio::task::spawn_blocking(move || state.start_session(id, LaunchMode::Fresh))
+            .await
+            .unwrap()
+            .expect("the structured session starts");
+        argv(self.dir())
+    }
+
+    fn listed(&self) -> PermissionMode {
+        summary(&self.state, self.dir(), self.id).permission_mode
+    }
+
+    /// The mode the saved catalog holds, as a daemon restarted now would load it.
+    fn recorded(&self) -> PermissionMode {
+        load_catalog(self.store.path())
+            .workspace()
+            .find_session(self.id)
+            .map(|(_, s)| s.permission_mode)
+            .expect("recorded")
+    }
+
+    /// Ask for `mode` on `client` and return the answer.
+    async fn change(&self, client: &mut Client, req: u64, mode: PermissionMode) -> DaemonMsg {
+        send(
+            client,
+            ClientMsg::SetPermissionMode {
+                req,
+                session: self.id,
+                mode,
+            },
+        )
+        .await;
+        answer(client, req).await
+    }
+}
+
+impl Drop for Saved {
+    fn drop(&mut self) {
+        self.state.stop_session(self.id);
+    }
+}
+
+/// The control requests the stand-in in `dir` read on its stdin, as JSON.
+fn control_requests(dir: &Path) -> Vec<serde_json::Value> {
+    record(dir, "stdin-record")
+        .lines()
+        .filter(|line| line.contains("control_request"))
+        .map(|line| serde_json::from_str(line).expect("a JSON line"))
+        .collect()
+}
+
+fn refused_with(answer: &DaemonMsg) -> &str {
+    match answer {
+        DaemonMsg::OperationError { message, .. } => message,
+        other => panic!("refused: {other:?}"),
+    }
+}
+
+/// Wait up to 10 s for `done`.
+fn eventually(what: &str, done: impl Fn() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !done() {
+        assert!(Instant::now() < deadline, "{what} never happened");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// T044 (US2 s5, FR-017): on a running session `SetPermissionMode` writes the contract's control
+/// line to the CLI's stdin; its `success` answer is acknowledged, persisted and broadcast.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_running_sessions_mode_change_is_sent_to_claude_and_kept_on_success() {
+    let saved = Saved::new(PermissionMode::Default);
+    saved.start("control success\n").await;
+    let mut client = connect(&saved.state).await;
+    let mut other = connect(&saved.state).await;
+    let ok = saved
+        .change(&mut client, 1, PermissionMode::AcceptEdits)
+        .await;
+    assert!(matches!(ok, DaemonMsg::OperationOk { .. }), "{ok:?}");
+
+    let requests = control_requests(saved.dir());
+    assert_eq!(requests.len(), 1, "{requests:#?}");
+    let id = requests[0]["request_id"].as_str().expect("a request id");
+    assert!(id.starts_with("micold-"), "{id}");
+    assert_eq!(
+        requests[0],
+        serde_json::json!({"type": "control_request", "request_id": id,
+            "request": {"subtype": "set_permission_mode", "mode": "acceptEdits"}})
+    );
+    assert_eq!(saved.listed(), PermissionMode::AcceptEdits, "listed");
+    assert_eq!(saved.recorded(), PermissionMode::AcceptEdits, "persisted");
+    shown_in(&mut other, saved.id, PermissionMode::AcceptEdits).await;
+}
+
+/// Wait up to 15 s for a `CatalogChanged` on `client` listing `id` in `mode`.
+async fn shown_in(client: &mut Client, id: SessionId, mode: PermissionMode) {
+    use futures_util::StreamExt;
+    tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            if let Frame::Control(DaemonMsg::CatalogChanged { catalog }) =
+                client.next().await.expect("stream open").unwrap()
+            {
+                let listed = catalog.projects.iter().flat_map(|p| &p.sessions);
+                if listed
+                    .into_iter()
+                    .any(|s| s.id == id && s.permission_mode == mode)
+                {
+                    return;
+                }
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("no client was shown {id:?} in {mode:?}"))
+}
+
+/// T044 (FR-017): a mode change the CLI refuses leaves the mode as it was and the client is told
+/// the CLI's reason.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_mode_change_claude_refuses_leaves_the_mode_and_says_why() {
+    let saved = Saved::new(PermissionMode::Plan);
+    saved
+        .start("control error bypass_not_launched Cannot switch to bypass now\n")
+        .await;
+    let mut client = connect(&saved.state).await;
+    let refused = saved.change(&mut client, 1, PermissionMode::Bypass).await;
+    assert_eq!(refused_with(&refused), "Cannot switch to bypass now");
+    assert_eq!(saved.listed(), PermissionMode::Plan);
+    assert_eq!(saved.recorded(), PermissionMode::Plan);
+}
+
+/// T044 (FR-017, data-model *ControlRequest*): a mode change the CLI never answers is refused once
+/// `CONTROL_ANSWER_BOUND` (10 s) passed, and the mode stays.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_mode_change_claude_does_not_answer_is_refused_after_ten_seconds() {
+    let saved = Saved::new(PermissionMode::Default);
+    saved.start("control none\n").await;
+    let mut client = connect(&saved.state).await;
+    let asked = Instant::now();
+    send(
+        &mut client,
+        ClientMsg::SetPermissionMode {
+            req: 1,
+            session: saved.id,
+            mode: PermissionMode::Plan,
+        },
+    )
+    .await;
+    let refused = answer(&mut client, 1).await;
+    assert_eq!(
+        refused_with(&refused),
+        "Claude did not answer the mode change."
+    );
+    assert!(
+        asked.elapsed() >= micold_daemon::structured::CONTROL_ANSWER_BOUND,
+        "not before the bound: {:?}",
+        asked.elapsed()
+    );
+    assert_eq!(saved.listed(), PermissionMode::Default);
+    assert_eq!(saved.recorded(), PermissionMode::Default);
+}
+
+/// T044 (data-model *ControlRequest*): the process ending before it answers ends the wait with
+/// "Claude stopped before it answered.", and the mode stays.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_process_ending_before_it_answers_ends_the_wait() {
+    let saved = Saved::new(PermissionMode::Default);
+    saved.start("await-stdin\nexit 0\n").await;
+    let mut client = connect(&saved.state).await;
+    let asked = Instant::now();
+    let refused = saved.change(&mut client, 1, PermissionMode::Plan).await;
+    assert_eq!(refused_with(&refused), "Claude stopped before it answered.");
+    assert!(
+        asked.elapsed() < micold_daemon::structured::CONTROL_ANSWER_BOUND,
+        "at the end, not at the bound: {:?}",
+        asked.elapsed()
+    );
+    assert_eq!(saved.listed(), PermissionMode::Default);
+}
+
+/// T044 (FR-017, FR-015): a session not running has its new mode persisted at once and is
+/// launched in it next.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_not_running_is_persisted_at_once_and_launched_in_its_new_mode() {
+    let saved = Saved::new(PermissionMode::Default);
+    let mut client = connect(&saved.state).await;
+    let ok = saved.change(&mut client, 1, PermissionMode::Plan).await;
+    assert!(matches!(ok, DaemonMsg::OperationOk { .. }), "{ok:?}");
+    assert_eq!(saved.listed(), PermissionMode::Plan);
+    assert_eq!(saved.recorded(), PermissionMode::Plan, "persisted");
+    let launch = saved.start("").await;
+    assert_eq!(launched_mode(&launch), Some("plan".into()), "{launch:#?}");
+    assert!(
+        !std::fs::read_to_string(saved.dir().join("stdin-record"))
+            .unwrap_or_default()
+            .contains("control_request"),
+        "nothing asked of the new process"
+    );
+}
+
+/// T044 (FR-018): a terminal session's mode cannot be changed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_terminal_sessions_mode_change_is_refused() {
+    setup();
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let session = ai_session();
+    let id = session.id;
+    let state = service(dir, vec![session]);
+    let mut client = connect(&state).await;
+    send(
+        &mut client,
+        ClientMsg::SetPermissionMode {
+            req: 1,
+            session: id,
+            mode: PermissionMode::Plan,
+        },
+    )
+    .await;
+    let refused = answer(&mut client, 1).await;
+    assert_eq!(
+        refused_with(&refused),
+        ModeRefusal::NotStructured.to_string()
+    );
+    assert_eq!(
+        summary(&state, dir, id).permission_mode,
+        PermissionMode::Default
+    );
+}
+
+/// T045 (FR-016): a `status` or `init` line reporting another mode than the persisted one changes
+/// the summary and the record.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_mode_claude_reports_is_followed() {
+    let saved = Saved::new(PermissionMode::Default);
+    saved.start("status acceptEdits\n").await;
+    eventually("the status mode listed", || {
+        saved.listed() == PermissionMode::AcceptEdits
+    });
+    assert_eq!(saved.recorded(), PermissionMode::AcceptEdits, "persisted");
+    saved.state.stop_session(saved.id);
+
+    saved
+        .start("{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s-942\",\"permissionMode\":\"plan\"}\n")
+        .await;
+    eventually("the init mode listed", || {
+        saved.listed() == PermissionMode::Plan
+    });
+    assert_eq!(saved.recorded(), PermissionMode::Plan, "persisted");
+}
+
+/// T045 (FR-016, R6): a mode the app never sets (`dontAsk`) leaves the mode unchanged and is
+/// logged once.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unknown_reported_mode_is_ignored_and_logged_once() {
+    mcp::log();
+    let saved = Saved::new(PermissionMode::Plan);
+    saved
+        .start("status dontAsk\nstatus dontAsk\nstatus acceptEdits\n")
+        .await;
+    // The known mode after the unknown ones is applied: both unknown ones were seen by then.
+    eventually("the known mode listed", || {
+        saved.listed() == PermissionMode::AcceptEdits
+    });
+    let lines = mcp::log_lines_for(saved.id);
+    let unknown: Vec<&String> = lines.iter().filter(|l| l.contains("dontAsk")).collect();
+    assert_eq!(unknown.len(), 1, "{lines:#?}");
 }

@@ -252,11 +252,11 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 7: Daemon — mode change while running, following Claude, plan approval (M5)
 
-- [ ] T043 [US2] Extend the stand-in in `daemon/tests/support/structured.rs`: a script step that
+- [x] T043 [US2] Extend the stand-in in `daemon/tests/support/structured.rs`: a script step that
   awaits a `control_request` on stdin and writes a scripted `control_response` line (success with
   `response.mode`, error with `error` and `error_code`, or none), and a step that writes a
   `system`/`status` line with a given `permissionMode`
-- [ ] T044 [P] [US2] Integration tests in `daemon/tests/structured_permission_mode.rs`: on a running
+- [x] T044 [P] [US2] Integration tests in `daemon/tests/structured_permission_mode.rs`: on a running
   session `SetPermissionMode` writes the contract's control line to stdin; `success` → persisted,
   broadcast in the summary, `OperationOk`; `error` → unchanged, `OperationError` with the CLI's
   text; no answer → unchanged and "Claude did not answer the mode change." after
@@ -266,22 +266,23 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `prompt` call is still raised and answered normally (the next request reaches the daemon whatever
   the mode; that the CLI applies the mode is the `mode-change` fixture's and Part B 5's evidence)
   (FR-017, SC-005)
-- [ ] T045 [US2] Integration tests in `daemon/tests/structured_permission_mode.rs`: a `status`
+- [x] T045 [US2] Integration tests in `daemon/tests/structured_permission_mode.rs`: a `status`
   (or `init`) line whose `permissionMode` differs from the persisted mode changes the summary and
   the record; an unknown mode (`dontAsk`) leaves them unchanged and is logged once (FR-016)
-- [ ] T046 [P] [US3] Integration tests in `daemon/tests/structured_permission.rs`: `ApprovePlan
+- [x] T046 [P] [US3] Integration tests in `daemon/tests/structured_permission.rs`: `ApprovePlan
   { accept_edits: true }` sends `set_permission_mode` `acceptEdits` and answers allow only after its
   `success`, and the summary shows Accept edits; `accept_edits: false` → `default`, whatever mode
   preceded Plan; a refused mode change still answers allow and the deciding client is told the mode
   stayed as reported; `KeepPlanning` sends no control request and the mode stays Plan
-- [ ] T047 [US2] Implement T044–T045: `ClientMsg::SetPermissionMode` in
+- [x] T047 [US2] Implement T044–T045: `ClientMsg::SetPermissionMode` in
   `core/src/protocol/messages.rs` (`PROTOCOL_VERSION` +1); `ControlWaiters` in
   `daemon/src/structured.rs` (`write_control` through the stdin writer's mutex, the reader resolves
   the waiter of a matching `ControlResponse`, a process end resolves every waiter); the
   `SetPermissionMode` handler and following reported modes in `daemon/src/state.rs`; dispatch in
   `daemon/src/server.rs`
-- [ ] T048 [US3] Implement T046: `decide` returns `mode_change` for `ApprovePlan` and
-  `daemon/src/state.rs` sets the mode through the control request before sending the answer
+- [x] T048 [US3] Implement T046: `decide` returns `plan: PlanApproved` (the mode and the held
+  answer) for `ApprovePlan` and `DaemonState::finish_plan_approval` in `daemon/src/state.rs` sets
+  the mode through the control request before sending the answer
 
 ---
 

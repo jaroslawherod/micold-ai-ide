@@ -43,13 +43,15 @@ impl Rejections {
 pub type Offer = (SessionId, UsageReading);
 
 /// The feed's two ends: the sender every structured session's reader holds, and the receiver the
-/// service's feed task takes once at start ([`crate::server::spawn_plan_usage_feed`]).
-pub struct Feed {
-    sender: mpsc::UnboundedSender<Offer>,
-    receiver: Mutex<Option<mpsc::UnboundedReceiver<Offer>>>,
+/// service's feed task takes once at start ([`crate::server::spawn_plan_usage_feed`]). Generic, so
+/// the modes a structured session's CLI reports take the same path (#942 FR-016,
+/// [`crate::server::spawn_mode_reports`]); a reader never takes the state's lock itself.
+pub struct Feed<T = Offer> {
+    sender: mpsc::UnboundedSender<T>,
+    receiver: Mutex<Option<mpsc::UnboundedReceiver<T>>>,
 }
 
-impl Default for Feed {
+impl<T> Default for Feed<T> {
     fn default() -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
         Self {
@@ -59,14 +61,14 @@ impl Default for Feed {
     }
 }
 
-impl Feed {
+impl<T> Feed<T> {
     /// A sender for one structured session's reader.
-    pub fn sender(&self) -> mpsc::UnboundedSender<Offer> {
+    pub fn sender(&self) -> mpsc::UnboundedSender<T> {
         self.sender.clone()
     }
 
     /// The receiving end, the first time only.
-    pub fn take_receiver(&self) -> Option<mpsc::UnboundedReceiver<Offer>> {
+    pub fn take_receiver(&self) -> Option<mpsc::UnboundedReceiver<T>> {
         self.receiver
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

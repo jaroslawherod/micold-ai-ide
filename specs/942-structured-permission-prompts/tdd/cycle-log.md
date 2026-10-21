@@ -170,3 +170,15 @@ Red runs recorded live, each before its implementation existed; commands with
   structured `2147483647` is not used).
 - Green: `structured_permission_mode` 5 passed; `structured_permission` 23, `structured_resume` 4,
   `structured_session` 15 unchanged.
+
+## M5 — mode change while running, following Claude, plan approval sets the mode (T043–T048)
+
+### Cycle 8 — T043–T048 control requests, reported modes, plan approval
+
+- Red: the stand-in's `control`/`status` steps (T043) and the T044–T046 tests written first
+  against the M4 daemon. `cargo test -p micold-daemon --test structured_permission_mode --test
+  structured_permission --no-run`: did not compile — no `micold_daemon::server::spawn_mode_reports`,
+  no `micold_daemon::structured::CONTROL_ANSWER_BOUND`, no `DaemonState::set_permission_mode`
+  (core already had `ClientMsg::SetPermissionMode`, version 62, and its round-trip test).
+- Green: `structured_permission_mode` 13 passed (the no-answer case waits the 10 s bound),
+  `structured_permission` 29 passed (the M2 plan test now answers the stand-in's control request).

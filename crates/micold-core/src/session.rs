@@ -172,6 +172,16 @@ impl PermissionMode {
         Self::ALL.into_iter().find(|mode| mode.cli_name() == name)
     }
 
+    /// The mode's name as the user reads it (spec *Permission mode*).
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::AcceptEdits => "Accept edits",
+            Self::Plan => "Plan",
+            Self::Bypass => "Bypass",
+        }
+    }
+
     /// Whether this is the default mode (every session that chose none, FR-013).
     pub fn is_default(&self) -> bool {
         matches!(self, Self::Default)

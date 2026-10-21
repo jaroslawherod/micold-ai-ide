@@ -118,7 +118,7 @@ named ones (a `Bash` call without `command` gets no rule: Always allow is then n
 | `pending: BTreeMap<PromptId, Pending>` | `Pending { request: PermissionRequest, call: PromptCall, answer: oneshot::Sender<Value> }` |
 | `rules: HashMap<SessionId, Vec<AllowRule>>` | dropped when the session's process ends (R9) |
 | `open(session, call, kind) -> Opened` | `Opened::Answered(Value)` when a rule matches (no request), else `Opened::Pending { id, receiver, broadcast: DaemonMsg }`; first pending of the session → activity `Notification` (R8) |
-| `decide(session, id, choice) -> Result<Decided, DecisionRefusal>` | removes the entry; `Decided { resolved: DaemonMsg, last_of_session: bool, mode_change: Option<PermissionMode> }` |
+| `decide(session, id, choice) -> Result<Decided, DecisionRefusal>` | removes the entry; `Decided { resolved: DaemonMsg, last_of_session: bool, plan: Option<PlanApproved> }`; for an `ApprovePlan`, `PlanApproved { mode, .. }` holds the allow answer until `DaemonState::finish_plan_approval` has set the mode (R7), which then broadcasts `PlanApproved { mode }` with the mode the session has |
 | `withdraw_session(session, reason) -> Vec<DaemonMsg>` | removes every entry of the session; each waiting call answered deny "The turn ended before you answered." |
 | `withdraw(id, AgentHungUp)` | the one entry; nothing is answered |
 | `replay() -> Vec<DaemonMsg>` | one `PermissionRequested` per pending entry, oldest first, for a client's handshake |
