@@ -64,6 +64,8 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review tasks | 1 | 98c81d7650a1aaa75d3488756d2a6b9f04034a02:0909b8aa08b8a364302b36b8fdb71a48509ffa94 | CHANGES: 2 MAJOR, 1 MINOR (all fixed); checklist item confirmed |
 | Review tasks | 2 | 22c56cfa4d83ea22a4f99578a543af65950291e4:0909b8aa08b8a364302b36b8fdb71a48509ffa94 | CLEAN (design PR #1209 merged) |
 | Review A M1 (code-review high) | 1 | b061491b31b1e8adfe7a819ba51179e7e88ac6bb:96a0defe7106c1484b328d9175dc173b7b440a05 | CHANGES: 2 MAJOR (Debug prints picture bytes; wire types outside the hashed source), 7 MINOR; fixed 2 MAJOR + 2 MINOR, 5 declined |
+| Review A M1 (scoped, sonnet) | 2 | 5f610c5dfb06d3b71341f75aa694d4278dc805d0:ca17d07da3d3242ae0a73a894ff08cf80dbcf877 | CLEAN: 2 MINOR (capture temp file fixed; picture-name check declined) |
+| Review B M1 (conformance, sonnet) | 1 | 2c163570b179fbb1922c81e07643980c76793802:ca17d07da3d3242ae0a73a894ff08cf80dbcf877 | CLEAN (Verify: daemon structured_session 16 passed; core green except the root-only permission test, which gate.sh runs unprivileged) |
 
 ## Declined review findings
 
@@ -79,30 +81,14 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
   the daemon computes both under one lock (M2). MINOR.
 - Review A M1 r1 F9 (blank check written in three places): the two daemon copies are M1's
   compile-only bridge that M2 removes (T008); MINOR.
+- Review A M1 r2 F1 (picture name not checked for `/`, `\` or empty): MINOR; the name is display text only, never joined to a path (pictures are held in memory and in the saved queue file, not as files).
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
 
-M1 unit handed over at 314k context (cap 150k), branch rebased on origin/main 4e67f211, not pushed.
-
-- **Done**: T001–T022 implemented and ticked (commits d207faf3…8218a369); fixtures recorded with
-  the container's signed-in `claude` 2.1.306 (T003, no escalation); `PROTOCOL_VERSION` 59 → 60 with
-  the `schema_hash.rs` pin; TDD log `tdd/cycle-log.md`; Decision 6 (JSON control frames → base64
-  pictures, 9 MiB per message). Review A r1 done, fixes in 8218a369 (see *Review rounds* and
-  *Declined review findings*). Core targets and the daemon's `structured_session`/`structured_resume`
-  tests pass locally.
-- **Next step**: (1) review A r2, scoped, `--model sonnet`, on
-  `scripts/autopilot/review-snapshot.sh diff b061491b31b1e8adfe7a819ba51179e7e88ac6bb:96a0defe7106c1484b328d9175dc173b7b440a05`,
-  together with the scoped gate; (2) review B (conformance, sonnet) once; no visual pass (nothing
-  visible: `EntryKind::Interrupted` draws an empty `Space` until M6); (3) full gate
-  `scripts/gate.sh`; (4) PR title/body files in the orchestrator's scratchpad
-  (`pr-title.md`, `pr-body.md`), not `gh`.
-- **Disk**: a workspace test build filled the disk (link errors, ENOSPC); the build cache was
-  deleted. Run gates with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0`.
-- **Open findings**: none beyond the declined ones.
-- **PR**: none yet.
+None.
 
 ## Open escalation
 
