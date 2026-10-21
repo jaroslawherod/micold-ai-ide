@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: implement M1
-- **Next step**: M1 verify: review A r4 (event_message fix diff) and visual pass r3 (C3 only), both sonnet, run by the orchestrator; then PR (title/body in the scratchpad).
+- **Next step**: M1 verify (part 4): full gate on the ring-gutter fix, then review A r5 (fix diff) and visual pass r4 (C3 only), both sonnet, run by the orchestrator; then PR (title/body in the scratchpad).
 
 ## Pull requests
 
@@ -60,8 +60,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A M1 | 3 | 58faf2edfdeef46ce65515e5f5352043d1c8dddf:75e361b63685cb7d4008e07f327c2a6ded0abe20 | CLEAN (sonnet, showcase Tab fix diff) |
 | Visual pass M1 | 2 | 58faf2edfdeef46ce65515e5f5352043d1c8dddf:75e361b63685cb7d4008e07f327c2a6ded0abe20 | FAIL (sonnet, C3 only): F1 MAJOR, Tab/Shift+Tab had no visible effect anywhere in the showcase (light/dark x 1.0/2.0; Escape worked). Cause: the gallery poses a *focused* `TerminalPane`, which writes Tab to its process and captures the event, and `iced::keyboard::listen` hears only uncaptured keys, so the showcase never saw Tab (confirmed headless: the gallery returns `Status::Captured` for Tab; `focus_next` itself walks its 211 focusables). Fixed: the showcase listens with `iced::event::listen_with(state::event_message)`, which ignores the capture status; test `tests/showcase_tab.rs` drives Tab through the real gallery and hands its status to the listener (red with a captured-drop mutant). Proven live (Xvfb + xdotool, light 1.0): Shift+Tab x22/x23 from rest rings the caption and body links (`light-1.0-3-tab-fixed-ring-{caption,body}.png`); r2 evidence `*-3-tab-x*-no-ring.png` |
 | Full gate M1 | 4 | 919dee35 | GREEN (after visual r2 fix) |
-| Review A M1 | 4 | d8272a25bfb51c71040f9beb512c07def3356a3b:919dee35498cb93f597039ee8c3b154cf4385615 | pending (event_message fix diff, sonnet; prompt 1122-m1-prompt-review-a-r4.md) |
-| Visual pass M1 | 3 | d8272a25bfb51c71040f9beb512c07def3356a3b:919dee35498cb93f597039ee8c3b154cf4385615 | pending (C3 only, sonnet; prompt 1122-m1-prompt-visual-r3.md; check the caption ring against the glyphs) |
+| Review A M1 | 4 | d8272a25bfb51c71040f9beb512c07def3356a3b:919dee35498cb93f597039ee8c3b154cf4385615 | CLEAN (sonnet, event_message fix diff) |
+| Visual pass M1 | 3 | d8272a25bfb51c71040f9beb512c07def3356a3b:919dee35498cb93f597039ee8c3b154cf4385615 | FAIL (sonnet, C3 only): Tab/Shift+Tab reach both links in all 4 combos, ring in `secondary`, gone on tabbing away; F1 MAJOR the ring (3 px, drawn inside the link's box) sat flush with the label and painted over glyph tops, bottoms and the first glyph's left edge (caption read "ssue #1122"), light/dark x 1.0/2.0; observation: under focus the ring hid the hover underline. Fixed in part 4 (unit continued by the orchestrator's call for this one narrow fix, not an escalation): the link's button padded by `FOCUS_RING_WIDTH + 1` on every side (the material layer draws rings inside the control, `keyboard_focus::ring_bounds`, so no outside-ring pattern exists), underline clamped inside the label box; test `the_focus_ring_clears_the_label_on_every_side`, and `the_focus_layer_is_the_same_under_the_pointer` now requires the underline under focus (both red on the old padding). Evidence `visual-pass/m1/*-3-r3-*.png` |
 
 ## Declined review findings
 
