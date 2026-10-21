@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: milestone M1
-- **Next step**: M1 verify (handover: see *Handover*)
+- **Next step**: M1 PR open — orchestrator opens it from the pushed branch, waits on CI and merges; then M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | — | in progress |
+| M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | pending (orchestrator opens) | verified, gate green |
 | M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | — | pending |
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | — | pending |
 | M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | — | pending |
@@ -46,18 +46,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review plan | 1 | d0912186067579c21f5295b44c37fdcac714e0bd:dac0eb5478f3f39151b5deba2fcffc6b02a82619 | CHANGES: F1 MAJOR (no geometry-gate layer) fixed — geometry layer + DisclosureCard outline/ripple/contrast gates, header-fits and jump-control gates, layout_snapshot transcript state; F2 MINOR fixed (Shown from on_viewport_resize, R9); F3 MINOR fixed (Transcript::nested scope for #944, R7); F4 MINOR fixed (renderer-seam behavioural test) |
 | Review plan | 2 | 8156502f4d59c5450a15b614c9c4f442756c771e:dad297fe3e0f1334887ccfe7eda90b93e46ac3c6 | CLEAN: 1 MINOR (F1 fixed, prose only) |
 | Review tasks | 1 | cdfaee5481a594e3449ee2b0253893520d5cc0ad:76cdeb51e56a37bb1c3ee20d2dcd18ea98d4e3d8 | CHANGES: F1 MAJOR (stale checklist item: no NEEDS CLARIFICATION marker remains) fixed, prose only — ticked, note rewritten; F2 MINOR fixed (T007 [P] dropped) |
+| Review A M1 | 1 | 49a92f67248f43164448d157e66563380ac30900:4f9eaad7133c0dd7c2d931414b6b606d607ae996 | CLEAN (code-review high; no findings) |
+| Review B M1 | 1 | 49a92f67248f43164448d157e66563380ac30900:4f9eaad7133c0dd7c2d931414b6b606d607ae996 | CHANGES: F1 BLOCKER (reviewer sandbox refused cargo, Verify unobserved) — resolved by the unit running Verify inside the full gate's `cargo test --workspace` (see PR body); no code change. F2 MINOR (red/green batched per milestone in cycle-log) declined |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | B | F2 MINOR: red/green recorded once per milestone, not per behaviour | cycle-log records the batched red run before green (part 1); MINOR, no rule violated by the milestone's tests |
 
 ## Handover
 
-- **Done**: M1 implemented, all of T001–T015 ticked, committed (`feat(939): transcript model for finished events`). Branch restarted from origin/main at cee4e719 (#1183 merged). Red/green evidence in `tdd/cycle-log.md`. Local runs: `micold-core` lib `structured::transcript` 14/14, `--test structured_transcript` 25/25, `--test structured_parse` 7/7, clippy `-p micold-core --all-targets -D warnings` clean, `cargo fmt --all` applied.
-- **Next step**: verify.md step 1 — scoped gate (`scripts/autopilot/scoped-gate.sh`) detached, review A (`code-review` high) on `origin/main...HEAD` in its shadow; then review B (conformance, sonnet); then full gate (`scripts/gate.sh` in the cloud container); then pr.md with the PR title/body written to the scratchpad for the orchestrator (no gh).
-- **Open findings**: none yet; no review has run.
-- **PR**: none opened.
+None.
 
 ## Open escalation
 
