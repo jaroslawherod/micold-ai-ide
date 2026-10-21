@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M3
-- **Next step**: M3 implement (T016–T024)
+- **Next step**: M3 verify: scoped gate + review A (round 1), then review B, full gate, push
 
 ## Pull requests
 
@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Tasks (2026-10-21): 42 tasks, five milestones as the plan's Delivery (layered like #939's: core, cache, components, renderers last; no half-wired UI). M1 has 12 tasks (setup + re-check + fixtures + model; no split along a scenario leaves a deliverable). speckit-analyze (inline): M-5 moved to markdown_subset as plan names it; `refresh` takes an injected `Grammar { knows, token }` so the render-free cache does not depend on `ui::syntax` (data-model.md updated).
 - Clarify round 1 (2026-10-21): FR-020 Edit/MultiEdit/Write cards start folded (#939 FR-010); FR-021 no tool result gets rich rendering (issue #940 scope; sub-agent output is #944). Both agent-resolved, no requirement added; unit ends CLEAN.
 - M2 (2026-10-21): Claude Code 2.1.306 has no `MultiEdit` tool, so `edit-turn.jsonl` records a Write, an Edit with `replace_all` and a multi-line Edit; MultiEdit is covered by `tests/edit_diff.rs`'s synthetic set (R13 wanted it recorded; not recordable, no user decision needed). `bytes` = `input_json.len()`. A `replace_all` edit with old == new is `NoChange` (nothing changes). Adding `similar` 2.7.0 made cargo 1.97 re-pick some Windows-only `windows-sys`/`getrandom` edges in Cargo.lock; `cargo update --workspace` gave the same lock, kept as cargo resolved it.
+- M3 (2026-10-21): `ui::syntax::knows` reads two-face's grammar set (the one iced_highlighter builds with; iced keeps its set private) as a new direct dependency of micold-client at iced_highlighter's version and features, so no crate is added to the build (Cargo.lock: one dependency edge). Rich messages route through `structured_transcript::State::update(&mut RichCache, msg) -> Effect { scroll, outcomes, jobs }` (allowlisted in feature_registration_cost); `App::structured_events` takes the `Grammar` and returns the jobs. `highlighted(session, key, part, spans)` takes the message's fields (the message carries no lines); it stores only for an issued, still-present part whose line count matches. A part's spans sit in `Spans`' `new` side, both schemes. The view now reads the window's `transcript_rich` as its `BlockCache` (still drawn with `PLAIN`).
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
@@ -54,9 +55,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 (conformance, sonnet) | 2 | aa1daa152374351708fc813c0750520c06544c37:57b9034cc9b18594488478b04fa6f02cef99ef3c | CLEAN; Verify re-run green |
 | Review A M2 (code-review high) | 1 | 91f29aa19fb9dce4c7014317aa0c19aa654c0b06:d3939ee9054b6be493d62dcb528ed054caa5b87d | CLEAN: 1 MINOR (Cargo.lock windows-sys churn; declined) |
 | Review B M2 (conformance, sonnet) | 1 | 91f29aa19fb9dce4c7014317aa0c19aa654c0b06:d3939ee9054b6be493d62dcb528ed054caa5b87d | CLEAN: 2 MINOR (lock churn, declined; CRLF-only note unpinned in test, fixed: pinned `None`). Verify: edit_diff 15 passed |
+| Review A M3 (code-review high) | 1 | 44fb4d110ddc2e383c9fc7dacf9676ecb10dd479:59cb951d0d56f3b805f85c3d82ad77e3a993a0d0 | CLEAN: 3 MINOR — settle cloned+hashed every settled block per delta (fixed: hashed in place); unbounded parallel highlight tasks (fixed: one blocking task per batch, jobs in turn); stale late spans (declined) |
 
 ## Declined review findings
 
+- Review A M3 F2 (a late answer of an older job for a part whose content changed under the same `CodeId` can overwrite the newer spans): MINOR; same-key content changes only on a rebuild from a different history, the line count must still match, and the job carries no fingerprint by the data model (`HighlightJob { session, key, part, token, lines }`, `Highlighted { session, key, part, spans }`).
 - Review A M1 #8 (`code_blocks` builds a Vec, `code` scans): MINOR; ids are few per reply and the renderer reads them from M3's cache, not per frame.
 - Review A M1 #9 (lone trailing `\r` read as a complete line ending): a lone `\r` is a CommonMark line ending; the `\n` that may follow only completes the same CRLF ending, so the line before it is complete either way.
 - Review A/B M2 (Cargo.lock re-picks Windows-only `windows-sys`/`getrandom` edges): `cargo update -p similar --precise` cannot run before `similar` is in the lock, and `cargo update --workspace` from origin/main's lock gives the same result; hand-editing the lock is not allowed. Windows-only edges, no effect on the Linux/macOS builds.

@@ -72,35 +72,38 @@ fn transcript(msg: TranscriptMsg) -> Message {
     Message::Session(SessionMsg::Transcript(msg))
 }
 
-/// Run `jobs` off the update thread, each in both schemes under [`HIGHLIGHT_BUDGET`], answering
-/// with `TranscriptMsg::Highlighted`; past the budget the part stays plain (research R4).
+/// Run `jobs` off the update thread, one after another on one blocking task (a replayed history
+/// asks for many at once), each in both schemes under [`HIGHLIGHT_BUDGET`], answering with
+/// `TranscriptMsg::Highlighted`; past the budget the part stays plain (research R4).
 pub fn highlight(jobs: Vec<HighlightJob>) -> Task<Message> {
-    Task::batch(jobs.into_iter().map(|job| {
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let spans = syntax::highlight_job(&job.token, &job.lines, HIGHLIGHT_BUDGET);
-                    if spans.is_none() {
-                        crate::log_line(&format!(
-                            "transcript: {} lines of {} not highlighted, over {}s",
-                            job.lines.len(),
-                            job.token,
-                            HIGHLIGHT_BUDGET.as_secs()
-                        ));
-                    }
-                    spans.map(|spans| TranscriptMsg::Highlighted {
-                        session: job.session,
-                        key: job.key,
-                        part: job.part,
-                        spans,
-                    })
-                })
+    if jobs.is_empty() {
+        return Task::none();
+    }
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || jobs.into_iter().filter_map(run).collect())
                 .await
-                .ok()
-                .flatten()
-            },
-            std::convert::identity,
-        )
-        .then(|done| done.map_or_else(Task::none, |msg| Task::done(transcript(msg))))
-    }))
+                .unwrap_or_default()
+        },
+        |done: Vec<TranscriptMsg>| done,
+    )
+    .then(|done| Task::batch(done.into_iter().map(|msg| Task::done(transcript(msg)))))
+}
+
+fn run(job: HighlightJob) -> Option<TranscriptMsg> {
+    let spans = syntax::highlight_job(&job.token, &job.lines, HIGHLIGHT_BUDGET);
+    if spans.is_none() {
+        crate::log_line(&format!(
+            "transcript: {} lines of {} not highlighted, over {}s",
+            job.lines.len(),
+            job.token,
+            HIGHLIGHT_BUDGET.as_secs()
+        ));
+    }
+    spans.map(|spans| TranscriptMsg::Highlighted {
+        session: job.session,
+        key: job.key,
+        part: job.part,
+        spans,
+    })
 }

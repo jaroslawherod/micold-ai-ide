@@ -101,9 +101,10 @@ pub struct SessionRich {
     entries: HashMap<EntryKey, Derived>,
 }
 
-/// The window's cache: one [`SessionRich`] per structured session (RR-5).
+/// The window's cache: one [`SessionRich`] per structured session (RR-5). Named `State` as every
+/// feature's root state is; data-model.md and the renderers call it [`RichCache`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RichCache {
+pub struct State {
     sessions: HashMap<SessionId, SessionRich>,
     /// The last ticket given out.
     next_ticket: u64,
@@ -215,6 +216,21 @@ impl DerivedBody {
         }
     }
 
+    /// A fingerprint of `part`'s text, hashed in place (it runs on every delta's re-derive).
+    fn print(&self, part: Part) -> Option<u64> {
+        match (self, part) {
+            (Self::Text(doc), Part::Code(id)) => Some(fingerprint(&doc.code(id)?.code)),
+            (Self::Diff(Some(diff)), Part::Diff) => Some(fingerprint(
+                diff.hunks
+                    .iter()
+                    .flat_map(|hunk| &hunk.lines)
+                    .map(|line| &line.text)
+                    .collect::<Vec<_>>(),
+            )),
+            _ => None,
+        }
+    }
+
     /// Whether `part` exists in the body: a code block it holds, or its diff.
     fn holds(&self, part: Part) -> bool {
         match (self, part) {
@@ -234,11 +250,14 @@ struct Known {
     asked: bool,
 }
 
-fn fingerprint(lines: &[String]) -> u64 {
+fn fingerprint(text: impl Hash) -> u64 {
     let mut hasher = DefaultHasher::new();
-    lines.hash(&mut hasher);
+    text.hash(&mut hasher);
     hasher.finish()
 }
+
+/// The window's render cache: this feature's [`State`].
+pub type RichCache = State;
 
 impl Derived {
     fn new(revision: u64, body: DerivedBody) -> Self {
@@ -266,10 +285,9 @@ impl Derived {
     fn settle(&mut self, grammar: &Grammar) {
         let mut known = HashMap::new();
         for (part, token) in self.body.colourable(grammar) {
-            let Some((lines, ..)) = self.body.part(part) else {
+            let Some(print) = self.body.print(part) else {
                 continue;
             };
-            let print = fingerprint(&lines);
             let kept = self
                 .known
                 .remove(&part)
@@ -336,7 +354,7 @@ struct Copying {
     text: Option<String>,
 }
 
-impl RichCache {
+impl State {
     /// Derive `session`'s entries whose revision changed, prune keys `transcript` no longer
     /// holds, and return the highlight jobs that became due (RR-4).
     pub fn refresh(
