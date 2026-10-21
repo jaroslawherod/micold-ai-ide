@@ -72,3 +72,5 @@ None.
 ## Follow-ups not done
 
 None.
+
+- Red CI attempt 1 (run 39649966814): Windows "Report rust-cache hit" step exited 1 on a cache miss (`du target` under pipefail, no target dir); `|| true` added in ci.yml. Not caused by this flow. Full gate green locally (GIT_CONFIG_GLOBAL=/dev/null: host insteadOf breaks git_credential_grant test).
