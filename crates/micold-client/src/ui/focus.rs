@@ -198,12 +198,12 @@ impl Operation<Option<Rectangle>> for FocusedBounds {
     fn scrollable(
         &mut self,
         _id: Option<&Id>,
-        _bounds: Rectangle,
+        bounds: Rectangle,
         _content_bounds: Rectangle,
         translation: Vector,
         _state: &mut dyn Scrollable,
     ) {
-        self.0.entering = Some(translation);
+        self.0.entered(bounds, translation);
     }
 
     fn focusable(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
@@ -218,17 +218,23 @@ impl Operation<Option<Rectangle>> for FocusedBounds {
 /// Where a widget is on screen: the focused control ([`focused_bounds`]), or the widget named by
 /// [`Self::of`], which a caller drives over a subtree itself and reads with [`Self::found`] (a
 /// card's link in the Overview grid, feature 1122 R7). Each scrollable holding it takes its
-/// translation off the bounds it reports.
+/// translation off the bounds it reports, and clips the part [`Self::visible`] reports to its
+/// view.
 #[derive(Default)]
 pub(crate) struct ScreenBounds {
     /// The widget looked for by its id; the focused control when `None`.
     target: Option<Id>,
-    /// The translation of the scrollable just met, until the traversal into its content claims it.
-    entering: Option<Vector>,
+    /// The translation of the scrollable just met and its view on screen, until the traversal
+    /// into its content claims them.
+    entering: Option<(Vector, Rectangle)>,
     /// For each traversal the pass is inside, the translation its scrollable applies (zero for a
-    /// traversal that is not a scrollable's content).
-    inside: Vec<Vector>,
+    /// traversal that is not a scrollable's content) and the view on screen its content shows
+    /// through, the innermost scrollable's clipped by those around it (`None` outside every
+    /// scrollable).
+    inside: Vec<(Vector, Option<Rectangle>)>,
     found: Option<Rectangle>,
+    /// The part of `found` inside every scrollable view holding it: `None` when none of it is.
+    visible: Option<Rectangle>,
 }
 
 impl ScreenBounds {
@@ -240,15 +246,47 @@ impl ScreenBounds {
         }
     }
 
-    /// Where the widget was found, after the pass; the first match when several carry its id.
-    pub(crate) fn found(&self) -> Option<Rectangle> {
-        self.found
+    /// The part of the widget on screen, after the pass: its bounds clipped to the view of each
+    /// scrollable holding it, so a link scrolled out of a card's body is not under a pointer on
+    /// the card's title (feature 1122, review A M2 F2); `None` when it was not found or is
+    /// scrolled out of view. The first match when several carry its id.
+    pub(crate) fn visible(&self) -> Option<Rectangle> {
+        self.visible
+    }
+
+    /// The sum of the translations of the scrollables the pass is inside.
+    fn shift(&self) -> Vector {
+        self.inside
+            .iter()
+            .fold(Vector::ZERO, |sum, (t, _)| sum + *t)
+    }
+
+    /// The view the pass is inside on screen, if any scrollable holds it.
+    fn view(&self) -> Option<Rectangle> {
+        self.inside.last().and_then(|(_, view)| *view)
+    }
+
+    /// A scrollable met at `bounds`, translating its content by `translation`.
+    fn entered(&mut self, bounds: Rectangle, translation: Vector) {
+        let own = bounds - self.shift();
+        // Wholly outside the view around it: an empty view, which nothing intersects.
+        let view = match self.view() {
+            Some(outer) => outer
+                .intersection(&own)
+                .unwrap_or(Rectangle::new(own.position(), iced::Size::ZERO)),
+            None => own,
+        };
+        self.entering = Some((translation, view));
     }
 
     fn take(&mut self, bounds: Rectangle) {
         if self.found.is_none() {
-            let shift = self.inside.iter().fold(Vector::ZERO, |sum, t| sum + *t);
-            self.found = Some(bounds - shift);
+            let on_screen = bounds - self.shift();
+            self.found = Some(on_screen);
+            self.visible = match self.view() {
+                Some(view) => view.intersection(&on_screen),
+                None => Some(on_screen),
+            };
         }
     }
 
@@ -270,8 +308,11 @@ impl ScreenBounds {
 
 impl<T> Operation<T> for ScreenBounds {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
-        self.inside
-            .push(self.entering.take().unwrap_or(Vector::ZERO));
+        let level = match self.entering.take() {
+            Some((translation, view)) => (translation, Some(view)),
+            None => (Vector::ZERO, self.view()),
+        };
+        self.inside.push(level);
         operate(self);
         self.inside.pop();
     }
@@ -279,12 +320,12 @@ impl<T> Operation<T> for ScreenBounds {
     fn scrollable(
         &mut self,
         _id: Option<&Id>,
-        _bounds: Rectangle,
+        bounds: Rectangle,
         _content_bounds: Rectangle,
         translation: Vector,
         _state: &mut dyn Scrollable,
     ) {
-        self.entering = Some(translation);
+        self.entered(bounds, translation);
     }
 
     fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
