@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #939
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
-- **Phase**: milestone M3
-- **Next step**: M3 PR — orchestrator opens it from the pushed branch, waits on CI and merges; then M4
+- **Phase**: milestone M4
+- **Next step**: M4 verify — scoped gate + review A, then review B and the visual pass
 
 ## Pull requests
 
@@ -19,15 +19,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1183 | Design: spec, clarify, plan, research, contracts, tasks | merged (rebase) | cee4e71942a66b77ba2d7107e57fd6e433d38b7e |
 | #1189 | M1: transcript model for finished events | merged (rebase) | 1348549cf021492216ffa03a63f1ae9faee0e03d |
 | #1192 | M2: streaming, supersede, bound and re-sync | merged (rebase) | 061d8805a1f11b934d72e4c5f606e8e972738e8a |
+| #1193 | M3: window's per-session transcript state | merged (rebase) | 965949081cfe2b986593b96eed026e2122f82ece |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | #1189 | merged |
-| M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | pending (orchestrator opens) | verified, gate green |
-| M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | — | pending |
-| M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | — | pending |
+| M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | #1192 | merged |
+| M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | #1193 | merged |
+| M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | — | implemented |
 | M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | — | pending |
 | M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | — | pending |
 
@@ -37,6 +38,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Tasks (2026-10-21): milestones follow the plan's reviewed layered delivery (core → state → components → view → pane) rather than one milestone per story, because the UI of US1/US2 cannot finish before M6 (milestones.md rule 6); M1 carries both P1 stories at the model (15 tasks, kept whole: splitting it splits one build.rs rule table across PRs with no new observable).
 - M2 (2026-10-21): the bound runs after each pushed event, not once per message, so a result whose tool use was dropped earlier in the same message is an `OrphanResult` (FR-020) rather than filling a card that then leaves; `Transcript::held()` added for G4. A `content_block_start` of a block type the transcript does not stream is absorbed but keeps its position in the stream, so its finished block (a `Raw { UnknownBlock }` row) and later blocks stay matched; empty deltas change nothing (no revision).
 - M3 (2026-10-21): `TranscriptMsg` rides in `session::Msg::Transcript`, but the root routes it to the transcript feature (`app::State::update_transcript`), never the session reducer (allowlisted in `feature_registration_cost.rs`); the shell (`shell/transcript.rs`) performs the returned `Scroll` as `snap_to_end` / `scroll_to`. The wire's events and the two forget paths go through `app::State::structured_events` / `forget_structured`, so the log and the transcript cannot drift. T021's binary-side half (wire routing, scroll tasks via `Task::units`, close path) is in `src/main_tests.rs::structured_transcript`, since the shell lives in the binary. `transcript_scroll_id` is in `ui/transcript.rs` (a file, not yet a directory: `material_boundary.rs` needs a new `ui/` directory registered; M5 does that when the view arrives). Fold state is pruned after a rebuild and once the bound may have dropped entries.
+- M4 (2026-10-21): `build`, `check_circle` and `error` are already `TypeChore`'s, `CardDone`'s and `SessionError`'s codepoints and `tests/icons.rs` forbids two variants on one, so `ToolCall`, `ToolDone`, `ToolFailed` take the font's alias codepoints for the same glyphs (`U+F8CD`, `U+E92D`, `U+E001`), the precedent `ActiveMarker`/`Unavailable` set; research R11 notes it. A failed `DisclosureCard` is an outlined card (error outline, no shadow) so the outline is its one edge; the failure's words and icon are the caller's trailing `IconLabel`. `AccordionSection` without slots draws its pre-939 header row unchanged (`plain`), so no layout fixture moved.
+- Cross-issue, with #944 (2026-10-21): in streaming-input mode a result's `total_cost_usd` is a running total for the whole CLI session, not per turn. #939's turn footer shows it labelled as the session total, with no per-turn math; the per-turn delta belongs to #944. M4 touches no footer wording or cost text; M5 applies it (footer label, and the spec/contract/plan wording that says "per-turn cost").
 - Clarify (2026-10-21, 2 rounds, agent-resolved): sub-agent events (parent tool use set) are kept out of the main transcript and counted per parent tool-call card (FR-024; orphans on one notice); deltas not counted. #944 adds nesting on top. #944 treats the per-turn cost in #939's turn footer as #939's; #944 adds context meter, plan_usage feed and sub-agent nesting.
 
 | # | Phase | Question | Answer | By | Evidence |

@@ -293,6 +293,31 @@ pub fn surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
     elevated(r, elevation::CARD, shape::MEDIUM)
 }
 
+/// The width of a failed [`DisclosureCard`](super::DisclosureCard)'s outline: Material's outlined
+/// card draws 1dp.
+const CARD_OUTLINE: f32 = 1.0;
+
+/// A [`DisclosureCard`](super::DisclosureCard)'s surface (feature 939, research R11): a raised card
+/// like [`surface`], at the medium corner. Failed, it is an *outlined* card instead — the same tone,
+/// a 1dp `error` outline and **no shadow** — so the outline is the one edge it draws and depth never
+/// doubles as a border (contract §1.5, `style_outline_discipline`). The outline is colour; the
+/// card's status label and icon carry the failure without it (FR-012).
+pub fn disclosure_card(r: Roles, failed: bool) -> impl Fn(&Theme) -> container::Style {
+    let raised = elevated(r, elevation::CARD, shape::MEDIUM);
+    move |theme| {
+        let mut s = raised(theme);
+        if failed {
+            s.border = Border {
+                color: color(r.error),
+                width: CARD_OUTLINE,
+                radius: shape::MEDIUM.into(),
+            };
+            s.shadow = Shadow::default();
+        }
+        s
+    }
+}
+
 /// The snackbar: the one deliberately **inverted** surface in the application (§7.8).
 ///
 /// `inverse_surface` is light-on-dark in a light scheme and dark-on-light in a dark one, which is

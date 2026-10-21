@@ -213,7 +213,11 @@ per block `content_block_start {index, content_block}` → `content_block_delta`
   - **Icons** (new `Icon` variants in `icons.rs`, Material Symbols Outlined is shipped with full
     coverage): `Thinking` (`psychology`), `ToolCall` (`build`), `ToolRunning` (`progress_activity`),
     `ToolDone` (`check_circle`), `ToolFailed` (`error`), `ToolNoResult` (`do_not_disturb_on`),
-    `JumpToLatest` (`arrow_downward`); `tests/icons.rs` pins their codepoints.
+    `JumpToLatest` (`arrow_downward`); `tests/icons.rs` pins their codepoints. `build`,
+    `check_circle` and `error` are already `TypeChore`'s, `CardDone`'s and `SessionError`'s
+    codepoints, and no two variants share one, so `ToolCall`, `ToolDone` and `ToolFailed` take the
+    font's alias codepoints for the same glyphs (`U+F8CD`, `U+E92D`, `U+E001`), as `ActiveMarker` and
+    `Unavailable` do (M4).
   - **Monospace text**: a `.monospace()` builder step on the shared `Text` (`Font::MONOSPACE`, as
     `DiffView` uses) for tool input, results and raw rows.
   - `DisclosureCard` gets a showcase entry (`src/showcase/catalogue.rs`, `tests/showcase_completeness.rs`).

@@ -182,6 +182,23 @@ pub enum Icon {
     /// The same toggle while full-screen mode is on: it leaves it (feature 970) —
     /// `fullscreen_exit`.
     FullScreenExit,
+    /// A transcript's thinking card (feature 939, research R11) — `psychology`.
+    Thinking,
+    /// A transcript's tool-call card (feature 939) — `build`, on its alias codepoint: `U+E869` is
+    /// [`Icon::TypeChore`]'s.
+    ToolCall,
+    /// A tool call still waiting for its result (feature 939) — `progress_activity`.
+    ToolRunning,
+    /// A tool call whose result came back (feature 939) — `check_circle`, on its
+    /// `check_circle_outline` alias: `U+E86C` is [`Icon::CardDone`]'s.
+    ToolDone,
+    /// A tool call whose result is an error (feature 939, FR-012) — `error`, on its
+    /// `error_outline` alias: `U+E000` is [`Icon::SessionError`]'s.
+    ToolFailed,
+    /// A tool call whose turn ended without its result (feature 939) — `do_not_disturb_on`.
+    ToolNoResult,
+    /// The transcript's "jump to latest" button (feature 939, FR-017) — `arrow_downward`.
+    JumpToLatest,
 }
 
 impl Icon {
@@ -257,6 +274,13 @@ impl Icon {
         Icon::ChevronRight,
         Icon::FullScreen,
         Icon::FullScreenExit,
+        Icon::Thinking,
+        Icon::ToolCall,
+        Icon::ToolRunning,
+        Icon::ToolDone,
+        Icon::ToolFailed,
+        Icon::ToolNoResult,
+        Icon::JumpToLatest,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -350,6 +374,16 @@ impl Icon {
             Icon::ChevronRight => '\u{e5cc}',
             Icon::FullScreen => '\u{e5d0}',
             Icon::FullScreenExit => '\u{e5d1}',
+            // Feature 939's transcript (research R11). `build`, `check_circle` and `error` take the
+            // font's alias codepoints for the same glyph, since their primary codepoints are
+            // `TypeChore`'s, `CardDone`'s and `SessionError`'s and two icons never share one.
+            Icon::Thinking => '\u{ea4a}',
+            Icon::ToolCall => '\u{f8cd}',
+            Icon::ToolRunning => '\u{e9d0}',
+            Icon::ToolDone => '\u{e92d}',
+            Icon::ToolFailed => '\u{e001}',
+            Icon::ToolNoResult => '\u{f08f}',
+            Icon::JumpToLatest => '\u{e5db}',
         }
     }
 }

@@ -239,6 +239,7 @@ pub struct Text<'a, M> {
     height: Option<Length>,
     align_y: Option<iced::alignment::Vertical>,
     wrapping: Option<Wrapping>,
+    monospace: bool,
     marker: PhantomData<M>,
 }
 
@@ -255,6 +256,7 @@ impl<'a, M: 'a> Text<'a, M> {
             height: None,
             align_y: None,
             wrapping: None,
+            monospace: false,
             marker: PhantomData,
         }
     }
@@ -310,13 +312,25 @@ impl<'a, M: 'a> Text<'a, M> {
         self.wrapping = Some(wrapping);
         self
     }
+
+    /// Set the text in `Font::MONOSPACE`, the face [`DiffView`](super::DiffView) draws code in, at
+    /// the role's size and line height — for tool input, tool results and raw events (feature 939,
+    /// research R11).
+    pub fn monospace(mut self) -> Self {
+        self.monospace = true;
+        self
+    }
 }
 
 impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
     fn from(t: Text<'a, M>) -> Self {
         let mut widget = text(t.content)
             .size(t.role.size())
-            .font(t.role.font())
+            .font(if t.monospace {
+                Font::MONOSPACE
+            } else {
+                t.role.font()
+            })
             .line_height(t.role.line_height());
         match t.emphasis {
             // No style call at all, so the text inherits — which is what an unstyled call site
@@ -340,5 +354,48 @@ impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
             widget = widget.wrapping(wrapping);
         }
         widget.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_support::{roles, Mounted};
+    use super::*;
+
+    fn painted_font(t: Text<'static, String>) -> Font {
+        let painted = Mounted::new(t).painted_text();
+        painted
+            .iter()
+            .find(|p| p.content == "cargo test")
+            .unwrap_or_else(|| panic!("the text is painted: {painted:?}"))
+            .font
+    }
+
+    /// Feature 939 (contract R-5, research R11): `.monospace()` draws the role's text in
+    /// `Font::MONOSPACE`, the face `DiffView` draws code in, at the role's size.
+    #[test]
+    fn monospace_draws_the_monospace_face_at_the_roles_size() {
+        let r = roles();
+        assert_eq!(
+            painted_font(Text::new("cargo test", TypeRole::Body, r).monospace()),
+            Font::MONOSPACE
+        );
+        let painted =
+            Mounted::new(Text::<String>::new("cargo test", TypeRole::Body, r).monospace())
+                .painted_text();
+        assert_eq!(
+            painted[0].size,
+            TypeRole::Body.size(),
+            "the role still sizes it"
+        );
+    }
+
+    /// Without the step, the text keeps its role's Roboto face.
+    #[test]
+    fn plain_text_keeps_its_roles_face() {
+        assert_eq!(
+            painted_font(Text::new("cargo test", TypeRole::Body, roles())),
+            TypeRole::Body.font()
+        );
     }
 }

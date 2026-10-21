@@ -159,6 +159,13 @@ mod notification_kind_rows_sit_under_the_switch;
 #[path = "gates/structured_row_marker_fits.rs"]
 mod structured_row_marker_fits;
 
+// --- The disclosure card's header holds its parts (feature 939) ---------------------------------
+
+// The showcase's tool-call card, laid out folded and open, failed and not: its leading icon, one-line
+// summary and trailing status stay inside the header row.
+#[path = "gates/disclosure_card_header_fits.rs"]
+mod disclosure_card_header_fits;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

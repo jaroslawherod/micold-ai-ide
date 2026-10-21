@@ -35,6 +35,8 @@ pub struct AccordionSection<'a, M> {
     on_toggle: Option<M>,
     summary: Option<String>,
     required: bool,
+    leading: Option<Icon>,
+    trailing: Option<Element<'a, M>>,
 }
 
 impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
@@ -48,6 +50,8 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
             on_toggle: None,
             summary: None,
             required: false,
+            leading: None,
+            trailing: None,
         }
     }
 
@@ -98,6 +102,22 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
         self.required = required;
         self
     }
+
+    /// An icon before the title, in the chevron's size and muted tint, saying what kind of thing
+    /// the section is (feature 939, research R11). Inside the header, so it adds no press target or
+    /// focus stop.
+    pub fn leading(mut self, icon: Icon) -> Self {
+        self.leading = Some(icon);
+        self
+    }
+
+    /// An element after the title and before the chevron — a status such as an
+    /// [`IconLabel`](super::IconLabel) — shown folded and open (feature 939, research R11). It is
+    /// drawn inside the header button, so it should be something to read, not to press.
+    pub fn trailing(mut self, trailing: impl Into<Element<'a, M>>) -> Self {
+        self.trailing = Some(trailing.into());
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
@@ -111,23 +131,11 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
             s.title
         };
         let title = Text::new(title, TypeRole::Action, s.roles);
-        let header: Element<'a, M> = match s.summary.filter(|text| !s.open && !text.is_empty()) {
-            // The summary is a second line of the same button, so the header stays one press
-            // target and one focus stop (FR-011, FR-013). The column fills the row, so the
-            // summary is cut against everything the chevron leaves it.
-            Some(summary) => row![
-                column![
-                    title,
-                    Ellipsized::at_role(summary, TypeRole::Caption, s.roles.on_surface_variant),
-                ]
-                .width(Length::Fill),
-                chevron,
-            ]
-            .align_y(alignment::Vertical::Center)
-            .into(),
-            None => row![title, Space::new().width(Length::Fill), chevron]
-                .align_y(alignment::Vertical::Center)
-                .into(),
+        let summary = s.summary.filter(|text| !s.open && !text.is_empty());
+        let header: Element<'a, M> = if s.leading.is_some() || s.trailing.is_some() {
+            slotted(title, summary, s.leading, s.trailing, chevron, s.roles)
+        } else {
+            plain(title, summary, chevron, s.roles)
         };
         column![
             Button::with_content(header, ButtonVariant::Text, s.roles)
@@ -140,6 +148,66 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
         .spacing(spacing::XS)
         .into()
     }
+}
+
+/// The header row of a section without slots: drawn exactly as before feature 939 (FR-013 of
+/// feature 890), so no existing section's layout moves.
+fn plain<'a, M: 'a>(
+    title: Text<'a, M>,
+    summary: Option<String>,
+    chevron: Element<'a, M>,
+    roles: Roles,
+) -> Element<'a, M> {
+    match summary {
+        // The summary is a second line of the same button, so the header stays one press
+        // target and one focus stop (FR-011, FR-013). The column fills the row, so the
+        // summary is cut against everything the chevron leaves it.
+        Some(summary) => row![
+            column![
+                title,
+                Ellipsized::at_role(summary, TypeRole::Caption, roles.on_surface_variant),
+            ]
+            .width(Length::Fill),
+            chevron,
+        ]
+        .align_y(alignment::Vertical::Center)
+        .into(),
+        None => row![title, Space::new().width(Length::Fill), chevron]
+            .align_y(alignment::Vertical::Center)
+            .into(),
+    }
+}
+
+/// The header row with a leading icon or a trailing element (feature 939, research R11): the icon,
+/// the title (one line) over the summary, the trailing element, then the chevron. The title column
+/// fills the row, so the summary is cut against everything the slots leave it.
+fn slotted<'a, M: 'a>(
+    title: Text<'a, M>,
+    summary: Option<String>,
+    leading: Option<Icon>,
+    trailing: Option<Element<'a, M>>,
+    chevron: Element<'a, M>,
+    roles: Roles,
+) -> Element<'a, M> {
+    let title = title.wrapping(iced::widget::text::Wrapping::None);
+    let text: Element<'a, M> = match summary {
+        Some(summary) => column![
+            title,
+            Ellipsized::at_role(summary, TypeRole::Caption, roles.on_surface_variant),
+        ]
+        .width(Length::Fill)
+        .into(),
+        None => column![title].width(Length::Fill).into(),
+    };
+    let leading = leading.map(|icon| super::glyph::icon(icon, CHEVRON, roles.on_surface_variant));
+    row(leading
+        .into_iter()
+        .chain([text])
+        .chain(trailing)
+        .chain([chevron]))
+    .spacing(spacing::SM)
+    .align_y(alignment::Vertical::Center)
+    .into()
 }
 
 #[cfg(test)]
@@ -469,6 +537,80 @@ mod tests {
             let m = Mounted::new(s);
             assert_eq!(m.node.children()[0].bounds().height, TODAYS_HEADER_HEIGHT);
         }
+    }
+
+    /// A status the M4 tests put in the trailing slot (feature 939).
+    const STATUS: &str = "Running";
+
+    fn decorated<'a>(open: bool, r: Roles) -> AccordionSection<'a, String> {
+        section(open, r)
+            .summary(SUMMARY)
+            .leading(Icon::ToolCall)
+            .trailing(Text::new(STATUS, TypeRole::Label, r))
+    }
+
+    /// Feature 939 (research R11): the leading icon and the trailing element are drawn inside the
+    /// header row, the icon before the title and the trailing element after it, with the chevron
+    /// still last — folded and open, in both themes.
+    #[test]
+    fn the_leading_icon_and_trailing_element_are_drawn_in_the_header_row() {
+        let glyph = Icon::ToolCall.glyph().to_string();
+        let chevron_closed = Icon::MoveDown.glyph().to_string();
+        let chevron_open = Icon::MoveUp.glyph().to_string();
+        for r in [roles(), dark_roles()] {
+            for open in [false, true] {
+                let mut m = Mounted::new(decorated(open, r));
+                let header = m.node.children()[0].bounds();
+                let painted = m.painted_text();
+                let find = |content: &str| {
+                    painted_with(content, &painted).unwrap_or_else(|| {
+                        panic!("`{content}` is painted (open {open}): {painted:?}")
+                    })
+                };
+                let icon = find(&glyph);
+                let title = find("Network");
+                let status = find(STATUS);
+                let chevron = find(if open { &chevron_open } else { &chevron_closed });
+                for p in [&icon, &title, &status, &chevron] {
+                    assert!(
+                        p.bounds.x >= header.x - 0.5
+                            && p.bounds.y >= header.y - 0.5
+                            && p.bounds.x + p.bounds.width <= header.x + header.width + 0.5
+                            && p.bounds.y + p.bounds.height <= header.y + header.height + 0.5,
+                        "{p:?} lies outside the header {header:?}"
+                    );
+                }
+                assert!(icon.bounds.x < title.bounds.x, "the icon leads the title");
+                assert!(
+                    title.bounds.x < status.bounds.x,
+                    "the status follows the title"
+                );
+                assert!(status.bounds.x < chevron.bounds.x, "the chevron stays last");
+                assert_eq!(
+                    header.height, TODAYS_HEADER_HEIGHT,
+                    "the header keeps its height"
+                );
+            }
+        }
+    }
+
+    /// The slots leave the header one press target and one focus stop: a press, Space and Enter
+    /// each toggle once, and a closed body still offers no stop (feature 939, FR-010).
+    #[test]
+    fn the_slots_leave_the_headers_toggle_and_focus_alone() {
+        let r = roles();
+        let mut m = Mounted::new(decorated(false, r));
+        let at = header_centre(&m);
+        assert_eq!(click(&mut m, at), vec!["toggled".to_string()]);
+        for key in [Named::Space, Named::Enter] {
+            let out = m.send(named_key(key), mouse::Cursor::Unavailable);
+            assert_eq!(out, vec!["toggled".to_string()], "{key:?} must toggle once");
+        }
+        let body = crate::ui::material::TextField::<String>::new("", "v", r).label("Label");
+        let slotted = AccordionSection::new("Network", body, r)
+            .leading(Icon::ToolCall)
+            .trailing(Text::new(STATUS, TypeRole::Label, r));
+        assert_eq!(stops(slotted), focus_stops(false), "no new focus stop");
     }
 
     /// With both a summary and the marker, the header is still one press target and one focus
