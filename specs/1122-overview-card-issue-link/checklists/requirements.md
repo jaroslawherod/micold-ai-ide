@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,8 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers remain, both left for the clarify unit: FR-001 (do the links
-  follow the GitHub issues and Jira integration switches?) and FR-010 (app-wide Jira base URL field,
-  a per-project field, or the Jira connection's site?). Each carries a working assumption.
+- The two [NEEDS CLARIFICATION] markers (FR-001, FR-010) were resolved in the clarify unit with
+  the recommended defaults (spec.md#Clarifications), pending the owner's answer.
 - `settings.json`, the `https` scheme and the issue addresses are named because they are the
   user-visible contract (the stored setting and the addresses the browser opens), as in features 533
   and 1102.
