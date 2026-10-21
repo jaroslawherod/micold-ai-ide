@@ -5,7 +5,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+pub use crate::protocol::messages::{AttachmentMeta, ImageAttachment, ImageMedia};
 
 /// The largest picture the CLI accepts: the Messages API's 5 MB limit on the base64 form.
 pub const MAX_IMAGE_BYTES: usize = 3_750_000;
@@ -15,15 +15,6 @@ pub const MAX_IMAGES_PER_MESSAGE: usize = 20;
 /// travels as base64 (4/3 of its size): 9 MiB of pictures take 12 MiB of the 16 MiB
 /// `MAX_FRAME_LENGTH`, leaving room for the text.
 pub const MAX_MESSAGE_IMAGE_BYTES: usize = 9 * 1024 * 1024;
-
-/// A picture format the CLI accepts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ImageMedia {
-    Png,
-    Jpeg,
-    Gif,
-    Webp,
-}
 
 impl ImageMedia {
     /// The format `bytes` starts with, by magic number; `None` for anything else.
@@ -52,19 +43,9 @@ impl ImageMedia {
     }
 }
 
-/// A picture of a draft or a queued message: the file's name (no directory), its format and its
-/// bytes. Built by [`admit`], which checks the limits.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ImageAttachment {
-    name: String,
-    media: ImageMedia,
-    #[serde(with = "picture_bytes")]
-    bytes: Vec<u8>,
-}
-
 /// A picture's bytes as base64 text in a human-readable format (the JSON control frames), and as
 /// plain bytes otherwise (postcard: the saved queue).
-mod picture_bytes {
+pub(crate) mod picture_bytes {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
     use serde::de::{self, SeqAccess, Visitor};
@@ -116,6 +97,18 @@ mod picture_bytes {
     }
 }
 
+/// Names the picture and its size, never its bytes: a message carrying pictures may be printed in
+/// a log or a failed assertion, and neither the text nor the pictures are ever logged.
+impl fmt::Debug for ImageAttachment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ImageAttachment")
+            .field("name", &self.name)
+            .field("media", &self.media)
+            .field("size", &self.bytes.len())
+            .finish()
+    }
+}
+
 impl ImageAttachment {
     /// The file name the user dropped.
     pub fn name(&self) -> &str {
@@ -129,14 +122,6 @@ impl ImageAttachment {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
-}
-
-/// What windows other than the sender see of a picture: no bytes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AttachmentMeta {
-    pub name: String,
-    pub media: ImageMedia,
-    pub size: u64,
 }
 
 impl From<&ImageAttachment> for AttachmentMeta {
@@ -184,46 +169,64 @@ impl fmt::Display for AttachmentRefusal {
     }
 }
 
-/// Attach the file `name` holding `bytes` to a draft that already holds `draft`, or say why not.
-/// Checks, in order: a known picture format, [`MAX_IMAGE_BYTES`], [`MAX_IMAGES_PER_MESSAGE`],
-/// [`MAX_MESSAGE_IMAGE_BYTES`].
-pub fn admit(
-    draft: &[ImageAttachment],
+/// Why a picture of `bytes`, named `name`, cannot join `held` pictures of `held_bytes` bytes in
+/// all; with its format when it can. Checks, in order: a known picture format,
+/// [`MAX_IMAGE_BYTES`], [`MAX_IMAGES_PER_MESSAGE`], [`MAX_MESSAGE_IMAGE_BYTES`].
+fn judge(
+    held: usize,
+    held_bytes: usize,
     name: &str,
-    bytes: Vec<u8>,
-) -> Result<ImageAttachment, AttachmentRefusal> {
-    let name = name.to_owned();
-    let Some(media) = ImageMedia::sniff(&bytes) else {
+    bytes: &[u8],
+) -> Result<ImageMedia, AttachmentRefusal> {
+    let name = || name.to_owned();
+    let Some(media) = ImageMedia::sniff(bytes) else {
         return Err(AttachmentRefusal::Unreadable {
-            name,
+            name: name(),
             why: "it is not a PNG, JPEG, GIF or WebP picture".into(),
         });
     };
     if bytes.len() > MAX_IMAGE_BYTES {
         let size = bytes.len() as u64;
-        return Err(AttachmentRefusal::TooLarge { name, size });
+        return Err(AttachmentRefusal::TooLarge { name: name(), size });
     }
-    if draft.len() >= MAX_IMAGES_PER_MESSAGE {
-        return Err(AttachmentRefusal::TooMany { name });
+    if held >= MAX_IMAGES_PER_MESSAGE {
+        return Err(AttachmentRefusal::TooMany { name: name() });
     }
-    let held: usize = draft.iter().map(|image| image.bytes.len()).sum();
-    if held + bytes.len() > MAX_MESSAGE_IMAGE_BYTES {
-        return Err(AttachmentRefusal::MessageTooLarge { name });
+    if held_bytes + bytes.len() > MAX_MESSAGE_IMAGE_BYTES {
+        return Err(AttachmentRefusal::MessageTooLarge { name: name() });
     }
-    Ok(ImageAttachment { name, media, bytes })
+    Ok(media)
+}
+
+/// Attach the file `name` holding `bytes` to a draft that already holds `draft`, or say why not
+/// (the checks of [`judge`], in its order).
+pub fn admit(
+    draft: &[ImageAttachment],
+    name: &str,
+    bytes: Vec<u8>,
+) -> Result<ImageAttachment, AttachmentRefusal> {
+    let held_bytes = draft.iter().map(|image| image.bytes.len()).sum();
+    let media = judge(draft.len(), held_bytes, name, &bytes)?;
+    Ok(ImageAttachment {
+        name: name.to_owned(),
+        media,
+        bytes,
+    })
 }
 
 /// Check pictures that arrived from elsewhere (the wire, a saved queue) as [`admit`] would have
 /// built them one by one: the first that fails is refused.
 pub fn check_images(images: &[ImageAttachment]) -> Result<(), AttachmentRefusal> {
-    for (at, image) in images.iter().enumerate() {
-        let admitted = admit(&images[..at], &image.name, image.bytes.clone())?;
-        if admitted.media != image.media {
+    let mut held_bytes = 0;
+    for (held, image) in images.iter().enumerate() {
+        let media = judge(held, held_bytes, &image.name, &image.bytes)?;
+        if media != image.media {
             return Err(AttachmentRefusal::Unreadable {
                 name: image.name.clone(),
                 why: "its bytes are not the picture format it names".into(),
             });
         }
+        held_bytes += image.bytes.len();
     }
     Ok(())
 }
@@ -406,6 +409,16 @@ mod tests {
             why: "permission denied".into(),
         };
         assert!(unreadable.to_string().contains("permission denied"));
+    }
+
+    #[test]
+    fn debug_shows_the_name_and_size_never_the_bytes() {
+        let shown = format!("{:?}", image("shot.png", 4096));
+        assert!(
+            shown.contains("shot.png") && shown.contains("4096"),
+            "{shown}"
+        );
+        assert!(!shown.contains("137, 80"), "no bytes: {shown}");
     }
 
     #[test]

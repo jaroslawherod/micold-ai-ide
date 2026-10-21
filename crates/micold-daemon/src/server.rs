@@ -2804,6 +2804,16 @@ fn spawn_session_start(
     });
 }
 
+/// The answer to a feature-941 request the daemon does not serve yet (M1, T021).
+fn not_available_yet(req: u64) -> DaemonMsg {
+    DaemonMsg::OperationError {
+        req,
+        kind: ErrorKind::Refused,
+        message: "Not available yet".into(),
+        detail: None,
+    }
+}
+
 /// Whether a terminal-only `request` to `process` of `session` is refused because it addresses a
 /// structured session's AI process, which has no terminal (feature 938, FR-019). When it is, the
 /// connection `client` is told why and nothing else is.
@@ -3095,15 +3105,5 @@ mod create_error_tests {
         });
         assert!(message.contains("feat-login"), "{message}");
         assert!(message.contains("Choose a different name"), "{message}");
-    }
-}
-
-/// The answer to a feature-941 request the daemon does not serve yet (M1, T021).
-fn not_available_yet(req: u64) -> DaemonMsg {
-    DaemonMsg::OperationError {
-        req,
-        kind: ErrorKind::Refused,
-        message: "Not available yet".into(),
-        detail: None,
     }
 }

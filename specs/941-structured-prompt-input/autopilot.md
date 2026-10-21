@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M1
-- **Next step**: implement M1 (T001–T022), gate, reviews A/B, PR files for the orchestrator
+- **Next step**: M1 implemented (T001–T022 ticked); review A r2 (fix diff) + scoped gate, then review B, full gate, PR files
 
 ## Pull requests
 
@@ -62,9 +62,23 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review plan | 1 | 5ed319d71185c5d5919a6e5458d96e8a71871984:125e33e3d05fbd606512f1185a0c45153db7f0bd | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Review plan | 2 | 5c526288a3d957a05bf42cfd41fc885f04683309:cc3ecef13d97dbe7bade5a8f198321d26f929441 | CLEAN (sonnet) |
 | Review tasks | 1 | 98c81d7650a1aaa75d3488756d2a6b9f04034a02:0909b8aa08b8a364302b36b8fdb71a48509ffa94 | CHANGES: 2 MAJOR, 1 MINOR (all fixed); checklist item confirmed |
-| Review tasks | 2 | 22c56cfa4d83ea22a4f99578a543af65950291e4:0909b8aa08b8a364302b36b8fdb71a48509ffa94 | pending |
+| Review tasks | 2 | 22c56cfa4d83ea22a4f99578a543af65950291e4:0909b8aa08b8a364302b36b8fdb71a48509ffa94 | CLEAN (design PR #1209 merged) |
+| Review A M1 (code-review high) | 1 | b061491b31b1e8adfe7a819ba51179e7e88ac6bb:96a0defe7106c1484b328d9175dc173b7b440a05 | CHANGES: 2 MAJOR (Debug prints picture bytes; wire types outside the hashed source), 7 MINOR; fixed 2 MAJOR + 2 MINOR, 5 declined |
 
 ## Declined review findings
+
+- Review A M1 r1 F2 (an asked interrupt closes the turn `Interrupted` whatever the result): spec
+  research R4 and T013 decide it ("a turn holding the `InterruptAsked` note whose `result` is
+  `success` … also closes `Interrupted`").
+- Review A M1 r1 F3 (per-process turn ids reset at 1, a stale interrupt could hit a new turn 1): not
+  reachable in M1 (the daemon ignores `TurnInterrupt`); T008 keeps the per-process counter until M2
+  moves ids to `SessionInput::next_turn`.
+- Review A M1 r1 F4 (queue unbounded, 1 GiB file cap): research R9 "The queue has no length cap
+  (the spec sets none)" and the 1 GiB read bound.
+- Review A M1 r1 F8 (`submit` takes `busy`/`running` bools): data-model *SessionInput* signature;
+  the daemon computes both under one lock (M2). MINOR.
+- Review A M1 r1 F9 (blank check written in three places): the two daemon copies are M1's
+  compile-only bridge that M2 removes (T008); MINOR.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
