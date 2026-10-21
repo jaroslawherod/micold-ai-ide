@@ -135,32 +135,32 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 4: Daemon — requests held and decided (M2)
 
-- [ ] T024 [P] [US1] Tests in `core/tests/mcp_jsonrpc.rs`, `core/tests/mcp_tools_catalog.rs` and
+- [x] T024 [P] [US1] Tests in `core/tests/mcp_jsonrpc.rs`, `core/tests/mcp_tools_catalog.rs` and
   `core/tests/mcp_binding_plan.rs`: `route(…, ListScope)` lists `permission_prompt` for a
   structured caller only and a terminal caller's `tools/call` of it fails `unknown_tool`;
   `binding::plan(…, timeout_ms)` writes `PROMPT_TOOL_TIMEOUT_MS = 2_147_483_647` when given it,
   and a terminal session's binding stays byte-for-byte as before (`TOOL_TIMEOUT_MS`) (FR-001,
   FR-018, R3)
-- [ ] T025 [US1] Implement T024 in `core/src/mcp/jsonrpc.rs` (`ListScope`), `core/src/mcp/tools.rs`
+- [x] T025 [US1] Implement T024 in `core/src/mcp/jsonrpc.rs` (`ListScope`), `core/src/mcp/tools.rs`
   (`PROMPT_TOOL` with the contract's schema) and `core/src/mcp/binding.rs` (`timeout_ms` argument);
   update every existing caller of `plan` to pass `TOOL_TIMEOUT_MS`
-- [ ] T026 [P] [US1] Serde tests in `core/tests/protocol_roundtrip.rs` for
+- [x] T026 [P] [US1] Serde tests in `core/tests/protocol_roundtrip.rs` for
   `DaemonMsg::{PermissionRequested, PermissionResolved, PermissionInputText}` and
   `ClientMsg::{PermissionDecision, PermissionInput}` per [contracts/wire.md](contracts/wire.md);
   then add them to `core/src/protocol/messages.rs` and bump `PROTOCOL_VERSION` by one in
   `core/src/protocol/version.rs`
-- [ ] T027 [US1] Extend the stand-in `claude` in `daemon/tests/support/structured.rs` (R13): script
+- [x] T027 [US1] Extend the stand-in `claude` in `daemon/tests/support/structured.rs` (R13): script
   commands `prompt <file>` (reads the tool server URL and bearer from the `--mcp-config` file its
   argv names, POSTs the file's `tools/call` over `std::net::TcpStream`, HTTP/1.1,
   `Connection: close`, appends the reply's `content[0].text` to `prompt-record`) and
   `prompt-async <file>` (the same on a thread, so several requests are held while it keeps reading
   stdin); a helper that turns `DaemonState::set_permission_prompts(true)` on for the tests
-- [ ] T028 [US1] Change the superseded FR-006a assertion in `daemon/tests/structured_session.rs`
+- [x] T028 [US1] Change the superseded FR-006a assertion in `daemon/tests/structured_session.rs`
   (plan *SC-007*): with the switch on, the structured argv carries
   `--allow-dangerously-skip-permissions` and `--permission-prompt-tool
   mcp__micold__permission_prompt` and no `--permission-mode` (Default); with it off, still
   `--allow-dangerously-skip-permissions` and no `--permission-prompt-tool`; the terminal argv assertion is untouched
-- [ ] T029 [US1] Integration tests in `daemon/tests/structured_permission.rs` (new) against the
+- [x] T029 [US1] Integration tests in `daemon/tests/structured_permission.rs` (new) against the
   stand-in: a call becomes `PermissionRequested` carrying tool name, input preview, tool use id and
   kind, sent to two attached clients; the stand-in gets no reply while pending across 2 s and a
   client reconnect (FR-003, SC-001); Allow, Deny with and without a message and AlwaysAllow each
@@ -169,7 +169,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   connecting while a request is pending gets it exactly once, including one connecting during the
   open (FR-005); a request raised while the session's mode is Bypass is shown and held like any
   other, never answered by the daemon (edge case *Bypass mode*); `PermissionInput` returns the whole input text for a > 64 KiB Write
-- [ ] T030 [US1] Integration tests in `daemon/tests/structured_permission.rs`: two clients decide the
+- [x] T030 [US1] Integration tests in `daemon/tests/structured_permission.rs`: two clients decide the
   same request concurrently, 50 iterations — exactly one decision reaches the stand-in, both see
   one resolution, the loser gets `OperationError` (SC-002); refusals with `OperationError` and the
   stand-in unchanged for an answered id, an unknown id, another session's id (session B named for
@@ -179,16 +179,16 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   pending at once (`prompt-async`) are decided in another order than they arrived, each answer
   reaching its own call (edge case *Several requests at once*); two structured sessions with
   requests pending at once stay independent
-- [ ] T031 [US3] [US4] Integration tests in `daemon/tests/structured_permission.rs`: a plan
+- [x] T031 [US3] [US4] Integration tests in `daemon/tests/structured_permission.rs`: a plan
   approval request carries the whole plan and `KeepPlanning` with a note reaches the stand-in as
   deny with the note; a question request with two questions, one multi-select, is answered and the
   stand-in records the `answers` map; `DeclineQuestion` reaches it as deny
-- [ ] T032 [US1] Implement `daemon/src/permission.rs` (new): `PromptRegistry { pending, rules }`
+- [x] T032 [US1] Implement `daemon/src/permission.rs` (new): `PromptRegistry { pending, rules }`
   with `open` (rule match → `Opened::Answered`, else `Opened::Pending { id, receiver, broadcast }`),
   `decide` (validate, remove, `Decided { resolved, last_of_session, mode_change }`) and `replay`;
   `serve_prompt` (the `tools/call` handler: `parse_call`, `classify`, open under the state lock,
   await the receiver or the connection's `hangup` token) — no deadline (R4)
-- [ ] T033 [US1] Wire it in: `daemon/src/mcp/server.rs` routes by caller kind and sends
+- [x] T033 [US1] Wire it in: `daemon/src/mcp/server.rs` routes by caller kind and sends
   `permission_prompt` to `permission::serve_prompt`; `daemon/src/state.rs` holds the registry
   inside the state lock, replays pending requests in the handshake under the same lock as the
   client's registration, and adds the never-persisted `set_permission_prompts(on)` switch (off by
@@ -196,7 +196,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `PermissionDecision` and `PermissionInput`; `daemon/src/structured.rs` launches with
   `launch_args(Default, bound && switch)` and writes the structured binding with
   `PROMPT_TOOL_TIMEOUT_MS`; T028–T031 pass
-- [ ] T034 [US1] Describe the prompt tool, the switch, and the `Permission*` messages in
+- [x] T034 [US1] Describe the prompt tool, the switch, and the `Permission*` messages in
   `docs/daemon.md` (*The second loopback listener* section)
 
 ---

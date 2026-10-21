@@ -59,7 +59,9 @@ const DESTRUCTIVE: [&str; 4] = [
 
 fn tools_list() -> Vec<Value> {
     let message = parse(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).unwrap();
-    let Route::Reply(response) = route(message, "0") else {
+    let Route::Reply(response) =
+        route(message, "0", micold_core::mcp::jsonrpc::ListScope::Terminal)
+    else {
         panic!("tools/list is answered directly");
     };
     response["result"]["tools"].as_array().unwrap().clone()
@@ -1179,4 +1181,23 @@ fn session_start_tools_state_the_person_confirms_agent_refused_rule() {
             "{name}: {description:?}"
         );
     }
+}
+
+/// #942 FR-001: the prompt tool is not in the catalog, so a terminal caller's `tools/call` of it
+/// fails as any unlisted tool does; only a structured caller's call reaches the prompt handler.
+#[test]
+fn the_prompt_tool_is_not_a_catalog_tool() {
+    let message = invalid(
+        "permission_prompt",
+        json!({"tool_name": "Bash", "input": {"command": "ls"}}),
+    );
+    assert_eq!(message, "unknown tool \"permission_prompt\"");
+    assert!(!tools_list()
+        .iter()
+        .any(|tool| tool["name"] == "permission_prompt"));
+    assert!(!catalog()["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|tool| tool["name"] == "permission_prompt"));
 }

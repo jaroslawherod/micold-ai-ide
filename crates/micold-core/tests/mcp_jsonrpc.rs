@@ -3,7 +3,7 @@
 
 use micold_core::mcp::errors::{tool_failure, tool_success, ErrorCategory, OpError};
 use micold_core::mcp::jsonrpc::{
-    parse, route, Message, Route, LATEST_PROTOCOL_VERSION, METHOD_NOT_FOUND, PARSE_ERROR,
+    parse, route, ListScope, Message, Route, LATEST_PROTOCOL_VERSION, METHOD_NOT_FOUND, PARSE_ERROR,
 };
 use serde_json::{json, Value};
 
@@ -13,7 +13,7 @@ const VERSION: &str = "9.9.9";
 /// Route a JSON value and expect a direct reply.
 fn reply(request: Value) -> Value {
     let message = parse(request.to_string().as_bytes()).expect("well-formed request");
-    match route(message, VERSION) {
+    match route(message, VERSION, ListScope::Terminal) {
         Route::Reply(response) => response,
         other => panic!("expected a reply, got {other:?}"),
     }
@@ -56,7 +56,10 @@ fn a_message_without_an_id_parses_as_a_notification() {
 #[test]
 fn a_notification_is_accepted_without_a_reply() {
     let message = parse(br#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#).unwrap();
-    assert!(matches!(route(message, VERSION), Route::Accepted));
+    assert!(matches!(
+        route(message, VERSION, ListScope::Terminal),
+        Route::Accepted
+    ));
 }
 
 #[test]
@@ -139,7 +142,7 @@ fn tools_call_is_handed_to_the_caller_with_its_name_and_arguments() {
         .as_bytes(),
     )
     .unwrap();
-    match route(message, VERSION) {
+    match route(message, VERSION, ListScope::Terminal) {
         Route::CallTool {
             id,
             name,
@@ -191,5 +194,87 @@ fn every_category_serialises_as_its_snake_case_name() {
     for (category, name) in expected {
         assert_eq!(category.as_str(), name);
         assert_eq!(serde_json::to_value(category).unwrap(), json!(name));
+    }
+}
+
+fn tool_names(scope: ListScope) -> Vec<String> {
+    let message = parse(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).unwrap();
+    let Route::Reply(response) = route(message, VERSION, scope) else {
+        panic!("tools/list is answered directly");
+    };
+    response["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap().to_string())
+        .collect()
+}
+
+/// #942 FR-001, contracts/claude-permission.md: the prompt tool is listed to a structured caller
+/// only, with the contract's schema, after every tool a terminal caller sees.
+#[test]
+fn the_prompt_tool_is_listed_for_a_structured_caller_only() {
+    let terminal = tool_names(ListScope::Terminal);
+    let structured = tool_names(ListScope::Structured);
+    assert!(!terminal.iter().any(|n| n == "permission_prompt"));
+    assert_eq!(
+        structured.last().map(String::as_str),
+        Some("permission_prompt")
+    );
+    assert_eq!(structured[..structured.len() - 1], terminal[..]);
+
+    let message = parse(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).unwrap();
+    let Route::Reply(response) = route(message, VERSION, ListScope::Structured) else {
+        panic!("tools/list is answered directly");
+    };
+    let tool = response["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "permission_prompt")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        tool,
+        json!({"name": "permission_prompt",
+            "description": "Asks the user of the Micold window whether a tool use may run.",
+            "inputSchema": {"type": "object",
+                "properties": {"tool_name": {"type": "string"}, "input": {"type": "object"},
+                               "tool_use_id": {"type": "string"}},
+                "required": ["tool_name", "input"]}})
+    );
+}
+
+fn prompt_call() -> Message {
+    parse(
+        json!({"jsonrpc":"2.0","id":5,"method":"tools/call",
+               "params":{"name":"permission_prompt",
+                         "arguments":{"tool_name":"Bash","input":{"command":"ls"}},
+                         "_meta":{"claudecode/toolUseId":"toolu_1"}}})
+        .to_string()
+        .as_bytes(),
+    )
+    .unwrap()
+}
+
+/// #942 R1: a structured caller's prompt-tool call is handed over as a prompt, with its `_meta`;
+/// a terminal caller's is an ordinary tool call, which the catalog refuses as an unknown tool.
+#[test]
+fn a_prompt_tool_call_is_a_prompt_for_a_structured_caller_only() {
+    match route(prompt_call(), VERSION, ListScope::Structured) {
+        Route::Prompt {
+            id,
+            arguments,
+            meta,
+        } => {
+            assert_eq!(id, json!(5));
+            assert_eq!(arguments["tool_name"], "Bash");
+            assert_eq!(meta, Some(json!({"claudecode/toolUseId":"toolu_1"})));
+        }
+        other => panic!("expected a prompt, got {other:?}"),
+    }
+    match route(prompt_call(), VERSION, ListScope::Terminal) {
+        Route::CallTool { name, .. } => assert_eq!(name, "permission_prompt"),
+        other => panic!("expected an ordinary tool call, got {other:?}"),
     }
 }

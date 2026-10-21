@@ -55,6 +55,9 @@ const PERMISSION_OVERRIDES: [&str; 5] = [
     "--permission-prompt-tool",
 ];
 
+/// What every structured launch adds so a later switch to Bypass is reachable (#942 R6).
+const BYPASS_REACHABLE: &str = "--allow-dangerously-skip-permissions";
+
 #[derive(Clone, Default)]
 struct LogBuffer(Arc<Mutex<Vec<u8>>>);
 
@@ -121,7 +124,10 @@ fn complete(expected: usize) -> impl Fn(&[structured::Received]) -> bool {
 }
 
 /// (a) FR-005, FR-006, FR-006a: the argv, cwd and environment of a terminal session at the same
-/// location, behind the seven structured arguments, with no permission override.
+/// location, behind the seven structured arguments, with no permission override. #942 (plan
+/// *SC-007*) supersedes FR-006a in one point: every structured launch also carries
+/// `--allow-dangerously-skip-permissions`, so a later switch to Bypass is reachable (R6); unbound,
+/// it names no prompt tool.
 #[test]
 fn a_structured_launch_is_the_terminal_launch_behind_the_structured_args() {
     fake_stream_cli();
@@ -170,7 +176,17 @@ fn a_structured_launch_is_the_terminal_launch_behind_the_structured_args() {
     for flag in PERMISSION_OVERRIDES {
         assert!(!args.contains(&flag), "no {flag}: {args:#?}");
     }
-    let rest = args[7..].join("\n") + "\n";
+    assert_eq!(
+        args.iter().filter(|a| **a == BYPASS_REACHABLE).count(),
+        1,
+        "{BYPASS_REACHABLE} once: {args:#?}"
+    );
+    let rest: Vec<&str> = args[7..]
+        .iter()
+        .copied()
+        .filter(|a| *a != BYPASS_REACHABLE)
+        .collect();
+    let rest = rest.join("\n") + "\n";
     assert_eq!(
         without_id(&rest, s),
         records[0],
@@ -224,6 +240,62 @@ fn a_structured_launch_forwards_subagent_text() {
     let args: Vec<&str> = argv.lines().collect();
     assert_eq!(args[..7], STRUCTURED_ARGS, "{args:#?}");
     state.stop_session(s);
+/// #942 T028 (plan *SC-007*, superseding FR-006a's refusal): a bound structured session names the
+/// prompt tool while prompts are on and not while they are off; either way it carries the Bypass
+/// flag once and no `--permission-mode` (Default), the prompt tool before the binding, which stays
+/// last, and its binding waits as long as the prompt tool may (R3).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bound_structured_launch_names_the_prompt_tool_only_while_prompts_are_on() {
+    fake_stream_cli();
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let session = structured_session(SessionLocation::Default);
+    let id = session.id;
+    let state = service(dir, vec![session]);
+    let bindings = tempfile::tempdir().unwrap();
+    mcp::serve_tool_server(&state, bindings.path().to_path_buf()).await;
+    stream_script(dir, "");
+    for on in [false, true] {
+        state.set_permission_prompts(on);
+        structured::clear_records(dir);
+        let starting = Arc::clone(&state);
+        tokio::task::spawn_blocking(move || starting.start_session(id, LaunchMode::Fresh))
+            .await
+            .unwrap()
+            .expect("starts");
+        let argv = record(dir, "argv-record");
+        let args: Vec<&str> = argv.lines().collect();
+        assert_eq!(
+            args.iter().filter(|a| **a == BYPASS_REACHABLE).count(),
+            1,
+            "prompts {on}: {args:#?}"
+        );
+        assert!(!args.contains(&"--permission-mode"), "Default: {args:#?}");
+        let tool_at = args.iter().position(|a| *a == "--permission-prompt-tool");
+        let config_at = args
+            .iter()
+            .position(|a| *a == "--mcp-config")
+            .expect("bound");
+        assert_eq!(config_at, args.len() - 4, "the binding is last: {args:#?}");
+        match tool_at {
+            Some(at) if on => {
+                assert_eq!(args[at + 1], "mcp__micold__permission_prompt");
+                assert!(at < config_at, "before the binding: {args:#?}");
+            }
+            None if !on => {}
+            _ => panic!("prompts {on}, prompt tool at {tool_at:?}: {args:#?}"),
+        }
+        let binding: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(args[config_at + 1]).unwrap()).unwrap();
+        assert_eq!(
+            binding["mcpServers"]["micold"]["timeout"],
+            serde_json::json!(2_147_483_647u64)
+        );
+        let stopping = Arc::clone(&state);
+        tokio::task::spawn_blocking(move || stopping.stop_session(id))
+            .await
+            .unwrap();
+    }
 }
 
 /// (b) SC-001, FR-016: every recorded fixture's lines reach a viewer as one typed event each, in

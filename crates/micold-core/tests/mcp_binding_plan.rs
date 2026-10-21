@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use micold_core::mcp::binding::{plan, SkipReason};
+use micold_core::mcp::binding::{plan, SkipReason, PROMPT_TOOL_TIMEOUT_MS, TOOL_TIMEOUT_MS};
 use micold_core::provider::ToolServerSupport;
 use serde_json::{json, Value};
 
@@ -25,7 +25,14 @@ fn claude_entry() -> Value {
 
 #[test]
 fn claude_is_bound_by_mcp_config_and_allowed_tools_as_the_last_arguments() {
-    let bound = plan(ToolServerSupport::McpConfigArg, URL, CREDENTIAL, &file()).unwrap();
+    let bound = plan(
+        ToolServerSupport::McpConfigArg,
+        URL,
+        CREDENTIAL,
+        &file(),
+        TOOL_TIMEOUT_MS,
+    )
+    .unwrap();
     assert_eq!(
         bound.args,
         vec![
@@ -40,7 +47,14 @@ fn claude_is_bound_by_mcp_config_and_allowed_tools_as_the_last_arguments() {
 
 #[test]
 fn the_claude_file_is_exactly_one_http_server_named_micold() {
-    let bound = plan(ToolServerSupport::McpConfigArg, URL, CREDENTIAL, &file()).unwrap();
+    let bound = plan(
+        ToolServerSupport::McpConfigArg,
+        URL,
+        CREDENTIAL,
+        &file(),
+        TOOL_TIMEOUT_MS,
+    )
+    .unwrap();
     let parsed: Value = serde_json::from_str(&bound.file_contents).unwrap();
     assert_eq!(parsed, json!({"mcpServers": {"micold": claude_entry()}}));
 }
@@ -52,6 +66,7 @@ fn copilot_is_bound_by_additional_mcp_config_and_allow_tool() {
         URL,
         CREDENTIAL,
         &file(),
+        TOOL_TIMEOUT_MS,
     )
     .unwrap();
     assert_eq!(
@@ -72,6 +87,7 @@ fn the_copilot_file_is_the_claude_entry_plus_every_tool() {
         URL,
         CREDENTIAL,
         &file(),
+        TOOL_TIMEOUT_MS,
     )
     .unwrap();
     let parsed: Value = serde_json::from_str(&bound.file_contents).unwrap();
@@ -89,6 +105,7 @@ fn an_unsupported_cli_is_skipped_with_its_reason_and_no_arguments() {
         URL,
         CREDENTIAL,
         &file(),
+        TOOL_TIMEOUT_MS,
     )
     .unwrap_err();
     assert_eq!(skipped, SkipReason::Unsupported("Pi has no MCP support"));
@@ -100,7 +117,7 @@ fn no_plan_ever_passes_strict_mcp_config() {
         ToolServerSupport::McpConfigArg,
         ToolServerSupport::AdditionalMcpConfig,
     ] {
-        let bound = plan(support, URL, CREDENTIAL, &file()).unwrap();
+        let bound = plan(support, URL, CREDENTIAL, &file(), TOOL_TIMEOUT_MS).unwrap();
         assert!(
             !bound.args.iter().any(|a| a.contains("strict-mcp-config")),
             "{support:?} must never replace the user's own servers"
@@ -139,4 +156,37 @@ fn each_skip_reason_renders_its_contract_text() {
     for (reason, text) in cases {
         assert_eq!(reason.to_string(), text);
     }
+}
+
+/// #942 R3, FR-018: a structured session's binding waits as long as Node's largest timer for the
+/// prompt tool's answer; every other binding keeps the 120 s it always had, byte for byte.
+#[test]
+fn a_structured_binding_waits_for_the_prompt_tools_answer_and_a_terminal_one_is_unchanged() {
+    assert_eq!(PROMPT_TOOL_TIMEOUT_MS, 2_147_483_647);
+    assert_eq!(TOOL_TIMEOUT_MS, 120_000);
+    let structured = plan(
+        ToolServerSupport::McpConfigArg,
+        URL,
+        CREDENTIAL,
+        &file(),
+        PROMPT_TOOL_TIMEOUT_MS,
+    )
+    .unwrap();
+    let parsed: Value = serde_json::from_str(&structured.file_contents).unwrap();
+    let mut entry = claude_entry();
+    entry["timeout"] = json!(2_147_483_647u64);
+    assert_eq!(parsed, json!({"mcpServers": {"micold": entry}}));
+
+    let terminal = plan(
+        ToolServerSupport::McpConfigArg,
+        URL,
+        CREDENTIAL,
+        &file(),
+        TOOL_TIMEOUT_MS,
+    )
+    .unwrap();
+    let expected =
+        serde_json::to_string_pretty(&json!({"mcpServers": {"micold": claude_entry()}})).unwrap();
+    assert_eq!(terminal.file_contents, expected, "byte for byte as before");
+    assert_eq!(terminal.args, structured.args, "the same arguments");
 }

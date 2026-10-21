@@ -211,6 +211,38 @@ text in it.
 When the daemon runs in a container, both listeners are the container's own loopback: neither port
 is published, and nothing on your machine outside the container can reach them.
 
+#### Permission prompts of structured sessions (#942, in progress)
+
+The tool server also serves a structured Claude session's **permission prompts**. Such a session
+is started with `--permission-prompt-tool mcp__micold__permission_prompt`, so when Claude wants to
+use a tool your rules do not allow outright, its CLI calls the tool `permission_prompt` instead of
+refusing. Only a structured session's key is offered that tool, and only that session can raise a
+request of its own; a terminal session's key is offered nothing new, and its call of the tool
+fails as an unknown tool. A structured session's key file gives the CLI the longest wait Node
+allows for each call (`2147483647` ms) instead of the usual 120 s, because the daemon holds the
+call open until someone answers and never times it out itself.
+
+Each call becomes a **pending request** of that session, kept in memory only:
+
+- Every connected window is sent `PermissionRequested` (the tool, up to 64 KiB of its input, the
+  tool call it belongs to, and whether it is a tool request, a plan approval or a question), and a
+  window that connects while requests are pending is sent each of them once, with its handshake.
+  `PermissionInput` fetches the whole input of a request whose preview was cut.
+- The first `PermissionDecision` from any window is the answer the CLI gets, and every window is
+  sent `PermissionResolved`. A decision for a request that is no longer pending, belongs to another
+  session, does not fit its kind, or leaves a question unanswered is refused with `OperationError`
+  and changes nothing. The deny message, the plan note and the answers are never logged.
+- **Always allow** also gives the session a rule for that exact request (the same command, file
+  path, web host, or tool), which the daemon applies itself to later identical calls of the same
+  session; no Claude settings file is written.
+- A call the daemon cannot read is denied at once and logged by its tool name, without its input.
+  A call whose CLI hangs up is withdrawn from every window.
+
+Until windows can show and answer these requests, the prompts are **off**: a structured session is
+started with `--allow-dangerously-skip-permissions` but without the prompt tool, and behaves as
+before. Only the daemon's tests turn them on (`DaemonState::set_permission_prompts`); the switch is
+never saved.
+
 ## Project and worktree operations run through the daemon (User Story 3)
 
 Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a
