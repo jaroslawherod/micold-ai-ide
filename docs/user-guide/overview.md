@@ -74,6 +74,7 @@ The body below it shows:
 
 - its **title**, which says what the location is for (see [Title](#title)), on up to three lines;
 - below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. A card whose title already is the branch does not repeat it. A worktree named after a GitHub issue, or a Jira key, shows a link to it at the end of this line (see [Opening a worktree's issue](#opening-a-worktrees-issue));
+- for a worktree linked to a Jira ticket whose status is known, the ticket's **status chip** (for example *In Review*), the same chip and the same status as in the sidebar (see [A ticket's status](worktrees-and-sessions.md#a-tickets-status)); a card without a status has no chip and no gap;
 - its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
 - when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
 - a **progress row**, when there is progress to show (see [Feature progress](#feature-progress));

@@ -158,6 +158,7 @@ pub struct OverviewCard<'a, M> {
     on_link_rest: Option<M>,
     on_link_keyboard_focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
     on_link_menu_key: Option<M>,
+    status: Option<(micold_core::jira_status::TicketStatus, bool)>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -191,8 +192,19 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             on_link_rest: None,
             on_link_keyboard_focus: None,
             on_link_menu_key: None,
+            status: None,
             _marker: PhantomData,
         }
+    }
+
+    /// The linked Jira ticket's status chip (feature 1101, FR-010), with whether it is stale.
+    /// `None` draws no chip and leaves no gap.
+    pub fn status(
+        mut self,
+        status: Option<(&micold_core::jira_status::TicketStatus, bool)>,
+    ) -> Self {
+        self.status = status.map(|(status, stale)| (status.clone(), stale));
+        self
     }
 
     /// Make the card a control: `message` is published by a click, and by Enter or Space while the
@@ -575,6 +587,9 @@ fn collapsed_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> 
         (None, Some(link)) => body = body.push(link),
         (None, None) => {}
     }
+    if let Some(chip) = status_chip(card) {
+        body = body.push(chip);
+    }
     body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
     if let Some(activity) = text.activity {
         body = body.push(
@@ -597,6 +612,15 @@ fn collapsed_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> 
         };
     }
     container(body).padding(spacing::MD).into()
+}
+
+/// The ticket's status chip, left-aligned in its own line, when the card has one (feature 1101).
+fn status_chip<'a, M: 'a>(card: &OverviewCard<'a, M>) -> Option<Element<'a, M>> {
+    super::StatusChip::maybe(
+        card.status.as_ref().map(|(status, _)| status),
+        card.status.as_ref().is_some_and(|(_, stale)| *stale),
+        card.roles,
+    )
 }
 
 /// A body line of the expanded card: wrapped in full, at `role`, in `tint`.
@@ -652,6 +676,9 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
         (None, None) => {}
     }
     rest = rest.push(body_line(full.dir));
+    if let Some(chip) = status_chip(card) {
+        rest = rest.push(chip);
+    }
     rest = rest.push(body_line(text.sessions));
     if let Some(activity) = full.activity {
         rest = rest.push(body_line(activity));

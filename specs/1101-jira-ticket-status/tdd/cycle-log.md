@@ -9,3 +9,9 @@
 | Disclosure text (FR-006b) | T025 | `jira_source_state` expected text updated first; `the_page_discloses_the_background_status_read` (Settings page) red by mutation: dropping "It also does so with no dialog open" from `DATA_USE` fails it (1 failed); restored, green | green |
 
 The layout fixture `tests/fixtures/layout_snapshot.txt` moved because the longer `DATA_USE` note on the Settings Jira page wraps to more lines and shifts the rows below it (FR-006b); regenerated, not a regression.
+
+# TDD cycle log — 1101, M3
+
+| Behaviour | Tasks | Red evidence | Green |
+|---|---|---|---|
+| A Jira-linked worktree's Overview card shows the board's status chip, the same as the sidebar row; both follow a change together; a numeric-ticket card has none | T028, T029 | `jira_status_overview` written first: 3 failed (`left: 1, right: 2`: only the sidebar row painted the chip) | 3 passed after `OverviewCard::status` and `ui::overview::card_status` |

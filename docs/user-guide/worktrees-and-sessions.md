@@ -685,8 +685,8 @@ retry.
 
 With the Jira integration on and the project connected, a worktree named for one of its tickets
 shows the ticket's current status (for example **In Review**) as a chip right of the ticket's key
-tag in the sidebar. A finished ticket keeps showing its status. A worktree whose ticket is not in the
-connected project, or whose ticket Jira does not know or cannot show you, has no chip.
+tag in the sidebar, and on the worktree's card in the [Overview](overview.md). A finished ticket
+keeps showing its status. A worktree whose ticket is not in the connected project, or whose ticket Jira does not know or cannot show you, has no chip.
 
 The status is read when a project opens, and again when the window regains focus after the last
 read is more than five minutes old, so it follows a ticket a teammate moved without a restart. The

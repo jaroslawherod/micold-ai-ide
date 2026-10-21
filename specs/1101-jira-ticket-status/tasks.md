@@ -58,9 +58,9 @@
 **Goal**: the Overview card of a worktree linked to a Jira ticket shows the same chip.
 **Independent test**: same ticket on sidebar and card shows the same status.
 
-- [ ] T028 [P] [US3] Write failing client integration test in `crates/micold-client/tests/jira_status_overview.rs`: the card for a Jira-linked worktree shows the chip from the same board as the sidebar; a ticket shown in two places shows the same status (US3 scenarios 1-2, FR-010)
-- [ ] T029 [US3] Add an optional chip slot to the card builder in `crates/micold-client/src/ui/material/overview_card.rs` and fill it in `crates/micold-client/src/features/overview.rs` from the board by the Jira key from `micold_core::naming::ticket`
-- [ ] T030 [US3] Update `docs/user-guide/overview.md` (status chip on cards)
+- [x] T028 [P] [US3] Write failing client integration test in `crates/micold-client/tests/jira_status_overview.rs`: the card for a Jira-linked worktree shows the chip from the same board as the sidebar; a ticket shown in two places shows the same status (US3 scenarios 1-2, FR-010)
+- [x] T029 [US3] Add an optional chip slot to the card builder in `crates/micold-client/src/ui/material/overview_card.rs` and fill it in `crates/micold-client/src/features/overview.rs` from the board by the Jira key from `micold_core::naming::ticket`
+- [x] T030 [US3] Update `docs/user-guide/overview.md` (status chip on cards)
 
 ## Dependencies and order
 
