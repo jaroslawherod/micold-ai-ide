@@ -517,3 +517,20 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   `scripts/gate.sh`; quickstart Part B (`specs/939-structured-transcript-view/visual/`)
 - **Depends on**: M5
 - **Tier**: full
+
+---
+
+## Phase 10: TDD remediation (close)
+
+From `tdd/verification.md` (verdict FAIL on test-first evidence only: four test-after fixes, each
+now mutant-checked). Nothing here blocks the feature: no `HIGH` smell and no untested criterion.
+
+- [x] T044 Fold #944's four recordings into `RECORDED` (`crates/micold-core/tests/support/stream_json.rs`)
+  so G1–G4 hold over them; G1 accounts sub-agent events (FR-024) and `signature_delta`, G2 compares
+  conversation and raw rows each in order, #938's five entry for entry (contract G2).
+  `cargo test -p micold-core --test structured_transcript --test structured_insights --test plan_usage_rate_limit_event --test structured_parse`
+- [x] T045 Findings 3–9: split the eager tests, label every assertion, replace vacuous checks
+  (`transcript_open_budget.rs`, `transcript_renderer_seam.rs`, `features_structured_transcript.rs`,
+  `src/main_tests.rs`, `structured_transcript.rs`). `scripts/gate.sh`
+- [x] T046 Deliberate mutants on the four test-after fixes and five high-risk behaviours (C1–C5,
+  M1–M4 in `tdd/verification.md`): each caught, each restored. `scripts/gate.sh` green after the last restore.

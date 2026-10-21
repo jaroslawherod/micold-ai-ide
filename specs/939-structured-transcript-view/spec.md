@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Closed 2026-10-21 — shipped in PRs #1183, #1189, #1192, #1193, #1198, #1203, #1206 and the close PR
 
 **Input**: GitHub issue #939 "Structured session view: read-only transcript (assistant text,
 thinking, tool calls)". "Part of the structured-session (stream-json) UI epic. Keeps the PTY/TUI

@@ -35,3 +35,13 @@ session (start-session chevron → **Claude Code (structured)**).
 7. Light and dark theme: every entry kind, the failed card and footer, raw rows and the control.
 
 Record the pass with the `visual-pass` skill into `visual/`.
+
+## Results (close, 2026-10-21)
+
+- **Part A**: every row green in the close's full gate (`scripts/gate.sh`), over nine recordings
+  now (#938's five and #944's four); `transcript_open_budget` in release: both budgets passed
+  (open < 1 s, each delta < 100 ms; M5 measured 180 ms and 5 ms).
+- **Part B**: run as CPU-rasterised visual passes, recorded in `visual/` (M4: card light/dark; M5:
+  open, failed greyscale, jump to latest; M6: pane detached light/dark, failed greyscale,
+  mid-stream, tiled, terminal beside structured). Steps 1–7 on a logged-in `claude` were not run:
+  the container has no `claude` login or display.
