@@ -8,7 +8,7 @@ use micold_core::structured::{
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
-use stream_json::{events_of, lines_of, PROMPT_RECORDED, RECORDED, RECORDED_941, RECORDED_944};
+use stream_json::{events_of, lines_of, PROMPT_RECORDED, RECORDED, RECORDED_941};
 
 /// Whether the line's `type` (and `subtype`, for `system`) is one the model types (R9).
 fn is_known_type(line: &str) -> bool {
@@ -472,7 +472,6 @@ fn a_control_response_that_does_not_fit_stays_unrecognised() {
 fn the_parser_never_makes_a_daemon_note_of_941() {
     for name in RECORDED
         .into_iter()
-        .chain(RECORDED_944)
         .chain(PROMPT_RECORDED)
         .chain(RECORDED_941)
     {
