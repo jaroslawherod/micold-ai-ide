@@ -164,7 +164,7 @@ lines, or `None` for #939's plain input (contracts/edit-diff.md E-1–E-3).
 
 ### Tests for User Story 2 ⚠️ write first, see them fail
 
-- [ ] T013 [US2] Setup for the edit diff: add `similar = "2"` to `[workspace.dependencies]` in
+- [x] T013 [US2] Setup for the edit diff: add `similar = "2"` to `[workspace.dependencies]` in
   `Cargo.toml` and `similar.workspace = true` to `crates/micold-core/Cargo.toml`; make
   `split_lines` in `crates/micold-core/src/review/diff.rs` `pub(crate)`; create
   `crates/micold-core/src/structured/edit_diff.rs` with the types of data-model.md *Edit diff*
@@ -178,7 +178,7 @@ lines, or `None` for #939's plain input (contracts/edit-diff.md E-1–E-3).
   `scripts/capture-stream-json.sh`: Claude Code Writes a file, Edits it once with `replace_all`,
   and MultiEdits it with two edits (research R13); add its row to the fixtures `README.md`. No
   logged-in `claude`: escalate
-- [ ] T014 [US2] Tests in `crates/micold-core/tests/edit_diff.rs` (E-1–E-3, FR-013, FR-014,
+- [x] T014 [US2] Tests in `crates/micold-core/tests/edit_diff.rs` (E-1–E-3, FR-013, FR-014,
   FR-016–FR-019 at the model, SC-003): each shape of contracts/edit-diff.md *Input shapes*; a
   MultiEdit's hunks in edit order with `ordinal`/`of`; notes `ReplaceAll`, `NoChange` (old == new,
   no lines), `EmptyWrite` (Write of `""`), `NewContent` (every Write); CRLF-only difference is no
@@ -191,7 +191,7 @@ lines, or `None` for #939's plain input (contracts/edit-diff.md E-1–E-3).
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Implement `edit_diff` in `crates/micold-core/src/structured/edit_diff.rs` (research
+- [x] T015 [US2] Implement `edit_diff` in `crates/micold-core/src/structured/edit_diff.rs` (research
   R6): `serde_json` shape checks per tool; lines split with `review::diff::split_lines`;
   `similar::TextDiff` over the line slices, Myers with a 50 ms deadline; equal → `Context`, delete →
   `Removed`, insert → `Added`; notes, final-newline flags and counts by the contract's *Rules*; no

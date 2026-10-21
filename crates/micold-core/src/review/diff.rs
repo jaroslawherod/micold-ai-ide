@@ -221,7 +221,7 @@ pub struct Spans {
 
 /// The lines of `text` without their endings (`\n` or `\r\n`); a last line without a newline
 /// counts, a trailing newline does not start another.
-fn split_lines(text: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn split_lines(text: &str) -> impl Iterator<Item = &str> {
     let body = text.strip_suffix('\n').unwrap_or(text);
     let lines = (!text.is_empty()).then(|| body.split('\n'));
     lines

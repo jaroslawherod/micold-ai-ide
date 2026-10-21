@@ -5,6 +5,7 @@
 //! tool calls with their results. The daemon owns the process and the history; the client draws.
 
 pub mod control;
+pub mod edit_diff;
 mod event;
 mod history;
 pub mod insights;

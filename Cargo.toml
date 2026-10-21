@@ -52,6 +52,9 @@ unicode-segmentation = "1.13"
 # Feature 940 (research R1): the markdown model in core. CommonMark + GFM tables, strikethrough and
 # task lists; default features off, so it adds `unicase` only (MIT; `memchr`, `bitflags` already in).
 pulldown-cmark = { version = "0.13", default-features = false }
+# Feature 940 (research R6): line diffs of Edit, MultiEdit and Write tool calls in core. Myers with
+# a deadline; dependency-free, Apache-2.0.
+similar = "2"
 directories = "6.0.0"
 # Feature 041 (R11): the host's IANA zone, passed to a sandbox as `TZ`.
 iana-time-zone = "0.1"

@@ -29,3 +29,16 @@ each test task written before its implementation task, run red, then made green.
   `lines` counts trailing blank lines. Lib `markdown` 15/15, `markdown_subset` 18/18,
   `markdown_stream` 4/4.
 - **Notes**: cycles were batched per milestone, not one behaviour per commit.
+
+## M2 (T013–T015) — edit diff
+
+- **Setup**: `edit-turn.jsonl` recorded with `scripts/capture-stream-json.sh` (CLI 2.1.306). That
+  CLI offers no `MultiEdit` tool (the first take's model said so and skipped it), so the
+  recording is a `Write`, an `Edit` with `replace_all: true` and a multi-line `Edit` sharing a line;
+  MultiEdit is covered by the test's synthetic set (README row, ledger decision).
+- **Red**: T014's `tests/edit_diff.rs` (15 tests) against the `todo!()` stub: 0 passed, 15 failed,
+  each in the stub's `todo!()` (every test calls `edit_diff` before its first assertion).
+- **Green**: T015 implemented (`serde_json` shape checks, `review::diff::split_lines`,
+  `similar::TextDiff` Myers with a 50 ms timeout); 15/15 first run.
+- **Refactor**: the multi-edit test's tuple got a `Shape` alias (clippy `type_complexity`);
+  `cargo fmt`; clippy `-D warnings` clean on `micold-core`.
