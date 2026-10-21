@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: implement M1
-- **Next step**: M1 verify (part 4): full gate on the ring-gutter fix, then review A r5 (fix diff) and visual pass r4 (C3 only), both sonnet, run by the orchestrator; then PR (title/body in the scratchpad).
+- **Next step**: M1 verify (part 4): review A r5 (fix diff) and visual pass r4 (C3 only), both sonnet, run by the orchestrator; then PR (title/body in the scratchpad).
 
 ## Pull requests
 
@@ -62,6 +62,9 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M1 | 4 | 919dee35 | GREEN (after visual r2 fix) |
 | Review A M1 | 4 | d8272a25bfb51c71040f9beb512c07def3356a3b:919dee35498cb93f597039ee8c3b154cf4385615 | CLEAN (sonnet, event_message fix diff) |
 | Visual pass M1 | 3 | d8272a25bfb51c71040f9beb512c07def3356a3b:919dee35498cb93f597039ee8c3b154cf4385615 | FAIL (sonnet, C3 only): Tab/Shift+Tab reach both links in all 4 combos, ring in `secondary`, gone on tabbing away; F1 MAJOR the ring (3 px, drawn inside the link's box) sat flush with the label and painted over glyph tops, bottoms and the first glyph's left edge (caption read "ssue #1122"), light/dark x 1.0/2.0; observation: under focus the ring hid the hover underline. Fixed in part 4 (unit continued by the orchestrator's call for this one narrow fix, not an escalation): the link's button padded by `FOCUS_RING_WIDTH + 1` on every side (the material layer draws rings inside the control, `keyboard_focus::ring_bounds`, so no outside-ring pattern exists), underline clamped inside the label box; test `the_focus_ring_clears_the_label_on_every_side`, and `the_focus_layer_is_the_same_under_the_pointer` now requires the underline under focus (both red on the old padding). Evidence `visual-pass/m1/*-3-r3-*.png` |
+| Full gate M1 | 5 | d9b86ce5 | RED twice on untouched environment/timing flakes (`micold-daemon mcp_create_session a_cli_that_would_ask_to_trust_the_folder_gets_no_first_prompt`: the fixture's `git commit` hit the signing server's 503, 3/3 green alone; `structured_session messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal`, the known flake); third run GREEN |
+| Review A M1 | 5 | 4f755bbccbc4c6ea9031f7da1a821289a582dc9a:d9b86ce519f5531d2d490c5c71e0f710e3065a31 | pending (ring-gutter fix diff, sonnet; prompt 1122-m1-prompt-review-a-r5.md) |
+| Visual pass M1 | 4 | 4f755bbccbc4c6ea9031f7da1a821289a582dc9a:d9b86ce519f5531d2d490c5c71e0f710e3065a31 | pending (C3 only, sonnet, r3 method; prompt 1122-m1-prompt-visual-r4.md) |
 
 ## Declined review findings
 
