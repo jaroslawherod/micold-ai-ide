@@ -90,17 +90,20 @@ pub fn turn_details(turn: &TurnUsage) -> Vec<String> {
     lines
 }
 
-/// `"$0.14 est. · 3 turns"`: the session totals and how many turns they cover (FR-007).
-pub fn totals_line(totals: &SessionTotals) -> String {
-    format!(
-        "{} · {}",
-        estimate(totals.cost_usd),
-        format_turns(totals.turns_counted)
-    )
+/// `"$0.14 est. · 3 turns"`: the session totals and how many turns they cover (FR-007); none
+/// while no turn is counted, since no cost was reported (FR-008).
+pub fn totals_line(totals: &SessionTotals) -> Option<String> {
+    (totals.turns_counted > 0).then(|| {
+        format!(
+            "{} · {}",
+            estimate(totals.cost_usd),
+            format_turns(totals.turns_counted)
+        )
+    })
 }
 
 /// The totals' details (FR-007, FR-008, FR-026): each token figure, one line per model, the
-/// turns left out, whether earlier turns are not held, and the estimate note.
+/// turns left out, whether earlier turns are not held, and the estimate note when a cost is shown.
 pub fn totals_details(totals: &SessionTotals) -> Vec<String> {
     let tokens = token_parts(&totals.tokens, true);
     let mut lines: Vec<String> = (!tokens.is_empty())
@@ -122,7 +125,9 @@ pub fn totals_details(totals: &SessionTotals) -> Vec<String> {
     if totals.partial {
         lines.push("Partial: covers the turns still held".to_string());
     }
-    lines.push(ESTIMATE_NOTE.to_string());
+    if totals.turns_counted > 0 {
+        lines.push(ESTIMATE_NOTE.to_string());
+    }
     lines
 }
 
@@ -269,13 +274,18 @@ mod tests {
             turns_counted: 3,
             ..SessionTotals::default()
         };
-        assert_eq!(totals_line(&totals), "$0.1400 est. · 3 turns");
+        assert_eq!(totals_line(&totals).unwrap(), "$0.1400 est. · 3 turns");
         let dear = SessionTotals {
             cost_usd: 1.244,
             turns_counted: 1,
             ..SessionTotals::default()
         };
-        assert_eq!(totals_line(&dear), "$1.24 est. · 1 turn");
+        assert_eq!(totals_line(&dear).unwrap(), "$1.24 est. · 1 turn");
+        assert_eq!(
+            totals_line(&SessionTotals::default()),
+            None,
+            "no turn counted"
+        );
     }
 
     #[test]
@@ -299,7 +309,10 @@ mod tests {
             ]
         );
         let whole = SessionTotals::default();
-        assert_eq!(totals_details(&whole), [ESTIMATE_NOTE]);
+        assert!(
+            totals_details(&whole).is_empty(),
+            "no cost, so no estimate note"
+        );
     }
 
     #[test]

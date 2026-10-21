@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
 - **Phase**: implement M1
-- **Next step**: M1 verify (scoped gate + review A, review B, full gate), then push
+- **Next step**: M1 verify — review B, full gate, then push
 
 ## Pull requests
 
@@ -55,9 +55,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 1 | 6f1501def4c33357f5c87ab3c095f6d2355879e7:0153e692fd2d790dfd46dceb6612281f428234a8 | CLEAN; 1 MINOR (footer label dependency row) fixed, prose only |
 | speckit-analyze | 1 | — | 0 CRITICAL, 0 HIGH; 4 MEDIUM fixed (M6 Satisfies, T039 #939 footer precondition, T003 escalation path, FR cites); LOW T1 (task size) not acted on |
 | Tasks review | 1 | 95d88fdccb0d89fd5614e3eab661ae7ae4eb7836:05fc6fbe5aecacd794c413bcf2ff70a83c337b00 | CLEAN; 3 MINOR fixed (checklist ticked after reviewer confirmed no markers; T003 after T002; T036 routing test) |
+| Review A M1 (code-review high) | 1 | 77e2180ce36783dd94cad9a7a7b89e5e6bf07015:3df85b84533bf6775439c57d7c3207cde3b648c9 | CLEAN; 3 MINOR: F2 (`totals_line` → `Option`, note only with a cost) and F3 (bound tracks held seqs, live seq gap) fixed with a test; F1 declined |
 
 ## Declined review findings
 
+- Review A M1 F1 [MINOR] — digest a `result` line that #938's parse leaves `Unrecognised` (a string token count): declined per D12. #939 shows no footer for such a line, so its per-turn figures would have nowhere to show; counting it in the totals while the transcript shows no turn would disagree with what the user sees. `insights-tolerance.jsonl` pins the behaviour.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 

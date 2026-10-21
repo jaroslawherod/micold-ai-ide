@@ -194,6 +194,24 @@ fn a_bound_crossed_inside_one_message_equals_a_fresh_build() {
     assert_eq!(insights, built(dropped as u64, &events[dropped..]));
 }
 
+#[test]
+fn past_a_seq_gap_the_bound_drops_the_events_actually_held_first() {
+    let history = fixture("tool-turn");
+    let gap = 10_000;
+    let mut live = numbered(turns(2).into_iter().map(|e| e.event), gap);
+    live.extend(fillers(gap + live.len() as u64, MAX_EVENTS));
+    let mut insights = built(0, &history);
+    insights.apply(0, &live, true);
+    let dropped = history.len() + live.len() - MAX_EVENTS;
+    assert_eq!(insights.held(), MAX_EVENTS);
+    assert_eq!(insights.turn(gap + 1), None, "the turns past the gap left");
+    assert_eq!(
+        insights,
+        built(dropped as u64, &live[live.len() - MAX_EVENTS..]),
+        "equal to a fresh build of the held events"
+    );
+}
+
 // ---------------------------------------------------------------------------------------
 // T009 — context (I2, FR-001–FR-005).
 

@@ -34,10 +34,9 @@ pub struct SessionInsights {
     sync: Continuity,
     /// Events before the first held one: the service's `omitted` plus those dropped here.
     omitted: u64,
-    /// How many events are held (at most [`MAX_EVENTS`]).
-    held: usize,
-    /// The first held `seq`; seqs are contiguous (#938 wire).
-    first_held: u64,
+    /// The held events' seqs, oldest first (at most [`MAX_EVENTS`]). Kept rather than counted:
+    /// a live message may continue past a seq gap, so the first held seq is not derivable.
+    seqs: VecDeque<u64>,
     /// The held events that matter here, by `seq`, oldest first.
     digests: VecDeque<(u64, Digest)>,
     usage: UsageState,
@@ -47,8 +46,7 @@ pub struct SessionInsights {
 impl PartialEq for SessionInsights {
     fn eq(&self, other: &Self) -> bool {
         self.omitted == other.omitted
-            && self.held == other.held
-            && (self.held == 0 || self.first_held == other.first_held)
+            && self.seqs == other.seqs
             && self.digests == other.digests
             && self.usage == other.usage
             && self.context == other.context
@@ -66,8 +64,7 @@ impl SessionInsights {
         Self {
             sync: Continuity::default(),
             omitted: 0,
-            held: 0,
-            first_held: 0,
+            seqs: VecDeque::new(),
             digests: VecDeque::new(),
             usage: UsageState::default(),
             context: ContextFold::default(),
@@ -88,10 +85,7 @@ impl SessionInsights {
         }
         let mut refold = false;
         for event in events {
-            if self.held == 0 {
-                self.first_held = event.seq;
-            }
-            self.held += 1;
+            self.seqs.push_back(event.seq);
             if let Some(digest) = digest(&event.event) {
                 self.fold(event.seq, &digest);
                 self.digests.push_back((event.seq, digest));
@@ -106,18 +100,18 @@ impl SessionInsights {
 
     /// Drops the events past [`MAX_EVENTS`]; whether the figures must be folded again.
     fn bound(&mut self) -> bool {
-        let Some(excess) = self.held.checked_sub(MAX_EVENTS).filter(|n| *n > 0) else {
+        let Some(excess) = self.seqs.len().checked_sub(MAX_EVENTS).filter(|n| *n > 0) else {
             return false;
         };
         let was_complete = self.omitted == 0;
-        self.held = MAX_EVENTS;
+        self.seqs.drain(..excess);
         self.omitted += excess as u64;
-        self.first_held += excess as u64;
+        let first_held = self.seqs.front().copied().unwrap_or(u64::MAX);
         let before = self.digests.len();
         while self
             .digests
             .front()
-            .is_some_and(|(seq, _)| *seq < self.first_held)
+            .is_some_and(|(seq, _)| *seq < first_held)
         {
             self.digests.pop_front();
         }
@@ -178,6 +172,6 @@ impl SessionInsights {
 
     /// How many events are held.
     pub fn held(&self) -> usize {
-        self.held
+        self.seqs.len()
     }
 }
