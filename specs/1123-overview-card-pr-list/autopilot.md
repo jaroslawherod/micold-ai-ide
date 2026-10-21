@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: plan
-- **Next step**: plan review A round 2 on sonnet over the fix diff (orchestrator dispatches; prompt 1123-prompt-plan-r2.md in the scratchpad), then tasks unit
+- **Phase**: tasks
+- **Next step**: tasks unit: speckit-tasks, milestones, speckit-analyze, tasks review r1
 
 ## Pull requests
 
@@ -40,7 +40,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A spec | 1 | afc9cb5d94279a3c0ae00d37d80855a145ded446:f1d7d1b5b3251cbb108318452ccb6a4ede3d1f3e | CHANGES: 1 MAJOR (F1 Story 1 sc 4 dash vs kept rows), 3 MINOR (F2 feature 1003 words, F3 FR-010/SC-002 after Escape, F4 function name in Edge Cases); all four fixed in spec.md, none declined |
 | Review A spec | 2 | 825ca900990f4c8ff4f75b661ae433152e67cae6:91b05eb41e1d852e023be0f044cc857a68bc5800 (fix diff 451f1d2c..91b05eb4, sonnet) | CLEAN, 1 MINOR (F1 FR-007 FR-025 wording); fixed, prose only, no round 3 |
 | Review A plan | 1 | 53ffa8f39a3a4caa715af2e64d4fca74c90e6a87:a55fb1b02c4bca128a2f493349a45dbf294074aa | CHANGES: 1 BLOCKER (F1 rate-limit points: request-count rule, `m<i>` with `...pr` costs 63 > 44), 3 MAJOR (F2 focus pairing for several links, F3 client hand-offs/menu return per link, F4 `StatusChip` does not fit a PR pill), 3 MINOR (F5 K3 edge cases, F6 address in Msg, F7 missing alternatives); all seven fixed in research R2/R5–R10, data-model §1–§5, contracts, plan, quickstart; none declined; round 2 on sonnet over the fix diff |
-| Review A plan | 2 | 9bc517ce26e6300ed4d9f258bb7fd82b0e0fad46:f3fad1fa408ff0b5345496fd0d6917e547bb9eed (fix diff 53ffa8f3:a55fb1b0 → f3fad1fa, sonnet) | pending |
+| Review A plan | 2 | 9bc517ce26e6300ed4d9f258bb7fd82b0e0fad46:f3fad1fa408ff0b5345496fd0d6917e547bb9eed (fix diff 53ffa8f3:a55fb1b0 → f3fad1fa, sonnet) | CLEAN, 2 MINOR (F1 card-rows.md U1–U7 heading, F2 R9 contrast wording); both fixed, prose only, no round 3 |
+
+### Review A plan round 2 verdict (verbatim)
+
+````
+# 1123 plan review A r2 (snapshot 9bc517ce:f3fad1fa)
+
+VERDICT: CLEAN
+F1 [MINOR] specs/1123-overview-card-pr-list/contracts/card-rows.md:32 — Section heading still reads "Client — tests U1–U4", but U5–U7 now sit under it (l.43, 49, 53). The plan and quickstart do say U1–U7.
+   Evidence: `## Client — tests U1–U4` directly above `- U5 hand-off (main_tests.rs, ...)`
+   Fix: Retitle to "Client — tests U1–U7".
+F2 [MINOR] specs/1123-overview-card-pr-list/research.md:R9 (contrast sentence) — "each PrMark tint on the card surface" does not say what the gate measures. `Tag` draws the accent as text on its own faint accent tint (`ui/material/tag.rs` `style::chip(accent)`), not on the bare card surface.
+   Evidence: R9: "Contrast is covered by composition_contrast.rs for each PrMark tint on the card surface in both themes"
+   Fix: Say the gate measures the `PrMark::role` text colour over the `Tag` chip fill, for each of the four marks in both themes.
+````
+
+Fixes: F1 contracts/card-rows.md heading now "Client — tests U1–U7". F2 research.md R9: the gate measures the `PrMark::role` text colour over the `Tag` chip fill (`style::chip(accent)`), for each of the four marks in both themes.
 
 ### Review A plan round 1 verdict (verbatim)
 
