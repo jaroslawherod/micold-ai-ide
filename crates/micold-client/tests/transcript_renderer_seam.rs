@@ -77,6 +77,7 @@ fn swapping_one_renderer_changes_only_that_kinds_drawing() {
     assert_eq!(
         others(&marked, &|p| p == MARKER),
         others(&plain, &|p| texts.contains(p)),
+        "every entry but assistant text is drawn as PLAIN draws it, in the same order"
     );
 }
 
@@ -97,5 +98,15 @@ fn a_folded_card_runs_no_block_renderer() {
         &mut renderer(),
         ROOM,
     );
-    assert!(!painted.is_empty());
+    let painted: Vec<String> = painted.into_iter().map(|p| p.content).collect();
+    assert!(
+        painted.iter().any(|p| p.contains("Read")),
+        "a folded card's header shows the tool name: {painted:#?}"
+    );
+    for hidden in ["The answer is 42", "file_path"] {
+        assert!(
+            !painted.iter().any(|p| p.contains(hidden)),
+            "a folded card paints none of its input or result ({hidden:?}): {painted:#?}"
+        );
+    }
 }

@@ -14148,7 +14148,11 @@ mod structured_transcript {
     fn structured_events_reach_the_transcript() {
         let (app, s) = with_events();
         let transcript = app.core.structured_transcript.transcript(s);
-        assert_eq!(transcript.map(|t| t.entries().len()), Some(1));
+        assert_eq!(
+            transcript.map(|t| t.entries().len()),
+            Some(1),
+            "a structured events message lands in the session's transcript as one entry"
+        );
     }
 
     #[test]
@@ -14167,7 +14171,8 @@ mod structured_transcript {
         assert_eq!(send(&mut app, scrolled(10)), 0, "detaching moves nothing");
         assert_eq!(
             app.core.structured_transcript.follow(session),
-            Follow::Detached { offset: 10 }
+            Follow::Detached { offset: 10 },
+            "scrolling away from the end detaches the view at that offset"
         );
         assert!(
             send(&mut app, TranscriptMsg::Shown { session }) > 0,
@@ -14177,14 +14182,20 @@ mod structured_transcript {
             send(&mut app, scrolled(800)) > 0,
             "resumed: snap to the end"
         );
-        assert!(send(&mut app, TranscriptMsg::JumpToLatest { session }) > 0);
+        assert!(
+            send(&mut app, TranscriptMsg::JumpToLatest { session }) > 0,
+            "jump to latest scrolls to the end"
+        );
     }
 
     #[test]
     fn closing_a_session_drops_its_transcript() {
         let (mut app, s) = with_events();
         let _ = update_inner(&mut app, Message::Session(SessionMsg::CloseRequested(s)));
-        assert!(app.core.structured_transcript.transcript(s).is_none());
+        assert!(
+            app.core.structured_transcript.transcript(s).is_none(),
+            "closing a session drops its transcript"
+        );
     }
 }
 
