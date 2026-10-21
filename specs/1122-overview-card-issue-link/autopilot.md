@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5 T039–T049 implemented and committed; full gate r1 running (core changed, so the scoped gate is the whole workspace). Then reviews A r1, B r1 and the visual pass (T050) via the orchestrator, then PR.
+- **Next step**: M5 T039–T049 done, full gate r2 GREEN on b4ba37fd. Waiting on review A r1, review B r1 and the visual pass r1 (T050), prompts in the session scratchpad `1122-m5-prompt-{review-a,review-b,visual}-r1.md`; then fix findings, tick T050, PR.
 
 ## Pull requests
 
@@ -98,6 +98,11 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M4 | 3 | 4faae67f | GREEN (after the r1 fixes) |
 | Review A M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | VERDICT: CLEAN; 1 optional MINOR (F1 `LinkFocus::of` clones on every message), declined (verdict verbatim below) |
 | Visual pass M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | PASS on all re-checked criteria (1, 6, 7; regression 2, 4); 64 r2 PNGs in visual-pass/m4/ (verdict verbatim below). T038 ticked |
+| Full gate M5 | 1 | af17c7fd | RED: clippy `large_enum_variant` on `features::runs::Effect` (`ClientMsg` grew with `SettingsSet.jira_base_url`); fixed b4ba37fd (`Option<Box<JiraBaseUrlChange>>`) |
+| Full gate M5 | 2 | b4ba37fd | GREEN (core changed, so the scoped gate would have been the whole workspace: the full gate ran instead) |
+| Review A M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | requested (orchestrator) |
+| Review B M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | requested (orchestrator, sonnet) |
+| Visual pass M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | requested (orchestrator, T050) |
 
 
 ### M4 r1 verdicts (verbatim)
