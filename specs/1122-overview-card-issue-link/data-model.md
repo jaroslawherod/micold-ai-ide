@@ -77,6 +77,8 @@ lost report's collapse stands (contract K5).
 "Held across the menu" (FR-009): `LinkFocusLost(l)` while the menu is open (the link's Menu key
 opened it) keeps `focused = l`, `focus_escaped` and part `Link`, and sets `link_held = Some(l)`
 (new field). `MenuOpened`, `MenuClosed` and pointer events do not end it. The next focus report
-ends it: `LinkFocusGained(l)` is a move inside the card (form and `focus_escaped` unchanged); any
-other focus report first applies the deferred loss exactly as `FocusLost(l)` with the menu closed
-would, then itself. `WindowBlurred`, and `Listed` without `l`, clear it with `focused`.
+ends it: `LinkFocusGained(l)`, or `FocusGained(l)` (R9's fallback to the card id when the link is
+gone), is a move inside the card (form and `focus_escaped` unchanged; part `Link` or `Card`); any
+other focus report first applies the deferred loss as `FocusLost(l)` arriving at that moment would,
+under the menu state of that moment (menu still open: 1121's `menu_open` branch, so `focus_held` is
+set and the loss settles on `MenuClosed`; menu closed: the collapse applies at once), then itself. `WindowBlurred`, and `Listed` without `l`, clear it with `focused`.

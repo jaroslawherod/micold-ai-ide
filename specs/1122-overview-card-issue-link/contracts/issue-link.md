@@ -66,6 +66,12 @@ Each line is a test, on top of 1121's K1 suite, which stays green unchanged:
   `MenuClosed`, `LinkFocusGained(A)` → A stays expanded, focused A.
 - Menu from the link, a choice moves focus: A expanded, `MenuOpened`, `LinkFocusLost(A)`,
   `MenuClosed`, `FocusGained(B)` → B expanded, A collapsed, focused B.
+- Menu from the link, link gone on return: A Escape-collapsed, `MenuOpened`, `LinkFocusLost(A)`,
+  `MenuClosed`, `FocusGained(A)` (fallback to the card id) → none expanded, `focus_escaped` still
+  true, focused A.
+- Menu from the link, the next focus report while the menu is still open: A expanded,
+  `MenuOpened`, `LinkFocusLost(A)`, `FocusGained(B)`, `MenuClosed` → A collapsed and B expanded only
+  at `MenuClosed` (1121's held focus).
 - Card menu unchanged: `FocusGained(A)`, `Escape`, `MenuOpened`, `FocusLost(A)`, `MenuClosed`,
   `FocusGained(A)` → as 1121 today (the hold applies to the link's loss only).
 - `Listed` without A while A's link holds the keyboard → `focused` cleared (Edge Case *Card goes
