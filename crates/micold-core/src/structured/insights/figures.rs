@@ -1,7 +1,10 @@
 //! The insights as text (data-model.md *Formatting*, research R9, FR-026). An absent figure
 //! yields no text (FR-004, FR-008).
 
-use super::{ContextState, ModelFigures, SessionTotals, Tokens, TurnUsage};
+use super::{
+    ContextState, ModelFigures, SessionTotals, SubagentState, Task, TaskState, ThreadView, Tokens,
+    TurnUsage,
+};
 use crate::format::group_digits;
 use crate::structured::transcript::{format_cost, format_turns};
 
@@ -181,6 +184,43 @@ pub fn context_details(state: &ContextState) -> Vec<String> {
             lines
         }
     }
+}
+
+/// A task's state in words, with its outcome when the CLI reported one (FR-020):
+/// `"Finished · Background command … completed (exit code 0)"`.
+pub fn task_label(task: &Task, cli_running: bool) -> String {
+    let state = match task.display_state(cli_running) {
+        TaskState::Running => "Running",
+        TaskState::Finished => "Finished",
+        TaskState::Failed => "Failed",
+        TaskState::Stopped => "Stopped",
+        TaskState::EndedWithoutReport => "Ended without a report",
+    };
+    match &task.outcome {
+        Some(outcome) => format!("{state} · {outcome}"),
+        None => state.to_string(),
+    }
+}
+
+/// A thread's folded summary (FR-015): `"Subagent · running · 3 tool calls · Reading notes.txt"`;
+/// the activity only while it runs.
+pub fn thread_summary_line(view: &ThreadView) -> String {
+    let state = match view.state {
+        SubagentState::Running => "running",
+        SubagentState::Finished => "finished",
+        SubagentState::Failed => "failed",
+        SubagentState::Stopped => "stopped",
+        SubagentState::EndedWithoutResult => "ended without a result",
+    };
+    let calls = match view.summary.tool_calls {
+        1 => "1 tool call".to_string(),
+        n => format!("{n} tool calls"),
+    };
+    let mut parts = vec!["Subagent", state, &calls];
+    if view.state == SubagentState::Running {
+        parts.extend(view.activity.as_deref());
+    }
+    parts.join(" · ")
 }
 
 #[cfg(test)]
@@ -369,6 +409,104 @@ mod tests {
         assert_eq!(
             context_details(&no_threshold),
             ["Context used: 5 tokens", "Context window: 1,000 tokens"]
+        );
+    }
+
+    fn task(state: TaskState, outcome: Option<&str>) -> Task {
+        Task {
+            task_id: "b4zmc5hrw".to_string(),
+            tool_use_id: Some("toolu_1".to_string()),
+            description: "Sleep briefly then print finished".to_string(),
+            kind: Some(super::super::TaskKind::Command),
+            background: true,
+            state,
+            outcome: outcome.map(str::to_string),
+            activity: None,
+        }
+    }
+
+    #[test]
+    fn a_tasks_label_names_its_state_and_its_outcome_when_reported() {
+        for (state, label) in [
+            (TaskState::Running, "Running"),
+            (TaskState::Finished, "Finished"),
+            (TaskState::Failed, "Failed"),
+            (TaskState::Stopped, "Stopped"),
+            (TaskState::EndedWithoutReport, "Ended without a report"),
+        ] {
+            assert_eq!(task_label(&task(state, None), true), label);
+        }
+        assert_eq!(
+            task_label(&task(TaskState::Finished, Some("exit code 0")), true),
+            "Finished · exit code 0"
+        );
+    }
+
+    #[test]
+    fn a_running_task_of_a_cli_that_is_not_running_ended_without_a_report() {
+        assert_eq!(
+            task_label(&task(TaskState::Running, None), false),
+            "Ended without a report"
+        );
+        assert_eq!(task_label(&task(TaskState::Failed, None), false), "Failed");
+    }
+
+    fn summary(tool_calls: u64) -> super::super::ThreadSummary {
+        super::super::ThreadSummary {
+            parent: "toolu_1".to_string(),
+            first_seq: 33,
+            messages: 4,
+            tool_calls,
+            latest_tool: Some("Read".to_string()),
+        }
+    }
+
+    #[test]
+    fn a_running_threads_summary_shows_its_tool_calls_and_activity() {
+        let summary = summary(3);
+        let view = ThreadView {
+            summary: &summary,
+            state: SubagentState::Running,
+            activity: Some("Reading notes.txt".to_string()),
+        };
+        assert_eq!(
+            thread_summary_line(&view),
+            "Subagent · running · 3 tool calls · Reading notes.txt"
+        );
+    }
+
+    #[test]
+    fn an_ended_threads_summary_leaves_out_the_activity() {
+        let summary = summary(1);
+        for (state, words) in [
+            (SubagentState::Finished, "finished"),
+            (SubagentState::Failed, "failed"),
+            (SubagentState::Stopped, "stopped"),
+            (SubagentState::EndedWithoutResult, "ended without a result"),
+        ] {
+            let view = ThreadView {
+                summary: &summary,
+                state,
+                activity: Some("Reading notes.txt".to_string()),
+            };
+            assert_eq!(
+                thread_summary_line(&view),
+                format!("Subagent · {words} · 1 tool call")
+            );
+        }
+    }
+
+    #[test]
+    fn a_running_thread_without_tool_calls_or_activity_says_so_plainly() {
+        let summary = summary(0);
+        let view = ThreadView {
+            summary: &summary,
+            state: SubagentState::Running,
+            activity: None,
+        };
+        assert_eq!(
+            thread_summary_line(&view),
+            "Subagent · running · 0 tool calls"
         );
     }
 }

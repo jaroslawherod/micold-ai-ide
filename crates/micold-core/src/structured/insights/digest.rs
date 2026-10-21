@@ -2,8 +2,9 @@
 //! R8). A missing or malformed field leaves its figure `None`; a line of another shape yields no
 //! digest; nothing here fails (FR-024).
 
+use super::tasks::{kind_of, reported_state, LiveTask, TaskEvent};
 use super::usage::{ModelFigures, Tokens};
-use crate::structured::{StructuredEvent, Usage};
+use crate::structured::{ContentBlock, StructuredEvent, Usage};
 use serde_json::Value;
 
 /// What one held event contributes to the insights, kept by its `seq` (data-model.md *Digest*).
@@ -26,6 +27,17 @@ pub(super) enum Digest {
     TurnEndedWithoutResult,
     /// An `autocompact_state` line: the threshold when compaction is enabled.
     Autocompact { threshold: Option<u64> },
+    /// The CLI process started or restarted (R6).
+    Init,
+    /// A `task_started`, `task_updated`, `task_progress` or `task_notification` line (R6).
+    Task(TaskEvent),
+    /// A `background_tasks_changed` line: the CLI's live set of background tasks (R6).
+    LiveSet(Vec<LiveTask>),
+    /// A subagent's message: its parent tool call and the tool calls it holds, id and name (R7).
+    Parented {
+        parent: String,
+        tool_uses: Vec<(String, String)>,
+    },
 }
 
 /// The digest of `event`, or `None` when the event does not matter to the insights.
@@ -42,12 +54,107 @@ pub(super) fn digest(event: &StructuredEvent) -> Option<Digest> {
             raw,
             ..
         } => Some(result(usage.as_ref(), *total_cost_usd, raw)),
+        StructuredEvent::Assistant {
+            parent_tool_use_id: Some(parent),
+            blocks,
+            ..
+        }
+        | StructuredEvent::User {
+            parent_tool_use_id: Some(parent),
+            blocks,
+            ..
+        } => Some(parented(parent, blocks)),
         StructuredEvent::TurnEndedWithoutResult => Some(Digest::TurnEndedWithoutResult),
+        StructuredEvent::Init { .. } => Some(Digest::Init),
         StructuredEvent::Unrecognised { raw } if raw.contains("\"autocompact_state\"") => {
             autocompact(raw)
         }
+        StructuredEvent::Unrecognised { raw }
+            if raw.contains("\"task_") || raw.contains("\"background_tasks_changed\"") =>
+        {
+            task_line(raw)
+        }
         _ => None,
     }
+}
+
+fn parented(parent: &str, blocks: &[ContentBlock]) -> Digest {
+    let tool_uses = blocks
+        .iter()
+        .filter_map(|block| match block {
+            ContentBlock::ToolUse { id, name, .. } => Some((id.clone(), name.clone())),
+            _ => None,
+        })
+        .collect();
+    Digest::Parented {
+        parent: parent.to_string(),
+        tool_uses,
+    }
+}
+
+/// A string field, or `None` for anything else.
+fn text(value: &Value) -> Option<String> {
+    value.as_str().map(str::to_string)
+}
+
+/// A `system` task line (R6). No digest for a line without a string `task_id`, a patch that is
+/// not an object, a report without a known status or a live set that is not a list.
+fn task_line(raw: &str) -> Option<Digest> {
+    let line = parsed(raw)?;
+    if line["type"].as_str() != Some("system") {
+        return None;
+    }
+    let subtype = line["subtype"].as_str()?;
+    if subtype == "background_tasks_changed" {
+        let live = line["tasks"]
+            .as_array()?
+            .iter()
+            .filter_map(|task| {
+                Some(LiveTask {
+                    task_id: text(&task["task_id"])?,
+                    description: text(&task["description"]),
+                    kind: kind_of(task["task_type"].as_str()),
+                })
+            })
+            .collect();
+        return Some(Digest::LiveSet(live));
+    }
+    let task_id = text(&line["task_id"])?;
+    let event = match subtype {
+        "task_started" => TaskEvent::Started {
+            task_id,
+            tool_use_id: text(&line["tool_use_id"]),
+            description: text(&line["description"]),
+            kind: kind_of(line["task_type"].as_str()),
+            background: line["is_backgrounded"].as_bool() == Some(true),
+        },
+        "task_updated" => {
+            let patch = line["patch"].as_object()?;
+            TaskEvent::Updated {
+                task_id,
+                state: patch
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .and_then(reported_state),
+                backgrounded: patch.get("is_backgrounded").and_then(Value::as_bool) == Some(true),
+                description: patch.get("description").and_then(text),
+            }
+        }
+        "task_progress" => TaskEvent::Progress {
+            task_id,
+            activity: text(&line["summary"])
+                .or_else(|| text(&line["description"]))
+                .or_else(|| text(&line["last_tool_name"])),
+        },
+        "task_notification" => TaskEvent::Notification {
+            task_id,
+            tool_use_id: text(&line["tool_use_id"]),
+            state: reported_state(line["status"].as_str()?)?,
+            outcome: text(&line["summary"]),
+        },
+        _ => return None,
+    };
+    Some(Digest::Task(event))
 }
 
 fn parsed(raw: &str) -> Option<Value> {

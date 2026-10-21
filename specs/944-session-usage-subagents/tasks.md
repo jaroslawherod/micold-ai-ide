@@ -281,7 +281,7 @@ cases) on the T003 recordings.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T023 [P] [US5] Task tests in `crates/micold-core/tests/structured_insights.rs`
+- [x] T023 [P] [US5] Task tests in `crates/micold-core/tests/structured_insights.rs`
   (contracts/insights-model.md *I5*, research R6): `background-command` shows the task `Running`
   (kind `Command`, `background`, its description and `tool_use_id`) then `Finished` with its
   `summary` as outcome, and `running_background()` drops 1 → 0 (FR-020); `background-subagent`
@@ -294,7 +294,7 @@ cases) on the T003 recordings.
   `description`, else `last_tool_name`; `display_state(false)` shows `Running` as
   `EndedWithoutReport` and leaves the table unchanged; with no background task,
   `background_tasks()` is empty (US5 s5); the tolerance fixture's task lines are skipped (I6)
-- [ ] T024 [US3] Thread tests in `crates/micold-core/tests/structured_insights.rs`
+- [x] T024 [US3] Thread tests in `crates/micold-core/tests/structured_insights.rs`
   (contracts/insights-model.md *I4*, research R7, SC-003): in `subagent-turn` and
   `nested-subagent`, every `Assistant`/`User` event with a `parent_tool_use_id` is counted in that
   parent's `ThreadSummary` and in no other; `tool_calls` and `latest_tool` follow its `ToolUse`
@@ -307,7 +307,7 @@ cases) on the T003 recordings.
   FR-018); `activity` is the task's activity, else the latest tool name; I1 (T007) now also
   compares tasks and threads. If T003 recorded that nested events are not marked with their own
   parent, test the spec's fallback instead: unmarked events go to the nearest marked ancestor
-- [ ] T025 [P] [US3] [US5] Unit tests (`#[cfg(test)]`) in
+- [x] T025 [P] [US3] [US5] Unit tests (`#[cfg(test)]`) in
   `crates/micold-core/src/structured/insights/figures.rs` for `task_label(&Task, cli_running)`
   ("Running", "Finished", "Failed", "Stopped", "Ended without a report", with the outcome when
   reported) and `thread_summary_line(&ThreadView)` ("Subagent · running · 3 tool calls · Reading
@@ -315,19 +315,19 @@ cases) on the T003 recordings.
 
 ### Implementation
 
-- [ ] T026 [US5] Implement `TaskTable`, `Task`, `TaskKind::{Command, Subagent}`,
+- [x] T026 [US5] Implement `TaskTable`, `Task`, `TaskKind::{Command, Subagent}`,
   `TaskState::{Running, Finished, Failed, Stopped, EndedWithoutReport}` and `display_state` per
   data-model.md *TaskTable* in `crates/micold-core/src/structured/insights/tasks.rs`; the
   `Task(TaskEvent)`, `LiveSet(Vec<LiveTask>)` and `Init` digests in `digest.rs`; `tasks()`,
   `background_tasks()`, `running_background()` and `task_for_tool()` on `SessionInsights`, folded
   in the refold; T023 passes
-- [ ] T027 [US3] Implement `ThreadIndex`, `ThreadSummary`, `Owner::{Main, Thread(String),
+- [x] T027 [US3] Implement `ThreadIndex`, `ThreadSummary`, `Owner::{Main, Thread(String),
   Unknown}`, `SubagentState` and `ThreadView` per data-model.md *ThreadIndex* in
   `crates/micold-core/src/structured/insights/subagents.rs`; the `Parented { parent, tool_uses }`
   digest in `digest.rs`; `thread(parent)`, `threads_owned_by(Owner)`, `owner(parent, &Transcript)`,
   `unknown_threads(&Transcript)` and a `thread_view(parent, Option<ToolStatus>)` on
   `SessionInsights`, folded in the refold; T024 passes
-- [ ] T028 [US3] [US5] Implement `task_label` and `thread_summary_line` in
+- [x] T028 [US3] [US5] Implement `task_label` and `thread_summary_line` in
   `crates/micold-core/src/structured/insights/figures.rs`; T025 passes
 
 **Checkpoint**: M3 complete — all of the core contract (I1–I6) holds on the recordings.

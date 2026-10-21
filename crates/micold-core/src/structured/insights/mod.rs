@@ -1,5 +1,6 @@
-//! Session insights (feature 944): the context reading, each turn's usage and the session totals
-//! of one structured session, derived from #938's `StructuredEvents` messages.
+//! Session insights (feature 944): the context reading, each turn's usage, the session totals, the
+//! background tasks and the subagent threads of one structured session, derived from #938's
+//! `StructuredEvents` messages.
 //!
 //! Render-free (research R1): it takes the same messages as #939's
 //! [`Transcript`](super::transcript::Transcript), under the same replace-or-continue rule and the
@@ -14,13 +15,18 @@ mod tasks;
 mod usage;
 
 pub use context::{ContextReading, ContextState};
+pub use subagents::{Owner, SubagentState, ThreadSummary, ThreadView};
+pub use tasks::{Task, TaskKind, TaskState};
 pub use usage::{ModelFigures, SessionTotals, Tokens, TurnUsage};
 
 use super::sync::Continuity;
+use super::transcript::{EntryKey, ToolStatus, Transcript};
 use super::{SequencedEvent, MAX_EVENTS};
 use context::ContextFold;
 use digest::{digest, Digest};
 use std::collections::VecDeque;
+use subagents::ThreadIndex;
+use tasks::TaskTable;
 use usage::UsageState;
 
 /// One structured session's insights, as one window holds them (data-model.md
@@ -41,6 +47,8 @@ pub struct SessionInsights {
     digests: VecDeque<(u64, Digest)>,
     usage: UsageState,
     context: ContextFold,
+    tasks: TaskTable,
+    threads: ThreadIndex,
 }
 
 impl PartialEq for SessionInsights {
@@ -50,6 +58,8 @@ impl PartialEq for SessionInsights {
             && self.digests == other.digests
             && self.usage == other.usage
             && self.context == other.context
+            && self.tasks == other.tasks
+            && self.threads == other.threads
     }
 }
 
@@ -68,6 +78,8 @@ impl SessionInsights {
             digests: VecDeque::new(),
             usage: UsageState::default(),
             context: ContextFold::default(),
+            tasks: TaskTable::default(),
+            threads: ThreadIndex::default(),
         }
     }
 
@@ -123,6 +135,8 @@ impl SessionInsights {
     fn refold(&mut self) {
         self.usage = UsageState::default();
         self.context = ContextFold::default();
+        self.tasks = TaskTable::default();
+        self.threads = ThreadIndex::default();
         let digests = std::mem::take(&mut self.digests);
         for (seq, digest) in &digests {
             self.fold(*seq, digest);
@@ -145,8 +159,15 @@ impl SessionInsights {
                     .result(seq, *tokens, *cost_cum, models_cum.as_ref(), self.omitted);
                 self.context.windows(windows);
             }
-            Digest::TurnEndedWithoutResult => self.usage.ended_without_result(),
+            Digest::TurnEndedWithoutResult => {
+                self.usage.ended_without_result();
+                self.tasks.turn_ended();
+            }
             Digest::Autocompact { threshold } => self.context.threshold(*threshold),
+            Digest::Init => self.tasks.init(),
+            Digest::Task(event) => self.tasks.event(event),
+            Digest::LiveSet(live) => self.tasks.live_set(live),
+            Digest::Parented { parent, tool_uses } => self.threads.message(seq, parent, tool_uses),
         }
     }
 
@@ -163,6 +184,88 @@ impl SessionInsights {
     /// The session totals over the counted turns held (FR-007, FR-008).
     pub fn totals(&self) -> &SessionTotals {
         &self.usage.totals
+    }
+
+    /// Every task of the session, in the order first seen.
+    pub fn tasks(&self) -> impl Iterator<Item = &Task> {
+        self.tasks.iter()
+    }
+
+    /// The background tasks (FR-020), in the order first seen; none when the session has none.
+    pub fn background_tasks(&self) -> impl Iterator<Item = &Task> {
+        self.tasks().filter(|task| task.background)
+    }
+
+    /// How many background tasks are still running (FR-020).
+    pub fn running_background(&self) -> usize {
+        self.background_tasks()
+            .filter(|task| task.state == TaskState::Running)
+            .count()
+    }
+
+    /// The task the tool call `tool_use_id` started (FR-021): the latest one, should several
+    /// name it.
+    pub fn task_for_tool(&self, tool_use_id: &str) -> Option<&Task> {
+        self.tasks()
+            .filter(|task| task.tool_use_id.as_deref() == Some(tool_use_id))
+            .last()
+    }
+
+    /// The thread of the subagent the tool call `parent` started, while any of its events is held.
+    pub fn thread(&self, parent: &str) -> Option<&ThreadSummary> {
+        self.threads.get(parent)
+    }
+
+    /// Where the thread of `parent` is drawn (FR-016, FR-017): under the main transcript's card
+    /// of `parent`, else under the card in the thread whose message holds `parent`, else under a
+    /// placeholder.
+    pub fn owner(&self, parent: &str, main: &Transcript) -> Owner {
+        if main.entry(&EntryKey::Tool(parent.to_string())).is_some() {
+            Owner::Main
+        } else if let Some(holder) = self.threads.holder(parent) {
+            Owner::Thread(holder.to_string())
+        } else {
+            Owner::Unknown
+        }
+    }
+
+    /// The threads drawn under `owner`, by their first event.
+    pub fn threads_owned_by(&self, owner: &Owner, main: &Transcript) -> Vec<&ThreadSummary> {
+        self.threads
+            .all()
+            .into_iter()
+            .filter(|t| self.owner(&t.parent, main) == *owner)
+            .collect()
+    }
+
+    /// The threads whose parent is held nowhere (FR-017), by their first event.
+    pub fn unknown_threads(&self, main: &Transcript) -> Vec<&ThreadSummary> {
+        self.threads_owned_by(&Owner::Unknown, main)
+    }
+
+    /// The thread of `parent` with its state and activity (FR-015, FR-018). The state is the
+    /// subagent task's when the CLI reported one for `parent`, else the parent card's `card`
+    /// status, else running; the activity is the task's, else the latest tool's name.
+    pub fn thread_view(&self, parent: &str, card: Option<ToolStatus>) -> Option<ThreadView<'_>> {
+        let summary = self.threads.get(parent)?;
+        let task = self
+            .tasks()
+            .filter(|t| t.kind == Some(TaskKind::Subagent))
+            .filter(|t| t.tool_use_id.as_deref() == Some(parent))
+            .last();
+        let state = match (task, card) {
+            (Some(task), _) => subagents::from_task(task.state),
+            (None, Some(card)) => subagents::from_card(card),
+            (None, None) => SubagentState::Running,
+        };
+        let activity = task
+            .and_then(|t| t.activity.clone())
+            .or_else(|| summary.latest_tool.clone());
+        Some(ThreadView {
+            summary,
+            state,
+            activity,
+        })
     }
 
     /// Events before the first held one.

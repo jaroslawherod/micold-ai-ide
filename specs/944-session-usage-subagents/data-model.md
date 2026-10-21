@@ -21,8 +21,9 @@ unless marked otherwise. Nothing here is persisted or sent on the wire: #938's `
 Operations: `apply(omitted, &[SequencedEvent], live)`; `context() -> &ContextReading`;
 `turn(result_seq) -> Option<&TurnUsage>`; `totals() -> &SessionTotals`; `tasks()`,
 `background_tasks()`, `running_background() -> usize`, `task_for_tool(tool_use_id)`;
-`thread(parent) -> Option<&ThreadSummary>`, `threads_owned_by(Owner)`, `owner(parent, &Transcript)
--> Owner`, `unknown_threads(&Transcript)`.
+`thread(parent) -> Option<&ThreadSummary>`, `threads_owned_by(&Owner, &Transcript)`,
+`owner(parent, &Transcript) -> Owner`, `unknown_threads(&Transcript)`, `thread_view(parent,
+Option<ToolStatus>) -> Option<ThreadView>`.
 
 Invariant **I1** (research R8): after any sequence of messages, equal to a value built by one
 `live: false` message of the held events with the same `omitted`.

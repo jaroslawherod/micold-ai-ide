@@ -1,13 +1,19 @@
 //! Feature 944 — the session insights model over the recorded stream-json fixtures and synthetic
-//! events (contracts/insights-model.md: guarantees I1, I2, I3, I6).
+//! events (contracts/insights-model.md: guarantees I1–I6).
 
-use micold_core::structured::insights::{ContextReading, ContextState, SessionInsights};
-use micold_core::structured::{parse_line, SequencedEvent, StructuredEvent, MAX_EVENTS};
+use micold_core::structured::insights::{
+    ContextReading, ContextState, Owner, SessionInsights, SubagentState, Task, TaskKind, TaskState,
+};
+use micold_core::structured::transcript::{ToolStatus, Transcript};
+use micold_core::structured::{
+    parse_line, ContentBlock, SequencedEvent, StructuredEvent, MAX_EVENTS,
+};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
-use stream_json::{events_of, lines_of, user_text, RECORDED, RECORDED_944};
+use stream_json::{events_of, lines_of, tool_use, user_text, with_parent, RECORDED, RECORDED_944};
 
 /// Every fixture recorded from a real `claude`.
 fn recorded() -> impl Iterator<Item = &'static str> {
@@ -754,4 +760,567 @@ fn a_malformed_response_usage_leaves_the_reading_without_a_figure() {
             assert_eq!(used, Some(10), "{bad}: no usage object, no reading");
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// T023 — I5: background tasks (FR-018, FR-020–FR-022).
+
+/// A `system` task line of `subtype` with `fields`.
+fn system(subtype: &str, fields: Value) -> StructuredEvent {
+    let mut value = json!({ "type": "system", "subtype": subtype, "session_id": "<SESSION_ID>" });
+    for (key, field) in fields.as_object().expect("fields are an object") {
+        value[key] = field.clone();
+    }
+    line(value)
+}
+
+fn task_started(
+    task_id: &str,
+    tool_use_id: &str,
+    task_type: &str,
+    background: bool,
+) -> StructuredEvent {
+    system(
+        "task_started",
+        json!({
+            "task_id": task_id, "tool_use_id": tool_use_id, "description": format!("task {task_id}"),
+            "task_type": task_type, "is_backgrounded": background,
+        }),
+    )
+}
+
+fn live_set(task_ids: &[&str]) -> StructuredEvent {
+    let tasks: Vec<Value> = task_ids
+        .iter()
+        .map(|id| json!({ "task_id": id, "task_type": "local_bash", "description": format!("live {id}") }))
+        .collect();
+    system("background_tasks_changed", json!({ "tasks": tasks }))
+}
+
+/// The CLI's `init` line, as `text-turn` recorded it.
+fn init() -> StructuredEvent {
+    fixture("text-turn")
+        .into_iter()
+        .map(|e| e.event)
+        .find(|e| matches!(e, StructuredEvent::Init { .. }))
+        .expect("text-turn starts with an init")
+}
+
+/// The task `task_id` of insights built from `events`.
+fn task_of<'a>(insights: &'a SessionInsights, task_id: &str) -> &'a Task {
+    insights
+        .tasks()
+        .find(|t| t.task_id == task_id)
+        .unwrap_or_else(|| panic!("task {task_id} is listed"))
+}
+
+/// The seq of the fixture's first `system` line of `subtype`.
+fn seq_of_subtype(events: &[SequencedEvent], subtype: &str) -> u64 {
+    events
+        .iter()
+        .find(|e| raw_of(&e.event).is_some_and(|v| v["subtype"] == subtype))
+        .map(|e| e.seq)
+        .unwrap_or_else(|| panic!("a {subtype} line"))
+}
+
+/// The fixture's first line of `subtype`, as JSON.
+fn first_line_of(events: &[SequencedEvent], subtype: &str) -> Value {
+    raw_of(&events[seq_of_subtype(events, subtype) as usize].event).expect("JSON")
+}
+
+#[test]
+fn a_background_command_runs_then_finishes_with_its_summary() {
+    let events = fixture("background-command");
+    let started = first_line_of(&events, "task_started");
+    let notification = first_line_of(&events, "task_notification");
+    let id = started["task_id"].as_str().unwrap();
+
+    let until_started = seq_of_subtype(&events, "task_started") as usize + 1;
+    let running = built(0, &events[..until_started]);
+    let task = task_of(&running, id);
+    assert_eq!(task.state, TaskState::Running);
+    assert_eq!(task.kind, Some(TaskKind::Command));
+    assert!(task.background);
+    assert_eq!(task.description, started["description"].as_str().unwrap());
+    assert_eq!(task.tool_use_id.as_deref(), started["tool_use_id"].as_str());
+    assert_eq!(task.outcome, None);
+    assert_eq!(running.running_background(), 1);
+    assert_eq!(running.background_tasks().count(), 1);
+
+    let finished = built(0, &events);
+    let task = task_of(&finished, id);
+    assert_eq!(task.state, TaskState::Finished);
+    assert_eq!(task.outcome.as_deref(), notification["summary"].as_str());
+    assert_eq!(finished.running_background(), 0);
+    assert_eq!(
+        finished.tasks().count(),
+        1,
+        "one task, however many lines name it"
+    );
+}
+
+#[test]
+fn a_background_subagent_is_a_subagent_background_task() {
+    let events = fixture("background-subagent");
+    let started = first_line_of(&events, "task_started");
+    let insights = built(0, &events);
+    let task = task_of(&insights, started["task_id"].as_str().unwrap());
+    assert_eq!(task.kind, Some(TaskKind::Subagent));
+    assert!(task.background);
+    assert_eq!(task.state, TaskState::Finished);
+    assert_eq!(insights.background_tasks().count(), 1);
+}
+
+#[test]
+fn the_call_that_started_a_task_finds_it() {
+    for name in ["background-command", "background-subagent", "subagent-turn"] {
+        let events = fixture(name);
+        let started = first_line_of(&events, "task_started");
+        let insights = built(0, &events);
+        let tool_use_id = started["tool_use_id"].as_str().unwrap();
+        assert_eq!(
+            insights
+                .task_for_tool(tool_use_id)
+                .map(|t| t.task_id.as_str()),
+            started["task_id"].as_str(),
+            "{name}"
+        );
+    }
+    assert!(built(0, &fixture("background-command"))
+        .task_for_tool("toolu_none")
+        .is_none());
+}
+
+#[test]
+fn an_init_ends_every_running_task_without_a_report() {
+    let events = numbered(
+        [
+            task_started("bg", "toolu_1", "local_bash", true),
+            task_started("fg", "toolu_2", "local_agent", false),
+            init(),
+        ],
+        0,
+    );
+    let insights = built(0, &events);
+    assert_eq!(
+        task_of(&insights, "bg").state,
+        TaskState::EndedWithoutReport
+    );
+    assert_eq!(
+        task_of(&insights, "fg").state,
+        TaskState::EndedWithoutReport
+    );
+    assert_eq!(insights.running_background(), 0);
+}
+
+#[test]
+fn a_live_set_without_a_running_background_task_ends_it() {
+    let events = numbered(
+        [
+            task_started("bg", "toolu_1", "local_bash", true),
+            task_started("kept", "toolu_2", "local_bash", true),
+            task_started("fg", "toolu_3", "local_agent", false),
+            live_set(&["kept"]),
+        ],
+        0,
+    );
+    let insights = built(0, &events);
+    assert_eq!(
+        task_of(&insights, "bg").state,
+        TaskState::EndedWithoutReport
+    );
+    assert_eq!(task_of(&insights, "kept").state, TaskState::Running);
+    assert_eq!(
+        task_of(&insights, "fg").state,
+        TaskState::Running,
+        "not a background task"
+    );
+    assert_eq!(insights.running_background(), 1);
+}
+
+#[test]
+fn a_live_set_lists_a_task_not_seen_before() {
+    let insights = built(0, &numbered([live_set(&["new"])], 0));
+    let task = task_of(&insights, "new");
+    assert_eq!(task.state, TaskState::Running);
+    assert!(task.background);
+    assert_eq!(task.kind, Some(TaskKind::Command));
+    assert_eq!(task.description, "live new");
+}
+
+#[test]
+fn a_turn_ended_without_result_ends_running_foreground_tasks_only() {
+    let events = numbered(
+        [
+            task_started("bg", "toolu_1", "local_bash", true),
+            task_started("fg", "toolu_2", "local_agent", false),
+            StructuredEvent::TurnEndedWithoutResult,
+        ],
+        0,
+    );
+    let insights = built(0, &events);
+    assert_eq!(
+        task_of(&insights, "fg").state,
+        TaskState::EndedWithoutReport
+    );
+    assert_eq!(task_of(&insights, "bg").state, TaskState::Running);
+}
+
+#[test]
+fn a_report_of_an_unknown_task_lists_it() {
+    let notification = system(
+        "task_notification",
+        json!({ "task_id": "lost", "tool_use_id": "toolu_9", "status": "failed", "summary": "Command failed" }),
+    );
+    let insights = built(0, &numbered([notification], 0));
+    let task = task_of(&insights, "lost");
+    assert_eq!(task.state, TaskState::Failed);
+    assert!(task.background);
+    assert_eq!(task.outcome.as_deref(), Some("Command failed"));
+    assert_eq!(task.description, "Command failed");
+    assert_eq!(task.tool_use_id.as_deref(), Some("toolu_9"));
+    assert_eq!(task.kind, None);
+}
+
+#[test]
+fn each_reported_status_sets_its_state() {
+    for (subtype, status, state) in [
+        ("task_updated", "completed", TaskState::Finished),
+        ("task_updated", "failed", TaskState::Failed),
+        ("task_updated", "killed", TaskState::Stopped),
+        ("task_notification", "completed", TaskState::Finished),
+        ("task_notification", "failed", TaskState::Failed),
+        ("task_notification", "stopped", TaskState::Stopped),
+    ] {
+        let report = if subtype == "task_updated" {
+            system(
+                subtype,
+                json!({ "task_id": "t", "patch": { "status": status } }),
+            )
+        } else {
+            system(subtype, json!({ "task_id": "t", "status": status }))
+        };
+        let events = numbered(
+            [task_started("t", "toolu_1", "local_bash", true), report],
+            0,
+        );
+        assert_eq!(
+            task_of(&built(0, &events), "t").state,
+            state,
+            "{subtype} {status}"
+        );
+    }
+}
+
+#[test]
+fn a_later_start_of_the_same_task_reopens_it() {
+    let events = numbered(
+        [
+            task_started("t", "toolu_1", "local_agent", true),
+            system(
+                "task_notification",
+                json!({ "task_id": "t", "status": "completed", "summary": "done" }),
+            ),
+            task_started("t", "toolu_1", "local_agent", true),
+        ],
+        0,
+    );
+    let insights = built(0, &events);
+    assert_eq!(task_of(&insights, "t").state, TaskState::Running);
+    assert_eq!(insights.tasks().count(), 1);
+}
+
+#[test]
+fn a_tasks_activity_is_its_progress_summary_else_description_else_last_tool() {
+    for (progress, activity) in [
+        (
+            json!({ "summary": "Summing up", "description": "Reading", "last_tool_name": "Read" }),
+            "Summing up",
+        ),
+        (
+            json!({ "description": "Reading", "last_tool_name": "Read" }),
+            "Reading",
+        ),
+        (json!({ "last_tool_name": "Read" }), "Read"),
+    ] {
+        let mut fields = progress.clone();
+        fields["task_id"] = json!("t");
+        let events = numbered(
+            [
+                task_started("t", "toolu_1", "local_agent", false),
+                system("task_progress", fields),
+            ],
+            0,
+        );
+        assert_eq!(
+            task_of(&built(0, &events), "t").activity.as_deref(),
+            Some(activity),
+            "{progress}"
+        );
+    }
+    let insights = built(0, &fixture("subagent-turn"));
+    let task = insights.tasks().next().expect("the subagent's task");
+    assert_eq!(task.activity.as_deref(), Some("Reading notes.txt"));
+}
+
+#[test]
+fn a_running_task_shows_ended_while_the_cli_is_not_running_and_the_table_keeps_it() {
+    let events = numbered([task_started("t", "toolu_1", "local_bash", true)], 0);
+    let insights = built(0, &events);
+    let task = task_of(&insights, "t");
+    assert_eq!(task.display_state(false), TaskState::EndedWithoutReport);
+    assert_eq!(task.display_state(true), TaskState::Running);
+    assert_eq!(task.state, TaskState::Running, "the table is unchanged");
+    assert_eq!(insights, built(0, &events));
+    let finished = Task {
+        state: TaskState::Finished,
+        ..task.clone()
+    };
+    assert_eq!(finished.display_state(false), TaskState::Finished);
+}
+
+#[test]
+fn a_session_without_background_tasks_lists_none() {
+    for name in ["text-turn", "tool-turn", "subagent-turn", "nested-subagent"] {
+        let insights = built(0, &fixture(name));
+        assert_eq!(insights.background_tasks().count(), 0, "{name}");
+        assert_eq!(insights.running_background(), 0, "{name}");
+    }
+}
+
+#[test]
+fn malformed_task_lines_are_skipped() {
+    let insights = built(0, &fixture("insights-tolerance"));
+    assert_eq!(insights.tasks().count(), 0);
+}
+
+// ---------------------------------------------------------------------------------------
+// T024 — I4: subagent threads (SC-003, FR-014–FR-018).
+
+/// Per parent tool use id, read straight from the events: the parented messages, the tool calls
+/// they hold and the latest tool's name.
+fn expected_threads(events: &[SequencedEvent]) -> HashMap<String, (u64, u64, Option<String>)> {
+    let mut threads: HashMap<String, (u64, u64, Option<String>)> = HashMap::new();
+    for e in events {
+        let (parent, blocks) = match &e.event {
+            StructuredEvent::Assistant {
+                parent_tool_use_id: Some(p),
+                blocks,
+                ..
+            }
+            | StructuredEvent::User {
+                parent_tool_use_id: Some(p),
+                blocks,
+                ..
+            } => (p, blocks),
+            _ => continue,
+        };
+        let entry = threads.entry(parent.clone()).or_default();
+        entry.0 += 1;
+        for block in blocks {
+            if let ContentBlock::ToolUse { name, .. } = block {
+                entry.1 += 1;
+                entry.2 = Some(name.clone());
+            }
+        }
+    }
+    threads
+}
+
+fn main_of(omitted: u64, events: &[SequencedEvent]) -> Transcript {
+    let mut main = Transcript::new();
+    main.apply(omitted, events, false);
+    main
+}
+
+/// The id of the first `Agent` call that `parent`'s thread (or, with `None`, the main scope)
+/// holds.
+fn agent_call(events: &[SequencedEvent], parent: Option<&str>) -> String {
+    events
+        .iter()
+        .find_map(|e| match &e.event {
+            StructuredEvent::Assistant {
+                parent_tool_use_id,
+                blocks,
+                ..
+            } if parent_tool_use_id.as_deref() == parent => blocks.iter().find_map(|b| match b {
+                ContentBlock::ToolUse { id, name, .. } if name == "Agent" => Some(id.clone()),
+                _ => None,
+            }),
+            _ => None,
+        })
+        .expect("an Agent call")
+}
+
+#[test]
+fn every_parented_message_is_counted_in_its_parents_thread_and_no_other() {
+    for name in ["subagent-turn", "nested-subagent", "background-subagent"] {
+        let events = fixture(name);
+        let expected = expected_threads(&events);
+        assert!(!expected.is_empty(), "{name} has a subagent");
+        let insights = built(0, &events);
+        for (parent, (messages, tool_calls, latest)) in &expected {
+            let thread = insights
+                .thread(parent)
+                .unwrap_or_else(|| panic!("{name}: a thread for {parent}"));
+            assert_eq!(&thread.parent, parent);
+            assert_eq!(thread.messages, *messages, "{name} {parent}: messages");
+            assert_eq!(
+                thread.tool_calls, *tool_calls,
+                "{name} {parent}: tool calls"
+            );
+            assert_eq!(&thread.latest_tool, latest, "{name} {parent}: latest tool");
+        }
+        let main = main_of(0, &events);
+        let mut every: Vec<_> = insights.threads_owned_by(&Owner::Main, &main);
+        let mut queue: Vec<String> = every.iter().map(|t| t.parent.clone()).collect();
+        while let Some(parent) = queue.pop() {
+            let inner = insights.threads_owned_by(&Owner::Thread(parent), &main);
+            queue.extend(inner.iter().map(|t| t.parent.clone()));
+            every.extend(inner);
+        }
+        assert_eq!(
+            every.len(),
+            expected.len(),
+            "{name}: every thread is placed once"
+        );
+        assert!(insights.unknown_threads(&main).is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn a_thread_is_placed_under_the_card_of_its_parent_at_every_depth() {
+    let events = fixture("nested-subagent");
+    let main = main_of(0, &events);
+    let insights = built(0, &events);
+    let outer = agent_call(&events, None);
+    let inner = agent_call(&events, Some(&outer));
+    assert_eq!(insights.owner(&outer, &main), Owner::Main);
+    assert_eq!(insights.owner(&inner, &main), Owner::Thread(outer.clone()));
+    let owned: Vec<&str> = insights
+        .threads_owned_by(&Owner::Thread(outer.clone()), &main)
+        .iter()
+        .map(|t| t.parent.as_str())
+        .collect();
+    assert_eq!(owned, [inner.as_str()]);
+    let at_main: Vec<&str> = insights
+        .threads_owned_by(&Owner::Main, &main)
+        .iter()
+        .map(|t| t.parent.as_str())
+        .collect();
+    assert_eq!(at_main, [outer.as_str()]);
+}
+
+#[test]
+fn a_thread_whose_parent_is_held_nowhere_is_unknown() {
+    let mut events = fixture("subagent-turn");
+    let next = events.len() as u64;
+    events.extend(numbered(
+        [with_parent(user_text("orphan"), "toolu_never")],
+        next,
+    ));
+    let main = main_of(0, &events);
+    let insights = built(0, &events);
+    assert_eq!(insights.owner("toolu_never", &main), Owner::Unknown);
+    let unknown: Vec<&str> = insights
+        .unknown_threads(&main)
+        .iter()
+        .map(|t| t.parent.as_str())
+        .collect();
+    assert_eq!(unknown, ["toolu_never"]);
+
+    // The parent's card evicted: the history starts after the `Agent` call.
+    let events = fixture("nested-subagent");
+    let outer = agent_call(&events, None);
+    let inner = agent_call(&events, Some(&outer));
+    let call_seq = events
+        .iter()
+        .position(|e| {
+            matches!(&e.event, StructuredEvent::Assistant { parent_tool_use_id: None, blocks, .. }
+            if blocks.iter().any(|b| matches!(b, ContentBlock::ToolUse { id, .. } if *id == outer)))
+        })
+        .unwrap();
+    let held = &events[call_seq + 1..];
+    let (main, insights) = (
+        main_of(call_seq as u64 + 1, held),
+        built(call_seq as u64 + 1, held),
+    );
+    assert_eq!(insights.owner(&outer, &main), Owner::Unknown);
+    assert_eq!(insights.owner(&inner, &main), Owner::Thread(outer.clone()));
+    let unknown: Vec<&str> = insights
+        .unknown_threads(&main)
+        .iter()
+        .map(|t| t.parent.as_str())
+        .collect();
+    assert_eq!(unknown, [outer.as_str()]);
+}
+
+#[test]
+fn a_threads_state_comes_from_its_subagent_task_else_from_its_card() {
+    let events = fixture("subagent-turn");
+    let parent = agent_call(&events, None);
+    let insights = built(0, &events);
+    let view = insights
+        .thread_view(&parent, Some(ToolStatus::Running))
+        .unwrap();
+    assert_eq!(view.state, SubagentState::Finished, "the task's state wins");
+    assert_eq!(
+        view.activity.as_deref(),
+        Some("Reading notes.txt"),
+        "the task's activity"
+    );
+
+    let until_progress = seq_of_subtype(&events, "task_progress") as usize + 1;
+    let running = built(0, &events[..until_progress]);
+    assert_eq!(
+        running
+            .thread_view(&parent, Some(ToolStatus::Done))
+            .unwrap()
+            .state,
+        SubagentState::Running
+    );
+
+    let untasked = numbered(
+        [
+            tool_use("toolu_a", "Agent", "{}"),
+            with_parent(tool_use("toolu_r", "Read", "{}"), "toolu_a"),
+        ],
+        0,
+    );
+    let insights = built(0, &untasked);
+    for (card, state) in [
+        (ToolStatus::Running, SubagentState::Running),
+        (ToolStatus::Done, SubagentState::Finished),
+        (ToolStatus::Failed, SubagentState::Failed),
+        (ToolStatus::NoResult, SubagentState::EndedWithoutResult),
+    ] {
+        let view = insights.thread_view("toolu_a", Some(card)).unwrap();
+        assert_eq!(view.state, state, "{card:?}");
+        assert_eq!(
+            view.activity.as_deref(),
+            Some("Read"),
+            "the latest tool's name"
+        );
+    }
+    assert!(insights.thread_view("toolu_none", None).is_none());
+}
+
+#[test]
+fn a_subagent_task_that_ended_without_a_report_ended_without_a_result() {
+    let events = fixture("subagent-turn");
+    let parent = agent_call(&events, None);
+    let until_progress = seq_of_subtype(&events, "task_progress") as usize + 1;
+    let mut cut = events[..until_progress].to_vec();
+    cut.extend(numbered(
+        [StructuredEvent::TurnEndedWithoutResult],
+        until_progress as u64,
+    ));
+    let insights = built(0, &cut);
+    assert_eq!(
+        insights
+            .thread_view(&parent, Some(ToolStatus::NoResult))
+            .unwrap()
+            .state,
+        SubagentState::EndedWithoutResult
+    );
 }
