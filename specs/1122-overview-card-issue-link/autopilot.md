@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5 r1 verdicts recorded (A CLEAN 3 MINOR: F2, F3 fixed, F1 declined; B CLEAN, wire.md fixed; visual PASS, T050 ticked); visual observation 1 (read-only switch reads no repo) fixed test-first. Full gate r3 on the fix commit, then review A r2 (sonnet) on the fix diff; then PR.
+- **Next step**: M5 r1 fixes in 44164707, full gate r4 GREEN, pushed. Waiting on review A r2 (sonnet, fix diff) and visual pass r2 (read-only switch link, subtitle), prompts `1122-m5-prompt-{review-a,visual}-r2.md` in the session scratchpad; then PR (title in the unit prompt).
 
 ## Pull requests
 
@@ -103,6 +103,10 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | VERDICT: CLEAN; 3 MINOR: F2 (typed trailing `/` freezes the draft) fixed test-first, F3 (subtitle) fixed, F1 (double `SettingsChanged` echo) declined (verdict verbatim below) |
 | Review B M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | VERDICT: CLEAN; 1 MINOR F1 (wire.md W2/W3 stale) fixed, prose only (verdict verbatim below) |
 | Visual pass M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | PASS on all 8 criteria; 41 PNGs in visual-pass/m5/; T050 ticked (verdict verbatim below). Observation 1 (read-only window switched B → A shows no "Issue #1122") is ours: M3's repo read fires only on `Attached`, and a read-only window's attach is answered `Refused { ProjectBusy }`; fixed test-first (`repo_reread_on_a_read_only_switch`) |
+| Full gate M5 | 3 | 44164707 | RED: `micold-daemon --test attention_error_notice` `without_focus_the_first_reporting_window_gets_the_notice` (`left: []`), a timing flake outside this diff (no daemon file changed since the green r2); 5 reruns of that test passed |
+| Full gate M5 | 4 | 44164707 | GREEN (after the r1 fixes) |
+| Review A M5 | 2 | 660cc05a9c3777cc54b0584f8a87eceffd625c2a:44164707544ad85d3bc0c6988bba72fbf08a9e3f | requested (orchestrator, sonnet; fix diff `git diff b4ba37fd 44164707 -- crates`) |
+| Visual pass M5 | 2 | 660cc05a9c3777cc54b0584f8a87eceffd625c2a:44164707544ad85d3bc0c6988bba72fbf08a9e3f | requested (orchestrator, sonnet; read-only switch link, subtitle) |
 
 
 ### M4 r1 verdicts (verbatim)
