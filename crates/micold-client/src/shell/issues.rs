@@ -747,8 +747,9 @@ fn send_remotes_read(app: &mut App, project: PathBuf, numbers: Vec<u64>) {
 
 /// Read the active project's GitHub repository while the Overview does not know it (feature 1122,
 /// R2): the titles' remotes request with no title numbers, so its answer records the repository
-/// and reads nothing. Called when the Overview opens and when the active project's daemon attaches
-/// with the Overview open (a project switch made there). A window with no route asks nothing.
+/// and reads nothing. Called when the Overview opens and when the active project's daemon answers
+/// its attach (`Attached`, or `Refused` in a read-only window) with the Overview open (a project
+/// switch made there). A window with no route asks nothing.
 pub fn read_repo(app: &mut App) {
     use micold_client::features::overview::RepoLookup;
     if app.core.overview.repo != RepoLookup::Unknown || !has_route(app) {

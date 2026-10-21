@@ -56,8 +56,8 @@ longer active, through `read_project`), `Msg::IssueLinkActivated(SessionLocation
 `Msg::CardStepped { forward: bool }`, `Msg::LinkMenuRequested(SessionLocation)` (the link's Menu
 key; the root opens the menu with origin `KeyboardFromLink`). `MenuOrigin` gains
 `KeyboardFromLink`, handled as `Keyboard` in the reducer; `focus_return` then names the link
-(FR-009). `repo` is read again on `DaemonMsg::Attached` for the active project while the Overview
-is open and `repo` is `Unknown` (R2).
+(FR-009). `repo` is read again on `DaemonMsg::Attached` (or a read-only window's `Refused`) for the
+active project while the Overview is open and `repo` is `Unknown` (R2).
 
 ## Expansion (core, `micold_core::overview_expansion`) — additions to feature 1121's model
 

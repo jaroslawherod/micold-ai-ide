@@ -10,10 +10,12 @@ After `github_issues_enabled`. Every project's value, by key; a project with no 
 Strict: each value is decoded through `JiraBaseUrl::parse`. The service drops an entry that no
 longer parses when it reads its file, so it never sends one.
 
-## W2 — `ClientMsg::SettingsSet.jira_base_url: Option<JiraBaseUrlChange>`
+## W2 — `ClientMsg::SettingsSet.jira_base_url: Option<Box<JiraBaseUrlChange>>`
 
-After `github_issues_enabled`. `JiraBaseUrlChange { project: String, url: Option<JiraBaseUrl> }`,
-in `micold_core::settings` beside `JiraConnectionChange`, with `apply(&mut BTreeMap)`. `None`: no
+After `github_issues_enabled`. Boxed so `ClientMsg` stays small (clippy `large_enum_variant`);
+postcard encodes a `Box<T>` as `T`, so the layout on the wire is that of
+`Option<JiraBaseUrlChange>`. `JiraBaseUrlChange { project: String, url: Option<JiraBaseUrl> }`, in
+`micold_core::settings` beside `JiraConnectionChange`, with `apply(&mut BTreeMap)`. `None`: no
 project changes. `Some { url: Some(u) }`: set that project's value. `Some { url: None }`: remove it.
 The service merges the one change into the map on disk inside its write
 (`Catalog::persist_service_settings_with`, as it merges `jira_connection`; the field is not copied
@@ -21,10 +23,11 @@ from the service's in-memory snapshot), so two windows saving different projects
 each other, and broadcasts `DaemonSettings` to every connection, so every window adopts it (FR-012).
 The service never reads it otherwise.
 
-## W3 — `PROTOCOL_VERSION` 57 → 58
+## W3 — `PROTOCOL_VERSION` 59 → 60
 
 One edit with W1 and W2, a doc paragraph in `protocol/version.rs`, and the `tests/schema_hash.rs`
-pin moved in the same commit. `docs/daemon.md` names version 58.
+pin moved in the same commit. `docs/daemon.md` names version 60. Planned as 57 → 58; `main` took 58
+and 59 (feature 942) first.
 
 ## Settings file
 

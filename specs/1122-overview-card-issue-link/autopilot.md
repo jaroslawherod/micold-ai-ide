@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5 T039–T049 done, full gate r2 GREEN on b4ba37fd. Waiting on review A r1, review B r1 and the visual pass r1 (T050), prompts in the session scratchpad `1122-m5-prompt-{review-a,review-b,visual}-r1.md`; then fix findings, tick T050, PR.
+- **Next step**: M5 r1 verdicts recorded (A CLEAN 3 MINOR: F2, F3 fixed, F1 declined; B CLEAN, wire.md fixed; visual PASS, T050 ticked); visual observation 1 (read-only switch reads no repo) fixed test-first. Full gate r3 on the fix commit, then review A r2 (sonnet) on the fix diff; then PR.
 
 ## Pull requests
 
@@ -100,9 +100,9 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Visual pass M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | PASS on all re-checked criteria (1, 6, 7; regression 2, 4); 64 r2 PNGs in visual-pass/m4/ (verdict verbatim below). T038 ticked |
 | Full gate M5 | 1 | af17c7fd | RED: clippy `large_enum_variant` on `features::runs::Effect` (`ClientMsg` grew with `SettingsSet.jira_base_url`); fixed b4ba37fd (`Option<Box<JiraBaseUrlChange>>`) |
 | Full gate M5 | 2 | b4ba37fd | GREEN (core changed, so the scoped gate would have been the whole workspace: the full gate ran instead) |
-| Review A M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | requested (orchestrator) |
-| Review B M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | requested (orchestrator, sonnet) |
-| Visual pass M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | requested (orchestrator, T050) |
+| Review A M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | VERDICT: CLEAN; 3 MINOR: F2 (typed trailing `/` freezes the draft) fixed test-first, F3 (subtitle) fixed, F1 (double `SettingsChanged` echo) declined (verdict verbatim below) |
+| Review B M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | VERDICT: CLEAN; 1 MINOR F1 (wire.md W2/W3 stale) fixed, prose only (verdict verbatim below) |
+| Visual pass M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | PASS on all 8 criteria; 41 PNGs in visual-pass/m5/; T050 ticked (verdict verbatim below). Observation 1 (read-only window switched B → A shows no "Issue #1122") is ours: M3's repo read fires only on `Attached`, and a read-only window's attach is answered `Refused { ProjectBusy }`; fixed test-first (`repo_reread_on_a_read_only_switch`) |
 
 
 ### M4 r1 verdicts (verbatim)
@@ -245,6 +245,95 @@ Observations:
 
 </details>
 
+### M5 r1 verdicts (verbatim)
+
+<details><summary>Review A M5 r1</summary>
+
+# 1122 M5 review A r1 (snapshot 3d085ccd:b4ba37fd)
+
+VERDICT: CLEAN
+F1 [MINOR] crates/micold-daemon/src/server.rs:1404-1419 — Each setter in the `SettingsSet` chain broadcasts its own `SettingsChanged`, so a save that has both `jira_enabled`/`jira_connection` and `jira_base_url` first echoes the base-URL map from before the save. `adopt_daemon_settings` (daemon_sync.rs:1011) then overwrites the change the client already applied, and the Overview's Jira links flicker off until the `set_jira_base_url` echo arrives. If that later write fails, they stay off. The same intermediate-echo pattern already exists for other fields, and the final state is correct.
+   Evidence: `catalog.rs:577/589` — `set_jira_connection` and `set_jira_base_url` each call `persist_service_settings_with(ProjectJiraChange { <one field>, ..default() })`; no caller fills both fields.
+   Fix: Add one state/catalog method that takes both Options, passes them in a single `ProjectJiraChange` and broadcasts once, which is what the struct was built for. Otherwise drop the struct.
+F2 [MINOR] crates/micold-client/src/features/settings.rs:529,548 — `base_untouched` compares the raw typed text with the stored value's text, but `JiraBaseUrl::parse` normalises (it trims and strips a trailing `/`, jira.rs:182). If the draft outlives a save where the user typed `https://x.atlassian.net/`, the field counts as edited for good. It then stops following other windows' changes, and a later save can undo them.
+   Evidence: `let base_untouched = self.base_url == Self::base_text(self.stored_base_url.as_ref());`
+   Fix: Compare parsed values (`JiraBaseUrl::parse(self.base_url.trim()).ok() == self.stored_base_url`, with empty treated as None), or re-seed `base_url` from the stored value after a successful save.
+F3 [MINOR] crates/micold-client/src/ui/settings/jira.rs:67 — The page subtitle still says "Applies to every project.", but the new base URL field shown under it is stored per project (docs/user-guide/settings.md says each project has its own value).
+   Evidence: `"Start worktrees from the issues of a Jira Cloud project. Applies to every project."`
+   Fix: Say that the switch applies everywhere while the connection and base URL belong to the open project.
+
+</details>
+
+<details><summary>Review B M5 r1</summary>
+
+# 1122 M5 review B r1 (snapshot 3d085ccd:b4ba37fd)
+
+VERDICT: CLEAN
+F1 [MINOR] specs/1122-overview-card-issue-link/contracts/wire.md:W2, W3 — The contract was not updated for two M5 deviations. W2 still reads `Option<JiraBaseUrlChange>`, but the code has `jira_base_url: Option<Box<JiraBaseUrlChange>>` (the clippy fix in b4ba37fd). W3 still reads "57 → 58" and "daemon.md names version 58", but the code and docs say 59 → 60.
+   Evidence: messages.rs `jira_base_url: Option<Box<JiraBaseUrlChange>>`; wire.md "## W3 — `PROTOCOL_VERSION` 57 → 58"
+   Fix: Edit wire.md W2 to say the field is boxed and the postcard layout is unchanged. Edit W3 to 59 → 60 and note that `main` took 58 and 59 (feature 942).
+
+Verify results (output in /tmp/claude-0/-home-user-micold-ai-ide/9f964f32-37d5-5fbc-86f4-e611005b6fc8/scratchpad/b-r1-verify.txt). All of the listed commands pass:
+- core: protocol_roundtrip 41, schema_hash 22, settings_roundtrip 42
+- daemon: jira_base_url_setting 6, jira_setting 5
+- client: features_settings 138, layout_snapshot 74, overview 75, settings_sections 24, `--bin micold-ai-ide -- jira` 15
+
+The five deliberate deviations are acceptable:
+- The 59 → 60 bump is a single bump with the schema_hash pin moved in the same commit.
+- The JiraDraft tests sit in `tests/features_settings.rs`, beside the existing Jira draft tests.
+- The adopt test is split between `tests/overview.rs` and `src/main_tests.rs`.
+- The `layout_snapshot` re-bless matches the cycle-log claim: `overview-issue-link` plus the five `settings-view-jira-on-*` states.
+- The settings_sections check is a source scan, as for the other sections.
+
+Scope, constitution, ownership and leftovers checks are clean:
+- The diff since M4 touches only M5 files. No `todo!`, `dbg!` or similar was added.
+- T050 is correctly unticked.
+- The cycle log shows red before green for each behaviour.
+- The user guide (settings.md, overview.md) and daemon.md are updated.
+
+</details>
+
+<details><summary>Visual pass M5 r1</summary>
+
+# 1122 M5 visual pass r1 (T050, HEAD 6c0e732f)
+
+VISUAL PASS M5 (T050) r1: PASS on all 8 criteria. Built daemon and client from HEAD 6c0e732f (built tree matches b4ba37fd per the prompt; the only later change is autopilot.md) via build-lock.sh. Both binaries were pinned together. Ran on Xvfb :77 with lavapipe, a throwaway HOME/data dir, a fake xdg-open, and fixture repos A (origin git@github.com:o/r.git, 3 worktrees) and B (feat-mic-87_x). Source untouched, nothing committed. 41 untracked PNGs are in /home/user/micold-ai-ide/specs/1122-overview-card-issue-link/visual-pass/m5/. All paths below are relative to that directory. Temp dirs, processes and the Xvfb are cleaned up.
+
+Two-window checks ran at light 1.0 with the windows side by side at 800 px each (names `light-1.0-*`). A single window ran the 4 theme x scale combos. A and B opened in different windows, since a project can only be writable in one.
+
+1. PASS (sc.1). A's Overview shows "Issue #1122"; Default, feat_no-ticket and feat-mic-87_add-login show no link. Files: light-1.0-1-cards-no-base-url, dark-1.0-1-cards-no-base-url, light-2.0-1-cards-no-base-url, dark-2.0-1-cards-no-base-url (.png).
+
+2. PASS (sc.3, FR-010). The "Jira base URL" field sits after the four connection fields, is empty, has no required mark, and shows "Used to link Jira keys on this project's Overview cards." With the Jira switch off the field is not shown (light-1.0-2-switch-off-no-field.png). Field shots: {light,dark}-{1.0,2.0}-2-jira-base-url-field.png.
+
+3. PASS (sc.2, sc.5, sc.6, FR-012). Saved `https://example.atlassian.net/` with the connection fields blank and nothing was marked.
+   - "Issue MIC-87" appeared in window 1 and in window 2 (read-only on A) within about 1 s, with no restart: light-1.0-3-both-windows-after-save.png.
+   - Clicking the link made the fake xdg-open receive exactly `https://example.atlassian.net/browse/MIC-87`, once. The Overview stayed open with no ripple and nothing selected: light-1.0-3-after-click-w1.png.
+   - Reopened Settings shows `https://example.atlassian.net` without the trailing slash, and settings.json stores it that way: light-1.0-3-settings-reopened-stored-no-slash.png, light-2.0-3-settings-stored-no-slash.png.
+   - The same click gave the same URL in dark 1.0, dark 2.0, light 2.0 and light 1.0 full-window.
+   - Card shots: {light,dark}-{1.0,2.0}-3-cards-after-save.png.
+
+4. PASS (sc.8). Window 2 on B: the feat-mic-87_x card had no link and B's field was empty (light-1.0-4-w2-projectB-card-no-link.png, light-1.0-4-w2-projectB-field-empty.png).
+   - After saving `https://b.atlassian.net` the B link appeared and opened `https://b.atlassian.net/browse/MIC-87` (light-1.0-4-w2-B-link-after-save.png, light-1.0-4-w2-after-click-B.png).
+   - Window 1 on A kept its link, opened the example.atlassian.net URL, and A's field kept its value.
+   - settings.json held both entries under `jira_base_urls`: repoA `https://example.atlassian.net`, repoB `https://b.atlassian.net`.
+
+5. PASS (sc.4, §B7, FR-011, SC-006). `http://x`, `https://u@x`, `https://x?q`, `https://x#f` and `https://` were each refused. The field is marked red with "Enter the https address of your Jira, e.g. https://acme.atlassian.net.", Settings stays open on Jira, and the stored value is unchanged. The card still opened the example.atlassian.net URL afterwards. Files: light-1.0-5-refused-http, -2 to -5 (the other four values), light-1.0-5-card-still-links-after-refusals. Marked-field shots of `http://x` in all four combos: {light,dark}-{1.0,2.0}-5-refused-http.png.
+
+6. PASS (§B7). Cleared A's field and Saved: A's MIC-87 link went in window 1, and in window 2 with it switched to A read-only (light-1.0-6-both-windows-A-after-clear.png). B's link stayed (light-1.0-6-w2-back-on-B-link-stays.png), and settings.json then held only repoB. An earlier clear with window 2 on B is in light-1.0-6-both-after-clear.png.
+
+7. PASS (sc.7, D3). Switching the Jira integration off and Saving removed both A's MIC-87 link and B's link, with `jira_enabled` false and the values kept in settings.json. No Keep prompt appeared, because there is no connection. Switching it on again brought both links back without a restart. Files: light-1.0-7-switch-off-both-no-links.png, light-1.0-7-switch-on-both-links-back.png.
+
+8. PASS. The Jira link is the same primary colour and style as the GitHub link, and the whole label is the link. Tab onto it shows the ring in the link's gutter, clear of the text. Files: light-1.0-8-tab-github-link-ring.png and light-1.0-8-tab-jira-link-ring.png (side by side for comparison), plus dark-1.0, dark-2.0 and light-2.0 `-8-tab-jira-link-ring.png`.
+
+Observations (non-blocking):
+- A read-only window that was switched from B to A did not show "Issue #1122" on A's 1122 card, even about 5 s later. It did show the link when it first opened on A, and the writable window showed it throughout. The Jira links were correct in that window. I did not isolate the cause and did not check whether it predates 1122.
+- The first ring/Tab shot for light 1.0 (card focused, not link) also landed in light-1.0-8-tab-jira-link-ring.png. The final file in the set is the Jira link ring, but the Tab count differs from the single-window combos.
+- At 2.0 a single column scrolls. An expanded card overlaps the card above it (also true earlier in M4).
+- The environment-include "script not found" toast appears after every Save. It is harness noise because HOME has no .bashrc.
+- The "Enable Jira integration" switch was pre-seeded on in settings.json, not toggled from the UI to start. Toggling it off and on was exercised in criteria 2 and 7.
+
+</details>
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -253,6 +342,7 @@ Observations:
 | M2 | A r1 | F4 MINOR: the inline link's 6 px focus gutter is clipped by 2 px under the expanded body's 4 px top padding when the link is the body's first row | Deferred to M4, where it can first be seen: in M2 (and M3) the link is never a Tab stop (`focusable(false)`, contract U3 staging), so no ring is drawn in the gutter, and the clipped 2 px of hit strip lie in the body's top padding, under the title. M4 shows the ring and its visual pass covers it; recorded in *Follow-ups not done*. |
 | M2 | A r1 | F5 MINOR: `over_link` runs an operation over the hovered card on every mouse event and frame | Kept by design: it walks only the one card under the pointer (a few dozen nodes), frames come only while something animates or a rest timer waits (G3, one timed wake), and the rest timer needs the link state on frames (a scroll moves the link under a still pointer, R8). A per-layout cache would also have to follow the expanded body's own scroll offset, state the grid does not hold. Confirmed by review A r2. |
 | M4 | A r2 | F1 MINOR (optional): `LinkFocus::of` runs on every message and clones the active project `PathBuf` and the expanded location, even with the Overview closed | Declined: two small clones per message are negligible beside the update they bracket (no measurable cost; the reviewer marks the fix optional). Snapshotting the project only when a link is shown would add a second condition to the F2 project-switch guard that review A r2 and the visual pass r2 just verified, and would force another review, visual and gate round for no user-visible gain. |
+| M5 | A r1 | F1 MINOR: each setter in the `SettingsSet` chain broadcasts its own `SettingsChanged`, so a save with `jira_connection` and `jira_base_url` first echoes the old base-URL map | Not small or local: a combined `ProjectJiraChange` for connection + base URL would still leave the earlier echoes of `set_jira_enabled` and `set_github_issues_enabled` (between the two in the chain, `server.rs` ~1404–1419) carrying the old maps, so the flicker remains whenever the switch changes in the same save. The real fix is one broadcast per `SettingsSet` for every field, a change to the pre-existing pattern (features 533, 1102 and others) outside this PR; the final state is correct (reviewer). |
 
 ## Handover
 

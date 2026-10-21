@@ -526,7 +526,9 @@ impl JiraDraft {
         let key = project.as_deref().map(micold_core::jira::connection_key);
         let connection = key.as_ref().and_then(|k| connections.get(k)).cloned();
         let stored_base_url = key.as_ref().and_then(|k| base_urls.get(k)).cloned();
-        let base_untouched = self.base_url == Self::base_text(self.stored_base_url.as_ref());
+        let base_untouched = self
+            .typed_base_url()
+            .is_ok_and(|typed| typed == self.stored_base_url);
         let previous = self.connection.as_ref().map(|c| {
             (
                 c.site.to_string(),
@@ -563,6 +565,18 @@ impl JiraDraft {
         url.map(|u| u.as_str().to_owned()).unwrap_or_default()
     }
 
+    /// The field's text as a base URL: `None` when empty; parsed (trimmed, trailing `/` removed)
+    /// otherwise, so text that means the stored value compares equal to it.
+    fn typed_base_url(
+        &self,
+    ) -> Result<Option<micold_core::jira::JiraBaseUrl>, micold_core::jira::FieldProblem> {
+        let typed = self.base_url.trim();
+        if typed.is_empty() {
+            return Ok(None);
+        }
+        micold_core::jira::JiraBaseUrl::parse(typed).map(Some)
+    }
+
     /// What the save does to the open project's base URL (feature 1122, FR-010, FR-011): `None`
     /// with the switch off, no project open or the value unchanged; a set for a changed valid
     /// value, a clear for an emptied field over a stored one. Never part of the connection's
@@ -573,18 +587,11 @@ impl JiraDraft {
         let Some(project) = self.project.as_deref().filter(|_| self.enabled) else {
             return Ok(None);
         };
-        let typed = self.base_url.trim();
-        let url = if typed.is_empty() {
-            None
-        } else {
-            Some(
-                micold_core::jira::JiraBaseUrl::parse(typed).map_err(|problem| FieldError {
-                    field: FieldId::SettingsJiraBaseUrl,
-                    section: SettingsSection::Jira,
-                    message: problem.reason.to_owned(),
-                })?,
-            )
-        };
+        let url = self.typed_base_url().map_err(|problem| FieldError {
+            field: FieldId::SettingsJiraBaseUrl,
+            section: SettingsSection::Jira,
+            message: problem.reason.to_owned(),
+        })?;
         Ok(
             (url != self.stored_base_url).then(|| micold_core::settings::JiraBaseUrlChange {
                 project: micold_core::jira::connection_key(project),
