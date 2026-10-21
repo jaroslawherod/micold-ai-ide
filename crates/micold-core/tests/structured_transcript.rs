@@ -4,13 +4,17 @@
 use micold_core::structured::transcript::{
     input_summary, EntryKey, EntryKind, Outcome, RawReason, ResultPart, ToolStatus, Transcript,
 };
-use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent};
+use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent, MAX_EVENTS};
+use serde_json::json;
+use std::collections::HashSet;
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
 use stream_json::{
-    assistant_block, assistant_blocks, events_of, lines_of, sequenced, thinking_block, tool_result,
-    tool_use, turn_result, user_text, with_parent, without_stream_events, RECORDED,
+    assistant_block, assistant_blocks, block_delta, block_start, events_of, input_json_delta,
+    lines_of, message_start, sequenced, stream_event, stream_marker, text_delta, thinking_block,
+    thinking_delta, tool_result, tool_use, turn_result, user_text, with_message_id, with_parent,
+    without_stream_events, RECORDED,
 };
 
 /// A transcript built from `events` in one history message.
@@ -618,4 +622,623 @@ fn a_message_of_several_blocks_is_one_entry_per_block() {
         ]
     );
     assert_eq!(card_of(&transcript, "toolu_1").summary, "fn main");
+}
+
+// ---------------------------------------------------------------------------------------
+// T016 — US3 at the model: streamed entries grow in place, the finished message supersedes
+// them (G2, SC-002), and every recorded event is accounted for (G1, SC-001).
+
+/// Applies `events` one live message each.
+fn replayed(events: &[SequencedEvent]) -> Transcript {
+    let mut transcript = Transcript::new();
+    for event in events {
+        transcript.apply(0, std::slice::from_ref(event), true);
+    }
+    transcript
+}
+
+/// `kind` with its `streaming` flags cleared.
+fn settled(kind: &EntryKind) -> EntryKind {
+    let mut kind = kind.clone();
+    match &mut kind {
+        EntryKind::AssistantText { streaming, .. } | EntryKind::Thinking { streaming, .. } => {
+            *streaming = false;
+        }
+        EntryKind::ToolCall(card) => card.streaming = false,
+        _ => {}
+    }
+    kind
+}
+
+fn snapshot(transcript: &Transcript) -> Vec<(EntryKey, u64, EntryKind)> {
+    transcript
+        .entries()
+        .map(|e| (e.key().clone(), e.revision(), e.kind().clone()))
+        .collect()
+}
+
+/// The last entry, which a streamed event grows.
+fn last(transcript: &Transcript) -> (EntryKey, u64, EntryKind) {
+    snapshot(transcript).pop().expect("an entry")
+}
+
+#[test]
+fn replaying_a_recorded_fixture_one_event_at_a_time_changes_only_the_streamed_entry() {
+    for name in RECORDED {
+        let events = events_of(&lines_of(name));
+        let mut transcript = Transcript::new();
+        for event in &events {
+            let before = snapshot(&transcript);
+            transcript.apply(0, std::slice::from_ref(event), true);
+            let after = snapshot(&transcript);
+            assert!(
+                after.len() >= before.len(),
+                "{name} seq {}: no entry leaves",
+                event.seq
+            );
+            let changed: Vec<usize> = (0..before.len())
+                .filter(|&i| before[i] != after[i])
+                .collect();
+            assert!(
+                changed.len() <= 1,
+                "{name} seq {}: only the touched entry changes (FR-016), changed {changed:?}",
+                event.seq
+            );
+            for i in changed {
+                assert_eq!(before[i].0, after[i].0, "{name}: an entry keeps its key");
+                assert!(after[i].1 > before[i].1, "{name}: its revision rises");
+            }
+        }
+        let streamed: Vec<EntryKind> = transcript.entries().map(|e| settled(e.kind())).collect();
+        let finished: Vec<EntryKind> = built(&finished_events_of(name))
+            .entries()
+            .map(|e| settled(e.kind()))
+            .collect();
+        assert_eq!(
+            streamed, finished,
+            "{name}: SC-002, no text duplicated or lost"
+        );
+        assert!(
+            !transcript.entries().any(|e| settled(e.kind()) != *e.kind()),
+            "{name}: nothing is still streaming once the turn ended"
+        );
+        assert_eq!(
+            snapshot(&transcript)
+                .into_iter()
+                .map(|(key, _, kind)| (key, kind))
+                .collect::<Vec<_>>(),
+            snapshot(&built(&events))
+                .into_iter()
+                .map(|(key, _, kind)| (key, kind))
+                .collect::<Vec<_>>(),
+            "{name}: one event at a time builds what one message builds"
+        );
+    }
+}
+
+#[test]
+fn each_text_delta_grows_the_same_reply_in_place() {
+    let events = events_of(&lines_of("partial-deltas"));
+    let start = events
+        .iter()
+        .position(|e| {
+            matches!(&e.event, StructuredEvent::StreamDelta { event_type, .. }
+                if event_type == "content_block_start")
+        })
+        .expect("the fixture streams a block");
+    let mut transcript = replayed(&events[..=start]);
+    let (key, mut revision, kind) = last(&transcript);
+    assert_eq!(
+        kind,
+        EntryKind::AssistantText {
+            text: String::new(),
+            streaming: true
+        },
+        "the reply appears at its block start"
+    );
+    let count = transcript.entries().len();
+    let mut text = String::new();
+    for event in &events[start + 1..] {
+        let StructuredEvent::StreamDelta {
+            delta: Some(micold_core::structured::Delta::Text { text: delta }),
+            ..
+        } = &event.event
+        else {
+            break;
+        };
+        text.push_str(delta);
+        transcript.apply(0, std::slice::from_ref(event), true);
+        assert_eq!(
+            transcript.entries().len(),
+            count,
+            "no entry added (US3 scenario 1)"
+        );
+        let (now_key, now_revision, now_kind) = last(&transcript);
+        assert_eq!(now_key, key);
+        assert!(now_revision > revision);
+        revision = now_revision;
+        assert_eq!(
+            now_kind,
+            EntryKind::AssistantText {
+                text: text.clone(),
+                streaming: true
+            },
+            "FR-014"
+        );
+    }
+    assert!(text.len() > 20, "the fixture streamed its reply: {text:?}");
+}
+
+#[test]
+fn thinking_and_tool_input_deltas_grow_entries_created_at_block_start() {
+    let events = sequenced([
+        message_start("msg_1"),
+        block_start(0, json!({ "type": "thinking", "thinking": "" })),
+        thinking_delta(0, "pl"),
+        thinking_delta(0, "an"),
+        block_delta(0, json!({ "type": "signature_delta", "signature": "c2ln" })),
+        block_start(
+            1,
+            json!({ "type": "tool_use", "id": "toolu_1", "name": "Bash", "input": {} }),
+        ),
+        input_json_delta(1, r#"{"comm"#),
+        input_json_delta(1, r#"and": "ls -la"}"#),
+    ]);
+    let thinking_key = EntryKey::At { seq: 1, block: 0 };
+    let thinking = |t: &Transcript| t.entry(&thinking_key).map(|e| e.kind().clone());
+
+    let transcript = replayed(&events[..2]);
+    assert_eq!(
+        thinking(&transcript),
+        Some(EntryKind::Thinking {
+            text: String::new(),
+            streaming: true
+        }),
+        "the thinking card appears at once (US3 scenario 3)"
+    );
+    let transcript = replayed(&events[..5]);
+    assert_eq!(
+        thinking(&transcript),
+        Some(EntryKind::Thinking {
+            text: "plan".to_string(),
+            streaming: true
+        })
+    );
+    assert_eq!(
+        transcript.entries().len(),
+        1,
+        "a signature delta is absorbed"
+    );
+
+    let transcript = replayed(&events[..6]);
+    let card = card_of(&transcript, "toolu_1");
+    assert_eq!(
+        (
+            card.name.as_str(),
+            card.input.as_str(),
+            card.status,
+            card.streaming
+        ),
+        ("Bash", "", ToolStatus::Running, true),
+        "the tool card appears at its block start"
+    );
+    let transcript = replayed(&events[..7]);
+    assert_eq!(card_of(&transcript, "toolu_1").input, r#"{"comm"#);
+    assert_eq!(
+        card_of(&transcript, "toolu_1").summary,
+        input_summary("Bash", r#"{"comm"#),
+        "the summary follows the partial input"
+    );
+    let mut transcript = replayed(&events);
+    let card = card_of(&transcript, "toolu_1");
+    assert_eq!(card.input, r#"{"command": "ls -la"}"#);
+    assert_eq!(card.summary, "ls -la");
+    assert_eq!(transcript.entries().len(), 2);
+
+    let finished = sequenced([
+        thinking_block("plan"),
+        tool_use("toolu_1", "Bash", r#"{"command":"ls -la"}"#),
+    ]);
+    for (offset, event) in finished.into_iter().enumerate() {
+        transcript.apply(
+            0,
+            &one(8 + offset as u64, with_message_id(event.event, "msg_1")),
+            true,
+        );
+    }
+    assert_eq!(
+        transcript.entries().len(),
+        2,
+        "superseded in place, not appended"
+    );
+    assert_eq!(
+        thinking(&transcript),
+        Some(EntryKind::Thinking {
+            text: "plan".to_string(),
+            streaming: false
+        })
+    );
+    let card = card_of(&transcript, "toolu_1");
+    assert_eq!(
+        (card.input.as_str(), card.streaming, card.status),
+        (r#"{"command":"ls -la"}"#, false, ToolStatus::Running)
+    );
+}
+
+#[test]
+fn the_finished_message_replaces_the_streamed_text_once_in_place() {
+    let mut events = sequenced([
+        user_text("hi"),
+        message_start("msg_1"),
+        block_start(0, json!({ "type": "text", "text": "" })),
+        text_delta(0, "Hel"),
+        text_delta(0, "lo"),
+        with_message_id(assistant_block(text("Hello.")), "msg_1"),
+    ]);
+    let transcript = replayed(&events);
+    let entries = snapshot(&transcript);
+    assert_eq!(entries.len(), 2, "{entries:?}");
+    assert_eq!(
+        entries[1].0,
+        EntryKey::At { seq: 2, block: 0 },
+        "in the same place"
+    );
+    assert_eq!(
+        entries[1].2,
+        EntryKind::AssistantText {
+            text: "Hello.".to_string(),
+            streaming: false
+        },
+        "the finished text, once (US3 scenario 2, FR-015)"
+    );
+
+    // The rest of the message is absorbed; the stream is closed.
+    events.extend(
+        [
+            stream_marker("content_block_stop"),
+            stream_marker("message_delta"),
+            stream_marker("ping"),
+            stream_marker("message_stop"),
+        ]
+        .into_iter()
+        .zip(6u64..)
+        .map(|(event, seq)| SequencedEvent { seq, event }),
+    );
+    let closed = replayed(&events);
+    assert_eq!(snapshot(&closed), entries, "absorbed: nothing changes");
+
+    // A finished message with no stream open is a new entry.
+    let mut later = closed.clone();
+    later.apply(0, &one(10, assistant_block(text("More."))), true);
+    assert_eq!(later.entries().len(), 3);
+
+    // A finished message of another message id does not supersede the stream.
+    let other = replayed(&sequenced([
+        message_start("msg_1"),
+        block_start(0, json!({ "type": "text", "text": "" })),
+        text_delta(0, "part"),
+        with_message_id(assistant_block(text("Other.")), "msg_2"),
+    ]));
+    assert_eq!(
+        kinds(&other),
+        vec![
+            EntryKind::AssistantText {
+                text: "part".to_string(),
+                streaming: true
+            },
+            EntryKind::AssistantText {
+                text: "Other.".to_string(),
+                streaming: false
+            },
+        ]
+    );
+
+    // An unknown id on either side supersedes.
+    let unknown = replayed(&sequenced([
+        message_start("msg_1"),
+        block_start(0, json!({ "type": "text", "text": "" })),
+        text_delta(0, "part"),
+        assistant_block(text("Whole.")),
+    ]));
+    assert_eq!(
+        kinds(&unknown),
+        vec![EntryKind::AssistantText {
+            text: "Whole.".to_string(),
+            streaming: false
+        }]
+    );
+}
+
+#[test]
+fn deltas_never_finished_keep_their_partial_text() {
+    let streamed = || {
+        vec![
+            message_start("msg_1"),
+            block_start(0, json!({ "type": "text", "text": "" })),
+            text_delta(0, "half a th"),
+        ]
+    };
+    let partial = EntryKind::AssistantText {
+        text: "half a th".to_string(),
+        streaming: false,
+    };
+
+    let mut events = streamed();
+    events.push(StructuredEvent::TurnEndedWithoutResult);
+    events.push(assistant_block(text("after")));
+    let transcript = replayed(&sequenced(events));
+    assert_eq!(
+        kinds(&transcript),
+        vec![
+            partial.clone(),
+            EntryKind::TurnEndedWithoutResult,
+            EntryKind::AssistantText {
+                text: "after".to_string(),
+                streaming: false
+            },
+        ],
+        "the turn's end closes the stream; a later message does not supersede"
+    );
+
+    let mut events = streamed();
+    events.push(message_start("msg_2"));
+    let transcript = replayed(&sequenced(events));
+    assert_eq!(
+        kinds(&transcript),
+        vec![partial],
+        "a new message closes the open one"
+    );
+}
+
+#[test]
+fn an_unknown_stream_event_or_delta_is_a_raw_row() {
+    let unknown_event = stream_event(json!({ "type": "message_rewind", "index": 0 }));
+    let unknown_delta = block_delta(0, json!({ "type": "citations_delta", "citation": {} }));
+    let raw_of = |event: &StructuredEvent| match event {
+        StructuredEvent::StreamDelta { raw, .. } => raw.clone(),
+        other => panic!("a stream event, got {other:?}"),
+    };
+    let expected = vec![
+        EntryKind::AssistantText {
+            text: String::new(),
+            streaming: true,
+        },
+        EntryKind::Raw {
+            text: raw_of(&unknown_event),
+            reason: RawReason::UnknownStreamEvent,
+        },
+        EntryKind::Raw {
+            text: raw_of(&unknown_delta),
+            reason: RawReason::UnknownStreamEvent,
+        },
+    ];
+    let transcript = replayed(&sequenced([
+        message_start("msg_1"),
+        block_start(0, json!({ "type": "text", "text": "" })),
+        unknown_event,
+        unknown_delta,
+    ]));
+    assert_eq!(kinds(&transcript), expected, "FR-003");
+}
+
+#[test]
+fn a_sub_agents_deltas_are_absorbed_not_counted() {
+    let transcript = replayed(&sequenced([
+        tool_use("toolu_task", "Task", r#"{"description":"look"}"#),
+        with_parent(message_start("msg_sub"), "toolu_task"),
+        with_parent(
+            block_start(0, json!({ "type": "text", "text": "" })),
+            "toolu_task",
+        ),
+        with_parent(text_delta(0, "sub"), "toolu_task"),
+        with_parent(stream_marker("message_stop"), "toolu_task"),
+        with_parent(stream_marker("brand_new"), "toolu_other"),
+    ]));
+    assert_eq!(transcript.entries().len(), 1, "{:?}", kinds(&transcript));
+    assert_eq!(card_of(&transcript, "toolu_task").subagent_messages, 0);
+}
+
+/// Whether an entry was opened by the event `seq`.
+fn opened_by(transcript: &Transcript, seq: u64) -> bool {
+    transcript.entries().any(|e| e.opened_at() == seq)
+}
+
+#[test]
+fn every_event_of_every_recorded_fixture_is_accounted_for() {
+    const ABSORBED: [&str; 5] = [
+        "message_start",
+        "content_block_stop",
+        "message_delta",
+        "message_stop",
+        "ping",
+    ];
+    for name in RECORDED {
+        let events = events_of(&lines_of(name));
+        let transcript = built(&events);
+        let all = kinds(&transcript);
+        let mut uses = HashSet::new();
+        for SequencedEvent { seq, event } in &events {
+            let at = format!("{name} seq {seq}");
+            match event {
+                StructuredEvent::StreamDelta {
+                    event_type, delta, ..
+                } => match event_type.as_str() {
+                    "content_block_start" => {
+                        assert!(opened_by(&transcript, *seq), "{at}: its streamed entry");
+                    }
+                    "content_block_delta" => assert!(
+                        delta.as_ref().is_some_and(|d| !matches!(
+                            d,
+                            micold_core::structured::Delta::Other { .. }
+                        )),
+                        "{at}: a typed delta, grown into its entry"
+                    ),
+                    other => assert!(
+                        ABSORBED.contains(&other) || opened_by(&transcript, *seq),
+                        "{at}: {other} absorbed or a raw row"
+                    ),
+                },
+                StructuredEvent::Assistant { blocks, .. } => {
+                    for block in blocks {
+                        match block {
+                            ContentBlock::Text { text } => assert!(
+                                all.contains(&EntryKind::AssistantText {
+                                    text: text.clone(),
+                                    streaming: false
+                                }),
+                                "{at}: its text"
+                            ),
+                            ContentBlock::Thinking { thinking } => assert!(
+                                all.contains(&EntryKind::Thinking {
+                                    text: thinking.clone(),
+                                    streaming: false
+                                }),
+                                "{at}: its thinking"
+                            ),
+                            ContentBlock::ToolUse { id, input, .. } => {
+                                assert_eq!(&card_of(&transcript, id).input, input, "{at}");
+                                uses.insert(id.clone());
+                            }
+                            _ => assert!(opened_by(&transcript, *seq), "{at}: a raw row"),
+                        }
+                    }
+                }
+                StructuredEvent::User { blocks, .. } => {
+                    for block in blocks {
+                        match block {
+                            ContentBlock::ToolResult { tool_use_id, .. } => assert!(
+                                card_of(&transcript, tool_use_id).result.is_some(),
+                                "{at}: its card holds it"
+                            ),
+                            _ => assert!(opened_by(&transcript, *seq), "{at}: its entry"),
+                        }
+                    }
+                }
+                _ => assert!(opened_by(&transcript, *seq), "{at}: its entry"),
+            }
+        }
+        let cards = all
+            .iter()
+            .filter(|k| matches!(k, EntryKind::ToolCall(_)))
+            .count();
+        assert_eq!(cards, uses.len(), "{name}: one card per tool use");
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// T017 — the bound (G4, FR-020) and the rebuild (G3, FR-013, FR-021).
+
+/// `count` user messages numbered from `from`.
+fn fillers(from: u64, count: usize) -> Vec<SequencedEvent> {
+    (from..)
+        .take(count)
+        .map(|seq| SequencedEvent {
+            seq,
+            event: user_text("filler"),
+        })
+        .collect()
+}
+
+#[test]
+fn past_the_bound_the_oldest_events_and_their_entries_leave_the_front() {
+    let mut events = sequenced([
+        assistant_blocks(vec![
+            text("first"),
+            ContentBlock::ToolUse {
+                id: "toolu_old".to_string(),
+                name: "Bash".to_string(),
+                input: r#"{"command":"ls"}"#.to_string(),
+            },
+        ]),
+        with_parent(assistant_block(text("sub")), "toolu_gone"),
+        user_text("kept"),
+    ]);
+    events.extend(fillers(3, MAX_EVENTS - 2));
+    let mut transcript = Transcript::new();
+    transcript.apply(0, &events[..MAX_EVENTS], false);
+    assert_eq!(transcript.held(), MAX_EVENTS);
+    assert_eq!(transcript.omitted_notice(), None);
+
+    transcript.apply(0, &events[MAX_EVENTS..], true);
+    assert_eq!(transcript.held(), MAX_EVENTS, "G4");
+    assert_eq!(
+        transcript.omitted_notice(),
+        Some(1),
+        "the dropped event is counted"
+    );
+    assert!(
+        transcript
+            .entry(&EntryKey::Tool("toolu_old".to_string()))
+            .is_none(),
+        "the card of a dropped tool use leaves"
+    );
+    assert_eq!(
+        transcript.entries().next().map(|e| e.key().clone()),
+        Some(EntryKey::At { seq: 1, block: 0 }),
+        "every entry the dropped event opened left the front"
+    );
+
+    // Two more: the notice and the user message leave, and the counts follow.
+    let next = MAX_EVENTS as u64 + 1;
+    transcript.apply(0, &fillers(next, 2), true);
+    assert_eq!(transcript.held(), MAX_EVENTS);
+    assert_eq!(transcript.omitted_notice(), Some(3));
+    assert_eq!(transcript.entries().next().map(|e| e.opened_at()), Some(3));
+    assert_eq!(transcript.entries().len(), MAX_EVENTS);
+
+    // A late result of the dropped tool use is a result without its call, not an error.
+    let late = next + 2;
+    transcript.apply(0, &one(late, tool_result("toolu_old", "done", false)), true);
+    assert!(matches!(
+        transcript.entries().last().map(|e| e.kind()),
+        Some(EntryKind::OrphanResult { tool_use_id, is_error: false, .. }) if tool_use_id == "toolu_old"
+    ));
+    // A sub-agent message after its notice left opens a new one in its place.
+    transcript.apply(
+        0,
+        &one(
+            late + 1,
+            with_parent(assistant_block(text("sub")), "toolu_gone"),
+        ),
+        true,
+    );
+    assert_eq!(
+        transcript
+            .entries()
+            .last()
+            .map(|e| (e.key().clone(), e.kind().clone())),
+        Some((
+            EntryKey::At {
+                seq: late + 1,
+                block: 0
+            },
+            EntryKind::SubagentNotice { count: 1 }
+        ))
+    );
+}
+
+#[test]
+fn the_omitted_notice_sums_the_services_omitted_and_the_dropped_events() {
+    let mut transcript = Transcript::new();
+    transcript.apply(4, &fillers(4, MAX_EVENTS + 3), false);
+    assert_eq!(transcript.held(), MAX_EVENTS);
+    assert_eq!(transcript.omitted_notice(), Some(4 + 3), "FR-004");
+}
+
+#[test]
+fn rebuilding_from_the_same_history_keeps_every_key_once() {
+    for name in RECORDED {
+        let events = events_of(&lines_of(name));
+        let keys = |t: &Transcript| t.entries().map(|e| e.key().clone()).collect::<Vec<_>>();
+        let mut transcript = replayed(&events);
+        let before = keys(&transcript);
+        assert_eq!(
+            before.iter().collect::<HashSet<_>>().len(),
+            before.len(),
+            "{name}: no key twice"
+        );
+        transcript.apply(0, &events, false);
+        assert_eq!(transcript.rebuilds(), 1);
+        assert_eq!(keys(&transcript), before, "{name}: G3, FR-021");
+    }
 }

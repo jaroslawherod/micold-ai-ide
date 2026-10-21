@@ -64,8 +64,19 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
                 },
             );
         }
-        StructuredEvent::Assistant { blocks, raw, .. } => {
-            push_blocks(transcript, seq, blocks, raw, Speaker::Assistant);
+        StructuredEvent::Assistant {
+            blocks,
+            raw,
+            message_id,
+            ..
+        } => {
+            push_blocks(
+                transcript,
+                seq,
+                blocks,
+                raw,
+                Speaker::Assistant(message_id.as_deref()),
+            );
         }
         StructuredEvent::User { blocks, raw, .. } => {
             push_blocks(transcript, seq, blocks, raw, Speaker::User);
@@ -90,14 +101,16 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
                 num_turns: *num_turns,
                 error_text: is_error.then(|| result.clone().unwrap_or_else(|| subtype.clone())),
             };
+            stream::close(transcript);
             transcript.open(at(0), seq, EntryKind::Footer(footer));
             end_turn(transcript);
         }
         StructuredEvent::TurnEndedWithoutResult => {
+            stream::close(transcript);
             transcript.open(at(0), seq, EntryKind::TurnEndedWithoutResult);
             end_turn(transcript);
         }
-        StructuredEvent::StreamDelta { .. } => stream::absorb(event),
+        StructuredEvent::StreamDelta { .. } => stream::push(transcript, seq, event),
         StructuredEvent::OversizedOnWire { original_bytes } => {
             transcript.open(
                 at(0),
@@ -124,13 +137,15 @@ fn raw_row(text: &str, reason: RawReason) -> EntryKind {
 }
 
 #[derive(Clone, Copy)]
-enum Speaker {
+enum Speaker<'a> {
     User,
-    Assistant,
+    /// The message's id, when known.
+    Assistant(Option<&'a str>),
 }
 
 /// One entry per block, keyed by the block's position, except a tool result, which goes into its
-/// card.
+/// card. An assistant block takes the place of the open stream's next streamed block, when it has
+/// one (research R3).
 fn push_blocks(
     transcript: &mut Transcript,
     seq: u64,
@@ -143,27 +158,30 @@ fn push_blocks(
             seq,
             block: u32::try_from(index).unwrap_or(u32::MAX),
         };
+        let streamed = match speaker {
+            Speaker::Assistant(message_id) if !matches!(block, ContentBlock::ToolResult { .. }) => {
+                stream::supersede(transcript, message_id)
+            }
+            _ => None,
+        };
         match block {
             ContentBlock::Text { text } => {
                 let text = text.clone();
                 let kind = match speaker {
                     Speaker::User => EntryKind::UserMessage { text },
-                    Speaker::Assistant => EntryKind::AssistantText {
+                    Speaker::Assistant(_) => EntryKind::AssistantText {
                         text,
                         streaming: false,
                     },
                 };
-                transcript.open(key, seq, kind);
+                open_or_replace(transcript, streamed, key, seq, kind);
             }
             ContentBlock::Thinking { thinking } => {
-                transcript.open(
-                    key,
-                    seq,
-                    EntryKind::Thinking {
-                        text: thinking.clone(),
-                        streaming: false,
-                    },
-                );
+                let kind = EntryKind::Thinking {
+                    text: thinking.clone(),
+                    streaming: false,
+                };
+                open_or_replace(transcript, streamed, key, seq, kind);
             }
             ContentBlock::ToolUse { id, name, input } => {
                 push_tool_use(transcript, seq, id, name, input);
@@ -179,6 +197,26 @@ fn push_blocks(
             ContentBlock::Other { raw } => {
                 transcript.open(key, seq, raw_row(raw, RawReason::UnknownBlock));
             }
+        }
+    }
+}
+
+/// Puts `kind` in the place of the streamed entry `streamed` when that entry is of its kind,
+/// keeping its key and place (FR-015); else opens it as a new entry.
+fn open_or_replace(
+    transcript: &mut Transcript,
+    streamed: Option<super::entry::EntryId>,
+    key: EntryKey,
+    seq: u64,
+    kind: EntryKind,
+) {
+    let same_kind = streamed
+        .and_then(|id| transcript.get(id))
+        .is_some_and(|e| std::mem::discriminant(e.kind()) == std::mem::discriminant(&kind));
+    match streamed {
+        Some(id) if same_kind => transcript.change(id, |old| *old = kind),
+        _ => {
+            transcript.open(key, seq, kind);
         }
     }
 }
