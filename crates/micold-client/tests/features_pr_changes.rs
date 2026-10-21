@@ -1259,6 +1259,59 @@ mod review_comments {
         assert_eq!(state.open.as_ref().unwrap().pick, None);
     }
 
+    // FR-014: a non-UTF-8 file, a large one not shown, and a diff GitHub calls too large cannot
+    // be picked either; showing the large file makes it pickable.
+    #[test]
+    fn nothing_is_picked_on_a_non_utf8_large_or_too_large_pull_request_file() {
+        let read = |state: &mut State, seq, result| {
+            changes::update(
+                state,
+                Msg::PullRequestDiffRead {
+                    seq,
+                    number: 7,
+                    result,
+                },
+            );
+        };
+        let start = || {
+            let mut state = opened(true);
+            listed(&mut state, vec![listed_pr(7)]);
+            let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(7))), 7);
+            (state, seq)
+        };
+        let select = |state: &mut State| {
+            changes::update(
+                state,
+                Msg::FileSelected(RelPath::from_native("p.rs").unwrap()),
+            );
+        };
+
+        let (mut state, seq) = start();
+        let mut diff =
+            split_pr_diff("diff --git a/p.rs b/p.rs\n--- a/p.rs\n+++ b/p.rs\n@@ -0,0 +1 @@\n+x\n");
+        diff.files[0].patch.push(0xFF);
+        read(&mut state, seq, Ok(diff));
+        select(&mut state);
+        assert!(!can_pick(state.open.as_ref().unwrap()), "not UTF-8");
+
+        let (mut state, seq) = start();
+        let body = "+x\n".repeat(5_001);
+        let raw =
+            format!("diff --git a/p.rs b/p.rs\n--- a/p.rs\n+++ b/p.rs\n@@ -0,0 +1,5001 @@\n{body}");
+        read(&mut state, seq, Ok(split_pr_diff(&raw)));
+        select(&mut state);
+        assert!(!can_pick(state.open.as_ref().unwrap()), "large, not shown");
+        changes::update(&mut state, Msg::ShowLarge);
+        assert!(can_pick(state.open.as_ref().unwrap()), "large, shown");
+
+        let (mut state, seq) = start();
+        read(&mut state, seq, Err(DiffReadFailure::TooLarge));
+        assert!(
+            !can_pick(state.open.as_ref().unwrap()),
+            "too large for GitHub"
+        );
+    }
+
     // US1 s4, FR-003: a comment shows on its own pull request's diff only.
     #[test]
     fn comments_are_filtered_by_the_shown_scope() {
@@ -1326,10 +1379,22 @@ mod review_comments {
                 group(Scope::PullRequest(9), None, false),
             ]
         );
-        assert!(panel_groups(&state)[3]
-            .heading()
-            .unwrap()
-            .contains("not in the list"));
+        // The heading is what the panel prints before a row's place (`ui/changes.rs`); the draw
+        // code only joins it to the place, so these are the strings drawn. There is no
+        // render-test harness for `ui/changes.rs`.
+        let groups = panel_groups(&state);
+        let headings: Vec<_> = groups.iter().map(PanelGroup::heading).collect();
+        assert_eq!(
+            headings,
+            [
+                None,
+                Some("Pull request #7: title 7".to_string()),
+                Some("Pull request #8: title 8".to_string()),
+                Some("Pull request #9 (not in the list)".to_string()),
+            ]
+        );
+        let unlisted = groups.last().expect("the unlisted pull request's group");
+        assert!(unlisted.heading().unwrap().contains("not in the list"));
         assert_eq!(panel_rows(&state).len(), 4, "the unlisted comment is kept");
     }
 
