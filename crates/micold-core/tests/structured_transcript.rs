@@ -1242,3 +1242,27 @@ fn rebuilding_from_the_same_history_keeps_every_key_once() {
         assert_eq!(keys(&transcript), before, "{name}: G3, FR-021");
     }
 }
+
+#[test]
+fn a_streamed_block_superseded_by_another_kind_stops_streaming_when_the_stream_closes() {
+    let transcript = replayed(&sequenced([
+        message_start("msg_1"),
+        block_start(0, json!({ "type": "thinking", "thinking": "" })),
+        thinking_delta(0, "hm"),
+        with_message_id(assistant_block(text("Answer.")), "msg_1"),
+        stream_marker("message_stop"),
+    ]));
+    assert_eq!(
+        kinds(&transcript),
+        vec![
+            EntryKind::Thinking {
+                text: "hm".to_string(),
+                streaming: false
+            },
+            EntryKind::AssistantText {
+                text: "Answer.".to_string(),
+                streaming: false
+            },
+        ]
+    );
+}

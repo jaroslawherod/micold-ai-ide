@@ -198,18 +198,13 @@ pub(super) fn supersede(transcript: &mut Transcript, message_id: Option<&str>) -
     block.entry
 }
 
-/// Closes the open stream: its blocks never finished keep their partial content and stop
-/// streaming.
+/// Closes the open stream: its blocks never finished keep their partial content, and every
+/// block still streaming stops (one superseded by a finished block of another kind included).
 pub(super) fn close(transcript: &mut Transcript) {
     let Some(stream) = transcript.stream.take() else {
         return;
     };
-    for id in stream
-        .blocks
-        .iter()
-        .filter(|b| !b.finished)
-        .filter_map(|b| b.entry)
-    {
+    for id in stream.blocks.iter().filter_map(|b| b.entry) {
         if transcript
             .get(id)
             .map(Entry::kind)
