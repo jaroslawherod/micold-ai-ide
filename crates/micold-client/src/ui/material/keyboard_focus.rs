@@ -589,12 +589,14 @@ mod tests {
         };
         let ring = ring_bounds(bounds);
         let half = state::FOCUS_RING_WIDTH / 2.0;
-        // The ring is stroked centred on its own edge, so its outer edge is this rectangle grown by
-        // half the width — which is exactly `bounds`.
+        // iced strokes a quad's border inside the quad, so the ring's outer edge is this rectangle
+        // itself: half the width inside `bounds` on every side, never outside them.
         assert_eq!(ring.x - half, bounds.x);
         assert_eq!(ring.y - half, bounds.y);
         assert_eq!(ring.width + state::FOCUS_RING_WIDTH, bounds.width);
         assert_eq!(ring.height + state::FOCUS_RING_WIDTH, bounds.height);
+        assert!(ring.x > bounds.x && ring.x + ring.width < bounds.x + bounds.width);
+        assert!(ring.y > bounds.y && ring.y + ring.height < bounds.y + bounds.height);
     }
 
     /// A control smaller than the ring is not a reason to panic or to draw a negative rectangle.
