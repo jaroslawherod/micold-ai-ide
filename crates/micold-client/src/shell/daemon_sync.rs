@@ -1954,6 +1954,11 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     app,
                     micold_client::features::pr_status::Msg::Released,
                 );
+                // Feature 1122 (R2): a read-only window's switch ends here, not in `Attached`;
+                // its Overview's issue links need the new project's repository all the same.
+                if app.core.overview.open {
+                    crate::shell::issues::read_repo(app);
+                }
             }
         }
         // An attach this window asked for was accepted (FR-024a). This is the fact that

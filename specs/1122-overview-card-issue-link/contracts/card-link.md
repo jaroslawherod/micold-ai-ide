@@ -91,10 +91,11 @@ Tested with `Mounted` on a three-card grid where the middle card has a link.
   `Keyboard` (`main_tests.rs`, both origins).
 - `MenuOrigin::KeyboardFromLink` → first entry highlighted as `Keyboard`; closing the menu without a
   choice focuses `card_link_id(l)` (FR-009).
-- `DaemonMsg::Attached` for the active project with the Overview open and `repo` `Unknown` →
+- `DaemonMsg::Attached` (or, in a read-only window, `Refused { ProjectBusy }`) for the active
+  project with the Overview open and `repo` `Unknown` →
   `shell::issues::read_repo` sends `RemoteList` (R2). Test (`daemon_sync` / `main_tests.rs`): switch
   project with the Overview open → `ProjectSwitched` clears `repo` → `Attached` sends the read →
-  `RepoRead` for the new project → the card shows its GitHub link.
+  `RepoRead` for the new project → the card shows its GitHub link; the same with `Refused`.
 - Link focus hand-offs (spec Edge Cases): with a card's link holding the keyboard, a change that
   removes the link (GitHub issues or Jira switch off, the repository read as none, the Jira base
   URL cleared) moves keyboard focus to `card_id(l)`; a listing without the card moves it as 972

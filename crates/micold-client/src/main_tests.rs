@@ -7520,6 +7520,28 @@ mod issue_source {
     /// `Attached` reads it, and its cards then link to the new repository.
     #[test]
     fn repo_reread_on_attach() {
+        repo_reread_after(|project| DaemonMsg::Attached {
+            project,
+            sessions: vec![],
+        });
+    }
+
+    /// R2, U6 (visual pass M5 r1): a switch in a read-only window ends in `Refused` (another
+    /// window holds the project), not `Attached`; that answer reads the repository all the same.
+    #[test]
+    fn repo_reread_on_a_read_only_switch() {
+        repo_reread_after(|project| DaemonMsg::Refused {
+            reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                project,
+                holder: super::other_window(),
+                since_secs: 12,
+            },
+        });
+    }
+
+    /// Switch the rig's window, its Overview open on a known repository, to another project; the
+    /// daemon answers the attach with `answer`, which must read the new project's repository.
+    fn repo_reread_after(answer: fn(PathBuf) -> DaemonMsg) {
         let other = PathBuf::from("/repo/other");
         let mut rig = titles_rig(true);
         rig.app.core.overview.open = true;
@@ -7549,17 +7571,14 @@ mod issue_source {
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut rig.app,
             micold_core::daemons::DaemonId(1),
-            DaemonMsg::Attached {
-                project: other.clone(),
-                sessions: vec![],
-            },
+            answer(other.clone()),
         );
         settle(&mut rig.app, work);
         let sent = remote_lists_sent(&mut rig.rx);
         let read = sent
             .iter()
             .find(|(_, project)| *project == other)
-            .expect("Attached reads the new project's repository");
+            .expect("the attach's answer reads the new project's repository");
         let new_remote = vec![GitRemote {
             name: "origin".into(),
             url: "git@github.com:o/s.git".into(),

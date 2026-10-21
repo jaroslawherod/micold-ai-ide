@@ -64,7 +64,8 @@ pub fn view<'a>(
     }
     page(
         "Jira",
-        "Start worktrees from the issues of a Jira Cloud project. Applies to every project.",
+        "Start worktrees from the issues of a Jira Cloud project. The switch applies to every \
+         project, the fields below only to the open one.",
         controls,
         roles,
     )

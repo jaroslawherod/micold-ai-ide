@@ -36,7 +36,9 @@ never runs again. `shell/daemon_sync.rs`'s `DaemonMsg::Attached` arm therefore a
 while the Overview is open and `repo` is `Unknown`: the same `PendingOp::TitleRemotes` with no
 title numbers, so its answer records `RepoRead` and fetches nothing. `Attached` is the trigger, not
 the switch itself: the new project's daemon answers `RemoteList` only once attached, and a
-reconnect after a lost route re-reads the same way. Titles keep today's behaviour.
+reconnect after a lost route re-reads the same way. A read-only window's switch ends in `Refused`
+(`ProjectBusy`: another window holds the project), never `Attached`, so that arm calls
+`read_repo` for the active project too (visual pass M5 r1). Titles keep today's behaviour.
 
 **Why**: the link needs the repository synchronously at render; the client holds it nowhere today
 outside the New-worktree form. Reading the remotes regardless of the switch makes FR-012 hold for

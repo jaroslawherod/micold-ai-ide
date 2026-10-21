@@ -2583,6 +2583,22 @@ mod jira_base_url_form {
         assert_eq!(draft(&state).jira.base_url, "https://typed.example.com");
     }
 
+    /// R4 (review A M5 F2): typed text that parses to the stored value counts as untouched, so a
+    /// saved `…/` keeps following other windows' changes.
+    #[test]
+    fn a_typed_trailing_slash_that_was_saved_still_follows_the_map() {
+        let mut state = open("/work/a", &BTreeMap::new());
+        type_base(&mut state, " https://a.atlassian.net/ ");
+        let saved = bases(&[("/work/a", "https://a.atlassian.net")]);
+        follow(&mut state, "/work/a", &saved);
+        follow(
+            &mut state,
+            "/work/a",
+            &bases(&[("/work/a", "https://other.atlassian.net")]),
+        );
+        assert_eq!(draft(&state).jira.base_url, "https://other.atlassian.net");
+    }
+
     /// FR-010, FR-011: a valid value saves as that project's change, its trailing `/` removed,
     /// with the connection's fields blank and none of them marked; the connection is kept.
     #[test]
