@@ -80,9 +80,10 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A M2 | 2 | d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089:a5984cdd | CLEAN (sonnet, fix diff d94cc82e..a5984cdd): F1, F2 fixes hold; declines F3 (touch: `keyboard_focus.rs:522` gives up the keyboard only on a left mouse press) and F5 (the per-frame probe walks one bounded card subtree, only the card under the pointer) confirmed. F1 MINOR `CardGrid::expanded` doc comment had a ~130-column line: fixed, prose only (re-wrapped), no round 3. Visual r2 not needed: neither fix changes what is drawn (the showcase's expanded linked card has a branch line, so its twin's height is unchanged; F2 changes pointer routing only) |
 | Full gate M2 | 4 | c006b626 | GREEN (after review A r2 F1, comment only) |
 | Full gate M3 | 1 | 5d362874 | RED: `anatomy_call_sites::the_test_module_convention_this_relies_on_holds`: `ui/mod.rs` had a second inline `#[cfg(test)]` module (the arrow test); moved to `ui/overview_arrow_tests.rs` |
-| Review A M3 | 1 | c6011334d922a5d95399cfaa817d461e18399bac:5d3628745e9ff150c8d56cf3e4f7d00317989171 | pending |
-| Review B M3 | 1 | c6011334d922a5d95399cfaa817d461e18399bac:5d3628745e9ff150c8d56cf3e4f7d00317989171 | pending |
-| Visual pass M3 | 1 | c6011334d922a5d95399cfaa817d461e18399bac:5d3628745e9ff150c8d56cf3e4f7d00317989171 | pending |
+| Full gate M3 | 2 | 06c27e10 | RED: `field_focus_call_sites::the_focus_message_reaches_the_traversal_operation` read the `CardStepped` arm's `Message::FocusMoved` fallback as the `FocusMoved` arm; the arm now calls `dialog_focus_move_task` itself |
+| Review A M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
+| Review B M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
+| Visual pass M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
 
 ## Declined review findings
 
