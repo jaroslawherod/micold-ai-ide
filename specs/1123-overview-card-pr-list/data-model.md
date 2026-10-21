@@ -12,9 +12,9 @@ One own (non-fork) pull request of a branch, from one reading (R1).
 | `number` | `u64` | `number` |
 | `url` | `String` | `url`; redacted from `Debug` |
 | `state` | `BranchPrState` (feature 1003: open, draft, merged, closed) | `state` + `isDraft`; unknown `state` → whole reading `Passing` |
-| `checks` | `CheckStatus` (feature 040: none, pending, passing, failing) | `reduce_checks` of the last commit's counts |
-| `review` | `ReviewState` (none, approved, changes requested, review required) | `reviewDecision` |
-| `conflict` | `bool` | `mergeable == CONFLICTING` |
+| `checks` | `CheckStatus` (feature 040: none, pending, passing, failing) | `reduce_checks` of the last commit's counts; none for a node only `m` returned (R2: `m` asks no `commits`) |
+| `review` | `ReviewState` (none, approved, changes requested, review required) | `reviewDecision`; none for an `m`-only node |
+| `conflict` | `bool` | `mergeable == CONFLICTING`; false for an `m`-only node |
 | `created_at` | `String` (ISO-8601 UTC, compares as text) | `createdAt` |
 
 The title is read by the shared fragment but not kept: no row shows it (spec Out of scope). No
@@ -40,7 +40,15 @@ Per branch, per successful reading (R2, R4).
 - Empty list: the branch was read and has no pull request: no row, no counts line.
 
 Invariants: the first entry, when any, is the sidebar's current pull request (`select_pull_request`
-picks the newest own open one, else the newest own of any state; open ones are all in `o`) (K3).
+picks the newest own open one, else the newest own of any state; open ones are all in `o`) (K3),
+whenever the branch's own pull requests have distinct `createdAt` and `r` holds at least one own
+node. Two edge cases are known and accepted: (a) two own pull requests created in the same second
+(GitHub's `createdAt` has one-second resolution): the list puts the higher number first while
+`select_pull_request`'s `max_by` keeps the later node of the page; (b) `r` full of fork pull
+requests while `m` holds an own merged one: the sidebar shows none and the card lists the merged
+one. Both need a branch name shared with ten forks or two pull requests opened in one second on one
+branch; the row is still a real pull request of the branch, and changing feature 040's selection
+for them is out of scope.
 
 ## §3 `StatusPhrase` and `PrRow` (core)
 
@@ -51,7 +59,8 @@ required, no conflict). `label()`: *checks failing*, *changes requested*, *merge
 pending*, *approved*, *checks passing*.
 
 `PrRow`: `number: u64`, `label: String` ("#N"), `pill: BranchPrState` (word: *Open*, *Draft*,
-*Merged*, *Closed*), `phrase: Option<StatusPhrase>`, `url: String` (redacted `Debug`).
+*Merged*, *Closed*), `phrase: Option<StatusPhrase>`. No address: activation carries the location
+and number and looks the address up when pressed (R8).
 
 ## §4 `StatusReading` and client state (changed)
 
@@ -62,10 +71,33 @@ pending*, *approved*, *checks passing*.
   counts survive a passing failure and a rate-limit pause and go with FR-025 (spec FR-007).
 - `CardModel.pull_requests: Option<BranchPrList>`: `Some` only when the card shows counts.
 
-## §5 `CardLink` (core, `overview_expansion`)
+## §5 `CardLink` and the focus model (core, `overview_expansion`)
 
-`CardLink { Issue, PullRequest(u64) }` names one link of a card (R6). `FocusPart::Link(CardLink)`;
-`Event::LinkFocusGained(SessionLocation, CardLink)`, `Event::LinkFocusLost(SessionLocation,
-CardLink)`; `focused_link() -> Option<(&SessionLocation, CardLink)>`. A loss on one link of a card
-followed by a gain on another link of the same card is no move (no collapse, no re-expansion of an
-Escape-collapsed card) (K5).
+`CardLink { Issue, PullRequest(u64) }` names one link of a card (R6).
+
+| Item | Was (1122) | Now |
+|---|---|---|
+| `FocusPart` | `Card`, `Link`, `Both`; `other()` | `Card`, `Link(CardLink)`; the part of the last gain |
+| `Event::LinkFocusGained` / `LinkFocusLost` | `(SessionLocation)` | `(SessionLocation, CardLink)` |
+| `link_held` | `Option<SessionLocation>` | `Option<(SessionLocation, CardLink)>` |
+| `JustLost.part` | `FocusPart` | `FocusPart` (with its link) |
+| `focused_link()` | `Option<&SessionLocation>` | `Option<(&SessionLocation, CardLink)>` |
+
+Transitions on the focused card `L` (everything else as 1122):
+
+- loss of part `P`, then (next event) gain on `L` of part `Q ≠ P`: one move, restore the state
+  before the loss, `focus_part = Q`.
+- gain on `L` of `Q ≠ focus_part`: one move, `focus_part = Q`, no form change.
+- gain on `L` of `Q = focus_part`: a repeated report, nothing.
+- loss on `L` of `P ≠ focus_part`: the old half of a move, nothing.
+- loss on `L` of `P = focus_part`: held when `P` is a link and a menu is open; else 1121's loss
+  (collapse a `Focus` expansion) with `just_lost` recorded.
+
+With only `Card` and `Link(Issue)` these are 1122's transitions (K5 keeps its cases).
+
+Client (`features/overview.rs`, `ui/overview.rs`, `main.rs`, R6): `FocusReturn.to_link:
+Option<CardLink>`; `MenuOrigin::KeyboardFromLink(CardLink)`; `Msg::LinkMenuRequested(SessionLocation,
+CardLink)`; `Msg::PullRequestLinkActivated(SessionLocation, u64)`; `card_link_id(&SessionLocation,
+CardLink)`; `card_link_shown(&State, &SessionLocation, CardLink) -> bool`; `pull_request_link_for(&State,
+&SessionLocation, u64) -> Option<String>`; `shown_focused_link` and `LinkFocus.link` hold
+`(SessionLocation, CardLink)`.
