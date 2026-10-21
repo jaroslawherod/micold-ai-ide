@@ -75,10 +75,10 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ## Phase 6: User Story 4 - Pick revealed lines for review comments (P2)
 
-- [ ] T032 [P] [US4] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `pickable` is true for revealed lines exactly where the diff's lines are pickable and addressed by the same file and line numbers, false where picking is not allowed (the rule is the existing line-pick handling in `update`, `features/changes.rs` near `Pick`; `pickable` mirrors it and adds none)
-- [ ] T033 [US4] Add the single gate `pickable(view, file)` and call it from the existing pick handling in `update` in `crates/micold-client/src/features/changes.rs` (T032 green)
-- [ ] T034 [US4] Route revealed lines through the diff's pick path in `crates/micold-client/src/ui/changes.rs`
-- [ ] T035 [US4] Document picking of revealed lines in `docs/user-guide/reviewing-changes.md`
+- [x] T032 [P] [US4] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `pickable` is true for revealed lines exactly where the diff's lines are pickable and addressed by the same file and line numbers, false where picking is not allowed (the rule is the existing line-pick handling in `update`, `features/changes.rs` near `Pick`; `pickable` mirrors it and adds none)
+- [x] T033 [US4] Add the single gate `pickable(view, file)` and call it from the existing pick handling in `update` in `crates/micold-client/src/features/changes.rs` (T032 green)
+- [x] T034 [US4] Route revealed lines through the diff's pick path in `crates/micold-client/src/ui/changes.rs`
+- [x] T035 [US4] Document picking of revealed lines in `docs/user-guide/reviewing-changes.md`
 
 ## Phase 7: User Story 5 - Browse any file and return to the diff (P2)
 

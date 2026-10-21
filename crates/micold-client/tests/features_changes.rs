@@ -7,8 +7,8 @@
 use std::collections::BTreeSet;
 
 use micold_client::features::changes::{
-    self, base_line, can_pick, committed_available, diff_body, list_body, DiffBody, Effect,
-    ListBody, Load, Msg, State, WholeFile, BOTH_HIDDEN, DEFAULT_ENTRY_NOTE,
+    self, base_line, can_pick, committed_available, diff_body, list_body, pickable, DiffBody,
+    Effect, ListBody, Load, Msg, State, WholeFile, BOTH_HIDDEN, DEFAULT_ENTRY_NOTE,
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
@@ -2692,4 +2692,41 @@ fn whole_file_state_is_per_file_and_survives_a_refresh() {
         .filter(|l| l.new.is_some())
         .count();
     assert_eq!(news, 20);
+}
+
+// Feature 1150, M4: picking revealed lines.
+
+/// FR-006, US4 scenario 1. A revealed line is picked through the diff's own path and addressed by
+/// the same file and the line's own number; it extends a pick that started on a diff line.
+#[test]
+fn pickable_revealed_lines_carry_the_diffs_file_and_line_identity() {
+    let mut state = showing(long_file("X"));
+    toggle_gap(&mut state, 0);
+    let view = view_of(&state);
+    assert!(pickable(view, &path("b.rs")), "the shown file");
+    assert!(!pickable(view, &path("a.rs")), "a file that is not shown");
+    gutter(&mut state, Some(3), Some(3), false);
+    assert_eq!(
+        pick(&state),
+        Some(Pick {
+            side: Side::New,
+            anchor: 3,
+            head: 3
+        })
+    );
+    gutter(&mut state, Some(10), Some(10), true);
+    assert_eq!(
+        pick(&state).unwrap().range(),
+        LineRange::new(3, 10).unwrap(),
+        "revealed and diff lines pick together"
+    );
+}
+
+/// FR-006, US4 scenario 2. Where the diff allows no pick, revealed lines are not pickable either.
+#[test]
+fn pickable_is_false_where_the_diff_allows_no_pick() {
+    let mut state = showing(loaded(FileDiff::Binary));
+    assert!(!pickable(view_of(&state), &path("b.rs")));
+    gutter(&mut state, Some(3), Some(3), false);
+    assert!(pick(&state).is_none());
 }
