@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: implement M4
-- **Next step**: M4 verify — scoped gate + review A, review B + visual pass, full gate, PR files
+- **Phase**: pr M4
+- **Next step**: M4 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | #1199 | merged |
 | M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | #1202 | merged |
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | #1205 | merged |
-| M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | implemented, verifying |
+| M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | PR files written, gate green at 39b563b5 |
 | M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | blocked on **#939 M3** (and M3) |
 | M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | blocked on **#939 M4, M5, M6** (and M4, M5) |
 
@@ -71,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M3 (conformance, sonnet) | 1 | cb7b51adec375febcae980c05ab93a8ab3a2d07f:f58f5294f5d6d5b5b44fd9b9787abb3b920387f1 | CHANGES: F1 BLOCKER — Verify could not build (disk full during the concurrent gate; `target-shared/debug` removed after). Static review: no scope creep, leftovers or defects |
 | Review A M3 (code-review, sonnet) | 2 | cabd729a2c8b8dd1e2b90f456b90e28fe8b03a89:9de37ca50b90bd95b652944170c1d92a743b4f5f | CLEAN |
 | Review A M4 (code-review high) | 1 | 17111c98cf23896bd77035b947c608e7b624d381:bb376e22c57150c5bd4f5192a41b94f8ae95f3ea | CLEAN, 5 MINOR. Fixed with a test: F1 (a tick split by the fill's edge is coloured per half), F4 (the as-before test pins pixels). Declined F2, F3, F5 (see table) |
+| Review B M4 (conformance, sonnet) | 1 | 9681421f6aa8bc6fb812ff6e2acb6707832127b2:39b563b53093aac756f3ad3161abf7d2b49a32fd | CLEAN |
+| Visual pass M4 | 1 | 39b563b5 | PASS light and dark: the showcase's `progress_bar` entry rendered offscreen through `Mounted` (the Xvfb showcase had no lavapipe ICD and redrew too slowly to scroll to it); the marker reads as a fill-coloured tick on the track and as a track-coloured notch in the fill, the warning bar fills in `error` (`visual/m4-progress-bar-{light,dark}.png`). the captions take the offscreen renderer's default text colour (dark on dark), a harness artefact the live showcase does not have. `layout_snapshot` unchanged: its states hold no `ProgressBar` |
 | Review B M3 (conformance, sonnet) | 2 | cabd729a2c8b8dd1e2b90f456b90e28fe8b03a89:9de37ca50b90bd95b652944170c1d92a743b4f5f | CLEAN; 1 MINOR (dedupe test is test-after, as the cycle log says) not acted on. Verify: `structured_insights` 49/49, `--lib structured::insights` 12/12 |
 | Full gate M3 | — | 9de37ca5 | green (`scripts/gate.sh`). An earlier run hit `structured_session::messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` timing out (21 s) while review B built alongside; it passed 3/3 alone (2 s) and in the rerun — load flake, not this diff |
 
