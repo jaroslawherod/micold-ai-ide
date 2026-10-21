@@ -197,24 +197,17 @@ impl Operation<Option<Rectangle>> for FocusedBounds {
 
     fn scrollable(
         &mut self,
-        id: Option<&Id>,
-        bounds: Rectangle,
-        content_bounds: Rectangle,
+        _id: Option<&Id>,
+        _bounds: Rectangle,
+        _content_bounds: Rectangle,
         translation: Vector,
-        state: &mut dyn Scrollable,
+        _state: &mut dyn Scrollable,
     ) {
-        Operation::<Option<Rectangle>>::scrollable(
-            &mut self.0,
-            id,
-            bounds,
-            content_bounds,
-            translation,
-            state,
-        );
+        self.0.entering = Some(translation);
     }
 
     fn focusable(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
-        Operation::<Option<Rectangle>>::focusable(&mut self.0, id, bounds, state);
+        self.0.offered(id, bounds, state.is_focused());
     }
 
     fn finish(&self) -> Outcome<Option<Rectangle>> {
@@ -259,6 +252,17 @@ impl ScreenBounds {
         }
     }
 
+    /// A focusable control offered to the pass: taken when it is the one looked for.
+    fn offered(&mut self, id: Option<&Id>, bounds: Rectangle, focused: bool) {
+        let wanted = match self.target {
+            Some(_) => self.named(id),
+            None => focused,
+        };
+        if wanted {
+            self.take(bounds);
+        }
+    }
+
     fn named(&self, id: Option<&Id>) -> bool {
         self.target.is_some() && self.target.as_ref() == id
     }
@@ -290,13 +294,7 @@ impl<T> Operation<T> for ScreenBounds {
     }
 
     fn focusable(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
-        let wanted = match self.target {
-            Some(_) => self.named(id),
-            None => state.is_focused(),
-        };
-        if wanted {
-            self.take(bounds);
-        }
+        self.offered(id, bounds, state.is_focused());
     }
 
     fn finish(&self) -> Outcome<T> {
