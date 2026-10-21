@@ -90,8 +90,9 @@ Derived from the `User` event's `raw` (R5).
 
 `outcome: Outcome { Success, Error }`, `duration_ms: Option<u64>`, `cost_usd: Option<f64>`,
 `num_turns: Option<u64>`, `error_text: Option<String>` (Error only: `result` text, else
-`subtype`). Display strings from `footer_figures(&TurnFooter) -> Vec<String>` (R14): omitted
-figures yield no string (FR-005).
+`subtype`). `cost_usd` is the result's `total_cost_usd`: the CLI session's running total, not the
+turn's. Display strings from `footer_figures(&TurnFooter) -> Vec<String>` (R14): the cost as
+`"session total $0.0372"`; omitted figures yield no string (FR-005).
 
 ## Core functions
 

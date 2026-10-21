@@ -114,6 +114,9 @@ pub enum Message {
     /// Held rather than swallowed, because `VirtualRows` builds only the rows in view from exactly
     /// these two numbers — a list that dropped them would show blank space past its first screen.
     RowsScrolled { offset: u32, viewport: u32 },
+    /// The transcript sample said something: a card's header was pressed, or it scrolled
+    /// (feature 939, T037). Held, so its cards fold and unfold as in the application.
+    Transcript(crate::features::structured_transcript::TranscriptMsg),
 }
 
 /// The grouped sections' default open key (feature 1091).
@@ -186,6 +189,11 @@ pub struct Showcase {
     group: crate::ui::material::AccordionGroup<usize>,
     /// Each independent `AccordionSection`'s own open flag (feature 1091, FR-008, FR-003).
     independent: [bool; 2],
+    /// The transcript sample's window state: a recorded tool turn, every card folded at rest
+    /// (feature 939, T037).
+    transcript: crate::features::structured_transcript::State,
+    /// Its block cache, empty in #939 (contracts/block-renderers.md R-4).
+    block_cache: crate::ui::transcript::BlockCache,
 }
 
 impl Showcase {
@@ -222,7 +230,19 @@ impl Showcase {
                     .to_owned(),
             ),
             typeahead_open: false,
+            transcript: super::samples::transcript(),
+            block_cache: crate::ui::transcript::BlockCache::default(),
         }
+    }
+
+    /// The transcript sample's window state.
+    pub fn transcript(&self) -> &crate::features::structured_transcript::State {
+        &self.transcript
+    }
+
+    /// The transcript sample's block cache.
+    pub fn block_cache(&self) -> &crate::ui::transcript::BlockCache {
+        &self.block_cache
     }
 
     /// How many entries this state was built for.
@@ -448,6 +468,11 @@ impl Showcase {
             }
             Message::TypeaheadFocused => self.typeahead_open = true,
             Message::TypeaheadDismissed => self.typeahead_open = false,
+            // The scroll it may ask for is the application shell's to perform; the gallery's
+            // scrollable keeps its own place.
+            Message::Transcript(msg) => {
+                let _ = self.transcript.update(msg);
+            }
         }
     }
 }

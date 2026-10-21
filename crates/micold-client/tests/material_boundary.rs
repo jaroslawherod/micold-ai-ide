@@ -36,10 +36,10 @@ fn ui_dir() -> PathBuf {
 const LIBRARY: &[&str] = &["material", "cdk"];
 
 /// Feature modules that outgrew a single file and became a directory (feature 027: Settings is a
-/// sectioned view, one module per section). They are **not** a library layer — naming them here
+/// sectioned view, one module per section; feature 939: the transcript view and its renderers). They are **not** a library layer — naming them here
 /// keeps them bound by every rule below, where adding them to [`LIBRARY`] would exempt them, which
 /// is exactly what the directory assertion's message warns against.
-const FEATURE_DIRS: &[&str] = &["settings"];
+const FEATURE_DIRS: &[&str] = &["settings", "transcript"];
 
 /// The styling module itself, which *is* the layer the rules point at.
 const STYLE_MODULE: &str = "style.rs";
@@ -319,6 +319,18 @@ fn the_scan_actually_finds_the_feature_modules() {
             modules.contains_key(expected),
             "the settings sections are not being scanned — a feature module that became a \
              directory is bound by the same boundary as one that stayed a file. Found: {:?}",
+            modules.keys().collect::<Vec<_>>()
+        );
+    }
+    // Feature 939: the transcript view became a directory (view, entries, block renderers).
+    for expected in [
+        "ui/transcript/mod.rs",
+        "ui/transcript/entries.rs",
+        "ui/transcript/blocks.rs",
+    ] {
+        assert!(
+            modules.contains_key(expected),
+            "the transcript view's modules are not being scanned. Found: {:?}",
             modules.keys().collect::<Vec<_>>()
         );
     }

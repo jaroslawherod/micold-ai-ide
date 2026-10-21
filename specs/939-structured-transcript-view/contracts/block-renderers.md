@@ -7,11 +7,14 @@ by a renderer.
 ## Shape
 
 ```rust
+/// What a renderer returns: the view's own message type, `TranscriptMsg`.
+pub type Block = Element<'static, TranscriptMsg>;
+
 pub struct BlockRenderers {
-    pub assistant_text: fn(&AssistantText<'_>, &RenderCtx<'_>) -> Element<'static, Message>,
-    pub thinking:       fn(&ThinkingText<'_>,  &RenderCtx<'_>) -> Element<'static, Message>,
-    pub tool_input:     fn(&ToolInput<'_>,     &RenderCtx<'_>) -> Element<'static, Message>,
-    pub tool_result:    fn(&ToolResult<'_>,    &RenderCtx<'_>) -> Element<'static, Message>,
+    pub assistant_text: fn(&AssistantText<'_>, &RenderCtx<'_>) -> Block,
+    pub thinking:       fn(&ThinkingText<'_>,  &RenderCtx<'_>) -> Block,
+    pub tool_input:     fn(&ToolInput<'_>,     &RenderCtx<'_>) -> Block,
+    pub tool_result:    fn(&ToolResult<'_>,    &RenderCtx<'_>) -> Block,
 }
 
 impl BlockRenderers {
@@ -25,11 +28,17 @@ pub struct ThinkingText<'a>  { pub block: BlockRef<'a>, pub text: &'a str }
 pub struct ToolInput<'a>     { pub block: BlockRef<'a>, pub tool: &'a str, pub input_json: &'a str }
 pub struct ToolResult<'a>    { pub block: BlockRef<'a>, pub tool: Option<&'a str>, pub parts: &'a [ResultPart], pub is_error: bool }
 
-pub struct RenderCtx<'a> { pub roles: Roles, pub cache: &'a BlockCache }
+pub struct RenderCtx<'a> { pub roles: Roles, pub scheme: ColorScheme, pub cache: &'a BlockCache }
+
+/// Keyed by `(SessionId, EntryKey, revision)`; its value type `CachedBlock` has no variant in #939.
+pub struct BlockCache { /* HashMap<BlockKey, CachedBlock> */ }
+impl BlockCache { pub fn get(&self, block: &BlockRef<'_>) -> Option<&CachedBlock>; /* len, is_empty */ }
 ```
 
 `Element<'static, _>` because entries are drawn inside iced `lazy` (research R12): a renderer clones
-what it shows, and runs only when the entry's `revision` or fold state changes.
+what it shows, and runs only when the entry's `revision`, its fold state or the scheme changes. The
+view's message type is `TranscriptMsg`; the pane maps it into the window's message. A folded card's
+body is not shown, so its renderers do not run.
 
 ## Rules
 

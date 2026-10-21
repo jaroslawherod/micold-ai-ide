@@ -72,7 +72,7 @@ session here (that is #941); terminal sessions are unchanged and stay the defaul
   identifier: tool name, a one-line input summary, a status (running, done, failed), and, expanded,
   the full input and the result.
 - **Turn footer**: the entry that closes a turn, from its result event: how it ended (success or
-  error), its duration, its cost and its number of turns.
+  error), its duration, the session's running cost and its number of turns.
 - **Follow-tail**: while the view is scrolled to its end, new and growing content keeps the end in
   view; once the user scrolls away from the end, the view stays where the user put it.
 - **Block renderer**: the one replaceable unit that draws one kind of block (assistant text,
@@ -100,8 +100,9 @@ error. Delivers a readable transcript without cards or streaming.
 
 1. **Given** a structured session whose history holds a completed text turn, **When** the user
    views its pane, **Then** the transcript shows a session-start entry (model and working folder),
-   the user's message, Claude's reply text, and a turn footer with the turn's duration, cost and
-   number of turns, in that order, and no plain-log line.
+   the user's message, Claude's reply text, and a turn footer with the turn's duration, the
+   session's running cost (labelled as the session total) and number of turns, in that order, and
+   no plain-log line.
 2. **Given** a turn whose result reports an error, **When** it is shown, **Then** its footer is
    marked as failed with a label and an icon as well as colour, and shows the error text the result
    carries.
@@ -245,8 +246,9 @@ the scroll state at the end and away from it and check follow-tail.
   service or the window no longer holds the earliest events; MUST show a notice in place of an event
   that was too large to send; and MUST end a turn whose process ended mid-turn with a notice that it
   ended without a result.
-- **FR-005**: A turn footer MUST show whether the turn succeeded or failed, its duration, its cost
-  and its number of turns, each when the result reports it; a figure the result omits is left out,
+- **FR-005**: A turn footer MUST show whether the turn succeeded or failed, its duration, the
+  cost the result reports labelled as the session's total (a result's `total_cost_usd` is the CLI
+  session's running total, not the turn's) and its number of turns, each when the result reports it; a figure the result omits is left out,
   not shown as zero. A failed turn's footer MUST show the error text the result carries.
 - **FR-006**: A structured session with no events yet MUST show an empty transcript with a short
   note that there is no output yet.
@@ -357,8 +359,8 @@ the scroll state at the end and away from it and check follow-tail.
   they show, built up from deltas until the finished message arrives.
 - **Tool-call card**: a tool use's identifier, name, input, input summary, status and result
   (text, error flag), its count of sub-agent messages (FR-024), and its fold state.
-- **Turn footer**: outcome (success or error), duration, cost, number of turns and error text, each
-  as reported.
+- **Turn footer**: outcome (success or error), duration, the session's running cost, number of
+  turns and error text, each as reported.
 - **View state**: per window and session: scroll position, whether it follows the tail, and the
   fold state of each card.
 
@@ -400,5 +402,6 @@ the scroll state at the end and away from it and check follow-tail.
   above one minute).
 - The input-summary rules of FR-009 cover Claude Code's built-in tools by name; tools from tool
   servers get the generic summary.
-- The per-turn cost (and duration) in the turn footer is this feature's; #944 builds on it and adds
-  the context meter, the plan-usage feed and sub-agent nesting, and does not re-implement the footer.
+- The turn footer (duration, and the session's running cost as the result reports it, labelled as
+  the session total) is this feature's; #944 builds on it and adds the per-turn cost delta, the
+  context meter, the plan-usage feed and sub-agent nesting, and does not re-implement the footer.

@@ -333,20 +333,20 @@ transcript_entry_view --test transcript_follow_layout`; `cargo test --release -p
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T031 [P] [US2] Renderer-seam test `crates/micold-client/tests/transcript_renderer_seam.rs`
+- [x] T031 [P] [US2] Renderer-seam test `crates/micold-client/tests/transcript_renderer_seam.rs`
   (FR-022, contracts/block-renderers.md R-1, R-2): build the view over the `tool-turn` transcript
   with `assistant_text` swapped for a marker renderer; the marker appears once per
   `AssistantText` entry, the other kinds' output, the entry order and the fold state are unchanged
-- [ ] T032 [P] [US1] Entry view-model test `crates/micold-client/tests/transcript_entry_view.rs`
+- [x] T032 [P] [US1] Entry view-model test `crates/micold-client/tests/transcript_entry_view.rs`
   (FR-012): a `Failed` card and an `Error` footer carry the "Failed" label and `Icon::ToolFailed`
   in the error role; `Running`/`Done`/`NoResult` cards their icon and label; a card with
   `subagent_messages > 0` shows the count; a raw row carries the "Raw event" label; an empty
   transcript shows "No output yet" (FR-006); an omitted notice is first when `omitted > 0`
-- [ ] T033 [P] [US3] Follow-layout test `crates/micold-client/tests/transcript_follow_layout.rs`
+- [x] T033 [P] [US3] Follow-layout test `crates/micold-client/tests/transcript_follow_layout.rs`
   pinning research R9 headless with the test support's renderer: after `snap_to(END)` the
   scrollable keeps the end in view as content grows; after a user scroll to an absolute offset,
   growth below leaves the visible content where it was (FR-016, US3 scenarios 4–5)
-- [ ] T034 [P] [US3] Release budget test `crates/micold-client/tests/transcript_open_budget.rs`
+- [x] T034 [P] [US3] Release budget test `crates/micold-client/tests/transcript_open_budget.rs`
   (`#[cfg_attr(debug_assertions, ignore = …)]`, as `micold-core/tests/typeahead_budget.rs`): a
   5,000-event transcript from repeated fixture turns with every card open lays out and draws one
   frame headless in under 1 s; each replayed delta's update + view + layout under 100 ms (SC-004,
@@ -355,18 +355,18 @@ transcript_entry_view --test transcript_follow_layout`; `cargo test --release -p
 
 ### Implementation
 
-- [ ] T035 [US2] Implement `crates/micold-client/src/ui/transcript/blocks.rs` per
+- [x] T035 [US2] Implement `crates/micold-client/src/ui/transcript/blocks.rs` per
   contracts/block-renderers.md: `BlockRenderers` (four `fn` fields), `BlockRef`, `AssistantText`,
   `ThinkingText`, `ToolInput`, `ToolResult`, `RenderCtx`, empty `BlockCache` keyed by `(SessionId,
   EntryKey, revision)`, and `BlockRenderers::PLAIN` (shared `Text` at `TypeRole::Body`, wrapped;
   tool input and results `.monospace()`; `Unshown` parts a muted caption `[image not shown]`)
-- [ ] T036 [US1] Implement `crates/micold-client/src/ui/transcript/entries.rs`: one function per
+- [x] T036 [US1] Implement `crates/micold-client/src/ui/transcript/entries.rs`: one function per
   `EntryKind` composing shared components only (`DisclosureCard` for thinking and tool cards with
   the status `IconLabel` and summary, the footer as an `IconLabel` + caption `Text` row from
   `footer_figures`, notices, raw rows as a muted monospace caption under "Raw event"), block
   content always through the `BlockRenderers` value, and the pure header/footer view model T032
   tests
-- [ ] T037 [US3] Implement `view(state, session, renderers)` in
+- [x] T037 [US3] Implement `view(state, session, renderers)` in
   `crates/micold-client/src/ui/transcript/mod.rs`: `material::Scrollable` with
   `.id(transcript_scroll_id(session))`, `.on_scroll_metrics` → `TranscriptMsg::Scrolled`,
   `.on_viewport_resize` → `TranscriptMsg::Shown`; each entry in iced `lazy` keyed by `(EntryKey,

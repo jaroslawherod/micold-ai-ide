@@ -386,10 +386,36 @@ pub fn disclosure_card<'a>(
                 ),
                 roles,
             ),
+            posed(
+                "a transcript of a recorded tool turn: press a card's header",
+                transcript_sample(showcase, roles),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )
 }
+
+/// The transcript view over the recorded tool turn, through `BlockRenderers::PLAIN`, in a pane of
+/// fixed height (feature 939, T037): its cards fold and unfold live.
+fn transcript_sample<'a>(showcase: &'a Showcase, roles: Roles) -> Element<'a, Message> {
+    let view = crate::ui::transcript::view(
+        showcase.transcript(),
+        samples::TRANSCRIPT_SESSION,
+        &crate::ui::transcript::BlockRenderers::PLAIN,
+        crate::ui::transcript::RenderCtx {
+            roles,
+            scheme: showcase.scheme,
+            cache: showcase.block_cache(),
+        },
+    );
+    iced::widget::container(view.map(Message::Transcript))
+        .height(Length::Fixed(TRANSCRIPT_SAMPLE_HEIGHT))
+        .into()
+}
+
+/// The transcript sample's pane height: a few entries in view, the rest a scroll away.
+const TRANSCRIPT_SAMPLE_HEIGHT: f32 = 480.0;
 
 /// `FieldGroup` — a labelled group of checkboxes with a note under its label, and without one
 /// (feature 890, FR-008).

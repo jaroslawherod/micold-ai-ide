@@ -734,7 +734,10 @@ pub const COMPONENTS: &[Entry] = &[
             "failed, with its label and icon",
             "a thinking card",
         ],
-        live: &["press the header, or focus it and press Space or Enter"],
+        live: &[
+            "press the header, or focus it and press Space or Enter",
+            "a transcript of a recorded tool turn: press a card's header",
+        ],
         interactive: true,
         section: Section::Components,
         layout: Layout::FullWidth,

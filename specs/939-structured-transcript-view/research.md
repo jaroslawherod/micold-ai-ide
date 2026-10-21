@@ -256,7 +256,9 @@ per block `content_block_start {index, content_block}` → `content_block_delta`
 - **Decision**: `TurnFooter` holds `outcome` (`Success`/`Error`), `duration_ms`, `cost_usd`,
   `num_turns`, `error_text` as `Option`s from the `Result` event; core formats them:
   duration `"6.7 s"` below a minute, `"1 min 12 s"` above; cost `"$0.0372"` (four decimals) below
-  $1, `"$1.24"` above; `"1 turn"` / `"2 turns"`. A figure the result omits is left out. The error
+  $1, `"$1.24"` above, shown by `footer_figures` as `"session total $0.0372"` because a result's
+  `total_cost_usd` is the CLI session's running total, not the turn's (agreed with #944, which owns
+  the per-turn delta); `"1 turn"` / `"2 turns"`. A figure the result omits is left out. The error
   text is the result's `result` text when present, else its `subtype` (e.g. `error_max_turns`).
 - **Rationale**: the spec's assumptions on units; formatting in core keeps it tested.
 
