@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: plan amend (D4)
-- **Next step**: review A d4 r2 (sonnet, fix diff of tasks.md T041/T045) pending, prompt in the scratchpad's 1122-prompt-review-a-d4-r2.md. If clean: M2 unit (the amended docs ride along with M2's PR).
+- **Phase**: milestone M2
+- **Next step**: M2 (T010–T019) implement, then verify (scoped gate + review A high, review B, visual pass), full gate, PR. The D4 amendment commits ride along in M2's PR.
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | #1188 | merged |
-| M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | — | planned |
+| M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | — | in progress |
 | M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | — | planned |
 | M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | — | planned |
 | M5 | T039–T050 | full | Jira base URL setting (wire 58) and Jira issue links | — | planned |
@@ -69,7 +69,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M1 | 6 | d8d84697 | RED once on the known untouched flake (`micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`, as gate r1); rerun GREEN |
 | Review A M1 | 6 | 26eeeb1fc8c8cccda3ad3c1adc715ae6fe1e7d25:d8d8469762d85b03bea08e4c1fcc97e0d0a34bf8 | CLEAN (sonnet, r5 fix diff) |
 | Review A plan amend D4 | 1 | 1a021e7be429ef5efa89f02f4283924163533d8b:0164f37579efae69cade704acdcc2f6633307cab | CHANGES (session model): F1 MAJOR the *Project forgotten* behaviour (spec edge cases, data-model) had no test task or quickstart step: fixed, T041 gains the forget/re-add case (`ProjectAdd` A, set, `ProjectRemove` A, entry still in `stored(dir)` and the next `DaemonSettings`, `ProjectAdd` A again resolves it by `connection_key`). F2 MINOR T045 did not say `JiraDraft::follow` (settings.rs:510) needs the map: fixed, T045 names the `base_urls: &BTreeMap<String, JiraBaseUrl>` parameter and its callers (persist.rs:288, daemon_sync.rs:1073, main_tests.rs:3270, settings.rs tests). F3 MINOR the moved `set` helper (jira_setting.rs:45) cannot send a base URL: fixed, T041 says `set` gains a `jira_base_url` argument, existing callers pass `None` |
-| Review A plan amend D4 | 2 | c627583d8ac12b7a3566014f16b20b741c372013:ae2b013038751aac9eeaf86abab1620426bb12d9 | pending (sonnet, tasks.md fix diff; prompt 1122-prompt-review-a-d4-r2.md) |
+| Review A plan amend D4 | 2 | c627583d8ac12b7a3566014f16b20b741c372013:ae2b013038751aac9eeaf86abab1620426bb12d9 | CLEAN (sonnet, fix diff ae2b0130..8ebea0f9) |
 
 ## Declined review findings
 
@@ -78,7 +78,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-Plan amend D4 part 2: review A d4 r1 findings F1–F3 fixed in tasks.md (T041, T045); r2 pending. No PR.
+None.
 
 ## Open escalation
 
