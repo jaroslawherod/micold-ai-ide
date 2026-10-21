@@ -33,6 +33,8 @@ uuid = { workspace = true }
 unicode-segmentation = { workspace = true }
 # Feature 940: assistant and thinking text parsed into the markdown model (research R1).
 pulldown-cmark = { workspace = true }
+# Feature 940: Edit, MultiEdit and Write tool inputs as line diffs (research R6).
+similar = { workspace = true }
 directories = { workspace = true }
 postcard = { workspace = true }
 # Shared client<->daemon framing codec (protocol::codec). `tokio-util`'s `LengthDelimitedCodec`

@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #940
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
-- **Phase**: milestone M1
-- **Next step**: orchestrator opens the M1 PR (title and body in the session scratchpad); after it merges, milestone M2 (T013–T015)
+- **Phase**: milestone M2
+- **Next step**: M2 scoped gate + review A, review B, full gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1187 | design (spec, clarify, plan, tasks, milestones) | merged | a7df5dd37517543447b150ff02d6a5f195c7c392 |
-| pending | M1 markdown model | to open (orchestrator, via MCP) | — |
+| #1216 | M1 markdown model | merged | 746ef5858a0e565dfdb13924d070ff244c329f3a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | markdown model in core: settled blocks final, incremental, total (after #939 M6; T001 re-checks #939 names) | pending | reviews clean, full gate green at 57b9034c; PR to open |
-| M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | — | pending |
+| M1 | T001–T012 | full | markdown model in core: settled blocks final, incremental, total (after #939 M6; T001 re-checks #939 names) | #1216 | merged (746ef585) |
+| M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | — | implemented; reviews and gate next |
 | M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | — | pending |
 | M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | — | pending |
 | M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | — | pending |
@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Plan (2026-10-21): planned against #939's planned names (plan.md, tasks.md, contracts/); #940 implementation starts only after #939 M6 merges, first re-checking those names (research R14). New core deps pulldown-cmark 0.13 and similar 2 (research R1, R6).
 - Tasks (2026-10-21): 42 tasks, five milestones as the plan's Delivery (layered like #939's: core, cache, components, renderers last; no half-wired UI). M1 has 12 tasks (setup + re-check + fixtures + model; no split along a scenario leaves a deliverable). speckit-analyze (inline): M-5 moved to markdown_subset as plan names it; `refresh` takes an injected `Grammar { knows, token }` so the render-free cache does not depend on `ui::syntax` (data-model.md updated).
 - Clarify round 1 (2026-10-21): FR-020 Edit/MultiEdit/Write cards start folded (#939 FR-010); FR-021 no tool result gets rich rendering (issue #940 scope; sub-agent output is #944). Both agent-resolved, no requirement added; unit ends CLEAN.
+- M2 (2026-10-21): Claude Code 2.1.306 has no `MultiEdit` tool, so `edit-turn.jsonl` records a Write, an Edit with `replace_all` and a multi-line Edit; MultiEdit is covered by `tests/edit_diff.rs`'s synthetic set (R13 wanted it recorded; not recordable, no user decision needed). `bytes` = `input_json.len()`. A `replace_all` edit with old == new is `NoChange` (nothing changes). Adding `similar` 2.7.0 made cargo 1.97 re-pick some Windows-only `windows-sys`/`getrandom` edges in Cargo.lock; `cargo update --workspace` gave the same lock, kept as cargo resolved it.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
