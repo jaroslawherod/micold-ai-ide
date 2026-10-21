@@ -89,7 +89,8 @@ open).
 
 **Decision**: a new shared component `crates/micold-client/src/ui/material/text_link.rs`:
 `TextLink::new(label, on_press, roles)` with `.role(TypeRole)`, `.id(Id)`, `.on_keyboard_focus(f)`,
-`.on_menu_key(m)`, `.on_page(f)`, `.focus_on_press(bool)`; `impl From<TextLink> for Element`.
+`.on_menu_key(m)`, `.on_page(f)`, `.focus_on_press(bool)`, `.focusable(bool)` (a link that is not a
+Tab stop, used by the card until its link focus is wired); `impl From<TextLink> for Element`.
 It draws its label in `roles.primary`, a 1 px underline in the same colour while the pointer is on
 it, the pointing-hand pointer, and the shared focus ring through `TakesTheKeyboard`'s `Indicator`
 (contract U1). A click is press and release both on it; Enter and Space activate it while it has
