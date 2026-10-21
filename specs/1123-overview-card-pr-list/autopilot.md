@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: tasks
-- **Next step**: tasks review A r1 (orchestrator dispatches; prompt 1123-prompt-tasks-r1.md in the scratchpad); then close checklists (all ticked), specs-only gate, design PR
+- **Next step**: tasks review A r2 (sonnet, fix diff; orchestrator dispatches; prompt 1123-prompt-tasks-r2.md in the scratchpad); if CLEAN: close checklists (all ticked), specs-only gate, design PR "#1123: Overview cards: pull request list with state, linked — design" (label docs-not-needed)
 
 ## Pull requests
 
@@ -48,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A plan | 1 | 53ffa8f39a3a4caa715af2e64d4fca74c90e6a87:a55fb1b02c4bca128a2f493349a45dbf294074aa | CHANGES: 1 BLOCKER (F1 rate-limit points: request-count rule, `m<i>` with `...pr` costs 63 > 44), 3 MAJOR (F2 focus pairing for several links, F3 client hand-offs/menu return per link, F4 `StatusChip` does not fit a PR pill), 3 MINOR (F5 K3 edge cases, F6 address in Msg, F7 missing alternatives); all seven fixed in research R2/R5–R10, data-model §1–§5, contracts, plan, quickstart; none declined; round 2 on sonnet over the fix diff |
 | Review A plan | 2 | 9bc517ce26e6300ed4d9f258bb7fd82b0e0fad46:f3fad1fa408ff0b5345496fd0d6917e547bb9eed (fix diff 53ffa8f3:a55fb1b0 → f3fad1fa, sonnet) | CLEAN, 2 MINOR (F1 card-rows.md U1–U7 heading, F2 R9 contrast wording); both fixed, prose only, no round 3 |
 | Review A tasks | 1 | 8c136e70f07d2dc1576652bbf31d1be9c59a6e81:e246bec8f4aaf98c75e15a2f3fe1292736a8455e | CHANGES: 2 MAJOR (F1 M1 has no deliverable, F2 `step_card` wrong file/name and T031 in another milestone), 2 MINOR (F3 `pull_request_source.rs` literals, F4 M3 Verify runs no core tests); all four fixed in tasks.md (M2 folded into M1, renumbered M1–M3), research R6, ledger D7; none declined; round 2 on sonnet over the fix diff |
+| Review A tasks | 2 | 8eaaf55f5c56b169826d26ef3eb8e8d1e5160a1c:e9713c39f547f81ea907d26e3a4cda7d106d1123 (fix diff 8c136e70:e246bec8 → e9713c39, sonnet) | pending |
 
 ### Review A tasks round 1 verdict (verbatim)
 
