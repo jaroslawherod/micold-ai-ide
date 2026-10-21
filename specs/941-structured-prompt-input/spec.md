@@ -79,11 +79,11 @@ as in a shell. Terminal sessions are unchanged and stay the default.
 - Q1: After a session restarts with messages still queued, does delivery resume on its own? → A:
   No. The queue stays on hold until the user activates one **Send queued** control in the pane; a
   restart can follow a stop, a crash or a service restart that restores sessions unattended, so the
-  user may not be watching. _(recommended default, pending user confirmation)_
+  user may not be watching. _(decided by user (jaro, 2026-10-21))_
 - Q2: What does interrupting a turn do to the queue? → A: The queue is kept unchanged and put on
   hold until the same **Send queued** control releases it; an interrupt means Claude went the wrong
   way, so the next message may no longer fit, and the queue is shared by every window, so it is not
-  emptied into one window's composer. _(recommended default, pending user confirmation)_
+  emptied into one window's composer. _(decided by user (jaro, 2026-10-21))_
 - Q5: While the queue is on hold and the session is idle, what does sending a new draft do? → A:
   It is delivered at once as the next user message, ahead of the held queue, which stays on hold
   and unchanged behind it. The hold exists so the user chooses what Claude does next after an
