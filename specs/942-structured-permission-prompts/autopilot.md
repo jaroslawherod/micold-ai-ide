@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
 - **Phase**: M5 PR
-- **Next step**: orchestrator waits on the M5 PR's CI and merges it; then milestone M6
+- **Next step**: orchestrator waits on #1231's CI and merges it (main moved 23 commits since 4780eb3e, none touching M5's files); then milestone M6
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1204 | M2: daemon holds and decides prompt requests (switch off) | merged (rebase) | 0c33edd153cba2c02c9f41dfe584253b6a15056b |
 | #1208 | M3: daemon waiting activity and withdrawal | merged (rebase) | 802f46ebcbd3379fb50758ac94fde18e757e11b2 |
 | #1224 | M4: daemon mode persisted, created, launched | merged (rebase) | 4780eb3eaf8e292a0d9258ded2a646ea855a3756 |
+| #1231 | M5: mode change while running, following Claude, plan approval sets the mode | open (draft) | — |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | #1204 | merged |
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | #1208 | merged |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | #1224 | merged |
-| M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | pending (draft) | full gate green (scripts/gate.sh, first run), reviews A and B clean; TDD red: the new tests did not compile (no `spawn_mode_reports`, `CONTROL_ANSWER_BOUND`, `DaemonState::set_permission_mode`) |
+| M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | #1231 (draft) | full gate green (scripts/gate.sh, first run), reviews A and B clean; TDD red: the new tests did not compile (no `spawn_mode_reports`, `CONTROL_ANSWER_BOUND`, `DaemonState::set_permission_mode`) |
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | pending |
 | M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1) | — | pending |
 | M8 | T064–T069 | full | Window composer side, switch on, user guide, Part B; needs #941 on main (I-2) | — | pending |
