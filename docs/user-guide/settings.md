@@ -452,7 +452,7 @@ it, the version it reported, a state badge (**Connected**, **Starting**, **Unrea
 | **Stop** | Disconnects from that daemon and no other |
 | **Reconnect** | Tries an unreachable or mismatched daemon again now, instead of waiting for the next automatic try |
 | **Edit** | Opens the daemon's form in a dialog, filled in |
-| **Details** | Opens a dialog with the recent connection errors and the log tail, and why a container runtime cannot be used when that is the reason. It keeps updating while it is open; **Close**, Escape or a click outside closes it |
+| **Details** | Opens a dialog with the recent connection errors and the log tail, and why a container runtime cannot be used when that is the reason. It keeps updating while it is open; **Close**, Escape or a click outside closes it. A question about a daemon's changed settings waits until the dialog is closed |
 | **Remove** | Asks first, see below |
 
 **Add daemon** opens a dialog with a form for a name, what it runs in (container or host), the container name,
