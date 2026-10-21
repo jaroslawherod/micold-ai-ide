@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
 - **Phase**: milestone M1 (implemented; gate and reviews)
-- **Next step**: M1 scoped gate, review A and B, full gate, PR
+- **Next step**: orchestrator waits on CI for the M1 PR, merges, then M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | - | pending |
+| M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | PR | in review |
 | M2 | T011–T014 | full | Bash commands judged | - | pending |
 | M3 | T015–T017 | full | EnterWorktree and git worktree add denied | - | pending |
 | M4 | T018–T020 | full | create_worktree hand-off text | - | pending |
@@ -44,10 +44,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review spec | 1 | 04953a8e0fcf81bad3b44bee76d980bf3a569b97:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CHANGES: 2 MAJOR (fixed) |
 | Review spec | 2 | 41605b740bcbaa3d9d2d22ecdcae8ba555dd538f:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CLEAN |
+| M1 review A (code-review high) | 1 | 86ee425da1e2cbbfebc38cb19d1b072940fe6fb6:c667802d37e322354801010490755f2daaeae0b1 | 4 fixed (cwd fallback, prefetch root, drive-like names, spawn_blocking), rest declined |
+| M1 review B | 1 | cd5bfcf1f255e7ef932ace763cf9b56411e8122e:45a6426ca6d00e7f96b854a111ffe6810469f2fe | CLEAN (1 MINOR: no log-capture test for fail-open warn; behaviour covered by verdict tests) |
 
 - tasks r1 (c3782371...:847ac3b5...): analyze fixed D1 (T028), A1, B1, E1, T2; reviewer CLEAN (3 MINOR fixed, prose/labels only).
 
 ## Declined review findings
+
+- M1 review A: unlisted dir under `.claude/worktrees/` allowed as removed worktree (F1) — the spec's
+  removed-worktree edge case requires it; create_worktree refreshes the cache.
+- M1 review A: lexical `..` before symlinks (F4) — mandated by research R4.
+- M1 review A: activity noted before a denial (F6) — the turn continues after a denial, so Working is right.
+- M1 review A: stale binding after rename (F2), guard-map leak (F7), re-resolving the list per call (F10) — edge or negligible; rename-while-running noted as follow-up.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
