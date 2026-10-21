@@ -103,7 +103,7 @@ fn entries(state: &State, session: SessionId) -> Vec<&Entry> {
     state.transcript(session).unwrap().entries().collect()
 }
 
-fn edit_cards<'s>(state: &'s State, session: SessionId) -> Vec<(&'s Entry, &'s ToolCard)> {
+fn edit_cards(state: &State, session: SessionId) -> Vec<(&Entry, &ToolCard)> {
     entries(state, session)
         .into_iter()
         .filter_map(|e| match e.kind() {

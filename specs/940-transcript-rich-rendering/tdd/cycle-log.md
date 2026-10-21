@@ -108,11 +108,17 @@ each test task written before its implementation task, run red, then made green.
   column at 170 dp): its red was not recorded (test-after, disclosed).
 - **Budget (T036, SC-004)**: `cargo test --release -p micold-client --test transcript_open_budget`
   4/4 passed (2026-10-21, cloud container): open with every card open PLAIN 100 ms, RICH 118 ms
-  (budget 1 s); slowest streamed delta PLAIN 3.2 ms, RICH markdown 2.7 ms (budget 100 ms).
+  (budget 1 s); slowest streamed delta PLAIN 3.2 ms, RICH markdown 2.7 ms (budget 100 ms). A
+  budget has no red before green: it guards a cost the implementation must stay under, and the
+  stub drew less than `RICH` does, so it passed against it too (review B M5 F2, disclosed).
 - **M5 review fixes (2026-10-21).** Review A r1 (all MINOR): the two fallback tests' red shown
   afterwards by mutation — `rich.rs` with each `PLAIN` fallback replaced by an empty `Space`:
   `a_streaming_or_malformed_edit_input_is_drawn_as_plain` (line 391), `a_cache_miss_draws_plain`
-  (line 461) and `edit_inputs_are_diffs_and_results_stay_plain` (a non-edit input is `PLAIN`'s, line 314) failed,
-  the other 4 passed; restored, 7/7. Also fixed: an empty text block draws nothing only on a cache
+  (line 461) and `edit_inputs_are_diffs_and_results_stay_plain` (a non-edit input is `PLAIN`'s,
+  line 314) failed, the other 4 passed; restored, 7/7. Also fixed: an empty text block draws nothing only on a cache
   hit (a miss draws `PLAIN`'s block); the header's `+N −M` is read only from the revision drawn;
   one `EDIT_TOOLS`.
+- **Review B M5 F1 (2026-10-21)**: Principle II's two-window check on screen was not driven;
+  `sessions_and_windows_share_nothing` (M3) gains the assertion that two windows' caches derive
+  the same document for one session (test-after: it passed on first run, as M3's derivation is
+  pure).
