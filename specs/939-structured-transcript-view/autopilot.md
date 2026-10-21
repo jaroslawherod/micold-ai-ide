@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: milestone M6
-- **Next step**: M6 — scoped gate + review A, review B + visual pass, full gate, push; orchestrator opens the PR
+- **Next step**: M6 PR — orchestrator opens it from the pushed branch, waits on CI and merges; then the close unit
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | #1193 | merged |
 | M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | #1198 | merged |
 | M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | #1203 | merged |
-| M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | — | implemented |
+| M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | pending (orchestrator opens) | verified, gate green |
 
 ## Decisions
 
@@ -72,7 +72,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M5 | — | bef0e450 | GATE_EXIT=0 (`scripts/gate.sh`; the first run hit a commit-signing server 503 in two `micold-daemon` github_issue tests that `git commit` in a temp repo, rerun with `commit.gpgsign=false` in the env: green). Release budget: open 180 ms, slowest delta 5 ms |
 | Review A M6 | 1 | 921845aebe61fae028d8db80f70ecb5578b8f059:57c509763839e190957b2a11c85eb690219602a9 | CLEAN (code-review high, `claude -p --agent autopilot-reviewer`; src pass, then a tests pass after the first run was denied a compound read): no findings |
 | Review B M6 | 1 | 921845aebe61fae028d8db80f70ecb5578b8f059:57c509763839e190957b2a11c85eb690219602a9 | CLEAN (conformance, sonnet; Verify supplied by the unit): F1 MINOR fixed, prose only (cycle log says why the single-pane red fails on `origin/main`) |
+| Review A M6 | 2 | (fix diff HEAD~1..HEAD, panes.rs) | CLEAN (sonnet, scoped): the source-shape test now pins `draws_a_terminal` and its `!is_structured_primary(` decision; not counted (forced by a red gate) |
 | Visual pass M6 | — | 57c50976 | PASS (CPU rasteriser, inline; no `claude`/display in the container): detached pane light/dark with "Jump to latest" bottom-centre clear of the bar, one card open; `error-result` greyscale (Failed = label + icon + error text, SC-005); mid-stream `partial-deltas`; tiled two structured sessions each with its own transcript and fold state; terminal pane beside a structured one unchanged ("Starting…"). Evidence `visual/m6-*.png` |
+| Full gate M6 | — | 59281b0d | GATE_EXIT=0 (`scripts/gate.sh`, `commit.gpgsign=false` in the env); the first run (57c50976) failed `ui::panes::tests::an_empty_pane_tile_is_pressable_and_a_terminal_pane_is_not`, a source-shape test, fixed |
 
 ## Declined review findings
 
