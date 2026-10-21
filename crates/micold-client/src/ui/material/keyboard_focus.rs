@@ -318,7 +318,7 @@ impl operation::Focusable for Focus {
 /// the control rather than around it, because a ring outside these bounds is a ring over whatever
 /// is next to them — the rail rows in a settings surface sit `spacing::XS` apart, which is less
 /// than the width of two rings.
-fn ring_bounds(bounds: Rectangle) -> Rectangle {
+pub(super) fn ring_bounds(bounds: Rectangle) -> Rectangle {
     let inset = state::FOCUS_RING_WIDTH / 2.0;
     Rectangle {
         x: bounds.x + inset,

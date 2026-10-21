@@ -104,7 +104,7 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
         // captured, and the redraw when the pointer comes and goes, which draws the underline.
         let click =
             iced::widget::button(Text::new(link.label, link.role, roles).tint(roles.primary))
-                .padding(iced::Padding::ZERO.left(SIDE).right(SIDE))
+                .padding(GUTTER)
                 .style(|_: &iced::Theme, _| iced::widget::button::Style::default())
                 .on_press(link.on_press.clone());
         let body = LinkBody {
@@ -146,16 +146,18 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
     }
 }
 
-/// The drawn link: the button holding the label, padded on each side by the focus ring's width
-/// so the ring clears the text, and the underline under the label while the pointer is on it.
+/// The drawn link: the button holding the label, padded on every side by a gutter wider than the
+/// focus ring, and the underline under the label while the pointer is on it.
 struct LinkBody<'a, M> {
     content: Element<'a, M>,
     underline: micold_core::tokens::Rgb,
     role: TypeRole,
 }
 
-/// The room left of and right of the label.
-const SIDE: f32 = state::FOCUS_RING_WIDTH;
+/// The room on every side of the label: the focus ring's width and a pixel more. The material
+/// layer draws its rings inside the control (`keyboard_focus::ring_bounds`), so this gutter is
+/// where the ring lands, clear of the glyphs and of the underline (visual pass M1 r3 F1).
+const GUTTER: f32 = state::FOCUS_RING_WIDTH + 1.0;
 
 impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
     forward_to_child!(content, M, iced::Theme, iced::Renderer;
@@ -190,7 +192,10 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
         let text = label.bounds();
         // Under the glyphs, not at the foot of the line box: the label sits centred in its line,
         // and its descenders end about half a size below the centre.
-        let y = (text.center_y() + self.role.size() * 0.5).round();
+        // Kept inside the label's box, so the focus ring in the gutter around it never covers it.
+        let y = (text.center_y() + self.role.size() * 0.5)
+            .round()
+            .min(text.y + text.height - 1.0);
         renderer.fill_quad(
             renderer::Quad {
                 bounds: Rectangle {
@@ -528,10 +533,45 @@ mod tests {
         let at = m.node.bounds().center();
         let away = m.drawn(backdrop).0;
         let hovered = m.drawn_under(backdrop, mouse::Cursor::Available(at)).0;
-        // The ring, drawn inside the link, may cover the underline's row, so nothing need change.
+        // The ring sits in the gutter, so the underline still shows under keyboard focus.
         assert!(
-            hovered == away || only_changed_to(&away, &hovered, style::color(roles().primary)),
-            "the pointer changed the focused link's layer, not only its underline"
+            only_changed_to(&away, &hovered, style::color(roles().primary)),
+            "the pointer drew no underline on the focused link, or changed its layer"
         );
+    }
+
+    /// Visual pass M1 r3 F1: the focus ring lands in the gutter around the label, at least a pixel
+    /// clear of the label's box on every side, at both roles, so it never paints over a glyph.
+    #[test]
+    fn the_focus_ring_clears_the_label_on_every_side() {
+        use super::super::keyboard_focus::ring_bounds;
+        for role in [TypeRole::Body, TypeRole::Caption] {
+            let m = Mounted::new(link().role(role));
+            let link = m.node.bounds();
+            // The label's node sits inside the button's, relative to it.
+            let label = m.node.children()[0].bounds();
+            let label = Rectangle {
+                x: link.x + label.x,
+                y: link.y + label.y,
+                ..label
+            };
+            // The ring is stroked centred on `ring_bounds`' edge: its inner edge is that rectangle
+            // shrunk by half the ring's width.
+            let half = state::FOCUS_RING_WIDTH / 2.0;
+            let ring = ring_bounds(link);
+            let inner = Rectangle {
+                x: ring.x + half,
+                y: ring.y + half,
+                width: ring.width - state::FOCUS_RING_WIDTH,
+                height: ring.height - state::FOCUS_RING_WIDTH,
+            };
+            assert!(
+                label.x - inner.x >= 1.0
+                    && label.y - inner.y >= 1.0
+                    && inner.x + inner.width - (label.x + label.width) >= 1.0
+                    && inner.y + inner.height - (label.y + label.height) >= 1.0,
+                "{role:?}: the ring's inner edge {inner:?} does not clear the label {label:?}"
+            );
+        }
     }
 }
