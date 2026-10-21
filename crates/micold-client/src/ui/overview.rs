@@ -118,6 +118,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
             let menu_at = location.clone();
             let expansion = |event: Event| Message::Overview(Msg::Expansion(event));
             let card = OverviewCard::new(model, r)
+                .status(card_status(state, model))
                 .id(card_id(&location))
                 .targeted(is_targeted(state, &location))
                 .menu_open(menu_open)
@@ -178,7 +179,10 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let mut grid = CardGrid::new(cards, r);
     if let Some(index) = expanded_at {
         // The twin: the same card collapsed, with no id or messages, measured for its row (U2).
-        grid = grid.expanded(index, OverviewCard::new(&models[index], r));
+        grid = grid.expanded(
+            index,
+            OverviewCard::new(&models[index], r).status(card_status(state, &models[index])),
+        );
     }
     let grid = grid
         .on_scroll(Message::Overview(Msg::GridScrolled))
@@ -372,6 +376,20 @@ pub fn settle_card_menu(state: &mut State) {
         state.overview.focus_return = None;
         state.overview.expansion.apply(Event::MenuClosed);
     }
+}
+
+/// The status of the Jira ticket a card's worktree is linked to, from the one board every
+/// surface reads (feature 1101, FR-010). A numeric (GitHub) ticket is never on the board.
+fn card_status<'s>(
+    state: &'s State,
+    model: &CardModel,
+) -> Option<(&'s micold_core::jira_status::TicketStatus, bool)> {
+    let SessionLocation::Worktree(dir) = &model.location else {
+        return None;
+    };
+    let key = micold_core::naming::ticket(dir)?;
+    let entry = state.jira_status.board.status_of(&key)?;
+    Some((&entry.status, entry.stale))
 }
 
 /// The cards for the active project: one per sidebar entry (a group contributes its runs'
