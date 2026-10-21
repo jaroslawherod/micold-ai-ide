@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T014, T016, T017, T019, T020 | full | Add/Edit daemon in a modal dialog, own Save/Cancel, in-dialog confirmation, no inline form | #1160 | merged |
 | M2 | T015, T018, T021–T023 | full | Add-path tests, focus return | #1170 | merged |
 | M3 | T024–T029 | light | Details in a dialog | #1174 | merged |
-| M4 | T031–T033, T035–T039 | full | Test strength (tdd-verify F2-F8) and drift prompts wait while Details is open (converge) | - | pending |
+| M4 | T031–T033, T035–T039 | full | Test strength (tdd-verify F2-F8) and drift prompts wait while Details is open (converge) | - | in review |
 
 ## Decisions
 
@@ -50,6 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 Visual | 1 | same | Add->Cancel focus ring PASS; Esc/Save/Edit/Tab not judged (headless sway key input unreliable) |
 | M3 Review A | 1 | 2d73eeb79e83dc1283335b0e56fada23ba12f8f9:56fa4f9e024877f97adbf83b93318d93e9a288a1 | CLEAN (1 MINOR: opener not cleared on removal; declined, harmless) |
 | M3 Review B | 1 | same | CLEAN (MINOR: Close bounds not asserted; test checks painted + no overflow) |
+| M4 Review A | 1 | (not recorded by the interrupted unit) | findings fixed in the review-A fix commit (focus after queued drift prompt; stale Details) |
+| M4 Review B | 1 | cd7553d2f4e78fcff4fbaae32cf5041d7515417c:d0e2912ca6fbf90ee8defc2a0f8ac4b48df04b6c | CLEAN (1 MINOR: Remove/Start/Stop wiring not pinned, outside T031) |
 
 ## Declined review findings
 
