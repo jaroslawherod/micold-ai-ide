@@ -61,7 +61,7 @@ impl SiteOrigin {
     ///
     /// This is also what reads a connection back from the settings file and off the wire, so a
     /// loopback `http` entry written by a development build is dropped by a release one, entry by
-    /// entry (`known_connections`), never failing the document. On the wire (not self-describing)
+    /// entry (`known_values`), never failing the document. On the wire (not self-describing)
     /// an entry cannot be skipped; the service has already dropped such entries, so only a
     /// development daemon feeding a release client could meet one, which is dev-only.
     pub fn parse(input: &str) -> Result<Self, FieldProblem> {
@@ -158,7 +158,7 @@ impl std::fmt::Display for SiteOrigin {
     }
 }
 
-/// The app-wide Jira base URL issue links are built on (feature 1122, FR-011):
+/// A project's Jira base URL its issue links are built on (feature 1122, FR-011):
 /// `https://host[:port][/path]`, scheme and host lower case, the path as written, no trailing `/`,
 /// no user info, query or fragment. Serialized as its string; deserialized through [`Self::parse`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
@@ -377,13 +377,15 @@ pub enum ConnectionAction {
     },
 }
 
-/// The connections that still parse, entry by entry; a value that is not a map reads as empty.
+/// The entries of a per-project map (Jira connections, base URLs) that still parse, entry by
+/// entry; a value that is not a map reads as empty.
 /// One bad hand edit must not send the whole document to `.bak`.
-pub(crate) fn known_connections<'de, D>(
+pub(crate) fn known_values<'de, D, T>(
     deserializer: D,
-) -> Result<std::collections::BTreeMap<String, JiraConnection>, D::Error>
+) -> Result<std::collections::BTreeMap<String, T>, D::Error>
 where
     D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
 {
     Ok(match serde_json::Value::deserialize(deserializer)? {
         serde_json::Value::Object(entries) => entries

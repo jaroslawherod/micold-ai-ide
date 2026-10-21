@@ -283,9 +283,12 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         .active_project()
         .map(|project| project.path.clone());
     let token_stored = jira_token_stored(app, project.as_deref());
-    draft
-        .jira
-        .follow(project, &current.jira_connections, token_stored);
+    draft.jira.follow(
+        project,
+        &current.jira_connections,
+        &current.jira_base_urls,
+        token_stored,
+    );
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
     // probe's answer, which lands on the sandbox state when a bring-up succeeds. The form needs it
     // to decide which limits are editable (FR-015), so it is carried across here rather than
@@ -376,6 +379,12 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         } else {
             stored.jira_connections.clone()
         },
+        // Feature 1122 (D4): the same for each project's Jira base URL.
+        jira_base_urls: if app.active_outbox().is_some() {
+            app.core.settings.jira_base_urls.clone()
+        } else {
+            stored.jira_base_urls.clone()
+        },
         ..stored
     }
 }
@@ -433,8 +442,9 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         pr_status_enabled: _,
         jira_enabled: _,
         github_issues_enabled: _,
-        // Written by its own per-project change, never by a save of the form (feature 533).
+        // Written by its own per-project change, never by a save of the form (features 533, 1122).
         jira_connections: _,
+        jira_base_urls: _,
         desktop_notifications: _,
         notification_kinds: _,
         long_task_threshold_secs: _,
@@ -517,6 +527,7 @@ struct ServiceChanges {
     pr_status_enabled: Option<bool>,
     jira_enabled: Option<bool>,
     jira_connection: Option<micold_core::settings::JiraConnectionChange>,
+    jira_base_url: Option<micold_core::settings::JiraBaseUrlChange>,
     github_issues_enabled: Option<bool>,
     plan_usage_enabled: Option<bool>,
     plan_usage_warn_percent: Option<u8>,
@@ -541,6 +552,7 @@ impl ServiceChanges {
             jira_enabled: self.jira_enabled,
             jira_connection: self.jira_connection,
             github_issues_enabled: self.github_issues_enabled,
+            jira_base_url: self.jira_base_url,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             plan_usage_enabled: self.plan_usage_enabled,
@@ -573,6 +585,7 @@ fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<Serv
         pr_status_enabled: changed!(pr_status_enabled),
         jira_enabled: changed!(jira_enabled),
         jira_connection: None,
+        jira_base_url: None,
         github_issues_enabled: changed!(github_issues_enabled),
         plan_usage_enabled: changed!(plan_usage_enabled),
         plan_usage_warn_percent: changed!(plan_usage_warn_percent),
@@ -656,6 +669,7 @@ pub(crate) fn save_and_prepare_check(
     // (a save of file-only settings sends nothing to the service), would be undone by writing it
     // back.
     let jira_action = valid.jira.clone();
+    let base_url_change = valid.jira_base_url.clone();
     let settings = valid.into_settings();
     let baseline = app
         .core
@@ -722,6 +736,11 @@ pub(crate) fn save_and_prepare_check(
     if let Some(change) = &jira_change {
         change.apply(&mut app.core.settings.jira_connections);
     }
+    // Feature 1122 (D4): the open project's base URL, in force here at once; the service merges
+    // the same change into its map and echoes it to every window (FR-012).
+    if let Some(change) = &base_url_change {
+        change.apply(&mut app.core.settings.jira_base_urls);
+    }
     if let Some(store) = app.caps.settings() {
         // Through `update` (BUG-025, T155), for the two things `save` alone cannot do: take the
         // lock the daemon's own write respects (FR-010b), and refuse when the stored document is
@@ -731,6 +750,9 @@ pub(crate) fn save_and_prepare_check(
             changed(stored);
             if let Some(change) = &jira_change {
                 change.apply(&mut stored.jira_connections);
+            }
+            if let Some(change) = &base_url_change {
+                change.apply(&mut stored.jira_base_urls);
             }
         });
         crate::log_line(&write.log_line("client"));
@@ -761,6 +783,10 @@ pub(crate) fn save_and_prepare_check(
     if jira_change.is_some() {
         told.get_or_insert_with(ServiceChanges::default)
             .jira_connection = jira_change.clone();
+    }
+    if base_url_change.is_some() {
+        told.get_or_insert_with(ServiceChanges::default)
+            .jira_base_url = base_url_change;
     }
     if let (Some(daemon), Some(told)) = (app.active_outbox(), told) {
         let req = app.next_req;
@@ -1131,6 +1157,7 @@ mod tests {
         let stored = Settings {
             jira_enabled: false,
             jira_connections: Default::default(),
+            jira_base_urls: Default::default(),
             github_issues_enabled: true,
             plan_usage_enabled: false,
             plan_usage_warn_percent: 65,

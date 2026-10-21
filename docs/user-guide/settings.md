@@ -36,7 +36,7 @@ marked too. Port, User and Key file are optional and carry no mark.
 | [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
 | [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them, and each container daemon's runtime, image, credentials and resources |
 | [GitHub](#github) | Whether worktrees show their pull request, which worktree type an issue's labels choose, and the GitHub access tokens that let sandboxes push |
-| [Jira](#jira) | Whether Jira issues can start worktrees, and whether the open project is connected |
+| [Jira](#jira) | Whether Jira issues can start worktrees, whether the open project is connected, and its Jira base URL for issue links |
 
 <!-- media: settings-view-light -->
 
@@ -727,6 +727,28 @@ token when you press **Save**. Turning the switch off while the open project has
 pressing **Save** asks **Keep the Jira connection for <project folder>?** below the switch, which is
 already off by then. **Keep** leaves the connection stored, so turning the switch on again finds it,
 and **Remove** deletes it as above.
+
+### Jira base URL
+
+With the switch on and a project open, the page also shows an optional **Jira base URL** field
+after the connection's fields, with the line *Used to link Jira keys on this project's Overview
+cards.* It holds the address a worktree's Jira key is linked to: a worktree named after a Jira key,
+such as `feat-mic-87_add-login`, shows **Issue MIC-87** on its Overview card, which opens
+`<Jira base URL>/browse/MIC-87` (see [Opening a worktree's issue](overview.md#opening-a-worktrees-issue)).
+
+| Accepted | Refused, with the reason on the field |
+| --- | --- |
+| `https://example.atlassian.net`, or with a path: `https://jira.example.com/jira` | Another scheme (`http://…`), no host, a user name (`https://me@…`), a query (`?…`) or a fragment (`#…`) |
+
+- The value is the open project's own: each project has its own, so projects on different Jira
+  sites each link to their own site. It is kept in `settings.json`, and a change made in one window
+  shows on the cards of every open window without a restart.
+- It needs no connection: it saves with the four connection fields blank, and saving it neither
+  asks for them nor changes them. The connection's Site URL is not used for links.
+- A trailing `/` is removed when it is saved. Clear the field and press **Save** to unset it; a
+  project with no value shows no Jira links.
+- Turning the switch off hides the field and the links; the value stays stored, and the links come
+  back when the switch is turned on again.
 
 ### Where the token is stored
 

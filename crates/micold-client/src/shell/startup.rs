@@ -268,6 +268,8 @@ fn boot() -> (App, Task<Message>) {
     // Feature 1102: the GitHub issues switch as stored, until the service's copy arrives.
     core.settings.github_issues_enabled = loaded.settings.github_issues_enabled;
     core.settings.jira_connections = loaded.settings.jira_connections.clone();
+    // Feature 1122 (D4): each project's Jira base URL as stored, until the service's copy arrives.
+    core.settings.jira_base_urls = loaded.settings.jira_base_urls.clone();
     // No availability answer is filled here (feature 027, FR-023c). One used to be, from this
     // process's own `PATH` — which is the host's, and under the sandboxed placement the sessions
     // are not on the host. Every directory's answer stays unknown ("nobody has said yet") until its

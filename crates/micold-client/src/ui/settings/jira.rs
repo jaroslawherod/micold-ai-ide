@@ -1,5 +1,6 @@
 //! The Jira section: the switch that turns the integration on and, once on, the open project's
-//! connection (feature 533, FR-001, FR-002, FR-004, FR-005b, FR-006, FR-010).
+//! connection (feature 533, FR-001, FR-002, FR-004, FR-005b, FR-006, FR-010) and Jira base URL
+//! (feature 1122, FR-010).
 //!
 //! With the switch off this page holds only the switch and its description: no credential field,
 //! no request (FR-001). The line beside the switch says what enabling it contacts and sends
@@ -21,7 +22,10 @@ use micold_core::tokens::Roles;
 /// What this section renders. See [`crate::ui::settings`].
 // Read by `tests/settings_sections.rs`, which is a separate crate and cannot be seen from here.
 #[allow(dead_code)]
-pub const SETTINGS: &[(&str, &str)] = &[("jira_enabled", "JiraEnabledToggled")];
+pub const SETTINGS: &[(&str, &str)] = &[
+    ("jira_enabled", "JiraEnabledToggled"),
+    ("jira_base_urls", "JiraBaseUrlChanged"),
+];
 
 /// The switch's description (FR-001).
 pub const SWITCH_DESCRIPTION: &str = "Lets Micold read open issues of a Jira Cloud project to start worktrees from. Off: nothing is sent to Jira.";
@@ -99,6 +103,18 @@ fn connection_form<'a>(
     if jira.token_stored {
         token = token.supporting(TOKEN_STORED);
     }
+    // Optional and independent of the connection (feature 1122, R4): no required mark.
+    let base_url = TextField::new("", &jira.base_url, roles)
+        .label("Jira base URL")
+        .supporting("Used to link Jira keys on this project's Overview cards.")
+        .error(error_for(
+            draft,
+            SettingsSection::Jira,
+            FieldId::SettingsJiraBaseUrl,
+        ))
+        .track_focus(FieldId::SettingsJiraBaseUrl, focused)
+        .on_input(|v| Message::Settings(SettingsMsg::JiraBaseUrlChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     let mut controls: Vec<Element<'a, Message>> = RequiredLegend::for_fields(&required, roles)
         .into_iter()
@@ -116,6 +132,7 @@ fn connection_form<'a>(
             ));
         }
     }
+    controls.push(base_url.into());
     controls
 }
 

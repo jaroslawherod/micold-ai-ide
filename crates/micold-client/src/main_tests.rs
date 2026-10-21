@@ -526,6 +526,7 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
         jira_enabled: false,
         jira_connections: Default::default(),
         github_issues_enabled: true,
+        jira_base_urls: Default::default(),
         plan_usage_enabled: true,
         plan_usage_warn_percent: 80,
         scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
@@ -2695,6 +2696,7 @@ fn the_binding_toggle_opens_with_the_value_the_service_reported() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 tool_server_enabled: false,
                 ..quiet_settings()
             },
@@ -2828,6 +2830,7 @@ fn the_desktop_notifications_switch_opens_with_the_value_the_service_reported() 
                     jira_enabled: false,
                     jira_connections: Default::default(),
                     github_issues_enabled: true,
+                    jira_base_urls: Default::default(),
                     desktop_notifications: reported,
                     ..quiet_settings()
                 },
@@ -2877,6 +2880,7 @@ fn an_open_settings_page_shows_another_windows_save_and_keeps_its_own_edits() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 desktop_notifications: false,
                 env_include_script_path: "/elsewhere/env.sh".into(),
                 scrollback_lines: 9999,
@@ -2929,6 +2933,7 @@ fn an_open_settings_page_keeps_an_edited_pr_status_switch_and_follows_an_untouch
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 desktop_notifications: false,
                 ..quiet_settings()
             },
@@ -2948,6 +2953,7 @@ fn an_open_settings_page_keeps_an_edited_pr_status_switch_and_follows_an_untouch
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 pr_status_enabled: true,
                 ..quiet_settings()
             },
@@ -3035,6 +3041,7 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 desktop_notifications: false,
                 tool_server_enabled: false,
                 ..quiet_settings()
@@ -3152,6 +3159,7 @@ fn turning_the_pr_status_switch_off_and_saving_tells_the_service() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 pr_status_enabled: true,
                 ..quiet_settings()
             },
@@ -3191,6 +3199,7 @@ fn the_open_draft_follows_a_pr_status_change_from_the_service() {
                     jira_enabled: false,
                     jira_connections: Default::default(),
                     github_issues_enabled: true,
+                    jira_base_urls: Default::default(),
                     pr_status_enabled: reported,
                     ..quiet_settings()
                 },
@@ -3237,6 +3246,71 @@ fn turning_the_jira_switch_on_and_saving_tells_the_service() {
     assert_eq!(told, vec![(Some(true), None, None)]);
 }
 
+/// Feature 1122 M5 (D4, FR-010, contract W2): saving the open project's Jira base URL, with the
+/// connection's fields blank, tells the service that one project's change and no connection change,
+/// and puts it in force in this window; the trailing `/` is removed.
+#[test]
+fn saving_a_jira_base_url_tells_the_service_that_projects_change() {
+    use micold_core::jira::{connection_key, JiraBaseUrl};
+    use micold_core::settings::JiraBaseUrlChange;
+    let (mut app, mut rx) = connected_app();
+    app.core.workspace.active = Some(PathBuf::from("/work/app"));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                jira_enabled: true,
+                ..quiet_settings()
+            },
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    app.core
+        .settings
+        .settings_draft
+        .as_mut()
+        .expect("open")
+        .jira
+        .follow(
+            Some(PathBuf::from("/work/app")),
+            &Default::default(),
+            &Default::default(),
+            false,
+        );
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::JiraBaseUrlChanged(
+            "https://example.atlassian.net/".into(),
+        )),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    let key = connection_key(std::path::Path::new("/work/app"));
+    let base = JiraBaseUrl::parse("https://example.atlassian.net").expect("valid");
+    let told: Vec<_> = drain(&mut rx)
+        .into_iter()
+        .filter_map(|msg| match msg {
+            ClientMsg::SettingsSet {
+                jira_connection,
+                jira_base_url,
+                ..
+            } => Some((jira_connection, jira_base_url)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        told,
+        vec![(
+            None,
+            Some(JiraBaseUrlChange {
+                project: key.clone(),
+                url: Some(base.clone()),
+            })
+        )]
+    );
+    assert_eq!(app.core.settings.jira_base_urls.get(&key), Some(&base));
+}
+
 /// Feature 533 (US2 AS5, T078): Save over a switch turned off with a stored connection raises the
 /// question and tells the service nothing; each answer is applied by the save it held.
 #[test]
@@ -3272,7 +3346,12 @@ fn switching_jira_off_over_a_stored_connection_asks_and_each_answer_is_saved() {
             .as_mut()
             .expect("open")
             .jira
-            .follow(Some(PathBuf::from("/work/app")), &connections, true);
+            .follow(
+                Some(PathBuf::from("/work/app")),
+                &connections,
+                &Default::default(),
+                true,
+            );
         let _ = update_inner(
             &mut app,
             Message::Settings(SettingsMsg::JiraEnabledToggled(false)),
@@ -3396,6 +3475,7 @@ fn a_save_that_leaves_github_issues_alone_does_not_send_it() {
         msg,
         ClientMsg::SettingsSet {
             github_issues_enabled: Some(_),
+            jira_base_url: None,
             ..
         }
     )));
@@ -3416,6 +3496,7 @@ fn the_window_and_the_open_draft_follow_the_services_github_issues_switch() {
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
                 github_issues_enabled: false,
+                jira_base_urls: Default::default(),
                 ..quiet_settings()
             },
         },
@@ -3442,6 +3523,7 @@ fn the_window_and_the_open_draft_follow_the_services_github_issues_switch() {
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
                 github_issues_enabled: false,
+                jira_base_urls: Default::default(),
                 pr_status_enabled: true,
                 ..quiet_settings()
             },
@@ -3486,6 +3568,7 @@ fn an_open_form_follows_the_services_github_issues_switch() {
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
                 github_issues_enabled: false,
+                jira_base_urls: Default::default(),
                 ..quiet_settings()
             },
         },
@@ -3496,6 +3579,7 @@ fn an_open_form_follows_the_services_github_issues_switch() {
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 ..quiet_settings()
             },
         },
@@ -3631,6 +3715,7 @@ fn the_cross_session_select_opens_with_the_value_the_service_reported() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 cross_session_access: CrossSessionAccess::Off,
                 ..quiet_settings()
             },
@@ -3791,6 +3876,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -3835,6 +3921,7 @@ fn settings_changed_event_syncs_env_include_fields() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -4340,6 +4427,7 @@ fn the_service_answers_with(
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -5500,6 +5588,7 @@ fn settings_with_env_include(enabled: bool) -> DaemonSettings {
         jira_enabled: false,
         jira_connections: Default::default(),
         github_issues_enabled: true,
+        jira_base_urls: Default::default(),
         env_include_enabled: enabled,
         env_include_script_path: "   ".into(),
         ..quiet_settings()
@@ -5639,6 +5728,7 @@ fn availability_an_unrelated_settings_change_asks_nothing() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 scrollback_lines: 42_000,
                 ..settings_with_env_include(true)
             },
@@ -6590,6 +6680,7 @@ mod script_path_report {
             jira_enabled: false,
             jira_connections: Default::default(),
             github_issues_enabled: true,
+            jira_base_urls: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             default_ai_cli: AiCli::ClaudeCode,
@@ -10826,6 +10917,7 @@ mod pr_status {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 pr_status_enabled,
                 ..quiet_settings()
             },
@@ -11982,6 +12074,7 @@ fn another_windows_kinds_and_threshold_reach_the_stored_values() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 notification_kinds: kinds,
                 long_task_threshold_secs: 15,
                 ..quiet_settings()
@@ -14429,6 +14522,41 @@ fn link_focus_moves_to_card_when_link_goes() {
     tab_onto_link(&mut kept, "feat-1122_x");
     let held = LinkFocus::of(&kept);
     assert_eq!(link_focus_after(&mut kept, &held), None, "the link stays");
+}
+
+/// Feature 1122 M5 (D3, D4, FR-012, contract U6): adopting the service's settings sets each
+/// project's Jira base URL in force, and a `DaemonSettings` that clears the open project's base
+/// while its Jira link holds the keyboard hands the keyboard to the link's card (T036's hand-off,
+/// Jira case).
+#[test]
+fn jira_base_url_adopted() {
+    use micold_client::ui::overview::{card_id, issue_link_for};
+    use micold_core::jira::{connection_key, JiraBaseUrl};
+    let l = SessionLocation::Worktree("feat-mic-87_add-login".into());
+    let mut app = app_in_overview_with(&["feat-mic-87_add-login"]);
+    let key = connection_key(std::path::Path::new("/repo"));
+    let base = JiraBaseUrl::parse("https://example.atlassian.net").expect("valid");
+    let mut settings = quiet_settings();
+    settings.jira_enabled = true;
+    settings.jira_base_urls.insert(key.clone(), base.clone());
+
+    let _ = crate::shell::daemon_sync::on_settings_changed(&mut app, settings.clone());
+
+    assert_eq!(app.core.settings.jira_base_urls.get(&key), Some(&base));
+    assert_eq!(
+        issue_link_for(&app.core, &l).map(|link| link.address),
+        Some("https://example.atlassian.net/browse/MIC-87".to_owned())
+    );
+    tab_onto_link(&mut app, "feat-mic-87_add-login");
+    let held = LinkFocus::of(&app);
+    assert_eq!(held.link, Some(l.clone()));
+
+    settings.jira_base_urls.clear();
+    let _ = crate::shell::daemon_sync::on_settings_changed(&mut app, settings);
+
+    assert!(app.core.settings.jira_base_urls.is_empty());
+    assert_eq!(link_focus_after(&mut app, &held), Some(card_id(&l)));
+    assert_eq!(app.core.overview.expansion.focused_link(), None);
 }
 
 /// Spec Edge Case *Card goes away*, contract U6: a listing without the card whose link holds

@@ -1006,6 +1006,9 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     // Feature 533: the Jira switch and connections in force, in every window (FR-022).
     app.core.settings.jira_enabled = settings.jira_enabled;
     app.core.settings.jira_connections = settings.jira_connections;
+    // Feature 1122 (D4, FR-012): each project's Jira base URL in force; the Overview's Jira links
+    // follow it with no other step.
+    app.core.settings.jira_base_urls = settings.jira_base_urls;
     crate::shell::issues::sync_jira_availability(app);
     // Feature 1102: the GitHub issues switch in force, in every window (FR-008).
     app.core.settings.github_issues_enabled = settings.github_issues_enabled;
@@ -1063,6 +1066,7 @@ fn refresh_open_settings(app: &mut App) {
     now.jira_enabled = app.core.settings.jira_enabled;
     now.github_issues_enabled = app.core.settings.github_issues_enabled;
     now.jira_connections = app.core.settings.jira_connections.clone();
+    now.jira_base_urls = app.core.settings.jira_base_urls.clone();
     let project = app
         .core
         .workspace
@@ -1071,9 +1075,12 @@ fn refresh_open_settings(app: &mut App) {
     let token_stored = crate::shell::persist::jira_token_stored(app, project.as_deref());
     if let Some(draft) = app.core.settings.settings_draft.as_mut() {
         draft.refresh_untouched(&now);
-        draft
-            .jira
-            .follow(project, &now.jira_connections, token_stored);
+        draft.jira.follow(
+            project,
+            &now.jira_connections,
+            &now.jira_base_urls,
+            token_stored,
+        );
     }
 }
 

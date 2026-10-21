@@ -102,6 +102,10 @@ pub struct State {
     pub jira_enabled: bool,
     /// Each project's Jira connection, as the service last reported it (feature 533, FR-022).
     pub jira_connections: std::collections::BTreeMap<String, micold_core::jira::JiraConnection>,
+    /// Each project's Jira base URL, as the service last reported it (feature 1122, D4, FR-012),
+    /// keyed as `jira_connections` is. The Overview's Jira issue links are built on the open
+    /// project's entry.
+    pub jira_base_urls: std::collections::BTreeMap<String, micold_core::jira::JiraBaseUrl>,
     /// Whether the GitHub issues integration is on, as the service last reported it (feature 1102,
     /// FR-008). On until told otherwise (FR-007), so a hand `Default` rather than a derived one.
     pub github_issues_enabled: bool,
@@ -163,6 +167,7 @@ impl Default for State {
             settings_draft: None,
             jira_enabled: false,
             jira_connections: Default::default(),
+            jira_base_urls: Default::default(),
             github_issues_enabled: true,
             github_tokens: Default::default(),
             settings_rail_collapsed: false,
@@ -467,6 +472,10 @@ pub struct JiraDraft {
     pub prompt: Option<KeepOrRemovePrompt>,
     /// The user answered **Keep** to the question, so the save does not raise it again.
     pub kept: bool,
+    /// The base URL stored for [`Self::project`], when there is one (feature 1122, D4).
+    pub stored_base_url: Option<micold_core::jira::JiraBaseUrl>,
+    /// **Jira base URL**, as typed (feature 1122, R4). Optional and independent of the connection.
+    pub base_url: String,
 }
 
 impl JiraDraft {
@@ -504,19 +513,20 @@ impl JiraDraft {
         self.token = TokenInput::default();
     }
 
-    /// Point the form at `project` and the connection `connections` holds for it; `token_stored`
-    /// is the probe's answer for that project. Typed text is kept unless the form still shows
-    /// the previous connection untouched.
+    /// Point the form at `project`, the connection `connections` holds for it and its base URL in
+    /// `base_urls` (feature 1122); `token_stored` is the probe's answer for that project. Typed
+    /// text is kept unless the form still shows the previous values untouched.
     pub fn follow(
         &mut self,
         project: Option<std::path::PathBuf>,
         connections: &std::collections::BTreeMap<String, micold_core::jira::JiraConnection>,
+        base_urls: &std::collections::BTreeMap<String, micold_core::jira::JiraBaseUrl>,
         token_stored: bool,
     ) {
-        let connection = project
-            .as_deref()
-            .and_then(|p| connections.get(&micold_core::jira::connection_key(p)))
-            .cloned();
+        let key = project.as_deref().map(micold_core::jira::connection_key);
+        let connection = key.as_ref().and_then(|k| connections.get(k)).cloned();
+        let stored_base_url = key.as_ref().and_then(|k| base_urls.get(k)).cloned();
+        let base_untouched = self.base_url == Self::base_text(self.stored_base_url.as_ref());
         let previous = self.connection.as_ref().map(|c| {
             (
                 c.site.to_string(),
@@ -535,6 +545,10 @@ impl JiraDraft {
         if (untouched || moved) && !self.remove_requested {
             self.fill_from(connection.as_ref());
         }
+        if base_untouched || moved {
+            self.base_url = Self::base_text(stored_base_url.as_ref());
+        }
+        self.stored_base_url = stored_base_url;
         if moved {
             self.remove_requested = false;
             self.prompt = None;
@@ -543,6 +557,40 @@ impl JiraDraft {
         self.token_stored = token_stored && !self.remove_requested;
         self.connection = connection;
         self.project = project;
+    }
+
+    fn base_text(url: Option<&micold_core::jira::JiraBaseUrl>) -> String {
+        url.map(|u| u.as_str().to_owned()).unwrap_or_default()
+    }
+
+    /// What the save does to the open project's base URL (feature 1122, FR-010, FR-011): `None`
+    /// with the switch off, no project open or the value unchanged; a set for a changed valid
+    /// value, a clear for an emptied field over a stored one. Never part of the connection's
+    /// validation, so it saves with the connection's fields blank.
+    fn base_url_change(
+        &self,
+    ) -> Result<Option<micold_core::settings::JiraBaseUrlChange>, FieldError> {
+        let Some(project) = self.project.as_deref().filter(|_| self.enabled) else {
+            return Ok(None);
+        };
+        let typed = self.base_url.trim();
+        let url = if typed.is_empty() {
+            None
+        } else {
+            Some(
+                micold_core::jira::JiraBaseUrl::parse(typed).map_err(|problem| FieldError {
+                    field: FieldId::SettingsJiraBaseUrl,
+                    section: SettingsSection::Jira,
+                    message: problem.reason.to_owned(),
+                })?,
+            )
+        };
+        Ok(
+            (url != self.stored_base_url).then(|| micold_core::settings::JiraBaseUrlChange {
+                project: micold_core::jira::connection_key(project),
+                url,
+            }),
+        )
     }
 
     /// An edit of a connection field: a pending removal or question no longer describes the form.
@@ -704,6 +752,9 @@ pub struct ValidSettings {
     pub jira_enabled: bool,
     /// Jira: what the save does to the open project's connection (feature 533, US3).
     pub jira: micold_core::jira::ConnectionAction,
+    /// Jira: what the save does to the open project's base URL (feature 1122, D4); `None` leaves
+    /// it as it is.
+    pub jira_base_url: Option<micold_core::settings::JiraBaseUrlChange>,
 }
 
 impl ValidSettings {
@@ -729,6 +780,9 @@ impl ValidSettings {
             github_issues_enabled: self.github_issues_enabled,
             // Not in the form yet (feature 533): written by their own change, never by a save.
             jira_connections: std::collections::BTreeMap::new(),
+            // Feature 1122 (D4): each project's base URL is written by its own change, as a
+            // connection is, never by a save.
+            jira_base_urls: std::collections::BTreeMap::new(),
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             // Not in the form (feature 482): service-owned; the save keeps the stored value.
@@ -1058,6 +1112,8 @@ impl SettingsDraft {
         profile.budget = self.budget()?;
         let mapping_complete = self.mapping()?;
         let jira = self.jira_action()?;
+        // After the connection: its field follows the connection's on the page.
+        let jira_base_url = self.jira.base_url_change()?;
 
         let (
             Some(scrollback_lines),
@@ -1114,6 +1170,7 @@ impl SettingsDraft {
             github_issues_enabled: self.github.issues_enabled,
             jira_enabled: self.jira.enabled,
             jira,
+            jira_base_url,
         })
     }
 
@@ -1477,6 +1534,9 @@ impl SettingsDraft {
                     remove_requested: _,
                     prompt: _,
                     kept: _,
+                    // Refreshed by `JiraDraft::follow`, as the connection's fields are (1122).
+                    stored_base_url: _,
+                    base_url: _,
                 },
             error: _,
             baseline: _,
@@ -1704,6 +1764,9 @@ pub enum Msg {
     JiraEnabledToggled(bool),
     /// **Site URL** was edited (feature 533, FR-006).
     JiraSiteChanged(String),
+    /// **Jira base URL** was edited (feature 1122, FR-010). Not a connection field: it leaves a
+    /// pending removal or question as it is.
+    JiraBaseUrlChanged(String),
     /// **Project key** was edited.
     JiraKeyChanged(String),
     /// **Account email** was edited.
@@ -1845,6 +1908,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             draft.jira.edited();
             draft.jira.site = text;
         }),
+        Msg::JiraBaseUrlChanged(text) => edit(state, |draft| draft.jira.base_url = text),
         Msg::JiraKeyChanged(text) => edit(state, |draft| {
             draft.jira.edited();
             draft.jira.project_key = text;
@@ -2464,6 +2528,7 @@ pub fn diff_layout_set(
         jira_enabled: None,
         jira_connection: None,
         github_issues_enabled: None,
+        jira_base_url: None,
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,

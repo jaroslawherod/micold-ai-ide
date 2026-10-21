@@ -9,119 +9,10 @@
 #[path = "support/conn.rs"]
 mod conn;
 
-use conn::{connect_with_settings, Client};
-use std::path::Path;
-use std::sync::Arc;
+use conn::{both_registered, connect_with_settings, next_settings_changed, service, set, stored};
 
-use futures_util::{SinkExt, StreamExt};
 use micold_core::jira::JiraConnection;
-use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg, DaemonSettings, OperationResult};
-use micold_core::settings::{
-    JiraChange, JiraConnectionChange, JsonFileSettingsStore, SettingsStore,
-};
-use micold_core::store::{JsonFileStore, ProjectStore};
-use micold_core::workspace::Workspace;
-use micold_daemon::catalog::Catalog;
-use micold_daemon::state::DaemonState;
-
-/// A service whose catalog and settings live in `store_dir`. Called twice over one directory, the
-/// second service is the first one restarted.
-fn service(store_dir: &Path) -> Arc<DaemonState> {
-    let projects_path = store_dir.join("projects.json");
-    if !projects_path.exists() {
-        JsonFileStore::at(projects_path.clone())
-            .save(&Workspace::default())
-            .unwrap();
-    }
-    Arc::new(DaemonState::new(Catalog::load(
-        Box::new(JsonFileStore::at(projects_path)),
-        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
-    )))
-}
-
-/// Send a `SettingsSet` that names the Jira fields and the scrollback and nothing else, and wait
-/// until the service acknowledges it.
-async fn set(
-    client: &mut Client,
-    req: u64,
-    jira_enabled: Option<bool>,
-    jira_connection: Option<JiraConnectionChange>,
-    scrollback: Option<usize>,
-) {
-    client
-        .send(Frame::Control(ClientMsg::SettingsSet {
-            plan_usage_enabled: None,
-            plan_usage_warn_percent: None,
-            req,
-            scrollback_lines: scrollback,
-            env_include_enabled: None,
-            env_include_script_path: None,
-            env_include_timeout_secs: None,
-            default_ai_cli: None,
-            pi_activity_component: None,
-            save_terminal_history: None,
-            tool_server_enabled: None,
-            cross_session_access: None,
-            pr_status_enabled: None,
-            jira_enabled,
-            jira_connection,
-            github_issues_enabled: None,
-            desktop_notifications: None,
-            notification_kinds: None,
-            long_task_threshold_secs: None,
-            diff_layout: None,
-        }))
-        .await
-        .unwrap();
-    let acknowledged = async {
-        loop {
-            match client.next().await.expect("stream open").unwrap() {
-                Frame::Control(DaemonMsg::OperationOk {
-                    req: r,
-                    result: OperationResult::Ack,
-                }) if r == req => return,
-                Frame::Control(DaemonMsg::OperationError {
-                    req: r, message, ..
-                }) if r == req => {
-                    panic!("the service refused the settings: {message}")
-                }
-                _ => continue,
-            }
-        }
-    };
-    tokio::time::timeout(std::time::Duration::from_secs(30), acknowledged)
-        .await
-        .expect("the service acknowledges the settings");
-}
-
-/// The next `SettingsChanged` this client is pushed.
-async fn next_settings_changed(client: &mut Client) -> DaemonSettings {
-    let pushed = async {
-        loop {
-            match client.next().await.expect("stream open").unwrap() {
-                Frame::Control(DaemonMsg::SettingsChanged { settings }) => return settings,
-                _ => continue,
-            }
-        }
-    };
-    tokio::time::timeout(std::time::Duration::from_secs(5), pushed)
-        .await
-        .expect("the client was never told the settings changed")
-}
-
-/// Wait until the service counts two clients, so a push cannot be sent before the second one is
-/// there to receive it.
-async fn both_registered(state: &Arc<DaemonState>) {
-    let registered = async {
-        while state.client_count() != 2 {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    };
-    tokio::time::timeout(std::time::Duration::from_secs(5), registered)
-        .await
-        .expect("two clients are registered");
-}
+use micold_core::settings::{JiraChange, JiraConnectionChange};
 
 fn connection(key: &str) -> JiraConnection {
     JiraConnection::parse("https://acme.atlassian.net", key, "me@acme.com").unwrap()
@@ -141,12 +32,6 @@ fn removal(project: &str) -> JiraConnectionChange {
     }
 }
 
-fn stored(dir: &Path) -> micold_core::settings::Settings {
-    JsonFileSettingsStore::at(dir.join("settings.json"))
-        .load()
-        .settings
-}
-
 /// FR-002: off until turned on; once on, the service holds it, across a restart.
 #[tokio::test]
 async fn the_switch_is_stored_and_reported_to_the_next_client() {
@@ -156,7 +41,7 @@ async fn the_switch_is_stored_and_reported_to_the_next_client() {
     assert!(!welcomed.jira_enabled, "off until the user turns it on");
     assert!(welcomed.jira_connections.is_empty());
 
-    set(&mut client, 1, Some(true), None, None).await;
+    set(&mut client, 1, Some(true), None, None, None).await;
 
     let (_next, welcomed) = connect_with_settings(&state).await;
     assert!(welcomed.jira_enabled);
@@ -180,6 +65,7 @@ async fn a_change_is_echoed_to_a_second_connected_client() {
         Some(true),
         Some(upsert("/work/a", "ABC")),
         None,
+        None,
     )
     .await;
 
@@ -200,13 +86,21 @@ async fn an_upsert_and_a_removal_are_applied_and_stored() {
     let state = service(store.path());
     let (mut client, _) = connect_with_settings(&state).await;
 
-    set(&mut client, 1, None, Some(upsert("/work/a", "ABC")), None).await;
+    set(
+        &mut client,
+        1,
+        None,
+        Some(upsert("/work/a", "ABC")),
+        None,
+        None,
+    )
+    .await;
     assert_eq!(
         stored(store.path()).jira_connections["/work/a"],
         connection("ABC")
     );
 
-    set(&mut client, 2, None, Some(removal("/work/a")), None).await;
+    set(&mut client, 2, None, Some(removal("/work/a")), None, None).await;
     assert!(stored(store.path()).jira_connections.is_empty());
     let (_next, welcomed) = connect_with_settings(&state).await;
     assert!(welcomed.jira_connections.is_empty());
@@ -220,8 +114,24 @@ async fn two_projects_changes_back_to_back_both_survive() {
     let (mut first, _) = connect_with_settings(&state).await;
     let (mut second, _) = connect_with_settings(&state).await;
 
-    set(&mut first, 1, None, Some(upsert("/work/a", "AAA")), None).await;
-    set(&mut second, 1, None, Some(upsert("/work/b", "BBB")), None).await;
+    set(
+        &mut first,
+        1,
+        None,
+        Some(upsert("/work/a", "AAA")),
+        None,
+        None,
+    )
+    .await;
+    set(
+        &mut second,
+        1,
+        None,
+        Some(upsert("/work/b", "BBB")),
+        None,
+        None,
+    )
+    .await;
 
     let on_disk = stored(store.path()).jira_connections;
     assert_eq!(on_disk.len(), 2, "{on_disk:?}");
@@ -242,9 +152,10 @@ async fn an_unrelated_save_keeps_the_jira_fields() {
         Some(true),
         Some(upsert("/work/a", "ABC")),
         None,
+        None,
     )
     .await;
-    set(&mut client, 2, None, None, Some(4321)).await;
+    set(&mut client, 2, None, None, None, Some(4321)).await;
 
     let settings = stored(store.path());
     assert_eq!(settings.scrollback_lines, 4321);

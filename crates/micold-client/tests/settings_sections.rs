@@ -934,3 +934,34 @@ fn the_plan_usage_subsection_follows_desktop_notifications() {
     let plan = view.find("\"Show Claude plan usage\"").expect("plan usage");
     assert!(notifications < plan, "after Desktop notifications");
 }
+
+/// Feature 1122 M5 (D4, R4, FR-010, T042): the Jira page claims each project's base URL with its
+/// message, and draws the field with its supporting line after the connection's fields, inside the
+/// connection form, so only while the switch is on and a project is open.
+#[test]
+fn the_jira_page_claims_the_base_url_inside_the_connection_form() {
+    let src = read(&client_dir().join("src/ui/settings/jira.rs"));
+    assert!(
+        src.contains("(\"jira_base_urls\", \"JiraBaseUrlChanged\")"),
+        "the page declares the base URL it renders"
+    );
+    assert_eq!(
+        claims().get("jira_base_urls").map(Vec::as_slice),
+        Some(["jira.rs".to_string()].as_slice())
+    );
+    let form = src.find("fn connection_form").expect("the connection form");
+    let token = src.find("\"API token\"").expect("the token field");
+    let label = src.find("\"Jira base URL\"").expect("the base URL field");
+    let line = src
+        .find("\"Used to link Jira keys on this project's Overview cards.\"")
+        .expect("its supporting line");
+    assert!(
+        form < token && token < label && label < line,
+        "after the connection's fields"
+    );
+    assert!(
+        src.contains("if draft.jira.enabled && draft.jira.project.is_some() {\n        controls.extend(connection_form("),
+        "the form is drawn only while the switch is on and a project is open"
+    );
+    assert!(src.contains("FieldId::SettingsJiraBaseUrl"));
+}

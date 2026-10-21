@@ -73,7 +73,7 @@ The header row shows:
 The body below it shows:
 
 - its **title**, which says what the location is for (see [Title](#title)), on up to three lines;
-- below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. A card whose title already is the branch does not repeat it. A worktree named after a GitHub issue shows a link to it at the end of this line (see [Opening a worktree's issue](#opening-a-worktrees-issue));
+- below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. A card whose title already is the branch does not repeat it. A worktree named after a GitHub issue, or a Jira key, shows a link to it at the end of this line (see [Opening a worktree's issue](#opening-a-worktrees-issue));
 - its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
 - when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
 - a **progress row**, when there is progress to show (see [Feature progress](#feature-progress));
@@ -93,7 +93,9 @@ A worktree named after a GitHub issue number, such as `feat-1122_overview-issue-
 
 The link is shown while the project has a GitHub repository (its `origin`, or else its first remote on github.com) and the **GitHub issues** switch in Settings is on. Turn the switch off and the links go; turn it on and they come back, without a restart. Default, a worktree whose name carries no issue number, and a project with no GitHub repository show no link. Showing the links asks GitHub for nothing: the repository comes from the project's own git remotes.
 
-- **Click** the link to open the issue's page (`https://github.com/<owner>/<repo>/issues/1122`) in your browser. The card is not activated: there is no ripple, nothing is selected, and the Overview stays open. If the browser cannot be opened, a notification names the address and the reason.
+A worktree named after a Jira key, such as `feat-mic-87_add-login`, shows **Issue MIC-87** in the same place, while the project's **Jira base URL** is set and the **Enable Jira integration** switch is on (Settings → [Jira base URL](settings.md#jira-base-url)). It opens `<Jira base URL>/browse/MIC-87`, for example `https://example.atlassian.net/browse/MIC-87`. Each project uses its own base URL; a project with none shows no Jira links. Setting or clearing the value, or turning the switch off or on, changes the links in every open window without a restart. Showing them asks Jira for nothing.
+
+- **Click** the link to open the issue's page (`https://github.com/<owner>/<repo>/issues/1122`, or the Jira issue's) in your browser. The card is not activated: there is no ripple, nothing is selected, and the Overview stays open. If the browser cannot be opened, a notification names the address and the reason.
 - A press that starts on the link and ends off it, or the reverse, opens nothing and activates nothing.
 - The pointer **resting** on the link of a collapsed card does not expand it, so the link stays under the pointer; rest on the rest of the card to expand it. An expanded card stays expanded while the pointer is on its link.
 - A **right-click** on the link opens the card's menu, as anywhere else on the card.

@@ -373,6 +373,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: Some(false),
+            jira_base_url: None,
             desktop_notifications: Some(false),
             // Feature 613 (W5.4, W5.6): the whole set of kinds, and the threshold in seconds.
             notification_kinds: Some(NotificationKinds {
@@ -403,6 +404,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
+            jira_base_url: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -546,6 +548,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 scrollback_lines: 10_000,
@@ -620,6 +623,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 scrollback_lines: 1_000,
@@ -893,8 +897,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_59() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 59);
+fn the_protocol_version_is_60() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 60);
 }
 
 /// A pending tool request, as every client is shown it (#942 contracts/wire.md).
@@ -1229,6 +1233,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             jira_enabled: false,
             jira_connections: Default::default(),
             github_issues_enabled: true,
+            jira_base_urls: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1269,6 +1274,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
+            jira_base_url: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1281,6 +1287,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
                 jira_enabled: None,
                 jira_connection: None,
                 github_issues_enabled: None,
+                jira_base_url: None,
                 cross_session_access,
                 ..
             } => assert_eq!(cross_session_access, Some(access)),
@@ -1308,6 +1315,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             jira_enabled: false,
             jira_connections: Default::default(),
             github_issues_enabled: true,
+            jira_base_urls: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1339,6 +1347,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
+            jira_base_url: None,
             plan_usage_enabled: None,
             plan_usage_warn_percent: None,
             req: 3,
@@ -1363,6 +1372,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
                 jira_enabled: None,
                 jira_connection: None,
                 github_issues_enabled: None,
+                jira_base_url: None,
                 pr_status_enabled,
                 ..
             } => assert_eq!(pr_status_enabled, chosen),
@@ -1727,6 +1737,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             jira_enabled: false,
             jira_connections: Default::default(),
             github_issues_enabled: true,
+            jira_base_urls: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1770,6 +1781,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
+            jira_base_url: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1933,6 +1945,7 @@ fn the_save_terminal_history_setting_round_trips_on_the_wire() {
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
+            jira_base_url: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1944,6 +1957,7 @@ fn the_save_terminal_history_setting_round_trips_on_the_wire() {
                 jira_enabled: None,
                 jira_connection: None,
                 github_issues_enabled: None,
+                jira_base_url: None,
                 save_terminal_history,
                 ..
             } => assert_eq!(save_terminal_history, chosen),
@@ -1979,6 +1993,7 @@ fn plan_usage_settings_set(
         jira_enabled: None,
         jira_connection: None,
         github_issues_enabled: None,
+        jira_base_url: None,
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,
@@ -2064,6 +2079,7 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
                 jira_enabled: false,
                 jira_connections: Default::default(),
                 github_issues_enabled: true,
+                jira_base_urls: Default::default(),
                 plan_usage_enabled: enabled,
                 plan_usage_warn_percent: percent,
                 ..settings.clone()
@@ -2080,6 +2096,7 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
                 jira_enabled: None,
                 jira_connection: None,
                 github_issues_enabled: None,
+                jira_base_url: None,
                 plan_usage_enabled,
                 plan_usage_warn_percent,
                 ..
@@ -2425,5 +2442,113 @@ fn the_permission_prompt_wire_types_round_trip() {
     }
     for mode in PermissionMode::ALL {
         permission_roundtrip(&mode);
+    }
+}
+
+/// Feature 1122 (D4, contracts/wire.md W1, W2): each project's Jira base URL in `DaemonSettings`,
+/// and one project's change in `SettingsSet`, survive both wires.
+fn settings_with_base_urls(
+    jira_base_urls: std::collections::BTreeMap<String, micold_core::jira::JiraBaseUrl>,
+) -> DaemonSettings {
+    DaemonSettings {
+        jira_enabled: true,
+        jira_connections: Default::default(),
+        github_issues_enabled: true,
+        jira_base_urls,
+        plan_usage_enabled: true,
+        plan_usage_warn_percent: 80,
+        scrollback_lines: 10_000,
+        env_include_enabled: true,
+        env_include_script_path: String::new(),
+        env_include_timeout_secs: 10,
+        default_ai_cli: AiCli::ClaudeCode,
+        pi_activity_component: true,
+        save_terminal_history: true,
+        tool_server_enabled: true,
+        cross_session_access: CrossSessionAccess::Auto,
+        pr_status_enabled: false,
+        desktop_notifications: true,
+        notification_kinds: NotificationKinds::default(),
+        long_task_threshold_secs: 120,
+        diff_layout: Default::default(),
+    }
+}
+
+fn base_url(url: &str) -> micold_core::jira::JiraBaseUrl {
+    micold_core::jira::JiraBaseUrl::parse(url).expect("valid base URL")
+}
+
+#[test]
+fn jira_base_urls_round_trip_in_daemon_settings() {
+    let empty = settings_with_base_urls(Default::default());
+    json_roundtrip(&empty);
+    postcard_roundtrip(&empty);
+    let two = settings_with_base_urls(
+        [
+            ("/work/a".to_owned(), base_url("https://a.atlassian.net")),
+            (
+                "/work/b".to_owned(),
+                base_url("https://jira.example.com/jira"),
+            ),
+        ]
+        .into(),
+    );
+    json_roundtrip(&two);
+    postcard_roundtrip(&two);
+}
+
+#[test]
+fn a_daemon_settings_entry_that_does_not_parse_fails_to_decode() {
+    let two = settings_with_base_urls(
+        [("/work/a".to_owned(), base_url("https://a.atlassian.net"))].into(),
+    );
+    let mut json = serde_json::to_value(&two).expect("json encode");
+    json["jira_base_urls"]["/work/a"] = serde_json::json!("http://a.atlassian.net");
+    assert!(serde_json::from_value::<DaemonSettings>(json).is_err());
+}
+
+#[test]
+fn a_jira_base_url_change_round_trips_in_settings_set() {
+    use micold_core::settings::JiraBaseUrlChange;
+    for change in [
+        None,
+        Some(JiraBaseUrlChange {
+            project: "/work/a".into(),
+            url: Some(base_url("https://a.atlassian.net")),
+        }),
+        Some(JiraBaseUrlChange {
+            project: "/work/a".into(),
+            url: None,
+        }),
+    ] {
+        let set = ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
+            req: 5,
+            scrollback_lines: None,
+            env_include_enabled: None,
+            env_include_script_path: None,
+            env_include_timeout_secs: None,
+            default_ai_cli: None,
+            pi_activity_component: None,
+            save_terminal_history: None,
+            tool_server_enabled: None,
+            cross_session_access: None,
+            pr_status_enabled: None,
+            jira_enabled: None,
+            jira_connection: None,
+            github_issues_enabled: None,
+            jira_base_url: change.clone(),
+            desktop_notifications: None,
+            notification_kinds: None,
+            long_task_threshold_secs: None,
+            diff_layout: None,
+        };
+        json_roundtrip(&set);
+        postcard_roundtrip(&set);
+        match serde_json::from_slice::<ClientMsg>(&serde_json::to_vec(&set).unwrap()).unwrap() {
+            ClientMsg::SettingsSet { jira_base_url, .. } => assert_eq!(jira_base_url, change),
+            other => panic!("expected SettingsSet, got {other:?}"),
+        }
     }
 }

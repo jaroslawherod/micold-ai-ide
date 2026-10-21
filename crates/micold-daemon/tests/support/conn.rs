@@ -11,12 +11,19 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::attention::NotificationKinds;
 use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::messages::OperationResult;
 use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg, DaemonSettings};
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
 use micold_core::session::AiCli;
-use micold_core::settings::DiffLayout;
+use micold_core::settings::{
+    DiffLayout, JiraBaseUrlChange, JiraConnectionChange, JsonFileSettingsStore, Settings,
+    SettingsStore,
+};
+use micold_core::store::{JsonFileStore, ProjectStore};
+use micold_core::workspace::Workspace;
+use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
 
@@ -38,6 +45,7 @@ pub struct SettingsPatch {
     pub jira_enabled: Option<bool>,
     pub jira_connection: Option<micold_core::settings::JiraConnectionChange>,
     pub github_issues_enabled: Option<bool>,
+    pub jira_base_url: Option<micold_core::settings::JiraBaseUrlChange>,
     pub desktop_notifications: Option<bool>,
     pub notification_kinds: Option<NotificationKinds>,
     pub long_task_threshold_secs: Option<u64>,
@@ -62,6 +70,7 @@ pub fn settings_set(req: u64, patch: SettingsPatch) -> ClientMsg {
         jira_enabled,
         jira_connection,
         github_issues_enabled,
+        jira_base_url,
         desktop_notifications,
         notification_kinds,
         long_task_threshold_secs,
@@ -84,6 +93,7 @@ pub fn settings_set(req: u64, patch: SettingsPatch) -> ClientMsg {
         jira_enabled,
         jira_connection,
         github_issues_enabled,
+        jira_base_url,
         desktop_notifications,
         notification_kinds,
         long_task_threshold_secs,
@@ -198,4 +208,84 @@ pub async fn answer(client: &mut Client, req: u64) -> DaemonMsg {
     })
     .await
     .expect("the request is answered")
+}
+
+/// A service whose catalog and settings live in `store_dir`. Called twice over one directory, the
+/// second service is the first one restarted.
+pub fn service(store_dir: &Path) -> Arc<DaemonState> {
+    let projects_path = store_dir.join("projects.json");
+    if !projects_path.exists() {
+        JsonFileStore::at(projects_path.clone())
+            .save(&Workspace::default())
+            .unwrap();
+    }
+    Arc::new(DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
+    )))
+}
+
+/// Send a `SettingsSet` that names the Jira fields and the scrollback and nothing else, and wait
+/// until the service acknowledges it.
+pub async fn set(
+    client: &mut Client,
+    req: u64,
+    jira_enabled: Option<bool>,
+    jira_connection: Option<JiraConnectionChange>,
+    jira_base_url: Option<JiraBaseUrlChange>,
+    scrollback_lines: Option<usize>,
+) {
+    let patch = SettingsPatch {
+        jira_enabled,
+        jira_connection,
+        jira_base_url,
+        scrollback_lines,
+        ..SettingsPatch::default()
+    };
+    client
+        .send(Frame::Control(settings_set(req, patch)))
+        .await
+        .unwrap();
+    match answer(client, req).await {
+        DaemonMsg::OperationOk {
+            result: OperationResult::Ack,
+            ..
+        } => {}
+        other => panic!("the service refused the settings: {other:?}"),
+    }
+}
+
+/// The next `SettingsChanged` this client is pushed.
+pub async fn next_settings_changed(client: &mut Client) -> DaemonSettings {
+    let pushed = async {
+        loop {
+            match client.next().await.expect("stream open").unwrap() {
+                Frame::Control(DaemonMsg::SettingsChanged { settings }) => return settings,
+                _ => continue,
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(5), pushed)
+        .await
+        .expect("the client was never told the settings changed")
+}
+
+/// Wait until the service counts two clients, so a push cannot be sent before the second one is
+/// there to receive it.
+pub async fn both_registered(state: &Arc<DaemonState>) {
+    let registered = async {
+        while state.client_count() != 2 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(5), registered)
+        .await
+        .expect("two clients are registered");
+}
+
+/// The settings document stored in `dir`.
+pub fn stored(dir: &Path) -> Settings {
+    JsonFileSettingsStore::at(dir.join("settings.json"))
+        .load()
+        .settings
 }

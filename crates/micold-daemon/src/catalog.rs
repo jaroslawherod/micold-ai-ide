@@ -136,6 +136,29 @@ pub struct Catalog {
     origin_events: Vec<DaemonMsg>,
 }
 
+/// One project's Jira change a service-settings write merges into the maps on disk: its
+/// connection (feature 533) or its base URL (feature 1122). The default changes neither.
+#[derive(Default, Clone, Copy)]
+struct ProjectJiraChange<'a> {
+    connection: Option<&'a micold_core::settings::JiraConnectionChange>,
+    base_url: Option<&'a micold_core::settings::JiraBaseUrlChange>,
+}
+
+impl ProjectJiraChange<'_> {
+    fn apply(
+        self,
+        connections: &mut std::collections::BTreeMap<String, micold_core::jira::JiraConnection>,
+        base_urls: &mut std::collections::BTreeMap<String, micold_core::jira::JiraBaseUrl>,
+    ) {
+        if let Some(change) = self.connection {
+            change.apply(connections);
+        }
+        if let Some(change) = self.base_url {
+            change.apply(base_urls);
+        }
+    }
+}
+
 impl Catalog {
     /// Adopt the catalog from explicit stores (used by tests with a temp directory).
     pub fn load(
@@ -239,6 +262,7 @@ impl Catalog {
             jira_enabled: self.settings.jira_enabled,
             jira_connections: self.settings.jira_connections.clone(),
             github_issues_enabled: self.settings.github_issues_enabled,
+            jira_base_urls: self.settings.jira_base_urls.clone(),
             desktop_notifications: self.settings.desktop_notifications,
             notification_kinds: self.settings.notification_kinds,
             long_task_threshold_secs: self.settings.long_task_threshold_secs,
@@ -369,18 +393,16 @@ impl Catalog {
     /// the service's to know. A theme is not a session-service setting, and a protocol that
     /// carried one would make this daemon the authority on a question it has no opinion about.
     fn persist_service_settings(&mut self) -> io::Result<()> {
-        self.persist_service_settings_with(None)
+        self.persist_service_settings_with(ProjectJiraChange::default())
     }
 
-    /// [`Self::persist_service_settings`], optionally merging one project's Jira connection change
-    /// into the map **read from disk** inside the same write (feature 533, FR-022). The map is
-    /// never copied from this daemon's boot snapshot: another daemon or window may have saved a
-    /// different project's connection since. The merged map becomes the one this daemon echoes.
-    fn persist_service_settings_with(
-        &mut self,
-        jira: Option<&micold_core::settings::JiraConnectionChange>,
-    ) -> io::Result<()> {
-        let mut connections = None;
+    /// [`Self::persist_service_settings`], optionally merging one project's Jira change (its
+    /// connection, feature 533 FR-022; its base URL, feature 1122 D4) into the maps **read from
+    /// disk** inside the same write. The maps are never copied from this daemon's boot snapshot:
+    /// another daemon or window may have saved a different project's since. The merged maps
+    /// become the ones this daemon echoes.
+    fn persist_service_settings_with(&mut self, jira: ProjectJiraChange<'_>) -> io::Result<()> {
+        let mut merged = None;
         let result = if let Some(store) = &self.settings_store {
             // `update` rather than `load` + `save` (BUG-025, T155). Re-reading the file is what
             // makes the client's fields survive this write; going through `update` is what stops
@@ -397,14 +419,16 @@ impl Catalog {
                 on_disk.tool_server_enabled = self.settings.tool_server_enabled;
                 on_disk.cross_session_access = self.settings.cross_session_access;
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
-                // `jira_enabled` is a service field; `jira_connections` is not copied from this
-                // daemon's snapshot, only merged from the one change that arrived (feature 533).
+                // `jira_enabled` is a service field; `jira_connections` and `jira_base_urls` are
+                // not copied from this daemon's snapshot, only merged from the one change that
+                // arrived (features 533 and 1122).
                 on_disk.jira_enabled = self.settings.jira_enabled;
                 on_disk.github_issues_enabled = self.settings.github_issues_enabled;
-                if let Some(change) = jira {
-                    change.apply(&mut on_disk.jira_connections);
-                }
-                connections = Some(on_disk.jira_connections.clone());
+                jira.apply(&mut on_disk.jira_connections, &mut on_disk.jira_base_urls);
+                merged = Some((
+                    on_disk.jira_connections.clone(),
+                    on_disk.jira_base_urls.clone(),
+                ));
                 on_disk.desktop_notifications = self.settings.desktop_notifications;
                 on_disk.notification_kinds = self.settings.notification_kinds;
                 on_disk.long_task_threshold_secs = self.settings.long_task_threshold_secs;
@@ -418,14 +442,16 @@ impl Catalog {
             tracing::info!("{}", write.log_line("daemon"));
             write.result
         } else {
-            // No store (an ephemeral catalog): the in-memory map is the only copy.
-            if let Some(change) = jira {
-                change.apply(&mut self.settings.jira_connections);
-            }
+            // No store (an ephemeral catalog): the in-memory maps are the only copy.
+            jira.apply(
+                &mut self.settings.jira_connections,
+                &mut self.settings.jira_base_urls,
+            );
             Ok(())
         };
-        if let (Ok(()), Some(map)) = (&result, connections) {
-            self.settings.jira_connections = map;
+        if let (Ok(()), Some((connections, base_urls))) = (&result, merged) {
+            self.settings.jira_connections = connections;
+            self.settings.jira_base_urls = base_urls;
         }
         result
     }
@@ -548,7 +574,22 @@ impl Catalog {
         &mut self,
         change: &micold_core::settings::JiraConnectionChange,
     ) -> io::Result<()> {
-        self.persist_service_settings_with(Some(change))
+        self.persist_service_settings_with(ProjectJiraChange {
+            connection: Some(change),
+            ..ProjectJiraChange::default()
+        })
+    }
+
+    /// Set or clear one project's Jira base URL (feature 1122, D4, FR-010), merged into the map
+    /// on disk inside the write so another project's concurrent save survives.
+    pub fn set_jira_base_url(
+        &mut self,
+        change: &micold_core::settings::JiraBaseUrlChange,
+    ) -> io::Result<()> {
+        self.persist_service_settings_with(ProjectJiraChange {
+            base_url: Some(change),
+            ..ProjectJiraChange::default()
+        })
     }
 
     /// A project's stored review comments (feature 482, FR-020); empty for the ephemeral catalog.
