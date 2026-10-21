@@ -58,3 +58,30 @@ implementation task, run red, then made green.
   header row), `material_builder_api` 11/11, `showcase_completeness` 43/43, `showcase_captions` 7/7,
   `showcase_state` 29/29.
 - **Refactor**: the section's header row split into `plain` (unchanged) and `slotted`; `cargo fmt`.
+
+## M5 (T031–T037) — transcript view behind the renderer seam
+
+- **Red**: T031–T034 written first (`tests/transcript_renderer_seam.rs`, `transcript_entry_view.rs`,
+  `transcript_follow_layout.rs`, `transcript_open_budget.rs`, shared `tests/support/transcript.rs`),
+  against `ui::transcript::view` as `todo!("T037")`; the cost label's expectation changed first in
+  `structured::transcript::figures::tests`. `cargo test -p micold-core --lib
+  structured::transcript::figures`: 4 passed, 2 failed (`left: ["6.7 s", "$0.0372", "1 turn"]`).
+  `cargo test -p micold-client --test transcript_entry_view`: 5 passed, 3 failed —
+  `a_success_footer_is_not_marked_failed_and_shows_its_figures` ("the cost is the CLI session's
+  running total, labelled so"), `an_empty_transcript_shows_no_output_yet` and
+  `a_raw_row_carries_the_raw_event_label_before_its_text` (`not yet implemented: T037`). The block
+  renderers (T035) and the entry view model (T036) went in beside the tests they serve, so their
+  red was by compilation and by the view stub.
+- **Green**: T035 (`blocks.rs`), T036 (`entries.rs`), T037 (`view`, the showcase sample, `ui/transcript/`
+  registered in `material_boundary.rs`) and the footer's `"session total $…"` label in
+  `footer_figures`: `structured::transcript` 14/14; `transcript_entry_view` 8/8,
+  `transcript_follow_layout` 2/2, `transcript_renderer_seam` 2/2.
+- **Red (T034, release)**: `cargo test --release -p micold-client --test transcript_open_budget`
+  failed: opened in 240 ms, but "the slowest delta's update, view and layout took 178.125218ms". At
+  the bound one event in and one out shifts every entry a widget-tree slot, and the column (iced's
+  `keyed_column` too, at an unchanged length) matches slots by index, so every `lazy` rebuilt and
+  reshaped its text.
+- **Green**: `ui/transcript/keyed.rs` — a column whose slots follow their keys (`RowKey::Entry(EntryId)`),
+  with two in-crate tests (one in, one out builds one row; an unchanged list or a removal builds
+  none): opened in 180 ms, slowest delta 5.0 ms, 1/1.
+- **Refactor**: none beyond `cargo fmt`; the samples moved above the showcase's test module (clippy).

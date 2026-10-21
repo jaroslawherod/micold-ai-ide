@@ -21,7 +21,7 @@ session (start-session chevron → **Claude Code (structured)**).
 1. Start a structured session with a prompt that reads a file and answers: the pane shows a
    session-start line (model, folder), the reply text growing as it streams, a folded `Read` card
    with the file path as its summary turning from running to done, and a footer with duration,
-   cost and turns. No plain-log line.
+   the session's running cost ("session total $…") and turns. No plain-log line.
 2. Unfold and fold the card with the pointer, then with Tab and Space/Enter.
 3. A turn that fails (`--max-turns 1` through a tool-heavy prompt, or a tool that errors): the card
    and footer show "Failed" with the error icon; check a greyscale screenshot (SC-005).

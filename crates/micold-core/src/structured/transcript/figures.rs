@@ -32,10 +32,15 @@ pub fn format_turns(n: u64) -> String {
 }
 
 /// The footer's duration, cost and turns, in that order, each only when the result reports it.
+///
+/// A result's `total_cost_usd` is the CLI session's running total, not the turn's, so the cost
+/// reads `"session total $0.0372"`; the per-turn delta is #944's.
 pub fn footer_figures(footer: &TurnFooter) -> Vec<String> {
     [
         footer.duration_ms.map(format_duration),
-        footer.cost_usd.map(format_cost),
+        footer
+            .cost_usd
+            .map(|usd| format!("session total {}", format_cost(usd))),
         footer.num_turns.map(format_turns),
     ]
     .into_iter()
@@ -96,7 +101,7 @@ mod tests {
     fn the_footer_shows_every_figure_the_result_reports() {
         assert_eq!(
             footer_figures(&footer(Some(6_674), Some(0.0371549), Some(1))),
-            vec!["6.7 s", "$0.0372", "1 turn"]
+            vec!["6.7 s", "session total $0.0372", "1 turn"]
         );
     }
 
@@ -108,7 +113,7 @@ mod tests {
         );
         assert_eq!(
             footer_figures(&footer(None, Some(1.5), None)),
-            vec!["$1.50"]
+            vec!["session total $1.50"]
         );
         assert_eq!(
             footer_figures(&footer(Some(1_000), None, Some(3))),

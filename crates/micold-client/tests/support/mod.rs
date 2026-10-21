@@ -18,6 +18,8 @@ pub mod sidebar_fixture;
 pub mod spawn_tree;
 /// A `cdk` tooltip driven event by event (feature 038).
 pub mod tooltip;
+/// The stream-json fixtures as a window's transcript state, and its view mounted (feature 939).
+pub mod transcript;
 
 // Session and workspace builders: one copy, shared with the core tests (issue #716).
 #[path = "../../../micold-core/tests/support/session_fixtures.rs"]

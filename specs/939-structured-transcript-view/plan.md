@@ -153,7 +153,7 @@ Later plans build on these; they are the stable surface of this feature.
 | Tool card lookup by tool use id (`Transcript::tools`) | core | #942 prompts attach to cards |
 | `SessionStart.model` | core | #943 |
 | Sub-agent events: not entries, counted on `ToolCard.subagent_messages` or the `SubagentNotice`, kept in the history, `Transcript::subagent_events(id)` | core (R7) | #944 nests them under the card |
-| `TurnFooter` per-turn cost and duration | core (R14) | #944 builds on it, does not re-implement |
+| `TurnFooter` duration and session running cost (labelled "session total") | core (R14) | #944 builds on it and adds the per-turn delta, does not re-implement |
 
 ## Requirement Coverage
 

@@ -63,4 +63,4 @@ events are ignored. "No parent" in the rules below reads "top-level" under eithe
 | #941 | `UserMessage` entries from echoed user events; a queued-message entry would be a new `EntryKind` |
 | #942 | a permission-prompt entry would be a new `EntryKind`, attached to its card by tool use id via `tools` |
 | #943 | `SessionStart.model` |
-| #944 | `subagent_events(id)`, `ToolCard.subagent_messages`, `Transcript::nested(id)` (the same rules with events whose parent is `id` as top-level, research R7), `TurnFooter` (per-turn cost, kept as is) |
+| #944 | `subagent_events(id)`, `ToolCard.subagent_messages`, `Transcript::nested(id)` (the same rules with events whose parent is `id` as top-level, research R7), `TurnFooter` (the session's running cost, labelled as the session total; #944 adds the per-turn delta) |

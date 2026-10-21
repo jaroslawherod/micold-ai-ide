@@ -294,6 +294,32 @@ pub const TOOL_SUMMARY: &str = "cargo test --workspace --all-targets -- --nocapt
 pub const TOOL_INPUT: &str =
     "{\"command\": \"cargo test --workspace --all-targets -- --nocapture\", \"timeout\": 600000}";
 
+/// The recorded tool turn the transcript sample shows (feature 939, T037): the core's stream-json
+/// fixture, compiled in, so the sample is the same on every launch and reads no file.
+pub const TOOL_TURN: &str =
+    include_str!("../../../micold-core/tests/fixtures/stream-json/tool-turn.jsonl");
+
+/// The transcript sample's session: a fixed id rather than a fresh one (SC-010).
+pub const TRANSCRIPT_SESSION: micold_core::session::SessionId =
+    micold_core::session::SessionId(uuid::Uuid::from_u128(0x939));
+
+/// A window's transcript state holding [`TOOL_TURN`] as [`TRANSCRIPT_SESSION`]'s history.
+pub fn transcript() -> crate::features::structured_transcript::State {
+    use micold_core::structured::{parse_line, SequencedEvent};
+    let events: Vec<SequencedEvent> = TOOL_TURN
+        .lines()
+        .filter(|line| !line.is_empty())
+        .zip(0u64..)
+        .map(|(line, seq)| SequencedEvent {
+            seq,
+            event: parse_line(line),
+        })
+        .collect();
+    let mut state = crate::features::structured_transcript::State::default();
+    state.apply(TRANSCRIPT_SESSION, 0, &events, false);
+    state
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
