@@ -522,32 +522,9 @@ fn with_removable_pull_request(width: u16) -> State {
 /// floats over it (FR-017).
 pub fn transcript_pane_detached() -> State {
     use micold_client::features::structured_transcript::TranscriptMsg;
-    use micold_core::session::SessionKind;
     use micold_core::structured::transcript::EntryKind;
 
-    let session = Session::restored_of_kind(
-        SessionId::new(),
-        SessionLocation::Worktree("feat-short".to_string()),
-        SessionLabel::Named("feat/short".to_string()),
-        TerminalMode::AiCli,
-        AiCli::ClaudeCode,
-        SessionKind::Structured,
-    );
-    let id = session.id;
-    let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
-    workspace.active = workspace.projects.first().map(|p| p.path.clone());
-    let mut state = with_project();
-    state.workspace = workspace;
-    state.session.active = Some(id);
-
-    let lines = super::transcript::fixture_lines("tool-turn");
-    state.structured_events(
-        id,
-        0,
-        &super::transcript::sequenced(&lines, 0),
-        false,
-        &micold_client::ui::syntax::GRAMMAR,
-    );
+    let (mut state, id) = structured_pane(&super::transcript::fixture_lines("tool-turn"));
     let card = state
         .structured_transcript
         .transcript(id)
@@ -566,6 +543,61 @@ pub fn transcript_pane_detached() -> State {
         content: 3000,
     });
     state
+}
+
+/// A structured session's pane drawn rich (feature 940, T037): the recorded `markdown-turn` reply —
+/// headings, lists, its table, three code blocks — then `edit-turn` with its multi-line Edit card
+/// unfolded on its diff, in a pane narrowed by the widest sidebar, following the end.
+pub fn transcript_pane_rich() -> State {
+    use micold_core::structured::transcript::EntryKind;
+
+    let lines: Vec<String> = ["markdown-turn", "edit-turn"]
+        .iter()
+        .flat_map(|name| super::transcript::fixture_lines(name))
+        .collect();
+    let (mut state, id) = structured_pane(&lines);
+    state.sidebar.width = micold_client::app::SIDEBAR_MAX_WIDTH;
+    let card = state
+        .structured_transcript
+        .transcript(id)
+        .and_then(|t| {
+            t.entries()
+                .filter(|e| matches!(e.kind(), EntryKind::ToolCall(c) if c.name == "Edit"))
+                .last()
+                .map(|e| e.key().clone())
+        })
+        .expect("the edit turn holds an Edit card");
+    state.structured_transcript.toggle(id, card);
+    state
+}
+
+/// The project with one structured session open in its pane, its transcript `lines` applied and its
+/// render cache refreshed as the window's update does.
+fn structured_pane(lines: &[String]) -> (State, SessionId) {
+    use micold_core::session::SessionKind;
+
+    let session = Session::restored_of_kind(
+        SessionId::new(),
+        SessionLocation::Worktree("feat-short".to_string()),
+        SessionLabel::Named("feat/short".to_string()),
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+        SessionKind::Structured,
+    );
+    let id = session.id;
+    let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+    let mut state = with_project();
+    state.workspace = workspace;
+    state.session.active = Some(id);
+    let _jobs = state.structured_events(
+        id,
+        0,
+        &super::transcript::sequenced(lines, 0),
+        false,
+        &micold_client::ui::syntax::GRAMMAR,
+    );
+    (state, id)
 }
 
 /// The registry. **This is the one place a covered state is declared** (FR-016).
@@ -1496,6 +1528,31 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "session-transcript-pane",
             build: || StateUnderTest::new(transcript_pane_detached()),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                // The transcript's `Scrollable`, whose content `gates/containment.rs` lets overhang
+                // its bottom edge (`TRANSCRIPT_VIEWPORT`).
+                Anchor {
+                    name: "transcript.viewport",
+                    path: &[0, 0, 1, 1, 0, 0, 0],
+                },
+            ],
+        },
+        // --- Feature 940: the transcript pane drawn rich (T037) --------------------------------
+        //
+        // A formatted reply with its table and code blocks, and an Edit card open on its diff, in
+        // a pane the widest sidebar narrows. `gates/transcript_rich_table_wraps.rs` holds a long
+        // cell inside its column at a narrower width still.
+        CoveredState {
+            name: "session-transcript-rich",
+            build: || StateUnderTest::new(transcript_pane_rich()),
             anchors: &[
                 Anchor {
                     name: "shell.root",

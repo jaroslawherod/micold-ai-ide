@@ -189,6 +189,13 @@ mod inline_diff_marker_fits;
 #[path = "gates/transcript_jump_control_fits.rs"]
 mod transcript_jump_control_fits;
 
+// --- The rich transcript's table wraps in its cells (feature 940, T037) --------------------------
+
+// The recorded markdown reply in a narrow transcript: each table cell inside its column, and a long
+// one wrapped onto a second line in its cell (FR-003).
+#[path = "gates/transcript_rich_table_wraps.rs"]
+mod transcript_rich_table_wraps;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

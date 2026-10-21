@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #940
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
-- **Phase**: milestone M4
-- **Next step**: M4 PR open, CI, merge (orchestrator); then M5
+- **Phase**: milestone M5
+- **Next step**: M5 handover: T042 visual pass, then gate and reviews (see Handover)
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1216 | M1 markdown model | merged | 746ef5858a0e565dfdb13924d070ff244c329f3a |
 | #1220 | M2 edit diff (+ orchestrator commit 5bcb6f83: Windows "Report rust-cache hit" CI step failed on every cache miss — find/du on a missing target/ under pipefail) | merged | 528209c8d15fd0e5f109ae49e0202fdaba01b842 |
 | #1229 | M3 rich cache | merged | 7ce164cfa2e5323ab82807db03e80e35bacd9af2 |
+| #1232 | M4 shared components | merged | 1a6250835d61c5cf2c800e8ce131f35051f63215 |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012 | full | markdown model in core: settled blocks final, incremental, total (after #939 M6; T001 re-checks #939 names) | #1216 | merged (746ef585) |
 | M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | #1220 | merged (528209c8) |
 | M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | #1229 | merged (7ce164cf) |
-| M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | pending (orchestrator opens) | full gate green at 96465834; pushed |
-| M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | — | pending |
+| M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | #1232 | merged (1a625083) |
+| M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | — | in progress |
 
 ## Decisions
 
@@ -82,7 +83,36 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 unit 1 (2026-10-21), over the context cap after implementing. Done, uncommitted work committed
+as `feat(940): draw the transcript with BlockRenderers::RICH…`: T035–T041 implemented and ticked.
+`ui/transcript/rich.rs` (`BlockRenderers::RICH`, `EDIT_TOOLS`); `entries.rs` `CardHeader::meta`,
+`tool_header_counted`, `edit_meta` ("+N −M", U+2212), drawn with `DisclosureCard::meta`;
+`mod.rs` lazy key gains `Derived.stamp`; `ui/terminal.rs` window switched to `RICH`.
+Tests green in debug: `transcript_rich_renderers` 7/7 (red shown: 5 of 7 failed with RICH stubbed
+to PLAIN fields, no stamp in the key and no counts; the 2 fallback tests are green by design),
+`transcript_renderer_seam` 2/2, `transcript_entry_view` 8/8, `layout_snapshot` 79/79 after
+regenerating the fixture (only additions: new covered state `session-transcript-rich`; the
+existing `session-transcript-pane` records did not change); new gate
+`tests/gates/transcript_rich_table_wraps.rs` (170dp: a cell wraps in its column);
+`gates/containment.rs` allows the new state's transcript overhang. User guide *Structured
+sessions* extended (T041).
+
+Next, in order:
+1. `cargo test --release -p micold-client --test transcript_open_budget` (NOT `-- --ignored`: the
+   budgets are `cfg_attr(debug_assertions, ignore)`, so `--ignored` in release runs none). Four
+   tests: PLAIN ×2 (unchanged numbers) and RICH ×2 (`markdown-turn`+`edit-turn` history, deltas from
+   `markdown-turn` renamed `live`). Free `target-shared/release` afterwards if disk is short.
+2. Add an M5 entry to `tdd/cycle-log.md` (red above).
+3. T042: quickstart Part B via visual-pass inline (cloud notes:
+   /tmp/claude/memory/team/silo/cloud-visual-pass.md); no logged-in `claude` here, so drive the
+   real transcript pane from recorded fixtures (e.g. the showcase or a seeded structured session)
+   and say so in the record; save to `specs/940-transcript-rich-rendering/visual-pass/m5-*`.
+4. verify.md: scoped gate + review A (high), review B (sonnet) + visual pass, full gate
+   (`scripts/gate.sh`), then pr.md files in the scratchpad (orchestrator opens the PR).
+
+Open notes for reviewers: with a filled cache PLAIN also shows the `+N −M` (RR-2 puts the count in
+the header view model, outside the renderers); RICH draws nothing (a zero `Space`) for an empty
+text block where PLAIN draws an empty paragraph.
 
 ## Open escalation
 

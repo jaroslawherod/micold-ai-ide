@@ -384,7 +384,7 @@ transcript_open_budget -- --ignored`; `scripts/gate.sh`; quickstart Part B.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T035 [P] [US2] Renderer test `crates/micold-client/tests/transcript_rich_renderers.rs`
+- [x] T035 [P] [US2] Renderer test `crates/micold-client/tests/transcript_rich_renderers.rs`
   (FR-002, FR-013, FR-018, FR-020–FR-022, contracts/rich-renderers.md RR-1–RR-3) on #939's
   `transcript_renderer_seam.rs` pattern over a replayed `markdown-turn` + `edit-turn` transcript
   and its `RichCache`: with `RICH`, entry order, fold state (Edit/MultiEdit/Write cards start
@@ -394,18 +394,18 @@ transcript_open_budget -- --ignored`; `scripts/gate.sh`; quickstart Part B.
   and a malformed Edit input equal `PLAIN`'s input; a failed Edit keeps its diff and #939's failed
   mark; a cache miss draws `PLAIN`; the lazy key changes when the entry's `stamp` changes and only
   then
-- [ ] T036 [P] [US1] Add the rich variant to `crates/micold-client/tests/transcript_open_budget.rs`
+- [x] T036 [P] [US1] Add the rich variant to `crates/micold-client/tests/transcript_open_budget.rs`
   (SC-004, research R12): the 5,000-event transcript from repeated `markdown-turn` and `edit-turn`
   turns, every card open, drawn with `RICH` after `refresh`: first layout + draw < 1 s; each replayed
   delta's update + refresh + view + layout < 100 ms (release; #939 already runs this test in CI's
   release-budget step of `.github/workflows/ci.yml`)
-- [ ] T037 [P] [US1] A rich transcript pane state in `crates/micold-client/tests/layout_snapshot.rs`
+- [x] T037 [P] [US1] A rich transcript pane state in `crates/micold-client/tests/layout_snapshot.rs`
   (a `markdown-turn` reply with its table at a narrow width wrapping in-cell, a code block, one open
   Edit card) with its reviewed fixture (FR-003)
 
 ### Implementation
 
-- [ ] T038 [US1] Implement `BlockRenderers::RICH` in a new `crates/micold-client/src/ui/transcript/rich.rs`
+- [x] T038 [US1] Implement `BlockRenderers::RICH` in a new `crates/micold-client/src/ui/transcript/rich.rs`
   per contracts/rich-renderers.md *Renderers*: `assistant_text` = `MarkdownView` of the cached
   `Document` (nothing for empty text) with `code_spans`, `copy_state` and `full` read from the
   entry's `Derived.spans`, `Derived.copy` and `Derived.full`, `on_copy` → `CopyCode`, `on_show` →
@@ -413,14 +413,14 @@ transcript_open_budget -- --ignored`; `scripts/gate.sh`; quickstart Part B.
   `InlineDiff` for `Edit`/`MultiEdit`/`Write` when `!streaming` and the cache holds `Diff(Some(_))`
   else `PLAIN.tool_input`, `tool_result` = `PLAIN.tool_result`; `PLAIN` on a cache miss; messages
   only `TranscriptMsg::{OpenLink, CopyCode, ShowInFull}` (RR-1)
-- [ ] T039 [US2] In `crates/micold-client/src/ui/transcript/entries.rs` add `meta = "+{added}
+- [x] T039 [US2] In `crates/micold-client/src/ui/transcript/entries.rs` add `meta = "+{added}
   −{removed}"` from `RichCache::edit_counts` to the header view model of Edit/MultiEdit/Write cards,
   drawn with `DisclosureCard::meta` (RR-2, FR-017)
-- [ ] T040 [US1] In `crates/micold-client/src/ui/transcript/mod.rs` add the entry's `Derived.stamp`
+- [x] T040 [US1] In `crates/micold-client/src/ui/transcript/mod.rs` add the entry's `Derived.stamp`
   to the lazy key (RR-3), register `rich`, and switch the window's renderers from `PLAIN` to `RICH`;
   T035–T037 pass and #939's tests pass unchanged except plain-text assertions of the replaced block
   kinds (SC-007)
-- [ ] T041 [US1] Extend *Structured sessions* in `docs/user-guide/worktrees-and-sessions.md`
+- [x] T041 [US1] Extend *Structured sessions* in `docs/user-guide/worktrees-and-sessions.md`
   (FR-024): formatted replies and thinking, code blocks with highlighting and the copy control
   (Copied / Copy failed), sideways scrolling, Edit/MultiEdit/Write diffs with `+`/`−`, notes and
   `+N −M` headers, "Show in full" for large blocks, and which links open (`http`, `https`,

@@ -256,7 +256,7 @@ const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/0/0/0";
 /// Whether `escape`, in the covered state `state`, is the transcript outgrowing its viewport
 /// downwards, which is the only overhang [`TRANSCRIPT_CONTENT`] allows.
 fn is_transcript_scroll(state: &str, escape: &lay::Escape) -> bool {
-    state == "session-transcript-pane"
+    matches!(state, "session-transcript-pane" | "session-transcript-rich")
         && TRANSCRIPT_CONTENT.contains(&escape.child_path.as_str())
         && escape.parent_path == TRANSCRIPT_VIEWPORT
         && escape.edge == "bottom"

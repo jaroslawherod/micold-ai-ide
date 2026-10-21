@@ -7,16 +7,19 @@
 mod blocks;
 mod entries;
 mod keyed;
+mod rich;
 
 pub use blocks::{
     plain_text, unshown_caption, AssistantText, Block, BlockCache, BlockRef, BlockRenderers,
     RenderCtx, ThinkingText, ToolInput, ToolResult,
 };
 pub use entries::{
-    footer_view, omitted_text, oversized_text, rows, subagent_count, subagent_notice_text,
-    tool_header, tool_status, CardHeader, FooterView, Row, Status, Tone, ENDED_WITHOUT_RESULT,
-    NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL, THINKING_TITLE, USER_LABEL,
+    edit_meta, footer_view, omitted_text, oversized_text, rows, subagent_count,
+    subagent_notice_text, tool_header, tool_header_counted, tool_status, CardHeader, FooterView,
+    Row, Status, Tone, ENDED_WITHOUT_RESULT, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL, THINKING_TITLE,
+    USER_LABEL,
 };
+pub use rich::EDIT_TOOLS;
 
 use crate::features::structured_transcript::{Follow, State, TranscriptMsg};
 use crate::icons::Icon;
@@ -52,12 +55,13 @@ pub const JUMP_TO_LATEST: &str = "Jump to latest";
 /// A `material::Scrollable` named [`transcript_scroll_id`] that reports its scroll metrics as
 /// [`TranscriptMsg::Scrolled`] and its first layout as [`TranscriptMsg::Shown`] (research R9); the
 /// omitted notice first, "No output yet" when empty; each entry inside `lazy`, keyed by its key,
-/// revision, fold state and the scheme, in a slot that follows the entry; and, while the view is
-/// detached from the end, "Jump to latest" floated over the bottom edge.
+/// revision, fold state, the scheme and its cache stamp, in a slot that follows the entry; and,
+/// while the view is detached from the end, "Jump to latest" floated over the bottom edge.
 ///
-/// The lazy key holds neither `renderers` nor the cache: the window's renderers are fixed for its
-/// life, and a cache filled for a revision is read when that revision is first drawn. A window that
-/// swaps renderers at run time (#940) adds a renderer-set id to the key.
+/// The lazy key holds neither `renderers` nor the cache itself: the window's renderers are fixed
+/// for its life, a cache filled for a revision is read when that revision is first drawn, and what
+/// changes in the cache at the same revision (highlight spans, a copy state, a show-in-full choice)
+/// bumps the entry's `Derived::stamp` (RR-3).
 pub fn view<'a>(
     state: &'a State,
     session: SessionId,
@@ -74,7 +78,9 @@ pub fn view<'a>(
                 Row::Empty => (RowKey::Empty, entries::no_output(roles)),
                 Row::Entry(entry) => {
                     let open = state.is_open(session, entry.key());
-                    let drawn = lazy((entry.key(), entry.revision(), open, dark), move |_| {
+                    let stamp = ctx.cache.get(session, entry.key()).map_or(0, |d| d.stamp);
+                    let key = (entry.key(), entry.revision(), open, dark, stamp);
+                    let drawn = lazy(key, move |_| {
                         entries::entry(entry, session, open, renderers, &ctx)
                     });
                     (RowKey::Entry(entry.id()), drawn.into())
