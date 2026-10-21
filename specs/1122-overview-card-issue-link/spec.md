@@ -16,6 +16,16 @@ Settings has the Jira field; card activation is unaffected; docs updated." Label
 flow:feature. Builds on features 1120 (`specs/1120-overview-card-readability`) and 1121
 (`specs/1121-overview-card-full-text`), both shipped, and on features 813, 972, 031, 533 and 1102.
 
+## Clarifications
+
+### Session 2026-10-21
+
+- Q: Do the issue links follow the integration switches? → A: Yes: the GitHub link shows only while
+  the GitHub issues switch (feature 1102) is on, the Jira link only while the Jira integration switch
+  (feature 533) is on (FR-001). _(default; awaiting owner's card answer)_
+- Q: Where does the Jira base URL come from? → A: One new app-wide Settings field, as the issue asks;
+  no link while it is unset (FR-010). _(default; awaiting owner's card answer)_
+
 ## Terms
 
 - **Overview**, **card**, **location**, **display name**: as defined by feature 813
@@ -228,10 +238,9 @@ compare with a card without a link.
 - **FR-001**: A card MUST show an issue link when its location is a worktree whose name carries a
   ticket, and either the ticket is a GitHub ticket and the project has a GitHub repository, or the
   ticket is a Jira key and the Jira base URL is set; otherwise it MUST show none. The *Default* card
-  never shows one. [NEEDS CLARIFICATION: Do the links follow the integration switches, so that the
-  GitHub link shows only while the GitHub issues switch (feature 1102) is on and the Jira link only
-  while the Jira integration switch (feature 533) is on, or do they show whatever the switches say,
-  since a link sends nothing from the app? Working assumption: they follow the switches.]
+  never shows one.
+  A GitHub issue link MUST show only while the GitHub issues switch (feature 1102) is on, and a Jira
+  issue link only while the Jira integration switch (feature 533) is on.
 - **FR-002**: The issue link MUST read "Issue #N" for GitHub ticket N and "Issue KEY" for Jira key
   KEY written upper case.
 - **FR-003**: The issue link MUST sit on the branch line, after the branch, on the collapsed and the
@@ -275,9 +284,8 @@ compare with a card without a link.
   with one line saying it is used to link Jira keys on the Overview's cards, and kept in
   `settings.json`; like the section's other controls it shows only while the Jira integration is on
   (feature 533 FR-001); a settings file without it MUST read
-  as unset. [NEEDS CLARIFICATION: Is the Jira base URL one new app-wide field, as the issue says, one field per project like the Jira connection
-  (feature 533 FR-007), or no new field at all, the open project's Jira connection site (533 FR-006)
-  serving as the base? Working assumption: one new app-wide field.]
+  as unset. The Jira base URL is one app-wide value, the same for
+  every project; the Jira connection's site (feature 533 FR-006) is not used as the base.
 - **FR-011**: Saving the Jira base URL MUST accept an `https` web address with a host and an
   optional path, store it with any trailing `/` removed, and MUST refuse, marking the field with
   the reason and storing nothing, a value that is not `https`, names no host, or has a user name, a

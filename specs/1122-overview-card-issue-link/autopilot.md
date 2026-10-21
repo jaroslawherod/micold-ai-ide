@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: spec
-- **Next step**: Review A done. Clarify unit: FR-001 (links follow integration switches) and FR-010 (Jira base URL source) markers, answers from jaro's decision cards.
+- **Phase**: clarify
+- **Next step**: Clarify done (CLEAN; D3, D4 are defaults awaiting jaro's card answers — if an answer differs, amend FR-001/FR-010 before or during plan). Next unit: plan.
 
 ## Pull requests
 
@@ -28,6 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | D1 | spec | How is the issue link reached by keyboard, given 1121's focus-expands rule? | A Tab stop right after its card; arrows move between cards only; focus on the link counts as focus on the card | agent-resolved | spec.md#FR-008; specs/1121-overview-card-full-text/spec.md#FR-002 |
 | D2 | spec | A collapsed card's link moves when the card expands (lines are added above it); how is a click aimed at it kept off the card? | A pointer resting on a collapsed card's link does not expand the card | agent-resolved | spec.md#FR-007 |
+| D3 | clarify | Do the issue links follow the integration switches (FR-001)? | Yes: GitHub link only while the GitHub issues switch (1102) is on, Jira link only while the Jira integration switch (533) is on | default; awaiting owner's card answer | spec.md#FR-001; Story 1 sc. 6, Story 2 sc. 7 |
+| D4 | clarify | Where does the Jira base URL come from (FR-010)? | One app-wide Settings field, as the issue asks; no link while unset | default; awaiting owner's card answer | spec.md#FR-010; issue #1122 body |
 
 ## Review rounds
 
