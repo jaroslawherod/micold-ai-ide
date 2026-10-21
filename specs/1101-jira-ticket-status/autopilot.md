@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Status chip in the issue picker | #1155 | merged |
-| M2 | T014–T027 | full | Current status on the sidebar | | gated |
+| M2 | T014–T027 | full | Current status on the sidebar | | in review |
 | M3 | T028–T030 | full | Status on Overview cards | | pending |
 
 ## Decisions
@@ -46,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review B | 1 | aad5399d8:f11ffb94 | CLEAN (2 MINOR) |
 | M2 review A | 1 | b90ff0c14cecbbde6895835d88fb8fe279889418:d0923323fa64e10532127c327f54ca41bc28e4c8 | 10 findings; fixed: fmt, per-message cost (dormant skip), connection change drops statuses and re-reads (also covers Jira enabled after open), clock doc; rest declined (below) |
 | M2 review B | 1 | 421a6d147b3dcd974dc351c312ad4804fe5e40da:a6da24e84c8e4b28b4081d93e49ac37606053282 | CHANGES: 1 MAJOR (red not recorded; fixed by mutation runs, logged in cycle-log), 1 MINOR (task paths; fixed). Verify green |
+| M2 review B | 2 | a1a93f4838d3a7f483a464ee2fe5dc9a19f32d3a:a162785b7ae08f9218cfd80c2aba2e718d8cac52 | CHANGES: 1 MAJOR (no test of the Settings disclosure; fixed with a painted-text test, red by mutation), 2 MINOR (cycle-log notes added). Verify could not run in the reviewer behind the gate lock; the full gate runs the tests |
 
 ## Declined review findings
 
