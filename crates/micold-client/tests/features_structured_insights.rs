@@ -269,7 +269,7 @@ fn an_open_thread_is_rebuilt_after_the_main_transcript_rebuilds() {
 }
 
 #[test]
-fn an_open_thread_is_rebuilt_after_the_bound_drops_its_events() {
+fn an_open_thread_folds_when_the_bound_drops_all_its_events() {
     let (mut w, s) = two_threads();
     w.toggle_thread(s, "p");
     let fillers = seq(4, (0..MAX_EVENTS).map(|_| user_text("filler")));
@@ -278,6 +278,23 @@ fn an_open_thread_is_rebuilt_after_the_bound_drops_its_events() {
     assert!(
         w.insights.thread(s, "p").is_none(),
         "its events left, so it folds as #939 folds a card that left"
+    );
+}
+
+#[test]
+fn an_open_thread_is_rebuilt_when_the_bound_drops_some_of_its_events() {
+    let (mut w, s) = two_threads();
+    w.toggle_thread(s, "p");
+    w.apply(s, 0, &seq(4, [sub_text("p says two", "p")]), true);
+    // Five events held: MAX_EVENTS - 3 more drop seq 0 and 1, the call and p's first message.
+    let fillers = seq(5, (0..MAX_EVENTS - 3).map(|_| user_text("filler")));
+    w.apply(s, 0, &fillers, true);
+    assert_eq!(w.main(s).omitted_notice(), Some(2));
+    assert_thread_is_nested(&w, s, "p");
+    assert_eq!(
+        entries(w.insights.thread(s, "p").unwrap()).len(),
+        1,
+        "only p's second message is still held"
     );
 }
 

@@ -56,8 +56,8 @@ struct SessionExtras {
     open_threads: HashMap<String, Transcript>,
     /// The background-task list is unfolded.
     tasks_open: bool,
-    /// The main transcript's `(rebuilds, omitted)` at the last apply: when either changes, the
-    /// open threads are built again from its held events.
+    /// The main transcript's `(rebuilds, omitted)` at the last apply: a rebuild builds the open
+    /// threads again from its held events; an eviction rebuilds those it cut and folds those gone.
     seen: (u64, Option<u64>),
 }
 
@@ -119,6 +119,11 @@ impl State {
         let rebuilt = seen.0 != s.seen.0;
         let evicted = seen.1 != s.seen.1;
         s.seen = seen;
+        if rebuilt || evicted {
+            let insights = &s.insights;
+            s.open_threads
+                .retain(|parent, _| insights.thread(parent).is_some());
+        }
         for (parent, thread) in &mut s.open_threads {
             if rebuilt {
                 *thread = nested(parent, main);
@@ -137,11 +142,6 @@ impl State {
             if evicted && thread.held() != main.subagent_events(parent).count() {
                 *thread = nested(parent, main);
             }
-        }
-        if rebuilt || evicted {
-            let insights = &s.insights;
-            s.open_threads
-                .retain(|parent, _| insights.thread(parent).is_some());
         }
     }
 

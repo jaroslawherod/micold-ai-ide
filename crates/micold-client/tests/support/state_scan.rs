@@ -111,6 +111,9 @@ pub const READERS: &[&str] = &[
     // `session.offered_providers` lists the CLIs a session may run; the Run in parallel dialog
     // reads it when it opens (feature 483).
     "offered_providers",
+    // `structured_transcript.transcript` hands out a session's transcript by shared reference;
+    // the root passes it to the insights feature, which reads it (feature 944, T036).
+    "transcript",
     "all",
     "and_then",
     // `session.answer_in_use` hands back the answer a row's list is drawn from, which the store
