@@ -283,10 +283,10 @@ pub fn view<'a>(
                     .height(Length::Fill)
             ]
             .into();
-            if pane
+            let draws_a_terminal = pane
                 .terminal()
-                .is_some_and(|t| !is_structured_primary(state, t))
-            {
+                .is_some_and(|t| !is_structured_primary(state, t));
+            if draws_a_terminal {
                 // The terminal widget focuses its own pane on a press.
                 return tile;
             }
@@ -333,12 +333,21 @@ mod tests {
 
     /// T039 (FR-010): an empty pane has no terminal widget to take a press, so its tile must be
     /// wrapped in a `mouse_area` that publishes `FocusPane`; a pane with a terminal must not be.
+    /// A structured primary's transcript (feature 939) has no terminal widget either.
     #[test]
     fn an_empty_pane_tile_is_pressable_and_a_terminal_pane_is_not() {
         let src = include_str!("panes.rs");
         let body = &src[src.find("let tile: Element").expect("tile")..];
         let body = &body[..body.find(".collect();").expect("end of map")];
-        assert!(body.contains("if pane.terminal().is_some()"), "{body}");
+        assert!(body.contains("if draws_a_terminal {"), "{body}");
+        let decided = &src[src
+            .find("let draws_a_terminal = pane")
+            .expect("the decision")..];
+        let decided = &decided[..decided.find(';').expect("end of the decision")];
+        assert!(
+            decided.contains(".terminal()") && decided.contains("!is_structured_primary("),
+            "{decided}"
+        );
         let wrapped = body
             .split("mouse_area(tile)")
             .nth(1)
