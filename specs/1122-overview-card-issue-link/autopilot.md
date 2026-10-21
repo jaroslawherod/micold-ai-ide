@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: implement M1
-- **Next step**: M1 verify: full gate on the showcase Tab fix, then review A (fix diff, sonnet) and visual pass r2 (C3 only, sonnet); then PR.
+- **Next step**: M1 verify: review A r3 (showcase Tab fix diff) and visual pass r2 (C3 only), both sonnet, run by the orchestrator; then PR (title/body in the scratchpad). Full gate green at 75e361b6.
 
 ## Pull requests
 
@@ -56,6 +56,9 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A M1 | 2 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | CLEAN (sonnet) |
 | Review B M1 | 1 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | CLEAN (sonnet, conformance) |
 | Visual pass M1 | 1 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | C1, C2, C4, C5 PASS (light/dark x 1.0/2.0); C3 focus ring not observable: F1 MAJOR, the showcase had no Tab traversal. Fixed: Tab/Shift+Tab wired into the showcase (`state::key_message`, `ui::focus_move_task`) with tests. Evidence `visual-pass/m1/` |
+| Full gate M1 | 3 | 75e361b6 | RED twice on untouched timing flakes (`micold-client` bin `pr_list_read_a_second_ask_shares_the_read_under_way`, 3/3 green alone; `micold-daemon structured_session messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal`); third run GREEN |
+| Review A M1 | 3 | 58faf2edfdeef46ce65515e5f5352043d1c8dddf:75e361b63685cb7d4008e07f327c2a6ded0abe20 | pending (showcase Tab fix diff, sonnet; prompt 1122-m1-prompt-review-a-r3.md) |
+| Visual pass M1 | 2 | 58faf2edfdeef46ce65515e5f5352043d1c8dddf:75e361b63685cb7d4008e07f327c2a6ded0abe20 | pending (C3 only, sonnet; prompt 1122-m1-prompt-visual-r2.md) |
 
 ## Declined review findings
 
