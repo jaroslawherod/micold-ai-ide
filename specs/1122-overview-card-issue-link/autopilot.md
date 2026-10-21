@@ -88,7 +88,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-None.
+M2 part 2 handed over at the context cap (checkpoint 163k) after returning REVIEW-NEEDED. Done: review A r1 F1/F2 fixed in a5984cdd (tests red under mutants, see cycle log), F3–F5 declined/deferred, review B r1 minor fixed, visual r1 PASS recorded (T019 ticked), 45 m2 PNGs committed (6cdea253), full gate r3 GREEN on a5984cdd, pushed (1f6c1bd0). Pending: review A r2 (sonnet, prompt 1122-m2-prompt-review-a-r2.md, snapshot 22663d17a675d1600889c76f56b30d3316ab4525:6cdea253a20512c2116c5686cdeab6b19bbd3a19). No visual r2 (no drawn change). Next: act on review A r2; when clean write pr-title.txt (`#1122: Overview cards: link to the worktree's issue — M2: card with its issue link`) and pr-body.md (D4 amendment commits ride along; label docs-not-needed; every round of *Review rounds* M2 rows listed; ends `Refs #1122`). No PR open.
 
 ## Open escalation
 
