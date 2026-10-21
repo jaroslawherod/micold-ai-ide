@@ -58,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 1 | f2b7b32bfd45c20bf89137e325eab23124ae2413:bdd0ffab5e0b7317d1c13b816299b6c68b23a5bf | CLEAN: 1 MINOR (fixed, prose only) |
 | Tasks review | 1 | 606e053a7f9c9c7632da9f594a373a2fbb5a824d:dffdf2b12eb552819450d6edf043665419ab018e | CHANGES: 2 MAJOR ([P] on shared files, fixed), 2 MINOR (F3 ledger decision 10; F4 checklist ticked) |
 | Tasks review | 2 | 9798b34af9176881119e5e988c331a2bed97b955:18723871b14cc61aac3015421e5aea161167f6bb | CLEAN |
+| Review A M1 (code-review high) | 1 | 166c2275321aa52bd9e60dbe67abaf1a1e4d7a61:a2a02be619ce58df6f96999e95bc220a90d9fea4 | CHANGES: 1 MAJOR (Bash rule ignored dangerouslyDisableSandbox/run_in_background — fixed: shell rules match every non-cosmetic field), 3 MINOR (PowerShell/Task AnyInput — PowerShell now a shell rule, rest declined; PROTOCOL_VERSION 58 — fixed; preview clone — fixed) |
+| Review B M1 (conformance, sonnet) | 1 | 166c2275321aa52bd9e60dbe67abaf1a1e4d7a61:a2a02be619ce58df6f96999e95bc220a90d9fea4 | CLEAN but incomplete (its `claude -p` sandbox refused every command, Verify not run): 2 MINOR (T005 text — fixed; no tdd/cycle-log.md — added with stub-based red evidence) |
 
 ## Declined review findings
 
@@ -68,6 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | Review A r1 | F2 MINOR (part): `Task`/`Agent` and other unnamed tools get an any-input rule | data-model *AllowRule* fixes "any other: the same tool name" (MCP tools are the case it serves); only `PowerShell`, a shell like `Bash`, was moved to the command rule |
 
 ## Handover
 
