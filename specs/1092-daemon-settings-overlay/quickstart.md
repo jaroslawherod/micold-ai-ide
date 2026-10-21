@@ -19,3 +19,13 @@ Prerequisites: `mise trust`, then `mise run gate`.
 7. Keyboard: Tab cycles inside the dialog; focus returns to the opening button on close.
 8. Resize to the smallest window: form scrolls, Save daemon and Cancel stay visible (SC-005).
 9. Light and dark theme: scrim, surface and action row look right.
+
+## Part B results (close unit, 2026-10-21)
+
+Headless sway, private display, real client and daemon built from the worktree. Earlier passes: `visual-pass-m1.md` (steps 1-5, 8, 9) and the M2/M3 passes (steps 6-7 partly). Judged here:
+
+- Step 6, live log line: Pass. With Details open, killing the daemon added "connection lost" and `state: Reconnecting` lines; the reconnect added "connected".
+- Step 7, Tab: Pass for the Add dialog (Name through Cancel, then wraps; no ring ever on the page behind). Not tested on the Edit dialog. The checkbox, Save daemon and one step after Cancel show no clear focus ring.
+- Step 7, focus after Escape on Details: Pass. Opened by keyboard, Escape shows the ring on Details; opened by mouse, no ring is drawn but Return reopens Details (focus is there; ring shows for keyboard use only).
+- Stale "This field is required" on a reopened Add dialog (blur, Escape, reopen): Pass, the dialog reopens clean.
+- Harness note: headless sway has no keyboard; a long-running `wtype` was needed for Escape and Tab to reach the app.
