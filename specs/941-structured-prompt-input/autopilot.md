@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M1
-- **Next step**: M1 implemented (T001–T022 ticked); review A r2 (fix diff) + scoped gate, then review B, full gate, PR files
+- **Next step**: M1 reviews clean, full gate `scripts/gate.sh` green at 81add926 (rebased on origin/main a608e0fc); branch pushed; orchestrator opens the M1 PR from the scratchpad pr-title.md/pr-body.md, then M2
 
 ## Pull requests
 
