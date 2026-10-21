@@ -36,6 +36,6 @@ Expected: all green; the grep prints nothing; `tests/layout_snapshot.rs` passes 
   failures are permission-refusal tests that do not belong to this feature:
   `settings_refuses_save_over_failed_read`, `settings_write_is_logged` and two directory-removal
   tests. They fail only when run as root, and `scripts/gate.sh` runs them unprivileged.
-  `scripts/gate.sh` on the close tree (1affdcb0): green.
+  `scripts/gate.sh` on the close tree (14faf6dd, after the close review fix): green.
 - **B** (T048): every item passes. The record, its evidence and its limits are in
   [visual-pass.md](visual-pass.md).

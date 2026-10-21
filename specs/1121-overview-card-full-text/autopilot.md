@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: close
-- **Next step**: close — checks recorded; test-strength fixes (F1, F2, F6) and Polish T047–T048 done, spec Closed; close review (round 1) pending, then fixes, gate, ledger finish, PR files.
+- **Phase**: done
+- **Next step**: handoff — close PR pending (title/body in the scratchpad); the run ends when it merges.
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1173 | M2 | merged | 4eaa990fb3210d90c85451cc447b58584a7a492c |
 | #1177 | M3 | merged | 7dd8a2f11fcc303735a4c70abc6be52c30246676 |
 | #1178 | M4 | merged | 6f8e1bbabff6e957e630e03b20d7ca3b70e1ce2d |
+| pending | close | to open (orchestrator) | — |
 
 Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
@@ -86,6 +87,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | tdd-verify audit / Close visual pass (BAR_FOOTPRINT 2x drag, full-screen Escape light-1x/dark-2x, 2x full-text smoke) | 1 | 4750fa62bdc62b68ac0785f0aaafc23e44c68b0f:b36d2aee82fb4547fa165c8d10fdc8d877a4dd46 | tdd-verify PASS_WITH_GAPS (no HIGH, no weakened test, every FR/SC tested; 10 of 11 mutants killed, the survivor M11 `EXPAND_REST` 1 ms judged equivalent): F1 MED M7 (body padding without `- clear`) survives `--lib overview_card`, F2 MED no cycle-log rows for two M4 r2 behaviours, F3 MED fixed 120 ms sleep in a card_grid test, F4–F6 LOW; report tdd/verification.md. Close visual pass PASS all 4 criteria (2x one-column inner bar beside the grid bar, hover/drag/release/collapse dark+light; dark-1x four columns; full-screen Escape twice light-1x + dark-2x; 2x full-text smoke), evidence visual-pass/close/ (65 PNGs); observations: full screen opened by click shows no ring until Tab; the expanded ring overlaps the grid bar's edge at 2x (cosmetic) |
 | Full gate close | A | 1affdcb0 | GREEN (first run) |
 | Close review (tests + docs truth, no rubric) | 1 | 797e13df0700ebee473acab3523648cc18c7c78b:422cac97960890ccdb8770d736a155e0c4594e48 | CLEAN, 1 MINOR, fixed: F1 the width guard in `an_expanded_cards_inner_scrollbar_clears_the_grids_scrollbar` relied on an `i` narrower than `BAR_FOOTPRINT` by comment only; now asserted as the comparison's precondition (one painted Body `i` is >0 and < `BAR_FOOTPRINT`). Mutant M7 re-run: still red (`wraps 241.70508 wide, not 245.10938`), restored. MINOR only: no round 2 |
+| Full gate close | B | 14faf6dd | GREEN (first run, after close review F1) |
 
 ## Declined review findings
 
@@ -97,7 +99,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-Close unit part 2 (2026-10-21), returned REVIEW-NEEDED near the context cap. Done: close checks recorded (`ed7a596b`); tdd-verify F1 (inset test pins the body text's room, M7 killed), F2 (cycle-log rows), F6 (labelled asserts) fixed (`1affdcb0`); F3/F4/F5 left with reasons in *Follow-ups*; T047/T048, visual-pass.md, spec **Status** Closed (`422cac97`); full gate GREEN at 1affdcb0; pushed. Next: act on the close review round 1 verdict (prompt: scratchpad close-prompt-review.md; snapshot in *Review rounds*) per review-rounds.md; if code/tests change, re-run `scripts/gate.sh` detached and update quickstart.md's gate line; then finish the ledger (Phase done, Next step handoff, close PR row), set this section to None, push, and write scratchpad pr-title.txt (`#1121: Overview cards: full text without truncation — close`) and pr-body.md (ends `Refs #1121`). Open findings: none.
+None.
 
 ## Open escalation
 
