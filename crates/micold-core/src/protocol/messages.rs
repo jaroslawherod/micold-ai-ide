@@ -740,8 +740,9 @@ pub enum ClientMsg {
         github_issues_enabled: Option<bool>,
         /// Set or clear one project's Jira base URL, or `None` to leave every project's unchanged
         /// (feature 1122, D4, contracts/wire.md W2). Per project, so two windows saving different
-        /// projects never overwrite each other.
-        jira_base_url: Option<JiraBaseUrlChange>,
+        /// projects never overwrite each other. Boxed so the rarely sent change does not grow
+        /// every `ClientMsg` (clippy::large_enum_variant).
+        jira_base_url: Option<Box<JiraBaseUrlChange>>,
         /// Raise desktop notifications, or `None` to leave unchanged (feature 039, FR-026).
         desktop_notifications: Option<bool>,
         /// The per-kind switches, all four at once, or `None` to leave them unchanged

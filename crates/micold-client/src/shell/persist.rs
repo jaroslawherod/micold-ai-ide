@@ -552,7 +552,7 @@ impl ServiceChanges {
             jira_enabled: self.jira_enabled,
             jira_connection: self.jira_connection,
             github_issues_enabled: self.github_issues_enabled,
-            jira_base_url: self.jira_base_url,
+            jira_base_url: self.jira_base_url.map(Box::new),
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             plan_usage_enabled: self.plan_usage_enabled,

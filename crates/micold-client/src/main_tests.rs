@@ -3294,7 +3294,7 @@ fn saving_a_jira_base_url_tells_the_service_that_projects_change() {
                 jira_connection,
                 jira_base_url,
                 ..
-            } => Some((jira_connection, jira_base_url)),
+            } => Some((jira_connection, jira_base_url.map(|change| *change))),
             _ => None,
         })
         .collect();
