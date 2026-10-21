@@ -15,3 +15,4 @@ The layout fixture `tests/fixtures/layout_snapshot.txt` moved because the longer
 | Behaviour | Tasks | Red evidence | Green |
 |---|---|---|---|
 | A Jira-linked worktree's Overview card shows the board's status chip, the same as the sidebar row; both follow a change together; a numeric-ticket card has none | T028, T029 | `jira_status_overview` written first: 3 failed (`left: 1, right: 2`: only the sidebar row painted the chip) | 3 passed after `OverviewCard::status` and `ui::overview::card_status` |
+| Lowercase dir name (`feat-abc-1_x`) finds its ticket (visual pass found cards without chips) | T029 | `a_lowercase_directory_name_still_finds_its_ticket` failed (`left: 1, right: 2`) | passes after upper-casing the key in `card_status` |
