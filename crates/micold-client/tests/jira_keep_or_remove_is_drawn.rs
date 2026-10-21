@@ -121,3 +121,23 @@ fn the_credential_fields_are_painted_only_with_the_switch_on() {
     }
     assert!(shows(&off, "Enable Jira integration"));
 }
+
+/// FR-006b / T025: the page tells the user, in the open, that Micold also contacts Jira with no
+/// dialog open, which data goes with it and on which events.
+#[test]
+fn the_page_discloses_the_background_status_read() {
+    let painted = painted(&jira_page());
+    let note = painted
+        .iter()
+        .find(|content| content.contains("with no dialog open"))
+        .unwrap_or_else(|| panic!("disclosure not painted: {painted:?}"));
+    for needle in [
+        "tickets' keys",
+        "project key",
+        "your credentials",
+        "when a project opens",
+        "regains focus",
+    ] {
+        assert!(note.contains(needle), "{needle:?} missing from {note:?}");
+    }
+}
