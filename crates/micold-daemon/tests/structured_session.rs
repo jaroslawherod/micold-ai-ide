@@ -240,6 +240,8 @@ fn a_structured_launch_forwards_subagent_text() {
     let args: Vec<&str> = argv.lines().collect();
     assert_eq!(args[..7], STRUCTURED_ARGS, "{args:#?}");
     state.stop_session(s);
+}
+
 /// #942 T028 (plan *SC-007*, superseding FR-006a's refusal): a bound structured session names the
 /// prompt tool while prompts are on and not while they are off; either way it carries the Bypass
 /// flag once and no `--permission-mode` (Default), the prompt tool before the binding, which stays
