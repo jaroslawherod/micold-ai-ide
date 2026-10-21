@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
 - **Phase**: tasks
-- **Next step**: tasks unit (plan review round 1 CLEAN; design PR ships spec + clarify + plan)
+- **Next step**: tasks unit — speckit-analyze, tasks review, checklists, design PR
 
 ## Pull requests
 
@@ -21,12 +21,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | tasks unit | full | Core: PermissionMode, permission::{request,decision,rules}, control, Status/ControlResponse events, recorded fixtures | — | pending |
-| M2 | tasks unit | full | Daemon: prompt tool, PromptRegistry, hold/decide/withdraw, activity, wire Permission* (switch off) | — | pending |
-| M3 | tasks unit | full | Daemon: mode persisted/launched, SetPermissionMode via control request, follow reported mode, plan approval sets mode | — | pending |
-| M4 | tasks unit | full | Client render-free prompt state and create-flow mode | — | pending |
-| M5 | tasks unit | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 UI on main (I-1) | — | pending |
-| M6 | tasks unit | full | Window composer side, switch on, user guide, Part B; needs #941 on main (I-2) | — | pending |
+| M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | — | pending |
+| M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | — | pending |
+| M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | — | pending |
+| M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | pending |
+| M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | — | pending |
+| M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | pending |
+| M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1) | — | pending |
+| M8 | T064–T069 | full | Window composer side, switch on, user guide, Part B; needs #941 on main (I-2) | — | pending |
 
 ## Decisions
 
@@ -40,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 6 | plan | Transport: MCP prompt tool vs stdio control channel | MCP prompt tool (issue acceptance); control channel only for set_permission_mode | agent | research R1; P-1, P-7 |
 | 7 | plan | CLI tool-call timeout vs FR-003 | Structured binding gets per-server timeout 2147483647 ms | agent | research R3; P-5, P-12, P-13 |
 | 8 | plan | Runtime switch to Bypass | Every structured launch adds --allow-dangerously-skip-permissions | agent | research R6; P-9, P-10 |
+| 9 | tasks | Milestones by layer, not by story (rule 2 deviation) | Every story spans core/daemon/window and the window needs #939/#941; the plan's six layers kept, the two daemon steps each split in two along acceptance scenarios (US1 vs US5/US6; US2 sc1–3 vs sc5+US3) for the ~800-line budget → M1–M8 | agent | tasks.md *Milestones*; plan *Delivery* |
 
 ## Review rounds
 

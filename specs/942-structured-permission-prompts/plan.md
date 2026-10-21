@@ -69,7 +69,7 @@ unchanged.
 | **IV. Local-First** | PASS | The prompt tool is the loopback tool server; nothing leaves the device; rules are never written to the user's Claude settings (FR-010). Fixtures are files. |
 | **V. Rust + iced** | PASS | `RequestKind` carries only the fields its kind has (a plan approval without a plan cannot be built); `PromptChoice` is validated against the kind before any answer; a request's terminal state is the removal of its entry, so it cannot be decided twice. iced only. |
 | **VI. Cross-Platform** | PASS | Loopback TCP and stdin control lines on every platform; no OS branch in core; the stand-in's prompt client is `std::net`. |
-| **VII. Documentation** | PASS | `docs/user-guide/worktrees-and-sessions.md` (structured section: prompts, Always allow and its scope, plan approval, questions, modes, Bypass's risk; "permission prompts" removed from the not-yet list) in M6, the milestone that makes the feature user-visible (FR-021). |
+| **VII. Documentation** | PASS | `docs/user-guide/worktrees-and-sessions.md` (structured section: prompts, Always allow and its scope, plan approval, questions, modes, Bypass's risk; "permission prompts" removed from the not-yet list) in M8, the milestone that makes the feature user-visible (FR-021). |
 | **VIII. Reusable UI** | PASS | New shared `ChoiceList` and `PromptCard` in `ui/material/` with builder APIs, showcase entries and theming; the rest reuses `Button`, `TextField`, `Select`, `Dialog` and #939's `DisclosureCard`. |
 
 No violations; Complexity Tracking is empty.
@@ -80,11 +80,11 @@ No violations; Complexity Tracking is empty.
 |---|---|---|---|
 | I-1 | `ui::transcript::view` and its per-entry draw fns; `EntryKey::Tool(tool_use_id)`; the card-draw seam | #939 M5–M6 (core model on `main`; spec `specs/939-structured-transcript-view`) | The request block is drawn by `ui/transcript/permission.rs` directly under the card whose key is `EntryKey::Tool(id)`, through the `entries.rs` tool-card fn taking an optional trailing element; requests whose card is not held are drawn after the last entry. |
 | I-2 | Composer area, idle/busy indicator, interrupt | #941 (no spec on `main` or any origin branch on 2026-10-21) | A per-session composer row below the transcript with a status slot; this feature puts the mode `Select` in it and replaces the busy text with *Waiting for you* while `waiting(session)`; the deny message and plan note are typed in the request block itself, not the composer, so they do not depend on #941. |
-| I-3 | Control requests on stdin and their correlated answers | #941's interrupt (P-8: `subtype: interrupt`) | `structured::control` and `StructuredSession`'s `ControlWaiters` are built here (M3). If #941 lands first with its own, M3 uses it. |
+| I-3 | Control requests on stdin and their correlated answers | #941's interrupt (P-8: `subtype: interrupt`) | `structured::control` and `StructuredSession`'s `ControlWaiters` are built here (M5). If #941 lands first with its own, M5 uses it. |
 | I-4 | Interrupt withdraws requests | #941 | Covered without #941: an interrupt ends the turn with a `result` (P-8), and a `Result` withdraws (R4). |
 | I-5 | Structured sessions accept `SessionInterrupt` | #941 | None needed by this feature. |
 
-M5 starts only when I-1 is on `main`; M6 only when I-2 is.
+M7 starts only when I-1 is on `main`; M8 only when I-2 is.
 
 ## Project Structure
 
@@ -115,7 +115,7 @@ crates/micold-core/src/
 │                                    #   Resolution, WithdrawReason; Permission{Requested,Resolved,
 │                                    #   Decision,Input,InputText}, SetPermissionMode;
 │                                    #   SessionSummary/SessionCreate.permission_mode
-├── protocol/version.rs              # PROTOCOL_VERSION +1 in M2 and M3
+├── protocol/version.rs              # PROTOCOL_VERSION +1 in M2, M4 and M5
 └── structured/
     ├── event.rs, parse.rs           # + Init.permission_mode, Status, ControlResponse
     ├── control.rs                   # NEW: encode_set_mode, request ids
@@ -155,9 +155,9 @@ crates/micold-client/src/
 ├── features/session.rs              # mode in the structured create flow; Bypass confirmation step
 ├── shell/daemon_sync.rs             # Permission* messages ↔ features; SetPermissionMode replies
 ├── app.rs                           # State.permission_prompts
-├── ui/transcript/permission.rs      # NEW draw code: request block, plan view, question view (M5)
+├── ui/transcript/permission.rs      # NEW draw code: request block, plan view, question view (M7)
 ├── ui/transcript/entries.rs         # tool card takes the request block (I-1)
-├── ui/<composer module of #941>     # mode Select, Waiting for you, Bypass label (M6, I-2)
+├── ui/<composer module of #941>     # mode Select, Waiting for you, Bypass label (M8, I-2)
 ├── ui/confirm_bypass.rs             # NEW: the Bypass confirmation dialog (like confirm_delete.rs)
 ├── ui/material/choice_list.rs       # NEW shared component
 ├── ui/material/prompt_card.rs       # NEW shared component
@@ -171,7 +171,7 @@ crates/micold-client/tests/
 scripts/capture-permission-prompt.sh # NEW (R12), sources capture-stream-json.sh's scrubber
 scripts/capture/prompt-stub.py       # NEW stub MCP server the capture runs
 scripts/tests/capture-permission-prompt.test.sh  # NEW: the scrubber on a prompt fixture
-docs/user-guide/worktrees-and-sessions.md        # FR-021 (M6)
+docs/user-guide/worktrees-and-sessions.md        # FR-021 (M8)
 ```
 
 **Structure Decision**: the existing three-crate split. Every decision is in
@@ -206,7 +206,7 @@ tests against the stand-in CLI; **client** = `micold-client` reducer tests; **ga
 | FR-018 | R3 (binding timeout only for structured), R14 | daemon (terminal argv and binding file unchanged; terminal `SessionCreate` with a mode refused); gate (every existing terminal test green) |
 | FR-019 | R13 | daemon (both new suites run with the stand-in only) |
 | FR-020 | R12 | core `structured_permission` over the recorded fixtures |
-| FR-021 | user guide (M6) | M6 diff review (each named topic present; "permission prompts" gone from the not-yet list) |
+| FR-021 | user guide (M8) | M8 diff review (each named topic present; "permission prompts" gone from the not-yet list) |
 | SC-001 | R4 | daemon (stand-in gets no reply until decided, then exactly the decision; turn ends with its result) |
 | SC-002 | R4 first-wins | daemon (two clients decide concurrently, 50 iterations: one decision reaches the stand-in, both see one resolution) |
 | SC-003 | R4 | daemon (withdrawal within 1 s per cause; late decision refused) |
@@ -218,22 +218,26 @@ tests against the stand-in CLI; **client** = `micold-client` reducer tests; **ga
 **SC-007 and the superseded assertion.** `crates/micold-daemon/tests/structured_session.rs`
 asserts feature 938 FR-006a: no `--permission-mode`, `--permission-prompt-tool` or
 `--dangerously-skip-permissions` in a structured argv. This feature's FR-001 replaces FR-006a's
-refusal, so that list changes in M2 (and M3) to what this feature launches; it is the one existing
+refusal, so that list changes in M2 (and in M8, when the switch goes) to what this feature launches; it is the one existing
 test edited, and it still asserts that a Default session carries no `--permission-mode`. Every
 other existing test passes unchanged.
 
 ## Delivery
 
-Six milestones; each merges to `main` on its own. M1–M4 do not depend on #939's view or #941.
+Eight milestones; each merges to `main` on its own. M1–M6 do not depend on #939's view or #941.
+The two daemon steps of the first sketch (hold/decide/withdraw; mode) are each split in two to stay
+near the 800-line milestone budget, along acceptance scenarios ([tasks.md](tasks.md) *Milestones*).
 
 | M | Delivers | Depends on |
 |---|---|---|
-| M1 | Core: `PermissionMode`, `permission::{request, decision, rules}`, `control`, the new events and parse, transcript absorbs; recorded fixtures, capture script | — |
-| M2 | Daemon: prompt tool listed per caller, `PromptRegistry`, hold/decide/withdraw, activity, wire `Permission*` (+1), stand-in `prompt`, binding timeout, the switch (off) | M1 |
-| M3 | Daemon: mode persisted, in summaries and create, launch flags, `SetPermissionMode` via control request, following reported modes, plan approval sets the mode (+1) | M2 |
-| M4 | Client render-free: `features/permission_prompts.rs`, mode in the create flow's state, `daemon_sync` wiring; no draw code | M3 |
-| M5 | Window, transcript side: `ChoiceList`, `PromptCard`, request block, plan view, question view, geometry gate | M4, I-1 |
-| M6 | Window, composer side: mode `Select`, *Waiting for you*, Bypass confirmation and label, the switch turned on and removed, user guide, Part B | M5, I-2 |
+| M1 | Core: `PermissionMode`, `launch_args`, `permission::{request, decision, rules}`, `control`, the new events and parse, transcript absorbs; recorded fixtures, capture script | — |
+| M2 | Daemon: prompt tool listed per caller, `PromptRegistry`, hold and decide, always allow, wire `Permission*` (+1), stand-in `prompt`, binding timeout, the switch (off) | M1 |
+| M3 | Daemon: activity while pending; withdrawal on turn end, process end, stop, remove, hang-up | M2 |
+| M4 | Daemon: mode persisted, in summaries and create, launched (+1) | M3 |
+| M5 | Daemon: `SetPermissionMode` via control request, following reported modes, plan approval sets the mode (+1) | M4 |
+| M6 | Client render-free: `features/permission_prompts.rs`, mode in the create flow's state, `daemon_sync` wiring; no draw code | M5 |
+| M7 | Window, transcript side: `ChoiceList`, `PromptCard`, request block, plan view, question view, geometry gate | M6, I-1 |
+| M8 | Window, composer side: mode `Select`, *Waiting for you*, Bypass confirmation and label, the switch turned on and removed, user guide, Part B | M7, I-2 |
 
 ## Complexity Tracking
 
