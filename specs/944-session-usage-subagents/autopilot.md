@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: implement M5
-- **Next step**: M5 verify — scoped gate, review A, review B, full gate, PR files
+- **Phase**: pr M5
+- **Next step**: M5 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | #1202 | merged |
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | #1205 | merged |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | #1211 | merged |
-| M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | implemented; verify |
+| M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | PR files written, gate green at 7e655fad |
 | M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | blocked on **#939 M4, M5, M6** (and M4, M5) |
 
 ## Decisions
@@ -81,6 +81,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Scoped gate M5 | 1 | cf00e007 | red: `feature_registration_cost` — `session` names `structured_insights`; allowed beside #939's `structured_transcript` entry (the session family carries `InsightsMsg`, never handles it) |
 | Review A M5 (code-review high, sonnet) | 2 | cf00e007 → d59cfbe3 (fix diff) | No BLOCKER/MAJOR; F1–F4, F6 of round 1 confirmed. 7 MINOR: fixed a partial-eviction test, the `seen` comment, the fold test's name, pruning before the rebuild loop; not acted on: per-message `count()` scan once bounded (no clone, O(held) filter), fresh revisions on a rebuilt thread (equality only feeds `App`'s derive), a core `follow` helper |
 | Scoped gate M5 | 2 | d59cfbe3 | red: `feature_write_isolation` — `structured_transcript.transcript` unclassified; added to `READERS` (it lends the transcript by shared reference) |
+| Scoped gate M5 | 3 | 7e655fad | client suites green; stopped at `settings_refuses_save_over_failed_read` (a root-only permission test the scoped gate runs as root; `scripts/gate.sh` runs it unprivileged) |
+| Review B M5 (conformance, sonnet) | 1 | a84a0e014281834f46571f6bd14a88f5cfebef12:7e655fad00d43739faa88beb27fbdb0dc3f243a3 | CLEAN |
+| Visual pass M5 | — | — | not run: nothing draws the new state (M6 does) |
+| Full gate M5 | — | 7e655fad | green (`scripts/gate.sh`) |
 
 ## Declined review findings
 
