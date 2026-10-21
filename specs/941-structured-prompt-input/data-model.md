@@ -14,7 +14,7 @@ Per process, held by `StructuredSession` (research R1).
 | Variant | Meaning |
 |---|---|
 | `Idle` | No turn open. A new process starts here. |
-| `InTurn { turn: TurnId, interrupt: InterruptAsk }` | A message was written; its `result` has not arrived. |
+| `InTurn { turn: TurnId, interrupt: InterruptAsk, asks: u32 }` | A message was written; its `result` has not arrived. `asks` counts the interrupts written in this turn (the ask epoch; daemon-side, not on the wire). |
 
 Beside the variant, `last_ended: Option<TurnId>`: set by the reader when it ends a turn, read under
 the state lock by a late interrupt (R4).
@@ -26,7 +26,7 @@ the state lock by a late interrupt (R4).
 |---|---|
 | `accept(turn: TurnId, running) -> Result<(), UserMessageRefusal>` | `NotRunning` if not running; `TurnInProgress` if `InTurn` (now only an internal answer: `SessionInput::submit` queues on it); else opens `InTurn { turn, None }`. Blank checking moves to `SessionInput::submit` (a message with images and no text is not blank). |
 | `ask_interrupt(turn) -> InterruptOutcome` | `Write` when `turn` is the open turn and its ask is `None` or `Overdue` (→ `Asked`); `AlreadyAsked` when `Asked`; `NotThisTurn` otherwise (FR-016). |
-| `overdue(turn, ask_epoch) -> bool` | `Asked` of the same turn and ask → `Overdue`. |
+| `overdue(turn, ask_epoch) -> bool` | `Asked` of the same turn with `asks == ask_epoch` → `Overdue`, so the timer of an earlier ask never marks a later one. |
 | `on_event(&Result)` → `Idle`, returning the ended turn and whether an interrupt was asked. |
 | `on_exit()` | As today: `TurnEndedWithoutResult` when a turn was open. |
 
@@ -119,7 +119,7 @@ with the session's history files and when the queue empties (R9). Restored on ho
 |---|---|
 | `DaemonInner.structured_inputs` | `HashMap<SessionId, SessionInput>`; created with the event stream, removed with it (session delete/forget) |
 | `StructuredSession` | `turn: Arc<Mutex<TurnState>>` (changed type), `on_turn_end` callback → `input_feed` |
-| `input_feed` | `tokio::sync::mpsc` of `TurnEnded { session, turn, by: Result \| Exit, interrupted }`; one driver task |
+| `input_feed` | `tokio::sync::mpsc` of `TurnClosed { session, turn, by: Result \| Exit, interrupted }` (named apart from `ActivityEvent::TurnEnded`); one driver task |
 | interrupt timer | `tokio::time::sleep(INTERRUPT_OVERDUE = 10 s)` per ask; on fire `TurnState::overdue` |
 
 Lifecycle of one queued message:

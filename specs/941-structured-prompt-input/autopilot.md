@@ -9,18 +9,38 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: tasks
-- **Next step**: tasks unit (plan reviewed CLEAN r2; six milestones in plan.md *Delivery*; if the user's Q1/Q2 answers differ from Decisions 3–4, apply them via research R6 *Changing Q1/Q2 later* — no wire change)
+- **Phase**: design PR
+- **Next step**: orchestrator opens the design PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M1 (T001–T022). T003 needs a signed-in Claude Code CLI to record fixtures. If the user's Q1/Q2 answers differ from Decisions 3–4, apply them via research R6 *Changing Q1/Q2 later* (no wire change)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| (to open) | Design: spec, clarifications, plan, research, contracts, tasks | branch pushed; orchestrator opens via GitHub MCP | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T022 | full | Core decisions (input, attachment, turn ids/asks, encoders, UserSent/InterruptAsked, transcript, saved queue), recorded fixtures, every wire type (one bump); daemon refuses new requests "Not available yet" | — | pending |
+| M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | — | pending |
+| M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | — | pending |
+| M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | — | pending |
+| M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | — | pending |
+| M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | pending |
+| M7 | T063 | light | Interrupt withdraws a pending #942 request (daemon test); waits on #942 M3 | — | pending |
+
+T062 (Polish, no code) is left to the close unit; T063 is M7, waiting on #942 M3 (I-3).
+M1 has 22 tasks (over rule 3's ~10) and is kept whole: it is no user story but the foundation every
+story and every later milestone builds on, and the wire bump must be one (I-6); there is no
+acceptance-scenario split. Milestones follow plan *Delivery* (layers), not one per story, because
+each story needs core, daemon and window and no UI may be half-wired on `main` (rule 6): nothing
+is visible before M6.
+
+speckit-analyze (sonnet, fresh session): 3 HIGH, 6 MEDIUM, 5 LOW, all fixed in tasks.md. Plan fixed
+(analyze I2): *Superseded assertions* now keeps the core `a_message_mid_turn_is_refused…` test (accept
+still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused…` to
+`SessionInput`; data-model gained `InTurn.asks` (the ask epoch) and the feed message is `TurnClosed`.
 
 ## Decisions
 
@@ -40,6 +60,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review spec | 2 | 7c8c2f791befe95ba7718b63d4cde6c4a169439f:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CLEAN (sonnet) |
 | Review plan | 1 | 5ed319d71185c5d5919a6e5458d96e8a71871984:125e33e3d05fbd606512f1185a0c45153db7f0bd | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Review plan | 2 | 5c526288a3d957a05bf42cfd41fc885f04683309:cc3ecef13d97dbe7bade5a8f198321d26f929441 | CLEAN (sonnet) |
+| Review tasks | 1 | 98c81d7650a1aaa75d3488756d2a6b9f04034a02:0909b8aa08b8a364302b36b8fdb71a48509ffa94 | CHANGES: 2 MAJOR, 1 MINOR (all fixed); checklist item confirmed |
+| Review tasks | 2 | 22c56cfa4d83ea22a4f99578a543af65950291e4:0909b8aa08b8a364302b36b8fdb71a48509ffa94 | pending |
 
 ## Declined review findings
 

@@ -135,7 +135,7 @@ crates/micold-daemon/src/
 ├── state.rs                    # structured_inputs; submit/deliver/queue ops/release/interrupt;
 │                               #   hold on exit/start; activity from the turn; StructuredInput
 │                               #   broadcast + handshake replay; queue save/restore/delete
-├── input_driver.rs             # NEW: TurnEnded feed → next delivery; overdue timers
+├── input_driver.rs             # NEW: TurnClosed feed → next delivery; overdue timers
 ├── activity.rs                 # ActivityEvent::{TurnBegan, TurnEnded}; turn_change mapping
 └── server.rs                   # dispatch the new ClientMsgs; SessionUserMessage queues
 crates/micold-daemon/tests/
@@ -223,10 +223,13 @@ tests against the stand-in; **client** = `micold-client` reducer tests; **gate**
 | SC-007 | R10 | `composer_large_draft` release test; §B 8 |
 | SC-008 | — | gate: every terminal and feature 487 test unchanged |
 
-**Superseded assertions.** `TurnState::accept` loses its blank check and `SessionUserMessage` no
-longer answers `TurnInProgress` (FR-018 replaces #938 FR-008's refusal): #938's
-`a_message_mid_turn_is_refused…` unit test and the daemon test asserting the `TurnInProgress`
-refusal change to assert queueing, in M2. `EntryKind::UserMessage` gains a field: #939's
+**Superseded assertions.** `TurnState::accept` loses its blank check: #938's
+`a_blank_message_is_refused_and_the_turn_stays_idle` unit test moves to `SessionInput::submit`
+(M1). `accept` still answers `TurnInProgress` internally, so `a_message_mid_turn_is_refused…`
+stays. `SessionUserMessage` no longer answers `TurnInProgress` (FR-018 replaces #938 FR-008's
+refusal): the mid-turn case of the daemon test
+`messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` changes to assert queueing,
+in M2. `EntryKind::UserMessage` gains a field: #939's
 transcript tests that build it add `attachments: vec![]`. Every other existing test passes
 unchanged.
 

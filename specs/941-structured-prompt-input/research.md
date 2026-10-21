@@ -49,7 +49,7 @@ requests.
   { entry }` (busy, or idle behind a queue that is not on hold, so a send never overtakes the
   queue at the turn boundary, edge case *Sending at the turn boundary*, FR-032); `Blank`,
   `NotRunning` and `NotStructured` stay refusals. When the stdout reader sees a `result`, it ends the
-  turn as today and calls the spawn's new `on_turn_end` callback, which sends `TurnEnded { session,
+  turn as today and calls the spawn's new `on_turn_end` callback, which sends `TurnClosed { session,
   by: Result | Exit }` on a channel to one daemon task (the *input driver*, like the plan-usage
   feed of #944). The driver, under the lock, calls `SessionInput::pump(turn)`: it pops the head only
   when `TurnState` is `Idle` **now** and the queue is not on hold, and opens the turn in the same lock
