@@ -6,7 +6,8 @@ In-crate tests (`ui::material::test_support::Mounted`) unless a file is named.
 
 Builder: `TextLink::new(label, on_press, roles)`, `.role(TypeRole)` (default `Body`), `.id(Id)`,
 `.on_keyboard_focus(Fn(bool) -> M)`, `.on_menu_key(M)`, `.on_page(Fn(bool) -> Option<M>)`,
-`.focus_on_press(bool)` (default `true`); `impl From<TextLink> for Element`.
+`.focus_on_press(bool)` (default `true`), `.focusable(bool)` (default `true`); `impl From<TextLink> for
+Element`.
 
 - Press and release on it → `on_press` once; the press and the release are captured.
 - Press on it, release off it → nothing published, release not captured.
@@ -15,6 +16,8 @@ Builder: `TextLink::new(label, on_press, roles)`, `.role(TypeRole)` (default `Bo
 - Menu key / Shift+F10 while focused → `on_menu_key`; Page Up/Down → `on_page` when it gives one.
 - `focus_on_press(false)`: a press on it leaves it without the keyboard (`TakesTheKeyboard`
   `.press_takes_focus(false)`, new; every existing caller keeps `true`).
+- `.focusable(false)`: Tab and Shift+Tab skip it, and Enter and Space never reach it; a click still
+  publishes `on_press`.
 - `mouse_interaction` is `Pointer` over it, `None` elsewhere. Drawn in `roles.primary`; an
   underline in the same colour only while the cursor is over it; the focus ring (`roles.secondary`)
   only for shown keyboard focus.
@@ -50,7 +53,10 @@ expanded card:
 - Click on the card outside the link → `on_press` with its ripple, as before (Story 4 sc. 1).
 - Secondary press on the link → `on_secondary_press` (FR-006).
 - Enter on the focused link → link message, no card ripple; Enter on the focused card → card.
-- Tab from the card focuses its link; Tab again leaves the card; Shift+Tab reverses (FR-008).
+- With `.on_link_keyboard_focus(f)` set, Tab from the card focuses its link; Tab again leaves the
+  card; Shift+Tab reverses (FR-008). Without it the link is built `.focusable(false)`: Tab goes from
+  the card to the next card, as before this feature (delivery staging: the app sets it only once
+  the link's focus reports are wired).
 - At 280, 380 and 480 px, with a 120-character branch: the link's text is whole and inside the
   card, the short branch ends in an ellipsis (FR-003, SC-004); with no branch line the link sits
   alone in its place.
@@ -87,5 +93,10 @@ Tested with `Mounted` on a three-card grid where the middle card has a link.
   `shell::issues::read_repo` sends `RemoteList` (R2). Test (`daemon_sync` / `main_tests.rs`): switch
   project with the Overview open → `ProjectSwitched` clears `repo` → `Attached` sends the read →
   `RepoRead` for the new project → the card shows its GitHub link.
+- Link focus hand-offs (spec Edge Cases): with a card's link holding the keyboard, a change that
+  removes the link (GitHub issues or Jira switch off, the repository read as none, the Jira base
+  URL cleared) moves keyboard focus to `card_id(l)`; a listing without the card moves it as 972
+  FR-011 does for a focused card that goes away (`focus_return_target`). The root does this after
+  the update, reading `Expansion`'s focused location and part (`main_tests.rs`).
 - Reducer tests (`app.rs` / `features::overview`): `RepoRead` recorded and dropped for another
   project; `ProjectSwitched` clears `repo`; `IssueLinkActivated` changes no state.
