@@ -157,6 +157,7 @@ pub struct OverviewCard<'a, M> {
     link_id: Option<iced::advanced::widget::Id>,
     on_link_rest: Option<M>,
     on_link_keyboard_focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
+    on_link_menu_key: Option<M>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -189,6 +190,7 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             link_id: None,
             on_link_rest: None,
             on_link_keyboard_focus: None,
+            on_link_menu_key: None,
             _marker: PhantomData,
         }
     }
@@ -348,6 +350,14 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
     /// and a click still opens it (contract U3).
     pub fn on_link_keyboard_focus(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
         self.on_link_keyboard_focus = Some(Rc::new(f));
+        self
+    }
+
+    /// Publish `message` for the Menu key or Shift+F10 while the link holds the keyboard (feature
+    /// 1122, FR-009): the card's menu, opened from its link. The link's Page Up / Page Down are the
+    /// card's [`Self::on_page`] (R9).
+    pub fn on_link_menu_key(mut self, message: M) -> Self {
+        self.on_link_menu_key = Some(message);
         self
     }
 
@@ -524,6 +534,15 @@ fn issue_link<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>) -> Option<Element<'
     if let Some(f) = card.on_link_keyboard_focus.clone() {
         link = link.on_keyboard_focus(move |shown| f(shown));
     }
+    // The card's own keys stand down while it is targeted or its menu is open; so do the link's.
+    if !card.targeted && !card.menu_open {
+        if let Some(menu) = card.on_link_menu_key.clone() {
+            link = link.on_menu_key(menu);
+        }
+        if let Some(page) = card.on_page.clone() {
+            link = link.on_page(move |down| page(down));
+        }
+    }
     Some(link.into())
 }
 
@@ -615,12 +634,16 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
     let text = CardText::of(&card.model);
     let body_line = |words: String| wrapped::<M>(words, TypeRole::Body, p.on_body_variant, roles);
     let mut rest = column![].spacing(spacing::XS);
+    let link = issue_link(card);
+    // A link that is the body's first row has the room its focus gutter spills into above it, so
+    // the inner scrollable does not clip its ring (feature 1122, review A M2 F4).
+    let link_first = link.is_some() && full.display_name.is_none() && full.branch.is_none();
     if let Some(name) = full.display_name {
         rest = rest.push(body_line(name));
     }
     // The branch line wraps in full with the link at its end, on its first line (R11); alone in
     // the line's place when there is no branch line.
-    match (full.branch, issue_link(card)) {
+    match (full.branch, link) {
         (Some(branch), Some(link)) => {
             rest = rest.push(row![body_line(branch), link].spacing(spacing::SM));
         }
@@ -648,7 +671,11 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
     let clear = super::scrollable::BAR_FOOTPRINT;
     let mut scroll = Scrollable::new(
         container(rest).padding(iced::Padding {
-            top: spacing::XS,
+            top: if link_first {
+                spacing::XS.max(super::text_link::GUTTER)
+            } else {
+                spacing::XS
+            },
             right: spacing::MD - clear,
             bottom: spacing::MD,
             left: spacing::MD,
@@ -2541,6 +2568,104 @@ mod tests {
         }
     }
 
+    /// `card` with its link wired for the keyboard, in a room, with the keyboard on the link (Tab
+    /// past the card), the focus reports drained.
+    fn on_the_link(card: OverviewCard<'static, String>, size: Size) -> Mounted<'static> {
+        let mut m = Mounted::new_in(
+            container(card.on_link_keyboard_focus(|f| format!("link focus {f}")))
+                .width(Length::Fixed(size.width))
+                .height(Length::Fixed(size.height)),
+            size,
+        );
+        m.focus_next();
+        m.focus_next();
+        assert_eq!(m.redraw(), ["link focus true"]);
+        m
+    }
+
+    /// FR-009, R9: the Menu key and Shift+F10 on the focused link publish the link's menu
+    /// message, captured, and not the card's; collapsed and expanded.
+    #[test]
+    fn the_menu_keys_on_the_focused_link_publish_the_links_menu_message() {
+        use super::super::test_support::key_with;
+        use iced::keyboard::Modifiers;
+        let none = mouse::Cursor::Unavailable;
+        for expanded in [false, true] {
+            let card = linked(&with_link(Some("feat/1122_x")), expanded)
+                .on_menu_key("card menu".to_string())
+                .on_link_menu_key("link menu".to_string());
+            let mut m = on_the_link(card, Size::new(380.0, 400.0));
+            for key in [
+                key_with(Named::ContextMenu, Modifiers::empty()),
+                key_with(Named::F10, Modifiers::SHIFT),
+            ] {
+                assert_eq!(
+                    m.send_captured(key.clone(), none),
+                    (vec!["link menu".to_string()], true),
+                    "expanded {expanded}: {key:?}"
+                );
+            }
+            assert!(
+                ripple(&m).is_idle(),
+                "expanded {expanded}: a menu key rippled"
+            );
+        }
+    }
+
+    /// Story 3 sc.6, R9: Page Up / Page Down on the focused link publish the card's page message.
+    #[test]
+    fn page_keys_on_the_focused_link_publish_the_cards_page_message() {
+        let none = mouse::Cursor::Unavailable;
+        for expanded in [false, true] {
+            let card = linked(&with_link(Some("feat/1122_x")), expanded)
+                .on_page(|down| Some(format!("page {}", if down { "down" } else { "up" })));
+            let mut m = on_the_link(card, Size::new(380.0, 400.0));
+            assert_eq!(
+                m.send_captured(named_key(Named::PageDown), none),
+                (vec!["page down".to_string()], true),
+                "expanded {expanded}"
+            );
+            assert_eq!(
+                m.send_captured(named_key(Named::PageUp), none),
+                (vec!["page up".to_string()], true),
+                "expanded {expanded}"
+            );
+            // A modified Page key is a project chord (keymap NAV_CHORDS), not a page.
+            let chord = super::super::test_support::key_with(
+                Named::PageDown,
+                iced::keyboard::Modifiers::CTRL | iced::keyboard::Modifiers::SHIFT,
+            );
+            assert_eq!(m.send_captured(chord, none), (vec![], false));
+        }
+    }
+
+    /// FR-008, Story 3 sc.6: a link in the scrolled part of an expanded card's body is scrolled
+    /// into the inner body's viewport when it takes the keyboard.
+    #[test]
+    fn a_focused_link_below_the_fold_scrolls_into_the_body() {
+        let mut model = with_link(Some("feat/1122_x"));
+        model.display_name = "a long display name ".repeat(40);
+        let mut m = on_the_link(linked(&model, true), Size::new(380.0, 220.0));
+        let viewport = m.scrollables()[0].0;
+        // Where the focused link is on screen, the inner body's scroll taken off.
+        let mut on_screen = |m: &mut Mounted<'_>| {
+            m.drive(crate::ui::focus::focused_bounds())
+                .flatten()
+                .expect("the link holds the keyboard")
+        };
+        let before = on_screen(&mut m);
+        assert!(
+            before.y > viewport.y + viewport.height,
+            "the link starts below the fold: {before:?} in {viewport:?}"
+        );
+        m.drive(crate::ui::focus::into_view::<()>());
+        let after = on_screen(&mut m);
+        assert!(
+            after.y >= viewport.y && after.y + after.height <= viewport.y + viewport.height,
+            "the link is in view: {after:?} in {viewport:?}"
+        );
+    }
+
     /// Contract U3: without `.on_link_keyboard_focus` the link is no Tab stop, so Tab goes from the
     /// card straight to the next one.
     #[test]
@@ -2621,6 +2746,25 @@ mod tests {
         assert!(
             link.x > branch.x + branch.width,
             "the link follows the branch"
+        );
+    }
+
+    /// Review A M2 F4 (deferred to M4): when the link is the expanded body's first row (no display
+    /// name, no branch line), its whole focus gutter lies inside the body's viewport, so no part of
+    /// the ring is clipped.
+    #[test]
+    fn a_link_first_in_the_expanded_body_keeps_its_whole_gutter() {
+        let mut model = with_link(None);
+        model.display_name = model.title.clone();
+        let mut m = on_the_link(linked(&model, true), Size::new(380.0, 400.0));
+        let viewport = m.scrollables()[0].0;
+        let gutter = m
+            .drive(crate::ui::focus::focused_bounds())
+            .flatten()
+            .expect("the link holds the keyboard");
+        assert!(
+            gutter.y >= viewport.y,
+            "the gutter's top {gutter:?} is above the body's viewport {viewport:?}"
         );
     }
 

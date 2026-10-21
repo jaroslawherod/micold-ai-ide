@@ -146,8 +146,9 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
         }
         if let Some(on_page) = link.on_page {
             for (key, down) in [(Named::PageUp, false), (Named::PageDown, true)] {
+                // Unmodified only, as the card's: Ctrl/Cmd+Shift+Page keys are the project chords.
                 if let Some(message) = on_page(down) {
-                    focus = focus.key(key, message);
+                    focus = focus.chord(key, keyboard::Modifiers::empty(), message);
                 }
             }
         }
@@ -275,7 +276,7 @@ struct LinkBody<'a, M> {
 /// quad's border inside the quad, so the ring covers half a width to one and a half widths in
 /// from the link's edge (1.5 px to 4.5 px). Twice the width puts the label 1.5 px clear of it, on
 /// a whole pixel (review A M1 r5 F1).
-const GUTTER: f32 = 2.0 * state::FOCUS_RING_WIDTH;
+pub(super) const GUTTER: f32 = 2.0 * state::FOCUS_RING_WIDTH;
 
 /// The row of the 1 px underline under a label laid out in `text` at `size`: under the glyphs,
 /// not at the foot of the line box. The label sits centred in its line, and its descenders end

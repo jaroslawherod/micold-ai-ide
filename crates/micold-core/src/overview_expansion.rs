@@ -34,6 +34,11 @@ pub enum Event {
     FocusGained(SessionLocation),
     /// A card lost keyboard focus.
     FocusLost(SessionLocation),
+    /// A card's issue link received keyboard (shown) focus (feature 1122, FR-008): focus on the
+    /// link counts as focus on its card.
+    LinkFocusGained(SessionLocation),
+    /// A card's issue link lost keyboard focus.
+    LinkFocusLost(SessionLocation),
     /// The Overview opened and put the keyboard on this card (research R13): the focus it reports
     /// next expands nothing (FR-013), and the card stays collapsed until focus moves.
     OpenFocused(SessionLocation),
@@ -56,6 +61,39 @@ pub enum Event {
     },
 }
 
+/// Which of the focused card's two keyboard stops reported focus last (feature 1122, data-model
+/// *Expansion*): the two reports of a move inside one card, in either order, are one move.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum FocusPart {
+    /// The card itself.
+    #[default]
+    Card,
+    /// Its issue link.
+    Link,
+    /// Both, between the gain of one and the loss of the other.
+    Both,
+}
+
+impl FocusPart {
+    fn other(self) -> Self {
+        match self {
+            Self::Card => Self::Link,
+            Self::Link => Self::Card,
+            Self::Both => Self::Both,
+        }
+    }
+}
+
+/// A focus loss of `part` of `location` and the expansion just before it: if the very next event
+/// is the gain of that card's other part, the two are one move inside the card and the loss is
+/// undone ("just held", contract K5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct JustLost {
+    location: SessionLocation,
+    part: FocusPart,
+    before: Expansion,
+}
+
 /// Which Overview card is expanded and the facts that decide the next one (data-model
 /// *Expansion*). `Default` expands nothing (FR-013).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -76,6 +114,13 @@ pub struct Expansion {
     /// The card the Overview's opening put the keyboard on, until its focus report arrives.
     open_focus: Option<SessionLocation>,
     body_edges: (bool, bool),
+    /// Which part of `focused` holds the keyboard (feature 1122, FR-008).
+    focus_part: FocusPart,
+    /// The link whose focus the open card menu took (FR-009): its loss waits for the next focus
+    /// report ("held across the menu").
+    link_held: Option<SessionLocation>,
+    /// The previous event, when it was a focus loss of the focused card or its link.
+    just_lost: Option<Box<JustLost>>,
 }
 
 impl Expansion {
@@ -94,8 +139,19 @@ impl Expansion {
         self.body_edges
     }
 
+    /// The card whose issue link holds the keyboard (feature 1122, FR-008): not while an open
+    /// menu holds it (FR-009).
+    pub fn focused_link(&self) -> Option<&SessionLocation> {
+        let link = matches!(self.focus_part, FocusPart::Link | FocusPart::Both);
+        self.focused
+            .as_ref()
+            .filter(|_| link && self.link_held.is_none())
+    }
+
     /// Take in `event` (K1, data-model *Events and transitions*).
     pub fn apply(&mut self, event: Event) {
+        // "Just held" lasts exactly one event (K5).
+        let just_lost = self.just_lost.take();
         match event {
             Event::PointerRested(location) => {
                 // Escape collapsed this card with the pointer still on it: it stays collapsed
@@ -156,39 +212,12 @@ impl Expansion {
                     self.end_hover();
                 }
             }
-            Event::FocusGained(location) => {
-                // The opening's own focus (R13): focused, and collapsed as Escape leaves a card,
-                // so nothing expands until focus moves (FR-013, review A F1, M4).
-                let opening = self.open_focus.take().as_ref() == Some(&location);
-                self.focused = Some(location.clone());
-                self.focus_escaped = opening;
-                if opening {
-                    return;
-                }
-                self.focus_held |= self.menu_open;
-                if !self.menu_open {
-                    self.expand(location, Cause::Focus);
-                }
+            Event::FocusGained(location) => self.gained(location, FocusPart::Card, just_lost),
+            Event::FocusLost(location) => self.lost(location, FocusPart::Card),
+            Event::LinkFocusGained(location) => {
+                self.gained(location, FocusPart::Link, just_lost);
             }
-            Event::FocusLost(location) => {
-                self.open_focus = None;
-                if self.focused.as_ref() == Some(&location) {
-                    self.focused = None;
-                    self.focus_escaped = false;
-                }
-                self.focus_held |= self.menu_open;
-                if self.expanded == Some((location.clone(), Cause::Focus)) && !self.menu_open {
-                    // A press on the card (its inner scrollbar) hides the focus with the pointer
-                    // still resting on it: hovered, so it stays, by the pointer (review A F3, M4).
-                    let hovered =
-                        !self.pointer_escaped && self.pointer_on.as_ref() == Some(&location);
-                    if hovered {
-                        self.expanded = Some((location, Cause::Pointer));
-                    } else {
-                        self.collapse();
-                    }
-                }
-            }
+            Event::LinkFocusLost(location) => self.lost(location, FocusPart::Link),
             Event::OpenFocused(location) => self.open_focus = Some(location),
             Event::Escape => {
                 if let Some((location, _)) = self.expanded.take() {
@@ -202,6 +231,7 @@ impl Expansion {
             Event::WindowBlurred => {
                 self.rest_held = false;
                 self.focus_held = false;
+                self.link_held = None;
                 self.collapse();
             }
             Event::MenuOpened => self.menu_open = true,
@@ -238,6 +268,9 @@ impl Expansion {
                     self.focused = None;
                     self.focus_escaped = false;
                 }
+                if gone(&self.link_held) {
+                    self.link_held = None;
+                }
                 if gone(&self.pointer_on) {
                     self.pointer_on = None;
                     self.pointer_escaped = false;
@@ -252,6 +285,98 @@ impl Expansion {
                 if self.expanded.is_some() {
                     self.body_edges = (up, down);
                 }
+            }
+        }
+    }
+
+    /// `part` of `location` received the keyboard (K5): a move inside the card that holds it, or
+    /// just held it, changes no form; anything else is a new focus (1121).
+    fn gained(
+        &mut self,
+        location: SessionLocation,
+        part: FocusPart,
+        just_lost: Option<Box<JustLost>>,
+    ) {
+        if let Some(held) = self.link_held.take() {
+            if held == location {
+                // The return from the link's menu, to the link or to its card (FR-009).
+                self.focused = Some(location);
+                self.focus_part = part;
+                return;
+            }
+            // Any other report: the loss the menu deferred happens now, then this report.
+            self.lost_plain(held);
+        }
+        if let Some(lost) = just_lost {
+            if lost.location == location && lost.part == part.other() {
+                *self = lost.before;
+                self.focus_part = part;
+                return;
+            }
+        }
+        if self.focused.as_ref() == Some(&location) {
+            if self.focus_part == part {
+                // It already holds the keyboard: a repeated report (the root's hand-off from a
+                // link that went to its card, contract U6) changes nothing.
+                return;
+            }
+            // The card's other part holds the keyboard: a move inside the card.
+            self.focus_part = FocusPart::Both;
+            return;
+        }
+        self.focus_part = part;
+        // The opening's own focus (R13): focused, and collapsed as Escape leaves a card,
+        // so nothing expands until focus moves (FR-013, review A F1, M4).
+        let opening = self.open_focus.take().as_ref() == Some(&location);
+        self.focused = Some(location.clone());
+        self.focus_escaped = opening;
+        if opening {
+            return;
+        }
+        self.focus_held |= self.menu_open;
+        if !self.menu_open {
+            self.expand(location, Cause::Focus);
+        }
+    }
+
+    /// `part` of `location` lost the keyboard (K5).
+    fn lost(&mut self, location: SessionLocation, part: FocusPart) {
+        if self.focused.as_ref() == Some(&location) {
+            if self.focus_part == FocusPart::Both || self.focus_part == part.other() {
+                // The card's other part holds the keyboard: a move inside the card.
+                self.focus_part = part.other();
+                return;
+            }
+            if part == FocusPart::Link && self.menu_open {
+                // The link's Menu key opened the menu, which took the keyboard (FR-009).
+                self.link_held = Some(location);
+                return;
+            }
+            self.just_lost = Some(Box::new(JustLost {
+                location: location.clone(),
+                part,
+                before: self.clone(),
+            }));
+        }
+        self.lost_plain(location);
+    }
+
+    /// A focus loss as 1121 defines it.
+    fn lost_plain(&mut self, location: SessionLocation) {
+        self.open_focus = None;
+        if self.focused.as_ref() == Some(&location) {
+            self.focused = None;
+            self.focus_escaped = false;
+        }
+        self.focus_held |= self.menu_open;
+        if self.expanded == Some((location.clone(), Cause::Focus)) && !self.menu_open {
+            // A press on the card (its inner scrollbar) hides the focus with the pointer
+            // still resting on it: hovered, so it stays, by the pointer (review A F3, M4).
+            let hovered = !self.pointer_escaped && self.pointer_on.as_ref() == Some(&location);
+            if hovered {
+                self.expanded = Some((location, Cause::Pointer));
+            } else {
+                self.collapse();
             }
         }
     }
@@ -921,6 +1046,198 @@ mod tests {
             Event::MenuClosed,
         ]);
         assert_eq!(shown(&closed), None);
+    }
+
+    fn link_focus(name: &str) -> Event {
+        Event::LinkFocusGained(loc(name))
+    }
+
+    fn link_lost(name: &str) -> Event {
+        Event::LinkFocusLost(loc(name))
+    }
+
+    fn lost(name: &str) -> Event {
+        Event::FocusLost(loc(name))
+    }
+
+    /// Focus on A's card, then forward Tab onto A's link (card lost, then link gained).
+    fn tabbed_to_link(name: &str) -> Vec<Event> {
+        vec![focus(name), lost(name), link_focus(name)]
+    }
+
+    /// K5, FR-008, Story 3 sc.1: forward Tab from a card to its own link is a move inside the
+    /// card: it stays expanded and focused.
+    #[test]
+    fn tab_from_a_card_to_its_link_keeps_it_expanded() {
+        let tabbed = after(tabbed_to_link("a"));
+        assert_eq!(shown(&tabbed), Some("a".into()));
+        assert_eq!(tabbed.cause(), Some(Cause::Focus));
+        assert_eq!(tabbed.focused, Some(loc("a")));
+        assert_eq!(tabbed.focused_link(), Some(&loc("a")));
+    }
+
+    /// K5, FR-008: after Escape, the same Tab does not re-expand the card.
+    #[test]
+    fn tab_to_the_link_after_escape_stays_collapsed() {
+        let escaped = after([focus("a"), Event::Escape, lost("a"), link_focus("a")]);
+        assert_eq!(shown(&escaped), None);
+        assert!(escaped.focus_escaped);
+        assert_eq!(escaped.focused, Some(loc("a")));
+    }
+
+    /// K5, FR-008, Story 3 sc.1: Shift+Tab from the link back to its card (card gained, then link
+    /// lost) keeps an escaped card collapsed and focused.
+    #[test]
+    fn shift_tab_from_the_link_to_its_card_keeps_the_form() {
+        let mut events = tabbed_to_link("a");
+        events.extend([Event::Escape, focus("a"), link_lost("a")]);
+        let back = after(events);
+        assert_eq!(shown(&back), None);
+        assert_eq!(back.focused, Some(loc("a")));
+        assert!(back.focus_escaped);
+        assert_eq!(back.focused_link(), None);
+    }
+
+    /// K5, FR-008: Tab from A's link to the next card moves the expansion to B.
+    #[test]
+    fn tab_from_a_link_to_the_next_card_expands_that_card() {
+        let mut events = tabbed_to_link("a");
+        events.extend([link_lost("a"), focus("b")]);
+        let next = after(events);
+        assert_eq!(shown(&next), Some("b".into()));
+        assert_eq!(next.focused, Some(loc("b")));
+        assert_eq!(next.focused_link(), None);
+    }
+
+    /// K5 "just held": any other event between the loss and the link's gain ends the pairing:
+    /// the gain is a new focus (A expands, the escape is cleared).
+    #[test]
+    fn an_event_between_loss_and_link_gain_makes_a_new_focus() {
+        let apart = after([
+            focus("a"),
+            Event::Escape,
+            lost("a"),
+            leave("z"),
+            link_focus("a"),
+        ]);
+        assert_eq!(shown(&apart), Some("a".into()));
+        assert!(!apart.focus_escaped);
+    }
+
+    /// The link of A holds the keyboard, its Menu key opens the menu, which takes the keyboard.
+    fn link_menu_opened(escaped: bool) -> Vec<Event> {
+        let mut events = tabbed_to_link("a");
+        if escaped {
+            events.push(Event::Escape);
+        }
+        events.extend([Event::MenuOpened, link_lost("a")]);
+        events
+    }
+
+    /// K5, FR-009, Story 3 sc.5: closing the link's menu returns to the link without
+    /// re-expanding a card collapsed by Escape.
+    #[test]
+    fn the_link_menu_returns_to_an_escaped_card_collapsed() {
+        let mut events = link_menu_opened(true);
+        events.extend([Event::MenuClosed, link_focus("a")]);
+        let back = after(events);
+        assert_eq!(shown(&back), None);
+        assert!(back.focus_escaped);
+        assert_eq!(back.focused_link(), Some(&loc("a")));
+    }
+
+    /// K5, FR-009: without Escape the card stays expanded across the link's menu.
+    #[test]
+    fn the_link_menu_keeps_an_expanded_card_expanded() {
+        let mut events = link_menu_opened(false);
+        let open = after(events.clone());
+        assert_eq!(shown(&open), Some("a".into()));
+        assert_eq!(open.link_held, Some(loc("a")));
+        events.extend([Event::MenuClosed, link_focus("a")]);
+        let back = after(events);
+        assert_eq!(shown(&back), Some("a".into()));
+        assert_eq!(back.link_held, None);
+    }
+
+    /// K5, FR-009: a menu choice that moves the keyboard to B applies the deferred loss first.
+    #[test]
+    fn a_link_menu_choice_moving_focus_collapses_the_card() {
+        let mut events = link_menu_opened(false);
+        events.extend([Event::MenuClosed, focus("b")]);
+        let moved = after(events);
+        assert_eq!(shown(&moved), Some("b".into()));
+        assert_eq!(moved.focused, Some(loc("b")));
+        assert_eq!(moved.link_held, None);
+    }
+
+    /// K5, R9: with the link gone the return lands on the card (`FocusGained(A)`), still a move
+    /// inside the card.
+    #[test]
+    fn the_link_menu_return_falls_back_to_the_card() {
+        for escaped in [true, false] {
+            let mut events = link_menu_opened(escaped);
+            events.extend([Event::MenuClosed, focus("a")]);
+            let back = after(events);
+            let expected = (!escaped).then(|| "a".to_owned());
+            assert_eq!(shown(&back), expected, "escaped: {escaped}");
+            assert_eq!(back.focus_escaped, escaped);
+            assert_eq!(back.focused, Some(loc("a")));
+            assert_eq!(back.focused_link(), None);
+        }
+    }
+
+    /// K5: a focus report while the link's menu is still open applies the deferred loss under
+    /// the menu, so the move settles when it closes (1121).
+    #[test]
+    fn a_focus_report_under_the_link_menu_settles_on_close() {
+        let mut events = link_menu_opened(false);
+        events.push(focus("b"));
+        let open = after(events.clone());
+        assert_eq!(shown(&open), Some("a".into()), "frozen while open");
+        assert_eq!(open.link_held, None);
+        events.push(Event::MenuClosed);
+        assert_eq!(shown(&after(events)), Some("b".into()));
+    }
+
+    /// K5: the card's own menu is unchanged from 1121: its focus loss under the menu is not held.
+    #[test]
+    fn the_cards_own_menu_is_unchanged() {
+        let events = [focus("a"), Event::MenuOpened, lost("a")];
+        let open = after(events.clone());
+        assert_eq!(open.link_held, None);
+        assert_eq!(open.focused, None);
+        let closed = after(events.into_iter().chain([Event::MenuClosed]));
+        assert_eq!(shown(&closed), None);
+    }
+
+    /// K5, Edge Case *Card goes away*: a listing without A while A's link holds the keyboard
+    /// clears the focus, held or not.
+    #[test]
+    fn a_listing_without_the_links_card_clears_its_focus() {
+        let mut events = tabbed_to_link("a");
+        events.push(Event::Listed(vec![loc("b")]));
+        let gone = after(events);
+        assert_eq!(gone.focused, None);
+        assert_eq!(gone.focused_link(), None);
+        let mut held = link_menu_opened(false);
+        held.push(Event::Listed(vec![loc("b")]));
+        let held = after(held);
+        assert_eq!(held.focused, None);
+        assert_eq!(held.link_held, None);
+    }
+
+    /// K5, contract U6: the root hands the keyboard from a link that went to its card as a move
+    /// inside the card (card gained, link lost); the card's own report that follows changes
+    /// nothing, so an escaped card stays collapsed.
+    #[test]
+    fn a_hand_off_from_a_gone_link_to_its_card_keeps_the_form() {
+        let mut events = tabbed_to_link("a");
+        events.extend([Event::Escape, focus("a"), link_lost("a"), focus("a")]);
+        let handed = after(events);
+        assert_eq!(shown(&handed), None);
+        assert!(handed.focus_escaped);
+        assert_eq!(handed.focused, Some(loc("a")));
+        assert_eq!(handed.focused_link(), None);
     }
 
     /// K2, SC-006: a card expands within half a second of the pointer resting on it.

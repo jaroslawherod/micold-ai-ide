@@ -125,10 +125,22 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                 .on_rest(expansion(Event::PointerRested(location.clone())))
                 .on_leave(expansion(Event::PointerLeft(location.clone())))
                 // Feature 1122: the issue link opens its address; a rest on it expands nothing
-                // (FR-007). Not yet a Tab stop: no `.on_link_keyboard_focus` until M4 (U3).
+                // (FR-007). It is the Tab stop after its card, and focus on it counts as focus on
+                // the card (FR-008); its Menu key opens the card's menu from it (FR-009).
                 .on_issue_link(Message::Overview(Msg::IssueLinkActivated(location.clone())))
                 .link_id(card_link_id(&location))
                 .on_link_rest(expansion(Event::LinkRested(location.clone())))
+                .on_link_keyboard_focus({
+                    let location = location.clone();
+                    move |shown| {
+                        expansion(if shown {
+                            Event::LinkFocusGained(location.clone())
+                        } else {
+                            Event::LinkFocusLost(location.clone())
+                        })
+                    }
+                })
+                .on_link_menu_key(Message::Overview(Msg::LinkMenuRequested(location.clone())))
                 .scroll_id(card_scroll_id(&location))
                 .on_body_scroll(move |up, down| expansion(Event::BodyScrolled { up, down }))
                 .on_keyboard_focus({
@@ -331,6 +343,7 @@ pub fn settle_card_menu(state: &mut State) {
     if !state.overview.open {
         state.overview.card_menu = None;
         state.overview.focus_return = None;
+        state.overview.focus_return_link = false;
         state.overview.focus_landed = None;
         // Closing the Overview collapses the card, and reopening expands none (FR-005, FR-013).
         state.overview.expansion = Expansion::default();
@@ -341,12 +354,15 @@ pub fn settle_card_menu(state: &mut State) {
         .card_menu
         .as_ref()
         .map(|m| m.location.clone());
-    // `cards()` derives every card: only when a menu or an expanded card may have lost its card.
-    if target.is_none() && state.overview.expansion.expanded().is_none() {
+    // `cards()` derives every card: only when a menu, an expanded card or a focused link (feature
+    // 1122) may have lost its card.
+    let expansion = &state.overview.expansion;
+    let watched = expansion.expanded().is_some() || expansion.focused_link().is_some();
+    if target.is_none() && !watched {
         return;
     }
     let listed: Vec<SessionLocation> = cards(state).into_iter().map(|m| m.location).collect();
-    if state.overview.expansion.expanded().is_some() {
+    if watched {
         state
             .overview
             .expansion
@@ -355,6 +371,7 @@ pub fn settle_card_menu(state: &mut State) {
     if target.is_some_and(|target| !listed.contains(&target)) {
         state.overview.card_menu = None;
         state.overview.focus_return = None;
+        state.overview.focus_return_link = false;
         state.overview.expansion.apply(Event::MenuClosed);
     }
 }
@@ -952,6 +969,56 @@ mod tests {
         assert_eq!(
             mounted.redraw(),
             [expansion_message(Event::FocusGained(target))]
+        );
+    }
+
+    /// Feature 1122 FR-008, FR-009 (D3): on the mounted Overview, Tab from a card with an issue
+    /// link reports the card's loss and the link's gain to the expansion; the link's Menu key asks
+    /// for the card's menu from the link; Tab on reports the link's loss.
+    #[test]
+    fn a_cards_link_reports_its_focus_and_menu_key() {
+        use crate::ui::material::test_support::key_with;
+        use iced::keyboard::{key::Named, Modifiers};
+        let mut state = overview_of(2);
+        state.worktree.worktrees[1].dir_name = "feat-1122_x".into();
+        state.settings.github_issues_enabled = true;
+        state.overview.repo = crate::features::overview::RepoLookup::Known(Some(
+            micold_core::github::GithubRepo::from_remote_url("git@github.com:o/r.git")
+                .expect("a GitHub remote"),
+        ));
+        let linked = cards(&state)
+            .into_iter()
+            .find(|card| card.issue_link.is_some())
+            .expect("a worktree card has its issue link")
+            .location;
+        let mut mounted = mount(&state);
+        mounted.drive(iced::advanced::widget::operation::focusable::focus::<()>(
+            card_id(&linked),
+        ));
+        mounted.redraw();
+        let tabbed = focus_moves(&mut mounted, 1);
+        assert_eq!(
+            tabbed,
+            [
+                expansion_message(Event::FocusLost(linked.clone())),
+                expansion_message(Event::LinkFocusGained(linked.clone())),
+            ]
+        );
+        let none = iced::mouse::Cursor::Unavailable;
+        let request = format!(
+            "{:?}",
+            Message::Overview(Msg::LinkMenuRequested(linked.clone()))
+        );
+        for key in [
+            key_with(Named::ContextMenu, Modifiers::empty()),
+            key_with(Named::F10, Modifiers::SHIFT),
+        ] {
+            assert_eq!(mounted.send(key, none), [request.clone()]);
+        }
+        let on = focus_moves(&mut mounted, 1);
+        assert_eq!(
+            on.first(),
+            Some(&expansion_message(Event::LinkFocusLost(linked)))
         );
     }
 
