@@ -249,7 +249,7 @@ pub fn entry(
             parts.extend(cwd.iter().cloned());
             caption(parts.join(" · "), roles)
         }
-        EntryKind::UserMessage { text } => column![
+        EntryKind::UserMessage { text, .. } => column![
             caption(USER_LABEL, roles),
             Text::new(plain_text(text), TypeRole::Body, roles)
                 .wrapping(Wrapping::WordOrGlyph)
@@ -311,6 +311,8 @@ pub fn entry(
         )
         .muted()
         .into(),
+        // Feature 941 draws the interrupted notice in M6; until then the turn ends with nothing.
+        EntryKind::Interrupted => iced::widget::Space::new().into(),
         EntryKind::Oversized { original_bytes } => caption(oversized_text(*original_bytes), roles),
         EntryKind::SubagentNotice { count } => caption(subagent_notice_text(*count), roles),
         EntryKind::Raw { text, .. } => column![

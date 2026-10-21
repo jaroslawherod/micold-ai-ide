@@ -1,6 +1,7 @@
 # Contract: client ↔ daemon wire additions (#941)
 
-All in `crates/micold-core/src/protocol/messages.rs`, postcard, in **one** `PROTOCOL_VERSION` bump
+All in `crates/micold-core/src/protocol/messages.rs`, JSON control frames (an `ImageAttachment`'s bytes
+as base64), in **one** `PROTOCOL_VERSION` bump
 (M1) with its `crates/micold-core/tests/schema_hash.rs` pin. Types from
 [../data-model.md](../data-model.md). `SessionInterrupt` is unchanged and still refused for a
 structured primary (#938 FR-019; FR-017).

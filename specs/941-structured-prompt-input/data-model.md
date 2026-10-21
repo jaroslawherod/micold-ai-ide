@@ -79,8 +79,8 @@ fed only by a running session); busy → `Queued`; idle and the queue is non-emp
 | `AttachmentRefusal` | `Unreadable { name, why }`, `TooLarge { name, size }`, `TooMany { name }`, `MessageTooLarge { name }` | `Display` names the file and why (FR-029) |
 | `DropPlan` | `images: Vec<PathBuf>`, `paths: Vec<PathBuf>` | `classify_drop(paths, sniff)` in drop order; folders and non-images → `paths` (FR-028) |
 
-Limits: `MAX_IMAGES_PER_MESSAGE = 20`; `MAX_MESSAGE_IMAGE_BYTES = 12 MiB` (sum per message, so the
-`SessionUserMessage` frame fits `MAX_FRAME_LENGTH`). `admit(draft_images, candidate) ->
+Limits: `MAX_IMAGES_PER_MESSAGE = 20`; `MAX_MESSAGE_IMAGE_BYTES = 9 MiB` (sum per message, so the
+`SessionUserMessage` frame, JSON with the bytes in base64, fits `MAX_FRAME_LENGTH`). `admit(draft_images, candidate) ->
 Result<(), AttachmentRefusal>` checks all three in that order.
 
 ### Encoded lines (changed / new)

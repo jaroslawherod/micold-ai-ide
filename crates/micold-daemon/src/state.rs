@@ -32,7 +32,7 @@ use micold_core::session::{
     AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle,
     SessionLocation, ShellInstanceId, TerminalMode, RESTART_STABLE_AFTER,
 };
-use micold_core::structured::{TurnState, UserMessageRefusal};
+use micold_core::structured::UserMessageRefusal;
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
@@ -6588,10 +6588,8 @@ impl DaemonState {
                 Err(UserMessageRefusal::NotStructured)
             }
             // Not running: `Blank` still comes first, as for a running session.
-            None => Err(TurnState::Idle
-                .accept(text, false)
-                .err()
-                .unwrap_or(UserMessageRefusal::NotRunning)),
+            None if text.trim().is_empty() => Err(UserMessageRefusal::Blank),
+            None => Err(UserMessageRefusal::NotRunning),
         }
     }
 

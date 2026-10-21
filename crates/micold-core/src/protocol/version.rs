@@ -217,7 +217,12 @@
 ///
 /// And 61 → 62 for #942's mode change while running (M5): `ClientMsg::SetPermissionMode`, which
 /// shifts the postcard index of every `ClientMsg` variant after it.
-pub const PROTOCOL_VERSION: u32 = 62;
+///
+/// And 62 → 63 for #941's prompt input (M1): `ClientMsg::SessionUserMessage` gains `images`,
+/// `ClientMsg::{TurnInterrupt, QueueEdit, QueueRemove, QueueTake, QueueRelease}`,
+/// `DaemonMsg::StructuredInput`, `OperationResult::Taken`, and `StructuredEvent` gains `UserSent`
+/// and `InterruptAsked`.
+pub const PROTOCOL_VERSION: u32 = 63;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

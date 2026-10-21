@@ -47,7 +47,8 @@ an interrupt ends the turn ≤ 3 s against a stand-in honouring it (SC-003); typ
 10,000-line draft never blocks input > 100 ms (SC-007).
 
 **Constraints**: nothing written to the CLI's stdin during a turn except control requests (P-3);
-a `SessionUserMessage` with its images fits `MAX_FRAME_LENGTH` (12 MiB of images, R8); broadcasts
+a `SessionUserMessage` with its images fits `MAX_FRAME_LENGTH` (9 MiB of images, base64 in the JSON
+control frame, R8); broadcasts
 never carry image bytes (R7); terminal sessions unchanged (FR-001, FR-017, SC-008); one
 `PROTOCOL_VERSION` bump.
 

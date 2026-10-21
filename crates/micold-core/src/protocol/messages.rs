@@ -39,8 +39,9 @@ use crate::session::{
 };
 use crate::settings::DiffLayout;
 use crate::settings::{JiraBaseUrlChange, JiraConnectionChange};
+use crate::structured::attachment::ImageAttachment;
 use crate::structured::permission::RequestKind;
-use crate::structured::SequencedEvent;
+use crate::structured::{InterruptAsk, QueueEntryId, QueuedSummary, SequencedEvent, TurnId};
 use crate::theme::ColorScheme;
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
@@ -684,10 +685,12 @@ pub enum ClientMsg {
         #[serde(default)]
         permission_mode: PermissionMode,
     },
-    /// A user message for a structured session (feature 938, FR-008): written to its CLI as one
-    /// stream-json user message. Answered `OperationOk(Ack)` once written; `OperationError` with
-    /// the `UserMessageRefusal` sentence when the text is blank, the session is not running, a turn
-    /// is in progress or the session is a terminal one. The text is never logged.
+    /// A user message for a structured session (feature 938, FR-008; feature 941): written to its
+    /// CLI as one stream-json user message, or queued while a turn is open. Answered
+    /// `OperationOk(Ack)` once written or queued (the `StructuredInput` that follows says which);
+    /// `OperationError` with the `UserMessageRefusal` sentence when there is nothing to send, the
+    /// session is not running or is a terminal one, or with the `AttachmentRefusal` sentence when
+    /// the pictures pass the limits. Neither the text nor the pictures are ever logged.
     SessionUserMessage {
         /// Correlation id.
         req: u64,
@@ -695,6 +698,9 @@ pub enum ClientMsg {
         session: SessionId,
         /// The message, delivered unchanged.
         text: String,
+        /// The pictures, in the order attached (feature 941, FR-027).
+        #[serde(default)]
+        images: Vec<ImageAttachment>,
     },
     /// Delete a session record.
     SessionDelete {
@@ -923,6 +929,57 @@ pub enum ClientMsg {
         session: SessionId,
         /// The mode it is to run in.
         mode: crate::session::PermissionMode,
+    },
+
+    // --- Structured session input (feature 941, contracts/wire.md) ---
+    /// Interrupt turn `turn` of a structured session (FR-013, FR-016). No answer: an interrupt of
+    /// a turn that is not open changes nothing; a terminal or unknown session, nothing.
+    TurnInterrupt {
+        /// Target session.
+        session: SessionId,
+        /// The turn the window saw busy.
+        turn: TurnId,
+    },
+    /// Replace queued message `entry`'s text and keep only its pictures at the indexes `keep`, in
+    /// place (FR-020). `Ack`, or `Refused` when it was sent or removed meanwhile or would be blank.
+    QueueEdit {
+        /// Correlation id.
+        req: u64,
+        /// Target session.
+        session: SessionId,
+        /// The queued message.
+        entry: QueueEntryId,
+        /// Its new text.
+        text: String,
+        /// Which of its pictures stay, by index.
+        keep: Vec<u32>,
+    },
+    /// Remove queued message `entry`: it is never delivered. `Ack`, or `Refused` when gone.
+    QueueRemove {
+        /// Correlation id.
+        req: u64,
+        /// Target session.
+        session: SessionId,
+        /// The queued message.
+        entry: QueueEntryId,
+    },
+    /// Move queued message `entry` back into this window's composer: answered
+    /// `OperationResult::Taken` with its text and pictures, or `Refused` when gone.
+    QueueTake {
+        /// Correlation id.
+        req: u64,
+        /// Target session.
+        session: SessionId,
+        /// The queued message.
+        entry: QueueEntryId,
+    },
+    /// **Send queued** (FR-022): release the session's held queue once. `Ack`, also when nothing
+    /// was held.
+    QueueRelease {
+        /// Correlation id.
+        req: u64,
+        /// Target session.
+        session: SessionId,
     },
 
     // --- Keepalive ---
@@ -1325,6 +1382,35 @@ pub enum DaemonMsg {
         request: RefusedRequest,
         /// Why, for the user.
         reason: String,
+    },
+    /// A structured session's input as every window shows it (feature 941, FR-009, FR-018,
+    /// FR-021, FR-022): sent to every client whenever its turn phase, hold or queue changes, in
+    /// the order the daemon made the changes, and after the handshake. Never carries picture bytes.
+    StructuredInput {
+        /// The session.
+        session: SessionId,
+        /// Whether a turn is open.
+        phase: TurnPhase,
+        /// The queue is on hold until **Send queued**.
+        hold: bool,
+        /// The queued messages, in delivery order.
+        queue: Vec<QueuedSummary>,
+    },
+}
+
+/// A structured session's turn as windows see it (feature 941, contracts/wire.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TurnPhase {
+    /// The session's CLI is not running.
+    NotRunning,
+    /// Running, no turn open.
+    Idle,
+    /// Turn `turn` is open; `interrupt` says whether an interrupt was asked for it.
+    Busy {
+        /// The open turn.
+        turn: TurnId,
+        /// Where an interrupt of it stands (FR-015).
+        interrupt: InterruptAsk,
     },
 }
 
@@ -2014,6 +2100,14 @@ pub enum OperationResult {
         path: PathBuf,
         /// Whether the daemon's git calls it a repository root.
         is_repo_root: bool,
+    },
+    /// A queued message moved back into the asking window's composer (feature 941,
+    /// [`ClientMsg::QueueTake`]): its text and pictures, to that window only.
+    Taken {
+        /// Its text.
+        text: String,
+        /// Its pictures, in order.
+        images: Vec<ImageAttachment>,
     },
 }
 

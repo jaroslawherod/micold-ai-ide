@@ -418,6 +418,31 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             req: 12,
             directives: "micold_daemon=debug".into(),
         },
+        ClientMsg::TurnInterrupt {
+            session: sid(),
+            turn: micold_core::structured::TurnId(9),
+        },
+        ClientMsg::QueueEdit {
+            req: 90,
+            session: sid(),
+            entry: micold_core::structured::QueueEntryId(1),
+            text: "edited".into(),
+            keep: vec![1],
+        },
+        ClientMsg::QueueRemove {
+            req: 91,
+            session: sid(),
+            entry: micold_core::structured::QueueEntryId(2),
+        },
+        ClientMsg::QueueTake {
+            req: 92,
+            session: sid(),
+            entry: micold_core::structured::QueueEntryId(3),
+        },
+        ClientMsg::QueueRelease {
+            req: 93,
+            session: sid(),
+        },
         ClientMsg::Ping { nonce: 0xdead_beef },
         // Feature 034 M5 (FR-014): a window's answer to an agent's destructive request.
         ClientMsg::ConfirmationAnswer { id: 7, allow: true },
@@ -876,6 +901,19 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             ],
             git_too_old: Some("2.30.0".into()),
         },
+        DaemonMsg::StructuredInput {
+            session: sid(),
+            phase: micold_core::protocol::messages::TurnPhase::Busy {
+                turn: micold_core::structured::TurnId(4),
+                interrupt: micold_core::structured::InterruptAsk::Asked,
+            },
+            hold: false,
+            queue: vec![micold_core::structured::QueuedSummary {
+                id: micold_core::structured::QueueEntryId(1),
+                text: "queued".into(),
+                attachments: vec![],
+            }],
+        },
     ]
 }
 
@@ -901,8 +939,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_62() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 62);
+fn the_protocol_version_is_63() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 63);
 }
 
 /// #942 M4 (FR-013, FR-015): a summary and a create carry the session's permission mode on both

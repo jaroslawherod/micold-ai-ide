@@ -186,6 +186,7 @@ async fn delivered_through_resume(
             req,
             session: id,
             text: AFTER_RESUME.into(),
+            images: vec![],
         },
     )
     .await;

@@ -218,6 +218,7 @@ fn a_session_user_message_round_trips_with_its_text_unchanged() {
             req: 41,
             session: sid(),
             text: text.into(),
+            images: vec![],
         };
         let ClientMsg::SessionUserMessage { text: back, .. } = json_roundtrip(&msg) else {
             panic!("not a SessionUserMessage");
@@ -240,5 +241,157 @@ fn a_session_request_refused_round_trips_for_every_refused_request() {
             reason: "a structured session has no terminal".into(),
         };
         json_roundtrip(&msg);
+    }
+}
+
+// -- Feature 941 (T019): prompt input, interrupt and the queue ------------------------------------
+
+mod prompt_input {
+    use super::*;
+    use bytes::BytesMut;
+    use micold_core::protocol::codec::{ClientCodec, Frame, WireFormat};
+    use micold_core::protocol::envelope::MAX_FRAME_LENGTH;
+    use micold_core::protocol::messages::{OperationResult, TurnPhase};
+    use micold_core::structured::attachment::{
+        admit, AttachmentMeta, ImageAttachment, ImageMedia, MAX_IMAGE_BYTES,
+        MAX_MESSAGE_IMAGE_BYTES,
+    };
+    use micold_core::structured::{InterruptAsk, QueueEntryId, QueuedSummary, TurnId};
+    use tokio_util::codec::Encoder;
+
+    fn picture(len: usize) -> ImageAttachment {
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        bytes.resize(len, 0xA5);
+        admit(&[], "shot.png", bytes).expect("a picture")
+    }
+
+    #[test]
+    fn a_user_message_with_pictures_round_trips() {
+        json_roundtrip(&ClientMsg::SessionUserMessage {
+            req: 1,
+            session: sid(),
+            text: "look".into(),
+            images: vec![picture(64), picture(9)],
+        });
+    }
+
+    #[test]
+    fn a_user_message_from_before_941_has_no_pictures() {
+        let msg = ClientMsg::SessionUserMessage {
+            req: 1,
+            session: sid(),
+            text: "hi".into(),
+            images: vec![],
+        };
+        let old = without(
+            serde_json::to_value(&msg).expect("json"),
+            &["SessionUserMessage"],
+            "images",
+        );
+        assert_eq!(
+            serde_json::from_value::<ClientMsg>(old).expect("decodes"),
+            msg
+        );
+    }
+
+    #[test]
+    fn structured_input_round_trips_in_every_phase() {
+        let queue = vec![QueuedSummary {
+            id: QueueEntryId(3),
+            text: "next".into(),
+            attachments: vec![AttachmentMeta {
+                name: "shot.png".into(),
+                media: ImageMedia::Png,
+                size: 64,
+            }],
+        }];
+        for phase in [
+            TurnPhase::NotRunning,
+            TurnPhase::Idle,
+            TurnPhase::Busy {
+                turn: TurnId(7),
+                interrupt: InterruptAsk::None,
+            },
+            TurnPhase::Busy {
+                turn: TurnId(7),
+                interrupt: InterruptAsk::Asked,
+            },
+            TurnPhase::Busy {
+                turn: TurnId(7),
+                interrupt: InterruptAsk::Overdue,
+            },
+        ] {
+            json_roundtrip(&DaemonMsg::StructuredInput {
+                session: sid(),
+                phase,
+                hold: true,
+                queue: queue.clone(),
+            });
+        }
+    }
+
+    #[test]
+    fn the_interrupt_and_the_queue_edits_round_trip() {
+        let entry = QueueEntryId(4);
+        for msg in [
+            ClientMsg::TurnInterrupt {
+                session: sid(),
+                turn: TurnId(2),
+            },
+            ClientMsg::QueueEdit {
+                req: 1,
+                session: sid(),
+                entry,
+                text: "edited".into(),
+                keep: vec![0, 2],
+            },
+            ClientMsg::QueueRemove {
+                req: 2,
+                session: sid(),
+                entry,
+            },
+            ClientMsg::QueueTake {
+                req: 3,
+                session: sid(),
+                entry,
+            },
+            ClientMsg::QueueRelease {
+                req: 4,
+                session: sid(),
+            },
+        ] {
+            json_roundtrip(&msg);
+        }
+        json_roundtrip(&DaemonMsg::OperationOk {
+            req: 3,
+            result: OperationResult::Taken {
+                text: "back".into(),
+                images: vec![picture(32)],
+            },
+        });
+    }
+
+    #[test]
+    fn a_message_with_the_most_pictures_and_a_mebibyte_of_text_fits_one_frame() {
+        let mut images = Vec::new();
+        let mut held = 0;
+        while held + MAX_IMAGE_BYTES <= MAX_MESSAGE_IMAGE_BYTES {
+            images.push(picture(MAX_IMAGE_BYTES));
+            held += MAX_IMAGE_BYTES;
+        }
+        images.push(picture(MAX_MESSAGE_IMAGE_BYTES - held));
+        let total: usize = images.iter().map(|i| i.bytes().len()).sum();
+        assert_eq!(total, MAX_MESSAGE_IMAGE_BYTES);
+        let msg = ClientMsg::SessionUserMessage {
+            req: 1,
+            session: sid(),
+            text: "ż".repeat(512 * 1024),
+            images,
+        };
+        let mut frame = BytesMut::new();
+        ClientCodec::with_format(WireFormat::Postcard)
+            .encode(Frame::Control(msg), &mut frame)
+            .expect("encodes within the frame limit");
+        assert!(frame.len() < MAX_FRAME_LENGTH, "{} bytes", frame.len());
     }
 }
