@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1152 | Design PR | merged | 537bf0d5193e751dbd41b377a70dd6488db31ba0 |
 | #1155 | M1 | merged | 473538658f1b4835f0fba0eddf67d95bfe608269 |
+| #1190 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Status chip in the issue picker | #1155 | merged |
-| M2 | T014–T027 | full | Current status on the sidebar | | gated |
+| M2 | T014–T027 | full | Current status on the sidebar | #1190 | PR open |
 | M3 | T028–T030 | full | Status on Overview cards | | pending |
 
 ## Decisions
