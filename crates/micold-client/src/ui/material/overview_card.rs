@@ -1136,12 +1136,45 @@ mod tests {
             viewport.x + viewport.width <= width - super::super::scrollable::BAR_FOOTPRINT + 0.01,
             "the inner bar lies under the grid's bar at the card's right edge: {viewport:?}"
         );
-        // The text stays within the card's margins; the bar took the strip from the padding.
+        // The text stays within the card's margins.
         for line in card.painted_text() {
             let b = line.bounds;
             assert!(b.x >= spacing::MD - 0.01, "{line:?}");
             assert!(b.x + b.width <= width - spacing::MD + 0.01, "{line:?}");
         }
+        // The bar took its strip from the body's padding, not from its text: the activity wraps
+        // exactly as body text does in the full room between the card's margins. An unbroken run
+        // of a glyph narrower than the strip breaks at the last glyph that fits, so any lost
+        // width shows.
+        let mut m = overlong();
+        let line = "i".repeat(300);
+        let activity = m.activity.as_mut().expect("an activity");
+        (activity.line, activity.ratio) = (line.clone(), None);
+        let room = width - 2.0 * spacing::MD;
+        let mut free = Mounted::new_in(
+            container(wrapped::<String>(
+                line.clone(),
+                TypeRole::Body,
+                roles().on_surface_variant,
+                roles(),
+            ))
+            .width(Length::Fixed(room)),
+            Size::new(room, 4000.0),
+        );
+        let wraps = |painted: Vec<super::super::test_support::Painted>| {
+            painted
+                .into_iter()
+                .find(|p| p.content == line)
+                .map(|p| p.bounds.width)
+                .unwrap_or_else(|| panic!("{line:?} is not painted"))
+        };
+        let (full_room, (in_body, _)) =
+            (wraps(free.painted_text()), expanded_at(&m, width, roles()));
+        let in_body = wraps(in_body);
+        assert!(
+            (full_room - in_body).abs() < 0.01,
+            "the body's text lost width to the inner bar: it wraps {in_body} wide, not {full_room}"
+        );
     }
 
     /// Feature 1121 K4: the inner body publishes `(up, down)` = `(true, false)` at its end and

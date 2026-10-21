@@ -535,7 +535,8 @@ mod tests {
     fn a_window_blur_collapses_and_nothing_re_expands() {
         assert_eq!(
             shown(&after([focus("a"), rest("b"), Event::WindowBlurred])),
-            None
+            None,
+            "a blur left the hovered card expanded"
         );
         assert_eq!(
             shown(&after([
@@ -544,9 +545,14 @@ mod tests {
                 Event::WindowBlurred,
                 leave("b")
             ])),
-            None
+            None,
+            "the focused card re-expanded after the blur"
         );
-        assert_eq!(shown(&after([focus("a"), Event::WindowBlurred])), None);
+        assert_eq!(
+            shown(&after([focus("a"), Event::WindowBlurred])),
+            None,
+            "a blur left the focused card expanded"
+        );
     }
 
     /// K1, Story 3 sc.5, D1: Escape collapses a focus-expanded card and keeps its focus; focus
@@ -598,17 +604,24 @@ mod tests {
                 rest("b"),
                 focus("b")
             ])),
-            Some("a".into())
+            Some("a".into()),
+            "a rest or focus under the open menu moved the expansion"
         );
         assert_eq!(
             shown(&after([Event::MenuOpened, rest("b"), focus("b")])),
-            None
+            None,
+            "a rest or focus under the open menu expanded a card"
         );
         let reopened = [Event::MenuOpened, rest("b"), Event::MenuClosed, rest("b")];
-        assert_eq!(shown(&after(reopened)), Some("b".into()));
+        assert_eq!(
+            shown(&after(reopened)),
+            Some("b".into()),
+            "a rest after the menu closed did not expand"
+        );
         assert_eq!(
             shown(&after([Event::MenuOpened, Event::MenuClosed, focus("b")])),
-            Some("b".into())
+            Some("b".into()),
+            "a focus after the menu closed did not expand"
         );
     }
 
