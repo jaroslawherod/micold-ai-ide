@@ -19,7 +19,7 @@
 //! `http://127.0.0.1:<port>/hook/<session-uuid>` with the token in an `Authorization: Bearer` header,
 //! so **user configuration is never modified**.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -30,12 +30,12 @@ use uuid::Uuid;
 
 use crate::activity::{ActivityEvent, HookKind};
 use crate::http::{self, respond, Body, HeadRead};
+use crate::plan_usage::Rejections;
 use crate::state::{unix_secs, DaemonState};
 use micold_core::agent_run::AgentSignal;
 use micold_core::mcp::binding::ConfigLocations;
 use micold_core::plan_usage::status_line;
 use micold_core::plan_usage::user_status_line::{RelayConfig, UserStatusLine};
-use micold_core::protocol::messages::DaemonMsg;
 use micold_core::session::{AiCli, SessionId};
 
 /// Longest `agent_id`, `agent_type` or transcript path recorded (feature 552): the runs ride on every
@@ -66,10 +66,6 @@ pub const MAX_STATUS_BODY: usize = 16 * 1024;
 
 /// The shared token registry: session uuid → its per-session bearer secret.
 type Tokens = Arc<Mutex<HashMap<Uuid, String>>>;
-
-/// The `/status` answers already logged, per session, since its last accepted reading (feature
-/// 490, S3.1, FR-016): an unchanged failure is logged once.
-type Rejections = Arc<Mutex<HashSet<(Uuid, &'static str)>>>;
 
 /// Where a session's own status line is looked up (feature 490, research R4): its working directory
 /// and the configuration locations it sees.
@@ -264,7 +260,7 @@ fn shell_quoted(path: &Path) -> String {
 /// lifetime. An accept error is transient (a peer that vanished mid-handshake) and is skipped rather
 /// than tearing the loop down.
 pub async fn serve(listener: TcpListener, tokens: Tokens, state: Arc<DaemonState>) {
-    let rejections = Rejections::default();
+    let rejections = state.plan_usage_rejections().clone();
     loop {
         let stream = match listener.accept().await {
             Ok((stream, _peer)) => stream,
@@ -272,7 +268,7 @@ pub async fn serve(listener: TcpListener, tokens: Tokens, state: Arc<DaemonState
         };
         let tokens = Arc::clone(&tokens);
         let state = Arc::clone(&state);
-        let rejections = Arc::clone(&rejections);
+        let rejections = rejections.clone();
         tokio::spawn(async move {
             // A handler error is a malformed/hostile request; it never propagates.
             let _ = handle_connection(stream, tokens, state, rejections).await;
@@ -346,7 +342,7 @@ async fn handle_connection(
             .expect("hook tokens lock poisoned")
             .contains_key(&session_uuid);
         if route == Route::Status && known {
-            rejected(&rejections, session_uuid, "forbidden");
+            rejections.reject(session_uuid, "forbidden");
         }
         return respond(&mut stream, 403, "Forbidden").await;
     }
@@ -361,7 +357,7 @@ async fn handle_connection(
         Body::Complete(body) => body,
         Body::TooLarge => {
             if route == Route::Status {
-                rejected(&rejections, session_uuid, "too large");
+                rejections.reject(session_uuid, "too large");
             }
             return respond(&mut stream, 413, "Payload Too Large").await;
         }
@@ -409,42 +405,20 @@ fn plan_usage(
     let body: serde_json::Value = match serde_json::from_slice(body) {
         Ok(object @ serde_json::Value::Object(_)) => object,
         _ => {
-            rejected(rejections, session.0, "malformed");
+            rejections.reject(session.0, "malformed");
             return (400, "Bad Request");
         }
     };
     let Some(reading) = status_line::parse(&body, unix_secs()) else {
-        rejected(rejections, session.0, "no usable window");
+        rejections.reject(session.0, "no usable window");
         return OK;
     };
     if !state.plan_usage_enabled() {
-        rejected(rejections, session.0, "plan usage is off");
+        rejections.reject(session.0, "plan usage is off");
         return OK;
     }
-    if state.note_plan_usage(session, reading.clone()) {
-        // An accepted reading: the next failure of this session is news again (FR-016).
-        rejections
-            .lock()
-            .expect("status rejections lock poisoned")
-            .retain(|(uuid, _)| *uuid != session.0);
-        state.broadcast(DaemonMsg::PlanUsageChanged {
-            reading: Some(reading),
-        });
-    }
+    state.offer_plan_usage(session, reading);
     OK
-}
-
-/// Log a `/status` request the service did not use, at debug and once per (session, answer) until
-/// that session's next accepted reading (S3.1, FR-016). Nothing about it is a warning: plan usage
-/// that cannot be read is simply not shown (FR-015).
-fn rejected(rejections: &Rejections, session: Uuid, answer: &'static str) {
-    let first = rejections
-        .lock()
-        .expect("status rejections lock poisoned")
-        .insert((session, answer));
-    if first {
-        tracing::debug!(%session, answer, "plan usage reading not used");
-    }
 }
 
 /// Extract the route and session uuid from a `/hook/<uuid>` or `/status/<uuid>` path (ignoring any

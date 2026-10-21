@@ -155,6 +155,12 @@ pub struct DaemonState {
     saver: Mutex<history::Saver>,
     /// Serialises changes of the terminal history setting.
     setting_change: Mutex<()>,
+    /// The plan-usage answers logged since each session's last accepted reading (feature 490,
+    /// FR-016), shared by the status route and structured sessions (feature 944).
+    plan_usage_rejections: crate::plan_usage::Rejections,
+    /// Structured sessions' plan-limit readings on their way to [`Self::offer_plan_usage`]
+    /// (feature 944, research R4).
+    plan_usage_feed: crate::plan_usage::Feed,
 }
 
 struct Inner {
@@ -796,6 +802,8 @@ impl DaemonState {
             history_directory_warned: std::sync::atomic::AtomicBool::new(false),
             saver: Mutex::new(history::Saver::default()),
             setting_change: Mutex::new(()),
+            plan_usage_rejections: crate::plan_usage::Rejections::default(),
+            plan_usage_feed: crate::plan_usage::Feed::default(),
         }
     }
 
@@ -1547,6 +1555,32 @@ impl DaemonState {
         }
         inner.plan_usage = Some(reading);
         true
+    }
+
+    /// Offer `reading`, reported by `session`, to every window (feature 490, FR-018, FR-019; feature
+    /// 944, research R4): kept as [`Self::note_plan_usage`] decides — never while plan usage is off
+    /// (FR-011) — and, when kept, pushed as `PlanUsageChanged` and the session's logged failures
+    /// forgotten (FR-016). Returns whether it was kept. Both sources, the status route and a
+    /// structured session's plan-limit event, come here.
+    pub fn offer_plan_usage(&self, session: SessionId, reading: UsageReading) -> bool {
+        let kept = self.note_plan_usage(session, reading.clone());
+        if kept {
+            self.plan_usage_rejections.accepted(session.0);
+            self.broadcast(DaemonMsg::PlanUsageChanged {
+                reading: Some(reading),
+            });
+        }
+        kept
+    }
+
+    /// The once-per-answer log of plan-usage readings not used (feature 490, FR-016).
+    pub fn plan_usage_rejections(&self) -> &crate::plan_usage::Rejections {
+        &self.plan_usage_rejections
+    }
+
+    /// The feed of structured sessions' plan-limit readings (feature 944).
+    pub fn plan_usage_feed(&self) -> &crate::plan_usage::Feed {
+        &self.plan_usage_feed
     }
 
     /// Turn plan usage on or off (feature 490, FR-002) and push `SettingsChanged` to every
@@ -4669,8 +4703,17 @@ impl DaemonState {
         let stream = self.event_stream_loading(id, true).ok_or_else(|| {
             io::Error::other("the session was removed before its event stream was made")
         })?;
-        StructuredSession::spawn(id, spec, extra, move |event| stream.push(event))
-            .map(|child| Proc::Structured(Arc::new(child)))
+        // A plan-limit event the running CLI writes is a plan-usage reading (feature 944, R4); a
+        // restored history never passes here (FR-013).
+        let feed = self.plan_usage_feed.sender();
+        let rejections = self.plan_usage_rejections.clone();
+        StructuredSession::spawn(id, spec, extra, move |event| {
+            if let micold_core::structured::StructuredEvent::Unrecognised { raw } = &event {
+                crate::plan_usage::offer_line(id, raw, &feed, &rejections);
+            }
+            stream.push(event)
+        })
+        .map(|child| Proc::Structured(Arc::new(child)))
     }
 
     /// `id`'s structured event stream, if it has ever run as a structured session (feature 938).

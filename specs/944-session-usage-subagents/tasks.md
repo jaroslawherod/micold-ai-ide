@@ -216,7 +216,7 @@ and the CLI forwards subagent text.
 
 ### Tests for User Story 4 ⚠️ write first, see them fail
 
-- [ ] T016 [P] [US4] Core tests in a new `crates/micold-core/tests/plan_usage_rate_limit_event.rs`
+- [x] T016 [P] [US4] Core tests in a new `crates/micold-core/tests/plan_usage_rate_limit_event.rs`
   (contracts/plan-usage-source.md *Parse*): every recorded fixture's `rate_limit_event` parses to
   two windows, "5-hour" and "Weekly", with `used_tenths = round(utilization × 1000)` and their
   `resetsAt`; `None` for a line that is not JSON, of another `type`, or without
@@ -224,7 +224,7 @@ and the CLI forwards subagent text.
   after scaling, or `resetsAt` before `obtained_at` is dropped, and an event with no usable window
   → `None`; the top-level `utilization`/`resetsAt` are not read; the tolerance fixture's
   `rate_limit_event` lines give `None` without a panic
-- [ ] T017 [P] [US4] Daemon tests in a new `crates/micold-daemon/tests/plan_usage_structured.rs`
+- [x] T017 [P] [US4] Daemon tests in a new `crates/micold-daemon/tests/plan_usage_structured.rs`
   (contracts/plan-usage-source.md *Guarantees*, SC-004), with the stand-in CLI of
   `tests/support/structured.rs` replaying `text-turn.jsonl` and the setting helpers of
   `tests/plan_usage_setting.rs` reused, not copied: **Show Claude plan usage** on → a test client
@@ -232,7 +232,7 @@ and the CLI forwards subagent text.
   no reading kept (FR-011); a structured session restored from a saved history containing the
   event → no `PlanUsageChanged` (FR-013); an unreadable event leaves the current reading unchanged
   (FR-012); the event stays in the session's event history in every case (US4 s3)
-- [ ] T018 [P] [US4] In `crates/micold-daemon/tests/structured_session.rs`, assert the stand-in
+- [x] T018 [P] [US4] In `crates/micold-daemon/tests/structured_session.rs`, assert the stand-in
   sees `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1` in its environment and #938's seven structured
   arguments unchanged (research R5, D8); in `crates/micold-core/src/provider.rs` unit tests, the
   Claude provider's `structured_env()` is `[("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT", "1")]` and every
@@ -240,18 +240,18 @@ and the CLI forwards subagent text.
 
 ### Implementation for User Story 4
 
-- [ ] T019 [US4] Extract `status_line::window`'s per-window rule into
+- [x] T019 [US4] Extract `status_line::window`'s per-window rule into
   `plan_usage::limit_window(key, used_percent: f64, resets_at: Option<&Value>, obtained_at) ->
   Option<LimitWindow>` in `crates/micold-core/src/plan_usage.rs`, called by
   `crates/micold-core/src/plan_usage/status_line.rs`; add `pub mod rate_limit_event;` and
   implement `parse(raw: &str, obtained_at: i64) -> Option<UsageReading>` in
   `crates/micold-core/src/plan_usage/rate_limit_event.rs`; T016 passes and
   `plan_usage_status_line`, `plan_usage_user_status_line` and `plan_usage` tests stay green unchanged
-- [ ] T020 [US4] Add `AiCliProvider::structured_env() -> &'static [(&'static str, &'static str)]`
+- [x] T020 [US4] Add `AiCliProvider::structured_env() -> &'static [(&'static str, &'static str)]`
   (default `&[]`; Claude: forward subagent text) in `crates/micold-core/src/provider.rs`, and apply
   it in `StructuredSession::spawn` in `crates/micold-daemon/src/structured.rs` after
   `apply_env_hygiene` and before `spec.env`; T018 passes
-- [ ] T021 [US4] Daemon feed (research R4): extract `DaemonState::offer_plan_usage(session,
+- [x] T021 [US4] Daemon feed (research R4): extract `DaemonState::offer_plan_usage(session,
   reading) -> bool` (switch check, `note_plan_usage`, `PlanUsageChanged` broadcast) from the status
   handler in `crates/micold-daemon/src/hooks.rs` into `crates/micold-daemon/src/state.rs` and call
   it from `hooks.rs`; add the plan-usage feed (`UnboundedSender<(SessionId, UsageReading)>` held by
@@ -261,7 +261,7 @@ and the CLI forwards subagent text.
   reading to the feed; an unreadable event logs one debug line per (session, reason) until that
   session's next accepted reading (feature 490 FR-016, as `hooks.rs` logs a rejected status);
   T017 passes and `plan_usage_route`, `plan_usage_setting`, `status_relay` pass unchanged (SC-007)
-- [ ] T022 [US4] Documentation (FR-027): `docs/user-guide/settings.md` *Claude plan usage* and
+- [x] T022 [US4] Documentation (FR-027): `docs/user-guide/settings.md` *Claude plan usage* and
   `docs/user-guide/worktrees-and-sessions.md` *Claude plan usage* say that structured sessions are
   a usage source too (the CLI's plan-limit event, read locally, no request); the Settings note of
   **Show Claude plan usage** in `crates/micold-client/src/ui/settings/environment.rs` says the

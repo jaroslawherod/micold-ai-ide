@@ -229,6 +229,7 @@ pub async fn run() -> io::Result<()> {
     // that crashes with no window open is restarted anyway (US4, FR-005).
     spawn_supervisor(Arc::clone(&state));
     spawn_history_saver(Arc::clone(&state));
+    spawn_plan_usage_feed(Arc::clone(&state));
 
     // The loopback activity-hook receiver (US2, T045/T046): bind an ephemeral 127.0.0.1 port and
     // record it on the shared state so AI-CLI spawns point `claude`'s lifecycle hooks at it. A bind
@@ -325,6 +326,14 @@ fn spawn_history_saver(state: Arc<DaemonState>) {
             .await;
         }
     });
+}
+
+/// Spawn the task that hands structured sessions' plan-limit readings to the service (feature
+/// 944, research R4). Once per service: a second call finds the feed taken and does nothing.
+pub fn spawn_plan_usage_feed(state: Arc<DaemonState>) {
+    if let Some(feed) = state.plan_usage_feed().take_receiver() {
+        tokio::spawn(crate::plan_usage::drain(state, feed));
+    }
 }
 
 /// Spawn the restart-supervision loop (US4, FR-005). Ticks on `SUPERVISION_INTERVAL`, drives the
