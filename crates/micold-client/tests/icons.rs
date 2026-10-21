@@ -85,6 +85,8 @@ fn expected(icon: Icon) -> char {
         Icon::ToolFailed => '\u{e001}',
         Icon::ToolNoResult => '\u{f08f}',
         Icon::JumpToLatest => '\u{e5db}',
+        Icon::Subagent => '\u{f06c}',
+        Icon::BackgroundTask => '\u{f1bb}',
     }
 }
 
@@ -128,8 +130,9 @@ fn all_covers_every_variant_without_duplicates() {
     // entry (`login`), +2 for feature 1003's pull request header's previous/next (`chevron_left`,
     // `chevron_right`), +2 for feature 970's Overview full-screen toggle (`fullscreen`,
     // `fullscreen_exit`), +7 for feature 939's transcript cards (`psychology`, `build`,
-    // `progress_activity`, `check_circle`, `error`, `do_not_disturb_on`, `arrow_downward`).
-    assert_eq!(Icon::ALL.len(), 77, "curated set size");
+    // `progress_activity`, `check_circle`, `error`, `do_not_disturb_on`, `arrow_downward`), +2 for
+    // feature 944's subagent and background-task icons (`smart_toy`, `pending_actions`).
+    assert_eq!(Icon::ALL.len(), 79, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -262,6 +265,26 @@ fn the_transcript_icons_are_pinned_and_distinct_from_each_other() {
     for (i, (a, _)) in transcript.iter().enumerate() {
         for (b, _) in &transcript[i + 1..] {
             assert_ne!(a.glyph(), b.glyph(), "{a:?} and {b:?} must differ");
+        }
+    }
+}
+
+/// Feature 944 (research R12): the subagent and background-task icons are pinned, in `Icon::ALL`,
+/// and share a codepoint with no other icon.
+#[test]
+fn the_subagent_and_background_task_icons_are_pinned_and_unique() {
+    for (icon, glyph) in [
+        (Icon::Subagent, '\u{f06c}'),
+        (Icon::BackgroundTask, '\u{f1bb}'),
+    ] {
+        assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+        assert_eq!(icon.glyph(), glyph, "{icon:?} codepoint");
+        for &other in Icon::ALL.iter().filter(|&&other| other != icon) {
+            assert_ne!(
+                icon.glyph(),
+                other.glyph(),
+                "{icon:?} and {other:?} share a codepoint"
+            );
         }
     }
 }

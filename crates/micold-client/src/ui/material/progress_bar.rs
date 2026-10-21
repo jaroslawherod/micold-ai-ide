@@ -3,13 +3,23 @@
 //!
 //! The track and the fill are `StageProgress`'s own (`progress::paint_track`, `paint_fill`), so
 //! the two indicators read as one family. Unlike it this one moves nothing and asks for no frame.
+//!
+//! Two optional steps serve the context meter (feature 944, research R12): `.marker(Ratio)` draws a
+//! [`MARKER_WIDTH`] tick across the track at a second ratio (the compaction threshold), and
+//! `.warning(true)` fills in the `error` role. The warning colour is never the only signal: the
+//! caller shows an icon and text beside the bar (FR-003).
 
-use crate::ui::material::progress::{paint_fill, paint_track};
+use crate::ui::material::progress::{paint_fill, paint_track, track_color};
+use crate::ui::material::style;
 use iced::advanced::widget::{tree, Tree, Widget};
 use iced::advanced::{layout, mouse, renderer, Layout};
 use iced::{Element, Length, Rectangle, Size};
 use micold_core::task_progress::Ratio;
-use micold_core::tokens::{anatomy, Roles};
+use micold_core::tokens::{anatomy, Rgb, Roles};
+
+/// How wide the marker's tick is, in dp. Component-owned like `TOOLTIP_MAX_WIDTH`: feature 018's
+/// anatomy contract names no marker figure.
+pub const MARKER_WIDTH: f32 = 2.0;
 
 /// A determinate bar showing a [`Ratio`]. Builder form (Principle VIII):
 /// `ProgressBar::new(ratio, roles).width(Length::Fixed(120.0))`.
@@ -17,6 +27,8 @@ pub struct ProgressBar {
     ratio: Ratio,
     roles: Roles,
     width: Length,
+    marker: Option<Ratio>,
+    warning: bool,
 }
 
 impl ProgressBar {
@@ -26,7 +38,21 @@ impl ProgressBar {
             ratio,
             roles,
             width: Length::Fill,
+            marker: None,
+            warning: false,
         }
+    }
+
+    /// Mark `at` on the track with a [`MARKER_WIDTH`] tick, inside the track at every ratio.
+    pub fn marker(mut self, at: Ratio) -> Self {
+        self.marker = Some(at);
+        self
+    }
+
+    /// Fill in the `error` role instead of `primary` while `on`.
+    pub fn warning(mut self, on: bool) -> Self {
+        self.warning = on;
+        self
     }
 
     /// The bar's width.
@@ -34,6 +60,22 @@ impl ProgressBar {
         self.width = width.into();
         self
     }
+}
+
+/// The fill's colour: `error` for a warning bar, `primary` otherwise.
+pub(crate) fn fill_color(roles: &Roles, warning: bool) -> Rgb {
+    if warning {
+        roles.error
+    } else {
+        roles.primary
+    }
+}
+
+/// Where the marker's tick starts on a track `track` wide: centred on `at`'s share of the track,
+/// and moved in so all of it stays on the track.
+pub fn marker_x(at: Ratio, track: f32) -> f32 {
+    let centre = fill_width(at, track);
+    (centre - MARKER_WIDTH / 2.0).clamp(0.0, (track - MARKER_WIDTH).max(0.0))
 }
 
 /// How wide the fill is on a track `track` wide: the ratio's share, never more than the track.
@@ -88,9 +130,31 @@ where
             return;
         }
         paint_track(renderer, bounds, &self.roles);
+        let fill = fill_color(&self.roles, self.warning);
         let width = fill_width(self.ratio, bounds.width);
         if width > 0.0 {
-            paint_fill(renderer, Rectangle { width, ..bounds }, &self.roles);
+            paint_fill(renderer, Rectangle { width, ..bounds }, fill);
+        }
+        if let Some(at) = self.marker {
+            let x = marker_x(at, bounds.width);
+            // On the filled part the tick takes the track's colour, on the empty part the fill's.
+            let on_fill = width >= x + MARKER_WIDTH / 2.0;
+            let color = if on_fill {
+                track_color(&self.roles)
+            } else {
+                fill
+            };
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: Rectangle {
+                        x: bounds.x + x,
+                        width: MARKER_WIDTH.min(bounds.width),
+                        ..bounds
+                    },
+                    ..Default::default()
+                },
+                iced::Background::Color(style::color(color)),
+            );
         }
     }
 }
@@ -197,5 +261,81 @@ mod tests {
         );
         let (h, _) = (pixels.len() as u32 / 4 / mine_width, ());
         assert_eq!(h as f32, anatomy::progress::THICKNESS);
+    }
+
+    /// The columns of `row` nearer `a` than `b`.
+    fn nearer(
+        row: &[[u8; 3]],
+        a: micold_core::tokens::Rgb,
+        b: micold_core::tokens::Rgb,
+    ) -> Vec<usize> {
+        let (a, b) = (rgb(a), rgb(b));
+        let apart = |p: &[u8; 3], to: [f32; 3]| -> f32 {
+            p.iter()
+                .zip(to)
+                .map(|(x, y)| (f32::from(*x) - y).abs())
+                .sum()
+        };
+        row.iter()
+            .enumerate()
+            .filter(|(_, p)| apart(p, a) < apart(p, b))
+            .map(|(x, _)| x)
+            .collect()
+    }
+
+    /// 944 FR-002, R12: the marker is a 2 px tick inside the track at its ratio — at 0, in the
+    /// middle and at 1. On the empty part of the track it is drawn in the fill's colour; on the
+    /// filled part in the track's, so it shows wherever the fill has reached.
+    #[test]
+    fn a_marker_is_a_two_px_tick_inside_the_track_at_its_ratio() {
+        let (fill, track) = (roles().primary, roles().secondary_container);
+        for (done, expect) in [(0, 0usize), (8, 159), (10, 198)] {
+            let at = Ratio { done, total: 10 };
+            let ticks = vec![expect, expect + 1];
+            let on_empty = middle_row(bar(0, 10).marker(at));
+            assert_eq!(
+                nearer(&on_empty, fill, track),
+                ticks,
+                "{done}/10 on an empty bar"
+            );
+            let on_full = middle_row(bar(10, 10).marker(at));
+            assert_eq!(
+                nearer(&on_full, track, fill),
+                ticks,
+                "{done}/10 on a full bar"
+            );
+            assert!(
+                (marker_x(at, WIDTH) - expect as f32).abs() < 0.01,
+                "{done}/10: marker_x"
+            );
+        }
+        assert_eq!(MARKER_WIDTH, 2.0);
+    }
+
+    /// 944 FR-003, R12: a warning bar fills in the `error` role, as wide as without the warning.
+    #[test]
+    fn a_warning_bar_fills_in_the_error_role() {
+        let r = roles();
+        assert_eq!(fill_color(&r, true), r.error);
+        assert_eq!(fill_color(&r, false), r.primary);
+        let row = middle_row(bar(6, 10).warning(true));
+        let red = nearer(&row, r.error, r.secondary_container);
+        assert!(
+            (red.len() as f32 - 120.0).abs() <= 1.0,
+            "{} px in the error role, expected 120",
+            red.len()
+        );
+        assert!(
+            nearer(&row[..red.len()], r.primary, r.error).is_empty(),
+            "no filled pixel is in the primary role"
+        );
+    }
+
+    /// Without either step the bar draws as before: `.warning(false)` and no marker change no pixel.
+    #[test]
+    fn without_a_marker_or_warning_the_bar_draws_as_before() {
+        let plain = Mounted::new(bar(6, 10)).drawn(style::color(roles().surface));
+        let off = Mounted::new(bar(6, 10).warning(false)).drawn(style::color(roles().surface));
+        assert_eq!(plain, off);
     }
 }

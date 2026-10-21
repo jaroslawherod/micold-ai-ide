@@ -23,7 +23,7 @@
 use iced::advanced::widget::{tree, Tree, Widget};
 use iced::advanced::{layout, mouse, renderer, Clipboard, Layout, Shell};
 use iced::{Border, Element, Event, Length, Rectangle, Size};
-use micold_core::tokens::{anatomy, motion::duration, shape, Roles};
+use micold_core::tokens::{anatomy, motion::duration, shape, Rgb, Roles};
 use std::time::Duration;
 
 use crate::ui::cdk::motion::Progress;
@@ -103,21 +103,26 @@ pub(super) fn paint_track<R: renderer::Renderer>(renderer: &mut R, bounds: Recta
             border: pill(),
             ..Default::default()
         },
-        iced::Background::Color(style::color(r.secondary_container)),
+        iced::Background::Color(style::color(track_color(r))),
     );
 }
 
-/// Paint the `primary` fill every progress bar shares, over `bounds` (the part of the track it
-/// covers).
-pub(super) fn paint_fill<R: renderer::Renderer>(renderer: &mut R, bounds: Rectangle, r: &Roles) {
+/// Paint the fill every progress bar shares, in `color` (`primary`, or `error` for a warning
+/// `ProgressBar`), over `bounds` (the part of the track it covers).
+pub(super) fn paint_fill<R: renderer::Renderer>(renderer: &mut R, bounds: Rectangle, color: Rgb) {
     renderer.fill_quad(
         renderer::Quad {
             bounds,
             border: pill(),
             ..Default::default()
         },
-        iced::Background::Color(style::color(r.primary)),
+        iced::Background::Color(style::color(color)),
     );
+}
+
+/// The track's colour, `secondary_container`.
+pub(super) fn track_color(r: &Roles) -> Rgb {
+    r.secondary_container
 }
 
 /// The full-radius border of the track and the fill.
@@ -219,7 +224,7 @@ where
             return;
         };
         renderer.with_layer(clip, |renderer| {
-            paint_fill(renderer, indicator, &r);
+            paint_fill(renderer, indicator, r.primary);
         });
     }
 }

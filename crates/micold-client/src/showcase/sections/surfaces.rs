@@ -581,18 +581,33 @@ pub fn stage_progress<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
     )
 }
 
-/// `ProgressBar` at none, most and all of a task list.
+/// `ProgressBar` at none, most and all of a task list; then with a marker at 8/10 (feature 944's
+/// compaction threshold), below it and, as a warning bar, past it.
 pub fn progress_bar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     use micold_core::task_progress::Ratio;
-    let bar = |done| {
-        iced::widget::container(material::ProgressBar::new(Ratio { done, total: 10 }, roles))
-            .width(Length::Fixed(320.0))
-    };
+    let ratio = |done| Ratio { done, total: 10 };
+    let sized =
+        |bar: material::ProgressBar| iced::widget::container(bar).width(Length::Fixed(320.0));
+    let bar = |done| sized(material::ProgressBar::new(ratio(done), roles));
     arrange(
         vec![
             posed("0/10", bar(0), roles),
             posed("6/10", bar(6), roles),
             posed("10/10", bar(10), roles),
+            posed(
+                "6/10, marker 8/10",
+                sized(material::ProgressBar::new(ratio(6), roles).marker(ratio(8))),
+                roles,
+            ),
+            posed(
+                "9/10, marker 8/10, warning",
+                sized(
+                    material::ProgressBar::new(ratio(9), roles)
+                        .marker(ratio(8))
+                        .warning(true),
+                ),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )

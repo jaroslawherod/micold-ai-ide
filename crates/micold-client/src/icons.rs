@@ -199,6 +199,12 @@ pub enum Icon {
     ToolNoResult,
     /// The transcript's "jump to latest" button (feature 939, FR-017) — `arrow_downward`.
     JumpToLatest,
+    /// A subagent's thread under the tool call that started it, and a background task of the
+    /// subagent kind (feature 944, research R12) — `smart_toy`, a robot: a helper doing the work.
+    Subagent,
+    /// A background task of the command kind, and the session's running-task count (feature 944,
+    /// R12) — `pending_actions`, a clipboard with a clock: work left running.
+    BackgroundTask,
 }
 
 impl Icon {
@@ -281,6 +287,8 @@ impl Icon {
         Icon::ToolFailed,
         Icon::ToolNoResult,
         Icon::JumpToLatest,
+        Icon::Subagent,
+        Icon::BackgroundTask,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -384,6 +392,9 @@ impl Icon {
             Icon::ToolFailed => '\u{e001}',
             Icon::ToolNoResult => '\u{f08f}',
             Icon::JumpToLatest => '\u{e5db}',
+            // Feature 944 (research R12): `smart_toy`, `pending_actions`.
+            Icon::Subagent => '\u{f06c}',
+            Icon::BackgroundTask => '\u{f1bb}',
         }
     }
 }

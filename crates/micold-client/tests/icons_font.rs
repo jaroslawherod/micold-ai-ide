@@ -221,3 +221,19 @@ fn the_transcript_icons_have_seven_distinct_glyphs_in_the_bundled_font() {
         );
     }
 }
+
+/// Feature 944 (research R12): the subagent and background-task icons are in `Icon::ALL` and draw
+/// two different glyphs of the bundled font.
+#[test]
+fn the_subagent_and_background_task_icons_have_distinct_glyphs_in_the_bundled_font() {
+    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
+    let ids: Vec<_> = [Icon::Subagent, Icon::BackgroundTask]
+        .into_iter()
+        .map(|icon| {
+            assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+            face.glyph_index(icon.glyph())
+                .unwrap_or_else(|| panic!("{icon:?} has no glyph in the shipped font"))
+        })
+        .collect();
+    assert_ne!(ids[0], ids[1], "the two icons draw the same glyph");
+}

@@ -546,3 +546,29 @@ fn a_disclosure_cards_header_summary_and_failed_status_are_legible_on_its_fill()
         violations.join("\n  ")
     );
 }
+
+/// 944 FR-002, FR-003 (research R12): a `ProgressBar`'s fill — `primary`, or `error` for a warning
+/// bar — is visible on its track at 3:1 in both schemes. The marker is drawn in whichever of the two
+/// it does not sit on, so this pair is also the marker's.
+#[test]
+fn a_progress_bars_fill_and_marker_are_visible_on_its_track() {
+    use super::progress::track_color;
+    use super::progress_bar::fill_color;
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for warning in [false, true] {
+            let ratio = contrast(fill_color(&r, warning), track_color(&r));
+            if ratio < AA_NON_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / warning {warning}: {ratio:.2}:1 (needs {AA_NON_TEXT})"
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "a progress bar's fill cannot be told from its track:\n  {}",
+        violations.join("\n  ")
+    );
+}
