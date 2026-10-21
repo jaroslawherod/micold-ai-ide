@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,8 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers remain (FR-020 default fold state of Edit/MultiEdit/Write
-  cards; FR-021 which tool results get rich rendering). They are left for the clarify unit.
+- The two [NEEDS CLARIFICATION] markers (FR-020 fold state of Edit/MultiEdit/Write cards; FR-021
+  tool-result rendering) were resolved by the clarify unit from repo evidence (spec.md#clarifications).
 - Tool and field names (Edit, MultiEdit, Write, `file_path`, `old_string`, …) are the product's
   user-visible tool names, not implementation choices. "iced `highlighter`" from the issue text
   appears only in the quoted Input line.

@@ -14,6 +14,25 @@ Edit/MultiEdit/Write tool calls. Acceptance: Markdown subset renders correctly w
 layout jumps on partial blocks). Edit/Write shown as a diff with file path. Copy button on code
 blocks." labels: enhancement, flow:feature
 
+## Clarifications
+
+### Session 2026-10-21
+
+- Q: Do Edit, MultiEdit and Write cards start unfolded, so the diff shows without a click? → A: No:
+  they start folded like every other card (#939 FR-010), and their folded header shows the file path
+  and the added/removed line counts (FR-017); unfolding shows the diff. The fold policy stays #939's,
+  so this feature's only change outside the block renderers is the header line counts (FR-022).
+  _(agent-resolved: specs/939-structured-transcript-view/spec.md#assumptions, "Cards start folded,
+  including failed ones"; #939 FR-010; issue #940 acceptance "Edit/Write shown as a diff with file
+  path", which the unfolded card meets)_
+- Q: Which tool results get rich rendering? → A: None: every tool result, including Read and Task
+  (sub-agent) results, stays #939's plain monospace text (#939 FR-011). Issue #940 scopes rich
+  rendering to markdown text, code blocks and Edit/MultiEdit/Write tool calls, and names no tool
+  results; sub-agent output belongs to #944. _(agent-resolved: issue #940 body, "Rich rendering in
+  the transcript: markdown …, highlighted code blocks …, and unified diffs for Edit/MultiEdit/Write
+  tool calls"; specs/939-structured-transcript-view/spec.md#context-where-this-sits-in-epic-945,
+  #944 "sub-agents")_
+
 ## In short (for non-technical readers)
 
 The structured session transcript of #939 shows Claude's replies, thinking and tool calls as plain
@@ -265,24 +284,20 @@ others; activate each copy button and check the clipboard text equals the block'
   result MUST NOT hide the diff.
 - **FR-019**: A diff or code block over a size limit MUST show its line counts and a control to show
   it in full, rather than make the view unresponsive.
-- **FR-020**: [NEEDS CLARIFICATION: Should Edit, MultiEdit and Write cards be unfolded when they
-  first appear, so the diff shows without a click? That is not a renderer change: it changes #939's
-  card fold policy (its FR-010, "folded when they first appear") for these tools, a second exception
-  to FR-022. Default if unanswered: they start folded, as #939 FR-010.]
+- **FR-020**: Edit, MultiEdit and Write cards MUST start folded, as every card does (#939 FR-010);
+  this feature does not change #939's fold policy.
 
 **Tool results**
 
-- **FR-021**: [NEEDS CLARIFICATION: Which tool results, if any, get rich rendering: none (all stay
-  #939's plain monospace text), Read results highlighted for the file's language, and/or Task
-  (sub-agent) results drawn as markdown? Default if unanswered: none; Read and Task results then
-  stay in Out of Scope.]
+- **FR-021**: Tool results MUST stay drawn as #939 draws them (plain monospace text, its FR-011),
+  including Read and Task (sub-agent) results; this feature gives no tool result rich rendering.
 
 **Scope of change and seam**
 
 - **FR-022**: All rendering of this feature MUST go through #939's per-block renderer seam (its
   FR-022): it replaces the renderers of block kinds and changes nothing about which entries exist,
-  their order, folding, status, streaming or follow-tail. The only exceptions are the header line
-  counts of FR-017 and, if clarified so, the fold policy of FR-020.
+  their order, folding, status, streaming or follow-tail. The only exception is the header line
+  counts of FR-017.
 - **FR-023**: While one entry streams, every other entry MUST keep its drawing unchanged and the view
   MUST stay responsive to input (SC-004); a theme switch MUST redraw highlighting and diff colours in
   the new theme (US3 scenario 6).
@@ -300,7 +315,7 @@ others; activate each copy button and check the clipboard text equals the block'
   tool card name and input, result parts, and entry key plus revision as its cache key
   (contracts/transcript-model.md, "Seams for later issues"). #939's milestones must have landed
   before this feature's code can. This feature changes #939's behaviour only where FR-017 (header
-  line counts, an extension of #939 FR-009) and, if clarified so, FR-020 (fold policy) say.
+  line counts, an extension of #939 FR-009) says.
 - **Shared UI components (Principle VIII)**: the markdown view, the code block with its copy
   control, and the inline diff are shared components with the builder interface, reusing the
   existing diff view and highlighting of the Changes view where they fit, not one-off widgets of
@@ -311,8 +326,8 @@ others; activate each copy button and check the clipboard text equals the block'
 
 ### Out of Scope
 
-- Rich rendering of tool inputs other than Edit, MultiEdit and Write, and of tool results beyond what
-  FR-021 settles (by default, all tool results, including Read and Task results).
+- Rich rendering of tool inputs other than Edit, MultiEdit and Write, and of any tool result,
+  including Read and Task results (FR-021).
 - Applying, reverting or opening a diffed file in an editor; comparing against the file's content on
   disk.
 - Selecting or copying arbitrary transcript text, search and export (as in #939); copy is only the
