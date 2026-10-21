@@ -68,6 +68,9 @@ pub const MUTATORS: &[&str] = &[
     "entry",
     "env_include_changed",
     "extend",
+    // `structured_log.forget` / `structured_transcript.forget` drop a closed session's log and
+    // transcript (features 938, 939).
+    "forget",
     "get_mut",
     "get_or_insert",
     "get_or_insert_with",
@@ -87,6 +90,8 @@ pub const MUTATORS: &[&str] = &[
     "sort_by_key",
     "take",
     "truncate",
+    // `structured_transcript.update` applies a message of the transcript view (feature 939).
+    "update",
     "values_mut",
 ];
 
