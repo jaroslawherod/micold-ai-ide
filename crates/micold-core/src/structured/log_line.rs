@@ -3,7 +3,7 @@
 //! Render-free. A line never contains a newline: multi-line text is flattened, so the pane is one
 //! row per event. #939 replaces the pane; this stays the fallback text of an event.
 
-use super::{ContentBlock, Delta, SequencedEvent, StructuredEvent};
+use super::{ContentBlock, ControlOutcome, Delta, SequencedEvent, StructuredEvent};
 
 /// The longest text one line carries from an event; the rest is cut with an ellipsis.
 const MAX_TEXT_CHARS: usize = 400;
@@ -50,6 +50,26 @@ fn summary(event: &StructuredEvent) -> String {
                 None => "",
             };
             format!("stream: {}{kind}", flat(event_type))
+        }
+        StructuredEvent::Status {
+            permission_mode, ..
+        } => match permission_mode {
+            Some(mode) => format!("status: mode {}", flat(mode)),
+            None => "status".to_owned(),
+        },
+        StructuredEvent::ControlResponse {
+            request_id,
+            outcome,
+            ..
+        } => {
+            let outcome = match outcome {
+                ControlOutcome::Success(_) => "success".to_owned(),
+                ControlOutcome::Error { message, code } => match code {
+                    Some(code) => format!("error {}: {}", flat(code), cut(&flat(message))),
+                    None => format!("error: {}", cut(&flat(message))),
+                },
+            };
+            format!("control response to {}: {outcome}", flat(request_id))
         }
         StructuredEvent::Unrecognised { raw } => match type_of(raw) {
             Some(t) => format!("unrecognised event of type {}", flat(&t)),
@@ -128,12 +148,54 @@ mod tests {
     }
 
     #[test]
+    fn a_status_line_names_the_mode_it_reports() {
+        let status = |permission_mode: Option<&str>| {
+            log_line(&seq(StructuredEvent::Status {
+                permission_mode: permission_mode.map(str::to_string),
+                raw: String::new(),
+            }))
+        };
+        assert_eq!(status(Some("acceptEdits")), "#7 status: mode acceptEdits");
+        assert_eq!(status(None), "#7 status");
+    }
+
+    #[test]
+    fn a_control_response_names_its_request_and_outcome() {
+        let response = |outcome: ControlOutcome| {
+            log_line(&seq(StructuredEvent::ControlResponse {
+                request_id: "micold-3".into(),
+                outcome,
+                raw: String::new(),
+            }))
+        };
+        assert_eq!(
+            response(ControlOutcome::Success("{}".into())),
+            "#7 control response to micold-3: success"
+        );
+        assert_eq!(
+            response(ControlOutcome::Error {
+                message: "Cannot set\nmode".into(),
+                code: Some("bypass_not_launched".into()),
+            }),
+            "#7 control response to micold-3: error bypass_not_launched: Cannot set mode"
+        );
+        assert_eq!(
+            response(ControlOutcome::Error {
+                message: "no".into(),
+                code: None,
+            }),
+            "#7 control response to micold-3: error: no"
+        );
+    }
+
+    #[test]
     fn init_names_the_model() {
         let line = log_line(&seq(StructuredEvent::Init {
             session_id: "s".into(),
             model: Some("opus".into()),
             cwd: None,
             tools: vec![],
+            permission_mode: None,
             raw: String::new(),
         }));
         assert!(line.contains("init") && line.contains("opus"), "{line}");

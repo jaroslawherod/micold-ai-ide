@@ -4,7 +4,9 @@
 
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusedRequest, SessionSummary};
 use micold_core::session::{AiCli, SessionId, SessionKind};
-use micold_core::structured::{ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage};
+use micold_core::structured::{
+    ContentBlock, ControlOutcome, Delta, SequencedEvent, StructuredEvent, Usage,
+};
 use uuid::Uuid;
 
 fn sid() -> SessionId {
@@ -99,7 +101,25 @@ fn every_variant() -> Vec<StructuredEvent> {
             model: Some("m".into()),
             cwd: Some("/w".into()),
             tools: vec!["Bash".into()],
+            permission_mode: Some("plan".into()),
             raw: "{\"type\":\"system\"}".into(),
+        },
+        StructuredEvent::Status {
+            permission_mode: Some("acceptEdits".into()),
+            raw: "{\"type\":\"system\",\"subtype\":\"status\"}".into(),
+        },
+        StructuredEvent::ControlResponse {
+            request_id: "micold-1".into(),
+            outcome: ControlOutcome::Success("{\"mode\":\"acceptEdits\"}".into()),
+            raw: "{\"type\":\"control_response\"}".into(),
+        },
+        StructuredEvent::ControlResponse {
+            request_id: "micold-2".into(),
+            outcome: ControlOutcome::Error {
+                message: "no".into(),
+                code: Some("bypass_not_launched".into()),
+            },
+            raw: "{\"type\":\"control_response\"}".into(),
         },
         StructuredEvent::Assistant {
             message_id: Some("msg".into()),

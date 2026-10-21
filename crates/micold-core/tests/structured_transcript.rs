@@ -4,7 +4,9 @@
 use micold_core::structured::transcript::{
     input_summary, EntryKey, EntryKind, Outcome, RawReason, ResultPart, ToolStatus, Transcript,
 };
-use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent, MAX_EVENTS};
+use micold_core::structured::{
+    decode_events, encode_events, ContentBlock, SequencedEvent, StructuredEvent, MAX_EVENTS,
+};
 use serde_json::json;
 use std::collections::HashSet;
 
@@ -14,7 +16,7 @@ use stream_json::{
     assistant_block, assistant_blocks, block_delta, block_start, events_of, input_json_delta,
     lines_of, message_start, sequenced, stream_event, stream_marker, text_delta, thinking_block,
     thinking_delta, tool_result, tool_use, turn_result, user_text, with_message_id, with_parent,
-    without_stream_events, RECORDED,
+    without_stream_events, PROMPT_RECORDED, RECORDED,
 };
 
 /// A transcript built from `events` in one history message.
@@ -1114,6 +1116,9 @@ fn every_event_of_every_recorded_fixture_is_accounted_for() {
                         }
                     }
                 }
+                StructuredEvent::Status { .. } | StructuredEvent::ControlResponse { .. } => {
+                    assert!(!opened_by(&transcript, *seq), "{at}: absorbed (#942)")
+                }
                 _ => assert!(opened_by(&transcript, *seq), "{at}: its entry"),
             }
         }
@@ -1265,4 +1270,69 @@ fn a_streamed_block_superseded_by_another_kind_stops_streaming_when_the_stream_c
             },
         ]
     );
+}
+
+// #942 T007 — the CLI's mode and control replies are absorbed: they change the session, not the
+// conversation, so they make no entry and no raw row.
+
+fn is_mode_or_control(event: &StructuredEvent) -> bool {
+    matches!(
+        event,
+        StructuredEvent::Status { .. } | StructuredEvent::ControlResponse { .. }
+    )
+}
+
+#[test]
+fn status_and_control_response_events_make_no_entry() {
+    for name in PROMPT_RECORDED {
+        let events = events_of(&lines_of(name));
+        let absorbed: Vec<SequencedEvent> = events
+            .iter()
+            .filter(|e| is_mode_or_control(&e.event))
+            .cloned()
+            .collect();
+        assert!(!absorbed.is_empty(), "{name} has status or control lines");
+        assert_eq!(
+            kinds(&built(&absorbed)),
+            vec![],
+            "{name}: status and control_response lines are absorbed, no entry"
+        );
+        let whole = built(&events);
+        let without = built(
+            &events
+                .iter()
+                .filter(|e| !is_mode_or_control(&e.event))
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
+        assert_eq!(
+            kinds(&whole),
+            kinds(&without),
+            "{name}: the transcript is the same with or without them (no raw row)"
+        );
+    }
+}
+
+#[test]
+fn a_saved_history_with_mode_and_control_lines_restores_to_the_same_transcript() {
+    for name in ["prompt-mode-change", "prompt-plan-approval"] {
+        let events = events_of(&lines_of(name));
+        let (omitted, restored) =
+            decode_events(&encode_events(0, &events)).expect("the saved history decodes");
+        assert_eq!(omitted, 0);
+        assert_eq!(
+            restored,
+            events.iter().map(|e| e.event.clone()).collect::<Vec<_>>(),
+            "{name}: each line parses again to the same event"
+        );
+        let restored: Vec<SequencedEvent> = restored
+            .into_iter()
+            .enumerate()
+            .map(|(seq, event)| SequencedEvent {
+                seq: seq as u64,
+                event,
+            })
+            .collect();
+        assert_eq!(kinds(&built(&restored)), kinds(&built(&events)), "{name}");
+    }
 }

@@ -33,7 +33,11 @@ scrubbed. Two are **synthetic**, written by hand: `tolerance.jsonl` and `insight
 
 The recorded files also carry the line types this CLI version writes that the model does not
 type (`active_goal`, `autocompact_state`, `rate_limit_event`, `system` subtypes other than
-`init`): they parse as `Unrecognised`, kept whole (FR-012).
+`init` and `status`): they parse as `Unrecognised`, kept whole (FR-012). `system`/`status` lines
+parse as `Status` since #942.
+
+The `prompt-*.jsonl` files are the stdout of #942's permission-prompt recordings, made by
+`scripts/capture-permission-prompt.sh` and described in `../permission-prompt/README.md`.
 
 `tolerance.jsonl` is **synthetic** (SC-002): a real `init` line copied from `text-turn.jsonl`,
 then an unknown `type`, an `assistant` line with unknown fields at top level and inside a block,

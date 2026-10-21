@@ -1,0 +1,108 @@
+{
+  "case": "question-multi",
+  "cli_version": "2.1.306",
+  "flags": [],
+  "call": {
+    "arguments": {
+      "tool_name": "AskUserQuestion",
+      "input": {
+        "questions": [
+          {
+            "question": "Which color?",
+            "header": "Color",
+            "options": [
+              {
+                "label": "red",
+                "description": "red"
+              },
+              {
+                "label": "green",
+                "description": "green"
+              },
+              {
+                "label": "blue",
+                "description": "blue"
+              }
+            ],
+            "multiSelect": false
+          },
+          {
+            "question": "Which fruits?",
+            "header": "Fruits",
+            "options": [
+              {
+                "label": "apple",
+                "description": "apple"
+              },
+              {
+                "label": "pear",
+                "description": "pear"
+              },
+              {
+                "label": "plum",
+                "description": "plum"
+              }
+            ],
+            "multiSelect": true
+          }
+        ]
+      },
+      "tool_use_id": "toolu_01HY1UJHjnh6HstmDRLkH9St"
+    },
+    "_meta": {
+      "claudecode/toolUseId": "toolu_01HY1UJHjnh6HstmDRLkH9St",
+      "progressToken": 2
+    }
+  },
+  "answer": {
+    "behavior": "allow",
+    "updatedInput": {
+      "questions": [
+        {
+          "question": "Which color?",
+          "header": "Color",
+          "options": [
+            {
+              "label": "red",
+              "description": "red"
+            },
+            {
+              "label": "green",
+              "description": "green"
+            },
+            {
+              "label": "blue",
+              "description": "blue"
+            }
+          ],
+          "multiSelect": false
+        },
+        {
+          "question": "Which fruits?",
+          "header": "Fruits",
+          "options": [
+            {
+              "label": "apple",
+              "description": "apple"
+            },
+            {
+              "label": "pear",
+              "description": "pear"
+            },
+            {
+              "label": "plum",
+              "description": "plum"
+            }
+          ],
+          "multiSelect": true
+        }
+      ],
+      "answers": {
+        "Which color?": "red",
+        "Which fruits?": "apple, pear"
+      }
+    }
+  },
+  "tool_result": "Your questions have been answered: \"Which color?\"=\"red\", \"Which fruits?\"=\"apple, pear\". You can now continue with these answers in mind.",
+  "later": []
+}

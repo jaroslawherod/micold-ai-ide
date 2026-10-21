@@ -47,6 +47,8 @@ impl SavedEvent {
             | StructuredEvent::User { raw, .. }
             | StructuredEvent::Result { raw, .. }
             | StructuredEvent::StreamDelta { raw, .. }
+            | StructuredEvent::Status { raw, .. }
+            | StructuredEvent::ControlResponse { raw, .. }
             | StructuredEvent::Unrecognised { raw } => SavedEvent::Line(raw.clone()),
             StructuredEvent::Unreadable { text } => SavedEvent::Unreadable(text.clone()),
             StructuredEvent::TurnEndedWithoutResult => SavedEvent::TurnEndedWithoutResult,

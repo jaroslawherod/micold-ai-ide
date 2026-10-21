@@ -27,6 +27,17 @@ pub const RECORDED_944: [&str; 4] = [
     "background-subagent",
 ];
 
+/// The stdout of the permission-prompt recordings (#942,
+/// `tests/fixtures/permission-prompt/README.md`).
+pub const PROMPT_RECORDED: [&str; 6] = [
+    "prompt-tool-request",
+    "prompt-always-allow",
+    "prompt-plan-approval",
+    "prompt-question-multi",
+    "prompt-mode-change",
+    "prompt-mode-change-bypass",
+];
+
 pub fn fixture_bytes(name: &str) -> Vec<u8> {
     let path = format!(
         "{}/tests/fixtures/stream-json/{name}.jsonl",

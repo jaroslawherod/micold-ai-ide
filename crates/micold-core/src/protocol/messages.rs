@@ -34,9 +34,12 @@ use crate::review::comment::{CommentId, Move, Outcome, PrAnchor, ReviewComment, 
 use crate::review::Side;
 use crate::runs::{GroupId, Integration, RunGroup};
 use crate::scoped_credential::{SecretToken, UnixTime};
-use crate::session::{AiCli, SessionId, SessionKind, SessionLabel, ShellInstanceId};
+use crate::session::{
+    AiCli, PermissionMode, SessionId, SessionKind, SessionLabel, ShellInstanceId,
+};
 use crate::settings::DiffLayout;
 use crate::settings::JiraConnectionChange;
+use crate::structured::permission::RequestKind;
 use crate::structured::SequencedEvent;
 use crate::theme::ColorScheme;
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
@@ -1357,6 +1360,83 @@ pub enum RefusalReason {
         /// The image reference the daemon is running from, when the client knows it.
         image: String,
     },
+}
+
+/// A permission request's identity (#942): daemon-wide, never reused within a daemon run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PromptId(pub u64);
+
+/// A permission request every client is shown (#942, data-model *PermissionRequest*).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PermissionRequest {
+    pub id: PromptId,
+    pub session: SessionId,
+    /// The tool call it belongs to: the transcript card it is shown under.
+    pub tool_use_id: Option<String>,
+    pub tool_name: String,
+    /// The input's JSON text, at most `PREVIEW_BYTES`, cut at a char boundary.
+    pub input_preview: String,
+    /// The whole input's JSON size; more than `input_preview.len()` means it was cut.
+    pub input_bytes: u64,
+    pub kind: RequestKind,
+    /// The rule Always allow would add, as a sentence; `None` when Always allow is not offered.
+    pub always_allow: Option<String>,
+}
+
+/// The user's answer to a permission request (#942, data-model *PromptChoice*).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PromptChoice {
+    /// A tool request: run it.
+    Allow,
+    /// A tool request: run it, and this session's later identical requests too.
+    AlwaysAllow,
+    /// A tool request: do not run it; Claude is told `message` or a standard one.
+    Deny { message: Option<String> },
+    /// A plan approval: leave plan mode, for Accept edits or Default.
+    ApprovePlan { accept_edits: bool },
+    /// A plan approval: stay in plan mode; Claude is told `note` or a standard one.
+    KeepPlanning { note: Option<String> },
+    /// A question request: one answer per question, in order.
+    Answer { answers: Vec<QuestionAnswer> },
+    /// A question request: answer none.
+    DeclineQuestion,
+}
+
+/// The answer to one question: chosen option labels, or a free answer, or both on a multi-select.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuestionAnswer {
+    pub labels: Vec<String>,
+    pub other: Option<String>,
+}
+
+/// How a permission request ended (#942, data-model *Resolution*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Resolution {
+    Allowed,
+    AllowedAlways,
+    Denied,
+    /// The plan was approved and the session left plan mode for `mode`.
+    PlanApproved {
+        mode: PermissionMode,
+    },
+    KeptPlanning,
+    Answered,
+    Declined,
+    /// Nobody answered before the request could no longer be answered.
+    Withdrawn {
+        reason: WithdrawReason,
+    },
+}
+
+/// Why a permission request was withdrawn (FR-011).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WithdrawReason {
+    TurnEnded,
+    ProcessEnded,
+    SessionStopped,
+    SessionRemoved,
+    /// The CLI's tool call hung up before an answer.
+    AgentHungUp,
 }
 
 /// The projected summary of a single session, sent for **every** session so the client can render

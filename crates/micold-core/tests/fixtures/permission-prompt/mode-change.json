@@ -1,0 +1,79 @@
+{
+  "case": "mode-change",
+  "cli_version": "2.1.306",
+  "runs": [
+    {
+      "run": "not-launched",
+      "flags": [],
+      "control": [
+        {
+          "request": {
+            "type": "control_request",
+            "request_id": "micold-1",
+            "request": {
+              "subtype": "set_permission_mode",
+              "mode": "acceptEdits"
+            }
+          },
+          "response": {
+            "type": "control_response",
+            "response": {
+              "subtype": "success",
+              "request_id": "micold-1",
+              "response": {
+                "mode": "acceptEdits"
+              }
+            }
+          }
+        },
+        {
+          "request": {
+            "type": "control_request",
+            "request_id": "micold-2",
+            "request": {
+              "subtype": "set_permission_mode",
+              "mode": "bypassPermissions"
+            }
+          },
+          "response": {
+            "type": "control_response",
+            "response": {
+              "subtype": "error",
+              "request_id": "micold-2",
+              "error": "Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions",
+              "error_code": "bypass_not_launched"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "run": "launched",
+      "flags": [
+        "--allow-dangerously-skip-permissions"
+      ],
+      "control": [
+        {
+          "request": {
+            "type": "control_request",
+            "request_id": "micold-1",
+            "request": {
+              "subtype": "set_permission_mode",
+              "mode": "bypassPermissions"
+            }
+          },
+          "response": {
+            "type": "control_response",
+            "response": {
+              "subtype": "success",
+              "request_id": "micold-1",
+              "response": {
+                "mode": "bypassPermissions"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

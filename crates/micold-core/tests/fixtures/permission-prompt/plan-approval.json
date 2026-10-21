@@ -1,0 +1,56 @@
+{
+  "case": "plan-approval",
+  "cli_version": "2.1.306",
+  "flags": [
+    "--permission-mode",
+    "plan"
+  ],
+  "call": {
+    "arguments": {
+      "tool_name": "ExitPlanMode",
+      "input": {
+        "plan": "1. Use the Write tool to create hello.txt in the current directory.\n2. Set its content to the single word: hi\n3. Reply with the word \"done\".\n",
+        "planFilePath": "<HOME>/.claude/plans/plan-how-to-create-zany-backus.md"
+      },
+      "tool_use_id": "toolu_01MgFceRyAvGCcMFv8f6SsXr"
+    },
+    "_meta": {
+      "claudecode/toolUseId": "toolu_01MgFceRyAvGCcMFv8f6SsXr",
+      "progressToken": 2
+    }
+  },
+  "answer": {
+    "behavior": "allow",
+    "updatedInput": {
+      "plan": "1. Use the Write tool to create hello.txt in the current directory.\n2. Set its content to the single word: hi\n3. Reply with the word \"done\".\n",
+      "planFilePath": "<HOME>/.claude/plans/plan-how-to-create-zany-backus.md"
+    }
+  },
+  "tool_result": "User has approved your plan. You can now start coding. Start with updating your todo list if applicable\n\nYour plan has been saved to: <HOME>/.claude/plans/plan-how-to-create-zany-backus.md\nYou can refer back to it if needed during implementation.\n\n## Approved Plan:\n1. Use the Write tool to create hello.txt in the current directory.\n2. Set its content to the single word: hi\n3. Reply with the word \"done\".\n",
+  "later": [
+    {
+      "call": {
+        "arguments": {
+          "tool_name": "Write",
+          "input": {
+            "file_path": "<CWD>/hello.txt",
+            "content": "hi\n"
+          },
+          "tool_use_id": "toolu_01HYWYSNsaUcEKWu3YxaMw9k"
+        },
+        "_meta": {
+          "claudecode/toolUseId": "toolu_01HYWYSNsaUcEKWu3YxaMw9k",
+          "progressToken": 3
+        }
+      },
+      "answer": {
+        "behavior": "allow",
+        "updatedInput": {
+          "file_path": "<CWD>/hello.txt",
+          "content": "hi\n"
+        }
+      },
+      "tool_result": "File created successfully at: <CWD>/hello.txt (file state is current in your context — no need to Read it back)"
+    }
+  ]
+}

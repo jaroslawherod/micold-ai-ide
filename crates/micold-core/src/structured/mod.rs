@@ -4,19 +4,21 @@
 //! turns each line into exactly one [`StructuredEvent`] (FR-014), and [`pair_tool_calls`] matches
 //! tool calls with their results. The daemon owns the process and the history; the client draws.
 
+pub mod control;
 mod event;
 mod history;
 pub mod insights;
 mod lines;
 mod log_line;
 mod parse;
+pub mod permission;
 mod saved;
 pub(crate) mod sync;
 pub mod transcript;
 mod turn;
 mod user_message;
 
-pub use event::{ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage};
+pub use event::{ContentBlock, ControlOutcome, Delta, SequencedEvent, StructuredEvent, Usage};
 pub use history::{EventHistory, MAX_BYTES, MAX_EVENTS};
 pub use lines::LineSplitter;
 pub use log_line::{log_line, omitted_line};
