@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: close
-- **Next step**: close: tdd-verify r1 PASS_WITH_GAPS acted on (F1 fixed, FR-013 test added, F2 accepted); full gate, then close review r1 (prompt `1122-close-prompt-review-r1.md` in the session scratchpad). Then: Status Closed, finish ledger, PR text.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1200 | M3: GitHub issue links on the Overview | merged | 32b7d671 |
 | #1207 | M4: issue links by keyboard | merged | 65cefbbe |
 | #1217 | M5: Jira base URL setting and Jira issue links | merged | fd2a64ef |
+| close | Close-out: quickstart and visual-pass records, tdd-verify gap tests, spec Closed | open (opened by the orchestrator) | — |
 
 ## Milestones
 
@@ -112,9 +113,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate close | 1 | fd2a64ef | RED: feature 942's `structured_permission::a_pending_request_marks_its_session_waiting_until_the_last_is_decided` (3.0 s under load); passes 5/5 alone |
 | Full gate close | 2 | fd2a64ef | GREEN (T051) |
 | TDD verify close | 1 | 78bb84ab25e7d5d007194a6d82187d46637e88c7:a847dfee7d0347117789e2b51da34f517835239c | PASS_WITH_GAPS (verdict verbatim below). F1 fixed: `https://host/jira#frag` added to the `JiraBaseUrl` refusal test (mutant B1 now killed by `-p micold-core --lib jira`). FR-013: feature 031's tests cover only the reducer half (`LinkOpenFinished` → notification, `tests/features_session_links.rs`), none the link path; added `issue_link_whose_browser_fails_to_open_notifies_the_address_and_reason` (main_tests), green on first run: no defect. F2 accepted (no mutation or coverage tool; see *Declined review findings*). `tdd/verification.md` committed |
-
 | Full gate close | 3 | 9ca16896 | GREEN (tdd-verify r1 test fixes) |
-| Review close | 1 | 7f51184560bd390837ab7ea641e68882cd0ed7cc:9ca168960e695e54fc8c3c4f60a301a78eefed2c | pending (session model; prompt `1122-close-prompt-review-r1.md` in the session scratchpad) |
+| Review close | 1 | 7f51184560bd390837ab7ea641e68882cd0ed7cc:9ca168960e695e54fc8c3c4f60a301a78eefed2c | VERDICT: CLEAN; 3 MINOR all fixed: F1 quickstart §A T051 record (gate r3), F2 FR-013 test compares the whole Overview state, F3 blank line in this table (verdict verbatim below); no round 2 |
 
 ### Close r1 verdicts (verbatim)
 
@@ -163,6 +163,23 @@ The four mutants that survived their filter were:
 One early attempt at D1 survived only because my mutant name had no ticket; I discarded it and re-ran with a valid name.
 
 **Not audited:** the full workspace suite and `mise run gate`; the three root-only core reds noted in the cycle log; coverage; the layout and settings snapshot re-bless diffs (taken from the log); the Windows and macOS legs; the sandbox suite.
+
+</details>
+
+<details><summary>Close review r1</summary>
+
+# 1122 close review r1 (snapshot 7f511845:9ca16896)
+
+VERDICT: CLEAN
+F1 [MINOR] specs/1122-overview-card-issue-link/quickstart.md:§Results, A — the T051 record now says something untrue. It says the close "changes only `specs/`" and that the gate is green on fd2a64ef. The close branch now also changes `crates/micold-core/src/jira.rs` and `crates/micold-client/src/main_tests.rs` (9ca16896), and the record does not mention gate r3 on 9ca16896.
+   Evidence: "`scripts/gate.sh` on the close tree (fd2a64ef, the M5 merge; the close changes only `specs/`): green." Meanwhile `git diff --stat origin/main...HEAD` lists `crates/micold-client/src/main_tests.rs | 35` and `crates/micold-core/src/jira.rs | 1`.
+   Fix: drop the "changes only specs/" clause. Add that the tdd-verify r1 test fixes (9ca16896) passed the full gate (ledger: Full gate close 3, GREEN).
+F2 [MINOR] crates/micold-client/src/main_tests.rs:~7654 — FR-013 also says "nothing else MUST change", but the new test checks only one field, `overview.open`. Expansion, focus and the other fields could change and the test would still pass. `features::overview::State` derives `Clone, PartialEq`, so a whole-state comparison would cost nothing.
+   Evidence: `assert!(rig.app.core.overview.open, "the Overview stays open");`
+   Fix: take `let before = rig.app.core.overview.clone();` before the `update_inner` call, then `assert_eq!(rig.app.core.overview, before, "nothing else changes")`.
+F3 [MINOR] specs/1122-overview-card-issue-link/autopilot.md:115 — a blank line between the "TDD verify close 1" row and the "Full gate close 3" row splits the *Review rounds* table. The rows "Full gate close 3" and "Review close 1" then do not show as table rows.
+   Evidence: line 115 is empty (`$`) between line 114 `| TDD verify close | 1 |…` and line 116 `| Full gate close | 3 | 9ca16896 | GREEN …|`.
+   Fix: delete the blank line 115.
 
 </details>
 
