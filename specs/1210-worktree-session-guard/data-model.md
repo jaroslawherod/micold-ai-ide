@@ -3,8 +3,8 @@
 All in `micold-core::worktree_guard` unless noted. No persisted state except the setting.
 
 - **SessionBinding** (enum): `Worktree(PathBuf)` | `Default(PathBuf project root)` | `Unknown`. Own worktree (spec). `Unknown` => fail open.
-- **GuardInput**: `binding: SessionBinding`, `project_root: PathBuf`, `worktrees: Vec<PathBuf>` (every location git lists, root included), `session_cwd: PathBuf`, `tool: ToolCall`.
-- **ToolCall** (enum): `Edit{file_path}` (Edit/Write/MultiEdit/NotebookEdit) | `Bash{command}` | `Other`. Parsed from the PreToolUse `tool_name`/`tool_input`.
+- **GuardInput**: `binding: SessionBinding`, `project_root: PathBuf`, `worktrees: Vec<PathBuf>` (every location git lists, root included), `session_cwd: PathBuf` (the payload's top-level `cwd`), `tool: ToolCall`.
+- **ToolCall** (enum): `Edit{path}` (Edit/Write/MultiEdit from `file_path`, NotebookEdit from `notebook_path`) | `Bash{command}` | `Other`. Parsed from the PreToolUse `tool_name`/`tool_input`.
 - **Allowlist**: shared build dir `<root>/target-shared`; worktrees whose dir name starts with `autopilot-prefetch`.
 - **GuardVerdict** (enum): `Allow` | `AllowUnknown{reason}` | `Deny{message, target}`. Invalid combinations (deny with no target) unrepresentable.
 - **GuardState** (daemon, per session): `Off` | `On{binding, project}`; frozen at launch (rules R7).
