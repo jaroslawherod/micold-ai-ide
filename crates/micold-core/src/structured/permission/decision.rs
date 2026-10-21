@@ -151,7 +151,7 @@ fn deny(text: Option<&str>, standard: &str) -> Value {
 /// The input's JSON text cut to at most [`PREVIEW_BYTES`] at a char boundary, and the whole text's
 /// size in bytes (data-model *PermissionRequest* `input_preview`, `input_bytes`).
 pub fn input_preview(input: &Map<String, Value>) -> (String, u64) {
-    let mut text = Value::Object(input.clone()).to_string();
+    let mut text = serde_json::to_string(input).unwrap_or_default();
     let bytes = text.len() as u64;
     if text.len() > PREVIEW_BYTES {
         let mut end = PREVIEW_BYTES;

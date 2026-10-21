@@ -199,7 +199,11 @@
 /// And 56 → 57 for feature 1149's review comments on a pull request's diff (contracts/review-wire-delta.md):
 /// `pr` on `ReviewComment`, `ReviewEditOp::Add`, `ReviewEditOp::{ClearSent, DiscardPending}` take a
 /// `Scope`, and `ClientMsg::ReviewSend` gains `pr: Option<PrSend>`.
-pub const PROTOCOL_VERSION: u32 = 57;
+///
+/// And 57 → 58 for #942's CLI permission mode and control replies (M1): `StructuredEvent::Init`
+/// gains `permission_mode` and `StructuredEvent` gains `Status` and `ControlResponse`, which shift
+/// the postcard layout `StructuredEvents` carries.
+pub const PROTOCOL_VERSION: u32 = 58;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

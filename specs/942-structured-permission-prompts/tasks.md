@@ -58,7 +58,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 - [x] T005 [P] Tests in `core/tests/structured_parse.rs` over `prompt-*.jsonl`: `Init.permission_mode`
   read from `system`/`init` `permissionMode`; `system`/`status` → `Status { permission_mode, raw }`;
-  `control_response` → `ControlResponse { request_id, outcome }` with `ControlOutcome::Success(Value)`
+  `control_response` → `ControlResponse { request_id, outcome }` with `ControlOutcome::Success(String)` (the `response` object's JSON text; ledger decision 11)
   and `ControlOutcome::Error { message, code: Option<String> }` (`error_code`
   `bypass_not_launched`); every line still makes exactly one event (feature 938 FR-014)
 - [x] T006 Implement T005 in `core/src/structured/event.rs` and `core/src/structured/parse.rs`
