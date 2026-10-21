@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: tasks
-- **Next step**: tasks review A r2 (sonnet, fix diff; orchestrator dispatches; prompt 1123-prompt-tasks-r2.md in the scratchpad); if CLEAN: close checklists (all ticked), specs-only gate, design PR "#1123: Overview cards: pull request list with state, linked — design" (label docs-not-needed)
+- **Next step**: design PR "#1123: Overview cards: pull request list with state, linked — design" (label docs-not-needed): title/body in the scratchpad, orchestrator opens it; then M1
 
 ## Pull requests
 
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D7 | tasks | Milestone cut | US1 ships whole in M1 (list, counts and rows, T001–T019): tasks review A r1 F1 showed a split of US1 leaves the first half no deliverable (its scenarios sc. 3, 4, 6, 8 all hold before this feature; *10+* shows less than today), and the folded diff is not too big to review (one core module, a renamed map, one card builder), so no split along sc. 1/2/5; US2 (P2) ships in M1 with the rows: its only rule is `rows(expanded)` (K4) and a card that draws rows must draw them right expanded; US3 (P1) split along its scenarios into M2 (pointer, sc. 1–3, 5) and M3 (keyboard, sc. 4); Polish T038–T039 code-free → close unit | agent-resolved | milestones.md rules 1–4, 6 |
 | D8 | tasks | Contract P1 count | contracts/reading.md P1 said "1 open (draft counted)" for four states; open + draft is 2, fixed to "2 open (the draft counted) · 1 merged" (plan text fix) | agent-resolved | data-model §2 `counts()` |
 | D9 | tasks | `speckit-analyze` | Not invokable in this cloud session (Skill: unknown skill); mechanical coverage check run instead (every FR-001–FR-017, SC-001–SC-007, K1–K6, K5a–K5g, Q1–Q2, P1–P7, U1–U7 named in tasks.md; all tasks in checklist format); the tasks review r1 is asked to apply the analyze checks too | agent-resolved | this unit |
+| D10 | tasks | Checklists closed | checklists/requirements.md: all 16 items ticked, none open; spec, plan and tasks reviews A all CLEAN (spec r2, plan r2, tasks r2) | agent-resolved | checklists/requirements.md |
 
 ## Review rounds
 
@@ -48,7 +49,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A plan | 1 | 53ffa8f39a3a4caa715af2e64d4fca74c90e6a87:a55fb1b02c4bca128a2f493349a45dbf294074aa | CHANGES: 1 BLOCKER (F1 rate-limit points: request-count rule, `m<i>` with `...pr` costs 63 > 44), 3 MAJOR (F2 focus pairing for several links, F3 client hand-offs/menu return per link, F4 `StatusChip` does not fit a PR pill), 3 MINOR (F5 K3 edge cases, F6 address in Msg, F7 missing alternatives); all seven fixed in research R2/R5–R10, data-model §1–§5, contracts, plan, quickstart; none declined; round 2 on sonnet over the fix diff |
 | Review A plan | 2 | 9bc517ce26e6300ed4d9f258bb7fd82b0e0fad46:f3fad1fa408ff0b5345496fd0d6917e547bb9eed (fix diff 53ffa8f3:a55fb1b0 → f3fad1fa, sonnet) | CLEAN, 2 MINOR (F1 card-rows.md U1–U7 heading, F2 R9 contrast wording); both fixed, prose only, no round 3 |
 | Review A tasks | 1 | 8c136e70f07d2dc1576652bbf31d1be9c59a6e81:e246bec8f4aaf98c75e15a2f3fe1292736a8455e | CHANGES: 2 MAJOR (F1 M1 has no deliverable, F2 `step_card` wrong file/name and T031 in another milestone), 2 MINOR (F3 `pull_request_source.rs` literals, F4 M3 Verify runs no core tests); all four fixed in tasks.md (M2 folded into M1, renumbered M1–M3), research R6, ledger D7; none declined; round 2 on sonnet over the fix diff |
-| Review A tasks | 2 | 8eaaf55f5c56b169826d26ef3eb8e8d1e5160a1c:e9713c39f547f81ea907d26e3a4cda7d106d1123 (fix diff 8c136e70:e246bec8 → e9713c39, sonnet) | pending |
+| Review A tasks | 2 | 8eaaf55f5c56b169826d26ef3eb8e8d1e5160a1c:e9713c39f547f81ea907d26e3a4cda7d106d1123 (fix diff 8c136e70:e246bec8 → e9713c39, sonnet) | CLEAN, 1 MINOR (F1 T031 must extend `stepping_grid` with a pull request row and the number's builders); fixed in tasks.md, prose only, no round 3 |
+
+### Review A tasks round 2 verdict (verbatim)
+
+````
+# 1123 tasks review A r2 (snapshot 8eaaf55f:e9713c39)
+
+VERDICT: CLEAN
+F1 [MINOR] specs/1123-overview-card-pr-list/tasks.md:T031 — The test says `stepping_grid` should draw a focusable number on card 1. Today `stepping_grid` (`ui/overview.rs` l.1208) builds `overview_of(2)` models with no pull requests and no `.on_pr_link*`/`on_pr_link_keyboard_focus` builders, so T031 also has to extend `stepping_grid`.
+   Evidence: `stepping_grid` sets only `models[1].issue_link` and `.link_id(card_link_id(&model.location))`.
+   Fix: add to T031 "extend `stepping_grid` with a pull request row on card 1 and the number's builders (T024, T034)". This is not blocking, since the builders land in M2 and T034 (same milestone) precedes T035.
+````
 
 ### Review A tasks round 1 verdict (verbatim)
 
