@@ -70,6 +70,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 (conformance, sonnet) | 2 (full; r1 ran no command) | eaf8fcf201e09294a5e358f8e9a654abbbbe907f:23f1ca80d17fd747754fd5b488d3730d0f06197a | CLEAN; Verify `INTEG_EXIT=0` (37, 11, 9, 39, 5 passed), `LIB_EXIT=0` (52), capture test 6/0; 1 MINOR (cycle log red taken afterwards on stubs — follow-up) |
 | Review A M2 (code-review high) | 1 | 09a697c663e494eb41ad33a7fad9e966d9108097:69239a2b67091c928e63a2cdb59f70e7d3154e19 | CLEAN: 3 MINOR (F1 doc comment displaced — fixed; F2 rules never dropped — declined, M3; F3 entry left pending if the wait is dropped — fixed, drop guard) |
 | Review B M2 (conformance, sonnet) | 1 | 09a697c663e494eb41ad33a7fad9e966d9108097:69239a2b67091c928e63a2cdb59f70e7d3154e19 | CLEAN; Verify `DAEMON_EXIT=0` (13, 14 passed), `CORE_EXIT=0` (8, 15, 54); 2 MINOR (F1 hang-up withdrawal untested — test added, cycle 4; F2 = A's F1, fixed) |
+| Review A M3 (code-review high) | 1 | edf8b82347414b400af69e760bf7e3b7553198b0:275254ee26bcb14aaa85d5153e121405c7ada690 | CLEAN: 3 MINOR (F1 activity applied off the registry lock may land out of order — declined; F2 a late waiter withdraws a next turn's requests — declined; F3 a hang-up applies no activity — declined, per R8) |
+| Review B M3 (conformance, sonnet) | 1 | edf8b82347414b400af69e760bf7e3b7553198b0:275254ee26bcb14aaa85d5153e121405c7ada690 | CLEAN; Verify 23 passed, 0 failed; 1 MINOR (F1 ledger 17 "before the kill" — declined) |
 
 ## Declined review findings
 
@@ -82,6 +84,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | M1 | Review A r1 | F2 MINOR (part): `Task`/`Agent` and other unnamed tools get an any-input rule | data-model *AllowRule* fixes "any other: the same tool name" (MCP tools are the case it serves); only `PowerShell`, a shell like `Bash`, was moved to the command rule |
 | M2 | Review A r1 | F2 MINOR: a session's always-allow rules are never dropped | T038 (M3) drops them at process end, beside the withdrawals; nothing in M2 removes a session's process state yet |
+| M3 | Review A r1 | F1 MINOR: the Notification/PreToolUse activity runs after the registry lock is released, so a decision racing the first request's open can apply first | The window is the few instructions between `drop(inner)` and `note_activity`'s own lock, and the next hook or turn end corrects it; a full fix needs the activity FSM under the registry's lock step, more than a few minutes |
+| M3 | Review A r1 | F2 MINOR: a waiter woken late by a turn end could withdraw a next turn's requests | The next turn's request needs a user message and a new tool call after the `result`, while the waiter's wake-up is immediate on the runtime; turn generations would add state for a window no run can hit in practice |
+| M3 | Review A r1 | F3 MINOR: an agent hang-up withdraws with no activity change | R8 and T036: "a withdrawal applies nothing" — the turn's own events decide the activity |
+| M3 | Review B r1 | F1 MINOR: ledger 17 says stop withdraws before the kill, the code after | `stop_session_gated` only takes the live entry out of the map under the lock; `end_processes`, which kills, runs after `withdraw_session_prompts` |
 
 ## Handover
 
