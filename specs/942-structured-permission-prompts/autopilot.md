@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M2 verify
-- **Next step**: final gate on the fixed tree, then the M2 PR
+- **Phase**: M2 PR
+- **Next step**: orchestrator opens the M2 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | #1201 | merged |
-| M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | — | implemented, in review |
+| M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | pending (orchestrator opens) | gate green at 82335a5a (scripts/gate.sh), PR to open |
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | — | pending |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | pending |
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | — | pending |
@@ -90,5 +90,7 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M2's first final gate failed once in  (`left: []`, no notice; untouched by #942); 5 of 5 isolated runs and the rerun gate passed. A load flake to watch.
 
 - Local builds in this cloud container fill the disk with the default `line-tables-only` debug info (the first M1 gate died at `ld` Bus error, 0 bytes free); M1's green gate ran with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` after `rm -rf target-shared/debug`.
