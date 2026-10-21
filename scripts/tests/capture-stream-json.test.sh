@@ -96,5 +96,70 @@ check "the recorded CLI runs with CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1" \
   "$(cat "$fake_root/repo/crates/micold-core/tests/fixtures/stream-json/probe.jsonl" 2>/dev/null)"
 rm -rf "$fake_root"
 
+# `--image <png>` (feature 941, T001): the one stdin line carries the prompt as a text block, then
+# the picture as a base64 image block whose media type comes from the file's bytes (P-5). A
+# stand-in `claude` echoes its stdin line as its stdout, so the fixture is that line, scrubbed.
+fake_root="$(mktemp -d)"
+mkdir -p "$fake_root/bin" "$fake_root/repo"
+cat > "$fake_root/bin/claude" <<'FAKE'
+#!/usr/bin/env bash
+IFS= read -r line
+printf '%s\n' "$line"
+printf '{"cwd":"%s"}\n' "$PWD"
+FAKE
+chmod +x "$fake_root/bin/claude"
+git -C "$fake_root/repo" init -q
+printf '\x89PNG\r\n\x1a\nIHDR' > "$fake_root/pic.png"
+(cd "$fake_root/repo" && PATH="$fake_root/bin:$PATH" TMPDIR="$fake_root" \
+  capture_main --image "$fake_root/pic.png" probe 'what is "this"?') 2>/dev/null
+fixture="$fake_root/repo/crates/micold-core/tests/fixtures/stream-json/probe.jsonl"
+check "--image writes the text block, then the image block with the file's media type" \
+  '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"what is \"this\"?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgpJSERS"}}]}}' \
+  "$(sed -n 1p "$fixture" 2>/dev/null)"
+check "--image output is scrubbed as the other modes are" \
+  '{"cwd":"<CWD>"}' \
+  "$(sed -n 2p "$fixture" 2>/dev/null)"
+check "a file that is not a known image is refused" \
+  1 \
+  "$( (cd "$fake_root/repo" && printf 'plain text' > "$fake_root/a.png" \
+       && PATH="$fake_root/bin:$PATH" TMPDIR="$fake_root" \
+       capture_main --image "$fake_root/a.png" probe2 hi) >/dev/null 2>&1; echo $?)"
+rm -rf "$fake_root"
+
+# `--interrupt-after-first-delta` (feature 941, T001): the capture writes P-4's interrupt request
+# after the first text delta it reads, and keeps stdin open until the `result`. The stand-in
+# streams one text delta, then echoes the next stdin line it reads inside a marker line, then ends
+# the turn; a thinking delta before it must not trigger the interrupt.
+fake_root="$(mktemp -d)"
+mkdir -p "$fake_root/bin" "$fake_root/repo"
+cat > "$fake_root/bin/claude" <<'FAKE'
+#!/usr/bin/env bash
+IFS= read -r first
+for arg in "$@"; do [ "$prev" = --session-id ] && sid="$arg"; prev="$arg"; done
+printf '{"type":"system","subtype":"init","session_id":"%s","cwd":"%s"}\n' "$sid" "$PWD"
+printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hm"}}}\n'
+printf '{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Once"}}}\n'
+IFS= read -r second
+printf '{"stdin":%s}\n' "$second"
+printf '{"type":"result","subtype":"error_during_execution","is_error":true}\n'
+IFS= read -r rest && printf '{"unexpected":"%s"}\n' "$rest"
+exit 0
+FAKE
+chmod +x "$fake_root/bin/claude"
+git -C "$fake_root/repo" init -q
+(cd "$fake_root/repo" && PATH="$fake_root/bin:$PATH" TMPDIR="$fake_root" \
+  timeout 20 bash -c "source '$ROOT/scripts/capture-stream-json.sh'; capture_main --interrupt-after-first-delta probe 'tell a long story'") 2>/dev/null
+fixture="$fake_root/repo/crates/micold-core/tests/fixtures/stream-json/probe.jsonl"
+check "--interrupt-after-first-delta writes the interrupt request after the first text delta" \
+  '{"stdin":{"type":"control_request","request_id":"micold-1","request":{"subtype":"interrupt"}}}' \
+  "$(sed -n 4p "$fixture" 2>/dev/null)"
+check "--interrupt-after-first-delta closes stdin after the result and keeps every line" \
+  5 \
+  "$(wc -l < "$fixture" 2>/dev/null | tr -d ' ')"
+check "--interrupt-after-first-delta output is scrubbed (session id, cwd)" \
+  '{"type":"system","subtype":"init","session_id":"<SESSION_ID>","cwd":"<CWD>"}' \
+  "$(sed -n 1p "$fixture" 2>/dev/null)"
+rm -rf "$fake_root"
+
 echo "$cases cases, $failures failed"
 [ "$failures" -eq 0 ]

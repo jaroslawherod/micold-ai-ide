@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # Record one `claude` stream-json fixture for feature 938 (FR-024, research R11).
 #
-# Usage: scripts/capture-stream-json.sh <name> "<prompt>" [--resume <id>] [-- <extra claude args>...]
+# Usage: scripts/capture-stream-json.sh [--image <file>] [--interrupt-after-first-delta] <name> "<prompt>"
+#            [--resume <id>] [-- <extra claude args>...]
+#
+# --image <file> (feature 941, P-5): the user message carries <prompt> as a text block, then the
+#   file as a base64 image block, its media type sniffed from the file's bytes (PNG, JPEG, GIF, WebP).
+# --interrupt-after-first-delta (feature 941, P-4): stdin stays open; after the first text delta on
+#   stdout the capture writes the `control_request` `interrupt` line, and closes stdin at the `result`.
 #
 # In a fresh scratch git repo, with CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1 (feature 944), it runs the
 # structured argv
@@ -93,10 +99,76 @@ user_message_line() {
   jq -cn --arg text "$1" '{type:"user",message:{role:"user",content:[{type:"text",text:$text}]}}'
 }
 
+# The one stdin line that carries <prompt> and the image file <file> as one user message: the text
+# block, then the image block (specs/941-structured-prompt-input/contracts/claude-input.md). Fails
+# when <file> is not a PNG, JPEG, GIF or WebP by its first bytes.
+image_message_line() {
+  local media
+  media="$(python3 -I -c '
+import sys
+head = open(sys.argv[1], "rb").read(12)
+if head.startswith(b"\x89PNG\r\n\x1a\n"): print("image/png")
+elif head.startswith(b"\xff\xd8\xff"): print("image/jpeg")
+elif head[:6] in (b"GIF87a", b"GIF89a"): print("image/gif")
+elif head[:4] == b"RIFF" and head[8:12] == b"WEBP": print("image/webp")
+else: sys.exit(1)
+' "$2")" || { echo "not a PNG, JPEG, GIF or WebP file: $2" >&2; return 1; }
+  base64 -w0 < "$2" \
+    | jq -cR --arg text "$1" --arg media "$media" \
+        '{type:"user",message:{role:"user",content:[{type:"text",text:$text},
+          {type:"image",source:{type:"base64",media_type:$media,data:.}}]}}'
+}
+
+# P-4's interrupt request, exactly as the service writes it (contracts/claude-input.md).
+INTERRUPT_LINE='{"type":"control_request","request_id":"micold-1","request":{"subtype":"interrupt"}}'
+
+# Run <command...> with <user line> on its stdin, kept open: copy its stdout to ours line by line,
+# write INTERRUPT_LINE after the first `content_block_delta` text delta, close its stdin after the
+# first `result` line, and exit with its status.
+drive_interrupt() {
+  python3 -I -c '
+import json, subprocess, sys
+user_line, interrupt_line, argv = sys.argv[1], sys.argv[2], sys.argv[3:]
+child = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+child.stdin.write((user_line + "\n").encode()); child.stdin.flush()
+asked = False
+for raw in child.stdout:
+    sys.stdout.buffer.write(raw); sys.stdout.buffer.flush()
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        continue
+    if not isinstance(value, dict):
+        continue
+    event = value.get("event") if value.get("type") == "stream_event" else None
+    delta = event.get("delta") if isinstance(event, dict) else None
+    if not asked and isinstance(delta, dict) and event.get("type") == "content_block_delta" \
+            and delta.get("type") == "text_delta":
+        child.stdin.write((interrupt_line + "\n").encode()); child.stdin.flush()
+        asked = True
+    elif value.get("type") == "result" and not child.stdin.closed:
+        child.stdin.close()
+sys.exit(child.wait())
+' "$1" "$INTERRUPT_LINE" "${@:2}"
+}
+
 capture_main() {
   set -euo pipefail
-  [ $# -ge 2 ] || { echo "usage: $0 <name> \"<prompt>\" [--resume <id>] [-- <claude args>...]" >&2; exit 2; }
-  local name="$1" prompt="$2"
+  local image="" interrupt=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --image) image="$2"; shift 2 ;;
+      --interrupt-after-first-delta) interrupt=1; shift ;;
+      *) break ;;
+    esac
+  done
+  [ $# -ge 2 ] || { echo "usage: $0 [--image <file>] [--interrupt-after-first-delta] <name> \"<prompt>\" [--resume <id>] [-- <claude args>...]" >&2; exit 2; }
+  local name="$1" prompt="$2" line
+  if [ -n "$image" ]; then
+    line="$(image_message_line "$prompt" "$image")" || exit 1
+  else
+    line="$(user_message_line "$prompt")"
+  fi
   shift 2
   local session_flag="--session-id" sid
   sid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen | tr 'A-Z' 'a-z')"
@@ -121,9 +193,13 @@ capture_main() {
   mkdir -p "$(dirname "$out")"
   # Forward subagent text and thinking, as the service's structured launch does (feature 944, R5).
   export CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1
-  user_message_line "$prompt" \
-    | (cd "$repo" && claude -p --input-format stream-json --output-format stream-json --verbose \
-         --include-partial-messages "$session_flag" "$sid" "$@") \
+  local argv=(claude -p --input-format stream-json --output-format stream-json --verbose
+              --include-partial-messages "$session_flag" "$sid" "$@")
+  if [ -n "$interrupt" ]; then
+    (cd "$repo" && drive_interrupt "$line" "${argv[@]}")
+  else
+    printf '%s\n' "$line" | (cd "$repo" && "${argv[@]}")
+  fi \
     | scrub_split_deltas "$sid" "$repo" "$HOME" \
     | scrub_stream_json "$sid" "$repo" "$HOME" > "$out" \
     || echo "claude exited non-zero (kept: an error result is a fixture too)" >&2

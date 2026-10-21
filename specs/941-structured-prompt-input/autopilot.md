@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M1 (T001–T022). T003 needs a signed-in Claude Code CLI to record fixtures. If the user's Q1/Q2 answers differ from Decisions 3–4, apply them via research R6 *Changing Q1/Q2 later* (no wire change)
+- **Phase**: M1
+- **Next step**: implement M1 (T001–T022), gate, reviews A/B, PR files for the orchestrator
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| (to open) | Design: spec, clarifications, plan, research, contracts, tasks | branch pushed; orchestrator opens via GitHub MCP | — |
+| #1209 | Design: spec, clarifications, plan, research, contracts, tasks | merged (rebase) | 01c64cee744edf4036b2edd018dbd0677c015dba |
 
 ## Milestones
 

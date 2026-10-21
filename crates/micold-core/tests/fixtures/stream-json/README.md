@@ -1,12 +1,12 @@
 # `claude` stream-json fixtures (feature 938, FR-024)
 
-Ten of these files are **recorded**: the stdout of a real `claude` run, byte for byte, then
+Twelve of these files are **recorded**: the stdout of a real `claude` run, byte for byte, then
 scrubbed. Three are **synthetic**, written by hand: `tolerance.jsonl`, `insights-tolerance.jsonl` and
 `markdown-subset.md` (plain markdown, not stream-json; see below).
 
-- CLI: Claude Code `2.1.302`, model `claude-sonnet-5-5`; the four marked (944) and the one marked
-  (940) with `2.1.306` (the (940) one with `--model claude-sonnet-5-5` passed)
-- Captured: 2026-10-18 (the (944) and (940) ones 2026-10-21), in the dev container, with
+- CLI: Claude Code `2.1.302`, model `claude-sonnet-5-5`; the four marked (944), the one marked
+  (940) and the two marked (941) with `2.1.306` (the (940) one with `--model claude-sonnet-5-5` passed)
+- Captured: 2026-10-18 (the (944), (940) and (941) ones 2026-10-21), in the dev container, with
   `scripts/capture-stream-json.sh` (for the (944) ones it sets `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1`)
 - Argv of every recorded run: `claude -p --input-format stream-json --output-format stream-json
   --verbose --include-partial-messages --session-id <new uuid>` (or `--resume <id>`), in a fresh
@@ -34,6 +34,8 @@ scrubbed. Three are **synthetic**, written by hand: `tolerance.jsonl`, `insights
 | `background-subagent.jsonl` (944) | `Use the Agent tool exactly once, with subagent_type general-purpose and run_in_background set to true, to have a subagent read notes.txt in the current directory with the Read tool and report the number it states. Do not use any other tool yourself. When its completion notification arrives, tell me that number in one short sentence.` | — | a backgrounded `local_agent` task, its parented messages, and a second turn after its notification |
 | `markdown-turn.jsonl` (940) | `Do not use any tools. Reply with a short markdown document about brewing tea that uses each of these elements at least once: a level-1 heading and a level-2 heading; **bold**, *italic* and ~~strikethrough~~ text; `inline code`; a bullet list with a nested bullet list; a numbered list; a task list with one checked and one unchecked item; a block quote; a horizontal rule; a link to https://example.com; a table with three columns whose columns are left-, centre- and right-aligned; a code block tagged rust, a code block tagged teapot-lang, and a code block with no tag.` | `--model claude-sonnet-5-5` | one assistant text block streamed in many `text_delta`s, using every element of #940's markdown subset |
 | `edit-turn.jsonl` (940) | `Make exactly three file changes in the current directory, one tool call each, and use no other tool. First, use the Write tool to create fruits.txt with these four lines: apple, banana, apple, cherry. Second, use the Edit tool once with replace_all set to true to replace every "apple" with "pear". Third, use the Edit tool once more, with old_string the three lines "banana", "pear", "cherry" and new_string the four lines "kiwi", "pear", "plum", "fig". Then reply with one short sentence.` | `--model claude-sonnet-5-5 --allowedTools Write Edit` | a `Write`, an `Edit` with `replace_all: true` and a multi-line `Edit` with a shared line, each with its `tool_result`; this CLI (2.1.306) has no `MultiEdit` tool, so MultiEdit is covered by `tests/edit_diff.rs`'s synthetic set |
+| `interrupt-turn.jsonl` (941) | `Write a long story of at least 1500 words about a lighthouse keeper. Do not use any tool.` | capture flag `--interrupt-after-first-delta` | P-4: the `control_request` `interrupt` written after the first text delta; its `control_response` `success`, the partial `assistant` message, the `[Request interrupted by user]` `user` line and a `result` `error_during_execution` (`terminal_reason: aborted_streaming`) |
+| `image-turn.jsonl` (941) | `Reply with one short sentence: what colour fills this picture?` | capture flag `--image red-square.png` (a 16×16 solid red PNG) | P-5: one user message with a text block and a base64 PNG block, answered and ended `success` |
 
 The recorded files also carry the line types this CLI version writes that the model does not
 type (`active_goal`, `autocompact_state`, `rate_limit_event`, `system` subtypes other than
