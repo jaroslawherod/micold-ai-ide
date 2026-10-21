@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: plan
-- **Next step**: plan (speckit-plan), then plan review A r1
+- **Next step**: plan review A round 1 (orchestrator dispatches; prompt 1123-prompt-plan-r1.md in the scratchpad), then tasks unit
 
 ## Pull requests
 
@@ -31,6 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | clarify | FR-004: one status phrase or each? | One phrase per row by precedence: checks failing, changes requested, merge conflict, checks pending, approved, checks passing (first three in 813's attention order); 1003's words | orchestrator default, owner card pending | 813 card_state order (crates/micold-core/src/overview.rs ~l.328); 1003 FR-003 |
 | D4 | clarify | FR-008: how many PRs per branch? | Newest 10 of any state + newest 10 open/draft (today's `o`/`r` pages), no more GitHub points than today; a count of 10 or more reads *10+* (replaces 813's *100+* on the card) | orchestrator default, owner card pending | pull_request.rs status_query (NEWEST_TEN, COUNT_PAGE) |
 | D5 | clarify | Second clarify round | No critical ambiguities after D3/D4 (they only fix wording and a cap); clarify CLEAN | agent-resolved | spec.md scan |
+| D6 | plan | How counts derive from a 10-cap list at no more cost | A newest-10 merged page `m<i>` replaces the 100-node `oc`/`mc` count pages (260 → 90 points per branch); spec FR-008, FR-006 (fork *N+*) and Key Entities (title not kept) amended with the plan | agent-resolved | research.md R1, R2 |
 
 ## Review rounds
 
