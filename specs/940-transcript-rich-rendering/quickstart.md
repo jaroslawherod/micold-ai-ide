@@ -11,7 +11,7 @@ Prerequisite for everything below: #939's milestones M1–M6 merged (research R1
 | Render cache, copy, links | `cargo test -p micold-client --test features_transcript_rich` | refresh derives changed revisions only and prunes; isolation across sessions; copy `Pending → Copied/Failed → Idle` by ticket, a stale expiry ignored, clipboard text = code byte for byte (SC-005); `OpenLink` emits an open for web/mail only; show in full per session |
 | Renderer swap | `cargo test -p micold-client --test transcript_rich_renderers --test transcript_renderer_seam` | `RICH` changes only block content and the FR-017 meta; results and malformed inputs equal `PLAIN` (FR-018, FR-021, FR-022, SC-007) |
 | Shared components | `cargo test -p micold-client --test showcase_completeness --test material_builder_api --test layout_snapshot` and `--lib ui::material` | `MarkdownView`, `CodeBlock`, `InlineDiff`, `LinkText`, `DisclosureCard::meta` have builders, showcase entries and their gates (contrast both schemes: SC-006) |
-| Budget | `cargo test --release -p micold-client --test transcript_open_budget -- --ignored` | the rich variant: 5,000 events with markdown, code and diffs, every card open, first draw < 1 s, each delta < 100 ms (SC-004) |
+| Budget | `cargo test --release -p micold-client --test transcript_open_budget` (no `--ignored`: in release the budgets run by default) | the rich variant: 5,000 events with markdown, code and diffs, every card open, first draw < 1 s, each delta < 100 ms (SC-004) |
 | Everything else unchanged | `scripts/gate.sh` | green (SC-007) |
 
 ## Part B — manual / visual pass (GUI exception)
