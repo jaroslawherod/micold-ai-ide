@@ -3545,6 +3545,14 @@ pub fn send_worktree_create(
         || app.active_binding(),
         micold_core::daemons::Binding::Bound,
     );
+    // A daemon that is down must return the form to editing, not leave it creating for ever.
+    if let micold_client::links::Route::Unavailable { message }
+    | micold_client::links::Route::NoDaemon { message } = app.route(binding)
+    {
+        app.core
+            .update(Message::WorktreeForm(FormMsg::CreateFailed(message)));
+        return;
+    }
     send_op_bound(
         app,
         binding,

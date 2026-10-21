@@ -13626,6 +13626,33 @@ mod two_daemons {
         assert!(!created(&mut rx1), "the host daemon heard nothing");
     }
 
+    /// Bug 1159: a worktree create for a down chosen daemon fails visibly, reaches no other daemon,
+    /// and returns the form to editing.
+    #[test]
+    fn a_worktree_create_for_a_down_daemon_fails_and_frees_the_form() {
+        let (mut app, mut rx1, _rx2) = two_connected();
+        let project = PathBuf::from("/repo/p");
+        app.core.workspace.active = Some(project.clone());
+        app.core.update(Message::WorktreeForm(FormMsg::Opened));
+        app.core
+            .update(Message::WorktreeForm(FormMsg::DaemonChosen(DaemonId(2))));
+        let _ = app.core.settings.links.lost(DaemonId(2), "test");
+        crate::shell::daemon_sync::send_worktree_create(
+            &mut app,
+            project,
+            micold_core::naming::DerivedNames {
+                dir_name: "feat-x".into(),
+                branch: "feat/x".into(),
+            },
+            micold_core::worktree::CreateMode::NewBranch,
+        );
+        assert!(drain(&mut rx1).is_empty(), "nothing fell back to the host");
+        assert_eq!(
+            form_status(&app),
+            Some(micold_client::features::worktree_form::WorktreeFormStatus::Editing)
+        );
+    }
+
     #[test]
     fn forgetting_a_project_detaches_from_each_daemon_its_locations_are_bound_to() {
         let (mut app, mut rx1, mut rx2) = two_connected();
