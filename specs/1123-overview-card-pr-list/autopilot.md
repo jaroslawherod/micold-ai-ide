@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: tasks
-- **Next step**: tasks unit: speckit-tasks, milestones, speckit-analyze, tasks review r1
+- **Next step**: tasks review A r1 (orchestrator dispatches; prompt 1123-prompt-tasks-r1.md in the scratchpad); then close checklists (all ticked), specs-only gate, design PR
 
 ## Pull requests
 
@@ -21,6 +21,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T009 | full | The reading lists each branch's pull requests (43 requests per branch, was 44); card counts derive from the list and read *10+* | — | pending |
+| M2 | T010–T019 | full | Cards show pull request rows (#N, state pill, status words), two collapsed with "+N more", all expanded; snapshot `overview-pr-rows` | — | pending |
+| M3 | T020–T028 | full | A click on a row's number opens the pull request, no card activation | — | pending |
+| M4 | T029–T037 | full | Numbers are Tab stops with every 1122 link rule; Escape/menu hand-offs per link | — | pending |
 
 ## Decisions
 
@@ -32,6 +36,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | clarify | FR-008: how many PRs per branch? | Newest 10 of any state + newest 10 open/draft (today's `o`/`r` pages), no more GitHub points than today; a count of 10 or more reads *10+* (replaces 813's *100+* on the card) | orchestrator default, owner card pending | pull_request.rs status_query (NEWEST_TEN, COUNT_PAGE) |
 | D5 | clarify | Second clarify round | No critical ambiguities after D3/D4 (they only fix wording and a cap); clarify CLEAN | agent-resolved | spec.md scan |
 | D6 | plan | How counts derive from a 10-cap list at no more cost | A newest-10 merged page `m<i>` of scalar fields only (no `commits`) replaces the 100-node `oc`/`mc` count pages: 44 → 43 connection requests per branch by GitHub's rate-limit score (plan review A r1 F1 corrected the earlier node-count figure); spec FR-008, FR-006 (fork *N+*) and Key Entities (title not kept) amended with the plan | agent-resolved | research.md R1, R2 |
+| D7 | tasks | Milestone cut | US1 split in M1 (list + counts) and M2 (rows); US2 (P2) ships in M2 with the rows: its only rule is `rows(expanded)` (K4) and a card that draws rows must draw them right expanded, so no separate milestone; US3 (P1) split along its scenarios into M3 (pointer, sc. 1–3, 5) and M4 (keyboard, sc. 4); Polish T038–T039 code-free → close unit | agent-resolved | milestones.md rules 1–4, 6 |
+| D8 | tasks | Contract P1 count | contracts/reading.md P1 said "1 open (draft counted)" for four states; open + draft is 2, fixed to "2 open (the draft counted) · 1 merged" (plan text fix) | agent-resolved | data-model §2 `counts()` |
+| D9 | tasks | `speckit-analyze` | Not invokable in this cloud session (Skill: unknown skill); mechanical coverage check run instead (every FR-001–FR-017, SC-001–SC-007, K1–K6, K5a–K5g, Q1–Q2, P1–P7, U1–U7 named in tasks.md; all tasks in checklist format); the tasks review r1 is asked to apply the analyze checks too | agent-resolved | this unit |
 
 ## Review rounds
 
@@ -41,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A spec | 2 | 825ca900990f4c8ff4f75b661ae433152e67cae6:91b05eb41e1d852e023be0f044cc857a68bc5800 (fix diff 451f1d2c..91b05eb4, sonnet) | CLEAN, 1 MINOR (F1 FR-007 FR-025 wording); fixed, prose only, no round 3 |
 | Review A plan | 1 | 53ffa8f39a3a4caa715af2e64d4fca74c90e6a87:a55fb1b02c4bca128a2f493349a45dbf294074aa | CHANGES: 1 BLOCKER (F1 rate-limit points: request-count rule, `m<i>` with `...pr` costs 63 > 44), 3 MAJOR (F2 focus pairing for several links, F3 client hand-offs/menu return per link, F4 `StatusChip` does not fit a PR pill), 3 MINOR (F5 K3 edge cases, F6 address in Msg, F7 missing alternatives); all seven fixed in research R2/R5–R10, data-model §1–§5, contracts, plan, quickstart; none declined; round 2 on sonnet over the fix diff |
 | Review A plan | 2 | 9bc517ce26e6300ed4d9f258bb7fd82b0e0fad46:f3fad1fa408ff0b5345496fd0d6917e547bb9eed (fix diff 53ffa8f3:a55fb1b0 → f3fad1fa, sonnet) | CLEAN, 2 MINOR (F1 card-rows.md U1–U7 heading, F2 R9 contrast wording); both fixed, prose only, no round 3 |
+| Review A tasks | 1 | 8c136e70f07d2dc1576652bbf31d1be9c59a6e81:e246bec8f4aaf98c75e15a2f3fe1292736a8455e | pending |
 
 ### Review A plan round 2 verdict (verbatim)
 

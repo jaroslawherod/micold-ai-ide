@@ -35,7 +35,7 @@ Tests (`crates/micold-core/tests/pull_request_parse.rs`, `pull_request_counts.rs
 - Q1 the query has `m<i>` and no `oc<i>`/`mc<i>`; no branch name in the document.
 - Q2 the `m<i>` connection asks no nested connection: its text up to the next alias has no
   `commits(` and no `...pr`, and the `merged` fragment has no `(` (FR-008 cost, R2).
-- P1 four states on one branch → list in FR-003 order, counts 1 open (draft counted) · 1 merged.
+- P1 four states on one branch → list in FR-003 order, counts 2 open (the draft counted) · 1 merged.
 - P2 a node in both `o` and `r` (and `m`) is listed once.
 - P3 forks are listed nowhere and counted nowhere; a full `o` with a fork reads `9+ open`.
 - P4 10 open nodes → `10+ open`; 10 merged nodes → `10+ merged`.
