@@ -74,16 +74,24 @@ here (context meter, session totals, plan-usage feed, subagent threads, backgrou
 
 ## Clarifications
 
-Open questions, left for the clarify unit:
+### Session 2026-10-21
 
-- **Q1** (FR-010, US4): The CLI writes the plan-limit event in structured mode, but feature 490's
-  FR-012 allows plan usage only from the values Claude Code documents in its status-line input, and
-  a structured session has no status line. May the plan-limit event feed the plan-usage indicator
-  (amending feature 490's FR-012), or does a structured session not feed it, leaving the issue's
-  "feeds the existing plan_usage feature" acceptance unmet until such a source is documented?
-- **Q2** (FR-026, also FR-006 and FR-007): For an account on a subscription plan, the CLI still
-  reports a list-price cost for each turn. Show it as is; label it as an API-equivalent cost; or
-  hide cost for such accounts?
+- Q: How is cost shown for an account on a subscription plan, for which the CLI still reports a
+  list-price cost? (FR-026) → A: Shown for every account, never hidden, and always labelled as an
+  estimate: the figure is Claude Code's own estimate at API list prices, not what the account is
+  billed, and the cost details say so in words ("estimated at API list prices; a subscription plan
+  does not bill this amount"). The application does not detect the plan type for this.
+  _(agent-resolved: issue #944 acceptance "per-turn cost visible";
+  https://code.claude.com/docs/en/agent-sdk/cost-tracking — `total_cost_usd` and `costUSD` "are
+  client-side estimates, not authoritative billing data", computed "from a price table bundled at
+  build time"; https://code.claude.com/docs/en/agent-sdk/typescript#sdkusagereport — "an estimate
+  and not what your plan bills")_
+- Q: May the CLI's plan-limit event feed the plan-usage indicator (FR-010, amending feature 490's
+  FR-012)? → open, escalated to the user. Evidence: the event is documented
+  (https://code.claude.com/docs/en/agent-sdk/typescript#sdkratelimitevent: `status`, optional
+  `resetsAt` and `utilization`, no window name), but the CLI 2.1.302 fixtures carry no top-level
+  `utilization`; the per-window figures (`unifiedWindows.five_hour` / `.seven_day`, each
+  `utilization` and `resetsAt`, and `rateLimitType`) are undocumented fields.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -376,9 +384,10 @@ finished, and the transcript's tool-call card that started it links to the list 
   figure is left out, as feature 938's tolerant parsing requires.
 - **FR-025**: Terminal sessions MUST be unchanged by this feature.
 - **FR-026**: Every cost this feature shows (the turn details of FR-006 and the session totals of
-  FR-007) MUST be shown and labelled as the answer to Q2 settles
-  [NEEDS CLARIFICATION: Q2 — how is cost shown for an account on a subscription plan? See
-  Clarifications].
+  FR-007) MUST be shown for every account and labelled as an estimate, and the cost details MUST
+  say in words that it is Claude Code's estimate at API list prices and not what a subscription
+  plan bills. Cost MUST NOT be hidden by plan type, and the application MUST NOT detect the plan
+  type for this.
 - **FR-027**: The user guide MUST describe the context meter, the token figures and totals, how
   structured sessions feed the plan-usage indicator, subagent threads and the background-task list,
   in the same change that ships each; feature 490's Settings note and guide page MUST say that
