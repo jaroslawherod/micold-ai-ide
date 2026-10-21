@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M3 implement
-- **Next step**: M3 reviews (A, B), full gate, then the orchestrator opens the M3 PR
+- **Phase**: M3 PR
+- **Next step**: orchestrator opens the M3 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M4
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | #1201 | merged |
 | M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | #1204 | merged |
-| M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | — | implemented (T035–T038 ticked), reviews next |
+| M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | pending (orchestrator opens) | gate green at 9ef265a6 (scripts/gate.sh), reviews clean, PR to open |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | pending |
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | — | pending |
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | pending |
