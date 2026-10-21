@@ -294,6 +294,17 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         }
     }
 
+    /// This card, as the collapsed twin of `expanded` in the [`CardGrid`](super::CardGrid): laid
+    /// out with the link `expanded` shows, so the twin is as tall as the collapsed card it stands
+    /// for (feature 1121 FR-009). The twin is only measured, so the link's message is never sent.
+    pub(crate) fn twin_of(mut self, expanded: &Self) -> Self
+    where
+        M: Clone,
+    {
+        self.on_issue_link = expanded.on_issue_link.clone();
+        self
+    }
+
     /// Publish `f(true)` when the card gets keyboard focus (Tab, Shift+Tab, an arrow move, a
     /// `focus(id)` hand-back) and `f(false)` when it loses it; a pointer press that takes the
     /// keyboard publishes nothing (feature 1121, U1, FR-002).

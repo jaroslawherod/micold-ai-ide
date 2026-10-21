@@ -385,7 +385,8 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
 
     /// Draw card `index` expanded (feature 1121, research R4, contract U2): `cards[index]` is the
     /// expanded card and `twin` the same card collapsed, built with no id, focus wiring or
-    /// messages. The grid measures the twin for that card's row, so every row and slot is what it
+    /// messages; the grid gives it the expanded card's issue link, which takes a line of its own
+    /// when the card has no branch line (feature 1122). The grid measures the twin for that card's row, so every row and slot is what it
     /// is with nothing expanded (FR-009); the expanded card takes its slot's x, width and top, as
     /// tall as its content up to the view's height, and is drawn over its neighbours, moved up
     /// just enough to lie inside the view (`overview_expansion::place`, FR-008).
@@ -397,9 +398,10 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
     /// The grid proper, without its scrollable.
     fn into_grid(self) -> Grid<'a, M> {
         let (expanded, twin) = match self.expanded.clone() {
-            Some((index, twin)) if index < self.cards.len() => {
-                (Some(index), Some(Element::from(twin)))
-            }
+            Some((index, twin)) if index < self.cards.len() => (
+                Some(index),
+                Some(Element::from(twin.twin_of(&self.cards[index]))),
+            ),
             _ => (None, None),
         };
         Grid {
@@ -537,7 +539,8 @@ impl<M: Clone> Grid<'_, M> {
 
 impl<M> Grid<'_, M> {
     /// Whether `cursor` is on card `i`'s link, laid out in `layout`: the link's bounds found by its
-    /// id over the card's subtree, on screen (`ui::focus::ScreenBounds`, research R7).
+    /// id over the card's subtree, on screen and clipped to the expanded body's view
+    /// (`ui::focus::ScreenBounds`, research R7).
     fn over_link(
         &mut self,
         i: usize,
@@ -553,7 +556,7 @@ impl<M> Grid<'_, M> {
         self.cards[i]
             .as_widget_mut()
             .operate(card_tree, layout, renderer, &mut find);
-        find.found().is_some_and(|bounds| cursor.is_over(bounds))
+        find.visible().is_some_and(|bounds| cursor.is_over(bounds))
     }
 
     /// The expanded card's index and drawn layout, in `view`.
@@ -2805,28 +2808,34 @@ mod tests {
 
     const LINK: &str = "Issue #1122";
 
+    /// `model` with the issue link `LINK`.
+    fn with_issue(model: CardModel) -> CardModel {
+        CardModel {
+            issue_link: Some(micold_core::issue_link::IssueLink {
+                label: LINK.into(),
+                address: "https://github.com/o/r/issues/1122".into(),
+            }),
+            ..model
+        }
+    }
+
+    /// `card` with its issue link wired: `link i`, id `link-i`, `link rest i`.
+    fn link_wired(card: OverviewCard<'static, String>, i: usize) -> OverviewCard<'static, String> {
+        card.on_issue_link(format!("link {i}"))
+            .link_id(iced::advanced::widget::Id::from(format!("link-{i}")))
+            .on_link_rest(format!("link rest {i}"))
+    }
+
     /// Six cards, each with an issue link (`link i`, id `link-i`, `link rest i`), its rest and
     /// leave messages, and its keyboard reports.
     fn linked_grid() -> CardGrid<'static, String> {
-        let models: Vec<CardModel> = (0..6)
-            .map(|i| CardModel {
-                issue_link: Some(micold_core::issue_link::IssueLink {
-                    label: LINK.into(),
-                    address: "https://github.com/o/r/issues/1122".into(),
-                }),
-                ..titled(i)
-            })
-            .collect();
+        let models: Vec<CardModel> = (0..6).map(|i| with_issue(titled(i))).collect();
         let mut grid = with_rests(plain_grid(&models));
         grid.cards = grid
             .cards
             .into_iter()
             .enumerate()
-            .map(|(i, card)| {
-                card.on_issue_link(format!("link {i}"))
-                    .link_id(iced::advanced::widget::Id::from(format!("link-{i}")))
-                    .on_link_rest(format!("link rest {i}"))
-            })
+            .map(|(i, card)| link_wired(card, i))
             .collect();
         grid
     }
@@ -2941,5 +2950,112 @@ mod tests {
         assert!(matches!(asked(&mut m, t0), RedrawRequest::At(_)));
         assert_eq!(asked(&mut m, t0 + EXPAND_REST), RedrawRequest::Wait);
         assert_eq!(asked(&mut m, t0 + EXPAND_REST * 2), RedrawRequest::Wait);
+    }
+
+    /// Review A M2 F1, feature 1121 FR-009: with no branch line the link takes a line of its own,
+    /// and the expanded card's twin, built with no messages, is laid out with it, so every slot is
+    /// that of the grid with nothing expanded (one column, where the twin alone sets the row).
+    #[test]
+    fn the_twin_of_a_linked_card_with_no_branch_keeps_its_row() {
+        let models: Vec<CardModel> = (0..4)
+            .map(|i| {
+                with_issue(CardModel {
+                    branch: None,
+                    ..titled(i)
+                })
+            })
+            .collect();
+        let linked = |models: &[CardModel]| -> Vec<OverviewCard<'static, String>> {
+            wired(models)
+                .into_iter()
+                .enumerate()
+                .map(|(i, card)| link_wired(card, i))
+                .collect()
+        };
+        let rest = mounted(
+            CardGrid::new(linked(&models), roles())
+                .min_width(280.0)
+                .spacing(GAP),
+            279.0,
+            4000.0,
+        );
+        let mut cards = linked(&models);
+        cards[1] = cards[1].clone().expanded(true);
+        let open = mounted(
+            CardGrid::new(cards, roles())
+                .min_width(280.0)
+                .spacing(GAP)
+                .expanded(1, OverviewCard::new(&models[1], roles())),
+            279.0,
+            4000.0,
+        );
+        let (at_rest, expanded) = (slots(&rest.node, 4), slots(&open.node, 4));
+        assert_eq!(
+            at_rest[2], expanded[2],
+            "the row under the expanded card moved"
+        );
+        assert_eq!(at_rest[3], expanded[3]);
+    }
+
+    /// Review A M2 F2, R7, R8: a link scrolled out of the expanded body's view is not under the
+    /// pointer, even where its bounds, translated by the scroll, lie over the title above the
+    /// body: a rest there is the card's, not the link's.
+    #[test]
+    fn a_link_scrolled_out_of_the_body_is_not_under_the_pointer() {
+        use iced::advanced::mouse::{Cursor, Event as Mouse, ScrollDelta};
+        use micold_core::overview_expansion::EXPAND_REST;
+        let models: Vec<CardModel> = (0..9).map(titled).collect();
+        let content = with_issue(long(0));
+        let mut cards = with_rests(plain_grid(&models)).cards;
+        cards[0] = link_wired(
+            OverviewCard::new(&content, roles())
+                .on_press("open 0".to_string())
+                .on_rest("rest 0".to_string())
+                .on_leave("leave 0".to_string())
+                .on_body_scroll(|up, down| format!("body {up} {down}"))
+                .expanded(true),
+            0,
+        );
+        let mut m = Mounted::new_in(
+            CardGrid::new(cards, roles())
+                .min_width(280.0)
+                .spacing(GAP)
+                .expanded(0, OverviewCard::new(&models[0], roles())),
+            Size::new(900.0, 400.0),
+        );
+        let body = Point::new(150.0, 300.0);
+        m.painted_text();
+        m.hover(body);
+        let text = m.painted_text();
+        let link = text
+            .iter()
+            .find(|p| p.content == LINK)
+            .expect("the link is painted")
+            .bounds;
+        let title = text
+            .iter()
+            .find(|p| p.content.starts_with("long 0"))
+            .expect("the title is painted")
+            .bounds;
+        // Scroll the body so the link's translated bounds lie on the title's first line.
+        let on_title = Point::new(link.center_x(), title.y + 4.0);
+        let scrolled = m.send(
+            iced::Event::Mouse(Mouse::WheelScrolled {
+                delta: ScrollDelta::Pixels {
+                    x: 0.0,
+                    y: on_title.y - link.center_y(),
+                },
+            }),
+            Cursor::Available(body),
+        );
+        assert_eq!(scrolled, ["body true true"]);
+        let t0 = std::time::Instant::now();
+        let mut rested = frame_at(&mut m, on_title, t0);
+        rested.extend(frame_at(&mut m, on_title, t0 + EXPAND_REST));
+        assert_eq!(
+            rested,
+            ["rest 0"],
+            "the pointer on the title counted as on the link"
+        );
     }
 }
