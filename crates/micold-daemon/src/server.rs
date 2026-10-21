@@ -1070,15 +1070,17 @@ where
                 provider,
                 allow_additional_session,
                 kind,
+                permission_mode,
             } => {
                 // The catalog write stays on the loop: it is a small atomic file write, and it is
                 // what mints the id every later message refers to. Only the spawn — the slow half
                 // — is deferred (BUG-009, T125).
-                match state.create_session_of_kind(
+                match state.create_session_in_mode(
                     &project,
                     &worktree_dir,
                     provider,
                     kind,
+                    permission_mode,
                     allow_additional_session.into(),
                 ) {
                     Ok(session) => {
@@ -1112,8 +1114,12 @@ where
                                 detail: Some(existing.id.0.to_string()),
                             },
                         ),
-                    // Feature 938, FR-003: a kind the CLI cannot run is refused, nothing written.
-                    Err(crate::catalog::CreateSessionError::Kind(refusal)) => state.send(
+                    // Feature 938, FR-003: a kind the CLI cannot run is refused, nothing written;
+                    // #942, FR-018: so is a terminal session with a permission mode.
+                    Err(
+                        refusal @ (crate::catalog::CreateSessionError::Kind(_)
+                        | crate::catalog::CreateSessionError::Mode(_)),
+                    ) => state.send(
                         id,
                         DaemonMsg::OperationError {
                             req,

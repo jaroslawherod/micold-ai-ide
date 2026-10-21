@@ -4,7 +4,8 @@
 
 use micold_core::project::{Availability, Project};
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
+    AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle,
+    SessionLocation, TerminalMode,
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -207,4 +208,80 @@ fn projects_without_sessions_load_unchanged() {
     assert_eq!(loaded.status, LoadStatus::Loaded);
     assert_eq!(loaded.workspace.projects.len(), 1);
     assert!(loaded.workspace.sessions.is_empty());
+}
+
+/// #942 (FR-013, FR-015): a structured session of `mode`, saved and loaded back; also the project
+/// state file as written.
+fn round_trip_mode(mode: PermissionMode) -> (Session, String) {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    let path = PathBuf::from("/home/dev/proj");
+    let mut session = Session::restored_of_kind(
+        SessionId::new(),
+        SessionLocation::Worktree("feat-x".to_string()),
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+        SessionKind::Structured,
+    );
+    session.permission_mode = mode;
+    let ws = Workspace {
+        projects: vec![Project {
+            path: path.clone(),
+            display_name: "proj".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        }],
+        active: None,
+        sessions: BTreeMap::from([(path.clone(), vec![session])]),
+        worktree_names: Default::default(),
+        ..Default::default()
+    };
+    store.save(&ws).unwrap();
+    let written = std::fs::read_to_string(store.project_state_path(&path)).unwrap();
+    let loaded = store.load();
+    let back = loaded.workspace.sessions.get(&path).unwrap()[0].clone();
+    (back, written)
+}
+
+#[test]
+fn each_permission_mode_round_trips_through_the_store() {
+    for mode in PermissionMode::ALL {
+        let (back, _) = round_trip_mode(mode);
+        assert_eq!(
+            back.permission_mode, mode,
+            "{mode:?} reloads as itself (FR-015)"
+        );
+    }
+}
+
+#[test]
+fn a_default_mode_record_is_written_with_no_permission_mode_key() {
+    let (_, written) = round_trip_mode(PermissionMode::Default);
+    assert!(
+        !written.contains("permission_mode"),
+        "a Default session is written exactly as before the feature: {written}"
+    );
+    let (_, written) = round_trip_mode(PermissionMode::Plan);
+    assert!(
+        written.contains("permission_mode"),
+        "a chosen mode is what the record carries: {written}"
+    );
+}
+
+#[test]
+fn a_record_written_before_permission_modes_loads_as_default() {
+    // A structured session recorded before #942: no "permission_mode" key.
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("projects.json");
+    std::fs::write(
+        &file,
+        r#"{"schema_version":1,"last_active":null,"projects":[{"path":"/p","display_name":"p","is_git_repo":true,"sessions":[{"id":"00000000-0000-0000-0000-000000000942","worktree_dir":"feat-x","title":null,"kind":"Structured"}]}]}"#,
+    )
+    .unwrap();
+    let loaded = JsonFileStore::at(file).load();
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    let session = &loaded.workspace.sessions.get(&PathBuf::from("/p")).unwrap()[0];
+    assert_eq!(session.kind, SessionKind::Structured);
+    assert_eq!(session.permission_mode, PermissionMode::Default, "FR-013");
 }

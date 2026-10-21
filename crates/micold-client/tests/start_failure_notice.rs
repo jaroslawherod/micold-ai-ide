@@ -60,6 +60,7 @@ fn snapshot(lifecycle: WireLifecycle) -> CatalogSnapshot {
                 activity: ActivitySignal::Unknown,
                 provider: AiCli::Copilot,
                 kind: Default::default(),
+                permission_mode: Default::default(),
                 input_serial: 0,
                 live_shells: Vec::new(),
                 attention_seq: 0,

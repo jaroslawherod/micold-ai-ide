@@ -148,6 +148,7 @@ async fn ssh_real_cut_link_reconnects_to_the_same_daemon_with_output_intact() {
             worktree_dir: "feature-x".into(),
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
+            permission_mode: Default::default(),
             allow_additional_session: true,
         },
         3,

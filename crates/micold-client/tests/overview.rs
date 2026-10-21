@@ -1177,6 +1177,7 @@ fn adopt(
                 main: true,
                 provider: AiCli::ClaudeCode,
                 kind: Default::default(),
+                permission_mode: Default::default(),
                 origin: None,
                 agents: Vec::new(),
                 paused_on_user: false,

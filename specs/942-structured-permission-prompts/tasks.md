@@ -229,21 +229,21 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 6: Daemon — mode persisted, created and launched (M4)
 
-- [ ] T039 [P] [US2] Tests in `core/tests/session_store.rs` and `core/tests/protocol_roundtrip.rs`:
+- [x] T039 [P] [US2] Tests in `core/tests/session_store.rs` and `core/tests/protocol_roundtrip.rs`:
   a record written before this feature loads as `Default`; each mode round-trips;
   `#[serde(default, skip_serializing_if = "PermissionMode::is_default")]` leaves a Default record's
   JSON unchanged; `SessionSummary.permission_mode` and `ClientMsg::SessionCreate.permission_mode`
   default to `Default` when absent (FR-013, FR-015)
-- [ ] T040 [US2] Implement T039: `Session.permission_mode` in `core/src/session.rs`,
+- [x] T040 [US2] Implement T039: `Session.permission_mode` in `core/src/session.rs`,
   `StoredSession.permission_mode` in `core/src/store.rs`, the two wire fields in
   `core/src/protocol/messages.rs`, `PROTOCOL_VERSION` +1
-- [ ] T041 [P] [US2] Integration tests in `daemon/tests/structured_permission_mode.rs` (new): each of
+- [x] T041 [P] [US2] Integration tests in `daemon/tests/structured_permission_mode.rs` (new): each of
   the four modes on `SessionCreate` is in the summary and in the stand-in's argv
   (`--permission-mode` only when not Default), and again after a restart and after a daemon
   restart and resume (SC-005); a terminal `SessionCreate` with a non-default mode is refused
   `OperationError` and writes no record; a terminal session's argv and binding file are unchanged
   (FR-018)
-- [ ] T042 [US2] Implement T041: `Catalog::set_permission_mode(id, mode)` (refuses a terminal session,
+- [x] T042 [US2] Implement T041: `Catalog::set_permission_mode(id, mode)` (refuses a terminal session,
   `ModeRefusal::NotStructured`) and create-with-mode in `daemon/src/catalog.rs`; the
   `SessionCreate` handler in `daemon/src/state.rs`; `daemon/src/structured.rs` launches with the
   session's persisted mode

@@ -421,6 +421,7 @@ fn create(req: u64, project: &Path, provider: AiCli, kind: Option<SessionKind>) 
         provider,
         allow_additional_session: true,
         kind: kind.unwrap_or_default(),
+        permission_mode: Default::default(),
     }
 }
 

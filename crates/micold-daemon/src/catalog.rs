@@ -34,8 +34,8 @@ use micold_core::protocol::messages::{
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{
-    AiCli, KindRefusal, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle,
-    SessionLocation, TerminalMode,
+    AiCli, KindRefusal, ModeRefusal, PermissionMode, Session, SessionId, SessionKind, SessionLabel,
+    SessionLifecycle, SessionLocation, TerminalMode,
 };
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
@@ -81,6 +81,9 @@ pub enum CreateSessionError {
     /// The provider cannot run a session of the requested kind (feature 938, FR-003); the catalog
     /// is unchanged.
     Kind(KindRefusal),
+    /// A terminal session was asked for with a permission mode other than Default (#942, FR-018);
+    /// the catalog is unchanged.
+    Mode(ModeRefusal),
     /// The catalog could not be written.
     Io(io::Error),
 }
@@ -90,12 +93,36 @@ impl std::fmt::Display for CreateSessionError {
         match self {
             Self::Occupied(existing, location) => f.write_str(&refusal_text(existing, location)),
             Self::Kind(refusal) => std::fmt::Display::fmt(refusal, f),
+            Self::Mode(refusal) => std::fmt::Display::fmt(refusal, f),
             Self::Io(e) => std::fmt::Display::fmt(e, f),
         }
     }
 }
 
 impl std::error::Error for CreateSessionError {}
+
+/// Why [`Catalog::set_permission_mode`] changed nothing (#942, data-model *PermissionMode*).
+#[derive(Debug)]
+pub enum SetModeError {
+    /// No session has the id.
+    NoSession,
+    /// The session cannot have a mode (a terminal session, FR-018).
+    Refused(ModeRefusal),
+    /// The catalog could not be written; the session keeps its earlier mode.
+    Io(io::Error),
+}
+
+impl std::fmt::Display for SetModeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoSession => f.write_str("no such session"),
+            Self::Refused(refusal) => std::fmt::Display::fmt(refusal, f),
+            Self::Io(e) => std::fmt::Display::fmt(e, f),
+        }
+    }
+}
+
+impl std::error::Error for SetModeError {}
 
 impl From<io::Error> for CreateSessionError {
     fn from(e: io::Error) -> Self {
@@ -723,7 +750,8 @@ impl Catalog {
     }
 
     /// [`Self::create_session`] of a session of `kind`, refused before anything is written when
-    /// `provider` cannot run it (feature 938, FR-003).
+    /// `provider` cannot run it (feature 938, FR-003). [`Self::create_session_in_mode`] in
+    /// [`PermissionMode::Default`].
     pub fn create_session_of_kind(
         &mut self,
         project: &Path,
@@ -732,7 +760,29 @@ impl Catalog {
         kind: SessionKind,
         additional: Additional,
     ) -> Result<SessionId, CreateSessionError> {
+        self.create_session_in_mode(
+            project,
+            worktree_dir,
+            provider,
+            kind,
+            PermissionMode::Default,
+            additional,
+        )
+    }
+
+    /// [`Self::create_session_of_kind`] in permission mode `mode` (#942, FR-013), refused before
+    /// anything is written for a terminal session in a mode other than Default (FR-018).
+    pub fn create_session_in_mode(
+        &mut self,
+        project: &Path,
+        worktree_dir: &str,
+        provider: AiCli,
+        kind: SessionKind,
+        mode: PermissionMode,
+        additional: Additional,
+    ) -> Result<SessionId, CreateSessionError> {
         kind.check(provider).map_err(CreateSessionError::Kind)?;
+        kind.check_mode(mode).map_err(CreateSessionError::Mode)?;
         let location = location_of(worktree_dir);
         // An explicit request (FR-015) skips the check and adds a session beside the existing one.
         if !additional.is_yes() {
@@ -743,6 +793,7 @@ impl Catalog {
         // The client already resolved default-or-override and put the answer on the wire (T030),
         // so nothing here re-decides it.
         let mut session = Session::start_new_of_kind(location, provider, kind);
+        session.permission_mode = mode;
         let id = session.id;
         let list = self
             .workspace
@@ -755,6 +806,36 @@ impl Catalog {
         list.push(session);
         self.persist()?;
         Ok(id)
+    }
+
+    /// Set structured session `id`'s permission mode and persist it (#942, FR-015, FR-017):
+    /// `Ok(true)` when it changed, `Ok(false)` when it already was `mode` (nothing written). A
+    /// terminal session is refused, `ModeRefusal::NotStructured` (FR-018); a failed write leaves
+    /// the earlier mode in place.
+    pub fn set_permission_mode(
+        &mut self,
+        id: SessionId,
+        mode: PermissionMode,
+    ) -> Result<bool, SetModeError> {
+        let (_, session) = self
+            .workspace
+            .find_session_mut(id)
+            .ok_or(SetModeError::NoSession)?;
+        if session.kind != SessionKind::Structured {
+            return Err(SetModeError::Refused(ModeRefusal::NotStructured));
+        }
+        let before = session.permission_mode;
+        if before == mode {
+            return Ok(false);
+        }
+        session.permission_mode = mode;
+        if let Err(e) = self.persist() {
+            if let Some((_, session)) = self.workspace.find_session_mut(id) {
+                session.permission_mode = before;
+            }
+            return Err(SetModeError::Io(e));
+        }
+        Ok(true)
     }
 
     /// Whether `location` of `project` has an un-archived session (feature 776).
@@ -1998,6 +2079,7 @@ fn session_summary(session: &Session, removed: &HashSet<SessionId>) -> SessionSu
         // known session runs (data-model invariant 3).
         provider: session.provider,
         kind: session.kind,
+        permission_mode: session.permission_mode,
         lifecycle: wire_lifecycle(session.lifecycle.clone()),
         activity: ActivitySignal::Unknown,
         input_serial: 0,

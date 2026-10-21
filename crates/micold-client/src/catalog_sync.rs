@@ -524,6 +524,7 @@ mod tests {
                             main: false,
                             provider: micold_core::session::AiCli::ClaudeCode,
                             kind: Default::default(),
+                            permission_mode: Default::default(),
                             origin: None,
                             agents: Vec::new(),
                             paused_on_user: false,

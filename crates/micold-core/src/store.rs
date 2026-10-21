@@ -23,7 +23,8 @@ use crate::project::{Availability, Project};
 use crate::review::store::ReviewFile;
 use crate::runs::store::RunsFile;
 use crate::session::{
-    AiCli, Session, SessionId, SessionKind, SessionLabel, SessionLocation, TerminalMode,
+    AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLocation,
+    TerminalMode,
 };
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
@@ -297,6 +298,11 @@ struct StoredSession {
     /// written exactly as before, and no `schema_version` bump is needed.
     #[serde(default, skip_serializing_if = "SessionKind::is_terminal")]
     kind: SessionKind,
+    /// A structured session's permission mode (#942, FR-013, FR-015). Additive and defaulted, and
+    /// not written for `Default`, so a record from before the feature loads `Default`, a Default
+    /// record is written exactly as before, and no `schema_version` bump is needed.
+    #[serde(default, skip_serializing_if = "PermissionMode::is_default")]
+    permission_mode: PermissionMode,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -418,6 +424,7 @@ impl StoredSession {
             agents: session.agents.clone(),
             main: session.main,
             kind: session.kind,
+            permission_mode: session.permission_mode,
         }
     }
 
@@ -455,6 +462,7 @@ impl StoredSession {
         // (feature 552, FR-005).
         crate::agent_run::stop_running(&mut session.agents);
         session.main = self.main;
+        session.permission_mode = self.permission_mode;
         session
     }
 }

@@ -211,7 +211,10 @@
 /// And 59 → 60 for feature 1122's per-project Jira base URL (contracts/wire.md, W1-W3):
 /// `jira_base_urls` on `DaemonSettings` and `jira_base_url` on `ClientMsg::SettingsSet`, which
 /// shift the postcard layout of both.
-pub const PROTOCOL_VERSION: u32 = 60;
+///
+/// And 60 → 61 for #942's permission mode (M4): `permission_mode` on `SessionSummary` and on
+/// `ClientMsg::SessionCreate` (serde-defaulted), which shift the postcard layout.
+pub const PROTOCOL_VERSION: u32 = 61;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
