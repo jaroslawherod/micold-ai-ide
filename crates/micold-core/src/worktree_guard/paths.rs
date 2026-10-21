@@ -142,7 +142,10 @@ fn lexical(raw: &str) -> Vec<String> {
 
 fn has_drive(text: &str) -> bool {
     let bytes = text.as_bytes();
-    bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
+    bytes.len() >= 2
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes.get(2), None | Some(b'/'))
 }
 
 fn joined(parts: &[String]) -> String {
@@ -256,6 +259,8 @@ mod tests {
         assert_eq!(resolve(&f, Path::new("/")).last(), None);
         assert!(has_root(Path::new("C:\\x")) && has_root(Path::new("/x")));
         assert!(!has_root(Path::new("src/x")));
+        // A file name that merely looks like a drive is not a root.
+        assert!(!has_root(Path::new("a:notes.txt")));
     }
 
     #[test]
