@@ -70,6 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 (code-review high) | 1 | cb7b51adec375febcae980c05ab93a8ab3a2d07f:f58f5294f5d6d5b5b44fd9b9787abb3b920387f1 | 8 items, no severities. Fixed with tests: F1 (an `init` starts every turn; only a process-start `init`, with `startup_timing`, ends running tasks — D16), F3 (a report after an inferred `EndedWithoutReport` sets the reported state), F4 (`running_background(cli_running)` follows the overlay), F7 (a test for a tool call held twice), F8 (`entry` one hash, `task_for_tool` from the back). Declined F2, F5, F6 (see table) |
 | Review B M3 (conformance, sonnet) | 1 | cb7b51adec375febcae980c05ab93a8ab3a2d07f:f58f5294f5d6d5b5b44fd9b9787abb3b920387f1 | CHANGES: F1 BLOCKER — Verify could not build (disk full during the concurrent gate; `target-shared/debug` removed after). Static review: no scope creep, leftovers or defects |
 | Review A M3 (code-review, sonnet) | 2 | cabd729a2c8b8dd1e2b90f456b90e28fe8b03a89:9de37ca50b90bd95b652944170c1d92a743b4f5f | CLEAN |
+| Review A M4 (code-review high) | 1 | 17111c98cf23896bd77035b947c608e7b624d381:bb376e22c57150c5bd4f5192a41b94f8ae95f3ea | CLEAN, 5 MINOR. Fixed with a test: F1 (a tick split by the fill's edge is coloured per half), F4 (the as-before test pins pixels). Declined F2, F3, F5 (see table) |
 | Review B M3 (conformance, sonnet) | 2 | cabd729a2c8b8dd1e2b90f456b90e28fe8b03a89:9de37ca50b90bd95b652944170c1d92a743b4f5f | CLEAN; 1 MINOR (dedupe test is test-after, as the cycle log says) not acted on. Verify: `structured_insights` 49/49, `--lib structured::insights` 12/12 |
 | Full gate M3 | — | 9de37ca5 | green (`scripts/gate.sh`). An earlier run hit `structured_session::messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` timing out (21 s) while review B built alongside; it passed 3/3 alone (2 s) and in the rerun — load flake, not this diff |
 
@@ -85,6 +86,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A (code-review high) | F2 `thread_view` should prefer a terminal card over a running task | A background subagent's card is `Done` at launch (its result is the launch placeholder) while the subagent runs: the task's state must win (research R6); a foreground subagent's task ends by its report or by `TurnEndedWithoutResult` |
 | M3 | A (code-review high) | F5 a notification for an unseen task is made background, description from the summary | research R6 and data-model *TaskTable* say so (spec Edge Cases: an entry from the notification); the table cannot tell foreground from background without the start |
 | M3 | A (code-review high) | F6 `task_updated`/`task_progress` for an unseen task are dropped | research R6: only a notification or a live set makes an entry; an update alone has no description or kind to show, and the notification or live set that follows lists it |
+| M4 | A (code-review high) | F2 [MINOR] square tick overhangs the pill end at ratio 0 or 1 | The square tick at ratio 0 or 1 overhangs the pill's rounded end by under 1 px; a threshold at 0% or 100% of the window does not occur, and the context meter's threshold sits inside |
+| M4 | A (code-review high) | F3 [MINOR] gate fill and tick against `surface` too | Fill and track against `surface` are not this change's pairs: the track/surface pair predates M4 (StageProgress), and the warning is never colour alone (FR-003: icon and text) |
+| M4 | A (code-review high) | F5 [MINOR] colour helpers split across progress.rs and progress_bar.rs | Taste: `track_color` beside `paint_track` and `fill_color` beside the bar that chooses it keeps each decision with its owner; StageProgress has no warning |
+
 
 ## Handover
 
