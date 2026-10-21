@@ -223,7 +223,8 @@ open, that no location is selected and that the card shows no ripple.
 - **FR-006**: The card's pull request counts MUST be derived from the listed pull requests: the
   open count is the listed open and draft ones, the merged count the listed merged ones. A count
   is exact below 10 and MUST read *10+* when the branch may have 10 or more of that group (FR-008);
-  on the card this replaces the *100+* of feature 813. The counts line
+  on the card this replaces the *100+* of feature 813. When the newest 10 of a group include a
+  fork's pull request, the count reads its own ones with *+* (*9+*), as *100+* pages do today. The counts line
   keeps its text and its rules of feature 813 (zero counts left out, no line when both are 0).
 - **FR-007**: When pull request status is off, or the branch has no successful reading to show
   (the reading never succeeded for it, or the reading finds that pull requests cannot be read at
@@ -232,10 +233,10 @@ open, that no location is selected and that the card shows no ripple.
   them, and no row. A card that shows rows from a successful reading MUST keep them, and its
   counts, through a rate-limit pause and through a reading that fails for a passing reason (feature
   040 FR-019, FR-024), as it keeps its counts today.
-- **FR-008**: A reading MUST list, per branch, the newest 10 pull requests of any state and the
-  newest 10 open or draft ones (so the current pull request is always listed), and read enough to
-  tell a count of 9 or fewer from 10 or more for the open and the merged group; it MUST cost GitHub
-  no more rate-limit points per reading than today's reading.
+- **FR-008**: A reading MUST list, per branch, the newest 10 pull requests of any state, the
+  newest 10 open or draft ones (so the current pull request is always listed) and the newest 10
+  merged ones (so both counts come from the list); it MUST cost GitHub no more rate-limit points per
+  reading than today's reading.
 - **FR-009**: A primary click on a row's number, and Enter or Space while it has keyboard focus,
   MUST ask the browser to open that pull request's address as the reading gave it, and MUST NOT
   activate the card; every pointer and keyboard rule feature 1122 FR-005 to FR-009 sets for the
@@ -278,8 +279,8 @@ open, that no location is selected and that the card shows no ripple.
 - **Branch pull request list**: per branch, per reading: the listed pull requests in FR-003's order,
   and whether the list may be short of the branch's total. Held in memory only, replaced by each
   successful reading, cleared when feature 040 clears its statuses.
-- **Listed pull request**: number, address, title (read but not shown here), state, checks, review,
-  conflict, creation time. Never stored, never logged.
+- **Listed pull request**: number, address, state, checks, review, conflict, creation time (the
+  title is read by the shared query but not kept). Never stored, never logged.
 - **Pull request row**: derived per render from a listed pull request: number text, pill word,
   status words, address.
 
