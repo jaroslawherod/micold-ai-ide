@@ -122,15 +122,24 @@ else: sys.exit(1)
 # P-4's interrupt request, exactly as the service writes it (contracts/claude-input.md).
 INTERRUPT_LINE='{"type":"control_request","request_id":"micold-1","request":{"subtype":"interrupt"}}'
 
-# Run <command...> with <user line> on its stdin, kept open: copy its stdout to ours line by line,
-# write INTERRUPT_LINE after the first `content_block_delta` text delta, close its stdin after the
-# first `result` line, and exit with its status.
+# Run <command...> with the user line in <line file> on its stdin, kept open: copy its stdout to
+# ours line by line, write INTERRUPT_LINE after the first `content_block_delta` text delta, close
+# its stdin after the first `result` line, and exit with its status. The line goes through a file,
+# not an argument: with a picture it can pass the kernel's limit on one argument.
 drive_interrupt() {
   python3 -I -c '
 import json, subprocess, sys
-user_line, interrupt_line, argv = sys.argv[1], sys.argv[2], sys.argv[3:]
+line_file, interrupt_line, argv = sys.argv[1], sys.argv[2], sys.argv[3:]
 child = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-child.stdin.write((user_line + "\n").encode()); child.stdin.flush()
+
+def write(line):
+    try:
+        child.stdin.write((line + "\n").encode()); child.stdin.flush()
+    except BrokenPipeError:
+        print("the CLI stopped reading its stdin", file=sys.stderr)
+
+with open(line_file) as f:
+    write(f.read().rstrip("\n"))
 asked = False
 for raw in child.stdout:
     sys.stdout.buffer.write(raw); sys.stdout.buffer.flush()
@@ -144,10 +153,13 @@ for raw in child.stdout:
     delta = event.get("delta") if isinstance(event, dict) else None
     if not asked and isinstance(delta, dict) and event.get("type") == "content_block_delta" \
             and delta.get("type") == "text_delta":
-        child.stdin.write((interrupt_line + "\n").encode()); child.stdin.flush()
+        write(interrupt_line)
         asked = True
     elif value.get("type") == "result" and not child.stdin.closed:
-        child.stdin.close()
+        try:
+            child.stdin.close()
+        except BrokenPipeError:
+            pass
 sys.exit(child.wait())
 ' "$1" "$INTERRUPT_LINE" "${@:2}"
 }
@@ -157,7 +169,7 @@ capture_main() {
   local image="" interrupt=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --image) image="$2"; shift 2 ;;
+      --image) image="${2:?--image needs a file}"; shift 2 ;;
       --interrupt-after-first-delta) interrupt=1; shift ;;
       *) break ;;
     esac
@@ -196,7 +208,10 @@ capture_main() {
   local argv=(claude -p --input-format stream-json --output-format stream-json --verbose
               --include-partial-messages "$session_flag" "$sid" "$@")
   if [ -n "$interrupt" ]; then
-    (cd "$repo" && drive_interrupt "$line" "${argv[@]}")
+    local line_file="${TMPDIR:-/tmp}/micold-capture-line-$sid"
+    printf '%s\n' "$line" > "$line_file"
+    (cd "$repo" && drive_interrupt "$line_file" "${argv[@]}")
+    rm -f "$line_file"
   else
     printf '%s\n' "$line" | (cd "$repo" && "${argv[@]}")
   fi \

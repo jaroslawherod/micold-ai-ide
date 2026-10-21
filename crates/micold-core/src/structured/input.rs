@@ -10,16 +10,11 @@
 use std::collections::VecDeque;
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+pub use crate::protocol::messages::{QueueEntryId, QueuedSummary};
 
-use super::attachment::{AttachmentMeta, ImageAttachment};
+use super::attachment::ImageAttachment;
 use super::turn::{TurnId, TurnState};
 use super::user_message::UserMessageRefusal;
-
-/// A queued message's id: unique within its session for the daemon run (restored entries get new
-/// ones), so an edit from one window never hits another entry (R7).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct QueueEntryId(pub u64);
 
 /// A message a window sent: its text and its pictures.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -42,15 +37,6 @@ pub struct QueuedMessage {
     pub message: Message,
     /// The daemon's id of the client that queued it, for logs only.
     pub queued_by: u64,
-}
-
-/// What every window is shown of a queued message: its whole text and its pictures' names and
-/// sizes, never their bytes (R7).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct QueuedSummary {
-    pub id: QueueEntryId,
-    pub text: String,
-    pub attachments: Vec<AttachmentMeta>,
 }
 
 impl From<&QueuedMessage> for QueuedSummary {

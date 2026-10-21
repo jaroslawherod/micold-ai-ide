@@ -5,26 +5,10 @@
 //! names the turn it is for, so one pressed as a turn ended never reaches the next. The daemon keeps
 //! one per live process and checks and sets it under its state lock.
 
-use serde::{Deserialize, Serialize};
+pub use crate::protocol::messages::{InterruptAsk, TurnId};
 
 use super::event::StructuredEvent;
 use super::user_message::UserMessageRefusal;
-
-/// A turn's id: per session, increasing across processes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct TurnId(pub u64);
-
-/// Where an interrupt of the open turn stands (FR-015).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum InterruptAsk {
-    /// No interrupt was asked for.
-    #[default]
-    None,
-    /// An interrupt request was written; the turn has not ended yet.
-    Asked,
-    /// The CLI did not end the turn within the deadline of the last ask.
-    Overdue,
-}
 
 /// Whether the CLI is answering a user message.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

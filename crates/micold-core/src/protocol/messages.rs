@@ -39,9 +39,8 @@ use crate::session::{
 };
 use crate::settings::DiffLayout;
 use crate::settings::{JiraBaseUrlChange, JiraConnectionChange};
-use crate::structured::attachment::ImageAttachment;
 use crate::structured::permission::RequestKind;
-use crate::structured::{InterruptAsk, QueueEntryId, QueuedSummary, SequencedEvent, TurnId};
+use crate::structured::SequencedEvent;
 use crate::theme::ColorScheme;
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
@@ -1396,6 +1395,77 @@ pub enum DaemonMsg {
         /// The queued messages, in delivery order.
         queue: Vec<QueuedSummary>,
     },
+}
+
+// --- Structured session input (feature 941): the wire types. Defined here so the schema hash
+// covers them; their rules live in `structured::{turn, input, attachment}`, which re-export them.
+
+/// A turn's id: per session, increasing across processes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct TurnId(pub u64);
+
+/// Where an interrupt of the open turn stands (FR-015).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InterruptAsk {
+    /// No interrupt was asked for.
+    #[default]
+    None,
+    /// An interrupt request was written; the turn has not ended yet.
+    Asked,
+    /// The CLI did not end the turn within the deadline of the last ask.
+    Overdue,
+}
+
+/// A queued message's id: unique within its session for the daemon run (restored entries get new
+/// ones), so an edit from one window never hits another entry (research R7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct QueueEntryId(pub u64);
+
+/// What every window is shown of a queued message: its whole text and its pictures' names and
+/// sizes, never their bytes (research R7).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueuedSummary {
+    /// The entry.
+    pub id: QueueEntryId,
+    /// Its whole text; the window cuts it to one line.
+    pub text: String,
+    /// Its pictures, in order.
+    pub attachments: Vec<AttachmentMeta>,
+}
+
+/// A picture format the CLI accepts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ImageMedia {
+    /// PNG.
+    Png,
+    /// JPEG.
+    Jpeg,
+    /// GIF.
+    Gif,
+    /// WebP.
+    Webp,
+}
+
+/// What windows other than the sender see of a picture: no bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttachmentMeta {
+    /// The file name.
+    pub name: String,
+    /// Its format.
+    pub media: ImageMedia,
+    /// Its size in bytes.
+    pub size: u64,
+}
+
+/// A picture of a draft or a queued message: the file's name (no directory), its format and its
+/// bytes, base64 in the JSON control frames. Built by `structured::attachment::admit`, which
+/// checks the limits; its `Debug` never shows the bytes.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageAttachment {
+    pub(crate) name: String,
+    pub(crate) media: ImageMedia,
+    #[serde(with = "crate::structured::attachment::picture_bytes")]
+    pub(crate) bytes: Vec<u8>,
 }
 
 /// A structured session's turn as windows see it (feature 941, contracts/wire.md).
