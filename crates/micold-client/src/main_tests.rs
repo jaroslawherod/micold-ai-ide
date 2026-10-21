@@ -1887,6 +1887,38 @@ fn the_blocked_start_opens_the_confirmation() {
     assert!(confirmation_is_shown(&app), "the dialog is on screen");
 }
 
+/// BUG-1219: the passive paths (switch, reconnect, attach-resume) view a blocked session without
+/// reopening the confirmation after Cancel; an explicit selection still prompts.
+#[test]
+fn a_cancelled_blocked_start_does_not_reopen_on_a_passive_view() {
+    let (mut app, _rx, ids) = app_with_sessions_at_feat_x(2);
+    let sessions = app
+        .core
+        .workspace
+        .sessions
+        .get_mut(Path::new("/repo/demo"))
+        .unwrap();
+    sessions[0].lifecycle = micold_core::session::SessionLifecycle::Running;
+    sessions[1].lifecycle = micold_core::session::SessionLifecycle::Idle;
+    app.core.session.active = Some(ids[1]);
+
+    let _ = shell::daemon_sync::on_session_selected(&mut app, ids[1]);
+    assert_eq!(
+        app.core.session.blocked_start,
+        Some(ids[1]),
+        "explicit start prompts"
+    );
+
+    app.core
+        .update(Message::Session(SessionMsg::AdditionalCancelled));
+    shell::daemon_sync::view_and_start_quietly(&mut app, ids[1]);
+    assert_eq!(
+        app.core.session.blocked_start, None,
+        "a passive view does not reprompt"
+    );
+    assert!(!confirmation_is_shown(&app));
+}
+
 fn confirmation_is_shown(app: &App) -> bool {
     micold_client::ui::confirm_additional_session::dialog(
         &app.core,
