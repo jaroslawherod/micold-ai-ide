@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1210
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
-- **Phase**: spec
-- **Next step**: Run the clarify unit on spec.md (open markers: FR-004, FR-008)
+- **Phase**: clarify
+- **Next step**: Run the plan unit (clarify done: FR-004 best effort, FR-008 app-wide setting)
 
 ## Pull requests
 

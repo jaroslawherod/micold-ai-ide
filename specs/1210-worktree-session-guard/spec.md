@@ -136,6 +136,13 @@ call is allowed. Turn it on again; new sessions are guarded.
 - A session the user themselves drives in the project's Default location performing its legitimate
   work in the project root is never blocked.
 
+## Clarifications
+
+### Session 2026-10-21
+
+- Q: How far should shell analysis go (FR-004)? → A: Best effort: starting directory, explicit path arguments and chained `cd`/`pushd`; no expansion or nested-script analysis. _(agent-resolved: docs/user-guide/settings.md; FR-001 and the edit/write tools carry the strong guarantee)_
+- Q: Scope of the opt-out (FR-008)? → A: One app-wide setting, default guarded, no per-project copy. _(agent-resolved: docs/user-guide/settings.md#L169, docs/daemon.md; FR-001 forbids per-repo configuration)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -147,9 +154,11 @@ call is allowed. Turn it on again; new sessions are guarded.
 - **FR-003**: A denial MUST carry a message that states the action was blocked because it targets
   another worktree and that the work must be handed to a dedicated session with `create_session`.
 - **FR-004**: For shell commands the guard MUST judge the command's working directory and any path
-  arguments it can identify [NEEDS CLARIFICATION: how far should shell analysis go? Working
-  directory plus explicit path arguments only (best effort), or also `cd` chains and nested
-  scripts?].
+  arguments it can identify (best effort):
+  the shell's starting directory, explicit path arguments, and `cd <dir>` / `pushd <dir>` steps
+  chained with `&&`, `;` or `||` ahead of a command. Paths built by expansion, substitution or
+  variables, and the contents of nested scripts, are not analysed (the edit and write tools remain
+  the strong guard).
 - **FR-005**: Launched sessions MUST deny entering a worktree via the agent's enter-worktree tool
   and deny `git worktree add` in every form, including `git -C <dir> worktree add`.
 - **FR-006**: The `create_worktree` tool MUST stay available to launched sessions, and the
@@ -157,7 +166,7 @@ call is allowed. Turn it on again; new sessions are guarded.
 - **FR-007**: The guard MUST allow targets in autopilot's prefetch worktree and in the main
   checkout's shared build output directory (`target-shared/`) from any session.
 - **FR-008**: The user MUST be able to opt out of the guard and deny rules with a setting
-  [NEEDS CLARIFICATION: scope of the opt-out: one app-wide setting, per project, or both?]. The
+  (one app-wide setting, no per-project copy, matching the existing *Let AI sessions manage worktrees and sessions* setting) The
   default is guarded.
 - **FR-009**: When the guard cannot determine the session's own worktree or the project's worktree
   list, it MUST allow the call and record why, rather than block legitimate work. [Assumed: fail
