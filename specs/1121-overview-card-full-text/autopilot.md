@@ -97,7 +97,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 
 ## Handover
 
-None.
+Close unit part 2 (2026-10-21), returned REVIEW-NEEDED near the context cap. Done: close checks recorded (`ed7a596b`); tdd-verify F1 (inset test pins the body text's room, M7 killed), F2 (cycle-log rows), F6 (labelled asserts) fixed (`1affdcb0`); F3/F4/F5 left with reasons in *Follow-ups*; T047/T048, visual-pass.md, spec **Status** Closed (`422cac97`); full gate GREEN at 1affdcb0; pushed. Next: act on the close review round 1 verdict (prompt: scratchpad close-prompt-review.md; snapshot in *Review rounds*) per review-rounds.md; if code/tests change, re-run `scripts/gate.sh` detached and update quickstart.md's gate line; then finish the ledger (Phase done, Next step handoff, close PR row), set this section to None, push, and write scratchpad pr-title.txt (`#1121: Overview cards: full text without truncation — close`) and pr-body.md (ends `Refs #1121`). Open findings: none.
 
 ## Open escalation
 
