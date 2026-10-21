@@ -93,7 +93,7 @@ pub fn settings_set(req: u64, patch: SettingsPatch) -> ClientMsg {
         jira_enabled,
         jira_connection,
         github_issues_enabled,
-        jira_base_url,
+        jira_base_url: jira_base_url.map(Box::new),
         desktop_notifications,
         notification_kinds,
         long_task_threshold_secs,

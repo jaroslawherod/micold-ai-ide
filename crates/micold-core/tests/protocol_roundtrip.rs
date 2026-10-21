@@ -2538,7 +2538,7 @@ fn a_jira_base_url_change_round_trips_in_settings_set() {
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
-            jira_base_url: change.clone(),
+            jira_base_url: change.clone().map(Box::new),
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -2547,7 +2547,9 @@ fn a_jira_base_url_change_round_trips_in_settings_set() {
         json_roundtrip(&set);
         postcard_roundtrip(&set);
         match serde_json::from_slice::<ClientMsg>(&serde_json::to_vec(&set).unwrap()).unwrap() {
-            ClientMsg::SettingsSet { jira_base_url, .. } => assert_eq!(jira_base_url, change),
+            ClientMsg::SettingsSet { jira_base_url, .. } => {
+                assert_eq!(jira_base_url.map(|c| *c), change)
+            }
             other => panic!("expected SettingsSet, got {other:?}"),
         }
     }
