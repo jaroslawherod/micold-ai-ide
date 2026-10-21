@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5 r1 fixes in 44164707, full gate r4 GREEN, pushed. Waiting on review A r2 (sonnet, fix diff) and visual pass r2 (read-only switch link, subtitle), prompts `1122-m5-prompt-{review-a,visual}-r2.md` in the session scratchpad; then PR (title in the unit prompt).
+- **Next step**: M5 reviews done (A r2 CLEAN, B r1 CLEAN, visual r2 PASS), gate green at 44164707. PR text in the session scratchpad (`pr-title.txt`, `pr-body.md`); orchestrator opens the PR and records its number.
 
 ## Pull requests
 
@@ -105,8 +105,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Visual pass M5 | 1 | 3d085ccd3ea3965bbcf29c77c4afac48bce8b959:b4ba37fd9cdca22050adfb90b0188afebd7014fb | PASS on all 8 criteria; 41 PNGs in visual-pass/m5/; T050 ticked (verdict verbatim below). Observation 1 (read-only window switched B → A shows no "Issue #1122") is ours: M3's repo read fires only on `Attached`, and a read-only window's attach is answered `Refused { ProjectBusy }`; fixed test-first (`repo_reread_on_a_read_only_switch`) |
 | Full gate M5 | 3 | 44164707 | RED: `micold-daemon --test attention_error_notice` `without_focus_the_first_reporting_window_gets_the_notice` (`left: []`), a timing flake outside this diff (no daemon file changed since the green r2); 5 reruns of that test passed |
 | Full gate M5 | 4 | 44164707 | GREEN (after the r1 fixes) |
-| Review A M5 | 2 | 660cc05a9c3777cc54b0584f8a87eceffd625c2a:44164707544ad85d3bc0c6988bba72fbf08a9e3f | requested (orchestrator, sonnet; fix diff `git diff b4ba37fd 44164707 -- crates`) |
-| Visual pass M5 | 2 | 660cc05a9c3777cc54b0584f8a87eceffd625c2a:44164707544ad85d3bc0c6988bba72fbf08a9e3f | requested (orchestrator, sonnet; read-only switch link, subtitle) |
+| Review A M5 | 2 | 660cc05a9c3777cc54b0584f8a87eceffd625c2a:44164707544ad85d3bc0c6988bba72fbf08a9e3f | VERDICT: CLEAN, no findings; F1's declined reason confirmed (verdict verbatim below) |
+| Visual pass M5 | 2 | 660cc05a9c3777cc54b0584f8a87eceffd625c2a:44164707544ad85d3bc0c6988bba72fbf08a9e3f | PASS on both criteria (read-only switch link, subtitle); r2 PNGs in visual-pass/m5/ (verdict verbatim below) |
 
 
 ### M4 r1 verdicts (verbatim)
@@ -335,6 +335,56 @@ Observations (non-blocking):
 - At 2.0 a single column scrolls. An expanded card overlaps the card above it (also true earlier in M4).
 - The environment-include "script not found" toast appears after every Save. It is harness noise because HOME has no .bashrc.
 - The "Enable Jira integration" switch was pre-seeded on in settings.json, not toggled from the UI to start. Toggling it off and on was exercised in criteria 2 and 7.
+
+</details>
+
+### M5 r2 verdicts (verbatim)
+
+<details><summary>Review A M5 r2</summary>
+
+# 1122 M5 review A r2 (snapshot 660cc05a:44164707)
+
+VERDICT: CLEAN
+
+No findings. I checked the r2 fix diff against the points in the brief:
+- F2: `typed_base_url()` is shared by `follow` and `base_url_change`. The `base_url_change` error mapping is unchanged. The new test `a_typed_trailing_slash_that_was_saved_still_follows_the_map` passes, along with the rest of `jira_base_url_form` (7 passed).
+- F3: the subtitle is accurate. The switch is global, and the connection fields and base URL are per project. The layout snapshot change touches only the five subtitle widths.
+- F1 declined: the reason stands. `set_jira_enabled`, `set_jira_connection`, `set_github_issues_enabled` and `set_jira_base_url` each call `broadcast(SettingsChanged)` separately in the `SettingsSet` chain (`crates/micold-daemon/src/server.rs` ~1404–1419). Merging connection and base URL would not remove the echoes that carry the old maps.
+- Read-only switch fix:
+  - The `Refused { ProjectBusy }` arm calls `read_repo` only when the refused project is the active one and the Overview is open.
+  - The BUG-022 own-instance early return above it is unaffected.
+  - `read_repo` itself returns when the repository is already known, so a reconnect refusal with the repository known sends nothing.
+  - `Displaced` needs nothing, since the project does not change.
+  - `repo_reread_on_a_read_only_switch` and `repo_reread_on_attach` both pass (2 passed).
+
+</details>
+
+<details><summary>Visual pass M5 r2</summary>
+
+# 1122 M5 visual pass r2 (HEAD a29e02b4)
+
+VISUAL PASS M5 (T050) r2: PASS on both criteria. Built daemon and client from HEAD a29e02b4 (code 44164707) via scripts/build-lock.sh with the build env. Ran on Xvfb :77 with lavapipe, a throwaway HOME and data dir, a fake xdg-open, fixture repos A (origin git@github.com:o/r.git, worktrees feat-1122_overview-issue-link, feat-mic-87_add-login, feat_no-ticket) and B (feat-mic-87_x), and Jira and GitHub issues switched on. No source edited, nothing committed. Evidence PNGs are untracked in /home/user/micold-ai-ide/specs/1122-overview-card-issue-link/visual-pass/m5/. Xvfb, client, daemon, temp dirs and the .visual-pass build dir are cleaned up (one defunct Xvfb zombie entry remains in the process list).
+
+1. PASS (light 1.0, two windows side by side at 800 px).
+ - Window 1 held A (writable). Window 2 first opened on A read-only (r2-0-start.png), then was switched to B with the Overview open (r2-1-w2-on-B-overview.png).
+ - Switching window 2 to A showed "Issue #1122" on the 1122 card within 4 s, with the read-only banner present (r2-1-w2-switched-to-A-4s.png).
+ - Clicking the link made xdg-open receive exactly `https://github.com/o/r/issues/1122`, once (r2-1-w2-A-after-click.png). The log had one line after all the later switches too.
+ - Window 2 back on B (r2-1-w2-back-on-B.png) and on A again, twice (r2-1-w2-A-again-2nd.png, r2-1-w2-A-again-3rd.png): the link was there each time.
+ - Window 1 kept its link throughout (visible in every shot above).
+ - The round-1 observation (no link after B to A in a read-only window) is fixed.
+
+2. PASS. Settings, Jira, switch on. The subtitle reads "Start worktrees from the issues of a Jira Cloud project. The switch applies to every project, the fields below only to the open one." in full each time. It is not clipped and does not overlap anything.
+ - Light 1.0, default window (1024x768): one line (r2-2-light-1.0-1024-jira.png).
+ - Light 1.0, narrow (800): wraps to two lines (r2-2-light-1.0-800-jira.png).
+ - Dark 1.0, default: one line (r2-2-dark-1.0-1024-jira.png).
+ - Dark 1.0, narrow: two lines (r2-2-dark-1.0-800-jira.png).
+ - Light 2.0, default (2048x1536 physical): one line (r2-2-light-2.0-default-jira.png).
+ - Light 2.0, narrow (800 logical): two lines (r2-2-light-2.0-800-jira.png).
+
+Observations (non-blocking):
+- At the default width the one-line subtitle ends a few pixels short of the scrollbar, at 1.0 and 2.0.
+- At the narrow width the "Once a project is connected..." paragraph below the subtitle touches the scrollbar ("linked" loses its last letter). That paragraph is not part of this change and was not examined further.
+- To fit the 2.0 default size I restarted Xvfb at 2200x1600 for that combo only.
 
 </details>
 
