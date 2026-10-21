@@ -203,6 +203,10 @@ impl Expansion {
                     self.pointer_on = None;
                     self.pointer_escaped = false;
                 }
+                // The opening's focus will never report for a card no longer listed (r2 F1, M4).
+                if gone(&self.open_focus) {
+                    self.open_focus = None;
+                }
             }
             Event::BodyScrolled { up, down } => {
                 if self.expanded.is_some() {
@@ -472,6 +476,26 @@ mod tests {
         assert_eq!(shown(&after(lost())), Some("b".into()));
         let back = lost().chain([Event::FocusLost(loc("b")), focus("a")]);
         assert_eq!(shown(&after(back)), Some("a".into()));
+    }
+
+    /// Review A/B r2 F1 (M4): a listing without the opening's card drops its pending opening
+    /// focus, so that card's later genuine focus (re-listed) expands it instead of being taken
+    /// for the opening's.
+    #[test]
+    fn a_removed_opening_card_drops_its_opening_focus() {
+        let relisted = [
+            Event::OpenFocused(loc("a")),
+            Event::Listed(vec![loc("b")]),
+            Event::Listed(vec![loc("a"), loc("b")]),
+            focus("a"),
+        ];
+        assert_eq!(shown(&after(relisted)), Some("a".into()));
+        let kept = [
+            Event::OpenFocused(loc("a")),
+            Event::Listed(vec![loc("a"), loc("b")]),
+            focus("a"),
+        ];
+        assert_eq!(shown(&after(kept)), None);
     }
 
     /// FR-005 (review A F3, M4): a press on the focus-expanded card it rests on (its inner

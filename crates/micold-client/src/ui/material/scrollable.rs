@@ -30,6 +30,10 @@ type ScrollMetrics<'a, M> = Box<dyn Fn(u32, u32, u32) -> M + 'a>;
 const BAR_WIDTH: f32 = 4.0;
 const BAR_MARGIN: f32 = 1.0;
 
+/// The width the floating bar takes along its edge, margins included: what a nested scrollable
+/// keeps its own bar clear of when it shares that edge (feature 1121).
+pub const BAR_FOOTPRINT: f32 = BAR_WIDTH + 2.0 * BAR_MARGIN;
+
 /// The axis a viewport scrolls along (feature 026 FR-002a).
 ///
 /// The wrapper built a vertical viewport and only a vertical one, because both call sites wanted

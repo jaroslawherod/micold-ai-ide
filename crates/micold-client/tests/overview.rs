@@ -1498,7 +1498,8 @@ mod expansion {
     }
 
     /// FR-005, FR-013: closing, toggling or activating leaves the Overview with nothing expanded,
-    /// so reopening it shows every card collapsed.
+    /// so reopening it shows every card collapsed. An opening focus that never reported is
+    /// dropped with it, so a later focus of that card expands it (review A/B r2 F1, M4).
     #[test]
     fn leaving_the_overview_resets_the_expansion() {
         let leave = [
@@ -1511,10 +1512,13 @@ mod expansion {
         for msg in leave {
             let mut state = two_cards();
             apply(&mut state, Event::PointerRested(wt("feat-a")));
+            apply(&mut state, Event::OpenFocused(wt("feat-b")));
             state.update(Message::Overview(msg.clone()));
             assert!(!state.overview.open, "{msg:?}");
             open_overview(&mut state);
             assert_eq!(expanded(&state), None, "{msg:?}");
+            apply(&mut state, Event::FocusGained(wt("feat-b")));
+            assert_eq!(expanded(&state), Some(wt("feat-b")), "{msg:?}");
         }
     }
 

@@ -534,10 +534,14 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
     if let Some((words, _)) = text.prs {
         rest = rest.push(body_line(words));
     }
+    // The card's right edge is the grid's, where the grid's own bar floats when it scrolls (one
+    // column, or the last): the inner bar keeps clear of it, taking that strip from the text's
+    // right padding, so the text keeps its room (M4 visual re-look r2).
+    let clear = super::scrollable::BAR_FOOTPRINT;
     let mut scroll = Scrollable::new(
         container(rest).padding(iced::Padding {
             top: spacing::XS,
-            right: spacing::MD,
+            right: spacing::MD - clear,
             bottom: spacing::MD,
             left: spacing::MD,
         }),
@@ -565,7 +569,10 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
             bottom: 0.0,
             left: spacing::MD,
         }),
-        scroll,
+        container(Element::from(scroll)).padding(iced::Padding {
+            right: clear,
+            ..iced::Padding::ZERO
+        }),
     ]
     .width(Length::Fill)
     .into()
@@ -1113,6 +1120,28 @@ mod tests {
             !card.painted_text().iter().any(|p| p.content == first),
             "the body's first line did not scroll out of view"
         );
+    }
+
+    /// Feature 1121 M4 visual re-look r2 (2x, one column): the card's right edge is the grid's,
+    /// where the grid's own scrollbar floats, so the inner body's scrollbar sits clear of that
+    /// bar's footprint and stays reachable; the body's text stays within its margins.
+    #[test]
+    fn an_expanded_cards_inner_scrollbar_clears_the_grids_scrollbar() {
+        let (width, height) = (280.0, 260.0);
+        let mut card = expanded_in(&overlong(), width, height);
+        let [(viewport, _)] = card.scrollables()[..] else {
+            panic!("the expanded card holds one inner scrollable");
+        };
+        assert!(
+            viewport.x + viewport.width <= width - super::super::scrollable::BAR_FOOTPRINT + 0.01,
+            "the inner bar lies under the grid's bar at the card's right edge: {viewport:?}"
+        );
+        // The text stays within the card's margins; the bar took the strip from the padding.
+        for line in card.painted_text() {
+            let b = line.bounds;
+            assert!(b.x >= spacing::MD - 0.01, "{line:?}");
+            assert!(b.x + b.width <= width - spacing::MD + 0.01, "{line:?}");
+        }
     }
 
     /// Feature 1121 K4: the inner body publishes `(up, down)` = `(true, false)` at its end and
