@@ -1013,7 +1013,7 @@ mod tests {
             key_with(Named::ContextMenu, Modifiers::empty()),
             key_with(Named::F10, Modifiers::SHIFT),
         ] {
-            assert_eq!(mounted.send(key, none), [request.clone()]);
+            assert_eq!(mounted.send(key, none), std::slice::from_ref(&request));
         }
         let on = focus_moves(&mut mounted, 1);
         assert_eq!(

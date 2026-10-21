@@ -2648,7 +2648,7 @@ mod tests {
         let mut m = on_the_link(linked(&model, true), Size::new(380.0, 220.0));
         let viewport = m.scrollables()[0].0;
         // Where the focused link is on screen, the inner body's scroll taken off.
-        let mut on_screen = |m: &mut Mounted<'_>| {
+        let on_screen = |m: &mut Mounted<'_>| {
             m.drive(crate::ui::focus::focused_bounds())
                 .flatten()
                 .expect("the link holds the keyboard")
