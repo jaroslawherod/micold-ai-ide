@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: implement M1
-- **Next step**: M1 verify (part 5): full gate on the r5 fix, then review A r6 (fix diff, sonnet; prompt 1122-m1-prompt-review-a-r6.md) by the orchestrator; then PR text (title/body in the scratchpad). No visual pass r5: the fix only widens the link's gutter by 2 px (4 to 6), moving the label further from a ring the r4 pass already found clear.
+- **Next step**: M1 verify (part 5): full gate on the r5 fix GREEN; review A r6 (fix diff, sonnet; prompt 1122-m1-prompt-review-a-r6.md) by the orchestrator; then PR text (title/body in the scratchpad). No visual pass r5: the fix only widens the link's gutter by 2 px (4 to 6), moving the label further from a ring the r4 pass already found clear.
 
 ## Pull requests
 
@@ -65,6 +65,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M1 | 5 | d9b86ce5 | RED twice on untouched environment/timing flakes (`micold-daemon mcp_create_session a_cli_that_would_ask_to_trust_the_folder_gets_no_first_prompt`: the fixture's `git commit` hit the signing server's 503, 3/3 green alone; `structured_session messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal`, the known flake); third run GREEN |
 | Review A M1 | 5 | 4f755bbccbc4c6ea9031f7da1a821289a582dc9a:d9b86ce519f5531d2d490c5c71e0f710e3065a31 | CHANGES (sonnet): F1 MAJOR iced strokes a quad's border inside the quad, so the ring covers 1.5 to 4.5 px in from the link's edge and overlapped the 4 px gutter's label box by 0.5 px; the clearance test modelled a centred stroke. Verified in iced_tiny_skia-0.14.1 engine.rs (stroke path offset by half the width, inside `quad.bounds`) and iced_wgpu-0.14.0 solid.wgsl (`clamp(0.5 + dist + border_width)`). Fixed in part 5 (orchestrator's call for one narrow fix): `GUTTER = 2 * FOCUS_RING_WIDTH` (6 px, label on a whole pixel 1.5 px clear of the ring), test models the inner edge as `ring_bounds` shrunk by the whole width (red on the old 4 px gutter), `keyboard_focus` comment and assertion say the ring's outer edge is `ring_bounds` itself, inside the control. F2 MINOR underline clamp could lift it into glyphs under a tight line height: fixed, clamp dropped (`underline_y`), and the clearance test now covers every `TypeRole::ALL` role and asserts the underline is clear of the ring and at or below centre + 0.4 size |
 | Visual pass M1 | 4 | 4f755bbccbc4c6ea9031f7da1a821289a582dc9a:d9b86ce519f5531d2d490c5c71e0f710e3065a31 | PASS (sonnet, C3 only): ring clear of the glyphs in light/dark x 1.0/2.0; observation: the horizontal gutter looks thinner than the vertical one (the line box adds vertical room), addressed by the r5 fix's wider gutter. Evidence `visual-pass/m1/*-3-r4-*.png` (40 PNGs) |
+| Full gate M1 | 6 | d8d84697 | RED once on the known untouched flake (`micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`, as gate r1); rerun GREEN |
+| Review A M1 | 6 | 26eeeb1fc8c8cccda3ad3c1adc715ae6fe1e7d25:d8d8469762d85b03bea08e4c1fcc97e0d0a34bf8 | pending (r5 fix diff, sonnet; prompt 1122-m1-prompt-review-a-r6.md) |
 
 ## Declined review findings
 
