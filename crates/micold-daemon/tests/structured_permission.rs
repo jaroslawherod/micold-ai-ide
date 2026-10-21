@@ -847,3 +847,41 @@ async fn a_question_request_is_answered_or_declined() {
     );
     assert_eq!(resolved(&mut a).await.3, Resolution::Declined);
 }
+
+/// T032 (R4): an agent that hangs up while its request is pending withdraws it from every client,
+/// and a decision after that is refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_request_whose_agent_hangs_up_is_withdrawn() {
+    use tokio::io::AsyncWriteExt;
+    let daemon = Daemon::new(1).await;
+    let mut a = window(&daemon.state).await;
+    daemon.start(0, "").await;
+    let id = daemon.ids[0];
+    let server = daemon.state.tool_server().expect("bound");
+    let (addr, bearer) = (server.addr(), server.credential_for(id));
+    let body = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "permission_prompt",
+            "arguments": {"tool_name": "Bash", "input": bash("sleep 1"), "tool_use_id": "toolu_h"}}})
+    .to_string();
+    let mut agent = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let request = format!(
+        "POST /mcp HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/json\r\nAuthorization: Bearer {bearer}\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    agent.write_all(request.as_bytes()).await.unwrap();
+    let shown = requested(&mut a).await;
+    drop(agent);
+    assert_eq!(
+        resolved(&mut a).await,
+        (
+            id,
+            shown.id,
+            Some("toolu_h".into()),
+            Resolution::Withdrawn {
+                reason: micold_core::protocol::messages::WithdrawReason::AgentHungUp
+            }
+        )
+    );
+    let late = decide(&mut a, 1, id, shown.id, PromptChoice::Allow).await;
+    assert_refused(&late, DecisionRefusal::NotPending);
+}

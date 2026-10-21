@@ -1005,8 +1005,6 @@ impl DaemonState {
             .expect("first-prompt bound poisoned") = bound;
     }
 
-    /// Bound the event streams of structured sessions started from now on (feature 938), so a test
-    /// need not write 5,000 events to see eviction or 1,024 to see a viewer lag.
     /// Turn structured sessions' permission prompts on or off (#942 R14). On, a bound structured
     /// session started from now on names the prompt tool, and its tool-server calls are offered
     /// it. Off (the default) it behaves as feature 938 ships it. Never persisted.
@@ -1014,6 +1012,8 @@ impl DaemonState {
         self.lock().permission_prompts = on;
     }
 
+    /// Bound the event streams of structured sessions started from now on (feature 938), so a test
+    /// need not write 5,000 events to see eviction or 1,024 to see a viewer lag.
     pub fn set_event_stream_bounds(&self, bounds: crate::structured::StreamBounds) {
         self.lock().event_bounds = bounds;
     }

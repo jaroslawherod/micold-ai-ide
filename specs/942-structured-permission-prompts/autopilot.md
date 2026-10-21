@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
 - **Phase**: M2 verify
-- **Next step**: M2 reviews (A, B) and full gate, then the M2 PR
+- **Next step**: final gate on the fixed tree, then the M2 PR
 
 ## Pull requests
 
@@ -66,6 +66,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 (conformance, sonnet) | 1 | 166c2275321aa52bd9e60dbe67abaf1a1e4d7a61:a2a02be619ce58df6f96999e95bc220a90d9fea4 | CLEAN but incomplete (its `claude -p` sandbox refused every command, Verify not run): 2 MINOR (T005 text — fixed; no tdd/cycle-log.md — added with stub-based red evidence) |
 | Review A M1 (sonnet) | 2 | eaf8fcf201e09294a5e358f8e9a654abbbbe907f:23f1ca80d17fd747754fd5b488d3730d0f06197a | CLEAN |
 | Review B M1 (conformance, sonnet) | 2 (full; r1 ran no command) | eaf8fcf201e09294a5e358f8e9a654abbbbe907f:23f1ca80d17fd747754fd5b488d3730d0f06197a | CLEAN; Verify `INTEG_EXIT=0` (37, 11, 9, 39, 5 passed), `LIB_EXIT=0` (52), capture test 6/0; 1 MINOR (cycle log red taken afterwards on stubs — follow-up) |
+| Review A M2 (code-review high) | 1 | 09a697c663e494eb41ad33a7fad9e966d9108097:69239a2b67091c928e63a2cdb59f70e7d3154e19 | CLEAN: 3 MINOR (F1 doc comment displaced — fixed; F2 rules never dropped — declined, M3; F3 entry left pending if the wait is dropped — fixed, drop guard) |
+| Review B M2 (conformance, sonnet) | 1 | 09a697c663e494eb41ad33a7fad9e966d9108097:69239a2b67091c928e63a2cdb59f70e7d3154e19 | CLEAN; Verify `DAEMON_EXIT=0` (13, 14 passed), `CORE_EXIT=0` (8, 15, 54); 2 MINOR (F1 hang-up withdrawal untested — test added, cycle 4; F2 = A's F1, fixed) |
 
 ## Declined review findings
 
@@ -77,6 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | Review A r1 | F2 MINOR (part): `Task`/`Agent` and other unnamed tools get an any-input rule | data-model *AllowRule* fixes "any other: the same tool name" (MCP tools are the case it serves); only `PowerShell`, a shell like `Bash`, was moved to the command rule |
+| M2 | Review A r1 | F2 MINOR: a session's always-allow rules are never dropped | T038 (M3) drops them at process end, beside the withdrawals; nothing in M2 removes a session's process state yet |
 
 ## Handover
 

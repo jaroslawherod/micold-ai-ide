@@ -252,11 +252,24 @@ pub async fn serve_prompt(
         Opened::Answered(answer) => return prompt_result(&answer),
         Opened::Pending { id, receiver, .. } => (id, receiver),
     };
+    // However this wait ends — the agent hung up, or the task was dropped — a request still
+    // pending is withdrawn from every client; after a decision it finds nothing.
+    let _withdraw = WithdrawOnDrop { state: &state, id };
     tokio::select! {
         answer = receiver => prompt_result(&answer.unwrap_or_else(|_| deny(WITHDRAWN))),
-        () = hangup.cancelled() => {
-            state.withdraw_prompt(id, WithdrawReason::AgentHungUp);
-            prompt_result(&deny(WITHDRAWN))
-        }
+        () = hangup.cancelled() => prompt_result(&deny(WITHDRAWN)),
+    }
+}
+
+/// Withdraws request `id` as `AgentHungUp` when dropped, if it is still pending.
+struct WithdrawOnDrop<'a> {
+    state: &'a DaemonState,
+    id: PromptId,
+}
+
+impl Drop for WithdrawOnDrop<'_> {
+    fn drop(&mut self) {
+        self.state
+            .withdraw_prompt(self.id, WithdrawReason::AgentHungUp);
     }
 }
