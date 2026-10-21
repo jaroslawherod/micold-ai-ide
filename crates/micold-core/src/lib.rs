@@ -41,6 +41,7 @@ pub mod link;
 pub mod local_time;
 pub mod location_state;
 pub mod logout_survival;
+pub mod markdown;
 pub mod markup;
 pub mod mcp;
 pub mod metadata;

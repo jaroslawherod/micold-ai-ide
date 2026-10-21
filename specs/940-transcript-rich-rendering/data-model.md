@@ -30,7 +30,7 @@ in the blocks' text.
 | Variant | Fields |
 |---|---|
 | `Heading` | `level: u8` (1–6), `text: Inlines` |
-| `Paragraph` | `text: Inlines` (also raw HTML blocks, as literal text) |
+| `Paragraph` | `text: Inlines` (also raw HTML blocks and link reference definitions, as literal text) |
 | `List` | `start: Option<u64>` (ordered when `Some`), `tight: bool`, `items: Vec<ListItem>` |
 | `Quote` | `blocks: Vec<Block>` |
 | `Rule` | — |

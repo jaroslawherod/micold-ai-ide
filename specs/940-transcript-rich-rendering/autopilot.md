@@ -3,26 +3,27 @@
 Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
 finds this file by its **Worktree branch** line. Keep it true.
 
-- **Input**: Issue #940 "Structured session view: markdown, syntax-highlighted code and diffs for Edit/Write" (spec 940; depends on #939, whose design merged and whose code M1–M6 has not landed); labels: enhancement, flow:feature
+- **Input**: Issue #940 "Structured session view: markdown, syntax-highlighted code and diffs for Edit/Write" (spec 940; depends on #939, fully merged through M6, PR #1206, b6c1dd92); labels: enhancement, flow:feature
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #940
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR; after it merges and #939 M6 has merged, milestone M1 (T001 re-checks #939 names)
+- **Phase**: milestone M1
+- **Next step**: M1 reviews (A high, B conformance), full gate, then the orchestrator opens the M1 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| pending | design (spec, clarify, plan, tasks, milestones) | to open (orchestrator, via MCP) | — |
+| #1187 | design (spec, clarify, plan, tasks, milestones) | merged | a7df5dd37517543447b150ff02d6a5f195c7c392 |
+| pending | M1 markdown model | to open (orchestrator, via MCP) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | markdown model in core: settled blocks final, incremental, total (after #939 M6; T001 re-checks #939 names) | — | pending |
+| M1 | T001–T012 | full | markdown model in core: settled blocks final, incremental, total (after #939 M6; T001 re-checks #939 names) | pending | implemented, in review |
 | M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | — | pending |
 | M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | — | pending |
 | M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | — | pending |

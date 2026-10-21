@@ -54,6 +54,18 @@ its implementation re-check them against the merged code (R14).
   - **Finished message** (#939 FR-015): the finished text equal to the streamed text gives the same
     slices, so the same blocks (FR-008); `update` with `streaming: false` settles the open block
     with the parse it already has.
+- **Refined in M1** (found by the every-prefix tests): a cut is final only once the line it starts
+  and the line after it are complete. A table's header row interrupts a paragraph only when its
+  separator row follows, and a lone `***`, `#` or `<div` on an unfinished line may still become
+  paragraph text (`***b`), so while streaming the open part starts at the last cut, or at an
+  earlier one that is not followed by two complete lines; it may then hold more than one block. A
+  link reference definition is a slice of its own (cut at its line), so a reference never resolves
+  across slices and stays literal, the definition shown as its literal text (FR-001). Two edge
+  cases stay outside the guarantee: a definition whose title spans three or more lines can still
+  absorb a paragraph a line later, and a link's or image's title is not shown (the model has no
+  field for it). `update` takes the incremental path only when the text extends the whole text the
+  document was built from while it streamed (a hash of it is kept), since a cut is final only for
+  the text that followed it.
 - **Tested by** (core, `crates/micold-core/tests/markdown_stream.rs`): for every recorded and
   synthetic markdown fixture and **every byte-prefix** of its text that ends on a char boundary,
   (a) the incremental document after each prefix equals `Document::parse(prefix, true)`;
@@ -349,3 +361,12 @@ its implementation re-check them against the merged code (R14).
 - **Alternatives**: start the core milestones (M1, M2) before #939 M6 merges — rejected, the flow
   keeps one PR open at a time and M1's replay test needs #939's `Transcript`; plan against the code
   only once it lands — rejected, the design of both can be reviewed now and only names may move.
+- **Re-check (M1, 2026-10-21)**: #939 M6 merged (`b6c1dd92`, PR #1206). Every name above is in the
+  merged code as planned — `Transcript`, `Entry`, `EntryKey`, `Entry::revision`, `ToolCard`
+  (`structured/transcript/`); `BlockRenderers` (fn fields `assistant_text`, `thinking`,
+  `tool_input`, `tool_result`; `BlockRenderers::PLAIN`), `BlockRef`, `RenderCtx`, `BlockCache`
+  (keyed by `(SessionId, EntryKey, revision)`, with the still-empty `CachedBlock`)
+  (`ui/transcript/blocks.rs`, beside `mod.rs`, `entries.rs` and `keyed.rs`); `TranscriptMsg`
+  (`features/structured_transcript.rs`); `DisclosureCard` (`ui/material/disclosure_card.rs`);
+  `transcript_open_budget.rs` and `transcript_renderer_seam.rs` (`crates/micold-client/tests/`).
+  Renames or changed signatures: none.

@@ -24,6 +24,9 @@ crates/micold-core/tests/fixtures/gh/pr_*.txt -text
 # the synthetic `tolerance.jsonl` carries one `\r\n` line on purpose: the line splitter is tested on
 # the bytes as written.
 crates/micold-core/tests/fixtures/stream-json/*.jsonl -text
+# #940's synthetic markdown fixture holds a CRLF paragraph and list on purpose: the markdown model
+# is tested on the bytes as written (CRLF text gives the blocks LF text gives).
+crates/micold-core/tests/fixtures/stream-json/markdown-subset.md -text
 
 # The documentation set (feature 023).
 #
