@@ -532,3 +532,48 @@ fn each_opener_opens_exactly_one_panel() {
         );
     }
 }
+
+// --- the keyboard (feature 1122, M1 visual pass F1) --------------------------------------------
+
+fn key(
+    named: iced::keyboard::key::Named,
+    modifiers: iced::keyboard::Modifiers,
+) -> iced::keyboard::Event {
+    let key = iced::keyboard::Key::Named(named);
+    iced::keyboard::Event::KeyPressed {
+        modified_key: key.clone(),
+        key,
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat: false,
+    }
+}
+
+/// Tab and Shift+Tab move the focus as they do in the application, so a component's focus ring can
+/// be seen in the gallery; Escape still dismisses; any other key is not the showcase's.
+#[test]
+fn tab_moves_the_focus_and_escape_dismisses() {
+    use iced::keyboard::{key::Named, Modifiers};
+    use micold_client::showcase::state::key_message;
+    let moved = |named, modifiers| key_message(key(named, modifiers)).and_then(|m| m.focus_move());
+    assert_eq!(moved(Named::Tab, Modifiers::empty()), Some(true));
+    assert_eq!(moved(Named::Tab, Modifiers::SHIFT), Some(false));
+    assert!(matches!(
+        key_message(key(Named::Escape, Modifiers::empty())),
+        Some(Message::Dismissed)
+    ));
+    assert!(key_message(key(Named::Enter, Modifiers::empty())).is_none());
+}
+
+/// A focus move is the runtime's; the showcase's own state does not change.
+#[test]
+fn a_focus_move_changes_no_state() {
+    let mut s = showcase();
+    let before = snapshot(&s);
+    s.update(Message::FocusMoved { forward: true });
+    assert_eq!(snapshot(&s), before);
+}

@@ -66,6 +66,10 @@ pub enum Message {
     Opened(Floating),
     /// Close whatever floating surface is open.
     Dismissed,
+    /// Tab (`forward`) or Shift+Tab: move the keyboard focus, as it moves in the application, so a
+    /// component's focus ring can be seen here (feature 1122, M1 visual pass F1). It changes no
+    /// state; the glue runs the focus move it names ([`Message::focus_move`]).
+    FocusMoved { forward: bool },
     /// A component in the gallery emitted a message. Components here are real and interactive
     /// (FR-002), so their messages have to go somewhere; a catalogue has no behaviour to invoke, so
     /// they go nowhere. Swallowing them is what keeps the instance genuinely live without the gallery
@@ -386,7 +390,7 @@ impl Showcase {
             }
             Message::Opened(surface) => self.open = Some(surface),
             Message::Dismissed => self.open = None,
-            Message::NoOp => {}
+            Message::NoOp | Message::FocusMoved { .. } => {}
             Message::TypeaheadQueryChanged(text) => {
                 self.typeahead_query = text;
                 // Typing into a dismissed field brings the list back, exactly as
@@ -445,5 +449,33 @@ impl Showcase {
             Message::TypeaheadFocused => self.typeahead_open = true,
             Message::TypeaheadDismissed => self.typeahead_open = false,
         }
+    }
+}
+
+impl Message {
+    /// Which way this message moves the keyboard focus, if it is a focus move at all.
+    pub fn focus_move(&self) -> Option<bool> {
+        match self {
+            Message::FocusMoved { forward } => Some(*forward),
+            _ => None,
+        }
+    }
+}
+
+/// What a key press asks of the showcase: Escape dismisses whatever floating surface is open, and
+/// Tab and Shift+Tab move the focus through [`crate::ui::focus_move_message`], the mapping the
+/// application listens with. Anything else is not the showcase's.
+pub fn key_message(event: iced::keyboard::Event) -> Option<Message> {
+    use iced::keyboard::{key::Named, Event, Key};
+    if let Event::KeyPressed {
+        key: Key::Named(Named::Escape),
+        ..
+    } = event
+    {
+        return Some(Message::Dismissed);
+    }
+    match crate::ui::focus_move_message(event)? {
+        crate::app::Message::FocusMoved { forward } => Some(Message::FocusMoved { forward }),
+        _ => None,
     }
 }

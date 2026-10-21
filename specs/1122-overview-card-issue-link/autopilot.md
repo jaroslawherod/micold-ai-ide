@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: implement M1
-- **Next step**: M1 verify: review A r2, review B r1 and visual pass r1 run in parallel by the orchestrator (prompts 1122-m1-prompt-*.md in the scratchpad); then PR. Full gate green at f5e371b9.
+- **Next step**: M1 verify: full gate on the showcase Tab fix, then review A (fix diff, sonnet) and visual pass r2 (C3 only, sonnet); then PR.
 
 ## Pull requests
 
@@ -53,9 +53,9 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M1 | 1 | 50a09809 | RED: flaky `micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (untouched; 5/5 green alone); rerun GREEN |
 | Review A M1 | 1 | 32c67355331e1a393de36645923df016972978d9:50a09809fe5596886ff266bd8cabaa061a0b467f | CHANGES: 1 MAJOR (F1 a click on a Tab-focused `press_takes_focus(false)` link dropped the keyboard, FR-005), 2 MINOR (F2 focus layer topped up for a child that draws no hover layer, F3 touch lift off the link captured); all three fixed with tests, none declined |
 | Full gate M1 | 2 | f5e371b9 | GREEN (after review A r1 fixes) |
-| Review A M1 | 2 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | pending (fix diff, sonnet) |
-| Review B M1 | 1 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | pending (sonnet) |
-| Visual pass M1 | 1 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | pending (showcase TextLink) |
+| Review A M1 | 2 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | CLEAN (sonnet) |
+| Review B M1 | 1 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | CLEAN (sonnet, conformance) |
+| Visual pass M1 | 1 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | C1, C2, C4, C5 PASS (light/dark x 1.0/2.0); C3 focus ring not observable: F1 MAJOR, the showcase had no Tab traversal. Fixed: Tab/Shift+Tab wired into the showcase (`state::key_message`, `ui::focus_move_task`) with tests. Evidence `visual-pass/m1/` |
 
 ## Declined review findings
 
