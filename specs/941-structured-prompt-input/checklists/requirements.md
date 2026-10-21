@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,9 @@
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers remain, all in User Story 4 (queue): whether delivery
-  resumes on its own after a restart, what an interrupt does to the queue, and whether the queue is
-  the session's (shared by every window) or each window's. They are left for the clarify unit.
+- The three `[NEEDS CLARIFICATION]` markers of the first draft (User Story 4: resume after a
+  restart, the queue on interrupt, whose queue) were resolved in clarify r1–r3 (spec
+  *Clarifications*); none remains (confirmed by the tasks review, round 1).
 - The requirements state outcomes; how the idle/busy state is shared and how the interrupt reaches
   the CLI are recorded as Assumptions for the plan, not as requirements.
 - FR-021, FR-022, FR-032, SC-004 and the two-windows edge case depend on clarification 3 (where the
