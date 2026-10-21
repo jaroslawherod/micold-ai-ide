@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: verify M1
-- **Next step**: M1 review A r1 / B r1 / visual r1 fixes done (pr_mark reused, StatusPhrase words from CardReason, on_role merged, data-model §2 F2, tdd/cycle-log.md, expanded dash tooltip D13); full gate green (scripts/gate.sh, r2 red on 2 clippy lints, r3 green); orchestrator runs review A r2 (sonnet, prompt 1123-m1-prompt-review-a-r2.md) and visual r2 (1123-m1-prompt-visual-r2.md), then pr
+- **Phase**: pr M1
+- **Next step**: M1 reviews done (A r2 CLEAN, B r1 CLEAN, visual r2 PASS); full gate green at 2bc05024 (later commits docs/evidence only); PR title/body in the scratchpad, orchestrator opens the M1 PR, waits on CI and merges
 
 ## Pull requests
 
@@ -57,8 +57,53 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | CHANGES: 1 MAJOR, 3 MINOR. F1 duplicate `pr_mark`: fixed, `ui/overview.rs` calls `features::changes::pr_mark` (its doc names the card). F2 one unknown-state node fails the chunk: kept per feature 040 FR-019, recorded in data-model §2 (fixed, prose only). F3 `StatusPhrase::label` takes its first three words from `CardReason::label`. F4 `on_role` merged into the one `impl PrMark`; the `failing` field declined (see Declined). Round 2 on sonnet over the fix diff |
 | Review B M1 | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | CLEAN, 2 MINOR. F1 no `tdd/cycle-log.md`: written after the fact (conformance rubric requires it), honest: red not captured for T001–T018 (compile-red only, from baseline symbols), real red for the visual-r1 dash fix. F2 root-only core test failures outside the milestone: nothing to do. No re-run (no BLOCKER/MAJOR of B) |
 | Visual pass M1 (T019) | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | PASS on §B1, §B2, §B5 (light 1.0), §B6; 1 MINOR observation: the expanded card's dash has no tooltip. Fixed test-first (D13): `the_dash_carries_its_reason_collapsed_and_expanded`, shared `counts_line`. 54 PNGs committed in visual-pass/m1/; T019 ticked |
-| Review A M1 | 2 | ff466f0efe74a00e9956be12c5f8f751be705d0e:80ebc12071cf736d5b2e6512f9a800f5002a10b1 (fix diff f90ede20:efff51eb → 80ebc120, sonnet) | pending (orchestrator) |
-| Visual pass M1 | 2 | ff466f0efe74a00e9956be12c5f8f751be705d0e:80ebc12071cf736d5b2e6512f9a800f5002a10b1 (expanded dash tooltip only) | pending (orchestrator) |
+| Review A M1 | 2 | ff466f0efe74a00e9956be12c5f8f751be705d0e:80ebc12071cf736d5b2e6512f9a800f5002a10b1 (fix diff f90ede20:efff51eb → 80ebc120, sonnet) | CLEAN: F1, F3 fixed; F2 note matches `parse_status`; F4 declined part stands; D13 tooltip inside the expanded body, width unchanged. Review A done |
+| Visual pass M1 | 2 | ff466f0efe74a00e9956be12c5f8f751be705d0e:80ebc12071cf736d5b2e6512f9a800f5002a10b1 (expanded dash tooltip only) | PASS on all 3 criteria (same reason tooltip on the expanded dash, unavailable and off, light 1.0 and dark 2.0; layout unchanged; tooltip whole). 4 r2-* PNGs committed in visual-pass/m1/ |
+
+### Review A M1 round 2 verdict (verbatim)
+
+````
+# 1123 M1 review A r2 (snapshot ff466f0e:80ebc120)
+
+VERDICT: CLEAN
+
+I read the fix diff and spot-checked the code. I did not run the gate or the tests.
+
+- **F1:** fixed. The only `BranchPrState` to `PrMark` match left is `features::changes::pr_mark`. The other `BranchPrState::` matches in `crates` are `micold-core` pull-request and review code, not a second mark mapping.
+- **F2:** the data-model note matches `parse_status`. `branch_pr_state` fails with `Unreadable`, and `map_err(|_| UNREADABLE)?` at pull_request.rs:692 and :971 fails the whole reading.
+- **F3:** fixed. `StatusPhrase::label` now takes its first three words from `CardReason::label`, which holds the same strings: "checks failing", "changes requested", "merge conflict".
+- **F4, the declined part:** the reason stands. `ui::material` keeps no core pull request type, and `pr_rows` is the one builder and derives both `phrase` and `failing` from the same `StatusPhrase`. The `on_role` part is fixed (one `impl PrMark`).
+- **D13, tooltip in the expanded body:**
+  - `counts_line` sits inside `rest`, so the tooltip is inside the inner Scrollable.
+  - The expanded line is still `wrapped` at `Length::Fill`.
+  - The cdk Tooltip forwards the child's `size_hint` (tooltip.rs:225), so the width should be unchanged.
+  - The new test covers both states.
+  - The reading of US1 sc. 4 / FR-007 holds: only the full-text tooltips are dropped.
+````
+
+### Visual pass M1 round 2 verdict (verbatim)
+
+````
+# 1123 M1 visual pass r2 (HEAD 6b70c4d6)
+
+VISUAL PASS M1 1123 r2 (T019 re-look): all three criteria PASS, in both the not-signed-in and the pull-request-status-off cases, at light 1.0 and dark 2.0.
+
+Setup: real client and daemon built from the checked-out tree (HEAD 6b70c4d6; the prompt named 80ebc120 and the commits after it are docs-only). I did not check that the tree matches the named snapshot. Ran on Xvfb with lavapipe. /tmp/vp1123 was gone, so I rebuilt a fake `gh` that always exits 4 ("please run: gh auth login"), a fixture repo with an origin of github.com/owner/repo, and the worktrees feat-1123_w/x/y/z under `.claude/worktrees/`. Every card shows "—". I rested the pointer on feat-1123_x until it expanded (about 2 s), then on its dash.
+
+1. Same reason tooltip on the expanded card's dash: PASS.
+   - Not signed in, light 1.0: "GitHub is not reachable", file r2-light-1-b5-unavailable-dash-expanded-tooltip.png.
+   - Not signed in, dark 2.0: "GitHub is not reachable", file r2-dark-2-b5-unavailable-dash-expanded-tooltip.png.
+   - Status switched off, light 1.0: "pull request status is off", file r2-light-1-b5-off-dash-expanded-tooltip.png.
+   - Status switched off, dark 2.0: "pull request status is off", file r2-dark-2-b5-off-dash-expanded-tooltip.png.
+   - The wording matches the collapsed card's tooltips in round 1.
+   - I did not capture a collapsed-card tooltip in this round. My attempt expanded the card first, so I discarded that capture. The "same as collapsed" comparison rests on round 1's wording.
+2. Expanded layout unchanged from round 1's expanded-dash image (light-1-b5-3-unavailable-dash-expanded-no-tooltip.png): PASS. The order is name, short name, "Issue #1123", full path, "No sessions", then "—" last. There is no counts line, no rows and no "+N more", which is the right shape for the unavailable case. Compared with round 1's image, the path text differs because the fixture path differs, and I did not check card widths.
+3. Tooltip drawn whole and readable: PASS. In dark 2.0 it sits just under the card at the window's bottom edge and is not clipped.
+
+One note for the next run. The card did not expand when the pointer rested on its "Issue #1123" link, so rest the pointer on the title or "No sessions".
+
+Evidence is the four untracked PNGs above, in /home/user/micold-ai-ide/specs/1123-overview-card-pr-list/visual-pass/m1/. No source edits and no commit. I killed only my own processes by runtime dir and removed the run dir, /tmp/vp77 and ~/.cache/vp77. `git status` shows only those four untracked files.
+````
 
 ### Review A tasks round 2 verdict (verbatim)
 
