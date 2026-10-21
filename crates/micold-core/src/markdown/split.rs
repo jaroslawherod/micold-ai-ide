@@ -4,6 +4,8 @@
 //! of its line, is a cut. A slice runs from its cut to the next one, trailing blank lines included,
 //! and is parsed on its own, so nothing later can reach back into it.
 
+use std::ops::Range;
+
 use pulldown_cmark::{Event, Parser};
 
 /// Where `text`'s top-level blocks start: `0`, then each later block's line start (a link
@@ -13,6 +15,7 @@ pub(super) fn cuts(text: &str) -> Vec<usize> {
         return Vec::new();
     }
     let mut starts = Vec::new();
+    let mut blocks: Vec<Range<usize>> = Vec::new();
     let mut depth = 0usize;
     let mut events = Parser::new_ext(text, super::options()).into_offset_iter();
     for (event, range) in events.by_ref() {
@@ -29,15 +32,18 @@ pub(super) fn cuts(text: &str) -> Vec<usize> {
         };
         if top {
             starts.push(range.start);
+            blocks.push(range);
         }
     }
     // A link reference definition is a block of its own, though it opens no event: cut there too,
-    // so it never resolves a reference in another slice (research R2).
+    // so it never resolves a reference in another slice (research R2). One inside a quote or a
+    // list item belongs to that block, and is no cut.
     starts.extend(
         events
             .reference_definitions()
             .iter()
-            .map(|(_, d)| d.span.start),
+            .map(|(_, d)| d.span.start)
+            .filter(|at| !blocks.iter().any(|b| b.contains(at))),
     );
     let mut cuts: Vec<usize> = starts.into_iter().map(|at| line_start(text, at)).collect();
     cuts.sort_unstable();

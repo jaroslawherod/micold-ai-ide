@@ -11,7 +11,6 @@ mod fence;
 mod inline;
 mod split;
 
-use std::hash::{DefaultHasher, Hasher};
 use std::iter::Peekable;
 use std::ops::Range;
 use std::vec::IntoIter;
@@ -34,16 +33,10 @@ pub struct Document {
     blocks: Vec<Block>,
     settled: usize,
     open_from: usize,
-    source_len: usize,
-    /// A hash of the text the document was built from, so `update` knows it is being extended.
-    source_hash: u64,
+    /// The text the document was built from (`source_len` is its length), so `update` knows
+    /// when it is being extended.
+    source: String,
     streaming: bool,
-}
-
-fn hash(text: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    hasher.write(text.as_bytes());
-    hasher.finish()
 }
 
 impl Document {
@@ -53,8 +46,7 @@ impl Document {
             blocks: Vec::new(),
             settled: 0,
             open_from: 0,
-            source_len: 0,
-            source_hash: 0,
+            source: String::new(),
             streaming,
         };
         document.build_from(text, 0, streaming);
@@ -64,11 +56,7 @@ impl Document {
     /// The document of `text`, re-parsing only the open slices when `text` extends the text this
     /// document was built from while it streamed; otherwise parsed afresh (research R2).
     pub fn update(&mut self, text: &str, streaming: bool) {
-        let extends = self.streaming
-            && text.len() >= self.source_len
-            && text.is_char_boundary(self.source_len)
-            && hash(&text[..self.source_len]) == self.source_hash;
-        if extends {
+        if self.streaming && text.starts_with(self.source.as_str()) {
             let from = self.open_from;
             self.build_from(text, from, streaming);
         } else {
@@ -123,7 +111,8 @@ impl Document {
         };
         for (i, &start) in cuts.iter().enumerate() {
             let end = cuts.get(i + 1).copied().unwrap_or(tail.len());
-            let blocks = slice_blocks(&tail[start..end], &mut next_code);
+            let last = i + 1 == cuts.len();
+            let blocks = slice_blocks(&tail[start..end], &mut next_code, last);
             if i < settled_slices {
                 self.settled += blocks.len();
             }
@@ -134,8 +123,12 @@ impl Document {
             None if streaming => from,
             None => text.len(),
         };
-        self.source_len = text.len();
-        self.source_hash = hash(text);
+        if text.starts_with(self.source.as_str()) {
+            let known = self.source.len();
+            self.source.push_str(&text[known..]);
+        } else {
+            self.source = text.to_string();
+        }
         self.streaming = streaming;
     }
 }
@@ -168,16 +161,27 @@ fn literal(text: &str) -> Block {
     }
 }
 
-/// The blocks of one slice, parsed on its own. Text no block covers (a link reference
-/// definition) is kept as a literal paragraph in its place, so nothing received is hidden.
-fn slice_blocks(src: &str, next_code: &mut u32) -> Vec<Block> {
-    let events: Vec<_> = Parser::new_ext(src, options()).into_offset_iter().collect();
+/// The blocks of one slice, parsed on its own; `last` when it is the text's last slice. Text no
+/// block covers (a link reference definition) is kept as a literal paragraph in its place, so
+/// nothing received is hidden.
+fn slice_blocks(src: &str, next_code: &mut u32, last: bool) -> Vec<Block> {
+    let mut parser = Parser::new_ext(src, options()).into_offset_iter();
+    let events: Vec<_> = parser.by_ref().collect();
+    let mut definitions: Vec<Range<usize>> = parser
+        .reference_definitions()
+        .iter()
+        .map(|(_, d)| d.span.clone())
+        .collect();
+    definitions.sort_by_key(|span| span.start);
     let mut builder = Builder {
         src,
         events: events.into_iter().peekable(),
         next_code: *next_code,
         task: None,
         nested: 0,
+        last,
+        definitions,
+        next_definition: 0,
     };
     let mut out = Vec::new();
     let mut covered = 0;
@@ -187,6 +191,9 @@ fn slice_blocks(src: &str, next_code: &mut u32) -> Vec<Block> {
             out.push(literal(src[covered..start].trim()));
         }
         covered = covered.max(range.end);
+        // Definitions between top-level blocks are the gaps above; those inside a container
+        // are shown in it (`blocks_to_end`).
+        builder.definitions_before(range.start, None);
         out.extend(builder.block(event, range));
     }
     if !src[covered..].trim().is_empty() {
@@ -205,6 +212,11 @@ struct Builder<'a> {
     task: Option<bool>,
     /// How many containers (quotes, list items) the builder is in.
     nested: u32,
+    /// The slice is the text's last: a fence it leaves unclosed is still open.
+    last: bool,
+    /// Where the slice's link reference definitions are, in order, and the next one not shown.
+    definitions: Vec<Range<usize>>,
+    next_definition: usize,
 }
 
 impl Builder<'_> {
@@ -215,11 +227,9 @@ impl Builder<'_> {
             Event::Rule => return Some(Block::Rule),
             Event::End(_) => return None,
             other => {
-                let mut inline = Inline::default();
-                inline.feed(other);
-                let mut text = inline.finish();
-                text.extend(self.inline_run());
-                return Some(Block::Paragraph { text });
+                return Some(Block::Paragraph {
+                    text: self.inline_run(Some(other)),
+                })
             }
         };
         Some(match tag {
@@ -232,7 +242,7 @@ impl Builder<'_> {
             },
             Tag::BlockQuote(_) => {
                 self.nested += 1;
-                let (blocks, _) = self.blocks_to_end();
+                let (blocks, _) = self.blocks_to_end(range.end);
                 self.nested -= 1;
                 Block::Quote { blocks }
             }
@@ -244,13 +254,9 @@ impl Builder<'_> {
                 self.text_to_end(&mut html);
                 literal(&html)
             }
-            tag if is_inline(&tag) => {
-                let mut inline = Inline::default();
-                inline.feed(Event::Start(tag));
-                let mut text = inline.finish();
-                text.extend(self.inline_run());
-                Block::Paragraph { text }
-            }
+            tag if is_inline(&tag) => Block::Paragraph {
+                text: self.inline_run(Some(Event::Start(tag))),
+            },
             _ => {
                 let mut text = String::new();
                 self.text_to_end(&mut text);
@@ -296,10 +302,17 @@ impl Builder<'_> {
         inline.finish()
     }
 
-    /// The spans of a run of inline events directly in a container (a tight list item's text).
-    fn inline_run(&mut self) -> Inlines {
+    /// The spans of a run of inline events directly in a container (a tight list item's text),
+    /// from `first` when the run's first event is already taken.
+    fn inline_run(&mut self, first: Option<Event<'_>>) -> Inlines {
         let mut inline = Inline::default();
         let mut depth = 0u32;
+        if let Some(first) = first {
+            if matches!(&first, Event::Start(tag) if is_inline(tag)) {
+                depth += 1;
+            }
+            inline.feed(first);
+        }
         while let Some((event, _)) = self.events.peek() {
             match event {
                 Event::Start(tag) if is_inline(tag) => depth += 1,
@@ -318,12 +331,27 @@ impl Builder<'_> {
         inline.finish()
     }
 
-    /// The blocks up to the end of the open container, and whether a paragraph was among them
-    /// (a loose list item).
-    fn blocks_to_end(&mut self) -> (Vec<Block>, bool) {
+    /// Shows the definitions that start before `bound` as literal paragraphs in `blocks`, or
+    /// skips them with no `blocks` (the top level shows them as gaps).
+    fn definitions_before(&mut self, bound: usize, mut blocks: Option<&mut Vec<Block>>) {
+        while let Some(span) = self.definitions.get(self.next_definition) {
+            if span.start >= bound {
+                break;
+            }
+            if let Some(blocks) = blocks.as_deref_mut() {
+                blocks.push(literal(self.src[span.clone()].trim()));
+            }
+            self.next_definition += 1;
+        }
+    }
+
+    /// The blocks up to the end of the open container, which ends at byte `end`, and whether a
+    /// paragraph was among them (a loose list item).
+    fn blocks_to_end(&mut self, end: usize) -> (Vec<Block>, bool) {
         let mut blocks = Vec::new();
         let mut paragraph = false;
-        while let Some((event, _)) = self.events.peek() {
+        while let Some((event, range)) = self.events.peek() {
+            let start = range.start;
             match event {
                 Event::End(_) => {
                     self.events.next();
@@ -332,16 +360,20 @@ impl Builder<'_> {
                 Event::Start(tag) if !is_inline(tag) => {}
                 Event::Rule => {}
                 _ => {
-                    blocks.push(Block::Paragraph {
-                        text: self.inline_run(),
-                    });
+                    self.definitions_before(start, Some(&mut blocks));
+                    let text = self.inline_run(None);
+                    if !text.is_empty() {
+                        blocks.push(Block::Paragraph { text });
+                    }
                     continue;
                 }
             }
+            self.definitions_before(start, Some(&mut blocks));
             let (event, range) = self.events.next().expect("peeked");
             paragraph |= matches!(event, Event::Start(Tag::Paragraph));
             blocks.extend(self.block(event, range));
         }
+        self.definitions_before(end, Some(&mut blocks));
         (blocks, paragraph)
     }
 
@@ -349,14 +381,25 @@ impl Builder<'_> {
         let mut code = String::new();
         self.text_to_end(&mut code);
         let mut code = lf(&code);
-        if code.ends_with('\n') {
-            code.pop();
-        }
+        let lines = if code.is_empty() {
+            0
+        } else {
+            if code.ends_with('\n') {
+                code.pop();
+            }
+            code.split('\n').count() as u32
+        };
+        // Open: unclosed and running to the end of the text. A fence a container's end closes
+        // (a quote or list item followed by more text) is final.
+        let to_end = self.last && range.end >= self.src.trim_end().len();
         let (tag, open) = match kind {
             CodeBlockKind::Fenced(info) => {
                 let word = fence::first_word(&info);
                 let tag = (!word.is_empty()).then(|| word.to_string());
-                (tag, !fence_closed(&self.src[range], self.nested > 0))
+                (
+                    tag,
+                    to_end && !fence_closed(&self.src[range], self.nested > 0),
+                )
             }
             CodeBlockKind::Indented => (None, false),
         };
@@ -366,7 +409,7 @@ impl Builder<'_> {
             id,
             token: tag.as_deref().and_then(fence_token),
             tag,
-            lines: code.lines().count() as u32,
+            lines,
             bytes: code.len() as u64,
             code,
             open,
@@ -376,12 +419,12 @@ impl Builder<'_> {
     fn list(&mut self, start: Option<u64>) -> Block {
         let mut items = Vec::new();
         let mut tight = true;
-        while let Some((event, _)) = self.events.next() {
+        while let Some((event, range)) = self.events.next() {
             match event {
                 Event::Start(Tag::Item) => {
                     let outer = self.task.take();
                     self.nested += 1;
-                    let (blocks, paragraph) = self.blocks_to_end();
+                    let (blocks, paragraph) = self.blocks_to_end(range.end);
                     self.nested -= 1;
                     let task = std::mem::replace(&mut self.task, outer);
                     tight &= !paragraph;
@@ -467,7 +510,7 @@ fn fence_closed(src: &str, nested: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::split::{cuts, last_complete_line};
-    use super::{Block, Document};
+    use super::{Block, CodeBlock, Document};
 
     #[test]
     fn a_text_is_cut_at_each_top_level_block_line() {
@@ -499,6 +542,77 @@ mod tests {
         assert_eq!(doc.settled(), 0, "`|-|x` would make it one paragraph");
         let doc = Document::parse("x\n| a |\n|-|\n", true);
         assert_eq!(doc.settled(), 1);
+    }
+
+    fn codes(text: &str) -> Vec<CodeBlock> {
+        Document::parse(text, false)
+            .code_blocks()
+            .map(|(_, c, _)| c.clone())
+            .collect()
+    }
+
+    #[test]
+    fn a_definition_in_a_container_is_shown_in_it_and_cuts_nothing() {
+        let doc = Document::parse("> [a]: http://x\n> more\n", false);
+        let [Block::Quote { blocks }] = doc.blocks() else {
+            panic!("one quote: {:?}", doc.blocks());
+        };
+        let texts: Vec<String> = blocks
+            .iter()
+            .map(|b| match b {
+                Block::Paragraph { text } => text.iter().map(|s| s.text.as_str()).collect(),
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(texts, ["[a]: http://x", "more"]);
+        let doc = Document::parse("- item\n\n  [a]: /x\n\n  tail\n", false);
+        assert!(
+            matches!(doc.blocks(), [Block::List { .. }]),
+            "{:?}",
+            doc.blocks()
+        );
+    }
+
+    #[test]
+    fn an_image_in_a_link_keeps_the_link() {
+        let doc = Document::parse("[![build](https://i/b.svg)](https://ci/run)", false);
+        let [Block::Paragraph { text }] = doc.blocks() else {
+            panic!("{:?}", doc.blocks());
+        };
+        assert_eq!(text[0].text, "build (https://i/b.svg)");
+        assert_eq!(
+            text[0].link.as_ref().map(|l| l.target.as_str()),
+            Some("https://ci/run")
+        );
+    }
+
+    #[test]
+    fn a_fence_a_container_closes_is_not_open() {
+        assert!(!codes("> ```\n> code\n\nnext paragraph\n")[0].open);
+        assert!(!codes("- ```\n  code\n- next\n")[0].open);
+        assert!(
+            codes("```\ncode\n")[0].open,
+            "unclosed to the end of the text"
+        );
+        assert!(codes("> ```\n> code")[0].open);
+    }
+
+    #[test]
+    fn an_empty_task_item_has_no_empty_paragraph() {
+        let doc = Document::parse("- [ ]\n", false);
+        let [Block::List { items, .. }] = doc.blocks() else {
+            panic!("{:?}", doc.blocks());
+        };
+        assert_eq!(items[0].task, Some(false));
+        assert!(items[0].blocks.is_empty(), "{:?}", items[0].blocks);
+    }
+
+    #[test]
+    fn lines_count_trailing_blank_lines() {
+        let code = &codes("```\na\n\n```\n")[0];
+        assert_eq!((code.code.as_str(), code.lines), ("a\n", 2));
+        assert_eq!(codes("```\n```\n")[0].lines, 0);
+        assert_eq!(codes("```\n\n```\n")[0].lines, 1);
     }
 
     #[test]

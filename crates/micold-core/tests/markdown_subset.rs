@@ -365,7 +365,7 @@ fn code_blocks_hold_exactly_their_code_tag_and_token() {
     );
     for code in &codes {
         assert_eq!(code.bytes, code.code.len() as u64);
-        assert_eq!(code.lines, code.code.lines().count() as u32);
+        assert_eq!(code.lines, code.code.split('\n').count() as u32);
     }
 }
 
