@@ -386,10 +386,11 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
     /// Draw card `index` expanded (feature 1121, research R4, contract U2): `cards[index]` is the
     /// expanded card and `twin` the same card collapsed, built with no id, focus wiring or
     /// messages; the grid gives it the expanded card's issue link, which takes a line of its own
-    /// when the card has no branch line (feature 1122). The grid measures the twin for that card's row, so every row and slot is what it
-    /// is with nothing expanded (FR-009); the expanded card takes its slot's x, width and top, as
-    /// tall as its content up to the view's height, and is drawn over its neighbours, moved up
-    /// just enough to lie inside the view (`overview_expansion::place`, FR-008).
+    /// when the card has no branch line (feature 1122). The grid measures the twin for that
+    /// card's row, so every row and slot is what it is with nothing expanded (FR-009); the
+    /// expanded card takes its slot's x, width and top, as tall as its content up to the view's
+    /// height, and is drawn over its neighbours, moved up just enough to lie inside the view
+    /// (`overview_expansion::place`, FR-008).
     pub fn expanded(mut self, index: usize, twin: OverviewCard<'a, M>) -> Self {
         self.expanded = Some((index, twin));
         self
