@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1210
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
-- **Phase**: tasks
-- **Next step**: wait for design PR #1214 merge, then M1
+- **Phase**: milestone M1 (implemented; gate and reviews)
+- **Next step**: M1 scoped gate, review A and B, full gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1214 | Design | open | - |
+| #1214 | Design | merged | 46582900eb258d140dd971d45c5d5e39e35131d3 |
 
 ## Milestones
 

@@ -114,6 +114,10 @@ pub struct DaemonState {
     /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
     /// `claude`'s lifecycle hooks at it.
     hooks: std::sync::OnceLock<crate::hooks::HookReceiver>,
+    /// Each prepared session's worktree guard, frozen when its settings file is written (feature
+    /// 1210, research R7). Its own mutex: the hook receiver reads it on every `PreToolUse`, and it
+    /// is never held across anything else.
+    guards: Mutex<HashMap<SessionId, crate::hooks::GuardState>>,
     /// The tool server (feature 034), set once at startup by `server::run`. Absent for tests that do
     /// not bind one and when binding fails: AI-CLI sessions then start unbound, with the reason
     /// logged (FR-005).
@@ -827,6 +831,7 @@ impl DaemonState {
             diagnostics: std::sync::OnceLock::new(),
             git_targets: Mutex::new(None),
             hooks: std::sync::OnceLock::new(),
+            guards: Mutex::new(HashMap::new()),
             tool_server: std::sync::OnceLock::new(),
             first_prompt_bound: Mutex::new(FIRST_PROMPT_BOUND),
             details_bound: Mutex::new(micold_core::issue_details::DETAILS_BOUND),
@@ -1275,12 +1280,68 @@ impl DaemonState {
             locations: claude_locations(spec),
         };
         match receiver.prepare_settings(id, status) {
-            Ok(path) => Some(path),
+            Ok(path) => {
+                let guard = self.guard_state_for(id);
+                self.set_session_guard(id, guard);
+                Some(path)
+            }
             Err(e) => {
                 tracing::warn!(session = %id.0, error = %e, "could not write hook settings; activity will be Unknown");
                 None
             }
         }
+    }
+
+    /// The worktree guard a session launched now gets (feature 1210, FR-001, FR-011): bound to its
+    /// own worktree, or to the project root for a Default session. A session the catalog does not
+    /// know is `Off`: the call is allowed (FR-009).
+    pub fn guard_state_for(&self, id: SessionId) -> crate::hooks::GuardState {
+        let inner = self.lock();
+        let Some((project, record)) = inner.catalog.workspace().find_session(id) else {
+            return crate::hooks::GuardState::Off;
+        };
+        let binding = match &record.location {
+            SessionLocation::Worktree(_) => {
+                micold_core::worktree_guard::SessionBinding::Worktree(record.location.cwd(project))
+            }
+            SessionLocation::Default => {
+                micold_core::worktree_guard::SessionBinding::Default(project.to_path_buf())
+            }
+        };
+        crate::hooks::GuardState::On {
+            binding,
+            project: project.to_path_buf(),
+        }
+    }
+
+    /// Freeze `session`'s worktree guard (written at launch; see [`Self::guard_state_for`]).
+    pub fn set_session_guard(&self, session: SessionId, guard: crate::hooks::GuardState) {
+        self.guards
+            .lock()
+            .expect("guards lock poisoned")
+            .insert(session, guard);
+    }
+
+    /// `session`'s frozen worktree guard, if it was launched with one.
+    pub fn session_guard(&self, session: SessionId) -> Option<crate::hooks::GuardState> {
+        self.guards
+            .lock()
+            .expect("guards lock poisoned")
+            .get(&session)
+            .cloned()
+    }
+
+    /// Every location of `project` the guard judges against: the root and each worktree the last
+    /// refresh found, from the cache (no `git` per call, feature 1210 R6). Empty when the project
+    /// has not been refreshed yet, which the guard reads as unknown and allows (FR-009).
+    pub fn guard_worktrees(&self, project: &Path) -> Vec<PathBuf> {
+        let inner = self.lock();
+        let Some(found) = inner.worktrees.get(project) else {
+            return Vec::new();
+        };
+        std::iter::once(project.to_path_buf())
+            .chain(found.iter().map(|w| w.path.clone()))
+            .collect()
     }
 
     /// The environment-include-resolved variables for `cwd`, merged with the hardcoded `TERM` pair
@@ -5609,6 +5670,10 @@ impl DaemonState {
         if let Some(receiver) = self.hooks.get() {
             receiver.forget(session);
         }
+        self.guards
+            .lock()
+            .expect("guards lock poisoned")
+            .remove(&session);
         // A structured process is no PTY to hand back: it ends as the entry drops here, off the
         // lock (its `Drop` kills its tree).
         removed

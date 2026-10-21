@@ -1427,6 +1427,29 @@ You keep control of the panel:
 > the container's image. If it is missing, starting the session reports which one could not be found
 > — see [When a CLI isn't installed](#when-a-cli-isnt-installed).
 
+## A session stays in its own worktree
+
+A Claude Code session that Micold starts may only edit or write files in its own worktree. A
+session in the **Default** entry works in the project's main checkout.
+
+When a session tries to edit or write a file in another worktree of the same project, Micold
+denies the call and the session sees a message like this:
+
+> Blocked: Write targets /path/to/other/worktree/src/x.rs, which is in another worktree. Do not
+> work here; hand the work to a dedicated session with create_session.
+
+The session is expected to do what the message says: start a dedicated session in that worktree
+with `create_session`, and hand the work to it.
+
+Two places stay open to every session, so shared builds and autopilot keep working:
+
+- the main checkout's shared build directory, `target-shared/`;
+- autopilot's prefetch worktree, a worktree whose folder name starts with `autopilot-prefetch`.
+
+Reading files in another worktree is never blocked, and a worktree that has been removed is not
+protected. Only sessions of **Claude Code** are covered; other AI CLIs run unguarded, and a
+session whose worktree Micold cannot work out is let through rather than blocked.
+
 ## Switching to a regular terminal
 
 Each session's terminal can also run a plain shell instead of the AI CLI — useful for running git
