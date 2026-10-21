@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1214 | Design | merged | 46582900eb258d140dd971d45c5d5e39e35131d3 |
+| #1225 | M1 | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | PR | in review |
+| M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | #1225 | in review |
 | M2 | T011–T014 | full | Bash commands judged | - | pending |
 | M3 | T015–T017 | full | EnterWorktree and git worktree add denied | - | pending |
 | M4 | T018–T020 | full | create_worktree hand-off text | - | pending |
