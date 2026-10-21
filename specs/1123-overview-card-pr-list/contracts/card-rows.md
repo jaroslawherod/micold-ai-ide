@@ -29,7 +29,7 @@
 - K6 `ListedPr` `Debug` holds no address, `PrRow` has none; no `Serialize` (extend
   `tests/pull_request_is_never_stored.rs`).
 
-## Client — tests U1–U4
+## Client — tests U1–U7
 
 - U1 `OverviewCard::pull_requests(rows, more)`: draws "#N", the pill word and the phrase per row;
   "+N more" only when `more > 0`; at 280/380/480 px the number and pill are whole and the phrase

@@ -264,8 +264,9 @@ enum. The pill has no tooltip: its accessible text is its word, which it shows, 
 repeats it (as `StatusChip`'s rule "the group is never carried by colour alone"). Failing words
 take the `error` role, the rest the body role. Rows sit between the counts line and the card's
 activity line; the "+N more" line is a muted body-role text below the rows. Contrast is covered by
-`composition_contrast.rs` for each `PrMark` tint on the card surface in both themes (feature 1120
-FR-003).
+`composition_contrast.rs`: it measures the `PrMark::role` text colour over the `Tag` chip fill
+(`style::chip(accent)`, the accent's own faint tint), for each of the four marks in both themes
+(feature 1120 FR-003).
 
 **Rationale**: Principle VIII (shared components, roles); SC-006 (number and pill never clipped);
 the card's pill and the sidebar's glyph colour a state the same way.
