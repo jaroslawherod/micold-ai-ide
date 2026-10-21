@@ -12,10 +12,13 @@ use micold_client::ui::overview::{arrow_focus, cards, follow_up};
 use micold_core::local_time::LocalTime;
 use micold_core::overview::Activation;
 use micold_core::overview::{CardReason, CardState, LocationType, PrCounts, PrDisplay};
+use micold_core::pr_list::{BranchPrList, ListedPr, PrRow, StatusPhrase};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::ActivitySignal;
 use micold_core::protocol::messages::ConfirmOperation;
-use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
+use micold_core::pull_request::{
+    BranchPrState, CheckStatus, PrState, PullRequestStatus, ReviewState,
+};
 use micold_core::session::{AiCli, Session, SessionLifecycle, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
@@ -515,10 +518,31 @@ fn counts(open: u8, merged: u8) -> PrCounts {
     }
 }
 
-fn read_counts(state: &mut State, branch: &str, counts: PrCounts) {
+/// Feature 1123: a listed own pull request of `state`; a higher number is newer.
+fn listed(number: u64, state: BranchPrState) -> ListedPr {
+    ListedPr {
+        number,
+        url: format!("https://github.com/acme/widgets/pull/{number}"),
+        state,
+        checks: CheckStatus::None,
+        review: ReviewState::None,
+        conflict: false,
+        created_at: format!("2026-01-01T00:00:{number:02}Z"),
+    }
+}
+
+/// A list of `open` own open pull requests and `merged` merged ones, no page full.
+fn list_of(open: u8, merged: u8) -> BranchPrList {
+    let open = (1..=u64::from(open)).map(|n| listed(n, BranchPrState::Open));
+    let merged = (1..=u64::from(merged)).map(|n| listed(20 + n, BranchPrState::Merged));
+    BranchPrList::new(open.chain(merged).collect(), false, false)
+}
+
+/// A successful reading holding `list` for `branch`.
+fn read_list(state: &mut State, branch: &str, list: BranchPrList) {
     state.pr_status.enabled = true;
     state.pr_status.read_at = Some(100);
-    state.pr_status.counts.insert(branch.to_string(), counts);
+    state.pr_status.lists.insert(branch.to_string(), list);
 }
 
 fn feat_a() -> State {
@@ -538,7 +562,7 @@ fn prs(state: &State) -> PrDisplay {
 #[test]
 fn a_branch_with_one_open_and_two_merged_reads_counts() {
     let mut state = feat_a();
-    read_counts(&mut state, "feat/a", counts(1, 2));
+    read_list(&mut state, "feat/a", list_of(1, 2));
     assert_eq!(prs(&state), PrDisplay::Counts(counts(1, 2)));
 }
 
@@ -546,7 +570,7 @@ fn a_branch_with_one_open_and_two_merged_reads_counts() {
 #[test]
 fn a_branch_without_pull_requests_reads_zero_and_zero() {
     let mut state = feat_a();
-    read_counts(&mut state, "feat/a", counts(0, 0));
+    read_list(&mut state, "feat/a", list_of(0, 0));
     assert_eq!(prs(&state), PrDisplay::Counts(counts(0, 0)));
 }
 
@@ -590,7 +614,7 @@ fn unknown_counts_name_their_reason() {
 #[test]
 fn counts_of_the_last_reading_show_during_a_pause() {
     let mut state = feat_a();
-    read_counts(&mut state, "feat/a", counts(2, 0));
+    read_list(&mut state, "feat/a", list_of(2, 0));
     state.pr_status.pause_until = Some(4_000_000_000);
     assert_eq!(prs(&state), PrDisplay::Counts(counts(2, 0)));
 }
@@ -603,25 +627,246 @@ fn locations_without_a_branch_hide_the_counts() {
         worktree("detached", None, WorktreeStatus::Valid, false),
         worktree("gone", None, WorktreeStatus::Missing, false),
     ]);
-    read_counts(&mut state, "main", counts(3, 3));
+    read_list(&mut state, "main", list_of(3, 3));
     let all = cards(&state);
     assert_eq!(card(&all, &SessionLocation::Default).prs, PrDisplay::Hidden);
     assert_eq!(card(&all, &wt("detached")).prs, PrDisplay::Hidden);
     assert_eq!(card(&all, &wt("gone")).prs, PrDisplay::Hidden);
 }
 
-/// FR-004: a count of 100 or more is flagged so the card reads *100+*.
+/// Feature 1123 FR-006: a full page of ten is flagged so the card reads *10+*.
 #[test]
 fn a_full_page_is_flagged_as_capped() {
     let mut state = feat_a();
+    let merged = (1..=10).map(|n| listed(n, BranchPrState::Merged)).collect();
+    read_list(&mut state, "feat/a", BranchPrList::new(merged, false, true));
     let capped = PrCounts {
         open: 0,
-        merged: 100,
+        merged: 10,
         open_capped: false,
         merged_capped: true,
     };
-    read_counts(&mut state, "feat/a", capped);
     assert_eq!(prs(&state), PrDisplay::Counts(capped));
+    assert_eq!(prs(&state).footer(), Some(("10+ merged".to_string(), None)));
+}
+
+// ---- Feature 1123 (T007): the counts and the rows come from one list ----
+
+fn footer(state: &State) -> Option<String> {
+    prs(state).footer().map(|(text, _)| text)
+}
+
+fn rows_of(state: &State) -> Option<BranchPrList> {
+    card(&cards(state), &wt("feat-a")).pull_requests.clone()
+}
+
+/// FR-006: two open and one merged listed read "2 open · 1 merged"; an empty list reads nothing.
+#[test]
+fn the_counts_line_comes_from_the_list() {
+    let mut state = feat_a();
+    read_list(&mut state, "feat/a", list_of(2, 1));
+    assert_eq!(footer(&state).as_deref(), Some("2 open \u{b7} 1 merged"));
+    read_list(&mut state, "feat/a", list_of(0, 0));
+    assert_eq!(footer(&state), None, "no counts line for an empty list");
+}
+
+/// FR-006: a full open page reads *10+* for ten own and *9+* when one of the ten was a fork's.
+#[test]
+fn a_full_open_page_reads_its_own_count_with_a_plus() {
+    let mut state = feat_a();
+    for (own, text) in [(10, "10+ open"), (9, "9+ open")] {
+        let open = (1..=own).map(|n| listed(n, BranchPrState::Open)).collect();
+        read_list(&mut state, "feat/a", BranchPrList::new(open, true, false));
+        assert_eq!(footer(&state).as_deref(), Some(text));
+    }
+}
+
+/// R5, Story 1 sc. 3, 4, 6: the card carries the list exactly when it shows counts.
+#[test]
+fn the_card_carries_the_list_only_with_its_counts() {
+    let mut state = feat_a();
+    read_list(&mut state, "feat/a", list_of(1, 1));
+    assert_eq!(rows_of(&state), Some(list_of(1, 1)));
+
+    state.pr_status.enabled = false;
+    assert_eq!(rows_of(&state), None, "status off");
+
+    let mut state = feat_a();
+    state.pr_status.enabled = true;
+    assert_eq!(rows_of(&state), None, "not read yet");
+    state.pr_status.unreachable = true;
+    assert_eq!(rows_of(&state), None, "GitHub is not reachable");
+    state.pr_status.unreachable = false;
+    state.pr_status.pause_until = Some(4_000_000_000);
+    assert_eq!(rows_of(&state), None, "rate-limited, never read");
+
+    let mut state = project_with(vec![
+        worktree("detached", None, WorktreeStatus::Valid, false),
+        worktree("gone", None, WorktreeStatus::Missing, false),
+    ]);
+    read_list(&mut state, "main", list_of(3, 3));
+    let all = cards(&state);
+    for location in [SessionLocation::Default, wt("detached"), wt("gone")] {
+        assert_eq!(card(&all, &location).pull_requests, None, "{location:?}");
+    }
+}
+
+/// Story 1 sc. 8: a card keeps its list and counts through a rate-limit pause and a reading that
+/// fails for a passing reason.
+#[test]
+fn the_list_stays_through_a_pause_and_a_passing_failure() {
+    use micold_client::features::pr_status::{Outcome, Phase};
+    use micold_core::pull_request::ReadingFailure;
+    for failure in [
+        ReadingFailure::RateLimited {
+            until: 4_000_000_000,
+        },
+        ReadingFailure::Passing,
+    ] {
+        let mut state = feat_a();
+        read_list(&mut state, "feat/a", list_of(1, 2));
+        state.pr_status.phase = Phase::Reading {
+            seq: 9,
+            again: false,
+            started: 200,
+        };
+        let _ = state.update_pr_status(PrMsg::Finished {
+            seq: 9,
+            outcome: Outcome::Err(failure),
+            now: 300,
+        });
+        assert_eq!(rows_of(&state), Some(list_of(1, 2)), "{failure:?}");
+        assert_eq!(prs(&state), PrDisplay::Counts(counts(1, 2)), "{failure:?}");
+    }
+}
+
+// ---- Feature 1123 (T012): the rows ----
+
+fn pr_with(number: u64, state: BranchPrState, checks: CheckStatus) -> ListedPr {
+    ListedPr {
+        checks,
+        ..listed(number, state)
+    }
+}
+
+fn row_view(row: &PrRow) -> (String, BranchPrState, Option<&'static str>) {
+    (
+        row.label.clone(),
+        row.pill,
+        row.phrase.map(StatusPhrase::label),
+    )
+}
+
+/// Story 1 sc. 1: one open #12 with failing checks is one row "#12", *Open*, *checks failing*.
+#[test]
+fn an_open_pull_request_with_failing_checks_is_one_row() {
+    let mut state = feat_a();
+    let list = BranchPrList::new(
+        vec![pr_with(12, BranchPrState::Open, CheckStatus::Failing)],
+        false,
+        false,
+    );
+    read_list(&mut state, "feat/a", list);
+    let (rows, more) = rows_of(&state).expect("a list").rows(false);
+    let rows: Vec<_> = rows.iter().map(row_view).collect();
+    assert_eq!(
+        rows,
+        [(
+            "#12".to_string(),
+            BranchPrState::Open,
+            Some("checks failing")
+        )]
+    );
+    assert_eq!(more, 0);
+}
+
+fn four_states() -> BranchPrList {
+    BranchPrList::new(
+        vec![
+            pr_with(9, BranchPrState::Merged, CheckStatus::Passing),
+            pr_with(8, BranchPrState::Closed, CheckStatus::Failing),
+            pr_with(12, BranchPrState::Open, CheckStatus::Failing),
+            pr_with(11, BranchPrState::Draft, CheckStatus::Pending),
+        ],
+        false,
+        false,
+    )
+}
+
+/// Story 1 sc. 2, 5; US2 sc. 1–2: collapsed two rows (open, draft) and two more; expanded all four
+/// in FR-003 order; a draft carries its words, merged and closed none.
+#[test]
+fn four_states_show_two_rows_collapsed_and_four_expanded() {
+    let mut state = feat_a();
+    read_list(&mut state, "feat/a", four_states());
+    let list = rows_of(&state).expect("a list");
+    let (collapsed, more) = list.rows(false);
+    assert_eq!(
+        collapsed.iter().map(|r| r.number).collect::<Vec<_>>(),
+        [12, 11]
+    );
+    assert_eq!(more, 2);
+    let (expanded, more) = list.rows(true);
+    let expanded: Vec<_> = expanded.iter().map(row_view).collect();
+    assert_eq!(
+        expanded,
+        [
+            (
+                "#12".to_string(),
+                BranchPrState::Open,
+                Some("checks failing")
+            ),
+            (
+                "#11".to_string(),
+                BranchPrState::Draft,
+                Some("checks pending")
+            ),
+            ("#9".to_string(), BranchPrState::Merged, None),
+            ("#8".to_string(), BranchPrState::Closed, None),
+        ]
+    );
+    assert_eq!(more, 0);
+}
+
+/// US2 sc. 3: one or two pull requests: the same rows collapsed and expanded, none more.
+#[test]
+fn one_or_two_pull_requests_show_the_same_rows_both_ways() {
+    for list in [list_of(1, 0), list_of(1, 1)] {
+        let mut state = feat_a();
+        read_list(&mut state, "feat/a", list);
+        let list = rows_of(&state).expect("a list");
+        assert_eq!(list.rows(false), list.rows(true));
+        assert_eq!(list.rows(false).1, 0);
+    }
+}
+
+/// Story 1 sc. 7: a new reading that merges #12 changes its row with no other step.
+#[test]
+fn a_new_reading_changes_the_row() {
+    let mut state = feat_a();
+    let open = vec![pr_with(12, BranchPrState::Open, CheckStatus::Passing)];
+    read_list(&mut state, "feat/a", BranchPrList::new(open, false, false));
+    let merged = vec![listed(12, BranchPrState::Merged)];
+    read_list(
+        &mut state,
+        "feat/a",
+        BranchPrList::new(merged, false, false),
+    );
+    let (rows, _) = rows_of(&state).expect("a list").rows(false);
+    assert_eq!(rows[0].pill, BranchPrState::Merged);
+    assert_eq!(rows[0].phrase, None);
+}
+
+/// Story 1 sc. 3, 4, 6: no row for an empty list, while the dash shows, or without a branch.
+#[test]
+fn no_row_for_an_empty_list_the_dash_or_no_branch() {
+    let mut state = feat_a();
+    read_list(&mut state, "feat/a", list_of(0, 0));
+    assert_eq!(rows_of(&state).expect("read").rows(false), (Vec::new(), 0));
+    state.pr_status.enabled = false;
+    assert_eq!(rows_of(&state), None, "the dash: no row");
+    let all = cards(&state);
+    assert_eq!(card(&all, &SessionLocation::Default).pull_requests, None);
 }
 
 /// R6: a current open pull request that conflicts needs attention, with the reason named.

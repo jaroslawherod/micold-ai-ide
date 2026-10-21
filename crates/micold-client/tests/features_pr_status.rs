@@ -7,9 +7,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use micold_client::features::pr_status::{self, Effect, Msg, Outcome, Phase, State};
-use micold_core::overview::PrCounts;
+use micold_core::pr_list::{BranchPrList, ListedPr};
 use micold_core::pull_request::{
-    CheckStatus, PrState, PullRequestStatus, ReadingFailure, ReviewState,
+    BranchPrState, CheckStatus, PrState, PullRequestStatus, ReadingFailure, ReviewState,
 };
 
 const NOW: u64 = 1_000;
@@ -34,22 +34,35 @@ fn statuses() -> BTreeMap<String, PullRequestStatus> {
     BTreeMap::from([("feat/a".to_string(), status(7))])
 }
 
-fn counts() -> BTreeMap<String, PrCounts> {
+/// Feature 1123: one listed open pull request and two merged ones on `feat/a`.
+fn lists() -> BTreeMap<String, BranchPrList> {
+    let listed = |number: u64, state: BranchPrState| ListedPr {
+        number,
+        url: format!("https://github.com/acme/widgets/pull/{number}"),
+        state,
+        checks: micold_core::pull_request::CheckStatus::None,
+        review: micold_core::pull_request::ReviewState::None,
+        conflict: false,
+        created_at: format!("2026-01-0{number}T00:00:00Z"),
+    };
     BTreeMap::from([(
         "feat/a".to_string(),
-        PrCounts {
-            open: 1,
-            merged: 2,
-            open_capped: false,
-            merged_capped: false,
-        },
+        BranchPrList::new(
+            vec![
+                listed(7, BranchPrState::Open),
+                listed(5, BranchPrState::Merged),
+                listed(3, BranchPrState::Merged),
+            ],
+            false,
+            false,
+        ),
     )])
 }
 
 fn ok(started_at: u64) -> Outcome {
     Outcome::Ok {
         statuses: statuses(),
-        counts: counts(),
+        lists: lists(),
         removable: BTreeSet::new(),
         started_at,
     }
@@ -213,7 +226,7 @@ fn reading_again(st: &mut State) -> u64 {
     let pause = st.pause_until.take();
     let kept = (
         st.statuses.clone(),
-        st.counts.clone(),
+        st.lists.clone(),
         st.removable.clone(),
         st.read_at,
     );
@@ -227,7 +240,7 @@ fn reading_again(st: &mut State) -> u64 {
     let Effect::Read { seq } = update(st, enable()) else {
         panic!("switching on while held and listed reads");
     };
-    (st.statuses, st.counts, st.removable, st.read_at) = kept;
+    (st.statuses, st.lists, st.removable, st.read_at) = kept;
     st.pause_until = pause;
     seq
 }
@@ -412,7 +425,7 @@ fn finish_ok(statuses: BTreeMap<String, PullRequestStatus>, removable: &[&str]) 
         seq,
         Outcome::Ok {
             statuses,
-            counts: BTreeMap::new(),
+            lists: BTreeMap::new(),
             removable,
             started_at: NOW,
         },
@@ -622,7 +635,7 @@ fn a_trigger_sixty_seconds_after_a_reading_started_abandons_it() {
 #[test]
 fn a_finished_reading_stores_its_counts() {
     let st = holding_statuses();
-    assert_eq!(st.counts, counts());
+    assert_eq!(st.lists, lists());
     assert!(!st.unreachable);
 }
 
@@ -637,7 +650,7 @@ fn statuses_read_carries_counts_and_changes_nothing() {
         Msg::StatusesRead {
             seq: 0,
             statuses: statuses(),
-            counts: counts(),
+            lists: lists(),
             started_at: NOW,
         },
     );
@@ -651,12 +664,12 @@ fn unavailable_released_and_disabling_clear_the_counts_with_the_statuses() {
     let mut st = holding_statuses();
     let seq = reading_again(&mut st);
     finish(&mut st, seq, Outcome::Err(ReadingFailure::Unavailable));
-    assert!(st.statuses.is_empty() && st.counts.is_empty());
+    assert!(st.statuses.is_empty() && st.lists.is_empty());
     assert!(st.unreachable, "the card says why it has no counts");
 
     let mut st = holding_statuses();
     update(&mut st, Msg::Released);
-    assert!(st.statuses.is_empty() && st.counts.is_empty());
+    assert!(st.statuses.is_empty() && st.lists.is_empty());
 
     let mut st = holding_statuses();
     update(
@@ -666,7 +679,7 @@ fn unavailable_released_and_disabling_clear_the_counts_with_the_statuses() {
             now: LATER,
         },
     );
-    assert!(st.statuses.is_empty() && st.counts.is_empty());
+    assert!(st.statuses.is_empty() && st.lists.is_empty());
 }
 
 /// A passing failure or a rate limit keeps the statuses, and so the counts; the next good reading
@@ -681,7 +694,7 @@ fn a_passing_failure_or_a_rate_limit_keeps_the_counts_and_a_good_reading_clears_
         let seq = reading_again(&mut st);
         finish(&mut st, seq, Outcome::Err(failure));
         assert_eq!(st.statuses, statuses());
-        assert_eq!(st.counts, counts());
+        assert_eq!(st.lists, lists());
     }
     let mut st = holding_statuses();
     let seq = reading_again(&mut st);
@@ -689,5 +702,5 @@ fn a_passing_failure_or_a_rate_limit_keeps_the_counts_and_a_good_reading_clears_
     let seq = reading_again(&mut st);
     finish(&mut st, seq, ok(LATER));
     assert!(!st.unreachable);
-    assert_eq!(st.counts, counts());
+    assert_eq!(st.lists, lists());
 }

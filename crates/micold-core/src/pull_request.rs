@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::github::{classify, GithubRepo, IssueLoadError};
-use crate::overview::PrCounts;
+use crate::pr_list::{BranchPrList, ListedPr};
 use crate::process::RunOutcome;
 use crate::review::browse::FileReadFailure;
 use crate::review::RelPath;
@@ -170,17 +170,11 @@ pub struct Unreadable;
 
 // ---- §2: the command and the query ----
 
-/// Shared by both connections of a branch: the 10 newest pull requests with that head branch.
+/// Shared by the connections of a branch: the 10 newest pull requests with that head branch.
 const NEWEST_TEN: &str = "first: 10, orderBy: {field: CREATED_AT, direction: DESC}";
 
-/// The page the count aliases read, and the most they can report (`PrCounts` shows *100+*).
-const COUNT_PAGE: &str = "first: 100";
-
-/// The same page size as a number.
-const COUNT_PAGE_SIZE: usize = 100;
-
-/// Only the fork flag of each node: the counts leave out other repositories' pull requests.
-const COUNT_NODES: &str = "{ nodes { isCrossRepository } }";
+/// The size of a [`NEWEST_TEN`] page: a full one means there may be more (feature 1123, FR-006).
+const PAGE_SIZE: usize = 10;
 
 /// The last commit's check counts by state, as a field list: one text for the sidebar's fragment and
 /// the Review changes list (feature 1003, FR-003), so both mark a pull request the same way.
@@ -201,11 +195,16 @@ isCrossRepository headRefOid reviewDecision mergeable ",
     " }"
 );
 
+/// What is read of each merged pull request for the card's list and counts (feature 1123, R2):
+/// scalar fields only, no nested connection, so the `m<i>` page costs one request.
+const MERGED_FRAGMENT: &str =
+    "fragment merged on PullRequest { number url state isDraft createdAt isCrossRepository }";
+
 /// The GraphQL document that asks about `n` branches (1 to [`BRANCHES_PER_REQUEST`]), on one line.
 ///
 /// Branch `i` is the variable `$b<i>`; `o<i>` holds its open pull requests and `r<i>` its newest of
-/// any state; `oc<i>` and `mc<i>` hold the fork flags of up to 100 open and merged ones, for the
-/// counts (feature 813). No branch name is part of the document (FR-031): names travel as variables, so no
+/// any state; `m<i>` its newest merged ones, so the card's list and counts come from the three
+/// pages (feature 1123, FR-008). No branch name is part of the document (FR-031): names travel as variables, so no
 /// name can change what is asked.
 pub fn status_query(n: usize) -> String {
     use fmt::Write as _;
@@ -219,14 +218,14 @@ pub fn status_query(n: usize) -> String {
             "o{i}: pullRequests(headRefName: $b{i}, states: OPEN, {NEWEST_TEN}) \
              {{ nodes {{ ...pr }} }} \
              r{i}: pullRequests(headRefName: $b{i}, {NEWEST_TEN}) {{ nodes {{ ...pr }} }} \
-             oc{i}: pullRequests(headRefName: $b{i}, states: OPEN, {COUNT_PAGE}) {COUNT_NODES} \
-             mc{i}: pullRequests(headRefName: $b{i}, states: MERGED, {COUNT_PAGE}) {COUNT_NODES} "
+             m{i}: pullRequests(headRefName: $b{i}, states: MERGED, {NEWEST_TEN}) \
+             {{ nodes {{ ...merged }} }} "
         );
     }
     format!(
         "query($owner: String!, $name: String!{variables}) {{ \
          repository(owner: $owner, name: $name) {{ {aliases}}} \
-         rateLimit {{ remaining resetAt }} }} {FRAGMENT}"
+         rateLimit {{ remaining resetAt }} }} {FRAGMENT} {MERGED_FRAGMENT}"
     )
 }
 
@@ -277,29 +276,55 @@ pub fn select_pull_request(
     let Some(node) = newest(open).or_else(|| newest(recent)) else {
         return Ok(None);
     };
-    let checks = reduce_checks(node.checks.as_ref());
-    let state = match (node.state.as_str(), node.is_draft) {
-        ("OPEN", true) => PrState::Draft { checks },
-        ("OPEN", false) => PrState::Open { checks },
-        ("MERGED", _) => PrState::Merged,
-        ("CLOSED", _) => PrState::Closed,
-        _ => return Err(Unreadable),
-    };
-    let review = match node.review_decision.as_deref() {
-        Some("APPROVED") => ReviewState::Approved,
-        Some("CHANGES_REQUESTED") => ReviewState::ChangesRequested,
-        Some("REVIEW_REQUIRED") => ReviewState::ReviewRequired,
-        _ => ReviewState::None,
+    let listed = listed(&node)?;
+    let checks = listed.checks;
+    let state = match listed.state {
+        BranchPrState::Open => PrState::Open { checks },
+        BranchPrState::Draft => PrState::Draft { checks },
+        BranchPrState::Merged => PrState::Merged,
+        BranchPrState::Closed => PrState::Closed,
     };
     Ok(Some(PullRequestStatus {
         number: node.number,
         title: node.title,
         url: node.url,
         state,
-        review,
+        review: listed.review,
         head: node.head,
         conflict: node.conflict,
     }))
+}
+
+/// GitHub's `state` and `isDraft` as a state this version knows.
+fn branch_pr_state(state: &str, is_draft: bool) -> Result<BranchPrState, Unreadable> {
+    match (state, is_draft) {
+        ("OPEN", true) => Ok(BranchPrState::Draft),
+        ("OPEN", false) => Ok(BranchPrState::Open),
+        ("MERGED", _) => Ok(BranchPrState::Merged),
+        ("CLOSED", _) => Ok(BranchPrState::Closed),
+        _ => Err(Unreadable),
+    }
+}
+
+/// One node of the `pr` fragment as the card lists it (feature 1123, data-model §1): its state, the
+/// reduced checks and the review decision, read the one way [`select_pull_request`] reads them
+/// (FR-013).
+fn listed(node: &PrNode) -> Result<ListedPr, Unreadable> {
+    let review = match node.review_decision.as_deref() {
+        Some("APPROVED") => ReviewState::Approved,
+        Some("CHANGES_REQUESTED") => ReviewState::ChangesRequested,
+        Some("REVIEW_REQUIRED") => ReviewState::ReviewRequired,
+        _ => ReviewState::None,
+    };
+    Ok(ListedPr {
+        number: node.number,
+        url: node.url.clone(),
+        state: branch_pr_state(&node.state, node.is_draft)?,
+        checks: reduce_checks(node.checks.as_ref()),
+        review,
+        conflict: node.conflict,
+        created_at: node.created_at.clone(),
+    })
 }
 
 /// The states of a check run that count as failed.
@@ -480,10 +505,15 @@ struct Connection {
     nodes: Vec<serde_json::Value>,
 }
 
-/// One node of a count alias: whether the pull request lives in a fork.
+/// One node of the `merged` fragment (feature 1123, R2).
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RawCounted {
+struct RawMerged {
+    number: u64,
+    url: String,
+    state: String,
+    is_draft: bool,
+    created_at: String,
     is_cross_repository: bool,
 }
 
@@ -578,30 +608,31 @@ impl From<RawNode> for PrNode {
     }
 }
 
-/// What one reading found: the pull request each branch is shown with, and how many it has.
+/// What one reading found: the pull request each branch is shown with, and the list of its pull
+/// requests the card shows and counts (feature 1123).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StatusReading {
     /// Branch → the shown pull request; a branch without one has no entry.
     pub statuses: BTreeMap<String, PullRequestStatus>,
-    /// Branch → its open and merged counts; **every** asked branch has an entry (0 / 0 for none), so
+    /// Branch → its listed pull requests; **every** asked branch has an entry (empty for none), so
     /// "no pull request" differs from "unknown" (no entry).
-    pub counts: BTreeMap<String, PrCounts>,
+    pub lists: BTreeMap<String, BranchPrList>,
 }
 
 impl StatusReading {
     /// Add the branches of `other`, as chunks of one reading are joined.
     fn extend(&mut self, other: Self) {
         self.statuses.extend(other.statuses);
-        self.counts.extend(other.counts);
+        self.lists.extend(other.lists);
     }
 }
 
-/// One status and one count pair per asked branch, from the body of an answer to
+/// One status and one list per asked branch, from the body of an answer to
 /// [`status_query`]`(branches.len())`.
 ///
 /// The key of an entry is `branches[i]`, never a name taken from the answer. An answer that cannot
 /// be read whole — an `errors` entry (but a refused `statusCheckRollup`, whose checks read as none),
-/// a missing alias (`oc`/`mc` too), a `null` repository, a pull request state
+/// a missing alias (`m` too), a `null` repository, a pull request state
 /// this version does not know, JSON that does not parse — is [`ReadingFailure::Passing`], never a
 /// partial reading (FR-019). [`reading_failure`] names the real kind from the whole `gh` run.
 pub fn parse_status(body: &[u8], branches: &[String]) -> Result<StatusReading, ReadingFailure> {
@@ -624,7 +655,7 @@ pub fn parse_status(body: &[u8], branches: &[String]) -> Result<StatusReading, R
                 .ok_or(UNREADABLE)
         };
         let (open, recent) = (alias("o".into())?, alias("r".into())?);
-        let (open_forks, merged_forks) = (alias("oc".into())?, alias("mc".into())?);
+        let merged = alias("m".into())?;
         let pull_requests =
             |values: Vec<serde_json::Value>| -> Result<Vec<PrNode>, ReadingFailure> {
                 values
@@ -637,35 +668,41 @@ pub fn parse_status(body: &[u8], branches: &[String]) -> Result<StatusReading, R
                     .collect()
             };
         let (open, recent) = (pull_requests(open)?, pull_requests(recent)?);
+        let merged = merged
+            .into_iter()
+            .map(|value| serde_json::from_value::<RawMerged>(value).map_err(|_| UNREADABLE))
+            .collect::<Result<Vec<_>, _>>()?;
+        let (open_full, merged_full) = (open.len() >= PAGE_SIZE, merged.len() >= PAGE_SIZE);
         if let Some(status) = select_pull_request(&open, &recent).map_err(|_| UNREADABLE)? {
             reading.statuses.insert(branch.clone(), status);
         }
-        let (open, open_capped) = count_own(open_forks)?;
-        let (merged, merged_capped) = count_own(merged_forks)?;
-        reading.counts.insert(
+        // Forks are listed nowhere, the rule `select_pull_request` uses. The `o` and `r` nodes come
+        // first, so a number also on the merged page keeps its checks and review (P7).
+        let mut listed_prs = Vec::new();
+        for node in open.iter().chain(&recent) {
+            if !node.is_cross_repository {
+                listed_prs.push(listed(node).map_err(|_| UNREADABLE)?);
+            }
+        }
+        for node in merged {
+            if !node.is_cross_repository {
+                listed_prs.push(ListedPr {
+                    number: node.number,
+                    url: node.url,
+                    state: branch_pr_state(&node.state, node.is_draft).map_err(|_| UNREADABLE)?,
+                    checks: CheckStatus::None,
+                    review: ReviewState::None,
+                    conflict: false,
+                    created_at: node.created_at,
+                });
+            }
+        }
+        reading.lists.insert(
             branch.clone(),
-            PrCounts {
-                open,
-                merged,
-                open_capped,
-                merged_capped,
-            },
+            BranchPrList::new(listed_prs, open_full, merged_full),
         );
     }
     Ok(reading)
-}
-
-/// The pull requests of this repository among a count alias's nodes, and whether the page was full
-/// (so there may be more). Forks are not counted, the rule [`select_pull_request`] uses.
-fn count_own(nodes: Vec<serde_json::Value>) -> Result<(u8, bool), ReadingFailure> {
-    let capped = nodes.len() >= COUNT_PAGE_SIZE;
-    let mut own = 0u8;
-    for node in nodes {
-        let counted: RawCounted =
-            serde_json::from_value(node).map_err(|_| ReadingFailure::Passing)?;
-        own = own.saturating_add(u8::from(!counted.is_cross_repository));
-    }
-    Ok((own, capped))
 }
 
 /// How long nothing is sent when GitHub names no time (FR-024).
@@ -887,13 +924,15 @@ struct ListNode {
     commits: RawCommits,
 }
 
+/// Newest first by `createdAt`, then the higher number first (FR-004): `a` before `b` is `Less`.
+/// Shared by the Changes pane's list and the card's (feature 1123, FR-003).
+pub(crate) fn newest_first(a: (&str, u64), b: (&str, u64)) -> std::cmp::Ordering {
+    b.0.cmp(a.0).then(b.1.cmp(&a.1))
+}
+
 /// Newest first by `createdAt`, then the higher number first (FR-004).
 fn sort_newest_first(list: &mut [BranchPullRequest]) {
-    list.sort_by(|a, b| {
-        b.created_at
-            .cmp(&a.created_at)
-            .then(b.number.cmp(&a.number))
-    });
+    list.sort_by(|a, b| newest_first((&a.created_at, a.number), (&b.created_at, b.number)));
 }
 
 /// The pull requests of an answer's body to [`list_query`] over `branches`: forks dropped, the
@@ -929,13 +968,7 @@ pub fn parse_list(
             if node.is_cross_repository {
                 continue;
             }
-            let state = match (node.state.as_str(), node.is_draft) {
-                ("OPEN", true) => BranchPrState::Draft,
-                ("OPEN", false) => BranchPrState::Open,
-                ("MERGED", _) => BranchPrState::Merged,
-                ("CLOSED", _) => BranchPrState::Closed,
-                _ => return Err(UNREADABLE),
-            };
+            let state = branch_pr_state(&node.state, node.is_draft).map_err(|_| UNREADABLE)?;
             list.push(BranchPullRequest {
                 number: node.number,
                 title: node.title,
@@ -1178,11 +1211,11 @@ impl FakePullRequestSource {
         Self::default()
     }
 
-    /// Answer the next unanswered `read` with `statuses` and no counts.
+    /// Answer the next unanswered `read` with `statuses` and no lists.
     pub fn with_answer(self, statuses: BTreeMap<String, PullRequestStatus>) -> Self {
         self.with_reading(StatusReading {
             statuses,
-            counts: BTreeMap::new(),
+            lists: BTreeMap::new(),
         })
     }
 

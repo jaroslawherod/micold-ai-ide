@@ -8,6 +8,10 @@ line, the headers, an empty line, the body. Recorded on 2026-10-02 with `gh` 2.5
 the command of the first line. `$QUERY` is the document `pull_request::status_query(n)` returns for
 the `n` branches passed; `tests/pull_request_query.rs` pins it.
 
+Feature 1123 replaced the count pages `oc<i>`/`mc<i>` of these answers with the merged page `m<i>`
+the query now asks: its nodes are the merged ones of the same answer's `o<i>`/`r<i>` pages, reduced to
+the `merged` fragment's fields, so every branch keeps the open and merged counts it read before.
+
 After recording, three header lines were removed and nothing else was changed:
 `X-Github-Request-Id`, `X-Oauth-Scopes` and `X-Oauth-Client-Id`. `gh` prints no token and no
 `Authorization` header; `tests/pull_request_parse.rs` holds that for every file.
@@ -31,6 +35,7 @@ state on GitHub has moved on since; the files are what GitHub answered on the da
 | `pr_cross_repository.txt` | `cli/cli` | `patch-1` | ten pull requests whose head branch is a fork's `patch-1` (`isCrossRepository: true`), one of them open (#14373); none lives in `cli/cli` |
 | `pr_repo_not_found.txt` | `jaroslawherod/no-such-repository-040` | `main` | HTTP 200 with a `NOT_FOUND` error at `["repository"]`; `gh` exited 1 and wrote `gh: Could not resolve to a Repository with the name 'jaroslawherod/no-such-repository-040'.` to stderr |
 | `pr_checks_forbidden.txt` | `jaroslawherod/micold-pr-status-scratch` (private) | `pr-open-failing`, `no-pr` | recorded 2026-10-09 inside GitHub Actions with `GITHUB_TOKEN` and `permissions: pull-requests: read, contents: read`: #2 open with `statusCheckRollup: null` and two `FORBIDDEN` errors ("Resource not accessible by integration") at its paths; `gh` exited 1. Query as `status_query(2)`. |
+| `pr_four_states.txt` | `acme/widgets` (hand-written) | `feat-1123_y` | feature 1123: #14 open approved, #13 draft with a check running, #12 merged, #11 closed, distinct `createdAt`; written in the recorded layout from `pr_draft.txt`'s header block and node shape |
 | `pr_truncated.txt` | — | — | the first 2,000 bytes of `pr_three_branches.txt` (`head -c 2000`): an answer cut mid-body |
 
 ## Written from GitHub's documented answer

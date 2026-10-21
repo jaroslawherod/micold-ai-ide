@@ -8,7 +8,9 @@ use crate::features::overview::{MenuOrigin, Msg};
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
-use crate::ui::material::{Button, CardGrid, MenuItem, OverviewCard, Tooltip, Zoom};
+use crate::ui::material::{
+    Button, CardGrid, CardPrRow, MenuItem, OverviewCard, PrMark, Tooltip, Zoom,
+};
 use iced::advanced::widget::Operation;
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
@@ -20,6 +22,8 @@ use micold_core::overview::{
     CardState, CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
 };
 use micold_core::overview_expansion::{page_target, Event, Expansion};
+use micold_core::pr_list::StatusPhrase;
+use micold_core::pull_request::BranchPrState;
 use micold_core::session::{Session, SessionLocation};
 use micold_core::task_progress::{self, Progress, Source};
 use micold_core::theme::ColorScheme;
@@ -117,12 +121,15 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
             let location = model.location.clone();
             let menu_at = location.clone();
             let expansion = |event: Event| Message::Overview(Msg::Expansion(event));
+            let expanded = expanded_at == Some(index);
+            let (rows, more) = pr_rows(model, expanded);
             let card = OverviewCard::new(model, r)
                 .status(card_status(state, model))
+                .pull_requests(rows, more)
                 .id(card_id(&location))
                 .targeted(is_targeted(state, &location))
                 .menu_open(menu_open)
-                .expanded(expanded_at == Some(index))
+                .expanded(expanded)
                 .on_rest(expansion(Event::PointerRested(location.clone())))
                 .on_leave(expansion(Event::PointerLeft(location.clone())))
                 // Feature 1122: the issue link opens its address; a rest on it expands nothing
@@ -179,10 +186,12 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let mut grid = CardGrid::new(cards, r);
     if let Some(index) = expanded_at {
         // The twin: the same card collapsed, with no id or messages, measured for its row (U2).
-        grid = grid.expanded(
-            index,
-            OverviewCard::new(&models[index], r).status(card_status(state, &models[index])),
-        );
+        grid = grid.expanded(index, {
+            let (rows, more) = pr_rows(&models[index], false);
+            OverviewCard::new(&models[index], r)
+                .status(card_status(state, &models[index]))
+                .pull_requests(rows, more)
+        });
     }
     let grid = grid
         .on_scroll(Message::Overview(Msg::GridScrolled))
@@ -612,6 +621,12 @@ fn card(app: &State, place: &Place) -> CardModel {
         .and_then(|hooks| hooks.current());
     let activation = activation(&location, main, kind);
     let issue_link = issue_link_for(app, &location);
+    let prs = pr_display(&app.pr_status, branch_ref.clone());
+    // The rows come from the list the counts come from, and only while the counts show (R5).
+    let pull_requests = match (&prs, branch_ref) {
+        (PrDisplay::Counts(_), Some(branch)) => app.pr_status.lists.get(&branch).cloned(),
+        _ => None,
+    };
     CardModel {
         location,
         display_name,
@@ -623,7 +638,8 @@ fn card(app: &State, place: &Place) -> CardModel {
         title,
         progress,
         activity,
-        prs: pr_display(&app.pr_status, branch_ref),
+        prs,
+        pull_requests,
         activation,
         dir,
         issue_link,
@@ -652,6 +668,36 @@ fn progress(app: &State, location: &SessionLocation, state: CardState, pr_open: 
     }
 }
 
+/// The card's pull request rows and how many it does not draw (feature 1123, FR-002, FR-005): two
+/// on a collapsed card, all of them on the expanded one, none without a list.
+pub fn pr_rows(model: &CardModel, expanded: bool) -> (Vec<CardPrRow>, usize) {
+    let Some(list) = &model.pull_requests else {
+        return (Vec::new(), 0);
+    };
+    let (rows, more) = list.rows(expanded);
+    let rows = rows
+        .into_iter()
+        .map(|row| CardPrRow {
+            label: row.label,
+            mark: pr_mark(row.pill),
+            phrase: row.phrase.map(|phrase| phrase.label().to_string()),
+            failing: row.phrase == Some(StatusPhrase::ChecksFailing),
+        })
+        .collect();
+    (rows, more)
+}
+
+/// A listed pull request's state as the card's pill (research R9), beside the sidebar's
+/// `indicator_marks`: `ui::material` keeps no core pull request type.
+fn pr_mark(state: BranchPrState) -> PrMark {
+    match state {
+        BranchPrState::Open => PrMark::Open,
+        BranchPrState::Draft => PrMark::Draft,
+        BranchPrState::Merged => PrMark::Merged,
+        BranchPrState::Closed => PrMark::Closed,
+    }
+}
+
 /// The pull request reading for a branch: unknown while the reading is off or holds nothing (never
 /// read, or released), and for a location with no branch, such as Default (research R6, R14).
 fn pr_signal(pr: &crate::features::pr_status::State, branch: Option<&str>) -> PrSignal {
@@ -673,8 +719,8 @@ fn pr_display(pr: &crate::features::pr_status::State, branch: Option<String>) ->
     if !pr.enabled {
         return PrDisplay::Unknown(PrUnknown::Off);
     }
-    if let Some(counts) = pr.counts.get(&branch) {
-        return PrDisplay::Counts(*counts);
+    if let Some(list) = pr.lists.get(&branch) {
+        return PrDisplay::Counts(list.counts());
     }
     if pr.unreachable {
         return PrDisplay::Unknown(PrUnknown::Unreachable);

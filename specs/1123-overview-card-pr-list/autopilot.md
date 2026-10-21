@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: tasks
-- **Next step**: orchestrator opens the design PR "#1123: Overview cards: pull request list with state, linked — design" (label docs-not-needed) from pr-title.txt/pr-body.md in the scratchpad; gate green at 8191c30f; then M1
+- **Phase**: verify M1
+- **Next step**: M1 T001–T018 done; full gate, then reviews A (high) and B and the visual pass (T019) by the orchestrator, then pr
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1230 | design (spec, plan, tasks) | merged (rebase) | 9607e14b |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T019 | full | Cards show pull request rows (#N, state pill, status words), two collapsed with "+N more", all expanded; counts derive from the same list and read *10+* (43 requests per branch, was 44); snapshot `overview-pr-rows` | — | pending |
+| M1 | T001–T019 | full | Cards show pull request rows (#N, state pill, status words), two collapsed with "+N more", all expanded; counts derive from the same list and read *10+* (43 requests per branch, was 44); snapshot `overview-pr-rows` | — | in progress |
 | M2 | T020–T028 | full | A click on a row's number opens the pull request, no card activation | — | pending |
 | M3 | T029–T037 | full | Numbers are Tab stops with every 1122 link rule, arrows step from a number; Escape/menu hand-offs per link | — | pending |
 
@@ -39,6 +40,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D8 | tasks | Contract P1 count | contracts/reading.md P1 said "1 open (draft counted)" for four states; open + draft is 2, fixed to "2 open (the draft counted) · 1 merged" (plan text fix) | agent-resolved | data-model §2 `counts()` |
 | D9 | tasks | `speckit-analyze` | Not invokable in this cloud session (Skill: unknown skill); mechanical coverage check run instead (every FR-001–FR-017, SC-001–SC-007, K1–K6, K5a–K5g, Q1–Q2, P1–P7, U1–U7 named in tasks.md; all tasks in checklist format); the tasks review r1 is asked to apply the analyze checks too | agent-resolved | this unit |
 | D10 | tasks | Checklists closed | checklists/requirements.md: all 16 items ticked, none open; spec, plan and tasks reviews A all CLEAN (spec r2, plan r2, tasks r2) | agent-resolved | checklists/requirements.md |
+| D11 | M1 | Pill contrast (T011 plan finding) | The tonal `Tag` (accent text on `style::chip`) measured 4.41:1 for *Open* and *Merged* in light; the pill is drawn solid (`Tag::solid`, fill `PrMark::role`, word `PrMark::on_role`), which passes 4.5:1 in every card state, on the body and under the selected layer, both schemes; research R9 amended | agent-resolved | composition_contrast.rs `an_overview_cards_pull_request_rows_are_legible_on_its_body` |
+| D12 | M1 | Row placement | Rows sit after the activity and progress lines and above the counts line (R9 "between the counts line and the activity line"; the counts line is the card's last line) | agent-resolved | overview_card.rs U1 test |
 
 ## Review rounds
 

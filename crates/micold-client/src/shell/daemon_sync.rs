@@ -174,7 +174,7 @@ pub enum PendingOp {
         seq: u64,
         asked: Vec<String>,
         statuses: std::collections::BTreeMap<String, micold_core::pull_request::PullRequestStatus>,
-        counts: std::collections::BTreeMap<String, micold_core::overview::PrCounts>,
+        lists: std::collections::BTreeMap<String, micold_core::pr_list::BranchPrList>,
         started: u64,
     },
     /// A read-only `RepoRootQuery` — the open-project gate asked over the wire, because this
@@ -1534,7 +1534,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 seq,
                 asked,
                 statuses,
-                counts,
+                lists,
                 started,
             }) => {
                 let answers = match result {
@@ -1545,7 +1545,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     app,
                     seq,
                     asked,
-                    (statuses, counts),
+                    (statuses, lists),
                     started,
                     answers,
                 );
@@ -1765,14 +1765,14 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     seq,
                     asked,
                     statuses,
-                    counts,
+                    lists,
                     started,
                 }) => {
                     return crate::shell::pr_status::on_merged_branches(
                         app,
                         seq,
                         asked,
-                        (statuses, counts),
+                        (statuses, lists),
                         started,
                         None,
                     );

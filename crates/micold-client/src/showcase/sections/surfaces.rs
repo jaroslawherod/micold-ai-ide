@@ -640,6 +640,7 @@ fn card_model(
             open_capped: false,
             merged_capped: false,
         }),
+        pull_requests: None,
         progress: Default::default(),
         activity: None,
         activation: micold_core::overview::Activation::RevealOnly(
@@ -874,6 +875,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         .unscrolled(),
     ))
     .width(Length::Fill);
+    let pr_rows = pull_request_rows_pose(roles);
     let mut done = card_model("done", T::Other, S::Done, R::Merged);
     done.prs = micold_core::overview::PrDisplay::Hidden;
     // Unscrolled: the showcase page scrolls, and a grid with its own scrollable fills a height
@@ -918,9 +920,95 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             posed("expanded", expanded, roles),
             posed("issue link", issue_links, roles),
             posed("issue link, expanded", issue_expanded, roles),
+            posed("pull request rows", pr_rows, roles),
         ],
         Layout::FullWidth,
     )
+}
+
+/// Feature 1123 (FR-015, quickstart §B1, §B2): a card with three pull requests (open with *checks
+/// failing*, draft with *checks pending*, merged) collapsed with "+1 more" and expanded, and one
+/// with a long number and *changes requested* at the card widths 280, 380 and 480 px.
+fn pull_request_rows_pose<'a>(roles: Roles) -> Element<'a, Message> {
+    use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
+    use micold_core::pr_list::{BranchPrList, ListedPr};
+    use micold_core::pull_request::{BranchPrState as P, CheckStatus as C, ReviewState};
+    let listed = |number: u64, state: P, checks: C, review: ReviewState, at: &str| ListedPr {
+        number,
+        url: format!("https://github.com/o/r/pull/{number}"),
+        state,
+        checks,
+        review,
+        conflict: false,
+        created_at: at.to_string(),
+    };
+    let with = |name: &str, prs: Vec<ListedPr>| {
+        let mut m = card_model(name, T::Feature, S::NeedsAttention, R::ChecksFailing);
+        let list = BranchPrList::new(prs, false, false);
+        m.prs = micold_core::overview::PrDisplay::Counts(list.counts());
+        m.pull_requests = Some(list);
+        m
+    };
+    let three = with(
+        "feat-1123_x",
+        vec![
+            listed(
+                12,
+                P::Open,
+                C::Failing,
+                ReviewState::None,
+                "2026-10-03T00:00:00Z",
+            ),
+            listed(
+                11,
+                P::Draft,
+                C::Pending,
+                ReviewState::None,
+                "2026-10-02T00:00:00Z",
+            ),
+            listed(
+                9,
+                P::Merged,
+                C::None,
+                ReviewState::None,
+                "2026-10-01T00:00:00Z",
+            ),
+        ],
+    );
+    let drawn = |m: &micold_core::overview::CardModel, expanded: bool| {
+        let (rows, more) = crate::ui::overview::pr_rows(m, expanded);
+        material::OverviewCard::<Message>::new(m, roles)
+            .on_press(Message::NoOp)
+            .pull_requests(rows, more)
+            .expanded(expanded)
+    };
+    let fixed = |card: material::OverviewCard<'a, Message>, width: f32| -> Element<'a, Message> {
+        iced::widget::container(Element::from(card))
+            .width(Length::Fixed(width))
+            .into()
+    };
+    let long = with(
+        "feat-1123_long",
+        vec![listed(
+            1_123_456,
+            P::Open,
+            C::None,
+            ReviewState::ChangesRequested,
+            "2026-10-03T00:00:00Z",
+        )],
+    );
+    iced::widget::column![
+        iced::widget::row![
+            fixed(drawn(&three, false), 320.0),
+            fixed(drawn(&three, true), 320.0)
+        ]
+        .spacing(spacing::MD),
+        iced::widget::row([280.0, 380.0, 480.0].map(|w| fixed(drawn(&long, false), w)))
+            .spacing(spacing::MD)
+            .wrap(),
+    ]
+    .spacing(spacing::MD)
+    .into()
 }
 
 /// The width the zoom pose's drawer gives the grid when it retracts.

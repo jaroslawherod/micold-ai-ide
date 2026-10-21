@@ -2193,6 +2193,62 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: &[],
         },
+        // Feature 1123 (FR-017, SC-007, R10, G6): two cards with three pull requests each (open
+        // with *checks failing*, draft with *checks pending*, merged), the first collapsed with
+        // "+1 more" and the second expanded over the row below, so the rows pass the text-overflow and
+        // containment gates in both schemes.
+        CoveredState {
+            name: "overview-pr-rows",
+            build: || {
+                use micold_core::pr_list::{BranchPrList, ListedPr};
+                use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
+                let mut state = with_project();
+                // First in the list, so their cards share the first row and the expanded one lies
+                // over the cards of the row below, as the Overview draws it.
+                for (at, (dir, branch)) in [
+                    ("feat-1123_x", "feat/1123_x"),
+                    ("feat-1123_y", "feat/1123_y"),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    state.worktree.worktrees.insert(at, worktree(dir, branch));
+                }
+                let listed = |number: u64, state: BranchPrState, checks: CheckStatus| ListedPr {
+                    number,
+                    url: format!("https://github.com/o/r/pull/{number}"),
+                    state,
+                    checks,
+                    review: ReviewState::None,
+                    conflict: false,
+                    created_at: format!("2026-10-0{}T00:00:00Z", number % 9 + 1),
+                };
+                let three = || {
+                    BranchPrList::new(
+                        vec![
+                            listed(18, BranchPrState::Open, CheckStatus::Failing),
+                            listed(17, BranchPrState::Draft, CheckStatus::Pending),
+                            listed(16, BranchPrState::Merged, CheckStatus::None),
+                        ],
+                        false,
+                        false,
+                    )
+                };
+                state.pr_status.enabled = true;
+                state.pr_status.read_at = Some(100);
+                for branch in ["feat/1123_x", "feat/1123_y"] {
+                    state.pr_status.lists.insert(branch.to_string(), three());
+                }
+                state.overview.open = true;
+                let second = SessionLocation::Worktree("feat-1123_y".to_string());
+                state
+                    .overview
+                    .expansion
+                    .apply(micold_core::overview_expansion::Event::FocusGained(second));
+                StateUnderTest::new(state)
+            },
+            anchors: &[],
+        },
     ]
 }
 

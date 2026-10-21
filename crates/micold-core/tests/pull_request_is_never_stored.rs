@@ -12,16 +12,24 @@ fn declaration() -> String {
     declaration_of("PullRequestStatus")
 }
 
-/// The source text of the struct `name`: its attributes and its `pub struct` line.
+/// The source text of the struct `name` of `src/pull_request.rs`: its attributes and its `pub
+/// struct` line.
 fn declaration_of(name: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/pull_request.rs");
+    declaration_in("pull_request.rs", name)
+}
+
+/// The source text of the struct `name` of `src/<file>`: its attributes and its `pub struct` line.
+fn declaration_in(file: &str, name: &str) -> String {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join(file);
     let source =
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let lines: Vec<&str> = source.lines().collect();
     let at = lines
         .iter()
         .position(|line| line.starts_with(&format!("pub struct {name}")))
-        .unwrap_or_else(|| panic!("src/pull_request.rs declares `pub struct {name}`"));
+        .unwrap_or_else(|| panic!("src/{file} declares `pub struct {name}`"));
     // The attributes and doc comments directly above the struct belong to it.
     let first = lines[..at]
         .iter()
@@ -120,4 +128,32 @@ fn a_listed_pull_request_derives_no_serialisation_and_prints_no_title_or_address
             assert!(!output.contains(secret), "{secret} printed: {output}");
         }
     }
+}
+
+/// Feature 1123 K6: the card's list derives no serialisation, its pull request prints neither
+/// address nor title, and a row carries no address (FR-014).
+#[test]
+fn the_cards_list_derives_no_serialisation_and_a_row_holds_no_address() {
+    for (name, forbidden) in [
+        ("ListedPr", &["Serialize", "Deserialize", "Debug"][..]),
+        ("BranchPrList", &["Serialize", "Deserialize"][..]),
+        ("PrRow", &["Serialize", "Deserialize"][..]),
+    ] {
+        let declaration = declaration_in("pr_list.rs", name);
+        assert!(declaration.contains("#[derive("), "{name}: {declaration}");
+        for word in forbidden {
+            assert!(
+                !declaration.contains(word),
+                "{name} must not derive {word}:\n{declaration}"
+            );
+        }
+    }
+    // Every field of a row, and no more: an address field would not compile here.
+    let row = micold_core::pr_list::PrRow {
+        number: 4713,
+        label: "#4713".to_string(),
+        pill: BranchPrState::Open,
+        phrase: None,
+    };
+    assert!(!format!("{row:?}").contains("github.com"));
 }

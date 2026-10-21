@@ -60,6 +60,16 @@ impl PrMark {
         }
     }
 
+    /// The state in words, as an Overview card's pill reads it (feature 1123, FR-004).
+    pub fn word(self) -> &'static str {
+        match self {
+            PrMark::Open => "Open",
+            PrMark::Draft => "Draft",
+            PrMark::Merged => "Merged",
+            PrMark::Closed => "Closed",
+        }
+    }
+
     /// The role the glyph is drawn in when current. One function, so that the contrast gate
     /// measures the colour that is drawn.
     pub(crate) fn role(self, r: &Roles) -> Rgb {
@@ -67,6 +77,18 @@ impl PrMark {
             PrMark::Open => r.primary,
             PrMark::Draft | PrMark::Closed => r.on_surface_variant,
             PrMark::Merged => r.tertiary,
+        }
+    }
+}
+
+impl PrMark {
+    /// The label colour of a pill filled with [`Self::role`] (feature 1123, research R9): the fill's
+    /// own on-colour, so the word reads on the solid pill in every theme.
+    pub(crate) fn on_role(self, r: &Roles) -> Rgb {
+        match self {
+            PrMark::Open => r.on_primary,
+            PrMark::Draft | PrMark::Closed => r.surface,
+            PrMark::Merged => r.on_tertiary,
         }
     }
 }
@@ -153,6 +175,13 @@ mod tests {
     use iced::Size;
     use micold_core::theme::ColorScheme;
     use micold_core::tokens;
+
+    /// Feature 1123 (T011): each state has its pill word.
+    #[test]
+    fn each_mark_has_its_word() {
+        let words = [PrMark::Open, PrMark::Draft, PrMark::Merged, PrMark::Closed].map(PrMark::word);
+        assert_eq!(words, ["Open", "Draft", "Merged", "Closed"]);
+    }
 
     fn size_of(element: Element<'_, ()>) -> Size {
         super::super::test_support::size_of(element, Size::new(400.0, 100.0))

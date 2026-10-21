@@ -1152,6 +1152,7 @@ mod tests {
             ),
             dir: std::path::PathBuf::from("/repo"),
             issue_link: None,
+            pull_requests: None,
         }
     }
 

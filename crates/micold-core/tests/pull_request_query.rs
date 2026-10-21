@@ -7,9 +7,9 @@
 use std::path::PathBuf;
 
 use micold_core::github::GithubRepo;
-use micold_core::pull_request::{status_args, status_query};
+use micold_core::pull_request::{status_args, status_query, BRANCHES_PER_REQUEST};
 
-const QUERY_1: &str = "query($owner: String!, $name: String!, $b0: String!) { repository(owner: $owner, name: $name) { o0: pullRequests(headRefName: $b0, states: OPEN, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } r0: pullRequests(headRefName: $b0, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } oc0: pullRequests(headRefName: $b0, states: OPEN, first: 100) { nodes { isCrossRepository } } mc0: pullRequests(headRefName: $b0, states: MERGED, first: 100) { nodes { isCrossRepository } } } rateLimit { remaining resetAt } } fragment pr on PullRequest { number title url state isDraft createdAt isCrossRepository headRefOid reviewDecision mergeable commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 1) { checkRunCount checkRunCountsByState { state count } statusContextCount statusContextCountsByState { state count } } } } } } }";
+const QUERY_1: &str = "query($owner: String!, $name: String!, $b0: String!) { repository(owner: $owner, name: $name) { o0: pullRequests(headRefName: $b0, states: OPEN, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } r0: pullRequests(headRefName: $b0, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } m0: pullRequests(headRefName: $b0, states: MERGED, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...merged } } } rateLimit { remaining resetAt } } fragment pr on PullRequest { number title url state isDraft createdAt isCrossRepository headRefOid reviewDecision mergeable commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 1) { checkRunCount checkRunCountsByState { state count } statusContextCount statusContextCountsByState { state count } } } } } } } fragment merged on PullRequest { number url state isDraft createdAt isCrossRepository }";
 
 fn repo() -> GithubRepo {
     GithubRepo::from_remote_url("https://github.com/acme/widgets").expect("a github.com url")
@@ -31,8 +31,7 @@ fn u2_query_for_one_branch_is_pinned() {
     for part in [
         "o0:",
         "r0:",
-        "oc0:",
-        "mc0:",
+        "m0:",
         "rateLimit { remaining resetAt }",
         "fragment pr on PullRequest",
         "checkRunCountsByState",
@@ -169,4 +168,84 @@ fn u6_args_are_exactly_the_contract() {
             "U6: no credential in {a:?} (FR-028)"
         );
     }
+}
+
+/// Feature 1123 Q1: every branch has a merged page `m<i>`, the 100-node count pages are gone, and
+/// no branch name is in the document.
+#[test]
+fn q1_the_query_lists_merged_pull_requests_instead_of_counting_them() {
+    let n = BRANCHES_PER_REQUEST;
+    let q = status_query(n);
+    for i in 0..n {
+        assert!(
+            q.contains(&format!(" m{i}: ")),
+            "Q1: the document must hold m{i}"
+        );
+        for gone in [format!(" oc{i}: "), format!(" mc{i}: ")] {
+            assert!(
+                !q.contains(&gone),
+                "Q1: the document must not hold {gone:?}"
+            );
+        }
+    }
+    let branches = strings(&["zq-merged-alpha", "zq-merged-beta"]);
+    let args = status_args(&repo(), &branches);
+    let query = &args[args.iter().position(|a| a == "-f").expect("-f") + 1];
+    for branch in &branches {
+        assert!(
+            !query.contains(branch.as_str()),
+            "Q1: {branch} must travel as a variable"
+        );
+    }
+}
+
+/// Where the first alias after the start of `text` (`o<i>:`, `r<i>:` or `m<i>:`) begins.
+fn next_alias(text: &str) -> Option<usize> {
+    text.match_indices(' ').map(|(at, _)| at + 1).find(|&at| {
+        let word = text[at..].split(' ').next().unwrap_or_default();
+        let digits = word
+            .get(1..word.len().saturating_sub(1))
+            .unwrap_or_default();
+        word.ends_with(':')
+            && matches!(word.as_bytes()[0], b'o' | b'r' | b'm')
+            && !digits.is_empty()
+            && digits.bytes().all(|c| c.is_ascii_digit())
+    })
+}
+
+/// Feature 1123 Q2: the merged page asks no nested connection, so it costs one request (FR-008,
+/// research R2).
+#[test]
+fn q2_the_merged_page_asks_no_nested_connection() {
+    let q = status_query(3);
+    for i in 0..3 {
+        let start = q.find(&format!(" m{i}: ")).expect("m alias");
+        let rest = &q[start + 1..];
+        let end = next_alias(rest).unwrap_or_else(|| rest.find("rateLimit").expect("rateLimit"));
+        let page = &rest[..end];
+        assert!(
+            !page.contains("commits("),
+            "Q2: m{i} must not ask commits: {page}"
+        );
+        assert!(
+            !page.contains("...pr "),
+            "Q2: m{i} must not spread pr: {page}"
+        );
+        assert!(
+            page.contains("...merged"),
+            "Q2: m{i} must spread merged: {page}"
+        );
+    }
+    let fragment = &q[q
+        .find("fragment merged on PullRequest")
+        .expect("merged fragment")..];
+    let fragment = &fragment[..=fragment.find('}').expect("end of fragment")];
+    assert_eq!(
+        fragment,
+        "fragment merged on PullRequest { number url state isDraft createdAt isCrossRepository }"
+    );
+    assert!(
+        !fragment.contains('('),
+        "Q2: the merged fragment asks no argument"
+    );
 }

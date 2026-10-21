@@ -78,7 +78,7 @@ The body below it shows:
 - its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
 - when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
 - a **progress row**, when there is progress to show (see [Feature progress](#feature-progress));
-- for a card with a branch, its **pull request counts** (see [Pull request counts](#pull-request-counts)).
+- for a card with a branch, its **pull requests**, one row each, and their **counts** (see [Pull requests](#pull-requests)).
 
 A row with nothing to say is not shown.
 
@@ -146,18 +146,26 @@ Without hooks, with a session that has reported nothing yet, or while the window
 
 The todo text and prompt stay on your machine: the hooks report them to the app's own service, which hands them to the window over the same local connection. They are held in memory only, never written to a log or to the saved session list, and sent nowhere else.
 
-## Pull request counts
+## Pull requests
 
-The row shows the branch's open and merged pull requests, such as *1 open · 2 merged*; drafts count as open, and a count of 100 or more reads *100+*. A count of 0 is left out (*1 open*, *2 merged*), and with both at 0 the card has no pull request row.
+A card lists its branch's pull requests, one row each:
 
-The counts come from the pull request status the app already reads; the Overview starts no reading of its own. When they cannot be read, the card shows a dash (*—*) and its tooltip says why:
+- the **number**, such as *#12*;
+- a **pill** with the state: *Open*, *Draft*, *Merged* or *Closed*;
+- for an open or draft pull request, one **status phrase**, the first that applies of *checks failing*, *changes requested*, *merge conflict*, *checks pending*, *approved* and *checks passing*. *checks failing* is drawn in the error colour. A pull request with no checks and no review decision shows no phrase, and a merged or closed one never shows one.
+
+Open and draft pull requests come first, then merged and closed ones, each group newest first. A collapsed card shows the first **two** rows and, when there are more, a line such as *+2 more*; the expanded card (see [Reading a card in full](#reading-a-card-in-full)) shows all of them. A narrow card shortens the phrase with an ellipsis (…) and keeps the number and the pill whole.
+
+Below the rows, the counts line shows the branch's open and merged pull requests, such as *1 open · 2 merged*; drafts count as open. The counts come from the pull requests the reading lists: the newest ten open and the newest ten merged ones. A count of 10 or more reads *10+*, and when the newest ten include a fork's pull request the count reads the branch's own ones with *+* (*9+*). A count of 0 is left out (*1 open*, *2 merged*), and with both at 0 the card has no counts line. A branch with no pull request shows no row.
+
+The rows and counts come from the pull request status the app already reads; the Overview starts no reading of its own, and showing them asks GitHub for nothing. A new reading changes the rows without a restart. Rows and counts stay through a rate-limit pause and a reading that fails for a passing reason, such as a moment offline. When they cannot be read, the card shows a dash (*—*) instead, with no rows, and its tooltip says why:
 
 - *pull request status is off*: the pull request status setting is off;
 - *GitHub is not reachable*: the last reading could not reach GitHub;
 - *rate-limited until HH:MM*: GitHub asked the app to wait, and readings resume then;
 - *not read yet*: no reading has covered the branch yet.
 
-Default, a detached HEAD and an orphan have no branch, so they show no counts. An open pull request that cannot merge because of a conflict makes its card **Needs attention** with the reason *merge conflict*.
+Default, a detached HEAD and an orphan have no branch, so they show no pull requests and no counts. An open pull request that cannot merge because of a conflict makes its card **Needs attention** with the reason *merge conflict*.
 
 | Icon | Type | Meaning |
 |------|------|---------|
