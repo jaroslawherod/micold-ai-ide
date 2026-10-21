@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: plan amend (D4)
-- **Next step**: D4 amendment (per-project Jira base URL) committed; review A d4 r1 of the amendment (rubric plan.md, session model) pending, prompt in the scratchpad's 1122-prompt-review-a-d4-r1.md. Then M2 unit (the amended docs ride along with M2's PR).
+- **Next step**: review A d4 r2 (sonnet, fix diff of tasks.md T041/T045) pending, prompt in the scratchpad's 1122-prompt-review-a-d4-r2.md. If clean: M2 unit (the amended docs ride along with M2's PR).
 
 ## Pull requests
 
@@ -68,7 +68,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Visual pass M1 | 4 | 4f755bbccbc4c6ea9031f7da1a821289a582dc9a:d9b86ce519f5531d2d490c5c71e0f710e3065a31 | PASS (sonnet, C3 only): ring clear of the glyphs in light/dark x 1.0/2.0; observation: the horizontal gutter looks thinner than the vertical one (the line box adds vertical room), addressed by the r5 fix's wider gutter. Evidence `visual-pass/m1/*-3-r4-*.png` (40 PNGs) |
 | Full gate M1 | 6 | d8d84697 | RED once on the known untouched flake (`micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`, as gate r1); rerun GREEN |
 | Review A M1 | 6 | 26eeeb1fc8c8cccda3ad3c1adc715ae6fe1e7d25:d8d8469762d85b03bea08e4c1fcc97e0d0a34bf8 | CLEAN (sonnet, r5 fix diff) |
-| Review A plan amend D4 | 1 | 1a021e7be429ef5efa89f02f4283924163533d8b:0164f37579efae69cade704acdcc2f6633307cab | pending (session model, rubric plan.md; prompt 1122-prompt-review-a-d4-r1.md) |
+| Review A plan amend D4 | 1 | 1a021e7be429ef5efa89f02f4283924163533d8b:0164f37579efae69cade704acdcc2f6633307cab | CHANGES (session model): F1 MAJOR the *Project forgotten* behaviour (spec edge cases, data-model) had no test task or quickstart step: fixed, T041 gains the forget/re-add case (`ProjectAdd` A, set, `ProjectRemove` A, entry still in `stored(dir)` and the next `DaemonSettings`, `ProjectAdd` A again resolves it by `connection_key`). F2 MINOR T045 did not say `JiraDraft::follow` (settings.rs:510) needs the map: fixed, T045 names the `base_urls: &BTreeMap<String, JiraBaseUrl>` parameter and its callers (persist.rs:288, daemon_sync.rs:1073, main_tests.rs:3270, settings.rs tests). F3 MINOR the moved `set` helper (jira_setting.rs:45) cannot send a base URL: fixed, T041 says `set` gains a `jira_base_url` argument, existing callers pass `None` |
+| Review A plan amend D4 | 2 | c627583d8ac12b7a3566014f16b20b741c372013:ae2b013038751aac9eeaf86abab1620426bb12d9 | pending (sonnet, tasks.md fix diff; prompt 1122-prompt-review-a-d4-r2.md) |
 
 ## Declined review findings
 
@@ -77,7 +78,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-Plan amend D4 unit (context over 150k at its end). Done: D3 recorded as owner-confirmed; D4 amendment committed and pushed (bd07b5e7): spec, research R3/R4/R12, data-model, contracts wire/issue-link/card-link, plan, quickstart, tasks T039–T050. Next: review A d4 r1 (snapshot in *Review rounds*); a fresh unit acts on its findings per review-rounds.md (fix, re-review on sonnet with `review-snapshot.sh diff`), then the M2 unit. No open findings yet; no PR.
+Plan amend D4 part 2: review A d4 r1 findings F1–F3 fixed in tasks.md (T041, T045); r2 pending. No PR.
 
 ## Open escalation
 
