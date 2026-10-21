@@ -123,7 +123,7 @@ per block `content_block_start {index, content_block}` → `content_block_delta`
   first such event, in its place, and counting thereafter). A `StreamDelta` with a parent is
   absorbed: neither shown nor counted, and it never touches the main stream state. The events stay
   in the transcript's event history, and `Transcript::subagent_events(tool_use_id)` returns them in
-  order. The builder is scoped: `Transcript::new(Scope::Main)` treats events without a parent as
+  order. The builder is scoped: `Transcript::new()` (`Scope::Main`) treats events without a parent as
   top-level (this feature), and `Transcript::nested(tool_use_id)` (`Scope::Subagent(id)`) treats
   events whose parent is `id` as top-level — parented deltas included, so a sub-agent's stream runs
   through the same `stream.rs` — and everything else as foreign. #944 nests a sub-agent by building
