@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M4 implement
-- **Next step**: M4 review A + gate, review B, full gate, PR
+- **Phase**: M4 PR
+- **Next step**: orchestrator opens the M4 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M5
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | #1201 | merged |
 | M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | #1204 | merged |
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | #1208 | merged |
-| M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | implemented (T039–T042 ticked); TDD red: core tests failed to compile (no `permission_mode`), daemon launch tests failed with the launch still Default |
+| M4 | T039–T042 | full | Daemon: mode persisted, created, launched | pending (orchestrator opens) | rebased onto origin/main f1d54d86; gate green at ed07ed27 (scripts/gate.sh, 2nd run; 1st hit the known `attention_error_notice` flake, 5/5 isolated passes), reviews clean; TDD red: core tests failed to compile (no `permission_mode`), daemon launch tests failed with the launch still Default |
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | — | pending |
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | pending |
 | M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1) | — | pending |
@@ -73,6 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 (conformance, sonnet) | 1 | 09a697c663e494eb41ad33a7fad9e966d9108097:69239a2b67091c928e63a2cdb59f70e7d3154e19 | CLEAN; Verify `DAEMON_EXIT=0` (13, 14 passed), `CORE_EXIT=0` (8, 15, 54); 2 MINOR (F1 hang-up withdrawal untested — test added, cycle 4; F2 = A's F1, fixed) |
 | Review A M3 (code-review high) | 1 | edf8b82347414b400af69e760bf7e3b7553198b0:275254ee26bcb14aaa85d5153e121405c7ada690 | CLEAN: 3 MINOR (F1 activity applied off the registry lock may land out of order — declined; F2 a late waiter withdraws a next turn's requests — declined; F3 a hang-up applies no activity — declined, per R8) |
 | Review B M3 (conformance, sonnet) | 1 | edf8b82347414b400af69e760bf7e3b7553198b0:275254ee26bcb14aaa85d5153e121405c7ada690 | CLEAN; Verify 23 passed, 0 failed; 1 MINOR (F1 ledger 17 "before the kill" — declined) |
+| Review A M4 (code-review high) | 1 | f8700e0a018d6a318ee5f4a40732448129c58b9c:3196a9e7f9874a86042c6a3a1ed57e42270b8ef0 | CLEAN: 1 MINOR (F1 `stop_session` called on the async test thread — declined). Its first two dispatches had every Bash and scratchpad Read refused and returned an empty CLEAN; the counted round had the diff inline |
+| Review B M4 (conformance, sonnet) | 1 | f8700e0a018d6a318ee5f4a40732448129c58b9c:3196a9e7f9874a86042c6a3a1ed57e42270b8ef0 | CLEAN: 2 MINOR (F1 cycle log uncommitted — fixed, committed; F2 Verify not run, its `cargo test` refused — the unit ran Verify: 5 passed; 8 and 39 passed) |
 
 ## Declined review findings
 
@@ -89,6 +91,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | Review A r1 | F2 MINOR: a waiter woken late by a turn end could withdraw a next turn's requests | The next turn's request needs a user message and a new tool call after the `result`, while the waiter's wake-up is immediate on the runtime; turn generations would add state for a window no run can hit in practice |
 | M3 | Review A r1 | F3 MINOR: an agent hang-up withdraws with no activity change | R8 and T036: "a withdrawal applies nothing" — the turn's own events decide the activity |
 | M3 | Review B r1 | F1 MINOR: ledger 17 says stop withdraws before the kill, the code after | `stop_session_gated` only takes the live entry out of the map under the lock; `end_processes`, which kills, runs after `withdraw_session_prompts` |
+| M4 | Review A r1 | F1 MINOR: `each_mode_on_create_is_listed_launched_and_kept_across_a_restart` calls `stop_session` on the async test thread | Taste: `structured_resume.rs` does the same in its `multi_thread` tests, and the stand-in exits at once on stdin close |
 
 ## Handover
 
@@ -100,6 +103,11 @@ None.
 
 ## Follow-ups not done
 
-- M2's first final gate failed once in `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (`left: []`, no notice; untouched by #942); 5 of 5 isolated runs and the rerun gate passed. A load flake to watch.
+- M2's first final gate failed once in `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (`left: []`, no notice; untouched by #942); 5 of 5 isolated runs and the rerun gate passed. A load flake to watch. M4's final gate hit it once more (5 of 5 isolated runs and the rerun passed).
 
 - Local builds in this cloud container fill the disk with the default `line-tables-only` debug info (the first M1 gate died at `ld` Bus error, 0 bytes free); M1's green gate ran with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` after `rm -rf target-shared/debug`.
+
+- `claude -p --agent autopilot-reviewer` in this container (workspace not trusted, so the project's
+  `permissions.allow` is ignored) refuses every Bash call and every Read outside tracked files,
+  and still answers `VERDICT: CLEAN`. Check `permission_denials` in `--output-format json`; M4's
+  review A got a real round only with the brief and diffs inline in its prompt.
