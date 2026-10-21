@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: plan
-- **Next step**: tasks unit (plan review A done: round 2 CLEAN). D3, D4 still defaults awaiting the owner; the plan follows them (R2 reads the repo regardless of the GitHub switch, so a D3 change touches only `issue_link` K2).
+- **Phase**: tasks
+- **Next step**: tasks unit: speckit-analyze + review A of tasks.md (round 1) requested from the orchestrator; then close checklists, specs-only gate, design PR. D3, D4 still defaults awaiting the owner; tasks tag the affected tasks `(D3)` / `(D4)`.
 
 ## Pull requests
 
@@ -21,6 +21,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | — | planned |
+| M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | — | planned |
+| M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | — | planned |
+| M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | — | planned |
+| M5 | T039–T050 | full | Jira base URL setting (wire 58) and Jira issue links | — | planned |
+
+Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and well over 800 lines, and each part has its own deliverable (core + `TextLink`; the card in the showcase; the app). M1 and M2 are showcase-only (`docs-not-needed`). M2 is 10 tasks: `ControlOverlay`, the card and the grid change together (one routing decision, R6–R8) and have no smaller observable split. US3 (M4) goes before US2 (M5), both P2, because it completes the keyboard path of the link M3 puts in the app (rule 6); interim behaviour between M3 and M4 is in tasks.md *Notes*. Polish T051–T052 is code-free: close unit.
 
 ## Decisions
 
