@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1156 | M1 expand hidden lines | merged | 25e95c33ff20a6a07f72abaa4d0aad4aee683cd2 |
 | #1162 | M2 whole-file toggle | merged | 8109df50677a9a0635067277aa0df3137e3c3c48 |
 | #1215 | M3 pull request head version | merged | a608e0fcb7713377ed9abe3426b958462b91a9db |
+| #1221 | M4 pick revealed lines | open | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | Expand hidden lines in a diff (MVP) | #1156 | merged |
 | M2 | T018–T022 | light | Whole-file toggle | #1162 | merged |
 | M3 | T023–T031 | full | Pull request head version | #1215 | merged |
-| M4 | T032–T035 | light | Pick revealed lines | (pending PR) | PR open |
+| M4 | T032–T035 | light | Pick revealed lines | #1221 | PR open |
 | M5 | T036–T046 | full | Browse repository files | | pending |
 | M6 | T047–T053 | full | Browse at the PR head | | pending |
 | M7 | T054–T062 | full | Follow references from the diff | | pending |
