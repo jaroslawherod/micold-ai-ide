@@ -3,7 +3,7 @@
 //! and answers a matching later call allow without asking.
 
 use super::request::{PromptCall, RequestKind};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
 /// A session's always-allow rule: a later call of the same tool with the same matched input.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,7 +14,14 @@ pub struct AllowRule {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Matcher {
-    /// The input field `key` holds exactly `value` (`Bash` `command`, a file tool's path).
+    /// A shell tool's `command` is exactly `command`, and every other input field but the
+    /// cosmetic ones ([`COSMETIC`]) equals `rest`, so a later call cannot run the same command
+    /// with more (`dangerouslyDisableSandbox`, `run_in_background`) than the user saw.
+    Command {
+        command: String,
+        rest: Map<String, Value>,
+    },
+    /// The input field `key` holds exactly `value` (a file tool's path).
     Field { key: &'static str, value: String },
     /// A `WebFetch` URL on this host (lower-cased).
     Host(String),
@@ -24,10 +31,13 @@ enum Matcher {
     AnyInput,
 }
 
+/// The fields of a shell tool's input that change nothing it is allowed to do.
+const COSMETIC: [&str; 2] = ["description", "timeout"];
+
 /// The input field a tool's rule matches on, for the tools that have one.
 fn field_of(tool: &str) -> Option<&'static str> {
     match tool {
-        "Bash" => Some("command"),
+        "Bash" | "PowerShell" => Some("command"),
         "Edit" | "MultiEdit" | "Write" => Some("file_path"),
         "NotebookEdit" => Some("notebook_path"),
         "WebFetch" => Some("url"),
@@ -52,6 +62,10 @@ impl AllowRule {
                 Some(host) => Matcher::Host(host),
                 None => Matcher::Url(value),
             },
+            "command" => Matcher::Command {
+                command: value,
+                rest: rest_of(&call.input),
+            },
             key => Matcher::Field { key, value },
         };
         Some(AllowRule { tool, matcher })
@@ -72,6 +86,9 @@ impl AllowRule {
         }
         let text = |key: &str| call.input.get(key).and_then(Value::as_str);
         match &self.matcher {
+            Matcher::Command { command, rest } => {
+                text("command") == Some(command.as_str()) && &rest_of(&call.input) == rest
+            }
             Matcher::Field { key, value } => text(key) == Some(value.as_str()),
             Matcher::Host(host) => text("url").and_then(host_of).as_deref() == Some(host.as_str()),
             Matcher::Url(url) => text("url") == Some(url.as_str()),
@@ -82,34 +99,42 @@ impl AllowRule {
     /// The rule as the user is shown it: `Bash: "npm test"`.
     pub fn describe(&self) -> String {
         match &self.matcher {
-            Matcher::Field { value, .. } | Matcher::Url(value) => {
-                format!("{}: \"{value}\"", self.tool)
-            }
+            Matcher::Command { command: value, .. }
+            | Matcher::Field { value, .. }
+            | Matcher::Url(value) => format!("{}: \"{value}\"", self.tool),
             Matcher::Host(host) => format!("{}: any address on {host}", self.tool),
             Matcher::AnyInput => format!("{}: any input", self.tool),
         }
     }
 
     /// The rule in the CLI's `updatedPermissions` syntax, for the answer's `addRules` (research
-    /// R5, R9), or `None` where the CLI's syntax would match more than this rule: a command or path
-    /// holding a pattern character, or a file path, whose CLI rule is a path pattern relative to a
-    /// settings root, or an exact URL, which the CLI cannot name. The daemon's own rule still
-    /// applies either way.
+    /// R5, R9), or `None` where the CLI's syntax would match more than this rule: a command holding
+    /// a pattern character or approved with other input fields (the CLI's rule names the command
+    /// only), a file path, whose CLI rule is a path pattern relative to a settings root, or an
+    /// exact URL, which the CLI cannot name. The daemon's own rule still applies either way.
     pub fn cli_rule(&self) -> Option<Value> {
         match &self.matcher {
-            Matcher::Field {
-                key: "command",
-                value,
-            } if !value.contains(['*', '?', '[']) => {
-                Some(json!({"toolName": self.tool, "ruleContent": value}))
+            Matcher::Command { command, rest }
+                if rest.is_empty() && !command.contains(['*', '?', '[']) =>
+            {
+                Some(json!({"toolName": self.tool, "ruleContent": command}))
             }
             Matcher::Host(host) => {
                 Some(json!({"toolName": self.tool, "ruleContent": format!("domain:{host}")}))
             }
             Matcher::AnyInput => Some(json!({"toolName": self.tool})),
-            Matcher::Field { .. } | Matcher::Url(_) => None,
+            Matcher::Command { .. } | Matcher::Field { .. } | Matcher::Url(_) => None,
         }
     }
+}
+
+/// A shell call's input without its `command` and cosmetic fields.
+fn rest_of(input: &Map<String, Value>) -> Map<String, Value> {
+    input
+        .iter()
+        .filter(|(key, _)| key.as_str() != "command" && !COSMETIC.contains(&key.as_str()))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect()
 }
 
 /// The host of `url`: the text between `://` and the next `/`, `?` or `#`, lower-cased; `None`
@@ -146,6 +171,41 @@ mod tests {
         assert!(!npm.matches(&call("Bash", json!({"command": "npm test -- --all"}))));
         assert!(!npm.matches(&call("Bash", json!({}))));
         assert_eq!(npm.describe(), "Bash: \"npm test\"");
+    }
+
+    #[test]
+    fn a_shell_rule_never_allows_the_command_with_more_than_the_user_saw() {
+        for tool in ["Bash", "PowerShell"] {
+            let plain = rule(
+                tool,
+                json!({"command": "make", "description": "Build", "timeout": 5}),
+            );
+            assert!(plain.matches(&call(tool, json!({"command": "make", "timeout": 60000}))));
+            for wider in [
+                json!({"command": "make", "dangerouslyDisableSandbox": true}),
+                json!({"command": "make", "run_in_background": true}),
+                json!({"command": "make", "something_new": 1}),
+            ] {
+                assert!(
+                    !plain.matches(&call(tool, wider.clone())),
+                    "{tool}: {wider}"
+                );
+            }
+            let unsandboxed = rule(
+                tool,
+                json!({"command": "make", "dangerouslyDisableSandbox": true}),
+            );
+            assert!(unsandboxed.matches(&call(
+                tool,
+                json!({"command": "make", "dangerouslyDisableSandbox": true, "description": "x"})
+            )));
+            assert!(!unsandboxed.matches(&call(tool, json!({"command": "make"}))));
+            assert_eq!(
+                unsandboxed.cli_rule(),
+                None,
+                "the CLI's rule would name the command only"
+            );
+        }
     }
 
     #[test]

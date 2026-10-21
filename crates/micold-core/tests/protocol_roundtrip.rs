@@ -888,8 +888,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_57() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 57);
+fn the_protocol_version_is_58() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 58);
 }
 
 /// Two merged branches and the last commit of each one's pull request (feature 040).

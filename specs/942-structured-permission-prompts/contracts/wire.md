@@ -1,7 +1,8 @@
 # Contract: client ↔ daemon additions
 
 Every new field is `#[serde(default)]`; control messages stay JSON. `PROTOCOL_VERSION` is bumped by
-one in each milestone that changes the wire (M2, M4, M5), each merging to `main` on its own.
+one in each milestone that changes the wire (M1: the `StructuredEvent` additions, 57 → 58; M2, M4,
+M5), each merging to `main` on its own.
 
 ## Changed (M4)
 
