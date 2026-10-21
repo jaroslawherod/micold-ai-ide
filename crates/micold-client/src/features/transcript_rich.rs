@@ -29,6 +29,7 @@ pub struct Ticket(u64);
 impl Ticket {
     /// A ticket no cache issued, for a copy state posed by the gallery or a test: the cache's own
     /// tickets come from [`State::copy`] alone.
+    #[doc(hidden)]
     pub const fn posed(n: u64) -> Self {
         Self(n)
     }

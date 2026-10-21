@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M4
-- **Next step**: handover — scoped gate + review A, review B + visual pass, full gate, push (see Handover)
+- **Next step**: M4 full gate, push, PR (orchestrator opens it)
 
 ## Pull requests
 
@@ -59,6 +59,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 (conformance, sonnet) | 1 | 91f29aa19fb9dce4c7014317aa0c19aa654c0b06:d3939ee9054b6be493d62dcb528ed054caa5b87d | CLEAN: 2 MINOR (lock churn, declined; CRLF-only note unpinned in test, fixed: pinned `None`). Verify: edit_diff 15 passed |
 | Review A M3 (code-review high) | 1 | 44fb4d110ddc2e383c9fc7dacf9676ecb10dd479:59cb951d0d56f3b805f85c3d82ad77e3a993a0d0 | CLEAN: 3 MINOR — settle cloned+hashed every settled block per delta (fixed: hashed in place); unbounded parallel highlight tasks (fixed: one blocking task per batch, jobs in turn); stale late spans (declined) |
 | Review B M3 (conformance, sonnet) | 1 | 151e2ec884c299f9a0f025d2ccf1a268dcb973d0:a7ce3e85dce237449f36f8f13e3e2af35a07526d | CLEAN: 1 MINOR (T019/T020 test-after; T020 red shown afterwards and logged, T019 left disclosed). Visual pass: not applicable (still `PLAIN`) |
+| Review A M4 (code-review high) | 1 | 2df6462e12a4d095de132ab6078cddffe1de467a:9478b70f8fb881a801b067a833257004120e7349 | 10 findings: a link split across styles gave one stop per span (fixed: consecutive spans of one link collapse); fixed 28 dp list gutter overflowed by long numbers (fixed: `number_gutter`); `Ticket::posed` public (fixed: `#[doc(hidden)]`); paragraph-wide focus ring (declined, follow-up); per-view clones, inert-link colour, pad counts chars, `ink` duplication, marker gate poses (MINOR, declined) |
+| Review A M4 (code-review, sonnet) | 2 | 20dc1895118dfc8c4f13d0aaa25f5a488aacca72:9478b70f8fb881a801b067a833257004120e7349 | CLEAN |
+| Review B M4 (conformance, sonnet) | 1 | 20dc1895118dfc8c4f13d0aaa25f5a488aacca72:9478b70f8fb881a801b067a833257004120e7349 | CLEAN: 1 MINOR (CodeBlock/LinkText test-after and T026 never red; disclosed in the cycle log, accepted) |
+| Visual pass M4 (showcase, tiny-skia on Xvfb) | 1 | — | 1 finding fixed: InlineDiff's "No newline at end" was drawn as a monospace `+` line, indistinguishable from a file line (now a marker plus a caption); MarkdownView, CodeBlock (idle/copied/failed/large), LinkText, the Edit card's `+12 −3` meta and InlineDiff in light and dark otherwise as specified; italic is drawn upright (no italic face bundled: follow-up). Evidence: `visual-pass/m4-*.png` |
 
 ## Declined review findings
 
@@ -66,6 +70,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Review A M1 #8 (`code_blocks` builds a Vec, `code` scans): MINOR; ids are few per reply and the renderer reads them from M3's cache, not per frame.
 - Review A M1 #9 (lone trailing `\r` read as a complete line ending): a lone `\r` is a CommonMark line ending; the `\n` that may follow only completes the same CRLF ending, so the line before it is complete either way.
 - Review A/B M2 (Cargo.lock re-picks Windows-only `windows-sys`/`getrandom` edges): `cargo update -p similar --precise` cannot run before `similar` is in the lock, and `cargo update --workspace` from origin/main's lock gives the same result; hand-editing the lock is not allowed. Windows-only edges, no effect on the Linux/macOS builds.
+- Review A M4 F2 (LinkText's focus ring wraps the paragraph, so with several links the focused one is not identifiable): a per-link ring needs a custom text widget drawing from `Paragraph::span_bounds` (iced `rich_text` exposes none); out of M4's tasks, recorded under *Follow-ups not done*.
+- Review A M4 F3/F7 (`MarkdownView::view` and the `spans` builders clone spans and settled blocks per view): MINOR; M5's budget task measures the transcript's render cost and owns any `Rc` change.
+- Review A M4 F4 (links drawn in `primary` with no `on_link`): MINOR; the transcript always sets `on_link`, and the showcase's inert entry says so.
+- Review A M4 F6 (the tint pad counts chars, not display cells): MINOR, part of the recorded tint limit (Decisions M4).
+- Review A M4 F9/F10 (`ink` duplicates `Text`'s muted colour; the marker gate poses no missing-final-newline edit): MINOR; the row is unit-tested in `inline_diff.rs`.
 - Scoped gate M2: `settings_refuses_save_over_failed_read` fails as root (root reads a 0o000 file); pre-existing, unrelated; `scripts/gate.sh` runs it unprivileged (`root_only`).
 
 | Milestone | Review | Finding | Why declined |
@@ -73,10 +82,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done**: M4 implemented and committed (bea68195, on origin/main 7ce164cf): T025–T034 ticked; red against stubs logged in tdd/cycle-log.md (M4). Green locally: `cargo test -p micold-client --lib ui::material` (771), `--test layout_snapshot` (all, incl. the new gates and the fixture), `--test icons`; `cargo clippy -p micold-client -p micold-core --all-targets -D warnings` clean; `cargo fmt` clean. `showcase_completeness`, `material_builder_api`, `showcase_captions`, `icons_font` passed in the stub run — re-run them on the final tree.
-- **Next step**: verify.md step 1 — scoped gate (`scripts/autopilot/scoped-gate.sh`, detached) with review A (`code-review` high on origin/main...HEAD); then review B (conformance, sonnet) and the visual pass (showcase: the MarkdownView, CodeBlock, LinkText, InlineDiff entries and DisclosureCard's "an Edit card with its line counts"; cloud notes in /tmp/claude/memory/team/silo/cloud-visual-pass.md; `mise run showcase` = `cargo run -p micold-client --bin micold-showcase`); full gate `scripts/gate.sh`; push `git push --force-with-lease=claude/project-thread-x8n8q6: -u origin claude/project-thread-x8n8q6`; PR title/body to the session scratchpad (pr-title.md, pr-body.md; orchestrator opens it).
-- **Open findings**: none yet (no review run). Known limits to judge in review: `LinkText`'s focus ring is drawn round its paragraph, not the focused link (Decisions M4); `InlineDiff` tints end at the hunk's widest line, not the viewport's edge.
-- **PR**: none.
+None.
 
 ## Open escalation
 
@@ -85,5 +91,9 @@ None.
 ## Follow-ups not done
 
 - Markdown model edge cases outside the guarantee (research R2 *Refined in M1*): a definition whose title spans three or more lines can still absorb a paragraph a line later; link and image titles are not shown; a duplicate-label definition inside a quote or list item is not shown (review A M1 r2 MINOR).
+
+- Italic emphasis is drawn upright: the bundled fonts are Roboto Regular and Medium only, so `Style::Italic` finds no face (visual pass M4). Needs a Roboto Italic asset with its provenance entry (FR-003); not in M4's tasks.
+
+- LinkText per-link focus ring (review A M4 F2): draw the ring round the focused link's spans (`Paragraph::span_bounds`) instead of the paragraph; fix before #940 closes or file an issue.
 
 - Possible later issue: draw Task (sub-agent) results as markdown and highlight Read results (out of #940 scope, FR-021).

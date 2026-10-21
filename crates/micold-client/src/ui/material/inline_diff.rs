@@ -103,6 +103,15 @@ fn line_row<M: 'static>(
     tinted(cells.into(), kind, r, Length::Shrink)
 }
 
+/// The "No newline at end" note: the marker of the side that lacks the newline, then the note in
+/// the caption's type, so it never reads as a line of the file.
+fn note_row<M: 'static>(kind: LineKind, r: Roles) -> Element<'static, M> {
+    let cells = row![marker(kind, r), caption(NO_NEWLINE, r)]
+        .padding([0.0, spacing::XS])
+        .align_y(Alignment::Center);
+    tinted(cells.into(), kind, r, Length::Shrink)
+}
+
 /// The width, in characters, of the widest of `lines` once its tabs are drawn as spaces.
 fn widest<'t>(lines: impl IntoIterator<Item = &'t str>) -> usize {
     lines
@@ -137,12 +146,7 @@ fn hunk<M: Clone + 'static>(
     } else {
         LineKind::Added
     });
-    let width = widest(
-        h.lines
-            .iter()
-            .map(|line| line.text.as_str())
-            .chain(newline.map(|_| NO_NEWLINE)),
-    );
+    let width = widest(h.lines.iter().map(|line| line.text.as_str()));
     let mut lines: Vec<Element<'static, M>> = h
         .lines
         .iter()
@@ -150,7 +154,7 @@ fn hunk<M: Clone + 'static>(
         .map(|(line, n)| line_row(line.kind, &line.text, spans.line(n), width, r))
         .collect();
     if let Some(kind) = newline {
-        lines.push(line_row(kind, NO_NEWLINE, &[], width, r));
+        lines.push(note_row(kind, r));
     }
     if !lines.is_empty() {
         parts = parts.push(sideways(column(lines), r));
@@ -255,6 +259,21 @@ mod tests {
                 "`{content}` is painted: {painted:?}"
             );
         }
+    }
+
+    /// "No newline at end" is a note on its side's tint, not a line of the file: it is drawn in the
+    /// caption's type, never in the lines' monospace.
+    #[test]
+    fn the_no_newline_note_is_not_drawn_as_a_line() {
+        let diff = edit_diff("Write", r#"{"file_path":"b.txt","content":"one"}"#).expect("a Write");
+        let mut m = Mounted::new(InlineDiff::<String>::new(&diff, roles()));
+        let painted = m.painted_text();
+        let note = painted
+            .iter()
+            .find(|p| p.content.trim_end() == NO_NEWLINE)
+            .unwrap_or_else(|| panic!("the note is painted: {painted:?}"));
+        assert_ne!(note.font, iced::Font::MONOSPACE, "{note:?}");
+        assert_eq!(note.content, NO_NEWLINE, "the note is not padded as a line");
     }
 
     /// FR-019: over the limits, the counts and "Show in full" take the hunks' place.

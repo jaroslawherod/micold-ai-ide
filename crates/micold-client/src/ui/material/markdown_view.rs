@@ -40,6 +40,13 @@ use crate::icons::Icon;
 /// The width of a list item's gutter: its bullet, number or checkbox.
 const GUTTER: f32 = 28.0;
 
+/// A numbered list's gutter: [`GUTTER`], or wide enough for its longest number and its full stop
+/// (a digit is at most 0.6 em, the stop 0.3 em) inside the gutter's padding.
+fn number_gutter(last: u64) -> f32 {
+    let digits = last.to_string().len() as f32;
+    GUTTER.max((digits * 0.6 + 0.3) * TypeRole::Body.size() + 2.0 * spacing::XS)
+}
+
 /// The width of a quote's rule.
 const QUOTE_RULE: f32 = 3.0;
 
@@ -208,6 +215,10 @@ impl<M: Clone + 'static> Draw<M> {
     fn list(&self, start: Option<u64>, items: &[ListItem]) -> Element<'static, M> {
         let r = self.roles;
         let tint = ink(r, self.muted);
+        let width = match start {
+            Some(n) => number_gutter(n + items.len().saturating_sub(1) as u64),
+            None => GUTTER,
+        };
         column(items.iter().zip(0u64..).map(|(item, k)| {
             let gutter: Element<'static, M> = match (item.task, start) {
                 (Some(done), _) => {
@@ -222,7 +233,7 @@ impl<M: Clone + 'static> Draw<M> {
             };
             row![
                 container(gutter)
-                    .width(Length::Fixed(GUTTER))
+                    .width(Length::Fixed(width))
                     .align_x(Horizontal::Right)
                     .padding([0.0, spacing::XS]),
                 self.blocks(&item.blocks),
@@ -415,6 +426,27 @@ mod tests {
                 .iter()
                 .all(|p| p.content != SHOW_IN_FULL),
             "in full, the block shows its lines"
+        );
+    }
+
+    /// FR-003: a numbered list's gutter widens to its longest number, so "1000." does not run
+    /// into its item's text.
+    #[test]
+    fn a_long_number_fits_its_gutter() {
+        let doc = Document::parse("998. a\n999. b\n1000. c\n", false);
+        let mut m = Mounted::new(MarkdownView::<String>::new(&doc, roles()));
+        let painted = m.painted_text();
+        let at = |content: &str| {
+            painted
+                .iter()
+                .find(|p| p.content == content)
+                .unwrap_or_else(|| panic!("`{content}` is painted: {painted:?}"))
+                .bounds
+        };
+        let (number, item) = (at("1000."), at("c"));
+        assert!(
+            number.x + number.width <= item.x,
+            "the number {number:?} ends before its item {item:?}"
         );
     }
 
