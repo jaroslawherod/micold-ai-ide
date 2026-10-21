@@ -14186,3 +14186,143 @@ mod structured_transcript {
         assert_eq!(app.core.structured_log.rows(s).count(), 0);
     }
 }
+
+// ---- Feature 1122 M4 (FR-008, FR-009, contract U6): the issue link by keyboard, at the root ----
+
+/// The Overview on `dirs` of a project on `o/r` with the GitHub issues switch on, so a worktree
+/// named for an issue has its link.
+fn app_with_links(dirs: &[&str]) -> App {
+    let mut app = app_in_overview_with(dirs);
+    app.core.settings.github_issues_enabled = true;
+    app.core.overview.repo = micold_client::features::overview::RepoLookup::Known(Some(
+        micold_core::github::GithubRepo::from_remote_url("git@github.com:o/r.git")
+            .expect("a GitHub remote"),
+    ));
+    app
+}
+
+/// Tab from `dir`'s card onto its link, as the expansion hears it.
+fn tab_onto_link(app: &mut App, dir: &str) {
+    use micold_client::features::overview::Msg;
+    use micold_core::overview_expansion::Event;
+    let l = SessionLocation::Worktree(dir.into());
+    for event in [
+        Event::FocusGained(l.clone()),
+        Event::FocusLost(l.clone()),
+        Event::LinkFocusGained(l),
+    ] {
+        let _ = update_inner(app, Message::Overview(Msg::Expansion(event)));
+    }
+}
+
+/// R9, contract U6: the link's Menu key opens the card's menu as `KeyboardFromLink`, the card's
+/// as `Keyboard`; neither while an activation is pending or the Overview is closed.
+#[test]
+fn link_menu_opens_from_the_link() {
+    use micold_client::features::overview::{MenuOrigin, Msg};
+    let l = SessionLocation::Worktree("feat-1122_x".into());
+    let mut app = app_with_links(&["feat-1122_x"]);
+    assert_eq!(
+        keyboard_menu_request(&app, Msg::LinkMenuRequested(l.clone())),
+        Some((l.clone(), MenuOrigin::KeyboardFromLink))
+    );
+    assert_eq!(
+        keyboard_menu_request(&app, Msg::CardMenuRequested(l.clone())),
+        Some((l.clone(), MenuOrigin::Keyboard))
+    );
+    app.core.overview.open = false;
+    assert_eq!(keyboard_menu_request(&app, Msg::LinkMenuRequested(l)), None);
+}
+
+/// FR-009: closing a menu opened from the link without a choice returns the keyboard to the
+/// link; to the card when the link has gone meanwhile, or for the card's own menu.
+#[test]
+fn card_focus_return_focuses_the_link() {
+    use micold_client::features::overview::{MenuOrigin, Msg};
+    use micold_client::ui::overview::{card_id, card_link_id};
+    let l = SessionLocation::Worktree("feat-1122_x".into());
+    let returned = |origin: MenuOrigin, link_on: bool| {
+        let mut app = app_with_links(&["feat-1122_x"]);
+        open_card_menu(&mut app, "feat-1122_x", origin);
+        let _ = update_inner(&mut app, Message::Overview(Msg::CardMenuDismissed));
+        app.core.settings.github_issues_enabled = link_on;
+        card_focus_return_id(&mut app)
+    };
+    assert_eq!(
+        returned(MenuOrigin::KeyboardFromLink, true),
+        Some(card_link_id(&l))
+    );
+    assert_eq!(
+        returned(MenuOrigin::KeyboardFromLink, false),
+        Some(card_id(&l))
+    );
+    assert_eq!(returned(MenuOrigin::Keyboard, true), Some(card_id(&l)));
+}
+
+/// Spec Edge Case *Jira base URL changes*, contract U6: with a link holding the keyboard, a
+/// change that removes it (the GitHub issues switch off; the repository read as none) moves the
+/// keyboard to its card, as a move inside the card; a change that keeps it moves nothing.
+#[test]
+fn link_focus_moves_to_card_when_link_goes() {
+    use micold_client::features::overview::Msg;
+    use micold_client::ui::overview::card_id;
+    let l = SessionLocation::Worktree("feat-1122_x".into());
+    let ways: [(&str, fn(&mut App)); 2] = [
+        ("switch off", |app| {
+            app.core.settings.github_issues_enabled = false;
+        }),
+        ("no repository", |app| {
+            let _ = update_inner(
+                app,
+                Message::Overview(Msg::RepoRead {
+                    project: PathBuf::from("/repo"),
+                    repo: None,
+                }),
+            );
+        }),
+    ];
+    for (way, remove) in ways {
+        let mut app = app_with_links(&["feat-1122_x"]);
+        tab_onto_link(&mut app, "feat-1122_x");
+        let held = shown_focused_link(&app);
+        assert_eq!(held, Some(l.clone()), "{way}");
+        remove(&mut app);
+        assert_eq!(
+            link_focus_handoff(&mut app, held),
+            Some(card_id(&l)),
+            "{way}"
+        );
+        let expansion = &app.core.overview.expansion;
+        assert_eq!(expansion.focused_link(), None, "{way}");
+        assert_eq!(
+            expansion.expanded(),
+            Some(&l),
+            "{way}: the card keeps its form"
+        );
+    }
+    let mut kept = app_with_links(&["feat-1122_x"]);
+    tab_onto_link(&mut kept, "feat-1122_x");
+    let held = shown_focused_link(&kept);
+    assert_eq!(link_focus_handoff(&mut kept, held), None, "the link stays");
+}
+
+/// Spec Edge Case *Card goes away*, contract U6: a listing without the card whose link holds
+/// the keyboard moves it where feature 972 FR-011 moves it for a removed focused card.
+#[test]
+fn link_focus_follows_removed_card() {
+    use micold_client::features::overview::Msg;
+    use micold_client::ui::overview::{card_id, focus_return_target};
+    let gone = SessionLocation::Worktree("feat-1122_x".into());
+    let mut app = app_with_links(&["feat-7_y", "feat-1122_x"]);
+    tab_onto_link(&mut app, "feat-1122_x");
+    let held = shown_focused_link(&app);
+    app.core
+        .worktree
+        .worktrees
+        .retain(|w| w.dir_name != "feat-1122_x");
+    let _ = update_inner(&mut app, Message::Overview(Msg::GridScrolled));
+    assert_eq!(app.core.overview.expansion.focused_link(), None);
+    let target = focus_return_target(&app.core, &gone).expect("a card is left");
+    assert_ne!(target, gone);
+    assert_eq!(link_focus_handoff(&mut app, held), Some(card_id(&target)));
+}

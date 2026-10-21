@@ -1731,4 +1731,88 @@ mod issue_link {
         assert!(state.overview.open);
         assert_eq!(state.sidebar.revealed, None);
     }
+
+    // --- Feature 1122 M4: the link by keyboard (FR-008, FR-009, contract U6) -----------------
+
+    fn link_event(state: &mut State, event: micold_core::overview_expansion::Event) {
+        state.update(Message::Overview(Msg::Expansion(event)));
+    }
+
+    /// The linked project's Overview, the keyboard Tabbed from `LINKED`'s card onto its link.
+    fn on_the_link() -> State {
+        use micold_core::overview_expansion::Event;
+        let mut state = linked_project();
+        open_overview(&mut state);
+        for event in [
+            Event::FocusGained(wt(LINKED)),
+            Event::FocusLost(wt(LINKED)),
+            Event::LinkFocusGained(wt(LINKED)),
+        ] {
+            link_event(&mut state, event);
+        }
+        state
+    }
+
+    /// FR-008, D3: the link's focus reports reach the reducer as `LinkFocusGained/Lost`: the card
+    /// stays expanded with focus on its link, and the link's loss to the next card moves it on.
+    #[test]
+    fn link_focus_reports_reach_the_expansion() {
+        use micold_core::overview_expansion::Event;
+        let mut state = on_the_link();
+        let expansion = &state.overview.expansion;
+        assert_eq!(expansion.expanded(), Some(&wt(LINKED)));
+        assert_eq!(expansion.focused_link(), Some(&wt(LINKED)));
+        link_event(&mut state, Event::LinkFocusLost(wt(LINKED)));
+        link_event(&mut state, Event::FocusGained(wt("feat_no-ticket")));
+        assert_eq!(
+            state.overview.expansion.expanded(),
+            Some(&wt("feat_no-ticket"))
+        );
+    }
+
+    /// FR-009, Story 3 sc.4 (`app.rs::on_escape` unchanged): Escape on the focused link of an
+    /// expanded card collapses it, leaves the keyboard on the link and keeps the Overview open.
+    #[test]
+    fn escape_on_a_focused_link_collapses_its_card_and_keeps_the_overview() {
+        let mut state = on_the_link();
+        state.update(Message::EscapePressed);
+        assert_eq!(state.overview.expansion.expanded(), None);
+        assert_eq!(state.overview.expansion.focused_link(), Some(&wt(LINKED)));
+        assert!(state.overview.open);
+    }
+
+    /// FR-009, R9: a menu opened from the link highlights its first entry as a keyboard menu does;
+    /// dismissed, it hands the keyboard back to the link; an entry's hand-back is the card's.
+    #[test]
+    fn a_menu_from_the_link_hands_the_keyboard_back_to_the_link() {
+        use micold_client::features::overview::MenuOrigin;
+        for (close, to_link) in [
+            (Msg::CardMenuDismissed, true),
+            (
+                Msg::CardMenuEntryChosen(Box::new(Message::Overview(Msg::GridScrolled))),
+                false,
+            ),
+        ] {
+            let mut state = on_the_link();
+            state.update(Message::Overview(Msg::CardMenuOpened {
+                location: wt(LINKED),
+                anchor: (10, 10),
+                origin: MenuOrigin::KeyboardFromLink,
+            }));
+            let menu = state.overview.card_menu.clone().expect("the menu is open");
+            assert_eq!(menu.origin, MenuOrigin::KeyboardFromLink);
+            assert_eq!(menu.highlighted, Some(0));
+            state.update(Message::Overview(close.clone()));
+            assert_eq!(state.overview.focus_return, Some(wt(LINKED)), "{close:?}");
+            assert_eq!(state.overview.focus_return_link, to_link, "{close:?}");
+        }
+        let mut state = on_the_link();
+        state.update(Message::Overview(Msg::CardMenuOpened {
+            location: wt(LINKED),
+            anchor: (10, 10),
+            origin: MenuOrigin::Keyboard,
+        }));
+        state.update(Message::Overview(Msg::CardMenuDismissed));
+        assert!(!state.overview.focus_return_link, "the card's menu");
+    }
 }

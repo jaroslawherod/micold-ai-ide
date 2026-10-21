@@ -76,6 +76,9 @@ pub struct State {
     /// The card the keyboard goes back to once a keyboard-opened menu closed or ran an entry
     /// (feature 972, FR-011); drained by the root.
     pub focus_return: Option<SessionLocation>,
+    /// The return goes to the card's issue link, not the card: a menu opened from the link closed
+    /// without a choice (feature 1122, FR-009). Drained with [`Self::focus_return`].
+    pub focus_return_link: bool,
     /// The card the keyboard was just handed back to. While it is still listed nothing happens;
     /// if it goes (a delete that finishes after its dialog closed) the keyboard moves to the
     /// first card instead of being lost. Cleared by any other focus move (feature 972, FR-011).
@@ -126,6 +129,17 @@ pub enum MenuOrigin {
     /// Menu or Shift+F10 on the focused card: the first entry starts highlighted and focus
     /// returns to the card when the menu closes (FR-009, FR-011).
     Keyboard,
+    /// Menu or Shift+F10 on a card's focused issue link (feature 1122, FR-009): as [`Self::Keyboard`],
+    /// except that closing the menu without a choice returns the keyboard to the link.
+    KeyboardFromLink,
+}
+
+impl MenuOrigin {
+    /// Opened from the keyboard, on the card or on its link: the first entry starts highlighted
+    /// and the keyboard is handed back on close (feature 972, FR-009, FR-011).
+    pub fn is_keyboard(self) -> bool {
+        matches!(self, Self::Keyboard | Self::KeyboardFromLink)
+    }
 }
 
 /// An open card menu (feature 972, data-model).
@@ -219,6 +233,10 @@ pub enum Msg {
     /// Menu or Shift+F10 on a focused card: the root measures the card, then opens its menu from
     /// the keyboard (feature 972, FR-009). Changes no state of its own.
     CardMenuRequested(SessionLocation),
+    /// Menu or Shift+F10 on a card's focused issue link (feature 1122, FR-009, R9): the root
+    /// measures the link and opens the card's menu with [`MenuOrigin::KeyboardFromLink`]. Changes
+    /// no state of its own.
+    LinkMenuRequested(SessionLocation),
     /// Up or Down in the open card menu: the highlight steps by one and wraps (FR-010). `items`
     /// is the menu's entry count, known to the root and not to the key listener, which sends 0 and
     /// has the root fill it in; with 0 the highlight does not move.
@@ -340,6 +358,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             state.titles.clear();
             state.card_menu = None;
             state.focus_return = None;
+            state.focus_return_link = false;
             state.focus_landed = None;
             state.expansion = Expansion::default();
             state.repo = RepoLookup::Unknown;
@@ -356,17 +375,22 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
                 location,
                 anchor,
                 origin,
-                highlighted: (origin == MenuOrigin::Keyboard).then_some(0),
+                highlighted: origin.is_keyboard().then_some(0),
             });
             return vec![crate::features::Outcome::SurfaceOpened(
                 OverviewCardMenu::ID,
             )];
         }
         Msg::CardMenuDismissed | Msg::CardMenuEntryChosen(_) => {
+            let chosen = matches!(msg, Msg::CardMenuEntryChosen(_));
             state.expansion.apply(Event::MenuClosed);
             if let Some(menu) = state.card_menu.take() {
-                if menu.origin == MenuOrigin::Keyboard {
+                if menu.origin.is_keyboard() {
                     state.focus_return = Some(menu.location);
+                    // Without a choice, a menu opened from the link hands the keyboard back to
+                    // the link (feature 1122, FR-009); an entry's hand-back is the card's (972).
+                    state.focus_return_link =
+                        !chosen && menu.origin == MenuOrigin::KeyboardFromLink;
                 }
             }
         }
@@ -383,7 +407,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         // The root scrolls the grid to the offset (a task, not state).
         Msg::Reflowed(_) => {}
         // The root answers these two with the measured card and the highlighted entry.
-        Msg::CardMenuRequested(_) | Msg::CardMenuActivated => {}
+        Msg::CardMenuRequested(_) | Msg::LinkMenuRequested(_) | Msg::CardMenuActivated => {}
         Msg::CardMenuMoved { forward, items } => {
             if let Some(menu) = state.card_menu.as_mut().filter(|_| items > 0) {
                 menu.highlighted = Some(match (menu.highlighted, forward) {

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: milestone M3
-- **Next step**: M3 reviews done (A r2 CLEAN, B r1 CLEAN, visual r1 PASS); full gate r5 GREEN on 7103e7a0; PR text in the scratchpad (pr-title.txt, pr-body.md): the orchestrator opens the M3 PR; record its number, then M4.
+- **Phase**: milestone M4
+- **Next step**: M4 T031–T037 done; scoped gate, then review A r1, review B r1 and the visual pass (T038) requested together.
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1180 | Design (spec, plan, tasks) | merged | 9ad05048 |
 | #1188 | M1: link rules in core; shared `TextLink` in the showcase | merged | 0164f375 |
 | #1195 | M2: the issue link on cards in the showcase | merged | c61380e1 |
+| #1200 | M3: GitHub issue links on the Overview | merged | 32b7d671 |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | #1188 | merged |
 | M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | #1195 | merged |
-| M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | — | in progress |
-| M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | — | planned |
+| M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | #1200 | merged |
+| M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | — | in progress |
 | M5 | T039–T050 | full | Jira base URL setting (wire 58) and Jira issue links | — | planned |
 
 Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and well over 800 lines, and each part has its own deliverable (core + `TextLink`; the card in the showcase; the app). M1 and M2 are showcase-only (`docs-not-needed`). M2 is 10 tasks: `ControlOverlay`, the card and the grid change together (one routing decision, R6–R8) and have no smaller observable split. US3 (M4) goes before US2 (M5), both P2, because it completes the keyboard path of the link M3 puts in the app. Rule 6 (review A tasks r1 F1): the link stays out of the Tab order until M4 (`TextLink::focusable(false)` while the card has no `.on_link_keyboard_focus`), so M3 leaves the keyboard exactly as before; design fixed in contracts/card-link.md U1/U3/U6 and research R5. Polish T051–T052 is code-free: close unit.
@@ -107,4 +108,4 @@ None.
 
 ## Follow-ups not done
 
-- M4 (T031–T038): when the link is the expanded body's first row (no display name, no branch line), the body's 4 px top padding clips 2 px of the link's 6 px focus gutter (review A M2 F4). Give that row the gutter's room when the ring arrives, and check it in M4's visual pass.
+- ~~M4 (T031–T038): the link as the expanded body's first row has 2 px of its 6 px focus gutter clipped (review A M2 F4).~~ Fixed in M4 (top padding `max(XS, GUTTER)` for that row; test `a_link_first_in_the_expanded_body_keeps_its_whole_gutter`); the visual pass checks the ring there.
