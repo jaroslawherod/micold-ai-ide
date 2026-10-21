@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: milestone M4
-- **Next step**: M4 verify — review B, then the full gate
+- **Next step**: M4 PR — orchestrator opens it from the pushed branch, waits on CI and merges; then M5
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | #1189 | merged |
 | M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | #1192 | merged |
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | #1193 | merged |
-| M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | — | implemented |
+| M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | pending (orchestrator opens) | verified, gate green |
 | M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | — | pending |
 | M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | — | pending |
 
@@ -61,6 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M3 | 1 | 20804f72471f0a52c405e4fc95df918068531d3b:fa9c54a1a89302f558a8bfc52bb6b95f9fd4e8ad | CLEAN (conformance, sonnet; Verify 17 passed, supplied by the unit): F1 MINOR declined |
 | Review A M4 | 1 | 386c7ecc49536f04c8c3c035f105d300be0c0eba:ec28ea0bba7fe12b7af23d361571adc18b5fdc67 | CLEAN (code-review high, `claude -p --agent autopilot-reviewer`): no findings |
 | Visual pass M4 | — | ec28ea0b | PASS (CPU rasteriser, the gate's renderer; no xdotool/lavapipe in the container): showcase entry light/dark/greyscale — icons distinct, no overlap, summary one line and cut, failed = outline + `Failed` + `error` icon, readable in greyscale (SC-005); evidence `visual/m4-disclosure-card-{light,dark}.png`. Note: an unmounted iced button draws `Disabled` until its first redraw, so a render must tick once first |
+| Review B M4 | 1 | 27b813ac12ca641ae8609118b028ec90d09ed68d:73d4bb564058b032d2e9877bae0286d27ee20abd | CLEAN (conformance, sonnet; Verify 722 lib + 6/11/73/11/43 integration passed, supplied by the unit); full gate (`scripts/gate.sh`) green after rebase onto c61380e1 |
 
 ## Declined review findings
 
