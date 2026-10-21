@@ -2,7 +2,7 @@
 //! state*): one [`Transcript`] per session, with the cards the user unfolded and whether the view
 //! follows the end.
 //!
-//! Render-free, as `structured_log.rs`: this holds the state, `ui/transcript/` draws it and the
+//! Render-free: this holds the state, `ui/transcript/` draws it and the
 //! shell turns a [`Scroll`] into a scroll operation on `ui::transcript::transcript_scroll_id`
 //! (research R9).
 

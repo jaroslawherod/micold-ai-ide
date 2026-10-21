@@ -14111,8 +14111,8 @@ fn reduce_motion_is_applied_by_save_and_discarded_by_cancel() {
 }
 
 /// T021 (feature 939, research R9): the shell routes a structured session's events to its
-/// transcript beside the plain log, performs the transcript view's scroll requests, and drops the
-/// transcript with the session.
+/// transcript, performs the transcript view's scroll requests, and drops the transcript with the
+/// session.
 mod structured_transcript {
     use super::*;
     use micold_client::features::structured_transcript::{Follow, TranscriptMsg};
@@ -14142,11 +14142,10 @@ mod structured_transcript {
     }
 
     #[test]
-    fn structured_events_reach_the_transcript_and_the_plain_log() {
+    fn structured_events_reach_the_transcript() {
         let (app, s) = with_events();
         let transcript = app.core.structured_transcript.transcript(s);
         assert_eq!(transcript.map(|t| t.entries().len()), Some(1));
-        assert_eq!(app.core.structured_log.rows(s).count(), 1);
     }
 
     #[test]
@@ -14179,10 +14178,9 @@ mod structured_transcript {
     }
 
     #[test]
-    fn closing_a_session_drops_its_transcript_and_log() {
+    fn closing_a_session_drops_its_transcript() {
         let (mut app, s) = with_events();
         let _ = update_inner(&mut app, Message::Session(SessionMsg::CloseRequested(s)));
         assert!(app.core.structured_transcript.transcript(s).is_none());
-        assert_eq!(app.core.structured_log.rows(s).count(), 0);
     }
 }

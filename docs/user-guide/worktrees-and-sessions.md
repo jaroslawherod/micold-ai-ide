@@ -1089,21 +1089,46 @@ the background service keeps the events it reports. It is Claude Code only.
   and every other entry, start a normal terminal session.
 - **Its row says so.** The label beside the name reads `claude, structured`, and so does the AI
   tab of its pane.
-- **Its pane is a plain log.** One line per event, in order, read-only: what Claude said, the
-  tools it called and their results, how each turn ended, and any event or line the app does not
-  recognise. If the service no longer holds the earliest events, the first line says how many were
-  omitted. There is no input box.
-- **It does not do yet** what the rest of this work adds: a readable transcript instead of the
-  plain log ([#939](https://github.com/jaroslawherod/micold-ai-ide/issues/939)), rich rendering of
-  messages and tool calls ([#940](https://github.com/jaroslawherod/micold-ai-ide/issues/940)),
-  typing a prompt and interrupting a turn
-  ([#941](https://github.com/jaroslawherod/micold-ai-ide/issues/941)), permission prompts
-  ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash commands and switching
-  a session between kinds ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)), and
-  usage and sub-agents ([#944](https://github.com/jaroslawherod/micold-ai-ide/issues/944)).
-- **Across a restart.** While [Save terminal history](./settings.md#terminal) is on, the log is
-  kept across a restart of the background service; with it off the events live in the service's
-  memory only.
+- **Its pane is a transcript.** The conversation reads top to bottom, read-only, with no input
+  box:
+  - a **session start** entry with the model and the working folder;
+  - your messages, headed **You**, and Claude's replies as text;
+  - a **turn footer** closing each turn: **Done** or **Failed**, how long the turn took, the
+    session's running cost (labelled **session total**, since Claude Code reports the cost of the
+    whole session so far) and the number of turns. A failed turn's footer also shows the error the
+    turn ended with.
+- **Thinking and tool calls are cards.** Each tool Claude runs is one card, in the place it ran:
+  folded, its header shows the tool's name, what it was asked in one line (the command, the file,
+  the pattern) and its status, **Running**, **Done**, **Failed** or **No result** (the turn ended
+  before the tool reported back). Claude's reasoning is a **Thinking** card. Press a card's header
+  to unfold it and see the tool's full input and its result, or the thinking text; press it again to
+  fold it. From the keyboard, Tab to the header and press Space or Enter. Cards start folded, and
+  stay as you left them while new events arrive and when you switch to another session and back.
+- **Failures are marked by more than colour.** A failed card and a failed footer say **Failed**
+  and carry the error icon, so they read as failed in greyscale too.
+- **Nothing is hidden.** An event or line the app does not recognise is shown in its place as a
+  **Raw event** row with its original text. If the service no longer holds the earliest events, the
+  first entry says how many earlier events are not shown. A turn whose process ended before it
+  reported a result ends with "The turn ended without a result" instead of a footer.
+- **Sub-agents are counted, not shown.** The messages of a sub-agent Claude starts are kept out of
+  the main conversation: the tool card that started it says how many sub-agent messages it sent.
+- **It follows the end.** While you are at the end of the transcript, it stays there as a reply
+  streams in. Scroll up and it stops following, so what you are reading does not move, and a
+  **Jump to latest** control appears over the bottom of the pane; press it, or scroll back to the
+  end, to follow again. A session you open for the first time in a window opens at its end.
+- **Each window keeps its own view.** Tiled side by side, each structured session draws its own
+  transcript; a second window showing the same session has its own folded cards and scroll
+  position.
+- **It does not do yet** what the rest of this work adds: rich rendering of messages and tool calls
+  ([#940](https://github.com/jaroslawherod/micold-ai-ide/issues/940)), typing a prompt and
+  interrupting a turn ([#941](https://github.com/jaroslawherod/micold-ai-ide/issues/941)),
+  permission prompts ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash
+  commands and switching a session between kinds
+  ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)), and usage, per-turn cost and
+  nested sub-agents ([#944](https://github.com/jaroslawherod/micold-ai-ide/issues/944)).
+- **Across a restart.** While [Save terminal history](./settings.md#terminal) is on, the events are
+  kept across a restart of the background service; with it off they live in the service's memory
+  only.
 
 ### Sessions on Codex and OpenCode
 

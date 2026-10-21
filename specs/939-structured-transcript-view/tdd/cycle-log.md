@@ -89,3 +89,16 @@ implementation task, run red, then made green.
   lines) as missing glyphs. `blocks::plain_text` expands tabs to the next 4-column stop, for every
   plain renderer, user messages and raw rows; its in-crate test was written with it, not before it:
   `cargo test -p micold-client --lib transcript` 3/3.
+
+## M6 (T038–T043) — the pane shows the transcript
+
+- **Red**: T039's `transcript_pane.rs` (5 tests) and T038's gate written first. The single-pane
+  tests compiled together with the `ui/terminal.rs` routing, so their red was not observed; the two
+  tiled tests failed red twice for two reasons: the pane drew no transcript, then `SplitView`
+  forwarded no operation to its panes (`[sidebar-list, terminal-tab-strip-scroll]` only).
+  The jump-control gate first failed on its own lookup (the label's node is attributed by clip), and
+  `containment` named the transcript's scroll content overhanging its viewport by 29 px.
+- **Green**: tiled routing in `panes.rs`, `SplitView::operate`, the lookup by the label's origin,
+  `TRANSCRIPT_CONTENT` scoped to the new state; fixture regenerated (only the new state's block
+  added). `transcript_pane` 5/5, `layout_snapshot` 74/74.
+- **Refactor**: the plain log removed (T041) with its tests' log assertions; `cargo fmt`.

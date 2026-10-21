@@ -24,7 +24,10 @@ use crate::ui::material::{
     IconButton, SplitView, TerminalPane, Text, Tooltip, TypeRole,
 };
 use crate::ui::terminal::TERM_FONT_SIZE;
-use crate::ui::terminal::{empty_terminal_message, session_title, CellMetrics, TermPalette};
+use crate::ui::terminal::{
+    empty_terminal_message, is_structured_primary, session_title, transcript_body, CellMetrics,
+    TermPalette,
+};
 
 /// What the pane renderer reads besides `State`: the active project's layout and the grids.
 pub struct PaneArea<'a> {
@@ -242,6 +245,11 @@ pub fn view<'a>(
             let is_focused = pane.id() == focused_id;
             let body: Element<'a, Message> = match pane.terminal() {
                 None => picker(state, area, pane, r),
+                // A structured session's primary draws no terminal: its pane is the transcript
+                // (feature 939, FR-001, research R15).
+                Some(t) if is_structured_primary(state, t) => {
+                    transcript_body(state, t.session, scheme)
+                }
                 Some(t) => match area.grids.get(&t) {
                     Some(grid) => {
                         let mut p = TerminalPane::new(grid, TermPalette::from_scheme(scheme))
@@ -275,12 +283,15 @@ pub fn view<'a>(
                     .height(Length::Fill)
             ]
             .into();
-            if pane.terminal().is_some() {
+            if pane
+                .terminal()
+                .is_some_and(|t| !is_structured_primary(state, t))
+            {
                 // The terminal widget focuses its own pane on a press.
                 return tile;
             }
-            // An empty pane has no terminal widget to take the press: its header and body do
-            // (FR-010). A button inside still handles its own press first.
+            // An empty pane, or a transcript, has no terminal widget to take the press: its header
+            // and body do (FR-010). A button inside still handles its own press first.
             mouse_area(tile)
                 .on_press(Message::Session(SessionMsg::Pane(PaneMsg::FocusPane(
                     pane.id(),

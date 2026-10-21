@@ -255,10 +255,9 @@ fn app_with_cards() -> (App, SessionId) {
 }
 
 #[test]
-fn structured_events_reach_the_transcript_and_still_the_plain_log() {
+fn structured_events_reach_the_transcript() {
     let (app, s) = app_with_cards();
     assert_eq!(entries(&app.structured_transcript, s), 2);
-    assert_eq!(app.structured_log.rows(s).count(), 2);
 }
 
 #[test]
@@ -343,9 +342,8 @@ fn the_scroll_id_names_the_session() {
 }
 
 #[test]
-fn forgetting_a_structured_session_drops_its_transcript_and_its_log() {
+fn forgetting_a_structured_session_drops_its_transcript() {
     let (mut app, s) = app_with_cards();
     app.forget_structured(s);
     assert!(app.structured_transcript.transcript(s).is_none());
-    assert_eq!(app.structured_log.rows(s).count(), 0);
 }

@@ -239,6 +239,27 @@ fn is_inline_link_gutter(state: &str, escape: &lay::Escape) -> bool {
         && (escape.overhang - LINK_GUTTER).abs() <= TOLERANCE
 }
 
+/// A **structured session's transcript** taller than the pane it scrolls in (feature 939, T038).
+///
+/// A sixth site of the same mechanism: `session-transcript-pane` unfolds a card of the recorded
+/// tool turn, and the transcript outgrows its viewport, so its end is reached by scrolling (and the
+/// state is detached, which is what shows "Jump to latest"). Like [`SETTINGS_PAGE_CONTENT`] it
+/// holds only there, and only past the **bottom** edge of the transcript's `Scrollable`
+/// ([`TRANSCRIPT_VIEWPORT`]).
+const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/0/0/0/0"];
+
+/// The transcript's `Scrollable`: the parent of [`TRANSCRIPT_CONTENT`].
+const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/0/0/0";
+
+/// Whether `escape`, in the covered state `state`, is the transcript outgrowing its viewport
+/// downwards, which is the only overhang [`TRANSCRIPT_CONTENT`] allows.
+fn is_transcript_scroll(state: &str, escape: &lay::Escape) -> bool {
+    state == "session-transcript-pane"
+        && TRANSCRIPT_CONTENT.contains(&escape.child_path.as_str())
+        && escape.parent_path == TRANSCRIPT_VIEWPORT
+        && escape.edge == "bottom"
+}
+
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
 fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str> {
     let child_path = escape.child_path.as_str();
@@ -256,6 +277,8 @@ fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str>
         Some("ISSUE_DETAILS_CONTENT")
     } else if is_inline_link_gutter(state, escape) {
         Some("INLINE_LINK_GUTTER")
+    } else if is_transcript_scroll(state, escape) {
+        Some("TRANSCRIPT_CONTENT")
     } else {
         None
     }
@@ -296,6 +319,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(SETTINGS_PAGE_CONTENT)
         .chain(ISSUE_DETAILS_CONTENT)
         .chain(INLINE_LINK_GUTTER)
+        .chain(TRANSCRIPT_CONTENT)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(

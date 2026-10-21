@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #939
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
-- **Phase**: milestone M5
-- **Next step**: M5 PR — orchestrator opens it from the pushed branch, waits on CI and merges; then M6
+- **Phase**: milestone M6
+- **Next step**: M6 — scoped gate + review A, review B + visual pass, full gate, push; orchestrator opens the PR
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1192 | M2: streaming, supersede, bound and re-sync | merged (rebase) | 061d8805a1f11b934d72e4c5f606e8e972738e8a |
 | #1193 | M3: window's per-session transcript state | merged (rebase) | 965949081cfe2b986593b96eed026e2122f82ece |
 | #1198 | M4: shared DisclosureCard, AccordionSection slots, Text::monospace, icons | merged (rebase) | dd7b2946270f8b493b08004bc3089512fb147e15 |
+| #1203 | M5: transcript view behind the renderer seam, lazy keyed entries, SC-004 budget | merged (rebase) | 21cc8efa9b2e994f1c6adef594658bd4d9077630 |
 
 ## Milestones
 
@@ -30,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | #1192 | merged |
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | #1193 | merged |
 | M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | #1198 | merged |
-| M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | pending (orchestrator opens) | verified, gate green |
-| M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | — | pending |
+| M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | #1203 | merged |
+| M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | — | implemented |
 
 ## Decisions
 
@@ -42,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M4 (2026-10-21): `build`, `check_circle` and `error` are already `TypeChore`'s, `CardDone`'s and `SessionError`'s codepoints and `tests/icons.rs` forbids two variants on one, so `ToolCall`, `ToolDone`, `ToolFailed` take the font's alias codepoints for the same glyphs (`U+F8CD`, `U+E92D`, `U+E001`), the precedent `ActiveMarker`/`Unavailable` set; research R11 notes it. A failed `DisclosureCard` is an outlined card (error outline, no shadow) so the outline is its one edge; the failure's words and icon are the caller's trailing `IconLabel`. `AccordionSection` without slots draws its pre-939 header row unchanged (`plain`), so no layout fixture moved.
 - Cross-issue, with #944 (2026-10-21): in streaming-input mode a result's `total_cost_usd` is a running total for the whole CLI session, not per turn. #939's turn footer shows it labelled as the session total, with no per-turn math; the per-turn delta belongs to #944. M4 touches no footer wording or cost text; M5 applies it (footer label, and the spec/contract/plan wording that says "per-turn cost").
 - M5 (2026-10-21): the view's message type is `TranscriptMsg` (`blocks::Block = Element<'static, TranscriptMsg>`); the pane maps it in M6. `RenderCtx` carries the `scheme` beside `roles`, so the entries' lazy key holds it (contract updated). A folded card's body is not built, so its renderers do not run. The footer's cost reads `"session total $…"` (`footer_figures`, per the #944 decision; spec FR-005, research R14, data model, contract and quickstart reworded). SC-004 first failed on deltas (178 ms): at the bound the column shifted every entry a tree slot and every `lazy` rebuilt; `ui/transcript/keyed.rs` keeps slots by `EntryId` (iced's `keyed_column` matches by index at an unchanged length): open 180 ms, slowest delta 5 ms. Not R12's fallback (no windowed list, no measured heights), so no escalation. The transcript sample is a live pose of the `DisclosureCard` showcase entry, since the catalogue lists only library components.
+- M6 (2026-10-21): a tiled structured primary draws its transcript in `ui/panes.rs`, and the single-pane check moved below the tiled one in `ui/terminal.rs`, so a tiled layout tiles even when the active session is structured (it showed only the log before). `SplitView` had no `operate`, so no operation reached a tiled pane: it forwards to every pane now, or the shell's `snap_to`/`scroll_to` on `transcript-<session>` would miss a tiled transcript. A transcript pane focuses on a press as an empty pane does (no terminal widget to do it). The window's `BlockCache` is one shared empty static in `ui/terminal.rs` (`window_block_cache`): #939's renderers read none, and `app::State` takes only feature structs (`root_state_is_shared.rs`), so #940, which fills it, moves it into the window's state. `containment.rs` gains `TRANSCRIPT_CONTENT`, scoped to `session-transcript-pane`'s bottom edge like `SETTINGS_PAGE_CONTENT`. Part B ran on the CPU rasteriser (no `claude` CLI, display or xdotool in the container) over recorded fixtures, so evidence is in `visual/` beside M4/M5's (tasks and quickstart said `visual-pass/`; reworded); live streaming, wheel/drag and a second window are covered by `transcript_follow_layout.rs`, `features_structured_transcript.rs` and per-window state, not by a live run.
 - Clarify (2026-10-21, 2 rounds, agent-resolved): sub-agent events (parent tool use set) are kept out of the main transcript and counted per parent tool-call card (FR-024; orphans on one notice); deltas not counted. #944 adds nesting on top. #944 treats the per-turn cost in #939's turn footer as #939's; #944 adds context meter, plan_usage feed and sub-agent nesting.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -85,4 +87,6 @@ None.
 None.
 
 ## Follow-ups not done
+
+- For the close unit: #944's thread landed 4 real-CLI stream-json recordings on main (subagent, nested subagent, background tasks) in a separate `RECORDED_944` list in `crates/micold-core/tests/support/stream_json.rs`, because #939's transcript tests failed on them. Not taken on in M6; the close unit folds them into #939's transcript tests (or records why not).
 

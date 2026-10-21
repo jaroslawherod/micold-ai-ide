@@ -16,12 +16,14 @@ use crate::ui::material::{
     GridSizeReporter, IconButton, MenuItem, SurfaceKind, Tab, TabStrip, TerminalPane, Text,
     Tooltip, TooltipPosition, TypeRole, TAB_WIDTH,
 };
+use crate::ui::transcript::{BlockCache, BlockRenderers, RenderCtx};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Color, Element, Font, Length, Padding};
 use micold_core::protocol::grid::{WireColor, WireStyle};
+use micold_core::protocol::messages::{SessionProcess, TerminalRef};
 use micold_core::session::{
     AiCli, SessionId, SessionLifecycle, ShellInstanceId, ShellLifecycle, TerminalMode,
 };
@@ -458,12 +460,9 @@ pub fn pane<'a>(
     // The colour-rendering terminal body fills the whole main area (feature 006). Falls back to
     // an empty state if the runtime is not yet available (e.g. the session is still starting).
     let several = area.filter(|a| a.layout.len() > 1);
-    let body: Element<'a, Message> = if shows_structured_log(state, active) {
-        // A structured session's AI process draws no terminal and takes no input (feature 938,
-        // FR-022a); its shell instances stay terminals.
-        structured_log_body(state, active, r)
-    } else if let Some(area) = several {
+    let body: Element<'a, Message> = if let Some(area) = several {
         // Feature 484: several panes tile the area; each measures itself, so no outer reporter.
+        // A pane showing a structured session's primary draws its transcript (feature 939, R15).
         crate::ui::panes::view(
             state,
             area,
@@ -472,6 +471,11 @@ pub fn pane<'a>(
             scheme,
             &link_context,
         )
+    } else if shows_transcript(state, active) {
+        // A structured session's AI process draws no terminal and takes no input (feature 938,
+        // FR-022a): its pane is the transcript (feature 939, FR-001). Its shell instances stay
+        // terminals.
+        transcript_body(state, active, scheme)
     } else {
         match grid {
             Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
@@ -763,35 +767,47 @@ fn session_provider(state: &State, id: SessionId) -> AiCli {
         .unwrap_or_default()
 }
 
-/// A structured session's pane until #939 (feature 938, FR-022a): one plain line per event, in
-/// order, read-only. Shared `Text` in a `Scrollable`; no input box, no keystroke routing.
-fn structured_log_body<'a>(
+/// A structured session's primary in a pane (feature 939, FR-001): the window's transcript of it,
+/// drawn through [`BlockRenderers::PLAIN`], its messages routed as the session feature's.
+pub(crate) fn transcript_body<'a>(
     state: &'a State,
     id: SessionId,
-    r: tokens::Roles,
+    scheme: ColorScheme,
 ) -> Element<'a, Message> {
-    let mut lines = column![].spacing(spacing::XS).width(Length::Fill);
-    let mut any = false;
-    for line in state.structured_log.rows(id) {
-        any = true;
-        lines = lines.push(Text::new(line, TypeRole::Body, r));
-    }
-    if !any {
-        lines = lines.push(Text::new("No events yet.", TypeRole::Caption, r).muted());
-    }
-    material::Scrollable::new(container(lines).padding(spacing::MD).width(Length::Fill), r)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    crate::ui::transcript::view(
+        &state.structured_transcript,
+        id,
+        &BlockRenderers::PLAIN,
+        RenderCtx {
+            roles: tokens::roles(scheme),
+            scheme,
+            cache: window_block_cache(),
+        },
+    )
+    .map(|msg| Message::Session(SessionMsg::Transcript(msg)))
 }
 
-/// Whether the pane for `id` is the structured log: a structured session with its AI tab displayed.
-fn shows_structured_log(state: &State, id: SessionId) -> bool {
+/// The window's block cache (contract R-4). #939's renderers read none, so it is empty and shared;
+/// #940, whose renderers fill it, moves it into the window's state beside the transcript.
+fn window_block_cache() -> &'static BlockCache {
+    static EMPTY: std::sync::LazyLock<BlockCache> = std::sync::LazyLock::new(BlockCache::default);
+    &EMPTY
+}
+
+/// Whether the pane for `id` is the transcript: a structured session with its AI tab displayed.
+fn shows_transcript(state: &State, id: SessionId) -> bool {
     state.active_sessions().iter().any(|s| {
         s.id == id
             && s.kind == micold_core::session::SessionKind::Structured
             && s.mode == TerminalMode::AiCli
     })
+}
+
+/// Whether `terminal` is a structured session's primary, which a tiled pane draws as its
+/// transcript (feature 939, research R15); a shell instance stays a terminal.
+pub(crate) fn is_structured_primary(state: &State, terminal: TerminalRef) -> bool {
+    matches!(terminal.process, SessionProcess::Primary)
+        && session_kind(state, terminal.session) == micold_core::session::SessionKind::Structured
 }
 
 /// How session `id` runs its CLI; a terminal session when the projection does not list it.

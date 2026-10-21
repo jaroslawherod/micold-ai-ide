@@ -34,4 +34,4 @@ session (start-session chevron → **Claude Code (structured)**).
 6. A terminal session's pane is unchanged.
 7. Light and dark theme: every entry kind, the failed card and footer, raw rows and the control.
 
-Record the pass with the `visual-pass` skill into `visual-pass/`.
+Record the pass with the `visual-pass` skill into `visual/`.
