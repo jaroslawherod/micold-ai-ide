@@ -73,6 +73,8 @@ pub struct CardHeader {
     pub subagents: Option<String>,
     /// Drawn as failed: the error outline as well as the status (FR-012).
     pub failed: bool,
+    /// An Edit/MultiEdit/Write card's `+N −M`, once its diff is known (feature 940, FR-017).
+    pub meta: Option<String>,
 }
 
 /// `card`'s header.
@@ -83,7 +85,23 @@ pub fn tool_header(card: &ToolCard) -> CardHeader {
         status: tool_status(card.status),
         subagents: (card.subagent_messages > 0).then(|| subagent_count(card.subagent_messages)),
         failed: card.status == ToolStatus::Failed,
+        meta: None,
     }
+}
+
+/// `card`'s header with its `+N −M` from the cache's `(added, removed)` count of its diff (RR-2):
+/// [`RichCache::edit_counts`](super::BlockCache::edit_counts), which holds a count for an
+/// Edit/MultiEdit/Write card only.
+pub fn tool_header_counted(card: &ToolCard, counts: Option<(u32, u32)>) -> CardHeader {
+    CardHeader {
+        meta: counts.map(|(added, removed)| edit_meta(added, removed)),
+        ..tool_header(card)
+    }
+}
+
+/// `"+12 −3"`: an edit's added and removed lines, with a minus sign (FR-017).
+pub fn edit_meta(added: u32, removed: u32) -> String {
+    format!("+{added} \u{2212}{removed}")
 }
 
 /// `"1 sub-agent message"`, `"3 sub-agent messages"`.
@@ -319,7 +337,7 @@ fn tool_card(
     ctx: &RenderCtx<'_>,
 ) -> Block {
     let roles = ctx.roles;
-    let header = tool_header(card);
+    let header = tool_header_counted(card, ctx.cache.edit_counts(block.session, block.key));
     let mut status = row![status_label(header.status, roles)]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);
@@ -329,6 +347,7 @@ fn tool_card(
     let shell = DisclosureCard::new(header.title, on_toggle, roles)
         .leading(Icon::ToolCall)
         .summary(header.summary)
+        .meta(header.meta.unwrap_or_default())
         .trailing(status)
         .open(open)
         .failed(header.failed);

@@ -1092,7 +1092,7 @@ the background service keeps the events it reports. It is Claude Code only.
 - **Its pane is a transcript.** The conversation reads top to bottom, read-only, with no input
   box:
   - a **session start** entry with the model and the working folder;
-  - your messages, headed **You**, and Claude's replies as text;
+  - your messages, headed **You**, and Claude's replies, formatted (see below);
   - a **turn footer** closing each turn: **Done** or **Failed**, how long the turn took, the
     session's running cost (labelled **session total**, since Claude Code reports the cost of the
     whole session so far) and the number of turns. A failed turn's footer also shows the error the
@@ -1100,12 +1100,41 @@ the background service keeps the events it reports. It is Claude Code only.
 - **Thinking and tool calls are cards.** Each tool Claude runs is one card, in the place it ran:
   folded, its header shows the tool's name, what it was asked in one line (the command, the file,
   the pattern) and its status, **Running**, **Done**, **Failed** or **No result** (the turn ended
-  before the tool reported back). Claude's reasoning is a **Thinking** card. Press a card's header
-  to unfold it and see the tool's full input and its result, or the thinking text; press it again to
-  fold it. From the keyboard, Tab to the header and press Space or Enter. Cards start folded, and
+  before the tool reported back). An **Edit**, **MultiEdit** or **Write** card's header also shows
+  how many lines the change adds and removes, as `+12 −3`. Claude's reasoning is a **Thinking**
+  card. Press a card's header to unfold it and see the tool's full input and its result, or the
+  thinking text; press it again to fold it. From the keyboard, Tab to the header and press Space or Enter. Cards start folded, and
   stay as you left them while new events arrive and when you switch to another session and back.
 - **Failures are marked by more than colour.** A failed card and a failed footer say **Failed**
   and carry the error icon, so they read as failed in greyscale too.
+- **Replies are formatted.** Claude's replies, and the text of an unfolded **Thinking** card (in
+  its muted style), are drawn as markdown: headings, **bold**, *italic* and ~~struck~~ text,
+  `inline code`, bullet, numbered and task lists, quotes, rules, links and tables (a long cell wraps
+  inside its column). The punctuation that made the formatting is not shown. Raw HTML stays as its
+  text, and an image is shown as its description and address and never fetched. A reply is
+  formatted while it streams in: what is already shown above the part still arriving does not
+  change or move.
+- **Code blocks** sit on their own surface in a monospace font. One whose fence names a language
+  the app knows is coloured for it, in colours that follow the light or dark theme; any other is
+  plain, with its tag shown. Long lines are not wrapped: the block scrolls sideways on its own,
+  while the mouse wheel still scrolls the transcript. Each block has a copy control (press it, or
+  Tab to it and press Enter) that puts exactly the block's code on the clipboard — no
+  fences, no tag, indentation kept; while the block still streams, the code received so far. The
+  control then says **Copied** for a moment, or **Copy failed** when the clipboard did not take it.
+- **File changes are diffs.** Unfolded, an **Edit**, **MultiEdit** or **Write** card shows the file's
+  path and the change instead of its raw input: removed lines marked `−` and added lines marked
+  `+`, each on its own tint so they read apart in greyscale too, with the lines both sides share
+  as context, coloured for the file's language when its extension names one. A MultiEdit shows one
+  hunk per edit, in order (**Edit 1 of 3**); a Write shows the whole content as added lines, labelled
+  **New content**. Notes say when an edit **Replaces every occurrence**, when it changes nothing
+  (**No change**) and when the last line gains or loses its line ending (**No newline at end**).
+  While the input is still arriving, or when it is not of the shape the tool expects, the card shows
+  the raw input as before; a failed call still shows its diff. Tool results stay plain text.
+- **Large blocks wait for you.** A code block or a diff over the size the **Changes** view shows
+  without asking says how large it is, and draws its lines only once you press **Show in full**.
+- **Which links open.** An `http`, `https` or `mailto` link opens in your system's browser or mail
+  app when you press it, or Tab to it and press Enter. Any other address (a relative path, a
+  `file:` link) is shown as text and does nothing.
 - **Nothing is hidden.** An event or line the app does not recognise is shown in its place as a
   **Raw event** row with its original text. If the service no longer holds the earliest events, the
   first entry says how many earlier events are not shown. A turn whose process ended before it
@@ -1119,8 +1148,7 @@ the background service keeps the events it reports. It is Claude Code only.
 - **Each window keeps its own view.** Tiled side by side, each structured session draws its own
   transcript; a second window showing the same session has its own folded cards and scroll
   position.
-- **It does not do yet** what the rest of this work adds: rich rendering of messages and tool calls
-  ([#940](https://github.com/jaroslawherod/micold-ai-ide/issues/940)), typing a prompt and
+- **It does not do yet** what the rest of this work adds: typing a prompt and
   interrupting a turn ([#941](https://github.com/jaroslawherod/micold-ai-ide/issues/941)),
   permission prompts ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash
   commands and switching a session between kinds

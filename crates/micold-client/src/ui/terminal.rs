@@ -768,7 +768,8 @@ fn session_provider(state: &State, id: SessionId) -> AiCli {
 }
 
 /// A structured session's primary in a pane (feature 939, FR-001): the window's transcript of it,
-/// drawn through [`BlockRenderers::PLAIN`], its messages routed as the session feature's.
+/// drawn through [`BlockRenderers::RICH`] (feature 940), its messages routed as the session
+/// feature's.
 pub(crate) fn transcript_body<'a>(
     state: &'a State,
     id: SessionId,
@@ -777,7 +778,7 @@ pub(crate) fn transcript_body<'a>(
     crate::ui::transcript::view(
         &state.structured_transcript,
         id,
-        &BlockRenderers::PLAIN,
+        &BlockRenderers::RICH,
         RenderCtx {
             roles: tokens::roles(scheme),
             scheme,
