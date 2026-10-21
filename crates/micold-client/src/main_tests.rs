@@ -7622,6 +7622,39 @@ mod issue_source {
         assert_eq!(opener.opened.lock().unwrap().len(), 1, "the link is gone");
     }
 
+    /// FR-013: a browser that cannot be opened from an issue link gives feature 031's notification,
+    /// naming the address and the opener's reason, and the Overview stays as it was.
+    #[test]
+    fn issue_link_whose_browser_fails_to_open_notifies_the_address_and_reason() {
+        let opener = Arc::new(super::pr_status_open::Recording {
+            fail: true,
+            ..Default::default()
+        });
+        let mut rig = titles_rig(true);
+        rig.app.caps = rig.app.caps.clone().with_link_opener(opener.clone());
+        rig.app.core.overview.open = true;
+        rig.app.core.overview.repo = repo_named("git@github.com:o/r.git");
+        let work = update_inner(
+            &mut rig.app,
+            Message::Overview(micold_client::features::overview::Msg::IssueLinkActivated(
+                micold_core::session::SessionLocation::Worktree("feat-42_crash".into()),
+            )),
+        );
+        settle(&mut rig.app, work);
+        let shown = rig
+            .app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone());
+        assert_eq!(
+            shown.as_deref(),
+            Some("Couldn't open https://github.com/o/r/issues/42: no launcher")
+        );
+        assert!(rig.app.core.overview.open, "the Overview stays open");
+    }
+
     // --- 837: the picked issue's details (US2, US3) ---------------------------------------------
 
     use micold_client::features::worktree_form::IssueDetailsState;
@@ -12415,7 +12448,7 @@ mod pr_status_open {
     #[derive(Default)]
     pub(super) struct Recording {
         pub(super) opened: Mutex<Vec<String>>,
-        fail: bool,
+        pub(super) fail: bool,
     }
 
     impl LinkOpener for Recording {

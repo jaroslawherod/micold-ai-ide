@@ -816,6 +816,7 @@ mod tests {
             "https://host?x=1",
             "https://host#a",
             "https://host/path?x",
+            "https://host/jira#frag",
             "https://a..b",
             "https://-a.com",
             "https://a_b.com",

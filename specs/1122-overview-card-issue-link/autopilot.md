@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: close
-- **Next step**: close: T051 (quickstart §A) and T052 (visual-pass.md) done; tdd-verify r1 requested (prompt `1122-close-prompt-tdd-verify-r1.md` in the session scratchpad). Then: act on its findings, close review r1, Status, PR text.
+- **Next step**: close: tdd-verify r1 PASS_WITH_GAPS acted on (F1 fixed, FR-013 test added, F2 accepted); full gate, then close review r1 (prompt `1122-close-prompt-review-r1.md` in the session scratchpad). Then: Status Closed, finish ledger, PR text.
 
 ## Pull requests
 
@@ -111,8 +111,58 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Converge close | — | — | skipped: review B CLEAN for M1–M5 (close.md step 1) |
 | Full gate close | 1 | fd2a64ef | RED: feature 942's `structured_permission::a_pending_request_marks_its_session_waiting_until_the_last_is_decided` (3.0 s under load); passes 5/5 alone |
 | Full gate close | 2 | fd2a64ef | GREEN (T051) |
-| TDD verify close | 1 | 78bb84ab25e7d5d007194a6d82187d46637e88c7:a847dfee7d0347117789e2b51da34f517835239c | pending (sonnet, autopilot-worker) |
+| TDD verify close | 1 | 78bb84ab25e7d5d007194a6d82187d46637e88c7:a847dfee7d0347117789e2b51da34f517835239c | PASS_WITH_GAPS (verdict verbatim below). F1 fixed: `https://host/jira#frag` added to the `JiraBaseUrl` refusal test (mutant B1 now killed by `-p micold-core --lib jira`). FR-013: feature 031's tests cover only the reducer half (`LinkOpenFinished` → notification, `tests/features_session_links.rs`), none the link path; added `issue_link_whose_browser_fails_to_open_notifies_the_address_and_reason` (main_tests), green on first run: no defect. F2 accepted (no mutation or coverage tool; see *Declined review findings*). `tdd/verification.md` committed |
 
+
+### Close r1 verdicts (verbatim)
+
+<details><summary>TDD verify close r1</summary>
+
+# 1122 close tdd-verify r1 (snapshot 78bb84ab:a847dfee)
+
+VERDICT: PASS_WITH_GAPS. Every behaviour has a recorded red, the git history agrees with the log, and every non-equivalent deliberate mutant was caught by some test. The gaps are the missing `tdd/test-list.md`, no mutation or coverage tool, one `JiraBaseUrl` refusal row pinned only through a sibling test, and FR-013 not traced to any test.
+
+I wrote only `/home/user/micold-ai-ide/specs/1122-overview-card-issue-link/tdd/verification.md`. Nothing is committed and no source is changed. Every mutant was restored with `git checkout -- <file>` and `git diff --quiet` confirmed it. After the last restore I re-ran all the scoped filters and they were green. `git status --short` shows only `?? specs/1122-overview-card-issue-link/tdd/verification.md`.
+
+**Skill note:** the Skill tool answered "Unknown skill: speckit-tdd-verify". I read `.claude/skills/speckit-tdd-verify/SKILL.md` and the rubric `.specify/extensions/tdd/templates/tdd-test-quality-rubric.md` directly and followed them. The report's `standard:` field names that rubric.
+
+**Test-first evidence:** there is no `test-list.md`, so the 41 cycle-log rows stand in for behaviours.
+- 35 rows are PROVEN.
+- 6 rows are NOT_APPLICABLE: the T009 contrast guard, the docs tasks T029, T037 and T049, the M4 `FocusReturn` refactor, and the M5 subtitle wording.
+- There are no TEST_AFTER or NO_TEST rows.
+- All 52 tasks are ticked.
+- No existing test was weakened. I opened every removed assertion in the feature commits and each is a deliberate requirement change or an equal-strength refactor.
+
+**Findings:**
+- F1 LOW, `crates/micold-core/src/jira.rs:102` with tests in `crates/micold-core/src/jira.rs` `mod tests` (about line 807-824):
+  - No `JiraBaseUrl` refusal row has a fragment after a path.
+  - Mutant B1 (`rest.contains(['?','#'])` to `['?']`) survives `-p micold-core --lib jira`. It is killed only by `crates/micold-core/tests/jira_connection.rs:39`, because `WebAddress::split` is shared with `SiteOrigin`.
+  - Remediation: add `"https://host/jira#frag"` to the refusals list in `a_base_url_that_is_not_an_https_address_is_refused_on_its_field` and assert `JiraBaseUrl::parse` refuses it.
+- F2 LOW: `tdd-profile.md` has `mutation: null` and `coverage: null`, so test strength rests on hand-made mutants. Remediation: none in the feature; installing cargo-mutants is a separate decision.
+- FR-013 gap (listed in the report's traceability section and "What was not audited", not given a finding number): no 1122 test was found that a failed browser open shows feature 031's notification naming the address and reason. I did not check whether feature 031's tests cover it. Remediation: a test in `crates/micold-client/src/main_tests.rs` where `IssueLinkActivated` hits a failing opener and the notifier receives the address and reason.
+
+**Mutants (21 run):** 17 were caught on the first filter run. The covered behaviours:
+- Jira key upper-casing and the `/browse/` address (A1, A2).
+- The Jira and GitHub switches and the "Issue #N" label (A3, A4, A5).
+- The `https`-only check and the trailing `/` (B3, B4).
+- A captured event never reaching the control, and a release off the link not clicking (C1, C2).
+- A rest on a link not expanding the card (C3).
+- `link_focus_after` (C4).
+- Per-project base URL, and the daemon set not clearing other projects (C5, C7).
+- The read-only switch repository read (C6).
+- The GitHub switch (C8).
+- A press on a link not reaching other cards (C9).
+- The Default card showing no link (D1).
+
+The four mutants that survived their filter were:
+- B1 and B6 are the same fragment guard, caught by `jira_connection`.
+- B2 (user-info guard dropped) and B5 (empty-authority guard dropped) are equivalent mutants, because the later host-label check rejects those inputs anyway.
+
+One early attempt at D1 survived only because my mutant name had no ticket; I discarded it and re-ran with a valid name.
+
+**Not audited:** the full workspace suite and `mise run gate`; the three root-only core reds noted in the cycle log; coverage; the layout and settings snapshot re-bless diffs (taken from the log); the Windows and macOS legs; the sandbox suite.
+
+</details>
 
 ### M4 r1 verdicts (verbatim)
 
@@ -401,6 +451,7 @@ Observations (non-blocking):
 | M2 | A r1 | F4 MINOR: the inline link's 6 px focus gutter is clipped by 2 px under the expanded body's 4 px top padding when the link is the body's first row | Deferred to M4, where it can first be seen: in M2 (and M3) the link is never a Tab stop (`focusable(false)`, contract U3 staging), so no ring is drawn in the gutter, and the clipped 2 px of hit strip lie in the body's top padding, under the title. M4 shows the ring and its visual pass covers it; recorded in *Follow-ups not done*. |
 | M2 | A r1 | F5 MINOR: `over_link` runs an operation over the hovered card on every mouse event and frame | Kept by design: it walks only the one card under the pointer (a few dozen nodes), frames come only while something animates or a rest timer waits (G3, one timed wake), and the rest timer needs the link state on frames (a scroll moves the link under a still pointer, R8). A per-layout cache would also have to follow the expanded body's own scroll offset, state the grid does not hold. Confirmed by review A r2. |
 | M4 | A r2 | F1 MINOR (optional): `LinkFocus::of` runs on every message and clones the active project `PathBuf` and the expanded location, even with the Overview closed | Declined: two small clones per message are negligible beside the update they bracket (no measurable cost; the reviewer marks the fix optional). Snapshotting the project only when a link is shown would add a second condition to the F2 project-switch guard that review A r2 and the visual pass r2 just verified, and would force another review, visual and gate round for no user-visible gain. |
+| close | TDD verify r1 | F2 LOW: `tdd-profile.md` has `mutation: null` and `coverage: null`, so test strength rests on hand-made mutants | Accepted: the verifier gives no remediation inside the feature; its 21 hand-made mutants were all caught or equivalent (after F1). Installing cargo-mutants or a coverage tool is a repo-wide decision outside this feature. |
 | M5 | A r1 | F1 MINOR: each setter in the `SettingsSet` chain broadcasts its own `SettingsChanged`, so a save with `jira_connection` and `jira_base_url` first echoes the old base-URL map | Not small or local: a combined `ProjectJiraChange` for connection + base URL would still leave the earlier echoes of `set_jira_enabled` and `set_github_issues_enabled` (between the two in the chain, `server.rs` ~1404–1419) carrying the old maps, so the flicker remains whenever the switch changes in the same save. The real fix is one broadcast per `SettingsSet` for every field, a change to the pre-existing pattern (features 533, 1102 and others) outside this PR; the final state is correct (reviewer). |
 
 ## Handover
