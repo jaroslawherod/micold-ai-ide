@@ -1168,6 +1168,27 @@ mod tests {
                 .map(|p| p.bounds.width)
                 .unwrap_or_else(|| panic!("{line:?} is not painted"))
         };
+        // Precondition of the comparison: one `i` is narrower than the strip, so a strip lost
+        // from the text's room always costs the run at least one glyph.
+        let glyph = Mounted::new_in(
+            container(wrapped::<String>(
+                "i".to_string(),
+                TypeRole::Body,
+                roles().on_surface_variant,
+                roles(),
+            ))
+            .width(Length::Fixed(room)),
+            Size::new(room, 4000.0),
+        )
+        .painted_text()
+        .into_iter()
+        .find(|p| p.content == "i")
+        .map(|p| p.bounds.width)
+        .expect("one `i` is painted");
+        assert!(
+            glyph > 0.0 && glyph < super::super::scrollable::BAR_FOOTPRINT,
+            "an `i` ({glyph} wide) is not narrower than the strip, so a lost strip could go unseen"
+        );
         let (full_room, (in_body, _)) =
             (wraps(free.painted_text()), expanded_at(&m, width, roles()));
         let in_body = wraps(in_body);
