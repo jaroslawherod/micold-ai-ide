@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: implement M1
-- **Next step**: M1 verify — review B, full gate, then push
+- **Phase**: pr M1
+- **Next step**: M1 PR — push, then orchestrator opens the PR from the title/body files and waits on CI
 
 ## Pull requests
 
@@ -56,28 +56,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | speckit-analyze | 1 | — | 0 CRITICAL, 0 HIGH; 4 MEDIUM fixed (M6 Satisfies, T039 #939 footer precondition, T003 escalation path, FR cites); LOW T1 (task size) not acted on |
 | Tasks review | 1 | 95d88fdccb0d89fd5614e3eab661ae7ae4eb7836:05fc6fbe5aecacd794c413bcf2ff70a83c337b00 | CLEAN; 3 MINOR fixed (checklist ticked after reviewer confirmed no markers; T003 after T002; T036 routing test) |
 | Review A M1 (code-review high) | 1 | 77e2180ce36783dd94cad9a7a7b89e5e6bf07015:3df85b84533bf6775439c57d7c3207cde3b648c9 | CLEAN; 3 MINOR: F2 (`totals_line` → `Option`, note only with a cost) and F3 (bound tracks held seqs, live seq gap) fixed with a test; F1 declined |
+| Review B M1 (conformance, sonnet) | 1 | dcf8a4a7ee3df67c8cba53abd724893bd1ad62a9:520a46447de01102919168516cd1f256e52b8a2d | CHANGES: F1 MAJOR (no `tdd/cycle-log.md`) fixed — red reproduced by stubbing, `tdd/cycle-log.md` added (evidence only, no code change, so no re-run); F2 MINOR (declined finding outside the table) fixed. Verify: `structured_insights` 26/26, `structured_transcript` 37/37, lib filter 9/9, capture test 11/11 |
 
 ## Declined review findings
 
-- Review A M1 F1 [MINOR] — digest a `result` line that #938's parse leaves `Unrecognised` (a string token count): declined per D12. #939 shows no footer for such a line, so its per-turn figures would have nowhere to show; counting it in the totals while the transcript shows no turn would disagree with what the user sees. `insights-tolerance.jsonl` pins the behaviour.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A (code-review high) | F1 [MINOR] digest a `result` line #938's parse leaves `Unrecognised` (a string token count) | D12: #939 shows no footer for such a line, so its per-turn figures would have nowhere to show, and counting it in the totals while the transcript shows no turn would disagree with what the user sees; `insights-tolerance.jsonl` pins it |
 
 ## Handover
 
-- **Done**: M1 implement — T001–T015 ticked, committed (`feat(944): core session insights …`).
-  Branch reset to origin/main at 5f95db21 first. Local checks green: `cargo test -p micold-core
-  --test structured_insights --test structured_transcript`, `cargo test -p micold-core --lib --
-  structured::insights format` (the tasks' Verify line needs the `--`: cargo takes one filter
-  before it), `bash scripts/tests/capture-stream-json.test.sh`, `cargo clippy -p micold-core
-  --all-targets -D warnings`, `cargo fmt`. The micold-client change (T006, `worktree_form.rs`
-  calls `micold_core::format::group_digits`) is not built yet.
-- **Next step**: verify.md step 1 — scoped gate with review A (`code-review` high on
-  `origin/main...HEAD`); then review B (conformance, sonnet), full gate (`scripts/gate.sh`),
-  push (`--force-with-lease=claude/project-thread-lllxzt:` the first time), PR title/body files.
-  No visual change in M1 (core only), so no visual pass.
-- **Open findings**: none (no review run yet). D11, D12 and the #939 follow-up recorded above.
-- **PR**: none yet.
+None.
 
 ## Open escalation
 
