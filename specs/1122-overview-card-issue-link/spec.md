@@ -27,8 +27,9 @@ flow:feature. Builds on features 1120 (`specs/1120-overview-card-readability`) a
   (`specs/1121-overview-card-full-text/spec.md#Terms`). The expanded card shows the full branch name
   where the collapsed card shows the short branch (1121 FR-004).
 - **Ticket**: the issue reference a worktree's directory name carries before its ticket boundary,
-  read the way the card's issue-title lookup already reads it (feature 813, T054): `feat-1122_slug`
-  carries `1122`, `feat/MIC-87_slug` carries `MIC-87`.
+  read the way the card's issue-title lookup already reads it (feature 813, T054): the directory
+  `feat-1122_slug` carries `1122`, and the directory `feat-mic-87_slug` (branch `feat/mic-87_slug`)
+  carries `mic-87`, read as the Jira key `MIC-87`.
 - **GitHub ticket**: a ticket that is all decimal digits. **Jira key**: a ticket of the Jira form,
   a project key (a letter, then letters, digits or `_`) followed by `-` and a decimal number,
   compared ignoring letter case and written upper case (`mic-87` reads `MIC-87`).
@@ -71,20 +72,23 @@ location is selected.
    link.
 5. **Given** a project with no GitHub repository, **When** a worktree's name carries a GitHub
    ticket, **Then** its card shows no issue link.
+6. **Given** the GitHub issues switch (feature 1102) off, **When** a worktree's name carries a
+   GitHub ticket, **Then** its card shows no issue link; turning the switch on shows it without a
+   restart (FR-001 working assumption, FR-012).
 
 ---
 
 ### User Story 2 - Open a worktree's Jira issue from its card (Priority: P2)
 
-A developer whose team tracks work in Jira names worktrees after Jira keys (feature 533 names them
-`feat/MIC-87_slug`). They enter their Jira base URL in Settings once; from then on each such card
+A developer whose team tracks work in Jira names worktrees after Jira keys (feature 533 names their directories
+`feat-mic-87_<slug>`). They enter their Jira base URL in Settings once; from then on each such card
 carries "Issue MIC-87", and a click on it opens `<Jira base URL>/browse/MIC-87`.
 
 **Why this priority**: It extends the same link to the project's other tracker; without the setting
 it shows nothing, so it costs no one who does not use Jira.
 
-**Independent Test**: With the Jira integration on and the Jira base URL unset, show a card for
-`feat/MIC-87_add-login` and check it has no link; set the base URL to
+**Independent Test**: With the Jira integration on and the Jira base URL unset, show a card for the
+worktree `feat-mic-87_add-login` and check it has no link; set the base URL to
 `https://example.atlassian.net/` in Settings, check the card now shows "Issue MIC-87", click it and check the browser is asked to open
 `https://example.atlassian.net/browse/MIC-87`.
 
@@ -105,8 +109,12 @@ it shows nothing, so it costs no one who does not use Jira.
    (`https://jira.example.com/jira`), **When** a link is built, **Then** it has exactly one `/`
    before `browse` (`https://example.atlassian.net/browse/MIC-87`,
    `https://jira.example.com/jira/browse/MIC-87`).
-6. **Given** the Overview open in two windows, **When** the user sets or clears the Jira base URL in
-   one, **Then** Jira links appear or disappear in both without a restart.
+6. **Given** the Overview open in two windows, **When** the user sets or clears the Jira base URL, or
+   turns the Jira integration switch on or off, in one, **Then** Jira links appear or disappear in
+   both without a restart.
+7. **Given** the Jira base URL set and the Jira integration switch (feature 533) off, **When** a
+   worktree's name carries a Jira key, **Then** its card shows no issue link (FR-001 working
+   assumption).
 
 ---
 
@@ -141,7 +149,7 @@ Shift+Tab do from the link.
    (feature 1121 FR-005).
 5. **Given** focus on an issue link, **When** the user presses the Menu key or Shift+F10, **Then**
    the card's menu opens as from the card (feature 972), and closing it without a choice returns
-   focus to the card (972 FR-011).
+   focus to the link it was opened from, without re-expanding a card collapsed by Escape (FR-009).
 6. **Given** focus on an issue link of an expanded card whose body scrolls (1121 FR-008), **When**
    focus arrives on the link or the user presses Page Up or Page Down, **Then** the body scrolls so
    the link is in view on arrival, and Page Up / Page Down scroll the body as from the card.
@@ -196,7 +204,8 @@ compare with a card without a link.
   notification feature 031 FR-015 defines, naming the address and the reason; the Overview stays as
   it was.
 - **Window loses focus to the browser**: the expanded card collapses (1121 FR-005); the Overview
-  stays open, and focus is on the link when the window comes back.
+  stays open. After a keyboard activation focus is on the link when the window comes back; after a
+  click, keyboard focus is where it was before the click (FR-005).
 - **Same issue on two worktrees**: each card has its own link to the same address.
 - **Jira key with no base URL, GitHub ticket with no GitHub repository**: no link, and nothing on
   the card says one is missing.
@@ -235,13 +244,19 @@ compare with a card without a link.
   `/browse/<KEY>`.
 - **FR-005**: A primary click on an issue link (press and release both on it), and Enter or Space
   while it has keyboard focus, MUST activate the link and MUST NOT activate the card: no ripple, no
-  location selected, the Overview stays open, full screen stays as it was.
+  location selected, the Overview stays open, full screen stays as it was. A primary press that
+  starts on an issue link MUST NOT start a ripple (replacing feature 971 FR-001 for the link's area);
+  a press that starts outside the link and is released on it starts the ripple as 971 FR-001
+  defines, and it fades as after any press released off its target. A pointer press on an issue
+  link MUST NOT move keyboard focus, so a click never expands a collapsed card through FR-008.
 - **FR-006**: A press and release on the card outside its issue link, a secondary click anywhere on
-  the card including on its link, and every key on the card MUST behave as feature 1121 FR-010 and
+  the card including on its link, and every key on the card except Tab and Shift+Tab (FR-008) MUST behave as feature 1121 FR-010 and
   FR-011 define; a press on the link released outside it, or the reverse, MUST do nothing.
 - **FR-007**: While the pointer rests on the issue link of a collapsed card, that card MUST NOT
   expand on that rest; a rest on any other part of the card expands it as feature 1121 FR-002
-  defines. An expanded card MUST stay expanded while the pointer is on its link.
+  defines. An expanded card MUST stay expanded while the pointer is on its link. For feature 1121
+  FR-005's re-expansion rule, a rest on a card's link counts as a rest on that card: a focused card
+  does not expand again while the pointer rests on another card's link, so it never covers that link.
 - **FR-008**: The issue link MUST be a keyboard focus stop reached by Tab right after its own card
   and by Shift+Tab right before the next card; the arrow keys MUST move between cards only, from a
   link as from its card. While a card's link has focus the card counts as focused for feature 1121
@@ -249,12 +264,14 @@ compare with a card without a link.
   link MUST NOT re-expand a card collapsed by Escape. A focused link MUST show a focus ring; if it
   lies in the scrolled part of an expanded card's body, the body MUST scroll to show it.
 - **FR-009**: The Menu key or Shift+F10 on a focused link MUST open the card's menu as on the card
-  (feature 972); Escape on a focused link MUST do what it does on its card (feature 1121 FR-005),
+  (feature 972), and closing that menu without a choice MUST return focus to the link, not the card
+  (replacing 972 FR-011's hand-back for this case), counting as a move between a card and its own
+  link (FR-008); Escape on a focused link MUST do what it does on its card (feature 1121 FR-005),
   leaving focus on the link.
 - **FR-010**: Settings MUST have a **Jira base URL** field in its Jira section, empty by default,
   with one line saying it is used to link Jira keys on the Overview's cards, and kept in
-  `settings.json`; under FR-001's working assumption it shows, like the section's other controls,
-  only while the Jira integration is on (feature 533 FR-001); a settings file without it MUST read
+  `settings.json`; like the section's other controls it shows only while the Jira integration is on
+  (feature 533 FR-001); a settings file without it MUST read
   as unset. [NEEDS CLARIFICATION: Is the Jira base URL one new app-wide field, as the issue says, one field per project like the Jira connection
   (feature 533 FR-007), or no new field at all, the open project's Jira connection site (533 FR-006)
   serving as the base? Working assumption: one new app-wide field.]
@@ -262,7 +279,8 @@ compare with a card without a link.
   optional path, store it with any trailing `/` removed, and MUST refuse, marking the field with
   the reason and storing nothing, a value that is not `https`, names no host, or has a user name, a
   query or a fragment. Clearing the field MUST unset it.
-- **FR-012**: A change to the Jira base URL made in one window MUST show on the Overview's cards in
+- **FR-012**: A change to the Jira base URL, or to an integration switch FR-001 depends on, made in
+  one window MUST show on the Overview's cards in
   every open window without a restart.
 - **FR-013**: When the browser cannot be opened, the user MUST see the notification of feature 031
   FR-015, naming the address and the reason, and nothing else MUST change.
@@ -300,7 +318,12 @@ compare with a card without a link.
   before this change.
 - **SC-004**: At card widths of 280, 380 and 480 px, the issue link is shown whole on every card
   that has one, in both forms and both themes.
-- **SC-005**: A change to the Jira base URL shows on every open window's cards within 1 s.
+- **SC-005**: A change to the Jira base URL or to an integration switch shows on every open window's
+  cards within 1 s.
+- **SC-006**: A user can set the Jira base URL in Settings, and every invalid value FR-011 lists
+  (100% of its cases) is refused with a reason and leaves the stored value unchanged.
+- **SC-007**: The user guide's Overview and Settings sections describe the issue link and the Jira
+  base URL field, checked by the docs review and the recorded layout snapshot.
 
 ## Out of scope
 
@@ -323,3 +346,6 @@ compare with a card without a link.
 - The link opens in the system's default browser through the opener feature 031 already uses.
 - Inserting the link into the Tab order replaces, for Tab and Shift+Tab only, the "focus order
   unchanged" clause of feature 1121 FR-011 and Story 4 scenario 4; the arrow keys keep it.
+- A primary press that starts on an issue link starts no ripple: this replaces feature 971 FR-001
+  for the link's area only (FR-005). Closing a card menu opened from a link hands focus back to the
+  link: this replaces feature 972 FR-011's hand-back for that case only (FR-009).
