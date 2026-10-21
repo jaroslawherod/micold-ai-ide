@@ -42,5 +42,5 @@ impl BlockRenderers {
 |---|---|
 | `HighlightJob` (from `refresh`, `ShowInFull`) | `spawn_blocking` → `ui::syntax::highlight_lines` in both schemes under the time budget → `TranscriptMsg::Highlighted` |
 | `Outcome::ClipboardWriteChecked { text, ticket }` | `clipboard::write(text)` then `clipboard::read()` → `TranscriptMsg::CopyChecked { ticket, read }` (no branch, contract C3 of feature 021) |
-| copy timer after `CopyChecked` | `tokio::time::sleep(COPY_CONFIRM)` → `TranscriptMsg::CopyExpired { ticket }` |
+| `Outcome::CopyConfirmTimer { ticket, after }` (with `Copied`/`Failed`) | `tokio::time::sleep(after)` → `TranscriptMsg::CopyExpired { ticket }` |
 | `Outcome::OpenLink(OpenRequest::Url)` | existing `shell/links.rs::perform` |

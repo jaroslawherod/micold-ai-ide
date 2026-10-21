@@ -107,7 +107,7 @@ Invariant (SC-003): the `Context` + `Removed` lines are the old text's lines and
 `Part` = `Code(CodeId)` · `Diff`. `Ticket(u64)` is monotonic per window.
 
 Operations (tested in `crates/micold-client/tests/features_transcript_rich.rs`):
-`refresh(session, &Transcript) -> Vec<HighlightJob>` (derive changed revisions, prune absent keys);
+`refresh(session, &Transcript, &Grammar) -> Vec<HighlightJob>` (derive changed revisions, prune absent keys; `Grammar { knows, token }` is injected by the shell from `ui::syntax`, so the render-free cache decides which parts get a job without depending on `ui`);
 `highlighted(job, spans) -> bool` (store if the part still exists; bumps the stamp);
 `copy(session, key, code) -> Option<(String, Ticket)>`; `copy_checked(ticket, read:
 Option<String>)`; `copy_expired(ticket)`; `show_in_full(session, key, part)`; `forget(session)`;
@@ -128,7 +128,9 @@ by the shell with `ui::syntax` (research R4); answered by `TranscriptMsg::Highli
 | `Highlighted { session, key, part, spans: Spans }` | a finished highlight job → stored, stamp bumped |
 
 New `Outcome::ClipboardWriteChecked { text: String, ticket: Ticket }`: interpreted by
-`shell/clipboard.rs` without a branch (research R5).
+`shell/clipboard.rs` without a branch (research R5). New `Outcome::CopyConfirmTimer { ticket:
+Ticket, after: Duration }`: emitted with `Copied` or `Failed`; the shell sleeps `after`, then sends
+`TranscriptMsg::CopyExpired { ticket }`.
 
 ## Draw-side types (client, GUI exception)
 
