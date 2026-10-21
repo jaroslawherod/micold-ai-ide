@@ -85,7 +85,24 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-None.
+M1 unit handed over at 314k context (cap 150k), branch rebased on origin/main 4e67f211, not pushed.
+
+- **Done**: T001–T022 implemented and ticked (commits d207faf3…8218a369); fixtures recorded with
+  the container's signed-in `claude` 2.1.306 (T003, no escalation); `PROTOCOL_VERSION` 59 → 60 with
+  the `schema_hash.rs` pin; TDD log `tdd/cycle-log.md`; Decision 6 (JSON control frames → base64
+  pictures, 9 MiB per message). Review A r1 done, fixes in 8218a369 (see *Review rounds* and
+  *Declined review findings*). Core targets and the daemon's `structured_session`/`structured_resume`
+  tests pass locally.
+- **Next step**: (1) review A r2, scoped, `--model sonnet`, on
+  `scripts/autopilot/review-snapshot.sh diff b061491b31b1e8adfe7a819ba51179e7e88ac6bb:96a0defe7106c1484b328d9175dc173b7b440a05`,
+  together with the scoped gate; (2) review B (conformance, sonnet) once; no visual pass (nothing
+  visible: `EntryKind::Interrupted` draws an empty `Space` until M6); (3) full gate
+  `scripts/gate.sh`; (4) PR title/body files in the orchestrator's scratchpad
+  (`pr-title.md`, `pr-body.md`), not `gh`.
+- **Disk**: a workspace test build filled the disk (link errors, ENOSPC); the build cache was
+  deleted. Run gates with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0`.
+- **Open findings**: none beyond the declined ones.
+- **PR**: none yet.
 
 ## Open escalation
 
