@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: plan
-- **Next step**: Plan written (plan.md, research.md R1–R12, data-model.md, contracts issue-link/card-link/wire, quickstart.md). Review A of the plan (rubric plan.md, round 1) pending, then tasks unit. D3, D4 still defaults awaiting the owner; the plan follows them (R2 reads the repo regardless of the GitHub switch, so a D3 change touches only `issue_link` K2).
+- **Next step**: Review A plan round 2 (sonnet, fix diff) pending, dispatched by the orchestrator; then tasks unit. D3, D4 still defaults awaiting the owner; the plan follows them (R2 reads the repo regardless of the GitHub switch, so a D3 change touches only `issue_link` K2).
 
 ## Pull requests
 
@@ -37,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review A spec | 1 | 399604367e0651717c12d766941fef7e892d58e9:48d810a53d17d50a45ab3b3ffaabec63220e6048 | CHANGES: 5 MAJOR, 3 MINOR (F1–F8), all fixed in spec.md, none declined |
 | Review A spec | 2 | 5b39717f:af373d3b (fix diff, sonnet) | CHANGES: 1 MAJOR (F1 FR-005/FR-006 press-off-link contradiction, ripple on press), 1 MINOR (F2 SC-007 not measurable); both fixed, prose only, no round 3 |
-| Review A plan | 1 | 200e0ca569743faecd1117df47127d69ad60e7c2:29f7e6c71c906f99358fc938b2e83ab638dfb25c | pending (dispatched by orchestrator) |
+| Review A plan | 1 | 200e0ca569743faecd1117df47127d69ad60e7c2:29f7e6c71c906f99358fc938b2e83ab638dfb25c | CHANGES: 3 MAJOR (F1 link Menu key origin, F2 focus pairing across the menu, F3 repo not re-read on project switch), 2 MINOR (F4 R6 scrollbar cursor, F5 R11 rejected alternatives); all five fixed in research/data-model/contracts/plan, none declined |
 
 ## Declined review findings
 
@@ -46,7 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit, context over 150k after writing the plan. Done: plan.md, research.md (R1–R12), data-model.md, contracts/{issue-link,card-link,wire}.md, quickstart.md, committed 29f7e6c7 and pushed. Next: apply review A round 1 of the plan (prompt /tmp/claude-0/-home-user-micold-ai-ide/9f964f32-37d5-5fbc-86f4-e611005b6fc8/scratchpad/1122-prompt-review-a-plan-r1.md, snapshot 200e0ca5…:29f7e6c7) per review-rounds.md; then set Next step to `tasks unit` and return DONE, PR none. Open findings: none yet.
+None.
 
 ## Open escalation
 

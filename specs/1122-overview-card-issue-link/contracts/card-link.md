@@ -29,14 +29,18 @@ that size.
 - An event the content captures never reaches the control.
 - Otherwise the control gets it, with the cursor levitated where the content's
   `mouse_interaction` is not `None`.
-- `draw`: content, then control. `mouse_interaction`: the content's where it is not `None`, else
-  the control's. `operate`: control, then content (focus order).
+- `draw`: content, then control, the control with the same levitated cursor `update` gives it (no
+  hover layer over the link). `mouse_interaction`: the content's where it is not `None`, else the
+  control's. Over the expanded card's inner scrollbar the content answers `None`, so the control's
+  hover and pointer cursor show there, as today (R6). `operate`: control, then content (focus
+  order).
 
 ## U3 — `OverviewCard` with a link (`ui/material/overview_card.rs`)
 
 Builders: `.on_issue_link(M)` (the card shows `model.issue_link` only with it), `.link_id(Id)`,
 `.on_link_keyboard_focus(Fn(bool) -> M)`, `.on_link_rest(M)` (read by the grid like `on_rest`).
-The link reuses the card's `on_menu_key` and `on_page`. Tests, each on the collapsed and the
+`.on_link_menu_key(M)` (the link's Menu key / Shift+F10: `Msg::LinkMenuRequested(l)`, R9). The link
+reuses the card's `on_page`. Tests, each on the collapsed and the
 expanded card:
 
 - Click on the link → only the link's message; no ripple started; the card does not take the
@@ -74,6 +78,14 @@ Tested with `Mounted` on a three-card grid where the middle card has a link.
   jira_on: settings.jira_enabled }`.
 - `Msg::IssueLinkActivated(l)` → `shell::links::perform(OpenRequest::Url(address))` with the address
   recomputed from state; nothing when the link is gone; Overview state unchanged (FR-004, FR-013).
-- `MenuOrigin::KeyboardFromLink` → closing the menu focuses `card_link_id(l)` (FR-009).
+- `Msg::LinkMenuRequested(l)` → `overview_message` opens the menu anchored in the focused link's
+  bounds with `MenuOrigin::KeyboardFromLink`; the card's `CardMenuRequested` still opens it with
+  `Keyboard` (`main_tests.rs`, both origins).
+- `MenuOrigin::KeyboardFromLink` → first entry highlighted as `Keyboard`; closing the menu without a
+  choice focuses `card_link_id(l)` (FR-009).
+- `DaemonMsg::Attached` for the active project with the Overview open and `repo` `Unknown` →
+  `shell::issues::read_repo` sends `RemoteList` (R2). Test (`daemon_sync` / `main_tests.rs`): switch
+  project with the Overview open → `ProjectSwitched` clears `repo` → `Attached` sends the read →
+  `RepoRead` for the new project → the card shows its GitHub link.
 - Reducer tests (`app.rs` / `features::overview`): `RepoRead` recorded and dropped for another
   project; `ProjectSwitched` clears `repo`; `IssueLinkActivated` changes no state.

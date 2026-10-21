@@ -108,7 +108,8 @@ beside `jira_enabled` (W2); `tests/jira_base_url_setting.rs` (new).
 - **`src/ui/material/card_grid.rs`**: link press routing (R7), `(card, on_link)` rest target (R8) —
   U5.
 - **`src/features/overview.rs`**: `State.repo: RepoLookup`, `Msg::{RepoRead, IssueLinkActivated,
-  CardStepped}`, `MenuOrigin::KeyboardFromLink`; `ProjectSwitched` clears `repo` (R2, R9, R10).
+  CardStepped, LinkMenuRequested}`, `MenuOrigin::KeyboardFromLink` (handled as `Keyboard`);
+  `ProjectSwitched` clears `repo` (R2, R9, R10).
 - **`src/features/settings.rs`**: `State.jira_base_url`, `JiraDraft.base_url`, validation and the
   `SettingsSet` value; **`src/features/window.rs`**: `FieldId::SettingsJiraBaseUrl` (R4).
 - **`src/ui/settings/jira.rs`**: the **Jira base URL** field and note; `SETTINGS` entry (R4).
@@ -116,8 +117,10 @@ beside `jira_enabled` (W2); `tests/jira_base_url_setting.rs` (new).
   = `card_link_id(location)` (new); `step_card` (U4); `issue_link_for(state, location)`.
 - **`src/ui/mod.rs`**: the Overview arrow listener sends `Msg::CardStepped` (R9).
 - **`src/main.rs`**: `IssueLinkActivated` → `shell::links::perform`; `CardStepped` → `step_card` then
-  `scroll_focused_into_view`; `card_focus_return` focuses the link for `KeyboardFromLink` (R9, R10).
-- **`src/shell/issues.rs`**: `on_overview_opened` reads the remotes while `repo` is `Unknown`;
+  `scroll_focused_into_view`; `LinkMenuRequested` → the menu anchored on the link with
+  `KeyboardFromLink`; `card_focus_return` focuses the link for `KeyboardFromLink` (R9, R10).
+- **`src/shell/issues.rs`**: `read_repo` (new), called by `on_overview_opened` and by
+  `daemon_sync.rs`'s `Attached` arm while the Overview is open and `repo` is `Unknown`;
   `on_title_remotes` records `RepoRead` before the switch gate (R2).
 - **`src/shell/persist.rs`**, **`src/shell/daemon_sync.rs`**, **`src/shell/startup.rs`**: the
   `jira_base_url` lines beside `jira_enabled` (found with `grep -n jira_enabled`).
@@ -139,7 +142,7 @@ version 58 and the new service-owned setting.
 
 | FR | Where | Test layer |
 |---|---|---|
-| FR-001 when a link shows; switches | `issue_link` K2; `ui::overview::card` sources; `RepoLookup` | core unit; client reducer (repo read, project switch); covered state |
+| FR-001 when a link shows; switches | `issue_link` K2; `ui::overview::card` sources; `RepoLookup`; re-read on `Attached` (R2) | core unit; client reducer (repo read, project switch); client switch-with-Overview-open test (U6); covered state |
 | FR-002 label | `issue_link` K2 | core unit |
 | FR-003 placement, never clipped | `OverviewCard` R11 | client U3 at 280/380/480 both forms; layout snapshot gates |
 | FR-004 address | `issue_link` K2–K3, `JiraBaseUrl` | core unit; quickstart §B3 |
@@ -147,7 +150,7 @@ version 58 and the new service-owned setting.
 | FR-006 rest of the card unchanged; secondary click | `ControlOverlay` routing, `ContextArea` outermost | client U3 (existing card tests stay green) |
 | FR-007 rest on the link | `CardGrid` U5, `Expansion` K5 | core unit; client U5 |
 | FR-008 Tab stop, arrows, focus counts for the card | traversal order U2, `step_card` U4, K5 | core unit; client U3, U4 |
-| FR-009 menu key, Escape on the link | `MenuOrigin::KeyboardFromLink`, `card_focus_return`; `on_escape` unchanged | reducer test; quickstart §B6 |
+| FR-009 menu key, Escape on the link | `Msg::LinkMenuRequested`, `MenuOrigin::KeyboardFromLink`, `card_focus_return`; `Expansion` hold across the menu (K5); `on_escape` unchanged | core unit (K5); client `main_tests.rs` (both origins) and reducer test; quickstart §B6 |
 | FR-010 settings field, default, stored | `Settings`, `JiraDraft`, `ui/settings/jira.rs` | `settings_roundtrip.rs`; `settings_sections.rs`; §B2 |
 | FR-011 validation | `JiraBaseUrl::parse` K4 | core unit; client draft test (field marked, nothing sent) |
 | FR-012 every window, no restart | service-owned field W2; per-render cards | daemon `jira_base_url_setting.rs`; client `adopt_daemon_settings` test |
