@@ -125,3 +125,12 @@ Red runs recorded live, each before its implementation existed; commands with
   `PermissionResolved` is broadcast before its own `OperationOk`, and the `answer` helper dropped
   it. The tests' client now keeps what it reads past (`Window`).
 - Green: `structured_permission` 13 passed, `structured_session` 14 passed.
+
+### Cycle 4 — T032 hang-up withdrawal, after review A F3 / review B F1 (MINOR)
+
+- The withdrawal moved into a drop guard (`WithdrawOnDrop`), so a pending request is withdrawn
+  however its wait ends, and `a_request_whose_agent_hangs_up_is_withdrawn` was added.
+- Red: with the guard replaced by a no-op, `cargo test -p micold-daemon --test
+  structured_permission a_request_whose_agent`: 1 failed, `the message arrives` (no
+  `PermissionResolved { Withdrawn { AgentHungUp } }`).
+- Green: `structured_permission` 14 passed.
