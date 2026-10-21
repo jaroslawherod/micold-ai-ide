@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1210
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
-- **Phase**: clarify
-- **Next step**: Run the plan unit (clarify done: FR-004 best effort, FR-008 app-wide setting)
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -29,6 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Review rounds
+
+- plan r1 (d3ad9a32...:d703bce5...): CHANGES, 2 MAJOR fixed. plan r2 (7fbf2284...:fe467967...): CLEAN (MINOR: version.rs, daemon_sync.rs not listed; covered by "grep it").
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
