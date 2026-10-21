@@ -462,6 +462,25 @@ impl Message {
     }
 }
 
+/// What an event asks of the showcase, whether or not a widget captured it: [`key_message`] for a
+/// key press, nothing for anything else.
+///
+/// The capture status is ignored on purpose. The gallery poses a *focused* `TerminalPane`, and a
+/// focused pane writes every key it can encode to its process and captures it, Tab included. Only
+/// listening to uncaptured keys (`iced::keyboard::listen`) is why Tab did nothing in the showcase
+/// (feature 1122, M1 visual pass r2 F1). In a gallery no instance owns the keyboard, so the page
+/// hears every key.
+pub fn event_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    match event {
+        iced::Event::Keyboard(key) => key_message(key),
+        _ => None,
+    }
+}
+
 /// What a key press asks of the showcase: Escape dismisses whatever floating surface is open, and
 /// Tab and Shift+Tab move the focus through [`crate::ui::focus_move_message`], the mapping the
 /// application listens with. Anything else is not the showcase's.

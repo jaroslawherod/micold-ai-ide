@@ -47,9 +47,10 @@ fn update(showcase: &mut Showcase, message: Message) -> Task<Message> {
 /// Escape dismisses whatever floating surface is open, exactly as it does in the application: the
 /// keypress arrives through the keyboard subscription, outside the widget tree, so the owner of the
 /// surface has to be the one to hear it. Tab and Shift+Tab move the focus, so a focus ring can be
-/// seen here too ([`micold_client::showcase::state::key_message`]).
+/// seen here too. Captured keys count: the gallery's focused terminal pane captures Tab
+/// ([`micold_client::showcase::state::event_message`]).
 fn subscription(_showcase: &Showcase) -> Subscription<Message> {
-    iced::keyboard::listen().filter_map(micold_client::showcase::state::key_message)
+    iced::event::listen_with(micold_client::showcase::state::event_message)
 }
 
 pub fn main() -> iced::Result {
