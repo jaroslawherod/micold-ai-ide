@@ -105,7 +105,9 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-None.
+- **Done**: M4 T031–T037 (core K5 focus part + menu hold, card `.on_link_menu_key` + page keys on the link, root `KeyboardFromLink` menu / focus return to the link / link→card hand-off, user guide) and the deferred review A M2 F4 gutter fix. Full gate r2 GREEN on c04408a4; pushed (branch at the ledger commit after it). No PR yet.
+- **Next step**: the orchestrator runs review A r1 (session model), review B r1 (sonnet) and the visual pass r1 (T038, sonnet, autopilot-worker) from the scratchpad prompts `1122-m4-prompt-review-a-r1.md`, `1122-m4-prompt-review-b-r1.md`, `1122-m4-prompt-visual-r1.md` (snapshot f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386). A fresh milestone unit acts on the verdicts (review-rounds.md), ticks T038 when the visual pass passes (evidence in visual-pass/m4/), runs the full gate on the final tree if code changed, and writes the PR text (title "#1122: Overview cards: link to the worktree's issue — M4: issue links by keyboard", body per pr.md with `Refs #1122`) to the scratchpad.
+- **Open findings**: none yet.
 
 ## Open escalation
 
