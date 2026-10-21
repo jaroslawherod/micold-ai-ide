@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M2
-- **Next step**: M2 T010–T018 done (d05aad46; R11 amended: Fill branch, `TextLink::inline`). Full gate running on d05aad46; review A r1, review B r1 and the visual pass (T019) requested together. Then fixes, full gate, push, PR text. The D4 amendment commits ride along in M2's PR.
+- **Next step**: M2 T010–T018 done (d05aad46; R11 amended: Fill branch, `TextLink::inline`). Full gate running on d05aad46; review A r1, review B r1 and the visual pass (T019) requested together. Gate r1 red on material_boundary, fixed d94cc82e; gate r2 GREEN on d94cc82e, pushed. Then fixes, full gate, push, PR text. The D4 amendment commits ride along in M2's PR.
 
 ## Pull requests
 
@@ -70,9 +70,11 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A M1 | 6 | 26eeeb1fc8c8cccda3ad3c1adc715ae6fe1e7d25:d8d8469762d85b03bea08e4c1fcc97e0d0a34bf8 | CLEAN (sonnet, r5 fix diff) |
 | Review A plan amend D4 | 1 | 1a021e7be429ef5efa89f02f4283924163533d8b:0164f37579efae69cade704acdcc2f6633307cab | CHANGES (session model): F1 MAJOR the *Project forgotten* behaviour (spec edge cases, data-model) had no test task or quickstart step: fixed, T041 gains the forget/re-add case (`ProjectAdd` A, set, `ProjectRemove` A, entry still in `stored(dir)` and the next `DaemonSettings`, `ProjectAdd` A again resolves it by `connection_key`). F2 MINOR T045 did not say `JiraDraft::follow` (settings.rs:510) needs the map: fixed, T045 names the `base_urls: &BTreeMap<String, JiraBaseUrl>` parameter and its callers (persist.rs:288, daemon_sync.rs:1073, main_tests.rs:3270, settings.rs tests). F3 MINOR the moved `set` helper (jira_setting.rs:45) cannot send a base URL: fixed, T041 says `set` gains a `jira_base_url` argument, existing callers pass `None` |
 | Review A plan amend D4 | 2 | c627583d8ac12b7a3566014f16b20b741c372013:ae2b013038751aac9eeaf86abab1620426bb12d9 | CLEAN (sonnet, fix diff ae2b0130..8ebea0f9) |
-| Review A M2 | 1 | 3e7be4ef9df20f2e7f0df83fda9bf4d481863acb:d05aad464dd69de3dc8c01fcbe301ed1ebed692d | pending (session model, code-review high; prompt 1122-m2-prompt-review-a-r1.md) |
-| Review B M2 | 1 | 3e7be4ef9df20f2e7f0df83fda9bf4d481863acb:d05aad464dd69de3dc8c01fcbe301ed1ebed692d | pending (sonnet, conformance; prompt 1122-m2-prompt-review-b-r1.md) |
-| Visual pass M2 | 1 | 3e7be4ef9df20f2e7f0df83fda9bf4d481863acb:d05aad464dd69de3dc8c01fcbe301ed1ebed692d | pending (sonnet, showcase §B1; prompt 1122-m2-prompt-visual-r1.md) |
+| Full gate M2 | 1 | d05aad46 | RED: `material_boundary` counted `Operation::<..>::scrollable(` in `ui/focus.rs` as building a wrapped widget; fixed d94cc82e |
+| Full gate M2 | 2 | d94cc82e | GREEN |
+| Review A M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | pending (session model, code-review high; prompt 1122-m2-prompt-review-a-r1.md) |
+| Review B M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | pending (sonnet, conformance; prompt 1122-m2-prompt-review-b-r1.md) |
+| Visual pass M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | pending (sonnet, showcase §B1; prompt 1122-m2-prompt-visual-r1.md) |
 
 ## Declined review findings
 
@@ -81,7 +83,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-M2 unit handed over at the context cap (checkpoint 284k). Done: T010–T018 in d05aad46 (cycle log *M2*; research R11 and contract U1 amended: Fill branch, `TextLink::inline`); ledger 9c933927. Full gate on d05aad46: see the scratchpad's gate-m2-1.log (`GATE_EXIT=`). Requested together, not yet run: review A r1 (session model, prompt 1122-m2-prompt-review-a-r1.md), review B r1 (sonnet, 1122-m2-prompt-review-b-r1.md), visual pass r1 = T019 (sonnet, 1122-m2-prompt-visual-r1.md; evidence to `visual-pass/m2/`). Next: act on the verdicts (review-rounds.md), tick T019 on a visual PASS, full gate on the final tree (scripts/gate.sh, detached), push `git push -u origin HEAD:refs/heads/claude/project-thread-7041o6`, write pr-title.txt (`#1122: Overview cards: link to the worktree's issue — M2: card with its issue link`) and pr-body.md (mention the D4 amendment commits riding along; label docs-not-needed; ends `Refs #1122`), return DONE "PR: ready". No PR open.
+M2 unit handed over at the context cap (checkpoint 284k). Done: T010–T018 in d05aad46 (cycle log *M2*; research R11 and contract U1 amended: Fill branch, `TextLink::inline`); ledger 9c933927. Full gate r1 on d05aad46 RED (`material_boundary`: `focus.rs widgets=1`, the explicit `Operation::scrollable(` call in `FocusedBounds`), fixed in d94cc82e; gate r2 on d94cc82e GREEN (pushed). Requested together, not yet run: review A r1 (session model, prompt 1122-m2-prompt-review-a-r1.md), review B r1 (sonnet, 1122-m2-prompt-review-b-r1.md), visual pass r1 = T019 (sonnet, 1122-m2-prompt-visual-r1.md; evidence to `visual-pass/m2/`). Next: act on the verdicts (review-rounds.md), tick T019 on a visual PASS, full gate on the final tree (scripts/gate.sh, detached), push `git push -u origin HEAD:refs/heads/claude/project-thread-7041o6`, write pr-title.txt (`#1122: Overview cards: link to the worktree's issue — M2: card with its issue link`) and pr-body.md (mention the D4 amendment commits riding along; label docs-not-needed; ends `Refs #1122`), return DONE "PR: ready". No PR open.
 
 ## Open escalation
 
