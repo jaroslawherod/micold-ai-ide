@@ -64,12 +64,16 @@ crates/micold-core/src/worktree_guard/     # NEW
 ├── mod.rs       # decide(), GuardInput, GuardVerdict, deny message
 ├── paths.rs     # lexical + injected-normaliser path containment (FR-014)
 └── shell.rs     # best-effort Bash analysis (FR-004)
-crates/micold-core/src/protocol/messages.rs  # worktree_guard_enabled on DaemonSettings + request (version bump)
-crates/micold-daemon/src/hooks.rs          # settings_json adds permissions.deny; PreToolUse deny response
-crates/micold-daemon/src/catalog.rs        # worktree_guard_enabled setting (beside tool_server_enabled)
-crates/micold-daemon/src/state.rs          # per-session guard context at launch; frozen opt-out state
+# worktree_guard_enabled is mirrored everywhere tool_server_enabled is (grep it to list sites):
+crates/micold-core/src/settings.rs         # persisted Settings: default true, serde default, mirror struct
+crates/micold-core/src/protocol/messages.rs  # DaemonSettings field + edit request Option<bool> (version bump)
+crates/micold-daemon/src/catalog.rs        # settings_wire, getter and setter
+crates/micold-daemon/src/server.rs         # edit-request handler
+crates/micold-client/src/features/settings.rs, shell/persist.rs, features/session.rs, shell/startup.rs  # toggle row and plumbing
+# enforcement:
+crates/micold-daemon/src/hooks.rs          # settings_json adds permissions.deny; new respond-with-JSON-body path; PreToolUse branch calls core decide; prepare_settings takes a GuardState (today only StatusContext)
+crates/micold-daemon/src/state.rs          # builds GuardState at launch (hook_settings_file); worktree list read from the catalog via a DaemonState accessor; frozen opt-out
 crates/micold-daemon/src/mcp/tools.rs      # create_worktree result text (FR-010)
-crates/micold-client/src/features/settings/ # toggle row
 docs/user-guide/{settings,agent-tools,worktrees-and-sessions}.md
 ```
 
@@ -80,7 +84,7 @@ docs/user-guide/{settings,agent-tools,worktrees-and-sessions}.md
 | FR | Where |
 |---|---|
 | FR-001, FR-008 | `state.rs` launch path adds guard to `--settings` unless setting off; `catalog.rs` setting; client toggle |
-| FR-002, FR-011 | `worktree_guard::decide` over Edit/Write/MultiEdit/NotebookEdit `file_path` and Bash `cwd`/command |
+| FR-002, FR-011 | `worktree_guard::decide` over Edit/Write/MultiEdit/NotebookEdit `file_path` and Bash command and top-level payload `cwd` |
 | FR-003, FR-010 | `worktree_guard::DENY_MESSAGE`; `mcp/tools.rs` result text |
 | FR-004 | `worktree_guard::shell` |
 | FR-005, FR-006 | `permissions.deny` in `hooks.rs::settings_json`; `mcp__micold__create_worktree` untouched |
@@ -98,3 +102,7 @@ docs/user-guide/{settings,agent-tools,worktrees-and-sessions}.md
 | FR-008, SC-004 | daemon unit (launch with setting off emits no guard) |
 | FR-010 | daemon unit on result text |
 | Toggle | client unit; no geometry/visual change (existing row) |
+| Setting persistence and protocol round-trip (Option<bool> edit, version bump, default true) | core unit (settings.rs, messages.rs) |
+| Frozen opt-out (R7) | daemon unit: toggle after launch leaves the session's state unchanged |
+| SC-005 | core unit asserting a decision on a 50-worktree input completes well under 100 ms |
+| Deny rules match real git forms | core unit matching the rule strings against `git worktree add`, `git -C . worktree add`; quickstart §B for the real CLI |

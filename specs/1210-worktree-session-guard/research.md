@@ -3,6 +3,7 @@
 ## R1 Enforcement channel
 Decision: answer `PreToolUse` on the existing loopback hook receiver with `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":<msg>}}`, plus static `permissions.deny` for the enter and `git worktree add` rules, both in the per-session `--settings` file.
 Rationale: the receiver already gets every `PreToolUse` with `tool_input`, `cwd` and the session id in the URL; no new process, no user config touched (FR-013), works for every project (FR-001).
+Evidence: Claude Code processes a 2xx HTTP-hook response body as hook output (JSON `hookSpecificOutput` as for command hooks); the receiver's body-less `200 OK` is accepted today as no decision. A daemon test proves the receiver emits the deny body; quickstart B step 1 proves the agent sees it. The receiver needs a `respond` variant with a JSON body and a PreToolUse branch calling core `decide`; the hook timeout bounds the response time (SC-005).
 Rejected: a command hook binary (extra process per call, packaging on 3 OSes); per-repo `.claude/settings.json` (per-repo, #944's flaw); sandbox filesystem rules (do not cover the Default session and give no `create_session` message).
 
 ## R2 Deny rule coverage of `git -C <dir> worktree add`
@@ -24,11 +25,12 @@ Rejected: per-project allowlist setting (violates FR-001/FR-008 simplicity).
 
 ## R6 Worktree list source and freshness
 Decision: the receiver resolves the project's current list from the daemon catalog (already reconciled via `worktree::parse_worktrees`/`reconcile`), not `git` per call. A removed worktree vanishes from the list (edge case satisfied).
+Access: a `DaemonState` accessor over the catalog's reconciled worktrees; the receiver gets it through a handle passed with the per-session GuardState in `prepare_settings`.
 Rejected: spawning `git worktree list` per call (latency, SC-005).
 
 ## R7 Session binding and opt-out freeze
 Decision: at launch the daemon computes the session's guard context (own path, project root, Default flag) and whether the setting is on; off means no guard hook response and no deny rules written. The guard state is stored per session id in the receiver map next to its token, so toggling later affects only new sessions.
-Rejected: reading the setting per call (violates the edge case).
+Rejected: reading the setting per call (violates the edge case); a shared flag in the receiver (leaks across sessions, Principle II).
 
 ## R8 Opt-out storage
 Decision: `worktree_guard_enabled: bool` (default true) in `DaemonSettings`, mirroring `tool_server_enabled` (catalog.rs, messages.rs, protocol version bump, `docs/user-guide/settings.md`).
@@ -40,3 +42,4 @@ Rejected: wrapping other CLIs' shells (out of scope).
 
 ## R10 Fail-open (FR-009)
 Decision: unknown own binding, empty/failed list, unparsable payload => allow and `tracing::warn!` with the reason. The static deny rules are unaffected.
+Rejected: fail closed (blocks legitimate work when state is merely unknown; spec FR-009 chose open).
