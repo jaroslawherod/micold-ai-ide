@@ -182,8 +182,8 @@ Page Up / Page Down scroll a long expanded card (K4), focus order unchanged (US4
 
 Code-free; done by the close unit in the close PR.
 
-- [ ] T047 Run quickstart §A: `mise run test-core`, `scripts/gate.sh`, and the FR-018 grep over `crates/micold-core/src/overview_expansion.rs` and `crates/micold-core/src/overview_text.rs` prints nothing; record the result in `specs/1121-overview-card-full-text/quickstart.md`
-- [ ] T048 Record the whole quickstart §B result in `specs/1121-overview-card-full-text/visual-pass.md` from the evidence of T023, T035 and T046
+- [x] T047 Run quickstart §A: `mise run test-core`, `scripts/gate.sh`, and the FR-018 grep over `crates/micold-core/src/overview_expansion.rs` and `crates/micold-core/src/overview_text.rs` prints nothing; record the result in `specs/1121-overview-card-full-text/quickstart.md`
+- [x] T048 Record the whole quickstart §B result in `specs/1121-overview-card-full-text/visual-pass.md` from the evidence of T023, T035 and T046
 
 ---
 

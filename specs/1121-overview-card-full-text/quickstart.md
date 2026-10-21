@@ -28,3 +28,14 @@ Expected: all green; the grep prints nothing; `tests/layout_snapshot.rs` passes 
    expand while it is open (Story 4).
 7. Full-screen mode: same behaviour; zoom unaffected.
 8. The directory line reads `~/…` for a worktree under the home folder (D2).
+
+## Results (close, 2026-10-21)
+
+- **A** (T047): the FR-018 grep prints nothing. `cargo test -p micold-core --all-targets` passes
+  every overview test (`overview_expansion` 29, `overview_text`, `worktree_dir`). Its only
+  failures are permission-refusal tests that do not belong to this feature:
+  `settings_refuses_save_over_failed_read`, `settings_write_is_logged` and two directory-removal
+  tests. They fail only when run as root, and `scripts/gate.sh` runs them unprivileged.
+  `scripts/gate.sh` on the close tree: GATE_PENDING.
+- **B** (T048): every item passes. The record, its evidence and its limits are in
+  [visual-pass.md](visual-pass.md).

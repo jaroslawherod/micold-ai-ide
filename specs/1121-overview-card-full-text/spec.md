@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: Closed 2026-10-21 — shipped in PRs #1168 (design), #1169 (M1), #1173 (M2), #1177 (M3), #1178 (M4) and the close PR
 
 **Input**: User description: "Implement GitHub issue #1121: Overview cards: full text without
 truncation. Blocked by: #1120. Title wraps to 3 lines and activity to 2. Hover or keyboard focus

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: close
-- **Next step**: close — T047 core part done (FR-018 grep empty; `cargo test -p micold-core --all-targets`: every overview test green, 3 permission-refusal tests red as root only, run unprivileged by scripts/gate.sh); waiting on tdd-verify audit and close visual pass; then fix test-strength findings, Polish T047–T048, close review, close visual pass (incl. M4's 2x one-column inner-scrollbar BAR_FOOTPRINT fix), gate, close PR.
+- **Next step**: close — checks recorded; test-strength fixes (F1, F2, F6) and Polish T047–T048 done, spec Closed; close review (round 1) pending, then fixes, gate, ledger finish, PR files.
 
 ## Pull requests
 
@@ -103,9 +103,13 @@ None.
 
 ## Follow-ups not done
 
+Close record (2026-10-21): what the feature leaves open. M4 settled the K4 body-edge reset (`an_expand_resets_the_body_edges`), focus under an open menu (`focus_moved_under_an_open_menu_settles_on_close`), the Menu key with another card hovered (M4 visual `b6-n*`, `b6-p*`) and the wheel order at the body's end (M4 visual `b4-w*`, `b4-x*`); they are gone from this list.
+
 - Review A M1 F3 (MINOR): during a zoom `card_width` is interpolated each frame, so a wrapping title can change line count mid-zoom and its row height jumps a line; measure naturals at the zoom's end width, or pin the jump in a test. Not in M1's tasks or FRs.
-- For M4 (carried from M2): K4 — M4 MUST reset `body_edges` to `(false, false)` on expand (cycle log T013 row). `settings_refuses_save_over_failed_read` red as root only (pre-existing).
-- For M4 (M3 visual note): with focus expansion, the Menu key on the focused card must find it expanded (focus expanded it, the hovered card collapsed, FR-006) and keep that form under the menu (FR-012); add it to the M4 visual pass (§B.5/§B.6 Menu key with a different card hovered). Also: `FocusLost`/`FocusGained` under an open menu are not settled on `MenuClosed` the way M3 now settles the pointer (review A F2/F3) — M4's keyboard work should do the same for focus.
-- From M4 review A F4: key `CardGrid`'s card trees by location, not index, so a reorder by state keeps keyboard focus (and a focus expansion) on the same card (pre-existing since feature 813).
-- From M4 visual pass r1 (criterion 4): a fast synthetic burst of 12 wheel notches 50 ms apart over a tall expanded card scrolled its body to the end and then the Overview within the same burst (dark-1x `b4-w1`, `w2`); slow notches latch as FR-008/D4 say and `a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview` pins in-gesture latching. The latching is iced's wheel transaction (ends on a cursor move ≥100 ms after the last scroll); check with a real wheel whether a rebuild during the burst (BodyScrolled, the shift) ends it early.
-- M3 visual §B.4: the wheel's "inside first, then Overview" order at the card's end was inferred, not shown; re-check in M4's Page-key/scroll visual pass.
+- From M4 review A F4 (declined in scope): key `CardGrid`'s card trees by location, not index, so a reorder by state keeps keyboard focus (and a focus expansion) on the same card (pre-existing since feature 813).
+- From M4 visual pass r1 (criterion 4): a fast synthetic burst of 12 wheel notches 50 ms apart over a tall expanded card scrolled its body to the end and then the Overview within the same burst; slow notches latch as FR-008/D4 say and `a_wheel_over_a_tall_expanded_card_scrolls_its_body_then_the_overview` pins in-gesture latching. The latching is iced's wheel transaction (ends on a cursor move ≥100 ms after the last scroll); check with a real wheel whether a rebuild during the burst (BodyScrolled, the shift) ends it early.
+- Close visual pass observations (cosmetic): full screen opened by a click shows no focus ring on the first card until Tab; at 2x the expanded card's focus ring runs over the Overview bar's right edge.
+- tdd-verify F3 (MED, left as is): `card_grid.rs` sleeps a fixed 120 ms for iced's wall-clock wheel transaction; iced exposes no controllable clock for it, and the sleep is commented as the reason.
+- tdd-verify F4 (LOW, left as is): `escape_collapses_the_focused_card_until_focus_moves_back` asserts the private `focused` field; it is an in-module unit test, and a public accessor for the focus would exist only for the test.
+- tdd-verify F5 (LOW, equivalent): `EXPAND_REST` shrunk to 1 ms survives; the spec sets only the 0.5 s ceiling (SC-006), which K2 pins with non-zero.
+- Pre-existing, not this feature: permission-refusal tests (`settings_refuses_save_over_failed_read`, `settings_write_is_logged`, two directory-removal tests) fail as root; `scripts/gate.sh` runs them unprivileged.
