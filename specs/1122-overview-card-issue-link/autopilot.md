@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M4
-- **Next step**: M4 r1 verdicts acted on (review A F1–F4 fixed; visual criteria 1, 6, 7 fixed by the root handing the keyboard back to the link when its card changes form); full gate r3 GREEN on 4faae67f. Review A r2 (sonnet) and visual pass r2 requested (scratchpad 1122-m4-prompt-review-a-r2.md, 1122-m4-prompt-visual-r2.md). Then: tick T038 on a visual PASS, PR text (title "#1122: Overview cards: link to the worktree's issue — M4: issue links by keyboard", no docs-not-needed label).
+- **Next step**: M4 reviews complete (A r2 CLEAN, B r1 CLEAN, visual r2 PASS); T038 ticked; full gate r3 GREEN on 4faae67f (code unchanged since; later commits are specs only). PR text written (scratchpad pr-title.txt, pr-body.md); orchestrator opens the M4 PR, waits on CI and merges. Then M5.
 
 ## Pull requests
 
@@ -95,8 +95,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review B M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | VERDICT: CLEAN |
 | Visual pass M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | FAIL on criteria 1 (reverse half), 6 and 7 (after-Escape half); 2–5, 8, 9 PASS (verdict verbatim below; evidence visual-pass/m4/). Root cause: the link sits in a different place in the collapsed and expanded body, so a change of form rebuilds its focus state; fixed by the root handing the keyboard back to the link (`link_focus_after`) |
 | Full gate M4 | 3 | 4faae67f | GREEN (after the r1 fixes) |
-| Review A M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | requested (sonnet, fix diff c04408a4..4faae67f -- crates) |
-| Visual pass M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | requested (criteria 1, 6, 7; regression 2, 4) |
+| Review A M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | VERDICT: CLEAN; 1 optional MINOR (F1 `LinkFocus::of` clones on every message), declined (verdict verbatim below) |
+| Visual pass M4 | 2 | 69879e504c90cc162144dff73698687dd0461b02:532bd52a1e3c706506bbb096f732a55e4a2e22f1 | PASS on all re-checked criteria (1, 6, 7; regression 2, 4); 64 r2 PNGs in visual-pass/m4/ (verdict verbatim below). T038 ticked |
 
 
 ### M4 r1 verdicts (verbatim)
@@ -168,6 +168,77 @@ Observations:
 
 </details>
 
+### M4 r2 verdicts (verbatim)
+
+<details><summary>Review A M4 r2</summary>
+
+#### 1122 M4 review A r2 (snapshot 69879e50..532bd52a)
+
+VERDICT: CLEAN
+
+I found no BLOCKER or MAJOR in the round-2 fix diff. I read the diff against the milestone brief and contracts, and I did not invoke the `code-review` skill. I ran only the core tests (`cargo test -p micold-core overview_expansion`: 51 passed, 0 failed). I did not run the client crate's tests or the gate.
+
+Round 1 fixes:
+- F1 holds. `Listed` clones the state after `just_lost` is taken, so a listing that changes nothing compares equal and puts the snapshot back. A listing that removes a tracked card still ends the pairing.
+- F2 holds. `link_focus_after` returns `None` when `workspace.active` changed, before any hand-off.
+- F3 holds. `WindowBlurred` applies the deferred loss through `lost_plain` and then collapses as before.
+- F4 holds. `FocusReturn { location, to_link }` is armed and cleared as one value, and `card_focus_return_id` destructures it.
+
+New focus-restore code (`link_focus_after`), including the redundant focus you flagged:
+- Under an open link menu, `focused_link()` is `None` while `link_held` is set, so nothing is restored. The `MenuClosed` update is covered by the same check. The return to the link or card then comes only from `card_focus_return_id` and the `link_held == location` branch of `gained`.
+- On Overview close, `shown_focused_link` requires `overview.open`, so it returns `None`.
+- Together with `card_focus_return`: the two never name different controls in one update. A card return (an entry chosen) leaves `focus_part` as Card, so no link is focused after the update.
+- A forward Tab onto the link gives a redundant focus of the already-focused link. The follow-up `LinkFocusGained` hits the "already holds, same part" early return in `gained`, so core state is unchanged.
+- Moving the keyboard from one link to another gives the same harmless extra focus.
+- Shift+Tab from a link to its own card is not a misfire: the link is no longer focused after the update, so there is no restore.
+- Pointer rest or Escape changing the form of the focused link's card restores the link. That is the intended behaviour.
+
+F1 [MINOR] crates/micold-client/src/main.rs:~735 — `LinkFocus::of` runs on every message and clones the active project `PathBuf` and the expanded location each time, even with the Overview closed.
+   Evidence: `project: app.core.workspace.active.clone()` in `LinkFocus::of`, called unconditionally at the top of `update`.
+   Fix: optional. Compare a cheap value instead (for example only snapshot the project when `shown_focused_link` is `Some`), or accept the cost.
+
+</details>
+
+<details><summary>Visual pass M4 r2</summary>
+
+#### 1122 M4 visual pass r2 (T038, HEAD ce44c8a9)
+
+VISUAL PASS M4 (T038) r2: PASS on all criteria (1, 6, 7, 2, 4). Built daemon and client from HEAD ce44c8a9 (code 4faae67f) via scripts/build-lock.sh. Ran on Xvfb :77 with lavapipe, a throwaway HOME and data dir, a fake xdg-open, origin git@github.com:o/r.git, and the same four worktrees as round 1. Pointer parked at the screen corner after opening the Overview; keyboard only. 64 new PNGs are untracked in /home/user/micold-ai-ide/specs/1122-overview-card-issue-link/visual-pass/m4/, named <theme>-<scale>-r2-<criterion>-<n>-<what>.png. Source untouched, nothing committed.
+
+Coverage: light 1.0 ran every criterion; dark 1.0 ran 1, 6 and 7; light 2.0 ran 1 and 6.
+
+1. PASS (forward and reverse; light 1.0, dark 1.0, light 2.0)
+   - Forward: Tab onto card 1122 expands it (r2-1-1). Tab puts the ring on its link with the card still expanded (1-2). Tab goes to card 1124, which expands, and 1122 collapses (1-3).
+   - Reverse: Shift+Tab from 1124 expands card 1122 and the ring is on its link (1-4).
+   - Enter there: xdg-open gets exactly `https://github.com/o/r/issues/1122`, once (1-5). The Overview stays open and the ring stays.
+   - Shift+Tab again: card 1122 itself, still expanded, no ring on the link (1-6). Shift+Tab again: Default (1-7).
+   - From card 1125 (1-8), Shift+Tab lands on the ring on link 1124 (1-9). Enter there gives `https://github.com/o/r/issues/1124`.
+   - Same files exist for dark-1.0 and light-2.0 (`light-2.0-r2-1-4` and `1-6` checked: ring on the link, then card focused with no ring on the link).
+
+6. PASS (light 1.0, dark 1.0; light 2.0 for steps 6-1 to 6-4)
+   - Escape on the focused link collapses the card and the ring stays on the link (6-1).
+   - Shift+Tab goes to its own card, still collapsed (6-2). Tab goes back to the link, still collapsed, ring on the link (6-3). Tab again focuses the next card (1124) and it expands (6-4).
+   - With Default focused and nothing expanded (6-5), Escape closes the Overview (6-6).
+
+7. PASS (light 1.0, dark 1.0)
+   - Menu key on the focused link of the expanded card opens the menu at the link with "Open" highlighted (7-1). Escape: ring back on the link, card still expanded (7-2).
+   - Shift+F10 behaves the same (7-3, 7-4).
+   - After Escape-collapse (7-5, ring on the link), the Menu key opens the menu anchored at the link (7-6). Escape closes it, the ring is back on the link and the card stays collapsed (7-7).
+
+2. PASS (light 1.0): the ring sits in the link's gutter around the label, clear of the text, with no underline and no pointer. Zoom crop of light-1.0-r2-2-1-link-ring.png checked.
+
+4. PASS (light 1.0)
+   - Enter on the link: xdg-open gets exactly the 1122 URL, once (r2-4-1, r2-4-2).
+   - Space: one more identical call, so two calls in total (r2-4-3, r2-4-4).
+   - The Overview stays open, no ripple at +0.12 s, nothing selected.
+
+Observations:
+- Light 2.0 grid is a single column and scrolls. The crop is full-window, so the ring and card form are visible in those shots.
+- I did not capture dark 2.0 or full-screen shots, as the prompt did not ask for them in r2.
+- Cleanup is done: temp fixture, data and HOME dirs, pinned binaries, `.visual-pass/run.*` removed. The Xvfb, client and daemon processes were killed; they still show as defunct entries (zombies) that the harness has not reaped.
+
+</details>
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -175,6 +246,7 @@ Observations:
 | M2 | A r1 | F3 MINOR: a touch `FingerPressed` on a link reaches every card, and `keyboard_focus.rs:536` drops another card's keyboard focus on it (R7 for touch) | The premise does not hold: the keyboard is given up only on `Event::Mouse(ButtonPressed(Left))` (`keyboard_focus.rs`, the rule just above line 536); line 536 sets only the control's own `pressed` flag, and only when the finger is over that control. Another card's ripple and button likewise react only to a finger over them. So a touch on a link moves no other card's keyboard, as R7 asks. Confirmed by review A r2. |
 | M2 | A r1 | F4 MINOR: the inline link's 6 px focus gutter is clipped by 2 px under the expanded body's 4 px top padding when the link is the body's first row | Deferred to M4, where it can first be seen: in M2 (and M3) the link is never a Tab stop (`focusable(false)`, contract U3 staging), so no ring is drawn in the gutter, and the clipped 2 px of hit strip lie in the body's top padding, under the title. M4 shows the ring and its visual pass covers it; recorded in *Follow-ups not done*. |
 | M2 | A r1 | F5 MINOR: `over_link` runs an operation over the hovered card on every mouse event and frame | Kept by design: it walks only the one card under the pointer (a few dozen nodes), frames come only while something animates or a rest timer waits (G3, one timed wake), and the rest timer needs the link state on frames (a scroll moves the link under a still pointer, R8). A per-layout cache would also have to follow the expanded body's own scroll offset, state the grid does not hold. Confirmed by review A r2. |
+| M4 | A r2 | F1 MINOR (optional): `LinkFocus::of` runs on every message and clones the active project `PathBuf` and the expanded location, even with the Overview closed | Declined: two small clones per message are negligible beside the update they bracket (no measurable cost; the reviewer marks the fix optional). Snapshotting the project only when a link is shown would add a second condition to the F2 project-switch guard that review A r2 and the visual pass r2 just verified, and would force another review, visual and gate round for no user-visible gain. |
 
 ## Handover
 
