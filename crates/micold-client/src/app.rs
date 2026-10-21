@@ -404,6 +404,9 @@ pub struct State {
     /// The render cache derived from those transcripts (feature 940) -- see
     /// [`crate::features::transcript_rich::RichCache`].
     pub transcript_rich: crate::features::transcript_rich::State,
+    /// The structured sessions' insights, open subagent threads and background-task fold
+    /// (feature 944) -- see [`crate::features::structured_insights::State`].
+    pub structured_insights: crate::features::structured_insights::State,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
     /// Each structured session's composer in this window (feature 941) -- see
@@ -955,8 +958,9 @@ impl State {
     }
 
     /// Take one `StructuredEvents` message for `session` (feature 938 wire.md): its events reach
-    /// the transcript (feature 939), and that session's render cache is refreshed from it with
-    /// `grammar` (feature 940, RR-4). Returns the highlight jobs the shell runs.
+    /// the transcript (feature 939), then the insights (feature 944), which read that transcript,
+    /// and that session's render cache is refreshed from it with `grammar` (feature 940, RR-4).
+    /// Returns the highlight jobs the shell runs.
     pub fn structured_events(
         &mut self,
         session: micold_core::session::SessionId,
@@ -968,16 +972,34 @@ impl State {
         self.structured_transcript
             .apply(session, omitted, events, live);
         match self.structured_transcript.transcript(session) {
-            Some(transcript) => self.transcript_rich.refresh(session, transcript, grammar),
+            Some(transcript) => {
+                self.structured_insights
+                    .apply(session, omitted, events, live, transcript);
+                self.transcript_rich.refresh(session, transcript, grammar)
+            }
             None => Vec::new(),
         }
     }
 
-    /// Forget a closed or removed session's transcript, its render cache and its composer.
+    /// Forget a closed or removed session's transcript, its render cache, its composer and its
+    /// insights.
     pub fn forget_structured(&mut self, session: micold_core::session::SessionId) {
         self.structured_transcript.forget(session);
         self.transcript_rich.forget(session);
         self.composers.forget(session);
+        self.structured_insights.forget(session);
+    }
+
+    /// Apply a message of the insights shown with a structured session's transcript (feature
+    /// 944): a subagent thread or the background-task list folded or unfolded.
+    pub fn update_insights(&mut self, msg: crate::features::structured_insights::InsightsMsg) {
+        let session = msg.session();
+        let empty = micold_core::structured::transcript::Transcript::new();
+        let main = self
+            .structured_transcript
+            .transcript(session)
+            .unwrap_or(&empty);
+        self.structured_insights.update(msg, main);
     }
 
     /// Apply a message of the transcript view and hand back what only the shell can perform: the
@@ -1134,6 +1156,10 @@ impl State {
             // scroll they ask for is the shell's (`shell/transcript.rs`), so here it is dropped.
             Message::Session(crate::features::session::Msg::Transcript(msg)) => {
                 let _ = self.update_transcript(msg);
+            }
+            // Feature 944: the insights' fold messages are the insights feature's.
+            Message::Session(crate::features::session::Msg::Insights(msg)) => {
+                self.update_insights(msg);
             }
             Message::Session(msg) => {
                 let outcomes = crate::features::session::update(self, msg);

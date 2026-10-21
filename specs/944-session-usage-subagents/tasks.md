@@ -377,7 +377,7 @@ cases) on the T003 recordings.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T034 [US3] Reducer tests in a new `crates/micold-client/tests/features_structured_insights.rs`
+- [x] T034 [US3] Reducer tests in a new `crates/micold-client/tests/features_structured_insights.rs`
   (data-model.md *View state*, contracts/insights-model.md *Client seam*): `apply(session, omitted,
   &events, live, &main_transcript)` after #939's transcript for the same message gives the same
   `SessionInsights` as core does; a thread is folded by default and `toggle_thread` opens it, and
@@ -393,11 +393,11 @@ cases) on the T003 recordings.
 
 ### Implementation
 
-- [ ] T035 [US3] Implement the render-free `crates/micold-client/src/features/structured_insights.rs`
+- [x] T035 [US3] Implement the render-free `crates/micold-client/src/features/structured_insights.rs`
   (`State`, `SessionExtras { insights, open_threads, tasks_open, seen }`, `apply`, `toggle_thread`,
   `thread`, `toggle_tasks`, `forget`) and register it in `crates/micold-client/src/features/mod.rs`;
   T034 passes and `tests/features_are_render_free.rs` stays green
-- [ ] T036 [US3] Wire it: `State.structured_insights` in `crates/micold-client/src/app.rs`; in
+- [x] T036 [US3] Wire it: `State.structured_insights` in `crates/micold-client/src/app.rs`; in
   `crates/micold-client/src/shell/daemon_sync.rs` route each `StructuredEvents` message to it right
   after #939's `structured_transcript` (passing that session's main `Transcript`) and follow #939's
   forget paths; add `InsightsMsg { ToggleThread { session, parent }, ToggleBackgroundTasks {

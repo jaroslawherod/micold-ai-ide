@@ -337,6 +337,7 @@ pub mod sandbox;
 pub mod session;
 pub mod settings;
 pub mod sidebar;
+pub mod structured_insights;
 pub mod structured_transcript;
 pub mod transcript_rich;
 pub mod window;
