@@ -58,6 +58,25 @@ as in a shell. Terminal sessions are unchanged and stay the default.
 - **Input history**: the session's earlier user messages, which the user can step through from the
   composer to recall one into the draft.
 
+## Clarifications
+
+### Session 2026-10-21
+
+- Q3: Is the queue the session's (held by the service, shared by every window) or each window's
+  own? → A: The session's. The background service holds one queue per structured session; every
+  window viewing the session shows the same queue in the same order, any of them can edit, remove
+  or move back an entry, and the queue outlives the window that queued a message. It is #938's
+  refusal of a message during a turn, which the service makes, that this feature replaces by
+  queueing; the idle/busy state the queue waits on is already one state shared by every window
+  (FR-009); and a queue that must survive a session restart (FR-021) cannot live in a window.
+  _(agent-resolved: specs/938-structured-session-mode/spec.md#Edge Cases, spec.md#Constraints,
+  spec.md#FR-009, .specify/memory/constitution.md#II. Native Multi-Session Support)_
+- Q4: Does the queue survive a restart of the background service? → A: As the session's event
+  history does: under the **Save terminal history** setting the service saves the queue with the
+  session and restores it on hold; with saving off it lives in the service's memory only and a
+  service restart empties it. _(agent-resolved: specs/938-structured-session-mode/spec.md#Clarifications
+  Q3)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Send a message and see the session busy until it is answered (Priority: P1)
@@ -207,10 +226,10 @@ queued message before its turn and check it is never delivered.
    [NEEDS CLARIFICATION: is the queue kept and delivery continues with the next queued message,
    kept but put on hold until the user releases it, or emptied back into the composer as Claude
    Code's terminal does?].
-6. **Given** two windows viewing the same session, **When** one queues a message, **Then**
-   [NEEDS CLARIFICATION: is the queue the session's — held by the service, shown, editable and
-   delivered the same in every window and kept when the window closes — or each window's own,
-   held only while that window is open?].
+6. **Given** two windows viewing the same session, **When** one queues a message, **Then** both
+   windows show it in the session's queue at the same position, either window can edit, remove or
+   move it back, and closing the window that queued it neither removes nor delays it
+   (clarification Q3).
 
 ---
 
@@ -259,8 +278,8 @@ picture and the text with the path.
   next message or queued and then delivered; it is never refused for a turn in progress, never
   delivered twice and never lost.
 - **Two windows send at once to an idle session** (Principle II): one message is delivered; the
-  other is neither refused for the turn in progress, merged nor lost: it waits in a queue behind
-  the first (which queue, and whether both windows show it, is clarification 3 of User Story 4).
+  other is neither refused for the turn in progress, merged nor lost: it waits in the session's
+  queue behind the first, and both windows show it there.
 - **Two structured sessions** side by side in one window: each has its own composer, draft, queue,
   history and busy state; a send, an interrupt or a drop on one never reaches the other.
 - **Session ends mid-turn** (crash, kill, restart): the turn closes as #939 shows it (ended without a
@@ -363,12 +382,16 @@ picture and the text with the path.
 - **FR-020**: Until it is delivered, a queued message MUST be removable (never delivered) and
   editable in place (its position kept); while the composer's draft is empty it MUST also be
   movable back into the composer, leaving the queue.
-- **FR-021**: No message MAY be delivered twice, delivered out of queue order, or lost while it is
-  queued and the queue is held, across a turn ending, an interrupt and a session restart; whether
-  the queue is held across a window closing is set by clarification 3 of User Story 4.
-- **FR-022**: While the session is not running, the queue MUST be kept and shown on hold and
-  nothing in it delivered; what happens to it on restart, on interrupt and across windows is set
-  by the clarifications in User Story 4.
+- **FR-021**: The queue MUST be the session's, held by the background service: every window
+  viewing the session MUST show the same queue in the same order and MAY edit, remove or move back
+  its entries, and the queue MUST be kept when any window closes (clarification Q3). No message MAY
+  be delivered twice, delivered out of queue order, or lost while it is queued, across a turn
+  ending, an interrupt, a window closing and a session restart; across a restart of the service it
+  MUST be kept while **Save terminal history** is on, as the session's events are (clarification
+  Q4).
+- **FR-022**: While the session is not running, the queue MUST be kept and shown on hold in every
+  window and nothing in it delivered; what happens to it on restart and on interrupt is set by the
+  clarifications in User Story 4.
 
 **Input history**
 
@@ -405,8 +428,7 @@ picture and the text with the path.
   MUST never reach another.
 - **FR-032**: Two windows sending to an idle session at the same moment MUST result in one
   delivered message and the other queued behind it, neither refused for a turn in progress, merged
-  nor lost; if the queue is the session's (clarification 3 of User Story 4), both windows MUST
-  show it in the same order.
+  nor lost, and both windows MUST show the queued one in the session's queue in the same order.
 
 **Documentation**
 
@@ -443,7 +465,8 @@ picture and the text with the path.
 - **Draft**: per window and session: text, caret, and ordered attachments.
 - **Attachment**: a dropped image's name, kind, size and content, held until the message is sent or
   the attachment removed.
-- **Queued message**: text and attachments, its position in the session's queue, and who queued it.
+- **Queued message**: text and attachments, its position in the session's queue (held by the
+  background service, one per session), and who queued it.
 - **Session turn state**: per structured session: not running, idle, busy, or busy with an
   interrupt asked for, and since when.
 - **Input history**: the session's delivered user messages in order, and per window the position
@@ -463,8 +486,9 @@ picture and the text with the path.
   within 3 seconds in 95% of runs against a stand-in CLI that honours interrupts, and the session's
   process is the same process before and after in 100% of runs.
 - **SC-004**: Across the queue test cases (several queued messages, removals, edits, interrupts,
-  restarts, and two windows sending at once), 0 messages are delivered twice, out of order or
-  lost while their queue is held.
+  restarts, a window closing, and two windows sending at once), 0 messages are delivered twice,
+  out of order or lost, and every window viewing the session shows the same queue in the same
+  order.
 - **SC-005**: In 100% of the refusal and lost-connection test cases, the user's text and
   attachments are back in the composer (or still queued) unchanged.
 - **SC-006**: A user can recall and resend their previous message with two key presses (history
