@@ -1152,14 +1152,6 @@ async fn send_pr(
     request(client, req, msg).await
 }
 
-fn of_pr(comments: &[ReviewComment], number: u64) -> Vec<ReviewComment> {
-    comments
-        .iter()
-        .filter(|c| c.pr.as_ref().is_some_and(|pr| pr.number == number))
-        .cloned()
-        .collect()
-}
-
 fn context(
     pr: &micold_core::protocol::messages::PrSend,
     checked_out: Option<&str>,
@@ -1176,12 +1168,17 @@ fn context(
     }
 }
 
-/// W20, SC-002, FR-006: ten comments on three files of one pull request, another pull request's and
-/// the working tree's drafts: only the first pull request's are delivered and become sent, and
-/// `pr: None` then sends the working tree's alone.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn w20_a_send_delivers_one_pull_requests_drafts_and_leaves_the_rest_draft() {
-    let _guard = ENV.lock().await;
+/// The W20 mix: ten comments on three files of pull request 12, one of pull request 13 and two of
+/// the working tree, with a running session.
+struct W20Mix {
+    s: Sandbox,
+    project: PathBuf,
+    branch: String,
+    head: String,
+    client: Client,
+}
+
+async fn w20_mix() -> W20Mix {
     let s = Sandbox::new().await;
     let project = s.project();
     let wt = entry_dir(&project, "wt");
@@ -1189,11 +1186,10 @@ async fn w20_a_send_delivers_one_pull_requests_drafts_and_leaves_the_rest_draft(
     let head = git_in(&wt, &["rev-parse", "HEAD"]);
     s.start(sid(1), false).await;
     let mut client = window(&s.state, &project).await;
-
-    let mut all = Vec::new();
     for n in 0..10u64 {
         let path = ["src/a.rs", "src/b.rs", "docs/c.md"][(n % 3) as usize];
-        all = add_pr(
+        let text = format!("pr12 note {n}");
+        add_pr(
             &mut client,
             n + 1,
             &project,
@@ -1202,7 +1198,7 @@ async fn w20_a_send_delivers_one_pull_requests_drafts_and_leaves_the_rest_draft(
             &branch,
             &head,
             path,
-            &format!("pr12 note {n}"),
+            &text,
         )
         .await;
     }
@@ -1229,7 +1225,7 @@ async fn w20_a_send_delivers_one_pull_requests_drafts_and_leaves_the_rest_draft(
         "tree note",
     )
     .await;
-    all = add(
+    add(
         &mut client,
         22,
         &project,
@@ -1239,36 +1235,27 @@ async fn w20_a_send_delivers_one_pull_requests_drafts_and_leaves_the_rest_draft(
         &["tree"],
         "tree note 2",
     )
-    .await
-    .into_iter()
-    .chain(all)
-    .collect::<Vec<_>>();
-    let all = {
-        // The last push holds everything the entry has.
-        let (_, seen) = send_pr(
-            &mut client,
-            23,
-            &project,
-            "wt",
-            Some(pr_send(99, &branch, &head)),
-        )
-        .await;
-        assert!(
-            seen.is_empty(),
-            "a pull request with no draft opens nothing"
-        );
-        let _ = all;
-        let msg = ClientMsg::ReviewSend {
-            req: 24,
-            project: project.clone(),
-            worktree_dir: "wt".into(),
-            outdated: Vec::new(),
-            pr: Some(pr_send(12, &branch, &head)),
-        };
-        client.send(Frame::Control(msg)).await.unwrap();
-        answer(&mut client, 24).await
-    };
-    let (result, seen) = all;
+    .await;
+    W20Mix {
+        s,
+        project,
+        branch,
+        head,
+        client,
+    }
+}
+
+/// W20, SC-002, FR-006: only the first pull request's ten drafts are delivered, in one batch typed
+/// once, and become sent; another pull request's and the working tree's drafts stay Draft.
+///
+/// The batch is checked by its key literal lines, not by calling `build_pr`; the exact bytes are
+/// pinned by `p1_pr_example_gives_the_exact_bytes` in `micold-core`'s `review/prompt.rs`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w20_a_pull_request_send_delivers_only_its_ten_drafts_and_they_become_sent() {
+    let _guard = ENV.lock().await;
+    let mut m = w20_mix().await;
+    let pr = Some(pr_send(12, &m.branch, &m.head));
+    let (result, seen) = send_pr(&mut m.client, 24, &m.project, "wt", pr).await;
     assert_eq!(
         result,
         Ok(OperationResult::ReviewSent {
@@ -1291,24 +1278,57 @@ async fn w20_a_send_delivers_one_pull_requests_drafts_and_leaves_the_rest_draft(
         3,
         "pr 13's and the working tree's two stay Draft"
     );
-    let pr = pr_send(12, &branch, &head);
-    let expected = prompt::build_pr(&context(&pr, Some(&branch), vec![]), &of_pr(&last, 12), &[]);
-    assert!(!expected.contains("checked out") && !expected.contains("written against"));
-    assert_eq!(
-        s.typed_holds(sid(1), &submitted(&expected)).await,
-        submitted(&expected),
-        "one pull request batch, typed once"
-    );
 
-    // The working tree's send holds the working tree's drafts only.
-    let (result, seen) = send_pr(&mut client, 25, &project, "wt", None).await;
+    let preamble = format!(
+        "Please work through these review comments on pull request #12 \"Add retry\" (head branch {}, head commit {}).",
+        m.branch, m.head
+    );
+    let typed = m.s.typed_holds(sid(1), &preamble).await;
+    assert_eq!(typed.matches(&preamble).count(), 1, "one batch, typed once");
+    assert_eq!(typed.matches("### Comment C-").count(), 10);
+    for n in 0..10 {
+        assert!(typed.contains(&format!("pr12 note {n}")), "note {n}");
+    }
+    assert!(!typed.contains("pr13 note") && !typed.contains("tree note"));
+    assert!(!typed.contains("checked out") && !typed.contains("written against"));
+}
+
+/// W20: a pull request with no draft is refused and opens and types nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w20_a_send_for_a_pull_request_with_no_draft_types_nothing() {
+    let _guard = ENV.lock().await;
+    let mut m = w20_mix().await;
+    let pr = Some(pr_send(99, &m.branch, &m.head));
+    let (result, seen) = send_pr(&mut m.client, 23, &m.project, "wt", pr).await;
+    assert_eq!(
+        result.expect_err("nothing to send").0,
+        ErrorKind::InvalidInput
+    );
+    assert!(
+        seen.is_empty(),
+        "a pull request with no draft opens nothing"
+    );
+    assert_eq!(m.s.typed(sid(1)), "");
+}
+
+/// W20, FR-006: `pr: None` sends the working tree's two drafts alone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w20_a_working_tree_send_holds_the_working_trees_drafts_only() {
+    let _guard = ENV.lock().await;
+    let mut m = w20_mix().await;
+    let (result, seen) = send_pr(&mut m.client, 25, &m.project, "wt", None).await;
     result.expect("sent");
     let (_, last, _) = seen.last().expect("pushed").clone();
-    assert_eq!(pending(&last).len(), 1, "only pr 13's draft is left");
+    assert_eq!(
+        pending(&last).len(),
+        11,
+        "pr 12's ten and pr 13's stay Draft"
+    );
     let tree: Vec<ReviewComment> = last.iter().filter(|c| c.pr.is_none()).cloned().collect();
     let expected = prompt::build(EntryKind::Worktree, &tree, &[]);
-    s.typed_holds(sid(1), &submitted(&expected)).await;
-    assert!(!expected.contains("pr12 note") && !expected.contains("pr13 note"));
+    assert!(expected.contains("tree note 2") && !expected.contains("pr12 note"));
+    let typed = m.s.typed_holds(sid(1), &submitted(&expected)).await;
+    assert!(!typed.contains("pr12 note") && !typed.contains("pr13 note"));
 }
 
 /// W20 refusals: W18's rules for the pull request, the Default entry, and no draft.

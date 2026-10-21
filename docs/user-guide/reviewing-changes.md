@@ -253,9 +253,10 @@ review you send names those new lines.
 - **Line endings.** A difference in a line's ending (`\r\n` against `\n`) does not move or outdate a
   comment.
 
-Comments are moved on the working tree, so a comment on a pull request's diff or on the committed
-changes alone is shown at the new place but is only stored there once you open the entry's working
-tree. A comment you are writing follows its lines the same way, and keeps its text.
+A comment on a pull request's diff is moved and stored as soon as the pull request is shown. A
+comment on the committed changes alone is shown at the new place but is only stored there once you
+open the entry's working tree. A comment you are writing follows its lines the same way, and keeps
+its text.
 
 ### Where comments are kept
 

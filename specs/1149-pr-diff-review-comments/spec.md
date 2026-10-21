@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: Closed 2026-10-21 — shipped in PRs #1153, #1158, #1172, #1184
 
 **Input**: GitHub issue #1149 "Review comments on a pull request's diff, sent to the agent session to apply and push to the PR". "The Changes view shows a pull request's diff read-only (spec 1003 puts commenting out of scope), so line comments can only be written on the worktree's own changes. Wanted: pick lines and write review comments on a PR's diff in the Changes view, like drafts on the working tree; send them to the agent session on the PR's branch (anchored to the PR head commit); the review message tells the agent to apply the requested changes and push them to the PR's branch. Out of scope: posting comments to GitHub. Relates to #482, #946, #1003."
 
@@ -45,7 +45,7 @@ A user opens Review changes, selects a pull request of the worktree, and picks o
 1. **Given** a pull request is selected and its text file diff is shown, **When** the user picks a line or range and writes a comment, **Then** a draft comment is created on those lines of that file and side, quoting the code on them, and shown on the diff and in the review panel.
 2. **Given** a draft PR comment, **When** the user edits or deletes it, **Then** it behaves as a working-tree draft does (946 FR-002, FR-018).
 3. **Given** a pull request's diff shows a binary or non-UTF-8 file, or a file too large to render, **When** the user looks at it, **Then** no lines can be picked on it, as on the working-tree diff (482 FR-008).
-4. **Given** PR comments exist on pull request A, **When** the user selects pull request B or returns to the working-tree changes, **Then** A's comments are not shown on B's or the working tree's diff, and each comment remains reachable from the review panel under its own pull request.
+4. **Given** PR comments exist on pull request A, **When** the user selects pull request B or returns to the working-tree changes, **Then** A's comments are not shown on B's or the working tree's diff, and each comment remains listed in the review panel under its own pull request (pressing its row opens the diff only while that pull request is shown).
 5. **Given** draft PR comments, **When** the app restarts, **Then** they are still there, still attached to their pull request and PR head commit (946 FR-008 persistence rules).
 
 ---
