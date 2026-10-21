@@ -116,6 +116,7 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
             .key(Named::Enter, link.on_press.clone())
             .key(Named::Space, link.on_press)
             .press_takes_focus(link.focus_on_press)
+            .bare_child()
             .indicator(Indicator {
                 outline: roles.secondary,
                 layer: roles.primary,
@@ -215,17 +216,25 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
         shell: &mut Shell<'_, M>,
         viewport: &Rectangle,
     ) {
-        // A release off the link ends its press without being captured (U1): the button would
-        // capture it, so it is told the press was lost instead, which it drops quietly.
+        // A release off the link, by mouse or finger, ends its press without being captured
+        // (U1): the button would capture it, so it is told the press was lost instead, which it
+        // drops quietly.
+        let bounds = layout.bounds();
         let lost;
-        let event = match event {
+        let event = match *event {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
-                if !cursor.is_over(layout.bounds()) =>
+                if !cursor.is_over(bounds) =>
             {
                 lost = Event::Touch(touch::Event::FingerLost {
                     id: touch::Finger(0),
                     position: iced::Point::ORIGIN,
                 });
+                &lost
+            }
+            Event::Touch(touch::Event::FingerLifted { id, position })
+                if !bounds.contains(position) =>
+            {
+                lost = Event::Touch(touch::Event::FingerLost { id, position });
                 &lost
             }
             _ => event,
@@ -488,5 +497,41 @@ mod tests {
         assert_eq!(m.redraw(), ["focus true"]);
         let away = off(&m);
         assert_eq!(press(&mut m, away).0, ["focus false"]);
+    }
+
+    /// Review A M1 F3: a finger lifted off the link publishes nothing and is not captured.
+    #[test]
+    fn a_finger_lifted_off_it_publishes_nothing_and_is_not_captured() {
+        let mut m = mounted(link());
+        let (at, away) = (on(&m), off(&m));
+        let id = touch::Finger(1);
+        m.send(
+            Event::Touch(touch::Event::FingerPressed { id, position: at }),
+            mouse::Cursor::Available(at),
+        );
+        assert_eq!(
+            m.send_captured(
+                Event::Touch(touch::Event::FingerLifted { id, position: away }),
+                mouse::Cursor::Available(away),
+            ),
+            (Vec::new(), false)
+        );
+    }
+
+    /// Review A M1 F2: the link's child draws no hover layer, so a Tab-focused link draws the same
+    /// focus layer under the pointer as away from it; only the underline is added.
+    #[test]
+    fn the_focus_layer_is_the_same_under_the_pointer() {
+        let backdrop = style::color(roles().surface);
+        let mut m = Mounted::new(link());
+        m.focus_next();
+        let at = m.node.bounds().center();
+        let away = m.drawn(backdrop).0;
+        let hovered = m.drawn_under(backdrop, mouse::Cursor::Available(at)).0;
+        // The ring, drawn inside the link, may cover the underline's row, so nothing need change.
+        assert!(
+            hovered == away || only_changed_to(&away, &hovered, style::color(roles().primary)),
+            "the pointer changed the focused link's layer, not only its underline"
+        );
     }
 }

@@ -83,6 +83,9 @@ pub(super) struct TakesTheKeyboard<'a, M> {
     /// Whether a pointer press on it takes the keyboard (feature 1122, U1): a link clicked on a
     /// card leaves the keyboard where it was.
     press_takes_focus: bool,
+    /// Whether the child draws its own hover and pressed layers, which the focus layer tops up;
+    /// `false` for a bare child, so the focus layer is the whole of it (feature 1122, U1).
+    child_layers: bool,
 }
 
 impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
@@ -101,6 +104,7 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
             on_shown_change: None,
             id: None,
             press_takes_focus: true,
+            child_layers: true,
         }
     }
 
@@ -169,10 +173,17 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
     }
 
     /// Whether a pointer press on this control takes the keyboard; `true` unless said otherwise
-    /// (feature 1122, U1). With `false` a press on it leaves it without the keyboard, and a press
-    /// elsewhere still drops the keyboard it holds.
+    /// (feature 1122, U1). With `false` a press on it leaves the keyboard where it was, held or
+    /// not, and a press elsewhere still drops the keyboard it holds.
     pub fn press_takes_focus(mut self, takes: bool) -> Self {
         self.press_takes_focus = takes;
+        self
+    }
+
+    /// Say the child draws no hover or pressed layer of its own, so the focus layer is drawn at
+    /// full focus opacity under the pointer too (feature 1122, U1: a text link).
+    pub fn bare_child(mut self) -> Self {
+        self.child_layers = false;
         self
     }
 
@@ -393,7 +404,7 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         let Some(opacity) = tree
             .state
             .downcast_ref::<Focus>()
-            .indicator(self.enabled, cursor.is_over(bounds))
+            .indicator(self.enabled, self.child_layers && cursor.is_over(bounds))
         else {
             return;
         };
@@ -506,13 +517,16 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         // A press takes the keyboard, and a press anywhere else gives it up — the same rule the
         // stack's text input follows, so a surface holding both behaves as one thing rather than as
         // two controls with different ideas about what a click means. It does not *show* the
-        // keyboard, though: the pointer is what the user is using (FR-022a). A control told not to
-        // take it on a press is left without it, wherever the press lands (feature 1122, U1).
+        // keyboard, though: the pointer is what the user is using (FR-022a). A press on a control
+        // told not to take the keyboard on a press moves nothing: the keyboard stays where it was,
+        // on this control or elsewhere (feature 1122, U1, FR-005).
         if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
-            let now = self.enabled && self.press_takes_focus && cursor.is_over(layout.bounds());
-            let state = tree.state.downcast_mut::<Focus>();
-            state.focused = now;
-            state.visible = false;
+            let over = cursor.is_over(layout.bounds());
+            if self.press_takes_focus || !over {
+                let state = tree.state.downcast_mut::<Focus>();
+                state.focused = self.enabled && over;
+                state.visible = false;
+            }
         }
 
         // The child's pressed state, by the rendering stack's button's own rule: taken by a press
@@ -819,5 +833,24 @@ mod tests {
         );
         let at = m.node.bounds().center();
         assert_eq!(m.press(at), ["focus true"]);
+    }
+
+    /// Feature 1122 review A M1 F1 (FR-005): a press on a control that does not take the keyboard
+    /// on a press leaves the keyboard a Tab gave it where it was, and its keys still answer.
+    #[test]
+    fn a_press_on_it_keeps_the_keyboard_a_tab_gave_it() {
+        use super::super::test_support::named_key;
+        let mut m = Mounted::new(reporting("link", false));
+        m.focus_next();
+        assert_eq!(m.redraw(), ["link focus true"]);
+        let at = m.node.bounds().center();
+        assert!(m.press(at).is_empty(), "the press moved the keyboard");
+        assert_eq!(
+            m.send(
+                named_key(iced::keyboard::key::Named::Enter),
+                mouse::Cursor::Unavailable
+            ),
+            ["link enter"]
+        );
     }
 }
