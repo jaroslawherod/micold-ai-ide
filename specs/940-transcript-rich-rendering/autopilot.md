@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M3
-- **Next step**: M3 verify: scoped gate + review A (round 1), then review B, full gate, push
+- **Next step**: M3 full gate, push; PR title/body in the session scratchpad for the orchestrator
 
 ## Pull requests
 
@@ -56,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 (code-review high) | 1 | 91f29aa19fb9dce4c7014317aa0c19aa654c0b06:d3939ee9054b6be493d62dcb528ed054caa5b87d | CLEAN: 1 MINOR (Cargo.lock windows-sys churn; declined) |
 | Review B M2 (conformance, sonnet) | 1 | 91f29aa19fb9dce4c7014317aa0c19aa654c0b06:d3939ee9054b6be493d62dcb528ed054caa5b87d | CLEAN: 2 MINOR (lock churn, declined; CRLF-only note unpinned in test, fixed: pinned `None`). Verify: edit_diff 15 passed |
 | Review A M3 (code-review high) | 1 | 44fb4d110ddc2e383c9fc7dacf9676ecb10dd479:59cb951d0d56f3b805f85c3d82ad77e3a993a0d0 | CLEAN: 3 MINOR — settle cloned+hashed every settled block per delta (fixed: hashed in place); unbounded parallel highlight tasks (fixed: one blocking task per batch, jobs in turn); stale late spans (declined) |
+| Review B M3 (conformance, sonnet) | 1 | 151e2ec884c299f9a0f025d2ccf1a268dcb973d0:a7ce3e85dce237449f36f8f13e3e2af35a07526d | CLEAN: 1 MINOR (T019/T020 test-after; T020 red shown afterwards and logged, T019 left disclosed). Visual pass: not applicable (still `PLAIN`) |
 
 ## Declined review findings
 

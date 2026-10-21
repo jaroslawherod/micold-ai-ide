@@ -62,3 +62,7 @@ each test task written before its implementation task, run red, then made green.
   revisions so the "entry left" case reused a revision (now one transcript rebuilt from a fresh
   history, as a session's is). Then 16/16.
 - **Refactor**: `cargo fmt`.
+- **Review B M3 follow-up**: T020's red shown afterwards: with the `ClipboardWriteChecked` arm
+  moved into `interpret`'s `Task::none()` list, the built `clipboard_request` test binary run on
+  `a_checked_write` fails, `panicked at ... clipboard_request.rs:247:47: the arm writes`; restored,
+  1 passed. T019's link test stays test-after (its routing came with the variants).
