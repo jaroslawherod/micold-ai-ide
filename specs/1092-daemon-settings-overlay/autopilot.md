@@ -54,7 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 Review B | 1 | same | CLEAN (MINOR: Close bounds not asserted; test checks painted + no overflow) |
 | M4 Review A | 1 | (not recorded by the interrupted unit) | findings fixed in the review-A fix commit (focus after queued drift prompt; stale Details) |
 | M4 Review B | 1 | cd7553d2f4e78fcff4fbaae32cf5041d7515417c:d0e2912ca6fbf90ee8defc2a0f8ac4b48df04b6c | CLEAN (1 MINOR: Remove/Start/Stop wiring not pinned, outside T031) |
-| Close Review | 1 | 5b858d29a95782be5e29784b579d637f7d6d6905:79cd9920ac36905bc8de980cda05bc2018e65667 | pending |
+| Close Review | 1 | 5b858d29a95782be5e29784b579d637f7d6d6905:79cd9920ac36905bc8de980cda05bc2018e65667 | CLEAN (2 MINOR: verification.md stale on finding 2, fixed prose only; test counts task units only, left) |
 
 ## Declined review findings
 
