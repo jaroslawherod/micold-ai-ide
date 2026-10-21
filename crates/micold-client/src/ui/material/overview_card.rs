@@ -636,14 +636,25 @@ fn collapsed_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> 
     if let Some(rows) = pull_request_rows(card, p) {
         body = body.push(rows);
     }
-    if let Some((text, tooltip)) = text.prs {
-        let line = Text::new(text, TypeRole::Body, roles).tint(p.on_body_variant);
-        body = match tooltip {
-            Some(reason) => body.push(Tooltip::new(line, reason, roles)),
-            None => body.push(line),
-        };
+    if let Some((words, reason)) = text.prs {
+        let line = Text::new(words, TypeRole::Body, roles).tint(p.on_body_variant);
+        body = body.push(counts_line(line, reason, roles));
     }
     container(body).padding(spacing::MD).into()
+}
+
+/// The counts `line`, or the dash with its `reason` as the tooltip (feature 813 FR-004), on the
+/// collapsed and the expanded card alike (feature 1123 FR-007).
+fn counts_line<'a, M: 'a>(
+    line: impl Into<Element<'a, M>>,
+    reason: Option<String>,
+    roles: Roles,
+) -> Element<'a, M> {
+    let line = line.into();
+    match reason {
+        Some(reason) => Tooltip::new(line, reason, roles).into(),
+        None => line,
+    }
 }
 
 /// The card's pull request rows and its "+N more" line (feature 1123, research R9), or `None`
@@ -763,8 +774,8 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
     if let Some(rows) = pull_request_rows(card, p) {
         rest = rest.push(rows);
     }
-    if let Some((words, _)) = text.prs {
-        rest = rest.push(body_line(words));
+    if let Some((words, reason)) = text.prs {
+        rest = rest.push(counts_line(body_line(words), reason, roles));
     }
     // The card's right edge is the grid's, where the grid's own bar floats when it scrolls (one
     // column, or the last): the inner bar keeps clear of it, taking that strip from the text's
@@ -1856,6 +1867,32 @@ mod tests {
                 let floated = mounted_at(&m, width, roles()).floated_text(at);
                 assert_eq!(floated, [want], "{width}: hovering {hovered:?}");
             }
+        }
+    }
+
+    /// Feature 1123 FR-007, US1 sc.4: the dash keeps its reason as the tooltip on the collapsed
+    /// and the expanded card alike (feature 1121 FR-004 drops only the full-text tooltips).
+    #[test]
+    fn the_dash_carries_its_reason_collapsed_and_expanded() {
+        let m = full(false);
+        let want = micold_core::overview::PrUnknown::Unreachable.label();
+        for expanded in [false, true] {
+            let mut card = Mounted::new_in(
+                container(
+                    OverviewCard::<String>::new(&m, roles())
+                        .on_press("open".to_string())
+                        .expanded(expanded),
+                )
+                .width(Length::Fixed(380.0)),
+                Size::new(500.0, 1000.0),
+            );
+            let text = card.painted_text();
+            let at = word(&text, "\u{2014}").bounds.center();
+            assert_eq!(
+                card.floated_text(at),
+                std::slice::from_ref(&want),
+                "expanded {expanded}"
+            );
         }
     }
 

@@ -170,12 +170,14 @@ impl StatusPhrase {
             .find_map(|(applies, phrase)| applies.then_some(phrase))
     }
 
-    /// The phrase in words.
+    /// The phrase in words; the first three are the card's attention reasons' own words, so a
+    /// card's header and its rows name the same pull request alike (feature 813).
     pub fn label(self) -> &'static str {
+        use crate::overview::CardReason;
         match self {
-            Self::ChecksFailing => "checks failing",
-            Self::ChangesRequested => "changes requested",
-            Self::MergeConflict => "merge conflict",
+            Self::ChecksFailing => CardReason::ChecksFailing.label(),
+            Self::ChangesRequested => CardReason::ChangesRequested.label(),
+            Self::MergeConflict => CardReason::MergeConflict.label(),
             Self::ChecksPending => "checks pending",
             Self::Approved => "approved",
             Self::ChecksPassing => "checks passing",
