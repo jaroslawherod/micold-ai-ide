@@ -8,7 +8,7 @@ use micold_client::features::structured_transcript::{
     Follow, FollowChange, Scroll, State, TranscriptMsg, END_SLACK,
 };
 use micold_core::session::SessionId;
-use micold_core::structured::transcript::EntryKey;
+use micold_core::structured::transcript::{EntryKey, EntryKind};
 use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent, MAX_EVENTS};
 use serde_json::json;
 
@@ -81,9 +81,25 @@ fn with_cards() -> (State, SessionId) {
 #[test]
 fn applied_events_are_the_sessions_transcript() {
     let (state, s) = with_cards();
-    assert_eq!(entries(&state, s), 2);
-    assert!(state.transcript(s).unwrap().entry(&tool("a")).is_some());
-    assert!(state.transcript(SessionId::new()).is_none());
+    assert_eq!(
+        entries(&state, s),
+        2,
+        "the applied events open one tool card and one thinking card"
+    );
+    let card = state.transcript(s).unwrap().entry(&tool("a"));
+    assert_eq!(
+        card.map(|e| e.key()),
+        Some(&tool("a")),
+        "the tool card is found under its tool use id"
+    );
+    assert!(
+        matches!(card.map(|e| e.kind()), Some(EntryKind::ToolCall(c)) if c.id == "a"),
+        "the tool card's entry is a tool call for that id"
+    );
+    assert!(
+        state.transcript(SessionId::new()).is_none(),
+        "a session that applied nothing has no transcript"
+    );
 }
 
 #[test]
@@ -93,7 +109,7 @@ fn every_card_starts_folded_and_toggle_unfolds_and_folds_it() {
     assert!(!state.is_open(s, &tool("a")), "a tool card starts folded");
     assert!(!state.is_open(s, &think), "a thinking card starts folded");
     state.toggle(s, tool("a"));
-    assert!(state.is_open(s, &tool("a")));
+    assert!(state.is_open(s, &tool("a")), "a toggle unfolds the card");
     assert!(!state.is_open(s, &think), "only the toggled card opens");
     state.toggle(s, tool("a"));
     assert!(!state.is_open(s, &tool("a")), "a second toggle folds it");

@@ -79,12 +79,17 @@ fn frame(
     }
 }
 
-#[test]
-#[cfg_attr(
-    debug_assertions,
-    ignore = "a release-build budget (SC-004, as BUG-003)"
-)]
-fn a_full_history_with_every_card_open_opens_within_a_second_and_each_delta_within_100_ms() {
+/// A full history opened with every card unfolded, and the state, caches and renderer it left.
+struct Opened {
+    session: SessionId,
+    state: State,
+    cache: BlockCache,
+    renderer: iced::Renderer,
+    tree: Option<Tree>,
+    elapsed: Duration,
+}
+
+fn opened() -> Opened {
     let session = SessionId::new();
     let history = sequenced(&history(), 0);
     let cache = BlockCache::default();
@@ -96,16 +101,50 @@ fn a_full_history_with_every_card_open_opens_within_a_second_and_each_delta_with
     state.apply(session, 0, &history, false);
     open_every_card(&mut state, session);
     frame(&state, session, &cache, &mut tree, &mut renderer, true);
-    let opened = started.elapsed();
-    eprintln!("opened in {opened:?}");
+    let elapsed = started.elapsed();
+    eprintln!("opened in {elapsed:?}");
+    Opened {
+        session,
+        state,
+        cache,
+        renderer,
+        tree,
+        elapsed,
+    }
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "a release-build budget (SC-004, as BUG-003)"
+)]
+fn a_full_history_with_every_card_open_opens_within_a_second() {
+    let opened = opened();
     assert!(
-        state.transcript(session).unwrap().held() == MAX_EVENTS,
+        opened.state.transcript(opened.session).unwrap().held() == MAX_EVENTS,
         "the transcript holds the bound"
     );
     assert!(
-        opened < OPEN_BUDGET,
-        "opening a {MAX_EVENTS}-event transcript, every card open, took {opened:?}"
+        opened.elapsed < OPEN_BUDGET,
+        "opening a {MAX_EVENTS}-event transcript, every card open, took {:?}",
+        opened.elapsed
     );
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "a release-build budget (SC-004, as BUG-003)"
+)]
+fn each_streamed_delta_on_a_full_history_updates_within_100_ms() {
+    let Opened {
+        session,
+        mut state,
+        cache,
+        mut renderer,
+        mut tree,
+        ..
+    } = opened();
 
     // A reply streamed in on top, one event at a time, as the wire delivers it live.
     let deltas = sequenced(&fixture_lines("partial-deltas"), MAX_EVENTS as u64);

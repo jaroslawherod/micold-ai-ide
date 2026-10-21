@@ -107,7 +107,11 @@ fn a_history_message_that_does_not_continue_rebuilds() {
         kinds(&built(&events)),
         "the same history again is shown once"
     );
-    assert_eq!(transcript.rebuilds(), 1);
+    assert_eq!(
+        transcript.rebuilds(),
+        1,
+        "FR-021: a history that does not continue is rebuilt"
+    );
 
     // A history after a live event is a fresh snapshot even when its seq continues (wire.md).
     let mut transcript = built(&events[..1]);
@@ -117,9 +121,14 @@ fn a_history_message_that_does_not_continue_rebuilds() {
         kinds(&transcript),
         vec![EntryKind::UserMessage {
             text: "three".to_string()
-        }]
+        }],
+        "a history after a live event replaces the entries"
     );
-    assert_eq!(transcript.rebuilds(), 1);
+    assert_eq!(
+        transcript.rebuilds(),
+        1,
+        "FR-021: a history after a live event is rebuilt"
+    );
 }
 
 #[test]
@@ -127,22 +136,49 @@ fn a_live_message_appends() {
     let events = sequenced([user_text("one"), assistant_block(text("two"))]);
     let mut transcript = built(&events[..1]);
     transcript.apply(0, &events[1..], true);
-    assert_eq!(kinds(&transcript), kinds(&built(&events)));
-    assert_eq!(transcript.rebuilds(), 0);
+    assert_eq!(
+        kinds(&transcript),
+        kinds(&built(&events)),
+        "a live message appends to the entries"
+    );
+    assert_eq!(
+        transcript.rebuilds(),
+        0,
+        "FR-021: a live append is not a rebuild"
+    );
 }
 
 #[test]
 fn a_transcript_with_no_event_is_empty() {
     assert!(Transcript::new().is_empty(), "nothing yet (FR-006)");
+}
+
+#[test]
+fn omitted_events_are_not_held() {
     let mut transcript = Transcript::new();
     transcript.apply(3, &[], false);
     assert!(transcript.is_empty(), "omitted events are not held");
-    assert!(!built(&sequenced([user_text("hi")])).is_empty());
+}
+
+#[test]
+fn a_transcript_with_an_event_is_not_empty() {
+    assert!(
+        !built(&sequenced([user_text("hi")])).is_empty(),
+        "a held event makes the transcript non-empty"
+    );
+}
+
+#[test]
+fn a_complete_history_has_no_omitted_notice() {
+    assert_eq!(
+        built(&sequenced([user_text("hi")])).omitted_notice(),
+        None,
+        "a history with nothing omitted carries no notice (FR-004)"
+    );
 }
 
 #[test]
 fn the_omitted_notice_carries_the_services_omitted_count() {
-    assert_eq!(built(&sequenced([user_text("hi")])).omitted_notice(), None);
     let mut transcript = Transcript::new();
     transcript.apply(
         7,
@@ -167,12 +203,36 @@ fn an_entry_is_found_by_its_key() {
             .map(|e| e.kind()),
         Some(&EntryKind::UserMessage {
             text: "hi".to_string()
-        })
+        }),
+        "an entry is found by its positional key"
     );
-    assert_eq!(card_of(&transcript, "toolu_1").name, "Bash");
-    assert!(transcript
-        .entry(&EntryKey::At { seq: 1, block: 0 })
-        .is_none());
+}
+
+#[test]
+fn a_tool_card_is_found_by_its_tool_use_id() {
+    let transcript = built(&sequenced([
+        user_text("hi"),
+        tool_use("toolu_1", "Bash", r#"{"command":"ls"}"#),
+    ]));
+    assert_eq!(
+        card_of(&transcript, "toolu_1").name,
+        "Bash",
+        "a tool card is found by its tool-use id"
+    );
+}
+
+#[test]
+fn a_key_with_no_entry_finds_nothing() {
+    let transcript = built(&sequenced([
+        user_text("hi"),
+        tool_use("toolu_1", "Bash", r#"{"command":"ls"}"#),
+    ]));
+    assert!(
+        transcript
+            .entry(&EntryKey::At { seq: 1, block: 0 })
+            .is_none(),
+        "a positional key whose event made no entry at that block finds nothing"
+    );
 }
 
 // ---------------------------------------------------------------------------------------
@@ -185,25 +245,42 @@ fn a_text_turn_is_session_start_reply_and_a_success_footer() {
     assert_eq!(entries.len(), 3, "{entries:?}");
     match &entries[0] {
         EntryKind::SessionStart { model, cwd, .. } => {
-            assert!(model.is_some(), "the session start names the model");
+            // The recording's own model: the init line of fixtures/stream-json/text-turn.jsonl.
+            assert_eq!(
+                model.as_deref(),
+                Some("claude-sonnet-5-5"),
+                "the session start names the recording's model"
+            );
             assert!(cwd.is_some(), "the session start names the folder");
         }
         other => panic!("the transcript starts with the session, got {other:?}"),
     }
     match &entries[1] {
         EntryKind::AssistantText { text, streaming } => {
-            assert!(text.contains("blue"), "{text}");
-            assert!(!streaming);
+            assert!(
+                text.contains("blue"),
+                "the reply is the recording's answer, which names a colour: {text}"
+            );
+            assert!(!streaming, "a finished turn's reply is not streaming");
         }
         other => panic!("then the reply, got {other:?}"),
     }
     match &entries[2] {
         EntryKind::Footer(footer) => {
-            assert_eq!(footer.outcome, Outcome::Success);
-            assert_eq!(footer.duration_ms, Some(6674));
-            assert!(footer.cost_usd.is_some());
-            assert_eq!(footer.num_turns, Some(1));
-            assert_eq!(footer.error_text, None);
+            // 6674 ms and 0.0371549 USD are the recording's: the result line of text-turn.jsonl.
+            assert_eq!(footer.outcome, Outcome::Success, "a success result");
+            assert_eq!(
+                footer.duration_ms,
+                Some(6674),
+                "the footer carries the recording's duration"
+            );
+            assert_eq!(
+                footer.cost_usd,
+                Some(0.0371549),
+                "the footer carries the recording's cost"
+            );
+            assert_eq!(footer.num_turns, Some(1), "one turn in the recording");
+            assert_eq!(footer.error_text, None, "a success has no error text");
         }
         other => panic!("then the footer, got {other:?}"),
     }
@@ -1074,7 +1151,6 @@ fn a_sub_agents_deltas_are_absorbed_not_counted() {
     assert_eq!(card_of(&transcript, "toolu_task").subagent_messages, 0);
 }
 
-/// Whether an entry was opened by the event `seq`.
 /// The parent tool use a sub-agent's event names (FR-024).
 fn subagent_parent(event: &StructuredEvent) -> Option<&str> {
     match event {
@@ -1091,6 +1167,7 @@ fn subagent_parent(event: &StructuredEvent) -> Option<&str> {
     }
 }
 
+/// Whether an entry was opened by the event `seq`.
 fn opened_by(transcript: &Transcript, seq: u64) -> bool {
     transcript.entries().any(|e| e.opened_at() == seq)
 }
@@ -1330,7 +1407,11 @@ fn rebuilding_from_the_same_history_keeps_every_key_once() {
             "{name}: no key twice"
         );
         transcript.apply(0, &events, false);
-        assert_eq!(transcript.rebuilds(), 1);
+        assert_eq!(
+            transcript.rebuilds(),
+            1,
+            "{name}: FR-021 a history that does not continue is rebuilt once"
+        );
         assert_eq!(keys(&transcript), before, "{name}: G3, FR-021");
     }
 }
@@ -1384,6 +1465,13 @@ fn status_and_control_response_events_make_no_entry() {
             vec![],
             "{name}: status and control_response lines are absorbed, no entry"
         );
+    }
+}
+
+#[test]
+fn status_and_control_response_events_leave_the_transcript_unchanged() {
+    for name in PROMPT_RECORDED {
+        let events = events_of(&lines_of(name));
         let whole = built(&events);
         let without = built(
             &events
