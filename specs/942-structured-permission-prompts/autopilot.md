@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: implement M1
-- **Next step**: M1 unit implements T001–T023, gates, reviews, and hands the PR title/body to the orchestrator
+- **Phase**: M1 PR
+- **Next step**: orchestrator opens the M1 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | — | in progress |
+| M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | pending (orchestrator opens) | gate green, PR to open |
 | M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | — | pending |
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | — | pending |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | pending |
@@ -60,6 +60,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 2 | 9798b34af9176881119e5e988c331a2bed97b955:18723871b14cc61aac3015421e5aea161167f6bb | CLEAN |
 | Review A M1 (code-review high) | 1 | 166c2275321aa52bd9e60dbe67abaf1a1e4d7a61:a2a02be619ce58df6f96999e95bc220a90d9fea4 | CHANGES: 1 MAJOR (Bash rule ignored dangerouslyDisableSandbox/run_in_background — fixed: shell rules match every non-cosmetic field), 3 MINOR (PowerShell/Task AnyInput — PowerShell now a shell rule, rest declined; PROTOCOL_VERSION 58 — fixed; preview clone — fixed) |
 | Review B M1 (conformance, sonnet) | 1 | 166c2275321aa52bd9e60dbe67abaf1a1e4d7a61:a2a02be619ce58df6f96999e95bc220a90d9fea4 | CLEAN but incomplete (its `claude -p` sandbox refused every command, Verify not run): 2 MINOR (T005 text — fixed; no tdd/cycle-log.md — added with stub-based red evidence) |
+| Review A M1 (sonnet) | 2 | eaf8fcf201e09294a5e358f8e9a654abbbbe907f:23f1ca80d17fd747754fd5b488d3730d0f06197a | CLEAN |
+| Review B M1 (conformance, sonnet) | 2 (full; r1 ran no command) | eaf8fcf201e09294a5e358f8e9a654abbbbe907f:23f1ca80d17fd747754fd5b488d3730d0f06197a | CLEAN; Verify `INTEG_EXIT=0` (37, 11, 9, 39, 5 passed), `LIB_EXIT=0` (52), capture test 6/0; 1 MINOR (cycle log red taken afterwards on stubs — follow-up) |
 
 ## Declined review findings
 
@@ -82,4 +84,5 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- From M2 on, record each behaviour's red run in `tdd/cycle-log.md` as it happens (M1's red evidence was taken afterwards on stubs; review B M1 r2 MINOR).
+- Local builds in this cloud container fill the disk with the default `line-tables-only` debug info (the first M1 gate died at `ld` Bus error, 0 bytes free); M1's green gate ran with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` after `rm -rf target-shared/debug`.
