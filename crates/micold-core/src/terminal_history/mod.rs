@@ -14,7 +14,8 @@ pub mod text;
 
 pub use format::{decode, encode, DamageReason, FORMAT_VERSION, MAX_FILE_BYTES};
 pub use store::{
-    history_dir, DeletionFailure, EventsLoad, HistoryStore, LoadOutcome, SaveOutcome, SkipReason,
+    history_dir, DeletionFailure, EventsLoad, HistoryStore, LoadOutcome, QueueLoad, SaveOutcome,
+    SkipReason,
 };
 
 /// What one terminal held at one moment: its history rows, then its screen rows down to the last

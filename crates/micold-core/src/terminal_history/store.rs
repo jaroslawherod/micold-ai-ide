@@ -11,7 +11,8 @@ use super::{decode, encode, DamageReason, HistorySnapshot, MAX_FILE_BYTES};
 use crate::owner_only;
 use crate::session::SessionId;
 use crate::structured::{
-    decode_events, encode_events, SequencedEvent, StructuredEvent, MAX_EVENTS_FILE_BYTES,
+    decode_events, decode_queue, encode_events, encode_queue, Message, SequencedEvent,
+    StructuredEvent, MAX_EVENTS_FILE_BYTES, MAX_QUEUE_FILE_BYTES,
 };
 
 /// What a session's saved history turned out to be (data-model §3).
@@ -38,21 +39,34 @@ pub enum EventsLoad {
     Damaged(DamageReason),
 }
 
-/// The two kinds of file a session can have saved: its terminal history and, for a structured
-/// session, its event history.
+/// What a structured session's saved queue turned out to be (feature 941, research R9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueueLoad {
+    /// No queue is saved for the session.
+    None,
+    /// The queued messages, in delivery order.
+    Queue(Vec<Message>),
+    /// A file is there and cannot be restored.
+    Damaged(DamageReason),
+}
+
+/// The kinds of file a session can have saved: its terminal history and, for a structured
+/// session, its event history and its queue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum FileKind {
     Terminal,
     Events,
+    Queue,
 }
 
 impl FileKind {
-    const ALL: [FileKind; 2] = [FileKind::Terminal, FileKind::Events];
+    const ALL: [FileKind; 3] = [FileKind::Terminal, FileKind::Events, FileKind::Queue];
 
     fn extension(self) -> &'static str {
         match self {
             FileKind::Terminal => "history",
             FileKind::Events => "events",
+            FileKind::Queue => "queue",
         }
     }
 
@@ -60,6 +74,7 @@ impl FileKind {
         match self {
             FileKind::Terminal => MAX_FILE_BYTES,
             FileKind::Events => MAX_EVENTS_FILE_BYTES,
+            FileKind::Queue => MAX_QUEUE_FILE_BYTES,
         }
     }
 }
@@ -348,6 +363,22 @@ impl HistoryStore {
         self.save_with(id, FileKind::Events, || encode_events(omitted, events))
     }
 
+    /// Write a structured session's queue as `<id>.queue`, by the rules of [`Self::save`]; an empty
+    /// queue removes the file instead, so a queue that emptied is not restored (research R9).
+    pub fn save_queue(&self, id: SessionId, entries: &[Message]) -> io::Result<SaveOutcome> {
+        if !entries.is_empty() {
+            return self.save_with(id, FileKind::Queue, || encode_queue(entries));
+        }
+        let mut guard = self.lock();
+        let state = &mut *guard;
+        state.last_written.remove(&(id, FileKind::Queue));
+        let name = file_name(id, FileKind::Queue);
+        match Self::remove_tracked(state, &self.dir.join(&name), &name, Some(id), true) {
+            Some(failure) => Err(failure.error),
+            None => Ok(SaveOutcome::Saved),
+        }
+    }
+
     fn save_with(
         &self,
         id: SessionId,
@@ -407,6 +438,18 @@ impl HistoryStore {
         }
     }
 
+    /// The saved queue of `id`: its messages, none, or why it cannot be restored.
+    pub fn load_queue(&self, id: SessionId) -> QueueLoad {
+        match self.read(id, FileKind::Queue) {
+            Ok(Some(bytes)) => match decode_queue(&bytes) {
+                Ok(entries) => QueueLoad::Queue(entries),
+                Err(reason) => QueueLoad::Damaged(reason),
+            },
+            Ok(None) => QueueLoad::None,
+            Err(reason) => QueueLoad::Damaged(reason),
+        }
+    }
+
     /// Whether an event history file is there for `id`: one `stat`, no store lock and no read, for
     /// the view path, which loads off the runtime only when there is something to load.
     /// [`Self::load_events`] still judges the setting, a removal and a file to be deleted.
@@ -436,7 +479,7 @@ impl HistoryStore {
     }
 }
 
-/// `<session uuid>.history` or `.events`, the uuid hyphenated and lower-case as the catalog
+/// `<session uuid>.history`, `.events` or `.queue`, the uuid hyphenated and lower-case as the catalog
 /// writes it.
 fn file_name(id: SessionId, kind: FileKind) -> String {
     format!("{}.{}", id.0.as_hyphenated(), kind.extension())
@@ -457,7 +500,8 @@ fn session_of(name: &str) -> Option<SessionId> {
     let stem = stem.strip_suffix(".tmp").unwrap_or(stem);
     let stem = stem
         .strip_suffix(".history")
-        .or_else(|| stem.strip_suffix(".events"))?;
+        .or_else(|| stem.strip_suffix(".events"))
+        .or_else(|| stem.strip_suffix(".queue"))?;
     uuid::Uuid::parse_str(stem).ok().map(SessionId)
 }
 
