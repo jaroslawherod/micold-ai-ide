@@ -29,6 +29,15 @@ sends the existing `PendingOp::TitleRemotes` (`ClientMsg::RemoteList`) whenever 
 `micold_core::github::choose_remote`, then goes on with the titles exactly as today (switch-gated).
 A window with no route to a daemon reads nothing and shows no GitHub link.
 
+A project switch with the Overview open (user guide *Overview*) clears `repo` on
+`ProjectSwitched` while the Overview stays open, so `on_overview_opened` (the closed → open edge)
+never runs again. `shell/daemon_sync.rs`'s `DaemonMsg::Attached` arm therefore also calls
+`shell::issues::read_repo(app)` (new; `on_overview_opened` calls it too) for the active project
+while the Overview is open and `repo` is `Unknown`: the same `PendingOp::TitleRemotes` with no
+title numbers, so its answer records `RepoRead` and fetches nothing. `Attached` is the trigger, not
+the switch itself: the new project's daemon answers `RemoteList` only once attached, and a
+reconnect after a lost route re-reads the same way. Titles keep today's behaviour.
+
 **Why**: the link needs the repository synchronously at render; the client holds it nowhere today
 outside the New-worktree form. Reading the remotes regardless of the switch makes FR-012 hold for
 the GitHub switch (turning it on shows the link at once, no second read). `RemoteList` is a git
@@ -36,7 +45,9 @@ read in the daemon, not a GitHub request: feature 1102 FR-009 already allows it 
 is off, and it is what the title reads use today (FR-014: no request to GitHub or Jira).
 
 **Rejected**: taking it from `worktree_form` (`github_repo()` exists only while the dialog is open);
-a new daemon op (the existing one answers); re-reading on each render (I/O in `view`).
+a new daemon op (the existing one answers); re-reading on each render (I/O in `view`); re-running
+all of `on_overview_opened` on `Attached` (its title numbers come from the worktree listing, which
+still holds the old project's worktrees until the listing after `Attached` arrives).
 
 ## R3 — The Jira base URL: type, validation, storage
 
@@ -101,8 +112,12 @@ around the face to a layer above it, inside a new cdk wrapper
 Layout: the content sizes it, the control fills it (as iced's `Stack` with a base layer). Events go
 to the content first; if the content captured the event, the control never sees it; otherwise the
 control sees it with the cursor levitated wherever the content answers a non-`None`
-`mouse_interaction` (the link, the expanded card's inner scrollbar). Draw: content, then control
-(ripple and focus layers over the face, as today). Focus traversal: control, then content, so Tab
+`mouse_interaction` (the link). Draw: content, then control (ripple and focus layers over the
+face, as today), the control drawn with the same levitated cursor, so it shows no hover layer over
+the link. The expanded card's inner scrollbar is not such a region: iced 0.14.2's `Scrollable`
+answers `None` over its scrollbar (and while it is grabbed), so the control shows its hover layer
+and pointer cursor there, as the card's button does today (its `mouse_interaction` never asks its
+content); a press on the scrollbar is still captured by the scrollable first, as today. Focus traversal: control, then content, so Tab
 reaches the card, then its link (contract U2). The `ContextArea` stays outermost, so a secondary
 click on the link opens the card menu (FR-006).
 
@@ -171,17 +186,37 @@ timer, and every pointer move across a link would be an app message).
   card holds the keyboard; a move between a card and its own link, in either order of the two
   reports (forward Tab: card lost then link gained; Shift+Tab: card gained then link lost), keeps
   `focus_escaped` and changes no form (contract K5).
-- Menu key on the link: `on_menu_key` publishes `Msg::CardMenuRequested(l)` with origin
-  `MenuOrigin::KeyboardFromLink` (new); closing without a choice sets `focus_return` to the link,
-  and `main.rs::card_focus_return` focuses `card_link_id(l)` (new), falling back to the card id when
-  the link is gone.
+- Menu key on the link: the link gets its own message, `Msg::LinkMenuRequested(l)` (new; the card's
+  `on_menu_key` stays `CardMenuRequested(l)`, which carries no origin). `main.rs::overview_message`
+  handles it in the `CardMenuRequested` arm, with the same open/activating guard and the same
+  `focused_bounds_task`, which then measures the focused **link**, so the menu is anchored in the
+  link's bounds (`keyboard_anchor`), and opens it with origin `MenuOrigin::KeyboardFromLink` (new).
+  The reducer treats `KeyboardFromLink` as `Keyboard` (first entry highlighted, `focus_return` set
+  on close) and keeps the origin in `CardMenu`; closing without a choice makes
+  `main.rs::card_focus_return` focus `card_link_id(l)` (new), falling back to the card id when the
+  link is gone. Tests: a `main_tests.rs` test that the link's Menu key opens the menu with
+  `KeyboardFromLink` and the card's with `Keyboard`; a reducer test that dismissing a
+  `KeyboardFromLink` menu sets `focus_return` and the return focuses the link id.
+- Focus across the menu (FR-009 "counting as a move between a card and its own link"): opening the
+  menu takes the keyboard from the link (`LinkFocusLost(l)` while `menu_open`), and the return
+  brings `LinkFocusGained(l)` after `MenuClosed`. 1121's `FocusLost` clears `focused` and
+  `focus_escaped` even while the menu is open, so the plain pairing rule would re-expand an
+  Escape-collapsed card. `Expansion` therefore holds the pairing across the menu (contract K5,
+  data-model *Expansion* "Held across the menu"): `LinkFocusLost(l)` while the menu is open keeps
+  `focused = l`, `focus_escaped` and part `Link`; the next focus report after `MenuClosed` decides —
+  `LinkFocusGained(l)` is a move inside the card (no form change), anything else first applies the
+  deferred loss as `FocusLost(l)` would have. The card's own `FocusLost` while the menu is open is
+  unchanged (1121's K1 suite stays green).
 - Escape: unchanged (`app.rs::on_escape` asks the expansion first; focus stays where it is).
 - Page keys: the card passes its `on_page` closure to the link (Story 3 sc. 6), and
   `scroll_focused_into_view` (already chained after focus moves) brings a link in the expanded body
   into view; a client test proves it reaches the inner scrollable.
 
 **Rejected**: keeping arrows on `FocusMoved` (they would stop on links); a `Msg` per part
-(`FocusGained { link: bool }`) changing 1121's existing event signatures and callers.
+(`FocusGained { link: bool }`) changing 1121's existing event signatures and callers; a
+`from_link: bool` field on `CardMenuRequested` (changes 972's variant and its callers for one
+case); keeping `focused`/`focus_escaped` for every focus loss while the menu is open (changes 1121's
+behaviour for card-opened menus).
 
 ## R10 — Opening the address and failures (FR-004, FR-013, FR-014)
 
@@ -206,6 +241,12 @@ the branch line's role (FR-015).
 
 **Why**: FR-003's ellipsis order and "never clipped" at 280 px: the link text is at most
 "Issue " plus a key, short enough for the narrowest card.
+
+**Rejected**: the link on a line of its own below the branch (an extra line on every card with a
+ticket, shrinking the collapsed card's room for the title and summary); the link after the title
+(the title wraps and ellipsizes by its own rules, so the link would move with title length and be
+clipped with it); the link before the branch (the branch, the line's subject, would be the one cut
+first by position rather than by FR-003's ellipsis order).
 
 ## R12 — Tests, snapshot, showcase, docs
 

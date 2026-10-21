@@ -47,8 +47,11 @@ Contract: [contracts/wire.md](contracts/wire.md).
 
 New messages: `Msg::RepoRead { project, repo: Option<GithubRepo> }` (dropped for a project no
 longer active, through `read_project`), `Msg::IssueLinkActivated(SessionLocation)`,
-`Msg::CardStepped { forward: bool }`. `MenuOrigin` gains `KeyboardFromLink`; `focus_return` then
-names the link (FR-009).
+`Msg::CardStepped { forward: bool }`, `Msg::LinkMenuRequested(SessionLocation)` (the link's Menu
+key; the root opens the menu with origin `KeyboardFromLink`). `MenuOrigin` gains
+`KeyboardFromLink`, handled as `Keyboard` in the reducer; `focus_return` then names the link
+(FR-009). `repo` is read again on `DaemonMsg::Attached` for the active project while the Overview
+is open and `repo` is `Unknown` (R2).
 
 ## Expansion (core, `micold_core::overview_expansion`) — additions to feature 1121's model
 
@@ -56,6 +59,7 @@ names the link (FR-009).
 |---|---|
 | `focused` | Now also set while the card's **link** holds the keyboard (FR-008) |
 | `focus_part` (new) | `Card` \| `Link` \| `Both`: which of the focused card's two stops reported focus last, so the two reports of a move inside one card (either order) are one move |
+| `link_held` (new) | `Option<SessionLocation>`: the link whose focus the open card menu took; the loss is deferred to the next focus report ("Held across the menu", FR-009) |
 
 ### New events
 
@@ -69,3 +73,10 @@ names the link (FR-009).
 "Just held": the immediately preceding event was the matching lost report for `l` (forward Tab:
 `FocusLost(l)` then `LinkFocusGained(l)`). Any other event in between ends the pairing, and the
 lost report's collapse stands (contract K5).
+
+"Held across the menu" (FR-009): `LinkFocusLost(l)` while the menu is open (the link's Menu key
+opened it) keeps `focused = l`, `focus_escaped` and part `Link`, and sets `link_held = Some(l)`
+(new field). `MenuOpened`, `MenuClosed` and pointer events do not end it. The next focus report
+ends it: `LinkFocusGained(l)` is a move inside the card (form and `focus_escaped` unchanged); any
+other focus report first applies the deferred loss exactly as `FocusLost(l)` with the menu closed
+would, then itself. `WindowBlurred`, and `Listed` without `l`, clear it with `focused`.
