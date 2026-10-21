@@ -1,10 +1,12 @@
 # `claude` stream-json fixtures (feature 938, FR-024)
 
-Nine of these files are **recorded**: the stdout of a real `claude` run, byte for byte, then
-scrubbed. Two are **synthetic**, written by hand: `tolerance.jsonl` and `insights-tolerance.jsonl`.
+Ten of these files are **recorded**: the stdout of a real `claude` run, byte for byte, then
+scrubbed. Three are **synthetic**, written by hand: `tolerance.jsonl`, `insights-tolerance.jsonl` and
+`markdown-subset.md` (plain markdown, not stream-json; see below).
 
-- CLI: Claude Code `2.1.302`, model `claude-sonnet-5-5`; the four marked (944) with `2.1.306`
-- Captured: 2026-10-18 (the (944) ones 2026-10-21), in the dev container, with
+- CLI: Claude Code `2.1.302`, model `claude-sonnet-5-5`; the four marked (944) and the one marked
+  (940) with `2.1.306` (the (940) one with `--model claude-sonnet-5-5` passed)
+- Captured: 2026-10-18 (the (944) and (940) ones 2026-10-21), in the dev container, with
   `scripts/capture-stream-json.sh` (for the (944) ones it sets `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1`)
 - Argv of every recorded run: `claude -p --input-format stream-json --output-format stream-json
   --verbose --include-partial-messages --session-id <new uuid>` (or `--resume <id>`), in a fresh
@@ -30,6 +32,7 @@ scrubbed. Two are **synthetic**, written by hand: `tolerance.jsonl` and `insight
 | `nested-subagent.jsonl` (944) | `Use the Agent tool once, with subagent_type relay, asking it to find out the number stated in notes.txt in the current directory. Then tell me that number. Do not use any other tool yourself.` | `--agents '{"relay":{"description":"Finds out what a file says by delegating the reading to another subagent.","prompt":"You never read files yourself. Use the Agent tool exactly once, with subagent_type general-purpose, asking that subagent to read the named file with the Read tool and report what it states. Then report its answer."}}'`, environment `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` | a subagent starting a subagent: each level's messages name their own parent call (`spawn_depth` 1 and 2) |
 | `background-command.jsonl` (944) | ``Use the Bash tool exactly once, with run_in_background set to true, to run the command `sleep 5; echo finished`. Do not run any other command. When its completion notification arrives, tell me its output in one short sentence.`` | `--allowedTools Bash` | a `local_bash` background task that finishes: `task_started`, `background_tasks_changed`, `task_notification`, and a second turn after it |
 | `background-subagent.jsonl` (944) | `Use the Agent tool exactly once, with subagent_type general-purpose and run_in_background set to true, to have a subagent read notes.txt in the current directory with the Read tool and report the number it states. Do not use any other tool yourself. When its completion notification arrives, tell me that number in one short sentence.` | — | a backgrounded `local_agent` task, its parented messages, and a second turn after its notification |
+| `markdown-turn.jsonl` (940) | `Do not use any tools. Reply with a short markdown document about brewing tea that uses each of these elements at least once: a level-1 heading and a level-2 heading; **bold**, *italic* and ~~strikethrough~~ text; `inline code`; a bullet list with a nested bullet list; a numbered list; a task list with one checked and one unchecked item; a block quote; a horizontal rule; a link to https://example.com; a table with three columns whose columns are left-, centre- and right-aligned; a code block tagged rust, a code block tagged teapot-lang, and a code block with no tag.` | `--model claude-sonnet-5-5` | one assistant text block streamed in many `text_delta`s, using every element of #940's markdown subset |
 
 The recorded files also carry the line types this CLI version writes that the model does not
 type (`active_goal`, `autocompact_state`, `rate_limit_event`, `system` subtypes other than
@@ -57,3 +60,10 @@ utilization as a string, a window that is a number and `rate_limit_info` a strin
 fields of the wrong type; and `result` lines with a `modelUsage` entry holding a string and an entry
 that is a number, with no `usage` and no `modelUsage`, with `modelUsage` a list, with a negative
 `total_cost_usd`, and with a token count as a string.
+
+`markdown-subset.md` (940, synthetic) is plain markdown for the markdown model's tests
+(`tests/markdown_subset.rs`, `tests/markdown_stream.rs`): what a recording may not hold — raw HTML
+(block and inline), an image, `javascript:`, relative and `file:` links, a reference defined in a
+later block, a CRLF paragraph and list (kept as written by its `-text` line in `.gitattributes`), an
+indented code block, an unclosed fence (last), unmatched `**` and a table without its separator
+row — beside every element of the subset.

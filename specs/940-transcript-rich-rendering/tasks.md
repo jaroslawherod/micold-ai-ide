@@ -46,7 +46,7 @@ the transcript to the rich renderers last, so no half-wired UI reaches `main` (m
 
 ## Phase 1: Setup
 
-- [ ] T001 Re-check #939's names (research R14): confirm with `git log origin/main` that #939 M6
+- [x] T001 Re-check #939's names (research R14): confirm with `git log origin/main` that #939 M6
   has merged (if not, stop and escalate: this run cannot start); then with `LSP`
   (`workspaceSymbol`, `documentSymbol`) find each #939 name listed above in the merged code
   (`crates/micold-core/src/structured/transcript/`, `crates/micold-client/src/features/structured_transcript.rs`,
@@ -54,14 +54,14 @@ the transcript to the rich renderers last, so no half-wired UI reaches `main` (m
   `crates/micold-client/tests/`). Record every rename or changed signature in
   `specs/940-transcript-rich-rendering/research.md` R14 (a *Re-check* paragraph, "none" if none)
   and update the affected task text in this file in the same commit
-- [ ] T002 Add `pulldown-cmark = { version = "0.13", default-features = false }` to the workspace
+- [x] T002 Add `pulldown-cmark = { version = "0.13", default-features = false }` to the workspace
   `[workspace.dependencies]` in `Cargo.toml` and `pulldown-cmark.workspace = true` to
   `crates/micold-core/Cargo.toml`; parser options are `ENABLE_TABLES`, `ENABLE_STRIKETHROUGH`,
   `ENABLE_TASKLISTS` only (research R1); `Cargo.lock` gains `pulldown-cmark` and `unicase` only
-- [ ] T003 Create the render-free module `crates/micold-core/src/markdown/` with `mod.rs`,
+- [x] T003 Create the render-free module `crates/micold-core/src/markdown/` with `mod.rs`,
   `block.rs`, `split.rs`, `inline.rs`, `fence.rs` and add `pub mod markdown;` to
   `crates/micold-core/src/lib.rs` (plan *Project Structure*)
-- [ ] T004 [P] Record `crates/micold-core/tests/fixtures/stream-json/markdown-turn.jsonl` with
+- [x] T004 [P] Record `crates/micold-core/tests/fixtures/stream-json/markdown-turn.jsonl` with
   `scripts/capture-stream-json.sh` (`--include-partial-messages`): a prompt asking for a reply using
   every element of the subset — headings, bold/italic/strikethrough, inline code, nested bullet and
   numbered lists with a task list, a quote, a rule, a link, a table, and code blocks tagged `rust`,
@@ -76,7 +76,7 @@ the transcript to the rich renderers last, so no half-wired UI reaches `main` (m
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T005 Define the model in `crates/micold-core/src/markdown/block.rs` per
+- [x] T005 Define the model in `crates/micold-core/src/markdown/block.rs` per
   [data-model.md](data-model.md) *Markdown document*: closed `Block::{Heading { level: u8 } (1–6),
   Paragraph, List { start: Option<u64>, tight: bool, items: Vec<ListItem> }, Quote { blocks }, Rule,
   Code(CodeBlock), Table { align: Vec<Align>, header: Vec<Inlines>, rows: Vec<Vec<Inlines>> }}`,
@@ -102,12 +102,12 @@ incremental while streaming, never failing (contracts/markdown-model.md M-1–M-
 
 ### Tests for User Story 1 ⚠️ write first, see them fail
 
-- [ ] T006 [P] [US3] Unit tests in `crates/micold-core/src/markdown/fence.rs` (`#[cfg(test)]`) for
+- [x] T006 [P] [US3] Unit tests in `crates/micold-core/src/markdown/fence.rs` (`#[cfg(test)]`) for
   `fence_token` (research R4): first word cut at whitespace, `,` or `{`; lower-cased; aliases
   `shell`/`bash`/`zsh`/`console` → `sh`, `golang` → `go`, `yml` → `yaml`, `jsonc` → `json`, `c++` →
   `cpp`; `ts`, `rs`, `py`, `Rust` → `rust` pass through lower-cased; `""` and whitespace-only →
   `None`
-- [ ] T007 [P] [US1] Fixture tests in `crates/micold-core/tests/markdown_subset.rs` (M-1, M-5, M-6,
+- [x] T007 [P] [US1] Fixture tests in `crates/micold-core/tests/markdown_subset.rs` (M-1, M-5, M-6,
   FR-001, FR-003, FR-004, FR-007, FR-011 at the model, SC-001) over `markdown-subset.md` and the
   final assistant text of `markdown-turn.jsonl`: each row of contracts/markdown-model.md *Rules*
   maps to its model (heading levels, styles, nested lists with `start`, `tight` and task marks,
@@ -122,7 +122,7 @@ incremental while streaming, never failing (contracts/markdown-model.md M-1–M-
   block's text; `CodeId`s are document-order ordinals and name the same block in every longer
   prefix (M-6); M-5 over 10,000 seeded pseudo-random byte cuts (a fixed-seed xorshift in the
   test, no new dependency) of both fixtures' texts and of arbitrary UTF-8: no panic, no dropped text
-- [ ] T008 [P] [US1] Stream tests in `crates/micold-core/tests/markdown_stream.rs` (M-2–M-4,
+- [x] T008 [P] [US1] Stream tests in `crates/micold-core/tests/markdown_stream.rs` (M-2–M-4,
   FR-005–FR-008, SC-002) for `markdown-subset.md` and `markdown-turn`'s text: for every char-boundary
   prefix `p` and every longer prefix `q`, `parse(p, true).blocks()[..settled]` equals the same
   blocks of `parse(q, true)` (M-2); feeding the prefixes in order through one `update` gives after
@@ -133,18 +133,18 @@ incremental while streaming, never failing (contracts/markdown-model.md M-1–M-
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US3] Implement `fence_token` with its alias table in
+- [x] T009 [P] [US3] Implement `fence_token` with its alias table in
   `crates/micold-core/src/markdown/fence.rs`; T006 passes
-- [ ] T010 [US1] Implement `crates/micold-core/src/markdown/inline.rs` (research R3): pulldown-cmark
+- [x] T010 [US1] Implement `crates/micold-core/src/markdown/inline.rs` (research R3): pulldown-cmark
   inline events → `Span`s (soft break → space, hard break → `"\n"`), literal fallbacks (inline HTML,
   footnotes, math as text; image → `"description (address)"`, nothing fetched), `Link.activatable`
   iff `micold_core::link::address::classify(target)` is `Address::Web` or `Address::Mail`, and bare
   addresses in text spans found with `micold_core::link::detect::detect` split out as activatable
   link spans
-- [ ] T011 [US1] Implement `crates/micold-core/src/markdown/split.rs` (research R2): run
+- [x] T011 [US1] Implement `crates/micold-core/src/markdown/split.rs` (research R2): run
   pulldown-cmark over the text (`into_offset_iter`), cut at every top-level `Start` offset, slices
   include their trailing blank lines; while streaming the last slice is open, else none is
-- [ ] T012 [US1] Implement `Document::parse` and `Document::update` in
+- [x] T012 [US1] Implement `Document::parse` and `Document::update` in
   `crates/micold-core/src/markdown/mod.rs`: each slice parsed on its own into `Block`s (block
   events, tables, lists, quotes, code blocks with `CodeId` ordinals and `lines`/`bytes`, through
   T010's inlines); `update` keeps `blocks[..settled]` and re-splits only `text[open_from..]` when
