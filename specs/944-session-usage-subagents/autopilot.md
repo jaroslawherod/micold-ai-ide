@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: pr M2
-- **Next step**: M2 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI
+- **Phase**: verify M3
+- **Next step**: M3 verify — scoped gate + review A, review B, full gate
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1194 | Design PR (spec, clarifications, plan, research, contracts, tasks) | merged (rebase) | 5f95db21d6b0ba7fcf87cb4bdaf647178349b702 |
 | #1199 | M1 — core insights | merged (rebase) | 558cb726092ef4b32a536179ccbe0a0f575c1135 |
+| #1202 | M2 — structured sessions feed plan usage | merged (rebase) | cdbd2c7badf911b6d8ff6b5d93bb8bd75941efb4 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | #1199 | merged |
-| M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | — | PR files written, gate green at a520ee52 |
-| M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | — | todo (needs M1) |
+| M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | #1202 | merged |
+| M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | — | in progress |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | todo (main as is) |
 | M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | blocked on **#939 M3** (and M3) |
 | M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | blocked on **#939 M4, M5, M6** (and M4, M5) |
@@ -48,6 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D12 | implement M1 | Totals cost text, and a result line that does not type | `totals_line` uses #939's `format_cost` unchanged (`"$0.1400 est. · 3 turns"`; T012's `"$0.14"` was illustrative, R9 names `format_cost`). A `result` line with a token count as a string is `Unrecognised` in #938's parse, so it is no digest (no turn), as #939 shows no footer for it; `insights-tolerance.jsonl` covers it | agent | `transcript/figures.rs` `format_cost`; `parse.rs` `ResultLine` |
 | D13 | implement M2 | Feed shape, the shared rejection log, a scaled share beyond `u32` | `Feed` (sender + once-taken receiver) and `Rejections` live in a new `micold-daemon/src/plan_usage.rs`, held by `DaemonState`; `server::spawn_plan_usage_feed` drains it (tests call it, as `service()` starts no tasks). The status route's once-per-answer log moved there too, so a structured session's unreadable event (`"unreadable plan-limit event"`) and a status answer share one per-session set cleared by `offer_plan_usage`. `limit_window` drops a window whose tenths exceed `u32` (contract *Parse*), where `status_line` saturated before; no 490 test covers saturation | agent | contracts/plan-usage-source.md *Parse*, *Feed* 3; research R4 |
 | D14 | implement M2 | The daemon test's reset times | `text-turn.jsonl`'s 5-hour reset (2026-10-18) is already past, so `plan_usage_structured.rs` replays a copy with both reset times moved to after the test's clock; utilizations, keys and every other byte unchanged | agent | `date -u -d @1792363200` |
+| D15 | implement M3 | Points data-model.md leaves open in the task table and thread index | (a) A terminal state changes only by a later `task_started` (data-model): a report after `EndedWithoutReport` still sets the outcome, not the state. (b) `threads_owned_by` takes the main `Transcript` too (`Main`/`Unknown` need it); data-model operations line updated. (c) `thread_view` with no subagent task and no card status → `Running` (as a card with no result), the client's `cli_running` overlay ends it. (d) `task_label` joins the outcome as `"<State> · <outcome>"`. (e) A tool call id already held by a thread is not counted again | agent | data-model.md *TaskTable*, *ThreadIndex*; tasks.md T025 |
 
 ## Review rounds
 

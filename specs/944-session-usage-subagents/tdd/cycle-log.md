@@ -76,3 +76,26 @@ Each test was written and run red before its implementation, recorded here as it
   subsection needs `plan-limit events of structured sessions`"); green once the note says so.
 - **Refactor**: the status route's `Rejections` alias and `rejected` fn replaced by the shared
   `plan_usage::Rejections`; `hooks.rs`'s keep-and-broadcast now calls `offer_plan_usage`.
+
+## M3 — task table and subagent thread index (T023–T028)
+
+- **Red, T023/T024/T025** (public types, `SessionInsights` accessors returning empty/`Unknown`/`None`,
+  no task or parented digest, `display_state` returning the state as is, `task_label` and
+  `thread_summary_line` returning `""`):
+  `cargo test -p micold-core --test structured_insights` → 28 passed, 17 failed, e.g.
+  `a_background_subagent_is_a_subagent_background_task` ("task af7410702746666d6 is listed"),
+  `a_thread_is_placed_under_the_card_of_its_parent_at_every_depth` (`left: Unknown`,
+  `right: Main`), `the_call_that_started_a_task_finds_it` (`left: None`,
+  `right: Some("b4zmc5hrw")`). `a_session_without_background_tasks_lists_none` and
+  `malformed_task_lines_are_skipped` pass on the stub: they guard against entries the stub never
+  makes. `cargo test -p micold-core --lib structured::insights` → 7 passed, 5 failed, e.g.
+  `a_running_threads_summary_shows_its_tool_calls_and_activity` (`left: ""`,
+  `right: "Subagent · running · 3 tool calls · Reading notes.txt"`).
+- **Green, T026/T027/T028**: `TaskTable` (tasks.rs), `ThreadIndex` (subagents.rs), the `Init`,
+  `Task`, `LiveSet` and `Parented` digests, the accessors and the refold reset; `task_label`,
+  `thread_summary_line` → `structured_insights` 45/45, `--lib structured::insights` 12/12. I1
+  (T007) now compares tasks and threads unchanged and stays green.
+- **Mutant**: the refold without `self.threads = ThreadIndex::default()` →
+  `past_the_bound_the_oldest_leave_and_the_value_equals_a_fresh_build` fails ("subagent-turn:
+  equal to a fresh build of the held events"), so I1 sees the thread index. Reverted.
+
