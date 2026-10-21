@@ -9,7 +9,7 @@ use micold_client::features::structured_transcript::{
 };
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::EntryKey;
-use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent};
+use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent, MAX_EVENTS};
 use serde_json::json;
 
 fn assistant(blocks: Vec<ContentBlock>) -> StructuredEvent {
@@ -144,6 +144,26 @@ fn a_rebuild_keeps_open_only_the_cards_still_present() {
     // `b` comes back in a later history: it starts folded again.
     state.apply(s, 0, &seq(0, [tool_use("b")]), false);
     assert!(!state.is_open(s, &tool("b")));
+}
+
+#[test]
+fn a_toggle_of_a_card_not_in_the_transcript_opens_nothing() {
+    let (mut state, s) = with_cards();
+    state.toggle(s, tool("gone"));
+    assert!(!state.is_open(s, &tool("gone")));
+}
+
+#[test]
+fn a_card_the_bound_dropped_is_forgotten() {
+    let (mut state, s) = with_cards();
+    state.toggle(s, tool("a"));
+    let filler = (0..MAX_EVENTS).map(|i| text(&i.to_string()));
+    state.apply(s, 0, &seq(2, filler), true);
+    assert!(state.transcript(s).unwrap().entry(&tool("a")).is_none());
+    assert!(
+        !state.is_open(s, &tool("a")),
+        "the card left with its events"
+    );
 }
 
 #[test]
