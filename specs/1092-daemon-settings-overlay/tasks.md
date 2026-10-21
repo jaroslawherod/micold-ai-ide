@@ -65,7 +65,7 @@ T016, T017, T019, T020 (US5) ship in M1 so a running-daemon edit never shows a s
 
 ## Phase 6: Polish
 
-- [ ] T030 Run quickstart Part B (`visual-pass` skill) and record results in `specs/1092-daemon-settings-overlay/quickstart.md`; tick tasks. No code (close unit).
+- [x] T030 Run quickstart Part B (`visual-pass` skill) and record results in `specs/1092-daemon-settings-overlay/quickstart.md`; tick tasks. No code (close unit).
 
 ## Dependencies and order
 
@@ -117,7 +117,7 @@ not done until T031-T034 are cleared; T035-T038 are non-blocking.
 - [x] T031 [US1] [US4] Finding 2 (HIGH): add button-wiring tests in `tests/daemons_section_geometry.rs` or a new `tests/daemon_dialog_buttons.rs`: build `ui::daemon_form_dialog::dialog`, `ui::daemon_details_dialog::dialog` and the Daemons page, and assert the message each of Save daemon, Cancel, Close, Edit, Details and Add produces (`src/ui/daemon_form_dialog.rs:60`, `src/ui/settings/daemons.rs:191,196`). Proof: `cargo test -p micold-client --test <file>` passes, and flipping each button's message (the three audit mutants) makes it fail.
 - [x] T032 [US4] Finding 3 (HIGH): in `tests/daemons_section_geometry.rs:132-160` feed a connection error and a log line through `daemons::daemon_event`/`Msg::LogLine` into `state.daemon_list`, assert the details dialog paints both, and a second line added while open is painted; rename the test to what it asserts. Proof: the test fails when `details_block` drops the `for error`/`for line` loops (`src/ui/settings/daemons.rs:219,226`).
 - [x] T033 [US2] Finding 4 (HIGH): in `tests/overlay_registry.rs:895` assert the modal's outside-click dismissal for the form and the details dialog (via the built view's `on_dismiss`, `src/ui/mod.rs:771`), or rename the test to Escape only and add the scrim test. Proof: removing `modal.on_dismiss(cancel)` fails it.
-- [ ] T034 Finding 1 (HIGH): record the evidence gap. Either accept it in the autopilot ledger with the reason (no TDD extension run for this feature), or, for the T031-T033 tests, commit each failing first and record the red output in `tdd/cycle-log.md`. Proof: `git log --stat` shows test commits before the fix commits.
+- [x] T034 Finding 1 (HIGH): record the evidence gap. Either accept it in the autopilot ledger with the reason (no TDD extension run for this feature), or, for the T031-T033 tests, commit each failing first and record the red output in `tdd/cycle-log.md`. Proof: `git log --stat` shows test commits before the fix commits.
 - [x] T035 Finding 5 (MED): in `tests/gates/daemon_form_fits.rs` also assert the dialog's Cancel bottom is `<= HEIGHT` in absolute terms at `TALL`, or document why not. Proof: `cargo test -p micold-client --test layout_snapshot`.
 - [x] T036 Finding 6 (MED): add a shell test that a closed form dialog issues `operation::focus(opener_id(..))`, and a test that Add and Edit buttons carry the ids `opener_id` returns (`src/shell/daemons.rs`, `src/ui/settings/daemons.rs:123`). Proof: mutating `opener_id` fails it.
 - [x] T037 Finding 7 (MED): in the FR-013 test (`tests/daemons_section_geometry.rs`, rows-keep-actions) assert presence of each needle on the page with the dialog open, using exact matches, not before/after equality. Proof: removing the Stop button from a row fails it.

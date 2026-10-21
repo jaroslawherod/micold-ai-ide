@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Draft
+**Status**: Closed 2026-10-21 — shipped in PRs #1160, #1170, #1174, #1182, plus the close PR
 
 **Input**: User description: "Issue #1092, Daemon settings should open in an overlay with its own Save, not rely on the Settings save button. Daemon settings are edited inline in the Settings page and only take effect after the Settings save button on the right is clicked; it is easy to edit a daemon and leave without saving, and the button is far from the daemon being edited. Expected: adding, editing and viewing details of a daemon open in an overlay (dialog) instead of inline; the overlay has its own Save and Cancel, and saving applies that daemon's settings immediately; Cancel or dismiss discards the edits; daemon settings no longer depend on the page-level Settings save button. Related: #890, #1091 (Settings accordions), #868."
 

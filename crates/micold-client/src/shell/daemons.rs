@@ -514,6 +514,16 @@ mod tests {
     }
 
     #[test]
+    fn the_shell_pushes_the_focus_task_when_a_dialog_closes() {
+        let mut app = crate::tests::base_app();
+        let host = app.core.settings.daemons.entries()[0].id;
+        let opened = update(&mut app, Msg::DetailsOpened(host));
+        assert_eq!(opened.units(), 0, "opening a dialog moves no focus");
+        let closed = update(&mut app, Msg::DetailsClosed);
+        assert_eq!(closed.units(), 1, "closing it focuses the opener again");
+    }
+
+    #[test]
     fn the_bundled_builds_are_found_where_each_package_puts_them() {
         for (exe, want) in [
             (
