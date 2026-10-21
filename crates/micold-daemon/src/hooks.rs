@@ -124,7 +124,10 @@ fn guard_response(
     };
     let input = GuardInput {
         worktrees: state.guard_worktrees(&project),
-        session_cwd: worktree_guard::payload_cwd(payload).unwrap_or_else(|| project.clone()),
+        session_cwd: worktree_guard::payload_cwd(payload).unwrap_or_else(|| match &binding {
+            SessionBinding::Worktree(own) | SessionBinding::Default(own) => own.clone(),
+            SessionBinding::Unknown => project.clone(),
+        }),
         project_root: project,
         binding,
         tool,
@@ -444,7 +447,15 @@ async fn handle_connection(
                 state.broadcast_catalog();
             }
             if kind == HookKind::PreToolUse {
-                if let Some(body) = guard_response(&state, session, &value) {
+                // It reads the disk to resolve symlinks, so off the async workers.
+                let guarded = {
+                    let state = Arc::clone(&state);
+                    tokio::task::spawn_blocking(move || guard_response(&state, session, &value))
+                        .await
+                        .ok()
+                        .flatten()
+                };
+                if let Some(body) = guarded {
                     return respond_json(&mut stream, 200, "OK", &body).await;
                 }
             }

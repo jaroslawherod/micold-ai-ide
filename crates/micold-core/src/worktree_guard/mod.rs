@@ -173,7 +173,9 @@ fn judge(
     // A directory under the root's worktrees folder that git no longer lists is a removed
     // worktree: nothing to protect.
     let unlisted = best == root && root.join(".claude/worktrees").contains(&resolved);
-    if best == own || is_prefetch(&best) || unlisted {
+    // Autopilot's prefetch worktree is a worktree, never the checkout itself, whatever it is named.
+    let prefetch = best != root && is_prefetch(&best);
+    if best == own || prefetch || unlisted {
         return GuardVerdict::Allow;
     }
     GuardVerdict::Deny {
@@ -321,6 +323,23 @@ mod tests {
             in_a(),
             &format!("{ROOT}/target-shared2/x")
         ))));
+    }
+
+    #[test]
+    fn a_checkout_named_like_the_prefetch_worktree_is_not_exempt() {
+        let root = "/p/autopilot-prefetch-tools";
+        let own = format!("{root}/.claude/worktrees/a");
+        let i = GuardInput {
+            binding: SessionBinding::Worktree(own.clone().into()),
+            project_root: root.into(),
+            worktrees: vec![root.into(), own.into()],
+            session_cwd: root.into(),
+            tool: ToolCall::Edit {
+                tool: "Write".into(),
+                path: format!("{root}/src/x.rs"),
+            },
+        };
+        assert!(denied(&verdict(&i)));
     }
 
     #[test]
