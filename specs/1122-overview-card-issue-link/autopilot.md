@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M2
-- **Next step**: M2 T010–T018 done (d05aad46; R11 amended: Fill branch, `TextLink::inline`). Full gate running on d05aad46; review A r1, review B r1 and the visual pass (T019) requested together. Gate r1 red on material_boundary, fixed d94cc82e; gate r2 GREEN on d94cc82e, pushed. Then fixes, full gate, push, PR text. The D4 amendment commits ride along in M2's PR.
+- **Next step**: M2 T010–T019 done. Review A r1 CHANGES (F1, F2 MAJOR fixed a5984cdd; F3–F5 declined), review B r1 CLEAN (minor fixed), visual r1 PASS (T019). Full gate r3 on a5984cdd, then push; review A r2 (sonnet, fix diff d94cc82e..a5984cdd) requested. When clean: PR text (pr-title.txt, pr-body.md). The D4 amendment commits ride along in M2's PR.
 
 ## Pull requests
 
@@ -72,18 +72,23 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A plan amend D4 | 2 | c627583d8ac12b7a3566014f16b20b741c372013:ae2b013038751aac9eeaf86abab1620426bb12d9 | CLEAN (sonnet, fix diff ae2b0130..8ebea0f9) |
 | Full gate M2 | 1 | d05aad46 | RED: `material_boundary` counted `Operation::<..>::scrollable(` in `ui/focus.rs` as building a wrapped widget; fixed d94cc82e |
 | Full gate M2 | 2 | d94cc82e | GREEN |
-| Review A M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | pending (session model, code-review high; prompt 1122-m2-prompt-review-a-r1.md) |
-| Review B M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | pending (sonnet, conformance; prompt 1122-m2-prompt-review-b-r1.md) |
-| Visual pass M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | pending (sonnet, showcase §B1; prompt 1122-m2-prompt-visual-r1.md) |
+| Review A M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | CHANGES (session model, code-review high): F1 MAJOR the expanded card's twin, built with no messages, lays out no link, so a linked card with no branch line (the link on a line of its own) has its row measured a line short (FR-009): fixed a5984cdd, `OverviewCard::twin_of` gives the twin the expanded card's `on_issue_link` in `CardGrid::into_grid`; test `the_twin_of_a_linked_card_with_no_branch_keeps_its_row` (red: the row below moved 24 px). F2 MAJOR `over_link` used the link's translated but unclipped bounds, so with the expanded body scrolled the link counted as under a pointer on the title (rest and press routing): fixed a5984cdd, `ScreenBounds` keeps each scrollable's on-screen view and reports `visible()`, the bounds clipped to it; test `a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (red: `["link rest 0"]`). F3, F4, F5 MINOR declined (see *Declined review findings*) |
+| Review B M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | CLEAN (sonnet, conformance). Verify: `--lib control_overlay overview_card card_grid` 124 passed; `layout_snapshot` 72; `showcase_completeness` 42; `idle_requests_no_frames` 14; five deliberate deviations judged acceptable (R11, U1 amended; snapshot additions only). F1 MINOR the cycle log's T018 row said 4 nodes per card, the snapshot adds 2: fixed a5984cdd |
+| Visual pass M2 | 1 | 8daa7797f59f03b36df7d97c5e568026b04db9f8:d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089 | PASS (sonnet, showcase §B1, light/dark x 1.0/2.0) = T019: C1 link whole at 280/380/480 collapsed and expanded, 120-char branch ellipsized before it; C2 line heights equal to a no-link card, link centred on the branch line, lone link flush; C3 pointing hand, 1 px underline, no hover layer under the link; C4 link press/release pixel-identical to hover, body press ripples; C5 Tab never stops on a link; C6 2.0 crisp. Observation (1), no card hover layer in any frame even without a link: not a regression, main (0164f375) had none either: its card wrapped the face in `button(face).style(\|_, _\| button::Style::default())`, which paints nothing in any status, the `Ripple` paints only a running ripple, and `TakesTheKeyboard`'s layer shows only under shown keyboard focus (`keyboard_focus.rs` `Focus::indicator` is `None` unless focused and visible); `ControlOverlay` keeps exactly that chain. Observations (2)–(6) are pre-existing or by design (overlay scroll-tracking offset is the 1121 pose's too). Evidence `visual-pass/m2/` (45 PNGs) |
+| Full gate M2 | 3 | a5984cdd | running (after review A r1 fixes) |
+| Review A M2 | 2 | d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089:a5984cdd | requested (sonnet, fix diff d94cc82e..a5984cdd; prompt 1122-m2-prompt-review-a-r2.md). Visual r2 not needed: neither fix changes what is drawn (the showcase's expanded linked card has a branch line, so its twin's height is unchanged; F2 changes pointer routing only) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M2 | A r1 | F3 MINOR: a touch `FingerPressed` on a link reaches every card, and `keyboard_focus.rs:536` drops another card's keyboard focus on it (R7 for touch) | The premise does not hold: the keyboard is given up only on `Event::Mouse(ButtonPressed(Left))` (`keyboard_focus.rs`, the rule just above line 536); line 536 sets only the control's own `pressed` flag, and only when the finger is over that control. Another card's ripple and button likewise react only to a finger over them. So a touch on a link moves no other card's keyboard, as R7 asks. |
+| M2 | A r1 | F4 MINOR: the inline link's 6 px focus gutter is clipped by 2 px under the expanded body's 4 px top padding when the link is the body's first row | Deferred to M4, where it can first be seen: in M2 (and M3) the link is never a Tab stop (`focusable(false)`, contract U3 staging), so no ring is drawn in the gutter, and the clipped 2 px of hit strip lie in the body's top padding, under the title. M4 shows the ring and its visual pass covers it; recorded in *Follow-ups not done*. |
+| M2 | A r1 | F5 MINOR: `over_link` runs an operation over the hovered card on every mouse event and frame | Kept by design: it walks only the one card under the pointer (a few dozen nodes), frames come only while something animates or a rest timer waits (G3, one timed wake), and the rest timer needs the link state on frames (a scroll moves the link under a still pointer, R8). A per-layout cache would also have to follow the expanded body's own scroll offset, state the grid does not hold. |
 
 ## Handover
 
-M2 unit handed over at the context cap (checkpoint 284k). Done: T010–T018 in d05aad46 (cycle log *M2*; research R11 and contract U1 amended: Fill branch, `TextLink::inline`); ledger 9c933927. Full gate r1 on d05aad46 RED (`material_boundary`: `focus.rs widgets=1`, the explicit `Operation::scrollable(` call in `FocusedBounds`), fixed in d94cc82e; gate r2 on d94cc82e GREEN (pushed). Requested together, not yet run: review A r1 (session model, prompt 1122-m2-prompt-review-a-r1.md), review B r1 (sonnet, 1122-m2-prompt-review-b-r1.md), visual pass r1 = T019 (sonnet, 1122-m2-prompt-visual-r1.md; evidence to `visual-pass/m2/`). Next: act on the verdicts (review-rounds.md), tick T019 on a visual PASS, full gate on the final tree (scripts/gate.sh, detached), push `git push -u origin HEAD:refs/heads/claude/project-thread-7041o6`, write pr-title.txt (`#1122: Overview cards: link to the worktree's issue — M2: card with its issue link`) and pr-body.md (mention the D4 amendment commits riding along; label docs-not-needed; ends `Refs #1122`), return DONE "PR: ready". No PR open.
+None.
 
 ## Open escalation
 
@@ -91,4 +96,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- M4 (T031–T038): when the link is the expanded body's first row (no display name, no branch line), the body's 4 px top padding clips 2 px of the link's 6 px focus gutter (review A M2 F4). Give that row the gutter's room when the ring arrives, and check it in M4's visual pass.
