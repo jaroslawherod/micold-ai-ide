@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1210
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: gate (specs-only), open design PR, then M1
 
 ## Pull requests
 
@@ -22,11 +22,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | - | pending |
+| M2 | T011–T014 | full | Bash commands judged | - | pending |
+| M3 | T015–T017 | full | EnterWorktree and git worktree add denied | - | pending |
+| M4 | T018–T020 | full | create_worktree hand-off text | - | pending |
+| M5 | T021–T027 | full | Opt-out setting and toggle | - | pending |
 
 ## Decisions
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | tasks | Prefetch worktree name (plan flag) | No repo convention (grep of scripts, .claude, docs finds none); keep `autopilot-prefetch` prefix constant; spec assumption corrected | agent | research.md R5, T001 |
+| 2 | tasks | JSON deny from HTTP hook unverified (plan flag) | T002 is the first task of M1; negative result escalates | agent | tasks.md T002 |
+| 3 | tasks | US4 allowlist placement | Folded into M1 so the live guard cannot block target-shared writes or prefetch worktrees on main | agent | milestones.md rule 6 |
 
 ## Review rounds
 
@@ -36,6 +44,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review spec | 1 | 04953a8e0fcf81bad3b44bee76d980bf3a569b97:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CHANGES: 2 MAJOR (fixed) |
 | Review spec | 2 | 41605b740bcbaa3d9d2d22ecdcae8ba555dd538f:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CLEAN |
+
+- tasks r1 (c3782371...:847ac3b5...): analyze fixed D1 (T028), A1, B1, E1, T2; reviewer CLEAN (3 MINOR fixed, prose/labels only).
 
 ## Declined review findings
 
