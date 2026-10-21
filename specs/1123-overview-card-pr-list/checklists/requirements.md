@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,7 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers remain for the clarify unit: FR-004 (status words when several
-  apply) and FR-008 (how many pull requests a reading lists per branch). Everything else is decided
-  by the issue or by the features this one builds on.
+- Clarify session 2026-10-21 resolved FR-004 (one status phrase by precedence) and FR-008 (newest
+  10 per branch, *10+*) on orchestrator defaults; the owner's cards are pending and may amend them.
 - FR-016 names "render-free code" and "parser tests" because the issue's acceptance and the
   constitution's Principle I require them; they name no language or framework.

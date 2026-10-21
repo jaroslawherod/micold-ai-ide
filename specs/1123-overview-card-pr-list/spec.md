@@ -52,6 +52,19 @@ words this feature reuses), all shipped.
   1003's on purpose (FR-003: open and draft ones first, so the first row is the current pull
   request).
 
+## Clarifications
+
+### Session 2026-10-21
+
+- Q: When an open or draft pull request has more than one of failing, pending or passing checks,
+  requested changes, an approval or a merge conflict, does its row name one or each? → A: One status
+  phrase per row, the most urgent by a fixed precedence (*checks failing*, *changes requested*,
+  *merge conflict*, *checks pending*, *approved*, *checks passing*), in feature 1003's words
+  (*pending*, not *running*) (FR-004). _(orchestrator default, owner card pending)_
+- Q: How many pull requests does a reading list per branch? → A: The newest 10, at no more GitHub
+  cost than today; a count of 10 or more reads *10+* (FR-006, FR-008). _(orchestrator default, owner
+  card pending)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See a worktree's pull requests and their state on its card (Priority: P1)
@@ -161,7 +174,8 @@ open, that no location is selected and that the card shows no ripple.
 - **Rate limit reached**: no new reading is sent until the reset (feature 040 FR-024); the card
   keeps its rows if it had them, else shows the dash *rate-limited until HH:MM*, as today.
 - **More pull requests than one reading lists** (FR-008): the rows show the newest the reading
-  listed; the counts read *N+* for the state whose count may be higher, as *100+* does today.
+  listed; a group with 10 or more pull requests reads *10+* (FR-006), where the card read *100+*
+  before.
 - **Checks unknown to this version** (a new GitHub check state): read as pending, never as passing
   (the combined check result of feature 040 FR-008).
 - **Checks hidden from the sign-in** (GitHub refuses the check rollup): the row has no checks
@@ -198,31 +212,30 @@ open, that no location is selected and that the card shows no ripple.
   ones, each group newest first (by creation time, then the higher number). The first row is
   therefore the current pull request.
 - **FR-004**: A row MUST show the number as "#N", a state pill reading *Open*, *Draft*, *Merged* or
-  *Closed*, and, for an open or draft pull request, status words by
-  [NEEDS CLARIFICATION: when a pull request has more than one of a merge conflict, failing,
-  pending or passing checks, requested changes or an approval, does the row name one of them (by a
-  fixed precedence) or each of them? The check words are feature 1003's (*checks passing*, *checks
-  failing*, *checks pending*), not the issue's *running*: keep them, or state a different word on
-  purpose?]. A merged or closed pull request's row MUST show no status
-  words. Each state is told apart by its word, never by colour alone (feature 813 FR-005).
+  *Closed*, and, for an open or draft pull request, one status phrase: the first that applies of
+  *checks failing*, *changes requested*, *merge conflict*, *checks pending*, *approved*, *checks
+  passing* (the first three in the order feature 813 picks a card's attention reason). A pull
+  request to which none applies (no checks, and no review decision or *review required*) shows no
+  status words. The check words are feature 1003's (FR-003), not the issue's *running*. A merged
+  or closed pull request's row MUST show no status words. Each state is told apart by its word, never by colour alone (feature 813 FR-005).
 - **FR-005**: The collapsed card MUST end its rows with a line "+N more" when the reading lists
   more pull requests than it shows; the expanded card shows no such line.
 - **FR-006**: The card's pull request counts MUST be derived from the listed pull requests: the
-  open count is the listed open and draft ones, the merged count the listed merged ones, and a
-  count MUST read *N+* when the list may hold fewer than the branch has (FR-008). The counts line
+  open count is the listed open and draft ones, the merged count the listed merged ones. A count
+  is exact below 10 and MUST read *10+* when the branch may have 10 or more of that group (FR-008);
+  on the card this replaces the *100+* of feature 813. The counts line
   keeps its text and its rules of feature 813 (zero counts left out, no line when both are 0).
 - **FR-007**: When pull request status is off, or the branch has no successful reading to show
-  (the reading never succeeded for it, or found pull requests cannot be read at all, feature 040
-  FR-025), the card MUST show the dash with today's reasons (*pull request status is off*, *GitHub
+  (the reading never succeeded for it, or the reading finds that pull requests cannot be read at
+  all (feature 040 FR-025)), the card MUST show the dash with today's reasons (*pull request status is off*, *GitHub
   is not reachable*, *rate-limited until HH:MM*, *not read yet*) exactly as feature 813 defines
   them, and no row. A card that shows rows from a successful reading MUST keep them, and its
   counts, through a rate-limit pause and through a reading that fails for a passing reason (feature
   040 FR-019, FR-024), as it keeps its counts today.
-- **FR-008**: A reading MUST list at most
-  [NEEDS CLARIFICATION: how many pull requests per branch: the newest 10 (no more GitHub cost than
-  today; counts read *10+* beyond), the newest 100 (counts read *100+* as today; each reading costs
-  GitHub several times today's points), or another number?]
-  pull requests per branch, the newest first, always including the current pull request.
+- **FR-008**: A reading MUST list, per branch, the newest 10 pull requests of any state and the
+  newest 10 open or draft ones (so the current pull request is always listed), and read enough to
+  tell a count of 9 or fewer from 10 or more for the open and the merged group; it MUST cost GitHub
+  no more rate-limit points per reading than today's reading.
 - **FR-009**: A primary click on a row's number, and Enter or Space while it has keyboard focus,
   MUST ask the browser to open that pull request's address as the reading gave it, and MUST NOT
   activate the card; every pointer and keyboard rule feature 1122 FR-005 to FR-009 sets for the
@@ -311,7 +324,8 @@ open, that no location is selected and that the card shows no ripple.
 - The row's number links to the address GitHub gave in the reading, so a renamed or transferred
   repository still opens the right page.
 - The counts were read from separate up-to-100 pages per state; deriving them from the list
-  replaces those pages, so the reading keeps its request count (FR-001, FR-006).
+  replaces those pages, so the reading keeps its request count (FR-001, FR-006). A branch rarely has
+  10 pull requests of one group, so *10+* in place of an exact count up to 100 loses little.
 - The status words and the pill use the words above; their colours follow the card-state colour
   roles of feature 813 (failing as attention, merged as done), always beside their words.
 - Keyboard and pointer rules for the number reuse feature 1122's link rules unchanged; this spec
