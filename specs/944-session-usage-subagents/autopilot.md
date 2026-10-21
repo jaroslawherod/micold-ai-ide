@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: verify M2
-- **Next step**: M2 verify — review B and full gate, then PR files
+- **Phase**: pr M2
+- **Next step**: M2 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | #1199 | merged |
-| M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | — | in progress (T016–T022 ticked) |
+| M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | — | PR files written, gate green at a520ee52 |
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | — | todo (needs M1) |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | todo (main as is) |
 | M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | blocked on **#939 M3** (and M3) |
@@ -61,6 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (code-review high) | 1 | 77e2180ce36783dd94cad9a7a7b89e5e6bf07015:3df85b84533bf6775439c57d7c3207cde3b648c9 | CLEAN; 3 MINOR: F2 (`totals_line` → `Option`, note only with a cost) and F3 (bound tracks held seqs, live seq gap) fixed with a test; F1 declined |
 | Review B M1 (conformance, sonnet) | 1 | dcf8a4a7ee3df67c8cba53abd724893bd1ad62a9:520a46447de01102919168516cd1f256e52b8a2d | CHANGES: F1 MAJOR (no `tdd/cycle-log.md`) fixed — red reproduced by stubbing, `tdd/cycle-log.md` added (evidence only, no code change, so no re-run); F2 MINOR (declined finding outside the table) fixed. Verify: `structured_insights` 26/26, `structured_transcript` 37/37, lib filter 9/9, capture test 11/11 |
 | Review A M2 (code-review high) | 1 | 8098161906187c26deea72c8fb8a0d72fcd6e31a:45524d887c4a62cfbb6fefcf136251f2febbeaa6 | No severities given (9 items, none a BLOCKER/MAJOR on verification). Fixed: offers serialised so pushes follow the keep order (`plan_usage_offer` lock); unreadable-event test waits for 2 with the later event as barrier; restored-history test uses a new CLI event as barrier instead of a 2 s silence; shared `limit_window` beyond-`u32` rule tested; terminal-launch assertion skipped when the test env sets the variable. Declined 4 (see table) |
+| Review B M2 (conformance, sonnet) | 1 | fefc8e417abfdeca961270112824232ae401bab7:3161e0cd6c0abd1d08a71abcc3b322501a74a841 | CLEAN. Verify on the full gate at a520ee52: `plan_usage_rate_limit_event` 9/9, `plan_usage_structured` 4/4, `structured_session` 14/14, `plan_usage_route` 15/15, `plan_usage_setting` 5/5, `status_relay` 11/11 |
+| Visual pass M2 | 1 | a520ee52 | PASS light and dark: the longer **Show Claude plan usage** note wraps to two lines in the column, clear of **Warn at** (`visual/m2-plan-usage-note-{light,dark}.png`); `layout_snapshot` accepted for the new wrap (a520ee52) |
 
 ## Declined review findings
 
