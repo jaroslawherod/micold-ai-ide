@@ -169,3 +169,7 @@ Each test was written and run red before its implementation, recorded here as it
   `main` still does (F2), and a thread the insights no longer hold folds → `features_structured_insights`
   21/21 (with `an_open_thread_survives_an_eviction_that_leaves_its_events`, test-after: it guards
   the F2 narrowing), `features_structured_transcript` 19/19.
+- **Review A M5 round 2** (all MINOR): `an_open_thread_is_rebuilt_when_the_bound_drops_some_of_its_events`
+  added test-after (green at once: it pins the partial-eviction rebuild no earlier test reached);
+  the fold test renamed to what it checks; threads gone are folded before the rebuild loop →
+  `features_structured_insights` 22/22.
