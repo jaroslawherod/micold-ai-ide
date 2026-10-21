@@ -380,7 +380,7 @@ everything else as #939 draws them; the user guide describes it.
 
 **Independent Test**: `cargo test -p micold-client --test transcript_rich_renderers --test
 transcript_renderer_seam --test layout_snapshot`; `cargo test --release -p micold-client --test
-transcript_open_budget -- --ignored`; `scripts/gate.sh`; quickstart Part B.
+transcript_open_budget` (no `--ignored`: in release the budgets run by default); `scripts/gate.sh`; quickstart Part B.
 
 ### Tests ⚠️ write first, see them fail
 
@@ -529,7 +529,7 @@ before #939 M6 has merged (research R14); M1 begins with T001's re-check.
   FR-017, FR-018, FR-020–FR-024; SC-004, SC-007
 - **Verify**: `cargo test -p micold-client --test transcript_rich_renderers --test
   transcript_renderer_seam --test layout_snapshot`; `cargo test --release -p micold-client --test
-  transcript_open_budget -- --ignored`; `scripts/gate.sh`; quickstart Part B
+  transcript_open_budget` (no `--ignored`: in release the budgets run by default); `scripts/gate.sh`; quickstart Part B
   (`specs/940-transcript-rich-rendering/visual-pass/`)
 - **Depends on**: M1, M2, M3, M4
 - **Tier**: full

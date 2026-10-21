@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5: review B, full gate, PR files
+- **Next step**: M5 PR: orchestrator opens it (title/body in the session scratchpad), then CI and merge
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | #1220 | merged (528209c8) |
 | M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | #1229 | merged (7ce164cf) |
 | M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | #1232 | merged (1a625083) |
-| M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | — | in progress |
+| M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | pending (orchestrator opens) | full gate green at adfb12ea |
 
 ## Decisions
 
@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M5 (code-review high) | 1 | 2af3c1c3b4a551349a6a7230788a8079790e7751:b3b61e65db682b853a82c0692ec312f20044bdf9 | CLEAN: 1 MAJOR not real (T042 unfinished: it was in progress, done in this unit), 6 MINOR — header counts ignored the revision (fixed), two `EDIT_TOOLS` (fixed), empty block drew `Space` on a miss (fixed), 130-char guide line (fixed), fallback tests test-after (red shown by mutation, logged), rich budget without spans (declined) |
 | Visual pass M5 (real window headless, tiny-skia, recorded fixtures) | 1 | — | No findings: Part B steps 1, 2, 5, 7 pass; 3, 4, 8 not driven (no input/no second window), 6 thinking empty in fixture. Card titles faint = iced first-frame `Status::Disabled` (headless artefact). Evidence: `visual-pass/m5-record.md`, `m5-*.png` |
 | Review B M5 (conformance, sonnet) | 1 | 73eb296a5316cb2a2ab7913435cc3a31b23e46e1:7d5a14c06382d17351b077801690349100c73c11 | CHANGES: 1 MAJOR (T042 ticked with steps 3, 4, 6, 8 not seen; fixed: thinking rendered from a synthetic event, two-window same-document assertion added, record names the tests for the undriven steps), 2 MINOR (budget has no red: disclosed; table gate red not shown: disclosed). Verify: layout_snapshot 79/79, seam 2/2, rich renderers 7/7 |
+| Review B M5 (conformance, sonnet) | 2 | 1af36e37ec1e7d684293330b8e3a31e3d25ca17c:adfb12ea8c69558c9747585bec8f452610472ed5 | CLEAN: 1 MINOR (steps 3, 4, 8 and the sideways scroll still not driven on screen; recorded with their tests). Verify: features_transcript_rich 16, transcript_rich_renderers 7 passed |
 
 ## Declined review findings
 
@@ -84,7 +85,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M5 | A r1 | F4 rich budget measured with no highlight spans applied | MINOR: spans split each line into coloured runs of the same text; the measured open is 118 ms against the 1 s budget, so the margin is wide. Follow-up recorded. |
-| M5 | B r1 | F3 table gate red not shown | MINOR, disclosed in the cycle log; the gate's claim is pinned by the committed fixture. |
+| M5 | B r1 | F3 table gate red not shown | MINOR, disclosed in the cycle log. |
 | M5 | A r1 | F1 T042 unfinished | Not real at the reviewed tree's next step: T042 was the unit's next task, now done (`visual-pass/m5-record.md`). |
 
 ## Handover
