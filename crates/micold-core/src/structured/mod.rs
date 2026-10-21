@@ -10,6 +10,7 @@ mod lines;
 mod log_line;
 mod parse;
 mod saved;
+pub mod transcript;
 mod turn;
 mod user_message;
 

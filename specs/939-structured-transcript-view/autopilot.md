@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #939
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
-- **Phase**: design-pr
-- **Next step**: orchestrator opens the design PR (branch pushed; title/body in the unit scratchpad) and merges it; then milestone M1
+- **Phase**: milestone M1
+- **Next step**: M1 review A + scoped gate, review B, full gate, push
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| (to open) | Design: spec, clarify, plan, research, contracts, tasks | pending | — |
+| #1183 | Design: spec, clarify, plan, research, contracts, tasks | merged (rebase) | cee4e71942a66b77ba2d7107e57fd6e433d38b7e |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | — | pending |
+| M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | — | in progress |
 | M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | — | pending |
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | — | pending |
 | M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | — | pending |
