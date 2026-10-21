@@ -14265,11 +14265,11 @@ fn link_focus_moves_to_card_when_link_goes() {
     use micold_client::features::overview::Msg;
     use micold_client::ui::overview::card_id;
     let l = SessionLocation::Worktree("feat-1122_x".into());
-    let ways: [(&str, fn(&mut App)); 2] = [
-        ("switch off", |app| {
+    /// One change that takes the link away.
+    fn remove(app: &mut App, way: &str) {
+        if way == "switch off" {
             app.core.settings.github_issues_enabled = false;
-        }),
-        ("no repository", |app| {
+        } else {
             let _ = update_inner(
                 app,
                 Message::Overview(Msg::RepoRead {
@@ -14277,14 +14277,14 @@ fn link_focus_moves_to_card_when_link_goes() {
                     repo: None,
                 }),
             );
-        }),
-    ];
-    for (way, remove) in ways {
+        }
+    }
+    for way in ["switch off", "no repository"] {
         let mut app = app_with_links(&["feat-1122_x"]);
         tab_onto_link(&mut app, "feat-1122_x");
         let held = shown_focused_link(&app);
         assert_eq!(held, Some(l.clone()), "{way}");
-        remove(&mut app);
+        remove(&mut app, way);
         assert_eq!(
             link_focus_handoff(&mut app, held),
             Some(card_id(&l)),
