@@ -41,7 +41,7 @@ Reply: an ordinary JSON-RPC result, `{"content": [{"type": "text", "text": <answ
 | Outcome | Answer |
 |---|---|
 | allow | `{"behavior":"allow","updatedInput":<input unchanged>}` |
-| always allow | the allow answer + `"updatedPermissions":[{"type":"addRules","rules":[<rule>],"behavior":"allow","destination":"session"}]` (ignored by 2.1.306; the daemon's own rule does the work, R9) |
+| always allow | the allow answer + `"updatedPermissions":[{"type":"addRules","rules":[<rule>],"behavior":"allow","destination":"session"}]` when the rule can be written in the CLI's syntax without matching more than the daemon's rule (`AllowRule::cli_rule`); the daemon's own rule applies either way (R9). The recorded 2.1.306 run honoured it (fixture `always-allow`), unlike probe P-11 |
 | deny / keep planning / decline / withdrawn / malformed | `{"behavior":"deny","message":"<text>"}` |
 | question answered | `{"behavior":"allow","updatedInput":<input + "answers":{"<question text>":"<label>[, <label>…]" or "<free answer>"}>}` |
 | plan approved | the allow answer, after the mode change below |

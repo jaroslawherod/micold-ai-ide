@@ -28,15 +28,15 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 1: Setup — recorded fixtures (FR-020, research R12)
 
-- [ ] T001 [P] Write `scripts/tests/capture-permission-prompt.test.sh`: feeds a sample prompt
+- [x] T001 [P] Write `scripts/tests/capture-permission-prompt.test.sh`: feeds a sample prompt
   fixture holding a scratch path, a home path and a session uuid through the capture script's
   scrub step and asserts `<CWD>`, `<HOME>`, `<SESSION_ID>` replace them and the JSON stays valid;
   it fails until T003 exists
-- [ ] T002 [P] Write the stub MCP server `scripts/capture/prompt-stub.py`: loopback HTTP JSON-RPC
+- [x] T002 [P] Write the stub MCP server `scripts/capture/prompt-stub.py`: loopback HTTP JSON-RPC
   serving `initialize`, `tools/list` (the `permission_prompt` tool of
   [contracts/claude-permission.md](contracts/claude-permission.md)) and `tools/call`; logs each
   call's `arguments` and `_meta` and answers from a scripted list of answer JSONs; stdlib only
-- [ ] T003 Write `scripts/capture-permission-prompt.sh <case>`: runs the real `claude` with feature
+- [x] T003 Write `scripts/capture-permission-prompt.sh <case>`: runs the real `claude` with feature
   938's structured argv plus `--permission-prompt-tool mcp__micold__permission_prompt` and a
   binding with `"timeout": 2147483647` pointing at the stub; per case writes
   `core/tests/fixtures/permission-prompt/<case>.json` (`call`: the recorded arguments and `_meta`,
@@ -44,7 +44,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   control lines for `mode-change`) and the run's stdout as
   `core/tests/fixtures/stream-json/prompt-<case>.jsonl`; **sources** `scrub_stream_json` from
   `scripts/capture-stream-json.sh` (never copies it); T001 passes
-- [ ] T004 Record the five cases with T003 against a logged-in CLI: `tool-request` (Bash, allow),
+- [x] T004 Record the five cases with T003 against a logged-in CLI: `tool-request` (Bash, allow),
   `always-allow` (Bash, always-allow answer, the identical second call asked again — R9),
   `plan-approval` (`--permission-mode plan`, `ExitPlanMode` approved, `status` line to `default`),
   `question-multi` (`AskUserQuestion`, two questions, one `multiSelect`), `mode-change`
@@ -56,79 +56,79 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 2: Foundational — core types every story needs (blocking)
 
-- [ ] T005 [P] Tests in `core/tests/structured_parse.rs` over `prompt-*.jsonl`: `Init.permission_mode`
+- [x] T005 [P] Tests in `core/tests/structured_parse.rs` over `prompt-*.jsonl`: `Init.permission_mode`
   read from `system`/`init` `permissionMode`; `system`/`status` → `Status { permission_mode, raw }`;
   `control_response` → `ControlResponse { request_id, outcome }` with `ControlOutcome::Success(Value)`
   and `ControlOutcome::Error { message, code: Option<String> }` (`error_code`
   `bypass_not_launched`); every line still makes exactly one event (feature 938 FR-014)
-- [ ] T006 Implement T005 in `core/src/structured/event.rs` and `core/src/structured/parse.rs`
-- [ ] T007 [P] Tests in `core/tests/structured_transcript.rs`: `Status` and `ControlResponse` events
+- [x] T006 Implement T005 in `core/src/structured/event.rs` and `core/src/structured/parse.rs`
+- [x] T007 [P] Tests in `core/tests/structured_transcript.rs`: `Status` and `ControlResponse` events
   are absorbed (no entry, no raw row), and a saved history containing them restores to the same
   transcript; unit test in `core/src/structured/log_line.rs` for each one's line text
-- [ ] T008 Implement T007 in `core/src/structured/transcript/build.rs` and
+- [x] T008 Implement T007 in `core/src/structured/transcript/build.rs` and
   `core/src/structured/log_line.rs`
-- [ ] T009 [P] Unit tests in `core/src/structured/control.rs`: `encode_set_mode(request_id, mode)`
+- [x] T009 [P] Unit tests in `core/src/structured/control.rs`: `encode_set_mode(request_id, mode)`
   gives exactly the one-line JSON of the contract ending in `\n`; request ids are `micold-<n>`,
   increasing per process counter
-- [ ] T010 Implement `core/src/structured/control.rs` (T009) and register it in
+- [x] T010 Implement `core/src/structured/control.rs` (T009) and register it in
   `core/src/structured/mod.rs`
-- [ ] T011 [P] Unit tests in `core/src/structured/permission/request.rs`: `parse_call(arguments,
+- [x] T011 [P] Unit tests in `core/src/structured/permission/request.rs`: `parse_call(arguments,
   meta)` yields `PromptCall { tool_name, input, tool_use_id }`, taking `tool_use_id` from
   `arguments.tool_use_id`, else `_meta["claudecode/toolUseId"]`; `Malformed { reason }` is exactly
   `"no tool name"` (missing or not a string) or `"the input is not an object"`
-- [ ] T012 Create `core/src/structured/permission/{mod.rs,request.rs}` with `PromptCall`,
+- [x] T012 Create `core/src/structured/permission/{mod.rs,request.rs}` with `PromptCall`,
   `Malformed`, `parse_call` (T011) and an empty `RequestKind` skeleton; register in
   `core/src/structured/mod.rs`
-- [ ] T013 [P] Serde round-trip tests in `core/tests/protocol_roundtrip.rs` for the wire types
+- [x] T013 [P] Serde round-trip tests in `core/tests/protocol_roundtrip.rs` for the wire types
   `PromptId(u64)`, `PermissionRequest { id, session, tool_use_id, tool_name, input_preview,
   input_bytes, kind, always_allow }`, `PromptChoice` (all seven variants), `QuestionAnswer
   { labels, other }`, `Resolution` (all eight) and `WithdrawReason` (all five); no message variant
   yet
-- [ ] T014 Add those types to `core/src/protocol/messages.rs` (T013)
+- [x] T014 Add those types to `core/src/protocol/messages.rs` (T013)
 
 ---
 
 ## Phase 3: Core decisions for every request kind and mode (M1)
 
-- [ ] T015 [P] [US1] Fixture tests in `core/tests/structured_permission.rs` (new): `tool-request` and
+- [x] T015 [P] [US1] Fixture tests in `core/tests/structured_permission.rs` (new): `tool-request` and
   `always-allow` calls parse and classify `Tool`; `ExitPlanMode` with a blank or missing `plan`,
   and `AskUserQuestion` with no options, one option or a non-string `question`, classify `Tool`
   (never dropped); `answer()` for Allow equals the recorded `{"behavior":"allow","updatedInput":…}`
   with the input unchanged; Deny with no message gives "The user denied this request."; AlwaysAllow
   adds `updatedPermissions` `addRules` with `"destination":"session"` and equals the recorded answer
-- [ ] T016 [P] [US1] Unit tests in `core/src/structured/permission/decision.rs`: `validate` admits
+- [x] T016 [P] [US1] Unit tests in `core/src/structured/permission/decision.rs`: `validate` admits
   Allow, AlwaysAllow, Deny for `Tool` only (else `WrongKind`); each `DecisionRefusal` (`NotPending`,
   `OtherSession`, `WrongKind`, `Incomplete`, `NotStructured`) has its user sentence; the preview is
   at most `PREVIEW_BYTES` (64 KiB) of the input's JSON text, cut at a char boundary (a multi-byte
   char straddling the limit), with `input_bytes` the whole size
-- [ ] T017 [P] [US1] Unit tests in `core/src/structured/permission/rules.rs`, one per row of
+- [x] T017 [P] [US1] Unit tests in `core/src/structured/permission/rules.rs`, one per row of
   data-model *AllowRule*: Bash same `command`; Edit, MultiEdit, Write same `file_path`; NotebookEdit
   same `notebook_path`; WebFetch same lower-cased host (text between `://` and the next `/`, `?`
   or `#`), an unparseable URL the same URL; any other tool the tool name; a Bash call without
   `command` gets no rule; `describe()` gives `Bash: "npm test"`
-- [ ] T018 [US1] Implement `classify` (the `Tool` branch), `core/src/structured/permission/decision.rs`
+- [x] T018 [US1] Implement `classify` (the `Tool` branch), `core/src/structured/permission/decision.rs`
   (`validate`, `answer`, `DecisionRefusal`, preview cut) and `rules.rs` (`AllowRule::for_call`,
   `matches`, `describe`) until T015–T017 pass
-- [ ] T019 [US3] Fixture and unit tests: `plan-approval` classifies `PlanApproval { plan }` with
+- [x] T019 [US3] Fixture and unit tests: `plan-approval` classifies `PlanApproval { plan }` with
   the whole plan; `ApprovePlan` answers allow with the input unchanged (equals the recorded
   answer); `KeepPlanning` with no note gives "The user wants to keep planning."; Tool choices on a
   plan approval are `WrongKind`; no `AllowRule` is offered for a plan approval
   (`core/tests/structured_permission.rs`, `decision.rs`)
-- [ ] T020 [US4] Fixture and unit tests: `question-multi` classifies `Question` with header,
+- [x] T020 [US4] Fixture and unit tests: `question-multi` classifies `Question` with header,
   text, every option's label and description (absent → empty) and `multi_select` (absent → false);
   `Answer` gives `updatedInput` = input + `"answers": {<question text>: <labels joined by ", " or
   the free answer>}` equal to the recorded answer; `DeclineQuestion` gives "The user declined to
   answer."; `validate` returns `Incomplete` for an answer count ≠ question count, a label not among
   the options, two labels on a single-choice question, and neither a label nor a non-blank `other`
-- [ ] T021 [US3] [US4] Implement the `PlanApproval` and `Question` branches of `classify` and their
+- [x] T021 [US3] [US4] Implement the `PlanApproval` and `Question` branches of `classify` and their
   `validate`/`answer` arms in `request.rs` and `decision.rs` until T019–T020 pass
-- [ ] T022 [P] [US2] Unit tests in `core/src/session.rs` and `core/src/structured/permission/mod.rs`:
+- [x] T022 [P] [US2] Unit tests in `core/src/session.rs` and `core/src/structured/permission/mod.rs`:
   `PermissionMode::{Default, AcceptEdits, Plan, Bypass}` `cli_name()` = `default`, `acceptEdits`,
   `plan`, `bypassPermissions`; `from_cli` round-trips them and returns `None` for `auto`,
   `dontAsk`, `manual`; `is_default()`; `launch_args(mode, prompt_tool)` always has
   `--allow-dangerously-skip-permissions`, adds `--permission-mode <cli_name>` only when not
   Default, and `--permission-prompt-tool mcp__micold__permission_prompt` only when `prompt_tool`
-- [ ] T023 [US2] Implement `PermissionMode` in `core/src/session.rs` (serde, `Default`) and
+- [x] T023 [US2] Implement `PermissionMode` in `core/src/session.rs` (serde, `Default`) and
   `launch_args` in `core/src/structured/permission/mod.rs` (T022)
 
 ---

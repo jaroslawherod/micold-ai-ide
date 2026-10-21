@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M1
+- **Phase**: implement M1
+- **Next step**: M1 unit implements T001–T023, gates, reviews, and hands the PR title/body to the orchestrator
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| pending | Design: spec, clarify, plan, research, contracts, tasks | to open (orchestrator, GitHub MCP) | — |
+| #1197 | Design: spec, clarify, plan, research, contracts, tasks | merged (rebase) | 51e571f4603dfa1cb9091f7f82f32062b9ca6e8a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | — | pending |
+| M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | — | in progress |
 | M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | — | pending |
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | — | pending |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | pending |
@@ -43,6 +43,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 6 | plan | Transport: MCP prompt tool vs stdio control channel | MCP prompt tool (issue acceptance); control channel only for set_permission_mode | agent | research R1; P-1, P-7 |
 | 7 | plan | CLI tool-call timeout vs FR-003 | Structured binding gets per-server timeout 2147483647 ms | agent | research R3; P-5, P-12, P-13 |
 | 8 | plan | Runtime switch to Bypass | Every structured launch adds --allow-dangerously-skip-permissions | agent | research R6; P-9, P-10 |
+| 13 | M1 | Fixture layout for runs with several calls or launches | `<case>.json` keeps `call`/`answer`/`tool_result` for the first call and `later` for the rest; `mode-change.json` holds `runs` (flags, control request/response pairs); its stdout is two files, `prompt-mode-change.jsonl` (launched without the bypass flag) and `prompt-mode-change-bypass.jsonl` | agent | permission-prompt/README.md |
+| 12 | M1 | The 2.1.306 recording honoured the always-allow `updatedPermissions` (P-11 said ignored) | Kept R9 (daemon keeps its own rule); since a CLI may honour the answer's rule, `AllowRule::cli_rule` names one only where it is no broader than the daemon's (Bash command without `*?[`, WebFetch `domain:<host>`, tool name), none for file paths or exact URLs; contract and research R9 updated | agent | fixture `always-allow` (1 prompt call for 2 identical Bash calls) vs a control run with plain allow (2 calls) |
+| 11 | M1 | `ControlOutcome::Success(Value)` cannot cross the postcard wire (`Value` needs `deserialize_any`) | `Success(String)`: the `response` object's JSON text, as `ContentBlock::ToolUse.input` already is | agent | event.rs; structured_wire.rs round-trips it |
 | 10 | tasks | M1 has 23 tasks (over rule 3's ~10) | Kept whole: its only split (Phase 2 vs Phase 3) leaves a Foundational-alone milestone (rule 1); 13 of its tasks are tests, fixtures or capture scripts, and the core code is small pure functions | agent | tasks review r1 F3 |
 | 9 | tasks | Milestones by layer, not by story (rule 2 deviation) | Every story spans core/daemon/window and the window needs #939/#941; the plan's six layers kept, the two daemon steps each split in two along acceptance scenarios (US1 vs US5/US6; US2 sc1–3 vs sc5+US3) for the ~800-line budget → M1–M8 | agent | tasks.md *Milestones*; plan *Delivery* |
 

@@ -16,6 +16,8 @@ pub enum StructuredEvent {
         model: Option<String>,
         cwd: Option<String>,
         tools: Vec<String>,
+        /// `permissionMode`: the mode the CLI started in (#942 FR-016).
+        permission_mode: Option<String>,
         raw: String,
     },
     /// `{"type":"assistant"}`: one assistant message and its blocks.
@@ -51,6 +53,19 @@ pub enum StructuredEvent {
         parent_tool_use_id: Option<String>,
         raw: String,
     },
+    /// `{"type":"system","subtype":"status"}`: the CLI's state changed; `permissionMode` when the
+    /// change is a mode change (#942 FR-016, research P-3, P-9).
+    Status {
+        permission_mode: Option<String>,
+        raw: String,
+    },
+    /// `{"type":"control_response"}`: the CLI's answer to the control request `request_id` the
+    /// daemon wrote to its stdin (#942 FR-017).
+    ControlResponse {
+        request_id: String,
+        outcome: ControlOutcome,
+        raw: String,
+    },
     /// Valid JSON of a type the model does not know, or a known type that does not fit (FR-012).
     Unrecognised { raw: String },
     /// A line that is not JSON (FR-013).
@@ -75,11 +90,27 @@ impl StructuredEvent {
             | Self::User { raw, .. }
             | Self::Result { raw, .. }
             | Self::StreamDelta { raw, .. }
+            | Self::Status { raw, .. }
+            | Self::ControlResponse { raw, .. }
             | Self::Unrecognised { raw } => raw.len(),
             Self::Unreadable { text } => text.len(),
             Self::TurnEndedWithoutResult | Self::OversizedOnWire { .. } => 0,
         }
     }
+}
+
+/// How the CLI answered a control request (contracts/claude-permission.md *Mode change*).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlOutcome {
+    /// `subtype: success`; the `response` object's JSON text (`null` when it sent none), as JSON
+    /// text because the wire is postcard, which cannot carry a `serde_json::Value`.
+    Success(String),
+    /// `subtype: error`: the CLI's `error` text and its `error_code`
+    /// (`bypass_not_launched`, research P-9).
+    Error {
+        message: String,
+        code: Option<String>,
+    },
 }
 
 /// One block inside a message (FR-011).

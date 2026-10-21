@@ -206,6 +206,13 @@ recorded fixtures of R12 are their committed form.
     `://` and the next `/`, `?` or `#`, lower-cased; an unparseable URL gives an exact-URL rule);
   - every other tool (MCP tools, unknown tools): the tool name, any input.
   Never for a plan approval or a question (Always allow is offered for tool requests only).
+- **Recorded (T004, fixture `always-allow`)**: in the 2.1.306 recording the CLI *did* honour the
+  session rule (the identical second `Bash` call ran without a prompt call; a control run answering
+  plain allow twice was asked twice), unlike P-11. The decision stands: the daemon's own rule makes
+  the behaviour the same whichever the CLI does. Because a CLI may honour it, the answer names a
+  CLI-syntax rule only where that rule is no broader than the daemon's (`AllowRule::cli_rule`: a
+  `Bash` command without `*`, `?` or `[`; `WebFetch` `domain:<host>`; a tool name for any other
+  tool), and none for file paths (the CLI reads them as path patterns) or an exact URL.
 - Scope: rules live in the session's live entry and are dropped when its process ends; never
   written to a Claude settings file (FR-010). The answer still carries `updatedPermissions` with
   destination `session` (so a CLI that honours it skips the call itself; the fixture records that

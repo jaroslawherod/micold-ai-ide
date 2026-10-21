@@ -2172,3 +2172,136 @@ fn the_github_issues_switch_round_trips() {
     settings.github_issues_enabled = false;
     json_roundtrip(&DaemonMsg::SettingsChanged { settings });
 }
+
+// #942 T013 — the permission-prompt wire types (contracts/wire.md). No message carries them yet
+// (M2 adds `PermissionRequested`), so each type round-trips on its own, under JSON (the control
+// plane) and postcard.
+
+fn permission_roundtrip<T>(value: &T)
+where
+    T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
+{
+    json_roundtrip(value);
+    postcard_roundtrip(value);
+}
+
+#[test]
+fn the_permission_prompt_wire_types_round_trip() {
+    use micold_core::protocol::messages::{
+        PermissionRequest, PromptChoice, PromptId, QuestionAnswer, Resolution, WithdrawReason,
+    };
+    use micold_core::session::PermissionMode;
+    use micold_core::structured::permission::{Question, QuestionOption, RequestKind};
+
+    permission_roundtrip(&PromptId(u64::MAX));
+    let question = Question {
+        header: "Color".into(),
+        text: "Which color?".into(),
+        options: vec![
+            QuestionOption {
+                label: "red".into(),
+                description: String::new(),
+            },
+            QuestionOption {
+                label: "blue".into(),
+                description: "the sky".into(),
+            },
+        ],
+        multi_select: true,
+    };
+    for (kind, always_allow) in [
+        (RequestKind::Tool, Some("Bash: \"npm test\"".to_string())),
+        (
+            RequestKind::PlanApproval {
+                plan: "1. é\n2. b".into(),
+            },
+            None,
+        ),
+        (
+            RequestKind::Question {
+                questions: vec![question],
+            },
+            None,
+        ),
+    ] {
+        permission_roundtrip(&PermissionRequest {
+            id: PromptId(7),
+            session: sid(),
+            tool_use_id: Some("toolu_1".into()),
+            tool_name: "Bash".into(),
+            input_preview: r#"{"command":"npm test"}"#.into(),
+            input_bytes: 22,
+            kind,
+            always_allow,
+        });
+    }
+    permission_roundtrip(&PermissionRequest {
+        id: PromptId(0),
+        session: sid(),
+        tool_use_id: None,
+        tool_name: String::new(),
+        input_preview: String::new(),
+        input_bytes: 0,
+        kind: RequestKind::Tool,
+        always_allow: None,
+    });
+
+    let answers = vec![
+        QuestionAnswer {
+            labels: vec!["red".into(), "blue".into()],
+            other: None,
+        },
+        QuestionAnswer {
+            labels: vec![],
+            other: Some("teal".into()),
+        },
+    ];
+    let choices = [
+        PromptChoice::Allow,
+        PromptChoice::AlwaysAllow,
+        PromptChoice::Deny { message: None },
+        PromptChoice::Deny {
+            message: Some("not that".into()),
+        },
+        PromptChoice::ApprovePlan { accept_edits: true },
+        PromptChoice::ApprovePlan {
+            accept_edits: false,
+        },
+        PromptChoice::KeepPlanning {
+            note: Some("smaller".into()),
+        },
+        PromptChoice::Answer { answers },
+        PromptChoice::DeclineQuestion,
+    ];
+    for choice in &choices {
+        permission_roundtrip(choice);
+    }
+
+    let reasons = [
+        WithdrawReason::TurnEnded,
+        WithdrawReason::ProcessEnded,
+        WithdrawReason::SessionStopped,
+        WithdrawReason::SessionRemoved,
+        WithdrawReason::AgentHungUp,
+    ];
+    let mut resolutions = vec![
+        Resolution::Allowed,
+        Resolution::AllowedAlways,
+        Resolution::Denied,
+        Resolution::KeptPlanning,
+        Resolution::Answered,
+        Resolution::Declined,
+    ];
+    resolutions.extend(
+        PermissionMode::ALL
+            .into_iter()
+            .map(|mode| Resolution::PlanApproved { mode }),
+    );
+    resolutions.extend(reasons.map(|reason| Resolution::Withdrawn { reason }));
+    for resolution in &resolutions {
+        permission_roundtrip(resolution);
+    }
+    for mode in PermissionMode::ALL {
+        permission_roundtrip(&mode);
+    }
+}

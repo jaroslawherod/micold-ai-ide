@@ -120,6 +120,8 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
                 },
             );
         }
+        // The CLI's mode and control replies change the session, not the conversation (#942).
+        StructuredEvent::Status { .. } | StructuredEvent::ControlResponse { .. } => {}
         StructuredEvent::Unrecognised { raw } => {
             transcript.open(at(0), seq, raw_row(raw, RawReason::Unrecognised));
         }

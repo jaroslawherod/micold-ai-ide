@@ -5,7 +5,7 @@
 //! that does not fit its shape is kept whole as [`StructuredEvent::Unrecognised`] (FR-012). No
 //! shape denies unknown fields (FR-015).
 
-use super::event::{ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage};
+use super::event::{ContentBlock, ControlOutcome, Delta, SequencedEvent, StructuredEvent, Usage};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -33,6 +33,29 @@ fn typed(value: Value, line: &str) -> Option<StructuredEvent> {
                 model: init.model,
                 cwd: init.cwd,
                 tools: init.tools.into_iter().flatten().map(tool_name).collect(),
+                permission_mode: init.permission_mode,
+                raw: raw(),
+            })
+        }
+        ("system", Some("status")) => Some(StructuredEvent::Status {
+            permission_mode: value["permissionMode"].as_str().map(str::to_string),
+            raw: raw(),
+        }),
+        ("control_response", _) => {
+            let response = &value["response"];
+            let request_id = response["request_id"].as_str()?.to_string();
+            let text = |key: &str| response[key].as_str().map(str::to_string);
+            let outcome = match response["subtype"].as_str()? {
+                "success" => ControlOutcome::Success(response["response"].to_string()),
+                "error" => ControlOutcome::Error {
+                    message: text("error").unwrap_or_default(),
+                    code: text("error_code"),
+                },
+                _ => return None,
+            };
+            Some(StructuredEvent::ControlResponse {
+                request_id,
+                outcome,
                 raw: raw(),
             })
         }
@@ -91,6 +114,8 @@ struct InitLine {
     /// Any JSON, so an unexpected entry or a `null` list costs the tools, not the init.
     #[serde(default)]
     tools: Option<Vec<Value>>,
+    #[serde(default, rename = "permissionMode")]
+    permission_mode: Option<String>,
 }
 
 /// A tool's name, or the JSON text of an entry that is not a string.

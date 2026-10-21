@@ -2,19 +2,20 @@
 //! SC-002). Fixtures and how they were recorded: `tests/fixtures/stream-json/README.md`.
 
 use micold_core::structured::{
-    pair_tool_calls, parse_line, ContentBlock, Delta, SequencedEvent, StructuredEvent,
+    pair_tool_calls, parse_line, ContentBlock, ControlOutcome, Delta, SequencedEvent,
+    StructuredEvent,
 };
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
-use stream_json::{events_of, lines_of, RECORDED};
+use stream_json::{events_of, lines_of, PROMPT_RECORDED, RECORDED};
 
 /// Whether the line's `type` (and `subtype`, for `system`) is one the model types (R9).
 fn is_known_type(line: &str) -> bool {
     let value: serde_json::Value = serde_json::from_str(line).expect("a recorded line is JSON");
     match value["type"].as_str() {
-        Some("assistant" | "user" | "result" | "stream_event") => true,
-        Some("system") => value["subtype"].as_str() == Some("init"),
+        Some("assistant" | "user" | "result" | "stream_event" | "control_response") => true,
+        Some("system") => matches!(value["subtype"].as_str(), Some("init" | "status")),
         _ => false,
     }
 }
@@ -26,6 +27,8 @@ fn raw_of(event: &StructuredEvent) -> Option<&str> {
         | StructuredEvent::User { raw, .. }
         | StructuredEvent::Result { raw, .. }
         | StructuredEvent::StreamDelta { raw, .. }
+        | StructuredEvent::Status { raw, .. }
+        | StructuredEvent::ControlResponse { raw, .. }
         | StructuredEvent::Unrecognised { raw } => Some(raw),
         StructuredEvent::Unreadable { text } => Some(text),
         StructuredEvent::TurnEndedWithoutResult | StructuredEvent::OversizedOnWire { .. } => None,
@@ -53,7 +56,7 @@ fn last_result(events: &[SequencedEvent]) -> &StructuredEvent {
 
 #[test]
 fn every_recorded_line_is_one_event_in_order_and_every_known_type_is_typed() {
-    for name in RECORDED {
+    for name in RECORDED.into_iter().chain(PROMPT_RECORDED) {
         let lines = lines_of(name);
         let events = events_of(&lines);
         assert!(!lines.is_empty(), "{name} has lines");
@@ -296,4 +299,162 @@ fn the_tolerance_fixture_keeps_every_line() {
             "every event keeps its line (FR-011)"
         );
     }
+}
+
+// #942 T005 — the CLI's permission mode and control replies, over the permission-prompt recordings
+// (`tests/fixtures/permission-prompt/README.md`).
+
+fn events_of_fixture(name: &str) -> Vec<StructuredEvent> {
+    events_of(&lines_of(name))
+        .into_iter()
+        .map(|sequenced| sequenced.event)
+        .collect()
+}
+
+fn init_mode(name: &str) -> Option<String> {
+    events_of_fixture(name)
+        .into_iter()
+        .find_map(|event| match event {
+            StructuredEvent::Init {
+                permission_mode, ..
+            } => Some(permission_mode),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{name} has an init"))
+}
+
+/// Every `permissionMode` the fixture's `status` lines report, in order.
+fn status_modes(name: &str) -> Vec<String> {
+    events_of_fixture(name)
+        .into_iter()
+        .filter_map(|event| match event {
+            StructuredEvent::Status {
+                permission_mode, ..
+            } => permission_mode,
+            _ => None,
+        })
+        .collect()
+}
+
+fn control_responses(name: &str) -> Vec<(String, ControlOutcome)> {
+    events_of_fixture(name)
+        .into_iter()
+        .filter_map(|event| match event {
+            StructuredEvent::ControlResponse {
+                request_id,
+                outcome,
+                ..
+            } => Some((request_id, outcome)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn init_reports_the_mode_the_cli_was_launched_in() {
+    assert_eq!(
+        init_mode("prompt-tool-request").as_deref(),
+        Some("default"),
+        "init carries permissionMode (FR-016)"
+    );
+    assert_eq!(
+        init_mode("prompt-plan-approval").as_deref(),
+        Some("plan"),
+        "a launch with --permission-mode plan reports plan"
+    );
+}
+
+#[test]
+fn a_status_line_reports_the_mode_it_changed_to() {
+    assert_eq!(
+        status_modes("prompt-plan-approval"),
+        vec!["default".to_string()],
+        "an approved ExitPlanMode moves the CLI to default by itself (P-3)"
+    );
+    assert_eq!(
+        status_modes("prompt-mode-change"),
+        vec!["acceptEdits".to_string()],
+        "a successful set_permission_mode is followed by its status line (P-9)"
+    );
+    assert_eq!(
+        status_modes("prompt-mode-change-bypass"),
+        vec!["bypassPermissions".to_string()]
+    );
+    let plain = events_of_fixture("prompt-tool-request")
+        .into_iter()
+        .find(|event| matches!(event, StructuredEvent::Status { .. }))
+        .expect("the CLI writes status lines without a mode too");
+    assert!(
+        matches!(
+            plain,
+            StructuredEvent::Status {
+                permission_mode: None,
+                ..
+            }
+        ),
+        "a status line without permissionMode has none: {plain:?}"
+    );
+}
+
+#[test]
+fn a_control_response_is_typed_as_success_or_error_for_its_request() {
+    let responses = control_responses("prompt-mode-change");
+    assert_eq!(
+        responses.len(),
+        2,
+        "one response per request: {responses:?}"
+    );
+    match &responses[0] {
+        (id, ControlOutcome::Success(response)) => {
+            assert_eq!(id, "micold-1");
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(response).expect("JSON text"),
+                serde_json::json!({"mode": "acceptEdits"}),
+                "the success keeps the CLI's response object"
+            );
+        }
+        other => panic!("micold-1 succeeds: {other:?}"),
+    }
+    match &responses[1] {
+        (id, ControlOutcome::Error { message, code }) => {
+            assert_eq!(id, "micold-2");
+            assert!(
+                message.contains("bypassPermissions"),
+                "the error keeps the CLI's text: {message}"
+            );
+            assert_eq!(code.as_deref(), Some("bypass_not_launched"));
+        }
+        other => panic!("micold-2 fails: {other:?}"),
+    }
+    assert!(
+        matches!(
+            control_responses("prompt-mode-change-bypass").as_slice(),
+            [(id, ControlOutcome::Success(_))] if id == "micold-1"
+        ),
+        "launched with --allow-dangerously-skip-permissions, bypass succeeds (P-10)"
+    );
+}
+
+#[test]
+fn a_control_response_that_does_not_fit_stays_unrecognised() {
+    for line in [
+        r#"{"type":"control_response","response":{"subtype":"success"}}"#,
+        r#"{"type":"control_response","response":{"subtype":"other","request_id":"micold-1"}}"#,
+        r#"{"type":"control_response"}"#,
+    ] {
+        assert!(
+            matches!(parse_line(line), StructuredEvent::Unrecognised { .. }),
+            "kept whole, never dropped (FR-012): {line}"
+        );
+    }
+    assert!(
+        matches!(
+            parse_line(r#"{"type":"control_response","response":{"subtype":"error","request_id":"r"}}"#),
+            StructuredEvent::ControlResponse {
+                outcome: ControlOutcome::Error { ref message, code: None },
+                ..
+            } if message.is_empty()
+        ),
+        "an error without text or code is still an error"
+    );
 }

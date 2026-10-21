@@ -130,6 +130,54 @@ impl fmt::Display for KindRefusal {
     }
 }
 
+/// How a structured session asks before Claude uses a tool (#942, data-model *PermissionMode*,
+/// FR-013): the CLI's own permission modes the app sets. Persisted, on the wire, and mutable for a
+/// session's life (unlike [`SessionKind`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PermissionMode {
+    /// Ask as the user's rules say; the launch adds no mode override (feature 938 FR-006a).
+    #[default]
+    Default,
+    /// Change files without asking.
+    AcceptEdits,
+    /// Investigate and propose only, until the user approves a plan.
+    Plan,
+    /// Never ask (`bypassPermissions`).
+    Bypass,
+}
+
+impl PermissionMode {
+    /// Every mode, in the order a mode control lists them.
+    pub const ALL: [PermissionMode; 4] = [
+        PermissionMode::Default,
+        PermissionMode::AcceptEdits,
+        PermissionMode::Plan,
+        PermissionMode::Bypass,
+    ];
+
+    /// The CLI's name of the mode: `--permission-mode`, `set_permission_mode` and the
+    /// `permissionMode` it reports (research R6).
+    pub fn cli_name(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::AcceptEdits => "acceptEdits",
+            Self::Plan => "plan",
+            Self::Bypass => "bypassPermissions",
+        }
+    }
+
+    /// The mode the CLI reports by `name`, or `None` for a mode the app never sets (`auto`,
+    /// `dontAsk`, `manual`, ...), which leaves the persisted mode unchanged (FR-013).
+    pub fn from_cli(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|mode| mode.cli_name() == name)
+    }
+
+    /// Whether this is the default mode (every session that chose none, FR-013).
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::Default)
+    }
+}
+
 /// The sidebar label for a session — read from the AI CLI's own records, never user-entered
 /// (FR-011a).
 ///
@@ -757,5 +805,39 @@ mod location_order_tests {
         assert_eq!(map.len(), 3);
         assert!(SessionLocation::Worktree("a".into()) < SessionLocation::Worktree("b".into()));
         assert_eq!(map[&SessionLocation::Worktree("a".into())], 3);
+    }
+}
+
+#[cfg(test)]
+mod permission_mode_tests {
+    use super::PermissionMode;
+
+    #[test]
+    fn each_mode_has_the_cli_name_and_back() {
+        let names: Vec<&str> = PermissionMode::ALL.iter().map(|m| m.cli_name()).collect();
+        assert_eq!(
+            names,
+            ["default", "acceptEdits", "plan", "bypassPermissions"],
+            "research R6, P-9"
+        );
+        for mode in PermissionMode::ALL {
+            assert_eq!(PermissionMode::from_cli(mode.cli_name()), Some(mode));
+        }
+    }
+
+    #[test]
+    fn a_mode_the_app_never_sets_is_none() {
+        for name in ["auto", "dontAsk", "manual", "", "Default", "bypass"] {
+            assert_eq!(PermissionMode::from_cli(name), None, "{name:?} (FR-013)");
+        }
+    }
+
+    #[test]
+    fn default_is_the_default_mode() {
+        assert_eq!(PermissionMode::default(), PermissionMode::Default);
+        assert!(PermissionMode::Default.is_default());
+        for mode in &PermissionMode::ALL[1..] {
+            assert!(!mode.is_default(), "{mode:?}");
+        }
     }
 }
