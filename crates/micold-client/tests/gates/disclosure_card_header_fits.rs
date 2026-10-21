@@ -11,7 +11,7 @@
 use crate::support::layout as lay;
 use iced::Size;
 use micold_client::icons::Icon;
-use micold_client::showcase::sections::surfaces::{tool_card, ToolPose};
+use micold_client::showcase::sections::surfaces::{edit_card, tool_card, ToolPose, EDIT_META};
 use micold_client::showcase::state::Message;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
@@ -92,6 +92,65 @@ fn a_disclosure_cards_header_parts_stay_inside_its_header_row() {
                     p.origin,
                     p.natural_height,
                     (header.x, header.y, header.width, header.height)
+                );
+            }
+        }
+    }
+}
+
+/// Feature 940 (FR-017): an Edit card's `+12 −3` meta is drawn whole in the header row, beside the
+/// summary and the trailing status, folded and open, at the narrow width — the summary gives way.
+#[test]
+fn an_edit_cards_meta_is_never_ellipsized() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let roles = tokens::roles(scheme);
+        for open in [false, true] {
+            let what = format!("{scheme:?}, open {open}");
+            let mut renderer = lay::renderer();
+            let (painted, records) = lay::painted_text_settled_at(
+                edit_card(open, Message::NoOp, roles),
+                &mut renderer,
+                ROOM,
+            );
+            let header = records
+                .iter()
+                .find(|r| (r.height - HEADER).abs() <= TOLERANCE && r.width > ROOM.width / 2.0)
+                .unwrap_or_else(|| panic!("{what}: no {HEADER} dp header row in {records:?}"));
+            let meta = painted
+                .iter()
+                .find(|p| p.content == EDIT_META)
+                .unwrap_or_else(|| panic!("{what}: the meta is drawn whole: {painted:?}"));
+            assert!(
+                meta.natural_width <= meta.allowed_width + TOLERANCE,
+                "{what}: the meta is cut: {meta:?}"
+            );
+            assert!(
+                meta.origin.y >= header.y - TOLERANCE
+                    && meta.origin.y < header.y + header.height
+                    && meta.origin.x + meta.natural_width <= header.x + header.width + TOLERANCE,
+                "{what}: the meta leaves the header row {header:?}: {meta:?}"
+            );
+            let status = painted
+                .iter()
+                .find(|p| p.content == "Done")
+                .unwrap_or_else(|| panic!("{what}: the status is drawn: {painted:?}"));
+            assert!(
+                meta.origin.x + meta.natural_width <= status.origin.x + TOLERANCE,
+                "{what}: the meta sits before the status: {meta:?} {status:?}"
+            );
+            if !open {
+                let summary = painted
+                    .iter()
+                    .find(|p| p.content.starts_with("crates/"))
+                    .unwrap_or_else(|| panic!("{what}: the summary is drawn: {painted:?}"));
+                assert!(
+                    summary.content.ends_with('\u{2026}'),
+                    "{what}: the summary gives way: {summary:?}"
+                );
+                assert!(
+                    summary.origin.x + summary.natural_width.min(summary.allowed_width)
+                        <= meta.origin.x + TOLERANCE,
+                    "{what}: the summary runs into the meta: {summary:?} {meta:?}"
                 );
             }
         }

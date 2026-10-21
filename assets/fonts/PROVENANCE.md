@@ -111,6 +111,8 @@ pyftsubset _static.ttf \
 | `JumpToLatest` | `arrow_downward`       | `E5DB`         |
 | `Subagent`     | `smart_toy`            | `F06C`         |
 | `BackgroundTask` | `pending_actions`    | `F1BB`         |
+| `TaskDone`     | `check_box`            | `E834`         |
+| `TaskOpen`     | `check_box_outline_blank` | `E835`      |
 
 **Why the activity dots are radio-button glyphs** (BUG-004): this file is a static instance
 pinned at **FILL=0**, and at that axis value the nominally-solid dots — `circle` (`EF4A`),

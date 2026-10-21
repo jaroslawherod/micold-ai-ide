@@ -318,6 +318,22 @@ pub fn disclosure_card(r: Roles, failed: bool) -> impl Fn(&Theme) -> container::
     }
 }
 
+/// The fill of code: a code block's surface and inline code's background (feature 940, research
+/// R9) — `surface_container_high`, one tone off the surface it sits on.
+pub fn code_fill(r: Roles) -> Rgb {
+    r.surface_container_high
+}
+
+/// A code block's surface (feature 940, research R9): [`code_fill`] at the small corner, with no
+/// border and no shadow — a tone inside the transcript, not a raised plane.
+pub fn code_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(code_fill(r)))),
+        border: radius(shape::SMALL),
+        ..container::Style::default()
+    }
+}
+
 /// The snackbar: the one deliberately **inverted** surface in the application (§7.8).
 ///
 /// `inverse_surface` is light-on-dark in a light scheme and dark-on-light in a dark one, which is

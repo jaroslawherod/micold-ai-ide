@@ -465,20 +465,31 @@ fn line_spans<'s>(
 }
 
 /// A line's text in its syntax colours, the rest in `on_surface`; monospace, never wrapped.
-fn line_text<'a, M: 'a>(
-    content: &'a str,
+/// Shared with [`InlineDiff`](super::InlineDiff) (feature 940, research R9).
+pub(super) fn line_text<'a, M: 'a>(
+    content: impl Into<std::borrow::Cow<'a, str>>,
     spans: &[(std::ops::Range<usize>, Rgb)],
     r: Roles,
 ) -> Element<'a, M> {
+    use std::borrow::Cow;
+    let content = content.into();
     if spans.is_empty() {
         return code(content, r.on_surface);
     }
-    let pieces: Vec<text::Span<'a, (), Font>> = segments(content, spans)
-        .into_iter()
-        .map(|(piece, colour)| {
-            span(piece).color(super::style::color(colour.unwrap_or(r.on_surface)))
-        })
-        .collect();
+    let paint = |piece: Cow<'a, str>, colour: Option<Rgb>| {
+        span(piece).color(super::style::color(colour.unwrap_or(r.on_surface)))
+    };
+    // Borrowed text is cut in place; owned text (a caller's 'static copy) is cut into copies.
+    let pieces: Vec<text::Span<'a, (), Font>> = match &content {
+        Cow::Borrowed(text) => segments(text, spans)
+            .into_iter()
+            .map(|(piece, colour)| paint(Cow::Borrowed(piece), colour))
+            .collect(),
+        Cow::Owned(text) => segments(text, spans)
+            .into_iter()
+            .map(|(piece, colour)| paint(Cow::Owned(piece.to_owned()), colour))
+            .collect(),
+    };
     rich_text(pieces)
         .font(Font::MONOSPACE)
         .size(CODE_SIZE)
@@ -486,21 +497,27 @@ fn line_text<'a, M: 'a>(
         .into()
 }
 
-/// The `+`/`−` marker cell of a `kind` line.
-fn marker<'a, M: 'a>(kind: LineKind, r: Roles) -> Element<'a, M> {
+/// The `+`/`−` marker cell of a `kind` line. Shared with [`InlineDiff`](super::InlineDiff).
+pub(super) fn marker<'a, M: 'a>(kind: LineKind, r: Roles) -> Element<'a, M> {
     let glyph = match kind {
         LineKind::Context => " ",
         LineKind::Added => "+",
         LineKind::Removed => "\u{2212}",
     };
-    container(code(glyph, r.on_surface_variant))
+    container(code(glyph, marker_ink(r)))
         .width(Length::Fixed(MARKER_WIDTH))
         .align_x(Horizontal::Center)
         .into()
 }
 
-/// `cells` on the tint of a `kind` line, `width` wide, clipped to the row.
-fn tinted<'a, M: 'a>(
+/// The colour of a `+`/`−` marker, on either tint (SC-006).
+pub(super) fn marker_ink(r: Roles) -> Rgb {
+    r.on_surface_variant
+}
+
+/// `cells` on the tint of a `kind` line, `width` wide, clipped to the row. Shared with
+/// [`InlineDiff`](super::InlineDiff).
+pub(super) fn tinted<'a, M: 'a>(
     cells: Element<'a, M>,
     kind: LineKind,
     r: Roles,
@@ -757,7 +774,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Gutter<'a, M> {
 }
 
 /// Diff text: monospace, one line, never wrapped (a long line is clipped by its row).
-fn code<'a, M: 'a>(content: impl text::IntoFragment<'a>, color: Rgb) -> Element<'a, M> {
+pub(super) fn code<'a, M: 'a>(content: impl text::IntoFragment<'a>, color: Rgb) -> Element<'a, M> {
     text(content)
         .font(Font::MONOSPACE)
         .size(CODE_SIZE)

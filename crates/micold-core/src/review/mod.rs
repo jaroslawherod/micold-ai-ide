@@ -142,6 +142,12 @@ pub mod limits {
     pub const MAX_VERSION_BYTES: u64 = 2 * 1024 * 1024;
     /// At most this many lines of a range are quoted in the review prompt.
     pub const MAX_QUOTED_LINES: usize = 50;
+
+    /// Whether a part of `lines` lines and `bytes` bytes is over the limits above: a transcript
+    /// code block or diff waits for "Show in full" (feature 940, research R7).
+    pub fn exceeds(lines: u64, bytes: u64) -> bool {
+        lines > u64::from(MAX_CHANGED_LINES) || bytes > MAX_VERSION_BYTES
+    }
 }
 
 #[cfg(test)]

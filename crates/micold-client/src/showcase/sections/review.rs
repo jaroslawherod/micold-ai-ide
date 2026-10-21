@@ -36,8 +36,8 @@ use micold_core::tokens;
 use crate::ui::syntax;
 
 use crate::ui::material::{
-    CardState, DiffLayout, DiffView, ReviewCommentCard, ReviewPanelRow, Tag, Text, TextArea,
-    TypeRole, VirtualRows, PANEL_ROW_HEIGHT,
+    CardState, DiffLayout, DiffView, InlineDiff, ReviewCommentCard, ReviewPanelRow, Tag, Text,
+    TextArea, TypeRole, VirtualRows, PANEL_ROW_HEIGHT,
 };
 
 /// Rows in the long-list pose: the length research R11 measures the list at.
@@ -544,6 +544,102 @@ pub fn pull_request_row<'a>(
                     PrMark::Open,
                 ),
             ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// The width of a diff line's `+`/`−` marker cell, which the marker gate holds the markers to.
+pub use crate::ui::material::DIFF_MARKER_WIDTH as MARKER_WIDTH;
+
+/// How a posed `InlineDiff` stands (feature 940). `pub` so `tests/gates/inline_diff_marker_fits.rs`
+/// lays out exactly what the gallery shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffPose {
+    /// One edit with `replace_all`.
+    Edit,
+    /// Two edits.
+    MultiEdit,
+    /// A new file's content.
+    Write,
+    /// Over the size limits.
+    Large,
+}
+
+/// The posed calls' inputs, as Claude Code sends them.
+fn edit_input(pose: DiffPose) -> (&'static str, &'static str) {
+    match pose {
+        DiffPose::Edit | DiffPose::Large => (
+            "Edit",
+            r#"{"file_path":"src/lib.rs","old_string":"fn total(a: u32) -> u32 {\n    a + 1\n}","new_string":"fn total(a: u32, b: u32) -> u32 {\n    a + b\n}","replace_all":true}"#,
+        ),
+        DiffPose::MultiEdit => (
+            "MultiEdit",
+            r#"{"file_path":"src/main.rs","edits":[{"old_string":"let port = 8080;","new_string":"let port = config.port;"},{"old_string":"println!(\"started\");","new_string":"println!(\"started on {port}\");\nlog::info!(\"listening\");"}]}"#,
+        ),
+        DiffPose::Write => (
+            "Write",
+            r##"{"file_path":"notes/todo.md","content":"# To do\n\n- [ ] ship the diff view\n- [ ] write the guide"}"##,
+        ),
+    }
+}
+
+/// Each pose's diff, with its colours in both schemes (light, dark) as a highlight job answers them.
+static EDIT_DIFFS: LazyLock<
+    Vec<(
+        micold_core::structured::edit_diff::EditDiff,
+        [micold_core::review::diff::SchemeSpans; 2],
+    )>,
+> = LazyLock::new(|| {
+    [
+        DiffPose::Edit,
+        DiffPose::MultiEdit,
+        DiffPose::Write,
+        DiffPose::Large,
+    ]
+    .map(|pose| {
+        let (tool, input) = edit_input(pose);
+        let diff = micold_core::structured::edit_diff::edit_diff(tool, input)
+            .expect("a posed call is well formed");
+        let token = syntax::token(&diff.path);
+        let lines: Vec<&str> = diff
+            .hunks
+            .iter()
+            .flat_map(|h| &h.lines)
+            .map(|l| l.text.as_str())
+            .collect();
+        let spans = [ColorScheme::Light, ColorScheme::Dark].map(|scheme| {
+            micold_core::review::diff::SchemeSpans {
+                old: Default::default(),
+                new: syntax::highlight_lines(&token, lines.iter().copied(), scheme),
+            }
+        });
+        (diff, spans)
+    })
+    .into()
+});
+
+/// One posed `InlineDiff`.
+pub fn inline_diff_sample(pose: DiffPose, roles: Roles) -> Element<'static, Message> {
+    let (diff, spans) = &EDIT_DIFFS[pose as usize];
+    let spans = &spans[usize::from(roles.scheme() == ColorScheme::Dark)];
+    let view = InlineDiff::new(diff, roles).spans(spans);
+    match pose {
+        DiffPose::Large => view.large(Message::NoOp).into(),
+        _ => view.into(),
+    }
+}
+
+/// `InlineDiff` — an Edit that replaces every occurrence, a MultiEdit, a Write and a large diff
+/// (feature 940, research R6, R9).
+pub fn inline_diff<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let pose = |label: &'a str, p| posed(label, inline_diff_sample(p, roles), roles);
+    arrange(
+        vec![
+            pose("an Edit", DiffPose::Edit),
+            pose("a MultiEdit", DiffPose::MultiEdit),
+            pose("a Write", DiffPose::Write),
+            pose("a large diff", DiffPose::Large),
         ],
         Layout::FullWidth,
     )

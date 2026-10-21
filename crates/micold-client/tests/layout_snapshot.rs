@@ -166,6 +166,22 @@ mod structured_row_marker_fits;
 #[path = "gates/disclosure_card_header_fits.rs"]
 mod disclosure_card_header_fits;
 
+// --- The transcript's rich components hold their parts (feature 940, T025) ---------------------
+
+// The showcase's code block: its tag and copy control stay in its header row at a narrow width, and
+// a long line is clipped to the block rather than widening it (FR-010).
+#[path = "gates/code_block_fits.rs"]
+mod code_block_fits;
+
+// A vertical wheel over a code block scrolls the list that holds it, not the block (research R12).
+#[path = "gates/code_block_wheel.rs"]
+mod code_block_wheel;
+
+// The showcase's inline diffs: every `+`/`−` marker inside its cell, both schemes, and no number
+// gutter (FR-015, FR-016).
+#[path = "gates/inline_diff_marker_fits.rs"]
+mod inline_diff_marker_fits;
+
 // --- The transcript's jump control fits its viewport (feature 939, T038) ------------------------
 
 // A structured session's pane, detached from the end: "Jump to latest" lies inside the

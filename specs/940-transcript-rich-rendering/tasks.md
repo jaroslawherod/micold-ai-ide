@@ -300,21 +300,21 @@ material_builder_api --test layout_snapshot` and `cargo test -p micold-client --
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T025 [P] [US3] Gates `crates/micold-client/tests/gates/code_block_fits.rs` (copy control and
+- [X] T025 [P] [US3] Gates `crates/micold-client/tests/gates/code_block_fits.rs` (copy control and
   tag stay in the header row at a narrow width; a line wider than the transcript scrolls inside the
   block, which does not widen its parent: FR-010), `crates/micold-client/tests/gates/code_block_wheel.rs`
   (a vertical wheel over a code block scrolls the enclosing scrollable, not the block: R12) and
   `crates/micold-client/tests/gates/inline_diff_marker_fits.rs` (each `+`/`−` marker lies inside its
   cell, both schemes, no number gutter: FR-015, FR-016), each wired into
   `crates/micold-client/tests/layout_snapshot.rs` with `#[path]` as the existing gates are
-- [ ] T026 [P] [US2] Add cases to `crates/micold-client/src/ui/material/composition_contrast.rs`
+- [X] T026 [P] [US2] Add cases to `crates/micold-client/src/ui/material/composition_contrast.rs`
   (code text, inline code, link text, diff `+`/`−` markers and note text on their fills, both
   schemes: SC-006), `crates/micold-client/src/ui/material/style_outline_discipline.rs` (the code
   surface draws no border), `crates/micold-client/src/ui/material/ripple_clipping.rs` (the copy
   control's ripple stays in its shape); and the meta case to
   `crates/micold-client/tests/gates/disclosure_card_header_fits.rs` (a `+12 −3` meta never
   ellipsized, beside the summary and the trailing status, at a narrow width: FR-017)
-- [ ] T027 [P] [US1] In-crate tests (`#[cfg(test)]`) in
+- [X] T027 [P] [US1] In-crate tests (`#[cfg(test)]`) in
   `crates/micold-client/src/ui/material/link_text.rs` and
   `crates/micold-client/src/ui/material/code_block.rs` with `ui/material/test_support.rs`: one
   keyboard focus stop per activatable link, Enter emits its `on_link` message, a non-activatable
@@ -327,27 +327,27 @@ material_builder_api --test layout_snapshot` and `cargo test -p micold-client --
 
 ### Implementation
 
-- [ ] T028 [US2] Extract `DiffView`'s marker cell, line `tint` and span-over-tint `rich_text`
+- [X] T028 [US2] Extract `DiffView`'s marker cell, line `tint` and span-over-tint `rich_text`
   builder in `crates/micold-client/src/ui/material/diff_view.rs` into `pub(super)` helpers that
   `DiffView` itself now uses (no change to its drawing; the Changes view's gates and
   `layout_snapshot` stay green)
-- [ ] T029 [P] [US3] Implement `CodeBlock` in `crates/micold-client/src/ui/material/code_block.rs`:
+- [X] T029 [P] [US3] Implement `CodeBlock` in `crates/micold-client/src/ui/material/code_block.rs`:
   `CodeBlock::new(code, roles).language(tag).spans(&scheme_spans).copy(state, on_copy).large(lines,
   on_show).into()`; monospace unwrapped lines in a horizontal-only `material::Scrollable` on
   `surface_container_high`, the tag in the header row, an `IconButton` copy control in
   `TakesTheKeyboard` with `Icon::Copy` / `Icon::CardDone` + "Copied" / the error role + "Copy failed"
   (research R5, R9); T027's code-block tests pass
-- [ ] T030 [P] [US1] Implement `LinkText` in `crates/micold-client/src/ui/material/link_text.rs`:
+- [X] T030 [P] [US1] Implement `LinkText` in `crates/micold-client/src/ui/material/link_text.rs`:
   `rich_text` with link spans opening on press (`on_link_click`) and one `TakesTheKeyboard` focus
   stop per activatable link; non-activatable links underlined without a link (research R9); T027's
   link tests pass
-- [ ] T031 [US2] Implement `InlineDiff` in `crates/micold-client/src/ui/material/inline_diff.rs`
+- [X] T031 [US2] Implement `InlineDiff` in `crates/micold-client/src/ui/material/inline_diff.rs`
   with T028's helpers: `InlineDiff::new(&edit_diff, roles).spans(&scheme_spans).large(on_show)
   .into()`; the path header, per hunk "Edit n of m" and its note ("Replaces every occurrence", "No
   change", "Writes an empty file", "New content", "No newline at end"), lines with a `+`/`−` marker
   cell and tint in a horizontal-only `Scrollable`, no number gutter; over the limit
   `diff_view::large_message(added, removed)` and "Show in full" (FR-013–FR-016, FR-019)
-- [ ] T032 [US1] Implement `MarkdownView` in `crates/micold-client/src/ui/material/markdown_view.rs`
+- [X] T032 [US1] Implement `MarkdownView` in `crates/micold-client/src/ui/material/markdown_view.rs`
   (after T029, T030): `MarkdownView::new(&doc, roles).muted(bool).on_link(f).on_copy(f)
   .code_spans(f).copy_state(f).full(f).on_show(f).into()` (`code_spans: CodeId -> Option<&Spans>`,
   `copy_state: CodeId -> Option<CopyState>`, `full: CodeId -> bool`, `on_show: CodeId -> Message`),
@@ -358,10 +358,10 @@ material_builder_api --test layout_snapshot` and `cargo test -p micold-client --
   on the left, rules with the shared `Divider`, tables with iced's `table` widget (header row in
   label weight, column alignment from the model, `Fill` columns that wrap: FR-003), code blocks
   through `CodeBlock`; an empty document draws nothing
-- [ ] T033 [P] [US2] Add `DisclosureCard::meta(text)` in
+- [X] T033 [P] [US2] Add `DisclosureCard::meta(text)` in
   `crates/micold-client/src/ui/material/disclosure_card.rs`: a short, never-ellipsized text between
   the summary and the trailing status (FR-017); T026's header case passes
-- [ ] T034 [US1] Register the four components in `crates/micold-client/src/ui/material/mod.rs` and
+- [X] T034 [US1] Register the four components in `crates/micold-client/src/ui/material/mod.rs` and
   add showcase entries in `crates/micold-client/src/showcase/catalogue.rs` with samples in
   `crates/micold-client/src/showcase/sections/surfaces.rs` (`MarkdownView` over
   `markdown-subset.md`, `CodeBlock` idle/copied/failed/large, `LinkText`) and

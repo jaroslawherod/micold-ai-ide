@@ -26,6 +26,14 @@ pub const COPY_CONFIRM: Duration = Duration::from_secs(2);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ticket(u64);
 
+impl Ticket {
+    /// A ticket no cache issued, for a copy state posed by the gallery or a test: the cache's own
+    /// tickets come from [`State::copy`] alone.
+    pub const fn posed(n: u64) -> Self {
+        Self(n)
+    }
+}
+
 /// A highlighted or size-limited part of an entry: one of its code blocks, or its diff.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Part {
@@ -276,9 +284,10 @@ impl Derived {
     /// not chosen to be shown in full (FR-019).
     pub fn is_large(&self, part: Part) -> bool {
         !self.full.contains(&part)
-            && self.body.part(part).is_some_and(|(_, lines, bytes)| {
-                lines > u64::from(limits::MAX_CHANGED_LINES) || bytes > limits::MAX_VERSION_BYTES
-            })
+            && self
+                .body
+                .part(part)
+                .is_some_and(|(_, lines, bytes)| limits::exceeds(lines, bytes))
     }
 
     /// After the body changed: keep what still holds of the parts' state, drop the rest.

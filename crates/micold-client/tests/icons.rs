@@ -87,6 +87,8 @@ fn expected(icon: Icon) -> char {
         Icon::JumpToLatest => '\u{e5db}',
         Icon::Subagent => '\u{f06c}',
         Icon::BackgroundTask => '\u{f1bb}',
+        Icon::TaskDone => '\u{e834}',
+        Icon::TaskOpen => '\u{e835}',
     }
 }
 
@@ -131,8 +133,9 @@ fn all_covers_every_variant_without_duplicates() {
     // `chevron_right`), +2 for feature 970's Overview full-screen toggle (`fullscreen`,
     // `fullscreen_exit`), +7 for feature 939's transcript cards (`psychology`, `build`,
     // `progress_activity`, `check_circle`, `error`, `do_not_disturb_on`, `arrow_downward`), +2 for
-    // feature 944's subagent and background-task icons (`smart_toy`, `pending_actions`).
-    assert_eq!(Icon::ALL.len(), 79, "curated set size");
+    // feature 944's subagent and background-task icons (`smart_toy`, `pending_actions`), +2 for
+    // feature 940's markdown task-list marks (`check_box`, `check_box_outline_blank`).
+    assert_eq!(Icon::ALL.len(), 81, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

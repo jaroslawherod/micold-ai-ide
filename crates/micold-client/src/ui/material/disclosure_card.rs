@@ -12,22 +12,28 @@
 //! role, an [`IconLabel`](super::IconLabel)), and the card swaps its shadow for an `error` outline.
 //!
 //! Whether it is open is the caller's, as for `AccordionSection`: the card keeps no state.
+//!
+//! A short [`meta`](DisclosureCard::meta) — an Edit card's `+12 −3` (feature 940, FR-017) — sits
+//! between the summary and the trailing status, folded or open. It is never cut: the summary,
+//! which fills what is left, gives way instead.
 
-use super::{style, AccordionSection};
+use super::{style, AccordionSection, Text, TypeRole};
 use crate::icons::Icon;
-use iced::widget::{container, Space};
-use iced::{Element, Length};
+use iced::widget::text::Wrapping;
+use iced::widget::{container, Row, Space};
+use iced::{Alignment, Element, Length};
 use micold_core::tokens::{spacing, Roles};
 
 /// A folding card. Builder form (Principle VIII):
 /// `DisclosureCard::new("Bash", msg, roles).leading(Icon::ToolCall).summary("cargo test")
-/// .trailing(status).open(open).body(body).failed(failed).into()`.
+/// .meta("+12 −3").trailing(status).open(open).body(body).failed(failed).into()`.
 pub struct DisclosureCard<'a, M> {
     title: String,
     on_toggle: M,
     roles: Roles,
     leading: Option<Icon>,
     summary: Option<String>,
+    meta: Option<String>,
     trailing: Option<Element<'a, M>>,
     open: bool,
     body: Option<Element<'a, M>>,
@@ -43,6 +49,7 @@ impl<'a, M: Clone + 'a> DisclosureCard<'a, M> {
             roles,
             leading: None,
             summary: None,
+            meta: None,
             trailing: None,
             open: false,
             body: None,
@@ -60,6 +67,14 @@ impl<'a, M: Clone + 'a> DisclosureCard<'a, M> {
     /// header is too narrow for it. An empty summary is none.
     pub fn summary(mut self, summary: impl Into<String>) -> Self {
         self.summary = Some(summary.into());
+        self
+    }
+
+    /// A short text between the summary and the trailing status, folded and open, never cut with
+    /// an ellipsis — an Edit card's added and removed line counts (feature 940, FR-017). An empty
+    /// meta is none.
+    pub fn meta(mut self, meta: impl Into<String>) -> Self {
+        self.meta = Some(meta.into()).filter(|meta| !meta.is_empty());
         self
     }
 
@@ -101,8 +116,25 @@ impl<'a, M: Clone + 'a> From<DisclosureCard<'a, M>> for Element<'a, M> {
         if let Some(icon) = c.leading {
             section = section.leading(icon);
         }
-        if let Some(status) = c.trailing {
-            section = section.trailing(status);
+        // Without a meta the trailing status goes in as it is, so a card without one lays out as
+        // it always has.
+        let trailing = match (c.meta, c.trailing) {
+            (None, trailing) => trailing,
+            (Some(meta), status) => {
+                let meta: Element<'a, M> = Text::new(meta, TypeRole::Label, c.roles)
+                    .muted()
+                    .wrapping(Wrapping::None)
+                    .into();
+                Some(
+                    Row::with_children(std::iter::once(meta).chain(status))
+                        .spacing(spacing::SM)
+                        .align_y(Alignment::Center)
+                        .into(),
+                )
+            }
+        };
+        if let Some(trailing) = trailing {
+            section = section.trailing(trailing);
         }
         container(section)
             .padding(spacing::XS)
@@ -214,6 +246,31 @@ mod tests {
                 painted.iter().any(|p| p.content == content),
                 "`{content}` is painted: {painted:?}"
             );
+        }
+    }
+
+    /// FR-017: a meta sits in the header beside the status, whole, while the summary gives way;
+    /// folded and open alike.
+    #[test]
+    fn a_meta_is_never_cut_and_the_summary_gives_way() {
+        let r = roles();
+        for open in [false, true] {
+            let mut m = Mounted::new(
+                iced::widget::container(card(open, r).meta("+12 \u{2212}3"))
+                    .width(Length::Fixed(WINDOW.width * 0.75)),
+            );
+            let painted = m.painted_text();
+            assert!(
+                painted.iter().any(|p| p.content == "+12 \u{2212}3"),
+                "open {open}: the meta is painted whole: {painted:?}"
+            );
+            if !open {
+                let summary = painted
+                    .iter()
+                    .find(|p| p.content.starts_with("cargo"))
+                    .expect("the summary is painted");
+                assert!(summary.content.ends_with('…'), "{:?}", summary.content);
+            }
         }
     }
 

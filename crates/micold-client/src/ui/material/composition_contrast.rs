@@ -572,3 +572,66 @@ fn a_progress_bars_fill_and_marker_are_visible_on_its_track() {
         violations.join("\n  ")
     );
 }
+
+/// Feature 940 (research R9, SC-006): in both schemes, the transcript's rich text reads at 4.5:1 on
+/// what it is drawn on — code and inline code on the code fill, link and plain text (muted or not)
+/// on the transcript's surface and on a card's fill, the copy control's words (and the failed
+/// error role) and a hunk's note on the code fill, and the `+`/`−` markers on both diff tints.
+#[test]
+fn rich_transcript_text_is_legible_on_its_fills() {
+    use super::code_block::copy_look;
+    use super::diff_view::marker_ink;
+    use super::link_text::{ink, link_ink};
+    use crate::features::transcript_rich::{CopyState, Ticket};
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = style::theme(scheme);
+        let card = match style::disclosure_card(r, false)(&theme).background {
+            Some(Background::Color(c)) => style::to_rgb(c),
+            other => panic!("{scheme:?}: the card paints a colour fill, not {other:?}"),
+        };
+        let code = style::code_fill(r);
+        let mut pairs: Vec<(String, Rgb, Rgb)> = vec![
+            ("code text on the code fill".into(), r.on_surface, code),
+            (
+                "a hunk's note on the code fill".into(),
+                r.on_surface_variant,
+                code,
+            ),
+            ("added marker".into(), marker_ink(r), r.diff_added),
+            ("removed marker".into(), marker_ink(r), r.diff_removed),
+        ];
+        for (name, fill) in [("surface", r.surface), ("card", card)] {
+            pairs.push((format!("link on the {name}"), link_ink(r), fill));
+            pairs.push((format!("text on the {name}"), ink(r, false), fill));
+            pairs.push((format!("muted text on the {name}"), ink(r, true), fill));
+            pairs.push((
+                format!("inline code on the {name}'s code fill"),
+                ink(r, false),
+                code,
+            ));
+        }
+        for state in [
+            None,
+            Some(CopyState::Copied(Ticket::posed(1))),
+            Some(CopyState::Failed(Ticket::posed(1))),
+        ] {
+            let (_, tint, words) = copy_look(state, r);
+            pairs.push((format!("copy control {words:?}"), tint, code));
+        }
+        for (what, ink, fill) in pairs {
+            let ratio = contrast(ink, fill);
+            if ratio < AA_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / {what}: {ratio:.2}:1 (needs {AA_TEXT})"
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "rich transcript text cannot be read:\n  {}",
+        violations.join("\n  ")
+    );
+}

@@ -66,3 +66,21 @@ each test task written before its implementation task, run red, then made green.
   moved into `interpret`'s `Task::none()` list, the built `clipboard_request` test binary run on
   `a_checked_write` fails, `panicked at ... clipboard_request.rs:247:47: the arm writes`; restored,
   1 passed. T019's link test stays test-after (its routing came with the variants).
+
+## M4 (T025–T034) — shared rich components
+
+- **Order, disclosed**: `CodeBlock` and `LinkText` were drafted before their tests (test-after);
+  `InlineDiff`, `MarkdownView` and `DisclosureCard::meta` were written beside theirs. So the red
+  below was shown against stubs: each new component's `From` impl began with `todo!("stub")` and
+  `meta` dropped its text, with the builders and types real.
+- **Red**: `cargo test -p micold-client --lib ui::material`: 754 passed, 17 failed — the 5
+  `code_block` tests, 3 `link_text`, 3 `inline_diff`, 4 `markdown_view`, the copy control's
+  `ripple_clipping` case (each `panicked at …: not yet implemented: stub`) and
+  `disclosure_card::a_meta_is_never_cut_and_the_summary_gives_way`. `cargo test -p micold-client
+  --test layout_snapshot`: 73 passed, 5 failed — `code_block_fits`, `code_block_wheel`,
+  `inline_diff_marker_fits` in the stub, `an_edit_cards_meta_is_never_ellipsized` ("the meta is
+  drawn whole" not found), and `the_layout_matches_the_committed_fixture` (session-transcript-pane:
+  a tool card's status node 12.0 → 43.8 wide). That last one was a real bug, not the stub: `meta`
+  wrapped every card's trailing status in a new row; fixed so a card without a meta passes its
+  status through unchanged. T026's `composition_contrast` and `style_outline_discipline` cases
+  passed against the stubs (they read the style and colour functions, which were real): test-after.

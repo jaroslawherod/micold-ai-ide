@@ -91,3 +91,28 @@ fn a_failed_disclosure_cards_outline_is_its_one_border() {
         );
     }
 }
+
+/// Feature 940 (research R9): a code block's surface is a tone, not an outlined box — it draws no
+/// border, and no shadow either, in both schemes.
+#[test]
+fn the_code_surface_draws_no_border() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let s = style::code_surface(r)(&style::theme(scheme));
+        assert!(
+            s.border.width == 0.0 || s.border.color.a == 0.0,
+            "{scheme:?}: the code surface draws a border: {:?}",
+            s.border
+        );
+        assert_eq!(
+            s.shadow,
+            iced::Shadow::default(),
+            "{scheme:?}: and no shadow"
+        );
+        assert_eq!(
+            s.background,
+            Some(iced::Background::Color(style::color(style::code_fill(r)))),
+            "{scheme:?}: its fill is the code fill"
+        );
+    }
+}
