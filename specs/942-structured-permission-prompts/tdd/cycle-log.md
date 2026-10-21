@@ -148,3 +148,25 @@ Red runs recorded live, each before its implementation existed; commands with
 - First green attempt: 22 passed, 1 failed — a test fault: the `CatalogChanged` was read past by
   `requested` on the same window; a second window now waits for it.
 - Green: `structured_permission` 23 passed, 4 runs of 4.
+
+## M4 — permission mode persisted, created and launched (T039–T042)
+
+### Cycle 6 — T039/T040 the mode in the record and on the wire
+
+- Red: the T039 tests written first (`session_store` each mode round-trips, a Default record has
+  no `permission_mode` key, a pre-feature structured record loads `Default`; `protocol_roundtrip`
+  the mode on `SessionSummary` and `SessionCreate` on both wires, absent → `Default`, version 60).
+  `cargo test -p micold-core --test session_store --test protocol_roundtrip --no-run`: did not
+  compile — `no field permission_mode` on `Session`, `SessionSummary`, `ClientMsg::SessionCreate`.
+- Green: `session_store` 8 passed, `protocol_roundtrip` 39, `schema_hash` 22, `session_kind` 10,
+  `structured_wire` 5.
+
+### Cycle 7 — T041/T042 create in a mode, launch with it, refuse a terminal one
+
+- Red: `structured_permission_mode` written first; with the create path implemented and the launch
+  still passing `PermissionMode::Default`: 2 passed, 3 failed — the create/restart and daemon
+  restart cases `AcceptEdits: … left: None, right: Some("acceptEdits")`; the terminal case on a
+  test fault (it expected no `timeout` in a terminal binding, which has `120000`; it now checks the
+  structured `2147483647` is not used).
+- Green: `structured_permission_mode` 5 passed; `structured_permission` 23, `structured_resume` 4,
+  `structured_session` 15 unchanged.
