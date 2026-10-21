@@ -350,9 +350,6 @@ pub struct State {
     /// The Claude plan's usage the service pushed (feature 490) -- see
     /// [`crate::features::plan_usage::State`].
     pub plan_usage: crate::features::plan_usage::State,
-    /// The structured sessions' read-only logs (feature 938) -- see
-    /// [`crate::features::structured_log::State`].
-    pub structured_log: crate::features::structured_log::State,
     /// The structured sessions' transcripts and their view state (feature 939) -- see
     /// [`crate::features::structured_transcript::State`].
     pub structured_transcript: crate::features::structured_transcript::State,
@@ -904,7 +901,7 @@ impl State {
     }
 
     /// Take one `StructuredEvents` message for `session` (feature 938 wire.md): its events reach
-    /// both the plain log and the transcript (feature 939).
+    /// the transcript (feature 939).
     pub fn structured_events(
         &mut self,
         session: micold_core::session::SessionId,
@@ -912,14 +909,12 @@ impl State {
         events: &[micold_core::structured::SequencedEvent],
         live: bool,
     ) {
-        self.structured_log.apply(session, omitted, events, live);
         self.structured_transcript
             .apply(session, omitted, events, live);
     }
 
-    /// Forget a closed or removed session's log and transcript.
+    /// Forget a closed or removed session's transcript.
     pub fn forget_structured(&mut self, session: micold_core::session::SessionId) {
-        self.structured_log.forget(session);
         self.structured_transcript.forget(session);
     }
 

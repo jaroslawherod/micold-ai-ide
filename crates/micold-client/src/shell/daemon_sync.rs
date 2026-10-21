@@ -1176,8 +1176,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 app.core.plan_usage.received(reading);
             }
         }
-        // Feature 938 (FR-022a): a structured session's events become lines of its read-only log,
-        // and (feature 939) entries of its transcript.
+        // Feature 938 (FR-022a): a structured session's events become entries of its transcript
+        // (feature 939).
         DaemonMsg::StructuredEvents {
             session,
             omitted,

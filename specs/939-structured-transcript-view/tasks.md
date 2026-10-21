@@ -389,31 +389,31 @@ removed; the user guide describes it.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T038 [P] [US3] Gate `crates/micold-client/tests/gates/transcript_jump_control_fits.rs`
+- [x] T038 [P] [US3] Gate `crates/micold-client/tests/gates/transcript_jump_control_fits.rs`
   wired into `crates/micold-client/tests/layout_snapshot.rs` (the jump control lies inside the
   transcript viewport, above its bottom edge, over no part of the scrollbar), and a transcript pane
   state in `layout_snapshot.rs` (a `tool-turn` transcript, one card open, detached) with its
   reviewed fixture
-- [ ] T039 [P] [US1] Pane-routing tests in a new `crates/micold-client/tests/transcript_pane.rs`
+- [x] T039 [P] [US1] Pane-routing tests in a new `crates/micold-client/tests/transcript_pane.rs`
   (FR-001): a structured session's primary, single and tiled, draws `ui::transcript::view` (no
   plain-log row); a terminal session's pane is unchanged (US1 scenario 6, SC-006)
 
 ### Implementation
 
-- [ ] T040 [US1] Route a structured primary (FR-001) to `ui::transcript::view` in
+- [x] T040 [US1] Route a structured primary (FR-001) to `ui::transcript::view` in
   `crates/micold-client/src/ui/terminal.rs` (removing `structured_log_body` and
   `shows_structured_log`) and in `crates/micold-client/src/ui/panes.rs` for a tiled pane (research
   R15); T038, T039 pass
-- [ ] T041 [US1] Remove the plain log (research R13): `crates/micold-client/src/features/structured_log.rs`,
+- [x] T041 [US1] Remove the plain log (research R13): `crates/micold-client/src/features/structured_log.rs`,
   `crates/micold-client/tests/features_structured_log.rs`, its `features/mod.rs` entry,
   `State.structured_log` in `app.rs` and its calls in `shell/daemon_sync.rs`; then
   `crates/micold-core/src/structured/log_line.rs` and its re-exports in `structured/mod.rs` after
   `LSP findReferences` shows no other user; `PROTOCOL_VERSION` unchanged
-- [ ] T042 [US1] Rewrite *Structured sessions* in `docs/user-guide/worktrees-and-sessions.md`:
+- [x] T042 [US1] Rewrite *Structured sessions* in `docs/user-guide/worktrees-and-sessions.md`:
   the transcript in place of the log — entries, cards and folding, failed marks, raw rows, notices,
   follow-tail and "Jump to latest", sub-agent counts (FR-023)
-- [ ] T043 [US3] Run quickstart Part B with the `visual-pass` skill and record it in
-  `specs/939-structured-transcript-view/visual-pass/` (FR-010, FR-012, FR-016–FR-019, SC-005)
+- [x] T043 [US3] Run quickstart Part B with the `visual-pass` skill and record it in
+  `specs/939-structured-transcript-view/visual/` (FR-010, FR-012, FR-016–FR-019, SC-005)
 
 **Checkpoint**: M6 done — feature complete.
 
@@ -514,6 +514,6 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US1 scenarios 1, 6; US2 scenarios 2, 7; US3 scenarios 4–6; FR-001, FR-017,
   FR-019, FR-023; SC-005, SC-006
 - **Verify**: `cargo test -p micold-client --test transcript_pane --test layout_snapshot`;
-  `scripts/gate.sh`; quickstart Part B (`specs/939-structured-transcript-view/visual-pass/`)
+  `scripts/gate.sh`; quickstart Part B (`specs/939-structured-transcript-view/visual/`)
 - **Depends on**: M5
 - **Tier**: full

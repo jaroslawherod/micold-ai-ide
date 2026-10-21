@@ -517,6 +517,51 @@ fn with_removable_pull_request(width: u16) -> State {
     state
 }
 
+/// A structured session's pane showing its transcript (feature 939, T038): the recorded `tool-turn`
+/// history, its tool card unfolded, and the view scrolled away from the end, so "Jump to latest"
+/// floats over it (FR-017).
+pub fn transcript_pane_detached() -> State {
+    use micold_client::features::structured_transcript::TranscriptMsg;
+    use micold_core::session::SessionKind;
+    use micold_core::structured::transcript::EntryKind;
+
+    let session = Session::restored_of_kind(
+        SessionId::new(),
+        SessionLocation::Worktree("feat-short".to_string()),
+        SessionLabel::Named("feat/short".to_string()),
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+        SessionKind::Structured,
+    );
+    let id = session.id;
+    let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+    let mut state = with_project();
+    state.workspace = workspace;
+    state.session.active = Some(id);
+
+    let lines = super::transcript::fixture_lines("tool-turn");
+    state.structured_events(id, 0, &super::transcript::sequenced(&lines, 0), false);
+    let card = state
+        .structured_transcript
+        .transcript(id)
+        .and_then(|t| {
+            t.entries()
+                .find(|e| matches!(e.kind(), EntryKind::ToolCall(_)))
+                .map(|e| e.key().clone())
+        })
+        .expect("the tool turn holds a tool card");
+    state.structured_transcript.toggle(id, card);
+    // Scrolled to the top of a transcript taller than its viewport: detached (R9).
+    state.update_transcript(TranscriptMsg::Scrolled {
+        session: id,
+        offset: 0,
+        viewport: 300,
+        content: 3000,
+    });
+    state
+}
+
 /// The registry. **This is the one place a covered state is declared** (FR-016).
 pub fn covered_states() -> &'static [CoveredState] {
     &[
@@ -1434,6 +1479,31 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "terminal.tabs.pinned",
                     path: TERMINAL_RESTARTABLE_TAB_AI_PINNED,
+                },
+            ],
+        },
+        // --- Feature 939: a structured session's pane is its transcript (T038) -------------------
+        //
+        // One card open and detached from the end, so the state holds every part a transcript
+        // pane lays out: entries, an unfolded card's body and the floating "Jump to latest".
+        // `gates/transcript_jump_control_fits.rs` holds the control inside the viewport.
+        CoveredState {
+            name: "session-transcript-pane",
+            build: || StateUnderTest::new(transcript_pane_detached()),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                // The transcript's `Scrollable`, whose content `gates/containment.rs` lets overhang
+                // its bottom edge (`TRANSCRIPT_VIEWPORT`).
+                Anchor {
+                    name: "transcript.viewport",
+                    path: &[0, 0, 1, 1, 0, 0, 0],
                 },
             ],
         },

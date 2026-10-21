@@ -8,7 +8,7 @@
 //! lead with its header (the first child of the child's layout).
 
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::{tree, Tree};
+use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, renderer, Clipboard, Shell, Widget};
 use iced::{Element, Event, Length, Point, Rectangle, Size};
 use micold_core::pane_layout::{Axis, Divider, PaneId, PaneLayout, Placement, Rect, SplitEvent};
@@ -360,6 +360,27 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
             })
             .collect();
         layout::Node::with_children(size, nodes)
+    }
+
+    /// Operations reach every pane's content, so a scroll task naming a widget in a tiled pane
+    /// (a transcript's `snap_to`, feature 939) finds it as it does in a single pane.
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.traverse(&mut |operation| {
+            for ((child, state), l) in self
+                .children
+                .iter_mut()
+                .zip(tree.children.iter_mut())
+                .zip(layout.children())
+            {
+                child.as_widget_mut().operate(state, l, renderer, operation);
+            }
+        });
     }
 
     fn update(

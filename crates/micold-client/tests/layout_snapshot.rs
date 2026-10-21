@@ -166,6 +166,13 @@ mod structured_row_marker_fits;
 #[path = "gates/disclosure_card_header_fits.rs"]
 mod disclosure_card_header_fits;
 
+// --- The transcript's jump control fits its viewport (feature 939, T038) ------------------------
+
+// A structured session's pane, detached from the end: "Jump to latest" lies inside the
+// transcript's viewport, above its bottom edge, clear of the scrollbar.
+#[path = "gates/transcript_jump_control_fits.rs"]
+mod transcript_jump_control_fits;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

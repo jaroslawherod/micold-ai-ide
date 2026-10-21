@@ -317,7 +317,6 @@ pub mod sandbox;
 pub mod session;
 pub mod settings;
 pub mod sidebar;
-pub mod structured_log;
 pub mod structured_transcript;
 pub mod window;
 pub mod worktree;
