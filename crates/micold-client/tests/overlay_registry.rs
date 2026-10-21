@@ -597,15 +597,18 @@ fn the_keyboard_subscription_names_no_surface() {
     // (`Msg::CardMenuMoved`, `Msg::CardMenuActivated`), not a surface a key dismisses; Escape stays
     // `Message::EscapePressed`.
     // So is the Overview's full-screen chord (feature 970, R7): a toggle the reducer gates itself.
+    // So is the Overview's arrow step (feature 1122, R9), which replaced `Message::FocusMoved` for
+    // the arrows there: like it, it names a direction, not a surface a key dismisses.
     // Whitespace is dropped first, so a message rustfmt splits over lines still reads as one name.
     // Each name runs to the first character a path cannot hold (`,`, `{`, `;`, `=`), and is compared
     // whole, so a longer message sharing a prefix with an exempt one is still found.
-    const EXEMPT: [&str; 8] = [
+    const EXEMPT: [&str; 9] = [
         "Message::EscapePressed",
         "Message::EscapePressed)",
         "Message::FocusMoved",
         "Message::Overview(crate::features::overview::Msg::Toggled",
         "Message::Overview(crate::features::overview::Msg::FullScreenToggled",
+        "Message::Overview(crate::features::overview::Msg::CardStepped",
         "Message::QuickSwitch(crate::features::quick_switch::Msg::Toggled",
         "Message::Navigation(crate::features::navigation::Msg::Pressed(action)))",
         // `card_menu_key`'s one return, `Some(Message::Overview(msg))`; the `Msg::` names it may

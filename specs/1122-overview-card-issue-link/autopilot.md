@@ -81,6 +81,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M2 | 4 | c006b626 | GREEN (after review A r2 F1, comment only) |
 | Full gate M3 | 1 | 5d362874 | RED: `anatomy_call_sites::the_test_module_convention_this_relies_on_holds`: `ui/mod.rs` had a second inline `#[cfg(test)]` module (the arrow test); moved to `ui/overview_arrow_tests.rs` |
 | Full gate M3 | 2 | 06c27e10 | RED: `field_focus_call_sites::the_focus_message_reaches_the_traversal_operation` read the `CardStepped` arm's `Message::FocusMoved` fallback as the `FocusMoved` arm; the arm now calls `dialog_focus_move_task` itself |
+| Full gate M3 | 3 | 44bbbce2 | RED: `overlay_registry::the_keyboard_subscription_names_no_surface` read `Msg::CardStepped` in `ui::subscription` as a per-surface message; exempted beside `FocusMoved` (it names a direction) |
 | Review A M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
 | Review B M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
 | Visual pass M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
