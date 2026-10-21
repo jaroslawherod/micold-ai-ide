@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: verify M1
-- **Next step**: M1 T001–T018 done; full gate, then reviews A (high) and B and the visual pass (T019) by the orchestrator, then pr
+- **Next step**: M1 T001–T018 done, full gate green at efff51eb (scripts/gate.sh; run 1 hit the unrelated daemon flake `ten_concurrent_creates_of_one_branch_leave_one_worktree`, re-run green); orchestrator runs review A r1, review B r1 and the visual pass T019 (prompts 1123-m1-prompt-*-r1.md in the scratchpad), then fixes, pr
 
 ## Pull requests
 
@@ -53,6 +53,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A plan | 2 | 9bc517ce26e6300ed4d9f258bb7fd82b0e0fad46:f3fad1fa408ff0b5345496fd0d6917e547bb9eed (fix diff 53ffa8f3:a55fb1b0 → f3fad1fa, sonnet) | CLEAN, 2 MINOR (F1 card-rows.md U1–U7 heading, F2 R9 contrast wording); both fixed, prose only, no round 3 |
 | Review A tasks | 1 | 8c136e70f07d2dc1576652bbf31d1be9c59a6e81:e246bec8f4aaf98c75e15a2f3fe1292736a8455e | CHANGES: 2 MAJOR (F1 M1 has no deliverable, F2 `step_card` wrong file/name and T031 in another milestone), 2 MINOR (F3 `pull_request_source.rs` literals, F4 M3 Verify runs no core tests); all four fixed in tasks.md (M2 folded into M1, renumbered M1–M3), research R6, ledger D7; none declined; round 2 on sonnet over the fix diff |
 | Review A tasks | 2 | 8eaaf55f5c56b169826d26ef3eb8e8d1e5160a1c:e9713c39f547f81ea907d26e3a4cda7d106d1123 (fix diff 8c136e70:e246bec8 → e9713c39, sonnet) | CLEAN, 1 MINOR (F1 T031 must extend `stepping_grid` with a pull request row and the number's builders); fixed in tasks.md, prose only, no round 3 |
+| Review A M1 | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | pending (orchestrator) |
+| Review B M1 | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | pending (orchestrator) |
+| Visual pass M1 (T019) | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | pending (orchestrator) |
 
 ### Review A tasks round 2 verdict (verbatim)
 
@@ -187,4 +190,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- Flaky daemon test `mcp_create_worktree::ten_concurrent_creates_of_one_branch_leave_one_worktree` (git race: "failed to read .git/worktrees/race/commondir") failed once in the M1 gate, green on re-run and 3 isolated runs; not this feature's code.
