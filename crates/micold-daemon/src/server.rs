@@ -1031,7 +1031,21 @@ where
             // Feature 938 (FR-008): the turn is opened here, in arrival order, so of two messages
             // the first wins; the write to the CLI's stdin may block on a full pipe, so it runs
             // off the connection loop. The text is never logged.
-            ClientMsg::SessionUserMessage { req, session, text } => {
+            // Feature 941 M1: pictures, interrupts and the queue are on the wire before the
+            // daemon serves them (M2, M3); until then they are refused or ignored.
+            ClientMsg::SessionUserMessage { req, images, .. } if !images.is_empty() => {
+                state.send(id, not_available_yet(req));
+            }
+            ClientMsg::QueueEdit { req, .. }
+            | ClientMsg::QueueRemove { req, .. }
+            | ClientMsg::QueueTake { req, .. }
+            | ClientMsg::QueueRelease { req, .. } => {
+                state.send(id, not_available_yet(req));
+            }
+            ClientMsg::TurnInterrupt { .. } => {}
+            ClientMsg::SessionUserMessage {
+                req, session, text, ..
+            } => {
                 use crate::structured::UserMessageUndelivered::{Refused, WriteFailed};
                 let state = Arc::clone(state);
                 let accepted = state.accept_user_message(session, &text);
@@ -3081,5 +3095,15 @@ mod create_error_tests {
         });
         assert!(message.contains("feat-login"), "{message}");
         assert!(message.contains("Choose a different name"), "{message}");
+    }
+}
+
+/// The answer to a feature-941 request the daemon does not serve yet (M1, T021).
+fn not_available_yet(req: u64) -> DaemonMsg {
+    DaemonMsg::OperationError {
+        req,
+        kind: ErrorKind::Refused,
+        message: "Not available yet".into(),
+        detail: None,
     }
 }

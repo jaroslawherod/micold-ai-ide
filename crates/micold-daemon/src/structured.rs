@@ -20,7 +20,7 @@ use micold_core::session::{KindRefusal, PermissionMode, SessionId};
 use micold_core::structured::control::{encode_set_mode, next_request_id};
 use micold_core::structured::{
     encode_user_message, parse_line, ControlOutcome, EventHistory, LineSplitter, SequencedEvent,
-    StructuredEvent, TurnState, UserMessageRefusal,
+    StructuredEvent, TurnId, TurnState, UserMessageRefusal,
 };
 use micold_core::terminal::{launch_args, LaunchSpec};
 use tokio::sync::{broadcast, oneshot};
@@ -231,6 +231,8 @@ pub struct StructuredSession {
     /// This process's turn (research R7): a new process starts `Idle`, so a restart resets it.
     /// Shared with the stdout reader, which ends the turn on a `result` and at end-of-file.
     turn: Arc<Mutex<TurnState>>,
+    /// How many turns this process opened: the last one's [`TurnId`].
+    turns: std::sync::atomic::AtomicU64,
     /// The stdout and stderr reader threads, joined by [`Self::teardown`].
     readers: Mutex<Vec<JoinHandle<()>>>,
     /// Set when both readers have seen end-of-file.
@@ -310,7 +312,7 @@ impl StructuredSession {
         };
 
         let output_ended = Arc::new(ReadersDone(2.into()));
-        let turn = Arc::new(Mutex::new(TurnState::Idle));
+        let turn = Arc::new(Mutex::new(TurnState::default()));
         let reader_turn = Arc::clone(&turn);
         let control = Arc::new(ControlWaiters::new());
         let reader_control = Arc::clone(&control);
@@ -355,6 +357,7 @@ impl StructuredSession {
             stdin: Mutex::new(stdin),
             control,
             turn,
+            turns: std::sync::atomic::AtomicU64::new(0),
             readers: Mutex::new(readers),
             output_ended,
             torn_down: AtomicBool::new(false),
@@ -395,16 +398,24 @@ impl StructuredSession {
     /// daemon calls it under its state lock, so of two simultaneous messages the first wins; the
     /// write is [`Self::write_user_message`], off the lock.
     pub fn accept_user_message(&self, text: &str) -> Result<(), UserMessageRefusal> {
+        if text.trim().is_empty() {
+            return Err(UserMessageRefusal::Blank);
+        }
         let running = self.is_alive() && !self.output_ended();
-        lock(&self.turn).accept(text, running)
+        let mut turn = lock(&self.turn);
+        // Until M2 moves turn ids to the session's `SessionInput`, this process numbers its own.
+        let id = TurnId(self.turns.load(Ordering::Relaxed) + 1);
+        turn.accept(id, running)?;
+        self.turns.fetch_add(1, Ordering::Relaxed);
+        Ok(())
     }
 
     /// Write an accepted `text` to the CLI as one stream-json user message. On a failed write
     /// nothing was delivered, so the turn it opened is closed again.
     pub fn write_user_message(&self, text: &str) -> io::Result<()> {
-        let written = self.write_line(&encode_user_message(text));
+        let written = self.write_line(&encode_user_message(text, &[]));
         if written.is_err() {
-            *lock(&self.turn) = TurnState::Idle;
+            lock(&self.turn).abandon();
         }
         written
     }

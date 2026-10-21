@@ -11,9 +11,10 @@ use serde::{Deserialize, Serialize};
 pub const MAX_IMAGE_BYTES: usize = 3_750_000;
 /// The most pictures one message carries.
 pub const MAX_IMAGES_PER_MESSAGE: usize = 20;
-/// The most picture bytes one message carries in all, so the `SessionUserMessage` frame with its
-/// text stays under `MAX_FRAME_LENGTH`.
-pub const MAX_MESSAGE_IMAGE_BYTES: usize = 12 * 1024 * 1024;
+/// The most picture bytes one message carries in all. Control frames are JSON, where a picture
+/// travels as base64 (4/3 of its size): 9 MiB of pictures take 12 MiB of the 16 MiB
+/// `MAX_FRAME_LENGTH`, leaving room for the text.
+pub const MAX_MESSAGE_IMAGE_BYTES: usize = 9 * 1024 * 1024;
 
 /// A picture format the CLI accepts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -57,7 +58,62 @@ impl ImageMedia {
 pub struct ImageAttachment {
     name: String,
     media: ImageMedia,
+    #[serde(with = "picture_bytes")]
     bytes: Vec<u8>,
+}
+
+/// A picture's bytes as base64 text in a human-readable format (the JSON control frames), and as
+/// plain bytes otherwise (postcard: the saved queue).
+mod picture_bytes {
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
+    use serde::de::{self, SeqAccess, Visitor};
+    use serde::{Deserializer, Serializer};
+    use std::fmt;
+
+    pub fn serialize<S: Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&STANDARD.encode(bytes))
+        } else {
+            serializer.serialize_bytes(bytes)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+        struct Bytes;
+        impl<'de> Visitor<'de> for Bytes {
+            type Value = Vec<u8>;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("a picture's bytes, or their base64 text")
+            }
+
+            fn visit_str<E: de::Error>(self, text: &str) -> Result<Vec<u8>, E> {
+                STANDARD.decode(text).map_err(E::custom)
+            }
+
+            fn visit_bytes<E: de::Error>(self, bytes: &[u8]) -> Result<Vec<u8>, E> {
+                Ok(bytes.to_vec())
+            }
+
+            fn visit_byte_buf<E: de::Error>(self, bytes: Vec<u8>) -> Result<Vec<u8>, E> {
+                Ok(bytes)
+            }
+
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<u8>, A::Error> {
+                let mut bytes = Vec::with_capacity(seq.size_hint().unwrap_or(0).min(1 << 20));
+                while let Some(byte) = seq.next_element()? {
+                    bytes.push(byte);
+                }
+                Ok(bytes)
+            }
+        }
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_str(Bytes)
+        } else {
+            deserializer.deserialize_byte_buf(Bytes)
+        }
+    }
 }
 
 impl ImageAttachment {
@@ -283,8 +339,8 @@ mod tests {
 
     #[test]
     fn pictures_over_the_message_total_are_refused() {
-        let draft = vec![image("a.png", 3_500_000); 3];
-        let room = MAX_MESSAGE_IMAGE_BYTES - 3 * 3_500_000;
+        let draft = vec![image("a.png", 3_000_000); 3];
+        let room = MAX_MESSAGE_IMAGE_BYTES - 3 * 3_000_000;
         assert!(admit(&draft, "fits.png", png_of(room)).is_ok());
         assert_eq!(
             admit(&draft, "over.png", png_of(room + 1)),
@@ -303,9 +359,9 @@ mod tests {
             admit(&full, "big.png", png_of(MAX_IMAGE_BYTES + 1)),
             Err(AttachmentRefusal::TooLarge { .. })
         ));
-        let heavy = vec![image("a.png", MAX_IMAGE_BYTES); 3];
+        let heavy = vec![image("a.png", MAX_IMAGE_BYTES); 2];
         let mut heavy_and_full = heavy.clone();
-        heavy_and_full.extend(full.into_iter().skip(3));
+        heavy_and_full.extend(full.into_iter().skip(2));
         assert!(matches!(
             admit(&heavy_and_full, "x.png", png_of(MAX_IMAGE_BYTES)),
             Err(AttachmentRefusal::TooMany { .. })
@@ -362,6 +418,26 @@ mod tests {
                 media: ImageMedia::Png,
                 size: 100
             }
+        );
+    }
+
+    #[test]
+    fn bytes_are_base64_in_json_and_plain_in_postcard() {
+        let attached = image("a.png", 16);
+        let json = serde_json::to_string(&attached).expect("json");
+        assert!(
+            json.contains("\"bytes\":\"iVBORw0KGgoAAAANSUhEUg==\""),
+            "{json}"
+        );
+        assert_eq!(
+            serde_json::from_str::<ImageAttachment>(&json).expect("back"),
+            attached
+        );
+        let packed = postcard::to_allocvec(&attached).expect("postcard");
+        assert!(packed.len() < 16 + 16, "{} bytes", packed.len());
+        assert_eq!(
+            postcard::from_bytes::<ImageAttachment>(&packed).expect("back"),
+            attached
         );
     }
 

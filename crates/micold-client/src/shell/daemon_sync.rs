@@ -2063,6 +2063,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             ));
             follow_up = Task::batch([follow_up, crate::shell::runs::run_pending(app)]);
         }
+        // Feature 941: the composer's state; M4 feeds it to the window, M1 only receives it.
+        DaemonMsg::StructuredInput { .. } => {}
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }

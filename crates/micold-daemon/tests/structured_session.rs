@@ -584,6 +584,7 @@ fn user_message(req: u64, id: SessionId, text: &str) -> ClientMsg {
         req,
         session: id,
         text: text.into(),
+        images: vec![],
     }
 }
 
@@ -884,4 +885,75 @@ async fn a_message_reaches_only_its_own_session() {
     for id in ids {
         state.stop_session(id);
     }
+}
+
+// --- Feature 941 M1 (T021): the new requests before the daemon serves them -------------------
+
+/// Until M2–M3, the queue requests are refused "Not available yet", an interrupt changes and
+/// answers nothing (nothing reaches the CLI's stdin), a message with pictures is refused, and one
+/// without is delivered as in #938.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_941_requests_are_refused_or_ignored_until_the_daemon_serves_them() {
+    use micold_core::protocol::messages::ErrorKind;
+    use micold_core::structured::attachment::admit;
+    use micold_core::structured::{QueueEntryId, TurnId};
+
+    let project = tempfile::tempdir().unwrap();
+    let (state, id) = started(project.path(), &answering_turn(0));
+    let mut client = connect(&state).await;
+    let entry = QueueEntryId(1);
+    let picture = admit(&[], "shot.png", b"\x89PNG\r\n\x1a\nIHDR".to_vec()).expect("a picture");
+    client
+        .send(Frame::Control(ClientMsg::TurnInterrupt {
+            session: id,
+            turn: TurnId(1),
+        }))
+        .await
+        .expect("sent");
+    let requests = [
+        ClientMsg::QueueEdit {
+            req: 11,
+            session: id,
+            entry,
+            text: "x".into(),
+            keep: vec![],
+        },
+        ClientMsg::QueueRemove {
+            req: 12,
+            session: id,
+            entry,
+        },
+        ClientMsg::QueueTake {
+            req: 13,
+            session: id,
+            entry,
+        },
+        ClientMsg::QueueRelease {
+            req: 14,
+            session: id,
+        },
+        ClientMsg::SessionUserMessage {
+            req: 15,
+            session: id,
+            text: "with a picture".into(),
+            images: vec![picture],
+        },
+    ];
+    for (req, msg) in (11..).zip(requests) {
+        client.send(Frame::Control(msg)).await.expect("sent");
+        match answer(&mut client, req).await {
+            DaemonMsg::OperationError {
+                kind: ErrorKind::Refused,
+                message,
+                ..
+            } => assert_eq!(message, "Not available yet", "request {req}"),
+            other => panic!("request {req}: not refused: {other:?}"),
+        }
+    }
+    assert_ok(
+        &send_text(&mut client, 16, id, "plain").await,
+        "a plain message",
+    );
+    delivered_is(project.path(), ["plain"]).await;
+    state.stop_session(id);
 }

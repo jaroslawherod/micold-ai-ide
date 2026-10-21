@@ -38,15 +38,15 @@ Story labels say which story each task serves.
 
 ## Phase 1: Setup — recorded fixtures and capture mode (M1, research R13)
 
-- [ ] T001 [P] [US3] [US5] Tests in `scripts/tests/capture-stream-json.test.sh`: the new
+- [x] T001 [P] [US3] [US5] Tests in `scripts/tests/capture-stream-json.test.sh`: the new
   `--interrupt-after-first-delta` mode writes P-4's `control_request` `interrupt` line (exact text of
   [contracts/claude-input.md](contracts/claude-input.md) *Interrupt*) after the first
   `content_block_delta` text line it reads, and the `--image <png>` mode writes P-5's content list
   (text block, then the image block with `media_type` from the file); both are scrubbed as the
   existing modes are (session ids, cwd, uuids, timings), checked against a stub CLI as the existing
   tests do
-- [ ] T002 [US3] [US5] Implement both modes in `scripts/capture-stream-json.sh` until T001 passes
-- [ ] T003 [US3] [US5] Record `core/tests/fixtures/stream-json/interrupt-turn.jsonl` (a long answer
+- [x] T002 [US3] [US5] Implement both modes in `scripts/capture-stream-json.sh` until T001 passes
+- [x] T003 [US3] [US5] Record `core/tests/fixtures/stream-json/interrupt-turn.jsonl` (a long answer
   interrupted after its first text delta: `control_response` `success`, partial `assistant`, the
   `[Request interrupted by user]` `user` line, `result` `error_during_execution`) and
   `image-turn.jsonl` (one message with a text and a PNG, ended `success`) with T002 against a
@@ -58,11 +58,11 @@ Story labels say which story each task serves.
 
 ## Phase 2: Foundational — core types every story needs (M1)
 
-- [ ] T004 [P] Add the workspace `base64` dependency to `core/Cargo.toml`
+- [x] T004 [P] Add the workspace `base64` dependency to `core/Cargo.toml`
 
 ### Attachments (US5, research R8)
 
-- [ ] T005 [P] [US5] Unit tests in `core/src/structured/attachment.rs`: `ImageMedia::sniff` by magic
+- [x] T005 [P] [US5] Unit tests in `core/src/structured/attachment.rs`: `ImageMedia::sniff` by magic
   bytes only — PNG `89 50 4E 47 0D 0A 1A 0A`, JPEG `FF D8 FF`, GIF `GIF87a`/`GIF89a`, WebP `RIFF`
   + 4 bytes + `WEBP` — and `None` for text, a truncated header and a PNG renamed `.txt` (sniffed
   `Png`: the extension is ignored); `mime()` gives `image/png`, `image/jpeg`, `image/gif`,
@@ -70,17 +70,17 @@ Story labels say which story each task serves.
   fails: `TooLarge { name, size }` when `bytes.len() > MAX_IMAGE_BYTES` (3,750,000; exactly
   3,750,000 is admitted), `TooMany { name }` when the draft already holds
   `MAX_IMAGES_PER_MESSAGE` (20), `MessageTooLarge { name }` when the draft's bytes plus the
-  candidate's exceed `MAX_MESSAGE_IMAGE_BYTES` (12 MiB); each `AttachmentRefusal` `Display`
+  candidate's exceed `MAX_MESSAGE_IMAGE_BYTES` (9 MiB; was 12, corrected in M1: control frames are JSON); each `AttachmentRefusal` `Display`
   (incl. `Unreadable { name, why }`) names the file and says why (FR-029); `ImageAttachment` is
   built only through `admit`; `AttachmentMeta::from(&ImageAttachment)` carries name, media, size;
   `classify_drop(paths, sniff)` puts folders and non-images in `paths` and images in `images`, each
   in drop order (FR-028)
-- [ ] T006 [US5] Implement `core/src/structured/attachment.rs` and export it from
+- [x] T006 [US5] Implement `core/src/structured/attachment.rs` and export it from
   `core/src/structured/mod.rs` until T005 passes
 
 ### Turn ids and interrupt asks (US1, US3, data-model *TurnState*)
 
-- [ ] T007 [P] [US1] [US3] Unit tests in `core/src/structured/turn.rs`: `accept(turn, running)` opens
+- [x] T007 [P] [US1] [US3] Unit tests in `core/src/structured/turn.rs`: `accept(turn, running)` opens
   `InTurn { turn, interrupt: None }`, answers `NotRunning` when not running and `TurnInProgress`
   when a turn is open, and no longer refuses blank text (moved to `SessionInput::submit`);
   `ask_interrupt(turn)` → `Write` for the open turn with ask `None` (→ `Asked`) and with `Overdue`
@@ -92,7 +92,7 @@ Story labels say which story each task serves.
   `TurnEndedWithoutResult` when a turn was open, as today; #938's
   `a_blank_message_is_refused_and_the_turn_stays_idle` moves to T015 (plan *Superseded
   assertions*)
-- [ ] T008 [US1] [US3] Implement `TurnState::InTurn { turn, interrupt, asks }`, `InterruptAsk`,
+- [x] T008 [US1] [US3] Implement `TurnState::InTurn { turn, interrupt, asks }`, `InterruptAsk`,
   `InterruptOutcome`, `last_ended`, `TurnId(u64)` in `core/src/structured/turn.rs` until T007
   passes; compile-only in `daemon/src/structured.rs`: the session passes a `TurnId` from a
   per-`StructuredSession` counter (M2 moves it to `SessionInput::next_turn`) and keeps its blank
@@ -100,28 +100,28 @@ Story labels say which story each task serves.
 
 ### Lines written to the CLI (US1, US2, US3, US5)
 
-- [ ] T009 [P] [US1] [US2] [US5] Unit tests in `core/src/structured/user_message.rs`:
+- [x] T009 [P] [US1] [US2] [US5] Unit tests in `core/src/structured/user_message.rs`:
   `encode_user_message(text, &[])` equals #938's line byte for byte; text with line breaks, tabs,
   quotes, backslashes and non-ASCII round-trips through `serde_json` unchanged (FR-002, US2 AS2);
   with images the content is `[text, image…]` in attach order, each image block
   `{"type":"image","source":{"type":"base64","media_type":<mime>,"data":<base64>}}` with keys in the
   order of [contracts/claude-input.md](contracts/claude-input.md); blank text with images omits
   the text block (FR-027 AS6); the line ends in exactly one `\n`
-- [ ] T010 [P] [US3] Unit test in `core/src/structured/control.rs`: `encode_interrupt(id)` equals
+- [x] T010 [P] [US3] Unit test in `core/src/structured/control.rs`: `encode_interrupt(id)` equals
   `{"type":"control_request","request_id":"micold-<n>","request":{"subtype":"interrupt"}}` + `\n`
   with the id from `next_request_id` (FR-013)
-- [ ] T011 [US1] [US3] [US5] Implement `encode_user_message(text, images)` and
+- [x] T011 [US1] [US3] [US5] Implement `encode_user_message(text, images)` and
   `control::encode_interrupt` until T009–T010 pass
 
 ### Daemon notes and the transcript (US1, US2, US3, US5)
 
-- [ ] T012 [P] [US1] [US3] Tests: `StructuredEvent::UserSent { text, attachments }` and
+- [x] T012 [P] [US1] [US3] Tests: `StructuredEvent::UserSent { text, attachments }` and
   `InterruptAsked` are appended variants — an events file written before them decodes unchanged
   with `EVENTS_FORMAT_VERSION` still 1 (`core/tests/terminal_history_format.rs`); `text_len` counts
   `UserSent.text` and gives 0 for `InterruptAsked` (`core/src/structured/event.rs`); the parser
   never produces either over every fixture, `interrupt-turn.jsonl` and `image-turn.jsonl` included
   (`core/tests/structured_parse.rs`), and both fixtures parse with no `Unrecognised` line
-- [ ] T013 [P] [US1] [US2] [US3] [US5] Tests in `core/tests/structured_transcript.rs`: `UserSent`
+- [x] T013 [P] [US1] [US2] [US3] [US5] Tests in `core/tests/structured_transcript.rs`: `UserSent`
   becomes `EntryKind::UserMessage { text, attachments }` with the names (FR-003, FR-030);
   `interrupt-turn.jsonl` with an `InterruptAsked` note before its `result` closes the turn with
   `EntryKind::Interrupted` and no `Footer`, and the CLI's `[Request interrupted by user]` text is
@@ -133,7 +133,7 @@ Story labels say which story each task serves.
   `Transcript::user_messages()` yields the `UserSent` texts oldest first, including notes restored
   from saved events, never the absorbed interrupt text (FR-025); existing tests building
   `UserMessage` add `attachments: vec![]` (plan *Superseded assertions*)
-- [ ] T014 [US1] [US3] [US5] Implement the two variants in `core/src/structured/event.rs` (and the
+- [x] T014 [US1] [US3] [US5] Implement the two variants in `core/src/structured/event.rs` (and the
   exhaustive arms in `parse.rs`), `UserMessage.attachments`, `EntryKind::Interrupted`, the absorb
   rule and `user_messages()` in `core/src/structured/transcript/{build,entry}.rs` until T012–T013
   pass; compile-only: `client/src/ui/transcript/entries.rs` matches `UserMessage { text, .. }` and
@@ -142,7 +142,7 @@ Story labels say which story each task serves.
 
 ### The session's input state (US1, US4, data-model *SessionInput*)
 
-- [ ] T015 [P] [US1] [US4] Scenario-table tests in `core/tests/structured_input.rs` (new, SC-004):
+- [x] T015 [P] [US1] [US4] Scenario-table tests in `core/tests/structured_input.rs` (new, SC-004):
   `submit` in rule order — blank text and no image → `Blank`; images-only accepted (FR-004);
   not running → `NotRunning`; busy → `Queued(id)`; idle behind a queue not on hold → `Queued`, and
   the `pump` that follows delivers the head, not the new message (FR-032 boundary); idle with an
@@ -157,36 +157,36 @@ Story labels say which story each task serves.
   `snapshot()` gives `QueuedSummary` with `AttachmentMeta` and no bytes; entry and turn ids
   increase; two `SessionInput`s never share state (FR-031); the invariant `hold ⇒ !queue.is_empty()`
   holds after every step of every row
-- [ ] T016 [US1] [US4] Implement `core/src/structured/input.rs` (`SessionInput`, `QueuedMessage`,
+- [x] T016 [US1] [US4] Implement `core/src/structured/input.rs` (`SessionInput`, `QueuedMessage`,
   `QueuedSummary`, `QueueEntryId`, `Submit`, `QueueRefusal`) and its exports until T015 passes
 
 ### The saved queue (US4, research R9)
 
-- [ ] T017 [P] [US4] Tests in `core/tests/terminal_history_store.rs`: `save_queue(id, entries)` then
+- [x] T017 [P] [US4] Tests in `core/tests/terminal_history_store.rs`: `save_queue(id, entries)` then
   `load_queue(id)` round-trips text and images (`QUEUE_FORMAT_VERSION = 1`, postcard) to
   `<session>.queue` beside `<session>.events`; absent file → `QueueLoad::None`; another version,
   a truncated file and a length over `MAX_QUEUE_FILE_BYTES` (1 GiB, checked from the file's
   metadata before reading) → `Damaged(reason)`; saving an empty queue removes the file; the
   session's delete removes it with the history files
-- [ ] T018 [US4] Implement `save_queue`, `load_queue`, `QueueLoad` and the delete in
+- [x] T018 [US4] Implement `save_queue`, `load_queue`, `QueueLoad` and the delete in
   `core/src/terminal_history/store.rs` until T017 passes
 
 ### Wire (all stories, [contracts/wire.md](contracts/wire.md))
 
-- [ ] T019 Tests in `core/tests/structured_wire.rs` and `core/tests/protocol_roundtrip.rs`:
+- [x] T019 Tests in `core/tests/structured_wire.rs` and `core/tests/protocol_roundtrip.rs`:
   postcard round trip of `SessionUserMessage { req, session, text, images }`, `StructuredInput`
   with each `TurnPhase` (`NotRunning`, `Idle`, `Busy { turn, interrupt: None | Asked | Overdue }`),
   `TurnInterrupt { session, turn }`, `QueueEdit`, `QueueRemove`, `QueueTake`, `QueueRelease`,
-  `OperationResult::Taken { text, images }`; a `SessionUserMessage` with 12 MiB of images and a
+  `OperationResult::Taken { text, images }`; a `SessionUserMessage` with 9 MiB of images and a
   1 MiB text encodes under `MAX_FRAME_LENGTH`; `PROTOCOL_VERSION` is one more than `main`'s and the
   `core/tests/schema_hash.rs` pin is updated (I-6: on a rebase conflict take the higher number + 1)
-- [ ] T020 Implement the wire types in `core/src/protocol/messages.rs` and the bump in
+- [x] T020 Implement the wire types in `core/src/protocol/messages.rs` and the bump in
   `core/src/protocol/version.rs` until T019 passes
-- [ ] T021 [P] Daemon tests in `daemon/tests/structured_session.rs`: until M2–M3, `QueueEdit`,
+- [x] T021 [P] Daemon tests in `daemon/tests/structured_session.rs`: until M2–M3, `QueueEdit`,
   `QueueRemove`, `QueueTake`, `QueueRelease` are answered `Refused` "Not available yet",
   `TurnInterrupt` changes nothing and answers nothing, a `SessionUserMessage` with images is
   refused, and one without images behaves as in #938 (its refusal tests unchanged)
-- [ ] T022 Compile-only wiring until T021 passes: `daemon/src/server.rs` answers as T021 says;
+- [x] T022 Compile-only wiring until T021 passes: `daemon/src/server.rs` answers as T021 says;
   `client/src/shell/daemon_sync.rs` ignores `StructuredInput`; every client and #939 match on the
   changed types gains its field or arm. Every terminal, feature 487 and #938/#939/#942 test passes
   unchanged apart from T013's `attachments` field (SC-008)

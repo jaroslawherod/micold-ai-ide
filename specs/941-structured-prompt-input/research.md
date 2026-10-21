@@ -163,8 +163,11 @@ requests.
 - **Decision**: `micold_core::structured::attachment`: `ImageMedia::{Png, Jpeg, Gif, Webp}` sniffed
   from the file's first bytes (magic numbers, not the extension), `MAX_IMAGE_BYTES = 3_750_000` (the
   Messages API's 5 MB limit on the base64 form), `MAX_IMAGES_PER_MESSAGE = 20`, and
-  `MAX_MESSAGE_IMAGE_BYTES = 12 MiB` so a message with its images stays under `MAX_FRAME_LENGTH`
-  (16 MiB) with room for the text. `AttachmentRefusal::{Unreadable, TooLarge, TooMany,
+  `MAX_MESSAGE_IMAGE_BYTES = 9 MiB` so a message with its images stays under `MAX_FRAME_LENGTH`
+  (16 MiB) with room for the text: control frames are JSON (`protocol::codec`), where an
+  `ImageAttachment`'s bytes travel as base64 (4/3 of their size, 12 MiB); postcard (the saved queue)
+  keeps them as plain bytes. (Corrected in M1: the plan had assumed postcard control frames and
+  12 MiB.) `AttachmentRefusal::{Unreadable, TooLarge, TooMany,
   MessageTooLarge}` carry the file name and a sentence (FR-029). `encode_user_message(text, images)`
   writes P-5's content list: the text block first when non-blank, then each image in order, base64
   by the `base64` crate already in the workspace. Classification of a drop
