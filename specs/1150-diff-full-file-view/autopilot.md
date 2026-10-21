@@ -16,8 +16,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| M3 | A | remote-daemon entries get no GitHub fallback | head_file needs a local checkout dir for the local-first read and the confinement; remote entries are out of scope (FR-014 local-first) |
-| M3 | A | submodule/symlink JSON from contents API; backslash in Confined; head_note string compare; off_thread duplication; worktree symlink TOCTOU | MINOR or unused path (Worktree source not used yet); Confined backslash rule is spec'd (test a_relative_path_is_confined) |
 | #1151 | Design PR (spec, plan, tasks) | merged | df019910c4b525b25df8b08f3fd1073a11b28f72 |
 | #1156 | M1 expand hidden lines | merged | 25e95c33ff20a6a07f72abaa4d0aad4aee683cd2 |
 | #1162 | M2 whole-file toggle | merged | 8109df50677a9a0635067277aa0df3137e3c3c48 |
@@ -63,6 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A | remote-daemon entries get no GitHub fallback | head_file needs a local checkout dir for the local-first read and the confinement; remote entries are out of scope (FR-014 local-first) |
+| M3 | A | submodule/symlink JSON from contents API; backslash in Confined; head_note string compare; off_thread duplication; worktree symlink TOCTOU | MINOR or unused path (Worktree source not used yet); Confined backslash rule is spec'd (test a_relative_path_is_confined) |
 
 ## Handover
 

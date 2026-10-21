@@ -21,8 +21,8 @@ use micold_core::review::comment::{
     CommentId, CommentState, Move, Outcome, PrAnchor, ReviewComment, Scope, Status,
 };
 use micold_core::review::diff::{
-    parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines, LoadedDiff, SideLines,
-    SideRow, Spans, UnifiedRow,
+    parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines, LoadedDiff,
+    SideLines, SideRow, Spans, UnifiedRow,
 };
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::pr_diff::PrDiff;
