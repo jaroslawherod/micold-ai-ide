@@ -36,9 +36,10 @@ fn ui_dir() -> PathBuf {
 const LIBRARY: &[&str] = &["material", "cdk"];
 
 /// Feature modules that outgrew a single file and became a directory (feature 027: Settings is a
-/// sectioned view, one module per section; feature 939: the transcript view and its renderers). They are **not** a library layer — naming them here
-/// keeps them bound by every rule below, where adding them to [`LIBRARY`] would exempt them, which
-/// is exactly what the directory assertion's message warns against.
+/// sectioned view, one module per section; feature 939: the transcript view and its renderers).
+/// They are **not** a library layer — naming them here keeps them bound by every rule below, where
+/// adding them to [`LIBRARY`] would exempt them, which is exactly what the directory assertion's
+/// message warns against.
 const FEATURE_DIRS: &[&str] = &["settings", "transcript"];
 
 /// The styling module itself, which *is* the layer the rules point at.

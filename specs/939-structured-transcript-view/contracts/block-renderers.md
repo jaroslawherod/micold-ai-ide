@@ -40,6 +40,9 @@ what it shows, and runs only when the entry's `revision`, its fold state or the 
 view's message type is `TranscriptMsg`; the pane maps it into the window's message. A folded card's
 body is not shown, so its renderers do not run.
 
+The view: `ui::transcript::view(state, session, renderers: &BlockRenderers, ctx: RenderCtx) ->
+Element<TranscriptMsg>` — the `RenderCtx` it passes to every renderer is its fourth argument.
+
 ## Rules
 
 - **R-1** The transcript view calls exactly one renderer per block shown, chosen by kind, from the
@@ -53,7 +56,7 @@ body is not shown, so its renderers do not run.
   empty. #940 fills it in update after each applied `StructuredEvents` message (derived state such
   as parsed markdown or highlighted lines) and prunes it with the transcript.
 - **R-5** The plain renderers draw the shared `Text` primitive at `TypeRole::Body`, wrapped to the
-  entry's width; tool input and results also take a new `Text::monospace()` builder step
-  (`Font::MONOSPACE`, as `material::DiffView` draws code); `Unshown` parts as
-  a muted caption naming the part (`[image not shown]`); `is_error` adds nothing inside the block
-  (failure is drawn by the card, FR-012).
+  entry's width, tabs expanded to spaces (`plain_text`); tool input and results also take a new
+  `Text::monospace()` builder step (`Font::MONOSPACE`, as `material::DiffView` draws code);
+  `Unshown` parts as a muted caption naming the part (`[image not shown]`); `is_error` adds nothing
+  inside the block (failure is drawn by the card, FR-012).
