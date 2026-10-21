@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
 - **Phase**: close
-- **Next step**: close — tdd-verify audit, Polish T047–T048, close review, close visual pass (incl. M4's 2x one-column inner-scrollbar BAR_FOOTPRINT fix), gate, close PR.
+- **Next step**: close — T047 core part done (FR-018 grep empty; `cargo test -p micold-core --all-targets`: every overview test green, 3 permission-refusal tests red as root only, run unprivileged by scripts/gate.sh); waiting on tdd-verify audit and close visual pass; then fix test-strength findings, Polish T047–T048, close review, close visual pass (incl. M4's 2x one-column inner-scrollbar BAR_FOOTPRINT fix), gate, close PR.
 
 ## Pull requests
 
@@ -83,6 +83,7 @@ US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachabl
 | Review A / Review B / Visual re-look §B.5–B.6 M4 | 2 | 4d9b78ff (fix diff from 78dc827a) | Review A (sonnet) CLEAN, 1 MINOR; Review B (sonnet) CLEAN, 1 MINOR, Verify re-run green (core `overview_expansion` 28, client lib 105, `--test overview` 62, app `expansion_` 3); both confirm A F1–F3, F5 and B F1 fixed and the A F4 decline standing. Shared MINOR (A F1 / B F1): `open_focus` stays set when the opening's focus never reports — fixed: the `Listed` arm drops it when its card is gone (core `a_removed_opening_card_drops_its_opening_focus`, red first); closing the Overview resets it with the rest (`settle_card_menu` → `Expansion::default`), now pinned in `leaving_the_overview_resets_the_expansion`. Visual re-look at 2f66109d: criteria 1–5 PASS dark-1x, light-1x, dark-2x; 6 PASS at 1x, NOT CHECKED at dark-2x — one column puts the card's inner scrollbar exactly under the grid's floating bar, which took every press. Fixed: the inner scrollable sits `BAR_FOOTPRINT` (6 px) in from the card's right edge, taken from the body's right padding, so the text's room is unchanged (`an_expanded_cards_inner_scrollbar_clears_the_grids_scrollbar`, red first). Evidence visual-pass/m4-r2/ (88 PNGs). Small diff: no round 3 |
 | Full gate M4 | C | bbb6146b | GREEN (second run; first red on the intended `overview-expanded` layout snapshot change, re-blessed: inner viewport 6 px narrower, text nodes unchanged; one run red on the unrelated daemon flake `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`, 5/5 green alone) |
 | Review A r2 / Review B r2 (sonnet, fix diff) / visual re-look of the Overview open state (A F1, F2, F3) | 2 | base 62a79e25f5e14c1442c856eb83f559b8e57d043e:78dc827afc2579bd8071cdc959b0bcd659ea9cd8 | pending (prompts in the scratchpad: m4-prompt-review-a-r2.md, m4-prompt-review-b-r2.md, m4-prompt-visual-r2.md) |
+| tdd-verify audit / Close visual pass (BAR_FOOTPRINT 2x drag, full-screen Escape light-1x/dark-2x, 2x full-text smoke) | 1 | 4750fa62bdc62b68ac0785f0aaafc23e44c68b0f:b36d2aee82fb4547fa165c8d10fdc8d877a4dd46 | pending (prompts in the scratchpad: close-prompt-tdd-verify.md, close-prompt-visual.md) |
 
 ## Declined review findings
 
