@@ -175,6 +175,14 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          is the attention feature's to say, and a second error type here would say it twice \
          (feature 039, review A F1)",
     ),
+    (
+        "session",
+        "structured_transcript",
+        "TranscriptMsg — the transcript view's messages ride in the session message family \
+         (data-model.md *Messages*) as `Msg::Transcript`; the session reducer only carries the \
+         type and never handles it: the root routes it to the transcript feature before the \
+         session reducer runs (feature 939, T023)",
+    ),
 ];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.
