@@ -876,6 +876,32 @@ pub enum ClientMsg {
         allow: bool,
     },
 
+    // --- Permission prompts of a structured session (#942, contracts/wire.md) ---
+    /// The user's decision on a pending [`DaemonMsg::PermissionRequested`]. The first decision
+    /// wins and is answered `OperationOk` once it reached the CLI; any other is refused with
+    /// `OperationError` and changes nothing (FR-010, FR-012). Its message, note and answers are
+    /// never logged.
+    PermissionDecision {
+        /// Correlation id.
+        req: u64,
+        /// The session the request belongs to.
+        session: SessionId,
+        /// The request.
+        id: PromptId,
+        /// What the user chose.
+        choice: PromptChoice,
+    },
+    /// The whole input of a pending request whose preview was cut (research R10). Answered
+    /// [`DaemonMsg::PermissionInputText`], or `OperationError` when it is no longer pending.
+    PermissionInput {
+        /// Correlation id.
+        req: u64,
+        /// The session the request belongs to.
+        session: SessionId,
+        /// The request.
+        id: PromptId,
+    },
+
     // --- Keepalive ---
     /// Liveness probe (protocol.md §5 Liveness). Answered with [`DaemonMsg::Pong`].
     Ping {
@@ -1205,6 +1231,33 @@ pub enum DaemonMsg {
     ConfirmationWithdrawn {
         /// The prompt's id.
         id: u64,
+    },
+
+    // --- Permission prompts of a structured session (#942, contracts/wire.md) ---
+    /// A structured session's CLI asks the user (FR-002, FR-005): sent to every client, and once
+    /// per pending request to a client completing its handshake. Each is later resolved exactly
+    /// once by [`DaemonMsg::PermissionResolved`], unless the daemon stops first.
+    PermissionRequested {
+        /// What is asked.
+        request: PermissionRequest,
+    },
+    /// A permission request ended; every client closes it.
+    PermissionResolved {
+        /// The session it belonged to.
+        session: SessionId,
+        /// The request.
+        id: PromptId,
+        /// The tool call it belonged to.
+        tool_use_id: Option<String>,
+        /// How it ended.
+        resolution: Resolution,
+    },
+    /// The answer to [`ClientMsg::PermissionInput`]: the request's whole input JSON.
+    PermissionInputText {
+        /// Correlation id.
+        req: u64,
+        /// The input's JSON text.
+        text: String,
     },
 
     // --- Diagnostics ---

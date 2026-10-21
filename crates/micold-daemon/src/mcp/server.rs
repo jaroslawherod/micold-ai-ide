@@ -171,7 +171,11 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
         // Contract §1: an authorized POST is answered 200 with one JSON-RPC response, errors included.
         Err(response) => return reply(&mut stream, 200, "OK", &response).await,
     };
-    match jsonrpc::route(message, env!("CARGO_PKG_VERSION")) {
+    match jsonrpc::route(
+        message,
+        env!("CARGO_PKG_VERSION"),
+        state.prompt_scope(caller),
+    ) {
         Route::Reply(response) => reply(&mut stream, 200, "OK", &response).await,
         Route::Accepted => respond(&mut stream, 202, "Accepted").await,
         Route::CallTool {
@@ -179,38 +183,61 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
             name,
             arguments,
         } => {
-            // Its own task, so a panic in a tool answers `service_error` instead of dropping the
-            // connection with no reply. If the agent hangs up first, a request still waiting for
-            // the user's confirmation is abandoned (withdrawn, nothing done); a call already past
-            // that point finishes. The reply is still written: a client that only half-closed
-            // (shut its sending side) still reads it, and for a gone one the write just fails.
-            let hangup = CancellationToken::new();
-            let mut call = tokio::spawn(super::tools::call(
-                state,
-                caller,
-                name,
-                arguments,
-                hangup.clone(),
-            ));
-            let joined = tokio::select! {
-                joined = &mut call => joined,
-                () = peer_closed(&mut stream) => {
-                    hangup.cancel();
-                    call.await
+            let result = until_answered(&mut stream, |hangup| async move {
+                match super::tools::call(state, caller, name, arguments, hangup).await {
+                    Ok(output) => tool_success(&output),
+                    Err(error) => tool_failure(&error),
                 }
-            };
-            let outcome = joined.unwrap_or_else(|_| {
-                Err(micold_core::mcp::errors::OpError::service_error(
+            })
+            .await
+            .unwrap_or_else(|| {
+                tool_failure(&micold_core::mcp::errors::OpError::service_error(
                     "the tool call failed unexpectedly",
                 ))
             });
-            let result = match outcome {
-                Ok(output) => tool_success(&output),
-                Err(error) => tool_failure(&error),
-            };
+            reply(&mut stream, 200, "OK", &jsonrpc::result(id, result)).await
+        }
+        // A structured session's permission request, held until the user decides (#942 R4).
+        Route::Prompt {
+            id,
+            arguments,
+            meta,
+        } => {
+            let result = until_answered(&mut stream, |hangup| {
+                crate::permission::serve_prompt(state, caller, arguments, meta, hangup)
+            })
+            .await
+            .unwrap_or_else(|| {
+                crate::permission::prompt_result(&serde_json::json!({
+                    "behavior": "deny",
+                    "message": "The permission request failed unexpectedly.",
+                }))
+            });
             reply(&mut stream, 200, "OK", &jsonrpc::result(id, result)).await
         }
     }
+}
+
+/// Run one call on its own task, so a panic in it answers instead of dropping the connection with
+/// no reply (`None`). If the agent hangs up first, `hangup` is cancelled: a request still waiting
+/// for the user (a confirmation, a permission request) is abandoned, and a call already past that
+/// point finishes. The reply is still written: a client that only half-closed (shut its sending
+/// side) still reads it, and for a gone one the write just fails.
+async fn until_answered<F, Fut>(stream: &mut TcpStream, call: F) -> Option<serde_json::Value>
+where
+    F: FnOnce(CancellationToken) -> Fut,
+    Fut: std::future::Future<Output = serde_json::Value> + Send + 'static,
+{
+    let hangup = CancellationToken::new();
+    let mut call = tokio::spawn(call(hangup.clone()));
+    let joined = tokio::select! {
+        joined = &mut call => joined,
+        () = peer_closed(stream) => {
+            hangup.cancel();
+            call.await
+        }
+    };
+    joined.ok()
 }
 
 /// Resolves once the peer has closed the connection (or it failed). Anything the peer sends after

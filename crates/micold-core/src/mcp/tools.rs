@@ -736,6 +736,27 @@ pub fn list_result() -> Value {
     listing(TOOLS.iter().filter(|t| t.shipped))
 }
 
+/// The permission prompt tool's name (#942 R1): `--permission-prompt-tool` names it
+/// `mcp__micold__permission_prompt`. Not a catalog tool: only a structured caller is offered it.
+pub const PROMPT_TOOL: &str = "permission_prompt";
+
+/// The `tools/list` result for a structured caller: the shipped tools, then the prompt tool with
+/// the schema of contracts/claude-permission.md.
+pub fn list_result_with_prompt() -> Value {
+    let mut listing = list_result();
+    if let Some(tools) = listing["tools"].as_array_mut() {
+        tools.push(json!({
+            "name": PROMPT_TOOL,
+            "description": "Asks the user of the Micold window whether a tool use may run.",
+            "inputSchema": {"type": "object",
+                "properties": {"tool_name": {"type": "string"}, "input": {"type": "object"},
+                               "tool_use_id": {"type": "string"}},
+                "required": ["tool_name", "input"]},
+        }));
+    }
+    listing
+}
+
 /// Every catalogued tool, listed as `tools/list` would list it, whether or not its handler ships.
 pub fn catalog() -> Value {
     listing(TOOLS.iter())

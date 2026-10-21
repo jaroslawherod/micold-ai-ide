@@ -23,6 +23,7 @@ pub mod idle;
 pub mod logging;
 pub mod mcp;
 pub mod ops;
+pub mod permission;
 pub mod plan_usage;
 pub mod platform;
 pub mod progress;

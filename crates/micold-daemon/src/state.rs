@@ -282,6 +282,12 @@ struct Inner {
     /// under one lock, so opening a prompt and broadcasting it, and a window's registration with
     /// its replay of the pending prompts, are each atomic (see [`crate::mcp::confirm`]).
     confirmations: crate::mcp::confirm::Registry,
+    /// Structured sessions' pending permission requests and always-allow rules (#942, R4). Beside
+    /// `clients` under one lock for the same reason as `confirmations` (FR-005).
+    prompts: crate::permission::PromptRegistry,
+    /// Whether structured sessions ask through the prompt tool (#942 R14): off by default and
+    /// never persisted, until the window can answer; turned on by tests.
+    permission_prompts: bool,
     /// What each connected window has in view (feature 039, W1.2). Under this lock because
     /// [`DaemonState::note_activity`] reads it in the same step as the change it judges.
     views: Views,
@@ -775,6 +781,8 @@ impl DaemonState {
                 sizes: HashMap::new(),
                 carried: HashMap::new(),
                 confirmations: crate::mcp::confirm::Registry::default(),
+                prompts: crate::permission::PromptRegistry::default(),
+                permission_prompts: false,
                 views: Views::default(),
                 attention_unsaved: false,
                 long_task_threshold_override: None,
@@ -999,6 +1007,13 @@ impl DaemonState {
 
     /// Bound the event streams of structured sessions started from now on (feature 938), so a test
     /// need not write 5,000 events to see eviction or 1,024 to see a viewer lag.
+    /// Turn structured sessions' permission prompts on or off (#942 R14). On, a bound structured
+    /// session started from now on names the prompt tool, and its tool-server calls are offered
+    /// it. Off (the default) it behaves as feature 938 ships it. Never persisted.
+    pub fn set_permission_prompts(&self, on: bool) {
+        self.lock().permission_prompts = on;
+    }
+
     pub fn set_event_stream_bounds(&self, bounds: crate::structured::StreamBounds) {
         self.lock().event_bounds = bounds;
     }
@@ -1108,6 +1123,35 @@ impl DaemonState {
         }
     }
 
+    /// Every argument an AI-CLI launch adds after its own: the activity wiring, then for a
+    /// structured session its permission arguments (#942, contracts/claude-permission.md
+    /// *Launch*), then, last of all so no positional argument can follow it, the tool-server
+    /// binding (contracts/binding.md §4). The prompt tool is named only when the session is bound
+    /// and prompts are on (R14).
+    fn ai_cli_extra(
+        &self,
+        id: SessionId,
+        spec: &mut LaunchSpec,
+        respawn: bool,
+        kind: SessionKind,
+    ) -> Vec<OsString> {
+        let mut extra = self.activity_launch_for(id, spec);
+        let binding = self.tool_server_launch_for(id, spec, respawn, kind);
+        if kind == SessionKind::Structured {
+            let prompt_tool = !binding.is_empty() && self.lock().permission_prompts;
+            extra.extend(
+                micold_core::structured::permission::launch_args(
+                    micold_core::session::PermissionMode::Default,
+                    prompt_tool,
+                )
+                .into_iter()
+                .map(OsString::from),
+            );
+        }
+        extra.extend(binding);
+        extra
+    }
+
     /// The arguments that bind an AI-CLI session to the tool server (feature 034, FR-002), appended
     /// after every other argument. A session that cannot be bound starts without them and logs one
     /// `info` line saying why (FR-005); nothing here ever fails the start. Writes the binding file,
@@ -1121,8 +1165,9 @@ impl DaemonState {
         id: SessionId,
         spec: &LaunchSpec,
         respawn: bool,
+        kind: SessionKind,
     ) -> Vec<OsString> {
-        match self.tool_server_binding(id, spec, respawn) {
+        match self.tool_server_binding(id, spec, respawn, kind) {
             Ok(args) => args.into_iter().map(OsString::from).collect(),
             Err(reason) => {
                 tracing::info!(session = %id.0, "no tool server: {reason}");
@@ -1141,6 +1186,7 @@ impl DaemonState {
         id: SessionId,
         spec: &LaunchSpec,
         respawn: bool,
+        kind: SessionKind,
     ) -> Result<Vec<String>, SkipReason> {
         if !respawn && !self.lock().catalog.tool_server_enabled() {
             return Err(SkipReason::Disabled);
@@ -1173,6 +1219,11 @@ impl DaemonState {
             &server.url(),
             &credential,
             &server.binding_file(id),
+            // A structured session's prompt tool holds its call until the user decides (#942 R3).
+            match kind {
+                SessionKind::Structured => mcp_binding::PROMPT_TOOL_TIMEOUT_MS,
+                SessionKind::Terminal => mcp_binding::TOOL_TIMEOUT_MS,
+            },
         )?;
         server
             .write_binding(id, plan.file_contents.as_bytes())
@@ -1776,6 +1827,10 @@ impl DaemonState {
             // meanwhile reaches it exactly once: by this replay or by its broadcast.
             for prompt in inner.confirmations.replay(tokio::time::Instant::now()) {
                 let _ = tx.send(Frame::Control(prompt));
+            }
+            // And each pending permission request, by the same rule (#942 FR-005).
+            for request in inner.prompts.replay() {
+                let _ = tx.send(Frame::Control(request));
             }
             inner.clients.insert(
                 id,
@@ -3078,6 +3133,77 @@ impl DaemonState {
             }
         }
         drop(live);
+    }
+
+    /// The tools `caller` is offered (#942 FR-001): the prompt tool too when it is a structured
+    /// session and prompts are on.
+    pub fn prompt_scope(&self, caller: SessionId) -> micold_core::mcp::jsonrpc::ListScope {
+        use micold_core::mcp::jsonrpc::ListScope;
+        let inner = self.lock();
+        if inner.permission_prompts
+            && Self::kind_of(&inner, caller) == Some(SessionKind::Structured)
+        {
+            ListScope::Structured
+        } else {
+            ListScope::Terminal
+        }
+    }
+
+    /// Open a permission request of `session` (#942 R4) and show it to every client, under the
+    /// lock that registers clients, unless one of the session's rules answers it.
+    pub fn open_prompt(
+        &self,
+        session: SessionId,
+        call: micold_core::structured::permission::PromptCall,
+        kind: micold_core::structured::permission::RequestKind,
+    ) -> crate::permission::Opened {
+        let mut inner = self.lock();
+        let opened = inner.prompts.open(session, call, kind);
+        if let crate::permission::Opened::Pending { broadcast, .. } = &opened {
+            Self::broadcast_locked(&inner, vec![(**broadcast).clone()]);
+        }
+        opened
+    }
+
+    /// Withdraw permission request `id` for `reason`, telling every client, if it is pending.
+    pub fn withdraw_prompt(
+        &self,
+        id: micold_core::protocol::messages::PromptId,
+        reason: micold_core::protocol::messages::WithdrawReason,
+    ) {
+        let mut inner = self.lock();
+        if let Some(resolved) = inner.prompts.withdraw(id, reason) {
+            Self::broadcast_locked(&inner, vec![resolved]);
+        }
+    }
+
+    /// A client's decision on permission request `id` of `session`
+    /// (`ClientMsg::PermissionDecision`): the first one reaches the CLI and every client is told it
+    /// is resolved; any other is refused and changes nothing (FR-010, FR-012).
+    pub fn decide_prompt(
+        &self,
+        session: SessionId,
+        id: micold_core::protocol::messages::PromptId,
+        choice: &micold_core::protocol::messages::PromptChoice,
+    ) -> Result<crate::permission::Decided, micold_core::structured::permission::DecisionRefusal>
+    {
+        use micold_core::structured::permission::DecisionRefusal;
+        let mut inner = self.lock();
+        if Self::kind_of(&inner, session) != Some(SessionKind::Structured) {
+            return Err(DecisionRefusal::NotStructured);
+        }
+        let decided = inner.prompts.decide(session, id, choice)?;
+        Self::broadcast_locked(&inner, vec![decided.resolved.clone()]);
+        Ok(decided)
+    }
+
+    /// The whole input of pending permission request `id` of `session` (R10).
+    pub fn prompt_input(
+        &self,
+        session: SessionId,
+        id: micold_core::protocol::messages::PromptId,
+    ) -> Result<String, micold_core::structured::permission::DecisionRefusal> {
+        self.lock().prompts.input_text(session, id)
     }
 
     /// A window's answer to prompt `id` (`ClientMsg::ConfirmationAnswer`). The first answer
@@ -4610,9 +4736,7 @@ impl DaemonState {
                 // The hook settings file follows the provider's `activity_source`, not the terminal
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
                 // it to (feature 026, T016a).
-                let mut extra = self.activity_launch_for(id, &mut spec);
-                // Last of all, so no positional argument can follow it (contracts/binding.md §4).
-                extra.extend(self.tool_server_launch_for(id, &spec, false));
+                let extra = self.ai_cli_extra(id, &mut spec, false, plan.kind);
                 match plan.kind {
                     SessionKind::Terminal => {
                         let (seed, from) = self.start_seed(id);
@@ -6035,8 +6159,11 @@ impl DaemonState {
                     provider,
                     mode: LaunchMode::Resume,
                 };
-                let mut extra = self.activity_launch_for(id, &mut spec);
-                extra.extend(self.tool_server_launch_for(id, &spec, true));
+                let kind = match dead {
+                    Proc::Pty { .. } => SessionKind::Terminal,
+                    Proc::Structured(_) => SessionKind::Structured,
+                };
+                let extra = self.ai_cli_extra(id, &mut spec, true, kind);
                 match dead {
                     Proc::Pty { pty, .. } => {
                         // The dead process's history first, whole, then the seed from it (R4).

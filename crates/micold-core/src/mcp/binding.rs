@@ -20,6 +20,11 @@ use crate::provider::ToolServerSupport;
 /// for the user's answer (FR-014), so the CLI's own timeout must be longer.
 pub const TOOL_TIMEOUT_MS: u64 = 120_000;
 
+/// How long a structured session's CLI waits for one tool call (#942 R3): the prompt tool holds
+/// the call until the user decides, with no deadline. Node's largest timer (about 24.8 days); a
+/// larger value overflows to an immediate timeout.
+pub const PROMPT_TOOL_TIMEOUT_MS: u64 = 2_147_483_647;
+
 /// What a bound spawn adds: the arguments, appended after every other argument, and the contents of
 /// the file they name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,18 +70,21 @@ impl fmt::Display for SkipReason {
 }
 
 /// The binding for a CLI with `support`, reaching the server at `url` with `credential`, through the
-/// config file at `file`. An unsupported CLI is skipped with its reason.
+/// config file at `file`, waiting `timeout_ms` for each tool call ([`TOOL_TIMEOUT_MS`], or
+/// [`PROMPT_TOOL_TIMEOUT_MS`] for a structured session). An unsupported CLI is skipped with its
+/// reason.
 pub fn plan(
     support: ToolServerSupport,
     url: &str,
     credential: &str,
     file: &Path,
+    timeout_ms: u64,
 ) -> Result<BindingPlan, SkipReason> {
     let mut entry = json!({
         "type": "http",
         "url": url,
         "headers": {"Authorization": format!("Bearer {credential}")},
-        "timeout": TOOL_TIMEOUT_MS,
+        "timeout": timeout_ms,
     });
     let file_arg = file.to_string_lossy().into_owned();
     let args = match support {

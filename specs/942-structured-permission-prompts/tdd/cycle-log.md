@@ -85,3 +85,43 @@ Failing on the stubs:
 - `structured::permission::tests::a_default_launch_adds_only_the_bypass_reachability_flag`
 - `structured::permission::tests::the_prompt_tool_is_named_only_when_asked_for`
 - `the_write_after_an_approved_plan_is_an_ordinary_tool_request`
+
+## M2 (T024–T034): the daemon holds and decides prompt requests (switch off)
+
+Red runs recorded live, each before its implementation existed; commands with
+`CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`.
+
+### Cycle 1 — T024/T025: `ListScope`, the prompt tool's listing, the binding's timeout
+
+- Red: `cargo test -p micold-core --test mcp_jsonrpc --test mcp_binding_plan --test
+  mcp_tools_catalog` on the unchanged `src/mcp/`: does not compile — `unresolved import
+  micold_core::mcp::jsonrpc::ListScope`, `unresolved import
+  micold_core::mcp::binding::PROMPT_TOOL_TIMEOUT_MS`, `no variant named Prompt found for enum
+  Route`, `route` takes 2 arguments (3 supplied, 8×), `plan` takes 4 (5 supplied, 8×).
+- Green: the three targets `ok` — 8, 15 and 54 passed.
+
+### Cycle 2 — T026: the permission messages and `PROTOCOL_VERSION` 59
+
+- Red: `cargo test -p micold-core --test protocol_roundtrip --test schema_hash`: does not
+  compile — `no variant named PermissionRequested / PermissionResolved / PermissionInputText found
+  for enum DaemonMsg`, `no variant named PermissionDecision / PermissionInput found for enum
+  ClientMsg` (the version tests then asserted 59 against 58).
+- Green: 38 and 22 passed.
+
+### Cycle 3 — T027–T033: the stand-in's prompt calls against the daemon
+
+- Red: the stand-in's `prompt`/`prompt-async` (T027) and the tests T028–T031 written first; the
+  daemon given only stubs so they compile (`route(…, ListScope::Terminal)`, a `Route::Prompt`
+  answered `{}`, `plan(…, TOOL_TIMEOUT_MS)`, `set_permission_prompts` doing nothing, no
+  `Permission*` handling). `cargo test -p micold-daemon --test structured_permission --test
+  structured_session --no-fail-fast`: `structured_permission` 0 passed, 13 failed (12 × `the
+  message arrives: Elapsed` waiting for `PermissionRequested`; the terminal-credential case
+  `offered to a structured session`; the malformed case read the answer `invalid_input: unknown
+  tool "permission_prompt"`); `structured_session` 12 passed, 2 failed
+  (`a_structured_launch_is_the_terminal_launch_behind_the_structured_args` and
+  `a_bound_structured_launch_names_the_prompt_tool_only_while_prompts_are_on`:
+  `--allow-dangerously-skip-permissions once`, left 0, right 1).
+- First green attempt: 7 passed, 6 failed — a test-client fault, not the daemon's: the decider's
+  `PermissionResolved` is broadcast before its own `OperationOk`, and the `answer` helper dropped
+  it. The tests' client now keeps what it reads past (`Window`).
+- Green: `structured_permission` 13 passed, `structured_session` 14 passed.

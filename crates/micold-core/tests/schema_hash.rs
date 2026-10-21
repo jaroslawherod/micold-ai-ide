@@ -303,7 +303,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 56 → 57 for feature 1149's review comments on a pull request's diff.
 ///
 /// And 57 → 58 for #942's `StructuredEvent::{Status, ControlResponse}` and `Init.permission_mode`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 58;
+///
+/// And 58 → 59 for #942's permission messages (M2): `DaemonMsg::{PermissionRequested,
+/// PermissionResolved, PermissionInputText}`, `ClientMsg::{PermissionDecision, PermissionInput}`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 59;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

@@ -25,6 +25,11 @@ const STAND_IN: &str = "claude.exe";
 ///   partial line included;
 /// - `pause <ms>` sleeps; `await-stdin` blocks until one more stdin line arrived;
 /// - `stderr <text>` writes the text and a line end to stderr; `exit <code>` exits;
+/// - `prompt <file>` POSTs the file (one JSON-RPC message) to the tool server its `--mcp-config`
+///   file names, with that file's bearer, over HTTP/1.1 with `Connection: close`, and appends the
+///   reply's `content[0].text` (or `<no reply>` when the connection closed without one) to
+///   `prompt-record`, one line each (#942 R13); `prompt-async <file>` does the same on a thread,
+///   so several calls are held at once while the script goes on;
 /// - any other line is written to stdout as it is, with a line end.
 ///
 /// When the script ends it idles until killed.
@@ -98,6 +103,11 @@ fn main() {
                 let _ = out.flush();
                 std::process::exit(arg.parse().unwrap_or(0));
             }
+            "prompt" => prompt(&args, arg),
+            "prompt-async" => {
+                let (args, file) = (args.clone(), arg.to_string());
+                std::thread::spawn(move || prompt(&args, &file));
+            }
             _ => {
                 let _ = writeln!(out, "{line}");
             }
@@ -107,6 +117,74 @@ fn main() {
     loop {
         std::thread::sleep(std::time::Duration::from_secs(60));
     }
+}
+
+/// The string value of the first `"key": "…"` in `text` (the binding file is pretty JSON).
+fn string_after(text: &str, key: &str) -> Option<String> {
+    let at = text.find(&format!("\"{key}\""))? + key.len() + 2;
+    let rest = &text[at..];
+    let open = rest.find('"')? + 1;
+    let close = rest[open..].find('"')? + open;
+    Some(rest[open..close].to_string())
+}
+
+/// The JSON string starting just after its opening quote in `text`, unescaped.
+fn json_string(text: &str) -> String {
+    let mut out = String::new();
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => break,
+            '\\' => match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('r') => out.push('\r'),
+                Some('b') => out.push('\u{8}'),
+                Some('f') => out.push('\u{c}'),
+                Some('u') => {
+                    let hex: String = chars.by_ref().take(4).collect();
+                    let code = u32::from_str_radix(&hex, 16).unwrap_or(0xfffd);
+                    out.push(char::from_u32(code).unwrap_or('\u{fffd}'));
+                }
+                Some(other) => out.push(other),
+                None => break,
+            },
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Make the prompt-tool call in `file` and record its answer.
+fn prompt(args: &[String], file: &str) {
+    let answer = call_tool_server(args, file).unwrap_or_else(|| "<no reply>".to_string());
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("prompt-record") {
+        let _ = f.write_all(format!("{answer}\n").as_bytes());
+    }
+}
+
+fn call_tool_server(args: &[String], file: &str) -> Option<String> {
+    use std::io::Read;
+    let config_at = args.iter().position(|a| a == "--mcp-config")? + 1;
+    let config = std::fs::read_to_string(args.get(config_at)?).ok()?;
+    let url = string_after(&config, "url")?;
+    let bearer = string_after(&config, "Authorization")?;
+    let rest = url.strip_prefix("http://")?;
+    let (host, path) = rest.split_once('/')?;
+    let body = std::fs::read_to_string(file).ok()?;
+    let mut stream = std::net::TcpStream::connect(host).ok()?;
+    let request = format!(
+        "POST /{path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nAuthorization: {bearer}\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(request.as_bytes()).ok()?;
+    let mut reply = Vec::new();
+    let _ = stream.read_to_end(&mut reply);
+    let reply = String::from_utf8_lossy(&reply).into_owned();
+    let (_head, json) = reply.split_once("\r\n\r\n")?;
+    let key = "\"text\":\"";
+    let at = json.find(key)? + key.len();
+    Some(json_string(&json[at..]))
 }
 "##;
 
@@ -225,6 +303,7 @@ pub fn clear_records(dir: &Path) {
         "forward-record",
         "pid-record",
         "stdin-record",
+        "prompt-record",
     ] {
         let _ = std::fs::remove_file(dir.join(name));
     }
@@ -364,4 +443,66 @@ pub fn structured_session(
     );
     session.set_mode(micold_core::session::TerminalMode::AiCli);
     session
+}
+
+/// Turn the permission prompts on for `state` (#942 R14): structured sessions it starts from now
+/// on name the prompt tool when bound, and their tool-server callers are offered it.
+pub fn prompts_on(state: &micold_daemon::state::DaemonState) {
+    state.set_permission_prompts(true);
+}
+
+/// The answers the stand-in in `dir` recorded for its prompt-tool calls, once there are `n`,
+/// within 15 s.
+pub fn prompt_answers(dir: &Path, n: usize) -> Vec<serde_json::Value> {
+    let file = dir.join("prompt-record");
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        let lines: Vec<&str> = text.lines().collect();
+        if text.ends_with('\n') && lines.len() >= n {
+            return lines
+                .iter()
+                .map(|line| {
+                    serde_json::from_str(line)
+                        .unwrap_or_else(|e| panic!("an answer is JSON ({e}): {line}"))
+                })
+                .collect();
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{n} prompt answers never appeared: {text:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// How many answers the stand-in in `dir` has recorded so far.
+pub fn prompt_answer_count(dir: &Path) -> usize {
+    std::fs::read_to_string(dir.join("prompt-record"))
+        .map(|text| text.lines().count())
+        .unwrap_or(0)
+}
+
+/// Write the JSON-RPC `tools/call` of the prompt tool for `tool_name` with `input` to `dir/name`,
+/// for a `prompt <file>` directive; returns the file's path.
+pub fn prompt_call_file(
+    dir: &Path,
+    name: &str,
+    tool_name: &str,
+    input: serde_json::Value,
+    tool_use_id: &str,
+) -> PathBuf {
+    let call = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "permission_prompt",
+            "arguments": {"tool_name": tool_name, "input": input, "tool_use_id": tool_use_id},
+            "_meta": {"claudecode/toolUseId": tool_use_id},
+        },
+    });
+    let path = dir.join(name);
+    std::fs::write(&path, call.to_string()).expect("write the prompt call");
+    path
 }

@@ -203,7 +203,11 @@
 /// And 57 → 58 for #942's CLI permission mode and control replies (M1): `StructuredEvent::Init`
 /// gains `permission_mode` and `StructuredEvent` gains `Status` and `ControlResponse`, which shift
 /// the postcard layout `StructuredEvents` carries.
-pub const PROTOCOL_VERSION: u32 = 58;
+///
+/// And 58 → 59 for #942's permission prompts (M2): `DaemonMsg::{PermissionRequested,
+/// PermissionResolved, PermissionInputText}` and `ClientMsg::{PermissionDecision,
+/// PermissionInput}`, which an older peer cannot decode.
+pub const PROTOCOL_VERSION: u32 = 59;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

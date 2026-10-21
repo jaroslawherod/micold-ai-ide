@@ -48,8 +48,9 @@ mod tests {
         assert_eq!(
             PROMPT_TOOL,
             format!(
-                "mcp__{}__permission_prompt",
-                crate::mcp::jsonrpc::SERVER_NAME
+                "mcp__{}__{}",
+                crate::mcp::jsonrpc::SERVER_NAME,
+                crate::mcp::tools::PROMPT_TOOL
             )
         );
     }

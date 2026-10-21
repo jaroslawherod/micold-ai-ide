@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M1 PR
-- **Next step**: orchestrator opens the M1 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M2
+- **Phase**: M2 verify
+- **Next step**: M2 reviews (A, B) and full gate, then the M2 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1197 | Design: spec, clarify, plan, research, contracts, tasks | merged (rebase) | 51e571f4603dfa1cb9091f7f82f32062b9ca6e8a |
+| #1201 | M1: core request kinds, answers, rules, modes, control lines | merged (rebase; rebased onto main first, one conflict in `tests/support/stream_json.rs` with #944, both lists kept) | a689c4c4a89cd1ab9da5206afd4f0c913e94437d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | pending (orchestrator opens) | gate green, PR to open |
-| M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | — | pending |
+| M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | #1201 | merged |
+| M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | — | implemented, in review |
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | — | pending |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | pending |
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | — | pending |
@@ -35,6 +36,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 16 | M2 | Always allow on a request that offers no rule (a `Bash` call without `command`) | Refused `WrongKind`, nothing changes; the request's `always_allow` is `None`, so a window never offers it | agent | data-model *AllowRule*; `permission.rs` `decide` |
+| 15 | M2 | Is the prompt tool offered to a structured caller while the switch is off? | No: `ListScope::Structured` only when prompts are on, else the model could call the listed tool and raise a request nobody can answer (R14 "behaves exactly as feature 938") | agent | `DaemonState::prompt_scope`; test `a_terminal_sessions_credential_cannot_list_or_call_the_prompt_tool` |
+| 14 | M2 | How the router hands over a prompt call (it needs `_meta`) | New `Route::Prompt { id, arguments, meta }`, only for a structured scope; a terminal caller's call stays `CallTool` and fails `unknown_tool` | agent | `core/src/mcp/jsonrpc.rs`; `mcp_jsonrpc.rs` |
 | 1 | clarify r1 | Can a running session's mode change? | Any time, via stream-json control request, effective next tool request, no restart; Bypass keeps confirmation | decided by user | spec Clarifications; FR-017 |
 | 2 | clarify r1 | Always-allow scope | This session only (`session` destination); no Claude settings file written | decided by user | spec Clarifications; FR-010 |
 | 3 | clarify r2 | Mode change vs a pending request; while not running | Pending unaffected; saved for next launch | agent | spec FR-017, FR-003, FR-015 |
@@ -84,5 +88,4 @@ None.
 
 ## Follow-ups not done
 
-- From M2 on, record each behaviour's red run in `tdd/cycle-log.md` as it happens (M1's red evidence was taken afterwards on stubs; review B M1 r2 MINOR).
 - Local builds in this cloud container fill the disk with the default `line-tables-only` debug info (the first M1 gate died at `ld` Bus error, 0 bytes free); M1's green gate ran with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` after `rm -rf target-shared/debug`.

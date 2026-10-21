@@ -29,8 +29,13 @@ use micold_core::protocol::messages::{
     MergedBranchQuery, OperationResult, ProjectSnapshot, RefusalReason, SessionProcess,
     SessionSummary, ShellOpenFailure, TerminalRef, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
+use micold_core::protocol::messages::{
+    PermissionRequest, PromptChoice, PromptId, QuestionAnswer, Resolution, WithdrawReason,
+};
 use micold_core::pull_request::BranchPrState;
+use micold_core::session::PermissionMode;
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
+use micold_core::structured::permission::{Question, QuestionOption, RequestKind};
 use micold_core::theme::ColorScheme;
 use micold_core::worktree::{CreateMode, CreateStage};
 use uuid::Uuid;
@@ -888,8 +893,125 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_58() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 58);
+fn the_protocol_version_is_59() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 59);
+}
+
+/// A pending tool request, as every client is shown it (#942 contracts/wire.md).
+fn permission_request(kind: RequestKind) -> PermissionRequest {
+    PermissionRequest {
+        id: PromptId(3),
+        session: sid(),
+        tool_use_id: Some("toolu_1".into()),
+        tool_name: "Bash".into(),
+        input_preview: r#"{"command":"npm test"}"#.into(),
+        input_bytes: 22,
+        kind,
+        always_allow: Some("Bash: \"npm test\"".into()),
+    }
+}
+
+/// #942 M2 (T026, contracts/wire.md): the permission messages of both directions round-trip with
+/// every request kind, choice and resolution.
+#[test]
+fn the_permission_messages_round_trip() {
+    let question = Question {
+        header: "DB".into(),
+        text: "Which database?".into(),
+        options: vec![
+            QuestionOption {
+                label: "Postgres".into(),
+                description: "".into(),
+            },
+            QuestionOption {
+                label: "SQLite".into(),
+                description: "file".into(),
+            },
+        ],
+        multi_select: true,
+    };
+    let kinds = [
+        RequestKind::Tool,
+        RequestKind::PlanApproval {
+            plan: "1. do it".into(),
+        },
+        RequestKind::Question {
+            questions: vec![question],
+        },
+    ];
+    let mut daemon: Vec<DaemonMsg> = kinds
+        .into_iter()
+        .map(|kind| DaemonMsg::PermissionRequested {
+            request: permission_request(kind),
+        })
+        .collect();
+    for resolution in [
+        Resolution::Allowed,
+        Resolution::AllowedAlways,
+        Resolution::Denied,
+        Resolution::PlanApproved {
+            mode: PermissionMode::AcceptEdits,
+        },
+        Resolution::KeptPlanning,
+        Resolution::Answered,
+        Resolution::Declined,
+        Resolution::Withdrawn {
+            reason: WithdrawReason::AgentHungUp,
+        },
+    ] {
+        daemon.push(DaemonMsg::PermissionResolved {
+            session: sid(),
+            id: PromptId(3),
+            tool_use_id: Some("toolu_1".into()),
+            resolution,
+        });
+    }
+    daemon.push(DaemonMsg::PermissionResolved {
+        session: sid(),
+        id: PromptId(4),
+        tool_use_id: None,
+        resolution: Resolution::Denied,
+    });
+    daemon.push(DaemonMsg::PermissionInputText {
+        req: 9,
+        text: r#"{"file_path":"/a","content":"x"}"#.into(),
+    });
+    for msg in &daemon {
+        json_roundtrip(msg);
+    }
+
+    let choices = [
+        PromptChoice::Allow,
+        PromptChoice::AlwaysAllow,
+        PromptChoice::Deny { message: None },
+        PromptChoice::Deny {
+            message: Some("not now".into()),
+        },
+        PromptChoice::ApprovePlan { accept_edits: true },
+        PromptChoice::KeepPlanning {
+            note: Some("more".into()),
+        },
+        PromptChoice::Answer {
+            answers: vec![QuestionAnswer {
+                labels: vec!["SQLite".into()],
+                other: Some("and a cache".into()),
+            }],
+        },
+        PromptChoice::DeclineQuestion,
+    ];
+    for (req, choice) in choices.into_iter().enumerate() {
+        json_roundtrip(&ClientMsg::PermissionDecision {
+            req: req as u64,
+            session: sid(),
+            id: PromptId(3),
+            choice,
+        });
+    }
+    json_roundtrip(&ClientMsg::PermissionInput {
+        req: 20,
+        session: sid(),
+        id: PromptId(3),
+    });
 }
 
 /// Two merged branches and the last commit of each one's pull request (feature 040).

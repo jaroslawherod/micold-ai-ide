@@ -738,6 +738,45 @@ where
             ClientMsg::ConfirmationAnswer { id: prompt, allow } => {
                 state.answer_confirmation(prompt, allow)
             }
+            // The first decision on a structured session's permission request wins (#942 FR-010);
+            // any other is refused with the reason (FR-012). Its message, note and answers are
+            // never logged.
+            ClientMsg::PermissionDecision {
+                req,
+                session,
+                id: prompt,
+                choice,
+            } => {
+                let answer = match state.decide_prompt(session, prompt, &choice) {
+                    Ok(_) => DaemonMsg::OperationOk {
+                        req,
+                        result: OperationResult::Ack,
+                    },
+                    Err(refusal) => DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::Refused,
+                        message: refusal.to_string(),
+                        detail: None,
+                    },
+                };
+                state.send(id, answer)
+            }
+            ClientMsg::PermissionInput {
+                req,
+                session,
+                id: prompt,
+            } => {
+                let answer = match state.prompt_input(session, prompt) {
+                    Ok(text) => DaemonMsg::PermissionInputText { req, text },
+                    Err(refusal) => DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::Refused,
+                        message: refusal.to_string(),
+                        detail: None,
+                    },
+                };
+                state.send(id, answer)
+            }
             ClientMsg::Goodbye => break,
             // Every session reads it when a program asks for its colours (`006` FR-003a, BUG-007).
             ClientMsg::TerminalColorScheme { scheme } => state.terminal_colors().set(scheme),

@@ -48,6 +48,16 @@ pub enum Message {
     Notification { method: String, params: Value },
 }
 
+/// Which tools a caller is offered (#942 FR-001): a structured session's caller also gets the
+/// permission prompt tool, and only its call of that tool is a [`Route::Prompt`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListScope {
+    /// A terminal session, or a structured one while prompts are off: the catalog alone.
+    Terminal,
+    /// A structured session with prompts on: the catalog and the prompt tool.
+    Structured,
+}
+
 /// What to do with a message.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Route {
@@ -60,6 +70,14 @@ pub enum Route {
         id: Value,
         name: String,
         arguments: Value,
+    },
+    /// A structured caller's call of the prompt tool (#942 R1): the caller holds it until the
+    /// user decides, and answers with the decision's JSON text.
+    Prompt {
+        id: Value,
+        arguments: Value,
+        /// `params._meta`, which repeats the tool use id.
+        meta: Option<Value>,
     },
 }
 
@@ -85,8 +103,9 @@ pub fn parse(body: &[u8]) -> Result<Message, Value> {
     })
 }
 
-/// Route one message. `server_version` is reported in `serverInfo.version`.
-pub fn route(message: Message, server_version: &str) -> Route {
+/// Route one message from a caller offered `scope`. `server_version` is reported in
+/// `serverInfo.version`.
+pub fn route(message: Message, server_version: &str, scope: ListScope) -> Route {
     let (id, method, params) = match message {
         Message::Notification { .. } => return Route::Accepted,
         Message::Request { id, method, params } => (id, method, params),
@@ -94,7 +113,13 @@ pub fn route(message: Message, server_version: &str) -> Route {
     match method.as_str() {
         "initialize" => Route::Reply(result(id, initialize_result(&params, server_version))),
         "ping" => Route::Reply(result(id, json!({}))),
-        "tools/list" => Route::Reply(result(id, super::tools::list_result())),
+        "tools/list" => Route::Reply(result(
+            id,
+            match scope {
+                ListScope::Terminal => super::tools::list_result(),
+                ListScope::Structured => super::tools::list_result_with_prompt(),
+            },
+        )),
         "tools/call" => {
             let Some(name) = params.get("name").and_then(Value::as_str) else {
                 return Route::Reply(error(id, INVALID_PARAMS, "tools/call needs a tool name"));
@@ -103,6 +128,13 @@ pub fn route(message: Message, server_version: &str) -> Route {
                 None | Some(Value::Null) => Value::Object(Map::new()),
                 Some(arguments) => arguments.clone(),
             };
+            if scope == ListScope::Structured && name == super::tools::PROMPT_TOOL {
+                return Route::Prompt {
+                    id,
+                    arguments,
+                    meta: params.get("_meta").cloned(),
+                };
+            }
             Route::CallTool {
                 id,
                 name: name.to_string(),
