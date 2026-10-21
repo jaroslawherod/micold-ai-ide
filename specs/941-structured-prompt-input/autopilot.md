@@ -47,8 +47,8 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | 1 | clarify r1 | Is the queue the session's or each window's? | The session's, held by the service, shared by every window, kept when a window closes | agent | specs/938-structured-session-mode/spec.md#Edge Cases; spec.md#Constraints, #FR-009; constitution II |
-| 3 | clarify r1 | After a restart, does queue delivery resume on its own? | No: queue on hold until one "Send queued" control | recommended default, pending user confirmation | ledger escalation r1; #938 restores sessions unattended |
-| 4 | clarify r1 | What does an interrupt do to the queue? | Kept unchanged, on hold until "Send queued" | recommended default, pending user confirmation | queue shared by every window (Decision 1) |
+| 3 | clarify r1 | After a restart, does queue delivery resume on its own? | No: queue on hold until one "Send queued" control | decided by user (jaro, 2026-10-21) | ledger escalation r1; #938 restores sessions unattended |
+| 4 | clarify r1 | What does an interrupt do to the queue? | Kept unchanged, on hold until "Send queued" | decided by user (jaro, 2026-10-21) | queue shared by every window (Decision 1) |
 | 5 | clarify r2 | Send while idle with the queue on hold? | Delivered at once, ahead of the held queue, which stays on hold | agent | spec.md#User Story 3 AS2, Clarifications Q2 |
 | 2 | clarify r1 | Does the queue survive a service restart? | As the event history: saved under Save terminal history, memory only otherwise | agent | specs/938-structured-session-mode/spec.md#Clarifications Q3 |
 | 6 | M1 implement | The plan assumed postcard control frames; they are JSON (`protocol::codec`). How do 12 MiB of pictures fit 16 MiB frames? | `ImageAttachment` bytes are base64 in JSON, plain bytes in postcard; `MAX_MESSAGE_IMAGE_BYTES` 12 → 9 MiB (base64 12 MiB + text). No requirement changes (the limit is plan-level); research R8, data-model, wire.md, plan, tasks T005/T019 corrected | agent | crates/micold-core/src/protocol/codec.rs "Control messages … are always JSON" |
