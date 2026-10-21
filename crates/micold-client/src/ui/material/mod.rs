@@ -163,6 +163,7 @@ mod text_field;
 /// The filled field's anatomy, checked in-crate — `material` is `pub(crate)`.
 #[cfg(test)]
 mod text_field_anatomy;
+mod text_link;
 mod toggle_chip;
 pub(crate) mod toleration_list;
 mod toolbar;
@@ -235,6 +236,7 @@ pub use terminal_pane::TerminalPane;
 pub use text::{Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
 pub use text_area::TextArea;
 pub use text_field::TextField;
+pub use text_link::TextLink;
 pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
 pub use toleration_list::TolerationList;
 pub use toolbar::Toolbar;

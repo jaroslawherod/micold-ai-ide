@@ -535,6 +535,19 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::controls::text_field,
     },
     Entry {
+        module: "material/text_link.rs",
+        component: "TextLink",
+        variants: &[],
+        density: &[],
+        // Feature 1122 (U1): at the body role, which a card's branch line uses, and at a smaller one.
+        posed: &["body", "caption"],
+        live: &["hover", "focus", "press"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::controls::text_link,
+    },
+    Entry {
         module: "material/select.rs",
         component: "Select",
         variants: &[],

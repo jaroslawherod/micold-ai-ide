@@ -339,6 +339,22 @@ pub fn text_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
     )
 }
 
+/// `TextLink` — at the body role and the caption role, live: the underline and the pointing hand
+/// under the pointer, the ring under keyboard focus (feature 1122, U1).
+pub fn text_link<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let instances = [("body", TypeRole::Body), ("caption", TypeRole::Caption)]
+        .into_iter()
+        .map(|(label, role)| {
+            posed(
+                label,
+                material::TextLink::new(samples::LINK_LABEL, Message::NoOp, roles).role(role),
+                roles,
+            )
+        })
+        .collect();
+    arrange(instances, Layout::Inline)
+}
+
 /// `FormField` — the shared chrome, posed through every state that changes it.
 ///
 /// Posed **through a `TextField`**, not around one. Every control in the library composes its own

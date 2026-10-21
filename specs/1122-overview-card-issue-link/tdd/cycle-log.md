@@ -1,0 +1,20 @@
+# TDD cycle log: 1122
+
+The feature has no `tdd/test-list.md` (as 1121, 1120): tasks.md's test tasks are the list, and each
+row names the task pair it covers. Append only. Locally `micold-core --all-targets` has root-only
+reds unrelated to this feature (`settings_refuses_save_over_failed_read`,
+`settings_write_is_logged`, `worktree_leftovers`: the run is root, so an "unreadable" file is
+readable); not touched.
+
+## M1 (link rules and the text link)
+
+Baseline: `main` at 9ad05048 (design PR #1180 merged).
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T001, T002 | K4 `JiraBaseUrl::parse`: accepted forms stored lower-case scheme/host, path as written, no trailing `/`; refusals on `JiraField::BaseUrl` / `BASE_URL_REFUSED`; serde as its string, read through `parse` | stub `parse` storing the input: `cargo test -p micold-core --lib -- jira::tests`: 3 failed, e.g. `left: "https://example.atlassian.net/" right: "https://example.atlassian.net"`, `left: "\"https://example.atlassian.net/\"" …` | private `WebAddress::split` holds the scheme/authority/port/host checks `SiteOrigin::parse` had; both call it; `jira_connection`, `jira_site_release` green |
+| T003, T004 | K1 `issue_ref` table; K2 `issue_link` label/address, switches, sources never crossed, `Debug` without the address; K3 one `/` before `browse` | stubs returning `None`: `cargo test -p micold-core --lib -- issue_link`: 8 failed, e.g. `left: None right: Some(Github(1122))`, `left: None right: Some(IssueLink { label: "Issue #1122", .. })`. The "no link" and "no ticket" rows pass at red (stub is `None`); mutants (switch filters dropped; overflow read as `0`) failed them: `left: Some(IssueLink { label: "Issue #1122", .. }) right: None`, `left: Some(Github(0)) right: None`; source restored. Mutant `!number.is_empty()` → `true` survives: `naming::ticket` drops empty segments, so `mic-` never reaches it (equivalent) | `issue_ref` on `naming::ticket`; Jira form checked here; 14 passed |
+| T005, T007 | `TakesTheKeyboard::press_takes_focus(false)`: a press on it publishes no focus change and leaves Enter unanswered; a press elsewhere drops Tab focus; default takes focus | builder stored but unused: `cargo test -p micold-client --lib -- keyboard_focus`: `a_press_on_a_control_that_does_not_take_focus_on_press_leaves_it_unfocused` failed (published `link focus true`); the other two are guards of today's behaviour | `now = enabled && press_takes_focus && over` |
+| T006, T008 | U1 `TextLink`: click = press+release on it (both captured); release off / press off → nothing; Enter/Space only with the keyboard; Menu/Shift+F10; Page Up/Down via `on_page`; `focus_on_press(false)`; `focusable(false)`; Pointer over it only; label in `primary` at its role; underline in `primary` only under the pointer; ring only for keyboard focus; `on_keyboard_focus` true/false | `From<TextLink>` stubbed to a plain `Text`: `cargo test -p micold-client --lib -- text_link`: 11 failed, e.g. `left: [] right: ["open"]`, `left: None right: Pointer`, `left: Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 } right: Color { r: 0.4039…, … }`. The two "release elsewhere" rows pass on a plain label (guards) | `LinkBody` (label padded by the ring width, underline, click) inside `TakesTheKeyboard` (keys, ring, `press_takes_focus`, `enabled = focusable`); 27 passed |
+| T008 | showcase entry | entry removed: `cargo test -p micold-client --test showcase_completeness`: `material/text_link.rs::TextLink exists in the library and has no instance in the gallery` | `catalogue.rs` entry + `controls::text_link`; `showcase_completeness` 42, `material_builder_api` 11 passed |
+| T009 | `primary` on the card body (bare and under the selected layer), every state, both schemes, ≥ 4.5:1 | guard by design (must pass against today's roles; a failure is a plan finding) | `composition_contrast` 11 passed |
