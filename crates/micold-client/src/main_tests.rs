@@ -7653,7 +7653,10 @@ mod issue_source {
             shown.as_deref(),
             Some("Couldn't open https://github.com/o/r/issues/42: no launcher")
         );
-        assert_eq!(rig.app.core.overview, before, "nothing else of the Overview changes");
+        assert_eq!(
+            rig.app.core.overview, before,
+            "nothing else of the Overview changes"
+        );
     }
 
     // --- 837: the picked issue's details (US2, US3) ---------------------------------------------
