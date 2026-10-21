@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: spec
-- **Next step**: Review A of spec.md, round 2 (fix diff, sonnet; orchestrator dispatches; prompt in the scratchpad). FR-001/FR-010 markers stay for the clarify unit.
+- **Next step**: Review A done. Clarify unit: FR-001 (links follow integration switches) and FR-010 (Jira base URL source) markers, answers from jaro's decision cards.
 
 ## Pull requests
 
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Review A spec | 1 | 399604367e0651717c12d766941fef7e892d58e9:48d810a53d17d50a45ab3b3ffaabec63220e6048 | CHANGES: 5 MAJOR, 3 MINOR (F1–F8), all fixed in spec.md, none declined |
-| Review A spec | 2 | (fix-diff re-review, sonnet; snapshot = round 1's) | pending |
+| Review A spec | 2 | 5b39717f:af373d3b (fix diff, sonnet) | CHANGES: 1 MAJOR (F1 FR-005/FR-006 press-off-link contradiction, ripple on press), 1 MINOR (F2 SC-007 not measurable); both fixed, prose only, no round 3 |
 
 ## Declined review findings
 
