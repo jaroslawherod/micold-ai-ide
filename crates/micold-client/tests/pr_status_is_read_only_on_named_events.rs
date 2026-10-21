@@ -292,7 +292,7 @@ fn the_source_is_read_from_one_place() {
         .filter(|(f, _, l)| f != CAPS && f != MAIN_TESTS && l.contains("tooling.pull_requests"))
         .collect();
     assert!(
-        factory.len() == 3 && factory.iter().all(|(f, _, _)| f == SHELL),
+        factory.len() == 1 && factory.iter().all(|(f, _, _)| f == SHELL),
         "the `pull_requests` factory is used only by {SHELL} outside {CAPS}; found:\n{}",
         show(&factory)
     );
