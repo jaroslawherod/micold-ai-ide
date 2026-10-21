@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1160 | M1 | merged | 08cb6ea11959288eb6832df9cce396a0589238f1 |
 | #1170 | M2 | merged | e8055c90fa21a43bcfcc6fa33187f3ca3d39c5db |
 | #1174 | M3 | merged | b56bf28d79e4eac5de6ee35510e7a0731e66e864 |
+| #1182 | M4 | open | - |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T014, T016, T017, T019, T020 | full | Add/Edit daemon in a modal dialog, own Save/Cancel, in-dialog confirmation, no inline form | #1160 | merged |
 | M2 | T015, T018, T021–T023 | full | Add-path tests, focus return | #1170 | merged |
 | M3 | T024–T029 | light | Details in a dialog | #1174 | merged |
-| M4 | T031–T033, T035–T039 | full | Test strength (tdd-verify F2-F8) and drift prompts wait while Details is open (converge) | - | in review |
+| M4 | T031–T033, T035–T039 | full | Test strength (tdd-verify F2-F8) and drift prompts wait while Details is open (converge) | #1182 | open |
 
 ## Decisions
 
