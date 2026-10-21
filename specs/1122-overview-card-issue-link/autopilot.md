@@ -113,6 +113,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate close | 2 | fd2a64ef | GREEN (T051) |
 | TDD verify close | 1 | 78bb84ab25e7d5d007194a6d82187d46637e88c7:a847dfee7d0347117789e2b51da34f517835239c | PASS_WITH_GAPS (verdict verbatim below). F1 fixed: `https://host/jira#frag` added to the `JiraBaseUrl` refusal test (mutant B1 now killed by `-p micold-core --lib jira`). FR-013: feature 031's tests cover only the reducer half (`LinkOpenFinished` → notification, `tests/features_session_links.rs`), none the link path; added `issue_link_whose_browser_fails_to_open_notifies_the_address_and_reason` (main_tests), green on first run: no defect. F2 accepted (no mutation or coverage tool; see *Declined review findings*). `tdd/verification.md` committed |
 
+| Full gate close | 3 | 9ca16896 | GREEN (tdd-verify r1 test fixes) |
+| Review close | 1 | 7f51184560bd390837ab7ea641e68882cd0ed7cc:9ca168960e695e54fc8c3c4f60a301a78eefed2c | pending (session model; prompt `1122-close-prompt-review-r1.md` in the session scratchpad) |
 
 ### Close r1 verdicts (verbatim)
 
