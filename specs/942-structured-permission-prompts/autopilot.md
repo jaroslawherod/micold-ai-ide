@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: clarify
-- **Next step**: clarify unit, continued with the user's answers to *Open escalation*: record them in spec.md Clarifications, replace both markers (US2 sc.5 / FR-017, FR-010), then run the next clarify round
+- **Phase**: plan
+- **Next step**: plan unit (clarify CLEAN after 2 rounds; design PR ships spec + clarify + plan)
 
 ## Pull requests
 
@@ -21,6 +21,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| 1 | clarify r1 | Can a running session's mode change? | Any time, via stream-json control request, effective next tool request, no restart; Bypass keeps confirmation | decided by user | spec Clarifications; FR-017 |
+| 2 | clarify r1 | Always-allow scope | This session only (`session` destination); no Claude settings file written | decided by user | spec Clarifications; FR-010 |
+| 3 | clarify r2 | Mode change vs a pending request; while not running | Pending unaffected; saved for next launch | agent | spec FR-017, FR-003, FR-015 |
+| 4 | clarify r2 | Always-allow rule with no CLI suggestions | Deferred to plan research (fixtures, FR-020) | agent | deferral |
 
 ## Decisions
 
@@ -45,16 +49,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1 (category 1: product decision the repo does not settle). Asked 2026-10-21.
-
-1. **Can a running structured session's permission mode be changed (US2 sc.5, FR-017)?**
-   - (Recommended) **Yes, any time; takes effect for the next tool request**, without restarting the CLI (stream-json control request; the session already runs `--input-format stream-json`, `crates/micold-core/src/provider.rs:848`). Bypass still needs its confirmation (FR-014). Evidence: FR-016 already makes the mode change mid-session (plan approval, CLI-reported changes), and the CLI's own terminal lets the user switch modes mid-session; without it, Plan can be left only through a plan approval.
-   - **Only between turns**, by relaunching the CLI with resume in the new mode: conversation kept, no new control path, but not mid-turn.
-   - **Only at creation**: smallest scope; changing it means a new session.
-2. **Where does Always allow save its rule (FR-010)?**
-   - (Recommended) **This session only** (the CLI's `session` destination): nothing written to the user's Claude settings. Evidence: the daemon never writes the user's Claude settings today, only a per-session `--settings` file (`crates/micold-daemon/src/hooks.rs:18`, `:252`); listing/editing saved rules is out of scope (spec Assumptions), so a saved rule could not be seen or revoked in the app.
-   - **The location's local Claude settings** (`.claude/settings.local.json`), as the CLI's own terminal "don't ask again" does: later sessions, terminal ones included, inherit it.
-   - **Both, as two buttons** ("Always allow in this session" / "... in this project").
+None.
 
 ## Follow-ups not done
 
