@@ -381,6 +381,13 @@ pub trait AiCliProvider {
     /// argument and the rest of [`Self::launch_args`] by the daemon (contracts/claude-stream-json.md).
     fn structured_args(&self) -> Option<&'static [&'static str]>;
 
+    /// The environment a structured session of this CLI runs with besides a terminal session's
+    /// (feature 944, research R5): set after the daemon's environment hygiene and before the
+    /// launch's own variables. Empty by default.
+    fn structured_env(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
+
     // --- attaching existing sessions (feature 582) ---
 
     /// The working directories under which this provider's store may hold sessions of the project
@@ -852,6 +859,13 @@ impl AiCliProvider for ClaudeProvider {
             "--verbose",
             "--include-partial-messages",
         ])
+    }
+
+    /// Without it a subagent's stream carries only its first message and its tool calls; with it,
+    /// its text and thinking too, at every depth (feature 944, research R5). An environment
+    /// variable rather than `--forward-subagent-text`, which an older CLI refuses.
+    fn structured_env(&self) -> &'static [(&'static str, &'static str)] {
+        &[("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT", "1")]
     }
 
     fn folder_trust(&self) -> FolderTrust {
@@ -2589,6 +2603,19 @@ mod structured_args_tests {
                 expected,
                 "only Claude Code runs as a structured session (FR-003, FR-005)"
             );
+        }
+    }
+
+    /// Feature 944 T018 (research R5, D8): a structured Claude Code session forwards its
+    /// subagents' text and thinking; no other CLI sets anything.
+    #[test]
+    fn only_claude_code_sets_a_structured_environment() {
+        for which in AiCli::ALL {
+            let expected: &[(&str, &str)] = match which {
+                AiCli::ClaudeCode => &[("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT", "1")],
+                AiCli::Copilot | AiCli::Pi | AiCli::Codex | AiCli::OpenCode => &[],
+            };
+            assert_eq!(which.provider().structured_env(), expected, "{which:?}");
         }
     }
 }

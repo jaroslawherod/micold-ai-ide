@@ -181,6 +181,48 @@ fn a_structured_launch_is_the_terminal_launch_behind_the_structured_args() {
     state.stop_session(s);
 }
 
+/// Feature 944 T018 (research R5, D8): a structured Claude Code session runs with its subagents'
+/// text forwarded, behind #938's seven structured arguments unchanged; a terminal session at the
+/// same location does not.
+#[test]
+fn a_structured_launch_forwards_subagent_text() {
+    fake_stream_cli();
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let terminal = ai_session();
+    let structured = structured_session(SessionLocation::Default);
+    let (t, s) = (terminal.id, structured.id);
+    let state = service(dir, vec![terminal, structured]);
+    stream_script(dir, "");
+
+    state
+        .start_session(t, LaunchMode::Fresh)
+        .expect("terminal starts");
+    assert_eq!(
+        record(dir, "forward-record"),
+        "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT\n",
+        "a terminal session is launched as before"
+    );
+    assert!(state.stop_session(t));
+    structured::clear_records(dir);
+
+    state
+        .start_session_gated(
+            s,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::Yes,
+        )
+        .expect("structured starts");
+    assert_eq!(
+        record(dir, "forward-record"),
+        "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1\n"
+    );
+    let argv = record(dir, "argv-record");
+    let args: Vec<&str> = argv.lines().collect();
+    assert_eq!(args[..7], STRUCTURED_ARGS, "{args:#?}");
+    state.stop_session(s);
+}
+
 /// (b) SC-001, FR-016: every recorded fixture's lines reach a viewer as one typed event each, in
 /// order, with strictly increasing seq; a second viewer receives the same.
 #[tokio::test(flavor = "multi_thread")]

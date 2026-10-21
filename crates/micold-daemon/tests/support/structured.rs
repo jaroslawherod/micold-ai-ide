@@ -16,7 +16,8 @@ const STAND_IN: &str = "claude.exe";
 
 /// The stand-in `claude`. At start it writes, in its cwd, its arguments to `argv-record` (one per
 /// line), its cwd to `cwd-record` and `TERM`, `PATH` and every `MICOLD_*` variable to
-/// `env-record` (`NAME=value`, sorted; `NAME` alone when unset), its pid to `pid-record`, appends
+/// `env-record` (`NAME=value`, sorted; `NAME` alone when unset), `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT`
+/// to `forward-record` (the same form, feature 944), its pid to `pid-record`, appends
 /// one line to `starts-record` (one per start), and from then on appends every stdin line to
 /// `stdin-record`. Then it runs `.fake-stream`, one line at a time:
 ///
@@ -48,6 +49,11 @@ fn main() {
     }
     env.sort();
     let _ = std::fs::write("env-record", env.join("\n") + "\n");
+    let forward = match std::env::var("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT") {
+        Ok(v) => format!("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT={v}"),
+        Err(_) => "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT".to_string(),
+    };
+    let _ = std::fs::write("forward-record", forward + "\n");
     let _ = std::fs::write("pid-record", format!("{}\n", std::process::id()));
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("starts-record") {
         let _ = writeln!(f, "start {}", std::process::id());
@@ -216,6 +222,7 @@ pub fn clear_records(dir: &Path) {
         "argv-record",
         "cwd-record",
         "env-record",
+        "forward-record",
         "pid-record",
         "stdin-record",
     ] {

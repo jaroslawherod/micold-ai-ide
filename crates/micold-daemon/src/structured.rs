@@ -182,7 +182,8 @@ impl ReadersDone {
 impl StructuredSession {
     /// Spawn `spec`'s AI CLI as a structured session: [`structured_args`], then `launch_args(spec)`,
     /// then `extra_args` (the activity wiring and, last, the tool server), in `spec.cwd` with
-    /// `spec.env` over the daemon's environment cleaned as a terminal session's is (R3). Each line
+    /// `spec.env` over the provider's `structured_env` (feature 944) over the daemon's environment
+    /// cleaned as a terminal session's is (R3). Each line
     /// the CLI writes to stdout reaches `on_event` as one event, in order, and a trailing partial
     /// line at end-of-file as one more (FR-014). A `result` ends the turn; at end-of-file a turn
     /// still in progress ends with a `TurnEndedWithoutResult` note, after the last line (R7).
@@ -213,6 +214,7 @@ impl StructuredSession {
         std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
         apply_env_hygiene(&mut cmd);
         cmd.current_dir(&spec.cwd)
+            .envs(provider.structured_env().iter().copied())
             .envs(spec.env.iter().map(|(k, v)| (k, v)))
             .args(structured)
             .args(launch_args(spec))

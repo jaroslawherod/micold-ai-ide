@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: pr M1
-- **Next step**: M1 PR — push, then orchestrator opens the PR from the title/body files and waits on CI
+- **Phase**: verify M2
+- **Next step**: M2 verify — scoped gate + review A, review B, full gate, then PR files
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1194 | Design PR (spec, clarifications, plan, research, contracts, tasks) | merged (rebase) | 5f95db21d6b0ba7fcf87cb4bdaf647178349b702 |
+| #1199 | M1 — core insights | merged (rebase) | 558cb726092ef4b32a536179ccbe0a0f575c1135 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | — | in progress |
-| M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | — | todo (needs M1) |
+| M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | #1199 | merged |
+| M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | — | in progress (T016–T022 ticked) |
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | — | todo (needs M1) |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | todo (main as is) |
 | M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | blocked on **#939 M3** (and M3) |
@@ -45,6 +46,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | tasks | Milestone cut | Plan's six layered milestones kept (not one per story): stories share the core digest, and UI waits on #939 (rule 6). `rate_limit_event` parse + `limit_window` moved M1 → M2 (plan *Delivery* updated) so M1 stays core usage/context. M1 kept whole at 15 tasks: Setup+Foundational are prerequisites and US1/US2 share the `Result` digest (window comes from it), so no split leaves both halves a deliverable. Polish T045–T046 change no code → close unit | agent | tasks.md *Milestones*; milestones.md rules 3, 4, 6 |
 | D11 | implement M1 | Nested subagent recording, and R7's assumption | 2.1.306 refuses a subagent's `Agent` call at the default spawn depth 1; `nested-subagent.jsonl` was recorded with `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` (README row says so). The recording shows each level's messages carry their **own** parent call (`spawn_depth` 1 and 2), so R7 holds and the spec's fallback is not needed for M3 | agent | `nested-subagent.jsonl`: inner `Read` under `toolu_014…`, which the relay's `Agent` call opened under `toolu_01P…` |
 | D12 | implement M1 | Totals cost text, and a result line that does not type | `totals_line` uses #939's `format_cost` unchanged (`"$0.1400 est. · 3 turns"`; T012's `"$0.14"` was illustrative, R9 names `format_cost`). A `result` line with a token count as a string is `Unrecognised` in #938's parse, so it is no digest (no turn), as #939 shows no footer for it; `insights-tolerance.jsonl` covers it | agent | `transcript/figures.rs` `format_cost`; `parse.rs` `ResultLine` |
+| D13 | implement M2 | Feed shape, the shared rejection log, a scaled share beyond `u32` | `Feed` (sender + once-taken receiver) and `Rejections` live in a new `micold-daemon/src/plan_usage.rs`, held by `DaemonState`; `server::spawn_plan_usage_feed` drains it (tests call it, as `service()` starts no tasks). The status route's once-per-answer log moved there too, so a structured session's unreadable event (`"unreadable plan-limit event"`) and a status answer share one per-session set cleared by `offer_plan_usage`. `limit_window` drops a window whose tenths exceed `u32` (contract *Parse*), where `status_line` saturated before; no 490 test covers saturation | agent | contracts/plan-usage-source.md *Parse*, *Feed* 3; research R4 |
+| D14 | implement M2 | The daemon test's reset times | `text-turn.jsonl`'s 5-hour reset (2026-10-18) is already past, so `plan_usage_structured.rs` replays a copy with both reset times moved to after the test's clock; utilizations, keys and every other byte unchanged | agent | `date -u -d @1792363200` |
 
 ## Review rounds
 

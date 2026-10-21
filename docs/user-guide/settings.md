@@ -278,9 +278,10 @@ nothing, whatever the system would allow. Where each system keeps its setting is
 when the next limit resets, in the app bar (see
 [Claude plan usage](worktrees-and-sessions.md#claude-plan-usage)). It is **on** by default,
 because it reads no credential and sends nothing off your machine. The values come from Claude
-Code's own status-line data in the Claude sessions the app runs. From Claude Code's settings files
-the app reads only the `statusLine` key, so that your own status line keeps working. No credential
-is read, and nothing is sent anywhere. Turning it off applies to Claude sessions started
+Code's own status-line data in the Claude sessions the app runs, and from the plan-limit events
+that structured Claude sessions write, read locally without any request. From Claude Code's
+settings files the app reads only the `statusLine` key, so that your own status line keeps
+working. No credential is read, and nothing is sent anywhere. Turning it off applies to Claude sessions started
 afterwards, and the indicator disappears at once.
 
 **Warn at** sets when the indicator changes to its warning look: a warning sign instead of the

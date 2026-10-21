@@ -1659,8 +1659,12 @@ nothing into it.
 On a Claude Pro or Max plan, the app keeps track of how much of your plan's usage limits you have
 used and when the next limit resets. The values come from Claude Code's own status-line data in
 the Claude sessions the app runs: after each response, Claude Code hands its status line the
-plan's `rate_limits`, and the app passes them to its background service. Nothing appears until a
-Claude session started by the app has had a response.
+plan's `rate_limits`, and the app passes them to its background service. Structured Claude
+sessions are a source too: Claude Code writes a plan-limit event into their output with each limit's
+used share and reset time, and the app's service reads it there, on the local machine, with no
+request of its own. Whichever kind of session reported last, its values replace the earlier ones.
+Events replayed from a structured session's saved history after a restart are not used again.
+Nothing appears until a Claude session started by the app has had a response.
 
 - **No credential is read.** The app does not open your Claude login or call any web service.
 - **Nothing is sent anywhere.** The values go from the session to the app's service over the local

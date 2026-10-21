@@ -2,13 +2,15 @@
 //!
 //! Source-neutral (research R1): every source produces a [`UsageReading`], and everything past it
 //! — the daemon's one stored reading, the wire, the indicator — reads only that. The one
-//! source-specific part is [`status_line`], which reads Claude Code's documented status-line
-//! `rate_limits`.
+//! source-specific parts are [`status_line`], which reads Claude Code's documented status-line
+//! `rate_limits`, and [`rate_limit_event`], which reads a structured session's plan-limit event
+//! (feature 944). Both apply one per-window rule, [`limit_window`].
 //!
 //! Render-free and I/O-free: times are Unix seconds, and the caller passes `now` and the local
 //! offset, so a test can pin both. The one exception is [`user_status_line`], which reads the
 //! `statusLine` key of Claude Code's settings files so the relay can keep the user's own line.
 
+pub mod rate_limit_event;
 pub mod status_line;
 pub mod user_status_line;
 
@@ -93,6 +95,36 @@ impl UsageReading {
     pub fn same_windows(&self, other: &UsageReading) -> bool {
         self.windows == other.windows
     }
+}
+
+/// One window of a source, by the rule every source applies (feature 944, research R4): `None`
+/// unless `used_percent` is finite and non-negative and, times ten, fits a `u32`, and `resets_at`
+/// is absent, `null`, or a time after `obtained_at` in range. A reset that is not a number, or not
+/// a time, is a window that cannot be read: kept, it would never stop being current (FR-009).
+pub fn limit_window(
+    key: &str,
+    used_percent: f64,
+    resets_at: Option<&serde_json::Value>,
+    obtained_at: i64,
+) -> Option<LimitWindow> {
+    let tenths = (used_percent * 10.0).round();
+    if !(tenths >= 0.0 && tenths <= f64::from(u32::MAX)) {
+        return None;
+    }
+    let resets_at = match resets_at {
+        None | Some(serde_json::Value::Null) => None,
+        Some(at) => Some(
+            at.as_f64()
+                .map(|at| at as i64)
+                .filter(|at| *at > obtained_at && crate::local_time::in_range(*at))?,
+        ),
+    };
+    Some(LimitWindow {
+        key: key.to_owned(),
+        // Non-negative, finite and within `u32`, checked above.
+        used_tenths: tenths as u32,
+        resets_at,
+    })
 }
 
 /// The highest window; a tie goes to the earliest reset (none sorts last), then the first.

@@ -5,7 +5,7 @@
 
 use serde_json::Value;
 
-use super::{LimitWindow, UsageReading};
+use super::{limit_window, LimitWindow, UsageReading};
 
 /// A gateway spend limit, not plan usage (spec Out of Scope).
 const SPEND_LIMIT: &str = "spend_limit";
@@ -39,23 +39,5 @@ pub fn parse(body: &Value, obtained_at: i64) -> Option<UsageReading> {
 
 fn window(key: &str, value: &Value, obtained_at: i64) -> Option<LimitWindow> {
     let percent = value.get("used_percentage")?.as_f64()?;
-    if !(percent >= 0.0 && percent.is_finite()) {
-        return None;
-    }
-    let resets_at = match value.get("resets_at") {
-        None | Some(Value::Null) => None,
-        // A reset that is not a number, or not a time, is a window that cannot be read: kept, it
-        // would never stop being current (FR-009).
-        Some(at) => Some(
-            at.as_f64()
-                .map(|at| at as i64)
-                .filter(|at| *at > obtained_at && crate::local_time::in_range(*at))?,
-        ),
-    };
-    Some(LimitWindow {
-        key: key.to_owned(),
-        // Non-negative and finite; `as` saturates a value beyond `u32`.
-        used_tenths: (percent * 10.0).round() as u32,
-        resets_at,
-    })
+    limit_window(key, percent, value.get("resets_at"), obtained_at)
 }

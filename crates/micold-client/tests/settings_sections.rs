@@ -913,7 +913,8 @@ fn the_terminal_page_claims_the_save_terminal_history_switch() {
 }
 
 /// Feature 490, T043 (US4; FR-003): **Claude plan usage** follows the desktop notification rows,
-/// with its switch, its threshold and the statement of where the values come from.
+/// with its switch, its threshold and the statement of where the values come from — structured
+/// sessions' plan-limit events too (feature 944, FR-027).
 #[test]
 fn the_plan_usage_subsection_follows_desktop_notifications() {
     let view = environment_view();
@@ -923,6 +924,7 @@ fn the_plan_usage_subsection_follows_desktop_notifications() {
         "SettingsMsg::PlanUsageToggled",
         "SettingsMsg::PlanUsageWarnChanged",
         "Claude Code's status-line data",
+        "plan-limit events of structured sessions",
         "No credential is read",
         "nothing is sent anywhere",
     ] {

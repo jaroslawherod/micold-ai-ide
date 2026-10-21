@@ -218,7 +218,8 @@ pub fn view<'a>(
     }
 
     // Feature 490 (US4; FR-001, FR-003, FR-005): **Claude plan usage**, after the notification
-    // rows. The switch carries the statement of where the values come from and what is not done;
+    // rows. The switch carries the statement of where the values come from (structured sessions'
+    // plan-limit events too, feature 944 FR-027) and what is not done;
     // the threshold field follows it, editable whatever the switch says, as the long-task one is.
     let plan_usage = Checkbox::new(
         "Show Claude plan usage",
@@ -229,7 +230,7 @@ pub fn view<'a>(
     .on_toggle(|v| Message::Settings(SettingsMsg::PlanUsageToggled(v)));
     let plan_usage = field_note(
         plan_usage,
-        Some("Shows your plan's usage and next limit reset in the app bar. The values come from Claude Code's status-line data in the sessions this app runs. No credential is read, and nothing is sent anywhere."),
+        Some("Shows your plan's usage and next limit reset in the app bar. The values come from Claude Code's status-line data in the sessions this app runs, and from the plan-limit events of structured sessions. No credential is read, and nothing is sent anywhere."),
         roles,
     );
     let plan_usage_warn = TextField::new("", &draft.environment.plan_usage_warn_percent, roles)
