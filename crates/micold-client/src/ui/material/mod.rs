@@ -43,6 +43,7 @@ pub(crate) mod dialog;
 #[cfg(test)]
 mod dialog_anatomy;
 mod diff_view;
+mod disclosure_card;
 mod divider;
 mod edge_fade;
 mod ellipsized;
@@ -187,6 +188,7 @@ pub use card_grid::{CardGrid, Zoom};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
 pub use diff_view::{DiffLayout, DiffView, ROW_HEIGHT as DIFF_ROW_HEIGHT};
+pub use disclosure_card::DisclosureCard;
 pub use divider::Divider;
 pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;

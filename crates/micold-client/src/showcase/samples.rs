@@ -330,3 +330,10 @@ mod tests {
         );
     }
 }
+
+/// The `DisclosureCard` entry's tool call (feature 939): its name, its one-line input summary and
+/// the full input its open pose shows.
+pub const TOOL_NAME: &str = "Bash";
+pub const TOOL_SUMMARY: &str = "cargo test --workspace --all-targets -- --nocapture";
+pub const TOOL_INPUT: &str =
+    "{\"command\": \"cargo test --workspace --all-targets -- --nocapture\", \"timeout\": 600000}";

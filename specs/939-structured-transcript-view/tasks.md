@@ -282,15 +282,15 @@ wire beside the plain log.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T024 [P] [US2] Pin the new icons' codepoints in `crates/micold-client/tests/icons.rs`
+- [x] T024 [P] [US2] Pin the new icons' codepoints in `crates/micold-client/tests/icons.rs`
   (research R11): `Thinking` `psychology`, `ToolCall` `build`, `ToolRunning`
   `progress_activity`, `ToolDone` `check_circle`, `ToolFailed` `error`, `ToolNoResult`
   `do_not_disturb_on`, `JumpToLatest` `arrow_downward`, distinct from each other
-- [ ] T025 [P] [US2] In-crate tests for `Text::monospace()` (draws `Font::MONOSPACE`, as
+- [x] T025 [P] [US2] In-crate tests for `Text::monospace()` (draws `Font::MONOSPACE`, as
   `DiffView`) in `crates/micold-client/src/ui/material/text.rs` and for `AccordionSection`'s
   `.leading(Icon)` and `.trailing(Element)` (both drawn in the header row, toggle and focus
   unchanged) in `crates/micold-client/src/ui/material/accordion_section.rs`
-- [ ] T026 [P] [US2] Tests for `DisclosureCard`: in-crate tests in
+- [x] T026 [P] [US2] Tests for `DisclosureCard`: in-crate tests in
   `crates/micold-client/src/ui/material/disclosure_card.rs` (header press and Space/Enter emit
   `on_toggle`, a Tab focus stop like `AccordionSection`'s; folded hides the body, open shows it;
   the summary is one line); its cases in `ui/material/style_outline_discipline.rs` (the failed
@@ -303,17 +303,17 @@ wire beside the plain log.
 
 ### Implementation
 
-- [ ] T027 [P] [US2] Add the seven `Icon` variants in `crates/micold-client/src/icons.rs`; T024
+- [x] T027 [P] [US2] Add the seven `Icon` variants in `crates/micold-client/src/icons.rs`; T024
   passes
-- [ ] T028 [US2] Add `Text::monospace()` in `crates/micold-client/src/ui/material/text.rs` and
+- [x] T028 [US2] Add `Text::monospace()` in `crates/micold-client/src/ui/material/text.rs` and
   `.leading(Icon)` / `.trailing(Element)` in
   `crates/micold-client/src/ui/material/accordion_section.rs`; T025 passes
-- [ ] T029 [US2] Implement `DisclosureCard` in `crates/micold-client/src/ui/material/disclosure_card.rs`
+- [x] T029 [US2] Implement `DisclosureCard` in `crates/micold-client/src/ui/material/disclosure_card.rs`
   with the builder `DisclosureCard::new(title, on_toggle, roles).leading(icon).summary(s)
   .trailing(status).open(bool).body(element).failed(bool)` composed from `AccordionSection`,
   `Accordion` and `Ellipsized` (research R11), registered in
   `crates/micold-client/src/ui/material/mod.rs`; T026 passes
-- [ ] T030 [US2] Add the `DisclosureCard` showcase entry (folded, open, running, failed with
+- [x] T030 [US2] Add the `DisclosureCard` showcase entry (folded, open, running, failed with
   `IconLabel` status) in `crates/micold-client/src/showcase/catalogue.rs` and
   `crates/micold-client/src/showcase/sections/surfaces.rs`; `showcase_completeness` and
   `material_builder_api` pass

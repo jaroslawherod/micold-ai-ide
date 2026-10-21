@@ -196,3 +196,28 @@ fn the_overview_icons_have_glyphs_in_the_bundled_font() {
         );
     }
 }
+
+/// Feature 939 (research R11): the transcript's seven icons are in the bundled font and draw seven
+/// different glyphs, so a card's kind and status are told apart by shape (FR-012).
+#[test]
+fn the_transcript_icons_have_seven_distinct_glyphs_in_the_bundled_font() {
+    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
+    let mut glyphs = std::collections::BTreeSet::new();
+    for icon in [
+        Icon::Thinking,
+        Icon::ToolCall,
+        Icon::ToolRunning,
+        Icon::ToolDone,
+        Icon::ToolFailed,
+        Icon::ToolNoResult,
+        Icon::JumpToLatest,
+    ] {
+        let id = face
+            .glyph_index(icon.glyph())
+            .unwrap_or_else(|| panic!("{icon:?} has no glyph in the shipped font"));
+        assert!(
+            glyphs.insert(id),
+            "{icon:?} draws the same glyph as another of the seven"
+        );
+    }
+}

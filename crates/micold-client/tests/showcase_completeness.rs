@@ -838,6 +838,35 @@ fn the_accordion_section_poses_its_summary_and_marker() {
     );
 }
 
+/// Feature 939 (research R11, T030): the `DisclosureCard` entry poses a card folded, open, running
+/// and failed, and keeps a live toggle.
+#[test]
+fn the_disclosure_card_poses_folded_open_running_and_failed() {
+    let entry = COMPONENTS
+        .iter()
+        .find(|e| e.module == "material/disclosure_card.rs" && e.component == "DisclosureCard")
+        .expect("the gallery has a `material/disclosure_card.rs` / `DisclosureCard` entry");
+    for pose in [
+        "folded",
+        "open",
+        "running",
+        "failed, with its label and icon",
+    ] {
+        assert!(
+            entry.posed.contains(&pose),
+            "the DisclosureCard entry poses `{pose}`: {:?}",
+            entry.posed
+        );
+    }
+    assert!(
+        entry
+            .live
+            .contains(&"press the header, or focus it and press Space or Enter"),
+        "the DisclosureCard entry has a live toggle: {:?}",
+        entry.live
+    );
+}
+
 /// Feature 890 (FR-008, T019): the catalogue lists `FieldGroup`, posed with a note and without.
 #[test]
 fn the_field_group_is_listed_with_and_without_a_note() {

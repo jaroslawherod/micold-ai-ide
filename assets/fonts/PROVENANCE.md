@@ -102,6 +102,13 @@ pyftsubset _static.ttf \
 | `MoveDown`     | `keyboard_arrow_down`  | `E313`         |
 | `FullScreen`   | `fullscreen`           | `E5D0`         |
 | `FullScreenExit` | `fullscreen_exit`    | `E5D1`         |
+| `Thinking`     | `psychology`           | `EA4A`         |
+| `ToolCall`     | `build` (alias)        | `F8CD`         |
+| `ToolRunning`  | `progress_activity`    | `E9D0`         |
+| `ToolDone`     | `check_circle_outline` (alias of `check_circle`) | `E92D` |
+| `ToolFailed`   | `error_outline` (alias of `error`) | `E001` |
+| `ToolNoResult` | `do_not_disturb_on`    | `F08F`         |
+| `JumpToLatest` | `arrow_downward`       | `E5DB`         |
 
 **Why the activity dots are radio-button glyphs** (BUG-004): this file is a static instance
 pinned at **FILL=0**, and at that axis value the nominally-solid dots — `circle` (`EF4A`),

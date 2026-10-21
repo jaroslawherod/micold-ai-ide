@@ -43,3 +43,18 @@ implementation task, run red, then made green.
   in `src/main_tests.rs::structured_transcript`, because the shell lives in the binary: 3/3, written
   with the wiring.
 - **Refactor**: none beyond `cargo fmt`.
+
+## M4 (T024–T030) — shared disclosure card, icons, monospace text
+
+- **Red**: T024, T025, T026 written first (icons pinned in `tests/icons.rs` and `tests/icons_font.rs`;
+  `Text::monospace` and the `AccordionSection` slots as stored-but-undrawn builder steps;
+  `DisclosureCard`'s `From` as `todo!()`; its outline, ripple, contrast and header-fits gates):
+  `cargo test -p micold-client --lib ui::material` 714 passed, 8 failed (the six card tests on the
+  stub, the slots drawn in the header row, monospace's face); `layout_snapshot` 72 passed, 1 failed
+  (`disclosure_card_header_fits`). The icon variants (T027) went in beside their pins, so T024 was
+  red by compilation only.
+- **Green**: T027–T030 implemented; `--lib ui::material` 722/722; `icons` 6/6, `icons_font` 11/11,
+  `layout_snapshot` 73/73 (the committed fixture unchanged: a section without slots draws its old
+  header row), `material_builder_api` 11/11, `showcase_completeness` 43/43, `showcase_captions` 7/7,
+  `showcase_state` 29/29.
+- **Refactor**: the section's header row split into `plain` (unchanged) and `slotted`; `cargo fmt`.

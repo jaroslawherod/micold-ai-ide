@@ -28,6 +28,10 @@ fn elevated(r: Roles) -> Vec<(&'static str, StyleFn)> {
         ("menu_surface", Box::new(style::menu_surface(r))),
         ("sidebar_surface", Box::new(style::sidebar_surface(r))),
         ("toolbar_surface", Box::new(style::toolbar_surface(r))),
+        (
+            "disclosure_card",
+            Box::new(style::disclosure_card(r, false)),
+        ),
     ]
 }
 
@@ -57,8 +61,33 @@ fn no_elevated_surface_also_draws_a_border() {
 fn the_scan_covers_every_elevated_surface() {
     let r = tokens::roles(ColorScheme::Light);
     assert!(
-        elevated(r).len() >= 5,
+        elevated(r).len() >= 6,
         "only {} surfaces checked — contract §4 assigns a level to more than that",
         elevated(r).len()
     );
+}
+
+/// A failed `DisclosureCard` (feature 939, research R11) draws one edge: its `error` outline, and
+/// no shadow beside it — an outlined card, not a raised one with a border on top.
+#[test]
+fn a_failed_disclosure_cards_outline_is_its_one_border() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let s = style::disclosure_card(r, true)(&style::theme(scheme));
+        assert!(
+            s.border.width > 0.0 && s.border.color == style::color(r.error),
+            "{scheme:?}: a failed card is outlined in the error role: {:?}",
+            s.border
+        );
+        assert_eq!(
+            s.shadow,
+            iced::Shadow::default(),
+            "{scheme:?}: a failed card's outline replaces its shadow"
+        );
+        let raised = style::disclosure_card(r, false)(&style::theme(scheme));
+        assert_eq!(
+            s.background, raised.background,
+            "{scheme:?}: failed or not, one card fill"
+        );
+    }
 }

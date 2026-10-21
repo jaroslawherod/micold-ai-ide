@@ -78,6 +78,13 @@ fn expected(icon: Icon) -> char {
         Icon::ChevronRight => '\u{e5cc}',
         Icon::FullScreen => '\u{e5d0}',
         Icon::FullScreenExit => '\u{e5d1}',
+        Icon::Thinking => '\u{ea4a}',
+        Icon::ToolCall => '\u{f8cd}',
+        Icon::ToolRunning => '\u{e9d0}',
+        Icon::ToolDone => '\u{e92d}',
+        Icon::ToolFailed => '\u{e001}',
+        Icon::ToolNoResult => '\u{f08f}',
+        Icon::JumpToLatest => '\u{e5db}',
     }
 }
 
@@ -120,8 +127,9 @@ fn all_covers_every_variant_without_duplicates() {
     // `bug_report`, `build`, `folder`, `link`, `folder_off`), +1 for feature 972's card menu *Open*
     // entry (`login`), +2 for feature 1003's pull request header's previous/next (`chevron_left`,
     // `chevron_right`), +2 for feature 970's Overview full-screen toggle (`fullscreen`,
-    // `fullscreen_exit`).
-    assert_eq!(Icon::ALL.len(), 70, "curated set size");
+    // `fullscreen_exit`), +7 for feature 939's transcript cards (`psychology`, `build`,
+    // `progress_activity`, `check_circle`, `error`, `do_not_disturb_on`, `arrow_downward`).
+    assert_eq!(Icon::ALL.len(), 77, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -227,6 +235,33 @@ fn the_overview_icons_are_pinned_and_distinct_from_every_other_icon() {
                 other.glyph(),
                 "{icon:?} must not share a glyph with {other:?}"
             );
+        }
+    }
+}
+
+/// Feature 939 (research R11): the transcript's seven icons are pinned and distinct from each
+/// other. `build`, `check_circle` and `error` are already `TypeChore`'s, `CardDone`'s and
+/// `SessionError`'s codepoints, so these three take the font's alias codepoints for the same glyph
+/// (`U+F8CD`, `U+E92D` `check_circle_outline`, `U+E001` `error_outline`), as `ActiveMarker` and
+/// `Unavailable` do: one glyph, one meaning on screen, and no two variants on one codepoint.
+#[test]
+fn the_transcript_icons_are_pinned_and_distinct_from_each_other() {
+    let transcript = [
+        (Icon::Thinking, '\u{ea4a}'),
+        (Icon::ToolCall, '\u{f8cd}'),
+        (Icon::ToolRunning, '\u{e9d0}'),
+        (Icon::ToolDone, '\u{e92d}'),
+        (Icon::ToolFailed, '\u{e001}'),
+        (Icon::ToolNoResult, '\u{f08f}'),
+        (Icon::JumpToLatest, '\u{e5db}'),
+    ];
+    for (icon, glyph) in transcript {
+        assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+        assert_eq!(icon.glyph(), glyph, "{icon:?} codepoint");
+    }
+    for (i, (a, _)) in transcript.iter().enumerate() {
+        for (b, _) in &transcript[i + 1..] {
+            assert_ne!(a.glyph(), b.glyph(), "{a:?} and {b:?} must differ");
         }
     }
 }

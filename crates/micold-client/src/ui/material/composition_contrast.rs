@@ -497,3 +497,52 @@ fn syntax_colours_are_legible_on_the_diff_surface_and_both_tints() {
         violations.join("\n  ")
     );
 }
+
+/// `DisclosureCard` (feature 939, research R11, SC-005): on the card's own fill, in both schemes,
+/// the header label reads at 4.5:1 at rest, hovered and pressed; the muted summary and the failed
+/// status's label and icon (the `error` role) at 4.5:1; and a failed card's outline at 3:1. The
+/// fill and the outline come from `style::disclosure_card`, the style the card is drawn with, and the
+/// label from the text button the header is.
+#[test]
+fn a_disclosure_cards_header_summary_and_failed_status_are_legible_on_its_fill() {
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = style::theme(scheme);
+        let fill = match style::disclosure_card(r, false)(&theme).background {
+            Some(Background::Color(c)) => style::to_rgb(c),
+            other => panic!("{scheme:?}: the card paints a colour fill, not {other:?}"),
+        };
+        let failed = style::disclosure_card(r, true)(&theme);
+        let header = Variant::Text.style(r, None);
+        for (state, status) in STATES {
+            let s = header(&theme, status);
+            let ground = behind(fill, &s);
+            let ratio = contrast(style::to_rgb(s.text_color), ground);
+            if ratio < AA_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / header label {state}: {ratio:.2}:1 (needs {AA_TEXT})"
+                ));
+            }
+        }
+        for (what, ink, needs) in [
+            ("summary", r.on_surface_variant, AA_TEXT),
+            ("failed label and icon", r.error, AA_TEXT),
+            (
+                "failed outline",
+                style::to_rgb(failed.border.color),
+                AA_NON_TEXT,
+            ),
+        ] {
+            let ratio = contrast(ink, fill);
+            if ratio < needs {
+                violations.push(format!("{scheme:?} / {what}: {ratio:.2}:1 (needs {needs})"));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "a disclosure card cannot be read:\n  {}",
+        violations.join("\n  ")
+    );
+}

@@ -297,6 +297,100 @@ pub fn accordion_section<'a>(
     )
 }
 
+/// What a posed `DisclosureCard`'s status says (feature 939).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolPose {
+    /// The result came back.
+    Done,
+    /// No result yet.
+    Running,
+    /// The result is an error: "Failed", `Icon::ToolFailed` and the error role (FR-012).
+    Failed,
+}
+
+/// One posed tool-call card: a `DisclosureCard` with the sample tool's icon, summary, status and
+/// monospace input. `pub` so `tests/gates/disclosure_card_header_fits.rs` lays out exactly what the
+/// gallery shows.
+pub fn tool_card<'a>(
+    pose: ToolPose,
+    open: bool,
+    on_toggle: Message,
+    roles: Roles,
+) -> Element<'a, Message> {
+    let (icon, label) = match pose {
+        ToolPose::Done => (Icon::ToolDone, "Done"),
+        ToolPose::Running => (Icon::ToolRunning, "Running"),
+        ToolPose::Failed => (Icon::ToolFailed, "Failed"),
+    };
+    let status = material::IconLabel::new(icon, label, TypeRole::Label, roles);
+    let status = match pose {
+        ToolPose::Failed => status.tint(roles.error).label_tint(roles.error),
+        ToolPose::Done | ToolPose::Running => status.muted(),
+    };
+    material::DisclosureCard::new(samples::TOOL_NAME, on_toggle, roles)
+        .leading(Icon::ToolCall)
+        .summary(samples::TOOL_SUMMARY)
+        .trailing(status)
+        .open(open)
+        .body(material::Text::new(samples::TOOL_INPUT, TypeRole::Body, roles).monospace())
+        .failed(pose == ToolPose::Failed)
+        .into()
+}
+
+/// `DisclosureCard` — a tool-call card folded, open, running and failed, a thinking card, and one
+/// that toggles live (feature 939, research R11).
+pub fn disclosure_card<'a>(
+    showcase: &'a Showcase,
+    roles: Roles,
+    index: usize,
+) -> Element<'a, Message> {
+    // The posed cards are pictures of a state: pressing one changes nothing. The last is live.
+    let inert = || Message::NoOp;
+    arrange(
+        vec![
+            posed(
+                "folded",
+                tool_card(ToolPose::Done, false, inert(), roles),
+                roles,
+            ),
+            posed(
+                "open",
+                tool_card(ToolPose::Done, true, inert(), roles),
+                roles,
+            ),
+            posed(
+                "running",
+                tool_card(ToolPose::Running, false, inert(), roles),
+                roles,
+            ),
+            posed(
+                "failed, with its label and icon",
+                tool_card(ToolPose::Failed, false, inert(), roles),
+                roles,
+            ),
+            posed(
+                "a thinking card",
+                material::DisclosureCard::new("Thinking", inert(), roles)
+                    .leading(Icon::Thinking)
+                    .summary(samples::BODY)
+                    .body(material::Text::new(samples::BODY, TypeRole::Body, roles)),
+                roles,
+            ),
+            posed(
+                "press the header, or focus it and press Space or Enter",
+                tool_card(
+                    ToolPose::Done,
+                    showcase.shown(index),
+                    Message::Reversed(index),
+                    roles,
+                ),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// `FieldGroup` — a labelled group of checkboxes with a note under its label, and without one
 /// (feature 890, FR-008).
 pub fn field_group<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {

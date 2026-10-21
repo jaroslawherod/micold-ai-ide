@@ -291,3 +291,68 @@ fn a_card_ripple_does_not_paint_outside_the_card() {
         "the ripple barely drew ({inside_lit} px)"
     );
 }
+
+/// Feature 939 (research R11): a `DisclosureCard`'s header ripple stays inside the card's shape.
+/// The card is drawn at rest and again mid-press; every pixel the press changed must lie inside the
+/// card's rounded rectangle, and the press must change some.
+#[test]
+fn a_disclosure_cards_header_ripple_stays_inside_the_card() {
+    use super::test_support::Mounted;
+    use super::{DisclosureCard, Text, TypeRole};
+    use iced::advanced::mouse;
+    use iced::Event;
+
+    let roles = tokens::roles(micold_core::theme::ColorScheme::Dark);
+    let card = || {
+        DisclosureCard::new("Bash", "toggled".to_string(), roles)
+            .leading(crate::icons::Icon::ToolCall)
+            .summary("cargo test")
+            .trailing(Text::new("Running", TypeRole::Label, roles))
+    };
+    let mut rest = Mounted::new(card());
+    let (before, w) = rest.drawn(BACKDROP);
+    let mut pressed = Mounted::new(card());
+    let header = pressed.node.children()[0].children()[0].bounds();
+    let at = Point::new(
+        header.x + header.width / 2.0,
+        header.y + header.height / 2.0,
+    );
+    pressed.press(at);
+    for step in 1..=3 {
+        let now = pressed.origin + std::time::Duration::from_millis(150) * step;
+        pressed.send(
+            Event::Window(iced::window::Event::RedrawRequested(now)),
+            mouse::Cursor::Unavailable,
+        );
+    }
+    let (after, w_after) = pressed.drawn(BACKDROP);
+    assert_eq!(w, w_after, "the press must not change the card's size");
+    let h = (before.len() / 4) as u32 / w;
+    let r = shape::MEDIUM;
+    let inside = |x: u32, y: u32| {
+        let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+        let (wf, hf) = (w as f32, h as f32);
+        let cx = px.clamp(r, wf - r);
+        let cy = py.clamp(r, hf - r);
+        (px - cx).hypot(py - cy) <= r + 1.0
+    };
+    let mut changed = 0;
+    let mut outside = Vec::new();
+    for y in 0..h {
+        for x in 0..w {
+            let i = ((y * w + x) * 4) as usize;
+            if before[i..i + 4] != after[i..i + 4] {
+                changed += 1;
+                if !inside(x, y) {
+                    outside.push((x, y));
+                }
+            }
+        }
+    }
+    assert!(changed > 100, "the press barely drew ({changed} px)");
+    assert!(
+        outside.is_empty(),
+        "the header ripple painted outside the card: {:?}",
+        &outside[..outside.len().min(6)]
+    );
+}
