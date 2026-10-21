@@ -80,8 +80,9 @@ Tested with `Mounted` on a three-card grid where the middle card has a link.
 ## U6 — Wiring (`ui/overview.rs`, `main.rs`)
 
 - `ui::overview::cards` sets `CardModel.issue_link` from `IssueSources { github: overview.repo,
-  github_on: settings.github_issues_enabled, jira_base: settings.jira_base_url.as_ref(),
-  jira_on: settings.jira_enabled }`.
+  github_on: settings.github_issues_enabled, jira_base:
+  settings.jira_base_urls.get(&connection_key(project))` for the open project (D4: per project),
+  `jira_on: settings.jira_enabled }`.
 - `Msg::IssueLinkActivated(l)` → `shell::links::perform(OpenRequest::Url(address))` with the address
   recomputed from state; nothing when the link is gone; Overview state unchanged (FR-004, FR-013).
 - `Msg::LinkMenuRequested(l)` → `overview_message` opens the menu anchored in the focused link's

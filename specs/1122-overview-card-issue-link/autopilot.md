@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: implement M1
-- **Next step**: M1 PR: orchestrator opens it from the scratchpad's pr-title.txt and pr-body.md (label docs-not-needed), waits on CI and merges. M1 verify done: full gate r6 GREEN, review A r6 CLEAN. No visual pass r5: the fix only widens the link's gutter by 2 px (4 to 6), moving the label further from a ring the r4 pass already found clear.
+- **Phase**: plan amend (D4)
+- **Next step**: D4 amendment (per-project Jira base URL) committed; review A d4 r1 of the amendment (rubric plan.md, session model) pending, prompt in the scratchpad's 1122-prompt-review-a-d4-r1.md. Then M2 unit (the amended docs ride along with M2's PR).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1180 | Design (spec, plan, tasks) | merged | 9ad05048 |
+| #1188 | M1: link rules in core; shared `TextLink` in the showcase | merged | 0164f375 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | — | in progress |
+| M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | #1188 | merged |
 | M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | — | planned |
 | M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | — | planned |
 | M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | — | planned |
@@ -36,8 +37,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 |---|---|---|---|---|---|
 | D1 | spec | How is the issue link reached by keyboard, given 1121's focus-expands rule? | A Tab stop right after its card; arrows move between cards only; focus on the link counts as focus on the card | agent-resolved | spec.md#FR-008; specs/1121-overview-card-full-text/spec.md#FR-002 |
 | D2 | spec | A collapsed card's link moves when the card expands (lines are added above it); how is a click aimed at it kept off the card? | A pointer resting on a collapsed card's link does not expand the card | agent-resolved | spec.md#FR-007 |
-| D3 | clarify | Do the issue links follow the integration switches (FR-001)? | Yes: GitHub link only while the GitHub issues switch (1102) is on, Jira link only while the Jira integration switch (533) is on | default; awaiting owner's card answer | spec.md#FR-001; Story 1 sc. 6, Story 2 sc. 7 |
-| D4 | clarify | Where does the Jira base URL come from (FR-010)? | One app-wide Settings field, as the issue asks; no link while unset | default; awaiting owner's card answer | spec.md#FR-010; issue #1122 body |
+| D3 | clarify | Do the issue links follow the integration switches (FR-001)? | Yes: GitHub link only while the GitHub issues switch (1102) is on, Jira link only while the Jira integration switch (533) is on | owner (card "Follow switches", the default confirmed; nothing changed) | spec.md#FR-001; Story 1 sc. 6, Story 2 sc. 7 |
+| D4 | clarify | Where does the Jira base URL come from (FR-010)? | Per project: a base URL field on each project, for projects on different Jira sites. Stored as `jira_base_urls` keyed by `jira::connection_key` beside each project's Jira connection (feature 533 route: `DaemonSettings` map, one-project `SettingsSet` change merged on disk), edited for the open project in Settings → Jira, independent of the connection. M1's `JiraBaseUrl` unchanged; only M5 (T039–T050) amended | owner (card "Per project", replacing the app-wide default) | spec.md#FR-010; research.md#R3, #R4; contracts/wire.md |
 
 ## Review rounds
 
@@ -67,6 +68,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Visual pass M1 | 4 | 4f755bbccbc4c6ea9031f7da1a821289a582dc9a:d9b86ce519f5531d2d490c5c71e0f710e3065a31 | PASS (sonnet, C3 only): ring clear of the glyphs in light/dark x 1.0/2.0; observation: the horizontal gutter looks thinner than the vertical one (the line box adds vertical room), addressed by the r5 fix's wider gutter. Evidence `visual-pass/m1/*-3-r4-*.png` (40 PNGs) |
 | Full gate M1 | 6 | d8d84697 | RED once on the known untouched flake (`micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`, as gate r1); rerun GREEN |
 | Review A M1 | 6 | 26eeeb1fc8c8cccda3ad3c1adc715ae6fe1e7d25:d8d8469762d85b03bea08e4c1fcc97e0d0a34bf8 | CLEAN (sonnet, r5 fix diff) |
+| Review A plan amend D4 | 1 | 1a021e7be429ef5efa89f02f4283924163533d8b:0164f37579efae69cade704acdcc2f6633307cab | pending (session model, rubric plan.md; prompt 1122-prompt-review-a-d4-r1.md) |
 
 ## Declined review findings
 

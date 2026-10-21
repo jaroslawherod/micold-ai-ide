@@ -56,34 +56,58 @@ accepts `https://host[:port][/path]`, refuses another scheme, no host, user info
 fragment, and stores it with every trailing `/` removed (contract K4). The authority and host
 checks are extracted from `SiteOrigin::parse` into one private helper both call (no copied block,
 `mise run duplication`). `JiraField::BaseUrl` (new) and `BASE_URL_REFUSED` carry the reason.
-Stored service-owned, as `jira_enabled` is: `Settings.jira_base_url: Option<JiraBaseUrl>` read
-leniently (a value that no longer parses reads as unset, never failing the document; a missing
-entry reads as unset, FR-010), `DaemonSettings.jira_base_url`, and
-`ClientMsg::SettingsSet.jira_base_url: Option<Option<JiraBaseUrl>>` (outer `None`: unchanged; inner
-`None`: clear). `PROTOCOL_VERSION` 57 → 58 (contract [wire.md](contracts/wire.md)).
+Stored per project (D4, owner's answer), by the route feature 533 already uses for each project's
+Jira connection: `Settings.jira_base_urls: BTreeMap<String, JiraBaseUrl>` keyed by
+`jira::connection_key(project)`, read leniently entry by entry (an entry that no longer parses is
+dropped and reads as unset, never failing the document; a missing map reads as empty, FR-010);
+`DaemonSettings.jira_base_urls` (the same map, mirrored to every window); and
+`ClientMsg::SettingsSet.jira_base_url: Option<JiraBaseUrlChange>`, one project's change
+(`JiraBaseUrlChange { project: String, url: Option<JiraBaseUrl> }`, `url: None` clears, outer `None`
+leaves every project unchanged) with `apply(&mut map)` as `JiraConnectionChange` has. The service
+merges the one change into the map on disk inside its write (`Catalog::persist_service_settings_with`,
+as for `jira_connection`), so two windows saving different projects never overwrite each other.
+`PROTOCOL_VERSION` 57 → 58 (contract [wire.md](contracts/wire.md)).
 
 **Why**: FR-011's rules differ from `SiteOrigin` (a path is kept, a debug-build loopback `http`
-is not needed for a browse link). Service-owned is the existing route by which every window
-follows one value without a restart (FR-012, as feature 533 FR-022 and 1102 FR-008).
+is not needed for a browse link). The owner chose a value per project, for projects on different
+Jira sites. The per-project Jira connection map is the existing per-project, service-owned route:
+every window follows it without a restart (FR-012, feature 533 FR-022), its per-project merge keeps
+concurrent saves of two projects apart, and its key, field placement and `follow` re-seeding on a
+project switch are reused rather than built again. `JiraBaseUrl` (M1) is unchanged: only where it is
+stored changes.
 
-**Rejected**: reusing `SiteOrigin` (drops the path, Assumptions); the per-project Jira connection's
-site (D4, FR-010); a client-only setting (other windows would not follow, FR-012); a plain
-`Option<String>` with `""` meaning clear (an unvalidated value could reach the wire).
+**Rejected**: one app-wide value (the default before D4; the owner chose per project); a field of
+`JiraConnection` (a browse link would then need a site, key, email and API token, and the
+connection's required fields would gate a link that makes no request); the project's own state file
+via a new project message, like `ProjectRename` or `SetPaneLayout` (a second per-project Jira
+store beside the connections, and a dialog outside Settings for one field); the connection's site
+as the base (a separate value was chosen, and the site drops a path); a client-only setting (other
+windows would not follow, FR-012); a plain `Option<String>` with `""` meaning clear (an unvalidated
+value could reach the wire).
 
 ## R4 — Settings page
 
-**Decision**: `features::settings::JiraDraft` gains `base_url: String`, seeded from the reported
-value, validated on save through `JiraBaseUrl::parse` beside the connection form (the refusal marks
-`FieldId::SettingsJiraBaseUrl`, new, and nothing is sent); an empty field saves `Some(None)`.
-`ui/settings/jira.rs` shows a `TextField` labelled **Jira base URL** with a `field_note` ("Used to
-link Jira keys on the Overview's cards."), right after the integration switch, only while the
-switch is on (FR-010). `SETTINGS` gains the entry `tests/settings_sections.rs` checks.
+**Decision**: `features::settings::JiraDraft` gains `base_url: String`, seeded by
+`JiraDraft::follow` from the open project's entry of `jira_base_urls` under the same rule as the
+connection's fields (re-seeded on a project switch, or while untouched when the reported map
+changes). It is validated on save through `JiraBaseUrl::parse` (the refusal marks
+`FieldId::SettingsJiraBaseUrl`, new, and nothing is sent); a value equal to the stored one sends
+nothing, a changed one sends `Some(JiraBaseUrlChange { project, url })`, an empty field `url: None`.
+It is optional and outside `required_fields(SettingsSection::Jira)` and `JiraDraft::validated`, so
+a base URL saves with the connection's fields blank, and the connection's validation never blocks
+it. `ui/settings/jira.rs` shows a `TextField` labelled **Jira base URL** with supporting text ("Used
+to link Jira keys on this project's Overview cards."), after the connection's fields, under the
+same condition (`draft.jira.enabled && draft.jira.project.is_some()`, FR-010). `SETTINGS` gains the
+entry `tests/settings_sections.rs` checks. The Keep-or-Remove question (switch off) leaves it
+untouched (spec edge case).
 
-**Why**: the switch's own section, the same field and note primitives as the connection form
-(Principle VIII); the field is app-wide, so it sits outside the per-project connection form.
+**Why**: the open project's Jira settings already live in this section (feature 533's connection
+form), with the same field primitives (Principle VIII) and the same draft that follows the open
+project; a separate per-project dialog would be a second place for a project's Jira settings.
 
-**Rejected**: a field inside the connection form (it is per project and hidden with no project
-open).
+**Rejected**: making it a fifth field of the connection (its required marks and validation would
+gate it); a dialog from the project list's row, beside Rename (a second place for a project's Jira
+settings, and out of reach while a project is open).
 
 ## R5 — The link widget: a shared `TextLink`
 
@@ -254,7 +278,8 @@ first by position rather than by FR-003's ellipsis order).
 **Decision**: core unit tests for K1–K5 (`mise run test-core`); client in-crate tests for
 `TextLink`, `ControlOverlay`, the card (presses, release-off, keys, ripple, focus, secondary click,
 widths 280/380/480 both forms) and the grid (press routing, link rest); reducer tests for the new
-messages; daemon `tests/jira_base_url_setting.rs` (new, modelled on `github_issues_setting.rs`);
+messages; daemon `tests/jira_base_url_setting.rs` (new, modelled on `jira_setting.rs`'s
+per-project connection tests);
 `composition_contrast.rs` gains `primary` on the card body; covered state `overview-issue-link`
 (new) with a GitHub and a Jira link; the existing `overview-open` anchors move one level because of
 `ControlOverlay`, an intended change, re-blessed once; showcase *Surfaces* shows a card with a link,

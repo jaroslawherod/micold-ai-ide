@@ -23,6 +23,8 @@ Built on `naming::ticket(dir_name)`.
 - `Jira(k)` with `jira_base: Some(b)` and `jira_on` → label `Issue K`, address `<b>/browse/K`.
   `jira_base: None` or `!jira_on` → `None`.
 - A GitHub ticket never uses the Jira base, a Jira key never the repository.
+- `jira_base` is the open project's own value (D4: per project); the caller looks it up, so the
+  function is unchanged by where the value is stored.
 - `Debug` of `IssueLink` does not contain the address (FR-014).
 
 ## K3 — Addresses have exactly one `/` before `browse` (SC-002, Story 2 sc. 5)
@@ -39,8 +41,9 @@ Base saved as `https://example.atlassian.net/` → `https://example.atlassian.ne
   no scheme, `https://` (no host), `https://user@host`, `https://host?x=1`, `https://host#a`,
   `https://host/path?x`, a host with an empty or invalid label, a port of 0 or non-digits.
 - `SiteOrigin::parse`'s existing tests stay green after the shared helper is extracted.
-- Settings file: an entry that does not parse reads as `None` and the rest of the document loads;
-  a missing entry reads as `None` (FR-010).
+- Settings file: a project's entry that does not parse is dropped (that project reads as unset)
+  and the rest of the document loads; a missing map reads as empty (FR-010, contract
+  [wire.md](wire.md)).
 
 ## K5 — `overview_expansion::Expansion` additions (FR-007, FR-008, FR-009)
 

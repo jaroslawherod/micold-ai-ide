@@ -24,18 +24,24 @@ Gains `issue_link: Option<IssueLink>`, set by `crates/micold-client/src/ui/overv
 | (inner) | `String` | `https://host[:port][/path]`, host lower case, no trailing `/`, no user info, query or fragment (FR-011) |
 
 Serialized as its string; deserialized through `parse` (strict on the wire; lenient in the settings
-file, where a value that does not parse reads as unset). `JiraField::BaseUrl` and `BASE_URL_REFUSED`
+file, where a project's value that does not parse reads as unset). Unchanged by D4: only where it is
+stored changed, from one app-wide value to one per project. `JiraField::BaseUrl` and `BASE_URL_REFUSED`
 name a refusal.
 
 ## Settings and wire
 
 | Where | Field | Default |
 |---|---|---|
-| `micold_core::settings::Settings` | `jira_base_url: Option<JiraBaseUrl>` | `None`; missing or unparsable entry → `None` |
-| `protocol::messages::DaemonSettings` | `jira_base_url: Option<JiraBaseUrl>` | — |
-| `ClientMsg::SettingsSet` | `jira_base_url: Option<Option<JiraBaseUrl>>` | `None` = unchanged; `Some(None)` = clear |
-| `features::settings::State` (client mirror) | `jira_base_url: Option<JiraBaseUrl>` | `None`, set by `adopt_daemon_settings` |
-| `features::settings::JiraDraft` | `base_url: String` | the mirror's text, or empty |
+| `micold_core::settings::Settings` | `jira_base_urls: BTreeMap<String, JiraBaseUrl>`, keyed by `jira::connection_key(project)` | empty; missing map → empty; an entry that does not parse is dropped |
+| `micold_core::settings::JiraBaseUrlChange` (new) | `project: String` (the same key), `url: Option<JiraBaseUrl>`; `apply(&mut map)` inserts or removes | — |
+| `protocol::messages::DaemonSettings` | `jira_base_urls: BTreeMap<String, JiraBaseUrl>` | — |
+| `ClientMsg::SettingsSet` | `jira_base_url: Option<JiraBaseUrlChange>` | `None` = no project changed; `url: None` = clear that project's |
+| `features::settings::State` (client mirror) | `jira_base_urls: BTreeMap<String, JiraBaseUrl>` | empty, set by `adopt_daemon_settings` |
+| `features::settings::JiraDraft` | `base_url: String` | the open project's entry as text, or empty; re-seeded by `follow` as the connection's fields are |
+
+Per project (D4, owner's answer), beside `jira_connections` and under the same key; a project's
+lookup is `jira_base_urls.get(&connection_key(project))`. Forgetting a project leaves its entry, as
+it leaves its connection.
 
 Contract: [contracts/wire.md](contracts/wire.md).
 

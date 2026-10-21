@@ -22,9 +22,11 @@ flow:feature. Builds on features 1120 (`specs/1120-overview-card-readability`) a
 
 - Q: Do the issue links follow the integration switches? → A: Yes: the GitHub link shows only while
   the GitHub issues switch (feature 1102) is on, the Jira link only while the Jira integration switch
-  (feature 533) is on (FR-001). _(default; awaiting owner's card answer)_
-- Q: Where does the Jira base URL come from? → A: One new app-wide Settings field, as the issue asks;
-  no link while it is unset (FR-010). _(default; awaiting owner's card answer)_
+  (feature 533) is on (FR-001). _(owner's answer: "Follow switches", the default)_
+- Q: Where does the Jira base URL come from? → A: Per project: each project has its own Jira base
+  URL, set in Settings → Jira for the open project beside its Jira connection, for projects on
+  different Jira sites; no link while the project's value is unset (FR-010). _(owner's answer: "Per
+  project", which replaces the default of one app-wide field)_
 
 ## Terms
 
@@ -47,8 +49,10 @@ flow:feature. Builds on features 1120 (`specs/1120-overview-card-readability`) a
   "Issue #1122" for a GitHub ticket, "Issue MIC-87" for a Jira key.
 - **Project's GitHub repository**: the github.com repository the project's remote names, the one the
   create-worktree dialog lists GitHub issues from (feature 034).
-- **Jira base URL**: the new setting, the web address issue keys are browsed under
-  (`https://example.atlassian.net`); a Jira key links to `<Jira base URL>/browse/<KEY>`.
+- **Jira base URL**: the new per-project setting, the web address a project's issue keys are
+  browsed under (`https://example.atlassian.net`); a Jira key on a card of that project links to
+  `<Jira base URL>/browse/<KEY>`. **The project's Jira base URL** is the value set for the project
+  the Overview shows.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -84,34 +88,37 @@ location is selected.
    ticket, **Then** its card shows no issue link.
 6. **Given** the GitHub issues switch (feature 1102) off, **When** a worktree's name carries a
    GitHub ticket, **Then** its card shows no issue link; turning the switch on shows it without a
-   restart (FR-001 working assumption, FR-012).
+   restart (FR-001, the owner's answer; FR-012).
 
 ---
 
 ### User Story 2 - Open a worktree's Jira issue from its card (Priority: P2)
 
 A developer whose team tracks work in Jira names worktrees after Jira keys (feature 533 names their directories
-`feat-mic-87_<slug>`). They enter their Jira base URL in Settings once; from then on each such card
-carries "Issue MIC-87", and a click on it opens `<Jira base URL>/browse/MIC-87`.
+`feat-mic-87_<slug>`). They enter the project's Jira base URL in Settings once per project; from
+then on each such card of that project carries "Issue MIC-87", and a click on it opens
+`<Jira base URL>/browse/MIC-87`. Two projects on different Jira sites each link to their own site.
 
 **Why this priority**: It extends the same link to the project's other tracker; without the setting
 it shows nothing, so it costs no one who does not use Jira.
 
-**Independent Test**: With the Jira integration on and the Jira base URL unset, show a card for the
-worktree `feat-mic-87_add-login` and check it has no link; set the base URL to
-`https://example.atlassian.net/` in Settings, check the card now shows "Issue MIC-87", click it and check the browser is asked to open
-`https://example.atlassian.net/browse/MIC-87`.
+**Independent Test**: With the Jira integration on and the open project's Jira base URL unset, show a
+card for the worktree `feat-mic-87_add-login` and check it has no link; set the project's base URL
+to `https://example.atlassian.net/` in Settings → Jira, check the card now shows "Issue MIC-87",
+click it and check the browser is asked to open `https://example.atlassian.net/browse/MIC-87`; open
+a second project with no value and check its Jira-key cards show no link.
 
 **Acceptance Scenarios**:
 
-1. **Given** the Jira base URL unset, **When** a worktree's name carries a Jira key, **Then** its
-   card shows no issue link.
-2. **Given** the Jira base URL set to `https://example.atlassian.net`, **When** a worktree's name
+1. **Given** the project's Jira base URL unset, **When** a worktree's name carries a Jira key,
+   **Then** its card shows no issue link.
+2. **Given** the project's Jira base URL set to `https://example.atlassian.net`, **When** a worktree's name
    carries `mic-87`, **Then** its card shows "Issue MIC-87", and a click on it asks the browser to
    open `https://example.atlassian.net/browse/MIC-87`, without activating the card.
-3. **Given** Settings with the Jira integration on, **When** the user opens its Jira section,
-   **Then** it has a **Jira base URL** field, empty by default, with one line saying it is used for
-   issue links on the Overview's cards.
+3. **Given** Settings with the Jira integration on and a project open, **When** the user opens its
+   Jira section, **Then** it has a **Jira base URL** field for the open project, empty by default,
+   with one line saying it is used for issue links on this project's Overview cards; the field does
+   not need the project's Jira connection to be set, and saving it does not ask for one.
 4. **Given** the field, **When** the user saves a value that is not an `https` web address, or has a
    user name, a query or a fragment, **Then** the save is refused, the field is marked with the
    reason, and the stored value is unchanged.
@@ -119,12 +126,17 @@ worktree `feat-mic-87_add-login` and check it has no link; set the base URL to
    (`https://jira.example.com/jira`), **When** a link is built, **Then** it has exactly one `/`
    before `browse` (`https://example.atlassian.net/browse/MIC-87`,
    `https://jira.example.com/jira/browse/MIC-87`).
-6. **Given** the Overview open in two windows, **When** the user sets or clears the Jira base URL, or
-   turns the Jira integration switch on or off, in one, **Then** Jira links appear or disappear in
-   both without a restart.
-7. **Given** the Jira base URL set and the Jira integration switch (feature 533) off, **When** a
-   worktree's name carries a Jira key, **Then** its card shows no issue link (FR-001 working
-   assumption).
+6. **Given** the Overview of the same project open in two windows, **When** the user sets or clears
+   the project's Jira base URL, or turns the Jira integration switch on or off, in one, **Then** Jira
+   links appear or disappear in both without a restart.
+7. **Given** the project's Jira base URL set and the Jira integration switch (feature 533) off, **When** a
+   worktree's name carries a Jira key, **Then** its card shows no issue link (FR-001, the owner's
+   answer).
+8. **Given** project A's Jira base URL set to `https://a.atlassian.net` and project B's to
+   `https://b.atlassian.net`, **When** each project's Overview shows a card for `feat-mic-87_x`,
+   **Then** A's card opens `https://a.atlassian.net/browse/MIC-87` and B's opens
+   `https://b.atlassian.net/browse/MIC-87`; setting or clearing one project's value leaves the
+   other's unchanged.
 
 ---
 
@@ -218,9 +230,16 @@ compare with a card without a link.
   click, keyboard focus is where it was before the click (FR-005).
 - **Same issue on two worktrees**: each card has its own link to the same address.
 - **Jira key with no base URL, GitHub ticket with no GitHub repository**: no link, and nothing on
-  the card says one is missing.
+  the card says one is missing. A project with a Jira connection but no Jira base URL shows no Jira
+  link: the connection's site is not used as the base (FR-010).
 - **Jira base URL changes while the Overview is open**: the cards' Jira links follow at once (Story 2
   scenario 6); a link focused when it disappears hands focus to its card.
+- **Switching the open project**: the cards follow the newly open project's Jira base URL, and
+  Settings → Jira shows that project's value.
+- **Project forgotten**: its stored Jira base URL stays in `settings.json`, as its Jira connection
+  does (feature 533); adding the project again at the same path finds it again. Turning the Jira
+  switch off keeps every project's value: feature 533's Keep-or-Remove question concerns the
+  connection and its token only.
 - **Card goes away while its link has focus** (the worktree is removed): focus moves as feature 972
   FR-011 defines for a focused card that goes away.
 - **Multi-session (Principle II)**: the link is per location, whatever sessions the location has;
@@ -237,7 +256,7 @@ compare with a card without a link.
 
 - **FR-001**: A card MUST show an issue link when its location is a worktree whose name carries a
   ticket, and either the ticket is a GitHub ticket and the project has a GitHub repository, or the
-  ticket is a Jira key and the Jira base URL is set; otherwise it MUST show none. The *Default* card
+  ticket is a Jira key and the project's Jira base URL is set; otherwise it MUST show none. The *Default* card
   never shows one.
   A GitHub issue link MUST show only while the GitHub issues switch (feature 1102) is on, and a Jira
   issue link only while the Jira integration switch (feature 533) is on.
@@ -249,7 +268,7 @@ compare with a card without a link.
   ellipsized or clipped at any card width; the short branch gives way first.
 - **FR-004**: Activating a GitHub issue link MUST ask the browser to open
   `https://github.com/<owner>/<repo>/issues/<N>` for the project's GitHub repository; activating a
-  Jira issue link MUST ask it to open the Jira base URL, without a trailing `/`, followed by
+  Jira issue link MUST ask it to open the project's Jira base URL, without a trailing `/`, followed by
   `/browse/<KEY>`.
 - **FR-005**: A primary click on an issue link (press and release both on it), and Enter or Space
   while it has keyboard focus, MUST activate the link and MUST NOT activate the card: no ripple, no
@@ -280,19 +299,24 @@ compare with a card without a link.
   (replacing 972 FR-011's hand-back for this case), counting as a move between a card and its own
   link (FR-008); Escape on a focused link MUST do what it does on its card (feature 1121 FR-005),
   leaving focus on the link.
-- **FR-010**: Settings MUST have a **Jira base URL** field in its Jira section, empty by default,
-  with one line saying it is used to link Jira keys on the Overview's cards, and kept in
-  `settings.json`; like the section's other controls it shows only while the Jira integration is on
-  (feature 533 FR-001); a settings file without it MUST read
-  as unset. The Jira base URL is one app-wide value, the same for
-  every project; the Jira connection's site (feature 533 FR-006) is not used as the base.
-- **FR-011**: Saving the Jira base URL MUST accept an `https` web address with a host and an
+- **FR-010**: Each project MUST have its own Jira base URL, unset by default. Settings MUST have a
+  **Jira base URL** field in its Jira section for the open project, beside that project's Jira
+  connection (feature 533 FR-006), with one line saying it is used to link Jira keys on this
+  project's Overview cards; like the connection it shows only while the Jira integration is on and a
+  project is open (feature 533 FR-001). The field is optional and independent of the connection:
+  it can be set with no connection, and saving it neither requires nor changes the connection's
+  fields. The value is kept in `settings.json` per project, keyed as the project's Jira connection
+  is; a settings file without it, or with a project's value that does not parse, MUST read as unset
+  for that project, and the rest of the file MUST load. Setting one project's value MUST NOT change
+  another's, including when two windows save different projects. The Jira connection's site is not
+  used as the base.
+- **FR-011**: Saving a project's Jira base URL MUST accept an `https` web address with a host and an
   optional path, store it with any trailing `/` removed, and MUST refuse, marking the field with
   the reason and storing nothing, a value that is not `https`, names no host, or has a user name, a
-  query or a fragment. Clearing the field MUST unset it.
-- **FR-012**: A change to the Jira base URL, or to an integration switch FR-001 depends on, made in
-  one window MUST show on the Overview's cards in
-  every open window without a restart.
+  query or a fragment. Clearing the field MUST unset it for that project.
+- **FR-012**: A change to a project's Jira base URL, or to an integration switch FR-001 depends on,
+  made in one window MUST show on the Overview's cards of every open window showing that project (for
+  a switch, every window) without a restart.
 - **FR-013**: When the browser cannot be opened, the user MUST see the notification of feature 031
   FR-015, naming the address and the reason, and nothing else MUST change.
 - **FR-014**: Showing issue links MUST NOT make any network request, and activating one MUST make
@@ -306,15 +330,16 @@ compare with a card without a link.
   validation of the Jira base URL, and how a press, a rest and a focus move on the link are resolved
   against the card MUST live in render-free code and be unit-tested without the GUI (Principle I).
 - **FR-017**: The user guide MUST describe the issue link in the Overview section (what it shows,
-  when it shows, pointer and keyboard use) and the Jira base URL field in the Settings section, and
+  when it shows, pointer and keyboard use) and the per-project Jira base URL field in the Settings
+  section, and
   the recorded layout snapshot MUST include a card with an issue link (Principle VII).
 
 ### Key Entities
 
 - **Issue link**: per card, derived per render: the label ("Issue #N" / "Issue KEY") and the
   address; absent when FR-001 says so. Not stored.
-- **Jira base URL**: an optional user setting, an `https` address with no trailing `/`, kept in
-  `settings.json` with the app's other settings.
+- **Jira base URL**: an optional per-project setting, an `https` address with no trailing `/`, kept
+  in `settings.json` in a map by project, beside the projects' Jira connections.
 
 ## Success Criteria *(mandatory)*
 
@@ -329,13 +354,14 @@ compare with a card without a link.
   before this change.
 - **SC-004**: At card widths of 280, 380 and 480 px, the issue link is shown whole on every card
   that has one, in both forms and both themes.
-- **SC-005**: A change to the Jira base URL or to an integration switch shows on every open window's
+- **SC-005**: A change to a project's Jira base URL or to an integration switch shows on every open window's
   cards within 1 s.
-- **SC-006**: A user can set the Jira base URL in Settings, and every invalid value FR-011 lists
-  (100% of its cases) is refused with a reason and leaves the stored value unchanged.
+- **SC-006**: A user can set a project's Jira base URL in Settings, and every invalid value FR-011
+  lists (100% of its cases) is refused with a reason and leaves the stored value unchanged; two
+  projects set to different sites each open their own site (Story 2 scenario 8).
 - **SC-007**: The user guide's Overview section has an entry naming the issue link (what it shows,
-  when, pointer and keyboard use) and its Settings Jira section an entry naming the Jira base URL
-  field, and the recorded layout snapshot includes a card with an issue link (FR-017).
+  when, pointer and keyboard use) and its Settings Jira section an entry naming the per-project
+  Jira base URL field, and the recorded layout snapshot includes a card with an issue link (FR-017).
 
 ## Out of scope
 
