@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M3
-- **Next step**: M3 review A r1 fixes (F1–F3) in; rebase on origin/main, full gate, push; then review A r2 (sonnet, fix diff), then PR text.
+- **Next step**: review A M3 r2 (sonnet) on the fix commit 41736a28..7103e7a0 requested (prompt 1122-m3-prompt-review-a-r2.md in the scratchpad); full gate r5 GREEN on 7103e7a0. Clean → PR text. No visual round 2: the fixes change no drawing.
 
 ## Pull requests
 
@@ -86,6 +86,8 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Review A M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | CHANGES: 1 MAJOR (F1 `LinkRested` cleared `pointer_escaped` on the same card, so an Escape-collapsed card re-expanded after a rest on its link), 2 MINOR (F2 `card_link_id` fell in `card_id`'s namespace: worktree `link-x` = x's link; F3 a rest held by the menu survived a rest on that card's link); all fixed: F1 clears only on another card + test, F2 one `card_part_id` helper with `/` before the dir + test, F3 drops the held rest for the same card + test |
 | Review B M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | CLEAN |
 | Visual pass M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | PASS on all 9 criteria (T030); evidence in visual-pass/m3/ (133 PNGs). Observations, non-blocking: criteria 6–8 not run in every scale/theme combo; PATH-without-xdg-open variant of 7 not run |
+| Full gate M3 | 5 | 7103e7a0 | GREEN (after the review A r1 fixes, rebased onto origin/main) |
+| Review A M3 | 2 | 41736a28..7103e7a0 (fix commit; r1 snapshot stale after the rebase) | pending (sonnet, fix diff) |
 
 ## Declined review findings
 
