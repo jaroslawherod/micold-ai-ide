@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::ui::cdk::motion::{self, Progress};
 use crate::ui::material::navigation_drawer::SLIDE;
+use crate::ui::material::overview_card::RestMessages;
 use crate::ui::material::{OverviewCard, Scrollable};
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Id, Operation, Tree};
@@ -261,6 +262,11 @@ struct ZoomState {
     /// That card's location, and whether its rest was published: the card, not its place in
     /// the list, so a re-sort under the pointer leaves it (review A F1, M3).
     resting: Option<(SessionLocation, bool)>,
+    /// Whether the pointer is on that card's link: a change starts the wait again (feature 1122,
+    /// R8).
+    on_link: bool,
+    /// Whether the rest on the current part (link or the rest of the card) was published.
+    part_rested: bool,
     /// The rest scope `resting` was seen in: another drops it (review A F2, M3 round 2).
     rest_scope: u64,
 }
@@ -280,6 +286,8 @@ impl ZoomState {
             capped_at: None,
             rest: ShowTimer::default(),
             resting: None,
+            on_link: false,
+            part_rested: false,
             rest_scope: 0,
         }
     }
@@ -428,8 +436,8 @@ struct Grid<'a, M> {
     /// That card collapsed: measured for its row, never drawn, focused or sent events. Its tree
     /// is the one after the cards'.
     twin: Option<Element<'a, M>>,
-    /// Each card's location and its `on_rest` and `on_leave` messages (feature 1121, R5).
-    rests: Vec<(SessionLocation, Option<M>, Option<M>)>,
+    /// Each card's location, rest messages and link id (feature 1121, R5; feature 1122, R8).
+    rests: Vec<RestMessages<M>>,
     /// Published when the window loses focus (feature 1121, FR-005).
     on_window_blur: Option<M>,
     /// The cards' set, hashed: [`CardGrid::rest_scope`].
@@ -459,17 +467,17 @@ fn last_view(state: &ZoomState, layout: Layout<'_>) -> Rectangle {
 }
 
 impl<M: Clone> Grid<'_, M> {
-    /// Feature 1121 R5, U3: time the pointer's rest on the topmost card under it (the expanded
-    /// card first), publishing that card's `on_rest` once it has rested `EXPAND_REST` and its
-    /// `on_leave` when the pointer leaves it after. A change of the card under the pointer starts
-    /// the wait again, even with no frame outside every card. Nothing happens while a zoom runs.
+    /// Feature 1121 R5, U3: time the pointer's rest on the topmost card under it (`pointer`: its
+    /// index, the expanded card first, and whether the pointer is on its link), publishing that
+    /// card's `on_rest`, or its `on_link_rest` on the link (feature 1122, R8), once it has rested
+    /// `EXPAND_REST`, and its `on_leave` when the pointer leaves it after. A change of the card
+    /// under the pointer, or between its link and the rest of it, starts the wait again, even with
+    /// no frame outside every card. Nothing happens while a zoom runs.
     fn observe_rest(
         &self,
         state: &mut ZoomState,
         event: &Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        over_expanded: bool,
+        pointer: Option<(usize, bool)>,
         shell: &mut Shell<'_, M>,
     ) {
         let now = match event {
@@ -480,18 +488,9 @@ impl<M: Clone> Grid<'_, M> {
         if state.ends.is_some() {
             return;
         }
-        let topmost = if over_expanded {
-            self.expanded
-        } else {
-            cursor.position().and_then(|at| {
-                layout
-                    .children()
-                    .take(self.cards.len())
-                    .position(|card| card.bounds().contains(at))
-            })
-        };
-        let topmost = topmost.and_then(|card| self.rests.get(card).map(|(at, ..)| at));
-        let messages = |at: &SessionLocation| self.rests.iter().find(|(card, ..)| card == at);
+        let topmost = pointer.and_then(|(card, _)| self.rests.get(card).map(|r| &r.at));
+        let on_link = pointer.is_some_and(|(_, on_link)| on_link);
+        let messages = |at: &SessionLocation| self.rests.iter().find(|r| &r.at == at);
         if state.rest_scope != self.rest_scope {
             // The old set's card is gone with its owner's state: nothing to leave.
             state.rest_scope = self.rest_scope;
@@ -499,19 +498,34 @@ impl<M: Clone> Grid<'_, M> {
         }
         if topmost != state.resting.as_ref().map(|(card, _)| card) {
             if let Some((left, true)) = &state.resting {
-                if let Some((_, _, Some(on_leave))) = messages(left) {
+                if let Some(on_leave) = messages(left).and_then(|r| r.on_leave.as_ref()) {
                     shell.publish(on_leave.clone());
                 }
             }
             state.rest.reset();
             state.resting = topmost.map(|card| (card.clone(), false));
+            state.on_link = on_link;
+            state.part_rested = false;
+        } else if topmost.is_some() && on_link != state.on_link {
+            // Between the card and its link: the same card, a new wait and no leave.
+            state.rest.reset();
+            state.on_link = on_link;
+            state.part_rested = false;
         }
         let rest = state.rest.observe(topmost.is_some(), now, EXPAND_REST);
-        if let Some((card, rested @ false)) = state.resting.as_mut() {
-            if rest.open {
+        if let Some((card, rested)) = state.resting.as_mut() {
+            if rest.open && !state.part_rested {
+                state.part_rested = true;
                 *rested = true;
-                if let Some((_, Some(on_rest), _)) = messages(card) {
-                    shell.publish(on_rest.clone());
+                let message = messages(card).and_then(|r| {
+                    if state.on_link {
+                        r.on_link_rest.as_ref()
+                    } else {
+                        r.on_rest.as_ref()
+                    }
+                });
+                if let Some(message) = message {
+                    shell.publish(message.clone());
                 }
             }
         }
@@ -522,6 +536,26 @@ impl<M: Clone> Grid<'_, M> {
 }
 
 impl<M> Grid<'_, M> {
+    /// Whether `cursor` is on card `i`'s link, laid out in `layout`: the link's bounds found by its
+    /// id over the card's subtree, on screen (`ui::focus::ScreenBounds`, research R7).
+    fn over_link(
+        &mut self,
+        i: usize,
+        card_tree: &mut Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &iced::Renderer,
+    ) -> bool {
+        let Some(id) = self.rests.get(i).and_then(|r| r.link_id.clone()) else {
+            return false;
+        };
+        let mut find = crate::ui::focus::ScreenBounds::of(id);
+        self.cards[i]
+            .as_widget_mut()
+            .operate(card_tree, layout, renderer, &mut find);
+        find.found().is_some_and(|bounds| cursor.is_over(bounds))
+    }
+
     /// The expanded card's index and drawn layout, in `view`.
     fn expanded_layout<'n>(
         &self,
@@ -775,11 +809,45 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         }
         let (state_tree, children) = (&tree.state, &mut tree.children);
         let state = state_tree.downcast_ref::<ZoomState>();
+        let expanded = self.expanded_layout(state, origin, *viewport);
+        let over_expanded = expanded.is_some_and(|(_, drawn)| cursor.is_over(drawn.bounds()));
+        // The card under the pointer, the expanded one first, and whether the pointer is on its
+        // link: what the rest timer follows, and where a press on a link goes (feature 1122).
+        let pointer = if state.ends.is_none()
+            && matches!(
+                event,
+                Event::Mouse(_) | Event::Window(window::Event::RedrawRequested(_))
+            ) {
+            let under = if over_expanded {
+                expanded
+            } else {
+                cursor.position().and_then(|at| {
+                    layout
+                        .children()
+                        .take(self.cards.len())
+                        .enumerate()
+                        .find(|(_, card)| card.bounds().contains(at))
+                })
+            };
+            under.map(|(i, card)| {
+                let on_link = self.over_link(i, &mut children[i], card, cursor, renderer);
+                (i, on_link)
+            })
+        } else {
+            None
+        };
+        // A primary press on a link is that card's alone: another card holding the keyboard keeps
+        // it, as it would not on a press outside it (R7).
+        let only = match (event, pointer) {
+            (Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)), Some((i, true))) => {
+                Some(i)
+            }
+            _ => None,
+        };
+        let others = |i: usize| only.is_some_and(|card| card != i);
         // The expanded card takes events first; beneath its drawn rectangle the others see the
         // pointer levitate (FR-010).
-        let mut over_expanded = false;
-        if let Some((index, drawn)) = self.expanded_layout(state, origin, *viewport) {
-            over_expanded = cursor.is_over(drawn.bounds());
+        if let Some((index, drawn)) = expanded.filter(|(index, _)| !others(*index)) {
             self.cards[index].as_widget_mut().update(
                 &mut children[index],
                 event,
@@ -792,7 +860,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             );
         }
         for (i, (card, card_tree)) in self.cards.iter_mut().zip(children).enumerate() {
-            if Some(i) == self.expanded {
+            if Some(i) == self.expanded || others(i) {
                 continue;
             }
             let Some(card_layout) = layout.children().nth(i) else {
@@ -815,7 +883,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             );
         }
         let state = tree.state.downcast_mut::<ZoomState>();
-        self.observe_rest(state, event, layout, cursor, over_expanded, shell);
+        self.observe_rest(state, event, pointer, shell);
     }
 
     fn mouse_interaction(
@@ -1079,6 +1147,7 @@ mod tests {
                 micold_core::session::SessionLocation::Default,
             ),
             dir: std::path::PathBuf::from("/repo"),
+            issue_link: None,
         }
     }
 
@@ -2730,5 +2799,147 @@ mod tests {
         let mut published = frame_at(&mut m, on, t0);
         published.extend(frame_at(&mut m, on, t0 + EXPAND_REST * 2));
         assert_eq!(published, NOTHING);
+    }
+
+    // ---- Feature 1122: a card's issue link in the grid (contract U5; R7, R8) ----
+
+    const LINK: &str = "Issue #1122";
+
+    /// Six cards, each with an issue link (`link i`, id `link-i`, `link rest i`), its rest and
+    /// leave messages, and its keyboard reports.
+    fn linked_grid() -> CardGrid<'static, String> {
+        let models: Vec<CardModel> = (0..6)
+            .map(|i| CardModel {
+                issue_link: Some(micold_core::issue_link::IssueLink {
+                    label: LINK.into(),
+                    address: "https://github.com/o/r/issues/1122".into(),
+                }),
+                ..titled(i)
+            })
+            .collect();
+        let mut grid = with_rests(plain_grid(&models));
+        grid.cards = grid
+            .cards
+            .into_iter()
+            .enumerate()
+            .map(|(i, card)| {
+                card.on_issue_link(format!("link {i}"))
+                    .link_id(iced::advanced::widget::Id::from(format!("link-{i}")))
+                    .on_link_rest(format!("link rest {i}"))
+            })
+            .collect();
+        grid
+    }
+
+    /// The centre of the link painted inside `slot`.
+    fn link_in(m: &mut Mounted<'_>, slot: Rectangle) -> Point {
+        m.painted_text()
+            .into_iter()
+            .find(|p| p.content == LINK && slot.contains(p.bounds.center()))
+            .unwrap_or_else(|| panic!("no link painted in {slot:?}"))
+            .bounds
+            .center()
+    }
+
+    /// A point in `slot`'s left padding: on the card, off its link.
+    fn off_link_in(slot: Rectangle) -> Point {
+        Point::new(slot.x + 6.0, slot.y + slot.height * 0.6)
+    }
+
+    /// R7, FR-005: a press on card 1's link reaches card 1 only, so card 0, holding the keyboard
+    /// by Tab, keeps it: Enter still activates card 0.
+    #[test]
+    fn a_click_on_a_link_leaves_the_keyboard_with_the_card_that_holds_it() {
+        let mut m = mounted(linked_grid(), 900.0, 4000.0);
+        m.focus_next();
+        let slot = slots(&m.node, 6)[1];
+        let at = link_in(&mut m, slot);
+        assert!(m.press(at).is_empty());
+        let released = m.send(
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            mouse::Cursor::Available(at),
+        );
+        assert_eq!(released, ["link 1"]);
+        let enter = super::super::test_support::named_key(iced::keyboard::key::Named::Enter);
+        assert_eq!(m.send(enter, mouse::Cursor::Unavailable), ["open 0"]);
+    }
+
+    /// R8, FR-007: a rest on a card's link publishes its `on_link_rest`; moving onto the rest of
+    /// the card starts the wait again and publishes its `on_rest`, with no `on_leave` between;
+    /// leaving the card publishes `on_leave` once.
+    #[test]
+    fn a_rest_on_a_link_and_then_on_its_card_publish_each_their_own() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let mut m = mounted(linked_grid(), 900.0, 4000.0);
+        let slot = slots(&m.node, 6)[1];
+        let (on, off) = (link_in(&mut m, slot), off_link_in(slot));
+        let t0 = std::time::Instant::now();
+        assert_eq!(frame_at(&mut m, on, t0), NOTHING);
+        assert_eq!(frame_at(&mut m, on, t0 + EXPAND_REST), ["link rest 1"]);
+        let t1 = t0 + EXPAND_REST * 2;
+        assert_eq!(
+            frame_at(&mut m, off, t1),
+            NOTHING,
+            "a part change is no leave"
+        );
+        assert_eq!(frame_at(&mut m, off, t1 + EXPAND_REST), ["rest 1"]);
+        let t2 = t1 + EXPAND_REST * 2;
+        assert_eq!(frame_at(&mut m, on, t2), NOTHING);
+        assert_eq!(frame_at(&mut m, on, t2 + EXPAND_REST), ["link rest 1"]);
+        let gap = Point::new(slot.x - GAP / 2.0, slot.center_y());
+        assert_eq!(frame_at(&mut m, gap, t2 + EXPAND_REST * 2), ["leave 1"]);
+    }
+
+    /// R8: a pointer that crosses from the card onto its link before the rest is over waits again
+    /// from the crossing; and having left the link early, the card's leave still follows a rest.
+    #[test]
+    fn crossing_onto_the_link_starts_the_wait_again() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let mut m = mounted(linked_grid(), 900.0, 4000.0);
+        let slot = slots(&m.node, 6)[1];
+        let (on, off) = (link_in(&mut m, slot), off_link_in(slot));
+        let t0 = std::time::Instant::now();
+        frame_at(&mut m, off, t0);
+        let t1 = t0 + EXPAND_REST / 2;
+        assert_eq!(frame_at(&mut m, on, t1), NOTHING);
+        assert_eq!(
+            frame_at(&mut m, on, t0 + EXPAND_REST),
+            NOTHING,
+            "not re-armed"
+        );
+        assert_eq!(frame_at(&mut m, on, t1 + EXPAND_REST), ["link rest 1"]);
+        let gap = Point::new(slot.x - GAP / 2.0, slot.center_y());
+        let t2 = t1 + EXPAND_REST * 2;
+        assert_eq!(frame_at(&mut m, off, t2), NOTHING);
+        assert_eq!(frame_at(&mut m, gap, t2 + EXPAND_REST / 2), ["leave 1"]);
+    }
+
+    /// G3: the rest on a link asks for one timed wake while it waits and nothing once it is over.
+    #[test]
+    fn a_rest_on_a_link_asks_for_no_frame_once_it_is_over() {
+        use iced::window::RedrawRequest;
+        use micold_core::overview_expansion::EXPAND_REST;
+        let mut m = mounted(linked_grid(), 900.0, 4000.0);
+        let slot = slots(&m.node, 6)[1];
+        let on = link_in(&mut m, slot);
+        let asked = |m: &mut Mounted<'_>, now: std::time::Instant| {
+            let mut messages = Vec::new();
+            let mut shell = iced::advanced::Shell::new(&mut messages);
+            m.element.as_widget_mut().update(
+                &mut m.tree,
+                &Event::Window(iced::window::Event::RedrawRequested(now)),
+                iced::advanced::Layout::new(&m.node),
+                mouse::Cursor::Available(on),
+                &m.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(m.room),
+            );
+            shell.redraw_request()
+        };
+        let t0 = std::time::Instant::now();
+        assert!(matches!(asked(&mut m, t0), RedrawRequest::At(_)));
+        assert_eq!(asked(&mut m, t0 + EXPAND_REST), RedrawRequest::Wait);
+        assert_eq!(asked(&mut m, t0 + EXPAND_REST * 2), RedrawRequest::Wait);
     }
 }

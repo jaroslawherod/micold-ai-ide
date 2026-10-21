@@ -472,6 +472,7 @@ mod tests {
                 .join("app")
                 .join(".worktrees")
                 .join("feat-1120_x"),
+            issue_link: None,
         }
     }
 

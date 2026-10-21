@@ -506,6 +506,7 @@ fn card_model(
             micold_core::session::SessionLocation::Default,
         ),
         dir: std::path::PathBuf::from("/home/dev/code/app"),
+        issue_link: None,
     }
 }
 
@@ -658,6 +659,81 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         .unscrolled(),
     ))
     .width(Length::Fill);
+    // Feature 1122 (FR-003, FR-015, quickstart §B1): "Issue #1122" on the branch line, collapsed
+    // at the three card widths with a short branch, a 120-character one and none (the title is the
+    // branch: the link alone in its place), and on an expanded card over its neighbours.
+    let issue = |mut m: micold_core::overview::CardModel| {
+        m.issue_link = Some(micold_core::issue_link::IssueLink {
+            label: "Issue #1122".to_string(),
+            address: "https://github.com/o/r/issues/1122".to_string(),
+        });
+        m
+    };
+    let linked = |m: &micold_core::overview::CardModel, id: String| {
+        material::OverviewCard::<Message>::new(m, roles)
+            .on_press(Message::NoOp)
+            .on_issue_link(Message::NoOp)
+            .link_id(iced::widget::Id::from(id))
+    };
+    let mut short = issue(card_model(
+        "feat-1122_overview-issue-link",
+        T::Feature,
+        S::Working,
+        R::Working,
+    ));
+    short.branch = Some("feat/1122_overview-issue-link".to_string());
+    let mut long_branch = issue(card_model("long-branch", T::Other, S::Idle, R::Idle));
+    long_branch.branch = Some(format!(
+        "topic-overview-card-issue-link-{}",
+        "with-a-branch-name-far-longer-than-any-card-".repeat(2)
+    ));
+    let mut by_branch = issue(card_model("feat-1122_x", T::Feature, S::Done, R::Merged));
+    by_branch.branch = Some("feat/1122_x".to_string());
+    by_branch.title = "feat/1122_x".to_string();
+    let link_models = [short, long_branch, by_branch];
+    let link_column = |width: f32| {
+        iced::widget::container(
+            iced::widget::column(
+                link_models
+                    .iter()
+                    .enumerate()
+                    .map(|(i, m)| Element::from(linked(m, format!("showcase-link-{width}-{i}")))),
+            )
+            .spacing(spacing::MD),
+        )
+        .width(Length::Fixed(width))
+        .into()
+    };
+    let issue_links = iced::widget::row([280.0, 380.0, 480.0].map(link_column))
+        .spacing(spacing::MD)
+        .wrap();
+    let mut long_linked = issue(long.clone());
+    long_linked.branch = Some(format!(
+        "feat/1122_{}",
+        "overview-card-issue-link-".repeat(4)
+    ));
+    let issue_expanded = iced::widget::container(Element::from(
+        material::CardGrid::new(
+            std::iter::once(
+                linked(&long_linked, "showcase-link-expanded".to_string()).expanded(true),
+            )
+            .chain(
+                ["one", "two", "three"]
+                    .map(|name| issue(card_model(name, T::Chore, S::Idle, R::Idle)))
+                    .iter()
+                    .enumerate()
+                    .map(|(i, m)| linked(m, format!("showcase-link-beneath-{i}"))),
+            )
+            .collect(),
+            roles,
+        )
+        .expanded(
+            0,
+            material::OverviewCard::<Message>::new(&long_linked, roles),
+        )
+        .unscrolled(),
+    ))
+    .width(Length::Fill);
     let mut done = card_model("done", T::Other, S::Done, R::Merged);
     done.prs = micold_core::overview::PrDisplay::Hidden;
     // Unscrolled: the showcase page scrolls, and a grid with its own scrollable fills a height
@@ -700,6 +776,8 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             posed("targeted", targeted, roles),
             posed("wrapped titles", wrapped, roles),
             posed("expanded", expanded, roles),
+            posed("issue link", issue_links, roles),
+            posed("issue link, expanded", issue_expanded, roles),
         ],
         Layout::FullWidth,
     )

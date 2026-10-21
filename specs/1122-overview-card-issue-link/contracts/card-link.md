@@ -6,8 +6,9 @@ In-crate tests (`ui::material::test_support::Mounted`) unless a file is named.
 
 Builder: `TextLink::new(label, on_press, roles)`, `.role(TypeRole)` (default `Body`), `.id(Id)`,
 `.on_keyboard_focus(Fn(bool) -> M)`, `.on_menu_key(M)`, `.on_page(Fn(bool) -> Option<M>)`,
-`.focus_on_press(bool)` (default `true`), `.focusable(bool)` (default `true`); `impl From<TextLink> for
-Element`.
+`.focus_on_press(bool)` (default `true`), `.focusable(bool)` (default `true`), `.inline(bool)` (default
+`false`; added in M2: laid out at the label's box, the focus gutter spilling over its neighbours, so a
+link in a line of text keeps the line's height); `impl From<TextLink> for Element`.
 
 - Press and release on it → `on_press` once; the press and the release are captured.
 - Press on it, release off it → nothing published, release not captured.

@@ -179,7 +179,7 @@ pub fn into_view<T>() -> impl Operation<T> {
 /// result is `Some(None)` rather than no result when nothing is focused, so a caller can tell the
 /// pass ran.
 pub fn focused_bounds() -> impl Operation<Option<Rectangle>> {
-    FocusedBounds::default()
+    FocusedBounds(ScreenBounds::default())
 }
 
 /// [`focused_bounds`] as the runtime runs it.
@@ -187,8 +187,49 @@ pub fn focused_bounds_task() -> Task<Option<Rectangle>> {
     operate(focused_bounds())
 }
 
+/// [`focused_bounds`]: the pass, finishing with what it found.
+struct FocusedBounds(ScreenBounds);
+
+impl Operation<Option<Rectangle>> for FocusedBounds {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Option<Rectangle>>)) {
+        self.0.traverse(operate);
+    }
+
+    fn scrollable(
+        &mut self,
+        id: Option<&Id>,
+        bounds: Rectangle,
+        content_bounds: Rectangle,
+        translation: Vector,
+        state: &mut dyn Scrollable,
+    ) {
+        Operation::<Option<Rectangle>>::scrollable(
+            &mut self.0,
+            id,
+            bounds,
+            content_bounds,
+            translation,
+            state,
+        );
+    }
+
+    fn focusable(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
+        Operation::<Option<Rectangle>>::focusable(&mut self.0, id, bounds, state);
+    }
+
+    fn finish(&self) -> Outcome<Option<Rectangle>> {
+        Outcome::Some(self.0.found)
+    }
+}
+
+/// Where a widget is on screen: the focused control ([`focused_bounds`]), or the widget named by
+/// [`Self::of`], which a caller drives over a subtree itself and reads with [`Self::found`] (a
+/// card's link in the Overview grid, feature 1122 R7). Each scrollable holding it takes its
+/// translation off the bounds it reports.
 #[derive(Default)]
-struct FocusedBounds {
+pub(crate) struct ScreenBounds {
+    /// The widget looked for by its id; the focused control when `None`.
+    target: Option<Id>,
     /// The translation of the scrollable just met, until the traversal into its content claims it.
     entering: Option<Vector>,
     /// For each traversal the pass is inside, the translation its scrollable applies (zero for a
@@ -197,8 +238,34 @@ struct FocusedBounds {
     found: Option<Rectangle>,
 }
 
-impl Operation<Option<Rectangle>> for FocusedBounds {
-    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Option<Rectangle>>)) {
+impl ScreenBounds {
+    /// The pass that finds the widget named `id`: a container or a focusable control.
+    pub(crate) fn of(id: Id) -> Self {
+        Self {
+            target: Some(id),
+            ..Self::default()
+        }
+    }
+
+    /// Where the widget was found, after the pass; the first match when several carry its id.
+    pub(crate) fn found(&self) -> Option<Rectangle> {
+        self.found
+    }
+
+    fn take(&mut self, bounds: Rectangle) {
+        if self.found.is_none() {
+            let shift = self.inside.iter().fold(Vector::ZERO, |sum, t| sum + *t);
+            self.found = Some(bounds - shift);
+        }
+    }
+
+    fn named(&self, id: Option<&Id>) -> bool {
+        self.target.is_some() && self.target.as_ref() == id
+    }
+}
+
+impl<T> Operation<T> for ScreenBounds {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
         self.inside
             .push(self.entering.take().unwrap_or(Vector::ZERO));
         operate(self);
@@ -216,15 +283,24 @@ impl Operation<Option<Rectangle>> for FocusedBounds {
         self.entering = Some(translation);
     }
 
-    fn focusable(&mut self, _id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
-        if state.is_focused() {
-            let shift = self.inside.iter().fold(Vector::ZERO, |sum, t| sum + *t);
-            self.found = Some(bounds - shift);
+    fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+        if self.named(id) {
+            self.take(bounds);
         }
     }
 
-    fn finish(&self) -> Outcome<Option<Rectangle>> {
-        Outcome::Some(self.found)
+    fn focusable(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
+        let wanted = match self.target {
+            Some(_) => self.named(id),
+            None => state.is_focused(),
+        };
+        if wanted {
+            self.take(bounds);
+        }
+    }
+
+    fn finish(&self) -> Outcome<T> {
+        Outcome::None
     }
 }
 

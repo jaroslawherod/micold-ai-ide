@@ -405,6 +405,9 @@ pub struct CardModel {
     pub activation: Activation,
     /// Its directory: the worktree's path, or the project root for *Default* (feature 1121 R8).
     pub dir: std::path::PathBuf,
+    /// The link to the issue its worktree is named after, when the name carries a ticket and its
+    /// source is configured and switched on (feature 1122, FR-001, FR-002).
+    pub issue_link: Option<crate::issue_link::IssueLink>,
 }
 
 /// Orders cards worst state first, keeping the sidebar's order within a state (FR-007).
@@ -1102,6 +1105,7 @@ mod tests {
             activity: None,
             activation: Activation::RevealOnly(worktree(name)),
             dir: std::path::PathBuf::from(format!("/repo/{name}")),
+            issue_link: None,
         }
     }
 

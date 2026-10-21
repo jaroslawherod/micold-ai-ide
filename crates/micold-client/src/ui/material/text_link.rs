@@ -10,9 +10,9 @@
 //! `.focusable(false)` keeps it out of the Tab order altogether while a click still opens it, for a
 //! card whose link focus is not wired yet (research R5).
 
-use crate::ui::cdk::passthrough::forward_to_child;
+use crate::ui::cdk::passthrough::{forward_to_child, forward_to_selected};
 use iced::advanced::widget::{Tree, Widget};
-use iced::advanced::{mouse, renderer, Clipboard, Layout, Renderer as _, Shell};
+use iced::advanced::{layout, mouse, renderer, Clipboard, Layout, Renderer as _, Shell};
 use iced::{keyboard, touch, Background, Element, Event, Rectangle};
 use micold_core::tokens::{state, Roles};
 
@@ -31,6 +31,7 @@ pub struct TextLink<'a, M> {
     on_page: Option<Box<dyn Fn(bool) -> Option<M> + 'a>>,
     focus_on_press: bool,
     focusable: bool,
+    inline: bool,
 }
 
 impl<'a, M: Clone + 'a> TextLink<'a, M> {
@@ -47,6 +48,7 @@ impl<'a, M: Clone + 'a> TextLink<'a, M> {
             on_page: None,
             focus_on_press: true,
             focusable: true,
+            inline: false,
         }
     }
 
@@ -94,6 +96,15 @@ impl<'a, M: Clone + 'a> TextLink<'a, M> {
         self.focusable = focusable;
         self
     }
+
+    /// Lay the link out at its label's own box, its gutter spilling over its neighbours, so a link
+    /// set in a line of text keeps the line's height and lines up with the text beside and above
+    /// it; `false` unless said otherwise. The gutter still takes the pointer and holds the focus
+    /// ring, so the neighbours need that much room to spare (feature 1122, the card's branch line).
+    pub fn inline(mut self, inline: bool) -> Self {
+        self.inline = inline;
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
@@ -111,6 +122,7 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
             content: click.into(),
             underline: roles.primary,
             role: link.role,
+            id: link.id.clone(),
         };
         let mut focus = TakesTheKeyboard::new(Element::new(body), link.focusable)
             .key(Named::Enter, link.on_press.clone())
@@ -142,7 +154,107 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
         if let Some(on_keyboard_focus) = link.on_keyboard_focus {
             focus = focus.on_shown_change(on_keyboard_focus);
         }
-        focus.into()
+        if link.inline {
+            Element::new(Spill {
+                content: focus.into(),
+            })
+        } else {
+            focus.into()
+        }
+    }
+}
+
+/// [`TextLink::inline`]: the link laid out [`GUTTER`] larger on every side than the box it reports,
+/// and drawn, hit and focused at that larger box.
+struct Spill<'a, M> {
+    content: Element<'a, M>,
+}
+
+impl<'a, M> Spill<'a, M> {
+    /// The link's own layout, the one child.
+    fn spilled<'l>(&self, _tree: &Tree, layout: Layout<'l>) -> Option<(usize, Layout<'l>)> {
+        layout.children().next().map(|child| (0, child))
+    }
+
+    fn child(&self, _i: usize) -> &Element<'a, M> {
+        &self.content
+    }
+
+    fn child_mut(&mut self, _i: usize) -> &mut Element<'a, M> {
+        &mut self.content
+    }
+}
+
+impl<'a, M> Widget<M, iced::Theme, iced::Renderer> for Spill<'a, M> {
+    forward_to_child!(content, M, iced::Theme, iced::Renderer; children, diff, size);
+    forward_to_selected!(spilled, child, child_mut, M, iced::Theme, iced::Renderer;
+        mouse_interaction, operate, overlay);
+
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let both = iced::Size::new(2.0 * GUTTER, 2.0 * GUTTER);
+        let wider = layout::Limits::new(limits.min() + both, limits.max() + both);
+        let link = self
+            .content
+            .as_widget_mut()
+            .layout(&mut tree.children[0], renderer, &wider);
+        let size = iced::Size::new(
+            (link.size().width - both.width).max(0.0),
+            (link.size().height - both.height).max(0.0),
+        );
+        layout::Node::with_children(size, vec![link.move_to(iced::Point::new(-GUTTER, -GUTTER))])
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, M>,
+        viewport: &Rectangle,
+    ) {
+        if let Some((_, link)) = self.spilled(tree, layout) {
+            self.content.as_widget_mut().update(
+                &mut tree.children[0],
+                event,
+                link,
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut iced::Renderer,
+        theme: &iced::Theme,
+        style_: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        if let Some((_, link)) = self.spilled(tree, layout) {
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style_,
+                link,
+                cursor,
+                viewport,
+            );
+        }
     }
 }
 
@@ -152,6 +264,9 @@ struct LinkBody<'a, M> {
     content: Element<'a, M>,
     underline: micold_core::tokens::Rgb,
     role: TypeRole,
+    /// The link's id again, offered as a container: a link that is no Tab stop offers no
+    /// focusable, and its bounds are still found by its id (feature 1122, R7).
+    id: Option<iced::advanced::widget::Id>,
 }
 
 /// The room on every side of the label, where the focus ring lands clear of the glyphs and of the
@@ -173,7 +288,20 @@ fn underline_y(text: Rectangle, size: f32) -> f32 {
 
 impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
     forward_to_child!(content, M, iced::Theme, iced::Renderer;
-        children, diff, size, layout, operate);
+        children, diff, size, layout);
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn iced::advanced::widget::Operation,
+    ) {
+        operation.container(self.id.as_ref(), layout.bounds());
+        self.content
+            .as_widget_mut()
+            .operate(&mut tree.children[0], layout, renderer, operation);
+    }
 
     fn draw(
         &self,
@@ -321,6 +449,36 @@ mod tests {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
             mouse::Cursor::Available(at),
         )
+    }
+
+    /// `inline(true)`: the link reports its label's box, the gutter spilling round it, and still
+    /// takes a click and the pointer across the whole gutter.
+    #[test]
+    fn an_inline_link_reports_its_labels_box_and_keeps_its_gutter() {
+        let boxed = mounted(link());
+        let mut inline = mounted(link().inline(true));
+        let (outer, inner) = (
+            boxed.node.children()[0].bounds(),
+            inline.node.children()[0].bounds(),
+        );
+        assert_eq!(inner.width, outer.width - 2.0 * GUTTER);
+        assert_eq!(inner.height, outer.height - 2.0 * GUTTER);
+        assert_eq!(
+            inline.node.children()[1].bounds().y,
+            inner.height,
+            "the next line starts at the label's foot"
+        );
+        let edge = Point::new(inner.x - GUTTER + 1.0, inner.y - GUTTER + 1.0);
+        let pointer = inline.element.as_widget().mouse_interaction(
+            &inline.tree,
+            Layout::new(&inline.node),
+            mouse::Cursor::Available(edge),
+            &Rectangle::with_size(inline.room),
+            &inline.renderer,
+        );
+        assert_eq!(pointer, mouse::Interaction::Pointer);
+        press(&mut inline, edge);
+        assert_eq!(release(&mut inline, edge).0, ["open"]);
     }
 
     #[test]
