@@ -246,12 +246,15 @@ compare with a card without a link.
   while it has keyboard focus, MUST activate the link and MUST NOT activate the card: no ripple, no
   location selected, the Overview stays open, full screen stays as it was. A primary press that
   starts on an issue link MUST NOT start a ripple (replacing feature 971 FR-001 for the link's area);
-  a press that starts outside the link and is released on it starts the ripple as 971 FR-001
-  defines, and it fades as after any press released off its target. A pointer press on an issue
+  a press that starts outside the link starts its ripple at the press as 971 FR-001 defines, and
+  releasing it on the link activates neither the link nor the card; the ripple fades as after any
+  press released off its target. A pointer press on an issue
   link MUST NOT move keyboard focus, so a click never expands a collapsed card through FR-008.
 - **FR-006**: A press and release on the card outside its issue link, a secondary click anywhere on
-  the card including on its link, and every key on the card except Tab and Shift+Tab (FR-008) MUST behave as feature 1121 FR-010 and
-  FR-011 define; a press on the link released outside it, or the reverse, MUST do nothing.
+  the card including on its link, and every key on the card except Tab and Shift+Tab (FR-008) MUST
+  behave as feature 1121 FR-010 and FR-011 define; a press on the link released outside it, or the
+  reverse, MUST activate nothing (a press that starts on the card keeps its 971 FR-001 ripple,
+  FR-005).
 - **FR-007**: While the pointer rests on the issue link of a collapsed card, that card MUST NOT
   expand on that rest; a rest on any other part of the card expands it as feature 1121 FR-002
   defines. An expanded card MUST stay expanded while the pointer is on its link. For feature 1121
@@ -322,8 +325,9 @@ compare with a card without a link.
   cards within 1 s.
 - **SC-006**: A user can set the Jira base URL in Settings, and every invalid value FR-011 lists
   (100% of its cases) is refused with a reason and leaves the stored value unchanged.
-- **SC-007**: The user guide's Overview and Settings sections describe the issue link and the Jira
-  base URL field, checked by the docs review and the recorded layout snapshot.
+- **SC-007**: The user guide's Overview section has an entry naming the issue link (what it shows,
+  when, pointer and keyboard use) and its Settings Jira section an entry naming the Jira base URL
+  field, and the recorded layout snapshot includes a card with an issue link (FR-017).
 
 ## Out of scope
 
