@@ -229,8 +229,8 @@ Six milestones; the first four need nothing beyond what is on main today.
 
 | ID | Deliverable | Needs on main | User-visible |
 |---|---|---|---|
-| **M1** | Core: `sync::Continuity` (extracted from `Transcript::apply`), fixture recordings (R11) and the capture script's env var, `insights` usage + context + figures, `format::group_digits`, `plan_usage::rate_limit_event` + shared `limit_window` | main as is | no |
-| **M2** | Daemon: plan-usage feed from structured sessions (`offer_plan_usage`, feed task), `structured_env` with `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1`; feature 490's Settings note and both guide sections (FR-027) | M1 | yes: the app-bar indicator learns from structured sessions |
+| **M1** | Core: `sync::Continuity` (extracted from `Transcript::apply`), fixture recordings (R11) and the capture script's env var, `insights` usage + context + figures, `format::group_digits` | main as is | no |
+| **M2** | Core `plan_usage::rate_limit_event` + shared `limit_window`; daemon: plan-usage feed from structured sessions (`offer_plan_usage`, feed task), `structured_env` with `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1`; feature 490's Settings note and both guide sections (FR-027) | M1 | yes: the app-bar indicator learns from structured sessions |
 | **M3** | Core: task table and thread index (I4, I5) on the new recordings | M1; #939 M1–M2 (on main) | no |
 | **M4** | Shared UI: `ProgressBar::marker`/`warning`, icons, showcase | main as is | showcase only |
 | **M5** | Client: `features::structured_insights` (state, `InsightsMsg`, open threads, routing after `structured_transcript`, forget paths) | M3; **#939 M3** | no |
