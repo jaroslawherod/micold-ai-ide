@@ -40,8 +40,8 @@ pub mod quick_switcher;
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
 pub(crate) use focus::dialog_scope as focus_dialog_scope;
 pub use focus::{
-    dialog_focus_move, dialog_focus_move_task, focused_bounds, focused_bounds_task,
-    into_view as focus_into_view, scroll_focused_into_view,
+    dialog_focus_move, dialog_focus_move_task, focus_move_task, focused_bounds,
+    focused_bounds_task, into_view as focus_into_view, scroll_focused_into_view,
 };
 /// The reveal control's `label · N` rule (feature 029, FR-025a), named individually for the same
 /// reason the ripple below is: `tests/toggle_chip_count.rs` asserts the rule — zero renders the

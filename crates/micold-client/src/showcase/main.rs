@@ -36,25 +36,20 @@ fn boot() -> (Showcase, Task<Message>) {
 }
 
 fn update(showcase: &mut Showcase, message: Message) -> Task<Message> {
+    let focus = message.focus_move().map(|forward| {
+        micold_client::ui::focus_move_task(forward)
+            .chain(micold_client::ui::scroll_focused_into_view())
+    });
     showcase.update(message);
-    Task::none()
+    focus.unwrap_or_else(Task::none)
 }
 
 /// Escape dismisses whatever floating surface is open, exactly as it does in the application: the
 /// keypress arrives through the keyboard subscription, outside the widget tree, so the owner of the
-/// surface has to be the one to hear it.
+/// surface has to be the one to hear it. Tab and Shift+Tab move the focus, so a focus ring can be
+/// seen here too ([`micold_client::showcase::state::key_message`]).
 fn subscription(_showcase: &Showcase) -> Subscription<Message> {
-    iced::keyboard::listen().filter_map(|event| {
-        use iced::keyboard::{key::Named, Event, Key};
-        matches!(
-            event,
-            Event::KeyPressed {
-                key: Key::Named(Named::Escape),
-                ..
-            }
-        )
-        .then_some(Message::Dismissed)
-    })
+    iced::keyboard::listen().filter_map(micold_client::showcase::state::key_message)
 }
 
 pub fn main() -> iced::Result {

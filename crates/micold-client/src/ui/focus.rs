@@ -130,6 +130,16 @@ pub fn dialog_focus_move_task<M: Send + 'static>(forward: bool) -> Task<M> {
     operate(dialog_focus_move(forward))
 }
 
+/// Tab (`forward`) or Shift+Tab over the whole view, as iced's own traversal runs it. Used by the
+/// showcase, which moves the keyboard as the application's own `Message::FocusMoved` arm does.
+pub fn focus_move_task<M: Send + 'static>(forward: bool) -> Task<M> {
+    if forward {
+        iced::widget::operation::focus_next()
+    } else {
+        iced::widget::operation::focus_previous()
+    }
+}
+
 /// A boxed operation, which `scope` can take as the `impl Operation` it wants.
 struct BoxedOperation<T>(Box<dyn Operation<T>>);
 
