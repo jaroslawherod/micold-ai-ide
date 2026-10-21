@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M3
-- **Next step**: M3 T020–T029 done (5d362874); full gate r1 running; review A r1, review B r1 and the visual pass (T030) requested from the orchestrator (prompts in the scratchpad: 1122-m3-prompt-review-a-r1.md, -review-b-r1.md, -visual-r1.md). Then: act on the verdicts, tick T030, PR text.
+- **Next step**: M3 T020–T029 done (5d362874); full gate r4 GREEN on 707c9ec4 (r1–r3 RED on source-scan guards, fixed); review A r1, review B r1 and the visual pass (T030) requested from the orchestrator (prompts in the scratchpad: 1122-m3-prompt-review-a-r1.md, -review-b-r1.md, -visual-r1.md). Then: act on the verdicts, tick T030, PR text.
 
 ## Pull requests
 
@@ -82,9 +82,10 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M3 | 1 | 5d362874 | RED: `anatomy_call_sites::the_test_module_convention_this_relies_on_holds`: `ui/mod.rs` had a second inline `#[cfg(test)]` module (the arrow test); moved to `ui/overview_arrow_tests.rs` |
 | Full gate M3 | 2 | 06c27e10 | RED: `field_focus_call_sites::the_focus_message_reaches_the_traversal_operation` read the `CardStepped` arm's `Message::FocusMoved` fallback as the `FocusMoved` arm; the arm now calls `dialog_focus_move_task` itself |
 | Full gate M3 | 3 | 44bbbce2 | RED: `overlay_registry::the_keyboard_subscription_names_no_surface` read `Msg::CardStepped` in `ui::subscription` as a per-surface message; exempted beside `FocusMoved` (it names a direction) |
-| Review A M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
-| Review B M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
-| Visual pass M3 | 1 | 3a57fe2d89a285b4b179bbd73bbf5ca2176b65fe:06c27e10bfaba0b5644feda4b988bf1bcb2a20ae | pending |
+| Full gate M3 | 4 | 707c9ec4 | GREEN |
+| Review A M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | pending |
+| Review B M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | pending |
+| Visual pass M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | pending |
 
 ## Declined review findings
 
