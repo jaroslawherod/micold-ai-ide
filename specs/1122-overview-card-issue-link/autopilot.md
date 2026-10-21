@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M4
-- **Next step**: M4 T031–T037 done; scoped gate, then review A r1, review B r1 and the visual pass (T038) requested together.
+- **Next step**: M4 T031–T037 done, full gate r2 GREEN on c04408a4; review A r1, review B r1 and the visual pass r1 (T038) requested together (prompts in the scratchpad, 1122-m4-prompt-*-r1.md). Then act on the verdicts, full gate on the final tree, PR text.
 
 ## Pull requests
 
@@ -89,6 +89,11 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Visual pass M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | PASS on all 9 criteria (T030); evidence in visual-pass/m3/ (133 PNGs). Observations, non-blocking: criteria 6–8 not run in every scale/theme combo; PATH-without-xdg-open variant of 7 not run |
 | Full gate M3 | 5 | 7103e7a0 | GREEN (after the review A r1 fixes, rebased onto origin/main) |
 | Review A M3 | 2 | 41736a28..7103e7a0 (fix commit; r1 snapshot stale after the rebase) | CLEAN (sonnet, fix diff) |
+| Full gate M4 | 1 | 1ccd6669 | RED: clippy (`unused_mut` in an overview_card test, `cloned_ref_to_slice_refs` in a ui/overview test, `type_complexity` in a main_tests table) |
+| Full gate M4 | 2 | c04408a4 | GREEN |
+| Review A M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | requested (with review B r1 and the visual pass r1) |
+| Review B M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | requested |
+| Visual pass M4 | 1 | f2307f9a1e2ce80fb17368e3f6e21f999a3b0454:c04408a4053f06b61fd945b56ae10fe80024a386 | requested (T038) |
 
 ## Declined review findings
 
