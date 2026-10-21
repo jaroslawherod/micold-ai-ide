@@ -79,6 +79,8 @@ pub const MUTATORS: &[&str] = &[
     // `RequiredMarks::leave` records that the user left a required field (feature 937).
     "leave",
     "pop",
+    // `transcript_rich.refresh` derives a session's render cache from its transcript (feature 940).
+    "refresh",
     "push",
     "push_str",
     "remove",
@@ -96,6 +98,9 @@ pub const MUTATORS: &[&str] = &[
 
 /// Methods that only read the receiver.
 pub const READERS: &[&str] = &[
+    // `structured_transcript.transcript` names a session's transcript, which the render cache is
+    // refreshed from (feature 940).
+    "transcript",
     // `overview_expansion::Expansion::expanded` names the expanded card (feature 1121).
     "expanded",
     // `settings.legacy_daemon` names the daemon an unbound location runs on (feature 489, M9).

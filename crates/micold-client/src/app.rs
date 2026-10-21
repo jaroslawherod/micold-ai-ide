@@ -355,7 +355,7 @@ pub struct State {
     pub structured_transcript: crate::features::structured_transcript::State,
     /// The render cache derived from those transcripts (feature 940) -- see
     /// [`crate::features::transcript_rich::RichCache`].
-    pub transcript_rich: crate::features::transcript_rich::RichCache,
+    pub transcript_rich: crate::features::transcript_rich::State,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
