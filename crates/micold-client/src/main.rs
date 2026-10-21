@@ -770,19 +770,20 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
         // Feature 1122 (R9): the arrows step from card to card, over the issue links. A daemon
         // dialog keeps the keyboard to itself, as it does for Tab.
         Msg::CardStepped { forward } => {
-            if micold_client::ui::dialog_keeps_focus(&app.core) {
-                return update_inner(app, Message::FocusMoved { forward });
-            }
             app.core
                 .update(Message::Overview(Msg::CardStepped { forward }));
-            let cards: Vec<_> = micold_client::ui::overview::cards(&app.core)
-                .into_iter()
-                .map(|card| card.location)
-                .collect();
-            return iced::advanced::widget::operate(micold_client::ui::overview::step_card(
-                forward, &cards,
-            ))
-            .chain(micold_client::ui::scroll_focused_into_view());
+            let moved = if micold_client::ui::dialog_keeps_focus(&app.core) {
+                micold_client::ui::dialog_focus_move_task(forward)
+            } else {
+                let cards: Vec<_> = micold_client::ui::overview::cards(&app.core)
+                    .into_iter()
+                    .map(|card| card.location)
+                    .collect();
+                iced::advanced::widget::operate(micold_client::ui::overview::step_card(
+                    forward, &cards,
+                ))
+            };
+            return moved.chain(micold_client::ui::scroll_focused_into_view());
         }
         other => other,
     };
