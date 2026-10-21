@@ -233,7 +233,8 @@ its implementation re-check them against the merged code (R14).
 
 - **Decision** (all in `ui/material/`, builders ending in `.into()`, showcase entries, both schemes):
   - **`MarkdownView`** — `MarkdownView::new(&doc, roles).muted(bool).on_link(f).on_copy(f)
-    .code_spans(f).into()`: draws a `Document` block by block, each settled block in its own iced
+    .code_spans(f).copy_state(f).full(f).on_show(f).into()` (per `CodeId`: spans, copy state,
+    shown in full and the show-in-full message, handed to each `CodeBlock`): draws a `Document` block by block, each settled block in its own iced
     `lazy` keyed by `(block index, stamp, scheme, muted)` so only the open block re-lays out per
     delta (R12). Headings use the type scale (`TypeRole` title/headline roles), paragraphs
     `TypeRole::Body` through the shared `Text`/`rich_text` spans (bold, italic, strikethrough,
