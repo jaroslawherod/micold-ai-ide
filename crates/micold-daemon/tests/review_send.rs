@@ -1283,7 +1283,12 @@ async fn w20_a_pull_request_send_delivers_only_its_ten_drafts_and_they_become_se
         "Please work through these review comments on pull request #12 \"Add retry\" (head branch {}, head commit {}).",
         m.branch, m.head
     );
-    let typed = m.s.typed_holds(sid(1), &preamble).await;
+    // The batch arrives in chunks: wait for every note, not just the preamble.
+    m.s.typed_holds(sid(1), &preamble).await;
+    let mut typed = String::new();
+    for n in 0..10 {
+        typed = m.s.typed_holds(sid(1), &format!("pr12 note {n}")).await;
+    }
     assert_eq!(typed.matches(&preamble).count(), 1, "one batch, typed once");
     assert_eq!(typed.matches("### Comment C-").count(), 10);
     for n in 0..10 {
