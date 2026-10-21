@@ -3,8 +3,8 @@
 ## A. Automated
 
 - `mise run test-core` (here: `cargo test -p micold-core --all-targets` with the cloud env flags):
-  K1–K6, Q1, P1–P6.
-- `cargo test -p micold-client` overview_card / card_grid / overview tests: U1–U4.
+  K1–K6 (K5a–K5g), Q1–Q2, P1–P7.
+- `cargo test -p micold-client` overview_card / card_grid / overview tests: U1–U4; `main_tests.rs` hand-off, menu return and opener: U5–U7.
 - `crates/micold-client/tests/layout_snapshot.rs`: covered state `overview-pr-rows`.
 - Whole gate: `scripts/gate.sh`.
 
@@ -21,6 +21,8 @@ requests (open approved, draft pending, merged, closed); branch `feat-1123_z` wi
 3. Click "#12": the opener is asked for #12's address; no ripple, no selection, Overview stays.
    Click the pill: the card activates.
 4. Tab from `feat-1123_y`'s card: each number in order, Enter opens; Escape collapses, Tab skips the
-   hidden numbers; Menu key on a number opens the card menu and closing it returns to that number.
+   hidden numbers; Escape while the third number has the keyboard collapses the card and the card
+   keeps the keyboard (shown focus on the card, not lost); Menu key on a number opens the card menu
+   and closing it returns to that number.
 5. Rate-limit then offline (fake source): rows stay. Unavailable: dash, rows gone.
 6. 280, 380, 480 px; light and dark; scale 1.0 and 2.0: numbers and pills whole.
