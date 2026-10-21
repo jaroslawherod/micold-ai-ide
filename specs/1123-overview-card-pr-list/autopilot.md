@@ -39,6 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review A spec | 1 | afc9cb5d94279a3c0ae00d37d80855a145ded446:f1d7d1b5b3251cbb108318452ccb6a4ede3d1f3e | CHANGES: 1 MAJOR (F1 Story 1 sc 4 dash vs kept rows), 3 MINOR (F2 feature 1003 words, F3 FR-010/SC-002 after Escape, F4 function name in Edge Cases); all four fixed in spec.md, none declined |
 | Review A spec | 2 | 825ca900990f4c8ff4f75b661ae433152e67cae6:91b05eb41e1d852e023be0f044cc857a68bc5800 (fix diff 451f1d2c..91b05eb4, sonnet) | CLEAN, 1 MINOR (F1 FR-007 FR-025 wording); fixed, prose only, no round 3 |
+| Review A plan | 1 | 53ffa8f39a3a4caa715af2e64d4fca74c90e6a87:a55fb1b02c4bca128a2f493349a45dbf294074aa | pending |
 
 ### Review A spec round 2 verdict (verbatim)
 
