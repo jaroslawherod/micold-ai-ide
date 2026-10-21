@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: milestone M4
-- **Next step**: M4 verify — scoped gate + review A, then review B and the visual pass
+- **Next step**: M4 verify — review B, then the full gate
 
 ## Pull requests
 
@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 1 | c258083c60c69b7307e90eaecd795751949f21c6:ec670f5809ec67f239a3539be72727a08ed0b46a | CLEAN (conformance, sonnet; Verify 37 passed, supplied from the gate) |
 | Review A M3 | 1 | 20804f72471f0a52c405e4fc95df918068531d3b:fa9c54a1a89302f558a8bfc52bb6b95f9fd4e8ad | CLEAN (code-review high): F1 MINOR fixed — open cards the bound dropped are pruned; F2 MINOR fixed — a toggle of a card not in the transcript opens nothing; tests added |
 | Review B M3 | 1 | 20804f72471f0a52c405e4fc95df918068531d3b:fa9c54a1a89302f558a8bfc52bb6b95f9fd4e8ad | CLEAN (conformance, sonnet; Verify 17 passed, supplied by the unit): F1 MINOR declined |
+| Review A M4 | 1 | 386c7ecc49536f04c8c3c035f105d300be0c0eba:ec28ea0bba7fe12b7af23d361571adc18b5fdc67 | CLEAN (code-review high, `claude -p --agent autopilot-reviewer`): no findings |
+| Visual pass M4 | — | ec28ea0b | PASS (CPU rasteriser, the gate's renderer; no xdotool/lavapipe in the container): showcase entry light/dark/greyscale — icons distinct, no overlap, summary one line and cut, failed = outline + `Failed` + `error` icon, readable in greyscale (SC-005); evidence `visual/m4-disclosure-card-{light,dark}.png`. Note: an unmounted iced button draws `Disabled` until its first redraw, so a render must tick once first |
 
 ## Declined review findings
 
