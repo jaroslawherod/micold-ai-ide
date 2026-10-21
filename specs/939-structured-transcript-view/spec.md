@@ -14,6 +14,25 @@ text, collapsible thinking and tool-call cards (name, input summary, result), tu
 follow-tail. Tool cards collapse/expand; errors are visually distinct. Depends on the structured
 session mode issue." labels: enhancement, flow:feature
 
+## Clarifications
+
+### Session 2026-10-21
+
+- Q: How are events produced inside a sub-agent (they name the tool use that started it) shown? →
+  A: Not as transcript entries: #944 owns nesting sub-agent transcripts under the parent tool call,
+  and this view leaves them out of the main transcript so #944 can add nesting on top. Each such
+  event is attributed to the tool-call card of the tool use it names, whose header shows how many
+  sub-agent messages it holds; their content is not drawn. Events naming a tool use that is not in
+  the transcript are counted on one notice instead, so none is silently dropped (FR-003, FR-024).
+  _(agent-resolved: specs/939-structured-transcript-view/spec.md#out-of-scope; issue #944 scope
+  "subagent activity nested under the parent tool call")_
+- Q: Do a sub-agent's streaming deltas count toward its card's sub-agent event count? → A: No: the
+  count is of the sub-agent's messages (assistant and user messages, including tool results), not
+  of deltas, since a finished message supersedes its deltas in this view; deltas naming a parent
+  tool use are neither shown nor counted. _(agent-resolved:
+  specs/939-structured-transcript-view/spec.md#assumptions, "A finished assistant message
+  supersedes the deltas of the same message")_
+
 ## In short (for non-technical readers)
 
 A structured Claude Code session (#938) today shows a plain technical log: one line per item Claude
@@ -192,10 +211,10 @@ the scroll state at the end and away from it and check follow-tail.
   the shape expected, gets a generic one-line summary of its input; it is never an error.
 - **Tool result content as a block list**: a result whose content is a list of blocks rather than
   text shows the text parts, and names any part it cannot show (an image) instead of hiding it.
-- **Sub-agent events** (events carrying a parent tool use): [NEEDS CLARIFICATION: Should events
-  produced inside a sub-agent (they name the tool use that started it) be shown inline in stream
-  order and marked as from a sub-agent, nested inside that tool use's card, or hidden until #944
-  groups them?]
+- **Sub-agent events** (events carrying a parent tool use): they are not shown as entries. Each
+  sub-agent message is counted on the tool-call card of the tool use it names, whose header shows
+  the count (FR-024); one naming a tool use not in the transcript (dropped by the history bound, or never seen) is
+  counted on a single "sub-agent messages not shown" notice. #944 nests them under the card.
 - **Several windows (Principle II)**: two windows viewing the same session show the same entries in
   the same order; each window has its own scroll position, follow-tail state and folded/unfolded
   choices. Two structured sessions viewed side by side in one window never mix entries, fold state
@@ -298,6 +317,15 @@ the scroll state at the end and away from it and check follow-tail.
   control) in place of the plain log, and MUST keep listing what the later issues of the epic add, in
   the same change that ships the view.
 
+**Sub-agent events (for #944)**
+
+- **FR-024**: An event that names a parent tool use (produced inside a sub-agent) MUST NOT be
+  shown as an entry of the main transcript, nor change any entry's text, status or footer. Each
+  such message (not its deltas) MUST be counted on the tool-call card of the tool use it names, whose header MUST show that count
+  while it is above zero; when no card with that identifier is in the transcript, it MUST be
+  counted on one notice saying that many sub-agent messages are not shown. The events MUST stay in
+  the window's history so #944 can nest them under the card.
+
 ### Constraints
 
 - **Rendering seam**: per-block rendering sits behind the seam of FR-022 (one renderer per block
@@ -315,8 +343,9 @@ the scroll state at the end and away from it and check follow-tail.
 - Markdown, syntax-highlighted code and Edit/Write diff rendering (#940).
 - Prompt input, interrupt, queued messages (#941); permission prompts (#942); slash commands, model
   switching and falling back to the terminal mode (#943).
-- Usage and context meters beyond the per-turn footer figures, sub-agent grouping and background
-  tasks (#944).
+- Usage and context meters beyond the per-turn footer figures, the plan-usage feed, showing
+  sub-agent events nested under their tool call, and background tasks (#944). This feature only
+  counts sub-agent messages on their card (FR-024).
 - Searching the transcript, copying text out of it, and exporting it.
 - Remembering fold state or scroll position across application restarts.
 
@@ -327,7 +356,7 @@ the scroll state at the end and away from it and check follow-tail.
 - **Entry**: one visible item (see Terms); text entries and cards hold the content of the block
   they show, built up from deltas until the finished message arrives.
 - **Tool-call card**: a tool use's identifier, name, input, input summary, status and result
-  (text, error flag), and its fold state.
+  (text, error flag), its count of sub-agent messages (FR-024), and its fold state.
 - **Turn footer**: outcome (success or error), duration, cost, number of turns and error text, each
   as reported.
 - **View state**: per window and session: scroll position, whether it follows the tail, and the
@@ -371,3 +400,5 @@ the scroll state at the end and away from it and check follow-tail.
   above one minute).
 - The input-summary rules of FR-009 cover Claude Code's built-in tools by name; tools from tool
   servers get the generic summary.
+- The per-turn cost (and duration) in the turn footer is this feature's; #944 builds on it and adds
+  the context meter, the plan-usage feed and sub-agent nesting, and does not re-implement the footer.
