@@ -18,6 +18,8 @@ suite: 4279 passed, 0 failed, 3 ignored (micold-client only; wall time 18 min, a
 
 # TDD Verification: Daemon settings in an overlay (#1092)
 
+**Post-audit note:** finding 2 (mutant M9, the focus push) was fixed after 79cd9920a by `shell::daemons::tests::the_shell_pushes_the_focus_task_when_a_dialog_closes`, which fails with the push deleted. The audited verdict stands: finding 1 (no red-phase evidence, accepted in T034) is unchanged.
+
 **Verdict: FAIL.** The only blocking reason is the test-first record: M1-M3 and six of the seven M4 test tasks have no
 red phase on record, and the rubric fails every `TEST_AFTER` behavior. Everything behavioral the previous audit
 found is fixed: no HIGH smell, no weakened existing test, every criterion has an end-to-end test, 8 of 9 new
