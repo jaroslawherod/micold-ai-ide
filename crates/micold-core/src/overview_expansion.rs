@@ -25,6 +25,9 @@ pub enum Cause {
 pub enum Event {
     /// The pointer rested on a card for [`EXPAND_REST`].
     PointerRested(SessionLocation),
+    /// The pointer rested on a card's issue link for [`EXPAND_REST`] (feature 1122, FR-007): it
+    /// counts as a rest on that card, but expands nothing.
+    LinkRested(SessionLocation),
     /// The pointer left a card it was over.
     PointerLeft(SessionLocation),
     /// A card received keyboard (shown) focus.
@@ -62,6 +65,9 @@ pub struct Expansion {
     focus_escaped: bool,
     pointer_on: Option<SessionLocation>,
     pointer_escaped: bool,
+    /// The rest on `pointer_on` was on its issue link (feature 1122, FR-007): nothing expanded
+    /// for it, so leaving that card ends a hover all the same.
+    pointer_on_link: bool,
     menu_open: bool,
     /// The pointer rested on `pointer_on` while a menu was open: it expands once the menu closes.
     rest_held: bool,
@@ -101,19 +107,40 @@ impl Expansion {
                 }
                 self.pointer_on = Some(location.clone());
                 self.pointer_escaped = false;
+                self.pointer_on_link = false;
                 // FR-012: no other card expands under an open menu; this one does once it closes.
                 self.rest_held = self.menu_open;
                 if !self.menu_open {
                     self.expand(location, Cause::Pointer);
                 }
             }
+            Event::LinkRested(location) => {
+                if self.menu_open {
+                    return;
+                }
+                self.pointer_on = Some(location.clone());
+                self.pointer_escaped = false;
+                self.pointer_on_link = true;
+                // A rest on a link counts as a rest on its card (FR-007): another card expanded
+                // would cover the link, so it collapses; the link's own card keeps its form.
+                if self
+                    .expanded()
+                    .is_some_and(|expanded| *expanded != location)
+                {
+                    self.collapse();
+                }
+            }
             Event::PointerLeft(location) => {
+                let mut left_link = false;
                 if self.pointer_on.as_ref() == Some(&location) {
                     self.pointer_on = None;
                     self.pointer_escaped = false;
                     self.rest_held = false;
+                    left_link = std::mem::take(&mut self.pointer_on_link);
                 }
-                if self.expanded == Some((location, Cause::Pointer)) && !self.menu_open {
+                let hover_ended = self.expanded == Some((location, Cause::Pointer))
+                    || (left_link && self.expanded.is_none());
+                if hover_ended && !self.menu_open {
                     self.end_hover();
                 }
             }
@@ -202,6 +229,7 @@ impl Expansion {
                 if gone(&self.pointer_on) {
                     self.pointer_on = None;
                     self.pointer_escaped = false;
+                    self.pointer_on_link = false;
                 }
                 // The opening's focus will never report for a card no longer listed (r2 F1, M4).
                 if gone(&self.open_focus) {
@@ -805,6 +833,59 @@ mod tests {
             Event::MenuClosed,
         ]);
         assert_eq!(shown(&blurred), None);
+    }
+
+    fn link_rest(name: &str) -> Event {
+        Event::LinkRested(loc(name))
+    }
+
+    /// Feature 1122 K5, FR-007, Story 4 sc.2: a rest on a collapsed card's link expands nothing;
+    /// a rest on the rest of that card then expands it as before.
+    #[test]
+    fn a_rest_on_a_collapsed_cards_link_expands_nothing() {
+        assert_eq!(shown(&after([link_rest("a")])), None);
+        let then_card = after([link_rest("a"), rest("a")]);
+        assert_eq!(shown(&then_card), Some("a".into()));
+        assert_eq!(then_card.cause(), Some(Cause::Pointer));
+    }
+
+    /// K5, FR-007, Story 4 sc.3: an expanded card stays expanded while the pointer is on its link.
+    #[test]
+    fn an_expanded_card_stays_expanded_under_a_rest_on_its_link() {
+        let kept = after([rest("a"), link_rest("a")]);
+        assert_eq!(shown(&kept), Some("a".into()));
+        assert_eq!(kept.cause(), Some(Cause::Pointer));
+        let focused = after([focus("a"), link_rest("a")]);
+        assert_eq!(shown(&focused), Some("a".into()));
+    }
+
+    /// K5, FR-007 (1121 FR-005's re-expansion): a rest on another card's link counts as a rest on
+    /// that card, so the focused card does not cover it; leaving that card brings it back.
+    #[test]
+    fn a_rest_on_another_cards_link_keeps_the_focused_card_collapsed() {
+        let on_link = || [focus("a"), rest("b"), leave("b"), link_rest("c")];
+        assert_eq!(shown(&after(on_link())), None);
+        let left = after(on_link().into_iter().chain([leave("c")]));
+        assert_eq!(shown(&left), Some("a".into()));
+        assert_eq!(left.cause(), Some(Cause::Focus));
+    }
+
+    /// K5, FR-012 (1121): a rest on a link under an open menu changes nothing.
+    #[test]
+    fn a_rest_on_a_link_under_an_open_menu_changes_nothing() {
+        let before = after([rest("a"), Event::MenuOpened]);
+        let mut rested = before.clone();
+        rested.apply(link_rest("b"));
+        assert_eq!(rested, before);
+        assert_eq!(
+            shown(&after([
+                rest("a"),
+                Event::MenuOpened,
+                link_rest("b"),
+                Event::MenuClosed
+            ])),
+            Some("a".into())
+        );
     }
 
     /// K2, SC-006: a card expands within half a second of the pointer resting on it.

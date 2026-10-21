@@ -45,6 +45,19 @@ impl std::fmt::Debug for TitleLookup {
     }
 }
 
+/// What the Overview knows of the active project's GitHub repository (feature 1122, research R2):
+/// the issue links need it at render, so it is read once per project and kept here.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum RepoLookup {
+    /// Not asked for yet in this project.
+    #[default]
+    Unknown,
+    /// Asked for; the daemon has not answered.
+    Asked,
+    /// The repository the daemon's remotes name, or `None` when none is on GitHub.
+    Known(Option<micold_core::github::GithubRepo>),
+}
+
 /// What the Overview remembers: whether it is on screen, the last file reading of each worktree and
 /// the issue titles read. The cards are derived per render.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -75,6 +88,9 @@ pub struct State {
     /// (feature 1121, data-model *Expansion*). Reset whenever the Overview closes
     /// ([`crate::ui::overview::settle_card_menu`]) and on a project switch.
     pub expansion: Expansion,
+    /// The project's GitHub repository, for the cards' issue links (feature 1122, R2). Forgotten on
+    /// a project switch.
+    pub repo: RepoLookup,
 }
 
 impl State {
@@ -231,6 +247,23 @@ pub enum Msg {
     /// Something that decides which card is expanded happened: a pointer rest or leave, a focus
     /// move, Escape, the inner scroll of the expanded card (feature 1121, contract U4).
     Expansion(Event),
+    /// The active project's remotes were read: `repo` is the GitHub repository they name, if any
+    /// (feature 1122, R2).
+    RepoRead {
+        /// The project the read was started in; dropped when it is no longer the active one.
+        project: PathBuf,
+        /// The repository, or `None` when no remote is on GitHub.
+        repo: Option<micold_core::github::GithubRepo>,
+    },
+    /// A card's issue link was clicked (feature 1122, FR-004): the root opens the address it
+    /// recomputes from state. Changes no state of its own.
+    IssueLinkActivated(SessionLocation),
+    /// An arrow key on the Overview (feature 1122, R9): the root moves the keyboard to the next
+    /// (`forward`) or previous card, never to a link.
+    CardStepped {
+        /// Right or Down; `false` for Left or Up.
+        forward: bool,
+    },
     /// Page Down (`down`) or Page Up on the focused, expanded card whose body can move that way
     /// (feature 1121, FR-008, contract K4): the root scrolls the body by one visible height.
     CardPaged {
@@ -250,7 +283,9 @@ impl Msg {
     /// longer the active one.
     pub fn read_project(&self) -> Option<&Path> {
         match self {
-            Self::ProgressRead { project, .. } | Self::TitleRead { project, .. } => Some(project),
+            Self::ProgressRead { project, .. }
+            | Self::TitleRead { project, .. }
+            | Self::RepoRead { project, .. } => Some(project),
             _ => None,
         }
     }
@@ -307,6 +342,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             state.focus_return = None;
             state.focus_landed = None;
             state.expansion = Expansion::default();
+            state.repo = RepoLookup::Unknown;
         }
         Msg::CardMenuOpened {
             location,
@@ -339,6 +375,11 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         Msg::Expansion(event) => state.expansion.apply(event),
         // The root pages the body (a task, not state).
         Msg::CardPaged { .. } => {}
+        Msg::RepoRead { repo, .. } => state.repo = RepoLookup::Known(repo),
+        // The root opens the address (a task, not state).
+        Msg::IssueLinkActivated(_) => {}
+        // The root moves the keyboard; like any other focus move it ends the hand-back watch.
+        Msg::CardStepped { .. } => state.focus_landed = None,
         // The root scrolls the grid to the offset (a task, not state).
         Msg::Reflowed(_) => {}
         // The root answers these two with the measured card and the highlighted entry.

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: milestone M2
-- **Next step**: M2 T010–T019 done; all reviews clean (review A r2 CLEAN, minor fixed prose only). PR text written (scratchpad pr-title.txt, pr-body.md); the orchestrator opens M2's PR (D4 amendment commits ride along) and records its number.
+- **Phase**: milestone M3
+- **Next step**: M3 T020–T030: implement, then scoped gate + review A, review B, visual pass, full gate, PR text.
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1180 | Design (spec, plan, tasks) | merged | 9ad05048 |
 | #1188 | M1: link rules in core; shared `TextLink` in the showcase | merged | 0164f375 |
+| #1195 | M2: the issue link on cards in the showcase | merged | c61380e1 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | #1188 | merged |
-| M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | — | in progress |
-| M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | — | planned |
+| M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | #1195 | merged |
+| M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | — | in progress |
 | M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | — | planned |
 | M5 | T039–T050 | full | Jira base URL setting (wire 58) and Jira issue links | — | planned |
 

@@ -755,6 +755,35 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
                 None => Task::none(),
             };
         }
+        // Feature 1122 (R10): the link's address, recomputed from what the window holds now, goes
+        // to the link opener, whose failures are feature 031's notification (FR-013). Nothing of
+        // the Overview changes, and a link gone since the card was drawn opens nothing.
+        Msg::IssueLinkActivated(location) => {
+            return match micold_client::ui::overview::issue_link_for(&app.core, &location) {
+                Some(link) => shell::links::perform(
+                    app,
+                    micold_client::features::OpenRequest::Url(link.address),
+                ),
+                None => Task::none(),
+            };
+        }
+        // Feature 1122 (R9): the arrows step from card to card, over the issue links. A daemon
+        // dialog keeps the keyboard to itself, as it does for Tab.
+        Msg::CardStepped { forward } => {
+            if micold_client::ui::dialog_keeps_focus(&app.core) {
+                return update_inner(app, Message::FocusMoved { forward });
+            }
+            app.core
+                .update(Message::Overview(Msg::CardStepped { forward }));
+            let cards: Vec<_> = micold_client::ui::overview::cards(&app.core)
+                .into_iter()
+                .map(|card| card.location)
+                .collect();
+            return iced::advanced::widget::operate(micold_client::ui::overview::step_card(
+                forward, &cards,
+            ))
+            .chain(micold_client::ui::scroll_focused_into_view());
+        }
         other => other,
     };
     // A card-menu entry: the reducer closes the menu, then the entry runs as the row menu's own

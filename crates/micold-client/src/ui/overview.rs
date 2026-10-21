@@ -12,6 +12,7 @@ use crate::ui::material::{Button, CardGrid, MenuItem, OverviewCard, Tooltip, Zoo
 use iced::advanced::widget::Operation;
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
+use micold_core::issue_link::IssueLink;
 use micold_core::location_state::location_state;
 use micold_core::occupancy::main_session;
 use micold_core::overview::{
@@ -45,6 +46,15 @@ pub fn card_scroll_id(location: &SessionLocation) -> iced::advanced::widget::Id 
     iced::advanced::widget::Id::from(match location {
         SessionLocation::Default => "overview-card-body-default".to_string(),
         SessionLocation::Worktree(dir) => format!("overview-card-body-{dir}"),
+    })
+}
+
+/// A card's issue link, by location (feature 1122): the grid finds the link under the pointer by
+/// it, and the arrow keys step over it.
+pub fn card_link_id(location: &SessionLocation) -> iced::advanced::widget::Id {
+    iced::advanced::widget::Id::from(match location {
+        SessionLocation::Default => "overview-card-link-default".to_string(),
+        SessionLocation::Worktree(dir) => format!("overview-card-link-{dir}"),
     })
 }
 
@@ -113,6 +123,11 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                 .expanded(expanded_at == Some(index))
                 .on_rest(expansion(Event::PointerRested(location.clone())))
                 .on_leave(expansion(Event::PointerLeft(location.clone())))
+                // Feature 1122: the issue link opens its address; a rest on it expands nothing
+                // (FR-007). Not yet a Tab stop: no `.on_link_keyboard_focus` until M4 (U3).
+                .on_issue_link(Message::Overview(Msg::IssueLinkActivated(location.clone())))
+                .link_id(card_link_id(&location))
+                .on_link_rest(expansion(Event::LinkRested(location.clone())))
                 .scroll_id(card_scroll_id(&location))
                 .on_body_scroll(move |up, down| expansion(Event::BodyScrolled { up, down }))
                 .on_keyboard_focus({
@@ -367,6 +382,130 @@ pub fn cards(app: &State) -> Vec<CardModel> {
     cards
 }
 
+/// The issue link of the card at `location`, from what the window holds now (feature 1122, FR-001,
+/// R10): `None` on *Default*, for a name with no ticket, and while its source is unknown or off.
+pub fn issue_link_for(state: &State, location: &SessionLocation) -> Option<IssueLink> {
+    let SessionLocation::Worktree(dir) = location else {
+        return None;
+    };
+    let github = match &state.overview.repo {
+        crate::features::overview::RepoLookup::Known(repo) => repo.as_ref(),
+        _ => None,
+    };
+    micold_core::issue_link::issue_link(
+        dir,
+        &micold_core::issue_link::IssueSources {
+            github,
+            github_on: state.settings.github_issues_enabled,
+            // The Jira base URL setting arrives with M5 (FR-010).
+            jira_base: None,
+            jira_on: state.settings.jira_enabled,
+        },
+    )
+}
+
+/// Move the keyboard to the next (`forward`) or previous card of `cards` (feature 1122, R9,
+/// contract U4), counting from the focused card or from the card whose issue link is focused. It
+/// never stops on a link. Past the first or the last card it does what iced's `focus_previous` /
+/// `focus_next` do there; with nothing focused it takes the first or the last card.
+pub fn step_card<T: Send + 'static>(forward: bool, cards: &[SessionLocation]) -> impl Operation<T> {
+    use iced::advanced::widget::operation::{Focusable, Outcome};
+    use iced::advanced::widget::Id;
+
+    /// The first pass: every focusable in order, and which one holds the keyboard.
+    struct StepCard {
+        forward: bool,
+        /// Each card's id and its link's id.
+        cards: Vec<(Id, Id)>,
+        seen: Vec<Option<Id>>,
+        focused: Option<usize>,
+    }
+
+    impl StepCard {
+        fn is_link(&self, at: usize) -> bool {
+            self.seen[at]
+                .as_ref()
+                .is_some_and(|id| self.cards.iter().any(|(_, link)| link == id))
+        }
+
+        /// Where the step counts from: the focused card, or the card of the focused link.
+        fn from(&self) -> Option<usize> {
+            let at = self.focused?;
+            let card = self.seen[at]
+                .as_ref()
+                .and_then(|id| self.cards.iter().find(|(_, link)| link == id))
+                .and_then(|(card, _)| self.seen.iter().position(|s| s.as_ref() == Some(card)));
+            Some(card.unwrap_or(at))
+        }
+    }
+
+    impl<T: Send + 'static> Operation<T> for StepCard {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self);
+        }
+
+        fn focusable(
+            &mut self,
+            id: Option<&Id>,
+            _bounds: iced::Rectangle,
+            state: &mut dyn Focusable,
+        ) {
+            if state.is_focused() {
+                self.focused = Some(self.seen.len());
+            }
+            self.seen.push(id.cloned());
+        }
+
+        fn finish(&self) -> Outcome<T> {
+            let from = self.from();
+            let target = if self.forward {
+                let start = from.map_or(0, |at| at + 1);
+                (start..self.seen.len()).find(|&at| !self.is_link(at))
+            } else {
+                let end = from.unwrap_or(self.seen.len());
+                (0..end).rev().find(|&at| !self.is_link(at))
+            };
+            Outcome::Chain(Box::new(FocusAt { target, current: 0 }))
+        }
+    }
+
+    /// The second pass: focus the `target`-th focusable, unfocus every other.
+    struct FocusAt {
+        target: Option<usize>,
+        current: usize,
+    }
+
+    impl<T> Operation<T> for FocusAt {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self);
+        }
+
+        fn focusable(
+            &mut self,
+            _id: Option<&Id>,
+            _bounds: iced::Rectangle,
+            state: &mut dyn Focusable,
+        ) {
+            if self.target == Some(self.current) {
+                state.focus();
+            } else {
+                state.unfocus();
+            }
+            self.current += 1;
+        }
+    }
+
+    StepCard {
+        forward,
+        cards: cards
+            .iter()
+            .map(|location| (card_id(location), card_link_id(location)))
+            .collect(),
+        seen: Vec::new(),
+        focused: None,
+    }
+}
+
 /// What a card stands for.
 enum Place<'a> {
     Default,
@@ -432,6 +571,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         .and_then(|s| s.hook_activity.as_ref())
         .and_then(|hooks| hooks.current());
     let activation = activation(&location, main, kind);
+    let issue_link = issue_link_for(app, &location);
     CardModel {
         location,
         display_name,
@@ -446,7 +586,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         prs: pr_display(&app.pr_status, branch_ref),
         activation,
         dir,
-        issue_link: None,
+        issue_link,
     }
 }
 
@@ -988,5 +1128,98 @@ mod tests {
             micold_core::overview_text::activity_line(card.activity.as_ref()),
             None
         );
+    }
+
+    // --- Feature 1122, contract U4: the arrows step over issue links -------------------------
+
+    /// The Overview's three cards (Default and two worktrees), the middle one with an issue link
+    /// that takes Tab focus (as it does from M4), mounted as a grid.
+    fn stepping_grid() -> (Vec<SessionLocation>, Mounted<'static>) {
+        let mut models = cards(&overview_of(2));
+        models[1].issue_link = Some(IssueLink {
+            label: "Issue #1".into(),
+            address: "https://github.com/o/r/issues/1".into(),
+        });
+        let locations: Vec<SessionLocation> = models.iter().map(|m| m.location.clone()).collect();
+        let r = tokens::roles(ColorScheme::Dark);
+        let grid: Vec<OverviewCard<'static, String>> = models
+            .iter()
+            .map(|model| {
+                OverviewCard::new(model, r)
+                    .id(card_id(&model.location))
+                    .on_press("open".to_string())
+                    .on_issue_link("link".to_string())
+                    .link_id(card_link_id(&model.location))
+                    .on_link_keyboard_focus(|_| String::new())
+            })
+            .collect();
+        (locations, Mounted::new(CardGrid::new(grid, r)))
+    }
+
+    fn focus_on(mounted: &mut Mounted<'_>, id: iced::advanced::widget::Id) {
+        mounted.drive(iced::advanced::widget::operation::focusable::focus::<()>(
+            id,
+        ));
+    }
+
+    fn focused(mounted: &mut Mounted<'_>) -> Option<iced::advanced::widget::Id> {
+        mounted.drive(iced::advanced::widget::operation::focusable::find_focused())
+    }
+
+    /// What `step_card` focuses from `from`.
+    fn step_from(
+        from: iced::advanced::widget::Id,
+        forward: bool,
+    ) -> Option<iced::advanced::widget::Id> {
+        let (locations, mut mounted) = stepping_grid();
+        focus_on(&mut mounted, from);
+        mounted.drive(step_card::<()>(forward, &locations));
+        focused(&mut mounted)
+    }
+
+    /// U4, FR-008: from a card or from its link the arrows go to the next or previous card, never
+    /// onto a link.
+    #[test]
+    fn the_arrows_step_between_cards_and_never_onto_a_link() {
+        let (l, _) = stepping_grid();
+        assert_eq!(step_from(card_id(&l[0]), true), Some(card_id(&l[1])));
+        assert_eq!(step_from(card_id(&l[1]), true), Some(card_id(&l[2])));
+        assert_eq!(step_from(card_link_id(&l[1]), true), Some(card_id(&l[2])));
+        assert_eq!(step_from(card_link_id(&l[1]), false), Some(card_id(&l[0])));
+        assert_eq!(step_from(card_id(&l[2]), false), Some(card_id(&l[1])));
+        assert_eq!(step_from(card_id(&l[1]), false), Some(card_id(&l[0])));
+    }
+
+    /// U4: past the first card backward and the last forward, it does what iced's
+    /// `focus_previous` / `focus_next` did there.
+    #[test]
+    fn past_the_ends_the_arrows_do_what_the_traversal_did() {
+        use iced::advanced::widget::operation::focusable::{focus_next, focus_previous};
+        let (l, _) = stepping_grid();
+        let traversed = |from: iced::advanced::widget::Id, forward: bool| {
+            let (_, mut mounted) = stepping_grid();
+            focus_on(&mut mounted, from);
+            if forward {
+                mounted.drive(focus_next::<()>());
+            } else {
+                mounted.drive(focus_previous::<()>());
+            }
+            focused(&mut mounted)
+        };
+        assert_eq!(
+            step_from(card_id(&l[0]), false),
+            traversed(card_id(&l[0]), false)
+        );
+        assert_eq!(
+            step_from(card_id(&l[2]), true),
+            traversed(card_id(&l[2]), true)
+        );
+        // With nothing focused: the first card forward, the last backward.
+        let (locations, mut mounted) = stepping_grid();
+        mounted.drive(step_card::<()>(true, &locations));
+        assert_eq!(focused(&mut mounted), Some(card_id(&l[0])));
+        let (locations, mut mounted) = stepping_grid();
+        mounted.drive(step_card::<()>(false, &locations));
+        assert_eq!(focused(&mut mounted), Some(card_id(&l[2])));
     }
 }
