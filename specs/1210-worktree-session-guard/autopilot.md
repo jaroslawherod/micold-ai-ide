@@ -10,13 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
 - **Phase**: tasks
-- **Next step**: gate (specs-only), open design PR, then M1
+- **Next step**: wait for design PR #1214 merge, then M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| none yet | Design | - | - |
+| #1214 | Design | open | - |
 
 ## Milestones
 
