@@ -236,8 +236,8 @@ without a restart (FR-010–FR-012).
 
 Code-free; done by the close unit in the close PR.
 
-- [ ] T051 Run quickstart §A (`mise run test-core`, `scripts/gate.sh`, and the FR-014 grep over `crates/micold-core/src/issue_link.rs` prints nothing) and record the result in `specs/1122-overview-card-issue-link/quickstart.md`
-- [ ] T052 Record the whole quickstart §B result in `specs/1122-overview-card-issue-link/visual-pass.md` from the evidence of T019, T030, T038 and T050
+- [X] T051 Run quickstart §A (`mise run test-core`, `scripts/gate.sh`, and the FR-014 grep over `crates/micold-core/src/issue_link.rs` prints nothing) and record the result in `specs/1122-overview-card-issue-link/quickstart.md`
+- [X] T052 Record the whole quickstart §B result in `specs/1122-overview-card-issue-link/visual-pass.md` from the evidence of T019, T030, T038 and T050
 
 ---
 

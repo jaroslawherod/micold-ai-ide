@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: milestone M5
-- **Next step**: M5 reviews done (A r2 CLEAN, B r1 CLEAN, visual r2 PASS), gate green at 44164707. PR text in the session scratchpad (`pr-title.txt`, `pr-body.md`); orchestrator opens the PR and records its number.
+- **Phase**: close
+- **Next step**: close: T051 (quickstart §A) and T052 (visual-pass.md) done; tdd-verify r1 requested (prompt `1122-close-prompt-tdd-verify-r1.md` in the session scratchpad). Then: act on its findings, close review r1, Status, PR text.
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1195 | M2: the issue link on cards in the showcase | merged | c61380e1 |
 | #1200 | M3: GitHub issue links on the Overview | merged | 32b7d671 |
 | #1207 | M4: issue links by keyboard | merged | 65cefbbe |
+| #1217 | M5: Jira base URL setting and Jira issue links | merged | fd2a64ef |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | #1195 | merged |
 | M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | #1200 | merged |
 | M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | #1207 | merged |
-| M5 | T039–T050 | full | Jira base URL setting (wire 60; 58 when planned, `main` moved to 59) and Jira issue links | — | in progress |
+| M5 | T039–T050 | full | Jira base URL setting (wire 60; 58 when planned, `main` moved to 59) and Jira issue links | #1217 | merged |
 
 Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and well over 800 lines, and each part has its own deliverable (core + `TextLink`; the card in the showcase; the app). M1 and M2 are showcase-only (`docs-not-needed`). M2 is 10 tasks: `ControlOverlay`, the card and the grid change together (one routing decision, R6–R8) and have no smaller observable split. US3 (M4) goes before US2 (M5), both P2, because it completes the keyboard path of the link M3 puts in the app. Rule 6 (review A tasks r1 F1): the link stays out of the Tab order until M4 (`TextLink::focusable(false)` while the card has no `.on_link_keyboard_focus`), so M3 leaves the keyboard exactly as before; design fixed in contracts/card-link.md U1/U3/U6 and research R5. Polish T051–T052 is code-free: close unit.
 
@@ -107,6 +108,10 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M5 | 4 | 44164707 | GREEN (after the r1 fixes) |
 | Review A M5 | 2 | 660cc05a9c3777cc54b0584f8a87eceffd625c2a:44164707544ad85d3bc0c6988bba72fbf08a9e3f | VERDICT: CLEAN, no findings; F1's declined reason confirmed (verdict verbatim below) |
 | Visual pass M5 | 2 | 660cc05a9c3777cc54b0584f8a87eceffd625c2a:44164707544ad85d3bc0c6988bba72fbf08a9e3f | PASS on both criteria (read-only switch link, subtitle); r2 PNGs in visual-pass/m5/ (verdict verbatim below) |
+| Converge close | — | — | skipped: review B CLEAN for M1–M5 (close.md step 1) |
+| Full gate close | 1 | fd2a64ef | RED: feature 942's `structured_permission::a_pending_request_marks_its_session_waiting_until_the_last_is_decided` (3.0 s under load); passes 5/5 alone |
+| Full gate close | 2 | fd2a64ef | GREEN (T051) |
+| TDD verify close | 1 | 6f552538a137b82b74c095c00793ecaef9b68684:fd2a64ef85925313a77d395156792aed6ece370a | pending (sonnet, autopilot-worker) |
 
 
 ### M4 r1 verdicts (verbatim)

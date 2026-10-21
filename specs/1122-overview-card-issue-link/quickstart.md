@@ -45,3 +45,18 @@ either.
 9. Break the opener (Linux: `PATH` without `xdg-open`): the click shows feature 031's notification
    naming the address and the reason (FR-013).
 10. Full screen: links behave the same.
+
+## Results (close, 2026-10-21)
+
+- **A** (T051): the FR-014 grep prints nothing. `cargo test -p micold-core --all-targets
+  --no-fail-fast` passes every test of this feature: `issue_link` 14, the `JiraBaseUrl` tests 10,
+  `overview_expansion` 51, `protocol_roundtrip` 41, `settings_roundtrip` 42, `schema_hash` 22. Its
+  only failures are 4 permission-refusal tests outside this feature
+  (`settings_refuses_save_over_failed_read`, `settings_write_is_logged` and two directory-removal
+  tests). They fail only when run as root, and `scripts/gate.sh` runs them unprivileged.
+  `scripts/gate.sh` on the close tree (fd2a64ef, the M5 merge; the close changes only `specs/`):
+  green. A first run failed once on feature 942's
+  `structured_permission::a_pending_request_marks_its_session_waiting_until_the_last_is_decided`
+  (3.0 s under the gate's load); it passed 5 runs of 5 alone and in the second gate run.
+- **B** (T052): every item passes. The record, its evidence and its limits are in
+  [visual-pass.md](visual-pass.md).
