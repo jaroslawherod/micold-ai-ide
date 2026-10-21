@@ -353,6 +353,9 @@ pub struct State {
     /// The structured sessions' transcripts and their view state (feature 939) -- see
     /// [`crate::features::structured_transcript::State`].
     pub structured_transcript: crate::features::structured_transcript::State,
+    /// The render cache derived from those transcripts (feature 940) -- see
+    /// [`crate::features::transcript_rich::RichCache`].
+    pub transcript_rich: crate::features::transcript_rich::RichCache,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
@@ -901,30 +904,39 @@ impl State {
     }
 
     /// Take one `StructuredEvents` message for `session` (feature 938 wire.md): its events reach
-    /// the transcript (feature 939).
+    /// the transcript (feature 939), and that session's render cache is refreshed from it with
+    /// `grammar` (feature 940, RR-4). Returns the highlight jobs the shell runs.
     pub fn structured_events(
         &mut self,
         session: micold_core::session::SessionId,
         omitted: u64,
         events: &[micold_core::structured::SequencedEvent],
         live: bool,
-    ) {
+        grammar: &crate::features::transcript_rich::Grammar,
+    ) -> Vec<crate::features::transcript_rich::HighlightJob> {
         self.structured_transcript
             .apply(session, omitted, events, live);
+        match self.structured_transcript.transcript(session) {
+            Some(transcript) => self.transcript_rich.refresh(session, transcript, grammar),
+            None => Vec::new(),
+        }
     }
 
-    /// Forget a closed or removed session's transcript.
+    /// Forget a closed or removed session's transcript and its render cache.
     pub fn forget_structured(&mut self, session: micold_core::session::SessionId) {
         self.structured_transcript.forget(session);
+        self.transcript_rich.forget(session);
     }
 
-    /// Apply a message of the transcript view and hand back the scroll it asks for, which only
-    /// the shell can perform (feature 939, research R9).
+    /// Apply a message of the transcript view and hand back what only the shell can perform: the
+    /// scroll (feature 939, research R9), and the effect requests and highlight jobs of the rich
+    /// blocks (feature 940).
     pub fn update_transcript(
         &mut self,
         msg: crate::features::structured_transcript::TranscriptMsg,
-    ) -> Option<crate::features::structured_transcript::Scroll> {
-        self.structured_transcript.update(msg)
+    ) -> crate::features::structured_transcript::Effect {
+        self.structured_transcript
+            .update(&mut self.transcript_rich, msg)
     }
 
     /// The read an outcome started while the root interpreted it (opening the view from the
@@ -1343,6 +1355,8 @@ pub fn interpret(
             state.workspace.issue_sources.insert(project, provider);
         }
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
+        // Feature 940: the transcript's, handed to the shell in its `Effect`, never drained here.
+        Outcome::ClipboardWriteChecked { .. } | Outcome::CopyConfirmTimer { .. } => {}
         // The shell's: it persists the registry and the binding (`App::apply_daemon_outcome`).
         Outcome::DaemonRegistryChanged(_)
         | Outcome::KubeContextsRequested

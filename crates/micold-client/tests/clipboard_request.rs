@@ -200,17 +200,22 @@ fn the_guard_is_reading_the_shell_it_exempts() {
     );
 }
 
-#[test]
-fn the_shells_translation_decides_nothing() {
-    // C3. Read from the source, because the property is about the *shape* of the translation, and
-    // a body that grew an `if` would still compile and still pass every behaviour test above.
+/// `shell/clipboard.rs::interpret`'s body, comments stripped.
+fn interpret_body() -> String {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shell/clipboard.rs");
     let code =
         inventory::code_only(&std::fs::read_to_string(&src).expect("read shell/clipboard.rs"));
     let at = code
         .find("fn interpret(")
         .expect("the shell interprets effect requests in `interpret`");
-    let body = &code[at..at + code[at..].find("\n}").expect("`interpret` body") + 2];
+    code[at..at + code[at..].find("\n}").expect("`interpret` body") + 2].to_owned()
+}
+
+#[test]
+fn the_shells_translation_decides_nothing() {
+    // C3. Read from the source, because the property is about the *shape* of the translation, and
+    // a body that grew an `if` would still compile and still pass every behaviour test above.
+    let body = &interpret_body();
 
     for branch in ["if ", "else", "while ", "unwrap_or", "is_empty"] {
         assert!(
@@ -225,5 +230,25 @@ fn the_shells_translation_decides_nothing() {
     assert!(
         arms >= 1,
         "no `Outcome::` arm found in `interpret`; this test is reading the wrong function\n\n{body}"
+    );
+}
+
+/// Feature 940 T020 (FR-012, research R5): a code block's copy is a write followed by a read of
+/// the clipboard, the read handed back as `TranscriptMsg::CopyChecked` for the transcript feature
+/// to judge. The arm decides nothing: `the_shells_translation_decides_nothing` reads the same body.
+#[test]
+fn a_checked_write_is_a_write_then_a_read_handed_back() {
+    let body = interpret_body();
+    let at = body
+        .find("Outcome::ClipboardWriteChecked")
+        .expect("`interpret` has a ClipboardWriteChecked arm");
+    let arm = &body[at..];
+    let arm = &arm[..arm[1..].find("Outcome::").map_or(arm.len(), |end| end + 1)];
+    let write = arm.find("clipboard::write(").expect("the arm writes");
+    let read = arm.find("clipboard::read()").expect("the arm reads back");
+    assert!(write < read, "the read follows the write:\n{arm}");
+    assert!(
+        arm.contains(".chain(") && arm.contains("TranscriptMsg::CopyChecked"),
+        "the read is chained after the write and answered as CopyChecked:\n{arm}"
     );
 }

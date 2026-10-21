@@ -213,11 +213,11 @@ clipboard_request` and `cargo test -p micold-client --lib ui::syntax`.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T016 [P] [US3] In-crate tests in `crates/micold-client/src/ui/syntax.rs` (`#[cfg(test)]`) for
+- [x] T016 [P] [US3] In-crate tests in `crates/micold-client/src/ui/syntax.rs` (`#[cfg(test)]`) for
   `knows(token) -> bool` (FR-009): `rust`, `sh`, `yaml`, `json`, `py` known; an unknown token and
   `""` not; and that `fills(roles)` includes the code surface `surface_container_high`, so `legible`
   lifts colours on it (SC-006)
-- [ ] T017 [US1] Reducer tests in a new `crates/micold-client/tests/features_transcript_rich.rs`
+- [x] T017 [US1] Reducer tests in a new `crates/micold-client/tests/features_transcript_rich.rs`
   for the cache (RR-4, RR-5, FR-019, FR-023): `refresh(session, &Transcript)` over a replayed
   `markdown-turn` and `edit-turn` derives `Derived::Text` for assistant text and thinking and
   `Derived::Diff` for Edit/MultiEdit/Write cards (`Diff(None)` while the input streams or is
@@ -230,7 +230,7 @@ clipboard_request` and `cargo test -p micold-client --lib ui::syntax`.
   once each; stored spans hold both schemes, so a theme switch issues no job (FR-023); a part over `review::limits` (`MAX_CHANGED_LINES` lines or `MAX_VERSION_BYTES` bytes) gets
   no job until `show_in_full`, which records the part for that session only and returns its job;
   `highlighted(job, spans)` stores spans and bumps `stamp` only when the part still exists
-- [ ] T018 [US3] Copy tests in `crates/micold-client/tests/features_transcript_rich.rs` (after T017,
+- [x] T018 [US3] Copy tests in `crates/micold-client/tests/features_transcript_rich.rs` (after T017,
   same file; FR-011, FR-012, SC-005): `TranscriptMsg::CopyCode` stores `Pending(ticket)` and emits
   `Outcome::ClipboardWriteChecked { text, ticket }` whose `text` equals the block's `code` byte for
   byte (fenced, indented, empty, and an open block's code so far); `CopyChecked { read:
@@ -238,22 +238,22 @@ clipboard_request` and `cargo test -p micold-client --lib ui::syntax`.
   emitting
   `Outcome::CopyConfirmTimer { ticket, after: COPY_CONFIRM }` (2 s); `CopyExpired` with the current ticket →
   `Idle`, with a stale ticket → unchanged; copy state is per window, session, entry and `CodeId`
-- [ ] T019 [US1] Link tests in `crates/micold-client/tests/features_transcript_rich.rs` (after T018,
+- [x] T019 [US1] Link tests in `crates/micold-client/tests/features_transcript_rich.rs` (after T018,
   same file; FR-004, RR-6): `TranscriptMsg::OpenLink { url }` emits
   `Outcome::OpenLink(OpenRequest::Url(url))` for `http`, `https` and `mailto` addresses and nothing
   for `javascript:`, `file:` and relative addresses
-- [ ] T020 [P] [US3] In `crates/micold-client/tests/clipboard_request.rs`: `shell::clipboard::interpret`
+- [x] T020 [P] [US3] In `crates/micold-client/tests/clipboard_request.rs`: `shell::clipboard::interpret`
   turns `Outcome::ClipboardWriteChecked { text, ticket }` into a write followed by a read mapped to
   `TranscriptMsg::CopyChecked { ticket, read }`, with no branch on the result (feature 021 contract
   C3)
 
 ### Implementation
 
-- [ ] T021 [P] [US3] Add `knows(token: &str) -> bool` (a syntax other than plain text exists) to
+- [x] T021 [P] [US3] Add `knows(token: &str) -> bool` (a syntax other than plain text exists) to
   `crates/micold-client/src/ui/syntax.rs`, and the code surface to `fills`, whose return type goes
   from `[Rgb; 3]` to `[Rgb; 4]` (update its callers and tests found with `LSP findReferences`,
   among them `ui/material/composition_contrast.rs`); T016 passes
-- [ ] T022 [US1] Implement `crates/micold-client/src/features/transcript_rich.rs` per data-model.md
+- [x] T022 [US1] Implement `crates/micold-client/src/features/transcript_rich.rs` per data-model.md
   *Render cache*: `RichCache`, `SessionRich`, `Derived { revision, stamp, body, spans, copy, full }`,
   `DerivedBody::{Text(Document), Diff(Option<EditDiff>)}`, `Part::{Code(CodeId), Diff}`,
   `CopyState::{Pending, Copied, Failed}(Ticket)` (absent = `Idle`), monotonic per-window `Ticket`,
@@ -263,7 +263,7 @@ clipboard_request` and `cargo test -p micold-client --lib ui::syntax`.
   ticket: Ticket }` and `Outcome::CopyConfirmTimer { ticket: Ticket, after: Duration }` in
   `crates/micold-client/src/features/mod.rs`, with their arms in every exhaustive
   `Outcome` match in `crates/micold-client/src/app.rs`
-- [ ] T023 [US1] Add the six variants `OpenLink { url }`, `CopyCode { session, key, code }`,
+- [x] T023 [US1] Add the six variants `OpenLink { url }`, `CopyCode { session, key, code }`,
   `CopyChecked { ticket, read }`, `CopyExpired { ticket }`, `ShowInFull { session, key, part }`,
   `Highlighted { session, key, part, spans }` to #939's `TranscriptMsg` and route them to
   `RichCache` in `crates/micold-client/src/features/structured_transcript.rs`; make both of its
@@ -272,7 +272,7 @@ clipboard_request` and `cargo test -p micold-client --lib ui::syntax`.
   `StructuredEvents` message for that session only; re-export `BlockCache` as
   `transcript_rich::RichCache` in `crates/micold-client/src/ui/transcript/blocks.rs`; T017–T019
   pass
-- [ ] T024 [US3] Shell glue (GUI exception, contracts/rich-renderers.md *Shell*): in
+- [x] T024 [US3] Shell glue (GUI exception, contracts/rich-renderers.md *Shell*): in
   `crates/micold-client/src/shell/daemon_sync.rs` pass `Grammar { knows: ui::syntax::knows, token:
   ui::syntax::token }` to `refresh` and run the `HighlightJob`s returned by `refresh` (and
   by `ShowInFull`) on `spawn_blocking` with `ui::syntax::highlight_lines` in both schemes under a

@@ -9,8 +9,8 @@ mod entries;
 mod keyed;
 
 pub use blocks::{
-    plain_text, unshown_caption, AssistantText, Block, BlockCache, BlockKey, BlockRef,
-    BlockRenderers, CachedBlock, RenderCtx, ThinkingText, ToolInput, ToolResult,
+    plain_text, unshown_caption, AssistantText, Block, BlockCache, BlockRef, BlockRenderers,
+    RenderCtx, ThinkingText, ToolInput, ToolResult,
 };
 pub use entries::{
     footer_view, omitted_text, oversized_text, rows, subagent_count, subagent_notice_text,

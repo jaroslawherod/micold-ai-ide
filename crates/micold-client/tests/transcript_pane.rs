@@ -52,7 +52,13 @@ fn window_with(sessions: Vec<Session>) -> State {
 
 /// `session`'s history as the recorded fixture `name`, as the wire hands it to the window.
 fn feed(state: &mut State, session: SessionId, name: &str) {
-    state.structured_events(session, 0, &sequenced(&fixture_lines(name), 0), false);
+    state.structured_events(
+        session,
+        0,
+        &sequenced(&fixture_lines(name), 0),
+        false,
+        &micold_client::ui::syntax::GRAMMAR,
+    );
 }
 
 fn primary(session: SessionId) -> TerminalRef {

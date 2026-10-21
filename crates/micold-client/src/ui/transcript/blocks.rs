@@ -12,7 +12,6 @@ use micold_core::session::SessionId;
 use micold_core::structured::transcript::{EntryKey, ResultPart};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{spacing, Roles};
-use std::collections::HashMap;
 
 /// What a block renderer draws: content only, emitting no message of the transcript's (R-2).
 /// `'static` because entries are drawn inside iced `lazy` (research R12): a renderer clones what it
@@ -96,38 +95,10 @@ pub struct RenderCtx<'a> {
     pub cache: &'a BlockCache,
 }
 
-/// The key of a cached block (R-4).
-pub type BlockKey = (SessionId, EntryKey, u64);
-
-/// Derived state a renderer reads instead of recomputing it each time an entry is drawn (parsed
-/// markdown, highlighted lines). #940 adds the variants; #939 has none.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CachedBlock {}
-
-/// Per window, keyed by `(SessionId, EntryKey, revision)` (R-4). #939 leaves it empty; #940 fills
-/// it in update after each applied `StructuredEvents` message and prunes it with the transcript.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct BlockCache {
-    slots: HashMap<BlockKey, CachedBlock>,
-}
-
-impl BlockCache {
-    /// What the cache holds for `block`, at its revision.
-    pub fn get(&self, block: &BlockRef<'_>) -> Option<&CachedBlock> {
-        self.slots
-            .get(&(block.session, block.key.clone(), block.revision))
-    }
-
-    /// How many blocks it holds.
-    pub fn len(&self) -> usize {
-        self.slots.len()
-    }
-
-    /// Whether it holds none.
-    pub fn is_empty(&self) -> bool {
-        self.slots.is_empty()
-    }
-}
+/// The window's block cache (R-4): #940's render cache, filled in update after each applied
+/// `StructuredEvents` message and pruned with the transcript (research R8). The name is #939's,
+/// so the seam's shape is unchanged.
+pub use crate::features::transcript_rich::RichCache as BlockCache;
 
 /// How many columns apart the tab stops are when a tab is laid out as spaces.
 const TAB_STOP: usize = 4;

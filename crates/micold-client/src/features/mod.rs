@@ -146,6 +146,25 @@ pub enum Outcome {
     /// `shell/links.rs` takes it out of the queue before the root drains the rest, because opening
     /// is I/O on a blocking task and its result comes back as `LinkOpenFinished`.
     OpenLink(OpenRequest),
+    /// Put `text` on the system clipboard, then read the clipboard back and answer with
+    /// `TranscriptMsg::CopyChecked { ticket, read }` (feature 940, FR-012, research R5).
+    ///
+    /// An effect request like [`Outcome::ClipboardWrite`], interpreted by `shell/clipboard.rs`
+    /// without a branch: whether the copy held is the transcript feature's to judge from the read.
+    ClipboardWriteChecked {
+        /// The code block's code, exactly.
+        text: String,
+        /// The copy it answers.
+        ticket: crate::features::transcript_rich::Ticket,
+    },
+    /// Answer with `TranscriptMsg::CopyExpired { ticket }` after `after` (feature 940, FR-012):
+    /// the shell's timer, as `shell/pr_status.rs` runs one.
+    CopyConfirmTimer {
+        /// The copy whose confirmation it ends.
+        ticket: crate::features::transcript_rich::Ticket,
+        /// `transcript_rich::COPY_CONFIRM`.
+        after: std::time::Duration,
+    },
     /// Type `text` at this terminal's input, without submitting it (feature 487, FR-003).
     ///
     /// An effect request like [`Outcome::OpenLink`]: the bytes go to the daemon addressed to
@@ -318,6 +337,7 @@ pub mod session;
 pub mod settings;
 pub mod sidebar;
 pub mod structured_transcript;
+pub mod transcript_rich;
 pub mod window;
 pub mod worktree;
 pub mod worktree_form;

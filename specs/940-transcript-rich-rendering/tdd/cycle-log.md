@@ -42,3 +42,23 @@ each test task written before its implementation task, run red, then made green.
   `similar::TextDiff` Myers with a 50 ms timeout); 15/15 first run.
 - **Refactor**: the multi-edit test's tuple got a `Shape` alias (clippy `type_complexity`);
   `cargo fmt`; clippy `-D warnings` clean on `micold-core`.
+
+## M3 (T016–T024) — the window's rich cache
+
+- **Red**: T017–T019's `tests/features_transcript_rich.rs` (16 tests) against a `transcript_rich`
+  stub whose methods were `todo!()` (types real, `TranscriptMsg` routing written):
+  `cargo test -p micold-client --test features_transcript_rich` 1 passed, 15 failed, each in the
+  stub's `todo!()`; the one that passed was T019's link test, whose routing in
+  `structured_transcript::State::update` was written with the new variants (test-after). T016
+  against `knows` returning `false` and `fills` still `[Rgb; 3]`: `cargo test -p micold-client
+  --lib ui::syntax` failed to compile, ``can't compare `[Rgb; 3]` with `[Rgb; 4]` ``. T020's source
+  scan of `interpret` was written after its arm (test-after): 16 passed on first run.
+- **Green**: T021 (`knows` over two-face's grammar set, the grammars iced_highlighter builds
+  with; `fills` gains `surface_container_high`), T022 (`RichCache`), T023 (routing, app state,
+  `BlockCache` re-export), T024 (shell glue). First run 11 passed, 5 failed: three were test
+  errors and fixed in the test — a code block's `code` has no final line break (M1's model; the
+  expected copy texts had one), `markdown-turn` holds one assistant text entry (the "several
+  entries" checks now also replay `edit-turn`), and a second `Transcript::new()` restarts
+  revisions so the "entry left" case reused a revision (now one transcript rebuilt from a fresh
+  history, as a session's is). Then 16/16.
+- **Refactor**: `cargo fmt`.

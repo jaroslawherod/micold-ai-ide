@@ -266,7 +266,13 @@ fn forgetting_a_session_drops_its_transcript_and_view_state() {
 
 fn app_with_cards() -> (App, SessionId) {
     let (mut app, s) = (App::default(), SessionId::new());
-    app.structured_events(s, 0, &seq(0, [tool_use("a"), thinking("hm")]), false);
+    app.structured_events(
+        s,
+        0,
+        &seq(0, [tool_use("a"), thinking("hm")]),
+        false,
+        &micold_client::ui::syntax::GRAMMAR,
+    );
     (app, s)
 }
 
@@ -310,28 +316,31 @@ fn following_again_and_showing_ask_for_the_scroll_the_follow_state_needs() {
         content: 1000,
     };
     assert_eq!(
-        app.update_transcript(TranscriptMsg::Shown { session: s }),
+        app.update_transcript(TranscriptMsg::Shown { session: s })
+            .scroll,
         Some(Scroll::End),
         "shown while following: open at the end (FR-018)"
     );
     assert_eq!(
-        app.update_transcript(scrolled(120)),
+        app.update_transcript(scrolled(120)).scroll,
         None,
         "detaching moves nothing"
     );
     assert_eq!(
-        app.update_transcript(TranscriptMsg::Shown { session: s }),
+        app.update_transcript(TranscriptMsg::Shown { session: s })
+            .scroll,
         Some(Scroll::To(120)),
         "shown while detached: back where the user left it"
     );
     assert_eq!(
-        app.update_transcript(scrolled(800)),
+        app.update_transcript(scrolled(800)).scroll,
         Some(Scroll::End),
         "scrolling back to the end resumes following"
     );
     app.update_transcript(scrolled(5));
     assert_eq!(
-        app.update_transcript(TranscriptMsg::JumpToLatest { session: s }),
+        app.update_transcript(TranscriptMsg::JumpToLatest { session: s })
+            .scroll,
         Some(Scroll::End)
     );
     assert_eq!(app.structured_transcript.follow(s), Follow::Following);
@@ -339,7 +348,8 @@ fn following_again_and_showing_ask_for_the_scroll_the_follow_state_needs() {
         app.update_transcript(TranscriptMsg::Toggle {
             session: s,
             key: tool("a"),
-        }),
+        })
+        .scroll,
         None
     );
 }

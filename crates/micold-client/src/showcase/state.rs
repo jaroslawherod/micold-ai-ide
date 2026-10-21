@@ -471,7 +471,7 @@ impl Showcase {
             // The scroll it may ask for is the application shell's to perform; the gallery's
             // scrollable keeps its own place.
             Message::Transcript(msg) => {
-                let _ = self.transcript.update(msg);
+                let _ = self.transcript.update(&mut self.block_cache, msg);
             }
         }
     }

@@ -16,7 +16,7 @@ use crate::ui::material::{
     GridSizeReporter, IconButton, MenuItem, SurfaceKind, Tab, TabStrip, TerminalPane, Text,
     Tooltip, TooltipPosition, TypeRole, TAB_WIDTH,
 };
-use crate::ui::transcript::{BlockCache, BlockRenderers, RenderCtx};
+use crate::ui::transcript::{BlockRenderers, RenderCtx};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
@@ -781,17 +781,10 @@ pub(crate) fn transcript_body<'a>(
         RenderCtx {
             roles: tokens::roles(scheme),
             scheme,
-            cache: window_block_cache(),
+            cache: &state.transcript_rich,
         },
     )
     .map(|msg| Message::Session(SessionMsg::Transcript(msg)))
-}
-
-/// The window's block cache (contract R-4). #939's renderers read none, so it is empty and shared;
-/// #940, whose renderers fill it, moves it into the window's state beside the transcript.
-fn window_block_cache() -> &'static BlockCache {
-    static EMPTY: std::sync::LazyLock<BlockCache> = std::sync::LazyLock::new(BlockCache::default);
-    &EMPTY
 }
 
 /// Whether the pane for `id` is the transcript: a structured session with its AI tab displayed.
