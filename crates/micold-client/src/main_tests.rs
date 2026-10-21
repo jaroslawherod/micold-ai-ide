@@ -7634,6 +7634,7 @@ mod issue_source {
         rig.app.caps = rig.app.caps.clone().with_link_opener(opener.clone());
         rig.app.core.overview.open = true;
         rig.app.core.overview.repo = repo_named("git@github.com:o/r.git");
+        let before = rig.app.core.overview.clone();
         let work = update_inner(
             &mut rig.app,
             Message::Overview(micold_client::features::overview::Msg::IssueLinkActivated(
@@ -7652,7 +7653,7 @@ mod issue_source {
             shown.as_deref(),
             Some("Couldn't open https://github.com/o/r/issues/42: no launcher")
         );
-        assert!(rig.app.core.overview.open, "the Overview stays open");
+        assert_eq!(rig.app.core.overview, before, "nothing else of the Overview changes");
     }
 
     // --- 837: the picked issue's details (US2, US3) ---------------------------------------------

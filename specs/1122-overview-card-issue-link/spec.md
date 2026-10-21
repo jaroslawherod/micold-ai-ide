@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Closed 2026-10-21 — shipped in PRs #1180, #1188, #1195, #1200, #1207, #1217 and the close PR
 
 **Input**: User description: "Implement GitHub issue #1122: Overview cards: link to the worktree's
 issue. Blocked by: #1120 (the branch line the link sits on). 'Issue #N' beside the branch opens the

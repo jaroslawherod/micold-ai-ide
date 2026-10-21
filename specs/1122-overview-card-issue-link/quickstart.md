@@ -54,9 +54,9 @@ either.
   only failures are 4 permission-refusal tests outside this feature
   (`settings_refuses_save_over_failed_read`, `settings_write_is_logged` and two directory-removal
   tests). They fail only when run as root, and `scripts/gate.sh` runs them unprivileged.
-  `scripts/gate.sh` on the close tree (fd2a64ef, the M5 merge; the close changes only `specs/`):
-  green. A first run failed once on feature 942's
+  `scripts/gate.sh` on fd2a64ef (the M5 merge): green. A first run failed once on feature 942's
   `structured_permission::a_pending_request_marks_its_session_waiting_until_the_last_is_decided`
-  (3.0 s under the gate's load); it passed 5 runs of 5 alone and in the second gate run.
+  (3.0 s under the gate's load); it passed 5 runs of 5 alone and in the second gate run. The tdd-verify r1 test fixes (9ca16896:
+  a `JiraBaseUrl` refusal row and the FR-013 failed-open test) then passed the full gate too.
 - **B** (T052): every item passes. The record, its evidence and its limits are in
   [visual-pass.md](visual-pass.md).
