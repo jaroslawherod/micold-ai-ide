@@ -152,7 +152,9 @@ fixture: M1 records the fixtures with the capture script (R11).
     unknown is created (`background = true`); a held `Running` background entry absent from it is
     `EndedWithoutReport`.
   - `Init` (the CLI process started or restarted) → every `Running` entry becomes
-    `EndedWithoutReport` (FR-022; /typescript *SDKBackgroundTasksChangedMessage*: "reset … whenever
+    `EndedWithoutReport` (FR-022; only an `init` with `startup_timing`: the CLI writes an `init`
+    at the start of every turn, and 2.1.306 adds `startup_timing` only to the process's first, as
+    `background-command`'s two inits show (ledger D16); /typescript *SDKBackgroundTasksChangedMessage*: "reset … whenever
     the session's CLI process starts or restarts"). `TurnEndedWithoutResult` → every `Running`
     foreground entry becomes `EndedWithoutReport` (FR-018).
   - While the session's CLI is not running (the client's catalog lifecycle), the view shows every

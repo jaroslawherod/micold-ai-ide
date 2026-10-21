@@ -98,4 +98,15 @@ Each test was written and run red before its implementation, recorded here as it
 - **Mutant**: the refold without `self.threads = ThreadIndex::default()` →
   `past_the_bound_the_oldest_leave_and_the_value_equals_a_fresh_build` fails ("subagent-turn:
   equal to a fresh build of the held events"), so I1 sees the thread index. Reverted.
+- **Red, review A M3 fixes** (`running_background` given a `cli_running` it ignored, nothing else
+  changed): `cargo test -p micold-core --test structured_insights` → 46 passed, 3 failed:
+  `a_later_turns_init_in_the_same_process_leaves_tasks_running` (`left: EndedWithoutReport`,
+  `right: Running`), `a_report_after_an_inferred_end_sets_the_reported_state`
+  (`left: EndedWithoutReport`, `right: Finished`),
+  `no_background_task_counts_as_running_while_the_cli_is_not_running` (`left: 1`, `right: 0`).
+  `a_tool_call_held_again_is_counted_once` passed at once: test-after for the dedupe written in
+  T027.
+- **Green**: only a process-start `init` (`startup_timing`) is an `Init` digest; `Task::report`
+  sets the reported state of a running or inferred-ended task; `running_background` counts
+  `display_state(cli_running)` → `structured_insights` 49/49, `--lib structured::insights` 12/12.
 

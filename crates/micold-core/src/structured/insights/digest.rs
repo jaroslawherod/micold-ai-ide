@@ -27,7 +27,8 @@ pub(super) enum Digest {
     TurnEndedWithoutResult,
     /// An `autocompact_state` line: the threshold when compaction is enabled.
     Autocompact { threshold: Option<u64> },
-    /// The CLI process started or restarted (R6).
+    /// The CLI process started or restarted (R6): an `init` line with `startup_timing`. The `init`
+    /// the same process writes at the start of each later turn has none, and is no digest.
     Init,
     /// A `task_started`, `task_updated`, `task_progress` or `task_notification` line (R6).
     Task(TaskEvent),
@@ -65,7 +66,7 @@ pub(super) fn digest(event: &StructuredEvent) -> Option<Digest> {
             ..
         } => Some(parented(parent, blocks)),
         StructuredEvent::TurnEndedWithoutResult => Some(Digest::TurnEndedWithoutResult),
-        StructuredEvent::Init { .. } => Some(Digest::Init),
+        StructuredEvent::Init { raw, .. } => process_start(raw).then_some(Digest::Init),
         StructuredEvent::Unrecognised { raw } if raw.contains("\"autocompact_state\"") => {
             autocompact(raw)
         }
@@ -76,6 +77,12 @@ pub(super) fn digest(event: &StructuredEvent) -> Option<Digest> {
         }
         _ => None,
     }
+}
+
+/// Whether an `init` line starts the CLI process: 2.1.306 writes `startup_timing` only then.
+fn process_start(raw: &str) -> bool {
+    raw.contains("\"startup_timing\"")
+        && parsed(raw).is_some_and(|line| line.get("startup_timing").is_some())
 }
 
 fn parented(parent: &str, blocks: &[ContentBlock]) -> Digest {

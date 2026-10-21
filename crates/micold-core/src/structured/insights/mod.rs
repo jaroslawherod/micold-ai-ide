@@ -196,19 +196,21 @@ impl SessionInsights {
         self.tasks().filter(|task| task.background)
     }
 
-    /// How many background tasks are still running (FR-020).
-    pub fn running_background(&self) -> usize {
+    /// How many background tasks are still running (FR-020): none while the session's CLI is not
+    /// running, as each task's [`Task::display_state`] shows it (FR-022).
+    pub fn running_background(&self, cli_running: bool) -> usize {
         self.background_tasks()
-            .filter(|task| task.state == TaskState::Running)
+            .filter(|task| task.display_state(cli_running) == TaskState::Running)
             .count()
     }
 
     /// The task the tool call `tool_use_id` started (FR-021): the latest one, should several
     /// name it.
     pub fn task_for_tool(&self, tool_use_id: &str) -> Option<&Task> {
-        self.tasks()
-            .filter(|task| task.tool_use_id.as_deref() == Some(tool_use_id))
-            .last()
+        self.tasks
+            .iter()
+            .rev()
+            .find(|task| task.tool_use_id.as_deref() == Some(tool_use_id))
     }
 
     /// The thread of the subagent the tool call `parent` started, while any of its events is held.

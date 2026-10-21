@@ -1,6 +1,7 @@
 //! The task table behind background tasks and subagent state (research R6, data-model.md
 //! *TaskTable*): one entry per `task_id` the CLI's `system` task lines name.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 /// What a task runs (FR-020): a shell command (`local_bash`) or a subagent (`local_agent`).
@@ -40,6 +41,17 @@ pub struct Task {
 }
 
 impl Task {
+    /// The CLI reported how the task ended. It sets the state of a running task, or of one this
+    /// table ended for want of a report; a reported end stays until the task starts again.
+    fn report(&mut self, state: TaskState) {
+        if matches!(
+            self.state,
+            TaskState::Running | TaskState::EndedWithoutReport
+        ) {
+            self.state = state;
+        }
+    }
+
     /// The state to show: `Running` reads as `EndedWithoutReport` while the session's CLI is not
     /// running (FR-022). A view-time overlay; the table is unchanged (FR-023).
     pub fn display_state(&self, cli_running: bool) -> TaskState {
@@ -119,27 +131,28 @@ pub(super) struct TaskTable {
 
 impl TaskTable {
     /// Every task, in the order first seen.
-    pub(super) fn iter(&self) -> impl Iterator<Item = &Task> {
+    pub(super) fn iter(&self) -> impl DoubleEndedIterator<Item = &Task> {
         self.order.iter().filter_map(|id| self.tasks.get(id))
     }
 
     /// The task `task_id`, made `Running` with no description when it is new.
     fn entry(&mut self, task_id: &str, background: bool) -> &mut Task {
-        if !self.tasks.contains_key(task_id) {
-            self.order.push(task_id.to_string());
+        match self.tasks.entry(task_id.to_string()) {
+            Entry::Occupied(held) => held.into_mut(),
+            Entry::Vacant(new) => {
+                self.order.push(task_id.to_string());
+                new.insert(Task {
+                    task_id: task_id.to_string(),
+                    tool_use_id: None,
+                    description: String::new(),
+                    kind: None,
+                    background,
+                    state: TaskState::Running,
+                    outcome: None,
+                    activity: None,
+                })
+            }
         }
-        self.tasks
-            .entry(task_id.to_string())
-            .or_insert_with(|| Task {
-                task_id: task_id.to_string(),
-                tool_use_id: None,
-                description: String::new(),
-                kind: None,
-                background,
-                state: TaskState::Running,
-                outcome: None,
-                activity: None,
-            })
     }
 
     pub(super) fn event(&mut self, event: &TaskEvent) {
@@ -176,8 +189,8 @@ impl TaskTable {
                 if let Some(description) = description {
                     task.description.clone_from(description);
                 }
-                if let (TaskState::Running, Some(state)) = (task.state, state) {
-                    task.state = *state;
+                if let Some(state) = state {
+                    task.report(*state);
                 }
             }
             TaskEvent::Progress { task_id, activity } => {
@@ -192,9 +205,7 @@ impl TaskTable {
                 outcome,
             } => {
                 let task = self.entry(task_id, true);
-                if task.state == TaskState::Running {
-                    task.state = *state;
-                }
+                task.report(*state);
                 if outcome.is_some() {
                     task.outcome.clone_from(outcome);
                 }
@@ -229,7 +240,7 @@ impl TaskTable {
         }
     }
 
-    /// The CLI started or restarted: every running task ended without a report (FR-022).
+    /// The CLI process started or restarted: every running task ended without a report (FR-022).
     pub(super) fn init(&mut self) {
         self.end_running(|_| true);
     }
