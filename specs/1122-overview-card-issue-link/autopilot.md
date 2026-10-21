@@ -81,7 +81,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-None.
+M2 unit handed over at the context cap (checkpoint 284k). Done: T010–T018 in d05aad46 (cycle log *M2*; research R11 and contract U1 amended: Fill branch, `TextLink::inline`); ledger 9c933927. Full gate on d05aad46: see the scratchpad's gate-m2-1.log (`GATE_EXIT=`). Requested together, not yet run: review A r1 (session model, prompt 1122-m2-prompt-review-a-r1.md), review B r1 (sonnet, 1122-m2-prompt-review-b-r1.md), visual pass r1 = T019 (sonnet, 1122-m2-prompt-visual-r1.md; evidence to `visual-pass/m2/`). Next: act on the verdicts (review-rounds.md), tick T019 on a visual PASS, full gate on the final tree (scripts/gate.sh, detached), push `git push -u origin HEAD:refs/heads/claude/project-thread-7041o6`, write pr-title.txt (`#1122: Overview cards: link to the worktree's issue — M2: card with its issue link`) and pr-body.md (mention the D4 amendment commits riding along; label docs-not-needed; ends `Refs #1122`), return DONE "PR: ready". No PR open.
 
 ## Open escalation
 
