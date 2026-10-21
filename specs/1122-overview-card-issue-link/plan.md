@@ -11,8 +11,9 @@ click, or Enter on the focused link, opens the issue through feature 031's opene
 the card. The rules (ticket form, FR-001's conditions, label, address, the Jira base URL's
 validation, the link's rest and focus effects on expansion) are render-free core code:
 `micold_core::issue_link` (new), `jira::JiraBaseUrl` (new) and additions to 1121's
-`overview_expansion::Expansion`. The Jira base URL is one service-owned setting beside
-`jira_enabled` (wire version 57 → 58), shown as a field in Settings → Jira. The project's GitHub
+`overview_expansion::Expansion`. The Jira base URL is per project (D4, owner's answer): a
+service-owned map beside each project's Jira connection (`jira_connections`, wire version 57 → 58),
+shown as a field for the open project in Settings → Jira. The project's GitHub
 repository comes from the existing `RemoteList` read, now made on every Overview open. The link is a
 new shared `TextLink`; the card's control chain (ripple, keyboard focus, button) moves into a new
 cdk `ControlOverlay` above the face, so a press, release or key the link takes never reaches the
@@ -27,7 +28,8 @@ the card. Arrows step between cards only. Design decisions: [research.md](resear
 `widget::Operation`); existing `serde` and the protocol codec; feature 031's
 `shell::link_opener::LinkOpener`. No new crate.
 
-**Storage**: `jira_base_url` in the service's `settings.json`, service-owned (R3). The link and the
+**Storage**: `jira_base_urls` (per project, keyed as `jira_connections`) in the service's
+`settings.json`, service-owned (R3). The link and the
 repository lookup are in-memory only.
 
 **Testing**: core unit tests (`mise run test-core`): `issue_link` K1–K3, `JiraBaseUrl` K4,
@@ -67,7 +69,7 @@ arrow listener, `main.rs`, `shell/issues.rs`, `shell/persist.rs`, `shell/daemon_
 | Principle | Status | How |
 |---|---|---|
 | I. Test-First | PASS | Every rule is a red-first core test (K1–K5) or a red-first client widget/reducer test (U1–U6); the wire and settings fields red-first in the round-trip tests and the daemon test. Only `main.rs` task wiring (`IssueLinkActivated` → `perform`, `CardStepped` → `step_card`, focus return) is glue, checked by quickstart §B. |
-| II. Multi-Session | PASS | No session state; the link is per location, whatever its sessions; opening it touches none. The base URL is app-wide and service-owned, the same in every window (FR-012). |
+| II. Multi-Session | PASS | No session state; the link is per location, whatever its sessions; opening it touches none. The base URL is per project and service-owned, the same for that project in every window (FR-012); a save carries one project's change, so windows saving different projects never overwrite each other. |
 | III. Worktree Integration | PASS | Read-only use of the worktree's directory name; `RemoteList` is the existing worktree-aware remote read; no VCS write. |
 | IV. Local-First | PASS | Showing a link reads only local state; following it asks the OS to open an address the user clicked (explicit action); nothing is sent to GitHub or Jira by the app; addresses are not logged (FR-014). |
 | V. Rust + iced | PASS | iced only. `IssueRef` makes "a link that is both or neither" unrepresentable; `JiraBaseUrl` can only hold a valid address; `RepoLookup` separates "not read" from "no GitHub repository". |
@@ -90,12 +92,15 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 - **`src/overview_expansion.rs`**: `Event::{LinkRested, LinkFocusGained, LinkFocusLost}`, the focus
   part and the pairing rule — K5 (R8, R9); [data-model.md](data-model.md) *Expansion*.
 - **`src/settings.rs`**, **`src/protocol/messages.rs`**, **`src/protocol/version.rs`**,
-  **`src/kube/fake_host.rs`**: `jira_base_url` — [wire.md](contracts/wire.md) W1–W3.
+  **`src/kube/fake_host.rs`**: `Settings.jira_base_urls`, `JiraBaseUrlChange` (beside
+  `JiraConnectionChange`), `DaemonSettings.jira_base_urls`, `SettingsSet.jira_base_url` —
+  [wire.md](contracts/wire.md) W1–W3.
 
 ### Daemon (`crates/micold-daemon`)
 
-`src/catalog.rs`, `src/state.rs`, `src/server.rs`: store, persist and broadcast `jira_base_url`
-beside `jira_enabled` (W2); `tests/jira_base_url_setting.rs` (new).
+`src/catalog.rs`, `src/state.rs`, `src/server.rs`: merge one project's `JiraBaseUrlChange` into the
+map on disk inside the write and broadcast it, as `jira_connection` is (`set_jira_connection`,
+`persist_service_settings_with`) (W2); `tests/jira_base_url_setting.rs` (new).
 
 ### Client (`crates/micold-client`)
 
@@ -110,9 +115,11 @@ beside `jira_enabled` (W2); `tests/jira_base_url_setting.rs` (new).
 - **`src/features/overview.rs`**: `State.repo: RepoLookup`, `Msg::{RepoRead, IssueLinkActivated,
   CardStepped, LinkMenuRequested}`, `MenuOrigin::KeyboardFromLink` (handled as `Keyboard`);
   `ProjectSwitched` clears `repo` (R2, R9, R10).
-- **`src/features/settings.rs`**: `State.jira_base_url`, `JiraDraft.base_url`, validation and the
-  `SettingsSet` value; **`src/features/window.rs`**: `FieldId::SettingsJiraBaseUrl` (R4).
-- **`src/ui/settings/jira.rs`**: the **Jira base URL** field and note; `SETTINGS` entry (R4).
+- **`src/features/settings.rs`**: `State.jira_base_urls`, `JiraDraft.base_url` seeded by `follow`
+  for the open project, validation and the `SettingsSet` change, outside the connection's required
+  fields; **`src/features/window.rs`**: `FieldId::SettingsJiraBaseUrl` (R4).
+- **`src/ui/settings/jira.rs`**: the open project's **Jira base URL** field and its supporting
+  line, after the connection's fields; `SETTINGS` entry (R4).
 - **`src/ui/overview.rs`**: `card` sets `issue_link`; each card gets the link builders, `link_id`
   = `card_link_id(location)` (new); `step_card` (U4); `issue_link_for(state, location)`.
 - **`src/ui/mod.rs`**: the Overview arrow listener sends `Msg::CardStepped` (R9).
@@ -123,7 +130,8 @@ beside `jira_enabled` (W2); `tests/jira_base_url_setting.rs` (new).
   `daemon_sync.rs`'s `Attached` arm while the Overview is open and `repo` is `Unknown`;
   `on_title_remotes` records `RepoRead` before the switch gate (R2).
 - **`src/shell/persist.rs`**, **`src/shell/daemon_sync.rs`**, **`src/shell/startup.rs`**: the
-  `jira_base_url` lines beside `jira_enabled` (found with `grep -n jira_enabled`).
+  `jira_base_urls` / `jira_base_url` lines beside `jira_connections` / `jira_connection` (found
+  with `grep -n jira_connection`).
 - **`src/showcase/sections/surfaces.rs`**: a card with a link, collapsed and expanded (FR-015).
 - **`tests/support/covered_states.rs`**, **`tests/fixtures/layout_snapshot.txt`**:
   `overview-issue-link` (new); `overview-open` anchors one level deeper (`ControlOverlay`), re-blessed
@@ -135,8 +143,8 @@ beside `jira_enabled` (W2); `tests/jira_base_url_setting.rs` (new).
 
 `docs/user-guide/overview.md`: a section *Opening a worktree's issue* (what the link shows, when,
 pointer and keyboard), the *Keyboard* list (Tab to the link, arrows skip it).
-`docs/user-guide/settings.md`: the Jira section's **Jira base URL** field. `docs/daemon.md`:
-version 58 and the new service-owned setting.
+`docs/user-guide/settings.md`: the Jira section's per-project **Jira base URL** field.
+`docs/daemon.md`: version 58 and the new service-owned per-project setting.
 
 ## Requirement map
 
@@ -151,9 +159,9 @@ version 58 and the new service-owned setting.
 | FR-007 rest on the link | `CardGrid` U5, `Expansion` K5 | core unit; client U5 |
 | FR-008 Tab stop, arrows, focus counts for the card | traversal order U2, `step_card` U4, K5 | core unit; client U3, U4 |
 | FR-009 menu key, Escape on the link | `Msg::LinkMenuRequested`, `MenuOrigin::KeyboardFromLink`, `card_focus_return`; `Expansion` hold across the menu (K5); `on_escape` unchanged | core unit (K5); client `main_tests.rs` (both origins) and reducer test; quickstart §B6 |
-| FR-010 settings field, default, stored | `Settings`, `JiraDraft`, `ui/settings/jira.rs` | `settings_roundtrip.rs`; `settings_sections.rs`; §B2 |
+| FR-010 per-project field, default, stored, independent of the connection | `Settings.jira_base_urls`, `JiraBaseUrlChange`, `JiraDraft`, `ui/settings/jira.rs` | `settings_roundtrip.rs`; `settings_sections.rs`; draft test (saves with the connection blank); §B2 |
 | FR-011 validation | `JiraBaseUrl::parse` K4 | core unit; client draft test (field marked, nothing sent) |
-| FR-012 every window, no restart | service-owned field W2; per-render cards | daemon `jira_base_url_setting.rs`; client `adopt_daemon_settings` test |
+| FR-012 every window, no restart; projects apart | service-owned map, one-project merge W2; per-render cards | daemon `jira_base_url_setting.rs` (two projects from two clients); client `adopt_daemon_settings` test |
 | FR-013 opener failure | `shell::links::perform` → `LinkOpenFinished` | existing 031 tests; §B9 |
 | FR-014 no network, not logged | `RemoteList` only; `IssueLink` `Debug` | core unit (Debug); quickstart §A grep |
 | FR-015 components, theme, contrast, showcase | `TextLink`, `composition_contrast.rs` | `showcase_completeness`, `material_builder_api`, contrast test; §B1 |
@@ -198,7 +206,7 @@ crates/micold-core/src/
 ├── jira.rs                    # JiraBaseUrl, shared authority helper
 ├── overview.rs                # CardModel.issue_link
 ├── overview_expansion.rs      # link events, focus part
-├── settings.rs                # jira_base_url
+├── settings.rs                # jira_base_urls, JiraBaseUrlChange
 ├── kube/fake_host.rs          # DaemonSettings literal
 └── protocol/{messages.rs,version.rs}
 crates/micold-daemon/src/{catalog.rs,state.rs,server.rs}
