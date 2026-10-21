@@ -81,6 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M6 | — | 59281b0d | GATE_EXIT=0 (`scripts/gate.sh`, `commit.gpgsign=false` in the env); the first run (57c50976) failed `ui::panes::tests::an_empty_pane_tile_is_pressable_and_a_terminal_pane_is_not`, a source-shape test, fixed |
 | TDD verify smell pass (close) | 1 | (fresh `autopilot-reviewer`, `claude -p`) | 1 HIGH (judged MED: every arm asserts, mutants caught), 5 MED, 4 LOW; F3–F9 fixed by sonnet workers (core, client), F2 declined (SC-004 is a time budget), F10–F11 LOW kept; 9 deliberate mutants caught; verdict FAIL on test-first evidence only (`tdd/verification.md`) |
 | Close review | 1 | 637d0a5977ee88745b36caaec06fb5c3fa9816b7:4134d89024f2b03e41d67681912d4c5ac1034537 | CLEAN (`claude -p --agent autopilot-reviewer`): F1 MINOR fixed, prose only (T046 sentence); F2 MINOR fixed (a doc comment back above `opened_by`) |
+| Full gate close | — | 14c91cf5 | GATE_EXIT=0 (`scripts/gate.sh`, `commit.gpgsign=false` in the env; 9190 passed, 0 failed) |
 
 ## Declined review findings
 
