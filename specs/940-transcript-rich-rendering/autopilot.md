@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #940
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
-- **Phase**: tasks
-- **Next step**: tasks unit
+- **Phase**: design PR
+- **Next step**: orchestrator opens the design PR; after it merges and #939 M6 has merged, milestone M1 (T001 re-checks #939 names)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| pending | design (spec, clarify, plan, tasks, milestones) | to open (orchestrator, via MCP) | — |
 
 ## Milestones
 
@@ -43,7 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review spec | 2 | 754f7fe793b60b5c4e0cd62f61f515be16d06b54:cee4e71942a66b77ba2d7107e57fd6e433d38b7e | CLEAN |
 | Review plan | 1 | cbeaa4e165ca7c3e9f2ea7b08be207eb01604534:9a46f37fbf00a575587b6d7999a054954d903020 | CLEAN: 3 MINOR (all fixed, prose only) |
 | Review tasks | 1 | df307d2ead90c7a22675e927c76fda956075f993:48dae9c37b7f429569d6b850335973fabda4a734 | CHANGES: 2 MAJOR (MarkdownView copy/large plumbing; CopyExpired timer request unnamed → `Outcome::CopyConfirmTimer`), 1 MINOR (`fills` arity) — all fixed; data-model, research R9, contracts/rich-renderers.md updated |
-| Review tasks | 2 | 09be2f38d7faea105eb95db889edb95def0aba7a:48dae9c37b7f429569d6b850335973fabda4a734 | pending |
+| Review tasks | 2 | 09be2f38d7faea105eb95db889edb95def0aba7a:48dae9c37b7f429569d6b850335973fabda4a734 | CLEAN: 1 MINOR (double blank line, fixed) |
 
 ## Declined review findings
 

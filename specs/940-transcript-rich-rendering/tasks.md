@@ -325,7 +325,6 @@ material_builder_api --test layout_snapshot` and `cargo test -p micold-client --
   `CodeBlock` of the matching `CodeId` (a copied block shows "Copied"; a large block not in `full`
   shows "Show in full" and its press emits `on_show(id)`)
 
-
 ### Implementation
 
 - [ ] T028 [US2] Extract `DiffView`'s marker cell, line `tint` and span-over-tint `rich_text`
