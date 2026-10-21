@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: tasks
-- **Next step**: design PR "#1123: Overview cards: pull request list with state, linked — design" (label docs-not-needed): title/body in the scratchpad, orchestrator opens it; then M1
+- **Next step**: orchestrator opens the design PR "#1123: Overview cards: pull request list with state, linked — design" (label docs-not-needed) from pr-title.txt/pr-body.md in the scratchpad; gate green at 8191c30f; then M1
 
 ## Pull requests
 
