@@ -19,12 +19,11 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    self as changes, adjacent, base_line, can_pick, card_model, committed_available,
-    composer_placed, diff_body, discard_prompt, file_comments, list_body, panel_groups, panel_rows,
-    pending_counts, pr_header, review_of, review_toolbar_label, section, selected_file,
-    send_action, status_counts, tidy_actions, whole_file, ComposerTarget, DiffBody, ListBody, Msg,
-    OpenView, PrSection, Source, Step, WholeFile, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
-    WHOLE_FILE_UNAVAILABLE,
+    self as changes, adjacent, base_line, card_model, committed_available, composer_placed,
+    diff_body, discard_prompt, file_comments, list_body, panel_groups, panel_rows, pending_counts,
+    pr_header, review_of, review_toolbar_label, section, selected_file, send_action, status_counts,
+    tidy_actions, whole_file, ComposerTarget, DiffBody, ListBody, Msg, OpenView, PrSection, Source,
+    Step, WholeFile, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT, WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -564,7 +563,7 @@ fn diff_pane_body<'a>(
             diff = diff
                 .shaped(&view.shaped)
                 .on_gap(|key| Message::Changes(Msg::GapToggled(key)));
-            if can_pick(view) {
+            if changes::pick_allowed(view) {
                 diff = diff.on_gutter(|old, new, extend| {
                     Message::Changes(Msg::GutterPressed { old, new, extend })
                 });

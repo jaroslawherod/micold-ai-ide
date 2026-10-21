@@ -1675,7 +1675,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::GutterPressed { old, new, extend } => {
-            if let Some(view) = state.open.as_mut().filter(|v| can_pick(v)) {
+            if let Some(view) = state.open.as_mut().filter(|v| pick_allowed(v)) {
                 // C1: a context line has both numbers and counts as the new side.
                 let (side, line) = match (old, new) {
                     (_, Some(n)) => (Side::New, n),
@@ -3032,6 +3032,19 @@ pub fn diff_body(view: &OpenView) -> DiffBody<'_> {
         Load::Failed(message) => DiffBody::Failed(message),
         Load::Idle | Load::Loading { last: None, .. } => DiffBody::Loading,
     }
+}
+
+/// The one gate on picking (R7, FR-006): whether lines of `file` can be picked for a comment. Only
+/// the shown file's diff rows can, and they can where [`can_pick`] allows; revealed lines are
+/// context rows of that diff, so they follow it. Adds no rule of its own: a file the change does
+/// not touch is not pickable until #1149 specifies an anchor for it.
+pub fn pickable(view: &OpenView, file: &RelPath) -> bool {
+    selected_key(view).is_some_and(|(_, shown)| &shown == file) && can_pick(view)
+}
+
+/// [`pickable`] for the file the view shows: the check the pick handling and the diff pane make.
+pub fn pick_allowed(view: &OpenView) -> bool {
+    selected_key(view).is_some_and(|(_, file)| pickable(view, &file))
 }
 
 /// Whether lines of the shown diff can be picked for a comment: text only (D3).

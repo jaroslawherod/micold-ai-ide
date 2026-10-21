@@ -134,6 +134,10 @@ and exactly those lines appear in place: numbered in step with the lines around 
 them, and in both the unified and the side-by-side layout. Press the row that opens the revealed
 lines to hide them again and get the usual hunk back.
 
+- Revealed lines are picked like the lines of the diff: click the line number, shift-click to
+  extend, together with diff lines or alone. A pick on them names the same file and line numbers as
+  a diff line would, so you comment on them in the same steps. Where picking is not allowed for the
+  shown diff, revealed lines cannot be picked either.
 - The view remembers what you opened for each file while it stays open. A refresh keeps the
   revealed lines that are still there and drops the ones that are gone.
 - The lines come from the file as it is on disk, so they are the latest saved version, committed or

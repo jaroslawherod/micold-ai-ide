@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1150
 - **Worktree branch**: feat/1150_show-the-full-file-while-reviewing-a-diff-in-the
 - **Started**: 2026-10-20
-- **Phase**: M3 PR open
-- **Next step**: wait for CI, merge M3, then M4
+- **Phase**: M4 PR open
+- **Next step**: wait for CI, merge M4, then M5
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1151 | Design PR (spec, plan, tasks) | merged | df019910c4b525b25df8b08f3fd1073a11b28f72 |
 | #1156 | M1 expand hidden lines | merged | 25e95c33ff20a6a07f72abaa4d0aad4aee683cd2 |
 | #1162 | M2 whole-file toggle | merged | 8109df50677a9a0635067277aa0df3137e3c3c48 |
-| #1215 | M3 pull request head version | open | |
+| #1215 | M3 pull request head version | merged | a608e0fcb7713377ed9abe3426b958462b91a9db |
 
 ## Milestones
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Expand hidden lines in a diff (MVP) | #1156 | merged |
 | M2 | T018–T022 | light | Whole-file toggle | #1162 | merged |
-| M3 | T023–T031 | full | Pull request head version | #1215 | PR open |
-| M4 | T032–T035 | light | Pick revealed lines | | pending |
+| M3 | T023–T031 | full | Pull request head version | #1215 | merged |
+| M4 | T032–T035 | light | Pick revealed lines | (pending PR) | PR open |
 | M5 | T036–T046 | full | Browse repository files | | pending |
 | M6 | T047–T053 | full | Browse at the PR head | | pending |
 | M7 | T054–T062 | full | Follow references from the diff | | pending |
@@ -55,6 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 A+B (autopilot-reviewer, combined) | 1 | d46fca691da0d60a56a4503dcb86b060016d02d9:cd601b580040cabf5a3eb1eb5f57baac4bb3fe57 | CLEAN; Verify green; 1 MINOR fixed (toggle hidden for PR source until M3), 2 MINOR no action |
 | Plan | 2 | 3213adb2c03edaa4431e840ab07b5a36c88de031:6179267cd162fbbfa13ebaa171f85c55810ee0be | CLEAN (3 MINOR fixed, prose only) |
 | M3 A (code-review high) + B (autopilot-reviewer sonnet) | 1 | ba4b1ee6541e38c40fea2c613f9b159e0ef8dadb:6a15094430c1a28268aa59eb561f688cb798d3f8 | A: fixed size gate before local blob read, force_large on ShowLarge, stale head_text reset; B: MAJOR fixed (local head read no longer needs gh), MINOR no shell test for address parsing left |
+| M4 A+B (autopilot-reviewer sonnet, combined) | 1 | 63ac6f9f17622829cba16564ff524073c9b47aae:a608e0fcb7713377ed9abe3426b958462b91a9db | MAJOR fmt fixed (cargo fmt); MINOR duplicate selected check fixed via pick_allowed; own gate run caught PR-source selection regression, fixed via selected_key |
 
 ## Declined review findings
 
