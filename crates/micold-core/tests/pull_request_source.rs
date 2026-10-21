@@ -51,7 +51,7 @@ fn one_each(chunk: &[String]) -> Answer {
             .enumerate()
             .map(|(i, b)| (b.clone(), status(i as u64 + 1)))
             .collect(),
-        counts: BTreeMap::new(),
+        lists: BTreeMap::new(),
     })
 }
 
@@ -71,7 +71,7 @@ fn fake_answers_in_order_and_records_calls() {
         source.read(&repo, &first, NOW),
         Ok(StatusReading {
             statuses: answer,
-            counts: BTreeMap::new()
+            lists: BTreeMap::new()
         }),
         "the first read gets the first scripted answer"
     );

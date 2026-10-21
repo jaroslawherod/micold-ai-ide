@@ -18,7 +18,8 @@ use crate::ui::cdk::control_overlay::ControlOverlay;
 use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::line_clamp::LineClamped;
 use crate::ui::material::{
-    style, Ellipsized, Glyph, ProgressBar, Ripple, Scrollable, Text, TextLink, Tooltip, TypeRole,
+    style, Ellipsized, Glyph, PrMark, ProgressBar, Ripple, Scrollable, Tag, Text, TextLink,
+    Tooltip, TypeRole,
 };
 use iced::widget::text::Wrapping;
 use iced::widget::{button, column, container, row, stack, Space};
@@ -118,6 +119,20 @@ pub fn words(model: &CardModel) -> Words {
     }
 }
 
+/// One pull request row as the card draws it (feature 1123, research R9): the number, the state
+/// pill and the status words. No address: a press names the number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardPrRow {
+    /// The number as shown, "#N".
+    pub label: String,
+    /// The state, drawn as a pill with its word.
+    pub mark: PrMark,
+    /// The status words, when one applies.
+    pub phrase: Option<String>,
+    /// The words say the checks fail: drawn in the `error` role.
+    pub failing: bool,
+}
+
 /// What a secondary press becomes, built from the press point in window pixels.
 type PressAt<'a, M> = Rc<dyn Fn((u16, u16)) -> M + 'a>;
 
@@ -159,6 +174,8 @@ pub struct OverviewCard<'a, M> {
     on_link_keyboard_focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
     on_link_menu_key: Option<M>,
     status: Option<(micold_core::jira_status::TicketStatus, bool)>,
+    pr_rows: Vec<CardPrRow>,
+    pr_more: usize,
     _marker: PhantomData<&'a M>,
 }
 
@@ -193,6 +210,8 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             on_link_keyboard_focus: None,
             on_link_menu_key: None,
             status: None,
+            pr_rows: Vec::new(),
+            pr_more: 0,
             _marker: PhantomData,
         }
     }
@@ -204,6 +223,16 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         status: Option<(&micold_core::jira_status::TicketStatus, bool)>,
     ) -> Self {
         self.status = status.map(|(status, stale)| (status.clone(), stale));
+        self
+    }
+
+    /// The pull request rows to draw (feature 1123, contract U1), above the counts line, and how
+    /// many more the reading lists than `rows` holds: "+N more" below them when `more > 0`. In a
+    /// row the number and the pill keep their width and the status words end in an ellipsis
+    /// first (FR-015). No rows draw nothing and leave no gap.
+    pub fn pull_requests(mut self, rows: Vec<CardPrRow>, more: usize) -> Self {
+        self.pr_rows = rows;
+        self.pr_more = more;
         self
     }
 
@@ -604,6 +633,9 @@ fn collapsed_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> 
             body = body.push(ProgressBar::new(ratio, roles));
         }
     }
+    if let Some(rows) = pull_request_rows(card, p) {
+        body = body.push(rows);
+    }
     if let Some((text, tooltip)) = text.prs {
         let line = Text::new(text, TypeRole::Body, roles).tint(p.on_body_variant);
         body = match tooltip {
@@ -612,6 +644,45 @@ fn collapsed_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> 
         };
     }
     container(body).padding(spacing::MD).into()
+}
+
+/// The card's pull request rows and its "+N more" line (feature 1123, research R9), or `None`
+/// without rows. A row is the number at its natural width, the pill (solid, in the state's
+/// `PrMark` role with its on-colour as the word) at its natural width, and the
+/// words in what is left, ellipsized; *checks failing* in `error`, other words in the body role,
+/// "+N more" in the muted body role.
+fn pull_request_rows<'a, M: 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Option<Element<'a, M>> {
+    if card.pr_rows.is_empty() {
+        return None;
+    }
+    let roles = card.roles;
+    let mut lines = column![].spacing(spacing::XS);
+    for pr in &card.pr_rows {
+        let mut line = row![
+            Text::new(pr.label.clone(), TypeRole::Body, roles).tint(p.on_body),
+            Tag::<M>::new(pr.mark.word(), pr.mark.role(&roles))
+                .solid(pr.mark.on_role(&roles))
+                .role(TypeRole::Label),
+        ]
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center);
+        if let Some(words) = &pr.phrase {
+            let tint = if pr.failing { roles.error } else { p.on_body };
+            line = line.push(Ellipsized::<M>::at_role_spaced(
+                words.clone(),
+                TypeRole::Body,
+                tint,
+            ));
+        }
+        lines = lines.push(line);
+    }
+    if card.pr_more > 0 {
+        lines = lines.push(
+            Text::new(format!("+{} more", card.pr_more), TypeRole::Body, roles)
+                .tint(p.on_body_variant),
+        );
+    }
+    Some(lines.into())
 }
 
 /// The ticket's status chip, left-aligned in its own line, when the card has one (feature 1101).
@@ -688,6 +759,9 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
         if let Some(ratio) = row.bar {
             rest = rest.push(ProgressBar::new(ratio, roles));
         }
+    }
+    if let Some(rows) = pull_request_rows(card, p) {
+        rest = rest.push(rows);
     }
     if let Some((words, _)) = text.prs {
         rest = rest.push(body_line(words));
@@ -769,6 +843,7 @@ mod tests {
             activation: Activation::OpenSession(SessionId::new()),
             dir: std::path::PathBuf::from("/repo/.worktrees/x"),
             issue_link: None,
+            pull_requests: None,
         }
     }
 
@@ -2882,5 +2957,210 @@ mod tests {
                 assert_eq!(all_bounds(&after.node), all_bounds(&before.node));
             }
         }
+    }
+
+    // ---- Feature 1123 (T010, contract U1): pull request rows ----
+
+    fn pr_row(number: u64, mark: PrMark, phrase: Option<&str>) -> CardPrRow {
+        CardPrRow {
+            label: format!("#{number}"),
+            mark,
+            phrase: phrase.map(str::to_string),
+            failing: phrase == Some("checks failing"),
+        }
+    }
+
+    /// Two rows and one more: open with failing checks, a draft pending.
+    fn two_rows() -> Vec<CardPrRow> {
+        vec![
+            pr_row(12, PrMark::Open, Some("checks failing")),
+            pr_row(11, PrMark::Draft, Some("checks pending")),
+        ]
+    }
+
+    /// The card of `full(false)` with counts showing, drawn with `rows` and `more`, `width` wide.
+    fn with_rows(
+        rows: Vec<CardPrRow>,
+        more: usize,
+        expanded: bool,
+        width: f32,
+    ) -> (Vec<super::super::test_support::Painted>, Size) {
+        let mut m = full(false);
+        m.prs = PrDisplay::Counts(micold_core::overview::PrCounts {
+            open: 2,
+            merged: 1,
+            open_capped: false,
+            merged_capped: false,
+        });
+        let mut mounted = Mounted::new_in(
+            container(
+                OverviewCard::<String>::new(&m, roles())
+                    .on_press("open".to_string())
+                    .pull_requests(rows, more)
+                    .expanded(expanded),
+            )
+            .width(Length::Fixed(width)),
+            Size::new(width, 4000.0),
+        );
+        (mounted.painted_text(), mounted.node.size())
+    }
+
+    fn top(painted: &[super::super::test_support::Painted], content: &str) -> f32 {
+        painted
+            .iter()
+            .find(|p| p.content == content)
+            .unwrap_or_else(|| panic!("{content:?} is not painted"))
+            .bounds
+            .y
+    }
+
+    /// U1, FR-002, FR-004, FR-005: one line per row with "#N", the pill word and the words, between
+    /// the activity line and the counts line; "+N more" below the rows only when there are more.
+    #[test]
+    fn the_rows_show_number_pill_and_words_between_the_activity_and_the_counts() {
+        for expanded in [false, true] {
+            let (painted, _) = with_rows(two_rows(), 1, expanded, 380.0);
+            let activity = painted
+                .iter()
+                .find(|p| p.content.starts_with("Editing card_grid.rs"))
+                .unwrap_or_else(|| panic!("no activity in {painted:?}"))
+                .bounds
+                .y;
+            let counts = top(&painted, "2 open \u{b7} 1 merged");
+            for (number, pill, words) in [
+                ("#12", "Open", "checks failing"),
+                ("#11", "Draft", "checks pending"),
+            ] {
+                let y = top(&painted, number);
+                assert!(activity < y && y < counts, "{expanded}: {number} at {y}");
+                assert!(
+                    (top(&painted, pill) - y).abs() < 8.0,
+                    "{expanded}: {pill} on its row"
+                );
+                assert!(
+                    (top(&painted, words) - y).abs() < 8.0,
+                    "{expanded}: {words} on its row"
+                );
+            }
+            let more = top(&painted, "+1 more");
+            assert!(top(&painted, "#11") < more && more < counts, "{expanded}");
+            let (painted, _) = with_rows(two_rows(), 0, expanded, 380.0);
+            assert!(
+                painted.iter().all(|p| !p.content.contains("more")),
+                "{expanded}"
+            );
+        }
+    }
+
+    /// A row without words draws the number and the pill only.
+    #[test]
+    fn a_row_without_words_draws_number_and_pill() {
+        let (painted, _) = with_rows(vec![pr_row(9, PrMark::Merged, None)], 0, false, 380.0);
+        let y = top(&painted, "#9");
+        let on_row: Vec<_> = painted
+            .iter()
+            .filter(|p| (p.bounds.y - y).abs() < 8.0)
+            .map(|p| p.content.as_str())
+            .collect();
+        assert_eq!(on_row, ["#9", "Merged"]);
+    }
+
+    /// U1, SC-006, FR-015: at 280, 380 and 480 px a long number and pill are whole and inside the
+    /// card and long words end in an ellipsis.
+    #[test]
+    fn the_number_and_pill_stay_whole_and_the_words_ellipsize_at_every_width() {
+        let long = "changes requested ".repeat(6);
+        for width in WIDTHS {
+            for expanded in [false, true] {
+                let rows = vec![pr_row(1_123_456, PrMark::Draft, Some(long.trim_end()))];
+                let (painted, card) = with_rows(rows, 0, expanded, width);
+                for whole in ["#1123456", "Draft"] {
+                    let p = painted
+                        .iter()
+                        .find(|p| p.content == whole)
+                        .unwrap_or_else(|| panic!("{width}: {whole:?} whole in {painted:?}"));
+                    assert!(
+                        p.bounds.x >= -0.01 && p.bounds.x + p.bounds.width <= card.width + 0.01,
+                        "{width}: {whole} leaves the card"
+                    );
+                }
+                let words = painted
+                    .iter()
+                    .find(|p| p.content.starts_with("changes requested"))
+                    .expect("the words");
+                assert!(words.content.ends_with('\u{2026}'), "{width}: {words:?}");
+                assert!(words.bounds.x + words.bounds.width <= card.width + 0.01);
+            }
+        }
+    }
+
+    /// R9: *checks failing* in `error`, other words in the body role, "+N more" muted.
+    #[test]
+    fn failing_words_are_drawn_in_the_error_role() {
+        let r = roles();
+        let p = palette(CardState::Working, &r);
+        let (painted, _) = with_rows(two_rows(), 3, false, 380.0);
+        let colour = |content: &str| {
+            painted
+                .iter()
+                .find(|p| p.content == content)
+                .unwrap_or_else(|| panic!("{content:?}"))
+                .color
+        };
+        assert_eq!(colour("checks failing"), style::color(r.error));
+        assert_eq!(colour("checks pending"), style::color(p.on_body));
+        assert_eq!(colour("+3 more"), style::color(p.on_body_variant));
+    }
+
+    /// U1: without rows the card lays out exactly as before: no extra node.
+    #[test]
+    fn a_card_without_rows_lays_out_as_before() {
+        use super::super::test_support::all_bounds;
+        let m = full(false);
+        let room = Size::new(380.0, 1000.0);
+        for expanded in [false, true] {
+            let plain = super::super::test_support::laid_out(
+                OverviewCard::<()>::new(&m, roles())
+                    .expanded(expanded)
+                    .into(),
+                room,
+            );
+            let empty = super::super::test_support::laid_out(
+                OverviewCard::<()>::new(&m, roles())
+                    .pull_requests(Vec::new(), 0)
+                    .expanded(expanded)
+                    .into(),
+                room,
+            );
+            assert_eq!(all_bounds(&empty), all_bounds(&plain), "{expanded}");
+        }
+    }
+
+    /// US2 sc. 2: on an expanded card whose body scrolls, the rows scroll with it.
+    #[test]
+    fn the_rows_scroll_with_the_expanded_body() {
+        let m = overlong();
+        let mut card = Mounted::new_in(
+            container(
+                OverviewCard::<String>::new(&m, roles())
+                    .on_press("open".to_string())
+                    .pull_requests(two_rows(), 0)
+                    .expanded(true),
+            )
+            .width(Length::Fixed(280.0))
+            .height(Length::Fixed(500.0)),
+            Size::new(280.0, 500.0),
+        );
+        let before = card
+            .painted_text()
+            .into_iter()
+            .find(|p| p.content == "#12")
+            .map(|p| p.bounds.y);
+        wheel(&mut card, Point::new(140.0, 450.0), -10_000.0);
+        let after = top_of(&mut card, "#12");
+        assert!(
+            before.is_none_or(|y| after < y),
+            "the row moved up: {before:?} -> {after}"
+        );
     }
 }

@@ -61,6 +61,7 @@ pub mod path_insert;
 pub mod paths;
 pub mod permission_failure;
 pub mod plan_usage;
+pub mod pr_list;
 pub mod process;
 pub mod project;
 pub mod protocol;

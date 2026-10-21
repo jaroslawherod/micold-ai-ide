@@ -205,7 +205,7 @@ pub use labelled_toggle::LabelledToggle;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
-pub use overview_card::OverviewCard;
+pub use overview_card::{CardPrRow, OverviewCard};
 pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;

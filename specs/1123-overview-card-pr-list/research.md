@@ -255,7 +255,8 @@ between draw and press would open another pull request.
 **Decision**: A row is `[TextLink "#N"] [pill] [Ellipsized status words]` on one line, the number
 and pill at natural width, the words taking the rest and ellipsized first (FR-015, 1121 FR-007).
 The pill is the shared `Tag` (`ui/material/tag.rs`, `Tag::new(label, accent)`, the tonal pill
-`StatusChip` is built on) with the state word as its label and `PrMark::role(roles)` as its accent:
+`StatusChip` is built on) with the state word as its label and `PrMark::role(roles)` as its accent
+(drawn solid, `Tag::solid(PrMark::on_role(roles))`: see the M1 amendment below):
 `PrMark` (`pull_request_indicator.rs`) already maps open to `primary`, draft and closed to
 `on_surface_variant`, merged to `tertiary` for the sidebar's state glyph, and the contrast gate
 measures that function. `BranchPrState` maps to `PrMark` in `ui/overview.rs`, as the sidebar maps
@@ -269,6 +270,15 @@ activity line; the "+N more" line is a muted body-role text below the rows. Cont
 `composition_contrast.rs`: it measures the `PrMark::role` text colour over the `Tag` chip fill
 (`style::chip(accent)`, the accent's own faint tint), for each of the four marks in both themes
 (feature 1120 FR-003).
+
+**M1 amendment (T011, ledger D11)**: the tonal pill (accent text on `style::chip`'s 20% tint) measured
+4.41:1 for *Open* (`primary`) and *Merged* (`tertiary`) in the light scheme, under feature 1120
+FR-003's 4.5:1. The pill is drawn solid instead: the fill is `PrMark::role`, the word its on-colour
+`PrMark::on_role` (*Open* `on_primary`, *Merged* `on_tertiary`, *Draft* and *Closed* `surface` on
+`on_surface_variant`), through `Tag::solid`, which passes in every card state, on the body and under
+the selected layer, in both schemes. Phrases other than *checks failing* use the body's `on_surface`,
+"+N more" the muted `on_surface_variant`. The rows sit above the counts line, after the activity and
+progress lines.
 
 **Rationale**: Principle VIII (shared components, roles); SC-006 (number and pill never clipped);
 the card's pill and the sidebar's glyph colour a state the same way.

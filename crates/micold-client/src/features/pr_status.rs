@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use micold_core::overview::PrCounts;
+use micold_core::pr_list::BranchPrList;
 use micold_core::protocol::messages::BranchContainment;
 use micold_core::pull_request::{PrState, PullRequestStatus, ReadingFailure};
 
@@ -42,9 +42,9 @@ pub struct State {
     pub next_seq: u64,
     /// Branch → status of the last successful reading.
     pub statuses: BTreeMap<String, PullRequestStatus>,
-    /// Branch → open and merged counts of the last successful reading; cleared exactly when
+    /// Branch → its listed pull requests (feature 1123) of the last successful reading; cleared exactly when
     /// `statuses` is (feature 813).
-    pub counts: BTreeMap<String, PrCounts>,
+    pub lists: BTreeMap<String, BranchPrList>,
     /// The last reading could not reach GitHub (`Unavailable`); cleared by the next good one.
     pub unreachable: bool,
     /// Branches whose merged pull request holds all of the branch's work.
@@ -62,8 +62,8 @@ pub enum Outcome {
     Ok {
         /// Branch → status.
         statuses: BTreeMap<String, PullRequestStatus>,
-        /// Branch → counts, an entry for every branch asked.
-        counts: BTreeMap<String, PrCounts>,
+        /// Branch → its listed pull requests, an entry for every branch asked.
+        lists: BTreeMap<String, BranchPrList>,
         /// Branches whose merged pull request holds all of their work.
         removable: BTreeSet<String>,
         /// Unix seconds at which the reading started.
@@ -132,8 +132,8 @@ pub enum Msg {
         seq: u64,
         /// Branch → status.
         statuses: BTreeMap<String, PullRequestStatus>,
-        /// Branch → counts.
-        counts: BTreeMap<String, PrCounts>,
+        /// Branch → its listed pull requests.
+        lists: BTreeMap<String, BranchPrList>,
         /// Unix seconds at which the reading started.
         started_at: u64,
     },
@@ -222,7 +222,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 start(state, now)
             } else {
                 state.statuses.clear();
-                state.counts.clear();
+                state.lists.clear();
                 state.unreachable = false;
                 state.removable.clear();
                 state.read_at = None;
@@ -248,7 +248,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             match outcome {
                 Outcome::Ok {
                     statuses,
-                    counts,
+                    lists,
                     removable,
                     started_at,
                 } => {
@@ -263,14 +263,14 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                         })
                         .collect();
                     state.statuses = statuses;
-                    state.counts = counts;
+                    state.lists = lists;
                     state.unreachable = false;
                     state.read_at = Some(started_at);
                     state.pause_until = None;
                 }
                 Outcome::Err(ReadingFailure::Unavailable) => {
                     state.statuses.clear();
-                    state.counts.clear();
+                    state.lists.clear();
                     state.unreachable = true;
                     state.removable.clear();
                     state.read_at = None;
@@ -292,7 +292,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             state.awaiting_listing = false;
             state.phase = Phase::Idle;
             state.statuses.clear();
-            state.counts.clear();
+            state.lists.clear();
             state.unreachable = false;
             state.removable.clear();
             state.read_at = None;

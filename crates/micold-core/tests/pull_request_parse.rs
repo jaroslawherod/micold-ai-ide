@@ -7,8 +7,8 @@
 
 use std::path::PathBuf;
 
-/// The 15 recorded answers of contracts/pull-request-source.md §5.
-const FIXTURES: [&str; 15] = [
+/// The 15 recorded answers of contracts/pull-request-source.md §5, and feature 1123's four-state one.
+const FIXTURES: [&str; 16] = [
     "pr_three_branches.txt",
     "pr_checks_failing.txt",
     "pr_checks_pending.txt",
@@ -24,6 +24,7 @@ const FIXTURES: [&str; 15] = [
     "pr_rate_limited_secondary_no_retry_after.txt",
     "pr_truncated.txt",
     "pr_checks_forbidden.txt",
+    "pr_four_states.txt",
 ];
 
 fn fixture_path(name: &str) -> PathBuf {
@@ -433,4 +434,124 @@ fn parse_status_only_cross_repository_is_empty() {
         map.is_empty(),
         "a fork's pull request is not this branch's (FR-005, SC-002)"
     );
+}
+
+// ---- feature 1123: the list of each branch's pull requests (contracts/reading.md) ----
+
+use micold_core::pull_request::BranchPrState;
+
+/// The branches an answer was asked about: one per `o<i>` alias, named by index.
+fn asked(body: &[u8]) -> Vec<String> {
+    let v: serde_json::Value = serde_json::from_slice(body).expect("JSON");
+    let repo = v["data"]["repository"].as_object().expect("repository");
+    (0..)
+        .take_while(|i| repo.contains_key(&format!("o{i}")))
+        .map(|i| format!("b{i}"))
+        .collect()
+}
+
+/// P1: four states on one branch are listed in FR-003 order, and the counts come from them.
+#[test]
+fn p1_four_states_are_listed_open_first_and_counted() {
+    let reading =
+        parse_status(&body_of("pr_four_states.txt"), &branches(&["y"])).expect("readable");
+    let list = &reading.lists["y"];
+    let listed: Vec<_> = list.prs().iter().map(|pr| (pr.number, pr.state)).collect();
+    assert_eq!(
+        listed,
+        [
+            (14, BranchPrState::Open),
+            (13, BranchPrState::Draft),
+            (12, BranchPrState::Merged),
+            (11, BranchPrState::Closed),
+        ]
+    );
+    let counts = list.counts();
+    assert_eq!(
+        (counts.open, counts.merged),
+        (2, 1),
+        "the draft counts as open"
+    );
+    assert!(!counts.open_capped && !counts.merged_capped);
+}
+
+/// P2: a pull request on the `o`, `r` and `m` pages is listed once.
+#[test]
+fn p2_a_pull_request_on_several_pages_is_listed_once() {
+    let reading =
+        parse_status(&body_of("pr_four_states.txt"), &branches(&["y"])).expect("readable");
+    let mut numbers: Vec<_> = reading.lists["y"]
+        .prs()
+        .iter()
+        .map(|pr| pr.number)
+        .collect();
+    numbers.sort_unstable();
+    numbers.dedup();
+    assert_eq!(numbers.len(), reading.lists["y"].prs().len());
+}
+
+/// P5: a missing `m<i>` alias, or a merged node missing a field, fails the whole reading.
+#[test]
+fn p5_an_unreadable_merged_page_fails_the_reading() {
+    let mut v = three_body();
+    assert!(v["data"]["repository"]
+        .as_object_mut()
+        .expect("repository")
+        .remove("m1")
+        .is_some());
+    assert_eq!(three_result(&v), Err(ReadingFailure::Passing), "missing m1");
+    let mut v = three_body();
+    let node = v["data"]["repository"]["m0"]["nodes"][0]
+        .as_object_mut()
+        .expect("a merged node");
+    assert!(node.remove("createdAt").is_some());
+    assert_eq!(
+        three_result(&v),
+        Err(ReadingFailure::Passing),
+        "a node without createdAt"
+    );
+}
+
+/// P7: a number on both `r` and `m` keeps `r`'s node, its checks and its review.
+#[test]
+fn p7_the_recent_page_wins_over_the_merged_page() {
+    let reading =
+        parse_status(&body_of("pr_four_states.txt"), &branches(&["y"])).expect("readable");
+    let merged = reading.lists["y"]
+        .prs()
+        .iter()
+        .find(|pr| pr.number == 12)
+        .expect("#12 is listed");
+    assert_eq!(
+        merged.checks,
+        CheckStatus::Passing,
+        "r0's node: its checks kept"
+    );
+}
+
+/// P6: for every recorded answer the list's first entry is the sidebar's pull request, and every
+/// asked branch has a list (empty for none).
+#[test]
+fn p6_the_first_listed_is_the_shown_pull_request() {
+    for name in FIXTURES.iter().filter(|name| {
+        name.starts_with("pr_")
+            && !name.contains("rate_limited")
+            && !name.contains("not_found")
+            && !name.contains("truncated")
+    }) {
+        let body = body_of(name);
+        let names = asked(&body);
+        let reading = parse_status(&body, &names).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        for branch in &names {
+            let list = reading
+                .lists
+                .get(branch)
+                .unwrap_or_else(|| panic!("{name} {branch}: a list"));
+            assert_eq!(
+                list.prs().first().map(|pr| pr.number),
+                reading.statuses.get(branch).map(|status| status.number),
+                "{name} {branch}"
+            );
+        }
+    }
 }

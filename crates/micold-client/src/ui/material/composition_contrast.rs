@@ -405,6 +405,63 @@ fn an_overview_cards_issue_link_is_legible_on_its_body() {
     );
 }
 
+/// Overview card pull request rows (feature 1123, T011 — FR-015, research R9): each state's pill
+/// word in `PrMark::on_role` on the solid `Tag` fill in `PrMark::role` (`style::chip_solid`; the
+/// tonal `style::chip` measured 4.41:1 for Open and Merged in the light scheme), the *checks failing* words in `error`, the other words in the body role and the
+/// "+N more" line in the muted body role, on the body bare and under the selected layer, in every
+/// card state and both schemes, at feature 1120 FR-003's 4.5:1.
+#[test]
+fn an_overview_cards_pull_request_rows_are_legible_on_its_body() {
+    use super::PrMark;
+    use micold_core::overview::CardState;
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for state in CardState::ALL {
+            let p = super::overview_card::palette(state, &r);
+            let selected = tokens::over(p.on_body, f64::from(tokens::state::SELECTED), p.body);
+            for (ground_name, ground) in [("body", p.body), ("body + selected layer", selected)] {
+                let mut pairs: Vec<(String, Rgb, Rgb)> = vec![
+                    ("failing words".into(), r.error, ground),
+                    ("status words".into(), p.on_body, ground),
+                    ("+N more".into(), p.on_body_variant, ground),
+                ];
+                for mark in [PrMark::Open, PrMark::Draft, PrMark::Merged, PrMark::Closed] {
+                    let chip =
+                        style::chip_solid(mark.role(&r), mark.on_role(&r))(&iced::Theme::Light);
+                    let Some(Background::Color(fill)) = chip.background else {
+                        panic!("a pill paints a colour");
+                    };
+                    let fill = if ground == p.body {
+                        style::to_rgb(fill)
+                    } else {
+                        tokens::over(
+                            p.on_body,
+                            f64::from(tokens::state::SELECTED),
+                            style::to_rgb(fill),
+                        )
+                    };
+                    let ink = style::to_rgb(chip.text_color.expect("a pill's word colour"));
+                    pairs.push((format!("{} pill", mark.word()), ink, fill));
+                }
+                for (what, ink, fill) in pairs {
+                    let ratio = contrast(ink, fill);
+                    if ratio < AA_TEXT {
+                        violations.push(format!(
+                            "{scheme:?} / {state:?} {what} on {ground_name}: {ratio:.2}:1 (needs {AA_TEXT})"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "a pull request row cannot be read on a card:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 /// Overview card target mark (feature 972, T015 — FR-006; feature 1120, T031): the `primary`
 /// outline reads at 3:1 against each card state's header and body, bare and with the selected
 /// layer over them, both schemes.

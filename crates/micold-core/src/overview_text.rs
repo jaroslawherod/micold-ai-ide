@@ -464,6 +464,7 @@ mod tests {
                 open_capped: false,
                 merged_capped: false,
             }),
+            pull_requests: None,
             progress: progress(None, None),
             activity: Some(activity("Writing tests", None)),
             activation: Activation::RevealOnly(location),

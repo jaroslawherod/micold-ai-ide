@@ -73,7 +73,8 @@ pub fn location_type(
 }
 
 /// How many pull requests a branch has, as the status reading counts them (data-model *PrCounts*):
-/// those of this repository, not forks. A full page of 100 reads as *100+*.
+/// those of this repository, not forks, among the newest ten of a group. A full page reads as *10+*
+/// (feature 1123, FR-006); a full page with a fork's pull request reads its own count with *+*.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PrCounts {
     /// Open, drafts included.
@@ -132,7 +133,7 @@ pub enum PrDisplay {
 impl PrDisplay {
     /// The pull request row's text and, for an unknown mark, its tooltip (C9, FR-010); `None` when
     /// hidden or both counts are 0, and a count of 0 beside a non-zero one is left out. A capped
-    /// count reads *100+*.
+    /// count reads *10+*.
     pub fn footer(self) -> Option<(String, Option<String>)> {
         let count = |n: u8, capped: bool| {
             if capped {
@@ -397,6 +398,8 @@ pub struct CardModel {
     pub title: String,
     /// Its pull request counts, or why there are none.
     pub prs: PrDisplay,
+    /// The pull requests its rows show: `Some` exactly when `prs` shows counts (feature 1123, R5).
+    pub pull_requests: Option<crate::pr_list::BranchPrList>,
     /// The feature's phase and task ratio, or none (data-model *CardModel*, R9).
     pub progress: crate::task_progress::Progress,
     /// What the main session's hooks say it is doing now, when they report (Story 5, R10).
@@ -1082,7 +1085,7 @@ mod tests {
         assert_eq!(counts(1, 0, false), text("1 open"));
         assert_eq!(counts(0, 2, false), text("2 merged"));
         assert_eq!(counts(1, 2, false), text("1 open \u{b7} 2 merged"));
-        assert_eq!(counts(100, 0, true), text("100+ open"), "a capped count");
+        assert_eq!(counts(10, 0, true), text("10+ open"), "a capped count");
         assert_eq!(PrDisplay::Hidden.footer(), None);
         assert_eq!(
             PrDisplay::Unknown(PrUnknown::Unreachable).footer(),
@@ -1101,6 +1104,7 @@ mod tests {
             reason: CardReason::Idle,
             title: name.into(),
             prs: PrDisplay::Hidden,
+            pull_requests: None,
             progress: Default::default(),
             activity: None,
             activation: Activation::RevealOnly(worktree(name)),

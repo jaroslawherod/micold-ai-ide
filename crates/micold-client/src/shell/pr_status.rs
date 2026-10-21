@@ -34,7 +34,7 @@ use micold_client::features::pr_status::{Cause, Effect, Outcome, Phase};
 use micold_client::features::OpenRequest;
 use micold_core::git::GitRemote;
 use micold_core::github::{choose_remote, env_include_path, RemoteChoice};
-use micold_core::overview::PrCounts;
+use micold_core::pr_list::BranchPrList;
 use micold_core::protocol::messages::{BranchContainment, ClientMsg, MergedBranchQuery};
 use micold_core::pull_request::{
     DiffReadFailure, PrState, PullRequestSource, PullRequestStatus, ReadingFailure,
@@ -130,7 +130,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             }
             let Some(PendingOp::MergedBranchCheck {
                 statuses,
-                counts,
+                lists,
                 started,
                 ..
             }) = app.pending_ops.remove(&req)
@@ -141,7 +141,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 seq,
                 Outcome::Ok {
                     statuses,
-                    counts,
+                    lists,
                     removable: BTreeSet::new(),
                     started_at: started,
                 },
@@ -151,9 +151,9 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::StatusesRead {
             seq,
             statuses,
-            counts,
+            lists,
             started_at,
-        } => return on_statuses_read(app, seq, (statuses, counts), started_at),
+        } => return on_statuses_read(app, seq, (statuses, lists), started_at),
         other => other,
     };
     if let Msg::Finished { seq, outcome, .. } = &msg {
@@ -288,7 +288,7 @@ pub fn on_remotes(
                     Ok(reading) => Msg::StatusesRead {
                         seq,
                         statuses: reading.statuses,
-                        counts: reading.counts,
+                        lists: reading.lists,
                         started_at: started,
                     },
                     Err(failure) => finished(seq, Outcome::Err(failure)),
@@ -529,9 +529,9 @@ pub fn on_diff_remotes(
 fn on_statuses_read(
     app: &mut App,
     seq: u64,
-    (statuses, counts): (
+    (statuses, lists): (
         BTreeMap<String, PullRequestStatus>,
-        BTreeMap<String, PrCounts>,
+        BTreeMap<String, BranchPrList>,
     ),
     started: u64,
 ) -> Task<Message> {
@@ -556,7 +556,7 @@ fn on_statuses_read(
     else {
         let outcome = Outcome::Ok {
             statuses,
-            counts,
+            lists,
             removable: BTreeSet::new(),
             started_at: started,
         };
@@ -570,7 +570,7 @@ fn on_statuses_read(
             seq,
             asked,
             statuses,
-            counts,
+            lists,
             started,
         },
         move |req| ClientMsg::MergedBranchCheck {
@@ -593,9 +593,9 @@ pub fn on_merged_branches(
     app: &mut App,
     seq: u64,
     asked: Vec<String>,
-    (statuses, counts): (
+    (statuses, lists): (
         BTreeMap<String, PullRequestStatus>,
-        BTreeMap<String, PrCounts>,
+        BTreeMap<String, BranchPrList>,
     ),
     started: u64,
     answers: Option<Vec<BranchContainment>>,
@@ -611,7 +611,7 @@ pub fn on_merged_branches(
     });
     let outcome = Outcome::Ok {
         statuses,
-        counts,
+        lists,
         removable,
         started_at: started,
     };

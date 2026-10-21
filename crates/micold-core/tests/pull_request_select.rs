@@ -270,3 +270,126 @@ fn review_decisions_map_and_unknown_text_is_none() {
         );
     }
 }
+
+// ---- feature 1123 K3: the card's first row is the sidebar's pull request ----
+
+use micold_core::pull_request::parse_status;
+
+/// A `pr` fragment node of `state` (`OPEN`, `DRAFT` for an open draft, `MERGED`, `CLOSED`).
+fn pr_json(number: u64, state: &str, created_at: &str, fork: bool) -> serde_json::Value {
+    serde_json::json!({
+        "number": number,
+        "title": format!("title {number}"),
+        "url": format!("https://github.com/o/r/pull/{number}"),
+        "state": if state == "DRAFT" { "OPEN" } else { state },
+        "isDraft": state == "DRAFT",
+        "createdAt": created_at,
+        "isCrossRepository": fork,
+        "headRefOid": format!("head{number}"),
+        "reviewDecision": null,
+        "mergeable": "MERGEABLE",
+        "commits": { "nodes": [] },
+    })
+}
+
+/// The `merged` fragment's fields of a `pr` node.
+fn merged_json(node: &serde_json::Value) -> serde_json::Value {
+    let keep = [
+        "number",
+        "url",
+        "state",
+        "isDraft",
+        "createdAt",
+        "isCrossRepository",
+    ];
+    keep.iter()
+        .map(|k| ((*k).to_string(), node[*k].clone()))
+        .collect::<serde_json::Map<_, _>>()
+        .into()
+}
+
+/// The answer for one branch with these pages.
+fn answer(
+    open: &[serde_json::Value],
+    recent: &[serde_json::Value],
+    merged: &[serde_json::Value],
+) -> Vec<u8> {
+    serde_json::json!({ "data": { "repository": {
+        "o0": { "nodes": open }, "r0": { "nodes": recent }, "m0": { "nodes": merged },
+    } } })
+    .to_string()
+    .into_bytes()
+}
+
+/// (first listed, shown) for one branch's answer.
+fn first_and_shown(body: &[u8]) -> (Option<u64>, Option<u64>) {
+    let reading = parse_status(body, &["x".to_string()]).expect("readable");
+    (
+        reading.lists["x"].prs().first().map(|pr| pr.number),
+        reading.statuses.get("x").map(|status| status.number),
+    )
+}
+
+/// K3: every combination of up to three own pull requests in the four states, distinct
+/// `createdAt`: the list's first entry is the one `select_pull_request` picks.
+#[test]
+fn k3_the_first_listed_is_the_selected_one_for_every_combination() {
+    const STATES: [&str; 4] = ["OPEN", "DRAFT", "MERGED", "CLOSED"];
+    for n in 1..=3u32 {
+        for combination in 0..4usize.pow(n) {
+            let nodes: Vec<_> = (0..n as usize)
+                .map(|i| {
+                    let state = STATES[combination / 4usize.pow(i as u32) % 4];
+                    pr_json(
+                        i as u64 + 1,
+                        state,
+                        &format!("2026-01-0{}T00:00:00Z", i + 1),
+                        false,
+                    )
+                })
+                .collect();
+            let mut recent = nodes.clone();
+            recent.reverse(); // newest first, as GitHub orders the page
+            let open: Vec<_> = recent
+                .iter()
+                .filter(|n| n["state"] == "OPEN")
+                .cloned()
+                .collect();
+            let merged: Vec<_> = recent
+                .iter()
+                .filter(|n| n["state"] == "MERGED")
+                .map(merged_json)
+                .collect();
+            let (first, shown) = first_and_shown(&answer(&open, &recent, &merged));
+            assert_eq!(first, shown, "n = {n}, combination {combination}");
+            assert!(first.is_some());
+        }
+    }
+}
+
+/// K3 edge case (a), accepted (data-model §2): two own pull requests created in the same second.
+/// The list puts the higher number first; `select_pull_request` keeps the later node of the page.
+#[test]
+fn k3_a_created_at_tie_lists_the_higher_number_and_selects_the_later_node() {
+    let six = pr_json(6, "OPEN", "2026-01-01T00:00:00Z", false);
+    let five = pr_json(5, "OPEN", "2026-01-01T00:00:00Z", false);
+    let pages = [six, five];
+    assert_eq!(
+        first_and_shown(&answer(&pages, &pages, &[])),
+        (Some(6), Some(5))
+    );
+}
+
+/// K3 edge case (b), accepted: `r` full of ten forks while `m` holds an own merged one. The sidebar
+/// shows none; the list's first row is the merged one.
+#[test]
+fn k3_a_recent_page_of_forks_lists_the_own_merged_one() {
+    let forks: Vec<_> = (100..110)
+        .map(|n| pr_json(n, "CLOSED", "2026-02-01T00:00:00Z", true))
+        .collect();
+    let own = merged_json(&pr_json(7, "MERGED", "2026-01-01T00:00:00Z", false));
+    assert_eq!(
+        first_and_shown(&answer(&[], &forks, &[own])),
+        (Some(7), None)
+    );
+}
