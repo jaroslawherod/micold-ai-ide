@@ -23,6 +23,9 @@ pub const RECORDED: [&str; 9] = [
     "background-subagent",
 ];
 
+/// The fixtures feature 941 recorded: an interrupted turn (P-4) and a message with a picture (P-5).
+pub const RECORDED_941: [&str; 2] = ["interrupt-turn", "image-turn"];
+
 /// The stdout of the permission-prompt recordings (#942,
 /// `tests/fixtures/permission-prompt/README.md`).
 pub const PROMPT_RECORDED: [&str; 6] = [
@@ -113,6 +116,14 @@ fn block_json(block: &ContentBlock) -> Value {
 }
 
 /// A user message of plain text, as the CLI echoes one.
+/// The daemon's note of a sent user message (feature 941).
+pub fn user_sent(text: &str, attachments: &[&str]) -> StructuredEvent {
+    StructuredEvent::UserSent {
+        text: text.to_string(),
+        attachments: attachments.iter().map(|name| name.to_string()).collect(),
+    }
+}
+
 pub fn user_text(text: &str) -> StructuredEvent {
     let blocks = vec![ContentBlock::Text {
         text: text.to_string(),

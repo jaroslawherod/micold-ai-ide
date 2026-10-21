@@ -8,7 +8,7 @@ use micold_core::structured::{
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
-use stream_json::{events_of, lines_of, PROMPT_RECORDED, RECORDED};
+use stream_json::{events_of, lines_of, PROMPT_RECORDED, RECORDED, RECORDED_941, RECORDED_944};
 
 /// Whether the line's `type` (and `subtype`, for `system`) is one the model types (R9).
 fn is_known_type(line: &str) -> bool {
@@ -31,7 +31,10 @@ fn raw_of(event: &StructuredEvent) -> Option<&str> {
         | StructuredEvent::ControlResponse { raw, .. }
         | StructuredEvent::Unrecognised { raw } => Some(raw),
         StructuredEvent::Unreadable { text } => Some(text),
-        StructuredEvent::TurnEndedWithoutResult | StructuredEvent::OversizedOnWire { .. } => None,
+        StructuredEvent::TurnEndedWithoutResult
+        | StructuredEvent::OversizedOnWire { .. }
+        | StructuredEvent::UserSent { .. }
+        | StructuredEvent::InterruptAsked => None,
     }
 }
 
@@ -56,7 +59,11 @@ fn last_result(events: &[SequencedEvent]) -> &StructuredEvent {
 
 #[test]
 fn every_recorded_line_is_one_event_in_order_and_every_known_type_is_typed() {
-    for name in RECORDED.into_iter().chain(PROMPT_RECORDED) {
+    for name in RECORDED
+        .into_iter()
+        .chain(PROMPT_RECORDED)
+        .chain(RECORDED_941)
+    {
         let lines = lines_of(name);
         let events = events_of(&lines);
         assert!(!lines.is_empty(), "{name} has lines");
@@ -457,4 +464,56 @@ fn a_control_response_that_does_not_fit_stays_unrecognised() {
         ),
         "an error without text or code is still an error"
     );
+}
+
+/// Feature 941 (T012): `UserSent` and `InterruptAsked` are the daemon's notes; no CLI line parses
+/// as either.
+#[test]
+fn the_parser_never_makes_a_daemon_note_of_941() {
+    for name in RECORDED
+        .into_iter()
+        .chain(RECORDED_944)
+        .chain(PROMPT_RECORDED)
+        .chain(RECORDED_941)
+    {
+        for event in events_of(&lines_of(name)) {
+            assert!(
+                !matches!(
+                    event.event,
+                    StructuredEvent::UserSent { .. } | StructuredEvent::InterruptAsked
+                ),
+                "{name}: {:?}",
+                event.event
+            );
+        }
+    }
+}
+
+/// Feature 941 (T012, P-4): the interrupted turn's lines are typed: the control response, the
+/// partial assistant message, the CLI's interrupted user text and the `error_during_execution`
+/// result.
+#[test]
+fn the_interrupt_fixture_is_typed_line_by_line() {
+    let events: Vec<_> = events_of(&lines_of("interrupt-turn"))
+        .into_iter()
+        .map(|e| e.event)
+        .collect();
+    assert!(events.iter().any(|e| matches!(
+        e,
+        StructuredEvent::ControlResponse {
+            outcome: ControlOutcome::Success(_),
+            ..
+        }
+    )));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, StructuredEvent::User { blocks, .. }
+        if matches!(blocks.as_slice(), [ContentBlock::Text { text }]
+            if text == "[Request interrupted by user]"))));
+    assert!(
+        matches!(last_result(&events_of(&lines_of("interrupt-turn"))),
+        StructuredEvent::Result { subtype, is_error: true, .. } if subtype == "error_during_execution")
+    );
+    assert!(matches!(last_result(&events_of(&lines_of("image-turn"))),
+        StructuredEvent::Result { subtype, is_error: false, .. } if subtype == "success"));
 }

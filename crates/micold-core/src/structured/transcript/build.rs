@@ -70,6 +70,7 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             message_id,
             ..
         } => {
+            transcript.in_turn = true;
             push_blocks(
                 transcript,
                 seq,
@@ -79,7 +80,13 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             );
         }
         StructuredEvent::User { blocks, raw, .. } => {
-            push_blocks(transcript, seq, blocks, raw, Speaker::User);
+            transcript.in_turn = true;
+            if is_interrupted_text(blocks) {
+                // The CLI's own mark of an interrupt: absorbed, it marks the turn (FR-014).
+                transcript.interrupted = true;
+            } else {
+                push_blocks(transcript, seq, blocks, raw, Speaker::User);
+            }
         }
         StructuredEvent::Result {
             subtype,
@@ -102,7 +109,12 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
                 error_text: is_error.then(|| result.clone().unwrap_or_else(|| subtype.clone())),
             };
             stream::close(transcript);
-            transcript.open(at(0), seq, EntryKind::Footer(footer));
+            let kind = if transcript.interrupted {
+                EntryKind::Interrupted
+            } else {
+                EntryKind::Footer(footer)
+            };
+            transcript.open(at(0), seq, kind);
             end_turn(transcript);
         }
         StructuredEvent::TurnEndedWithoutResult => {
@@ -110,7 +122,22 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             transcript.open(at(0), seq, EntryKind::TurnEndedWithoutResult);
             end_turn(transcript);
         }
-        StructuredEvent::StreamDelta { .. } => stream::push(transcript, seq, event),
+        StructuredEvent::StreamDelta { .. } => {
+            transcript.in_turn = true;
+            stream::push(transcript, seq, event);
+        }
+        StructuredEvent::UserSent { text, attachments } => {
+            transcript.in_turn = true;
+            let kind = EntryKind::UserMessage {
+                text: text.clone(),
+                attachments: attachments.clone(),
+            };
+            transcript.open(at(0), seq, kind);
+        }
+        // Marks the open turn; one written after the turn's end marks nothing (R4).
+        StructuredEvent::InterruptAsked => {
+            transcript.interrupted |= transcript.in_turn;
+        }
         StructuredEvent::OversizedOnWire { original_bytes } => {
             transcript.open(
                 at(0),
@@ -129,6 +156,13 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             transcript.open(at(0), seq, raw_row(text, RawReason::Unreadable));
         }
     }
+}
+
+/// The CLI's user line for an interrupted turn (P-4): one text block,
+/// `[Request interrupted by user]` (or a longer form of it, such as `… for tool use]`).
+fn is_interrupted_text(blocks: &[ContentBlock]) -> bool {
+    matches!(blocks, [ContentBlock::Text { text }]
+        if text.starts_with("[Request interrupted by user") && text.ends_with(']'))
 }
 
 fn raw_row(text: &str, reason: RawReason) -> EntryKind {
@@ -170,7 +204,10 @@ fn push_blocks(
             ContentBlock::Text { text } => {
                 let text = text.clone();
                 let kind = match speaker {
-                    Speaker::User => EntryKind::UserMessage { text },
+                    Speaker::User => EntryKind::UserMessage {
+                        text,
+                        attachments: Vec::new(),
+                    },
                     Speaker::Assistant(_) => EntryKind::AssistantText {
                         text,
                         streaming: false,
@@ -292,6 +329,8 @@ fn push_tool_result(
 
 /// The turn ended: its cards still running will get no result.
 fn end_turn(transcript: &mut Transcript) {
+    transcript.in_turn = false;
+    transcript.interrupted = false;
     for card in std::mem::take(&mut transcript.turn_cards) {
         let running = matches!(
             transcript.get(card).map(|e| e.kind()),

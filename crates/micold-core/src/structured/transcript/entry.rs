@@ -83,8 +83,11 @@ pub enum EntryKind {
         cwd: Option<String>,
         resumed_session: String,
     },
-    /// A user message's text.
-    UserMessage { text: String },
+    /// A user message's text, and the names of the pictures sent with it (FR-003, FR-030).
+    UserMessage {
+        text: String,
+        attachments: Vec<String>,
+    },
     /// An assistant text block.
     AssistantText { text: String, streaming: bool },
     /// A thinking block, shown as a thinking card.
@@ -102,6 +105,8 @@ pub enum EntryKind {
     Footer(TurnFooter),
     /// The process ended in the middle of a turn (FR-004).
     TurnEndedWithoutResult,
+    /// The user interrupted the turn: it closes with this notice in place of a footer (FR-014).
+    Interrupted,
     /// An event too large to send stands here (FR-004).
     Oversized { original_bytes: u64 },
     /// Sub-agent messages naming no card in the transcript (FR-024).
