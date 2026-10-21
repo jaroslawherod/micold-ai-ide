@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: plan
-- **Next step**: plan (clarify done; if the user's Q1/Q2 answers differ from the recommended defaults, apply them to US4 scenarios 4–5, FR-022 and the interrupt-race edge case first)
+- **Phase**: tasks
+- **Next step**: tasks unit (plan reviewed CLEAN r2; six milestones in plan.md *Delivery*; if the user's Q1/Q2 answers differ from Decisions 3–4, apply them via research R6 *Changing Q1/Q2 later* — no wire change)
 
 ## Pull requests
 
@@ -39,6 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review spec | 1 | 124c8bf01142dc504b1089c95d75b80d67980571:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CHANGES: 3 MAJOR, 2 MINOR (all fixed) |
 | Review spec | 2 | 7c8c2f791befe95ba7718b63d4cde6c4a169439f:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CLEAN (sonnet) |
 | Review plan | 1 | 5ed319d71185c5d5919a6e5458d96e8a71871984:125e33e3d05fbd606512f1185a0c45153db7f0bd | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
+| Review plan | 2 | 5c526288a3d957a05bf42cfd41fc885f04683309:cc3ecef13d97dbe7bade5a8f198321d26f929441 | CLEAN (sonnet) |
 
 ## Declined review findings
 
