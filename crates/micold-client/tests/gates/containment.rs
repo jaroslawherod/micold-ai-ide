@@ -221,11 +221,13 @@ fn is_issue_details_scroll(state: &str, escape: &lay::Escape) -> bool {
 /// past one edge, by exactly the gutter.
 ///
 /// It arrived with `overview-issue-link` (T028), the only covered state with a link: the link
-/// alone in the branch line's place on the first card, and after the branch on the second. It
-/// holds only there and only by the gutter, so a link that grew past its gutter still fires.
+/// alone in the branch line's place on the first card, and after the branch on the second; M5
+/// (T048) added a third, a Jira key's link after its card's branch. It holds only there and only by
+/// the gutter, so a link that grew past its gutter still fires.
 const INLINE_LINK_GUTTER: &[&str] = &[
     "0/0/0/1/1/0/1/0/1/0/0/1/0/1/0",
     "0/0/0/1/1/0/1/0/2/0/0/1/0/1/1/0",
+    "0/0/0/1/1/0/1/0/4/0/0/1/0/1/0",
 ];
 
 /// The gutter of [`INLINE_LINK_GUTTER`]: twice the focus ring's width (`text_link.rs`).

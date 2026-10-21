@@ -207,7 +207,11 @@
 /// And 58 → 59 for #942's permission prompts (M2): `DaemonMsg::{PermissionRequested,
 /// PermissionResolved, PermissionInputText}` and `ClientMsg::{PermissionDecision,
 /// PermissionInput}`, which an older peer cannot decode.
-pub const PROTOCOL_VERSION: u32 = 59;
+///
+/// And 59 → 60 for feature 1122's per-project Jira base URL (contracts/wire.md, W1-W3):
+/// `jira_base_urls` on `DaemonSettings` and `jira_base_url` on `ClientMsg::SettingsSet`, which
+/// shift the postcard layout of both.
+pub const PROTOCOL_VERSION: u32 = 60;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

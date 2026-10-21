@@ -2299,6 +2299,21 @@ impl DaemonState {
         Ok(())
     }
 
+    /// Set or clear one project's Jira base URL (feature 1122, D4). Pushes `SettingsChanged`
+    /// carrying the whole merged map to every client, so every window follows it (FR-012).
+    pub fn set_jira_base_url(
+        &self,
+        change: &micold_core::settings::JiraBaseUrlChange,
+    ) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_jira_base_url(change)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
     /// Set the Changes view's diff layout (feature 482, R12). Pushes `SettingsChanged` to every
     /// client, so every window shows the next diff in it.
     pub fn set_diff_layout(

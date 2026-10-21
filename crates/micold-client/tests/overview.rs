@@ -1685,8 +1685,8 @@ mod issue_link {
         assert_eq!(issue_link_for(&state, &wt(LINKED)), Some(link));
     }
 
-    /// Story 1 sc.4, FR-001: no link on Default, without a ticket, or for a Jira key while no
-    /// Jira base URL is known (M5).
+    /// Story 1 sc.4, Story 2 sc.1, FR-001: no link on Default, without a ticket, or for a Jira key
+    /// while the project's Jira base URL is unset.
     #[test]
     fn no_issue_link_on_default_without_a_ticket_or_for_a_jira_key() {
         let state = linked_project();
@@ -1717,6 +1717,91 @@ mod issue_link {
             assert_eq!(link_of(&state, &wt(LINKED)), None, "{on} {repo:?}");
             assert_eq!(issue_link_for(&state, &wt(LINKED)), None, "{on} {repo:?}");
         }
+    }
+
+    // --- Feature 1122 M5: Jira issue links (D3, D4, FR-001, FR-004, FR-010, FR-012) -----------
+
+    const JIRA: &str = "feat-mic-87_add-login";
+
+    fn set_base(state: &mut State, project: &std::path::Path, url: &str) {
+        state.settings.jira_base_urls.insert(
+            micold_core::jira::connection_key(project),
+            micold_core::jira::JiraBaseUrl::parse(url).expect("valid base URL"),
+        );
+    }
+
+    /// Story 2 sc.2: the open project's base URL gives a Jira-key card its link.
+    #[test]
+    fn a_jira_key_card_links_to_the_open_projects_base() {
+        let mut state = linked_project();
+        set_base(&mut state, &project_path(), "https://example.atlassian.net");
+        let link = link_of(&state, &wt(JIRA)).expect("the card has its Jira link");
+        assert_eq!(link.label, "Issue MIC-87");
+        assert_eq!(link.address, "https://example.atlassian.net/browse/MIC-87");
+        assert_eq!(issue_link_for(&state, &wt(JIRA)), Some(link));
+    }
+
+    /// Story 2 sc.1, sc.7 (D3): no Jira link with the switch off, or while the open project's base
+    /// is unset though another project's is set.
+    #[test]
+    fn no_jira_link_with_the_switch_off_or_the_projects_base_unset() {
+        let mut off = linked_project();
+        set_base(&mut off, &project_path(), "https://example.atlassian.net");
+        off.settings.jira_enabled = false;
+        assert_eq!(link_of(&off, &wt(JIRA)), None);
+        let mut other = linked_project();
+        set_base(
+            &mut other,
+            &PathBuf::from("/other"),
+            "https://example.atlassian.net",
+        );
+        assert_eq!(link_of(&other, &wt(JIRA)), None);
+        assert_eq!(issue_link_for(&other, &wt(JIRA)), None);
+    }
+
+    /// Story 2 sc.8: two projects on different sites each link to their own.
+    #[test]
+    fn two_projects_each_link_to_their_own_site() {
+        let mut state = linked_project();
+        let b = PathBuf::from("/b");
+        set_base(&mut state, &project_path(), "https://a.atlassian.net");
+        set_base(&mut state, &b, "https://b.atlassian.net");
+        let address = |state: &State| link_of(state, &wt(JIRA)).map(|link| link.address);
+        assert_eq!(
+            address(&state).as_deref(),
+            Some("https://a.atlassian.net/browse/MIC-87")
+        );
+        state.workspace.projects.push(Project {
+            path: b.clone(),
+            display_name: "b".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        state.workspace.active = Some(b);
+        assert_eq!(
+            address(&state).as_deref(),
+            Some("https://b.atlassian.net/browse/MIC-87")
+        );
+    }
+
+    /// Story 2 sc.6, FR-012: setting or clearing the base, or flipping the switch, in the window's
+    /// settings changes the cards with no other step.
+    #[test]
+    fn a_change_of_base_or_switch_changes_the_cards() {
+        let mut state = linked_project();
+        assert_eq!(link_of(&state, &wt(JIRA)), None);
+        set_base(
+            &mut state,
+            &project_path(),
+            "https://example.atlassian.net/",
+        );
+        assert!(link_of(&state, &wt(JIRA)).is_some());
+        state.settings.jira_enabled = false;
+        assert_eq!(link_of(&state, &wt(JIRA)), None);
+        state.settings.jira_enabled = true;
+        assert!(link_of(&state, &wt(JIRA)).is_some());
+        state.settings.jira_base_urls.clear();
+        assert_eq!(link_of(&state, &wt(JIRA)), None);
     }
 
     /// FR-005, FR-013: activating the link changes no Overview state and selects nothing; the root

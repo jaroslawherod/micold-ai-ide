@@ -128,6 +128,7 @@ pub fn welcoming_bridge() -> SshStdio {
             jira_enabled: false,
             jira_connections: Default::default(),
             github_issues_enabled: true,
+            jira_base_urls: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: crate::settings::DEFAULT_SCROLLBACK_LINES,

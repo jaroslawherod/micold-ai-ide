@@ -29,9 +29,12 @@ fn jira_page() -> State {
     let connection =
         JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap();
     let connections = BTreeMap::from([("/work/app".to_owned(), connection)]);
-    draft
-        .jira
-        .follow(Some(PathBuf::from("/work/app")), &connections, true);
+    draft.jira.follow(
+        Some(PathBuf::from("/work/app")),
+        &connections,
+        &BTreeMap::new(),
+        true,
+    );
     draft.section = SettingsSection::Jira;
     let mut state = State::default();
     state.settings.settings_draft = Some(draft);

@@ -23,9 +23,12 @@ fn typed_draft() -> micold_client::app::State {
         jira_enabled: true,
         ..Settings::default()
     });
-    draft
-        .jira
-        .follow(Some(PathBuf::from("/work/app")), &BTreeMap::new(), false);
+    draft.jira.follow(
+        Some(PathBuf::from("/work/app")),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        false,
+    );
     state.settings.settings_draft = Some(draft);
     for msg in [
         Msg::JiraSiteChanged("https://acme.atlassian.net".to_owned()),
@@ -83,6 +86,7 @@ fn save_and_remove_keep_the_token_in_its_file_alone() {
         jira_enabled: Some(true),
         jira_connection: Some(change),
         github_issues_enabled: None,
+        jira_base_url: None,
         notification_kinds: None,
         long_task_threshold_secs: None,
         plan_usage_enabled: None,

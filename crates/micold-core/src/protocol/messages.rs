@@ -24,7 +24,7 @@ use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
 use crate::attention::{NotificationKind, NotificationKinds};
 use crate::cli_reason::SpawnEnv;
 use crate::github::GithubRepo;
-use crate::jira::JiraConnection;
+use crate::jira::{JiraBaseUrl, JiraConnection};
 use crate::mcp::policy::CrossSessionAccess;
 use crate::naming::WorktreeNaming;
 use crate::plan_usage::UsageReading;
@@ -38,7 +38,7 @@ use crate::session::{
     AiCli, PermissionMode, SessionId, SessionKind, SessionLabel, ShellInstanceId,
 };
 use crate::settings::DiffLayout;
-use crate::settings::JiraConnectionChange;
+use crate::settings::{JiraBaseUrlChange, JiraConnectionChange};
 use crate::structured::permission::RequestKind;
 use crate::structured::SequencedEvent;
 use crate::theme::ColorScheme;
@@ -738,6 +738,10 @@ pub enum ClientMsg {
         /// Turn the GitHub issues integration on or off, or `None` to leave unchanged (feature
         /// 1102, FR-001).
         github_issues_enabled: Option<bool>,
+        /// Set or clear one project's Jira base URL, or `None` to leave every project's unchanged
+        /// (feature 1122, D4, contracts/wire.md W2). Per project, so two windows saving different
+        /// projects never overwrite each other.
+        jira_base_url: Option<JiraBaseUrlChange>,
         /// Raise desktop notifications, or `None` to leave unchanged (feature 039, FR-026).
         desktop_notifications: Option<bool>,
         /// The per-kind switches, all four at once, or `None` to leave them unchanged
@@ -1769,6 +1773,10 @@ pub struct DaemonSettings {
     /// Whether the GitHub issues integration is on (feature 1102, FR-001). Service-owned so every
     /// window follows one switch (FR-008).
     pub github_issues_enabled: bool,
+    /// Each project's Jira base URL, keyed as `jira_connections` is (feature 1122, D4,
+    /// contracts/wire.md W1). Strict on the wire: the service drops an entry that no longer parses
+    /// when it reads its file, so it never sends one.
+    pub jira_base_urls: std::collections::BTreeMap<String, JiraBaseUrl>,
     /// Whether a session that comes to await input while not in view raises a desktop
     /// notification (feature 039, FR-026, FR-027). Service-owned so that every window follows one
     /// switch, and because the service is what grants a claim.
@@ -2231,6 +2239,7 @@ mod desktop_notifications_wire_tests {
             jira_enabled: false,
             jira_connections: Default::default(),
             github_issues_enabled: true,
+            jira_base_urls: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -2288,6 +2297,7 @@ mod desktop_notifications_wire_tests {
                 jira_enabled: None,
                 jira_connection: None,
                 github_issues_enabled: None,
+                jira_base_url: None,
                 desktop_notifications: chosen,
                 notification_kinds: None,
                 long_task_threshold_secs: None,

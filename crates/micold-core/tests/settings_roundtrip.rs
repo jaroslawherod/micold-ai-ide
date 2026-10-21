@@ -838,3 +838,117 @@ fn turning_github_issues_off_survives_a_save_and_load() {
     assert_eq!(document["settings_version"], 4);
     assert_eq!(document["github_issues_enabled"], false);
 }
+
+// -------------------------------------------------------------------------------------------
+// Feature 1122 (D4, contracts/wire.md): each project's Jira base URL, keyed as its Jira
+// connection is. Additive and defaulted, so `settings_version` stays 4.
+// -------------------------------------------------------------------------------------------
+
+use micold_core::jira::{connection_key, JiraBaseUrl};
+use micold_core::settings::JiraBaseUrlChange;
+
+fn two_project_keys(dir: &tempfile::TempDir) -> (String, String) {
+    (
+        connection_key(&dir.path().join("a")),
+        connection_key(&dir.path().join("b")),
+    )
+}
+
+fn base(url: &str) -> JiraBaseUrl {
+    JiraBaseUrl::parse(url).expect("valid base URL")
+}
+
+#[test]
+fn each_projects_jira_base_url_round_trips_under_its_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let store = JsonFileSettingsStore::at(path.clone());
+    let (a, b) = two_project_keys(&dir);
+    let mut settings = Settings::default();
+    settings
+        .jira_base_urls
+        .insert(a.clone(), base("https://a.atlassian.net"));
+    settings
+        .jira_base_urls
+        .insert(b.clone(), base("https://b.atlassian.net"));
+
+    store.save(&settings).unwrap();
+
+    let document: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(
+        document["jira_base_urls"],
+        serde_json::json!({ a.clone(): "https://a.atlassian.net", b.clone(): "https://b.atlassian.net" })
+    );
+    assert_eq!(document["settings_version"], 4);
+    let loaded = store.load();
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    assert_eq!(loaded.settings.jira_base_urls, settings.jira_base_urls);
+}
+
+#[test]
+fn no_jira_base_url_writes_no_key_and_a_file_without_it_reads_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let store = JsonFileSettingsStore::at(path.clone());
+
+    store.save(&Settings::default()).unwrap();
+
+    let document: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(document.get("jira_base_urls").is_none(), "{document}");
+    let (_dir, store, _) = store_with(r#"{ "settings_version": 4, "theme": "dark" }"#);
+    let loaded = store.load();
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    assert!(loaded.settings.jira_base_urls.is_empty());
+}
+
+#[test]
+fn a_jira_base_url_that_does_not_parse_reads_unset_and_the_rest_loads() {
+    let document = serde_json::json!({
+        "settings_version": 4,
+        "theme": "dark",
+        "jira_base_urls": {
+            "/work/a": "https://a.atlassian.net",
+            "/work/b": "http://b.example.com",
+        },
+    });
+    let (_dir, store, _) = store_with(&document.to_string());
+
+    let loaded = store.load();
+
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    assert_eq!(loaded.settings.theme, ThemePreference::Dark);
+    let keys: Vec<_> = loaded.settings.jira_base_urls.keys().cloned().collect();
+    assert_eq!(keys, vec!["/work/a".to_owned()]);
+}
+
+#[test]
+fn a_jira_base_url_change_touches_only_its_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let (a, b) = two_project_keys(&dir);
+    let mut map = std::collections::BTreeMap::new();
+    map.insert(b.clone(), base("https://b.atlassian.net"));
+
+    JiraBaseUrlChange {
+        project: a.clone(),
+        url: Some(base("https://a.atlassian.net")),
+    }
+    .apply(&mut map);
+    assert_eq!(map[&a], base("https://a.atlassian.net"));
+    JiraBaseUrlChange {
+        project: a.clone(),
+        url: Some(base("https://jira.example.com/jira")),
+    }
+    .apply(&mut map);
+    assert_eq!(map[&a], base("https://jira.example.com/jira"));
+    assert_eq!(map[&b], base("https://b.atlassian.net"));
+
+    JiraBaseUrlChange {
+        project: a.clone(),
+        url: None,
+    }
+    .apply(&mut map);
+    assert!(!map.contains_key(&a));
+    assert_eq!(map[&b], base("https://b.atlassian.net"));
+}

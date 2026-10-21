@@ -9,7 +9,7 @@
 
 use crate::attention::{NotificationKinds, LONG_TASK_THRESHOLD};
 use crate::issue_types::{default_mapping, LabelTypeEntry};
-use crate::jira::JiraConnection;
+use crate::jira::{JiraBaseUrl, JiraConnection};
 use crate::mcp::policy::CrossSessionAccess;
 use crate::sandbox::placement::PlacementKind;
 use crate::sandbox::{BudgetViolation, SandboxProfile};
@@ -188,6 +188,31 @@ impl JiraConnectionChange {
     }
 }
 
+/// One project's Jira base URL changing (feature 1122, D4). Sent alone, as a
+/// [`JiraConnectionChange`] is, so two windows saving different projects never overwrite each
+/// other's map.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JiraBaseUrlChange {
+    /// The project, keyed as its Jira connection is ([`crate::jira::connection_key`]).
+    pub project: String,
+    /// The new value; `None` unsets the project's base URL.
+    pub url: Option<JiraBaseUrl>,
+}
+
+impl JiraBaseUrlChange {
+    /// Apply the change to a base-URL map: set or remove only this project's entry.
+    pub fn apply(&self, map: &mut BTreeMap<String, JiraBaseUrl>) {
+        match &self.url {
+            Some(url) => {
+                map.insert(self.project.clone(), url.clone());
+            }
+            None => {
+                map.remove(&self.project);
+            }
+        }
+    }
+}
+
 /// The persisted application settings document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -273,8 +298,17 @@ pub struct Settings {
     pub jira_enabled: bool,
     /// Each project's Jira connection, keyed by the project path as the wire names it (feature
     /// 533, FR-006). Never holds a token. An entry that no longer parses is dropped on read.
-    #[serde(default, deserialize_with = "crate::jira::known_connections")]
+    #[serde(default, deserialize_with = "crate::jira::known_values")]
     pub jira_connections: BTreeMap<String, JiraConnection>,
+    /// Each project's Jira base URL, which its Overview cards build Jira issue links on (feature
+    /// 1122, FR-010), keyed as `jira_connections` is. Independent of the connection. An entry
+    /// that no longer parses is dropped on read: that project reads as unset.
+    #[serde(
+        default,
+        deserialize_with = "crate::jira::known_values",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub jira_base_urls: BTreeMap<String, JiraBaseUrl>,
     /// Whether the GitHub issues integration is on (feature 1102, FR-001). On by default, and in a
     /// file written before the switch (FR-007). While off, no GitHub issue request is made and the
     /// New worktree form offers no GitHub issue source. Service-owned so every window follows one
@@ -373,6 +407,7 @@ impl Default for Settings {
             pr_status_enabled: false,
             jira_enabled: false,
             jira_connections: BTreeMap::new(),
+            jira_base_urls: BTreeMap::new(),
             github_issues_enabled: default_github_issues_enabled(),
             desktop_notifications: default_desktop_notifications(),
             notification_kinds: NotificationKinds::default(),
@@ -773,8 +808,17 @@ struct StoredSettings {
     #[serde(default)]
     jira_enabled: bool,
     /// Missing → none; an entry that no longer parses is dropped and the rest kept (FR-006).
-    #[serde(default, deserialize_with = "crate::jira::known_connections")]
+    #[serde(default, deserialize_with = "crate::jira::known_values")]
     jira_connections: BTreeMap<String, JiraConnection>,
+    /// Missing in files written before feature 1122 → none; an entry that no longer parses is
+    /// dropped and the rest kept (FR-010). Written only when not empty. Additive and defaulted, so
+    /// `settings_version` does not move.
+    #[serde(
+        default,
+        deserialize_with = "crate::jira::known_values",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    jira_base_urls: BTreeMap<String, JiraBaseUrl>,
     /// Missing in files written before feature 1102 → on (FR-007). Additive and defaulted, so
     /// `settings_version` does not move.
     #[serde(default = "default_github_issues_enabled")]
@@ -847,6 +891,7 @@ impl StoredSettings {
             pr_status_enabled: settings.pr_status_enabled,
             jira_enabled: settings.jira_enabled,
             jira_connections: settings.jira_connections.clone(),
+            jira_base_urls: settings.jira_base_urls.clone(),
             github_issues_enabled: settings.github_issues_enabled,
             desktop_notifications: settings.desktop_notifications,
             notification_kinds: settings.notification_kinds,
@@ -902,6 +947,7 @@ impl StoredSettings {
             pr_status_enabled: self.pr_status_enabled,
             jira_enabled: self.jira_enabled,
             jira_connections: self.jira_connections,
+            jira_base_urls: self.jira_base_urls,
             github_issues_enabled: self.github_issues_enabled,
             desktop_notifications: self.desktop_notifications,
             notification_kinds: self.notification_kinds,

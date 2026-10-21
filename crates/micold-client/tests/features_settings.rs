@@ -1884,6 +1884,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
             jira_enabled,
             jira_connection,
             github_issues_enabled,
+            jira_base_url,
             desktop_notifications,
             notification_kinds,
             long_task_threshold_secs,
@@ -1906,6 +1907,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
                     && jira_enabled.is_none()
                     && jira_connection.is_none()
                     && github_issues_enabled.is_none()
+                    && jira_base_url.is_none()
                     && desktop_notifications.is_none()
                     && notification_kinds.is_none()
                     && long_task_threshold_secs.is_none()
@@ -2192,6 +2194,7 @@ mod jira_switch {
         state.settings.settings_draft.as_mut().unwrap().jira.follow(
             Some(project.clone()),
             &connections,
+            &BTreeMap::new(),
             false,
         );
         assert_eq!(
@@ -2206,6 +2209,7 @@ mod jira_switch {
         state.settings.settings_draft.as_mut().unwrap().jira.follow(
             Some(project),
             &connections,
+            &BTreeMap::new(),
             false,
         );
         let status = draft(&state).jira.status().unwrap();
@@ -2261,9 +2265,12 @@ mod jira_connection_form {
         if stored {
             connections.insert("/work/app".to_owned(), connection());
         }
-        draft
-            .jira
-            .follow(Some(PathBuf::from("/work/app")), &connections, stored);
+        draft.jira.follow(
+            Some(PathBuf::from("/work/app")),
+            &connections,
+            &BTreeMap::new(),
+            stored,
+        );
         let mut state = State::default();
         state.settings.settings_draft = Some(draft);
         state
@@ -2472,6 +2479,203 @@ mod jira_connection_form {
             draft(&state).validate().unwrap().jira,
             ConnectionAction::Keep
         );
+    }
+}
+
+// --- Feature 1122 M5 (D4, R4): each project's Jira base URL (T042) ------------------------------
+
+mod jira_base_url_form {
+    use micold_client::app::State;
+    use micold_client::features::settings::{
+        update, KeepOrRemove, Msg, SettingsDraft, SettingsSection,
+    };
+    use micold_client::features::window::FieldId;
+    use micold_core::jira::{
+        connection_key, ConnectionAction, JiraBaseUrl, JiraConnection, BASE_URL_REFUSED,
+    };
+    use micold_core::settings::{JiraBaseUrlChange, Settings};
+    use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+
+    fn base(url: &str) -> JiraBaseUrl {
+        JiraBaseUrl::parse(url).unwrap()
+    }
+
+    fn bases(entries: &[(&str, &str)]) -> BTreeMap<String, JiraBaseUrl> {
+        entries
+            .iter()
+            .map(|(project, url)| (connection_key(Path::new(project)), base(url)))
+            .collect()
+    }
+
+    /// Settings open on `project` with the switch on, the given base URLs and connections stored.
+    fn open_with(
+        project: &str,
+        base_urls: &BTreeMap<String, JiraBaseUrl>,
+        connections: &BTreeMap<String, JiraConnection>,
+    ) -> State {
+        let settings = Settings {
+            jira_enabled: true,
+            ..Settings::default()
+        };
+        let mut draft = SettingsDraft::from_settings(&settings);
+        draft
+            .jira
+            .follow(Some(PathBuf::from(project)), connections, base_urls, false);
+        let mut state = State::default();
+        state.settings.settings_draft = Some(draft);
+        state
+    }
+
+    fn open(project: &str, base_urls: &BTreeMap<String, JiraBaseUrl>) -> State {
+        open_with(project, base_urls, &BTreeMap::new())
+    }
+
+    fn draft(state: &State) -> &SettingsDraft {
+        state.settings.settings_draft.as_ref().unwrap()
+    }
+
+    fn follow(state: &mut State, project: &str, base_urls: &BTreeMap<String, JiraBaseUrl>) {
+        state.settings.settings_draft.as_mut().unwrap().jira.follow(
+            Some(PathBuf::from(project)),
+            &BTreeMap::new(),
+            base_urls,
+            false,
+        );
+    }
+
+    fn type_base(state: &mut State, text: &str) {
+        update(state, Msg::JiraBaseUrlChanged(text.to_owned()));
+    }
+
+    /// R4: the field is seeded from the open project's entry and re-seeded on a project switch.
+    #[test]
+    fn follow_seeds_the_open_projects_value_and_reseeds_on_a_switch() {
+        let stored = bases(&[
+            ("/work/a", "https://a.atlassian.net"),
+            ("/work/b", "https://b.atlassian.net"),
+        ]);
+        let mut state = open("/work/a", &stored);
+        assert_eq!(draft(&state).jira.base_url, "https://a.atlassian.net");
+        type_base(&mut state, "https://typed.example.com");
+        follow(&mut state, "/work/b", &stored);
+        assert_eq!(draft(&state).jira.base_url, "https://b.atlassian.net");
+        follow(&mut state, "/work/c", &stored);
+        assert_eq!(draft(&state).jira.base_url, "", "unset by default");
+    }
+
+    /// R4: a reported map refreshes an untouched field and keeps a typed one.
+    #[test]
+    fn a_changed_map_refreshes_an_untouched_field_and_keeps_a_typed_one() {
+        let mut state = open("/work/a", &BTreeMap::new());
+        follow(
+            &mut state,
+            "/work/a",
+            &bases(&[("/work/a", "https://a.atlassian.net")]),
+        );
+        assert_eq!(draft(&state).jira.base_url, "https://a.atlassian.net");
+        type_base(&mut state, "https://typed.example.com");
+        follow(
+            &mut state,
+            "/work/a",
+            &bases(&[("/work/a", "https://other.atlassian.net")]),
+        );
+        assert_eq!(draft(&state).jira.base_url, "https://typed.example.com");
+    }
+
+    /// FR-010, FR-011: a valid value saves as that project's change, its trailing `/` removed,
+    /// with the connection's fields blank and none of them marked; the connection is kept.
+    #[test]
+    fn a_valid_value_saves_with_no_connection() {
+        let mut state = open("/work/a", &BTreeMap::new());
+        type_base(&mut state, " https://jira.example.com/jira/ ");
+        let valid = state
+            .settings
+            .settings_draft
+            .as_mut()
+            .unwrap()
+            .validated_for_save()
+            .expect("saves");
+        assert_eq!(
+            valid.jira_base_url,
+            Some(JiraBaseUrlChange {
+                project: connection_key(Path::new("/work/a")),
+                url: Some(base("https://jira.example.com/jira")),
+            })
+        );
+        assert_eq!(valid.jira, ConnectionAction::Keep);
+        assert!(draft(&state)
+            .required_fields(SettingsSection::Jira)
+            .is_empty());
+        assert_eq!(draft(&state).error, None);
+    }
+
+    /// FR-011: an empty field over a stored value clears it; an unchanged value sends nothing.
+    #[test]
+    fn empty_clears_and_unchanged_sends_nothing() {
+        let stored = bases(&[("/work/a", "https://a.atlassian.net")]);
+        let unchanged = open("/work/a", &stored);
+        assert_eq!(draft(&unchanged).validate().unwrap().jira_base_url, None);
+        let mut same = open("/work/a", &stored);
+        type_base(&mut same, "https://a.atlassian.net/");
+        assert_eq!(draft(&same).validate().unwrap().jira_base_url, None);
+        let mut cleared = open("/work/a", &stored);
+        type_base(&mut cleared, "  ");
+        assert_eq!(
+            draft(&cleared).validate().unwrap().jira_base_url,
+            Some(JiraBaseUrlChange {
+                project: connection_key(Path::new("/work/a")),
+                url: None,
+            })
+        );
+        let empty = open("/work/a", &BTreeMap::new());
+        assert_eq!(draft(&empty).validate().unwrap().jira_base_url, None);
+    }
+
+    /// FR-011, SC-006: each refused value marks the field with the reason and saves nothing.
+    #[test]
+    fn each_refused_value_marks_the_field_and_saves_nothing() {
+        for value in [
+            "http://x",
+            "https://u@x",
+            "https://x?q",
+            "https://x#f",
+            "https://",
+        ] {
+            let mut state = open("/work/a", &BTreeMap::new());
+            type_base(&mut state, value);
+            let draft_mut = state.settings.settings_draft.as_mut().unwrap();
+            assert!(draft_mut.validated_for_save().is_none(), "{value}");
+            let error = draft(&state).error.clone().expect("a field error");
+            assert_eq!(error.field, FieldId::SettingsJiraBaseUrl, "{value}");
+            assert_eq!(error.section, SettingsSection::Jira, "{value}");
+            assert_eq!(error.message, BASE_URL_REFUSED, "{value}");
+            assert_eq!(draft(&state).section, SettingsSection::Jira);
+        }
+    }
+
+    /// Spec edge case: the Keep-or-Remove answer `Remove` sends no base-URL change.
+    #[test]
+    fn the_remove_answer_sends_no_base_url_change() {
+        let mut connections = BTreeMap::new();
+        connections.insert(
+            "/work/a".to_owned(),
+            JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
+        );
+        let mut state = open_with(
+            "/work/a",
+            &bases(&[("/work/a", "https://a.atlassian.net")]),
+            &connections,
+        );
+        type_base(&mut state, "https://other.atlassian.net");
+        update(&mut state, Msg::JiraEnabledToggled(false));
+        update(
+            &mut state,
+            Msg::JiraKeepOrRemoveChosen(KeepOrRemove::Remove),
+        );
+        let valid = draft(&state).validate().unwrap();
+        assert!(matches!(valid.jira, ConnectionAction::Remove { .. }));
+        assert_eq!(valid.jira_base_url, None);
     }
 }
 

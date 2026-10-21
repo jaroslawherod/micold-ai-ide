@@ -2165,6 +2165,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     ),
                     worktree("feat-1124_long-branch", &long_branch),
                     worktree("feat_no-ticket", "feat/no-ticket"),
+                    // Feature 1122 M5 (T048): a Jira key, linked on the open project's base URL.
+                    worktree("feat-mic-87_add-login", "feat/mic-87_add-login"),
                 ];
                 state.overview.titles.insert(
                     1124,
@@ -2173,6 +2175,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.overview.repo =
                     RepoLookup::Known(GithubRepo::from_remote_url("git@github.com:o/r.git"));
                 state.settings.github_issues_enabled = true;
+                state.settings.jira_enabled = true;
+                let project = state.workspace.active.clone().expect("a project is open");
+                state.settings.jira_base_urls.insert(
+                    micold_core::jira::connection_key(&project),
+                    micold_core::jira::JiraBaseUrl::parse("https://example.atlassian.net")
+                        .expect("a valid base URL"),
+                );
                 state.overview.open = true;
                 StateUnderTest::new(state)
             },

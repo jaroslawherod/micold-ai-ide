@@ -169,6 +169,8 @@ pub enum FieldId {
     SettingsJiraKey,
     /// Settings -> Jira: **Account email**.
     SettingsJiraEmail,
+    /// Settings -> Jira: **Jira base URL** (feature 1122, FR-010).
+    SettingsJiraBaseUrl,
     /// Settings -> Jira: **API token**.
     SettingsJiraToken,
     /// Settings → Daemons: the form's name field (feature 491).

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: milestone M4
-- **Next step**: M4 reviews complete (A r2 CLEAN, B r1 CLEAN, visual r2 PASS); T038 ticked; full gate r3 GREEN on 4faae67f (code unchanged since; later commits are specs only). PR text written (scratchpad pr-title.txt, pr-body.md); orchestrator opens the M4 PR, waits on CI and merges. Then M5.
+- **Phase**: milestone M5
+- **Next step**: M5 T039–T049 implemented and committed; full gate r1 running (core changed, so the scoped gate is the whole workspace). Then reviews A r1, B r1 and the visual pass (T050) via the orchestrator, then PR.
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1188 | M1: link rules in core; shared `TextLink` in the showcase | merged | 0164f375 |
 | #1195 | M2: the issue link on cards in the showcase | merged | c61380e1 |
 | #1200 | M3: GitHub issue links on the Overview | merged | 32b7d671 |
+| #1207 | M4: issue links by keyboard | merged | 65cefbbe |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | #1188 | merged |
 | M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | #1195 | merged |
 | M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | #1200 | merged |
-| M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | — | in progress |
-| M5 | T039–T050 | full | Jira base URL setting (wire 58) and Jira issue links | — | planned |
+| M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | #1207 | merged |
+| M5 | T039–T050 | full | Jira base URL setting (wire 60; 58 when planned, `main` moved to 59) and Jira issue links | — | in progress |
 
 Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and well over 800 lines, and each part has its own deliverable (core + `TextLink`; the card in the showcase; the app). M1 and M2 are showcase-only (`docs-not-needed`). M2 is 10 tasks: `ControlOverlay`, the card and the grid change together (one routing decision, R6–R8) and have no smaller observable split. US3 (M4) goes before US2 (M5), both P2, because it completes the keyboard path of the link M3 puts in the app. Rule 6 (review A tasks r1 F1): the link stays out of the Tab order until M4 (`TextLink::focusable(false)` while the card has no `.on_link_keyboard_focus`), so M3 leaves the keyboard exactly as before; design fixed in contracts/card-link.md U1/U3/U6 and research R5. Polish T051–T052 is code-free: close unit.
 

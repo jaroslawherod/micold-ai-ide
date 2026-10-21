@@ -413,8 +413,13 @@ pub fn issue_link_for(state: &State, location: &SessionLocation) -> Option<Issue
         &micold_core::issue_link::IssueSources {
             github,
             github_on: state.settings.github_issues_enabled,
-            // The Jira base URL setting arrives with M5 (FR-010).
-            jira_base: None,
+            // The open project's own base URL (feature 1122, D4, FR-010).
+            jira_base: state.workspace.active.as_deref().and_then(|project| {
+                state
+                    .settings
+                    .jira_base_urls
+                    .get(&micold_core::jira::connection_key(project))
+            }),
             jira_on: state.settings.jira_enabled,
         },
     )

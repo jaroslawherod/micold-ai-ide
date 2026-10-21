@@ -580,7 +580,7 @@ cannot answer for it", and the filesystem permission is still what enforces it. 
 protocol grew an authenticated handshake — version 6 when the sandbox landed, version 7 after the
 repository-root query the container placement also needed (below), version 9 after a window became
 nameable on the wire so it could stop displacing itself, and version 10 after Pi joined the AI CLIs
-a frame can name. It is version 47 today: the later bumps are listed beside `PROTOCOL_VERSION` in
+a frame can name. It is version 60 today: the later bumps are listed beside `PROTOCOL_VERSION` in
 `crates/micold-core/src/protocol/version.rs`. Version 43 gives every session summary the agent runs
 its AI CLI reported against it (`agents`); version 46 removes worktree provenance and the worktree
 attach messages (`user_created`, `AttachItem::Worktree`, `NeedsWorktreeAttach`); version 47 gives every session summary the session that spawned it (`origin`). Version 21 lets a window report the session it
@@ -596,7 +596,12 @@ window (`RevealSession`); version 26 adds the Wayland activation token of the cl
 manual restart, which the service handles as `SessionStart` after re-sourcing the session's
 environment-include script. Version 56 adds the GitHub issues switch (`github_issues_enabled`) to the
 service's settings; while it is off the MCP `create_worktree` refuses `github_issue` before any GitHub
-request.
+request. Version 60 adds each project's Jira base URL (`jira_base_urls` on the service's settings,
+keyed as the project's Jira connection is) and the one-project change that sets or clears it
+(`SettingsSet.jira_base_url`). The service owns the map: it merges each change into the map in the
+settings file inside its write, so two windows saving different projects keep both, and pushes the
+merged map to every window. It never reads the values otherwise; a stored value that no longer parses
+is dropped when the file is read and never sent.
 
 ### The lifecycle
 

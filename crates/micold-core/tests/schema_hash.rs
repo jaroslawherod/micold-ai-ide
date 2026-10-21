@@ -306,7 +306,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 58 → 59 for #942's permission messages (M2): `DaemonMsg::{PermissionRequested,
 /// PermissionResolved, PermissionInputText}`, `ClientMsg::{PermissionDecision, PermissionInput}`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 59;
+///
+/// And 59 → 60 for feature 1122's `jira_base_urls` on `DaemonSettings` and `jira_base_url` on
+/// `SettingsSet`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 60;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
