@@ -425,7 +425,7 @@ transcript_open_budget -- --ignored`; `scripts/gate.sh`; quickstart Part B.
   (Copied / Copy failed), sideways scrolling, Edit/MultiEdit/Write diffs with `+`/`−`, notes and
   `+N −M` headers, "Show in full" for large blocks, and which links open (`http`, `https`,
   `mailto`) and which do not
-- [ ] T042 [US3] Run quickstart Part B with the `visual-pass` skill and record it in
+- [x] T042 [US3] Run quickstart Part B with the `visual-pass` skill and record it in
   `specs/940-transcript-rich-rendering/visual-pass/` (FR-002–FR-017, US3 scenario 6, SC-006,
   Principle II two-window check)
 

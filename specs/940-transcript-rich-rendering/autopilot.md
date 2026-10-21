@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5 handover: T042 visual pass, then gate and reviews (see Handover)
+- **Next step**: M5: review B, full gate, PR files
 
 ## Pull requests
 
@@ -64,6 +64,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 (code-review, sonnet) | 2 | 20dc1895118dfc8c4f13d0aaa25f5a488aacca72:9478b70f8fb881a801b067a833257004120e7349 | CLEAN |
 | Review B M4 (conformance, sonnet) | 1 | 20dc1895118dfc8c4f13d0aaa25f5a488aacca72:9478b70f8fb881a801b067a833257004120e7349 | CLEAN: 1 MINOR (CodeBlock/LinkText test-after and T026 never red; disclosed in the cycle log, accepted) |
 | Visual pass M4 (showcase, tiny-skia on Xvfb) | 1 | — | 1 finding fixed: InlineDiff's "No newline at end" was drawn as a monospace `+` line, indistinguishable from a file line (now a marker plus a caption); MarkdownView, CodeBlock (idle/copied/failed/large), LinkText, the Edit card's `+12 −3` meta and InlineDiff in light and dark otherwise as specified; italic is drawn upright (no italic face bundled: follow-up). Evidence: `visual-pass/m4-*.png` |
+| Review A M5 (code-review high) | 1 | 2af3c1c3b4a551349a6a7230788a8079790e7751:b3b61e65db682b853a82c0692ec312f20044bdf9 | CLEAN: 1 MAJOR not real (T042 unfinished: it was in progress, done in this unit), 6 MINOR — header counts ignored the revision (fixed), two `EDIT_TOOLS` (fixed), empty block drew `Space` on a miss (fixed), 130-char guide line (fixed), fallback tests test-after (red shown by mutation, logged), rich budget without spans (declined) |
+| Visual pass M5 (real window headless, tiny-skia, recorded fixtures) | 1 | — | No findings: Part B steps 1, 2, 5, 7 pass; 3, 4, 8 not driven (no input/no second window), 6 thinking empty in fixture. Card titles faint = iced first-frame `Status::Disabled` (headless artefact). Evidence: `visual-pass/m5-record.md`, `m5-*.png` |
 
 ## Declined review findings
 
@@ -80,39 +82,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M5 | A r1 | F4 rich budget measured with no highlight spans applied | MINOR: spans split each line into coloured runs of the same text; the measured open is 118 ms against the 1 s budget, so the margin is wide. Follow-up recorded. |
+| M5 | A r1 | F1 T042 unfinished | Not real at the reviewed tree's next step: T042 was the unit's next task, now done (`visual-pass/m5-record.md`). |
 
 ## Handover
 
-M5 unit 1 (2026-10-21), over the context cap after implementing. Done, uncommitted work committed
-as `feat(940): draw the transcript with BlockRenderers::RICH…`: T035–T041 implemented and ticked.
-`ui/transcript/rich.rs` (`BlockRenderers::RICH`, `EDIT_TOOLS`); `entries.rs` `CardHeader::meta`,
-`tool_header_counted`, `edit_meta` ("+N −M", U+2212), drawn with `DisclosureCard::meta`;
-`mod.rs` lazy key gains `Derived.stamp`; `ui/terminal.rs` window switched to `RICH`.
-Tests green in debug: `transcript_rich_renderers` 7/7 (red shown: 5 of 7 failed with RICH stubbed
-to PLAIN fields, no stamp in the key and no counts; the 2 fallback tests are green by design),
-`transcript_renderer_seam` 2/2, `transcript_entry_view` 8/8, `layout_snapshot` 79/79 after
-regenerating the fixture (only additions: new covered state `session-transcript-rich`; the
-existing `session-transcript-pane` records did not change); new gate
-`tests/gates/transcript_rich_table_wraps.rs` (170dp: a cell wraps in its column);
-`gates/containment.rs` allows the new state's transcript overhang. User guide *Structured
-sessions* extended (T041).
-
-Next, in order:
-1. `cargo test --release -p micold-client --test transcript_open_budget` (NOT `-- --ignored`: the
-   budgets are `cfg_attr(debug_assertions, ignore)`, so `--ignored` in release runs none). Four
-   tests: PLAIN ×2 (unchanged numbers) and RICH ×2 (`markdown-turn`+`edit-turn` history, deltas from
-   `markdown-turn` renamed `live`). Free `target-shared/release` afterwards if disk is short.
-2. Add an M5 entry to `tdd/cycle-log.md` (red above).
-3. T042: quickstart Part B via visual-pass inline (cloud notes:
-   /tmp/claude/memory/team/silo/cloud-visual-pass.md); no logged-in `claude` here, so drive the
-   real transcript pane from recorded fixtures (e.g. the showcase or a seeded structured session)
-   and say so in the record; save to `specs/940-transcript-rich-rendering/visual-pass/m5-*`.
-4. verify.md: scoped gate + review A (high), review B (sonnet) + visual pass, full gate
-   (`scripts/gate.sh`), then pr.md files in the scratchpad (orchestrator opens the PR).
-
-Open notes for reviewers: with a filled cache PLAIN also shows the `+N −M` (RR-2 puts the count in
-the header view model, outside the renderers); RICH draws nothing (a zero `Space`) for an empty
-text block where PLAIN draws an empty paragraph.
+None.
 
 ## Open escalation
 
@@ -125,5 +100,7 @@ None.
 - Italic emphasis is drawn upright: the bundled fonts are Roboto Regular and Medium only, so `Style::Italic` finds no face (visual pass M4). Needs a Roboto Italic asset with its provenance entry (FR-003); not in M4's tasks.
 
 - LinkText per-link focus ring (review A M4 F2): draw the ring round the focused link's spans (`Paragraph::span_bounds`) instead of the paragraph; fix before #940 closes or file an issue.
+
+- Rich budget with highlight spans applied (review A M5 F4, declined as MINOR): feed the jobs back in `transcript_open_budget.rs` before the timed frames.
 
 - Possible later issue: draw Task (sub-agent) results as markdown and highlight Read results (out of #940 scope, FR-021).

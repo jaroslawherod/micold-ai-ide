@@ -1103,8 +1103,9 @@ the background service keeps the events it reports. It is Claude Code only.
   before the tool reported back). An **Edit**, **MultiEdit** or **Write** card's header also shows
   how many lines the change adds and removes, as `+12 −3`. Claude's reasoning is a **Thinking**
   card. Press a card's header to unfold it and see the tool's full input and its result, or the
-  thinking text; press it again to fold it. From the keyboard, Tab to the header and press Space or Enter. Cards start folded, and
-  stay as you left them while new events arrive and when you switch to another session and back.
+  thinking text; press it again to fold it. From the keyboard, Tab to the header and press Space or
+  Enter. Cards start folded, and stay as you left them while new events arrive and when you switch
+  to another session and back.
 - **Failures are marked by more than colour.** A failed card and a failed footer say **Failed**
   and carry the error icon, so they read as failed in greyscale too.
 - **Replies are formatted.** Claude's replies, and the text of an unfolded **Thinking** card (in

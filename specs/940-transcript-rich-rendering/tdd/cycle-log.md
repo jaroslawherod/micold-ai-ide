@@ -91,3 +91,28 @@ each test task written before its implementation task, run red, then made green.
   `Font::MONOSPACE`, padded as a line). Green after: consecutive spans of one link collapse into one
   stop; `number_gutter` widens a numbered list's gutter to its longest number; the note is a
   marker plus a caption on its side's tint.
+
+## M5 (T035–T042) — the transcript drawn rich
+
+- **Red**: the renderer tests (T035, `tests/transcript_rich_renderers.rs`) were written first and
+  run against `BlockRenderers::RICH` stubbed to `PLAIN`'s fields, with no `Derived.stamp` in the
+  lazy key and no counts in the card header: 5 of 7 failed. The 2 that stayed green,
+  `a_streaming_or_malformed_edit_input_is_drawn_as_plain` and `a_cache_miss_draws_plain`, assert
+  the fall back to `PLAIN`, so a `PLAIN` stub passes them by design (test-after for those two).
+- **Green**: `rich.rs` (`BlockRenderers::RICH`, `EDIT_TOOLS`), `CardHeader::meta` with
+  `edit_meta` ("+N −M", U+2212), the stamp in the lazy key; the window switched to `RICH`.
+  `transcript_rich_renderers` 7/7, `transcript_renderer_seam` 2/2, `transcript_entry_view` 8/8.
+- **Layout**: `layout_snapshot` 79/79 after regenerating the fixture; the only change is the new
+  covered state `session-transcript-rich` (the existing `session-transcript-pane` records did not
+  move). New gate `gates/transcript_rich_table_wraps.rs` (a long table cell wraps inside its
+  column at 170 dp): its red was not recorded (test-after, disclosed).
+- **Budget (T036, SC-004)**: `cargo test --release -p micold-client --test transcript_open_budget`
+  4/4 passed (2026-10-21, cloud container): open with every card open PLAIN 100 ms, RICH 118 ms
+  (budget 1 s); slowest streamed delta PLAIN 3.2 ms, RICH markdown 2.7 ms (budget 100 ms).
+- **M5 review fixes (2026-10-21).** Review A r1 (all MINOR): the two fallback tests' red shown
+  afterwards by mutation — `rich.rs` with each `PLAIN` fallback replaced by an empty `Space`:
+  `a_streaming_or_malformed_edit_input_is_drawn_as_plain` (line 391), `a_cache_miss_draws_plain`
+  (line 461) and `edit_inputs_are_diffs_and_results_stay_plain` (a non-edit input is `PLAIN`'s, line 314) failed,
+  the other 4 passed; restored, 7/7. Also fixed: an empty text block draws nothing only on a cache
+  hit (a miss draws `PLAIN`'s block); the header's `+N −M` is read only from the revision drawn;
+  one `EDIT_TOOLS`.

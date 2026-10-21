@@ -337,7 +337,14 @@ fn tool_card(
     ctx: &RenderCtx<'_>,
 ) -> Block {
     let roles = ctx.roles;
-    let header = tool_header_counted(card, ctx.cache.edit_counts(block.session, block.key));
+    // Counted only from the revision drawn, as the body's diff is (`rich.rs`), so a header never
+    // shows an older revision's counts above a plain input.
+    let counts = ctx
+        .cache
+        .get(block.session, block.key)
+        .filter(|d| d.revision == block.revision)
+        .and_then(|_| ctx.cache.edit_counts(block.session, block.key));
+    let header = tool_header_counted(card, counts);
     let mut status = row![status_label(header.status, roles)]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);

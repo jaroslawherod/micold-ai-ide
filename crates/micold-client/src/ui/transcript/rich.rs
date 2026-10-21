@@ -15,8 +15,7 @@ use iced::widget::Space;
 use micold_core::review::diff::{SchemeSpans, Spans};
 use micold_core::theme::ColorScheme;
 
-/// The tools whose input the cache derives a diff from (FR-013).
-pub const EDIT_TOOLS: [&str; 3] = ["Edit", "MultiEdit", "Write"];
+pub use crate::features::transcript_rich::EDIT_TOOLS;
 
 impl BlockRenderers {
     /// #940: formatted text and thinking, diffs for edits; the window's value from #940 on.
@@ -71,8 +70,14 @@ fn markdown(block: &BlockRef<'_>, muted: bool, ctx: &RenderCtx<'_>) -> Option<Bl
     Some(view.into())
 }
 
+/// Whether `block` is empty and the cache holds it: drawn as nothing, while a miss draws `PLAIN`'s
+/// block.
+fn empty_hit(text: &str, block: &BlockRef<'_>, ctx: &RenderCtx<'_>) -> bool {
+    text.is_empty() && derived(block, ctx).is_some()
+}
+
 fn rich_assistant_text(block: &AssistantText<'_>, ctx: &RenderCtx<'_>) -> Block {
-    if block.text.is_empty() {
+    if empty_hit(block.text, &block.block, ctx) {
         return Space::new().into();
     }
     markdown(&block.block, false, ctx)
@@ -80,7 +85,7 @@ fn rich_assistant_text(block: &AssistantText<'_>, ctx: &RenderCtx<'_>) -> Block 
 }
 
 fn rich_thinking(block: &ThinkingText<'_>, ctx: &RenderCtx<'_>) -> Block {
-    if block.text.is_empty() {
+    if empty_hit(block.text, &block.block, ctx) {
         return Space::new().into();
     }
     markdown(&block.block, true, ctx)
@@ -90,7 +95,8 @@ fn rich_thinking(block: &ThinkingText<'_>, ctx: &RenderCtx<'_>) -> Block {
 /// An Edit/MultiEdit/Write call's diff once its input is complete and well formed (FR-013,
 /// FR-018); any other input as #939 draws it.
 fn rich_tool_input(block: &ToolInput<'_>, ctx: &RenderCtx<'_>) -> Block {
-    let diff = (!block.block.streaming && EDIT_TOOLS.contains(&block.tool))
+    // The cache derives a diff only for `EDIT_TOOLS`, so any other tool is a miss here.
+    let diff = (!block.block.streaming)
         .then(|| derived(&block.block, ctx))
         .flatten()
         .and_then(|d| match &d.body {
