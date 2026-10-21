@@ -703,7 +703,7 @@ fn card_focus_return_id(app: &mut App) -> Option<iced::advanced::widget::Id> {
     app.core.overview.focus_landed = Some(target.clone());
     let link = to_link && target == location && issue_link_for(&app.core, &target).is_some();
     Some(if link {
-        card_link_id(&target)
+        card_link_id(&target, micold_core::overview_expansion::CardLink::Issue)
     } else {
         card_id(&target)
     })
@@ -757,7 +757,12 @@ fn link_focus_after(app: &mut App, before: &LinkFocus) -> Option<iced::advanced:
     let link = shown_focused_link(app)?;
     let was = before.expanded.as_ref() == Some(&link);
     let is = app.core.overview.expansion.expanded() == Some(&link);
-    (was != is).then(|| micold_client::ui::overview::card_link_id(&link))
+    (was != is).then(|| {
+        micold_client::ui::overview::card_link_id(
+            &link,
+            micold_core::overview_expansion::CardLink::Issue,
+        )
+    })
 }
 
 /// The control the keyboard moves to when the update took away the link that held it (feature
@@ -825,6 +830,18 @@ fn first_card_focus(app: &mut App) -> Task<Message> {
     }
 }
 
+/// Hand a card link's `address`, recomputed from what the window holds now, to the link opener,
+/// whose failures are feature 031's notification; `None` (a link gone since the card was drawn)
+/// opens nothing (feature 1122 R10, feature 1123 R8).
+fn open_card_link(app: &mut App, address: Option<String>) -> Task<Message> {
+    match address {
+        Some(address) => {
+            shell::links::perform(app, micold_client::features::OpenRequest::Url(address))
+        }
+        None => Task::none(),
+    }
+}
+
 /// The Overview's messages, and what they ask of the window (feature 813, R12, R13).
 fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) -> Task<Message> {
     use micold_client::features::overview::Msg;
@@ -886,13 +903,17 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
         // to the link opener, whose failures are feature 031's notification (FR-013). Nothing of
         // the Overview changes, and a link gone since the card was drawn opens nothing.
         Msg::IssueLinkActivated(location) => {
-            return match micold_client::ui::overview::issue_link_for(&app.core, &location) {
-                Some(link) => shell::links::perform(
-                    app,
-                    micold_client::features::OpenRequest::Url(link.address),
-                ),
-                None => Task::none(),
-            };
+            let address = micold_client::ui::overview::issue_link_for(&app.core, &location)
+                .map(|link| link.address);
+            return open_card_link(app, address);
+        }
+        // Feature 1123 (R8): a row's number takes the issue link's path, with the address of that
+        // number looked up in the reading the window holds now; a number since dropped opens
+        // nothing (FR-009, FR-012).
+        Msg::PullRequestLinkActivated(location, number) => {
+            let address =
+                micold_client::ui::overview::pull_request_link_for(&app.core, &location, number);
+            return open_card_link(app, address);
         }
         // Feature 1122 (R9): the arrows step from card to card, over the issue links. A daemon
         // dialog keeps the keyboard to itself, as it does for Tab.

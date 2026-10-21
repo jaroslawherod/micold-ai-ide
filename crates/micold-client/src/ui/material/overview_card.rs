@@ -123,6 +123,8 @@ pub fn words(model: &CardModel) -> Words {
 /// pill and the status words. No address: a press names the number.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardPrRow {
+    /// The pull request's number: what a press on it names (feature 1123, R8).
+    pub number: u64,
     /// The number as shown, "#N".
     pub label: String,
     /// The state, drawn as a pill with its word.
@@ -136,6 +138,9 @@ pub struct CardPrRow {
 /// What a secondary press becomes, built from the press point in window pixels.
 type PressAt<'a, M> = Rc<dyn Fn((u16, u16)) -> M + 'a>;
 
+/// What a pull request row's number becomes, built from the number (feature 1123).
+type ByNumber<'a, T> = Rc<dyn Fn(u64) -> T + 'a>;
+
 /// What the [`CardGrid`](super::CardGrid) reads of a card: [`OverviewCard::rest_messages`].
 pub(crate) struct RestMessages<M> {
     /// The card's location.
@@ -146,8 +151,9 @@ pub(crate) struct RestMessages<M> {
     pub on_leave: Option<M>,
     /// [`OverviewCard::on_link_rest`].
     pub on_link_rest: Option<M>,
-    /// The id of the link the card shows, when it shows one.
-    pub link_id: Option<iced::advanced::widget::Id>,
+    /// The ids of the links the card draws, in the order it draws them: its issue link, then each
+    /// pull request row's number (feature 1123, R6).
+    pub link_ids: Vec<iced::advanced::widget::Id>,
 }
 
 /// The card. See the module documentation.
@@ -176,6 +182,8 @@ pub struct OverviewCard<'a, M> {
     status: Option<(micold_core::jira_status::TicketStatus, bool)>,
     pr_rows: Vec<CardPrRow>,
     pr_more: usize,
+    on_pr_link: Option<ByNumber<'a, M>>,
+    pr_link_id: Option<ByNumber<'a, iced::advanced::widget::Id>>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -212,6 +220,8 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             status: None,
             pr_rows: Vec::new(),
             pr_more: 0,
+            on_pr_link: None,
+            pr_link_id: None,
             _marker: PhantomData,
         }
     }
@@ -329,22 +339,32 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             on_rest: self.on_rest.clone(),
             on_leave: self.on_leave.clone(),
             on_link_rest: self.on_link_rest.clone(),
-            link_id: self
+            link_ids: self
                 .on_issue_link
                 .as_ref()
                 .and(self.model.issue_link.as_ref())
-                .and(self.link_id.clone()),
+                .and(self.link_id.clone())
+                .into_iter()
+                .chain(
+                    self.on_pr_link
+                        .as_ref()
+                        .and(self.pr_link_id.as_ref())
+                        .into_iter()
+                        .flat_map(|id| self.pr_rows.iter().map(move |pr| id(pr.number))),
+                )
+                .collect(),
         }
     }
 
     /// This card, as the collapsed twin of `expanded` in the [`CardGrid`](super::CardGrid): laid
-    /// out with the link `expanded` shows, so the twin is as tall as the collapsed card it stands
+    /// out with the links `expanded` shows, so the twin is as tall as the collapsed card it stands
     /// for (feature 1121 FR-009). The twin is only measured, so the link's message is never sent.
     pub(crate) fn twin_of(mut self, expanded: &Self) -> Self
     where
         M: Clone,
     {
         self.on_issue_link = expanded.on_issue_link.clone();
+        self.on_pr_link = expanded.on_pr_link.clone();
         self
     }
 
@@ -399,6 +419,20 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
     /// card's [`Self::on_page`] (R9).
     pub fn on_link_menu_key(mut self, message: M) -> Self {
         self.on_link_menu_key = Some(message);
+        self
+    }
+
+    /// Draw each pull request row's number as a link publishing `f(number)` when clicked (feature
+    /// 1123, FR-009, contract U2): a press on it is the link's alone, as on the issue link. Without
+    /// it the number is plain text.
+    pub fn on_pr_link(mut self, f: impl Fn(u64) -> M + 'a) -> Self {
+        self.on_pr_link = Some(Rc::new(f));
+        self
+    }
+
+    /// Name each number's link `f(number)`, so the grid can find its bounds (feature 1123, R6).
+    pub fn pr_link_id(mut self, f: impl Fn(u64) -> iced::advanced::widget::Id + 'a) -> Self {
+        self.pr_link_id = Some(Rc::new(f));
         self
     }
 
@@ -557,34 +591,78 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
     }
 }
 
-/// The card's issue link (feature 1122, contract U3): `model.issue_link` drawn as a [`TextLink`] at
-/// the branch line's role, only when [`OverviewCard::on_issue_link`] is set. A click on it leaves the
-/// keyboard where it was (R7), and it is a Tab stop only once its focus reports are wired.
+/// The card's issue link (feature 1122, contract U3): `model.issue_link` drawn as a card link
+/// ([`card_link`]), only when [`OverviewCard::on_issue_link`] is set.
 fn issue_link<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>) -> Option<Element<'a, M>> {
     let (Some(link), Some(message)) = (&card.model.issue_link, &card.on_issue_link) else {
         return None;
     };
-    let mut link = TextLink::new(link.label.clone(), message.clone(), card.roles)
+    Some(card_link(
+        card,
+        link.label.clone(),
+        message.clone(),
+        card.link_id.clone(),
+        card.on_link_keyboard_focus.clone(),
+        card.on_link_menu_key.clone(),
+    ))
+}
+
+/// One link on the card (feature 1122 U3, feature 1123 U2): `label` as a [`TextLink`] at the body
+/// role publishing `message`, named `id`. A click on it leaves the keyboard where it was (1122
+/// R7); it is a Tab stop only once its focus reports (`focus`) are wired; while it holds the
+/// keyboard its Menu key publishes `menu` and its Page keys page the card.
+fn card_link<'a, M: Clone + 'a>(
+    card: &OverviewCard<'a, M>,
+    label: String,
+    message: M,
+    id: Option<iced::advanced::widget::Id>,
+    focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
+    menu: Option<M>,
+) -> Element<'a, M> {
+    let mut link = TextLink::new(label, message, card.roles)
         .role(TypeRole::Body)
         .inline(true)
         .focus_on_press(false)
-        .focusable(card.on_link_keyboard_focus.is_some());
-    if let Some(id) = card.link_id.clone() {
+        .focusable(focus.is_some());
+    if let Some(id) = id {
         link = link.id(id);
     }
-    if let Some(f) = card.on_link_keyboard_focus.clone() {
+    if let Some(f) = focus {
         link = link.on_keyboard_focus(move |shown| f(shown));
     }
     // The card's own keys stand down while it is targeted or its menu is open; so do the link's.
     if !card.targeted && !card.menu_open {
-        if let Some(menu) = card.on_link_menu_key.clone() {
+        if let Some(menu) = menu {
             link = link.on_menu_key(menu);
         }
         if let Some(page) = card.on_page.clone() {
             link = link.on_page(move |down| page(down));
         }
     }
-    Some(link.into())
+    link.into()
+}
+
+/// A row's number: a card link publishing [`OverviewCard::on_pr_link`] for it, named by
+/// [`OverviewCard::pr_link_id`], and no Tab stop yet (feature 1123, R7); plain text without
+/// `on_pr_link`.
+fn pr_number<'a, M: Clone + 'a>(
+    card: &OverviewCard<'a, M>,
+    pr: &CardPrRow,
+    p: Palette,
+) -> Element<'a, M> {
+    match &card.on_pr_link {
+        Some(f) => card_link(
+            card,
+            pr.label.clone(),
+            f(pr.number),
+            card.pr_link_id.as_ref().map(|id| id(pr.number)),
+            None,
+            None,
+        ),
+        None => Text::new(pr.label.clone(), TypeRole::Body, card.roles)
+            .tint(p.on_body)
+            .into(),
+    }
 }
 
 /// The collapsed card's body, under its header (feature 1120, feature 1121 FR-001).
@@ -662,7 +740,10 @@ fn counts_line<'a, M: 'a>(
 /// `PrMark` role with its on-colour as the word) at its natural width, and the
 /// words in what is left, ellipsized; *checks failing* in `error`, other words in the body role,
 /// "+N more" in the muted body role.
-fn pull_request_rows<'a, M: 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Option<Element<'a, M>> {
+fn pull_request_rows<'a, M: Clone + 'a>(
+    card: &OverviewCard<'a, M>,
+    p: Palette,
+) -> Option<Element<'a, M>> {
     if card.pr_rows.is_empty() {
         return None;
     }
@@ -670,7 +751,7 @@ fn pull_request_rows<'a, M: 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Optio
     let mut lines = column![].spacing(spacing::XS);
     for pr in &card.pr_rows {
         let mut line = row![
-            Text::new(pr.label.clone(), TypeRole::Body, roles).tint(p.on_body),
+            pr_number(card, pr, p),
             Tag::<M>::new(pr.mark.word(), pr.mark.role(&roles))
                 .solid(pr.mark.on_role(&roles))
                 .role(TypeRole::Label),
@@ -3000,6 +3081,7 @@ mod tests {
 
     fn pr_row(number: u64, mark: PrMark, phrase: Option<&str>) -> CardPrRow {
         CardPrRow {
+            number,
             label: format!("#{number}"),
             mark,
             phrase: phrase.map(str::to_string),
@@ -3199,5 +3281,142 @@ mod tests {
             before.is_none_or(|y| after < y),
             "the row moved up: {before:?} -> {after}"
         );
+    }
+
+    // ---- Feature 1123 (T020, contract U2): a number opens its pull request ----
+
+    /// The card of `titled()` with `two_rows()`, every message a number test reads, and its
+    /// numbers wired as links when `wired` (`pr N`, id `pr-N`), collapsed or `expanded`.
+    fn numbered(expanded: bool, wired: bool) -> OverviewCard<'static, String> {
+        let card = OverviewCard::<String>::new(&titled(), roles())
+            .on_press("open".to_string())
+            .pull_requests(two_rows(), 1)
+            .expanded(expanded);
+        if wired {
+            card.on_pr_link(|n| format!("pr {n}"))
+                .pr_link_id(|n| iced::advanced::widget::Id::from(format!("pr-{n}")))
+        } else {
+            card
+        }
+    }
+
+    /// Where `content` is painted, at its centre.
+    fn centre_of(m: &mut Mounted<'_>, content: &str) -> Point {
+        painted_where(m, content)
+            .unwrap_or_else(|| panic!("{content:?} is not painted"))
+            .center()
+    }
+
+    /// U2, FR-009, SC-003: a click on "#12" publishes `pr 12` once and not the card's message,
+    /// starts no ripple and leaves the card without the keyboard, collapsed and expanded.
+    #[test]
+    fn a_click_on_a_number_publishes_only_its_pull_request() {
+        for expanded in [false, true] {
+            let mut m = in_room(numbered(expanded, true), 380.0);
+            let at = centre_of(&mut m, "#12");
+            assert!(m.press(at).is_empty(), "expanded {expanded}");
+            assert!(
+                ripple(&m).is_idle(),
+                "expanded {expanded}: the press rippled"
+            );
+            assert_eq!(release(&mut m, at), ["pr 12"], "expanded {expanded}");
+            assert!(
+                m.send(named_key(Named::Enter), mouse::Cursor::Unavailable)
+                    .is_empty(),
+                "expanded {expanded}: the click gave the card the keyboard"
+            );
+        }
+    }
+
+    /// FR-009 (1122 FR-005): a press and its release must both be on the number: a press on the
+    /// card released on "#12", or a press on "#12" released on the card, publishes nothing.
+    #[test]
+    fn a_press_and_release_split_between_a_number_and_the_card_publish_nothing() {
+        for expanded in [false, true] {
+            let mut m = in_room(numbered(expanded, true), 380.0);
+            let (on, off) = (centre_of(&mut m, "#12"), off_link(&m));
+            m.press(off);
+            m.hover(on);
+            assert!(release(&mut m, on).is_empty(), "expanded {expanded}");
+            settle(&mut m);
+            let mut m = in_room(numbered(expanded, true), 380.0);
+            m.press(on);
+            m.hover(off);
+            assert!(release(&mut m, off).is_empty(), "expanded {expanded}");
+        }
+    }
+
+    /// FR-011, Story 3 sc. 3: a click on a row's pill or its words activates the card, with its
+    /// ripple, as a click anywhere else on it.
+    #[test]
+    fn a_click_on_a_rows_pill_or_words_activates_the_card() {
+        for expanded in [false, true] {
+            for part in ["Open", "checks failing"] {
+                let mut m = in_room(numbered(expanded, true), 380.0);
+                let at = centre_of(&mut m, part);
+                m.press(at);
+                assert!(!ripple(&m).is_idle(), "expanded {expanded}: {part}");
+                assert_eq!(release(&mut m, at), ["open"], "expanded {expanded}: {part}");
+            }
+        }
+    }
+
+    /// Story 3 sc. 2: over a number the pointer is the pointing hand, as over the issue link.
+    #[test]
+    fn the_pointer_over_a_number_reads_as_a_link() {
+        for expanded in [false, true] {
+            let mut m = in_room(numbered(expanded, true), 380.0);
+            let at = centre_of(&mut m, "#11");
+            let pointer = m.element.as_widget().mouse_interaction(
+                &m.tree,
+                iced::advanced::Layout::new(&m.node),
+                mouse::Cursor::Available(at),
+                &Rectangle::with_size(m.room),
+                &m.renderer,
+            );
+            assert_eq!(pointer, mouse::Interaction::Pointer, "expanded {expanded}");
+        }
+    }
+
+    /// U2, R7: without `.on_pr_link_keyboard_focus` no number is a Tab stop, so Tab goes from the
+    /// card straight on; without `.on_pr_link` a number is plain text, and a click on it
+    /// activates the card.
+    #[test]
+    fn numbers_are_no_tab_stops_yet_and_plain_text_without_their_message() {
+        for expanded in [false, true] {
+            let mut wired = in_room(numbered(expanded, true), 380.0);
+            assert_eq!(wired.drive(Focusables(0)), Some(1), "expanded {expanded}");
+            let mut plain = in_room(numbered(expanded, false), 380.0);
+            let at = centre_of(&mut plain, "#12");
+            plain.press(at);
+            assert_eq!(release(&mut plain, at), ["open"], "expanded {expanded}");
+        }
+    }
+
+    /// U2, R6: the card names each number's link id after its issue link's, for the grid.
+    #[test]
+    fn the_card_names_its_numbers_link_ids_for_the_grid() {
+        let id = |s: &str| iced::advanced::widget::Id::from(s.to_string());
+        let card = numbered(false, true)
+            .on_issue_link("link".to_string())
+            .link_id(id("link"));
+        assert_eq!(card.rest_messages().link_ids, [id("pr-12"), id("pr-11")]);
+        let mut model = titled();
+        model.issue_link = Some(IssueLink {
+            label: LINK.into(),
+            address: "https://github.com/o/r/issues/1122".into(),
+        });
+        let card = OverviewCard::<String>::new(&model, roles())
+            .pull_requests(two_rows(), 1)
+            .on_issue_link("link".to_string())
+            .link_id(id("link"))
+            .on_pr_link(|n| format!("pr {n}"))
+            .pr_link_id(|n| iced::advanced::widget::Id::from(format!("pr-{n}")));
+        assert_eq!(
+            card.rest_messages().link_ids,
+            [id("link"), id("pr-12"), id("pr-11")]
+        );
+        let bare = OverviewCard::<String>::new(&model, roles()).pull_requests(two_rows(), 1);
+        assert!(bare.rest_messages().link_ids.is_empty());
     }
 }

@@ -11,6 +11,16 @@ use crate::session::SessionLocation;
 /// How long the pointer rests on a card before it expands (K2, R5): under the 0.5 s of SC-006.
 pub const EXPAND_REST: Duration = Duration::from_millis(400);
 
+/// One link of a card (feature 1123, research R6, data-model §5): its issue link, or the number of
+/// one of its pull request rows. Stable per number, so a reading that reorders the rows keeps it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardLink {
+    /// The issue link on the branch line (feature 1122).
+    Issue,
+    /// The number of a pull request row.
+    PullRequest(u64),
+}
+
 /// Why a card is expanded (data-model *Expansion*).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cause {

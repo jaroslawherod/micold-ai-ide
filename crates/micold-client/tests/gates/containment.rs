@@ -230,14 +230,30 @@ const INLINE_LINK_GUTTER: &[&str] = &[
     "0/0/0/1/1/0/1/0/4/0/0/1/0/1/0",
 ];
 
+/// The same gutter on a **pull request row's number** (feature 1123, M2): each number is an
+/// inline link, so its row keeps the line's height and the gutter overhangs the row by exactly the
+/// gutter. `overview-pr-rows` holds them: two numbers on the collapsed card and three on the
+/// expanded one.
+const PR_NUMBER_GUTTER: &[&str] = &[
+    "0/0/0/1/1/0/1/0/1/0/0/1/0/2/0/0/0",
+    "0/0/0/1/1/0/1/0/1/0/0/1/0/2/1/0/0",
+    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/3/0/0/0",
+    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/3/1/0/0",
+    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/3/2/0/0",
+];
+
 /// The gutter of [`INLINE_LINK_GUTTER`]: twice the focus ring's width (`text_link.rs`).
 const LINK_GUTTER: f32 = 6.0;
 
 /// Whether `escape`, in the covered state `state`, is an inline link's focus gutter, which is the
-/// only overhang [`INLINE_LINK_GUTTER`] allows.
+/// only overhang [`INLINE_LINK_GUTTER`] and [`PR_NUMBER_GUTTER`] allow.
 fn is_inline_link_gutter(state: &str, escape: &lay::Escape) -> bool {
-    state == "overview-issue-link"
-        && INLINE_LINK_GUTTER.contains(&escape.child_path.as_str())
+    let paths = match state {
+        "overview-issue-link" => INLINE_LINK_GUTTER,
+        "overview-pr-rows" => PR_NUMBER_GUTTER,
+        _ => return false,
+    };
+    paths.contains(&escape.child_path.as_str())
         && (escape.overhang - LINK_GUTTER).abs() <= TOLERANCE
 }
 
@@ -321,6 +337,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(SETTINGS_PAGE_CONTENT)
         .chain(ISSUE_DETAILS_CONTENT)
         .chain(INLINE_LINK_GUTTER)
+        .chain(PR_NUMBER_GUTTER)
         .chain(TRANSCRIPT_CONTENT)
         .filter(|path| !fired.contains(**path))
         .collect();
