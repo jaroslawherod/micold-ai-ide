@@ -1785,7 +1785,7 @@ mod issue_link {
     /// dismissed, it hands the keyboard back to the link; an entry's hand-back is the card's.
     #[test]
     fn a_menu_from_the_link_hands_the_keyboard_back_to_the_link() {
-        use micold_client::features::overview::MenuOrigin;
+        use micold_client::features::overview::{FocusReturn, MenuOrigin};
         for (close, to_link) in [
             (Msg::CardMenuDismissed, true),
             (
@@ -1803,8 +1803,14 @@ mod issue_link {
             assert_eq!(menu.origin, MenuOrigin::KeyboardFromLink);
             assert_eq!(menu.highlighted, Some(0));
             state.update(Message::Overview(close.clone()));
-            assert_eq!(state.overview.focus_return, Some(wt(LINKED)), "{close:?}");
-            assert_eq!(state.overview.focus_return_link, to_link, "{close:?}");
+            assert_eq!(
+                state.overview.focus_return,
+                Some(FocusReturn {
+                    location: wt(LINKED),
+                    to_link
+                }),
+                "{close:?}"
+            );
         }
         let mut state = on_the_link();
         state.update(Message::Overview(Msg::CardMenuOpened {
@@ -1813,6 +1819,10 @@ mod issue_link {
             origin: MenuOrigin::Keyboard,
         }));
         state.update(Message::Overview(Msg::CardMenuDismissed));
-        assert!(!state.overview.focus_return_link, "the card's menu");
+        assert_eq!(
+            state.overview.focus_return.map(|r| r.to_link),
+            Some(false),
+            "the card's menu"
+        );
     }
 }

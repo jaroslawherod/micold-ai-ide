@@ -230,8 +230,12 @@ impl Expansion {
             }
             Event::WindowBlurred => {
                 self.rest_held = false;
+                // The loss the link's menu deferred happens now: no link holds the keyboard under
+                // the menu once the window has lost it (review A F3, M4).
+                if let Some(held) = self.link_held.take() {
+                    self.lost_plain(held);
+                }
                 self.focus_held = false;
-                self.link_held = None;
                 self.collapse();
             }
             Event::MenuOpened => self.menu_open = true,
@@ -257,6 +261,10 @@ impl Expansion {
                 }
             }
             Event::Listed(listed) => {
+                // The root lists after every update (`settle_card_menu`): a listing that changes
+                // nothing is no event between a card's loss and its link's gain, so it keeps the
+                // pairing (K5, review A F1, M4).
+                let unchanged = self.clone();
                 let gone = |slot: &Option<SessionLocation>| {
                     slot.as_ref()
                         .is_some_and(|location| !listed.contains(location))
@@ -279,6 +287,9 @@ impl Expansion {
                 // The opening's focus will never report for a card no longer listed (r2 F1, M4).
                 if gone(&self.open_focus) {
                     self.open_focus = None;
+                }
+                if *self == unchanged {
+                    self.just_lost = just_lost;
                 }
             }
             Event::BodyScrolled { up, down } => {
@@ -1238,6 +1249,61 @@ mod tests {
         assert!(handed.focus_escaped);
         assert_eq!(handed.focused, Some(loc("a")));
         assert_eq!(handed.focused_link(), None);
+    }
+
+    /// K5, FR-008 (review A F1, M4): the root's listing after every update, unchanged, sits
+    /// between the card's loss and its link's gain and keeps the pairing: Tab onto an escaped
+    /// card's link leaves it collapsed and the card the pointer expanded expanded.
+    #[test]
+    fn an_unchanged_listing_keeps_the_pairing_of_a_tab_onto_the_link() {
+        let tabbed = after([
+            focus("a"),
+            Event::Escape,
+            rest("b"),
+            lost("a"),
+            Event::Listed(vec![loc("a"), loc("b")]),
+            link_focus("a"),
+        ]);
+        assert_eq!(shown(&tabbed), Some("b".into()));
+        assert_eq!(tabbed.cause(), Some(Cause::Pointer));
+        assert!(tabbed.focus_escaped);
+        assert_eq!(tabbed.focused_link(), Some(&loc("a")));
+    }
+
+    /// K5: a listing that changes something (another card gone) still ends the pairing.
+    #[test]
+    fn a_changed_listing_ends_the_pairing() {
+        let apart = after([
+            focus("a"),
+            Event::Escape,
+            lost("a"),
+            Event::Listed(vec![loc("a")]),
+            link_focus("a"),
+        ]);
+        assert_eq!(shown(&apart), None, "nothing gone: paired");
+        let apart = after([
+            focus("a"),
+            Event::Escape,
+            rest("b"),
+            lost("a"),
+            Event::Listed(vec![loc("a")]),
+            link_focus("a"),
+        ]);
+        assert_eq!(shown(&apart), Some("a".into()), "b gone: a new focus");
+        assert!(!apart.focus_escaped);
+    }
+
+    /// FR-009 (review A F3, M4): a window blur with the link's menu holding its focus applies the
+    /// deferred loss, so no link is left holding the keyboard under the menu.
+    #[test]
+    fn a_blur_under_the_link_menu_applies_the_held_loss() {
+        let mut events = link_menu_opened(false);
+        events.push(Event::WindowBlurred);
+        let blurred = after(events);
+        assert_eq!(blurred.link_held, None);
+        assert_eq!(blurred.focused, None);
+        assert_eq!(blurred.focused_link(), None);
+        assert_eq!(shown(&blurred), None);
     }
 
     /// K2, SC-006: a card expands within half a second of the pointer resting on it.

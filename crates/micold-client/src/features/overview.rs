@@ -60,6 +60,17 @@ pub enum RepoLookup {
 
 /// What the Overview remembers: whether it is on screen, the last file reading of each worktree and
 /// the issue titles read. The cards are derived per render.
+/// Where the keyboard goes back to after a keyboard-opened card menu (feature 972, FR-011): one
+/// value, so the card and the "to its link" flag are armed and cleared together (review A F4, M4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FocusReturn {
+    /// The card.
+    pub location: SessionLocation,
+    /// To the card's issue link, not the card: a menu opened from the link closed without a
+    /// choice (feature 1122, FR-009).
+    pub to_link: bool,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
     /// The Overview replaces the main area.
@@ -73,12 +84,9 @@ pub struct State {
     pub activating: Option<Activation>,
     /// The card menu, when one is open: at most one (feature 972, FR-014).
     pub card_menu: Option<CardMenu>,
-    /// The card the keyboard goes back to once a keyboard-opened menu closed or ran an entry
+    /// Where the keyboard goes back to once a keyboard-opened menu closed or ran an entry
     /// (feature 972, FR-011); drained by the root.
-    pub focus_return: Option<SessionLocation>,
-    /// The return goes to the card's issue link, not the card: a menu opened from the link closed
-    /// without a choice (feature 1122, FR-009). Drained with [`Self::focus_return`].
-    pub focus_return_link: bool,
+    pub focus_return: Option<FocusReturn>,
     /// The card the keyboard was just handed back to. While it is still listed nothing happens;
     /// if it goes (a delete that finishes after its dialog closed) the keyboard moves to the
     /// first card instead of being lost. Cleared by any other focus move (feature 972, FR-011).
@@ -358,7 +366,6 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             state.titles.clear();
             state.card_menu = None;
             state.focus_return = None;
-            state.focus_return_link = false;
             state.focus_landed = None;
             state.expansion = Expansion::default();
             state.repo = RepoLookup::Unknown;
@@ -386,11 +393,12 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             state.expansion.apply(Event::MenuClosed);
             if let Some(menu) = state.card_menu.take() {
                 if menu.origin.is_keyboard() {
-                    state.focus_return = Some(menu.location);
                     // Without a choice, a menu opened from the link hands the keyboard back to
                     // the link (feature 1122, FR-009); an entry's hand-back is the card's (972).
-                    state.focus_return_link =
-                        !chosen && menu.origin == MenuOrigin::KeyboardFromLink;
+                    state.focus_return = Some(FocusReturn {
+                        location: menu.location,
+                        to_link: !chosen && menu.origin == MenuOrigin::KeyboardFromLink,
+                    });
                 }
             }
         }
