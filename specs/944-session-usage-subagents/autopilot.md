@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
 - **Phase**: verify M2
-- **Next step**: M2 verify — scoped gate + review A, review B, full gate, then PR files
+- **Next step**: M2 verify — review B and full gate, then PR files
 
 ## Pull requests
 
@@ -60,12 +60,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | 95d88fdccb0d89fd5614e3eab661ae7ae4eb7836:05fc6fbe5aecacd794c413bcf2ff70a83c337b00 | CLEAN; 3 MINOR fixed (checklist ticked after reviewer confirmed no markers; T003 after T002; T036 routing test) |
 | Review A M1 (code-review high) | 1 | 77e2180ce36783dd94cad9a7a7b89e5e6bf07015:3df85b84533bf6775439c57d7c3207cde3b648c9 | CLEAN; 3 MINOR: F2 (`totals_line` → `Option`, note only with a cost) and F3 (bound tracks held seqs, live seq gap) fixed with a test; F1 declined |
 | Review B M1 (conformance, sonnet) | 1 | dcf8a4a7ee3df67c8cba53abd724893bd1ad62a9:520a46447de01102919168516cd1f256e52b8a2d | CHANGES: F1 MAJOR (no `tdd/cycle-log.md`) fixed — red reproduced by stubbing, `tdd/cycle-log.md` added (evidence only, no code change, so no re-run); F2 MINOR (declined finding outside the table) fixed. Verify: `structured_insights` 26/26, `structured_transcript` 37/37, lib filter 9/9, capture test 11/11 |
+| Review A M2 (code-review high) | 1 | 8098161906187c26deea72c8fb8a0d72fcd6e31a:45524d887c4a62cfbb6fefcf136251f2febbeaa6 | No severities given (9 items, none a BLOCKER/MAJOR on verification). Fixed: offers serialised so pushes follow the keep order (`plan_usage_offer` lock); unreadable-event test waits for 2 with the later event as barrier; restored-history test uses a new CLI event as barrier instead of a 2 s silence; shared `limit_window` beyond-`u32` rule tested; terminal-launch assertion skipped when the test env sets the variable. Declined 4 (see table) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A (code-review high) | F1 [MINOR] digest a `result` line #938's parse leaves `Unrecognised` (a string token count) | D12: #939 shows no footer for such a line, so its per-turn figures would have nowhere to show, and counting it in the totals while the transcript shows no turn would disagree with what the user sees; `insights-tolerance.jsonl` pins it |
+| M2 | A (code-review high) | Feed only drained when `spawn_plan_usage_feed` runs; call `offer_plan_usage` directly | research R4: `spawn_structured(&self, …)` holds no `Arc<DaemonState>`, so the channel is the plan's default; `server::run` spawns the drain |
+| M2 | A (code-review high) | `offer_line` parses a failing line twice | Only for lines containing `rate_limit_event` that fail to read (rare); keeping `parse -> Option` matches the contract's signature |
+| M2 | A (code-review high) | `Rejections` entries not cleared when a session is removed | Same as feature 490's status route before this change (an entry per (session, answer), bounded by answers × sessions); out of M2's scope |
+| M2 | A (code-review high) | Empty-key filter and `share × 100` then `× 10` scaling | Empty keys are dropped as `status_line` drops them (a window needs a non-empty key, data-model); `limit_window(key, used_percent, …)` is the plan's signature, and recorded shares are two-decimal values that scale exactly enough to round alike |
 
 ## Handover
 

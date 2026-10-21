@@ -115,6 +115,23 @@ impl Case {
         std::fs::read_to_string(&self.turn).unwrap().lines().count()
     }
 
+    /// A plan-limit event the CLI writes later, with the 5-hour window at 50%.
+    fn later_event(&self) -> String {
+        format!(
+            r#"{{"type":"rate_limit_event","rate_limit_info":{{"unifiedWindows":{{"five_hour":{{"utilization":0.5,"resetsAt":{}}}}}}}}}"#,
+            self.five_hour_reset
+        )
+    }
+
+    /// The windows of [`Self::later_event`].
+    fn later_windows(&self) -> Vec<LimitWindow> {
+        vec![LimitWindow {
+            key: "five_hour".into(),
+            used_tenths: 500,
+            resets_at: Some(self.five_hour_reset),
+        }]
+    }
+
     fn replay(&self) -> String {
         format!("replay {}\n", self.turn.display())
     }
@@ -248,10 +265,7 @@ async fn an_unreadable_event_leaves_the_current_reading_as_it_is() {
     let case = Case::new();
     let state = case.daemon();
     let mut window = connect(&state).await;
-    let later = format!(
-        r#"{{"type":"rate_limit_event","rate_limit_info":{{"unifiedWindows":{{"five_hour":{{"utilization":0.5,"resetsAt":{}}}}}}}}}"#,
-        case.five_hour_reset
-    );
+    let later = case.later_event();
     let script = format!(
         "{}{}\n{}\n{}\n",
         case.replay(),
@@ -264,21 +278,15 @@ async fn an_unreadable_event_leaves_the_current_reading_as_it_is() {
         .start_session(case.id(), LaunchMode::Fresh)
         .expect("starts");
 
-    let got = usage_changes(&mut window, 3, Duration::from_secs(10)).await;
+    // The later event is the barrier: a reading from either unreadable one would come before it.
+    let got = usage_changes(&mut window, 2, Duration::from_secs(10)).await;
     let windows: Vec<Vec<LimitWindow>> = got
         .into_iter()
         .map(|r| r.expect("a reading").windows)
         .collect();
     assert_eq!(
         windows,
-        [
-            case.windows(),
-            vec![LimitWindow {
-                key: "five_hour".into(),
-                used_tenths: 500,
-                resets_at: Some(case.five_hour_reset),
-            }],
-        ],
+        [case.windows(), case.later_windows(),],
         "the unreadable events in between showed nothing and kept the reading"
     );
     let events = history_of(&state, &case, case.turn_lines() + 3).await;
@@ -318,17 +326,24 @@ async fn a_restored_history_holding_the_event_yields_no_reading() {
         saved.path(),
     ));
     let mut window = connect(&restarted).await;
-    stream_script(case.dir(), "");
+    // The restarted CLI writes one new event, after the restore: the barrier showing the feed has
+    // carried everything before it.
+    stream_script(case.dir(), &format!("{}\n", case.later_event()));
     restarted
         .start_session(case.id(), LaunchMode::Fresh)
         .expect("starts again");
-    let restored = history_of(&restarted, &case, case.turn_lines()).await;
-    assert!(has_plan_limit_event(&restored), "the event was restored");
-    assert_eq!(
-        usage_changes(&mut window, 1, Duration::from_secs(2)).await,
-        [],
-        "a restored event is no reading"
+    let history = history_of(&restarted, &case, case.turn_lines() + 1).await;
+    assert!(
+        has_plan_limit_event(&history[..case.turn_lines()]),
+        "the event was restored"
     );
-    assert_eq!(restarted.welcome_plan_usage(), None);
+    let got = usage_changes(&mut window, 1, Duration::from_secs(10)).await;
+    assert_eq!(
+        got.into_iter()
+            .map(|r| r.expect("a reading").windows)
+            .collect::<Vec<_>>(),
+        [case.later_windows()],
+        "only the event the running CLI wrote is a reading, not the restored one"
+    );
     restarted.stop_session(case.id());
 }
