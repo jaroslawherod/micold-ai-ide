@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: milestone M1
-- **Next step**: M1 review A + scoped gate, review B, full gate, push
+- **Next step**: M1 verify (handover: see *Handover*)
 
 ## Pull requests
 
@@ -54,7 +54,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: M1 implemented, all of T001–T015 ticked, committed (`feat(939): transcript model for finished events`). Branch restarted from origin/main at cee4e719 (#1183 merged). Red/green evidence in `tdd/cycle-log.md`. Local runs: `micold-core` lib `structured::transcript` 14/14, `--test structured_transcript` 25/25, `--test structured_parse` 7/7, clippy `-p micold-core --all-targets -D warnings` clean, `cargo fmt --all` applied.
+- **Next step**: verify.md step 1 — scoped gate (`scripts/autopilot/scoped-gate.sh`) detached, review A (`code-review` high) on `origin/main...HEAD` in its shadow; then review B (conformance, sonnet); then full gate (`scripts/gate.sh` in the cloud container); then pr.md with the PR title/body written to the scratchpad for the orchestrator (no gh).
+- **Open findings**: none yet; no review has run.
+- **PR**: none opened.
 
 ## Open escalation
 
