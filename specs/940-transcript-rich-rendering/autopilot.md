@@ -46,8 +46,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review plan | 1 | cbeaa4e165ca7c3e9f2ea7b08be207eb01604534:9a46f37fbf00a575587b6d7999a054954d903020 | CLEAN: 3 MINOR (all fixed, prose only) |
 | Review tasks | 1 | df307d2ead90c7a22675e927c76fda956075f993:48dae9c37b7f429569d6b850335973fabda4a734 | CHANGES: 2 MAJOR (MarkdownView copy/large plumbing; CopyExpired timer request unnamed → `Outcome::CopyConfirmTimer`), 1 MINOR (`fills` arity) — all fixed; data-model, research R9, contracts/rich-renderers.md updated |
 | Review tasks | 2 | 09be2f38d7faea105eb95db889edb95def0aba7a:48dae9c37b7f429569d6b850335973fabda4a734 | CLEAN: 1 MINOR (double blank line, fixed) |
+| Review A M1 (code-review high) | 1 | c52ec378bfd53e2b9e289fa241e1faced7b8f684:4009ce61770beaba9d569a6c263284283ca295fb | 9 findings: nested definitions cut/hid (fixed), image in link lost its link (fixed), whole-text hash per delta (fixed: kept source text, memcmp), container-closed fence stayed open (fixed), empty task item paragraph (fixed), `lines` off on trailing blanks (fixed), duplicated inline prologue (fixed), eager `code_blocks` (declined), lone trailing `\r` (declined) |
+| Review B M1 (conformance, sonnet) | 1 | c52ec378bfd53e2b9e289fa241e1faced7b8f684:4009ce61770beaba9d569a6c263284283ca295fb | CHANGES: 2 MAJOR (cycle log untracked → committed; fence red not shown → shown against a stub, logged), 1 MINOR (batched cycles; noted). Verify: subset 18, stream 4, lib 10 passed |
 
 ## Declined review findings
+
+- Review A M1 #8 (`code_blocks` builds a Vec, `code` scans): MINOR; ids are few per reply and the renderer reads them from M3's cache, not per frame.
+- Review A M1 #9 (lone trailing `\r` read as a complete line ending): a lone `\r` is a CommonMark line ending; the `\n` that may follow only completes the same CRLF ending, so the line before it is complete either way.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

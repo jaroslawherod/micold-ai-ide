@@ -79,7 +79,8 @@ impl Inline {
                 Event::End(TagEnd::Image) => {
                     let image = self.image.take().expect("an image is being read");
                     let text = format!("{} ({})", image.description, image.address);
-                    self.push(&text, false, None, true);
+                    let link = self.links.last().cloned();
+                    self.push(&text, false, link, true);
                 }
                 Event::SoftBreak | Event::HardBreak => image.description.push(' '),
                 Event::Text(t) | Event::Code(t) | Event::InlineHtml(t) | Event::Html(t) => {
@@ -173,7 +174,8 @@ impl Inline {
     pub(super) fn finish(mut self) -> Inlines {
         if let Some(image) = self.image.take() {
             let text = format!("{} ({})", image.description, image.address);
-            self.push(&text, false, None, true);
+            let link = self.links.last().cloned();
+            self.push(&text, false, link, true);
         }
         let mut out = Vec::with_capacity(self.spans.len());
         for (span, image) in self.spans.into_iter().zip(self.images) {
