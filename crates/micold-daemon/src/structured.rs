@@ -186,7 +186,8 @@ impl StructuredSession {
     /// cleaned as a terminal session's is (R3). Each line
     /// the CLI writes to stdout reaches `on_event` as one event, in order, and a trailing partial
     /// line at end-of-file as one more (FR-014). A `result` ends the turn; at end-of-file a turn
-    /// still in progress ends with a `TurnEndedWithoutResult` note, after the last line (R7).
+    /// still in progress ends with a `TurnEndedWithoutResult` note, after the last line (R7), and
+    /// then `on_end` runs: the process's output is over (#942 FR-011).
     ///
     /// Refused if `spec.cwd` does not exist (FR-006c), and for a CLI with no structured mode
     /// (FR-003).
@@ -197,6 +198,7 @@ impl StructuredSession {
         spec: &LaunchSpec,
         extra_args: &[OsString],
         on_event: impl FnMut(StructuredEvent) + Send + 'static,
+        on_end: impl FnOnce() + Send + 'static,
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
         let provider = spec.provider.provider();
@@ -241,7 +243,10 @@ impl StructuredSession {
             spawn_reader(
                 format!("stream-out-{id}"),
                 Arc::clone(&output_ended),
-                move || read_events(stdout, &reader_turn, on_event),
+                move || {
+                    read_events(stdout, &reader_turn, on_event);
+                    on_end();
+                },
             ),
             spawn_reader(
                 format!("stream-err-{id}"),

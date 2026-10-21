@@ -161,6 +161,9 @@ pub struct DaemonState {
     /// Structured sessions' plan-limit readings on their way to [`Self::offer_plan_usage`]
     /// (feature 944, research R4).
     plan_usage_feed: crate::plan_usage::Feed,
+    /// The ends of structured sessions' turns and processes, for their waiting prompt calls (#942
+    /// FR-011). Outside `Inner`: a session's stdout reader signals it, and never takes that lock.
+    prompt_endings: Arc<crate::permission::Endings>,
     /// Held across keeping a reading and telling the windows, so two sources offering at once
     /// push in the order they were kept (feature 944).
     plan_usage_offer: Mutex<()>,
@@ -815,6 +818,7 @@ impl DaemonState {
             setting_change: Mutex::new(()),
             plan_usage_rejections: crate::plan_usage::Rejections::default(),
             plan_usage_feed: crate::plan_usage::Feed::default(),
+            prompt_endings: Arc::default(),
             plan_usage_offer: Mutex::new(()),
         }
     }
@@ -3078,7 +3082,8 @@ impl DaemonState {
     /// Stop `session` as the sidebar's stop does (feature 034, FR-009; the protocol `SessionStop`):
     /// end every process it has, mark the record `Idle`, and tell every window. The record, its
     /// conversation and its tool-server credential are kept, so it can be started (resumed) again.
-    /// A request the stopped session was waiting on for confirmation is withdrawn (FR-014).
+    /// A request the stopped session was waiting on for confirmation is withdrawn (FR-014), and so
+    /// is each of its pending permission requests (#942 FR-011).
     ///
     /// The live entry is taken under the lock and its processes killed and dropped off it (module
     /// invariant), so the supervisor never sees the kill as a crash. Returns whether the session is
@@ -3104,6 +3109,10 @@ impl DaemonState {
             (removed, covered, owner)
         };
         self.confirmations_caller_stopped(session);
+        self.withdraw_session_prompts(
+            session,
+            micold_core::protocol::messages::WithdrawReason::SessionStopped,
+        );
         if owner.is_some() {
             tracing::info!(session = %session.0, reason = "stopped on request", "session stopped");
             self.broadcast_catalog();
@@ -3159,10 +3168,50 @@ impl DaemonState {
     ) -> crate::permission::Opened {
         let mut inner = self.lock();
         let opened = inner.prompts.open(session, call, kind);
-        if let crate::permission::Opened::Pending { broadcast, .. } = &opened {
+        let mut begins_waiting = false;
+        if let crate::permission::Opened::Pending {
+            broadcast,
+            first_of_session,
+            ..
+        } = &opened
+        {
             Self::broadcast_locked(&inner, vec![(**broadcast).clone()]);
+            begins_waiting = *first_of_session;
+        }
+        drop(inner);
+        // The session waits for the user, as a terminal session whose CLI's `Notification` hook
+        // came (FR-009, R8): one notification, however many requests or hooks follow.
+        if begins_waiting {
+            self.note_prompt_activity(session, HookKind::Notification);
         }
         opened
+    }
+
+    /// The ends of structured sessions' turns and processes, which their waiting prompt calls
+    /// watch (FR-011).
+    pub fn prompt_endings(&self) -> &crate::permission::Endings {
+        &self.prompt_endings
+    }
+
+    /// Withdraw every pending permission request of `session` for `reason`, telling every client
+    /// and answering each call still waiting deny (FR-011). It changes no activity: the turn's own
+    /// end, or the process's, decides that (R8).
+    pub fn withdraw_session_prompts(
+        &self,
+        session: SessionId,
+        reason: micold_core::protocol::messages::WithdrawReason,
+    ) {
+        let mut inner = self.lock();
+        let withdrawn = inner.prompts.withdraw_session(session, reason);
+        Self::broadcast_locked(&inner, withdrawn);
+    }
+
+    /// Apply `hook` to `session`'s activity as the hook receiver does, and push the catalog when
+    /// it changed.
+    fn note_prompt_activity(&self, session: SessionId, hook: HookKind) {
+        if self.note_activity(session, ActivityEvent::Hook(hook)) {
+            self.broadcast_catalog();
+        }
     }
 
     /// Withdraw permission request `id` for `reason`, telling every client, if it is pending.
@@ -3194,6 +3243,11 @@ impl DaemonState {
         }
         let decided = inner.prompts.decide(session, id, choice)?;
         Self::broadcast_locked(&inner, vec![decided.resolved.clone()]);
+        drop(inner);
+        // The last request decided, the turn goes on (R8).
+        if decided.last_of_session {
+            self.note_prompt_activity(session, HookKind::PreToolUse);
+        }
         Ok(decided)
     }
 
@@ -4148,7 +4202,8 @@ impl DaemonState {
     /// path that archives a session comes through here once the archive is durable.
     ///
     /// The same sessions are gone for any confirmation that names them as caller or target, so
-    /// those prompts are withdrawn here too (FR-014, edge case *Target changes while pending*).
+    /// those prompts are withdrawn here too (FR-014, edge case *Target changes while pending*), as
+    /// are their pending permission requests (#942 FR-011).
     fn revoke_tool_credentials(&self, ids: &[SessionId]) {
         if let Some(server) = self.tool_server() {
             for id in ids {
@@ -4157,6 +4212,10 @@ impl DaemonState {
         }
         for id in ids {
             self.confirmations_session_gone(*id);
+            self.withdraw_session_prompts(
+                *id,
+                micold_core::protocol::messages::WithdrawReason::SessionRemoved,
+            );
         }
         // And their saved terminal history, before the action is reported as done, also while
         // saving is off (feature 041, FR-023).
@@ -4839,13 +4898,39 @@ impl DaemonState {
         // restored history never passes here (FR-013).
         let feed = self.plan_usage_feed.sender();
         let rejections = self.plan_usage_rejections.clone();
-        StructuredSession::spawn(id, spec, extra, move |event| {
-            if let micold_core::structured::StructuredEvent::Unrecognised { raw } = &event {
+        // A new process has none of the always-allow rules given to the one before (#942 R9).
+        self.lock().prompts.forget_rules(id);
+        // A `result`, or the note of a turn the output's end cut off, ends the turn its pending
+        // permission requests belong to; the output's end, the process (#942 FR-011).
+        let (turn_ends, process_ends) = (
+            Arc::clone(&self.prompt_endings),
+            Arc::clone(&self.prompt_endings),
+        );
+        let on_event = move |event: micold_core::structured::StructuredEvent| {
+            use micold_core::structured::StructuredEvent;
+            if let StructuredEvent::Unrecognised { raw } = &event {
                 crate::plan_usage::offer_line(id, raw, &feed, &rejections);
             }
-            stream.push(event)
-        })
-        .map(|child| Proc::Structured(Arc::new(child)))
+            let turn_ended = matches!(
+                event,
+                StructuredEvent::Result { .. } | StructuredEvent::TurnEndedWithoutResult
+            );
+            stream.push(event);
+            if turn_ended {
+                turn_ends.end(
+                    id,
+                    micold_core::protocol::messages::WithdrawReason::TurnEnded,
+                );
+            }
+        };
+        let on_end = move || {
+            process_ends.end(
+                id,
+                micold_core::protocol::messages::WithdrawReason::ProcessEnded,
+            )
+        };
+        StructuredSession::spawn(id, spec, extra, on_event, on_end)
+            .map(|child| Proc::Structured(Arc::new(child)))
     }
 
     /// `id`'s structured event stream, if it has ever run as a structured session (feature 938).

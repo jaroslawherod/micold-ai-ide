@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M2 PR
-- **Next step**: orchestrator opens the M2 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M3
+- **Phase**: M3 implement
+- **Next step**: M3 reviews (A, B), full gate, then the orchestrator opens the M3 PR
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1197 | Design: spec, clarify, plan, research, contracts, tasks | merged (rebase) | 51e571f4603dfa1cb9091f7f82f32062b9ca6e8a |
 | #1201 | M1: core request kinds, answers, rules, modes, control lines | merged (rebase; rebased onto main first, one conflict in `tests/support/stream_json.rs` with #944, both lists kept) | a689c4c4a89cd1ab9da5206afd4f0c913e94437d |
+| #1204 | M2: daemon holds and decides prompt requests (switch off) | merged (rebase) | 0c33edd153cba2c02c9f41dfe584253b6a15056b |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | #1201 | merged |
-| M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | pending (orchestrator opens) | gate green at 82335a5a (scripts/gate.sh), PR to open |
-| M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | — | pending |
+| M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | #1204 | merged |
+| M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | — | implemented (T035–T038 ticked), reviews next |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | pending |
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | — | pending |
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | pending |
@@ -36,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 17 | M3 | How a session's stdout reader withdraws its requests on a `result`, `TurnEndedWithoutResult` or end of output, with no `Arc<DaemonState>` and a teardown that may join it under the state lock | The reader signals `permission::Endings` (its own small mutex: `TurnEnded` on a result or the cut-off note, `ProcessEnded` at end of output); each waiting prompt call watches its session's next end and runs `withdraw_session_prompts`. Stop and remove withdraw directly (`SessionStopped`, `SessionRemoved`), before the kill. Rules drop on every reason but `TurnEnded` and at each structured spawn | agent | `permission.rs` `Endings`, `serve_prompt`; `state.rs` `spawn_structured`; tests `a_request_is_withdrawn_when_*` |
 | 16 | M2 | Always allow on a request that offers no rule (a `Bash` call without `command`) | Refused `WrongKind`, nothing changes; the request's `always_allow` is `None`, so a window never offers it | agent | data-model *AllowRule*; `permission.rs` `decide` |
 | 15 | M2 | Is the prompt tool offered to a structured caller while the switch is off? | No: `ListScope::Structured` only when prompts are on, else the model could call the listed tool and raise a request nobody can answer (R14 "behaves exactly as feature 938") | agent | `DaemonState::prompt_scope`; test `a_terminal_sessions_credential_cannot_list_or_call_the_prompt_tool` |
 | 14 | M2 | How the router hands over a prompt call (it needs `_meta`) | New `Route::Prompt { id, arguments, meta }`, only for a structured scope; a terminal caller's call stays `CallTool` and fails `unknown_tool` | agent | `core/src/mcp/jsonrpc.rs`; `mcp_jsonrpc.rs` |
