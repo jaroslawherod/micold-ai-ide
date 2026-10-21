@@ -239,8 +239,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          deps=$(find target/debug/deps -maxdepth 1 -type f 2>/dev/null | wc -l)
-          size=$(du -sm target 2>/dev/null | cut -f1)
+          # On a cache miss target/ does not exist: find and du exit 1, which pipefail would turn
+          # into a failed step before any build runs.
+          deps=$({ find target/debug/deps -maxdepth 1 -type f 2>/dev/null || true; } | wc -l)
+          size=$({ du -sm target 2>/dev/null || true; } | cut -f1)
           cpu=$(powershell -NoProfile -Command '(Get-CimInstance Win32_Processor | Select-Object -First 1).Name' | tr -d '\r')
           line="rust-cache cache-hit=${{ steps.rust-cache.outputs.cache-hit }} target=${size:-0}MB deps-files=$deps cpu=$cpu cores=$NUMBER_OF_PROCESSORS"
           echo "$line" | tee -a "$GITHUB_STEP_SUMMARY"
