@@ -387,7 +387,8 @@ fn card_status<'s>(
     let SessionLocation::Worktree(dir) = &model.location else {
         return None;
     };
-    let key = micold_core::naming::ticket(dir)?;
+    // The board is keyed by the upper-cased key, as the sidebar's tag shows it.
+    let key = micold_core::naming::ticket(dir)?.to_ascii_uppercase();
     let entry = state.jira_status.board.status_of(&key)?;
     Some((&entry.status, entry.stale))
 }

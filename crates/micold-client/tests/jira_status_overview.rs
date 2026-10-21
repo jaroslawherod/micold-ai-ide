@@ -110,3 +110,13 @@ fn a_card_without_a_ticket_or_status_has_no_chip() {
     // One chip on the linked worktree's row and one on its card; the numeric ticket has none.
     assert_eq!(count(&painted(&mut state, true), "To Do"), 2);
 }
+
+#[test]
+fn a_lowercase_directory_name_still_finds_its_ticket() {
+    // The app creates `feat-abc-1_...`; the sidebar shows `ABC-1` and so must the card.
+    let mut state = state_with(
+        &["feat-abc-1_login"],
+        vec![read("ABC-1", "In Review", "indeterminate")],
+    );
+    assert_eq!(count(&painted(&mut state, true), "In Review"), 2);
+}
