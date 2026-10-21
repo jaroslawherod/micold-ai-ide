@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1150
 - **Worktree branch**: feat/1150_show-the-full-file-while-reviewing-a-diff-in-the
 - **Started**: 2026-10-20
-- **Phase**: gate M3
-- **Next step**: full gate, push, open M3 PR, delete backup/1150-m2-old
+- **Phase**: M3 PR open
+- **Next step**: wait for CI, merge M3, then M4
 
 ## Pull requests
 
