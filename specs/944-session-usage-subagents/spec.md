@@ -18,8 +18,9 @@ the existing plan_usage feature."
 A structured Claude session (feature 938) shows Claude's work as a readable conversation (#939).
 This feature adds the numbers and the hidden work around that conversation. A small meter shows how
 full Claude's working memory (its context) is, so the user sees a long conversation approaching
-the point where Claude starts summarising older parts. Each answer shows how many tokens it used,
-next to the cost and duration #939 already shows, and the session shows its running total. When
+the point where Claude starts summarising older parts. Each answer shows what it cost and how many
+tokens it used, next to the duration and session total #939 already shows, and the session shows
+its running totals. When
 Claude hands part of a job to a helper (a subagent), the helper's own messages and tool uses appear
 folded under the step that started it, and open with one press, instead of being mixed into the
 main conversation or missing. Work Claude left running in the background (a long command, a helper
@@ -32,7 +33,7 @@ otherwise could not feed it. Terminal sessions are unchanged and remain the defa
 | Issue | Delivers | State |
 |---|---|---|
 | #938 | Session kind, event model, daemon side, wire, resume | shipped (`specs/938-structured-session-mode`) |
-| #939 | Read-only transcript view: assistant text, thinking, tool-call cards, a per-turn footer with cost and duration | specced in parallel, not on main |
+| #939 | Read-only transcript view: assistant text, thinking, tool-call cards, a per-turn footer with duration and the session's running cost | core on main (M1–M2), view in progress |
 | #940 | Markdown, highlighted code, Edit/Write diffs in that view | specced in parallel |
 | #941 | Prompt input, interrupt, queued messages | specced in parallel |
 | #942 | Permission prompts | specced in parallel |
@@ -40,16 +41,19 @@ otherwise could not feed it. Terminal sessions are unchanged and remain the defa
 | **#944 (this)** | Usage and context meter, token figures, plan-usage feed, nested subagent threads, background tasks | — |
 
 This feature is built on #939's transcript view and does not re-specify it. In particular, #939
-owns the transcript, the tool-call card, and the per-turn footer with the turn's cost and
-duration; this feature **extends** that footer with the turn's token figures and adds what is new
-here (context meter, session totals, plan-usage feed, subagent threads, background tasks).
+owns the transcript, the tool-call card, and the per-turn footer, which shows the turn's duration
+and the CLI's running session cost labelled "session total", with no per-turn arithmetic; this
+feature **extends** that footer with the turn's own cost (derived as FR-009 says) and token figures,
+and adds what is new here (context meter, session totals, plan-usage feed, subagent threads,
+background tasks).
 
 ## Terms
 
 - **Structured session, event, event history, turn result, Save terminal history**: as defined in
   feature 938's spec.
 - **Transcript view, tool-call card, turn footer**: as defined by #939. The **turn footer** is the
-  line #939 shows at the end of each turn with that turn's cost and duration.
+  line #939 shows at the end of each turn with the turn's duration and the turn result's
+  `total_cost_usd`, labelled "session total" (the CLI's running total, not the turn's cost).
 - **Token figures** of a turn: the tokens the CLI reports for it, split into input, output, and
   the input tokens served from or written to the prompt cache.
 - **Context**: what the model is given on each request in the conversation; its size is measured
@@ -104,6 +108,12 @@ here (context meter, session totals, plan-usage feed, subagent threads, backgrou
   #accumulate-costs-across-multiple-calls; crates/micold-core/tests/fixtures/stream-json/
   resume-init.jsonl, whose result reports 0.0954 USD and 20 output tokens for claude-sonnet-5-5
   after text-turn.jsonl's 0.0371 USD and 14)_
+- Q: Who shows a turn's own cost, given that #939's footer shows the result's `total_cost_usd`?
+  (FR-006, FR-009, FR-026) → A: This feature. #939's footer shows `total_cost_usd` labelled
+  "session total", with no per-turn arithmetic (drawn in #939's milestone M5); the per-turn cost —
+  the difference from the previous held result, with FR-009's restart and eviction rules — is
+  derived and shown here, beside it in the footer. _(agreed between #939 and #944 through the
+  coordinator, 2026-10-21)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -145,12 +155,13 @@ meter rises.
 
 ### User Story 2 - See what each turn and the session used (Priority: P1)
 
-A user sees, at the end of each turn, the tokens the turn used next to the cost and duration #939
-already shows, and sees the session's running totals, so they can tell expensive turns from cheap
-ones and know what the session has consumed.
+A user sees, at the end of each turn, what the turn cost and the tokens it used next to the
+duration and session total #939 already shows, and sees the session's running totals, so they can
+tell expensive turns from cheap ones and know what the session has consumed.
 
-**Why this priority**: The acceptance names per-turn cost; #939 shows the cost, and this story
-adds the token figures and the totals that make it useful.
+**Why this priority**: The acceptance names per-turn cost. #939's footer shows only the CLI's
+running session total; this story derives the turn's own cost from it and adds the token figures
+and the totals that make it useful.
 
 **Independent Test**: Replay a fixture with two turns into the view model; each turn footer shows
 that turn's token figures, and the session totals equal the sum of the turns' cost and figures.
@@ -158,8 +169,8 @@ that turn's token figures, and the session totals equal the sum of the turns' co
 **Acceptance Scenarios**:
 
 1. **Given** a turn that ended with a turn result reporting usage, **When** the turn footer is
-   shown, **Then** it shows, beside #939's cost and duration, the turn's input and output tokens,
-   with the cached input tokens in its details.
+   shown, **Then** it shows, beside #939's duration and session total, the turn's estimated cost
+   (FR-009) and its input and output tokens, with the cached input tokens in its details.
 2. **Given** a session with several finished turns, **When** the user views the session's usage
    details, **Then** they show the session totals (cost and each token figure) and the number of
    turns counted.
@@ -309,8 +320,9 @@ finished, and the transcript's tool-call card that started it links to the list 
 - **Terminal sessions**: nothing in this feature changes a terminal session; its plan usage keeps
   coming from its status line (feature 490).
 - **Cross-platform** (Principle VI): figures are formatted the same on Linux, macOS and Windows,
-  with the user's locale digit grouping for token counts, cost in US dollars with at least two and
-  at most four decimals, and reset times in local time as feature 490 formats them.
+  with token counts grouped by thousands as the application formats every count (plan research
+  R9), cost in US dollars with at least two and at most four decimals, and reset times in local
+  time as feature 490 formats them.
 
 ## Requirements *(mandatory)*
 
@@ -334,8 +346,9 @@ finished, and the transcript's tool-call card that started it links to the list 
 
 **Turn and session usage**
 
-- **FR-006**: The turn footer #939 shows MUST be extended with the turn's input and output tokens
-  (the main conversation's, as the turn result's usage reports them); its details MUST show the
+- **FR-006**: The turn footer #939 shows MUST be extended with the turn's cost (derived as FR-009
+  says, absent when FR-009 leaves it absent) and the turn's input and output tokens (the main
+  conversation's, as the turn result's usage reports them); its details MUST show the
   cached input tokens and, when the CLI reports them per model, each model's tokens and cost for
   the turn, subagents included.
 - **FR-007**: A structured session MUST show its session totals — cost and each token figure — and
@@ -405,8 +418,8 @@ finished, and the transcript's tool-call card that started it links to the list 
   FR-007) MUST be shown for every account and labelled as an estimate, and the cost details MUST
   say in words that it is Claude Code's estimate at API list prices and not what a subscription
   plan bills. Cost MUST NOT be hidden by plan type, and the application MUST NOT detect the plan
-  type for this. The cost figure in #939's footer stays #939's; this feature adds the estimate
-  note to the footer's details.
+  type for this. The running session total in #939's footer stays #939's figure and label; this
+  feature adds the turn's cost beside it (FR-006) and the estimate note to the footer's details.
 - **FR-027**: The user guide MUST describe the context meter, the token figures and totals, how
   structured sessions feed the plan-usage indicator, subagent threads and the background-task list,
   in the same change that ships each; feature 490's Settings note and guide page MUST say that
@@ -456,8 +469,8 @@ finished, and the transcript's tool-call card that started it links to the list 
 
 ## Out of Scope
 
-- The transcript view, tool-call cards, and the per-turn cost and duration footer (#939; extended
-  here, not re-specified).
+- The transcript view, tool-call cards, and the turn footer with its duration and session total
+  (#939; extended here with the turn's cost and tokens, not re-specified).
 - Markdown and diffs (#940), input, interrupt and queued messages (#941), permission prompts (#942),
   slash commands, model switching and falling back to the terminal mode (#943).
 - Stopping or controlling a background task or a subagent from the application (the user does it
