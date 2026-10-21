@@ -396,10 +396,10 @@ pub fn switch_daemon_attachment(
     // one the restore honours (feature 008's BUG-001), and it reached the same dead end a launch did:
     // current, with no process the daemon could stream.
     //
-    // `&mut App` for `crate::view_and_start`, which resets the selection and scroll offset. A switch
+    // `&mut App` for `crate::view_and_start_quietly`, which resets the selection and scroll offset. A switch
     // wants both reset anyway — they belong to the session being left, not the one being shown.
     match app.core.session.active {
-        Some(session) => view_and_start(app, session),
+        Some(session) => view_and_start_quietly(app, session),
         None => daemon.send(ClientMsg::SetViewedSession {
             project: new.to_path_buf(),
             session: None,
@@ -1638,7 +1638,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     app.core
                         .update(Message::Attach(AttachMsg::Applied(results)));
                     if let Some(id) = resumed {
-                        view_and_start(app, SessionId::from_uuid(id));
+                        view_and_start_quietly(app, SessionId::from_uuid(id));
                     }
                 }
             }
@@ -2180,7 +2180,7 @@ pub fn on_connected(
     // Attach to the active project and view its active session so the daemon starts
     // streaming grid frames for it (FR-011/FR-016).
     //
-    // `app.daemon` is assigned before the sends, not after, because they read it: `view_and_start`
+    // `app.daemon` is assigned before the sends, not after, because they read it: `view_and_start_quietly`
     // below (`010` BUG-002) and `ask_cli_availability` (`027` BUG-002). Nothing between here and
     // there can observe the difference: no message is dispatched and no frame is drawn inside this
     // arm. A send placed *above* this line is not an ordering nicety — `ask_cli_availability`
@@ -2243,11 +2243,11 @@ pub fn on_connected(
             // but the `restart` control. BUG-001 made that screen honest; this makes it
             // unnecessary.
             //
-            // Through `view_and_start` rather than a third copy of its sends: it already
+            // Through `view_and_start_quietly` rather than a third copy of its sends: it already
             // orders the pane size before the start (BUG-003, `006` FR-014a) and the view
             // after, and a start naming an already-running session is a no-op on the daemon
             // (`Session::start`), so a reconnect onto a live session costs nothing.
-            Some(session) => view_and_start(app, session),
+            Some(session) => view_and_start_quietly(app, session),
             // Landing on the project overview. FR-007 forbids choosing a session here, and
             // starting one would be that choice made twice — so only the view goes out.
             None => daemon.send(ClientMsg::SetViewedSession {
@@ -3359,12 +3359,25 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
 /// View a session on the daemon — start/resume it and stream its grid — resetting the local
 /// selection and scroll for the newly-displayed session.
 pub fn view_and_start(app: &mut App, id: SessionId) {
+    start_viewed(app, id, true);
+}
+
+/// [`view_and_start`] for the passive paths (project switch, reconnect, attach-resume):
+/// a start another live session blocks is viewed without the confirmation, so a
+/// cancelled dialog does not reopen on every pass (BUG-1219). Only an explicit start prompts.
+pub fn view_and_start_quietly(app: &mut App, id: SessionId) {
+    start_viewed(app, id, false);
+}
+
+fn start_viewed(app: &mut App, id: SessionId, prompt: bool) {
     // Another live session of its worktree blocks the start (feature 776, FR-013): view it without
-    // starting, and ask whether to run both (FR-016).
+    // starting, and ask whether to run both (FR-016) when the user asked for the start.
     if app.core.session_start_block_text(id).is_some() {
         view_session(app, id);
-        app.core
-            .update(Message::Session(SessionMsg::StartBlocked(id)));
+        if prompt {
+            app.core
+                .update(Message::Session(SessionMsg::StartBlocked(id)));
+        }
         return;
     }
     view_and_send(
