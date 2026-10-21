@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: plan
-- **Next step**: plan unit (handover): run plan review round 2 (sonnet, fix diff vs round-1 snapshot), then commit and set Next step to `tasks unit`
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review spec | 1 | be36b8772c7a0c2eb6acdfe0feb6de62a0ce7f56:9ad0504870e12886d671ea3f4124162315386f78 | CLEAN: 3 MINOR (F1 fixed, prose only) |
 | Review plan | 1 | d0912186067579c21f5295b44c37fdcac714e0bd:dac0eb5478f3f39151b5deba2fcffc6b02a82619 | CHANGES: F1 MAJOR (no geometry-gate layer) fixed — geometry layer + DisclosureCard outline/ripple/contrast gates, header-fits and jump-control gates, layout_snapshot transcript state; F2 MINOR fixed (Shown from on_viewport_resize, R9); F3 MINOR fixed (Transcript::nested scope for #944, R7); F4 MINOR fixed (renderer-seam behavioural test) |
+| Review plan | 2 | 8156502f4d59c5450a15b614c9c4f442756c771e:dad297fe3e0f1334887ccfe7eda90b93e46ac3c6 | CLEAN: 1 MINOR (F1 fixed, prose only) |
 
 ## Declined review findings
 
@@ -43,14 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- Done: plan.md, research.md (R1–R15), data-model.md, quickstart.md, contracts/transcript-model.md,
-  contracts/block-renderers.md written; plan review round 1 run (CHANGES, 1 MAJOR + 3 MINOR, all
-  fixed in the working tree and committed with this handover).
-- Next: plan review round 2 on `model: sonnet`, scoped to the fix diff
-  (`scripts/autopilot/review-snapshot.sh diff d0912186067579c21f5295b44c37fdcac714e0bd:dac0eb5478f3f39151b5deba2fcffc6b02a82619`),
-  with round 1's findings as listed in *Review rounds*. On CLEAN: set Next step to `tasks unit`,
-  Handover back to `None.`, commit, return DONE (PR: none).
-- Open findings: none unfixed. PR: none.
+None.
 
 ## Open escalation
 
