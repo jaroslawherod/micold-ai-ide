@@ -77,6 +77,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M4 | 1 | 39b563b5 | PASS light and dark: the showcase's `progress_bar` entry rendered offscreen through `Mounted` (the Xvfb showcase had no lavapipe ICD and redrew too slowly to scroll to it); the marker reads as a fill-coloured tick on the track and as a track-coloured notch in the fill, the warning bar fills in `error` (`visual/m4-progress-bar-{light,dark}.png`). the captions take the offscreen renderer's default text colour (dark on dark), a harness artefact the live showcase does not have. `layout_snapshot` unchanged: its states hold no `ProgressBar` |
 | Review B M3 (conformance, sonnet) | 2 | cabd729a2c8b8dd1e2b90f456b90e28fe8b03a89:9de37ca50b90bd95b652944170c1d92a743b4f5f | CLEAN; 1 MINOR (dedupe test is test-after, as the cycle log says) not acted on. Verify: `structured_insights` 49/49, `--lib structured::insights` 12/12 |
 | Full gate M3 | — | 9de37ca5 | green (`scripts/gate.sh`). An earlier run hit `structured_session::messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` timing out (21 s) while review B built alongside; it passed 3/3 alone (2 s) and in the rerun — load flake, not this diff |
+| Review A M5 (code-review high) | 1 | 06d235b254470cb6eb93ef37f9fc342ef32c1de3:cf00e00762be1bfcdd71edb7c37819e6575ce025 | 9 items, no severities. Fixed with tests: F1 (open threads stored every event of the message: now only their own, via core `is_subagent_event`), F2 (once bounded every message rebuilt every open thread: now only when the thread holds more than `main` does), F3 (a thread whose events all left folds, as #939 prunes cards), F6 (`PartialEq` compares keys and revisions without cloning), F9 (T036 note in tasks.md, prose only). Declined F4, F5, F7, F8 (see table) |
+| Scoped gate M5 | 1 | cf00e007 | red: `feature_registration_cost` — `session` names `structured_insights`; allowed beside #939's `structured_transcript` entry (the session family carries `InsightsMsg`, never handles it) |
 
 ## Declined review findings
 
@@ -93,7 +95,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | A (code-review high) | F2 [MINOR] square tick overhangs the pill end at ratio 0 or 1 | The square tick at ratio 0 or 1 overhangs the pill's rounded end by under 1 px; a threshold at 0% or 100% of the window does not occur, and the context meter's threshold sits inside |
 | M4 | A (code-review high) | F3 [MINOR] gate fill and tick against `surface` too | Fill and track against `surface` are not this change's pairs: the track/surface pair predates M4 (StageProgress), and the warning is never colour alone (FR-003: icon and text) |
 | M4 | A (code-review high) | F5 [MINOR] colour helpers split across progress.rs and progress_bar.rs | Taste: `track_color` beside `paint_track` and `fill_color` beside the bar that chooses it keeps each decision with its owner; StageProgress has no warning |
-
+| M5 | A (code-review high) | F4 a replacing history that changes neither `rebuilds` nor `omitted` | Self-labelled low confidence: `Transcript::rebuild` counts every replace of a transcript that held anything, and one that held nothing has no open thread (a thread opens only while the insights hold its events) |
+| M5 | A (code-review high) | F5 the thread shows no omitted notice | A thread is the nested transcript of the held events (E-2, R7); evicted parents are FR-017 placeholders (M6). The main transcript's notice already says the history is cut |
+| M5 | A (code-review high) | F7 insights skipped when the transcript has no session | Unreachable: `structured_transcript::apply` inserts the session before this reads it |
+| M5 | A (code-review high) | F8 an empty `Transcript` per fold message | `Transcript::new()` allocates nothing (empty `VecDeque`/`HashMap`) |
 
 ## Handover
 

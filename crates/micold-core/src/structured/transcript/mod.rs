@@ -236,7 +236,7 @@ impl Transcript {
     ) -> impl Iterator<Item = &'a SequencedEvent> + 'a {
         self.events
             .iter()
-            .filter(move |e| parent_of(&e.event) == Some(Some(tool_use_id)))
+            .filter(move |e| is_subagent_event(&e.event, tool_use_id))
     }
 
     // -- for build.rs ---------------------------------------------------------------------
@@ -268,6 +268,12 @@ impl Transcript {
             entry.change(self.revision, change);
         }
     }
+}
+
+/// Whether `event` is one of the sub-agent run by tool use `tool_use_id` (#944): what
+/// [`Transcript::subagent_events`] keeps, for a receiver that follows a thread message by message.
+pub fn is_subagent_event(event: &StructuredEvent, tool_use_id: &str) -> bool {
+    parent_of(event) == Some(Some(tool_use_id))
 }
 
 /// The parent tool use an event names: `Some(parent)` for the events that can name one, `None`

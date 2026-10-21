@@ -406,6 +406,9 @@ cases) on the T003 recordings.
   test that covers #939's routing of the same message in `shell/daemon_sync.rs` (extend it, do not
   copy it): after a `StructuredEvents` message both features hold the session; forgetting the
   session drops it from both
+  *Adapted (ledger D17)*: #939 routes the message in `app::State::structured_events`, which
+  `shell/daemon_sync.rs` calls; the insights are applied there, and the routing test #939 keeps in
+  `main_tests.rs` (`mod structured_transcript`) is the one extended.
 
 **Checkpoint**: M5 complete — every window holds the figures, threads and tasks, unseen.
 

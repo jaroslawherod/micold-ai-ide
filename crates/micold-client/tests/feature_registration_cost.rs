@@ -191,6 +191,14 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          transcript's `update` routes them to the cache the root hands it, beside its own state, \
          and names the cache's `Ticket`, `Part` and `HighlightJob` in them (T023)",
     ),
+    (
+        "session",
+        "structured_insights",
+        "InsightsMsg — the insights' fold messages ride in the session message family beside \
+         TranscriptMsg (feature 944 data-model.md *Messages*) as `Msg::Insights`; the session \
+         reducer only carries the type and never handles it: the root routes it to the insights \
+         feature (feature 944, T036)",
+    ),
 ];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.

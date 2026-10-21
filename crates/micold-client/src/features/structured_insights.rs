@@ -9,7 +9,7 @@
 
 use micold_core::session::SessionId;
 use micold_core::structured::insights::{SessionInsights, SubagentState, ThreadView, TurnUsage};
-use micold_core::structured::transcript::{Entry, EntryKey, ToolStatus, Transcript};
+use micold_core::structured::transcript::{is_subagent_event, EntryKey, ToolStatus, Transcript};
 use micold_core::structured::SequencedEvent;
 use std::collections::HashMap;
 
@@ -65,18 +65,22 @@ struct SessionExtras {
 /// as #939's transcript state compares, without comparing every event.
 impl PartialEq for SessionExtras {
     fn eq(&self, other: &Self) -> bool {
-        let shown = |threads: &HashMap<String, Transcript>| {
-            let mut all: Vec<(String, Vec<Entry>)> = threads
-                .iter()
-                .map(|(parent, t)| (parent.clone(), t.entries().cloned().collect()))
-                .collect();
-            all.sort_by(|a, b| a.0.cmp(&b.0));
-            all
+        let same_thread = |a: &Transcript, b: &Transcript| {
+            a.entries().len() == b.entries().len()
+                && a.entries()
+                    .zip(b.entries())
+                    .all(|(x, y)| x.key() == y.key() && x.revision() == y.revision())
         };
         self.insights == other.insights
             && self.tasks_open == other.tasks_open
             && self.seen == other.seen
-            && shown(&self.open_threads) == shown(&other.open_threads)
+            && self.open_threads.len() == other.open_threads.len()
+            && self.open_threads.iter().all(|(parent, a)| {
+                other
+                    .open_threads
+                    .get(parent)
+                    .is_some_and(|b| same_thread(a, b))
+            })
     }
 }
 
@@ -97,9 +101,10 @@ fn nested(parent: &str, main: &Transcript) -> Transcript {
 
 impl State {
     /// Take one `StructuredEvents` message for `session` (#938 wire.md), after `main`, the
-    /// session's transcript, took it. Open threads follow it: after a rebuild or an eviction of
-    /// `main` they are built again from its held events, else the message's events are appended
-    /// to them (a nested transcript keeps only its own subagent's).
+    /// session's transcript, took it. An open thread follows it: its own events are appended,
+    /// and after a rebuild of `main`, or an eviction that dropped some of them, it is built again
+    /// from `main`'s held events. A thread whose events all left folds, as #939 folds a card that
+    /// left (FR-013 of #939).
     pub fn apply(
         &mut self,
         session: SessionId,
@@ -111,17 +116,32 @@ impl State {
         let s = self.sessions.entry(session).or_default();
         s.insights.apply(omitted, events, live);
         let seen = marks(main);
-        if seen != s.seen {
-            s.seen = seen;
-            for (parent, thread) in &mut s.open_threads {
+        let rebuilt = seen.0 != s.seen.0;
+        let evicted = seen.1 != s.seen.1;
+        s.seen = seen;
+        for (parent, thread) in &mut s.open_threads {
+            if rebuilt {
+                *thread = nested(parent, main);
+                continue;
+            }
+            // `main` continued: append as live, whatever `live` says, so a history split over
+            // several messages does not replace a thread built from fewer events.
+            let own: Vec<SequencedEvent> = events
+                .iter()
+                .filter(|e| is_subagent_event(&e.event, parent))
+                .cloned()
+                .collect();
+            if !own.is_empty() {
+                thread.apply(0, &own, true);
+            }
+            if evicted && thread.held() != main.subagent_events(parent).count() {
                 *thread = nested(parent, main);
             }
-        } else {
-            // `main` continued: append, whatever `live` says, so a history split over several
-            // messages does not replace a thread built from fewer events than `main` holds.
-            for thread in s.open_threads.values_mut() {
-                thread.apply(omitted, events, true);
-            }
+        }
+        if rebuilt || evicted {
+            let insights = &s.insights;
+            s.open_threads
+                .retain(|parent, _| insights.thread(parent).is_some());
         }
     }
 
