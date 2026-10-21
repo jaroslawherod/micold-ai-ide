@@ -155,7 +155,7 @@ impl<'a> Source<'a> {
 }
 
 /// The tools whose cards draw a diff (FR-013).
-const EDIT_TOOLS: [&str; 3] = ["Edit", "MultiEdit", "Write"];
+pub const EDIT_TOOLS: [&str; 3] = ["Edit", "MultiEdit", "Write"];
 
 impl DerivedBody {
     fn of(source: &Source<'_>) -> Self {
