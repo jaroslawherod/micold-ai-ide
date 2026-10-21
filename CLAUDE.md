@@ -46,7 +46,7 @@ for the new model, which costs more than it saves.
 
 - **Explore** agents (locating code, tracing a call path): pinned to Haiku by `.claude/agents/Explore.md`.
 - **Autopilot subagents** run as the `autopilot-unit`, `autopilot-reviewer` and `autopilot-worker`
-  types in `.claude/agents/`. They inherit the model and drop the tools they never use: the Artifact
+  types in `.claude/agents/`. `autopilot-unit` is pinned to Sonnet by its frontmatter (the others inherit the model); all drop the tools they never use: the Artifact
   schema alone is about 10k tokens on every call of a `general-purpose` subagent.
 - **Re-review rounds** (round 2+ of a spec, plan, tasks or diff review) and **conformance checks**:
   `model: "sonnet"`. First-round reviews stay on the session model.
