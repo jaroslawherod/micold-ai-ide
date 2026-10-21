@@ -161,6 +161,9 @@ pub struct DaemonState {
     /// Structured sessions' plan-limit readings on their way to [`Self::offer_plan_usage`]
     /// (feature 944, research R4).
     plan_usage_feed: crate::plan_usage::Feed,
+    /// Held across keeping a reading and telling the windows, so two sources offering at once
+    /// push in the order they were kept (feature 944).
+    plan_usage_offer: Mutex<()>,
 }
 
 struct Inner {
@@ -804,6 +807,7 @@ impl DaemonState {
             setting_change: Mutex::new(()),
             plan_usage_rejections: crate::plan_usage::Rejections::default(),
             plan_usage_feed: crate::plan_usage::Feed::default(),
+            plan_usage_offer: Mutex::new(()),
         }
     }
 
@@ -1563,6 +1567,10 @@ impl DaemonState {
     /// forgotten (FR-016). Returns whether it was kept. Both sources, the status route and a
     /// structured session's plan-limit event, come here.
     pub fn offer_plan_usage(&self, session: SessionId, reading: UsageReading) -> bool {
+        let _order = self
+            .plan_usage_offer
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let kept = self.note_plan_usage(session, reading.clone());
         if kept {
             self.plan_usage_rejections.accepted(session.0);

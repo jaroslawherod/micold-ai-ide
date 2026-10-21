@@ -2,7 +2,7 @@
 //! (contracts/plan-usage-source.md *Parse*; FR-010, FR-012).
 
 use micold_core::plan_usage::rate_limit_event::parse;
-use micold_core::plan_usage::{LimitWindow, UsageReading};
+use micold_core::plan_usage::{limit_window, LimitWindow, UsageReading};
 use serde_json::{json, Value};
 
 #[path = "support/stream_json.rs"]
@@ -169,4 +169,21 @@ fn the_tolerance_fixtures_events_give_none_without_a_panic() {
     for line in lines {
         assert_eq!(parse(&line, OBTAINED), None, "{line}");
     }
+}
+
+/// The shared per-window rule (research R4) drops a percentage whose tenths do not fit a `u32`,
+/// for both sources, rather than saturating it.
+#[test]
+fn the_shared_rule_drops_a_percentage_beyond_u32_tenths() {
+    let max = f64::from(u32::MAX) / 10.0;
+    assert_eq!(
+        limit_window("five_hour", max, None, OBTAINED),
+        Some(window("five_hour", u32::MAX, None))
+    );
+    assert_eq!(limit_window("five_hour", max + 1.0, None, OBTAINED), None);
+    assert_eq!(limit_window("five_hour", f64::NAN, None, OBTAINED), None);
+    assert_eq!(
+        limit_window("five_hour", f64::INFINITY, None, OBTAINED),
+        None
+    );
 }

@@ -198,11 +198,14 @@ fn a_structured_launch_forwards_subagent_text() {
     state
         .start_session(t, LaunchMode::Fresh)
         .expect("terminal starts");
-    assert_eq!(
-        record(dir, "forward-record"),
-        "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT\n",
-        "a terminal session is launched as before"
-    );
+    // Unless the test itself runs with the variable set, which a terminal session inherits.
+    if std::env::var_os("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT").is_none() {
+        assert_eq!(
+            record(dir, "forward-record"),
+            "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT\n",
+            "a terminal session is launched as before"
+        );
+    }
     assert!(state.stop_session(t));
     structured::clear_records(dir);
 
