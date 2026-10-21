@@ -50,16 +50,16 @@ serves.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the render-free module `crates/micold-core/src/structured/insights/` with empty
+- [x] T001 Create the render-free module `crates/micold-core/src/structured/insights/` with empty
   `mod.rs`, `digest.rs`, `usage.rs`, `context.rs`, `tasks.rs`, `subagents.rs`, `figures.rs`; add
   `pub mod insights;` to `crates/micold-core/src/structured/mod.rs`; create
   `crates/micold-core/src/format.rs` and add `pub mod format;` to `crates/micold-core/src/lib.rs`;
   create an empty `crates/micold-core/tests/structured_insights.rs` (plan *Project Structure*)
-- [ ] T002 [P] Make the capture script forward subagent text (research R5, R11): first add a
+- [x] T002 [P] Make the capture script forward subagent text (research R5, R11): first add a
   failing assertion to `scripts/tests/capture-stream-json.test.sh` that the CLI the script runs
   sees `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1`, then export the variable in
   `scripts/capture-stream-json.sh`; the script's other arguments stay as they are
-- [ ] T003 Record the fixtures of research R11 (FR-028) with `scripts/capture-stream-json.sh` (Claude Code
+- [x] T003 Record the fixtures of research R11 (FR-028) with `scripts/capture-stream-json.sh` (Claude Code
   2.1.306 or later) into `crates/micold-core/tests/fixtures/stream-json/`: `subagent-turn.jsonl`
   (a foreground `Agent` call that reads a file), `nested-subagent.jsonl` (a subagent allowed the
   `Agent` tool through `--agents`, which starts its own), `background-command.jsonl` (a
@@ -78,7 +78,7 @@ serves.
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T004 Extract the replace-or-continue rule (research R1): first write unit tests
+- [x] T004 Extract the replace-or-continue rule (research R1): first write unit tests
   (`#[cfg(test)]`) in a new `crates/micold-core/src/structured/sync.rs` for `Continuity` — an empty
   `live: false` message replaces; a `live: false` message whose first `seq` equals `next_seq`
   after a non-live message that held something continues; one that does not continue replaces; a
@@ -87,14 +87,14 @@ serves.
   events, add `mod sync;` (crate-visible) to `crates/micold-core/src/structured/mod.rs`, and make
   `Transcript::apply` in `crates/micold-core/src/structured/transcript/mod.rs` use it with no
   behaviour change: `cargo test -p micold-core --test structured_transcript` stays green unchanged
-- [ ] T005 [P] Unit tests (`#[cfg(test)]`) in `crates/micold-core/src/format.rs` for
+- [x] T005 [P] Unit tests (`#[cfg(test)]`) in `crates/micold-core/src/format.rs` for
   `group_digits(u64) -> String`: `0` → "0", `999` → "999", `1000` → "1,000", `37141` →
   "37,141", `1000000` → "1,000,000", `u64::MAX` grouped (research R9)
-- [ ] T006 Move `thousands` from `crates/micold-client/src/features/worktree_form.rs` to
+- [x] T006 Move `thousands` from `crates/micold-client/src/features/worktree_form.rs` to
   `micold_core::format::group_digits` in `crates/micold-core/src/format.rs` and call it from
   `worktree_form.rs` (no copy left behind); T005 passes and
   `cargo test -p micold-client --test features_worktree_form` stays green unchanged
-- [ ] T007 Write failing I1 tests in `crates/micold-core/tests/structured_insights.rs`
+- [x] T007 Write failing I1 tests in `crates/micold-core/tests/structured_insights.rs`
   (contracts/insights-model.md *I1*, FR-023) over every recorded fixture: applying it one event
   per `live: true` message, in chunks of 3 after an initial `live: false` history, and as one
   `live: false` message all give a `SessionInsights` equal (`PartialEq`) to the one built by a
@@ -102,7 +102,7 @@ serves.
   message that does not continue replaces the state; past `MAX_EVENTS` (filler events, as
   `structured_transcript.rs` T017 builds them) the oldest leave, `omitted` grows by the number
   dropped, and the value still equals a fresh build of the held events with that `omitted`
-- [ ] T008 Implement `SessionInsights` in `crates/micold-core/src/structured/insights/mod.rs` and
+- [x] T008 Implement `SessionInsights` in `crates/micold-core/src/structured/insights/mod.rs` and
   the `Digest` enum in `crates/micold-core/src/structured/insights/digest.rs` per data-model.md
   *SessionInsights* and *Digest*: `sync: Continuity`, `omitted`, `held`, `first_held`,
   `digests: VecDeque<(u64, Digest)>`; `new()`, `apply(omitted, &[SequencedEvent], live)` (T004's
@@ -126,7 +126,7 @@ events.
 
 ### Tests for User Story 1 ⚠️ write first, see them fail
 
-- [ ] T009 [P] [US1] Context tests in `crates/micold-core/tests/structured_insights.rs`
+- [x] T009 [P] [US1] Context tests in `crates/micold-core/tests/structured_insights.rs`
   (contracts/insights-model.md *I2*, research R2, FR-001, FR-005 — the reading changes on the very
   event, O(1), with no timer): for every recorded fixture `context()` equals
   the last main-scope `Assistant`'s `input_tokens + cache_creation_input_tokens +
@@ -142,7 +142,7 @@ events.
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement `ContextReading { used, model, window, threshold }`, `ContextState::
+- [x] T010 [US1] Implement `ContextReading { used, model, window, threshold }`, `ContextState::
   {NoData, TokensOnly { used }, Measured { used, window, percent, threshold, warning }}` and
   `state()` in `crates/micold-core/src/structured/insights/context.rs` (a `Measured` cannot be
   built without a window, Constitution V); the `AssistantUsage { model, used }` (main scope only,
@@ -164,7 +164,7 @@ totals; display strings for every figure of US1 and US2.
 
 ### Tests for User Story 2 ⚠️ write first, see them fail
 
-- [ ] T011 [US2] Usage tests in `crates/micold-core/tests/structured_insights.rs`
+- [x] T011 [US2] Usage tests in `crates/micold-core/tests/structured_insights.rs`
   (contracts/insights-model.md *I2*, *I3*, research R3): each `turn(seq)` of a fixture's `Result`
   has the result's `usage` tokens (FR-006, SC-001); `text-turn` then `resume-init` gives the second
   turn cost `0.0954 − 0.0371` and per-model output `20 − 14` (FR-009, D5); 1, 2 and 50 turns
@@ -175,7 +175,7 @@ totals; display strings for every figure of US1 and US2.
   `MAX_EVENTS` changes that turn to not counted; a `Result` without `usage` → `tokens` `None`, not
   counted; a `TurnEndedWithoutResult` → `turns_left_out + 1`; `totals().partial == (omitted > 0)`
   (FR-008); per-model totals sum the counted turns' per-model figures
-- [ ] T012 [P] [US2] Unit tests (`#[cfg(test)]`) in
+- [x] T012 [P] [US2] Unit tests (`#[cfg(test)]`) in
   `crates/micold-core/src/structured/insights/figures.rs` for the strings of data-model.md
   *Formatting*: `turn_figures` → `"$0.0052 est."` (through #939's `format_cost`) and
   `"in 4 · out 106"` (grouped by `group_digits`); `turn_details` → cached input line, one line per
@@ -188,16 +188,16 @@ totals; display strings for every figure of US1 and US2.
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Implement `Tokens`, `ModelFigures`, `TurnUsage` and `SessionTotals` per
+- [x] T013 [US2] Implement `Tokens`, `ModelFigures`, `TurnUsage` and `SessionTotals` per
   data-model.md *Turn usage* in `crates/micold-core/src/structured/insights/usage.rs` (a
   `modelUsage` entry missing a number is skipped; `counted = tokens.is_some() &&
   cost_usd.is_some()`), the `Result { tokens, cost_cum, models_cum }` and
   `TurnEndedWithoutResult` digests in `digest.rs`, and `turn(result_seq)` and `totals()` on
   `SessionInsights`, recomputed in the refold after eviction; T011 and T007 pass
-- [ ] T014 [US2] Implement `turn_figures`, `turn_details`, `totals_line`, `totals_details`,
+- [x] T014 [US2] Implement `turn_figures`, `turn_details`, `totals_line`, `totals_details`,
   `context_label` and `context_details` in `crates/micold-core/src/structured/insights/figures.rs`
   using `micold_core::format::group_digits` and `structured::transcript::format_cost`; T012 passes
-- [ ] T015 [US1] [US2] Tolerance tests and fixes (I6, SC-006, FR-024): in
+- [x] T015 [US1] [US2] Tolerance tests and fixes (I6, SC-006, FR-024): in
   `crates/micold-core/tests/structured_insights.rs`, `insights-tolerance.jsonl` applies without a
   panic, every malformed usage, `modelUsage` and `autocompact_state` field leaves its figure
   `None`, and the well-formed lines around it still count; fix `digest.rs` until it passes

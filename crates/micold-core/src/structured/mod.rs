@@ -6,10 +6,12 @@
 
 mod event;
 mod history;
+pub mod insights;
 mod lines;
 mod log_line;
 mod parse;
 mod saved;
+pub(crate) mod sync;
 pub mod transcript;
 mod turn;
 mod user_message;

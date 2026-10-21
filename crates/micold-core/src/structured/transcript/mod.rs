@@ -19,6 +19,7 @@ pub use figures::{footer_figures, format_cost, format_duration, format_turns};
 pub use result::result_parts;
 pub use summary::{input_summary, SUMMARY_MAX_CHARS};
 
+use crate::structured::sync::Continuity;
 use crate::structured::{SequencedEvent, StructuredEvent, MAX_EVENTS};
 use std::collections::{HashMap, VecDeque};
 
@@ -38,10 +39,8 @@ pub struct Transcript {
     events: VecDeque<SequencedEvent>,
     /// Events before the first held one.
     omitted: u64,
-    /// One past the last held `seq`; `0` before any.
-    next_seq: u64,
-    /// Whether the last message applied was a live one (the replace-or-continue rule).
-    last_live: bool,
+    /// The replace-or-continue rule's state.
+    sync: Continuity,
     entries: VecDeque<Entry>,
     /// The `EntryId` of `entries[0]`.
     first_id: u64,
@@ -82,8 +81,7 @@ impl Transcript {
         Self {
             events: VecDeque::new(),
             omitted: 0,
-            next_seq: 0,
-            last_live: false,
+            sync: Continuity::default(),
             entries: VecDeque::new(),
             first_id: 0,
             revision: 0,
@@ -101,13 +99,10 @@ impl Transcript {
     /// live and its first `seq` is `next_seq`); an empty one is a fresh, empty transcript. A
     /// `live: true` message appends.
     pub fn apply(&mut self, omitted: u64, events: &[SequencedEvent], live: bool) {
-        let continues = events.first().is_some_and(|e| e.seq == self.next_seq);
-        if !live && !(continues && !self.last_live && self.holds_anything()) {
+        if self.sync.take(omitted, events, live) {
             self.rebuild(omitted);
         }
-        self.last_live = live;
         for event in events {
-            self.next_seq = event.seq + 1;
             self.events.push_back(event.clone());
             build::push(self, event);
             self.bound();
@@ -124,7 +119,7 @@ impl Transcript {
             self.events.pop_front();
             self.omitted += 1;
         }
-        let first = self.events.front().map_or(self.next_seq, |e| e.seq);
+        let first = self.events.front().map_or(self.sync.next_seq(), |e| e.seq);
         while let Some(entry) = self.entries.pop_front_if(|e| e.opened_at() < first) {
             self.first_id += 1;
             if let EntryKey::Tool(id) = entry.key() {
@@ -150,6 +145,7 @@ impl Transcript {
             // Ids and revisions keep rising, so nothing of the old build is named again.
             first_id: self.first_id + self.entries.len() as u64,
             revision: self.revision,
+            sync: self.sync.clone(),
             rebuilds: self.rebuilds + u64::from(held),
             ..Self::scoped(self.scope.clone())
         };

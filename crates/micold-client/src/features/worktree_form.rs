@@ -28,6 +28,7 @@ use crate::features::window::FieldId;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::env_include::EnvIncludeSnapshot;
+use micold_core::format::group_digits;
 use micold_core::git::GitRemote;
 use micold_core::github::{
     choose_remote, describe_listed, merge_searched, next_description_cursor, DescriptionPage,
@@ -399,19 +400,6 @@ impl IssueList {
     }
 }
 
-/// `1234567` as "1,234,567", for a count the user reads.
-fn thousands(n: u64) -> String {
-    let digits = n.to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
-}
-
 /// The search beyond the loaded issues (feature 034, FR-005a, data-model §5).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum SearchState {
@@ -767,13 +755,13 @@ impl WorktreeForm {
             {
                 Some(format!(
                     "Showing the {} most recently updated open issues.",
-                    thousands(listing.issues.len() as u64)
+                    group_digits(listing.issues.len() as u64)
                 ))
             }
             IssueList::Loaded { listing, .. } if !listing.complete => Some(format!(
                 "Showing the {} most recently updated of {} open issues — search also looks on GitHub.",
-                thousands(listing.issues.len() as u64),
-                thousands(listing.total_open)
+                group_digits(listing.issues.len() as u64),
+                group_digits(listing.total_open)
             )),
             _ => None,
         }
