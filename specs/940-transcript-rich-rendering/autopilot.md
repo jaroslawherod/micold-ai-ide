@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M4
-- **Next step**: M4 tasks done (T025–T034 ticked); scoped gate + review A, then review B + visual pass, full gate, push
+- **Next step**: handover — scoped gate + review A, review B + visual pass, full gate, push (see Handover)
 
 ## Pull requests
 
@@ -73,7 +73,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: M4 implemented and committed (bea68195, on origin/main 7ce164cf): T025–T034 ticked; red against stubs logged in tdd/cycle-log.md (M4). Green locally: `cargo test -p micold-client --lib ui::material` (771), `--test layout_snapshot` (all, incl. the new gates and the fixture), `--test icons`; `cargo clippy -p micold-client -p micold-core --all-targets -D warnings` clean; `cargo fmt` clean. `showcase_completeness`, `material_builder_api`, `showcase_captions`, `icons_font` passed in the stub run — re-run them on the final tree.
+- **Next step**: verify.md step 1 — scoped gate (`scripts/autopilot/scoped-gate.sh`, detached) with review A (`code-review` high on origin/main...HEAD); then review B (conformance, sonnet) and the visual pass (showcase: the MarkdownView, CodeBlock, LinkText, InlineDiff entries and DisclosureCard's "an Edit card with its line counts"; cloud notes in /tmp/claude/memory/team/silo/cloud-visual-pass.md; `mise run showcase` = `cargo run -p micold-client --bin micold-showcase`); full gate `scripts/gate.sh`; push `git push --force-with-lease=claude/project-thread-x8n8q6: -u origin claude/project-thread-x8n8q6`; PR title/body to the session scratchpad (pr-title.md, pr-body.md; orchestrator opens it).
+- **Open findings**: none yet (no review run). Known limits to judge in review: `LinkText`'s focus ring is drawn round its paragraph, not the focused link (Decisions M4); `InlineDiff` tints end at the hunk's widest line, not the viewport's edge.
+- **PR**: none.
 
 ## Open escalation
 
