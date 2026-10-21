@@ -87,11 +87,23 @@ here (context meter, session totals, plan-usage feed, subagent threads, backgrou
   build time"; https://code.claude.com/docs/en/agent-sdk/typescript#sdkusagereport — "an estimate
   and not what your plan bills")_
 - Q: May the CLI's plan-limit event feed the plan-usage indicator (FR-010, amending feature 490's
-  FR-012)? → open, escalated to the user. Evidence: the event is documented
-  (https://code.claude.com/docs/en/agent-sdk/typescript#sdkratelimitevent: `status`, optional
-  `resetsAt` and `utilization`, no window name), but the CLI 2.1.302 fixtures carry no top-level
-  `utilization`; the per-window figures (`unifiedWindows.five_hour` / `.seven_day`, each
-  `utilization` and `resetsAt`, and `rateLimitType`) are undocumented fields.
+  FR-012)? → A: Yes. Feature 490's FR-012 is amended to also accept the CLI's documented plan-limit
+  event (`rate_limit_event`, `SDKRateLimitEvent` in
+  https://code.claude.com/docs/en/agent-sdk/typescript#sdkratelimitevent) from structured sessions.
+  Its documented fields carry no window name, and CLI 2.1.302 writes no top-level `utilization`,
+  so the per-window figures are read, tolerantly, from the event's `unifiedWindows` (`five_hour`
+  and `seven_day`, each a used share and a reset time). A window or event of any other shape yields
+  no reading and no error. _(decided by user (jaro, 2026-10-21))_
+- Q: Are the CLI's cost and per-model figures per turn? (FR-006, FR-007, FR-009) → A: No. In the
+  streaming-input mode structured sessions use, a turn result's `total_cost_usd` and per-model
+  figures (`modelUsage`) are the running totals of the CLI's session — counting subagents, and
+  including the totals restored on resume — while its `usage` covers only that turn's main
+  conversation, without subagents. A turn's cost and per-model figures are therefore the
+  difference from the previous turn result of the same count. _(agent-resolved:
+  https://code.claude.com/docs/en/agent-sdk/cost-tracking#track-costs-in-streaming-input-mode and
+  #accumulate-costs-across-multiple-calls; crates/micold-core/tests/fixtures/stream-json/
+  resume-init.jsonl, whose result reports 0.0954 USD and 20 output tokens for claude-sonnet-5-5
+  after text-turn.jsonl's 0.0371 USD and 14)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -322,28 +334,34 @@ finished, and the transcript's tool-call card that started it links to the list 
 
 **Turn and session usage**
 
-- **FR-006**: The turn footer #939 shows MUST be extended with the turn's input and output tokens;
-  its details MUST show the cached input tokens and, when the CLI reports them per model, each
-  model's tokens and cost.
+- **FR-006**: The turn footer #939 shows MUST be extended with the turn's input and output tokens
+  (the main conversation's, as the turn result's usage reports them); its details MUST show the
+  cached input tokens and, when the CLI reports them per model, each model's tokens and cost for
+  the turn, subagents included.
 - **FR-007**: A structured session MUST show its session totals — cost and each token figure — and
   the number of turns they cover, in the session's usage details.
 - **FR-008**: A turn without reported usage MUST show no token figures, and the totals MUST say
   that they leave it out. Totals MUST be marked partial when the event history has evicted earlier
   events.
 - **FR-009**: Totals MUST be correct across process restarts and resumes of the session: no turn
-  is counted twice and no turn held in the history is left out.
+  is counted twice and no turn held in the history is left out. The CLI reports cost and per-model
+  figures as running totals of its session (restored on resume): a turn's cost and per-model
+  figures MUST be its result's figures minus those of the previous turn result held for the
+  session, or its result's figures as they are when none is held or when a figure is lower than the
+  previous one (the CLI started counting again). A turn whose previous result was evicted MUST show
+  no per-turn cost or per-model figures and is left out of the totals as FR-008 says.
 
 **Plan-usage feed**
 
 - **FR-010**: While **Show Claude plan usage** is on, each plan-limit event a structured session's
   running CLI writes MUST yield a usage reading for feature 490, with each limit window's name, used
-  percentage and reset time, shown within 10 seconds. This **amends feature 490's FR-012**, which
-  allows only the plan-limit values Claude Code documents in its status-line input: the CLI's own
-  structured output becomes a second source. Whether that amendment is acceptable is open:
-  [NEEDS CLARIFICATION: Q1 — the plan-limit event is written by the CLI in structured mode but
-  feature 490 allows only documented sources; may it feed the plan-usage indicator?]. Either way,
-  the source reads no credential and makes no request of its own (feature 490, FR-013, FR-014
-  hold).
+  percentage and reset time, shown within 10 seconds. This **amends feature 490's FR-012**: besides
+  the status-line input, the CLI's documented plan-limit event in structured mode is a usage source.
+  The windows are read from the event's `unifiedWindows` (`five_hour`, `seven_day`: used share and
+  reset time), which the CLI writes but does not document; they are read tolerantly, so a window
+  missing or of another shape is left out and an event with no readable window yields no reading
+  (FR-012). The source reads no credential and makes no request of its own (feature 490, FR-013,
+  FR-014 hold).
 - **FR-011**: While the switch is off, plan-limit events MUST NOT yield, keep or show a reading.
 - **FR-012**: A plan-limit event that cannot be read MUST yield no reading and show nothing, and
   MUST NOT change the current reading or affect the session; failures follow feature 490's logging
@@ -387,7 +405,8 @@ finished, and the transcript's tool-call card that started it links to the list 
   FR-007) MUST be shown for every account and labelled as an estimate, and the cost details MUST
   say in words that it is Claude Code's estimate at API list prices and not what a subscription
   plan bills. Cost MUST NOT be hidden by plan type, and the application MUST NOT detect the plan
-  type for this.
+  type for this. The cost figure in #939's footer stays #939's; this feature adds the estimate
+  note to the footer's details.
 - **FR-027**: The user guide MUST describe the context meter, the token figures and totals, how
   structured sessions feed the plan-usage indicator, subagent threads and the background-task list,
   in the same change that ships each; feature 490's Settings note and guide page MUST say that
@@ -407,7 +426,8 @@ finished, and the transcript's tool-call card that started it links to the list 
   figures stay absent.
 - **Context reading**: context used, context window and compaction threshold as of the latest model
   response; derived per session.
-- **Session totals**: the sums over the turns held, with the count of turns covered and whether the
+- **Session totals**: the sums over the turns held (each turn's cost and per-model figures derived as
+  FR-009 says), with the count of turns covered and whether the
   history was evicted.
 - **Subagent thread**: the parent tool-call identity, the ordered events attributed to it, its state
   and its child threads.
@@ -445,16 +465,23 @@ finished, and the transcript's tool-call card that started it links to the list 
 - Budgets, spending limits or alerts on cost; usage reporting across sessions or over time.
 - Context and usage figures for terminal sessions or for other AI CLIs.
 - Changing feature 490's indicator, warning threshold or settings. The one change to feature 490
-  in scope is the added usage source (FR-010, subject to Q1) and its Settings note and guide text
+  in scope is the added usage source (FR-010) and its Settings note and guide text
   (FR-027).
 
 ## Assumptions
 
 - **Dependency on #939**: this feature needs #939's transcript view, tool-call cards and turn
   footer, and ships after #939. Where #939 places the footer and cards, this feature adds to them.
+  #939 leaves every event with a parent tool call out of the main transcript, counts it on that
+  card (or on a single "sub-agent messages not shown" notice when the card is not held) and keeps
+  it in the event history; this feature builds each subagent thread through #939's nesting seam,
+  `Transcript::subagent_events(id)` and `Transcript::nested(id)`
+  (specs/939-structured-transcript-view/contracts/transcript-model.md), so a thread uses the main
+  transcript's rules and cards (FR-015), and replaces #939's notice with the placeholders of
+  FR-017.
 - The CLI's structured output reports, as in feature 938's recorded fixtures (Claude Code 2.1.302):
-  per-response and per-turn token usage, per-turn cost and a per-model breakdown with each model's
-  context window; an automatic-compaction state with its threshold; a plan-limit event with each
+  per-response and per-turn token usage, a running session cost and a running per-model breakdown
+  with each model's context window (FR-009); an automatic-compaction state with its threshold; a plan-limit event with each
   limit window's used share and reset time; a short "what is happening now" activity summary event;
   and, on every message and delta, a parent tool-call field, which is empty in all of those
   fixtures because none of them starts a subagent.

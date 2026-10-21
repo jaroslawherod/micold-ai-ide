@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
 - **Phase**: clarify
-- **Next step**: clarify unit continues with the user's answer to the open escalation (Q1, FR-010), applies it to spec.md, then runs the next clarify round
+- **Next step**: plan unit (clarify CLEAN after round 2)
 
 ## Pull requests
 
@@ -27,8 +27,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | Depends on #939 (not on main) | Spec builds on #939's transcript view, tool-call cards and turn footer; extends the footer with tokens, does not re-specify it | orchestrator | unit prompt |
-| D2 | spec | Plan-usage source for structured sessions | The CLI's `rate_limit_event` (no status line in -p mode) feeds feature 490's reading — pending Q1 escalation | agent | crates/micold-core/tests/fixtures/stream-json/text-turn.jsonl `rate_limit_event` |
+| D2 | spec | Plan-usage source for structured sessions | The CLI's `rate_limit_event` (no status line in -p mode) feeds feature 490's reading — confirmed by D4 | agent | crates/micold-core/tests/fixtures/stream-json/text-turn.jsonl `rate_limit_event` |
 | D3 | clarify | Q2: cost for subscription-plan accounts (FR-026) | Show for every account, labelled an estimate at API list prices, not what a plan bills; no plan detection | agent | issue #944 acceptance; code.claude.com/docs/en/agent-sdk/cost-tracking |
+| D4 | clarify | Q1: may the plan-limit event feed plan usage (FR-010, amends 490 FR-012) | Yes: 490 FR-012 amended to accept the documented `rate_limit_event`; windows read tolerantly from undocumented `unifiedWindows.five_hour/seven_day`; other shapes give no reading, no error | user (jaro, 2026-10-21) | decision card; code.claude.com/docs/en/agent-sdk/typescript#sdkratelimitevent |
+| D5 | clarify | Are result cost and per-model figures per turn? (FR-006, FR-009) | No: running totals of the CLI session (incl. subagents, restored on resume); `usage` is per turn, main loop only. Turn figures = difference from previous held result; a drop restarts the count; previous evicted → absent | agent | agent-sdk/cost-tracking#track-costs-in-streaming-input-mode; fixtures resume-init vs text-turn (0.0954 vs 0.0371 USD) |
+| D6 | clarify | Does the spec agree with #939's nesting seam? | Yes: threads built via `Transcript::subagent_events(id)` + `Transcript::nested(id)`; FR-017 placeholders replace #939's single notice; footer cost stays #939's (Assumptions) | agent | specs/939-structured-transcript-view/contracts/transcript-model.md, research.md R7 |
 
 ## Review rounds
 
@@ -48,13 +51,10 @@ None.
 
 ## Open escalation
 
-Category: product decision (amends feature 490's user-decided FR-012). Q1 (FR-010): may a structured
-session's `rate_limit_event` feed the plan-usage indicator? `SDKRateLimitEvent` is documented
-(status, optional resetsAt/utilization, no window name), but CLI 2.1.302 writes no top-level
-utilization; the named windows are in undocumented `unifiedWindows.{five_hour,seven_day}`.
-Options: (A, Recommended) amend 490 FR-012, read the documented event plus its `unifiedWindows`
-fields tolerantly; (B) documented fields only; (C) structured sessions do not feed plan usage.
+None.
 
 ## Follow-ups not done
 
-None.
+- #939 (not owned here): its footer shows `total_cost_usd` "as the result reports it" as the turn's
+  cost, but in streaming-input mode that is the CLI session's running total (D5). Belongs to #939's
+  flow; #944's FR-009 derives turn cost by difference.
