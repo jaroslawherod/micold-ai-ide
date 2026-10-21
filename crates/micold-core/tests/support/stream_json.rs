@@ -227,3 +227,80 @@ pub fn with_parent(event: StructuredEvent, parent: &str) -> StructuredEvent {
         other => other,
     }
 }
+
+/// `event` (an `Assistant`) as a part of the message `id`. Other events unchanged.
+pub fn with_message_id(event: StructuredEvent, id: &str) -> StructuredEvent {
+    match event {
+        StructuredEvent::Assistant {
+            blocks,
+            raw,
+            parent_tool_use_id,
+            ..
+        } => {
+            let mut value: Value = serde_json::from_str(&raw).expect("a synthetic line is JSON");
+            value["message"]["id"] = json!(id);
+            StructuredEvent::Assistant {
+                message_id: Some(id.to_string()),
+                blocks,
+                raw: value.to_string(),
+                parent_tool_use_id,
+            }
+        }
+        other => other,
+    }
+}
+
+/// A partial-message line of the CLI's shape around `event`, its `stream_event`'s `event`
+/// object, parsed as the service parses it.
+pub fn stream_event(event: Value) -> StructuredEvent {
+    parse_line(
+        &json!({
+            "type": "stream_event",
+            "event": event,
+            "parent_tool_use_id": null,
+            "session_id": "<SESSION_ID>",
+        })
+        .to_string(),
+    )
+}
+
+/// `message_start` of the message `id`.
+pub fn message_start(id: &str) -> StructuredEvent {
+    stream_event(json!({
+        "type": "message_start",
+        "message": { "id": id, "type": "message", "role": "assistant", "content": [] },
+    }))
+}
+
+/// `content_block_start` of block `index`, `block` its empty content block.
+pub fn block_start(index: u64, block: Value) -> StructuredEvent {
+    stream_event(json!({ "type": "content_block_start", "index": index, "content_block": block }))
+}
+
+/// `content_block_delta` of block `index` carrying `delta`.
+pub fn block_delta(index: u64, delta: Value) -> StructuredEvent {
+    stream_event(json!({ "type": "content_block_delta", "index": index, "delta": delta }))
+}
+
+pub fn text_delta(index: u64, text: &str) -> StructuredEvent {
+    block_delta(index, json!({ "type": "text_delta", "text": text }))
+}
+
+pub fn thinking_delta(index: u64, thinking: &str) -> StructuredEvent {
+    block_delta(
+        index,
+        json!({ "type": "thinking_delta", "thinking": thinking }),
+    )
+}
+
+pub fn input_json_delta(index: u64, partial_json: &str) -> StructuredEvent {
+    block_delta(
+        index,
+        json!({ "type": "input_json_delta", "partial_json": partial_json }),
+    )
+}
+
+/// A partial-message event carrying only its type (`message_stop`, `ping`, ...).
+pub fn stream_marker(kind: &str) -> StructuredEvent {
+    stream_event(json!({ "type": kind }))
+}

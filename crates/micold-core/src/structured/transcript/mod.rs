@@ -19,7 +19,7 @@ pub use figures::{footer_figures, format_cost, format_duration, format_turns};
 pub use result::result_parts;
 pub use summary::{input_summary, SUMMARY_MAX_CHARS};
 
-use crate::structured::{SequencedEvent, StructuredEvent};
+use crate::structured::{SequencedEvent, StructuredEvent, MAX_EVENTS};
 use std::collections::{HashMap, VecDeque};
 
 /// Which events are the transcript's own (research R7).
@@ -54,6 +54,8 @@ pub struct Transcript {
     turn_cards: Vec<EntryId>,
     /// The single notice counting sub-agent messages that name no held card.
     subagent_notice: Option<EntryId>,
+    /// The assistant message whose partial events are arriving (research R3).
+    stream: Option<stream::OpenStream>,
     scope: Scope,
     rebuilds: u64,
 }
@@ -88,6 +90,7 @@ impl Transcript {
             tools: HashMap::new(),
             turn_cards: Vec::new(),
             subagent_notice: None,
+            stream: None,
             scope,
             rebuilds: 0,
         }
@@ -107,7 +110,32 @@ impl Transcript {
             self.next_seq = event.seq + 1;
             self.events.push_back(event.clone());
             build::push(self, event);
+            self.bound();
         }
+    }
+
+    /// Past [`MAX_EVENTS`] held events the oldest leave, counted in `omitted`, and the entries
+    /// they opened leave the front with them (FR-020, research R8): O(1) per dropped entry.
+    fn bound(&mut self) {
+        if self.events.len() <= MAX_EVENTS {
+            return;
+        }
+        while self.events.len() > MAX_EVENTS {
+            self.events.pop_front();
+            self.omitted += 1;
+        }
+        let first = self.events.front().map_or(self.next_seq, |e| e.seq);
+        while let Some(entry) = self.entries.pop_front_if(|e| e.opened_at() < first) {
+            self.first_id += 1;
+            if let EntryKey::Tool(id) = entry.key() {
+                self.tools.remove(id);
+            }
+            if self.subagent_notice == Some(entry.id()) {
+                self.subagent_notice = None;
+            }
+        }
+        // Ids below `first_id` name nothing now; `turn_cards` and the open stream may still hold
+        // them, and `get`/`change` skip them.
     }
 
     fn holds_anything(&self) -> bool {
@@ -141,6 +169,11 @@ impl Transcript {
     /// No event is held: the view says there is no output yet (FR-006).
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
+    }
+
+    /// How many events the transcript holds: at most [`MAX_EVENTS`] (FR-020).
+    pub fn held(&self) -> usize {
+        self.events.len()
     }
 
     /// How many times a history message replaced what the transcript held; the client prunes

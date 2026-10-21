@@ -191,7 +191,7 @@ fixture as recorded).
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T016 [US3] Streaming tests in `crates/micold-core/tests/structured_transcript.rs`: **G2**
+- [X] T016 [US3] Streaming tests in `crates/micold-core/tests/structured_transcript.rs`: **G2**
   (SC-002) replaying `partial-deltas`, `tool-turn`, `text-turn`, `error-result` and `resume-init`
   one event at a time, after each event every entry before the streamed one is equal (key,
   revision, content) to before, and the final entries equal those of T007/T012's build without
@@ -204,7 +204,7 @@ fixture as recorded).
   { UnknownStreamEvent }`; a parented `StreamDelta` is absorbed, not counted; **G1** (SC-001) over
   every fixture as recorded: every event is an entry, an absorption or a count, every tool use one
   card holding its result
-- [ ] T017 [US3] Bound and re-sync tests in `crates/micold-core/tests/structured_transcript.rs`
+- [X] T017 [US3] Bound and re-sync tests in `crates/micold-core/tests/structured_transcript.rs`
   (after T016, same file): **G4** (FR-020) appending past `MAX_EVENTS` keeps `MAX_EVENTS` events,
   `omitted` counts every dropped one, entries opened by dropped events leave the front, a result
   arriving after its card's tool use left → `OrphanResult`; **G3** (FR-013, FR-021) rebuilding
@@ -213,7 +213,7 @@ fixture as recorded).
 
 ### Implementation
 
-- [ ] T018 [US3] Implement `OpenStream` in `crates/micold-core/src/structured/transcript/stream.rs`
+- [X] T018 [US3] Implement `OpenStream` in `crates/micold-core/src/structured/transcript/stream.rs`
   per research R3 and data-model.md *OpenStream*: `message_start` opens (closing an open one),
   `content_block_start` creates the streaming entry from the start event's `raw` `content_block`,
   typed deltas append to the entry of their `index`, `signature_delta`/`content_block_stop`/
@@ -221,7 +221,7 @@ fixture as recorded).
   `Assistant` block whose `message_id` matches the open stream (or either is unknown) supersedes the
   next unfinished streamed block in place, else appends; `Result` and `TurnEndedWithoutResult` close
   the stream; only the touched entry's `revision` moves; T016 passes
-- [ ] T019 [US3] Implement the bound in `crates/micold-core/src/structured/transcript/mod.rs`:
+- [X] T019 [US3] Implement the bound in `crates/micold-core/src/structured/transcript/mod.rs`:
   after each `apply`, drop events past `MAX_EVENTS`, grow `omitted`, pop entries whose `opened_at`
   is below the first held `seq` (and their `tools`/`turn_cards`/`subagent_notice` references),
   O(1) per dropped entry (research R8); T017 passes

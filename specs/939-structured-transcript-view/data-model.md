@@ -21,7 +21,8 @@ All types in core are in the new render-free module `micold_core::structured::tr
 | `rebuilds: u64` | count of rebuilds, so the client can prune fold keys after one |
 
 Operations: `apply(omitted, &[SequencedEvent], live)` (replace-or-continue rule of #938 wire.md,
-then one `push` per event, then eviction); `entries()`; `omitted_notice() -> Option<u64>`;
+then one `push` per event, each followed by eviction); `entries()`; `omitted_notice() -> Option<u64>`;
+`held() -> usize` (events held, at most `MAX_EVENTS`);
 `is_empty()` (no event held: the view shows "No output yet", FR-006); `subagent_events(&str) ->
 impl Iterator<Item = &SequencedEvent>`; `entry(EntryKey) -> Option<&Entry>`.
 
@@ -32,8 +33,9 @@ changes; `revision` strictly increases on each change to that entry and no other
 
 ### OpenStream
 
-`message_id: Option<String>`, `opened_at: u64` (seq of `message_start`), `blocks: Vec<(u64 index,
-EntryId, finished: bool)>` in index order. Closed by `message_stop`, `Result`,
+`message_id: Option<String>`, `blocks: Vec<(u64 index, Option<EntryId>, finished: bool)>` in
+`content_block_start` order; the entry is `None` for a block type the transcript does not stream
+(its finished block is shown instead, keeping the positions matched). Closed by `message_stop`, `Result`,
 `TurnEndedWithoutResult`, or a new `message_start`.
 
 ## Entry
