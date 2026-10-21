@@ -164,8 +164,8 @@ rejects it and the stand-in receives the decision; on approve, the session's mod
 1. **Given** a session in Plan mode, **When** Claude asks to leave plan mode, **Then** clients show
    a plan approval with the plan's full text, not a generic tool request.
 2. **Given** a plan approval, **When** the user approves with accept edits (or without), **Then**
-   Claude receives an allow decision, the session's mode becomes Accept edits (or Default, whatever
-   mode the session had before Plan), and the shown mode changes.
+   Claude receives an allow decision, the session's mode becomes Accept edits (or Default), whichever
+   approval was chosen, whatever mode the session had before Plan, and the shown mode changes.
 3. **Given** a plan approval, **When** the user keeps planning, optionally with a note, **Then**
    Claude receives a deny decision with the note, and the session stays in Plan mode.
 
@@ -318,7 +318,7 @@ client is told the request is withdrawn and an answer sent afterwards is refused
 **Returning decisions**
 
 - **FR-010**: The daemon MUST accept a decision for a pending request from any attached client, and
-  the first decision MUST win: the daemon MUST return it to the CLI as the prompt tool's answer,
+  the first decision MUST win: the daemon MUST return it to the CLI as the answer to its pending request,
   so that Claude acts on it, and tell every client the request is resolved:
   - **Allow** returns allow with the original input unchanged.
   - **Deny** returns deny with the user's message, or a standard message when none was given.
@@ -356,7 +356,7 @@ client is told the request is withdrawn and an answer sent afterwards is refused
 
 **Scope, tests and docs**
 
-- **FR-018**: Terminal sessions MUST be unchanged: no prompt tool, no permission-mode override, and
+- **FR-018**: Terminal sessions MUST be unchanged: no change to how they raise permission requests, no permission-mode override, and
   every existing terminal-session test passes unchanged.
 - **FR-019**: Request handling, decisions of every kind, first-decision-wins across two clients,
   withdrawal on stop, process end and interrupt, attach with a request pending, and the mode at
