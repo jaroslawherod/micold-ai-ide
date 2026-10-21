@@ -215,15 +215,15 @@ impl Operation<Option<Rectangle>> for FocusedBounds {
     }
 }
 
-/// Where a widget is on screen: the focused control ([`focused_bounds`]), or the widget named by
-/// [`Self::of`], which a caller drives over a subtree itself and reads with [`Self::found`] (a
-/// card's link in the Overview grid, feature 1122 R7). Each scrollable holding it takes its
+/// Where a widget is on screen: the focused control ([`focused_bounds`]), or each widget named by
+/// [`Self::of_any`], which a caller drives over a subtree itself and reads with
+/// [`Self::all_visible`] (a card's links in the Overview grid, feature 1122 R7, feature 1123 R6). Each scrollable holding it takes its
 /// translation off the bounds it reports, and clips the part [`Self::visible`] reports to its
 /// view.
 #[derive(Default)]
 pub(crate) struct ScreenBounds {
-    /// The widget looked for by its id; the focused control when `None`.
-    target: Option<Id>,
+    /// The widgets looked for by their ids; the focused control when empty.
+    targets: Vec<Id>,
     /// The translation of the scrollable just met and its view on screen, until the traversal
     /// into its content claims them.
     entering: Option<(Vector, Rectangle)>,
@@ -232,26 +232,29 @@ pub(crate) struct ScreenBounds {
     /// through, the innermost scrollable's clipped by those around it (`None` outside every
     /// scrollable).
     inside: Vec<(Vector, Option<Rectangle>)>,
+    /// The first match on screen.
     found: Option<Rectangle>,
-    /// The part of `found` inside every scrollable view holding it: `None` when none of it is.
-    visible: Option<Rectangle>,
+    /// The part of every match inside every scrollable view holding it, in traversal order; a
+    /// match wholly out of view has none.
+    all_visible: Vec<Rectangle>,
 }
 
 impl ScreenBounds {
-    /// The pass that finds the widget named `id`: a container or a focusable control.
-    pub(crate) fn of(id: Id) -> Self {
+    /// The pass that finds every widget named by one of `ids` (a container or a focusable
+    /// control), in one traversal.
+    pub(crate) fn of_any(ids: Vec<Id>) -> Self {
         Self {
-            target: Some(id),
+            targets: ids,
             ..Self::default()
         }
     }
 
-    /// The part of the widget on screen, after the pass: its bounds clipped to the view of each
-    /// scrollable holding it, so a link scrolled out of a card's body is not under a pointer on
-    /// the card's title (feature 1122, review A M2 F2); `None` when it was not found or is
-    /// scrolled out of view. The first match when several carry its id.
-    pub(crate) fn visible(&self) -> Option<Rectangle> {
-        self.visible
+    /// The part on screen of each widget found, after the pass: its bounds clipped to the view of
+    /// each scrollable holding it, so a link scrolled out of a card's body is not under a pointer
+    /// on the card's title (feature 1122, review A M2 F2). One entry per match at least partly in
+    /// view.
+    pub(crate) fn all_visible(&self) -> &[Rectangle] {
+        &self.all_visible
     }
 
     /// The sum of the translations of the scrollables the pass is inside.
@@ -280,21 +283,23 @@ impl ScreenBounds {
     }
 
     fn take(&mut self, bounds: Rectangle) {
+        let on_screen = bounds - self.shift();
+        let visible = match self.view() {
+            Some(view) => view.intersection(&on_screen),
+            None => Some(on_screen),
+        };
         if self.found.is_none() {
-            let on_screen = bounds - self.shift();
             self.found = Some(on_screen);
-            self.visible = match self.view() {
-                Some(view) => view.intersection(&on_screen),
-                None => Some(on_screen),
-            };
         }
+        self.all_visible.extend(visible);
     }
 
     /// A focusable control offered to the pass: taken when it is the one looked for.
     fn offered(&mut self, id: Option<&Id>, bounds: Rectangle, focused: bool) {
-        let wanted = match self.target {
-            Some(_) => self.named(id),
-            None => focused,
+        let wanted = if self.targets.is_empty() {
+            focused
+        } else {
+            self.named(id)
         };
         if wanted {
             self.take(bounds);
@@ -302,7 +307,7 @@ impl ScreenBounds {
     }
 
     fn named(&self, id: Option<&Id>) -> bool {
-        self.target.is_some() && self.target.as_ref() == id
+        id.is_some_and(|id| self.targets.contains(id))
     }
 }
 

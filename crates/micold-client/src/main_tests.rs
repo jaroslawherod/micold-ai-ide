@@ -7691,6 +7691,110 @@ mod issue_source {
         );
     }
 
+    // --- 1123: a pull request row's number opens it (U7, R8) -----------------------------------
+
+    /// `titles_rig`'s window with `numbers` listed open on its worktree's branch, the Overview
+    /// open, and `opener` as the link opener.
+    fn pr_link_rig(numbers: &[u64], opener: &Arc<super::pr_status_open::Recording>) -> IssueRig {
+        let mut rig = titles_rig(false);
+        rig.app.caps = rig.app.caps.clone().with_link_opener(opener.clone());
+        rig.app.core.overview.open = true;
+        read_numbers(&mut rig.app, numbers);
+        rig
+    }
+
+    /// A successful reading listing `numbers` open on `feat/42_crash`.
+    fn read_numbers(app: &mut App, numbers: &[u64]) {
+        use micold_core::pr_list::{BranchPrList, ListedPr};
+        use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
+        let prs = numbers
+            .iter()
+            .map(|&number| ListedPr {
+                number,
+                url: format!("https://github.com/o/r/pull/{number}"),
+                state: BranchPrState::Open,
+                checks: CheckStatus::None,
+                review: ReviewState::None,
+                conflict: false,
+                created_at: format!("2026-01-01T00:00:{number:02}Z"),
+            })
+            .collect();
+        app.core.pr_status.enabled = true;
+        app.core.pr_status.read_at = Some(100);
+        app.core
+            .pr_status
+            .lists
+            .insert("feat/42_crash".into(), BranchPrList::new(prs, false, false));
+    }
+
+    fn click_number(app: &mut App, location: &micold_core::session::SessionLocation, n: u64) {
+        let work = update_inner(
+            app,
+            Message::Overview(
+                micold_client::features::overview::Msg::PullRequestLinkActivated(
+                    location.clone(),
+                    n,
+                ),
+            ),
+        );
+        settle(app, work);
+    }
+
+    fn crash() -> micold_core::session::SessionLocation {
+        micold_core::session::SessionLocation::Worktree("feat-42_crash".into())
+    }
+
+    /// U7, FR-009: a click on "#12" asks the link opener for the address the reading gave #12;
+    /// the Overview stays open.
+    #[test]
+    fn pull_request_link_opens_the_listed_address() {
+        let opener = Arc::new(super::pr_status_open::Recording::default());
+        let mut rig = pr_link_rig(&[12, 11], &opener);
+        click_number(&mut rig.app, &crash(), 12);
+        assert_eq!(
+            opener.opened.lock().unwrap().clone(),
+            vec!["https://github.com/o/r/pull/12".to_string()]
+        );
+        assert!(rig.app.core.overview.open, "the Overview stays open");
+    }
+
+    /// R8: after a reading without #12, or for a card no longer there, a click opens nothing.
+    #[test]
+    fn pull_request_link_opens_nothing_once_gone() {
+        let opener = Arc::new(super::pr_status_open::Recording::default());
+        let mut rig = pr_link_rig(&[12], &opener);
+        read_numbers(&mut rig.app, &[11]);
+        click_number(&mut rig.app, &crash(), 12);
+        let gone = micold_core::session::SessionLocation::Worktree("feat-43_gone".into());
+        click_number(&mut rig.app, &gone, 11);
+        assert!(opener.opened.lock().unwrap().is_empty());
+    }
+
+    /// FR-012, Story 3 sc. 5: a browser that cannot be opened gives feature 031's notification,
+    /// naming the address and the reason, and nothing of the Overview changes.
+    #[test]
+    fn pull_request_link_failure_notifies() {
+        let opener = Arc::new(super::pr_status_open::Recording {
+            fail: true,
+            ..Default::default()
+        });
+        let mut rig = pr_link_rig(&[12], &opener);
+        let before = rig.app.core.overview.clone();
+        click_number(&mut rig.app, &crash(), 12);
+        let shown = rig
+            .app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone());
+        assert_eq!(
+            shown.as_deref(),
+            Some("Couldn't open https://github.com/o/r/pull/12: no launcher")
+        );
+        assert_eq!(rig.app.core.overview, before, "nothing else changes");
+    }
+
     // --- 837: the picked issue's details (US2, US3) ---------------------------------------------
 
     use micold_client::features::worktree_form::IssueDetailsState;
@@ -14556,7 +14660,10 @@ fn card_focus_return_focuses_the_link() {
     };
     assert_eq!(
         returned(MenuOrigin::KeyboardFromLink, true),
-        Some(card_link_id(&l))
+        Some(card_link_id(
+            &l,
+            micold_core::overview_expansion::CardLink::Issue
+        ))
     );
     assert_eq!(
         returned(MenuOrigin::KeyboardFromLink, false),
@@ -14713,7 +14820,10 @@ fn shift_tab_onto_the_previous_cards_link_keeps_the_keyboard_on_it() {
     assert_eq!(app.core.overview.expansion.expanded(), Some(&b), "fixture");
     assert_eq!(
         expansion_focus_move(&mut app, Event::LinkFocusGained(a.clone())),
-        Some(card_link_id(&a))
+        Some(card_link_id(
+            &a,
+            micold_core::overview_expansion::CardLink::Issue
+        ))
     );
     assert_eq!(app.core.overview.expansion.expanded(), Some(&a));
     assert_eq!(expansion_focus_move(&mut app, Event::FocusLost(b)), None);
@@ -14733,7 +14843,10 @@ fn escape_on_the_link_keeps_the_keyboard_on_it() {
     assert_eq!(app.core.overview.expansion.expanded(), Some(&a), "fixture");
     assert_eq!(
         expansion_focus_move(&mut app, Event::Escape),
-        Some(card_link_id(&a))
+        Some(card_link_id(
+            &a,
+            micold_core::overview_expansion::CardLink::Issue
+        ))
     );
     let expansion = &app.core.overview.expansion;
     assert_eq!(expansion.expanded(), None);

@@ -156,6 +156,13 @@ A card lists its branch's pull requests, one row each:
 
 Open and draft pull requests come first, then merged and closed ones, each group newest first. A collapsed card shows the first **two** rows and, when there are more, a line such as *+2 more*; the expanded card (see [Reading a card in full](#reading-a-card-in-full)) shows all of them. A narrow card shortens the phrase with an ellipsis (…) and keeps the number and the pill whole.
 
+The number is a link, drawn like the issue link:
+
+- **Click** the number to open the pull request's page on GitHub in your browser. The card is not activated: there is no ripple, nothing is selected, and the Overview stays open. If the browser cannot be opened, a notification names the address and the reason.
+- A click anywhere else on the row, on the pill or the phrase, activates the card as a click on the rest of the card does (see [Activating a card](#activating-a-card)).
+- A press that starts on the number and ends off it, or the reverse, opens nothing and activates nothing. The pointer resting on a collapsed card's number does not expand the card, as on the issue link, and a right-click on it opens the card's menu.
+- A pull request that a newer reading no longer lists opens nothing.
+
 Below the rows, the counts line shows the branch's open and merged pull requests, such as *1 open · 2 merged*; drafts count as open. The counts come from the pull requests the reading lists: the newest ten open and the newest ten merged ones. A count of 10 or more reads *10+*, and when the newest ten include a fork's pull request the count reads the branch's own ones with *+* (*9+*). A count of 0 is left out (*1 open*, *2 merged*), and with both at 0 the card has no counts line. A branch with no pull request shows no row.
 
 The rows and counts come from the pull request status the app already reads; the Overview starts no reading of its own, and showing them asks GitHub for nothing. A new reading changes the rows without a restart. Rows and counts stay through a rate-limit pause and a reading that fails for a passing reason, such as a moment offline. When they cannot be read, the card shows a dash (*—*) instead, with no rows, and its tooltip says why:

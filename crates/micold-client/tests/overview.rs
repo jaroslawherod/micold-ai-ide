@@ -869,6 +869,56 @@ fn no_row_for_an_empty_list_the_dash_or_no_branch() {
     assert_eq!(card(&all, &SessionLocation::Default).pull_requests, None);
 }
 
+// ---- Feature 1123 (T022): a number opens its pull request ----
+
+/// Story 3 sc. 1, SC-003, FR-014: activating a number changes no Overview state, selects nothing
+/// and does not activate the card; the message's `Debug` holds no address.
+#[test]
+fn activating_a_pull_request_link_changes_no_overview_state() {
+    let mut state = feat_a();
+    read_list(&mut state, "feat/a", four_states());
+    open_overview(&mut state);
+    let before = state.overview.clone();
+    let msg = Message::Overview(Msg::PullRequestLinkActivated(wt("feat-a"), 12));
+    let printed = format!("{msg:?}");
+    assert!(
+        !printed.contains("http") && !printed.contains("github.com"),
+        "{printed}"
+    );
+    state.update(msg);
+    assert_eq!(state.overview, before);
+    assert!(state.overview.open);
+    assert_eq!(state.sidebar.revealed, None);
+}
+
+/// R8: the address of a listed number is the one the reading gave; a number the reading does not
+/// list, a card that is not there, and a card whose rows are not shown give none.
+#[test]
+fn a_numbers_address_is_looked_up_in_the_cards_list() {
+    use micold_client::ui::overview::pull_request_link_for;
+    let mut state = feat_a();
+    read_list(&mut state, "feat/a", four_states());
+    assert_eq!(
+        pull_request_link_for(&state, &wt("feat-a"), 9).as_deref(),
+        Some("https://github.com/acme/widgets/pull/9")
+    );
+    assert_eq!(pull_request_link_for(&state, &wt("feat-a"), 99), None);
+    assert_eq!(pull_request_link_for(&state, &wt("gone"), 9), None);
+    assert_eq!(
+        pull_request_link_for(&state, &SessionLocation::Default, 9),
+        None
+    );
+    read_list(&mut state, "feat/a", list_of(1, 0));
+    assert_eq!(pull_request_link_for(&state, &wt("feat-a"), 9), None);
+    read_list(&mut state, "feat/a", four_states());
+    state.pr_status.enabled = false;
+    assert_eq!(
+        pull_request_link_for(&state, &wt("feat-a"), 9),
+        None,
+        "the dash"
+    );
+}
+
 /// R6: a current open pull request that conflicts needs attention, with the reason named.
 #[test]
 fn an_open_pull_request_with_a_conflict_needs_attention_for_a_merge_conflict() {

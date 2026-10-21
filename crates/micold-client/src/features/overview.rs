@@ -284,6 +284,10 @@ pub enum Msg {
     /// A card's issue link was clicked (feature 1122, FR-004): the root opens the address it
     /// recomputes from state. Changes no state of its own.
     IssueLinkActivated(SessionLocation),
+    /// A pull request row's number was clicked on the card at the location (feature 1123, R8):
+    /// the root opens the address it looks up for that number in what the window holds now. It
+    /// carries no address, so its `Debug` prints none (FR-014). Changes no state of its own.
+    PullRequestLinkActivated(SessionLocation, u64),
     /// An arrow key on the Overview (feature 1122, R9): the root moves the keyboard to the next
     /// (`forward`) or previous card, never to a link.
     CardStepped {
@@ -409,7 +413,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         Msg::CardPaged { .. } => {}
         Msg::RepoRead { repo, .. } => state.repo = RepoLookup::Known(repo),
         // The root opens the address (a task, not state).
-        Msg::IssueLinkActivated(_) => {}
+        Msg::IssueLinkActivated(_) | Msg::PullRequestLinkActivated(..) => {}
         // The root moves the keyboard; like any other focus move it ends the hand-back watch.
         Msg::CardStepped { .. } => state.focus_landed = None,
         // The root scrolls the grid to the offset (a task, not state).

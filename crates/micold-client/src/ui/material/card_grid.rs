@@ -539,9 +539,10 @@ impl<M: Clone> Grid<'_, M> {
 }
 
 impl<M> Grid<'_, M> {
-    /// Whether `cursor` is on card `i`'s link, laid out in `layout`: the link's bounds found by its
-    /// id over the card's subtree, on screen and clipped to the expanded body's view
-    /// (`ui::focus::ScreenBounds`, research R7).
+    /// Whether `cursor` is on one of card `i`'s links (its issue link, a pull request number),
+    /// laid out in `layout`: each link's bounds found by its id over the card's subtree, on screen
+    /// and clipped to the expanded body's view (`ui::focus::ScreenBounds`, research R7; feature
+    /// 1123, R6).
     fn over_link(
         &mut self,
         i: usize,
@@ -550,14 +551,17 @@ impl<M> Grid<'_, M> {
         cursor: mouse::Cursor,
         renderer: &iced::Renderer,
     ) -> bool {
-        let Some(id) = self.rests.get(i).and_then(|r| r.link_id.clone()) else {
-            return false;
+        let ids = match self.rests.get(i) {
+            Some(r) if !r.link_ids.is_empty() => r.link_ids.clone(),
+            _ => return false,
         };
-        let mut find = crate::ui::focus::ScreenBounds::of(id);
+        let mut find = crate::ui::focus::ScreenBounds::of_any(ids);
         self.cards[i]
             .as_widget_mut()
             .operate(card_tree, layout, renderer, &mut find);
-        find.visible().is_some_and(|bounds| cursor.is_over(bounds))
+        find.all_visible()
+            .iter()
+            .any(|bounds| cursor.is_over(*bounds))
     }
 
     /// The expanded card's index and drawn layout, in `view`.
@@ -3059,5 +3063,120 @@ mod tests {
             ["rest 0"],
             "the pointer on the title counted as on the link"
         );
+    }
+
+    // ---- Feature 1123 (T021, contract U4): a pull request number is a link of its card ----
+
+    /// [`linked_grid`] with one pull request row on every card, "#12", its number wired: `pr i
+    /// 12`, id `pr-i-12`.
+    fn numbered_grid() -> CardGrid<'static, String> {
+        let mut grid = linked_grid();
+        grid.cards = grid
+            .cards
+            .into_iter()
+            .enumerate()
+            .map(|(i, card)| {
+                card.pull_requests(
+                    vec![super::super::CardPrRow {
+                        number: 12,
+                        label: "#12".into(),
+                        mark: super::super::PrMark::Open,
+                        phrase: Some("checks failing".into()),
+                        failing: true,
+                    }],
+                    0,
+                )
+                .on_pr_link(move |n| format!("pr {i} {n}"))
+                .pr_link_id(move |n| iced::advanced::widget::Id::from(format!("pr-{i}-{n}")))
+            })
+            .collect();
+        grid
+    }
+
+    /// The centre of `content` painted inside `slot`.
+    fn painted_in(m: &mut Mounted<'_>, slot: Rectangle, content: &str) -> Point {
+        m.painted_text()
+            .into_iter()
+            .find(|p| p.content == content && slot.contains(p.bounds.center()))
+            .unwrap_or_else(|| panic!("no {content:?} painted in {slot:?}"))
+            .bounds
+            .center()
+    }
+
+    /// U4, 1122 FR-007: a rest on a card's number, as on its issue link, publishes the card's
+    /// `on_link_rest`; on the rest of the card its `on_rest`.
+    #[test]
+    fn a_rest_on_a_number_is_a_rest_on_a_link_of_its_card() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        for link in ["#12", LINK] {
+            let mut m = mounted(numbered_grid(), 900.0, 4000.0);
+            let slot = slots(&m.node, 6)[1];
+            let (on, off) = (painted_in(&mut m, slot, link), off_link_in(slot));
+            let t0 = std::time::Instant::now();
+            assert_eq!(frame_at(&mut m, on, t0), NOTHING, "{link}");
+            assert_eq!(
+                frame_at(&mut m, on, t0 + EXPAND_REST),
+                ["link rest 1"],
+                "{link}"
+            );
+            let t1 = t0 + EXPAND_REST * 2;
+            assert_eq!(frame_at(&mut m, off, t1), NOTHING, "{link}");
+            assert_eq!(
+                frame_at(&mut m, off, t1 + EXPAND_REST),
+                ["rest 1"],
+                "{link}"
+            );
+        }
+    }
+
+    /// U4, R7: a primary press on card 1's number reaches card 1 only, so card 0, holding the
+    /// keyboard by Tab, keeps it.
+    #[test]
+    fn a_click_on_a_number_leaves_the_keyboard_with_the_card_that_holds_it() {
+        let mut m = mounted(numbered_grid(), 900.0, 4000.0);
+        m.focus_next();
+        let slot = slots(&m.node, 6)[1];
+        let at = painted_in(&mut m, slot, "#12");
+        assert!(m.press(at).is_empty());
+        let released = m.send(
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            mouse::Cursor::Available(at),
+        );
+        assert_eq!(released, ["pr 1 12"]);
+        let enter = super::super::test_support::named_key(iced::keyboard::key::Named::Enter);
+        assert_eq!(m.send(enter, mouse::Cursor::Unavailable), ["open 0"]);
+    }
+
+    /// G3: a rest on a number asks for one timed wake while it waits, none once it is over.
+    #[test]
+    fn a_rest_on_a_number_asks_for_no_frame_once_it_is_over() {
+        use iced::window::RedrawRequest;
+        use micold_core::overview_expansion::EXPAND_REST;
+        let mut m = mounted(numbered_grid(), 900.0, 4000.0);
+        let slot = slots(&m.node, 6)[1];
+        let on = painted_in(&mut m, slot, "#12");
+        let mut asked = |now: std::time::Instant| {
+            let mut messages = Vec::new();
+            let mut shell = iced::advanced::Shell::new(&mut messages);
+            m.element.as_widget_mut().update(
+                &mut m.tree,
+                &Event::Window(iced::window::Event::RedrawRequested(now)),
+                iced::advanced::Layout::new(&m.node),
+                mouse::Cursor::Available(on),
+                &m.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(m.room),
+            );
+            let redraw = shell.redraw_request();
+            (messages, redraw)
+        };
+        let t0 = std::time::Instant::now();
+        assert!(matches!(asked(t0).1, RedrawRequest::At(_)));
+        assert_eq!(
+            asked(t0 + EXPAND_REST),
+            (vec!["link rest 1".to_string()], RedrawRequest::Wait)
+        );
+        assert_eq!(asked(t0 + EXPAND_REST * 2), (vec![], RedrawRequest::Wait));
     }
 }

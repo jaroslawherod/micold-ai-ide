@@ -19,7 +19,7 @@ use micold_core::overview::{
     activation, card_state, location_type, order, session_counts, CardModel, CardSignals,
     CardState, CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
 };
-use micold_core::overview_expansion::{page_target, Event, Expansion};
+use micold_core::overview_expansion::{page_target, CardLink, Event, Expansion};
 use micold_core::pr_list::StatusPhrase;
 use micold_core::session::{Session, SessionLocation};
 use micold_core::task_progress::{self, Progress, Source};
@@ -44,10 +44,16 @@ pub fn card_scroll_id(location: &SessionLocation) -> iced::advanced::widget::Id 
     card_part_id("overview-card-body", location)
 }
 
-/// A card's issue link, by location (feature 1122): the grid finds the link under the pointer by
-/// it, and the arrow keys step over it.
-pub fn card_link_id(location: &SessionLocation) -> iced::advanced::widget::Id {
-    card_part_id("overview-card-link", location)
+/// One link of a card, by location (feature 1122, feature 1123 R6): its issue link, or a pull
+/// request row's number, stable per number. The grid finds the link under the pointer by it, and
+/// the arrow keys step over it.
+pub fn card_link_id(location: &SessionLocation, link: CardLink) -> iced::advanced::widget::Id {
+    match link {
+        CardLink::Issue => card_part_id("overview-card-link", location),
+        CardLink::PullRequest(number) => {
+            card_part_id(&format!("overview-card-pr-{number}"), location)
+        }
+    }
 }
 
 /// The id of one part of a card (review A F2, M3): the worktree's directory name follows a `/`,
@@ -133,7 +139,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                 // (FR-007). It is the Tab stop after its card, and focus on it counts as focus on
                 // the card (FR-008); its Menu key opens the card's menu from it (FR-009).
                 .on_issue_link(Message::Overview(Msg::IssueLinkActivated(location.clone())))
-                .link_id(card_link_id(&location))
+                .link_id(card_link_id(&location, CardLink::Issue))
                 .on_link_rest(expansion(Event::LinkRested(location.clone())))
                 .on_link_keyboard_focus({
                     let location = location.clone();
@@ -146,6 +152,16 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                     }
                 })
                 .on_link_menu_key(Message::Overview(Msg::LinkMenuRequested(location.clone())))
+                // Feature 1123 (R8): a row's number opens its pull request, looked up by the root;
+                // a press on it does not activate the card (FR-009).
+                .on_pr_link({
+                    let location = location.clone();
+                    move |n| Message::Overview(Msg::PullRequestLinkActivated(location.clone(), n))
+                })
+                .pr_link_id({
+                    let location = location.clone();
+                    move |n| card_link_id(&location, CardLink::PullRequest(n))
+                })
                 .scroll_id(card_scroll_id(&location))
                 .on_body_scroll(move |up, down| expansion(Event::BodyScrolled { up, down }))
                 .on_keyboard_focus({
@@ -450,6 +466,24 @@ pub fn issue_link_for(state: &State, location: &SessionLocation) -> Option<Issue
     )
 }
 
+/// The address of pull request `number` on the card at `location`, from what the window holds now
+/// (feature 1123, R8): the card's list, as its rows are drawn from it. `None` once a reading has
+/// dropped the number, the card is gone, or its rows are not shown.
+pub fn pull_request_link_for(
+    state: &State,
+    location: &SessionLocation,
+    number: u64,
+) -> Option<String> {
+    cards(state)
+        .into_iter()
+        .find(|card| &card.location == location)?
+        .pull_requests?
+        .prs()
+        .iter()
+        .find(|pr| pr.number == number)
+        .map(|pr| pr.url.clone())
+}
+
 /// Move the keyboard to the next (`forward`) or previous card of `cards` (feature 1122, R9,
 /// contract U4), counting from the focused card or from the card whose issue link is focused. It
 /// never stops on a link. Past the first or the last card it does what iced's `focus_previous` /
@@ -545,7 +579,7 @@ pub fn step_card<T: Send + 'static>(forward: bool, cards: &[SessionLocation]) ->
         forward,
         cards: cards
             .iter()
-            .map(|location| (card_id(location), card_link_id(location)))
+            .map(|location| (card_id(location), card_link_id(location, CardLink::Issue)))
             .collect(),
         seen: Vec::new(),
         focused: None,
@@ -675,6 +709,7 @@ pub fn pr_rows(model: &CardModel, expanded: bool) -> (Vec<CardPrRow>, usize) {
     let rows = rows
         .into_iter()
         .map(|row| CardPrRow {
+            number: row.number,
             label: row.label,
             mark: crate::features::changes::pr_mark(row.pill),
             phrase: row.phrase.map(|phrase| phrase.label().to_string()),
@@ -1076,6 +1111,57 @@ mod tests {
         );
     }
 
+    /// Feature 1123 T022, Story 3 sc. 1: on the mounted Overview a click on a row's number asks
+    /// for that card's pull request by its number, and not for the card's activation.
+    #[test]
+    fn a_click_on_a_rows_number_asks_for_its_pull_request() {
+        use micold_core::pr_list::{BranchPrList, ListedPr};
+        use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
+        let mut state = overview_of(1);
+        state.pr_status.enabled = true;
+        state.pr_status.read_at = Some(100);
+        let pr = ListedPr {
+            number: 12,
+            url: "https://github.com/o/r/pull/12".into(),
+            state: BranchPrState::Open,
+            checks: CheckStatus::Failing,
+            review: ReviewState::None,
+            conflict: false,
+            created_at: "2026-01-01T00:00:00Z".into(),
+        };
+        state
+            .pr_status
+            .lists
+            .insert("feat/0".into(), BranchPrList::new(vec![pr], false, false));
+        let mut mounted = mount(&state);
+        let at = mounted
+            .painted_text()
+            .into_iter()
+            .find(|p| p.content == "#12")
+            .expect("the row's number is painted")
+            .bounds
+            .center();
+        let mut published = mounted.press(at);
+        published.extend(mounted.send(
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )),
+            iced::mouse::Cursor::Available(at),
+        ));
+        let asked = format!(
+            "{:?}",
+            Message::Overview(Msg::PullRequestLinkActivated(
+                SessionLocation::Worktree("feat-0".into()),
+                12
+            ))
+        );
+        assert!(published.contains(&asked), "{published:?}");
+        assert!(
+            !published.iter().any(|m| m.contains("ActivationRequested")),
+            "{published:?}"
+        );
+    }
+
     /// Review A F1 (M4), FR-013, R13: the opening's focus on the first card, run on the mounted
     /// Overview, reports that card's focus, and the expansion that takes it in expands nothing.
     #[test]
@@ -1271,7 +1357,7 @@ mod tests {
                     .id(card_id(&model.location))
                     .on_press("open".to_string())
                     .on_issue_link("link".to_string())
-                    .link_id(card_link_id(&model.location))
+                    .link_id(card_link_id(&model.location, CardLink::Issue))
                     .on_link_keyboard_focus(|_| String::new())
             })
             .collect();
@@ -1306,8 +1392,14 @@ mod tests {
         let (l, _) = stepping_grid();
         assert_eq!(step_from(card_id(&l[0]), true), Some(card_id(&l[1])));
         assert_eq!(step_from(card_id(&l[1]), true), Some(card_id(&l[2])));
-        assert_eq!(step_from(card_link_id(&l[1]), true), Some(card_id(&l[2])));
-        assert_eq!(step_from(card_link_id(&l[1]), false), Some(card_id(&l[0])));
+        assert_eq!(
+            step_from(card_link_id(&l[1], CardLink::Issue), true),
+            Some(card_id(&l[2]))
+        );
+        assert_eq!(
+            step_from(card_link_id(&l[1], CardLink::Issue), false),
+            Some(card_id(&l[0]))
+        );
         assert_eq!(step_from(card_id(&l[2]), false), Some(card_id(&l[1])));
         assert_eq!(step_from(card_id(&l[1]), false), Some(card_id(&l[0])));
     }
@@ -1321,7 +1413,9 @@ mod tests {
             [
                 card_id(location),
                 card_scroll_id(location),
-                card_link_id(location),
+                card_link_id(location, CardLink::Issue),
+                card_link_id(location, CardLink::PullRequest(1)),
+                card_link_id(location, CardLink::PullRequest(11)),
             ]
         };
         let locations = [
@@ -1331,6 +1425,7 @@ mod tests {
             worktree("link-x"),
             worktree("body-x"),
             worktree("link-default"),
+            worktree("pr-1"),
         ];
         let all: Vec<_> = locations.iter().flat_map(ids).collect();
         for (at, id) in all.iter().enumerate() {

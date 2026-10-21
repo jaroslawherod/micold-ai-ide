@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: pr M1
-- **Next step**: M1 reviews done (A r2 CLEAN, B r1 CLEAN, visual r2 PASS); full gate green at 2bc05024 (later commits docs/evidence only); PR title/body in the scratchpad, orchestrator opens the M1 PR, waits on CI and merges
+- **Phase**: verify M2
+- **Next step**: M2 T020–T027 done (scoped gate green but the root-only `settings_refuses_save_over_failed_read`, which scripts/gate.sh runs unprivileged); review A r1, review B r1 and visual pass r1 (T028) dispatched together by the orchestrator; then fix, full gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1230 | design (spec, plan, tasks) | merged (rebase) | 9607e14b |
+| #1233 | M1: pull request rows on the card | merged (rebase) | 97148cd2 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T019 | full | Cards show pull request rows (#N, state pill, status words), two collapsed with "+N more", all expanded; counts derive from the same list and read *10+* (43 requests per branch, was 44); snapshot `overview-pr-rows` | — | in progress |
-| M2 | T020–T028 | full | A click on a row's number opens the pull request, no card activation | — | pending |
+| M1 | T001–T019 | full | Cards show pull request rows (#N, state pill, status words), two collapsed with "+N more", all expanded; counts derive from the same list and read *10+* (43 requests per branch, was 44); snapshot `overview-pr-rows` | #1233 | merged |
+| M2 | T020–T028 | full | A click on a row's number opens the pull request, no card activation | — | in progress |
 | M3 | T029–T037 | full | Numbers are Tab stops with every 1122 link rule, arrows step from a number; Escape/menu hand-offs per link | — | pending |
 
 ## Decisions
