@@ -20,7 +20,7 @@ Decision: `paths.rs` takes a `PathFacts` trait (canonicalise, case-sensitivity) 
 Rejected: string `starts_with` (separator and case bugs).
 
 ## R5 Allowlist (FR-007)
-Decision: the shared build dir is `<project root>/target-shared` (the root is a worktree entry, so this is carved out before the root test). No code defines an "autopilot prefetch worktree" today (grep of `crates/`, `scripts/`, `.claude/skills` finds none), so the plan introduces a core constant: a worktree whose directory name starts with `autopilot-prefetch` is allowlisted. [Needs confirmation in tasks/implement: if the autopilot skill names its prefetch worktree differently, change the constant only.]
+Decision: the shared build dir is `<project root>/target-shared` (the root is a worktree entry, so this is carved out before the root test). No code defines an "autopilot prefetch worktree" today (grep of `crates/`, `scripts/`, `.claude/skills` finds none), so the plan introduces a core constant: a worktree whose directory name starts with `autopilot-prefetch` is allowlisted. Confirmed in the tasks unit (T001): `grep -rniI prefetch scripts .claude docs CLAUDE.md` finds nothing, so no repo convention exists; the prefix is a new constant. If a prefetch worktree is named differently later, change the constant only.
 Rejected: per-project allowlist setting (violates FR-001/FR-008 simplicity).
 
 ## R6 Worktree list source and freshness

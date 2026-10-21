@@ -166,7 +166,7 @@ call is allowed. Turn it on again; new sessions are guarded.
 - **FR-007**: The guard MUST allow targets in autopilot's prefetch worktree and in the main
   checkout's shared build output directory (`target-shared/`) from any session.
 - **FR-008**: The user MUST be able to opt out of the guard and deny rules with a setting
-  (one app-wide setting, no per-project copy, matching the existing *Let AI sessions manage worktrees and sessions* setting) The
+  (one app-wide setting, no per-project copy, matching the existing *Let AI sessions manage worktrees and sessions* setting). The
   default is guarded.
 - **FR-009**: When the guard cannot determine the session's own worktree or the project's worktree
   list, it MUST allow the call and record why, rather than block legitimate work. [Assumed: fail
@@ -213,8 +213,9 @@ call is allowed. Turn it on again; new sessions are guarded.
 - "Launched by Micold" covers sessions started from the app and through the tool server.
 - The guard is relative to the session's own worktree, so a session in the project root (Default)
   is denied other worktrees as well.
-- Worktrees are those git reports for the project; the prefetch worktree is identified by Micold's
-  existing autopilot convention.
+- Worktrees are those git reports for the project; the prefetch worktree is identified by a directory name starting
+  `autopilot-prefetch` (no existing autopilot convention names it; research R5), so the allowlist is
+  verified against that name only.
 - Per-repo rules such as #944 stay valid and are not removed.
 - The Principle III limits on Default sessions (no rename, modify or removal of worktrees) are unchanged by this feature.
 
