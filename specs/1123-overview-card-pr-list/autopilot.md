@@ -60,6 +60,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M1 (T019) | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | PASS on §B1, §B2, §B5 (light 1.0), §B6; 1 MINOR observation: the expanded card's dash has no tooltip. Fixed test-first (D13): `the_dash_carries_its_reason_collapsed_and_expanded`, shared `counts_line`. 54 PNGs committed in visual-pass/m1/; T019 ticked |
 | Review A M1 | 2 | ff466f0efe74a00e9956be12c5f8f751be705d0e:80ebc12071cf736d5b2e6512f9a800f5002a10b1 (fix diff f90ede20:efff51eb → 80ebc120, sonnet) | CLEAN: F1, F3 fixed; F2 note matches `parse_status`; F4 declined part stands; D13 tooltip inside the expanded body, width unchanged. Review A done |
 | Visual pass M1 | 2 | ff466f0efe74a00e9956be12c5f8f751be705d0e:80ebc12071cf736d5b2e6512f9a800f5002a10b1 (expanded dash tooltip only) | PASS on all 3 criteria (same reason tooltip on the expanded dash, unavailable and off, light 1.0 and dark 2.0; layout unchanged; tooltip whole). 4 r2-* PNGs committed in visual-pass/m1/ |
+| Review A M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | pending (dispatched by the orchestrator) |
+| Review B M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | pending (sonnet) |
+| Visual pass M2 (T028) | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | pending (sonnet, quickstart §B3) |
 
 ### Review A M1 round 2 verdict (verbatim)
 
