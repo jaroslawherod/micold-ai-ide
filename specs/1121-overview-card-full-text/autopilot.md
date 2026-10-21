@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1121
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-20
-- **Phase**: implement M4
-- **Next step**: M4 — reviews done (r2 CLEAN, MINORs fixed), gate GREEN at bbb6146b, pushed; PR files in the scratchpad (pr-title.txt, pr-body.md): orchestrator opens the M4 PR, waits on CI, merges; then the close unit (T047–T048).
+- **Phase**: close
+- **Next step**: close — tdd-verify audit, Polish T047–T048, close review, close visual pass (incl. M4's 2x one-column inner-scrollbar BAR_FOOTPRINT fix), gate, close PR.
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1169 | M1 | merged (rebase) | b8f4adfbbf5cbfe5bbd2cd190a54988d53323e73 |
 | #1173 | M2 | merged | 4eaa990fb3210d90c85451cc447b58584a7a492c |
 | #1177 | M3 | merged | 7dd8a2f11fcc303735a4c70abc6be52c30246676 |
+| #1178 | M4 | merged | 6f8e1bbabff6e957e630e03b20d7ca3b70e1ce2d |
 
 Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 
@@ -30,7 +31,7 @@ Base: origin/main at 4a36fba8 (feature 1120 fully merged).
 | M1 | T001–T008 | full | Title wraps to 3 lines, activity to 2, nothing clipped | #1169 | merged |
 | M2 | T009–T023 | full | Expanded card over neighbours, shifted/capped/scrolling, in the showcase only (`docs-not-needed`) | #1173 | merged |
 | M3 | T024–T035 | full | Hover expands a card in the app; tooltips gone; `overview-expanded` snapshot | #1177 | merged |
-| M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | pending | PR files written |
+| M4 | T036–T046 | full | Keyboard focus expands, Escape collapses first (D1), Page keys scroll | #1178 | merged |
 
 US2 split in two (rule 3): its form/placement (M2, showcase-only, app unreachable until M3) and its hover wiring (M3). Polish T047–T048 is code-free: close unit. speckit-analyze (14 findings, 1 HIGH) fixed in tasks.md; it also found plan.md's *Delivery order* (3 steps) out of line with the milestones: plan fixed (Delivery order superseded by the 4 milestones; `Msg::CardScrolled` → `Event::BodyScrolled` in plan and research).
 
