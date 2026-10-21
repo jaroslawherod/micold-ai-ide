@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M3
-- **Next step**: M3 full gate, push; PR title/body in the session scratchpad for the orchestrator
+- **Next step**: orchestrator opens the M3 PR (title and body in the session scratchpad); after it merges, milestone M4 (T025–T034)
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1187 | design (spec, clarify, plan, tasks, milestones) | merged | a7df5dd37517543447b150ff02d6a5f195c7c392 |
 | #1216 | M1 markdown model | merged | 746ef5858a0e565dfdb13924d070ff244c329f3a |
 | #1220 | M2 edit diff (+ orchestrator commit 5bcb6f83: Windows "Report rust-cache hit" CI step failed on every cache miss — find/du on a missing target/ under pipefail) | merged | 528209c8d15fd0e5f109ae49e0202fdaba01b842 |
+| pending | M3 rich cache | to open (orchestrator, via MCP) | — |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | markdown model in core: settled blocks final, incremental, total (after #939 M6; T001 re-checks #939 names) | #1216 | merged (746ef585) |
 | M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | #1220 | merged (528209c8) |
-| M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | — | in progress |
+| M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | pending | reviews A/B clean, full gate green at 0eb3683b; PR to open |
 | M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | — | pending |
 | M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | — | pending |
 
