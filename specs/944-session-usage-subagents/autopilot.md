@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: pr M3
-- **Next step**: M3 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI
+- **Phase**: implement M4
+- **Next step**: M4 verify — scoped gate + review A, review B + visual pass, full gate, PR files
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1194 | Design PR (spec, clarifications, plan, research, contracts, tasks) | merged (rebase) | 5f95db21d6b0ba7fcf87cb4bdaf647178349b702 |
 | #1199 | M1 — core insights | merged (rebase) | 558cb726092ef4b32a536179ccbe0a0f575c1135 |
 | #1202 | M2 — structured sessions feed plan usage | merged (rebase) | cdbd2c7badf911b6d8ff6b5d93bb8bd75941efb4 |
+| #1205 | M3 — task table and subagent thread index | merged (rebase) | 46f4bdabc5a4316f2a192dffd12f679039c7a96e |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | #1199 | merged |
 | M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | #1202 | merged |
-| M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | — | PR files written, gate green at 9de37ca5 |
-| M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | todo (main as is) |
+| M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | #1205 | merged |
+| M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | implemented, verifying |
 | M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | blocked on **#939 M3** (and M3) |
 | M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | blocked on **#939 M4, M5, M6** (and M4, M5) |
 

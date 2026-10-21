@@ -343,23 +343,23 @@ cases) on the T003 recordings.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T029 [P] [US1] In-crate tests in `crates/micold-client/src/ui/material/progress_bar.rs`
+- [x] T029 [P] [US1] In-crate tests in `crates/micold-client/src/ui/material/progress_bar.rs`
   (research R12, FR-002, FR-003): `.marker(Ratio)` places a 2 px tick inside the track at the
   ratio (0, a middle value and 1 stay inside); `.warning(true)` fills in the `error` role and the
   fill passes `composition_contrast` against the track in both schemes; without either step the bar
   draws as before; add the two builder steps to `crates/micold-client/tests/material_builder_api.rs`
   if it lists `ProgressBar`'s steps
-- [ ] T030 [P] [US3] [US5] In `crates/micold-client/tests/icons.rs`, add codepoint cases for
+- [x] T030 [P] [US3] [US5] In `crates/micold-client/tests/icons.rs`, add codepoint cases for
   `Icon::Subagent` and `Icon::BackgroundTask` (unique, present in the icon font as
   `tests/icons_font.rs` checks)
 
 ### Implementation
 
-- [ ] T031 [US1] Implement `.marker(Ratio)` and `.warning(bool)` on `material::ProgressBar` in
+- [x] T031 [US1] Implement `.marker(Ratio)` and `.warning(bool)` on `material::ProgressBar` in
   `crates/micold-client/src/ui/material/progress_bar.rs`; T029 passes
-- [ ] T032 [P] [US3] [US5] Add `Icon::Subagent` and `Icon::BackgroundTask` to
+- [x] T032 [P] [US3] [US5] Add `Icon::Subagent` and `Icon::BackgroundTask` to
   `crates/micold-client/src/icons.rs` (variant, list, codepoint); T030 passes
-- [ ] T033 [US1] Showcase: extend the `progress_bar` entry in
+- [x] T033 [US1] Showcase: extend the `progress_bar` entry in
   `crates/micold-client/src/showcase/sections/surfaces.rs` with a marked bar and a warning bar;
   `showcase_completeness`, `showcase_captions` and `layout_snapshot` stay green (regenerate the
   snapshot only for the changed entry)

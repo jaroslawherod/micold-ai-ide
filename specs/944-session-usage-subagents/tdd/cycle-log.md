@@ -110,3 +110,27 @@ Each test was written and run red before its implementation, recorded here as it
   sets the reported state of a running or inferred-ended task; `running_background` counts
   `display_state(cli_running)` → `structured_insights` 49/49, `--lib structured::insights` 12/12.
 
+
+## M4 — meter parts and icons (T029–T033)
+
+- **Red, T029** (`ProgressBar::marker`/`warning` storing their value and drawing nothing,
+  `fill_color` returning `primary`, `marker_x` returning 0):
+  `cargo test -p micold-client --lib -- ui::material::progress_bar a_progress_bars_fill` → 4 passed,
+  2 failed: `a_marker_is_a_two_px_tick_inside_the_track_at_its_ratio` ("0/10 on an empty bar",
+  `left: []`, `right: [0, 1]`), `a_warning_bar_fills_in_the_error_role` (`left: Rgb { r: 103, g:
+  80, b: 164 }`, `right: Rgb { r: 186, g: 26, b: 26 }`). `without_a_marker_or_warning_the_bar_draws_as_before`
+  and the composition gate `a_progress_bars_fill_and_marker_are_visible_on_its_track` passed on the
+  stub: the first guards the old look, the second measures whatever `fill_color` returns.
+- **Red, T030** (`Icon::Subagent` `U+F06C` and `Icon::BackgroundTask` `U+F1BB` declared, not in
+  `Icon::ALL`): `--test icons` → 5 passed, 2 failed (`all_covers_every_variant_without_duplicates`:
+  "curated set size"; `the_subagent_and_background_task_icons_are_pinned_and_unique`: "Subagent
+  must be in Icon::ALL"); `--test icons_font` → 11 passed, 1 failed
+  (`the_subagent_and_background_task_icons_have_distinct_glyphs_in_the_bundled_font`: "Subagent
+  must be in Icon::ALL").
+- **Green, T031/T032/T033**: `fill_color` (`error` when warning), `marker_x` (centred, clamped into
+  the track), the tick drawn in the track's colour over the fill and the fill's colour over the
+  track; `paint_fill` takes the colour; both icons in `Icon::ALL` → `--lib -- ui::material` 744/744
+  (after fixing the warning test, which counted the lavender track as "primary"), `icons` 7/7,
+  `icons_font` 12/12. Showcase entry gains "6/10, marker 8/10" and "9/10, marker 8/10, warning";
+  `showcase_completeness`, `showcase_captions`, `material_builder_api` green; `layout_snapshot`
+  green unchanged (its curated states hold no `ProgressBar`, so nothing to regenerate).
