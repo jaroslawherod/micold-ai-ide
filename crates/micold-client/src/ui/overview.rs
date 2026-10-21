@@ -539,9 +539,7 @@ pub fn follow_up(activation: &micold_core::overview::Activation) -> Option<Messa
 mod tests {
     use super::*;
     use crate::ui::material::test_support::{Mounted, WINDOW};
-    use iced::advanced::widget::operation::Outcome;
-    use iced::advanced::widget::Operation;
-    use iced::{Rectangle, Size};
+    use iced::Size;
 
     /// U1: the Overview outranks Changes and Compare in the crossfade key, and Settings outranks it.
     #[test]
@@ -577,33 +575,6 @@ mod tests {
         assert_ne!(changes, compare);
     }
 
-    /// Every scrollable under the element, as (viewport, content) bounds.
-    struct FindScrollables(Vec<(Rectangle, Rectangle)>);
-
-    impl Operation<Vec<(Rectangle, Rectangle)>> for FindScrollables {
-        fn traverse(
-            &mut self,
-            operate: &mut dyn FnMut(&mut dyn Operation<Vec<(Rectangle, Rectangle)>>),
-        ) {
-            operate(self);
-        }
-
-        fn scrollable(
-            &mut self,
-            _id: Option<&iced::widget::Id>,
-            bounds: Rectangle,
-            content_bounds: Rectangle,
-            _translation: iced::Vector,
-            _state: &mut dyn iced::advanced::widget::operation::Scrollable,
-        ) {
-            self.0.push((bounds, content_bounds));
-        }
-
-        fn finish(&self) -> Outcome<Vec<(Rectangle, Rectangle)>> {
-            Outcome::Some(self.0.clone())
-        }
-    }
-
     /// F1: thirty cards in a short window scroll inside the grid, not the page. Built through the
     /// real `view` and asked, as the runtime would, which scrollables it holds: the containers
     /// and the responsive wrapper around the grid are `Fill` whatever their content does, so
@@ -634,9 +605,7 @@ mod tests {
             "the window holds 30 cards and the root"
         );
         let mut mounted = Mounted::new(view(&state, ColorScheme::Dark).map(|_| String::new()));
-        let scrollables = mounted
-            .drive(FindScrollables(Vec::new()))
-            .expect("the operation finishes");
+        let scrollables = mounted.scrollables();
         let [(viewport, content)] = scrollables[..] else {
             panic!("the grid must hold exactly one scrollable of its own: {scrollables:?}");
         };

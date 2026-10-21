@@ -311,6 +311,13 @@ impl<'a> Mounted<'a> {
         value
     }
 
+    /// Every scrollable under the element, as (viewport, content) bounds, asked as the runtime
+    /// would.
+    pub fn scrollables(&mut self) -> Vec<(Rectangle, Rectangle)> {
+        self.drive(FindScrollables(Vec::new()))
+            .expect("the operation finishes")
+    }
+
     /// Move the keyboard forward through this element, the way `Message::FocusMoved` does.
     pub fn focus_next(&mut self) {
         self.drive(focusable::focus_next::<()>());
@@ -455,6 +462,33 @@ pub struct Painted {
     pub color: iced::Color,
     /// Where it was drawn and the room its shaped text takes.
     pub bounds: Rectangle,
+}
+
+/// Every scrollable under the element, as (viewport, content) bounds.
+struct FindScrollables(Vec<(Rectangle, Rectangle)>);
+
+impl Operation<Vec<(Rectangle, Rectangle)>> for FindScrollables {
+    fn traverse(
+        &mut self,
+        operate: &mut dyn FnMut(&mut dyn Operation<Vec<(Rectangle, Rectangle)>>),
+    ) {
+        operate(self);
+    }
+
+    fn scrollable(
+        &mut self,
+        _id: Option<&iced::widget::Id>,
+        bounds: Rectangle,
+        content_bounds: Rectangle,
+        _translation: iced::Vector,
+        _state: &mut dyn iced::advanced::widget::operation::Scrollable,
+    ) {
+        self.0.push((bounds, content_bounds));
+    }
+
+    fn finish(&self) -> Outcome<Vec<(Rectangle, Rectangle)>> {
+        Outcome::Some(self.0.clone())
+    }
 }
 
 /// A press of the named key, with no modifiers and no text.
