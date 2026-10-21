@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5 verify (scoped gate + review A, review B, visual pass, full gate)
+- **Next step**: M5 full gate on the final tree, then push; orchestrator opens the PR
 
 ## Pull requests
 
@@ -64,6 +64,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 | 1 | 386c7ecc49536f04c8c3c035f105d300be0c0eba:ec28ea0bba7fe12b7af23d361571adc18b5fdc67 | CLEAN (code-review high, `claude -p --agent autopilot-reviewer`): no findings |
 | Visual pass M4 | — | ec28ea0b | PASS (CPU rasteriser, the gate's renderer; no xdotool/lavapipe in the container): showcase entry light/dark/greyscale — icons distinct, no overlap, summary one line and cut, failed = outline + `Failed` + `error` icon, readable in greyscale (SC-005); evidence `visual/m4-disclosure-card-{light,dark}.png`. Note: an unmounted iced button draws `Disabled` until its first redraw, so a render must tick once first |
 | Review B M4 | 1 | 27b813ac12ca641ae8609118b028ec90d09ed68d:73d4bb564058b032d2e9877bae0286d27ee20abd | CLEAN (conformance, sonnet; Verify 722 lib + 6/11/73/11/43 integration passed, supplied by the unit); full gate (`scripts/gate.sh`) green after rebase onto c61380e1 |
+| Review A M5 | 1 | 7d15db943c685856b67ec516b20e1d8492e64e3f:087d4ecb6126db407c28da6262c4b0521307562b | CLEAN (code-review high, `claude -p --agent autopilot-reviewer`): F1 MINOR fixed (prose only — `view`'s doc says the lazy key holds no renderer set; #940 adds one if it swaps at run time), F2 MINOR fixed (doc rewrapped) |
+| Review B M5 | 1 | 7d15db943c685856b67ec516b20e1d8492e64e3f:087d4ecb6126db407c28da6262c4b0521307562b | CLEAN (conformance, sonnet; Verify supplied from the gate and the release run): F1 MINOR fixed (scratch visual test removed before commit), F2 MINOR fixed (contract names `view`'s `ctx` argument), F3 MINOR fixed (comments rewrapped) |
+| Visual pass M5 | — | 087d4ecb | PASS after one fix (CPU rasteriser, the gate's renderer): transcript of `tool-turn` open light/dark, folded + detached with "Jump to latest" floated bottom-centre, `error-result` in greyscale (Failed = label + icon + error text, SC-005). Found: tabs in a `Read` result drawn as missing glyphs — fixed by `plain_text` (tab stops). Evidence `visual/m5-transcript-{open-light-dark,failed-greyscale,jump-to-latest}.png` |
 
 ## Declined review findings
 

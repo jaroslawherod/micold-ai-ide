@@ -5,7 +5,8 @@
 //! nothing here draws an assistant text, a thinking text, a tool input or a tool result itself.
 
 use super::blocks::{
-    AssistantText, Block, BlockRef, BlockRenderers, RenderCtx, ThinkingText, ToolInput, ToolResult,
+    plain_text, AssistantText, Block, BlockRef, BlockRenderers, RenderCtx, ThinkingText, ToolInput,
+    ToolResult,
 };
 use crate::features::structured_transcript::TranscriptMsg;
 use crate::icons::Icon;
@@ -232,7 +233,7 @@ pub fn entry(
         }
         EntryKind::UserMessage { text } => column![
             caption(USER_LABEL, roles),
-            Text::new(text.clone(), TypeRole::Body, roles)
+            Text::new(plain_text(text), TypeRole::Body, roles)
                 .wrapping(Wrapping::WordOrGlyph)
                 .width(Length::Fill),
         ]
@@ -296,7 +297,7 @@ pub fn entry(
         EntryKind::SubagentNotice { count } => caption(subagent_notice_text(*count), roles),
         EntryKind::Raw { text, .. } => column![
             caption(RAW_LABEL, roles),
-            Text::new(text.clone(), TypeRole::Caption, roles)
+            Text::new(plain_text(text), TypeRole::Caption, roles)
                 .muted()
                 .monospace()
                 .wrapping(Wrapping::WordOrGlyph)

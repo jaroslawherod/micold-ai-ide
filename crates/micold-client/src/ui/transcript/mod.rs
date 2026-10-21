@@ -9,8 +9,8 @@ mod entries;
 mod keyed;
 
 pub use blocks::{
-    unshown_caption, AssistantText, Block, BlockCache, BlockKey, BlockRef, BlockRenderers,
-    CachedBlock, RenderCtx, ThinkingText, ToolInput, ToolResult,
+    plain_text, unshown_caption, AssistantText, Block, BlockCache, BlockKey, BlockRef,
+    BlockRenderers, CachedBlock, RenderCtx, ThinkingText, ToolInput, ToolResult,
 };
 pub use entries::{
     footer_view, omitted_text, oversized_text, rows, subagent_count, subagent_notice_text,
@@ -52,8 +52,12 @@ pub const JUMP_TO_LATEST: &str = "Jump to latest";
 /// A `material::Scrollable` named [`transcript_scroll_id`] that reports its scroll metrics as
 /// [`TranscriptMsg::Scrolled`] and its first layout as [`TranscriptMsg::Shown`] (research R9); the
 /// omitted notice first, "No output yet" when empty; each entry inside `lazy`, keyed by its key,
-/// revision, fold state and the scheme, in a slot that follows the entry; and, while the view is detached from the end, "Jump to
-/// latest" floated over the bottom edge.
+/// revision, fold state and the scheme, in a slot that follows the entry; and, while the view is
+/// detached from the end, "Jump to latest" floated over the bottom edge.
+///
+/// The lazy key holds neither `renderers` nor the cache: the window's renderers are fixed for its
+/// life, and a cache filled for a revision is read when that revision is first drawn. A window that
+/// swaps renderers at run time (#940) adds a renderer-set id to the key.
 pub fn view<'a>(
     state: &'a State,
     session: SessionId,

@@ -129,10 +129,41 @@ impl BlockCache {
     }
 }
 
+/// How many columns apart the tab stops are when a tab is laid out as spaces.
+const TAB_STOP: usize = 4;
+
+/// `text` as plain text draws it: each tab expanded to spaces up to the next tab stop, since the
+/// text stack draws a tab as a missing glyph (`Read` results are `cat -n` lines: `1\tline`).
+pub fn plain_text(text: &str) -> String {
+    if !text.contains('\t') {
+        return text.to_owned();
+    }
+    let mut out = String::with_capacity(text.len() + 8);
+    let mut column = 0;
+    for c in text.chars() {
+        match c {
+            '\t' => {
+                let pad = TAB_STOP - column % TAB_STOP;
+                out.extend(std::iter::repeat_n(' ', pad));
+                column += pad;
+            }
+            '\n' => {
+                out.push(c);
+                column = 0;
+            }
+            _ => {
+                out.push(c);
+                column += 1;
+            }
+        }
+    }
+    out
+}
+
 /// `text` at `TypeRole::Body`, wrapped to the entry's width, breaking a token with no space in it
 /// (a path, a long JSON string) rather than widening the entry.
 fn body(text: &str, roles: Roles) -> Text<'static, TranscriptMsg> {
-    Text::new(text.to_owned(), TypeRole::Body, roles)
+    Text::new(plain_text(text), TypeRole::Body, roles)
         .wrapping(Wrapping::WordOrGlyph)
         .width(Length::Fill)
 }
@@ -168,4 +199,16 @@ fn plain_tool_result(block: &ToolResult<'_>, ctx: &RenderCtx<'_>) -> Block {
     .spacing(spacing::XS)
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plain_text;
+
+    #[test]
+    fn a_tab_becomes_spaces_to_the_next_stop_and_a_line_break_restarts_the_count() {
+        assert_eq!(plain_text("     1\tThe answer"), "     1  The answer");
+        assert_eq!(plain_text("\tx\nab\ty"), "    x\nab  y");
+        assert_eq!(plain_text("no tabs"), "no tabs");
+    }
 }

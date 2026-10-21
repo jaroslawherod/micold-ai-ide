@@ -85,3 +85,7 @@ implementation task, run red, then made green.
   with two in-crate tests (one in, one out builds one row; an unchanged list or a removal builds
   none): opened in 180 ms, slowest delta 5.0 ms, 1/1.
 - **Refactor**: none beyond `cargo fmt`; the samples moved above the showcase's test module (clippy).
+- **Visual-pass fix (test-after)**: the CPU-rasterised pass drew the `Read` result's tabs (`cat -n`
+  lines) as missing glyphs. `blocks::plain_text` expands tabs to the next 4-column stop, for every
+  plain renderer, user messages and raw rows; its in-crate test was written with it, not before it:
+  `cargo test -p micold-client --lib transcript` 3/3.
