@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,8 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker remains (Edge Cases, sub-agent events), left for the clarify
-  unit.
+- The one `[NEEDS CLARIFICATION]` marker (Edge Cases, sub-agent events) was resolved by clarify
+  (FR-024); none remains (confirmed by the tasks review).
 - Constraints and FR-022 name the daemon, wire and a renderer seam on purpose: the first keeps the
   feature client-only (#938 reused as is), the second is the owner-requested seam for #940.
 - FR-022 (one replaceable renderer per block kind) is a constraint the next issue (#940) relies on;
