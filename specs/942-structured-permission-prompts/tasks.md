@@ -8,8 +8,8 @@
 **Tests**: Mandatory (Constitution I). In every phase a test task comes before the implementation
 task it covers and must fail first. Draw code is the GUI exception, validated by quickstart Part B.
 
-**Documentation**: `docs/daemon.md` (prompt tool, wire) in Phase 3; the user guide (FR-021) in
-Phase 9, the phase that makes the feature user-visible.
+**Documentation**: `docs/daemon.md` (prompt tool, wire) in Phase 4 (M2); the user guide (FR-021)
+in Phase 10 (M8), the phase that makes the feature user-visible.
 
 **Organization**: every user story spans the core, the daemon and the window, and the window side
 needs work not on `main` (#939's transcript view, I-1; #941's composer, I-2). Phases therefore
@@ -158,8 +158,8 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [ ] T028 [US1] Change the superseded FR-006a assertion in `daemon/tests/structured_session.rs`
   (plan *SC-007*): with the switch on, the structured argv carries
   `--allow-dangerously-skip-permissions` and `--permission-prompt-tool
-  mcp__micold__permission_prompt` and no `--permission-mode` (Default); with it off, no
-  `--permission-prompt-tool`; the terminal argv assertion is untouched
+  mcp__micold__permission_prompt` and no `--permission-mode` (Default); with it off, still
+  `--allow-dangerously-skip-permissions` and no `--permission-prompt-tool`; the terminal argv assertion is untouched
 - [ ] T029 [US1] Integration tests in `daemon/tests/structured_permission.rs` (new) against the
   stand-in: a call becomes `PermissionRequested` carrying tool name, input preview, tool use id and
   kind, sent to two attached clients; the stand-in gets no reply while pending across 2 s and a
@@ -167,16 +167,19 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   reach the stand-in as the T015 answer and every client gets `PermissionResolved`; after
   AlwaysAllow an identical second call is answered allow with no `PermissionRequested`; a client
   connecting while a request is pending gets it exactly once, including one connecting during the
-  open (FR-005); `PermissionInput` returns the whole input text for a > 64 KiB Write
+  open (FR-005); a request raised while the session's mode is Bypass is shown and held like any
+  other, never answered by the daemon (edge case *Bypass mode*); `PermissionInput` returns the whole input text for a > 64 KiB Write
 - [ ] T030 [US1] Integration tests in `daemon/tests/structured_permission.rs`: two clients decide the
   same request concurrently, 50 iterations — exactly one decision reaches the stand-in, both see
   one resolution, the loser gets `OperationError` (SC-002); refusals with `OperationError` and the
   stand-in unchanged for an answered id, an unknown id, another session's id (session B named for
   A's request, `OtherSession`), a wrong-kind choice and an incomplete answer (FR-012); a malformed
   call is answered deny at once, no `PermissionRequested`, and the log names the tool but not the
-  input (FR-004); a terminal session's credential cannot list or call the tool (FR-001); two
-  structured sessions with requests pending at once stay independent
-- [ ] T031 [P] [US3] [US4] Integration tests in `daemon/tests/structured_permission.rs`: a plan
+  input (FR-004); a terminal session's credential cannot list or call the tool (FR-001); three requests of one session
+  pending at once (`prompt-async`) are decided in another order than they arrived, each answer
+  reaching its own call (edge case *Several requests at once*); two structured sessions with
+  requests pending at once stay independent
+- [ ] T031 [US3] [US4] Integration tests in `daemon/tests/structured_permission.rs`: a plan
   approval request carries the whole plan and `KeepPlanning` with a note reaches the stand-in as
   deny with the note; a question request with two questions, one multi-select, is answered and the
   stand-in records the `answers` map; `DeclineQuestion` reaches it as deny
@@ -208,7 +211,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [ ] T036 [US5] Implement T035: on a session's first pending request `PromptRegistry::open` reports
   it and `daemon/src/state.rs` calls `note_activity(session, ActivityEvent::Hook(HookKind::Notification))`;
   a decision that leaves none applies `Hook(HookKind::PreToolUse)`; a withdrawal applies nothing
-- [ ] T037 [P] [US6] Integration tests in `daemon/tests/structured_permission.rs`: a pending request
+- [ ] T037 [US6] Integration tests in `daemon/tests/structured_permission.rs`: a pending request
   is withdrawn (`PermissionResolved { Withdrawn { reason } }` to every client within 1 s, the
   stand-in answered deny "The turn ended before you answered." while it still waits) when the
   stream carries a `result` (`TurnEnded`), on `TurnEndedWithoutResult`, when the process is killed
@@ -259,8 +262,11 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   text; no answer → unchanged and "Claude did not answer the mode change." after
   `CONTROL_ANSWER_BOUND` (10 s); a pending request is untouched by the change; the process ending
   first resolves the wait with "Claude stopped before it answered."; on a session not running the
-  mode is persisted at once and used at the next launch; on a terminal session refused (FR-017)
-- [ ] T045 [P] [US2] Integration tests in `daemon/tests/structured_permission_mode.rs`: a `status`
+  mode is persisted at once and used at the next launch; on a terminal session refused; after a successful change a
+  `prompt` call is still raised and answered normally (the next request reaches the daemon whatever
+  the mode; that the CLI applies the mode is the `mode-change` fixture's and Part B 5's evidence)
+  (FR-017, SC-005)
+- [ ] T045 [US2] Integration tests in `daemon/tests/structured_permission_mode.rs`: a `status`
   (or `init`) line whose `permissionMode` differs from the persisted mode changes the summary and
   the record; an unknown mode (`dontAsk`) leaves them unchanged and is logged once (FR-016)
 - [ ] T046 [P] [US3] Integration tests in `daemon/tests/structured_permission.rs`: `ApprovePlan
@@ -289,12 +295,12 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   session's state is dropped with the session; two sessions are isolated; `placement` gives
   `UnderCard(EntryKey::Tool(id))` when the transcript holds the card, else `AtEnd`; the input
   preview's cut flag is `input_bytes > input_preview.len()`
-- [ ] T050 [P] [US3] [US4] Reducer tests in `client/tests/features_permission_prompts.rs`: the plan
+- [ ] T050 [US3] [US4] Reducer tests in `client/tests/features_permission_prompts.rs`: the plan
   text is held whole; Approve, Approve and accept edits and Keep planning with a note build their
   choices; `can_submit` is false until every question has a chosen option or a chosen, non-blank
   Other, a single-choice question holds one option, a multi-select several; `choice` is `None`
   while not submittable; Decline builds `DeclineQuestion` (FR-007, FR-008)
-- [ ] T051 [P] [US5] Reducer test in `client/tests/features_permission_prompts.rs`: `waiting(session)`
+- [ ] T051 [US5] Reducer test in `client/tests/features_permission_prompts.rs`: `waiting(session)`
   is true while any request of that session is pending and false after the last resolves
 - [ ] T052 [US1] Implement `client/src/features/permission_prompts.rs` (data-model *Client state*) and
   register it in `client/src/features/mod.rs`; add `State.permission_prompts` to `client/src/app.rs`;
@@ -306,8 +312,11 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [ ] T054 [P] [US2] Tests in `client/tests/structured_start_menu.rs`: the structured create flow
   carries a chosen mode into `SessionCreate.permission_mode` (none chosen → Default); choosing
   Bypass enters a confirmation step and only its confirm sends the create; cancelling returns to
-  the choice; a terminal create sends Default (FR-014)
-- [ ] T055 [US2] Implement T054 in `client/src/features/session.rs` (state only; no draw code)
+  the choice; a terminal create sends Default (FR-014); and in
+  `client/tests/features_permission_prompts.rs`, a mode change of an existing session to Bypass
+  (the mode control, FR-017) goes through a confirmation state before `SetPermissionMode` is sent
+- [ ] T055 [US2] Implement T054 in `client/src/features/session.rs` and the mode-change confirmation
+  state in `client/src/features/permission_prompts.rs` (state only; no draw code)
 
 ---
 
@@ -381,7 +390,8 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - Phase 1: T001 and T002. Phase 2: T005, T007, T009, T011, T013 (disjoint files).
 - Phase 3: T015, T016, T017, T019, T020, T022 are test tasks in separate files or modules.
 - Phase 4: T024 and T026; T029–T031 after T027 share one file and are written in sequence.
-- Phase 8: T049–T051 then T054 alongside them.
+- Phase 5: T035 beside T036's files; Phase 7: T044 and T046 (different files).
+- Phase 8: T049 and T054 (T050–T051 follow T049 in its file).
 
 ## Implementation Strategy
 

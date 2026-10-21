@@ -340,7 +340,8 @@ client is told the request is withdrawn and an answer sent afterwards is refused
   - **Allow** returns allow with the original input unchanged.
   - **Deny** returns deny with the user's message, or a standard message when none was given.
   - **Always allow** returns allow and a permission rule for the request, taken from the
-    suggestions the CLI sent with it when it sent any, scoped to this session only (the CLI's
+    suggestions the CLI sent with it when it sent any, otherwise a rule for that exact input that
+    the application keeps for this session and applies itself (plan research R9), scoped to this session only (the CLI's
     `session` destination). The daemon MUST NOT write the rule to any Claude settings file, so
     later sessions, terminal ones included, do not inherit it.
   - A plan approval's **Approve and accept edits** and **Approve** return allow and set the
@@ -385,8 +386,8 @@ client is told the request is withdrawn and an answer sent afterwards is refused
   (feature 938 FR-025) extended to make prompt-tool calls, so no real CLI, network or account is
   needed in CI.
 - **FR-020**: The request shapes the parser and the decision shapes the daemon returns MUST be
-  checked against recorded fixtures captured from a real CLI: a tool request, an always-allow with
-  suggestions, a plan approval, and a question with a multi-select.
+  checked against recorded fixtures captured from a real CLI: a tool request, an always-allow (with the
+  CLI's suggestions when it sends any), a plan approval, and a question with a multi-select.
 - **FR-021**: The user guide MUST describe permission prompts, Always allow and its scope, plan
   approval, questions, the permission modes and Bypass's risk in structured sessions, and remove
   "permission prompts" from the structured kind's not-yet list, in the change that makes them

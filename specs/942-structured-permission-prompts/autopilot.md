@@ -54,6 +54,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
+| Phase | Review | Finding | Why declined |
+|---|---|---|---|
+| tasks | speckit-analyze | C1 MEDIUM: sandboxed-session edge case has no task | a sandboxed session runs the daemon and its CLI in the same container (feature 027), so the prompt call is the same loopback tool-server call with the same credential that T029 covers; reachability in the container is already the sandbox suite's (`sandbox_real_mcp.rs`) |
+| tasks | speckit-analyze | C4 LOW: no real `SessionInterrupt` test | #941's; plan I-4: an interrupt ends the turn with a `result`, which T037 covers |
+
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
