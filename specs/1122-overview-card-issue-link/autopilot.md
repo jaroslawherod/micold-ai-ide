@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: clarify
-- **Next step**: Clarify done (CLEAN; D3, D4 are defaults awaiting jaro's card answers — if an answer differs, amend FR-001/FR-010 before or during plan). Next unit: plan.
+- **Phase**: plan
+- **Next step**: Plan written (plan.md, research.md R1–R12, data-model.md, contracts issue-link/card-link/wire, quickstart.md). Review A of the plan (rubric plan.md, round 1) pending, then tasks unit. D3, D4 still defaults awaiting the owner; the plan follows them (R2 reads the repo regardless of the GitHub switch, so a D3 change touches only `issue_link` K2).
 
 ## Pull requests
 

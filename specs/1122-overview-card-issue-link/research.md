@@ -1,0 +1,223 @@
+# Research: Overview cards, a link to the worktree's issue
+
+Each entry: the decision, why, and what was rejected. Paths are workspace-relative; "new" marks
+what this feature adds.
+
+## R1 — Where the ticket and the link's rules live
+
+**Decision**: a new render-free module `crates/micold-core/src/issue_link.rs` (`pub mod issue_link`
+in `lib.rs`) holds `IssueRef` (`Github(u64)` / `Jira(String)`, the key upper case), `issue_ref(dir)`
+built on the existing `micold_core::naming::ticket` (feature 813, T054), `IssueSources` (the inputs
+FR-001 names) and `issue_link(dir, &IssueSources) -> Option<IssueLink>` giving label and address
+(contract K1–K3). The Jira key form (a letter, then letters, digits or `_`, `-`, digits) is checked
+here; `naming::ticket` is not changed (spec *Out of scope*).
+
+**Why**: FR-016 puts every rule in render-free code; the card model is already built from core
+types (`CardModel`, `CardText`), so the link is one more derived field.
+
+**Rejected**: reading the ticket in `crates/micold-client/src/features/overview.rs` beside
+`numeric_ticket` (client code, and it would add a second Jira-key reader next to the one GitHub
+reader); parsing the branch name (spec Assumptions: the directory name is the source).
+
+## R2 — The project's GitHub repository on the Overview
+
+**Decision**: `features::overview::State` gains `repo: RepoLookup` (`Unknown` / `Asked` /
+`Known(Option<GithubRepo>)`), cleared on `Msg::ProjectSwitched`. `shell/issues.rs::on_overview_opened`
+sends the existing `PendingOp::TitleRemotes` (`ClientMsg::RemoteList`) whenever the repository is
+`Unknown`, not only when titles are wanted, and before the GitHub issues switch check; the answer
+(`on_title_remotes`) first records `Msg::RepoRead { project, repo }` from
+`micold_core::github::choose_remote`, then goes on with the titles exactly as today (switch-gated).
+A window with no route to a daemon reads nothing and shows no GitHub link.
+
+**Why**: the link needs the repository synchronously at render; the client holds it nowhere today
+outside the New-worktree form. Reading the remotes regardless of the switch makes FR-012 hold for
+the GitHub switch (turning it on shows the link at once, no second read). `RemoteList` is a git
+read in the daemon, not a GitHub request: feature 1102 FR-009 already allows it while the switch
+is off, and it is what the title reads use today (FR-014: no request to GitHub or Jira).
+
+**Rejected**: taking it from `worktree_form` (`github_repo()` exists only while the dialog is open);
+a new daemon op (the existing one answers); re-reading on each render (I/O in `view`).
+
+## R3 — The Jira base URL: type, validation, storage
+
+**Decision**: `micold_core::jira::JiraBaseUrl` (new): `parse(&str) -> Result<Self, FieldProblem>`
+accepts `https://host[:port][/path]`, refuses another scheme, no host, user info, a query or a
+fragment, and stores it with every trailing `/` removed (contract K4). The authority and host
+checks are extracted from `SiteOrigin::parse` into one private helper both call (no copied block,
+`mise run duplication`). `JiraField::BaseUrl` (new) and `BASE_URL_REFUSED` carry the reason.
+Stored service-owned, as `jira_enabled` is: `Settings.jira_base_url: Option<JiraBaseUrl>` read
+leniently (a value that no longer parses reads as unset, never failing the document; a missing
+entry reads as unset, FR-010), `DaemonSettings.jira_base_url`, and
+`ClientMsg::SettingsSet.jira_base_url: Option<Option<JiraBaseUrl>>` (outer `None`: unchanged; inner
+`None`: clear). `PROTOCOL_VERSION` 57 → 58 (contract [wire.md](contracts/wire.md)).
+
+**Why**: FR-011's rules differ from `SiteOrigin` (a path is kept, a debug-build loopback `http`
+is not needed for a browse link). Service-owned is the existing route by which every window
+follows one value without a restart (FR-012, as feature 533 FR-022 and 1102 FR-008).
+
+**Rejected**: reusing `SiteOrigin` (drops the path, Assumptions); the per-project Jira connection's
+site (D4, FR-010); a client-only setting (other windows would not follow, FR-012); a plain
+`Option<String>` with `""` meaning clear (an unvalidated value could reach the wire).
+
+## R4 — Settings page
+
+**Decision**: `features::settings::JiraDraft` gains `base_url: String`, seeded from the reported
+value, validated on save through `JiraBaseUrl::parse` beside the connection form (the refusal marks
+`FieldId::SettingsJiraBaseUrl`, new, and nothing is sent); an empty field saves `Some(None)`.
+`ui/settings/jira.rs` shows a `TextField` labelled **Jira base URL** with a `field_note` ("Used to
+link Jira keys on the Overview's cards."), right after the integration switch, only while the
+switch is on (FR-010). `SETTINGS` gains the entry `tests/settings_sections.rs` checks.
+
+**Why**: the switch's own section, the same field and note primitives as the connection form
+(Principle VIII); the field is app-wide, so it sits outside the per-project connection form.
+
+**Rejected**: a field inside the connection form (it is per project and hidden with no project
+open).
+
+## R5 — The link widget: a shared `TextLink`
+
+**Decision**: a new shared component `crates/micold-client/src/ui/material/text_link.rs`:
+`TextLink::new(label, on_press, roles)` with `.role(TypeRole)`, `.id(Id)`, `.on_keyboard_focus(f)`,
+`.on_menu_key(m)`, `.on_page(f)`, `.focus_on_press(bool)`; `impl From<TextLink> for Element`.
+It draws its label in `roles.primary`, a 1 px underline in the same colour while the pointer is on
+it, the pointing-hand pointer, and the shared focus ring through `TakesTheKeyboard`'s `Indicator`
+(contract U1). A click is press and release both on it; Enter and Space activate it while it has
+the keyboard. `TakesTheKeyboard` gains `.press_takes_focus(bool)` (default `true`, unchanged for
+every other control) so the link can stay out of the keyboard on a click (FR-005). It is added to
+the showcase catalogue (`showcase_completeness`, `material_builder_api`).
+
+**Why**: Principle VIII: no link primitive exists (`terminal_pane.rs` underlines a cell link
+inside its own canvas); a link is a reusable control. `primary` is the role the theme's
+contrast rules already allow on neutral surfaces (`composition_contrast.rs`).
+
+**Rejected**: an iced `button` styled as text (no underline-on-hover, and its press would take the
+keyboard); `rich_text` spans with a link (no focus stop, no key activation).
+
+## R6 — Keeping a press on the link off the card: `ControlOverlay`
+
+**Decision**: the card's control chain (ripple, keyboard focus, the transparent button) moves from
+around the face to a layer above it, inside a new cdk wrapper
+`crates/micold-client/src/ui/cdk/control_overlay.rs`: `ControlOverlay::new(content, control)`.
+Layout: the content sizes it, the control fills it (as iced's `Stack` with a base layer). Events go
+to the content first; if the content captured the event, the control never sees it; otherwise the
+control sees it with the cursor levitated wherever the content answers a non-`None`
+`mouse_interaction` (the link, the expanded card's inner scrollbar). Draw: content, then control
+(ripple and focus layers over the face, as today). Focus traversal: control, then content, so Tab
+reaches the card, then its link (contract U2). The `ContextArea` stays outermost, so a secondary
+click on the link opens the card menu (FR-006).
+
+What follows: a press on the link is captured by `TextLink` → no ripple, no card focus, no
+activation (FR-005); a press elsewhere and release on the link → the button sees a levitated cursor
+on release → no activation, the ripple fades (FR-005/FR-006); Enter on the focused link is captured
+in the content → the card's ripple `centred_on_keys` never runs.
+
+**Why**: the three wrappers today act on any press in the card's bounds, the ripple even before its
+child (`ripple.rs` `update`), and the button captures the press too, so no wrapper can tell a link
+press from a card press by capture alone. Ordering content first and levitating the control is the
+one place that decides it, generic (any interactive child of a card-like control), and needs no
+change to `Ripple` or `button`.
+
+**Rejected**: iced `Stack` (it updates the top layer first, so the control would take the press
+before the link); teaching `Ripple`, `TakesTheKeyboard` and `button` a "hole" each (three changes to
+shared primitives for one region); a twin layer laying the link out over the card (doubles every
+card's text layout, and the expanded card's inner scroll would need syncing).
+
+## R7 — Clicking a link leaves keyboard focus where it was
+
+**Decision**: `CardGrid` sends a primary press over a card's link to that card only; the other cards
+do not see it, so a focused card or link elsewhere in the grid keeps the keyboard (FR-005, Edge Case
+*Window loses focus*). The grid finds each card's link bounds with an `Operation` over that card's
+subtree that returns the bounds of the widget whose id is the card's link id (translated by any
+scrollable it is inside, as `ui/focus.rs::focused_bounds` does). The link itself never takes the
+keyboard on a press (R5). A control outside the grid that held the keyboard loses it as on any
+click, which is the app-wide rule (`keyboard_focus.rs`, FR-022a).
+
+**Why**: every `TakesTheKeyboard` drops focus on a press outside itself, in tree order, before the
+link can capture; only the grid sits above all the cards.
+
+**Rejected**: re-focusing the previous card after the click (a frame of collapse and re-expand, and
+the Escape flag would be lost); making `TakesTheKeyboard` ignore captured presses app-wide (a click
+on any button would stop clearing focus elsewhere).
+
+## R8 — Pointer rest on a link (FR-007)
+
+**Decision**: the grid's rest timer (`card_grid.rs::observe_rest`) tracks `(card, on_link)`: a change
+of either re-arms it; after `EXPAND_REST` it publishes the card's `on_rest` or, on the link, the new
+`on_link_rest`; `on_leave` still only when the card changes. Core: `Event::LinkRested(l)` (new):
+with a menu open nothing; else `pointer_on = l`, `pointer_escaped = false`, and nothing expands —
+`l` expanded stays expanded, a collapsed `l` stays collapsed, another focus-expanded card is not
+re-expanded while the pointer is on `l` (contract K5).
+
+**Why**: a rest on the link counts as a rest on its card for the re-expansion rule (FR-007), but must
+not move the link from under the pointer. Moving off the link onto the card re-arms the timer, so
+the card expands after a rest there, as 1121 FR-002 defines.
+
+**Rejected**: a hover message from `TextLink` to the app (the grid would still have to re-arm its
+timer, and every pointer move across a link would be an app message).
+
+## R9 — Keyboard: Tab stops, arrows skip, focus between card and link (FR-008, FR-009)
+
+**Decision**:
+
+- Tab and Shift+Tab: iced's `focus_next`/`focus_previous` as today; the link is the focusable right
+  after its card (R6 traversal order), so no code.
+- Arrows: the Overview's arrow listener (`ui/mod.rs::overview_arrow`) sends
+  `Message::Overview(Msg::CardStepped { forward })` (new) instead of the root `FocusMoved`; the root
+  runs `ui::overview::step_card(forward, cards)` (new), an `Operation` that focuses the next or
+  previous **card** id, counting from the focused card or from the card of the focused link
+  (contract U4). The root `Message` vocabulary is unchanged (`root_vocabulary_is_cross_cutting`).
+- Focus events: the link reports `Event::LinkFocusGained(l)` / `LinkFocusLost(l)` (new) through
+  `TextLink::on_keyboard_focus` (shown focus only). `Expansion` tracks which part of the focused
+  card holds the keyboard; a move between a card and its own link, in either order of the two
+  reports (forward Tab: card lost then link gained; Shift+Tab: card gained then link lost), keeps
+  `focus_escaped` and changes no form (contract K5).
+- Menu key on the link: `on_menu_key` publishes `Msg::CardMenuRequested(l)` with origin
+  `MenuOrigin::KeyboardFromLink` (new); closing without a choice sets `focus_return` to the link,
+  and `main.rs::card_focus_return` focuses `card_link_id(l)` (new), falling back to the card id when
+  the link is gone.
+- Escape: unchanged (`app.rs::on_escape` asks the expansion first; focus stays where it is).
+- Page keys: the card passes its `on_page` closure to the link (Story 3 sc. 6), and
+  `scroll_focused_into_view` (already chained after focus moves) brings a link in the expanded body
+  into view; a client test proves it reaches the inner scrollable.
+
+**Rejected**: keeping arrows on `FocusMoved` (they would stop on links); a `Msg` per part
+(`FocusGained { link: bool }`) changing 1121's existing event signatures and callers.
+
+## R10 — Opening the address and failures (FR-004, FR-013, FR-014)
+
+**Decision**: the card's link publishes `Msg::IssueLinkActivated(location)` (new). The root
+(`main.rs::overview_message`) recomputes the link from current state (`ui::overview::issue_link_for`)
+and hands its address to `shell::links::perform(app, OpenRequest::Url(address))`, as
+`shell/pr_status.rs::open_requested` does. A failure comes back as `LinkOpenFinished` and is
+reported by feature 031's notification. The Overview state is untouched, so nothing else changes.
+Addresses are never logged: the new core module has no logging and the message's `Debug` shows the
+location only.
+
+**Rejected**: carrying the address in the message (the decision would be made at render, and a
+stale card could open a link the settings have since removed).
+
+## R11 — Card layout (FR-003)
+
+**Decision**: collapsed: the branch line becomes `row![Ellipsized(short branch).shrink(), link]`
+(the link at its natural width, the branch giving way first); expanded: `row![wrapped full branch
+(Fill), link]` with the link top-aligned after it; with no branch line (title is the branch,
+orphan or invalid) the link alone in the branch line's place. The link is drawn at `TypeRole::Body`,
+the branch line's role (FR-015).
+
+**Why**: FR-003's ellipsis order and "never clipped" at 280 px: the link text is at most
+"Issue " plus a key, short enough for the narrowest card.
+
+## R12 — Tests, snapshot, showcase, docs
+
+**Decision**: core unit tests for K1–K5 (`mise run test-core`); client in-crate tests for
+`TextLink`, `ControlOverlay`, the card (presses, release-off, keys, ripple, focus, secondary click,
+widths 280/380/480 both forms) and the grid (press routing, link rest); reducer tests for the new
+messages; daemon `tests/jira_base_url_setting.rs` (new, modelled on `github_issues_setting.rs`);
+`composition_contrast.rs` gains `primary` on the card body; covered state `overview-issue-link`
+(new) with a GitHub and a Jira link; the existing `overview-open` anchors move one level because of
+`ControlOverlay`, an intended change, re-blessed once; showcase *Surfaces* shows a card with a link,
+collapsed and expanded; docs: `docs/user-guide/overview.md` (*Opening a worktree's issue*,
+*Keyboard*), `docs/user-guide/settings.md` (Jira section), `docs/daemon.md` (version 58).
+
+**Rejected**: a new geometry gate for the link (the existing text-overflow and containment gates on
+the new covered state check "never clipped").
