@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M3
-- **Next step**: M3 T020–T029 done (5d362874); full gate r4 GREEN on 707c9ec4 (r1–r3 RED on source-scan guards, fixed); review A r1, review B r1 and the visual pass (T030) requested from the orchestrator (prompts in the scratchpad: 1122-m3-prompt-review-a-r1.md, -review-b-r1.md, -visual-r1.md). Then: act on the verdicts, tick T030, PR text.
+- **Next step**: M3 review A r1 fixes (F1–F3) in; rebase on origin/main, full gate, push; then review A r2 (sonnet, fix diff), then PR text.
 
 ## Pull requests
 
@@ -83,9 +83,9 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M3 | 2 | 06c27e10 | RED: `field_focus_call_sites::the_focus_message_reaches_the_traversal_operation` read the `CardStepped` arm's `Message::FocusMoved` fallback as the `FocusMoved` arm; the arm now calls `dialog_focus_move_task` itself |
 | Full gate M3 | 3 | 44bbbce2 | RED: `overlay_registry::the_keyboard_subscription_names_no_surface` read `Msg::CardStepped` in `ui::subscription` as a per-surface message; exempted beside `FocusMoved` (it names a direction) |
 | Full gate M3 | 4 | 707c9ec4 | GREEN |
-| Review A M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | pending |
-| Review B M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | pending |
-| Visual pass M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | pending |
+| Review A M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | CHANGES: 1 MAJOR (F1 `LinkRested` cleared `pointer_escaped` on the same card, so an Escape-collapsed card re-expanded after a rest on its link), 2 MINOR (F2 `card_link_id` fell in `card_id`'s namespace: worktree `link-x` = x's link; F3 a rest held by the menu survived a rest on that card's link); all fixed: F1 clears only on another card + test, F2 one `card_part_id` helper with `/` before the dir + test, F3 drops the held rest for the same card + test |
+| Review B M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | CLEAN |
+| Visual pass M3 | 1 | ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c | PASS on all 9 criteria (T030); evidence in visual-pass/m3/ (133 PNGs). Observations, non-blocking: criteria 6–8 not run in every scale/theme combo; PATH-without-xdg-open variant of 7 not run |
 
 ## Declined review findings
 
@@ -97,7 +97,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-M3 part 1 (context cap reached after the reviews were requested). Done: T020–T029 implemented and ticked (5d362874 + gate fixes 06c27e10, 44bbbce2, 707c9ec4); full gate r4 GREEN on 707c9ec4; pushed (6a3cd6e2). Review snapshot ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c recorded in *Review rounds* (pending rows). Next: the orchestrator runs review A r1 (session model), review B r1 (sonnet) and the visual pass = T030 (sonnet, autopilot-worker) from the scratchpad prompts 1122-m3-prompt-review-a-r1.md, 1122-m3-prompt-review-b-r1.md, 1122-m3-prompt-visual-r1.md; a fresh milestone unit (continuing this handover, skip branch-start) records the verdicts, fixes BLOCKER/MAJOR (scoped/full gate), ticks T030 with the evidence in visual-pass/m3/, writes the PR text (title "#1122: Overview cards: link to the worktree's issue — M3: GitHub issue links on the Overview", body ending `Refs #1122`, no docs-not-needed label: the user guide changed) to the scratchpad. origin/main moved to 52d78a0d (other features' docs/tests only); rebase before the PR if the orchestrator asks. No open findings yet.
+None.
 
 ## Open escalation
 
