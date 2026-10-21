@@ -38,6 +38,12 @@ Per branch, per successful reading (R2, R4).
 - `rows(expanded: bool) -> (Vec<PrRow>, usize)`: the first 2 (collapsed) or all (expanded) as
   rows, and the number not shown (0 expanded).
 - Empty list: the branch was read and has no pull request: no row, no counts line.
+- An own node whose state and draft flag this version does not know (`branch_pr_state` fails)
+  fails the whole reading as unreadable, as the selected node does today, not only that node: a
+  reading is whole or none, and an answer that cannot be understood leaves every row as it was
+  (feature 040 FR-019), and GitHub's `PullRequestState` enum is closed
+  (`OPEN`, `CLOSED`, `MERGED`), so skipping such a node would only hide a schema change behind a
+  shorter list (review A M1 r1 F2).
 
 Invariants: the first entry, when any, is the sidebar's current pull request (`select_pull_request`
 picks the newest own open one, else the newest own of any state; open ones are all in `o`) (K3),

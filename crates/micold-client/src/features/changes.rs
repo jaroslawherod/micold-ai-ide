@@ -238,7 +238,8 @@ pub enum PrDiffLoad {
     Failed,
 }
 
-/// The one mapping from a listed pull request's state to the mark the sidebar uses (FR-003).
+/// The one mapping from a listed pull request's state to the mark the sidebar uses (FR-003), and
+/// an Overview card's pill (feature 1123, research R9).
 pub fn pr_mark(state: BranchPrState) -> crate::ui::material::PrMark {
     use crate::ui::material::PrMark;
     match state {

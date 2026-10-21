@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: verify M1
-- **Next step**: M1 T001–T018 done, full gate green at efff51eb (scripts/gate.sh; run 1 hit the unrelated daemon flake `ten_concurrent_creates_of_one_branch_leave_one_worktree`, re-run green); orchestrator runs review A r1, review B r1 and the visual pass T019 (prompts 1123-m1-prompt-*-r1.md in the scratchpad), then fixes, pr
+- **Next step**: M1 review A r1 / B r1 / visual r1 fixes done (pr_mark reused, StatusPhrase words from CardReason, on_role merged, data-model §2 F2, tdd/cycle-log.md, expanded dash tooltip D13); full gate green (scripts/gate.sh, r2 red on 2 clippy lints, r3 green); orchestrator runs review A r2 (sonnet, prompt 1123-m1-prompt-review-a-r2.md) and visual r2 (1123-m1-prompt-visual-r2.md), then pr
 
 ## Pull requests
 
@@ -42,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | tasks | Checklists closed | checklists/requirements.md: all 16 items ticked, none open; spec, plan and tasks reviews A all CLEAN (spec r2, plan r2, tasks r2) | agent-resolved | checklists/requirements.md |
 | D11 | M1 | Pill contrast (T011 plan finding) | The tonal `Tag` (accent text on `style::chip`) measured 4.41:1 for *Open* and *Merged* in light; the pill is drawn solid (`Tag::solid`, fill `PrMark::role`, word `PrMark::on_role`), which passes 4.5:1 in every card state, on the body and under the selected layer, both schemes; research R9 amended | agent-resolved | composition_contrast.rs `an_overview_cards_pull_request_rows_are_legible_on_its_body` |
 | D12 | M1 | Row placement | Rows sit after the activity and progress lines and above the counts line (R9 "between the counts line and the activity line"; the counts line is the card's last line) | agent-resolved | overview_card.rs U1 test |
+| D13 | M1 | Expanded card's dash tooltip (visual r1 observation) | The dash keeps its reason as the tooltip on the expanded card too: spec Terms and US1 sc. 4 give the dash its reason as the tooltip on a card, and feature 1121 FR-004 removes only the title, branch and activity full-text tooltips ("plus every other row the collapsed card shows"); the drop predates 1123 (1121 `dafbd062`) | agent-resolved | overview_card.rs `the_dash_carries_its_reason_collapsed_and_expanded` |
 
 ## Review rounds
 
@@ -53,9 +54,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A plan | 2 | 9bc517ce26e6300ed4d9f258bb7fd82b0e0fad46:f3fad1fa408ff0b5345496fd0d6917e547bb9eed (fix diff 53ffa8f3:a55fb1b0 → f3fad1fa, sonnet) | CLEAN, 2 MINOR (F1 card-rows.md U1–U7 heading, F2 R9 contrast wording); both fixed, prose only, no round 3 |
 | Review A tasks | 1 | 8c136e70f07d2dc1576652bbf31d1be9c59a6e81:e246bec8f4aaf98c75e15a2f3fe1292736a8455e | CHANGES: 2 MAJOR (F1 M1 has no deliverable, F2 `step_card` wrong file/name and T031 in another milestone), 2 MINOR (F3 `pull_request_source.rs` literals, F4 M3 Verify runs no core tests); all four fixed in tasks.md (M2 folded into M1, renumbered M1–M3), research R6, ledger D7; none declined; round 2 on sonnet over the fix diff |
 | Review A tasks | 2 | 8eaaf55f5c56b169826d26ef3eb8e8d1e5160a1c:e9713c39f547f81ea907d26e3a4cda7d106d1123 (fix diff 8c136e70:e246bec8 → e9713c39, sonnet) | CLEAN, 1 MINOR (F1 T031 must extend `stepping_grid` with a pull request row and the number's builders); fixed in tasks.md, prose only, no round 3 |
-| Review A M1 | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | pending (orchestrator) |
-| Review B M1 | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | pending (orchestrator) |
-| Visual pass M1 (T019) | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | pending (orchestrator) |
+| Review A M1 | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | CHANGES: 1 MAJOR, 3 MINOR. F1 duplicate `pr_mark`: fixed, `ui/overview.rs` calls `features::changes::pr_mark` (its doc names the card). F2 one unknown-state node fails the chunk: kept per feature 040 FR-019, recorded in data-model §2 (fixed, prose only). F3 `StatusPhrase::label` takes its first three words from `CardReason::label`. F4 `on_role` merged into the one `impl PrMark`; the `failing` field declined (see Declined). Round 2 on sonnet over the fix diff |
+| Review B M1 | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | CLEAN, 2 MINOR. F1 no `tdd/cycle-log.md`: written after the fact (conformance rubric requires it), honest: red not captured for T001–T018 (compile-red only, from baseline symbols), real red for the visual-r1 dash fix. F2 root-only core test failures outside the milestone: nothing to do. No re-run (no BLOCKER/MAJOR of B) |
+| Visual pass M1 (T019) | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | PASS on §B1, §B2, §B5 (light 1.0), §B6; 1 MINOR observation: the expanded card's dash has no tooltip. Fixed test-first (D13): `the_dash_carries_its_reason_collapsed_and_expanded`, shared `counts_line`. 54 PNGs committed in visual-pass/m1/; T019 ticked |
 
 ### Review A tasks round 2 verdict (verbatim)
 
@@ -175,10 +176,118 @@ F4 [MINOR] specs/1123-overview-card-pr-list/spec.md:151-152 (Edge Cases) and che
    Fix: Cite feature 040's requirement (FR-008, which defines the combined check result) instead of the function name.
 ````
 
+### Review A M1 round 1 verdict (verbatim)
+
+````
+# 1123 M1 review A r1 (snapshot f90ede20:efff51eb)
+
+VERDICT: CHANGES
+F1 [MAJOR] crates/micold-client/src/ui/overview.rs:692 — the new private `pr_mark` is a copy of `features::changes::pr_mark` (changes.rs:242), whose doc calls itself "the one mapping from a listed pull request's state to the mark the sidebar uses". That breaks the CLAUDE.md rule "search for an existing helper before writing a new one". It leaves two identical `BranchPrState -> PrMark` matches, and a remap would have to change both.
+   Evidence: overview.rs:692 `fn pr_mark(state: BranchPrState) -> PrMark { match state { BranchPrState::Open => PrMark::Open, …` is the same as changes.rs:242–250.
+   Fix: delete the private fn and call `crate::features::changes::pr_mark` (or move it to `ui::material` and have both sites use it).
+F2 [MINOR] crates/micold-core/src/pull_request.rs:682-685 — `parse_status` now runs `listed()` (`branch_pr_state`) on every own `o`/`r` node, not only the selected one. One older node with a state/draft pair this version does not know now fails the reading for the whole chunk of up to 50 branches. GitHub's enum makes this unlikely, and it matches FR-019's "never partial".
+   Evidence: `listed_prs.push(listed(node).map_err(|_| UNREADABLE)?);`
+   Fix: accept as is per FR-019, or skip unknown-state non-selected nodes. Either way, record the choice in data-model §2.
+F3 [MINOR] crates/micold-core/src/pr_list.rs:174-183 — `StatusPhrase::label` repeats the words of `CardReason` (overview.rs:296-298) and its order of precedence. If the attention reasons are reworded, the card header and its rows can describe the same pull request differently.
+   Evidence: pr_list.rs `Self::ChecksFailing => "checks failing"` and overview.rs:296 `Self::ChecksFailing => "checks failing"`.
+   Fix: take the first three phrases' labels from `CardReason` (or one shared table).
+F4 [MINOR] crates/micold-client/src/ui/material/overview_card.rs:670 — `CardPrRow.failing` repeats `phrase == "checks failing"`, so a row can be built with the two disagreeing. The test helper already has to work `failing` out from the string again. Also, `PrMark::on_role` is in a second `impl PrMark` block when one already exists at pull_request_indicator.rs:52.
+   Evidence: the `CardPrRow { phrase: Option<…>, failing: bool }` fields; the `pr_row` test helper computes `failing` from the phrase.
+   Fix: carry the `StatusPhrase` (or a small enum) and derive `failing`. Merge `on_role` into the existing impl.
+````
+
+### Review B M1 round 1 verdict (verbatim)
+
+````
+# 1123 M1 review B r1 (snapshot f90ede20:efff51eb)
+
+VERDICT: CLEAN
+F1 [MINOR] specs/1123-overview-card-pr-list/ (no tdd/cycle-log.md) — the rubric expects `tdd/cycle-log.md` showing red before green for each behaviour, and the directory does not exist. M1 landed as one feature commit (efff51eb), so test-first order cannot be seen from the diff.
+   Evidence: `ls specs/1123-overview-card-pr-list/tdd` gives "No such file or directory". Nothing else in the feature's specs or the autopilot skill's top-level docs mentions `cycle-log`.
+   Fix: if this flow requires the log, add a short red-to-green record per task group. Otherwise ignore.
+
+F2 [MINOR] Test run, outside the milestone — `cargo test -p micold-core --all-targets` stops at its first failing test binary. Four tests fail, none from this diff: `settings_refuses_save_over_failed_read::a_save_over_an_unreadable_file_is_refused_and_leaves_it_untouched`, `a_refused_write_is_logged_as_a_failure_with_the_reason`, `a_directory_that_cannot_be_emptied_names_what_survived` and `the_leftover_report_is_capped`. They look like permission tests failing because this sandbox runs as uid 0 (I did not read their assertions).
+   Evidence: with `--no-fail-fast`, 207 test binaries pass and only those four tests fail. They are in files this diff does not touch. Every pull request test passes: `pull_request_*`, `pr_list`, and the `overview` unit tests in core.
+   Fix: none for M1. CI's gate runs as a normal user.
+
+Verify results, all pass:
+- `cargo test -p micold-client --lib -- overview_card pull_request_indicator composition_contrast`: 90 passed.
+- `--test features_pr_status --test overview --test layout_snapshot --test showcase_completeness`: 30, 74, 84 and 43 passed.
+- `--bin micold-ai-ide -- pr_status`: 71 passed.
+
+Deviations judged acceptable:
+- Solid pill (D11): `Tag::solid` with `PrMark::on_role` is covered by the new composition_contrast test, which measures contrast in every card state. Research R9 and the ledger record the change.
+- Rows above the counts line (D12): the placement test and the user guide agree with it.
+- Layout snapshot: the diff has 358 added lines and 0 removed, and the only new state is `overview-pr-rows`.
+- Fixture rewrite: `pr_README.md` explains the replacement of the oc/mc pages with m pages.
+- branch-start.sh not run: no effect on the code.
+
+Scope, constitution and leftovers:
+- The diff stays within M1 (T001–T018). No M2/M3 work is present: no row press handler and no keyboard stepping.
+- Only 1123's own `specs/` files changed, and T019 is correctly left unticked.
+- Forks are dropped everywhere, and the `o`/`r` node wins over `m` for the same number.
+- The query drops `oc`/`mc` and adds `m<i>` with scalar fields only.
+- `ListedPr` has a hand-written `Debug` that omits the url, and `PrRow` and `CardPrRow` carry no address.
+- `CardModel.pull_requests` is `Some` only when the counts show.
+- The user guide is updated and the showcase has the new cards.
+- No `todo!`, `dbg!` or commented-out code in the added lines.
+````
+
+### Visual pass M1 round 1 verdict (verbatim)
+
+````
+# 1123 M1 visual pass r1 (T019, HEAD b10c2af0)
+
+VISUAL PASS M1 1123 r1: all four criteria PASS, with one MINOR observation on the expanded card's dash tooltip (see 3).
+
+Setup: real client and daemon built from HEAD b10c2af0 (efff51eb source; the later commit is docs-only). Run on Xvfb :77 with lavapipe, a private HOME/data dir, a fake `gh` first on PATH and a fake `claude`. I covered light and dark at 1.0 and 2.0 for §B1, §B2 and §B6. §B5 ran at light/1.0 only. The fake gh answers `gh api graphql` from the b0..bN branch variables, with aliases o<i>/r<i>/m<i>, for these branches:
+- `feat-1123_x`: #12 open with a failing check, plus #9 merged.
+- `feat-1123_y`: #14 open approved, #13 draft with a check in progress, #12 merged, #11 closed.
+- `feat-1123_z`: none.
+- `feat-1123_w`: #123456789 open with changes requested. I added this for §B6; it is not in the brief.
+
+Pull request status was switched on in Settings. The fake gh is not a showcase fallback.
+
+Evidence: 54 untracked PNGs in /home/user/micold-ai-ide/specs/1123-overview-card-pr-list/visual-pass/m1/. Nothing else in the repo changed, and no source was edited or committed.
+
+1. §B1: PASS
+- feat-1123_x shows "#12" + Open + "checks failing" in the error colour, then "#9" + Merged with no words, then "1 open · 1 merged" below the rows.
+- Files: {light,dark}-{1,2}-b1-feat-1123_x-card.png
+- It holds in all four theme/scale combinations.
+
+2. §B2: PASS
+- feat-1123_y collapsed shows "#14 Open approved", "#13 Draft checks pending" and "+2 more".
+- With the pointer resting on it, it expands to four rows in the order #14 Open, #13 Draft, #12 Merged, #11 Closed, with no "+N more" and "2 open · 1 merged" below. It collapses again when the pointer leaves.
+- feat-1123_z shows no rows and no counts line.
+- Files: {light,dark}-{1,2}-b2-feat-1123_y-collapsed.png, -y-expanded.png, -y-collapsed-after-leave.png and -z-none.png
+
+3. §B5: PASS (light, 1.0 only), with one MINOR observation
+- Rows stay on both failures. The client log reads "reading 2 ended rate limited" for the RATE_LIMITED answer (HTTP 200 body, gh exit 1), and "reading 3 ended passing failure" for the offline case (exit 1, "error connecting to api.github.com"). Files: light-1-b5-0-ok-baseline.png, -b5-1-rate-rows-stay.png, -b5-1-offline-rows-stay.png
+- The not-signed-in answer (exit 4, stderr from `not_logged_in.stderr`) shows "—" and no rows on every card. The tooltip "GitHub is not reachable" shows on the collapsed card. File: light-1-b5-2-unauth-unavailable.png, light-1-b5-3-unavailable-dash-tooltip-collapsed.png
+- Switching pull request status off in Settings shows "—" with no rows, and the tooltip reads "pull request status is off". Files: light-1-b5-4-settings-off.png, -b5-5-switched-off-dash.png, -b5-6-switched-off-dash-tooltip-collapsed.png
+- MINOR observation: once the pointer has rested on a card long enough for it to expand (about 1 s), its dash has no tooltip. Evidence: light-1-b5-3-unavailable-dash-expanded-no-tooltip.png, light-1-b5-3-unavailable-dash-after-expand-no-tooltip.png.
+- Cause (read from source): `crates/micold-client/src/ui/material/overview_card.rs` around line 766 drops the reason (`if let Some((words, _)) = text.prs`), while the collapsed body at line 639 wraps the dash in a Tooltip.
+- The same widget in the showcase ("unknown counts" pose, no expansion) shows "GitHub is not reachable".
+- I did not check the spec on whether the expanded card should carry the tooltip, so I'm not calling it a FAIL.
+
+4. §B6: PASS
+- I measured card widths of 280, 380 and 480 px, with the sidebar and window resized so the grid gives one column. I ran light and dark at 1.0 and 2.0, 12 combinations in all.
+- Every number and pill is drawn whole inside the card. Pills read as intended: Open in primary, Merged in tertiary, Draft and Closed grey, and in dark Open and Merged use the lighter tones.
+- At 280 the long row "#123456789 Open changes requested" ends in an ellipsis ("changes request…") in all four theme/scale combinations. At 380 and 480 it fits in full.
+- Nothing overlaps the counts line, "No sessions" or "+2 more". The expanded y card draws over its neighbour, which is the by-design in-place expansion.
+- Files: {light,dark}-{1,2}-b6-{280,380,480}px-cards.png and {light,dark}-{1,2}-b6-{280,380,480}px-feat-1123_y-expanded.png
+- I looked at the 280 crops in all four combinations and the 380 and 480 crops in light-1, plus dark-2 480 expanded. The other 380/480 crops were not opened individually.
+
+NOT RUN: §B3 and §B4 were outside this prompt. The cards had no sessions, so there is no activity line, only "No sessions". §B5 was not repeated in dark or at 2.0.
+
+Cleanup: I killed only the processes with my runtime dir, then removed the `.visual-pass` run directory and /tmp/vp77. The fake gh and the fixture driver scripts remain in /tmp/vp1123 (fakebin/gh, start.sh, b12.sh, b5.sh, b6.sh).
+````
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | Review A r1 | F4 (part): carry `StatusPhrase` in `CardPrRow` and derive `failing` | `ui::material` keeps no core pull request type (T013, research R9), so the row cannot hold `StatusPhrase`; a material copy of the six phrases would be the duplication F1/F3 remove. The one builder, `ui::overview::pr_rows`, derives `phrase` and `failing` from the same `StatusPhrase`; the test helper's string match is test-only. The `on_role` part is fixed |
 
 ## Handover
 

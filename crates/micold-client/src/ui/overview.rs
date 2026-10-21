@@ -8,9 +8,7 @@ use crate::features::overview::{MenuOrigin, Msg};
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
-use crate::ui::material::{
-    Button, CardGrid, CardPrRow, MenuItem, OverviewCard, PrMark, Tooltip, Zoom,
-};
+use crate::ui::material::{Button, CardGrid, CardPrRow, MenuItem, OverviewCard, Tooltip, Zoom};
 use iced::advanced::widget::Operation;
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
@@ -23,7 +21,6 @@ use micold_core::overview::{
 };
 use micold_core::overview_expansion::{page_target, Event, Expansion};
 use micold_core::pr_list::StatusPhrase;
-use micold_core::pull_request::BranchPrState;
 use micold_core::session::{Session, SessionLocation};
 use micold_core::task_progress::{self, Progress, Source};
 use micold_core::theme::ColorScheme;
@@ -679,23 +676,12 @@ pub fn pr_rows(model: &CardModel, expanded: bool) -> (Vec<CardPrRow>, usize) {
         .into_iter()
         .map(|row| CardPrRow {
             label: row.label,
-            mark: pr_mark(row.pill),
+            mark: crate::features::changes::pr_mark(row.pill),
             phrase: row.phrase.map(|phrase| phrase.label().to_string()),
             failing: row.phrase == Some(StatusPhrase::ChecksFailing),
         })
         .collect();
     (rows, more)
-}
-
-/// A listed pull request's state as the card's pill (research R9), beside the sidebar's
-/// `indicator_marks`: `ui::material` keeps no core pull request type.
-fn pr_mark(state: BranchPrState) -> PrMark {
-    match state {
-        BranchPrState::Open => PrMark::Open,
-        BranchPrState::Draft => PrMark::Draft,
-        BranchPrState::Merged => PrMark::Merged,
-        BranchPrState::Closed => PrMark::Closed,
-    }
 }
 
 /// The pull request reading for a branch: unknown while the reading is off or holds nothing (never
