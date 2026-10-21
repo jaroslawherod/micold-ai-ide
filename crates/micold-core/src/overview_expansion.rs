@@ -115,11 +115,23 @@ impl Expansion {
                 }
             }
             Event::LinkRested(location) => {
+                let same_card = self.pointer_on.as_ref() == Some(&location);
                 if self.menu_open {
+                    // The pointer moved from its card onto the card's link under the menu: the
+                    // rest the menu held for the card is gone, so nothing expands on close
+                    // (review A F3, M3). Another card's link changes nothing (FR-012).
+                    if same_card {
+                        self.rest_held = false;
+                        self.pointer_on_link = true;
+                    }
                     return;
                 }
+                // Escape collapsed this card with the pointer on it: moving onto its own link is
+                // no leave, so it stays collapsed (1121; review A F1, M3).
+                if !same_card {
+                    self.pointer_escaped = false;
+                }
                 self.pointer_on = Some(location.clone());
-                self.pointer_escaped = false;
                 self.pointer_on_link = true;
                 // A rest on a link counts as a rest on its card (FR-007): another card expanded
                 // would cover the link, so it collapses; the link's own card keeps its form.
@@ -886,6 +898,29 @@ mod tests {
             ])),
             Some("a".into())
         );
+    }
+
+    /// K5 with 1121's Escape rule (review A F1, M3): an Escape-collapsed card stays collapsed while
+    /// the pointer moves onto its link and back, until the pointer leaves it.
+    #[test]
+    fn an_escaped_card_stays_collapsed_across_a_rest_on_its_link() {
+        let back = || [rest("a"), Event::Escape, link_rest("a"), rest("a")];
+        assert_eq!(shown(&after(back())), None);
+        let left = after(back().into_iter().chain([leave("a"), rest("a")]));
+        assert_eq!(shown(&left), Some("a".into()));
+    }
+
+    /// K5, FR-012 (review A F3, M3): a rest the menu held for a card is dropped when the pointer
+    /// then rests on that card's link, so closing the menu expands nothing.
+    #[test]
+    fn a_held_rest_is_dropped_by_a_rest_on_that_cards_link() {
+        let closed = after([
+            Event::MenuOpened,
+            rest("a"),
+            link_rest("a"),
+            Event::MenuClosed,
+        ]);
+        assert_eq!(shown(&closed), None);
     }
 
     /// K2, SC-006: a card expands within half a second of the pointer resting on it.

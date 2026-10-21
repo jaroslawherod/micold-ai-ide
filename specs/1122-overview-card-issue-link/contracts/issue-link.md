@@ -54,6 +54,9 @@ Each line is a test, on top of 1121's K1 suite, which stays green unchanged:
 - Focus A (expanded), rest B → B; leave B; `LinkRested(C)` → none expanded (A not re-expanded
   while the pointer rests on C's link); `PointerLeft(C)` → A again.
 - Menu open: `LinkRested(B)` → no change.
+- Rest A, `Escape`, `LinkRested(A)`, `PointerRested(A)` → none expanded; then `PointerLeft(A)`,
+  `PointerRested(A)` → A (review A F1, M3).
+- Menu open, rest A, `LinkRested(A)`, menu closed → none expanded (review A F3, M3).
 - Forward Tab: focus A (expanded), `FocusLost(A)`, `LinkFocusGained(A)` → A expanded, focused A.
 - Same after Escape: focus A, `Escape` (collapsed), `FocusLost(A)`, `LinkFocusGained(A)` → none
   expanded, `focus_escaped` still true (FR-008: no re-expansion by a move inside the card).

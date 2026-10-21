@@ -71,7 +71,7 @@ is open and `repo` is `Unknown` (R2).
 
 | Event | Effect |
 |---|---|
-| `LinkRested(l)` | menu open → none. Else `pointer_on = l`, `pointer_escaped = false`; nothing expands; an expanded `l` stays expanded (FR-007) |
+| `LinkRested(l)` | menu open → none, except that a rest the menu held for `l` (`pointer_on == l`) is dropped (review A F3, M3). Else `pointer_on = l`, and `pointer_escaped = false` only when `pointer_on` was another card (moving onto its own link is no leave: an Escape-collapsed `l` stays collapsed, review A F1, M3); nothing expands; an expanded `l` stays expanded (FR-007) |
 | `LinkFocusGained(l)` | menu open → record only. If `focused == l` (its card holds or just held the keyboard): part becomes `Link`, form and `focus_escaped` unchanged. Else as `FocusGained(l)` |
 | `LinkFocusLost(l)` | if `focused == l` and the card part holds the keyboard: part becomes `Card`, nothing else. Else as `FocusLost(l)` |
 | `FocusGained(l)` / `FocusLost(l)` | as 1121, with the same "inside one card" rule: a card report while its link holds or just held the keyboard changes the part only |

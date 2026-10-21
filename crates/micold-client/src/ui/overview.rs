@@ -34,27 +34,28 @@ pub static GRID_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
 /// A card's widget id, stable per location: the keyboard goes to the first card's when the Overview
 /// opens (research R13) and back to the target's when a card menu closes (feature 972, FR-011).
 pub fn card_id(location: &SessionLocation) -> iced::advanced::widget::Id {
-    iced::advanced::widget::Id::from(match location {
-        SessionLocation::Default => "overview-card-default".to_string(),
-        SessionLocation::Worktree(dir) => format!("overview-card-{dir}"),
-    })
+    card_part_id("overview-card", location)
 }
 
 /// The expanded card's inner scrollable, by location (feature 1121, FR-008): Page Up and Page Down
 /// scroll it while the card has the keyboard.
 pub fn card_scroll_id(location: &SessionLocation) -> iced::advanced::widget::Id {
-    iced::advanced::widget::Id::from(match location {
-        SessionLocation::Default => "overview-card-body-default".to_string(),
-        SessionLocation::Worktree(dir) => format!("overview-card-body-{dir}"),
-    })
+    card_part_id("overview-card-body", location)
 }
 
 /// A card's issue link, by location (feature 1122): the grid finds the link under the pointer by
 /// it, and the arrow keys step over it.
 pub fn card_link_id(location: &SessionLocation) -> iced::advanced::widget::Id {
+    card_part_id("overview-card-link", location)
+}
+
+/// The id of one part of a card (review A F2, M3): the worktree's directory name follows a `/`,
+/// which no directory name holds, and Default's id has none, so no worktree's name (`link-x`,
+/// `default`) can make one part's id equal another card's or another part's.
+fn card_part_id(part: &str, location: &SessionLocation) -> iced::advanced::widget::Id {
     iced::advanced::widget::Id::from(match location {
-        SessionLocation::Default => "overview-card-link-default".to_string(),
-        SessionLocation::Worktree(dir) => format!("overview-card-link-{dir}"),
+        SessionLocation::Default => part.to_string(),
+        SessionLocation::Worktree(dir) => format!("{part}/{dir}"),
     })
 }
 
@@ -1188,6 +1189,32 @@ mod tests {
         assert_eq!(step_from(card_link_id(&l[1]), false), Some(card_id(&l[0])));
         assert_eq!(step_from(card_id(&l[2]), false), Some(card_id(&l[1])));
         assert_eq!(step_from(card_id(&l[1]), false), Some(card_id(&l[0])));
+    }
+
+    /// Review A F2 (M3): no worktree's name makes a card's id equal another card's link or body,
+    /// or Default's.
+    #[test]
+    fn no_worktree_name_makes_one_cards_id_another_cards_part() {
+        let worktree = |dir: &str| SessionLocation::Worktree(dir.into());
+        let ids = |location: &SessionLocation| {
+            [
+                card_id(location),
+                card_scroll_id(location),
+                card_link_id(location),
+            ]
+        };
+        let locations = [
+            SessionLocation::Default,
+            worktree("default"),
+            worktree("x"),
+            worktree("link-x"),
+            worktree("body-x"),
+            worktree("link-default"),
+        ];
+        let all: Vec<_> = locations.iter().flat_map(ids).collect();
+        for (at, id) in all.iter().enumerate() {
+            assert!(!all[at + 1..].contains(id), "{id:?} names two parts");
+        }
     }
 
     /// U4: past the first card backward and the last forward, it does what iced's
