@@ -91,6 +91,6 @@ None.
 
 ## Follow-ups not done
 
-- M2's first final gate failed once in  (`left: []`, no notice; untouched by #942); 5 of 5 isolated runs and the rerun gate passed. A load flake to watch.
+- M2's first final gate failed once in `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (`left: []`, no notice; untouched by #942); 5 of 5 isolated runs and the rerun gate passed. A load flake to watch.
 
 - Local builds in this cloud container fill the disk with the default `line-tables-only` debug info (the first M1 gate died at `ld` Bus error, 0 bytes free); M1's green gate ran with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` after `rm -rf target-shared/debug`.
