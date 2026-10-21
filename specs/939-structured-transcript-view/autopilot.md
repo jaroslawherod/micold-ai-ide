@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #939
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
-- **Phase**: milestone M6
-- **Next step**: M6 PR — orchestrator opens it from the pushed branch, waits on CI and merges; then the close unit
+- **Phase**: done
+- **Next step**: handoff — the close PR (orchestrator opens it from the pushed branch); the run ends when it merges
 
 ## Pull requests
 
@@ -22,6 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1193 | M3: window's per-session transcript state | merged (rebase) | 965949081cfe2b986593b96eed026e2122f82ece |
 | #1198 | M4: shared DisclosureCard, AccordionSection slots, Text::monospace, icons | merged (rebase) | dd7b2946270f8b493b08004bc3089512fb147e15 |
 | #1203 | M5: transcript view behind the renderer seam, lazy keyed entries, SC-004 budget | merged (rebase) | 21cc8efa9b2e994f1c6adef594658bd4d9077630 |
+| #1206 | M6: pane shows the transcript; plain log removed; user guide; Part B | merged (rebase) | b6c1dd92621146110ef078c83576956cd3c94b7a |
+| (close) | Close: #944's recordings in `RECORDED`, tdd-verify, test-strength fixes, spec closed | pending (orchestrator opens) | — |
 
 ## Milestones
 
@@ -32,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | #1193 | merged |
 | M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | #1198 | merged |
 | M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | #1203 | merged |
-| M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | pending (orchestrator opens) | verified, gate green |
+| M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | #1206 | merged |
 
 ## Decisions
 
@@ -45,6 +47,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M5 (2026-10-21): the view's message type is `TranscriptMsg` (`blocks::Block = Element<'static, TranscriptMsg>`); the pane maps it in M6. `RenderCtx` carries the `scheme` beside `roles`, so the entries' lazy key holds it (contract updated). A folded card's body is not built, so its renderers do not run. The footer's cost reads `"session total $…"` (`footer_figures`, per the #944 decision; spec FR-005, research R14, data model, contract and quickstart reworded). SC-004 first failed on deltas (178 ms): at the bound the column shifted every entry a tree slot and every `lazy` rebuilt; `ui/transcript/keyed.rs` keeps slots by `EntryId` (iced's `keyed_column` matches by index at an unchanged length): open 180 ms, slowest delta 5 ms. Not R12's fallback (no windowed list, no measured heights), so no escalation. The transcript sample is a live pose of the `DisclosureCard` showcase entry, since the catalogue lists only library components.
 - M6 (2026-10-21): a tiled structured primary draws its transcript in `ui/panes.rs`, and the single-pane check moved below the tiled one in `ui/terminal.rs`, so a tiled layout tiles even when the active session is structured (it showed only the log before). `SplitView` had no `operate`, so no operation reached a tiled pane: it forwards to every pane now, or the shell's `snap_to`/`scroll_to` on `transcript-<session>` would miss a tiled transcript. A transcript pane focuses on a press as an empty pane does (no terminal widget to do it). The window's `BlockCache` is one shared empty static in `ui/terminal.rs` (`window_block_cache`): #939's renderers read none, and `app::State` takes only feature structs (`root_state_is_shared.rs`), so #940, which fills it, moves it into the window's state. `containment.rs` gains `TRANSCRIPT_CONTENT`, scoped to `session-transcript-pane`'s bottom edge like `SETTINGS_PAGE_CONTENT`. Part B ran on the CPU rasteriser (no `claude` CLI, display or xdotool in the container) over recorded fixtures, so evidence is in `visual/` beside M4/M5's (tasks and quickstart said `visual-pass/`; reworded); live streaming, wheel/drag and a second window are covered by `transcript_follow_layout.rs`, `features_structured_transcript.rs` and per-window state, not by a live run.
 - Clarify (2026-10-21, 2 rounds, agent-resolved): sub-agent events (parent tool use set) are kept out of the main transcript and counted per parent tool-call card (FR-024; orphans on one notice); deltas not counted. #944 adds nesting on top. #944 treats the per-turn cost in #939's turn footer as #939's; #944 adds context meter, plan_usage feed and sub-agent nesting.
+- Close (2026-10-21): `speckit-converge` not run. Review B is `CLEAN` for M2–M6; M1's B was `CHANGES` only for an environment BLOCKER (the reviewer's sandbox refused cargo, so Verify went unobserved), resolved by Verify inside the full gate with no conformance finding, so B checked every milestone's tasks and scenarios against its diff.
+- Close (2026-10-21): #944's four recordings joined `RECORDED`; the transcript model needed no change. They exposed two gaps in the tests, not the model: G1 did not account sub-agent events (FR-024: counted on the card, else on the one notice, now asserted as a total) or the absorbed `signature_delta` (contract table already absorbs it). G2's exact order cannot hold where an unmodelled event (`thinking_tokens`) arrives while a block streams: the streamed entry opened at its first partial event, the finished one after the raw row. G2 now compares the conversation and the raw rows each in order over all nine, and #938's five (SC-002's partial-message fixture among them) stay equal entry for entry; contract G2 says so. A nested sub-agent's messages name a tool use inside the sub-agent, so with no card for it in the main transcript they count on the notice (FR-024 as written).
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -75,6 +79,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M6 | 2 | (fix diff HEAD~1..HEAD, panes.rs) | CLEAN (sonnet, scoped): the source-shape test now pins `draws_a_terminal` and its `!is_structured_primary(` decision; not counted (forced by a red gate) |
 | Visual pass M6 | — | 57c50976 | PASS (CPU rasteriser, inline; no `claude`/display in the container): detached pane light/dark with "Jump to latest" bottom-centre clear of the bar, one card open; `error-result` greyscale (Failed = label + icon + error text, SC-005); mid-stream `partial-deltas`; tiled two structured sessions each with its own transcript and fold state; terminal pane beside a structured one unchanged ("Starting…"). Evidence `visual/m6-*.png` |
 | Full gate M6 | — | 59281b0d | GATE_EXIT=0 (`scripts/gate.sh`, `commit.gpgsign=false` in the env); the first run (57c50976) failed `ui::panes::tests::an_empty_pane_tile_is_pressable_and_a_terminal_pane_is_not`, a source-shape test, fixed |
+| TDD verify smell pass (close) | 1 | (fresh `autopilot-reviewer`, `claude -p`) | 1 HIGH (judged MED: every arm asserts, mutants caught), 5 MED, 4 LOW; F3–F9 fixed by sonnet workers (core, client), F2 declined (SC-004 is a time budget), F10–F11 LOW kept; 9 deliberate mutants caught; verdict FAIL on test-first evidence only (`tdd/verification.md`) |
+| Close review | 1 | 637d0a5977ee88745b36caaec06fb5c3fa9816b7:4134d89024f2b03e41d67681912d4c5ac1034537 | CLEAN (`claude -p --agent autopilot-reviewer`): F1 MINOR fixed, prose only (T046 sentence); F2 MINOR fixed (a doc comment back above `opened_by`) |
 
 ## Declined review findings
 
@@ -93,5 +99,6 @@ None.
 
 ## Follow-ups not done
 
-- For the close unit: #944's thread landed 4 real-CLI stream-json recordings on main (subagent, nested subagent, background tasks) in a separate `RECORDED_944` list in `crates/micold-core/tests/support/stream_json.rs`, because #939's transcript tests failed on them. Not taken on in M6; the close unit folds them into #939's transcript tests (or records why not).
+- ~~#944's recordings outside `RECORDED`~~ done in the close PR (see Decisions).
+- TDD verification (close): history cannot show test-first order per behaviour (one commit per milestone), and four review/visual fixes were test-after; recorded in `tdd/verification.md`, each now mutant-checked.
 
