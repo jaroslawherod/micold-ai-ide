@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5 full gate on the final tree, then push; orchestrator opens the PR
+- **Next step**: M5 PR — orchestrator opens it from the pushed branch, waits on CI and merges; then M6
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | #1192 | merged |
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | #1193 | merged |
 | M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | #1198 | merged |
-| M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | — | in progress |
+| M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | pending (orchestrator opens) | verified, gate green |
 | M6 | T038–T043 | full | Pane shows the transcript (single, tiled); plain log removed; user guide; Part B | — | pending |
 
 ## Decisions
@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M5 | 1 | 7d15db943c685856b67ec516b20e1d8492e64e3f:087d4ecb6126db407c28da6262c4b0521307562b | CLEAN (code-review high, `claude -p --agent autopilot-reviewer`): F1 MINOR fixed (prose only — `view`'s doc says the lazy key holds no renderer set; #940 adds one if it swaps at run time), F2 MINOR fixed (doc rewrapped) |
 | Review B M5 | 1 | 7d15db943c685856b67ec516b20e1d8492e64e3f:087d4ecb6126db407c28da6262c4b0521307562b | CLEAN (conformance, sonnet; Verify supplied from the gate and the release run): F1 MINOR fixed (scratch visual test removed before commit), F2 MINOR fixed (contract names `view`'s `ctx` argument), F3 MINOR fixed (comments rewrapped) |
 | Visual pass M5 | — | 087d4ecb | PASS after one fix (CPU rasteriser, the gate's renderer): transcript of `tool-turn` open light/dark, folded + detached with "Jump to latest" floated bottom-centre, `error-result` in greyscale (Failed = label + icon + error text, SC-005). Found: tabs in a `Read` result drawn as missing glyphs — fixed by `plain_text` (tab stops). Evidence `visual/m5-transcript-{open-light-dark,failed-greyscale,jump-to-latest}.png` |
+| Full gate M5 | — | bef0e450 | GATE_EXIT=0 (`scripts/gate.sh`; the first run hit a commit-signing server 503 in two `micold-daemon` github_issue tests that `git commit` in a temp repo, rerun with `commit.gpgsign=false` in the env: green). Release budget: open 180 ms, slowest delta 5 ms |
 
 ## Declined review findings
 
