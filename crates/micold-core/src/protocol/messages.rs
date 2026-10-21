@@ -911,6 +911,19 @@ pub enum ClientMsg {
         /// The request.
         id: PromptId,
     },
+    /// Change a structured session's permission mode (#942 FR-017). A running session's CLI is
+    /// asked through a `set_permission_mode` control request, and the mode is persisted once it
+    /// answers `success`; a session not running is persisted at once and launched in it next.
+    /// Answered `OperationOk`, or `OperationError` with the CLI's refusal, "Claude did not answer
+    /// the mode change." or the [`crate::session::ModeRefusal`] of a terminal session.
+    SetPermissionMode {
+        /// Correlation id.
+        req: u64,
+        /// The session.
+        session: SessionId,
+        /// The mode it is to run in.
+        mode: crate::session::PermissionMode,
+    },
 
     // --- Keepalive ---
     /// Liveness probe (protocol.md §5 Liveness). Answered with [`DaemonMsg::Pong`].

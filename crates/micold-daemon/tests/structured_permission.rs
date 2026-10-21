@@ -1,5 +1,7 @@
 //! #942 milestones M2 (T029–T031) and M3 (T035, T037): a structured session's permission prompts
-//! at the daemon, the activity a pending request gives its session, and its withdrawal.
+//! at the daemon, the activity a pending request gives its session, and its withdrawal. M5 (T044,
+//! T046): a mode change leaves a pending request alone and the next one is raised as before, and
+//! approving a plan sets the session's mode before Claude is answered.
 //!
 //! The stand-in `claude` of `support/structured.rs` makes real prompt-tool calls to the daemon's
 //! tool server with its own credential (`prompt`, `prompt-async`, research R13), and test clients
@@ -94,6 +96,7 @@ impl Daemon {
             .collect();
         let state = mcp::state_over(listed, store);
         mcp::serve_tool_server(&state, bindings.to_path_buf()).await;
+        micold_daemon::server::spawn_mode_reports(Arc::clone(&state));
         prompts_on(&state);
         state
     }
@@ -873,7 +876,8 @@ async fn a_plan_approval_carries_the_plan_and_keep_planning_returns_the_note() {
     let input = json!({"plan": plan});
     let script = [
         prompt(dir, "p1", "ExitPlanMode", input.clone()),
-        prompt(dir, "p2", "ExitPlanMode", input.clone()),
+        prompt_async(dir, "p2", "ExitPlanMode", input.clone()),
+        "control success\n".into(),
     ]
     .concat();
     daemon.start(0, &script).await;
@@ -1253,4 +1257,227 @@ async fn always_allow_rules_are_gone_after_the_process_ends() {
         Some("toolu_p2"),
         "asked again"
     );
+}
+
+/// What the stand-in in `dir` did first, as its `order-record` says, once it has `n` entries.
+fn order(dir: &Path, n: usize) -> Vec<String> {
+    let file = dir.join("order-record");
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        let lines: Vec<String> = text.lines().map(str::to_string).collect();
+        if text.ends_with('\n') && lines.len() >= n {
+            return lines;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{n} entries never appeared: {text:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// The `set_permission_mode` requests the stand-in in `dir` read on stdin: the mode of each.
+fn modes_asked(dir: &Path) -> Vec<String> {
+    std::fs::read_to_string(dir.join("stdin-record"))
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| line.contains("control_request"))
+        .map(|line| {
+            let request: Value = serde_json::from_str(line).expect("a JSON line");
+            assert_eq!(request["request"]["subtype"], "set_permission_mode");
+            request["request"]["mode"].as_str().unwrap().to_string()
+        })
+        .collect()
+}
+
+impl Daemon {
+    /// Set session `n`'s mode as a client's `SetPermissionMode` does.
+    async fn set_mode(&self, n: usize, mode: PermissionMode) {
+        self.state
+            .set_permission_mode(self.ids[n], mode)
+            .await
+            .expect("the mode is set");
+    }
+
+    fn mode(&self, n: usize) -> PermissionMode {
+        self.summary(n).permission_mode
+    }
+}
+
+/// T046 (US3 s2, FR-010, FR-016, R7): approving a plan with accept edits asks the CLI for
+/// `acceptEdits` and answers allow only after its `success`; the summary shows Accept edits.
+#[tokio::test(flavor = "multi_thread")]
+async fn approving_a_plan_with_accept_edits_sets_the_mode_before_claude_is_answered() {
+    let daemon = Daemon::new(1).await;
+    daemon.set_mode(0, PermissionMode::Plan).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    let input = json!({"plan": "# Plan\n\n1. Edit the parser"});
+    let script = [
+        prompt_async(dir, "p1", "ExitPlanMode", input.clone()),
+        "control success\n".into(),
+    ]
+    .concat();
+    daemon.start(0, &script).await;
+    let request = requested(&mut a).await;
+    let approve = PromptChoice::ApprovePlan { accept_edits: true };
+    assert_ok(&decide(&mut a, 1, request.session, request.id, approve).await);
+    assert_eq!(prompt_answers(dir, 1), [allow(input)]);
+    assert_eq!(order(dir, 2), ["control", "answer"], "the mode first");
+    assert_eq!(modes_asked(dir), ["acceptEdits"]);
+    assert_eq!(daemon.mode(0), PermissionMode::AcceptEdits);
+    assert_eq!(
+        resolved(&mut a).await.3,
+        Resolution::PlanApproved {
+            mode: PermissionMode::AcceptEdits
+        }
+    );
+}
+
+/// T046 (US3 s2, FR-010): approving without accept edits sets Default, whatever mode the session
+/// had before Plan (here Accept edits, then Plan as the CLI reported it).
+#[tokio::test(flavor = "multi_thread")]
+async fn approving_a_plan_sets_default_whatever_mode_came_before_plan() {
+    let daemon = Daemon::new(1).await;
+    daemon.set_mode(0, PermissionMode::AcceptEdits).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    let input = json!({"plan": "# Plan"});
+    let script = [
+        "status plan\n".into(),
+        prompt_async(dir, "p1", "ExitPlanMode", input.clone()),
+        "control success\n".into(),
+    ]
+    .concat();
+    daemon.start(0, &script).await;
+    let request = requested(&mut a).await;
+    let started = std::time::Instant::now();
+    while daemon.mode(0) != PermissionMode::Plan {
+        assert!(started.elapsed() < Duration::from_secs(10), "Plan followed");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let approve = PromptChoice::ApprovePlan {
+        accept_edits: false,
+    };
+    assert_ok(&decide(&mut a, 1, request.session, request.id, approve).await);
+    assert_eq!(prompt_answers(dir, 1), [allow(input)]);
+    assert_eq!(modes_asked(dir), ["default"]);
+    assert_eq!(daemon.mode(0), PermissionMode::Default);
+    assert_eq!(
+        resolved(&mut a).await.3,
+        Resolution::PlanApproved {
+            mode: PermissionMode::Default
+        }
+    );
+}
+
+/// T046 (R7): a mode change the CLI refuses still approves the plan (Claude is answered allow),
+/// and the deciding client is told the mode stayed as reported.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_mode_change_still_approves_the_plan_and_says_the_mode_stayed() {
+    let daemon = Daemon::new(1).await;
+    daemon.set_mode(0, PermissionMode::Plan).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    let input = json!({"plan": "# Plan"});
+    let script = [
+        prompt_async(dir, "p1", "ExitPlanMode", input.clone()),
+        "control error mode_refused Not now\n".into(),
+    ]
+    .concat();
+    daemon.start(0, &script).await;
+    let request = requested(&mut a).await;
+    let approve = PromptChoice::ApprovePlan { accept_edits: true };
+    match decide(&mut a, 1, request.session, request.id, approve).await {
+        DaemonMsg::OperationError { message, .. } => {
+            assert!(message.contains("approved"), "{message}");
+            assert!(
+                message.contains("Plan"),
+                "names the mode it stayed in: {message}"
+            );
+            assert!(message.contains("Not now"), "and why: {message}");
+        }
+        other => panic!("told the mode stayed: {other:?}"),
+    }
+    assert_eq!(prompt_answers(dir, 1), [allow(input)]);
+    assert_eq!(daemon.mode(0), PermissionMode::Plan);
+    assert_eq!(
+        resolved(&mut a).await.3,
+        Resolution::PlanApproved {
+            mode: PermissionMode::Plan
+        }
+    );
+}
+
+/// T046 (US3 s3, FR-010): Keep planning sends no control request and the mode stays Plan.
+#[tokio::test(flavor = "multi_thread")]
+async fn keep_planning_sends_no_mode_change() {
+    let daemon = Daemon::new(1).await;
+    daemon.set_mode(0, PermissionMode::Plan).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    let script = prompt(dir, "p1", "ExitPlanMode", json!({"plan": "# Plan"}));
+    daemon.start(0, &script).await;
+    let request = requested(&mut a).await;
+    let keep = PromptChoice::KeepPlanning { note: None };
+    assert_ok(&decide(&mut a, 1, request.session, request.id, keep).await);
+    assert_eq!(prompt_answers(dir, 1)[0]["behavior"], "deny");
+    assert!(modes_asked(dir).is_empty(), "no control request");
+    assert_eq!(daemon.mode(0), PermissionMode::Plan);
+}
+
+/// T044 (FR-017): a mode change while a request is pending leaves it pending; it is decided as
+/// before.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_mode_change_leaves_a_pending_request_alone() {
+    let daemon = Daemon::new(1).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    let script = [
+        prompt_async(dir, "p1", "Bash", bash("ls")),
+        "control success\n".into(),
+    ]
+    .concat();
+    daemon.start(0, &script).await;
+    let request = requested(&mut a).await;
+    a.send(ClientMsg::SetPermissionMode {
+        req: 1,
+        session: daemon.ids[0],
+        mode: PermissionMode::AcceptEdits,
+    })
+    .await;
+    assert_ok(&a.answer(1).await);
+    assert_eq!(daemon.mode(0), PermissionMode::AcceptEdits);
+    let shown = permission_messages_within(&mut a, Duration::from_millis(300)).await;
+    assert!(shown.is_empty(), "still pending: {shown:?}");
+    assert_eq!(prompt_answer_count(dir), 0, "unanswered");
+    assert_ok(&decide(&mut a, 2, request.session, request.id, PromptChoice::Allow).await);
+    assert_eq!(prompt_answers(dir, 1), [allow(bash("ls"))]);
+}
+
+/// T044 (SC-005): after a mode change the next tool request still reaches the daemon and is
+/// answered as before (that the CLI applies the mode is the `mode-change` fixture's evidence).
+#[tokio::test(flavor = "multi_thread")]
+async fn the_next_request_after_a_mode_change_is_raised_and_answered() {
+    let daemon = Daemon::new(1).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    let script = [
+        "control success\n".to_string(),
+        prompt(dir, "p1", "Bash", bash("ls")),
+    ]
+    .concat();
+    daemon.start(0, &script).await;
+    a.send(ClientMsg::SetPermissionMode {
+        req: 1,
+        session: daemon.ids[0],
+        mode: PermissionMode::AcceptEdits,
+    })
+    .await;
+    assert_ok(&a.answer(1).await);
+    let request = requested(&mut a).await;
+    assert_eq!(request.tool_name, "Bash");
+    assert_ok(&decide(&mut a, 2, request.session, request.id, PromptChoice::Allow).await);
+    assert_eq!(prompt_answers(dir, 1), [allow(bash("ls"))]);
 }

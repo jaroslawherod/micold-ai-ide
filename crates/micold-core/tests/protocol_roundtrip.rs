@@ -901,8 +901,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_61() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 61);
+fn the_protocol_version_is_62() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 62);
 }
 
 /// #942 M4 (FR-013, FR-015): a summary and a create carry the session's permission mode on both
@@ -1065,6 +1065,16 @@ fn the_permission_messages_round_trip() {
         session: sid(),
         id: PromptId(3),
     });
+    // #942 M5 (FR-017): every mode a running session can be changed to, on both wires.
+    for (req, mode) in (21u64..).zip(PermissionMode::ALL) {
+        let change = ClientMsg::SetPermissionMode {
+            req,
+            session: sid(),
+            mode,
+        };
+        json_roundtrip(&change);
+        postcard_roundtrip(&change);
+    }
 }
 
 /// Two merged branches and the last commit of each one's pull request (feature 040).

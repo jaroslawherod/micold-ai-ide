@@ -161,6 +161,9 @@ pub struct DaemonState {
     /// Structured sessions' plan-limit readings on their way to [`Self::offer_plan_usage`]
     /// (feature 944, research R4).
     plan_usage_feed: crate::plan_usage::Feed,
+    /// The permission modes structured sessions' CLIs report, on their way to
+    /// [`Self::follow_reported_mode`] (#942 FR-016): a reader never takes the state's lock.
+    mode_reports: crate::plan_usage::Feed<(SessionId, PermissionMode)>,
     /// The ends of structured sessions' turns and processes, for their waiting prompt calls (#942
     /// FR-011). Outside `Inner`: a session's stdout reader signals it, and never takes that lock.
     prompt_endings: Arc<crate::permission::Endings>,
@@ -818,6 +821,7 @@ impl DaemonState {
             setting_change: Mutex::new(()),
             plan_usage_rejections: crate::plan_usage::Rejections::default(),
             plan_usage_feed: crate::plan_usage::Feed::default(),
+            mode_reports: crate::plan_usage::Feed::default(),
             prompt_endings: Arc::default(),
             plan_usage_offer: Mutex::new(()),
         }
@@ -1650,6 +1654,12 @@ impl DaemonState {
     /// The feed of structured sessions' plan-limit readings (feature 944).
     pub fn plan_usage_feed(&self) -> &crate::plan_usage::Feed {
         &self.plan_usage_feed
+    }
+
+    /// The feed of the permission modes structured sessions' CLIs report (#942 FR-016), drained by
+    /// [`crate::server::spawn_mode_reports`].
+    pub fn mode_reports(&self) -> &crate::plan_usage::Feed<(SessionId, PermissionMode)> {
+        &self.mode_reports
     }
 
     /// Turn plan usage on or off (feature 490, FR-002) and push `SettingsChanged` to every
@@ -3263,13 +3273,123 @@ impl DaemonState {
             return Err(DecisionRefusal::NotStructured);
         }
         let decided = inner.prompts.decide(session, id, choice)?;
-        Self::broadcast_locked(&inner, vec![decided.resolved.clone()]);
+        // An approved plan is announced by [`Self::finish_plan_approval`], with the mode it set,
+        // once the CLI answered the mode change (up to 10 s): meanwhile another client still shows
+        // it, and its decision is refused as no longer pending, as for any request decided first.
+        if decided.plan.is_none() {
+            Self::broadcast_locked(&inner, vec![decided.resolved.clone()]);
+        }
         drop(inner);
         // The last request decided, the turn goes on (R8).
         if decided.last_of_session {
             self.note_prompt_activity(session, HookKind::PreToolUse);
         }
         Ok(decided)
+    }
+
+    /// The rest of a decision [`Self::decide_prompt`] returned for an approved plan (R7, FR-010):
+    /// set the session's mode to the one the approval chose, then answer the CLI allow, then tell
+    /// every client the plan is approved, in the mode the session now has. A mode change the CLI
+    /// refuses still approves the plan; the error says the mode stayed as it was, and why. A
+    /// decision of another kind was finished by `decide_prompt`.
+    pub async fn finish_plan_approval(
+        &self,
+        session: SessionId,
+        decided: crate::permission::Decided,
+    ) -> Result<(), String> {
+        use micold_core::protocol::messages::Resolution;
+        let crate::permission::Decided {
+            mut resolved, plan, ..
+        } = decided;
+        let Some(plan) = plan else { return Ok(()) };
+        let chosen = plan.mode;
+        let set = self.set_permission_mode(session, chosen).await;
+        plan.answer();
+        let mode = self.permission_mode_of(session).unwrap_or(chosen);
+        if let DaemonMsg::PermissionResolved {
+            resolution: Resolution::PlanApproved { mode: shown },
+            ..
+        } = &mut resolved
+        {
+            *shown = mode;
+        }
+        Self::broadcast_locked(&self.lock(), vec![resolved]);
+        set.map_err(|why| {
+            format!(
+                "The plan was approved, but the mode stayed {}: {why}",
+                mode.label()
+            )
+        })
+    }
+
+    /// `session`'s permission mode as the catalog holds it.
+    fn permission_mode_of(&self, session: SessionId) -> Option<PermissionMode> {
+        self.lock()
+            .catalog
+            .workspace()
+            .find_session(session)
+            .map(|(_, s)| s.permission_mode)
+    }
+
+    /// Change structured session `session`'s permission mode (`ClientMsg::SetPermissionMode`,
+    /// FR-017): a running session's CLI is asked first and the mode kept only on its `success`; a
+    /// session not running is persisted at once and launched in it next (FR-015). Either way the
+    /// catalog is broadcast when the mode changed. The error is the sentence the user is shown: a
+    /// terminal session's [`ModeRefusal`], the CLI's refusal, or that it did not answer.
+    pub async fn set_permission_mode(
+        &self,
+        session: SessionId,
+        mode: PermissionMode,
+    ) -> Result<(), String> {
+        let running = {
+            let inner = self.lock();
+            match Self::kind_of(&inner, session) {
+                None => return Err(crate::catalog::SetModeError::NoSession.to_string()),
+                Some(SessionKind::Terminal) => {
+                    return Err(micold_core::session::ModeRefusal::NotStructured.to_string())
+                }
+                Some(SessionKind::Structured) => {}
+            }
+            match inner
+                .sessions
+                .get(&session)
+                .and_then(|live| live.procs.get(&SessionProcess::Primary))
+            {
+                Some(Proc::Structured(child)) if child.is_alive() && !child.output_ended() => {
+                    Some(Arc::clone(child))
+                }
+                _ => None,
+            }
+        };
+        if let Some(child) = running {
+            child
+                .set_permission_mode(mode)
+                .await
+                .map_err(|why| why.to_string())?;
+        }
+        self.keep_permission_mode(session, mode)
+            .map_err(|why| why.to_string())
+    }
+
+    /// The mode `session`'s CLI reported in its `init` or a `status` line (FR-016): kept, and
+    /// broadcast, when it differs from the persisted one.
+    pub fn follow_reported_mode(&self, session: SessionId, mode: PermissionMode) {
+        if let Err(err) = self.keep_permission_mode(session, mode) {
+            tracing::warn!(session = %session.0, %err, "the mode the CLI reported was not kept");
+        }
+    }
+
+    /// Persist `mode` as `session`'s, broadcasting the catalog when it changed.
+    fn keep_permission_mode(
+        &self,
+        session: SessionId,
+        mode: PermissionMode,
+    ) -> Result<(), crate::catalog::SetModeError> {
+        let changed = self.lock().catalog.set_permission_mode(session, mode)?;
+        if changed {
+            self.broadcast_catalog();
+        }
+        Ok(())
     }
 
     /// The whole input of pending permission request `id` of `session` (R10).
@@ -4949,10 +5069,41 @@ impl DaemonState {
             Arc::clone(&self.prompt_endings),
             Arc::clone(&self.prompt_endings),
         );
+        // The mode the CLI reports is the session's (FR-016); one the app never sets is logged
+        // once per process and changes nothing (R6). Applied off this thread, so a report the CLI
+        // wrote just before a mode change's `success` could land after the change is kept; the CLI
+        // reports the new mode right after its `success` (P-9), which puts it back.
+        let modes = self.mode_reports.sender();
+        let mut unknown_mode_logged = false;
         let on_event = move |event: micold_core::structured::StructuredEvent| {
             use micold_core::structured::StructuredEvent;
             if let StructuredEvent::Unrecognised { raw } = &event {
                 crate::plan_usage::offer_line(id, raw, &feed, &rejections);
+            }
+            if let StructuredEvent::Init {
+                permission_mode: Some(name),
+                ..
+            }
+            | StructuredEvent::Status {
+                permission_mode: Some(name),
+                ..
+            } = &event
+            {
+                match PermissionMode::from_cli(name) {
+                    // A send fails only once the service is stopping.
+                    Some(mode) => {
+                        let _ = modes.send((id, mode));
+                    }
+                    None if !unknown_mode_logged => {
+                        unknown_mode_logged = true;
+                        tracing::info!(
+                            session = %id.0,
+                            mode = %name,
+                            "the CLI reported a permission mode the app does not set; the session's mode is unchanged"
+                        );
+                    }
+                    None => {}
+                }
             }
             let turn_ended = matches!(
                 event,

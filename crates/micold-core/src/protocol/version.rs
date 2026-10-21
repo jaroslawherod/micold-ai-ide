@@ -214,7 +214,10 @@
 ///
 /// And 60 → 61 for #942's permission mode (M4): `permission_mode` on `SessionSummary` and on
 /// `ClientMsg::SessionCreate` (serde-defaulted), which shift the postcard layout.
-pub const PROTOCOL_VERSION: u32 = 61;
+///
+/// And 61 → 62 for #942's mode change while running (M5): `ClientMsg::SetPermissionMode`, which
+/// shifts the postcard index of every `ClientMsg` variant after it.
+pub const PROTOCOL_VERSION: u32 = 62;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

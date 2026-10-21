@@ -7,6 +7,7 @@
 //!
 //! [`structured_args`]: micold_core::provider::AiCliProvider::structured_args
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{self, BufRead, Read, Write};
 use std::process::{ChildStdin, Command, Stdio};
@@ -15,13 +16,14 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use micold_core::session::{KindRefusal, SessionId};
+use micold_core::session::{KindRefusal, PermissionMode, SessionId};
+use micold_core::structured::control::{encode_set_mode, next_request_id};
 use micold_core::structured::{
-    encode_user_message, parse_line, EventHistory, LineSplitter, SequencedEvent, StructuredEvent,
-    TurnState, UserMessageRefusal,
+    encode_user_message, parse_line, ControlOutcome, EventHistory, LineSplitter, SequencedEvent,
+    StructuredEvent, TurnState, UserMessageRefusal,
 };
 use micold_core::terminal::{launch_args, LaunchSpec};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, oneshot};
 
 use crate::supervision::ExitOutcome;
 use crate::supervisor::{apply_env_hygiene, ensure_cwd_exists, Supervised, SupervisedChild};
@@ -147,14 +149,85 @@ impl std::fmt::Display for UserMessageUndelivered {
     }
 }
 
+/// How long the daemon waits for the CLI's answer to a control request (#942 data-model
+/// *ControlRequest*, FR-017).
+pub const CONTROL_ANSWER_BOUND: Duration = Duration::from_secs(10);
+
+/// Why a running session's CLI did not change its permission mode (FR-017): the user is told this.
+#[derive(Debug)]
+pub enum ModeChangeFailed {
+    /// The CLI answered `error`: its text.
+    Refused(String),
+    /// No answer within [`CONTROL_ANSWER_BOUND`].
+    NoAnswer,
+    /// The process's output ended first.
+    Stopped,
+    /// Writing the request to the CLI's stdin failed.
+    Unsent(io::Error),
+}
+
+impl std::fmt::Display for ModeChangeFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Refused(text) => f.write_str(text),
+            Self::NoAnswer => f.write_str("Claude did not answer the mode change."),
+            Self::Stopped => f.write_str("Claude stopped before it answered."),
+            Self::Unsent(err) => write!(f, "The mode change could not be sent to the CLI: {err}"),
+        }
+    }
+}
+
+/// The control requests of one process waiting for their answers (data-model *ControlRequest*): a
+/// request id's `oneshot`, resolved by the stdout reader on the `control_response` for it. At the
+/// end of the output every waiter is dropped, which ends its wait, and no new one is taken.
+struct ControlWaiters(Mutex<Option<HashMap<String, oneshot::Sender<ControlOutcome>>>>);
+
+impl ControlWaiters {
+    fn new() -> Self {
+        Self(Mutex::new(Some(HashMap::new())))
+    }
+
+    /// A receiver of `request_id`'s answer; `None` once the output ended.
+    fn wait_for(&self, request_id: &str) -> Option<oneshot::Receiver<ControlOutcome>> {
+        let (sender, receiver) = oneshot::channel();
+        lock(&self.0)
+            .as_mut()?
+            .insert(request_id.to_string(), sender);
+        Some(receiver)
+    }
+
+    /// Stop waiting for `request_id`.
+    fn forget(&self, request_id: &str) {
+        if let Some(waiting) = lock(&self.0).as_mut() {
+            waiting.remove(request_id);
+        }
+    }
+
+    /// The CLI answered `request_id`; an answer nobody waits for is dropped.
+    fn resolve(&self, request_id: &str, outcome: &ControlOutcome) {
+        let waiter = lock(&self.0).as_mut().and_then(|w| w.remove(request_id));
+        if let Some(waiter) = waiter {
+            let _ = waiter.send(outcome.clone());
+        }
+    }
+
+    /// The output ended: every wait ends unanswered, and later ones at once.
+    fn close(&self) {
+        lock(&self.0).take();
+    }
+}
+
 /// One daemon-hosted structured session: the CLI's child process with piped stdin, stdout and
 /// stderr. Stdout is read line by line into events, stderr into the daemon's log (FR-010).
 pub struct StructuredSession {
     id: SessionId,
     process: SupervisedChild,
-    /// The CLI's stdin, which user messages are written to (FR-008). Behind a mutex so a write
-    /// takes `&self`; `None` once teardown closed it.
+    /// The CLI's stdin, which user messages and control requests are written to (FR-008, #942
+    /// R6). Behind a mutex so a write takes `&self` and two writes never interleave; `None` once
+    /// teardown closed it.
     stdin: Mutex<Option<ChildStdin>>,
+    /// Control requests waiting for the CLI's answer, shared with the stdout reader.
+    control: Arc<ControlWaiters>,
     /// This process's turn (research R7): a new process starts `Idle`, so a restart resets it.
     /// Shared with the stdout reader, which ends the turn on a `result` and at end-of-file.
     turn: Arc<Mutex<TurnState>>,
@@ -239,12 +312,26 @@ impl StructuredSession {
         let output_ended = Arc::new(ReadersDone(2.into()));
         let turn = Arc::new(Mutex::new(TurnState::Idle));
         let reader_turn = Arc::clone(&turn);
+        let control = Arc::new(ControlWaiters::new());
+        let reader_control = Arc::clone(&control);
         let readers = [
             spawn_reader(
                 format!("stream-out-{id}"),
                 Arc::clone(&output_ended),
                 move || {
-                    read_events(stdout, &reader_turn, on_event);
+                    let mut on_event = on_event;
+                    read_events(stdout, &reader_turn, |event| {
+                        if let StructuredEvent::ControlResponse {
+                            request_id,
+                            outcome,
+                            ..
+                        } = &event
+                        {
+                            reader_control.resolve(request_id, outcome);
+                        }
+                        on_event(event);
+                    });
+                    reader_control.close();
                     on_end();
                 },
             ),
@@ -266,6 +353,7 @@ impl StructuredSession {
             id,
             process,
             stdin: Mutex::new(stdin),
+            control,
             turn,
             readers: Mutex::new(readers),
             output_ended,
@@ -314,17 +402,47 @@ impl StructuredSession {
     /// Write an accepted `text` to the CLI as one stream-json user message. On a failed write
     /// nothing was delivered, so the turn it opened is closed again.
     pub fn write_user_message(&self, text: &str) -> io::Result<()> {
-        let line = encode_user_message(text);
-        let written = match lock(&self.stdin).as_mut() {
-            Some(stdin) => stdin
-                .write_all(line.as_bytes())
-                .and_then(|()| stdin.flush()),
-            None => Err(io::Error::from(io::ErrorKind::BrokenPipe)),
-        };
+        let written = self.write_line(&encode_user_message(text));
         if written.is_err() {
             *lock(&self.turn) = TurnState::Idle;
         }
         written
+    }
+
+    /// Write one whole line to the CLI's stdin, under its mutex.
+    fn write_line(&self, line: &str) -> io::Result<()> {
+        match lock(&self.stdin).as_mut() {
+            Some(stdin) => stdin
+                .write_all(line.as_bytes())
+                .and_then(|()| stdin.flush()),
+            None => Err(io::Error::from(io::ErrorKind::BrokenPipe)),
+        }
+    }
+
+    /// Ask the CLI to switch to `mode` with a `set_permission_mode` control request, and wait for
+    /// its answer up to [`CONTROL_ANSWER_BOUND`] (#942 R6, FR-017). A request already pending is
+    /// not touched. The write may block briefly on the pipe, as a user message's does.
+    pub async fn set_permission_mode(&self, mode: PermissionMode) -> Result<(), ModeChangeFailed> {
+        let request_id = next_request_id();
+        let answer = self
+            .control
+            .wait_for(&request_id)
+            .ok_or(ModeChangeFailed::Stopped)?;
+        if let Err(err) = self.write_line(&encode_set_mode(&request_id, mode)) {
+            self.control.forget(&request_id);
+            return Err(ModeChangeFailed::Unsent(err));
+        }
+        match tokio::time::timeout(CONTROL_ANSWER_BOUND, answer).await {
+            Ok(Ok(ControlOutcome::Success(_))) => Ok(()),
+            Ok(Ok(ControlOutcome::Error { message, .. })) => {
+                Err(ModeChangeFailed::Refused(message))
+            }
+            Ok(Err(_)) => Err(ModeChangeFailed::Stopped),
+            Err(_) => {
+                self.control.forget(&request_id);
+                Err(ModeChangeFailed::NoAnswer)
+            }
+        }
     }
 
     /// End the session: kill its process tree, close its stdin, wait up to `wait` for both readers'

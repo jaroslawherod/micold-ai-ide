@@ -30,6 +30,14 @@ const STAND_IN: &str = "claude.exe";
 ///   reply's `content[0].text` (or `<no reply>` when the connection closed without one) to
 ///   `prompt-record`, one line each (#942 R13); `prompt-async <file>` does the same on a thread,
 ///   so several calls are held at once while the script goes on;
+/// - `control success`, `control error <code> <text>` and `control none` wait for the next
+///   `control_request` line on stdin (skipping any other line) and answer it with a
+///   `control_response` for its `request_id` (#942 contracts/claude-permission.md *Mode change*):
+///   `success` with `response.mode` set to the requested mode, `error` with the `error` text and
+///   `error_code`, `none` with nothing; an answer is noted in `order-record` (`control`) before it
+///   is written, as each prompt-tool answer is (`answer`) once it came, so a test sees which was
+///   first;
+/// - `status <mode>` writes a `system`/`status` line reporting `permissionMode` `<mode>`;
 /// - any other line is written to stdout as it is, with a line end.
 ///
 /// When the script ends it idles until killed.
@@ -64,7 +72,7 @@ fn main() {
         let _ = writeln!(f, "start {}", std::process::id());
     }
 
-    let (lines_tx, lines_rx) = mpsc::channel::<()>();
+    let (lines_tx, lines_rx) = mpsc::channel::<String>();
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
         for line in stdin.lock().lines() {
@@ -76,7 +84,7 @@ fn main() {
             {
                 let _ = writeln!(f, "{line}");
             }
-            let _ = lines_tx.send(());
+            let _ = lines_tx.send(line);
         }
     });
 
@@ -103,6 +111,13 @@ fn main() {
                 let _ = out.flush();
                 std::process::exit(arg.parse().unwrap_or(0));
             }
+            "control" => control(&lines_rx, &mut out, arg),
+            "status" => {
+                let _ = writeln!(
+                    out,
+                    "{{\"type\":\"system\",\"subtype\":\"status\",\"permissionMode\":\"{arg}\"}}"
+                );
+            }
             "prompt" => prompt(&args, arg),
             "prompt-async" => {
                 let (args, file) = (args.clone(), arg.to_string());
@@ -116,6 +131,42 @@ fn main() {
     }
     loop {
         std::thread::sleep(std::time::Duration::from_secs(60));
+    }
+}
+
+/// Wait for the next `control_request` line on stdin and answer it as `how` says: `success`,
+/// `error <code> <text>` or `none`.
+fn control(lines: &mpsc::Receiver<String>, out: &mut impl Write, how: &str) {
+    let request = loop {
+        match lines.recv() {
+            Ok(line) if line.contains("\"control_request\"") => break line,
+            Ok(_) => continue,
+            Err(_) => return,
+        }
+    };
+    let id = string_after(&request, "request_id").unwrap_or_default();
+    let mode = string_after(&request, "mode").unwrap_or_default();
+    let (kind, rest) = how.split_once(' ').unwrap_or((how, ""));
+    let answer = match kind {
+        "success" => format!(
+            "{{\"type\":\"control_response\",\"response\":{{\"subtype\":\"success\",\"request_id\":\"{id}\",\"response\":{{\"mode\":\"{mode}\"}}}}}}"
+        ),
+        "error" => {
+            let (code, text) = rest.split_once(' ').unwrap_or((rest, ""));
+            format!(
+                "{{\"type\":\"control_response\",\"response\":{{\"subtype\":\"error\",\"request_id\":\"{id}\",\"error\":\"{text}\",\"error_code\":\"{code}\"}}}}"
+            )
+        }
+        _ => return,
+    };
+    note_order("control");
+    let _ = writeln!(out, "{answer}");
+}
+
+/// Append `what` to `order-record`.
+fn note_order(what: &str) {
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("order-record") {
+        let _ = writeln!(f, "{what}");
     }
 }
 
@@ -161,6 +212,7 @@ fn prompt(args: &[String], file: &str) {
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("prompt-record") {
         let _ = f.write_all(format!("{answer}\n").as_bytes());
     }
+    note_order("answer");
 }
 
 fn call_tool_server(args: &[String], file: &str) -> Option<String> {
@@ -304,6 +356,7 @@ pub fn clear_records(dir: &Path) {
         "pid-record",
         "stdin-record",
         "prompt-record",
+        "order-record",
     ] {
         let _ = std::fs::remove_file(dir.join(name));
     }
