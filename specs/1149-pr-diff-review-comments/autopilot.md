@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1158 | M1 (T001–T011) | merged | d9c2e378c1ef6e6a8f142a5369dd16c856e9324c |
 | #1172 | M2 (T012–T022) | merged | bc162e1d6d6812afaf38c3987257bf3fe17e99e8 |
 | #1184 | M3 (T023–T027) | merged | 1e82b7dd6a5e9df7c379474d68379ab46fb3a15e |
-| close | Close the spec | committed locally, push blocked (see Open escalation) | |
+| #1191 | Close the spec (branch docs/1149_close-spec; feat/1149_… remote holds a squash-merged tip) | open | |
 
 ## Milestones
 
@@ -71,7 +71,7 @@ None.
 
 ## Open escalation
 
-Close commit is local only. The remote branch still holds the old M3 tip cf36119c4 (squash-merged); `git push --force-with-lease` was rejected as stale and `--force` / a `merge -s ours` push were denied by the permission classifier. Needs the user to allow a force push of this branch (or push it), then open the close PR (title `docs(1149): close the spec (#1149)`, body ends `Refs #1149`).
+None. Resolved: the close commits were rebased onto origin/main and pushed to docs/1149_close-spec (PR #1191).
 
 ## Follow-ups not done
 
