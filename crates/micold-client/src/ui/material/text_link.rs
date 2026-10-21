@@ -10,9 +10,10 @@
 //! `.focusable(false)` keeps it out of the Tab order altogether while a click still opens it, for a
 //! card whose link focus is not wired yet (research R5).
 
-use iced::advanced::widget::{tree, Tree, Widget};
-use iced::advanced::{layout, mouse, renderer, Clipboard, Layout, Renderer as _, Shell};
-use iced::{keyboard, Background, Element, Event, Length, Rectangle, Size, Vector};
+use crate::ui::cdk::passthrough::forward_to_child;
+use iced::advanced::widget::{Tree, Widget};
+use iced::advanced::{mouse, renderer, Clipboard, Layout, Renderer as _, Shell};
+use iced::{keyboard, touch, Background, Element, Event, Rectangle};
 use micold_core::tokens::{state, Roles};
 
 use super::keyboard_focus::{Indicator, TakesTheKeyboard};
@@ -99,11 +100,15 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
     fn from(link: TextLink<'a, M>) -> Self {
         use keyboard::key::Named;
         let roles = link.roles;
+        // The click is the rendering stack's button's: a press and a release both on it, each
+        // captured, and the redraw when the pointer comes and goes, which draws the underline.
+        let click =
+            iced::widget::button(Text::new(link.label, link.role, roles).tint(roles.primary))
+                .padding(iced::Padding::ZERO.left(SIDE).right(SIDE))
+                .style(|_: &iced::Theme, _| iced::widget::button::Style::default())
+                .on_press(link.on_press.clone());
         let body = LinkBody {
-            content: Text::new(link.label, link.role, roles)
-                .tint(roles.primary)
-                .into(),
-            on_press: link.on_press.clone(),
+            content: click.into(),
             underline: roles.primary,
             role: link.role,
         };
@@ -140,64 +145,20 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
     }
 }
 
-/// The drawn link: its label, padded on each side by the focus ring's width so the ring clears
-/// the text, the underline under the pointer, and the click.
+/// The drawn link: the button holding the label, padded on each side by the focus ring's width
+/// so the ring clears the text, and the underline under the label while the pointer is on it.
 struct LinkBody<'a, M> {
     content: Element<'a, M>,
-    on_press: M,
     underline: micold_core::tokens::Rgb,
     role: TypeRole,
 }
 
-/// Whether a press began on the link, so only a release that ends one there is a click.
-#[derive(Debug, Default, Clone, Copy)]
-struct Pressed(bool);
-
 /// The room left of and right of the label.
 const SIDE: f32 = state::FOCUS_RING_WIDTH;
 
-impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
-    fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<Pressed>()
-    }
-
-    fn state(&self) -> tree::State {
-        tree::State::new(Pressed::default())
-    }
-
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
-    }
-
-    fn size(&self) -> Size<Length> {
-        Size::new(Length::Shrink, Length::Shrink)
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &iced::Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        let label = self.content.as_widget_mut().layout(
-            &mut tree.children[0],
-            renderer,
-            &limits.shrink(Size::new(2.0 * SIDE, 0.0)),
-        );
-        let size = label.size();
-        layout::Node::with_children(
-            limits.resolve(
-                Length::Shrink,
-                Length::Shrink,
-                Size::new(size.width + 2.0 * SIDE, size.height),
-            ),
-            vec![label.translate(Vector::new(SIDE, 0.0))],
-        )
-    }
+impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
+    forward_to_child!(content, M, iced::Theme, iced::Renderer;
+        children, diff, size, layout, operate);
 
     fn draw(
         &self,
@@ -209,21 +170,22 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let Some(label) = layout.children().next() else {
-            return;
-        };
         self.content.as_widget().draw(
             &tree.children[0],
             renderer,
             theme,
             style_,
-            label,
+            layout,
             cursor,
             viewport,
         );
         if !cursor.is_over(layout.bounds()) {
             return;
         }
+        // The button's one child is the label, inside the padding.
+        let Some(label) = layout.children().next() else {
+            return;
+        };
         let text = label.bounds();
         // Under the glyphs, not at the foot of the line box: the label sits centred in its line,
         // and its descenders end about half a size below the centre.
@@ -248,34 +210,36 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
         event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
-        _renderer: &iced::Renderer,
-        _clipboard: &mut dyn Clipboard,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, M>,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
-        let over = cursor.is_over(layout.bounds());
-        let pressed = tree.state.downcast_mut::<Pressed>();
-        match event {
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                pressed.0 = over;
-                if over {
-                    shell.capture_event();
-                }
+        // A release off the link ends its press without being captured (U1): the button would
+        // capture it, so it is told the press was lost instead, which it drops quietly.
+        let lost;
+        let event = match event {
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+                if !cursor.is_over(layout.bounds()) =>
+            {
+                lost = Event::Touch(touch::Event::FingerLost {
+                    id: touch::Finger(0),
+                    position: iced::Point::ORIGIN,
+                });
+                &lost
             }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                let began_here = std::mem::take(&mut pressed.0);
-                if began_here && over {
-                    shell.publish(self.on_press.clone());
-                    shell.capture_event();
-                }
-            }
-            Event::Mouse(mouse::Event::CursorEntered | mouse::Event::CursorLeft)
-            | Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                // The underline follows the pointer; the next frame draws it.
-                shell.request_redraw();
-            }
-            _ => {}
-        }
+            _ => event,
+        };
+        self.content.as_widget_mut().update(
+            &mut tree.children[0],
+            event,
+            layout,
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        );
     }
 
     fn mouse_interaction(
@@ -361,6 +325,10 @@ mod tests {
         let (at, away) = (on(&m), off(&m));
         press(&mut m, at);
         assert_eq!(release(&mut m, away), (Vec::new(), false));
+        assert!(
+            release(&mut m, at).0.is_empty(),
+            "the press outlived its release"
+        );
     }
 
     #[test]
