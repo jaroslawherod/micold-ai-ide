@@ -76,6 +76,20 @@ as in a shell. Terminal sessions are unchanged and stay the default.
   session and restores it on hold; with saving off it lives in the service's memory only and a
   service restart empties it. _(agent-resolved: specs/938-structured-session-mode/spec.md#Clarifications
   Q3)_
+- Q1: After a session restarts with messages still queued, does delivery resume on its own? → A:
+  No. The queue stays on hold until the user activates one **Send queued** control in the pane; a
+  restart can follow a stop, a crash or a service restart that restores sessions unattended, so the
+  user may not be watching. _(recommended default, pending user confirmation)_
+- Q2: What does interrupting a turn do to the queue? → A: The queue is kept unchanged and put on
+  hold until the same **Send queued** control releases it; an interrupt means Claude went the wrong
+  way, so the next message may no longer fit, and the queue is shared by every window, so it is not
+  emptied into one window's composer. _(recommended default, pending user confirmation)_
+- Q5: While the queue is on hold and the session is idle, what does sending a new draft do? → A:
+  It is delivered at once as the next user message, ahead of the held queue, which stays on hold
+  and unchanged behind it. The hold exists so the user chooses what Claude does next after an
+  interrupt or a restart, and an interrupted session must take a new message at once (User Story 3,
+  scenario 2); the queue's own order is unchanged. _(agent-resolved: spec.md#User Story 3,
+  spec.md#Clarifications Q2)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -209,7 +223,7 @@ queued message before its turn and check it is never delivered.
 1. **Given** a busy session, **When** the user sends a draft, **Then** it is added to the end of the
    session's queue, shown above the composer with its position, the composer is emptied, and
    nothing reaches the CLI.
-2. **Given** a non-empty queue, **When** the turn in progress ends with a result, **Then** the first
+2. **Given** a non-empty queue that is not on hold, **When** the turn in progress ends with a result, **Then** the first
    queued message is delivered to the CLI as the next user message, alone, it leaves the queue and
    appears in the transcript, and the session is busy again.
 3. **Given** a queued message not yet delivered, **When** the user removes it, **Then** it leaves the
@@ -219,13 +233,14 @@ queued message before its turn and check it is never delivered.
    (moving it back is not offered while the draft holds anything, so no draft is displaced).
 4. **Given** a queue, **When** the session's process ends or the session is stopped, **Then** the
    queue is kept, nothing in it is delivered while the session is not running, and the pane says
-   the queue is on hold; **When** the session runs again and is idle, **Then** delivery resumes
-   [NEEDS CLARIFICATION: resume delivery automatically after a restart, or wait for the user to
-   release the queue?].
-5. **Given** a queue, **When** the user interrupts the turn in progress, **Then**
-   [NEEDS CLARIFICATION: is the queue kept and delivery continues with the next queued message,
-   kept but put on hold until the user releases it, or emptied back into the composer as Claude
-   Code's terminal does?].
+   the queue is on hold; **When** the session runs again and is idle, **Then** the queue stays on
+   hold and nothing is delivered until the user activates the pane's **Send queued** control, after
+   which delivery resumes with the first queued message (clarification Q1).
+5. **Given** a queue, **When** the user interrupts the turn in progress, **Then** the queue is kept
+   unchanged and put on hold: nothing in it is delivered when the interrupted turn ends, until the
+   user activates **Send queued** (clarification Q2); while on hold its entries stay editable,
+   removable and movable back into the composer, and a new draft sent while the session is idle is
+  delivered at once, ahead of the held queue (clarification Q5).
 6. **Given** two windows viewing the same session, **When** one queues a message, **Then** both
    windows show it in the session's queue at the same position, either window can edit, remove or
    move it back, and closing the window that queued it neither removes nor delays it
@@ -285,8 +300,8 @@ picture and the text with the path.
 - **Session ends mid-turn** (crash, kill, restart): the turn closes as #939 shows it (ended without a
   result), the session is not running, the stop control is withdrawn and the queue is on hold.
 - **Interrupt racing the turn's end**: the turn ends on its own just as the user interrupts; the
-  session becomes idle once, no error is shown, and the next queued message is handled by the rules
-  of User Story 4.
+  session becomes idle once, no error is shown, and the queue goes on hold as for any interrupt the
+  user asked for (clarification Q2), whichever ended the turn.
 - **Refusal or delivery failure**: if the service refuses or cannot deliver a message (the session
   stopped between send and delivery), the message comes back to the composer (or stays at the head
   of the queue) with the reason; it is never silently dropped.
@@ -390,8 +405,15 @@ picture and the text with the path.
   MUST be kept while **Save terminal history** is on, as the session's events are (clarification
   Q4).
 - **FR-022**: While the session is not running, the queue MUST be kept and shown on hold in every
-  window and nothing in it delivered; what happens to it on restart and on interrupt is set by the
-  clarifications in User Story 4.
+  window and nothing in it delivered. A queue MUST also go on hold when the session restarts
+  (clarification Q1) and when the user interrupts a turn (clarification Q2), and MUST stay on hold
+  while the session is idle; while a queue is on hold and the session is running, every window MUST
+  offer one **Send queued** control that releases it, and delivery then resumes by FR-019 with the
+  first queued message (delivered at once if the session is idle); releases from several windows
+  at once MUST release it once and deliver one message. A queue that is not on hold MUST
+  NOT go on hold on its own when a turn ends with a result. A draft sent while the session is idle
+  and its queue is on hold MUST be delivered at once, and the held queue MUST stay on hold and
+  unchanged (clarification Q5).
 
 **Input history**
 
@@ -434,7 +456,7 @@ picture and the text with the path.
 
 - **FR-033**: The user guide's structured-sessions section MUST describe the composer (send and
   new-line keys, history keys, attachments), the busy and idle states, interrupting a turn and the
-  queue, and MUST keep listing what the later issues of the epic add, in the same change that ships
+  queue (including when it goes on hold and **Send queued**), and MUST keep listing what the later issues of the epic add, in the same change that ships
   the composer.
 
 ### Constraints
@@ -465,6 +487,8 @@ picture and the text with the path.
 - **Draft**: per window and session: text, caret, and ordered attachments.
 - **Attachment**: a dropped image's name, kind, size and content, held until the message is sent or
   the attachment removed.
+- **Queue hold**: per session queue, whether it is on hold (after a stop, a restart or an
+  interrupt) and so waits for **Send queued**.
 - **Queued message**: text and attachments, its position in the session's queue (held by the
   background service, one per session), and who queued it.
 - **Session turn state**: per structured session: not running, idle, busy, or busy with an
@@ -487,7 +511,7 @@ picture and the text with the path.
   process is the same process before and after in 100% of runs.
 - **SC-004**: Across the queue test cases (several queued messages, removals, edits, interrupts,
   restarts, a window closing, and two windows sending at once), 0 messages are delivered twice,
-  out of order or lost, and every window viewing the session shows the same queue in the same
+  out of order or lost, 0 messages are delivered from a queue on hold before **Send queued**, and every window viewing the session shows the same queue in the same
   order.
 - **SC-005**: In 100% of the refusal and lost-connection test cases, the user's text and
   attachments are back in the composer (or still queued) unchanged.
