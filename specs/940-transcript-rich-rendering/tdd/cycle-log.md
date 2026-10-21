@@ -84,3 +84,10 @@ each test task written before its implementation task, run red, then made green.
   wrapped every card's trailing status in a new row; fixed so a card without a meta passes its
   status through unchanged. T026's `composition_contrast` and `style_outline_discipline` cases
   passed against the stubs (they read the style and colour functions, which were real): test-after.
+- **M4 review fixes (2026-10-21).** Review A r1 and the visual pass, each red first:
+  `link_text::a_link_split_across_styles_is_one_focus_stop` (left `Some(2)`, right `Some(1)`),
+  `markdown_view::a_long_number_fits_its_gutter` ("1000." ran into its item) and
+  `inline_diff::the_no_newline_note_is_not_drawn_as_a_line` (the note was painted in
+  `Font::MONOSPACE`, padded as a line). Green after: consecutive spans of one link collapse into one
+  stop; `number_gutter` widens a numbered list's gutter to its longest number; the note is a
+  marker plus a caption on its side's tint.

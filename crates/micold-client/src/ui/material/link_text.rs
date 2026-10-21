@@ -153,13 +153,17 @@ impl<'a, 'b, M: Clone + 'static> From<LinkText<'a, M>> for Element<'b, M> {
         text = text.on_link_click(move |url: String| press(url));
         let mut element: Element<'static, M> = text.into();
         // Innermost the last link, so the outermost stop, which traversal visits first, is the
-        // first link.
-        let targets: Vec<&str> = t
-            .spans
-            .iter()
-            .filter_map(|s| s.link.as_ref().filter(|l| l.activatable))
-            .map(|l| l.target.as_str())
-            .collect();
+        // first link. A link whose text changes style is several spans in a row with the same
+        // link: one stop.
+        let mut targets: Vec<&str> = Vec::new();
+        let mut previous = None;
+        for s in t.spans {
+            let link = s.link.as_ref().filter(|l| l.activatable);
+            if let Some(l) = link.filter(|_| previous != Some(link)) {
+                targets.push(l.target.as_str());
+            }
+            previous = Some(link);
+        }
         for target in targets.into_iter().rev() {
             let message = on_link(target.to_owned());
             element = TakesTheKeyboard::new(element, true)
@@ -227,6 +231,22 @@ mod tests {
         assert_eq!(mounted(&spans).drive(Focusables(0)), Some(2));
         let none = vec![plain("no "), link("links", "notes.md", false)];
         assert_eq!(mounted(&none).drive(Focusables(0)), Some(0));
+    }
+
+    /// FR-004: a link whose text changes style part-way (`[**bold** rest](url)`) is several spans
+    /// but one link, so one stop; the same address again after other text is a stop of its own.
+    #[test]
+    fn a_link_split_across_styles_is_one_focus_stop() {
+        let mut bold = link("bold", "https://example.com", true);
+        bold.style.bold = true;
+        let split = vec![bold, link(" rest", "https://example.com", true)];
+        assert_eq!(mounted(&split).drive(Focusables(0)), Some(1));
+        let again = vec![
+            link("one", "https://example.com", true),
+            plain(" and "),
+            link("two", "https://example.com", true),
+        ];
+        assert_eq!(mounted(&again).drive(Focusables(0)), Some(2));
     }
 
     /// FR-004: Tab reaches the links in reading order and Enter opens the one focused.
