@@ -1201,7 +1201,8 @@ impl SettingsDraft {
         }
         let refuse = |problem: FieldProblem| FieldError {
             field: match problem.field {
-                JiraField::Site => FieldId::SettingsJiraSite,
+                // The connection form never refuses the base URL; it is not part of a connection.
+                JiraField::Site | JiraField::BaseUrl => FieldId::SettingsJiraSite,
                 JiraField::ProjectKey => FieldId::SettingsJiraKey,
                 JiraField::Email => FieldId::SettingsJiraEmail,
                 JiraField::Token => FieldId::SettingsJiraToken,
@@ -1211,7 +1212,7 @@ impl SettingsDraft {
         };
         let empty = |field: JiraField| {
             let text = match field {
-                JiraField::Site => &j.site,
+                JiraField::Site | JiraField::BaseUrl => &j.site,
                 JiraField::ProjectKey => &j.project_key,
                 JiraField::Email => &j.email,
                 JiraField::Token => j.token.as_str(),

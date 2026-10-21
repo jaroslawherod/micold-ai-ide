@@ -325,7 +325,12 @@ impl<'a> Mounted<'a> {
 
     /// The element drawn over `backdrop`: the buffer and its width.
     pub fn drawn(&mut self, backdrop: iced::Color) -> (Vec<u8>, u32) {
-        let size = self.paint();
+        self.drawn_under(backdrop, mouse::Cursor::Unavailable)
+    }
+
+    /// [`Self::drawn`] with the pointer at `cursor`, for what a widget draws only under it.
+    pub fn drawn_under(&mut self, backdrop: iced::Color, cursor: mouse::Cursor) -> (Vec<u8>, u32) {
+        let size = self.paint(cursor);
         let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
         (self.renderer.screenshot(Size::new(w, h), 1.0, backdrop), w)
     }
@@ -334,7 +339,7 @@ impl<'a> Mounted<'a> {
     /// face and colour, and where — what `tests/support/layout.rs::painted_text` reads, for the
     /// in-crate tests that cannot reach it (feature 890, T001).
     pub fn painted_text(&mut self) -> Vec<Painted> {
-        self.paint();
+        self.paint(mouse::Cursor::Unavailable);
         self.paragraphs()
     }
 
@@ -418,7 +423,7 @@ impl<'a> Mounted<'a> {
     }
 
     /// Draw the element into the renderer at its own size, returning that size.
-    fn paint(&mut self) -> Size {
+    fn paint(&mut self, cursor: mouse::Cursor) -> Size {
         let size = self.node.bounds().size();
         let viewport = Rectangle::with_size(size);
         self.renderer.reset(viewport);
@@ -430,7 +435,7 @@ impl<'a> Mounted<'a> {
                 text_color: iced::Color::BLACK,
             },
             Layout::new(&self.node),
-            mouse::Cursor::Unavailable,
+            cursor,
             &viewport,
         );
         size

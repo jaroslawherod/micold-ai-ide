@@ -375,6 +375,36 @@ fn an_overview_cards_header_and_body_text_is_legible_on_their_fills() {
     );
 }
 
+/// Overview card issue link (feature 1122, T009 — FR-015): the `TextLink`'s `primary` label reads at
+/// feature 1120's FR-003 4.5:1 on the card's body in both schemes and every state. Collapsed and
+/// expanded draw the same body fill (`palette`), and a targeted card lays the selected layer over
+/// it, so both grounds are checked.
+#[test]
+fn an_overview_cards_issue_link_is_legible_on_its_body() {
+    use micold_core::overview::CardState;
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for state in CardState::ALL {
+            let p = super::overview_card::palette(state, &r);
+            let selected = tokens::over(p.on_body, f64::from(tokens::state::SELECTED), p.body);
+            for (what, ground) in [("body", p.body), ("body + selected layer", selected)] {
+                let ratio = contrast(r.primary, ground);
+                if ratio < AA_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / {state:?} link on {what}: {ratio:.2}:1 (needs {AA_TEXT})"
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "an issue link cannot be read on a card:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 /// Overview card target mark (feature 972, T015 — FR-006; feature 1120, T031): the `primary`
 /// outline reads at 3:1 against each card state's header and body, bare and with the selected
 /// layer over them, both schemes.

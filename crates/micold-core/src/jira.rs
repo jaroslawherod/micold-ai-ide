@@ -24,6 +24,8 @@ pub enum JiraField {
     Email,
     /// The API token.
     Token,
+    /// The app-wide Jira base URL issue links are built on (feature 1122).
+    BaseUrl,
 }
 
 /// One refused field of a connection, with the text shown beside it.
@@ -44,6 +46,9 @@ pub const KEY_REFUSED: &str = "Enter the project key, e.g. ABC.";
 pub const EMAIL_REFUSED: &str = "Enter the email of your Atlassian account.";
 /// Refusal text of an empty API token.
 pub const TOKEN_REFUSED: &str = "Enter an API token.";
+/// Refusal text of an unusable Jira base URL.
+pub const BASE_URL_REFUSED: &str =
+    "Enter the https address of your Jira, e.g. https://acme.atlassian.net.";
 
 /// A Jira site's origin: `scheme://host[:port]`, path and trailing slash dropped.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -64,18 +69,45 @@ impl SiteOrigin {
             field: JiraField::Site,
             reason: SITE_REFUSED,
         };
-        let input = input.trim();
-        let (scheme, rest) = input.split_once("://").ok_or(refuse)?;
-        let scheme = scheme.to_ascii_lowercase();
-        if rest.contains(['?', '#']) {
-            return Err(refuse);
+        let address = WebAddress::split(input).ok_or(refuse)?;
+        match address.scheme.as_str() {
+            "https" => {}
+            "http" if cfg!(debug_assertions) && is_loopback(&address.host) => {}
+            _ => return Err(refuse),
         }
-        let authority = rest.split('/').next().unwrap_or("");
+        Ok(Self(address.origin()))
+    }
+
+    /// The origin as text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A web address split into its parts, with the checks [`SiteOrigin`] and [`JiraBaseUrl`] share:
+/// a `scheme://` prefix, no query or fragment, a non-empty authority without user info or
+/// whitespace, a port (when given) of 1 to 65535 in digits, and a host whose every dot-separated
+/// label is letters, digits and inner hyphens. Scheme and host are lower case; the path is what
+/// follows the authority, as written (empty, or starting with `/`).
+struct WebAddress<'a> {
+    scheme: String,
+    host: String,
+    port: Option<u16>,
+    path: &'a str,
+}
+
+impl<'a> WebAddress<'a> {
+    fn split(input: &'a str) -> Option<Self> {
+        let (scheme, rest) = input.trim().split_once("://")?;
+        if rest.contains(['?', '#']) {
+            return None;
+        }
+        let (authority, path) = rest.find('/').map_or((rest, ""), |at| rest.split_at(at));
         if authority.is_empty()
             || authority.contains('@')
             || authority.chars().any(|c| c.is_whitespace())
         {
-            return Err(refuse);
+            return None;
         }
         let (host, port) = match authority.rsplit_once(':') {
             Some((host, port)) => {
@@ -83,8 +115,7 @@ impl SiteOrigin {
                 let port = Some(port)
                     .filter(|p| p.chars().all(|c| c.is_ascii_digit()))
                     .and_then(|p| p.parse::<u16>().ok())
-                    .filter(|p| *p != 0)
-                    .ok_or(refuse)?;
+                    .filter(|p| *p != 0)?;
                 (host, Some(port))
             }
             None => (authority, None),
@@ -98,22 +129,22 @@ impl SiteOrigin {
                 && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
         };
         if !host.split('.').all(label_ok) {
-            return Err(refuse);
+            return None;
         }
-        match scheme.as_str() {
-            "https" => {}
-            "http" if cfg!(debug_assertions) && is_loopback(&host) => {}
-            _ => return Err(refuse),
-        }
-        Ok(Self(match port {
-            Some(port) => format!("{scheme}://{host}:{port}"),
-            None => format!("{scheme}://{host}"),
-        }))
+        Some(Self {
+            scheme: scheme.to_ascii_lowercase(),
+            host,
+            port,
+            path,
+        })
     }
 
-    /// The origin as text.
-    pub fn as_str(&self) -> &str {
-        &self.0
+    /// `scheme://host[:port]`.
+    fn origin(&self) -> String {
+        match self.port {
+            Some(port) => format!("{}://{}:{port}", self.scheme, self.host),
+            None => format!("{}://{}", self.scheme, self.host),
+        }
     }
 }
 
@@ -124,6 +155,44 @@ fn is_loopback(host: &str) -> bool {
 impl std::fmt::Display for SiteOrigin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+/// The app-wide Jira base URL issue links are built on (feature 1122, FR-011):
+/// `https://host[:port][/path]`, scheme and host lower case, the path as written, no trailing `/`,
+/// no user info, query or fragment. Serialized as its string; deserialized through [`Self::parse`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct JiraBaseUrl(String);
+
+impl JiraBaseUrl {
+    /// Parse a base URL, trimmed. `https` only, in every build.
+    pub fn parse(input: &str) -> Result<Self, FieldProblem> {
+        let refuse = FieldProblem {
+            field: JiraField::BaseUrl,
+            reason: BASE_URL_REFUSED,
+        };
+        let address = WebAddress::split(input).ok_or(refuse)?;
+        if address.scheme != "https" || address.path.chars().any(char::is_whitespace) {
+            return Err(refuse);
+        }
+        Ok(Self(format!(
+            "{}{}",
+            address.origin(),
+            address.path.trim_end_matches('/')
+        )))
+    }
+
+    /// The base URL as text, without a trailing `/`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for JiraBaseUrl {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        Self::parse(&text).map_err(|problem| serde::de::Error::custom(problem.reason))
     }
 }
 
@@ -651,5 +720,88 @@ impl JiraSource for FakeJiraSource {
                 "FakeJiraSource: no search scripted for this call".into(),
             ))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_base_url_is_stored_without_its_trailing_slash_scheme_and_host_lower_case() {
+        for (input, stored) in [
+            (
+                "https://example.atlassian.net",
+                "https://example.atlassian.net",
+            ),
+            (
+                "https://example.atlassian.net/",
+                "https://example.atlassian.net",
+            ),
+            (
+                "  https://example.atlassian.net/ ",
+                "https://example.atlassian.net",
+            ),
+            (
+                "https://jira.example.com/jira/",
+                "https://jira.example.com/jira",
+            ),
+            (
+                "https://jira.example.com:8443/jira",
+                "https://jira.example.com:8443/jira",
+            ),
+            ("HTTPS://Example.Com", "https://example.com"),
+            (
+                "https://Jira.Example.com/Jira//",
+                "https://jira.example.com/Jira",
+            ),
+        ] {
+            let parsed = JiraBaseUrl::parse(input).unwrap_or_else(|_| panic!("{input} accepted"));
+            assert_eq!(parsed.as_str(), stored, "{input}");
+        }
+    }
+
+    #[test]
+    fn a_base_url_that_is_not_an_https_address_is_refused_on_its_field() {
+        for input in [
+            "http://example.com",
+            "http://localhost:8080",
+            "ftp://example.com",
+            "example.com",
+            "https://",
+            "https:///jira",
+            "https://user@host",
+            "https://host?x=1",
+            "https://host#a",
+            "https://host/path?x",
+            "https://a..b",
+            "https://-a.com",
+            "https://a_b.com",
+            "https://host:0",
+            "https://host:80a",
+            "https://host:",
+            "",
+        ] {
+            let problem = JiraBaseUrl::parse(input).expect_err(input);
+            assert_eq!(
+                problem,
+                FieldProblem {
+                    field: JiraField::BaseUrl,
+                    reason: BASE_URL_REFUSED
+                },
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_base_url_is_written_as_its_string_and_read_through_parse() {
+        let url = JiraBaseUrl::parse("https://example.atlassian.net/").expect("valid");
+        let json = serde_json::to_string(&url).expect("serializes");
+        assert_eq!(json, r#""https://example.atlassian.net""#);
+        let back: JiraBaseUrl = serde_json::from_str(r#""https://Example.atlassian.net/""#)
+            .expect("a valid string reads back");
+        assert_eq!(back, url);
+        assert!(serde_json::from_str::<JiraBaseUrl>(r#""http://example.com""#).is_err());
     }
 }

@@ -33,6 +33,9 @@ pub const LABEL: &str = "Rebuild index";
 /// A second label, so a row of two instances is visibly two things rather than one repeated.
 pub const OTHER_LABEL: &str = "Discard changes";
 
+/// What a text link reads: an Overview card's issue link (feature 1122).
+pub const LINK_LABEL: &str = "Issue #1122";
+
 /// A label long enough to be truncated, for the components whose job is truncating one.
 pub const LONG_LABEL: &str =
     "feat/an-unusually-long-worktree-name-that-will-not-fit-in-the-sidebar";

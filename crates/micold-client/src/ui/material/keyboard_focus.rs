@@ -80,6 +80,9 @@ pub(super) struct TakesTheKeyboard<'a, M> {
     on_shown_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
     /// A stable name, so the application can move the keyboard here (feature 813, R12/R13).
     id: Option<iced::advanced::widget::Id>,
+    /// Whether a pointer press on it takes the keyboard (feature 1122, U1): a link clicked on a
+    /// card leaves the keyboard where it was.
+    press_takes_focus: bool,
 }
 
 impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
@@ -97,6 +100,7 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
             on_focus_change: None,
             on_shown_change: None,
             id: None,
+            press_takes_focus: true,
         }
     }
 
@@ -161,6 +165,14 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
     /// reports `false` (feature 1121, U1, FR-002).
     pub fn on_shown_change(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
         self.on_shown_change = Some(Box::new(f));
+        self
+    }
+
+    /// Whether a pointer press on this control takes the keyboard; `true` unless said otherwise
+    /// (feature 1122, U1). With `false` a press on it leaves it without the keyboard, and a press
+    /// elsewhere still drops the keyboard it holds.
+    pub fn press_takes_focus(mut self, takes: bool) -> Self {
+        self.press_takes_focus = takes;
         self
     }
 
@@ -494,9 +506,10 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         // A press takes the keyboard, and a press anywhere else gives it up — the same rule the
         // stack's text input follows, so a surface holding both behaves as one thing rather than as
         // two controls with different ideas about what a click means. It does not *show* the
-        // keyboard, though: the pointer is what the user is using (FR-022a).
+        // keyboard, though: the pointer is what the user is using (FR-022a). A control told not to
+        // take it on a press is left without it, wherever the press lands (feature 1122, U1).
         if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
-            let now = self.enabled && cursor.is_over(layout.bounds());
+            let now = self.enabled && self.press_takes_focus && cursor.is_over(layout.bounds());
             let state = tree.state.downcast_mut::<Focus>();
             state.focused = now;
             state.visible = false;
@@ -756,5 +769,55 @@ mod tests {
             )
             .is_empty());
         assert_eq!(m.send(named_key(Named::ContextMenu), cursor), ["menu"]);
+    }
+
+    /// A control publishing `"<name> focus <bool>"` and answering Enter with `"<name> enter"`.
+    fn reporting(name: &'static str, press_takes_focus: bool) -> TakesTheKeyboard<'static, String> {
+        TakesTheKeyboard::new(container(text(name)).padding(8), true)
+            .key(iced::keyboard::key::Named::Enter, format!("{name} enter"))
+            .on_focus_change(move |focused| format!("{name} focus {focused}"))
+            .press_takes_focus(press_takes_focus)
+    }
+
+    /// Feature 1122 T005 (U1): a press on a control that does not take the keyboard on a press
+    /// leaves it without the keyboard and publishes no focus change.
+    #[test]
+    fn a_press_on_a_control_that_does_not_take_focus_on_press_leaves_it_unfocused() {
+        use super::super::test_support::named_key;
+        let mut m = Mounted::new(reporting("link", false));
+        let at = m.node.bounds().center();
+        assert!(m.press(at).is_empty(), "a press published a focus change");
+        assert!(
+            m.send(
+                named_key(iced::keyboard::key::Named::Enter),
+                mouse::Cursor::Unavailable
+            )
+            .is_empty(),
+            "Enter reached a control the press did not focus"
+        );
+    }
+
+    /// Feature 1122 T005: a press elsewhere still drops the keyboard such a control holds by Tab.
+    #[test]
+    fn a_press_elsewhere_drops_the_keyboard_a_tab_gave_it() {
+        let mut m = Mounted::new(iced::widget::column![
+            reporting("link", false),
+            container(text("elsewhere")).padding(8)
+        ]);
+        m.focus_next();
+        assert_eq!(m.redraw(), ["link focus true"]);
+        let elsewhere = m.node.children()[1].bounds().center();
+        assert_eq!(m.press(elsewhere), ["link focus false"]);
+    }
+
+    /// Feature 1122 T005: by default a press takes the keyboard, as before.
+    #[test]
+    fn a_press_takes_the_keyboard_by_default() {
+        let mut m = Mounted::new(
+            TakesTheKeyboard::new(container(text("button")).padding(8), true)
+                .on_focus_change(|focused| format!("focus {focused}")),
+        );
+        let at = m.node.bounds().center();
+        assert_eq!(m.press(at), ["focus true"]);
     }
 }

@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1122
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: tasks
-- **Next step**: orchestrator opens the design PR (title/body in the session scratchpad), waits on CI and merges; then M1. D3, D4 still defaults awaiting the owner; tasks tag the affected tasks `(D3)` / `(D4)`.
+- **Phase**: implement M1
+- **Next step**: M1 verify: scoped gate, review A (code-review high) round 1. T001–T009 implemented and ticked. D3, D4 still defaults awaiting the owner.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1180 | Design (spec, plan, tasks) | merged | 9ad05048 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | — | planned |
+| M1 | T001–T009 | full | Link rules proven in core; showcase shows the shared `TextLink` | — | in progress |
 | M2 | T010–T019 | full | Showcase shows cards with "Issue #1122", click opens only the link | — | planned |
 | M3 | T020–T030 | full | GitHub issue links on the Overview; rest on link and arrows as specified | — | planned |
 | M4 | T031–T038 | full | Issue links by keyboard (focus counts for the card, Menu key returns to link) | — | planned |
