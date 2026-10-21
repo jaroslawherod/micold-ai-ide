@@ -77,7 +77,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-None.
+Plan amend D4 unit (context over 150k at its end). Done: D3 recorded as owner-confirmed; D4 amendment committed and pushed (bd07b5e7): spec, research R3/R4/R12, data-model, contracts wire/issue-link/card-link, plan, quickstart, tasks T039–T050. Next: review A d4 r1 (snapshot in *Review rounds*); a fresh unit acts on its findings per review-rounds.md (fix, re-review on sonnet with `review-snapshot.sh diff`), then the M2 unit. No open findings yet; no PR.
 
 ## Open escalation
 
