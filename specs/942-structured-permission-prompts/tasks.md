@@ -109,12 +109,12 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [ ] T018 [US1] Implement `classify` (the `Tool` branch), `core/src/structured/permission/decision.rs`
   (`validate`, `answer`, `DecisionRefusal`, preview cut) and `rules.rs` (`AllowRule::for_call`,
   `matches`, `describe`) until T015–T017 pass
-- [ ] T019 [P] [US3] Fixture and unit tests: `plan-approval` classifies `PlanApproval { plan }` with
+- [ ] T019 [US3] Fixture and unit tests: `plan-approval` classifies `PlanApproval { plan }` with
   the whole plan; `ApprovePlan` answers allow with the input unchanged (equals the recorded
   answer); `KeepPlanning` with no note gives "The user wants to keep planning."; Tool choices on a
   plan approval are `WrongKind`; no `AllowRule` is offered for a plan approval
   (`core/tests/structured_permission.rs`, `decision.rs`)
-- [ ] T020 [P] [US4] Fixture and unit tests: `question-multi` classifies `Question` with header,
+- [ ] T020 [US4] Fixture and unit tests: `question-multi` classifies `Question` with header,
   text, every option's label and description (absent → empty) and `multi_select` (absent → false);
   `Answer` gives `updatedInput` = input + `"answers": {<question text>: <labels joined by ", " or
   the free answer>}` equal to the recorded answer; `DeclineQuestion` gives "The user declined to
@@ -309,7 +309,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `PermissionInputText` into the feature; `PermissionDecision`, `PermissionInput` and
   `SetPermissionMode` sent with their `req` and their `OperationOk`/`OperationError` replies routed
   back; a reducer test per route in `client/tests/features_permission_prompts.rs` first
-- [ ] T054 [P] [US2] Tests in `client/tests/structured_start_menu.rs`: the structured create flow
+- [ ] T054 [US2] Tests in `client/tests/structured_start_menu.rs`: the structured create flow
   carries a chosen mode into `SessionCreate.permission_mode` (none chosen → Default); choosing
   Bypass enters a confirmation step and only its confirm sends the create; cancelling returns to
   the choice; a terminal create sends Default (FR-014); and in
@@ -388,10 +388,11 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 ## Parallel Opportunities
 
 - Phase 1: T001 and T002. Phase 2: T005, T007, T009, T011, T013 (disjoint files).
-- Phase 3: T015, T016, T017, T019, T020, T022 are test tasks in separate files or modules.
+- Phase 3: T015, T016, T017 and T022 (separate files); T019 and T020 follow T015 and T016 in their
+  files.
 - Phase 4: T024 and T026; T029–T031 after T027 share one file and are written in sequence.
 - Phase 5: T035 beside T036's files; Phase 7: T044 and T046 (different files).
-- Phase 8: T049 and T054 (T050–T051 follow T049 in its file).
+- Phase 8: none — T049–T051 and T054 share `client/tests/features_permission_prompts.rs`.
 
 ## Implementation Strategy
 

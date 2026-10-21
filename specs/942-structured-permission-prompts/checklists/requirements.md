@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,7 +31,7 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers (running-session mode change, Always-allow scope) are left for
-  the clarify unit.
+- The two [NEEDS CLARIFICATION] markers (running-session mode change, Always-allow scope) were
+  resolved by the user in *Clarifications* (session 2026-10-21); none remain.
 - The CLI's own names (`--permission-prompt-tool`, `ExitPlanMode`, `AskUserQuestion`) appear because
   the issue's acceptance names them; they stay in Terms and Assumptions, and the transport is in Assumptions, not the requirements.
