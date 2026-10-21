@@ -48,6 +48,7 @@ fn a_session_create_without_a_kind_decodes_as_a_terminal_session() {
         provider: AiCli::ClaudeCode,
         allow_additional_session: false,
         kind: SessionKind::Structured,
+        permission_mode: Default::default(),
     };
     json_roundtrip(&msg);
     let old = without(

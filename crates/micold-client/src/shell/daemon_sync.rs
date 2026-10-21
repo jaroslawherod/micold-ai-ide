@@ -2668,6 +2668,7 @@ pub fn on_session_start_requested(
             automatic,
         };
         send_op_bound(app, binding, op, |req| ClientMsg::SessionCreate {
+            permission_mode: Default::default(),
             req,
             project,
             worktree_dir,
@@ -2693,6 +2694,7 @@ fn additional_session_request(
         SessionLocation::Default => String::new(),
     };
     ClientMsg::SessionCreate {
+        permission_mode: Default::default(),
         req,
         project,
         worktree_dir,
@@ -3866,6 +3868,7 @@ pub(crate) mod tests {
             title: SessionLabel::Named(title.into()),
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
+            permission_mode: Default::default(),
             lifecycle,
             activity: ActivitySignal::Unknown,
             input_serial,

@@ -178,6 +178,35 @@ impl PermissionMode {
     }
 }
 
+/// Why a session's permission mode cannot be set (#942, data-model *PermissionMode*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModeRefusal {
+    /// Only a structured session has a permission mode; a terminal one keeps its CLI's own
+    /// permission configuration (FR-018).
+    NotStructured,
+}
+
+impl fmt::Display for ModeRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotStructured => f.write_str(
+                "Only a structured session has a permission mode: a terminal session keeps its CLI's own permission settings",
+            ),
+        }
+    }
+}
+
+impl SessionKind {
+    /// Whether a session of this kind can be created in `mode` (FR-018): any kind in `Default`,
+    /// only a structured session in another mode.
+    pub fn check_mode(self, mode: PermissionMode) -> Result<(), ModeRefusal> {
+        match self {
+            Self::Terminal if !mode.is_default() => Err(ModeRefusal::NotStructured),
+            _ => Ok(()),
+        }
+    }
+}
+
 /// The sidebar label for a session — read from the AI CLI's own records, never user-entered
 /// (FR-011a).
 ///
@@ -477,6 +506,10 @@ pub struct Session {
     pub agents: Vec<crate::agent_run::AgentRun>,
     /// Terminal or structured (feature 938).
     pub kind: SessionKind,
+    /// How a structured session asks before Claude uses a tool (#942, FR-013, FR-015). Persisted
+    /// and mutable, through the daemon's `Catalog::set_permission_mode` only; always `Default` for
+    /// a terminal session (FR-018).
+    pub permission_mode: PermissionMode,
 }
 
 impl Session {
@@ -518,6 +551,7 @@ impl Session {
             origin_rejected: false,
             agents: Vec::new(),
             kind,
+            permission_mode: PermissionMode::Default,
         }
     }
 
@@ -569,6 +603,7 @@ impl Session {
             origin_rejected: false,
             agents: Vec::new(),
             kind,
+            permission_mode: PermissionMode::Default,
         }
     }
 

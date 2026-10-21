@@ -29,8 +29,8 @@ use micold_core::protocol::messages::{
 };
 use micold_core::provider::{ActivitySource, ConversationIdentity, ToolServerSupport};
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle, SessionLocation,
-    ShellInstanceId, TerminalMode, RESTART_STABLE_AFTER,
+    AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle,
+    SessionLocation, ShellInstanceId, TerminalMode, RESTART_STABLE_AFTER,
 };
 use micold_core::structured::{TurnState, UserMessageRefusal};
 use micold_core::terminal::{LaunchMode, LaunchSpec};
@@ -1142,14 +1142,20 @@ impl DaemonState {
         let mut extra = self.activity_launch_for(id, spec);
         let binding = self.tool_server_launch_for(id, spec, respawn, kind);
         if kind == SessionKind::Structured {
-            let prompt_tool = !binding.is_empty() && self.lock().permission_prompts;
+            let (prompt_tool, mode) = {
+                let inner = self.lock();
+                // The session's persisted mode, on every launch of it (FR-015).
+                let mode = inner
+                    .catalog
+                    .workspace()
+                    .find_session(id)
+                    .map_or(PermissionMode::Default, |(_, s)| s.permission_mode);
+                (!binding.is_empty() && inner.permission_prompts, mode)
+            };
             extra.extend(
-                micold_core::structured::permission::launch_args(
-                    micold_core::session::PermissionMode::Default,
-                    prompt_tool,
-                )
-                .into_iter()
-                .map(OsString::from),
+                micold_core::structured::permission::launch_args(mode, prompt_tool)
+                    .into_iter()
+                    .map(OsString::from),
             );
         }
         extra.extend(binding);
@@ -3363,11 +3369,33 @@ impl DaemonState {
         kind: SessionKind,
         additional: micold_core::occupancy::Additional,
     ) -> Result<SessionId, crate::catalog::CreateSessionError> {
-        self.lock().catalog.create_session_of_kind(
+        self.create_session_in_mode(
             project,
             worktree_dir,
             provider,
             kind,
+            PermissionMode::Default,
+            additional,
+        )
+    }
+
+    /// [`Self::create_session_of_kind`] in permission mode `mode` (#942, FR-013), refused before
+    /// anything is written for a terminal session in another mode than Default (FR-018).
+    pub fn create_session_in_mode(
+        &self,
+        project: &Path,
+        worktree_dir: &str,
+        provider: AiCli,
+        kind: SessionKind,
+        mode: PermissionMode,
+        additional: micold_core::occupancy::Additional,
+    ) -> Result<SessionId, crate::catalog::CreateSessionError> {
+        self.lock().catalog.create_session_in_mode(
+            project,
+            worktree_dir,
+            provider,
+            kind,
+            mode,
             additional,
         )
     }

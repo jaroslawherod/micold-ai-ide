@@ -34,6 +34,7 @@ fn session(id: SessionId, dir: &str) -> SessionSummary {
         main: false,
         provider: AiCli::ClaudeCode,
         kind: Default::default(),
+        permission_mode: Default::default(),
         origin: None,
         agents: Vec::new(),
         paused_on_user: false,

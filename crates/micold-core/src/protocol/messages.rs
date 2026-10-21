@@ -678,6 +678,11 @@ pub enum ClientMsg {
         /// with the `KindRefusal` sentence and writes no record (FR-003).
         #[serde(default)]
         kind: SessionKind,
+        /// The structured session's permission mode (#942, FR-013). Absent means
+        /// [`PermissionMode::Default`]. Another mode with `kind: Terminal` is refused with the
+        /// `ModeRefusal` sentence and writes no record (FR-018).
+        #[serde(default)]
+        permission_mode: PermissionMode,
     },
     /// A user message for a structured session (feature 938, FR-008): written to its CLI as one
     /// stream-json user message. Answered `OperationOk(Ack)` once written; `OperationError` with
@@ -1582,6 +1587,10 @@ pub struct SessionSummary {
     /// [`SessionKind::Terminal`].
     #[serde(default)]
     pub kind: SessionKind,
+    /// The session's permission mode (#942, FR-015): durable, from the record. Absent on an older
+    /// frame means [`PermissionMode::Default`].
+    #[serde(default)]
+    pub permission_mode: PermissionMode,
 }
 
 /// One agent run on a [`SessionSummary`] — the stored form, unchanged (feature 552).
@@ -2176,6 +2185,7 @@ mod attention_wire_tests {
             activity: ActivitySignal::AwaitingInput,
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
+            permission_mode: Default::default(),
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: COUNTED,
@@ -2204,6 +2214,7 @@ mod attention_wire_tests {
             activity: ActivitySignal::AwaitingInput,
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
+            permission_mode: Default::default(),
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: 1,

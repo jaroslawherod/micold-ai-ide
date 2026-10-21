@@ -667,6 +667,7 @@ pub async fn work(connection: &mut DaemonConnection, suite: &Suite, seen: &mut S
             provider: AiCli::ClaudeCode,
             allow_additional_session: true,
             kind: Default::default(),
+            permission_mode: Default::default(),
         },
         3,
         seen,

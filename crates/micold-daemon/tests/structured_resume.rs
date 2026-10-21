@@ -280,6 +280,7 @@ async fn a_new_structured_session_starts_a_new_conversation() {
             provider: AiCli::ClaudeCode,
             allow_additional_session: true,
             kind: SessionKind::Structured,
+            permission_mode: Default::default(),
         },
     )
     .await;

@@ -57,6 +57,7 @@ fn catalog(id: SessionId, unread: bool) -> CatalogSnapshot {
                 activity: ActivitySignal::AwaitingInput,
                 provider: AiCli::ClaudeCode,
                 kind: Default::default(),
+                permission_mode: Default::default(),
                 input_serial: 0,
                 live_shells: Vec::new(),
                 attention_seq: 1,

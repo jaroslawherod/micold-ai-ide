@@ -241,6 +241,7 @@ async fn ssh_real_mismatch_replace_is_withheld_while_a_session_runs() {
             worktree_dir: String::new(),
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
+            permission_mode: Default::default(),
             allow_additional_session: true,
         },
         2,

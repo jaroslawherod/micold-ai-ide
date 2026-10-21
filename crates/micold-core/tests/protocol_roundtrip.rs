@@ -337,6 +337,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             worktree_dir: "feat-x".into(),
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
+            permission_mode: Default::default(),
             allow_additional_session: false,
         },
         // The same message on the second provider (feature 026, T021). Both variants ride the
@@ -348,6 +349,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             worktree_dir: "feat-y".into(),
             provider: AiCli::Copilot,
             kind: Default::default(),
+            permission_mode: Default::default(),
             allow_additional_session: true,
         },
         ClientMsg::SessionDelete {
@@ -432,6 +434,8 @@ fn sample_summary() -> SessionSummary {
         worktree_dir: Some("feat-x".into()),
         provider: AiCli::Copilot,
         kind: Default::default(),
+        // Not the default, so a field that never encoded would read back `Default` (#942).
+        permission_mode: PermissionMode::AcceptEdits,
         title: SessionLabel::Named("Fix login".into()),
         lifecycle: WireLifecycle::Failed {
             reason: "crash loop".into(),
@@ -897,8 +901,53 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_60() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 60);
+fn the_protocol_version_is_61() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 61);
+}
+
+/// #942 M4 (FR-013, FR-015): a summary and a create carry the session's permission mode on both
+/// wires, and an older frame without it decodes as `Default`.
+#[test]
+fn the_permission_mode_rides_the_summary_and_the_create_and_defaults_when_absent() {
+    for mode in PermissionMode::ALL {
+        let summary = SessionSummary {
+            permission_mode: mode,
+            ..sample_summary()
+        };
+        json_roundtrip(&summary);
+        postcard_roundtrip(&summary);
+        let create = ClientMsg::SessionCreate {
+            req: 3,
+            project: "/p".into(),
+            worktree_dir: "wt".into(),
+            provider: AiCli::ClaudeCode,
+            allow_additional_session: false,
+            kind: micold_core::session::SessionKind::Structured,
+            permission_mode: mode,
+        };
+        json_roundtrip(&create);
+        postcard_roundtrip(&create);
+    }
+
+    let mut old = serde_json::to_value(sample_summary()).expect("a summary encodes");
+    old.as_object_mut()
+        .expect("an object")
+        .remove("permission_mode")
+        .expect("the summary carries its mode");
+    let back: SessionSummary = serde_json::from_value(old).expect("an older summary decodes");
+    assert_eq!(back.permission_mode, PermissionMode::Default);
+
+    let create: ClientMsg = serde_json::from_str(
+        r#"{"SessionCreate":{"req":1,"project":"/a","worktree_dir":"d","provider":"ClaudeCode","kind":"Structured"}}"#,
+    )
+    .expect("an older create decodes");
+    let ClientMsg::SessionCreate {
+        permission_mode, ..
+    } = create
+    else {
+        panic!("not a SessionCreate: {create:?}");
+    };
+    assert_eq!(permission_mode, PermissionMode::Default);
 }
 
 /// A pending tool request, as every client is shown it (#942 contracts/wire.md).
@@ -2160,6 +2209,7 @@ fn the_main_marker_and_set_main_round_trip() {
         activity: ActivitySignal::Unknown,
         provider: AiCli::ClaudeCode,
         kind: Default::default(),
+        permission_mode: Default::default(),
         input_serial: 0,
         live_shells: Vec::new(),
         attention_seq: 0,

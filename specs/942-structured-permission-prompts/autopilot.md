@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M3 PR
-- **Next step**: orchestrator opens the M3 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M4
+- **Phase**: M4 implement
+- **Next step**: M4 review A + gate, review B, full gate, PR
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1197 | Design: spec, clarify, plan, research, contracts, tasks | merged (rebase) | 51e571f4603dfa1cb9091f7f82f32062b9ca6e8a |
 | #1201 | M1: core request kinds, answers, rules, modes, control lines | merged (rebase; rebased onto main first, one conflict in `tests/support/stream_json.rs` with #944, both lists kept) | a689c4c4a89cd1ab9da5206afd4f0c913e94437d |
 | #1204 | M2: daemon holds and decides prompt requests (switch off) | merged (rebase) | 0c33edd153cba2c02c9f41dfe584253b6a15056b |
+| #1208 | M3: daemon waiting activity and withdrawal | merged (rebase) | 802f46ebcbd3379fb50758ac94fde18e757e11b2 |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | Core: request kinds, answers, rules, modes, control lines and parse against recorded fixtures; capture script | #1201 | merged |
 | M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | #1204 | merged |
-| M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | pending (orchestrator opens) | gate green at 9ef265a6 (scripts/gate.sh), reviews clean, PR to open |
-| M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | pending |
+| M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | #1208 | merged |
+| M4 | T039–T042 | full | Daemon: mode persisted, created, launched | — | implemented (T039–T042 ticked); TDD red: core tests failed to compile (no `permission_mode`), daemon launch tests failed with the launch still Default |
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | — | pending |
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | pending |
 | M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1) | — | pending |
