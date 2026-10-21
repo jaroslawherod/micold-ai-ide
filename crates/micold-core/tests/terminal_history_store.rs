@@ -1013,3 +1013,137 @@ mod events_kind {
         assert!(!store.dir().join(EVENTS_FILE).exists());
     }
 }
+
+// ---- The queue file kind (feature 941, research R9): `<uuid>.queue` beside `.events`.
+
+mod queue_kind {
+    use super::*;
+    use micold_core::structured::attachment::admit;
+    use micold_core::structured::{
+        encode_queue, Message, MAX_QUEUE_FILE_BYTES, QUEUE_FORMAT_VERSION,
+    };
+    use micold_core::terminal_history::{DamageReason, QueueLoad};
+
+    const QUEUE_FILE: &str = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.queue";
+
+    fn queue() -> Vec<Message> {
+        let picture = admit(&[], "shot.png", b"\x89PNG\r\n\x1a\nbytes".to_vec()).unwrap();
+        vec![
+            Message {
+                text: "first\nwith two lines".into(),
+                images: vec![picture],
+            },
+            Message {
+                text: "second".into(),
+                images: vec![],
+            },
+        ]
+    }
+
+    #[test]
+    fn a_saved_queue_loads_back_with_its_pictures_from_the_queue_file() {
+        assert_eq!(QUEUE_FORMAT_VERSION, 1);
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        assert_eq!(
+            store.save_queue(session(), &queue()).unwrap(),
+            SaveOutcome::Saved
+        );
+        assert_eq!(entries(store.dir()), [store.dir().join(QUEUE_FILE)]);
+        assert_eq!(store.load_queue(session()), QueueLoad::Queue(queue()));
+        assert_eq!(store.load_queue(other_session()), QueueLoad::None);
+    }
+
+    #[test]
+    fn no_file_is_no_queue() {
+        let root = tempfile::tempdir().unwrap();
+        assert_eq!(store_in(root.path()).load_queue(session()), QueueLoad::None);
+    }
+
+    #[test]
+    fn saving_an_empty_queue_removes_the_file() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_queue(session(), &queue()).unwrap();
+        store.save_queue(session(), &[]).unwrap();
+        assert!(entries(store.dir()).is_empty());
+        assert_eq!(store.load_queue(session()), QueueLoad::None);
+        // And the same queue again is written again, not "unchanged".
+        assert_eq!(
+            store.save_queue(session(), &queue()).unwrap(),
+            SaveOutcome::Saved
+        );
+    }
+
+    #[test]
+    fn another_version_a_truncated_file_and_an_oversized_one_are_damaged() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_queue(session(), &queue()).unwrap();
+        let path = store.dir().join(QUEUE_FILE);
+        let good = std::fs::read(&path).unwrap();
+
+        let mut other_version = good.clone();
+        other_version[8..12].copy_from_slice(&2u32.to_le_bytes());
+        std::fs::write(&path, &other_version).unwrap();
+        assert!(matches!(
+            store.load_queue(session()),
+            QueueLoad::Damaged(DamageReason::OtherVersion(2))
+        ));
+
+        std::fs::write(&path, &good[..good.len() - 5]).unwrap();
+        assert!(matches!(store.load_queue(session()), QueueLoad::Damaged(_)));
+
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(MAX_QUEUE_FILE_BYTES + 1).unwrap();
+        drop(file);
+        assert_eq!(
+            store.load_queue(session()),
+            QueueLoad::Damaged(DamageReason::TooLarge)
+        );
+    }
+
+    #[test]
+    fn a_picture_that_is_not_its_format_makes_the_file_damaged() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        let mut bytes = encode_queue(&queue());
+        // The PNG's first magic byte, inside the payload: the picture no longer sniffs as PNG.
+        let at = bytes
+            .windows(4)
+            .position(|w| w == b"\x89PNG")
+            .expect("the picture's bytes");
+        bytes[at] = b'x';
+        std::fs::create_dir_all(store.dir()).unwrap();
+        // Re-frame with a valid checksum, so only the picture is wrong.
+        let body = bytes.len() - 32;
+        let checksum = micold_core::protocol::hashing::sha256(&bytes[..body]);
+        bytes[body..].copy_from_slice(&checksum);
+        std::fs::write(store.dir().join(QUEUE_FILE), &bytes).unwrap();
+        assert_eq!(
+            store.load_queue(session()),
+            QueueLoad::Damaged(DamageReason::Malformed)
+        );
+    }
+
+    #[test]
+    fn removing_the_session_removes_its_queue_with_its_history_files() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_queue(session(), &queue()).unwrap();
+        store.save(session(), &snapshot(&["a"])).unwrap();
+        assert!(store.forget(&[session()]).is_empty());
+        assert!(entries(store.dir()).is_empty());
+        assert_eq!(store.load_queue(session()), QueueLoad::None);
+    }
+
+    #[test]
+    fn the_sweep_keeps_a_kept_sessions_queue() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_queue(session(), &queue()).unwrap();
+        store.save_queue(other_session(), &queue()).unwrap();
+        assert!(store.sweep(&ids(&[session()])).is_empty());
+        assert_eq!(entries(store.dir()), [store.dir().join(QUEUE_FILE)]);
+    }
+}

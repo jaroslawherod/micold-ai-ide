@@ -15,6 +15,7 @@ mod lines;
 mod parse;
 pub mod permission;
 mod saved;
+mod saved_queue;
 pub(crate) mod sync;
 pub mod transcript;
 mod turn;
@@ -29,5 +30,6 @@ pub use input::{
 pub use lines::LineSplitter;
 pub use parse::{pair_tool_calls, parse_line};
 pub use saved::{decode_events, encode_events, EVENTS_FORMAT_VERSION, MAX_EVENTS_FILE_BYTES};
+pub use saved_queue::{decode_queue, encode_queue, MAX_QUEUE_FILE_BYTES, QUEUE_FORMAT_VERSION};
 pub use turn::{InterruptAsk, InterruptOutcome, Turn, TurnEnded, TurnId, TurnState};
 pub use user_message::{encode_user_message, UserMessageRefusal};
