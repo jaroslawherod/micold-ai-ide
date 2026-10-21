@@ -205,6 +205,10 @@ pub enum Icon {
     /// A background task of the command kind, and the session's running-task count (feature 944,
     /// R12) — `pending_actions`, a clipboard with a clock: work left running.
     BackgroundTask,
+    /// A done item of a markdown task list (feature 940, research R9) — `check_box`.
+    TaskDone,
+    /// An open item of a markdown task list (feature 940) — `check_box_outline_blank`.
+    TaskOpen,
 }
 
 impl Icon {
@@ -289,6 +293,8 @@ impl Icon {
         Icon::JumpToLatest,
         Icon::Subagent,
         Icon::BackgroundTask,
+        Icon::TaskDone,
+        Icon::TaskOpen,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -395,6 +401,9 @@ impl Icon {
             // Feature 944 (research R12): `smart_toy`, `pending_actions`.
             Icon::Subagent => '\u{f06c}',
             Icon::BackgroundTask => '\u{f1bb}',
+            // Feature 940 (research R9): `check_box`, `check_box_outline_blank`.
+            Icon::TaskDone => '\u{e834}',
+            Icon::TaskOpen => '\u{e835}',
         }
     }
 }

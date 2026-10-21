@@ -356,3 +356,70 @@ fn a_disclosure_cards_header_ripple_stays_inside_the_card() {
         &outside[..outside.len().min(6)]
     );
 }
+
+/// Feature 940 (research R9): a code block's copy control ripples inside its own pill. The block is
+/// drawn at rest and again mid-press on the control; every pixel the press changed must lie inside
+/// the control's rounded shape, and the press must change some.
+#[test]
+fn a_code_blocks_copy_control_ripple_stays_in_its_shape() {
+    use super::test_support::{all_bounds, Mounted};
+    use super::CodeBlock;
+    use iced::advanced::mouse;
+    use iced::Event;
+
+    let roles = tokens::roles(micold_core::theme::ColorScheme::Dark);
+    let block = || CodeBlock::new("fn main() {}", roles).copy(None, "copy".to_string());
+    let mut rest = Mounted::new(block());
+    let (before, w) = rest.drawn(BACKDROP);
+    let mut pressed = Mounted::new(block());
+    let glyph = crate::icons::Icon::Copy.glyph().to_string();
+    let at = pressed
+        .painted_text()
+        .into_iter()
+        .find(|p| p.content == glyph)
+        .map(|p| Point::new(p.bounds.center_x(), p.bounds.center_y()))
+        .expect("the copy glyph is painted");
+    // The control: the smallest node around the glyph that is larger than the glyph's text.
+    let control = all_bounds(&pressed.node)
+        .into_iter()
+        .filter(|b| b.contains(at) && b.width > 24.0)
+        .min_by(|a, b| (a.width * a.height).total_cmp(&(b.width * b.height)))
+        .expect("the control's node");
+    pressed.press(at);
+    for step in 1..=3 {
+        let now = pressed.origin + std::time::Duration::from_millis(150) * step;
+        pressed.send(
+            Event::Window(iced::window::Event::RedrawRequested(now)),
+            mouse::Cursor::Unavailable,
+        );
+    }
+    let (after, w_after) = pressed.drawn(BACKDROP);
+    assert_eq!(w, w_after, "the press must not change the block's size");
+    let h = (before.len() / 4) as u32 / w;
+    let r = control.width.min(control.height) / 2.0;
+    let inside = |x: u32, y: u32| {
+        let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+        let cx = px.clamp(control.x + r, control.x + control.width - r);
+        let cy = py.clamp(control.y + r, control.y + control.height - r);
+        (px - cx).hypot(py - cy) <= r + 1.0
+    };
+    let mut changed = 0;
+    let mut outside = Vec::new();
+    for y in 0..h {
+        for x in 0..w {
+            let i = ((y * w + x) * 4) as usize;
+            if before[i..i + 4] != after[i..i + 4] {
+                changed += 1;
+                if !inside(x, y) {
+                    outside.push((x, y));
+                }
+            }
+        }
+    }
+    assert!(changed > 20, "the press barely drew ({changed} px)");
+    assert!(
+        outside.is_empty(),
+        "the copy control's ripple painted outside its shape {control:?}: {:?}",
+        &outside[..outside.len().min(6)]
+    );
+}

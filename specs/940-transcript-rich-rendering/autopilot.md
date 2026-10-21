@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #940
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
-- **Phase**: milestone M3
-- **Next step**: orchestrator opens the M3 PR (title and body in the session scratchpad); after it merges, milestone M4 (T025–T034)
+- **Phase**: milestone M4
+- **Next step**: M4 tasks done (T025–T034 ticked); scoped gate + review A, then review B + visual pass, full gate, push
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1187 | design (spec, clarify, plan, tasks, milestones) | merged | a7df5dd37517543447b150ff02d6a5f195c7c392 |
 | #1216 | M1 markdown model | merged | 746ef5858a0e565dfdb13924d070ff244c329f3a |
 | #1220 | M2 edit diff (+ orchestrator commit 5bcb6f83: Windows "Report rust-cache hit" CI step failed on every cache miss — find/du on a missing target/ under pipefail) | merged | 528209c8d15fd0e5f109ae49e0202fdaba01b842 |
-| pending | M3 rich cache | to open (orchestrator, via MCP) | — |
+| #1229 | M3 rich cache | merged | 7ce164cfa2e5323ab82807db03e80e35bacd9af2 |
 
 ## Milestones
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | markdown model in core: settled blocks final, incremental, total (after #939 M6; T001 re-checks #939 names) | #1216 | merged (746ef585) |
 | M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | #1220 | merged (528209c8) |
-| M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | pending | reviews A/B clean, full gate green at 0eb3683b; PR to open |
-| M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | — | pending |
+| M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | #1229 | merged (7ce164cf) |
+| M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | — | in progress |
 | M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | — | pending |
 
 ## Decisions
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Clarify round 1 (2026-10-21): FR-020 Edit/MultiEdit/Write cards start folded (#939 FR-010); FR-021 no tool result gets rich rendering (issue #940 scope; sub-agent output is #944). Both agent-resolved, no requirement added; unit ends CLEAN.
 - M2 (2026-10-21): Claude Code 2.1.306 has no `MultiEdit` tool, so `edit-turn.jsonl` records a Write, an Edit with `replace_all` and a multi-line Edit; MultiEdit is covered by `tests/edit_diff.rs`'s synthetic set (R13 wanted it recorded; not recordable, no user decision needed). `bytes` = `input_json.len()`. A `replace_all` edit with old == new is `NoChange` (nothing changes). Adding `similar` 2.7.0 made cargo 1.97 re-pick some Windows-only `windows-sys`/`getrandom` edges in Cargo.lock; `cargo update --workspace` gave the same lock, kept as cargo resolved it.
 - M3 (2026-10-21): `ui::syntax::knows` reads two-face's grammar set (the one iced_highlighter builds with; iced keeps its set private) as a new direct dependency of micold-client at iced_highlighter's version and features, so no crate is added to the build (Cargo.lock: one dependency edge). Rich messages route through `structured_transcript::State::update(&mut RichCache, msg) -> Effect { scroll, outcomes, jobs }` (allowlisted in feature_registration_cost); `App::structured_events` takes the `Grammar` and returns the jobs. `highlighted(session, key, part, spans)` takes the message's fields (the message carries no lines); it stores only for an issued, still-present part whose line count matches. A part's spans sit in `Spans`' `new` side, both schemes. The view now reads the window's `transcript_rich` as its `BlockCache` (still drawn with `PLAIN`).
+- M4 (2026-10-21): the four components own what they draw (`From<…> for Element<'b, M>` with `M: 'static`), so `BlockRenderers::RICH` (M5) can return them as its `'static` blocks; `MarkdownView` gains `.stamp(u64)` (the entry's `Derived.stamp`), and a settled block's lazy key also hashes the block itself (`Hash` derived on core's markdown types), so a document parsed afresh never shows an old block at the same index. One rule for the size limit, `review::limits::exceeds(lines, bytes)`, now shared by the cache and `MarkdownView`. `Ticket::posed(n)` makes copy states for the gallery and tests. Task-list marks use two new icons, `TaskDone`/`TaskOpen` (`check_box`, `check_box_outline_blank`). Inside a horizontal-only viewport no row can fill a width (iced compresses it to nothing), so `InlineDiff` pads each hunk's monospace lines to the widest one so their tints end together. `LinkText` focus: one `TakesTheKeyboard` per link around the one paragraph, so the ring is drawn round the paragraph, not the link (iced's `rich_text` exposes no span bounds). "Edit n of m" is shown only when a call holds several edits; "No newline at end" only when the old and new text differ in it, as a row marked on the side that lacks it.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 

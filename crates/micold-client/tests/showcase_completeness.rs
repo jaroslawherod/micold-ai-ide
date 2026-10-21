@@ -867,6 +867,57 @@ fn the_disclosure_card_poses_folded_open_running_and_failed() {
     );
 }
 
+/// Feature 940 (research R9, T034): the transcript's rich components each have an entry posing
+/// what they draw — the markdown subset, the code block's copy states and its large form, links,
+/// and an Edit, a MultiEdit, a Write and a large diff — and the disclosure card its Edit meta.
+#[test]
+fn the_rich_transcript_components_are_posed() {
+    for (module, component, poses) in [
+        (
+            "material/markdown_view.rs",
+            "MarkdownView",
+            &["the markdown subset", "muted, as a thinking card"][..],
+        ),
+        (
+            "material/code_block.rs",
+            "CodeBlock",
+            &[
+                "idle, a line wider than the block",
+                "copied",
+                "copy failed",
+                "large",
+            ][..],
+        ),
+        (
+            "material/link_text.rs",
+            "LinkText",
+            &["web, mail and a relative link"][..],
+        ),
+        (
+            "material/inline_diff.rs",
+            "InlineDiff",
+            &["an Edit", "a MultiEdit", "a Write", "a large diff"][..],
+        ),
+        (
+            "material/disclosure_card.rs",
+            "DisclosureCard",
+            &["an Edit card with its line counts"][..],
+        ),
+    ] {
+        let entry = COMPONENTS
+            .iter()
+            .find(|e| e.module == module && e.component == component)
+            .unwrap_or_else(|| panic!("the gallery has a `{module}` / `{component}` entry"));
+        for pose in poses {
+            assert!(
+                entry.posed.contains(pose),
+                "the {component} entry poses `{pose}`: {:?}",
+                entry.posed
+            );
+        }
+    }
+}
+
 /// Feature 890 (FR-008, T019): the catalogue lists `FieldGroup`, posed with a note and without.
 #[test]
 fn the_field_group_is_listed_with_and_without_a_note() {

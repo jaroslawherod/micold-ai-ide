@@ -377,6 +377,11 @@ pub fn disclosure_card<'a>(
                 roles,
             ),
             posed(
+                "an Edit card with its line counts",
+                edit_card(false, inert(), roles),
+                roles,
+            ),
+            posed(
                 "press the header, or focus it and press Space or Enter",
                 tool_card(
                     ToolPose::Done,
@@ -1386,3 +1391,174 @@ mod tests {
         }
     }
 }
+
+// --- Feature 940: the transcript's rich components -------------------------------------------
+
+/// The markdown subset fixture the core's markdown model is tested on: every element the view
+/// draws, and the literal fallbacks (feature 940, research R13).
+static MARKDOWN_SUBSET: std::sync::LazyLock<micold_core::markdown::Document> =
+    std::sync::LazyLock::new(|| {
+        micold_core::markdown::Document::parse(
+            include_str!("../../../../micold-core/tests/fixtures/stream-json/markdown-subset.md"),
+            false,
+        )
+    });
+
+/// A short reply for the muted pose: what a thinking card holds.
+static THINKING: std::sync::LazyLock<micold_core::markdown::Document> = std::sync::LazyLock::new(
+    || {
+        micold_core::markdown::Document::parse(
+            "The user wants **two** things:\n\n1. a `Write` of the new file\n2. an edit to the old one",
+            false,
+        )
+    },
+);
+
+/// The subset's code blocks highlighted, light and dark, as a highlight job would answer them.
+static MARKDOWN_SPANS: std::sync::LazyLock<
+    std::collections::HashMap<micold_core::markdown::CodeId, micold_core::review::diff::Spans>,
+> = std::sync::LazyLock::new(|| {
+    MARKDOWN_SUBSET
+        .code_blocks()
+        .filter_map(|(id, code, _)| {
+            let token = code
+                .token
+                .as_deref()
+                .filter(|t| crate::ui::syntax::knows(t))?;
+            let lines: Vec<String> = code.code.lines().map(str::to_owned).collect();
+            let spans =
+                crate::ui::syntax::highlight_job(token, &lines, std::time::Duration::from_secs(5))?;
+            Some((id, spans))
+        })
+        .collect()
+});
+
+/// `MarkdownView` — the markdown subset, and a muted reply as a thinking card draws it (feature
+/// 940, research R9).
+pub fn markdown_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let subset = material::MarkdownView::new(&MARKDOWN_SUBSET, roles)
+        .on_link(|_| Message::NoOp)
+        .on_copy(|_| Message::NoOp)
+        .code_spans(|id| MARKDOWN_SPANS.get(&id))
+        .on_show(|_| Message::NoOp);
+    let muted = material::MarkdownView::new(&THINKING, roles).muted(true);
+    arrange(
+        vec![
+            posed("the markdown subset", subset, roles),
+            posed("muted, as a thinking card", muted, roles),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// How a posed `CodeBlock` stands (feature 940). `pub` so `tests/gates/code_block_fits.rs` and
+/// `code_block_wheel.rs` lay out exactly what the gallery shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodePose {
+    /// Nothing copied yet.
+    Idle,
+    /// The read-back held the code.
+    Copied,
+    /// The clipboard did not take it.
+    Failed,
+    /// Over the size limits, waiting for "Show in full".
+    Large,
+}
+
+/// The sample code: Rust, with one line long enough to scroll sideways in a narrow transcript.
+pub const CODE_SAMPLE: &str = "fn main() {\n    let greeting = \"a line long enough to run past a narrow transcript, so it scrolls sideways inside its block\";\n    println!(\"{greeting}\");\n}";
+
+/// [`CODE_SAMPLE`]'s colours, light and dark.
+static CODE_SPANS: std::sync::LazyLock<[micold_core::review::diff::SchemeSpans; 2]> =
+    std::sync::LazyLock::new(|| {
+        [
+            micold_core::theme::ColorScheme::Light,
+            micold_core::theme::ColorScheme::Dark,
+        ]
+        .map(|scheme| micold_core::review::diff::SchemeSpans {
+            old: Default::default(),
+            new: crate::ui::syntax::highlight_lines("rust", CODE_SAMPLE.lines(), scheme),
+        })
+    });
+
+/// One posed code block of [`CODE_SAMPLE`], tagged `rust`, its copy control sending `on_copy`.
+pub fn code_block_sample(
+    pose: CodePose,
+    on_copy: Message,
+    roles: Roles,
+) -> Element<'static, Message> {
+    use crate::features::transcript_rich::{CopyState, Ticket};
+    let spans = &CODE_SPANS[usize::from(roles.scheme() == micold_core::theme::ColorScheme::Dark)];
+    let state = match pose {
+        CodePose::Copied => Some(CopyState::Copied(Ticket::posed(1))),
+        CodePose::Failed => Some(CopyState::Failed(Ticket::posed(1))),
+        CodePose::Idle | CodePose::Large => None,
+    };
+    let block = material::CodeBlock::new(CODE_SAMPLE, roles)
+        .language("rust")
+        .spans(spans)
+        .copy(state, on_copy);
+    match pose {
+        CodePose::Large => block.large(6_000, Message::NoOp).into(),
+        _ => block.into(),
+    }
+}
+
+/// `CodeBlock` — idle, copied, failed and large, the first with a line wider than the block
+/// (feature 940, research R5, R9).
+pub fn code_block<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let pose =
+        |label: &'a str, pose| posed(label, code_block_sample(pose, Message::NoOp, roles), roles);
+    arrange(
+        vec![
+            pose("idle, a line wider than the block", CodePose::Idle),
+            pose("copied", CodePose::Copied),
+            pose("copy failed", CodePose::Failed),
+            pose("large", CodePose::Large),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// A paragraph with a web link, a mail link and a relative one that is shown but not opened.
+static LINKS: std::sync::LazyLock<micold_core::markdown::Inlines> =
+    std::sync::LazyLock::new(|| {
+        let doc = micold_core::markdown::Document::parse(
+        "Open [the docs](https://example.com/docs), write to [the team](mailto:team@example.com), \
+         or read [the notes](docs/notes.md): a relative link, shown but not opened. Some \
+         **bold**, *italic*, ~~struck~~ and `inline code`.",
+        false,
+    );
+        match doc.blocks().first() {
+            Some(micold_core::markdown::Block::Paragraph { text }) => text.clone(),
+            _ => Vec::new(),
+        }
+    });
+
+/// `LinkText` — web, mail and a relative link among formatted text (feature 940, FR-004).
+pub fn link_text<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "web, mail and a relative link",
+            material::LinkText::new(&LINKS, roles).on_link(|_| Message::NoOp),
+            roles,
+        )],
+        Layout::FullWidth,
+    )
+}
+
+/// An Edit card, folded or open: its header's `+12 −3` meta beside the summary and the status
+/// (feature 940, FR-017). `pub` so `tests/gates/disclosure_card_header_fits.rs` lays it out.
+pub fn edit_card<'a>(open: bool, on_toggle: Message, roles: Roles) -> Element<'a, Message> {
+    material::DisclosureCard::new("Edit", on_toggle, roles)
+        .leading(Icon::ToolCall)
+        .summary("crates/micold-client/src/ui/material/disclosure_card.rs")
+        .meta(EDIT_META)
+        .trailing(material::IconLabel::new(Icon::ToolDone, "Done", TypeRole::Label, roles).muted())
+        .open(open)
+        .body(material::Text::new(samples::TOOL_INPUT, TypeRole::Body, roles).monospace())
+        .into()
+}
+
+/// The posed Edit card's line counts.
+pub const EDIT_META: &str = "+12 \u{2212}3";

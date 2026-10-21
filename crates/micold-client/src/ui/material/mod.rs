@@ -26,6 +26,7 @@ mod button;
 mod button_anatomy;
 mod card_grid;
 mod checkbox;
+mod code_block;
 /// A component read against the container it is *rendered in*, not against the surfaces its own
 /// role was enumerated for. The first check here that reads a **composition** rather than the
 /// token set (BUG-009).
@@ -63,12 +64,15 @@ pub mod glyph;
 mod host_picker;
 mod icon_button;
 mod icon_label;
+mod inline_diff;
 pub(crate) mod key_value_list;
 mod keyboard_focus;
 /// A toggle that names what it toggles — a glyph and a short word in one control (feature 026,
 /// T066a). The terminal bar's AI-CLI mode toggle carries the session's CLI with it.
 mod labelled_toggle;
 mod line_clamp;
+mod link_text;
+mod markdown_view;
 mod menu;
 /// §7.5's *spatial* figures — the item's inset, the panel's padding, the leading glyph, and what
 /// sits between two items. `anatomy_size` reads sizes; these are positions, and nothing read them
@@ -186,8 +190,11 @@ pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use card_grid::{CardGrid, Zoom};
 pub use checkbox::Checkbox;
+pub use code_block::CodeBlock;
 pub use connection_banner::ConnectionBanner;
-pub use diff_view::{DiffLayout, DiffView, ROW_HEIGHT as DIFF_ROW_HEIGHT};
+pub use diff_view::{
+    DiffLayout, DiffView, MARKER_WIDTH as DIFF_MARKER_WIDTH, ROW_HEIGHT as DIFF_ROW_HEIGHT,
+};
 pub use disclosure_card::DisclosureCard;
 pub use divider::Divider;
 pub use edge_fade::EdgeFade;
@@ -200,8 +207,11 @@ pub use glyph::Glyph;
 pub use host_picker::HostPicker;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;
+pub use inline_diff::InlineDiff;
 pub use key_value_list::KeyValueList;
 pub use labelled_toggle::LabelledToggle;
+pub use link_text::LinkText;
+pub use markdown_view::MarkdownView;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;

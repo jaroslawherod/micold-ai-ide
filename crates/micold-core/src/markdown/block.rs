@@ -21,7 +21,7 @@ impl CodeId {
 
 /// One top-level or nested block (contracts/markdown-model.md *Rules*). Closed: a block kind the
 /// subset does not name is drawn as one of these, as literal text where nothing else fits.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Block {
     /// An ATX or setext heading; `level` is 1–6.
     Heading { level: u8, text: Inlines },
@@ -49,14 +49,14 @@ pub enum Block {
 }
 
 /// One list item. `task` is a task-list mark: `Some(true)` checked, `Some(false)` unchecked.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ListItem {
     pub task: Option<bool>,
     pub blocks: Vec<Block>,
 }
 
 /// A code block (data-model.md *CodeBlock*).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CodeBlock {
     pub id: CodeId,
     /// The info string's first word, as written (shown, FR-009); `None` for an indented block or
@@ -74,7 +74,7 @@ pub struct CodeBlock {
 }
 
 /// A table column's alignment, as its separator row specifies (FR-003).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Align {
     None,
     Left,
@@ -86,7 +86,7 @@ pub enum Align {
 pub type Inlines = Vec<Span>;
 
 /// Text in one style, possibly a link. A hard break is a `"\n"` in `text`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Span {
     pub text: String,
     pub style: Style,
@@ -94,7 +94,7 @@ pub struct Span {
 }
 
 /// A span's emphasis; `code` is inline code.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Style {
     pub bold: bool,
     pub italic: bool,
@@ -104,7 +104,7 @@ pub struct Style {
 
 /// A link's address and whether it may be opened: `activatable` iff
 /// `link::address::classify(target)` is `Web` or `Mail` (FR-004).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Link {
     pub target: String,
     pub activatable: bool,
