@@ -8,7 +8,7 @@
 
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::{EntryKey, Transcript};
-use micold_core::structured::SequencedEvent;
+use micold_core::structured::{SequencedEvent, MAX_EVENTS};
 use std::collections::{HashMap, HashSet};
 
 /// How close to the end, in whole pixels, a scroll position still counts as at the end (R9), so
@@ -138,7 +138,8 @@ impl Eq for SessionTranscript {}
 
 impl State {
     /// Take one `StructuredEvents` message for `session` (#938 wire.md) into its transcript.
-    /// After a rebuild only the open cards still present stay open (FR-013, FR-021).
+    /// After a rebuild, or once the bound may have dropped entries from the front (FR-020), only
+    /// the open cards still present stay open (FR-013, FR-021).
     pub fn apply(
         &mut self,
         session: SessionId,
@@ -149,7 +150,8 @@ impl State {
         let s = self.sessions.entry(session).or_default();
         let rebuilds = s.transcript.rebuilds();
         s.transcript.apply(omitted, events, live);
-        if s.transcript.rebuilds() != rebuilds {
+        let bounded = s.transcript.held() >= MAX_EVENTS;
+        if s.transcript.rebuilds() != rebuilds || bounded && !s.open.is_empty() {
             let transcript = &s.transcript;
             s.open.retain(|key| transcript.entry(key).is_some());
         }
@@ -165,7 +167,8 @@ impl State {
         let Some(s) = self.sessions.get_mut(&session) else {
             return;
         };
-        if !s.open.remove(&key) {
+        // A late toggle of a card that has left opens nothing.
+        if !s.open.remove(&key) && s.transcript.entry(&key).is_some() {
             s.open.insert(key);
         }
     }
