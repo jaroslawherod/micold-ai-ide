@@ -1,9 +1,9 @@
 # Contract: client ↔ daemon additions
 
 Every new field is `#[serde(default)]`; control messages stay JSON. `PROTOCOL_VERSION` is bumped by
-one in each milestone that changes the wire (M2, M3), each merging to `main` on its own.
+one in each milestone that changes the wire (M2, M4, M5), each merging to `main` on its own.
 
-## Changed (M3)
+## Changed (M4)
 
 | Message | Change |
 |---|---|
@@ -29,7 +29,7 @@ PermissionResolved  { session: SessionId, id: PromptId, tool_use_id: Option<Stri
 
 ```text
 PermissionDecision { req: u64, session: SessionId, id: PromptId, choice: PromptChoice }   (M2)
-SetPermissionMode  { req: u64, session: SessionId, mode: PermissionMode }                   (M3)
+SetPermissionMode  { req: u64, session: SessionId, mode: PermissionMode }                   (M5)
 ```
 
 | Reply | When |
