@@ -29,7 +29,7 @@ use tokio::net::{TcpListener, TcpStream};
 use uuid::Uuid;
 
 use crate::activity::{ActivityEvent, HookKind};
-use crate::http::{self, respond, Body, HeadRead};
+use crate::http::{self, respond, respond_json, Body, HeadRead};
 use crate::plan_usage::Rejections;
 use crate::state::{unix_secs, DaemonState};
 use micold_core::agent_run::AgentSignal;
@@ -37,6 +37,10 @@ use micold_core::mcp::binding::ConfigLocations;
 use micold_core::plan_usage::status_line;
 use micold_core::plan_usage::user_status_line::{RelayConfig, UserStatusLine};
 use micold_core::session::{AiCli, SessionId};
+use micold_core::worktree_guard::paths::RealPathFacts;
+use micold_core::worktree_guard::{
+    self, decide, GuardInput, GuardVerdict, SessionBinding, ToolCall,
+};
 
 /// Longest `agent_id`, `agent_type` or transcript path recorded (feature 552): the runs ride on every
 /// catalog frame, so an oversized field is treated as absent.
@@ -75,6 +79,67 @@ pub struct StatusContext {
     pub cwd: PathBuf,
     /// Home and `CLAUDE_CONFIG_DIR` as the session sees them.
     pub locations: ConfigLocations,
+}
+
+/// A session's worktree guard (feature 1210, data-model): fixed when the session is launched, so a
+/// later change of the setting reaches only later launches (research R7).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GuardState {
+    Off,
+    On {
+        binding: SessionBinding,
+        project: PathBuf,
+    },
+}
+
+/// The deny body for `message` (`contracts/pretooluse-guard.md`).
+fn deny_body(message: &str) -> Vec<u8> {
+    serde_json::to_vec(&serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": message,
+        }
+    }))
+    .expect("a deny body is always serialisable")
+}
+
+/// What the guard says to a `PreToolUse` payload of `session`: the deny body, or `None` to answer
+/// as usual. Failing open is logged by reason, never with the payload (rule 5).
+fn guard_response(
+    state: &DaemonState,
+    session: SessionId,
+    payload: &serde_json::Value,
+) -> Option<Vec<u8>> {
+    let GuardState::On { binding, project } = state.session_guard(session)? else {
+        return None;
+    };
+    let tool = match ToolCall::from_payload(payload) {
+        Ok(ToolCall::Other) => return None,
+        Ok(tool) => tool,
+        Err(reason) => {
+            tracing::warn!(session = %session.0, %reason, "worktree guard allowed a call it could not read");
+            return None;
+        }
+    };
+    let input = GuardInput {
+        worktrees: state.guard_worktrees(&project),
+        session_cwd: worktree_guard::payload_cwd(payload).unwrap_or_else(|| project.clone()),
+        project_root: project,
+        binding,
+        tool,
+    };
+    match decide(&input, &RealPathFacts) {
+        GuardVerdict::Allow => None,
+        GuardVerdict::AllowUnknown { reason } => {
+            tracing::warn!(session = %session.0, %reason, "worktree guard allowed a call it could not judge");
+            None
+        }
+        GuardVerdict::Deny { message, target } => {
+            tracing::info!(session = %session.0, target = %target.display(), "worktree guard denied a call");
+            Some(deny_body(&message))
+        }
+    }
 }
 
 /// The loopback hook receiver: the bound address, the per-session token registry, and the directory
@@ -377,6 +442,11 @@ async fn handle_connection(
             let hook_activity = state.note_hook_activity(session, &value);
             if activity || hook_activity {
                 state.broadcast_catalog();
+            }
+            if kind == HookKind::PreToolUse {
+                if let Some(body) = guard_response(&state, session, &value) {
+                    return respond_json(&mut stream, 200, "OK", &body).await;
+                }
             }
             respond(&mut stream, 200, "OK").await
         }
@@ -708,6 +778,35 @@ mod tests {
     fn rejects_non_json_and_fieldless_bodies() {
         assert_eq!(classify_hook("not json"), HookClass::Invalid);
         assert_eq!(classify_hook("{}"), HookClass::Invalid);
+    }
+
+    #[test]
+    fn a_guarded_sessions_settings_keep_the_pre_tool_use_hook_and_override_nothing() {
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["hooks"]["PreToolUse"][0]["hooks"][0]["type"], "http");
+        // FR-013: only the hooks the session already had; no `allow`, no override key.
+        let keys: Vec<&str> = parsed
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, ["hooks"]);
+        assert!(!json.contains("\"allow\""));
+    }
+
+    #[test]
+    fn the_deny_body_follows_the_contract() {
+        let body: serde_json::Value = serde_json::from_slice(&deny_body("Blocked: x")).unwrap();
+        assert_eq!(
+            body,
+            serde_json::json!({"hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": "Blocked: x",
+            }})
+        );
     }
 
     #[test]

@@ -95,3 +95,4 @@ pub(crate) mod win_job;
 pub mod workspace;
 pub mod worktree;
 pub mod worktree_branches;
+pub mod worktree_guard;
