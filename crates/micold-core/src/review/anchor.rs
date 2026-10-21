@@ -7,6 +7,7 @@ use super::LineRange;
 
 /// The numbered lines of one version of a file that [`locate`] searches: the whole file
 /// ([`SideLines`]) or only the lines a diff's hunks show ([`super::diff::HunkLines`], 1149 R4).
+#[allow(clippy::len_without_is_empty)]
 pub trait Lines {
     /// Line `number` (1-based), `None` when there is none to read.
     fn line(&self, number: u32) -> Option<&str>;
