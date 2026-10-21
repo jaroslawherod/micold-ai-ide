@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: verify M3
-- **Next step**: M3 verify — scoped gate + review A, review B, full gate
+- **Phase**: pr M3
+- **Next step**: M3 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | #1199 | merged |
 | M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | #1202 | merged |
-| M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | — | in progress |
+| M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | — | PR files written, gate green at 9de37ca5 |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | todo (main as is) |
 | M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | blocked on **#939 M3** (and M3) |
 | M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | blocked on **#939 M4, M5, M6** (and M4, M5) |
@@ -68,6 +68,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M2 | 1 | a520ee52 | PASS light and dark: the longer **Show Claude plan usage** note wraps to two lines in the column, clear of **Warn at** (`visual/m2-plan-usage-note-{light,dark}.png`); `layout_snapshot` accepted for the new wrap (a520ee52) |
 | Review A M3 (code-review high) | 1 | cb7b51adec375febcae980c05ab93a8ab3a2d07f:f58f5294f5d6d5b5b44fd9b9787abb3b920387f1 | 8 items, no severities. Fixed with tests: F1 (an `init` starts every turn; only a process-start `init`, with `startup_timing`, ends running tasks — D16), F3 (a report after an inferred `EndedWithoutReport` sets the reported state), F4 (`running_background(cli_running)` follows the overlay), F7 (a test for a tool call held twice), F8 (`entry` one hash, `task_for_tool` from the back). Declined F2, F5, F6 (see table) |
 | Review B M3 (conformance, sonnet) | 1 | cb7b51adec375febcae980c05ab93a8ab3a2d07f:f58f5294f5d6d5b5b44fd9b9787abb3b920387f1 | CHANGES: F1 BLOCKER — Verify could not build (disk full during the concurrent gate; `target-shared/debug` removed after). Static review: no scope creep, leftovers or defects |
+| Review A M3 (code-review, sonnet) | 2 | cabd729a2c8b8dd1e2b90f456b90e28fe8b03a89:9de37ca50b90bd95b652944170c1d92a743b4f5f | CLEAN |
+| Review B M3 (conformance, sonnet) | 2 | cabd729a2c8b8dd1e2b90f456b90e28fe8b03a89:9de37ca50b90bd95b652944170c1d92a743b4f5f | CLEAN; 1 MINOR (dedupe test is test-after, as the cycle log says) not acted on. Verify: `structured_insights` 49/49, `--lib structured::insights` 12/12 |
+| Full gate M3 | — | 9de37ca5 | green (`scripts/gate.sh`). An earlier run hit `structured_session::messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` timing out (21 s) while review B built alongside; it passed 3/3 alone (2 s) and in the rerun — load flake, not this diff |
 
 ## Declined review findings
 
