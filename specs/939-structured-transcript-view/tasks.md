@@ -35,11 +35,11 @@ no half-wired UI reaches `main` (milestones.md rule 6). Each task carries the st
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the render-free module `crates/micold-core/src/structured/transcript/` with
+- [X] T001 Create the render-free module `crates/micold-core/src/structured/transcript/` with
   empty `mod.rs`, `entry.rs`, `build.rs`, `stream.rs`, `summary.rs`, `result.rs`, `figures.rs`
   and add `pub mod transcript;` to `crates/micold-core/src/structured/mod.rs` (plan *Project
   Structure*)
-- [ ] T002 [P] Move the fixture helpers `fixture_bytes`, `lines_of`, `events_of` and the fixture
+- [X] T002 [P] Move the fixture helpers `fixture_bytes`, `lines_of`, `events_of` and the fixture
   name list out of `crates/micold-core/tests/structured_parse.rs` into a shared
   `crates/micold-core/tests/support/stream_json.rs` (`#[path]`-included by both test files), and
   add `without_stream_events(&[String]) -> Vec<String>` (drops `"type":"stream_event"` lines) and
@@ -50,7 +50,7 @@ no half-wired UI reaches `main` (milestones.md rule 6). Each task carries the st
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T003 Define the entry types in `crates/micold-core/src/structured/transcript/entry.rs` per
+- [X] T003 Define the entry types in `crates/micold-core/src/structured/transcript/entry.rs` per
   [data-model.md](data-model.md) *Entry*: `EntryId`, `Entry { id, key, opened_at, revision, kind }`
   with `key` set only by its constructor (no setter, Constitution V), `EntryKey::{Tool(String),
   At { seq: u64, block: u32 }}`, the closed `EntryKind` (`SessionStart { model, cwd,
@@ -63,7 +63,7 @@ no half-wired UI reaches `main` (milestones.md rule 6). Each task carries the st
   Unshown { kind }}`, `TurnFooter { outcome, duration_ms, cost_usd, num_turns, error_text }`,
   `Outcome::{Success, Error}`, `RawReason::{Unrecognised, Unreadable, UnknownBlock,
   UnknownStreamEvent}`; re-export them from `transcript/mod.rs`
-- [ ] T004 Write failing tests in `crates/micold-core/tests/structured_transcript.rs` for
+- [X] T004 Write failing tests in `crates/micold-core/tests/structured_transcript.rs` for
   `Transcript::apply`'s replace-or-continue rule ([contracts/transcript-model.md](contracts/transcript-model.md)
   *Input*, unchanged from `features/structured_log.rs::State::apply`): an empty `live: false`
   message is a fresh empty transcript; a `live: false` message continuing `next_seq` of a
@@ -71,7 +71,7 @@ no half-wired UI reaches `main` (milestones.md rule 6). Each task carries the st
   `live: true` message appends; `is_empty()` is true with no event held (FR-006);
   `omitted_notice()` is `Some(n)` iff `omitted > 0`, carrying the service's `omitted` (FR-004);
   `entry(&EntryKey)` finds an entry
-- [ ] T005 Implement `Transcript` in `crates/micold-core/src/structured/transcript/mod.rs`:
+- [X] T005 Implement `Transcript` in `crates/micold-core/src/structured/transcript/mod.rs`:
   fields of data-model.md *Transcript* (`events`, `omitted`, `next_seq`, `entries` as
   `VecDeque<Entry>` addressed by `EntryId - first_id`, `tools`, `stream`, `turn_cards`,
   `subagent_notice`, `scope`, `rebuilds`), `new()` (`Scope::Main`), `nested(tool_use_id)`
@@ -93,12 +93,12 @@ and raw rows, in order.
 
 ### Tests for User Story 1 ⚠️ write first, see them fail
 
-- [ ] T006 [P] [US1] Unit tests in `crates/micold-core/src/structured/transcript/figures.rs`
+- [X] T006 [P] [US1] Unit tests in `crates/micold-core/src/structured/transcript/figures.rs`
   (`#[cfg(test)]`) for research R14: `format_duration` `"6.7 s"` below a minute and
   `"1 min 12 s"` above; `format_cost` four decimals below $1 (`"$0.0372"`) and two above
   (`"$1.24"`); `format_turns` `"1 turn"` / `"2 turns"`; `footer_figures(&TurnFooter)` leaves out
   every figure the result omits (FR-005)
-- [ ] T007 [US1] Fixture tests in `crates/micold-core/tests/structured_transcript.rs` (after T004,
+- [X] T007 [US1] Fixture tests in `crates/micold-core/tests/structured_transcript.rs` (after T004,
   same file): `text-turn` without stream lines → `SessionStart` (model, cwd) … `AssistantText` …
   `Footer(Success)` with duration, cost and turns, in order, no `UserMessage` from the recording;
   a synthetic `User` text event → `UserMessage` in place; `error-result` without stream lines →
@@ -111,9 +111,9 @@ and raw rows, in order.
 
 ### Implementation for User Story 1
 
-- [ ] T008 [P] [US1] Implement `format_duration`, `format_cost`, `format_turns` and
+- [X] T008 [P] [US1] Implement `format_duration`, `format_cost`, `format_turns` and
   `footer_figures` in `crates/micold-core/src/structured/transcript/figures.rs`; T006 passes
-- [ ] T009 [US1] Implement the US1 rows of contracts/transcript-model.md *Event → entry rules* in
+- [X] T009 [US1] Implement the US1 rows of contracts/transcript-model.md *Event → entry rules* in
   `crates/micold-core/src/structured/transcript/build.rs`: `Init` → `SessionStart`; top-level `User`
   `Text` → `UserMessage`; top-level finished `Assistant` `Text` → `AssistantText` (no stream open:
   a new entry per block, `block` = its position); `Other` block → `Raw { UnknownBlock }`; `Result`
@@ -136,19 +136,19 @@ without stream lines and the synthetic card, thinking and sub-agent cases;
 
 ### Tests for User Story 2 ⚠️ write first, see them fail
 
-- [ ] T010 [P] [US2] Unit tests in `crates/micold-core/src/structured/transcript/summary.rs` for
+- [X] T010 [P] [US2] Unit tests in `crates/micold-core/src/structured/transcript/summary.rs` for
   research R6's `input_summary(name, input_json)`: `Bash` → `command`; `Read`/`Write`/`Edit`/
   `MultiEdit` → `file_path`; `NotebookEdit` → `notebook_path`; `Grep`/`Glob` → `pattern`;
   `WebFetch` → `url`; `WebSearch` → `query`; `Task`/`Agent` → `description`; an unknown tool, a
   missing field, a non-object or partial input → the generic `key: value, …` summary (strings
   unquoted) or the text itself; whitespace runs including newlines collapse to one space; capped at
   240 characters with `…` (FR-009)
-- [ ] T011 [P] [US2] Unit tests in `crates/micold-core/src/structured/transcript/result.rs` for
+- [X] T011 [P] [US2] Unit tests in `crates/micold-core/src/structured/transcript/result.rs` for
   research R5's `result_parts(user_raw, block, content)`: a string `content` in `raw` → one
   `Text`, even when it is JSON text; an array → its `text` blocks as `Text` parts in order and
   every other block as `Unshown { kind }` (e.g. `image`) (FR-011); `raw` unreadable → one `Text`
   of `content`
-- [ ] T012 [US2] Fixture and synthetic tests in `crates/micold-core/tests/structured_transcript.rs`
+- [X] T012 [US2] Fixture and synthetic tests in `crates/micold-core/tests/structured_transcript.rs`
   (after T007, same file): `tool-turn` without stream lines → one `ToolCall` card per tool use,
   keyed `Tool(id)`, at the tool use's place, holding its result, `Done`, no result entry (FR-007,
   US2 scenario 1); an `is_error` result → `Failed` (scenario 3); a tool use alone → `Running`, its
@@ -165,12 +165,12 @@ without stream lines and the synthetic card, thinking and sub-agent cases;
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] Implement `input_summary` in
+- [X] T013 [P] [US2] Implement `input_summary` in
   `crates/micold-core/src/structured/transcript/summary.rs`; T010 passes
-- [ ] T014 [P] [US2] Implement `result_parts` in
+- [X] T014 [P] [US2] Implement `result_parts` in
   `crates/micold-core/src/structured/transcript/result.rs` (reads `message.content[block].content`
   from `raw` with `serde_json`); T011 passes
-- [ ] T015 [US2] Implement the card rules in `crates/micold-core/src/structured/transcript/build.rs`:
+- [X] T015 [US2] Implement the card rules in `crates/micold-core/src/structured/transcript/build.rs`:
   `ToolUse` → card + `tools` index + `turn_cards`; `Thinking` → `Thinking` entry; top-level
   `ToolResult` → fill card (`Done`/`Failed`, `result_parts`) or `OrphanResult`; `Result`/
   `TurnEndedWithoutResult` → `turn_cards` still `Running` → `NoResult`, then clear; parented

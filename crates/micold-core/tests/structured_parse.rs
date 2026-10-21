@@ -2,43 +2,12 @@
 //! SC-002). Fixtures and how they were recorded: `tests/fixtures/stream-json/README.md`.
 
 use micold_core::structured::{
-    pair_tool_calls, parse_line, ContentBlock, Delta, LineSplitter, SequencedEvent, StructuredEvent,
+    pair_tool_calls, parse_line, ContentBlock, Delta, SequencedEvent, StructuredEvent,
 };
 
-const RECORDED: [&str; 5] = [
-    "text-turn",
-    "tool-turn",
-    "partial-deltas",
-    "error-result",
-    "resume-init",
-];
-
-fn fixture_bytes(name: &str) -> Vec<u8> {
-    let path = format!(
-        "{}/tests/fixtures/stream-json/{name}.jsonl",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    std::fs::read(&path).unwrap_or_else(|e| panic!("fixture {path} reads: {e}"))
-}
-
-/// The fixture cut by the splitter: every line, the trailing one from `finish()` included.
-fn lines_of(name: &str) -> Vec<String> {
-    let mut splitter = LineSplitter::default();
-    let mut lines = splitter.push(&fixture_bytes(name));
-    lines.extend(splitter.finish());
-    lines
-}
-
-fn events_of(lines: &[String]) -> Vec<SequencedEvent> {
-    lines
-        .iter()
-        .zip(0u64..)
-        .map(|(line, seq)| SequencedEvent {
-            seq,
-            event: parse_line(line),
-        })
-        .collect()
-}
+#[path = "support/stream_json.rs"]
+mod stream_json;
+use stream_json::{events_of, lines_of, RECORDED};
 
 /// Whether the line's `type` (and `subtype`, for `system`) is one the model types (R9).
 fn is_known_type(line: &str) -> bool {
