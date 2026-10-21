@@ -208,10 +208,13 @@ capture_main() {
   local argv=(claude -p --input-format stream-json --output-format stream-json --verbose
               --include-partial-messages "$session_flag" "$sid" "$@")
   if [ -n "$interrupt" ]; then
-    local line_file="${TMPDIR:-/tmp}/micold-capture-line-$sid"
+    # mktemp makes it 0600; it is removed whether the capture succeeds or not.
+    local line_file rc=0
+    line_file=$(mktemp "${TMPDIR:-/tmp}/micold-capture-line.XXXXXX")
     printf '%s\n' "$line" > "$line_file"
-    (cd "$repo" && drive_interrupt "$line_file" "${argv[@]}")
+    (cd "$repo" && drive_interrupt "$line_file" "${argv[@]}") || rc=$?
     rm -f "$line_file"
+    [ "$rc" -eq 0 ] || return "$rc"
   else
     printf '%s\n' "$line" | (cd "$repo" && "${argv[@]}")
   fi \
