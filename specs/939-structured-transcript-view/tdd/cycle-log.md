@@ -93,7 +93,9 @@ implementation task, run red, then made green.
 ## M6 (T038–T043) — the pane shows the transcript
 
 - **Red**: T039's `transcript_pane.rs` (5 tests) and T038's gate written first. The single-pane
-  tests compiled together with the `ui/terminal.rs` routing, so their red was not observed; the two
+  tests compiled together with the `ui/terminal.rs` routing, so their red was not observed (on
+  `origin/main` the pane draws the log in an unnamed `Scrollable`, so `shows_transcript` is false
+  and "No output yet" is not painted: both structured single-pane tests fail by construction); the two
   tiled tests failed red twice for two reasons: the pane drew no transcript, then `SplitView`
   forwarded no operation to its panes (`[sidebar-list, terminal-tab-strip-scroll]` only).
   The jump-control gate first failed on its own lookup (the label's node is attributed by clip), and
