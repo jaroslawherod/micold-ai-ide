@@ -30,7 +30,7 @@ the same replace-or-continue rule and the same `MAX_EVENTS` bound as `Transcript
 | `Assistant`/`User` with `parent_tool_use_id` P | thread P: `+1` message; each `ToolUse` block → `tool_calls`, `latest_tool`, `tool_owner[id] = P` (R7) |
 | `Result` | a `TurnUsage` at its `seq` (R3); its `modelUsage` windows update `context.window` for the current model |
 | `TurnEndedWithoutResult` | a left-out turn; running foreground tasks → `EndedWithoutReport` |
-| `Init` | running tasks → `EndedWithoutReport` (FR-022) |
+| `Init` that starts the CLI process (it carries `startup_timing`; the `init` of each later turn of the same process does not) | running tasks → `EndedWithoutReport` (FR-022) |
 | `Unrecognised` `autocompact_state` | `context.threshold` (`value.threshold` when `value.enabled`) |
 | `Unrecognised` `system` `task_started` / `task_updated` / `task_progress` / `task_notification` / `background_tasks_changed` | the task table (R6) |
 | `Unrecognised` `rate_limit_event` | nothing here: the daemon reads it ([plan-usage-source.md](plan-usage-source.md)) |
@@ -51,7 +51,7 @@ the same replace-or-continue rule and the same `MAX_EVENTS` bound as `Transcript
   parent's thread and none elsewhere; `owner` places each thread under the card holding its parent,
   at every depth; a parent not held → `Unknown`.
 - **I5 Tasks (FR-020–FR-022)**: `background-command` shows the task `Running` then `Finished` with
-  its summary; `Init` and a live set without it end it; a notification for an unknown task makes
+  its summary; a process-start `Init` and a live set without it end it; a notification for an unknown task makes
   an entry.
 - **I6 Tolerance (SC-006)**: `insights-tolerance.jsonl` applies without panic and yields absent
   figures where fields are malformed.

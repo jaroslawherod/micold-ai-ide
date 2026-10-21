@@ -797,13 +797,24 @@ fn live_set(task_ids: &[&str]) -> StructuredEvent {
     system("background_tasks_changed", json!({ "tasks": tasks }))
 }
 
-/// The CLI's `init` line, as `text-turn` recorded it.
+/// The CLI's `init` line when its process starts, as `text-turn` recorded it.
 fn init() -> StructuredEvent {
     fixture("text-turn")
         .into_iter()
         .map(|e| e.event)
         .find(|e| matches!(e, StructuredEvent::Init { .. }))
         .expect("text-turn starts with an init")
+}
+
+/// The `init` line the same CLI process writes at the start of a later turn, as
+/// `background-command` recorded it (no `startup_timing`).
+fn turn_init() -> StructuredEvent {
+    fixture("background-command")
+        .into_iter()
+        .map(|e| e.event)
+        .filter(|e| matches!(e, StructuredEvent::Init { .. }))
+        .nth(1)
+        .expect("background-command's second turn starts with an init")
 }
 
 /// The task `task_id` of insights built from `events`.
@@ -844,14 +855,14 @@ fn a_background_command_runs_then_finishes_with_its_summary() {
     assert_eq!(task.description, started["description"].as_str().unwrap());
     assert_eq!(task.tool_use_id.as_deref(), started["tool_use_id"].as_str());
     assert_eq!(task.outcome, None);
-    assert_eq!(running.running_background(), 1);
+    assert_eq!(running.running_background(true), 1);
     assert_eq!(running.background_tasks().count(), 1);
 
     let finished = built(0, &events);
     let task = task_of(&finished, id);
     assert_eq!(task.state, TaskState::Finished);
     assert_eq!(task.outcome.as_deref(), notification["summary"].as_str());
-    assert_eq!(finished.running_background(), 0);
+    assert_eq!(finished.running_background(true), 0);
     assert_eq!(
         finished.tasks().count(),
         1,
@@ -910,7 +921,74 @@ fn an_init_ends_every_running_task_without_a_report() {
         task_of(&insights, "fg").state,
         TaskState::EndedWithoutReport
     );
-    assert_eq!(insights.running_background(), 0);
+    assert_eq!(insights.running_background(true), 0);
+}
+
+#[test]
+fn a_later_turns_init_in_the_same_process_leaves_tasks_running() {
+    let events = numbered(
+        [
+            task_started("bg", "toolu_1", "local_bash", true),
+            turn_init(),
+        ],
+        0,
+    );
+    let insights = built(0, &events);
+    assert_eq!(task_of(&insights, "bg").state, TaskState::Running);
+    assert_eq!(insights.running_background(true), 1);
+}
+
+#[test]
+fn a_report_after_an_inferred_end_sets_the_reported_state() {
+    for report in [
+        system(
+            "task_updated",
+            json!({ "task_id": "bg", "patch": { "status": "completed" } }),
+        ),
+        system(
+            "task_notification",
+            json!({ "task_id": "bg", "status": "completed", "summary": "done" }),
+        ),
+    ] {
+        let events = numbered(
+            [
+                task_started("bg", "toolu_1", "local_bash", true),
+                live_set(&[]),
+                report,
+            ],
+            0,
+        );
+        assert_eq!(task_of(&built(0, &events), "bg").state, TaskState::Finished);
+    }
+    let events = numbered(
+        [
+            task_started("bg", "toolu_1", "local_bash", true),
+            system(
+                "task_notification",
+                json!({ "task_id": "bg", "status": "failed" }),
+            ),
+            system(
+                "task_notification",
+                json!({ "task_id": "bg", "status": "completed" }),
+            ),
+        ],
+        0,
+    );
+    assert_eq!(
+        task_of(&built(0, &events), "bg").state,
+        TaskState::Failed,
+        "a reported end stays"
+    );
+}
+
+#[test]
+fn no_background_task_counts_as_running_while_the_cli_is_not_running() {
+    let insights = built(
+        0,
+        &numbered([task_started("bg", "toolu_1", "local_bash", true)], 0),
+    );
+    assert_eq!(insights.running_background(true), 1);
+    assert_eq!(insights.running_background(false), 0);
 }
 
 #[test]
@@ -935,7 +1013,7 @@ fn a_live_set_without_a_running_background_task_ends_it() {
         TaskState::Running,
         "not a background task"
     );
-    assert_eq!(insights.running_background(), 1);
+    assert_eq!(insights.running_background(true), 1);
 }
 
 #[test]
@@ -1084,7 +1162,7 @@ fn a_session_without_background_tasks_lists_none() {
     for name in ["text-turn", "tool-turn", "subagent-turn", "nested-subagent"] {
         let insights = built(0, &fixture(name));
         assert_eq!(insights.background_tasks().count(), 0, "{name}");
-        assert_eq!(insights.running_background(), 0, "{name}");
+        assert_eq!(insights.running_background(true), 0, "{name}");
     }
 }
 
@@ -1186,6 +1264,14 @@ fn every_parented_message_is_counted_in_its_parents_thread_and_no_other() {
         );
         assert!(insights.unknown_threads(&main).is_empty(), "{name}");
     }
+}
+
+#[test]
+fn a_tool_call_held_again_is_counted_once() {
+    let call = with_parent(tool_use("toolu_r", "Read", "{}"), "toolu_a");
+    let insights = built(0, &numbered([call.clone(), call], 0));
+    let thread = insights.thread("toolu_a").unwrap();
+    assert_eq!((thread.messages, thread.tool_calls), (2, 1));
 }
 
 #[test]

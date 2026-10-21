@@ -20,7 +20,7 @@ unless marked otherwise. Nothing here is persisted or sent on the wire: #938's `
 
 Operations: `apply(omitted, &[SequencedEvent], live)`; `context() -> &ContextReading`;
 `turn(result_seq) -> Option<&TurnUsage>`; `totals() -> &SessionTotals`; `tasks()`,
-`background_tasks()`, `running_background() -> usize`, `task_for_tool(tool_use_id)`;
+`background_tasks()`, `running_background(cli_running) -> usize`, `task_for_tool(tool_use_id)`;
 `thread(parent) -> Option<&ThreadSummary>`, `threads_owned_by(&Owner, &Transcript)`,
 `owner(parent, &Transcript) -> Owner`, `unknown_threads(&Transcript)`, `thread_view(parent,
 Option<ToolStatus>) -> Option<ThreadView>`.
@@ -92,9 +92,11 @@ Vec<(String, ModelFigures)>, turns_counted: u64, turns_left_out: u64, partial: b
 | `activity: Option<String>` | latest `task_progress` summary / description / last tool name |
 
 Transitions (research R6): `Running →(task_updated completed | notification completed) Finished`;
-`→(failed) Failed`; `→(killed | stopped) Stopped`; `Running →(Init, or absent from a later live set
-while background, or TurnEndedWithoutResult while foreground) EndedWithoutReport`. A terminal state
-changes only by a later `task_started` of the same `task_id` (a resumed run) back to `Running`.
+`→(failed) Failed`; `→(killed | stopped) Stopped`; `Running →(a process-start Init, or absent from a later live set
+while background, or TurnEndedWithoutResult while foreground) EndedWithoutReport`. A later report
+(`task_updated` status or notification) still sets the reported state of an `EndedWithoutReport`
+entry; a reported end changes only by a later `task_started` of the same `task_id` (a resumed run)
+back to `Running`.
 View overlay: `display_state(cli_running: bool)` maps `Running` to `EndedWithoutReport` when the
 CLI is not running (FR-022).
 
