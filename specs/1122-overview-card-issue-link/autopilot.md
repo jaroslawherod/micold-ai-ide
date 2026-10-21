@@ -97,7 +97,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-None.
+M3 part 1 (context cap reached after the reviews were requested). Done: T020–T029 implemented and ticked (5d362874 + gate fixes 06c27e10, 44bbbce2, 707c9ec4); full gate r4 GREEN on 707c9ec4; pushed (6a3cd6e2). Review snapshot ab166f69b8377f4ebb15d5973aa9a7a0b283887c:707c9ec42b5d20a4adc8dbca113b235a434c317c recorded in *Review rounds* (pending rows). Next: the orchestrator runs review A r1 (session model), review B r1 (sonnet) and the visual pass = T030 (sonnet, autopilot-worker) from the scratchpad prompts 1122-m3-prompt-review-a-r1.md, 1122-m3-prompt-review-b-r1.md, 1122-m3-prompt-visual-r1.md; a fresh milestone unit (continuing this handover, skip branch-start) records the verdicts, fixes BLOCKER/MAJOR (scoped/full gate), ticks T030 with the evidence in visual-pass/m3/, writes the PR text (title "#1122: Overview cards: link to the worktree's issue — M3: GitHub issue links on the Overview", body ending `Refs #1122`, no docs-not-needed label: the user guide changed) to the scratchpad. origin/main moved to 52d78a0d (other features' docs/tests only); rebase before the PR if the orchestrator asks. No open findings yet.
 
 ## Open escalation
 
