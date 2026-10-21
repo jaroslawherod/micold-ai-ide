@@ -3,7 +3,8 @@
 #
 # Usage: scripts/capture-stream-json.sh <name> "<prompt>" [--resume <id>] [-- <extra claude args>...]
 #
-# In a fresh scratch git repo it runs the structured argv
+# In a fresh scratch git repo, with CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1 (feature 944), it runs the
+# structured argv
 #   claude -p --input-format stream-json --output-format stream-json --verbose
 #          --include-partial-messages (--session-id <new uuid> | --resume <id>) [extra args]
 # writes <prompt> to stdin as one stream-json user message, and saves stdout verbatim to
@@ -118,6 +119,8 @@ capture_main() {
   [ -f "$repo/notes.txt" ] || printf 'The answer is 42.\n' > "$repo/notes.txt"
 
   mkdir -p "$(dirname "$out")"
+  # Forward subagent text and thinking, as the service's structured launch does (feature 944, R5).
+  export CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1
   user_message_line "$prompt" \
     | (cd "$repo" && claude -p --input-format stream-json --output-format stream-json --verbose \
          --include-partial-messages "$session_flag" "$sid" "$@") \

@@ -22,6 +22,7 @@ pub mod daemons;
 pub mod endpoint;
 pub mod env_include;
 pub mod first_turn;
+pub mod format;
 pub mod frame_probe;
 pub mod fs_scan;
 pub mod git;

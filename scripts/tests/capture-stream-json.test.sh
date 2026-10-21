@@ -77,5 +77,24 @@ check "lines with no split secret pass through byte for byte" \
   "$unchanged" \
   "$(printf '%s\n' "$unchanged" | scrub_split_deltas "$SID" "$CWD" "$HOME_DIR")"
 
+# The CLI the script runs sees CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1 (feature 944, research R5): a
+# stand-in `claude` on PATH writes the variable's value as its one stdout line, and the capture,
+# run in a throwaway git repo, saves that line as the fixture.
+fake_root="$(mktemp -d)"
+mkdir -p "$fake_root/bin" "$fake_root/repo"
+cat > "$fake_root/bin/claude" <<'FAKE'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '{"forward":"%s"}\n' "${CLAUDE_CODE_FORWARD_SUBAGENT_TEXT:-unset}"
+FAKE
+chmod +x "$fake_root/bin/claude"
+git -C "$fake_root/repo" init -q
+(cd "$fake_root/repo" && unset CLAUDE_CODE_FORWARD_SUBAGENT_TEXT \
+  && PATH="$fake_root/bin:$PATH" TMPDIR="$fake_root" capture_main probe "ping") 2>/dev/null
+check "the recorded CLI runs with CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1" \
+  '{"forward":"1"}' \
+  "$(cat "$fake_root/repo/crates/micold-core/tests/fixtures/stream-json/probe.jsonl" 2>/dev/null)"
+rm -rf "$fake_root"
+
 echo "$cases cases, $failures failed"
 [ "$failures" -eq 0 ]

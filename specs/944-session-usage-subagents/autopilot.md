@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: tasks
-- **Next step**: orchestrator updates design PR #1194 (title/body from the tasks unit); after its merge, milestone M1 (M4 may also start; M5 waits on #939 M3, M6 on #939 M4–M6)
+- **Phase**: implement M1
+- **Next step**: M1 verify (scoped gate + review A, review B, full gate), then push
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1194 | Design PR (spec, clarifications, plan, research, contracts, tasks) | draft, open | — |
+| #1194 | Design PR (spec, clarifications, plan, research, contracts, tasks) | merged (rebase) | 5f95db21d6b0ba7fcf87cb4bdaf647178349b702 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | — | todo (main as is) |
+| M1 | T001–T015 | full | Core insights: context reading, turn/FR-009 cost, totals, display strings; capture env var + 4 recordings | — | in progress |
 | M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | — | todo (needs M1) |
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | — | todo (needs M1) |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | — | todo (main as is) |
@@ -43,6 +43,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D8 | plan | How do subagent text and thinking reach the stream? (US3 s2, FR-015) | Structured Claude launch sets `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1` (new `AiCliProvider::structured_env`); #938's seven args unchanged; flag rejected (older CLI refuses unknown flag) | agent | code.claude.com/docs/en/headless#follow-subagent-messages; 2.1.306 probe (research R5) |
 | D9 | plan | Token-count digit grouping (spec Edge Cases, Principle VI) | Group by thousands with the app's one count format (core `format::group_digits`); spec bullet amended from "user's locale" — the app has no locale layer | agent | crates/micold-client/src/features/worktree_form.rs `thousands`; research R9 |
 | D10 | tasks | Milestone cut | Plan's six layered milestones kept (not one per story): stories share the core digest, and UI waits on #939 (rule 6). `rate_limit_event` parse + `limit_window` moved M1 → M2 (plan *Delivery* updated) so M1 stays core usage/context. M1 kept whole at 15 tasks: Setup+Foundational are prerequisites and US1/US2 share the `Result` digest (window comes from it), so no split leaves both halves a deliverable. Polish T045–T046 change no code → close unit | agent | tasks.md *Milestones*; milestones.md rules 3, 4, 6 |
+| D11 | implement M1 | Nested subagent recording, and R7's assumption | 2.1.306 refuses a subagent's `Agent` call at the default spawn depth 1; `nested-subagent.jsonl` was recorded with `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` (README row says so). The recording shows each level's messages carry their **own** parent call (`spawn_depth` 1 and 2), so R7 holds and the spec's fallback is not needed for M3 | agent | `nested-subagent.jsonl`: inner `Read` under `toolu_014…`, which the relay's `Agent` call opened under `toolu_01P…` |
+| D12 | implement M1 | Totals cost text, and a result line that does not type | `totals_line` uses #939's `format_cost` unchanged (`"$0.1400 est. · 3 turns"`; T012's `"$0.14"` was illustrative, R9 names `format_cost`). A `result` line with a token count as a string is `Unrecognised` in #938's parse, so it is no digest (no turn), as #939 shows no footer for it; `insights-tolerance.jsonl` covers it | agent | `transcript/figures.rs` `format_cost`; `parse.rs` `ResultLine` |
 
 ## Review rounds
 
@@ -69,5 +71,10 @@ None.
 
 ## Follow-ups not done
 
+- #939's transcript tests do not hold over #944's four new recordings (kept out of `RECORDED`, in
+  `RECORDED_944`): `every_event_of_every_recorded_fixture_is_accounted_for` fails at
+  `subagent-turn` seq 33 (a parented user text has no entry) and
+  `replaying_a_recorded_fixture_one_event_at_a_time_changes_only_the_streamed_entry` at
+  `background-command` ("SC-002, no text duplicated or lost"). For #939's flow.
 - #939's footer cost: resolved by D7 (#939 labels it "session total"; #944 owns the per-turn
   cost). Nothing left for #939's flow.

@@ -18,6 +18,15 @@ pub const RECORDED: [&str; 5] = [
     "resume-init",
 ];
 
+/// The fixtures feature 944 recorded with subagents and background tasks (research R11). Kept
+/// apart from [`RECORDED`]: #939's transcript guarantees are stated over its own five.
+pub const RECORDED_944: [&str; 4] = [
+    "subagent-turn",
+    "nested-subagent",
+    "background-command",
+    "background-subagent",
+];
+
 pub fn fixture_bytes(name: &str) -> Vec<u8> {
     let path = format!(
         "{}/tests/fixtures/stream-json/{name}.jsonl",
