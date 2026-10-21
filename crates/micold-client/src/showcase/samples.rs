@@ -287,6 +287,13 @@ pub fn grid() -> GridCache {
 /// and so wider than a menu panel: the note has to break inside it, which a short path never shows.
 pub const PROJECT_DIR: &str = "/home/dev/projects/atlas/.worktrees/feat-availability-notes";
 
+/// The `DisclosureCard` entry's tool call (feature 939): its name, its one-line input summary and
+/// the full input its open pose shows.
+pub const TOOL_NAME: &str = "Bash";
+pub const TOOL_SUMMARY: &str = "cargo test --workspace --all-targets -- --nocapture";
+pub const TOOL_INPUT: &str =
+    "{\"command\": \"cargo test --workspace --all-targets -- --nocapture\", \"timeout\": 600000}";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,10 +337,3 @@ mod tests {
         );
     }
 }
-
-/// The `DisclosureCard` entry's tool call (feature 939): its name, its one-line input summary and
-/// the full input its open pose shows.
-pub const TOOL_NAME: &str = "Bash";
-pub const TOOL_SUMMARY: &str = "cargo test --workspace --all-targets -- --nocapture";
-pub const TOOL_INPUT: &str =
-    "{\"command\": \"cargo test --workspace --all-targets -- --nocapture\", \"timeout\": 600000}";
