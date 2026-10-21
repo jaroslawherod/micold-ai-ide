@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #939
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
-- **Phase**: milestone M1
-- **Next step**: M1 PR open — orchestrator opens it from the pushed branch, waits on CI and merges; then M2
+- **Phase**: milestone M2
+- **Next step**: M2 — gate and reviews A/B (verify.md)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1183 | Design: spec, clarify, plan, research, contracts, tasks | merged (rebase) | cee4e71942a66b77ba2d7107e57fd6e433d38b7e |
+| #1189 | M1: transcript model for finished events | merged (rebase) | 1348549cf021492216ffa03a63f1ae9faee0e03d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | pending (orchestrator opens) | verified, gate green |
-| M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | — | pending |
+| M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | #1189 | merged |
+| M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | — | implemented (T016–T019 ticked), gate + reviews running |
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | — | pending |
 | M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | — | pending |
 | M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | — | pending |
@@ -33,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - speckit-analyze (2026-10-21): 0 CRITICAL/HIGH; 1 MEDIUM + 6 LOW fixed in tasks.md (T032 green at T037, T017/T019 → US3, T039 file named, FR-001/FR-004 cited, T002 dependency noted).
 - Tasks (2026-10-21): milestones follow the plan's reviewed layered delivery (core → state → components → view → pane) rather than one milestone per story, because the UI of US1/US2 cannot finish before M6 (milestones.md rule 6); M1 carries both P1 stories at the model (15 tasks, kept whole: splitting it splits one build.rs rule table across PRs with no new observable).
+- M2 (2026-10-21): the bound runs after each pushed event, not once per message, so a result whose tool use was dropped earlier in the same message is an `OrphanResult` (FR-020) rather than filling a card that then leaves; `Transcript::held()` added for G4. A `content_block_start` of a block type the transcript does not stream is absorbed but keeps its position in the stream, so its finished block (a `Raw { UnknownBlock }` row) and later blocks stay matched; empty deltas change nothing (no revision).
 - Clarify (2026-10-21, 2 rounds, agent-resolved): sub-agent events (parent tool use set) are kept out of the main transcript and counted per parent tool-call card (FR-024; orphans on one notice); deltas not counted. #944 adds nesting on top. #944 treats the per-turn cost in #939's turn footer as #939's; #944 adds context meter, plan_usage feed and sub-agent nesting.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -48,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review tasks | 1 | cdfaee5481a594e3449ee2b0253893520d5cc0ad:76cdeb51e56a37bb1c3ee20d2dcd18ea98d4e3d8 | CHANGES: F1 MAJOR (stale checklist item: no NEEDS CLARIFICATION marker remains) fixed, prose only — ticked, note rewritten; F2 MINOR fixed (T007 [P] dropped) |
 | Review A M1 | 1 | 49a92f67248f43164448d157e66563380ac30900:4f9eaad7133c0dd7c2d931414b6b606d607ae996 | CLEAN (code-review high; no findings) |
 | Review B M1 | 1 | 49a92f67248f43164448d157e66563380ac30900:4f9eaad7133c0dd7c2d931414b6b606d607ae996 | CHANGES: F1 BLOCKER (reviewer sandbox refused cargo, Verify unobserved) — resolved by the unit running Verify inside the full gate's `cargo test --workspace` (see PR body); no code change. F2 MINOR (red/green batched per milestone in cycle-log) declined |
+| Review A M2 | 1 | 37ffadcfa313d6388da4bdc2aa304eeb518885b6:6207562240b355ad65362d26555f33b64132b762 | CLEAN (code-review high): F1 MINOR fixed — `close` now stops every still-streaming block, one superseded by another kind included; test added |
 
 ## Declined review findings
 
