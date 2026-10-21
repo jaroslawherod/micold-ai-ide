@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: tasks
-- **Next step**: tasks unit — speckit-analyze, tasks review, checklists, design PR
+- **Phase**: design PR
+- **Next step**: orchestrator opens the design PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| pending | Design: spec, clarify, plan, research, contracts, tasks | to open (orchestrator, GitHub MCP) | — |
 
 ## Milestones
 
@@ -53,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | 004bb5b1f949c41b2cca2730ff420b7af0b6099f:f13d3e811a532c30a69e9475c01265080385e3f8 | CLEAN: 3 MINOR (fixed, prose only) |
 | Plan review | 1 | f2b7b32bfd45c20bf89137e325eab23124ae2413:bdd0ffab5e0b7317d1c13b816299b6c68b23a5bf | CLEAN: 1 MINOR (fixed, prose only) |
 | Tasks review | 1 | 606e053a7f9c9c7632da9f594a373a2fbb5a824d:dffdf2b12eb552819450d6edf043665419ab018e | CHANGES: 2 MAJOR ([P] on shared files, fixed), 2 MINOR (F3 ledger decision 10; F4 checklist ticked) |
+| Tasks review | 2 | 9798b34af9176881119e5e988c331a2bed97b955:18723871b14cc61aac3015421e5aea161167f6bb | CLEAN |
 
 ## Declined review findings
 
