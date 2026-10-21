@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: implement M1
-- **Next step**: M1 verify: review A round 1 (prompt 1122-m1-prompt-review-a-r1.md) dispatched by the orchestrator; then review B + visual pass of the showcase `TextLink`. Full gate green at 50a09809.
+- **Next step**: M1 verify: review A r2, review B r1 and visual pass r1 run in parallel by the orchestrator (prompts 1122-m1-prompt-*.md in the scratchpad); then PR. Full gate green at f5e371b9.
 
 ## Pull requests
 
@@ -52,6 +52,10 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Scoped gate M1 | 1 | 79f14e6c | RED: `idle_requests_no_frames` (TextLink's own `shell.request_redraw()`); fixed in 50a09809 (click via the stack's button) |
 | Full gate M1 | 1 | 50a09809 | RED: flaky `micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (untouched; 5/5 green alone); rerun GREEN |
 | Review A M1 | 1 | 32c67355331e1a393de36645923df016972978d9:50a09809fe5596886ff266bd8cabaa061a0b467f | CHANGES: 1 MAJOR (F1 a click on a Tab-focused `press_takes_focus(false)` link dropped the keyboard, FR-005), 2 MINOR (F2 focus layer topped up for a child that draws no hover layer, F3 touch lift off the link captured); all three fixed with tests, none declined |
+| Full gate M1 | 2 | f5e371b9 | GREEN (after review A r1 fixes) |
+| Review A M1 | 2 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | pending (fix diff, sonnet) |
+| Review B M1 | 1 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | pending (sonnet) |
+| Visual pass M1 | 1 | dd7dc7da9290a6eab81856708dc2fbb7f6246401:f5e371b9385f10e414dcf1e1c49c56e29aae6209 | pending (showcase TextLink) |
 
 ## Declined review findings
 
