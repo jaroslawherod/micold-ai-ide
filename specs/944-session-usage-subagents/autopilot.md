@@ -63,7 +63,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: M1 implement — T001–T015 ticked, committed (`feat(944): core session insights …`).
+  Branch reset to origin/main at 5f95db21 first. Local checks green: `cargo test -p micold-core
+  --test structured_insights --test structured_transcript`, `cargo test -p micold-core --lib --
+  structured::insights format` (the tasks' Verify line needs the `--`: cargo takes one filter
+  before it), `bash scripts/tests/capture-stream-json.test.sh`, `cargo clippy -p micold-core
+  --all-targets -D warnings`, `cargo fmt`. The micold-client change (T006, `worktree_form.rs`
+  calls `micold_core::format::group_digits`) is not built yet.
+- **Next step**: verify.md step 1 — scoped gate with review A (`code-review` high on
+  `origin/main...HEAD`); then review B (conformance, sonnet), full gate (`scripts/gate.sh`),
+  push (`--force-with-lease=claude/project-thread-lllxzt:` the first time), PR title/body files.
+  No visual change in M1 (core only), so no visual pass.
+- **Open findings**: none (no review run yet). D11, D12 and the #939 follow-up recorded above.
+- **PR**: none yet.
 
 ## Open escalation
 
