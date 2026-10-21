@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: milestone M3
-- **Next step**: M3 T020–T030: implement, then scoped gate + review A, review B, visual pass, full gate, PR text.
+- **Next step**: M3 T020–T029 done (5d362874); full gate r1 running; review A r1, review B r1 and the visual pass (T030) requested from the orchestrator (prompts in the scratchpad: 1122-m3-prompt-review-a-r1.md, -review-b-r1.md, -visual-r1.md). Then: act on the verdicts, tick T030, PR text.
 
 ## Pull requests
 
@@ -79,6 +79,10 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 | Full gate M2 | 3 | a5984cdd | GREEN (after review A r1 fixes) |
 | Review A M2 | 2 | d94cc82e9f7bb0d4f7527efd9a0f7261cfc16089:a5984cdd | CLEAN (sonnet, fix diff d94cc82e..a5984cdd): F1, F2 fixes hold; declines F3 (touch: `keyboard_focus.rs:522` gives up the keyboard only on a left mouse press) and F5 (the per-frame probe walks one bounded card subtree, only the card under the pointer) confirmed. F1 MINOR `CardGrid::expanded` doc comment had a ~130-column line: fixed, prose only (re-wrapped), no round 3. Visual r2 not needed: neither fix changes what is drawn (the showcase's expanded linked card has a branch line, so its twin's height is unchanged; F2 changes pointer routing only) |
 | Full gate M2 | 4 | c006b626 | GREEN (after review A r2 F1, comment only) |
+| Full gate M3 | 1 | 5d362874 | RED: `anatomy_call_sites::the_test_module_convention_this_relies_on_holds`: `ui/mod.rs` had a second inline `#[cfg(test)]` module (the arrow test); moved to `ui/overview_arrow_tests.rs` |
+| Review A M3 | 1 | c6011334d922a5d95399cfaa817d461e18399bac:5d3628745e9ff150c8d56cf3e4f7d00317989171 | pending |
+| Review B M3 | 1 | c6011334d922a5d95399cfaa817d461e18399bac:5d3628745e9ff150c8d56cf3e4f7d00317989171 | pending |
+| Visual pass M3 | 1 | c6011334d922a5d95399cfaa817d461e18399bac:5d3628745e9ff150c8d56cf3e4f7d00317989171 | pending |
 
 ## Declined review findings
 
@@ -90,7 +94,7 @@ Cut notes: US1 (P1) split in three (M1–M3): the whole story is ~30 tasks and w
 
 ## Handover
 
-M2 part 3: review A r2 CLEAN recorded, its F1 MINOR (doc comment wrap) fixed, full gate r4 GREEN on c006b626, pushed, PR text written. No handover pending.
+None.
 
 ## Open escalation
 

@@ -1434,6 +1434,8 @@ fn drawer_flags(state: &State) -> DrawerFlags {
 mod app_chord_tests;
 #[cfg(test)]
 mod drawer_flags_tests;
+#[cfg(test)]
+mod overview_arrow_tests;
 
 /// The width full screen gives the grid (feature 970, research R5): the sidebar drawer's, with its
 /// resize handle when expanded, or its collapsed strip.
@@ -1442,38 +1444,5 @@ pub(crate) fn freed_width(state: &State) -> f32 {
         crate::ui::sidebar::STRIP_WIDTH
     } else {
         f32::from(state.sidebar_width_px()) + crate::ui::material::RESIZE_HANDLE_WIDTH
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Feature 1122, R9: the Overview's arrow keys ask the root to step between cards, not to
-    /// move the keyboard through every focusable (which would stop on issue links).
-    #[test]
-    fn the_overview_arrows_step_between_cards() {
-        use crate::features::overview::Msg;
-        use iced::keyboard::key::Named;
-        let arrow = |named: Named| {
-            let iced::Event::Keyboard(event) = crate::ui::material::test_support::named_key(named)
-            else {
-                unreachable!("a key press is a keyboard event")
-            };
-            overview_arrow(event)
-        };
-        for (named, forward) in [
-            (Named::ArrowRight, true),
-            (Named::ArrowDown, true),
-            (Named::ArrowLeft, false),
-            (Named::ArrowUp, false),
-        ] {
-            assert_eq!(
-                arrow(named),
-                Some(Message::Overview(Msg::CardStepped { forward })),
-                "{named:?}"
-            );
-        }
-        assert_eq!(arrow(Named::Enter), None);
     }
 }
