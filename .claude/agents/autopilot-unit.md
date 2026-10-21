@@ -1,6 +1,7 @@
 ---
 name: autopilot-unit
 description: One unit of a speckit-autopilot run (spec, clarify, plan, tasks, milestone, close, bug, bugfix, chore). Dispatched only by the speckit-autopilot orchestrator, with a prompt that names the unit, its task files and its ledger.
+model: sonnet
 disallowedTools: Artifact, ArtifactComments, ArtifactData, AskUserQuestion, Workflow, ScheduleWakeup, SendFeedback, ReportFindings, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, NotebookEdit, CronCreate, CronDelete, CronList, RemoteTrigger, DesignSync, PushNotification
 ---
 
