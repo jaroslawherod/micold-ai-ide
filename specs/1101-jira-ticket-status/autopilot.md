@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1101_show-a-jira-ticket-s-current-status
 - **Started**: 2026-10-20
 - **Phase**: implement
-- **Next step**: M3 gate green and committed locally; push + open PR (push was denied by the permission classifier)
+- **Next step**: M3 rebased onto origin/main, PR #1218 open; wait for CI and merge
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1152 | Design PR | merged | 537bf0d5193e751dbd41b377a70dd6488db31ba0 |
 | #1155 | M1 | merged | 473538658f1b4835f0fba0eddf67d95bfe608269 |
 | #1190 | M2 | merged | 856f61a1a505e97ddc45dff92c9e1e66eb6e0338 |
+| #1218 | M3 | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Status chip in the issue picker | #1155 | merged |
 | M2 | T014–T027 | full | Current status on the sidebar | #1190 | merged |
-| M3 | T028–T030 | full | Status on Overview cards | | | committed, not pushed |
+| M3 | T028–T030 | full | Status on Overview cards | #1218 | open |
 
 ## Decisions
 
