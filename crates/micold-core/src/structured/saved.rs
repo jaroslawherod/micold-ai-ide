@@ -36,6 +36,12 @@ enum SavedEvent {
     /// An unreadable line, kept as such even when its text happens to parse.
     Unreadable(String),
     TurnEndedWithoutResult,
+    /// Feature 941's notes, appended so files saved before them decode unchanged.
+    UserSent {
+        text: String,
+        attachments: Vec<String>,
+    },
+    InterruptAsked,
 }
 
 impl SavedEvent {
@@ -52,6 +58,11 @@ impl SavedEvent {
             | StructuredEvent::Unrecognised { raw } => SavedEvent::Line(raw.clone()),
             StructuredEvent::Unreadable { text } => SavedEvent::Unreadable(text.clone()),
             StructuredEvent::TurnEndedWithoutResult => SavedEvent::TurnEndedWithoutResult,
+            StructuredEvent::UserSent { text, attachments } => SavedEvent::UserSent {
+                text: text.clone(),
+                attachments: attachments.clone(),
+            },
+            StructuredEvent::InterruptAsked => SavedEvent::InterruptAsked,
             StructuredEvent::OversizedOnWire { .. } => return None,
         })
     }
@@ -61,6 +72,10 @@ impl SavedEvent {
             SavedEvent::Line(raw) => parse_line(&raw),
             SavedEvent::Unreadable(text) => StructuredEvent::Unreadable { text },
             SavedEvent::TurnEndedWithoutResult => StructuredEvent::TurnEndedWithoutResult,
+            SavedEvent::UserSent { text, attachments } => {
+                StructuredEvent::UserSent { text, attachments }
+            }
+            SavedEvent::InterruptAsked => StructuredEvent::InterruptAsked,
         }
     }
 }

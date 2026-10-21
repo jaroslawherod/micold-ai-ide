@@ -480,3 +480,54 @@ fn the_v1_fixture_is_the_encoding_of_its_snapshot() {
     assert_eq!(encode(&every_colour_kind_and_flag()), fixture);
     assert_eq!(decode(&fixture), Ok(every_colour_kind_and_flag()));
 }
+
+/// Feature 941 (T012): `UserSent` and `InterruptAsked` are appended to the event model, so an
+/// `.events` file written before them — this one, byte for byte — decodes unchanged under version 1,
+/// and a history holding them round-trips.
+#[test]
+fn an_events_file_from_before_941_decodes_unchanged_and_the_new_notes_round_trip() {
+    use micold_core::structured::{
+        decode_events, encode_events, SequencedEvent, StructuredEvent, EVENTS_FORMAT_VERSION,
+    };
+    assert_eq!(EVENTS_FORMAT_VERSION, 1);
+    let mut file = Vec::new();
+    file.extend_from_slice(b"MICOLDSE");
+    file.extend_from_slice(&1u32.to_le_bytes());
+    // omitted 3; Line("x"), Unreadable("y"), TurnEndedWithoutResult. A saved line is parsed
+    // again, so "x", which is no JSON, comes back unreadable.
+    let payload: &[u8] = &[3, 3, 0, 1, b'x', 1, 1, b'y', 2];
+    file.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+    file.extend_from_slice(payload);
+    let checksum = sha256(&file);
+    file.extend_from_slice(&checksum);
+    assert_eq!(
+        decode_events(&file),
+        Ok((
+            3,
+            vec![
+                StructuredEvent::Unreadable { text: "x".into() },
+                StructuredEvent::Unreadable { text: "y".into() },
+                StructuredEvent::TurnEndedWithoutResult,
+            ]
+        ))
+    );
+
+    let notes = vec![
+        StructuredEvent::UserSent {
+            text: "look at this\nplease".into(),
+            attachments: vec!["shot.png".into()],
+        },
+        StructuredEvent::InterruptAsked,
+        StructuredEvent::TurnEndedWithoutResult,
+    ];
+    let held: Vec<_> = notes
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(seq, event)| SequencedEvent {
+            seq: seq as u64,
+            event,
+        })
+        .collect();
+    assert_eq!(decode_events(&encode_events(0, &held)), Ok((0, notes)));
+}

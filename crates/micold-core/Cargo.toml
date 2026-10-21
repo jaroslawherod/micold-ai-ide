@@ -48,6 +48,8 @@ bytes = { workspace = true }
 tokio = { workspace = true }
 interprocess = { workspace = true }
 futures-util = { workspace = true }
+# Feature 941: image blocks of a user message carry the picture in base64 (research R8).
+base64 = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 # `geteuid`/`setsid` for endpoint ownership verification + detached spawn, and

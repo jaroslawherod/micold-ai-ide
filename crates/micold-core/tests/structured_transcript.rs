@@ -15,8 +15,8 @@ mod stream_json;
 use stream_json::{
     assistant_block, assistant_blocks, block_delta, block_start, events_of, input_json_delta,
     lines_of, message_start, sequenced, stream_event, stream_marker, text_delta, thinking_block,
-    thinking_delta, tool_result, tool_use, turn_result, user_text, with_message_id, with_parent,
-    without_stream_events, PROMPT_RECORDED, RECORDED,
+    thinking_delta, tool_result, tool_use, turn_result, user_sent, user_text, with_message_id,
+    with_parent, without_stream_events, PROMPT_RECORDED, RECORDED,
 };
 
 /// A transcript built from `events` in one history message.
@@ -120,7 +120,8 @@ fn a_history_message_that_does_not_continue_rebuilds() {
     assert_eq!(
         kinds(&transcript),
         vec![EntryKind::UserMessage {
-            text: "three".to_string()
+            text: "three".to_string(),
+            attachments: vec![],
         }],
         "a history after a live event replaces the entries"
     );
@@ -202,7 +203,8 @@ fn an_entry_is_found_by_its_key() {
             .entry(&EntryKey::At { seq: 0, block: 0 })
             .map(|e| e.kind()),
         Some(&EntryKind::UserMessage {
-            text: "hi".to_string()
+            text: "hi".to_string(),
+            attachments: vec![],
         }),
         "an entry is found by its positional key"
     );
@@ -302,7 +304,8 @@ fn a_user_text_event_is_a_user_message_in_its_place() {
     assert_eq!(
         kinds(&transcript)[1],
         EntryKind::UserMessage {
-            text: "hello".to_string()
+            text: "hello".to_string(),
+            attachments: vec![],
         }
     );
 }
@@ -598,7 +601,7 @@ fn sub_agent_messages_are_counted_not_shown() {
     assert!(
         !kinds(&transcript).iter().any(|k| matches!(
             k,
-            EntryKind::AssistantText { text, .. } | EntryKind::UserMessage { text }
+            EntryKind::AssistantText { text, .. } | EntryKind::UserMessage { text, .. }
                 if text.contains("sub") || text.contains("elsewhere")
         )),
         "no sub-agent text in the main transcript"
@@ -667,7 +670,8 @@ fn a_nested_transcript_shows_its_sub_agent_as_top_level() {
         kinds(&nested),
         vec![
             EntryKind::UserMessage {
-                text: "sub prompt".to_string()
+                text: "sub prompt".to_string(),
+                attachments: vec![],
             },
             EntryKind::AssistantText {
                 text: "sub reply".to_string(),
@@ -1510,4 +1514,119 @@ fn a_saved_history_with_mode_and_control_lines_restores_to_the_same_transcript()
             .collect();
         assert_eq!(kinds(&built(&restored)), kinds(&built(&events)), "{name}");
     }
+}
+
+// -- Feature 941 (T013): the user's own messages, their pictures, and interrupted turns ----------
+
+fn note(seq: u64, event: StructuredEvent) -> SequencedEvent {
+    SequencedEvent { seq, event }
+}
+
+/// `interrupt-turn.jsonl`, with the daemon's notes around it: `UserSent` first, and, when
+/// `asked`, the `InterruptAsked` note right after the first text delta, as the daemon writes it.
+fn interrupted_turn(asked: bool) -> Vec<SequencedEvent> {
+    let mut events = vec![user_sent("tell a long story", &[])];
+    let mut noted = !asked;
+    for event in events_of(&lines_of("interrupt-turn")) {
+        let first_delta = matches!(
+            &event.event,
+            StructuredEvent::StreamDelta { delta: Some(_), .. }
+        );
+        events.push(event.event);
+        if first_delta && !noted {
+            events.push(StructuredEvent::InterruptAsked);
+            noted = true;
+        }
+    }
+    sequenced(events)
+}
+
+#[test]
+fn a_sent_message_is_a_user_message_with_its_pictures_names() {
+    let transcript = built(&sequenced([user_sent("look", &["a.png", "b.gif"])]));
+    assert_eq!(
+        kinds(&transcript),
+        vec![EntryKind::UserMessage {
+            text: "look".into(),
+            attachments: vec!["a.png".into(), "b.gif".into()],
+        }]
+    );
+}
+
+#[test]
+fn an_interrupted_turn_closes_with_the_notice_and_no_footer_and_the_cli_text_is_absorbed() {
+    for asked in [true, false] {
+        let transcript = built(&interrupted_turn(asked));
+        let kinds = kinds(&transcript);
+        assert_eq!(
+            kinds.last(),
+            Some(&EntryKind::Interrupted),
+            "asked {asked}: {kinds:?}"
+        );
+        assert!(
+            !kinds.iter().any(|k| matches!(k, EntryKind::Footer(_))),
+            "asked {asked}"
+        );
+        let user_texts: Vec<_> = kinds
+            .iter()
+            .filter_map(|k| match k {
+                EntryKind::UserMessage { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(user_texts, ["tell a long story"], "asked {asked}");
+    }
+}
+
+#[test]
+fn an_interrupt_racing_a_successful_end_still_closes_interrupted() {
+    let transcript = built(&sequenced([
+        user_sent("hi", &[]),
+        assistant_block(text("Hello")),
+        StructuredEvent::InterruptAsked,
+        turn_result(false, "success", Some("Hello")),
+    ]));
+    assert_eq!(kinds(&transcript).last(), Some(&EntryKind::Interrupted));
+}
+
+#[test]
+fn a_turn_with_neither_mark_keeps_its_footer_and_a_late_note_marks_nothing() {
+    let transcript = built(&sequenced([
+        user_sent("hi", &[]),
+        assistant_block(text("Hello")),
+        turn_result(false, "success", Some("Hello")),
+        StructuredEvent::InterruptAsked,
+        user_sent("next", &[]),
+        assistant_block(text("Again")),
+        turn_result(false, "success", Some("Again")),
+    ]));
+    let footers = kinds(&transcript)
+        .into_iter()
+        .filter(|k| matches!(k, EntryKind::Footer(_)))
+        .count();
+    assert_eq!(footers, 2);
+    assert!(!kinds(&transcript).contains(&EntryKind::Interrupted));
+}
+
+#[test]
+fn the_history_is_the_sent_texts_oldest_first_never_the_absorbed_interrupt_text() {
+    let mut events = interrupted_turn(true);
+    let next = events.len() as u64;
+    events.push(note(next, user_sent("second", &["a.png"])));
+    events.push(note(next + 1, turn_result(false, "success", None)));
+    let transcript = built(&events);
+    assert_eq!(
+        transcript.user_messages().collect::<Vec<_>>(),
+        ["tell a long story", "second"]
+    );
+
+    // Restored from a saved history, the notes are still there.
+    let (_, restored) =
+        decode_events(&encode_events(0, &events)).expect("the saved history decodes");
+    let restored = built(&sequenced(restored));
+    assert_eq!(
+        restored.user_messages().collect::<Vec<_>>(),
+        ["tell a long story", "second"]
+    );
+    assert!(kinds(&restored).contains(&EntryKind::Interrupted));
 }

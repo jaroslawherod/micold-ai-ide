@@ -3,7 +3,11 @@
 
 use std::fmt;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use serde::Serialize;
+
+use super::attachment::ImageAttachment;
 
 /// Why a user message was not delivered (data-model *UserMessageRefusal*).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,9 +37,11 @@ impl fmt::Display for UserMessageRefusal {
     }
 }
 
-/// The stream-json line that delivers `text` as one user message, newline included. The text goes
+/// The stream-json line that delivers `text` and `images` as one user message, newline included
+/// (contracts/claude-input.md): a text block when the text is not blank, then each picture as a
+/// base64 image block, in order. With no pictures it is #938's line, byte for byte. The text goes
 /// through `serde_json` escaping, so lines, quotes and non-ASCII text arrive unchanged.
-pub fn encode_user_message(text: &str) -> String {
+pub fn encode_user_message(text: &str, images: &[ImageAttachment]) -> String {
     // Typed rather than `json!`, so the keys keep the contract's order (a `serde_json::Map` sorts).
     #[derive(Serialize)]
     struct Line<'a> {
@@ -45,21 +51,36 @@ pub fn encode_user_message(text: &str) -> String {
     #[derive(Serialize)]
     struct Message<'a> {
         role: &'static str,
-        content: [Text<'a>; 1],
+        content: Vec<Block<'a>>,
     }
     #[derive(Serialize)]
-    struct Text<'a> {
-        r#type: &'static str,
-        text: &'a str,
+    #[serde(tag = "type", rename_all = "lowercase")]
+    enum Block<'a> {
+        Text { text: &'a str },
+        Image { source: Source },
     }
+    #[derive(Serialize)]
+    struct Source {
+        r#type: &'static str,
+        media_type: &'static str,
+        data: String,
+    }
+    let mut content = Vec::with_capacity(images.len() + 1);
+    if images.is_empty() || !text.trim().is_empty() {
+        content.push(Block::Text { text });
+    }
+    content.extend(images.iter().map(|image| Block::Image {
+        source: Source {
+            r#type: "base64",
+            media_type: image.media().mime(),
+            data: STANDARD.encode(image.bytes()),
+        },
+    }));
     let line = Line {
         r#type: "user",
         message: Message {
             role: "user",
-            content: [Text {
-                r#type: "text",
-                text,
-            }],
+            content,
         },
     };
     // Serializing plain strings into JSON cannot fail.
@@ -71,6 +92,7 @@ pub fn encode_user_message(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::structured::attachment::admit;
 
     #[test]
     fn every_refusal_has_a_user_sentence() {
@@ -91,7 +113,7 @@ mod tests {
     #[test]
     fn a_message_is_exactly_one_stream_json_user_line() {
         assert_eq!(
-            encode_user_message("hi"),
+            encode_user_message("hi", &[]),
             "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n"
         );
     }
@@ -103,11 +125,42 @@ mod tests {
             "say \"hi\" \\ back",
             "zażółć 🦀 日本",
         ] {
-            let line = encode_user_message(text);
+            let line = encode_user_message(text, &[]);
             assert!(line.ends_with('\n'));
             assert_eq!(line.matches('\n').count(), 1, "one line: {line:?}");
             let value: serde_json::Value = serde_json::from_str(&line).expect("json");
             assert_eq!(value["message"]["content"][0]["text"], text);
+        }
+    }
+
+    fn picture(name: &str, bytes: &[u8]) -> ImageAttachment {
+        admit(&[], name, bytes.to_vec()).expect("a picture")
+    }
+
+    #[test]
+    fn pictures_follow_the_text_in_attach_order_as_base64_image_blocks() {
+        let png = picture("a.png", b"\x89PNG\r\n\x1a\nIHDR");
+        let gif = picture("b.gif", b"GIF89a!");
+        let line = encode_user_message("look", &[png, gif]);
+        assert_eq!(
+            line,
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[\
+             {\"type\":\"text\",\"text\":\"look\"},\
+             {\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"iVBORw0KGgpJSERS\"}},\
+             {\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/gif\",\"data\":\"R0lGODlhIQ==\"}}]}}\n"
+        );
+    }
+
+    #[test]
+    fn blank_text_with_pictures_has_no_text_block() {
+        let png = picture("a.png", b"\x89PNG\r\n\x1a\n");
+        for text in ["", " \n\t"] {
+            let line = encode_user_message(text, std::slice::from_ref(&png));
+            let value: serde_json::Value = serde_json::from_str(&line).expect("json");
+            let content = value["message"]["content"].as_array().expect("content");
+            assert_eq!(content.len(), 1, "{line}");
+            assert_eq!(content[0]["type"], "image");
+            assert!(line.ends_with("}]}}\n") && line.matches('\n').count() == 1);
         }
     }
 }

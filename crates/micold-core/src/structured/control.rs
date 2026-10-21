@@ -25,9 +25,33 @@ pub fn encode_set_mode(request_id: &str, mode: PermissionMode) -> String {
     )
 }
 
+/// The line that asks the CLI to cancel the turn in progress (contracts/claude-input.md
+/// *Interrupt*, P-4), ending in `\n`. The CLI answers it and ends the turn with a `result`.
+pub fn encode_interrupt(request_id: &str) -> String {
+    let request_id = serde_json::Value::from(request_id);
+    format!(
+        "{{\"type\":\"control_request\",\"request_id\":{request_id},\"request\":{{\"subtype\":\"interrupt\"}}}}\n"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interrupt_is_the_contracts_one_line_with_a_fresh_id() {
+        let id = next_request_id();
+        assert_eq!(
+            encode_interrupt(&id),
+            format!(
+                "{{\"type\":\"control_request\",\"request_id\":\"{id}\",\"request\":{{\"subtype\":\"interrupt\"}}}}\n"
+            )
+        );
+        assert_eq!(
+            encode_interrupt("micold-1"),
+            "{\"type\":\"control_request\",\"request_id\":\"micold-1\",\"request\":{\"subtype\":\"interrupt\"}}\n"
+        );
+    }
 
     #[test]
     fn set_mode_is_the_contracts_one_line() {

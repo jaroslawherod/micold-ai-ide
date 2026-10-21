@@ -4,10 +4,12 @@
 //! turns each line into exactly one [`StructuredEvent`] (FR-014), and [`pair_tool_calls`] matches
 //! tool calls with their results. The daemon owns the process and the history; the client draws.
 
+pub mod attachment;
 pub mod control;
 pub mod edit_diff;
 mod event;
 mod history;
+pub mod input;
 pub mod insights;
 mod lines;
 mod parse;
@@ -20,8 +22,12 @@ mod user_message;
 
 pub use event::{ContentBlock, ControlOutcome, Delta, SequencedEvent, StructuredEvent, Usage};
 pub use history::{EventHistory, MAX_BYTES, MAX_EVENTS};
+pub use input::{
+    Message, QueueEntryId, QueueRefusal, QueuedMessage, QueuedSummary, Release, SessionInput,
+    Submit,
+};
 pub use lines::LineSplitter;
 pub use parse::{pair_tool_calls, parse_line};
 pub use saved::{decode_events, encode_events, EVENTS_FORMAT_VERSION, MAX_EVENTS_FILE_BYTES};
-pub use turn::TurnState;
+pub use turn::{InterruptAsk, InterruptOutcome, Turn, TurnEnded, TurnId, TurnState};
 pub use user_message::{encode_user_message, UserMessageRefusal};

@@ -57,6 +57,11 @@ pub struct Transcript {
     stream: Option<stream::OpenStream>,
     scope: Scope,
     rebuilds: u64,
+    /// A turn is open: a user message was sent or the CLI wrote since the last turn end.
+    in_turn: bool,
+    /// The open turn was interrupted (an `InterruptAsked` note or the CLI's interrupted text, R4):
+    /// its end is an `Interrupted` notice, not a footer (FR-014).
+    interrupted: bool,
 }
 
 impl Default for Transcript {
@@ -91,6 +96,8 @@ impl Transcript {
             stream: None,
             scope,
             rebuilds: 0,
+            in_turn: false,
+            interrupted: false,
         }
     }
 
@@ -190,6 +197,16 @@ impl Transcript {
                     .find(|e| e.key() == key)
             }
         }
+    }
+
+    /// The session's user messages as the composer's history recalls them (FR-025), oldest first:
+    /// the texts of the held `UserSent` notes, those restored from saved events included. The
+    /// CLI's own user lines (its interrupted text, tool results) are not among them.
+    pub fn user_messages(&self) -> impl DoubleEndedIterator<Item = &str> {
+        self.events.iter().filter_map(|e| match &e.event {
+            StructuredEvent::UserSent { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
     }
 
     /// The held events of the sub-agent run by tool use `tool_use_id`, in order (FR-024, #944).

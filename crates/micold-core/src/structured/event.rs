@@ -74,6 +74,14 @@ pub enum StructuredEvent {
     TurnEndedWithoutResult,
     /// Wire only: stands in for an event too large for one frame (research R6).
     OversizedOnWire { original_bytes: u64 },
+    /// Daemon note (feature 941): a user message was written to the CLI's stdin. `attachments`
+    /// names its pictures. Appended, so files saved before it decode unchanged.
+    UserSent {
+        text: String,
+        attachments: Vec<String>,
+    },
+    /// Daemon note (feature 941): an interrupt request was written for the open turn.
+    InterruptAsked,
 }
 
 /// `PartialEq` is total here: the only float, `total_cost_usd`, comes from JSON, which has no NaN,
@@ -82,7 +90,7 @@ impl Eq for StructuredEvent {}
 
 impl StructuredEvent {
     /// The length of the line text the event keeps (`raw`, or an unreadable line's `text`); `0`
-    /// for the daemon's notes. What a history's byte bound counts (research R5).
+    /// for the daemon's notes but `UserSent`, which counts its text. What a history's byte bound counts (research R5).
     pub fn text_len(&self) -> usize {
         match self {
             Self::Init { raw, .. }
@@ -93,8 +101,8 @@ impl StructuredEvent {
             | Self::Status { raw, .. }
             | Self::ControlResponse { raw, .. }
             | Self::Unrecognised { raw } => raw.len(),
-            Self::Unreadable { text } => text.len(),
-            Self::TurnEndedWithoutResult | Self::OversizedOnWire { .. } => 0,
+            Self::Unreadable { text } | Self::UserSent { text, .. } => text.len(),
+            Self::TurnEndedWithoutResult | Self::OversizedOnWire { .. } | Self::InterruptAsked => 0,
         }
     }
 }
@@ -172,4 +180,19 @@ pub enum Delta {
 pub struct SequencedEvent {
     pub seq: u64,
     pub event: StructuredEvent,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_sent_message_counts_its_text_and_an_interrupt_note_counts_nothing() {
+        let sent = StructuredEvent::UserSent {
+            text: "héllo".into(),
+            attachments: vec!["a-very-long-picture-name.png".into()],
+        };
+        assert_eq!(sent.text_len(), "héllo".len());
+        assert_eq!(StructuredEvent::InterruptAsked.text_len(), 0);
+    }
 }
