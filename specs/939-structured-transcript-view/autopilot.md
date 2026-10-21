@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-61i2k8
 - **Started**: 2026-10-21
 - **Phase**: milestone M2
-- **Next step**: M2 — gate and reviews A/B (verify.md)
+- **Next step**: M2 PR open — orchestrator opens it from the pushed branch, waits on CI and merges; then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Transcript model for finished events (entries, cards, pairing, footers, raw rows, notices, summaries, figures, sub-agent counts) | #1189 | merged |
-| M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | — | implemented (T016–T019 ticked), gate + reviews running |
+| M2 | T016–T019 | full | Streaming, supersede, bound and re-sync; G1–G4 on every fixture | pending (orchestrator opens) | verified, gate green |
 | M3 | T020–T023 | full | Window's per-session transcript state (fold, follow, TranscriptMsg, scroll tasks) beside the plain log | — | pending |
 | M4 | T024–T030 | full | Shared DisclosureCard, AccordionSection slots, Text::monospace, icons, showcase | — | pending |
 | M5 | T031–T037 | full | ui::transcript::view behind the renderer seam, lazy entries, SC-004 budget (showcase only) | — | pending |
@@ -51,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 | 1 | 49a92f67248f43164448d157e66563380ac30900:4f9eaad7133c0dd7c2d931414b6b606d607ae996 | CLEAN (code-review high; no findings) |
 | Review B M1 | 1 | 49a92f67248f43164448d157e66563380ac30900:4f9eaad7133c0dd7c2d931414b6b606d607ae996 | CHANGES: F1 BLOCKER (reviewer sandbox refused cargo, Verify unobserved) — resolved by the unit running Verify inside the full gate's `cargo test --workspace` (see PR body); no code change. F2 MINOR (red/green batched per milestone in cycle-log) declined |
 | Review A M2 | 1 | 37ffadcfa313d6388da4bdc2aa304eeb518885b6:6207562240b355ad65362d26555f33b64132b762 | CLEAN (code-review high): F1 MINOR fixed — `close` now stops every still-streaming block, one superseded by another kind included; test added |
+| Review B M2 | 1 | c258083c60c69b7307e90eaecd795751949f21c6:ec670f5809ec67f239a3539be72727a08ed0b46a | CLEAN (conformance, sonnet; Verify 37 passed, supplied from the gate) |
 
 ## Declined review findings
 
