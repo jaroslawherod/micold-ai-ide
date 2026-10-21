@@ -37,7 +37,7 @@ Whole gate: `scripts/gate.sh` (here `mise` is missing; see the cloud notes).
   (FR-014): `ListedPr`'s `Debug` is hand-written, `PrRow` and every new `Msg` carry no address.
 
 **Documentation**: Principle VII: each milestone that changes what a user sees ships its user-guide
-task in `docs/user-guide/overview.md` (M1 the *10+* counts, M2 the rows, M3 opening by pointer, M4
+task in `docs/user-guide/overview.md` (M1 the *10+* counts and the rows, M2 opening by pointer, M3
 the keyboard), so CI's user-guide gate passes on every `feat` PR.
 
 **Cross-platform**: Principle VI: no platform code. The browser is asked through feature 031's
@@ -49,7 +49,8 @@ recorded defaults hold): D3 (one status phrase per row by precedence, feature 10
 GitHub cost) is the `m<i>` page and the caps, tagged `(D4)`: T003–T006, T008, T010.
 
 **Organization**: by user story, in implementation order. US1 (P1) is split in two phases: the
-list read and the counts derived from it (Phase 2–3), and the rows drawn on the card (Phase 4).
+list read and the counts derived from it (Phase 2–3), and the rows drawn on the card (Phase 4);
+both phases ship in milestone M1, so the story ships whole (ledger D7).
 US2 (P2, every row on the expanded card) ships with the rows in Phase 4: its only rule is
 `BranchPrList::rows(expanded)` (K4), and a card that draws rows must draw them right when expanded.
 US3 (P1, open a pull request from its number) is split in pointer (Phase 5) and keyboard
@@ -78,7 +79,7 @@ FR-006, FR-008, FR-016).
 - [ ] T003 [P] (D4) In `crates/micold-core/tests/pull_request_query.rs`, add failing tests: Q1 `status_query(n)` has `m<i>:` for every `i` and no `oc<i>` or `mc<i>`, and no branch name; Q2 the text of each `m<i>` connection up to the next alias has no `commits(` and no `...pr`, it spreads `...merged`, and the `merged` fragment (`number url state isDraft createdAt isCrossRepository`) has no `(`; regenerate `crates/micold-core/tests/fixtures/gh/status_query_50.graphql` only in T006 when the query changes
 - [ ] T004 [P] (D4) Update the recorded answers in `crates/micold-core/tests/fixtures/gh/` (`pr_checks_failing.txt`, `pr_checks_forbidden.txt`, `pr_checks_passing.txt`, `pr_checks_pending.txt`, `pr_closed.txt`, `pr_cross_repository.txt`, `pr_draft.txt`, `pr_no_checks.txt`, `pr_review_states.txt`, `pr_three_branches.txt`): replace each branch's `oc<i>`/`mc<i>` with an `m<i>` page of `merged` nodes that keeps today's open and merged counts, and add `pr_four_states.txt` (one branch: open, draft, merged, closed, distinct `createdAt`); then add failing tests: in `crates/micold-core/tests/pull_request_parse.rs` P1 four states → `lists[branch]` in FR-003 order and `counts()` 2 open (the draft counted) · 1 merged; P2 a node in `o`, `r` and `m` is listed once; P5 a missing `m<i>` alias → `ReadingFailure::Passing`, an `m` node missing a `merged` field → `Passing`; P7 a number in both `r` and `m` is listed once with `r`'s node (its checks and review kept); P6 for every recorded answer the first listed entry's number equals `statuses[branch]`'s number; every asked branch has a `lists` entry (empty for none); in `crates/micold-core/tests/pull_request_counts.rs` (replacing its count-page tests, `pull_request_query_asks_mergeable_and_both_counts` included) P3 forks are listed nowhere and counted nowhere, a full `o` page with one fork reads `9` open capped; P4 10 own open nodes → `10` open capped, 10 merged nodes → `10` merged capped, 9 → exact
 - [ ] T005 [P] In `crates/micold-core/tests/pull_request_select.rs`, add failing K3 tests: for every combination (exhaustive loops, no new dependency) of up to three own pull requests of one branch, each in one of the four states, distinct `createdAt`, with `r` holding at least one own node and `o` every open one, the first entry of the parsed `lists[branch]` has the number `select_pull_request(o, r)` picks; one example each pins the two accepted edge cases of data-model §2 and what they give: (a) two own pull requests with equal `createdAt` (list: higher number first; `select_pull_request`: the later node of the page), (b) `r` full of ten forks while `m` holds an own merged one (`statuses` has no entry, the list's first row is the merged one); and in `crates/micold-core/tests/pull_request_is_never_stored.rs` extend K6: no `Serialize` for `ListedPr` or `BranchPrList` (the file's existing compile-time check), `PrRow` has no address field
-- [ ] T006 (D4) In `crates/micold-core/src/pull_request.rs`: the query keeps `o<i>` and `r<i>` with `...pr` unchanged, drops `oc<i>`/`mc<i>` and `COUNT_PAGE`, `COUNT_PAGE_SIZE`, `COUNT_NODES`, `RawCounted`, `count_own`, and adds `m<i>: pullRequests(headRefName: $b<i>, states: MERGED, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...merged } }` and `fragment merged on PullRequest { number url state isDraft createdAt isCrossRepository }` (R2); one shared `fn listed(node: &PrNode) -> Result<ListedPr, Unreadable>` holding the state, `reduce_checks` and review mapping that `select_pull_request` now also calls (no copied block, FR-013); `RawMerged` → `ListedPr` with checks none, review none, conflict false; `StatusReading.counts` becomes `lists: BTreeMap<String, BranchPrList>` (`BranchPrList::new(own(o ∪ r ∪ m), o.len() == 10, m.len() == 10)`, the `o`/`r` node kept over `m`), its merge (`extend`) and `FakePullRequestSource::with_answer` (empty `lists`) follow (contracts/reading.md); regenerate `status_query_50.graphql`; `PrCounts` and `PrDisplay::footer` docs in `crates/micold-core/src/overview.rs` say *10+*, and the footer test there that asserts `100+` uses `10` (same rule); T003–T005 and every existing `pull_request_*` test pass (G7)
+- [ ] T006 (D4) In `crates/micold-core/src/pull_request.rs`: the query keeps `o<i>` and `r<i>` with `...pr` unchanged, drops `oc<i>`/`mc<i>` and `COUNT_PAGE`, `COUNT_PAGE_SIZE`, `COUNT_NODES`, `RawCounted`, `count_own`, and adds `m<i>: pullRequests(headRefName: $b<i>, states: MERGED, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...merged } }` and `fragment merged on PullRequest { number url state isDraft createdAt isCrossRepository }` (R2); one shared `fn listed(node: &PrNode) -> Result<ListedPr, Unreadable>` holding the state, `reduce_checks` and review mapping that `select_pull_request` now also calls (no copied block, FR-013); `RawMerged` → `ListedPr` with checks none, review none, conflict false; `StatusReading.counts` becomes `lists: BTreeMap<String, BranchPrList>` (`BranchPrList::new(own(o ∪ r ∪ m), o.len() == 10, m.len() == 10)`, the `o`/`r` node kept over `m`), its merge (`extend`), `FakePullRequestSource::with_answer` (empty `lists`) and the two `StatusReading` literals of `crates/micold-core/tests/pull_request_source.rs` (`counts: BTreeMap::new()` → `lists: BTreeMap::new()`, l.54 and l.74) follow (contracts/reading.md); regenerate `status_query_50.graphql`; `PrCounts` and `PrDisplay::footer` docs in `crates/micold-core/src/overview.rs` say *10+*, and the footer test there that asserts `100+` uses `10` (same rule); T003–T005 and every existing `pull_request_*` test pass (G7)
 
 **Checkpoint**: `mise run test-core` proves the list, its order, the phrase, the counts and the
 reading's cost rule; the app does not use the list yet (it does not compile until T008 renames the
@@ -144,7 +145,8 @@ looked up when pressed, and never activates the card; a press elsewhere on a row
 (R6 names, R8; FR-009 pointer rules, FR-011, FR-012, FR-014; Story 3 sc. 1–3, 5). Numbers are no
 Tab stops until Phase 6 (built `.focusable(false)`, as 1122's link was between its M3 and M4).
 
-**Independent Test**: `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card card_grid overview`;
+**Independent Test**: `mise run test-core` (`overview_expansion`, T023's `CardLink`);
+`scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card card_grid overview`;
 `--test overview --test root_vocabulary_is_cross_cutting --test root_state_is_shared --test feature_write_isolation --test idle_requests_no_frames`;
 `--bin micold-ai-ide -- pull_request_link issue_link`; quickstart §B3.
 
@@ -158,7 +160,7 @@ Tab stops until Phase 6 (built `.focusable(false)`, as 1122's link was between i
 
 - [ ] T023 [US3] Add `pub enum CardLink { Issue, PullRequest(u64) }` (`Debug, Clone, Copy, PartialEq, Eq`) to `crates/micold-core/src/overview_expansion.rs` (R6, data-model §5; the focus events take it in T033), and change `card_link_id(&SessionLocation)` in `crates/micold-client/src/ui/overview.rs` to `card_link_id(&SessionLocation, CardLink)` (an id per link, stable per number), every caller passing `CardLink::Issue` (find them with `LSP` `findReferences`); every existing test passes unchanged
 - [ ] T024 [US3] In `crates/micold-client/src/ui/material/overview_card.rs`, factor the issue link's `TextLink` wiring (`fn issue_link`, ~l.522: id, `.focus_on_press(false)`, menu key, page, keyboard focus) into one helper the issue link and each number use (no copied block, `mise run duplication`); add `.on_pr_link(Fn(u64) -> M)` and `.pr_link_id(Fn(u64) -> Id)`; a number is a `TextLink` when `.on_pr_link` is set, built `.focusable(false)` until Phase 6's keyboard builder is set (R6, R7); T020 and every existing `overview_card` test pass
-- [ ] T025 [US3] In `crates/micold-client/src/ui/material/card_grid.rs`, a card's `link_id: Option<Id>` becomes `link_ids: Vec<Id>` (the issue link's id, then each drawn number's), filled from the card's builders; the link-bounds operation, `over_link` and the press routing take any of them, and `step_from` maps every link id of a card to that card (R6); T021 passes and `tests/idle_requests_no_frames.rs` stays green (G3)
+- [ ] T025 [US3] In `crates/micold-client/src/ui/material/card_grid.rs`, a card's `link_id: Option<Id>` becomes `link_ids: Vec<Id>` (the issue link's id, then each drawn number's), filled from the card's builders; the link-bounds operation, `over_link` and the press routing take any of them (R6); the arrow step (`step_card`, `ui/overview.rs`) is left to T035, since numbers are no Tab stops before Phase 6; T021 passes and `tests/idle_requests_no_frames.rs` stays green (G3)
 - [ ] T026 [US3] Wire opening (R8): `Msg::PullRequestLinkActivated(SessionLocation, u64)` in `crates/micold-client/src/features/overview.rs` (reducer: nothing, like `IssueLinkActivated`); `pull_request_link_for(&State, &SessionLocation, u64) -> Option<String>` in `crates/micold-client/src/ui/overview.rs` (the location's branch, its `State.lists` entry, the listed pull request with that number); each card's `.on_pr_link(move |n| Message::Overview(Msg::PullRequestLinkActivated(l.clone(), n)))` and `.pr_link_id(move |n| card_link_id(&l, CardLink::PullRequest(n)))` there; in `crates/micold-client/src/main.rs` the new arm takes `IssueLinkActivated`'s opener path with the looked-up address, opening nothing on `None` (G4, G5, G7); T022 passes
 - [ ] T027 [US3] In `docs/user-guide/overview.md` *Pull requests*: a click on a row's number opens the pull request on GitHub in the browser without activating the card, a click elsewhere on the row activates the card as before, and the notification when the browser cannot be opened (FR-017)
 - [ ] T028 [US3] Visual pass through an `autopilot-worker` (`visual-pass` skill) on the client, quickstart §B3 (click "#12": opener asked, no ripple, no selection; click the pill: the card activates); evidence in `specs/1123-overview-card-pr-list/visual-pass/`
@@ -182,14 +184,14 @@ quickstart §B4.
 
 - [ ] T029 [P] [US3] In `crates/micold-core/src/overview_expansion.rs` `mod tests`, rewrite every 1122 K5 test with `CardLink::Issue` in the events (K5g: they pass unchanged in meaning, including `Listed` keeping the pairing and the repeated report from the hand-off), and add failing tests, each in both report orders (loss first, gain first): K5a link → link on a Focus-expanded card stays expanded with `focused_link() == Some((a, Q))`; K5b link → link after Escape stays collapsed (FR-010); K5c card → `PullRequest(n)` and back, expanded and Escape-collapsed: no form change, `focused_link()` `(a, PullRequest(n))` then `None`; K5d gain-first `#1` → `#2`, then `#2` loses to another card's gain: the card collapses; K5e a stale loss of `#1` after `#2` gained and the card took it back: nothing; K5f `LinkFocusGained(a, PullRequest(n))`, `MenuOpened`, `LinkFocusLost(a, PullRequest(n))` holds `(a, PullRequest(n))`, `focused_link()` is `None` under the menu, the return gain on `a` restores `focus_part`, `WindowBlurred` under it applies the loss, `Listed` without `a` drops it
 - [ ] T030 [P] [US3] In `crates/micold-client/src/ui/material/overview_card.rs` `mod tests`, add failing U3 tests with `.on_pr_link_keyboard_focus(f)` and `.on_pr_link_menu(g)` set, on the expanded card: Tab from the card focuses the issue link, then each drawn number in row order (`f(n, true)` / `f(n, false)`), then leaves the card; Shift+Tab reverses (FR-010); on the collapsed card only the two drawn numbers are stops; Enter and Space on a focused number publish `on_pr_link(n)` and no card ripple (FR-009); the Menu key and Shift+F10 on it publish `g(n)` and not the card's `on_menu_key`; Page Up / Page Down publish the card's `on_page` value; on an expanded card whose body overflows, focusing a number in the scrolled part and running `ui::focus::scroll_focused_into_view` brings it into the body's viewport
-- [ ] T031 [P] [US3] In `crates/micold-client/src/ui/material/card_grid.rs` `mod tests`, add a failing U4 keyboard test: the arrow keys from a focused number step to the neighbouring card as from the card (1122 FR-008)
+- [ ] T031 [P] [US3] In `crates/micold-client/src/ui/overview.rs` `mod tests`, next to the existing `step_from` cases (`the_arrows_step_between_cards_and_never_onto_a_link`), add a failing U4 keyboard test: with `stepping_grid` drawing a focusable number on card 1, `step_from(card_link_id(&l[1], CardLink::PullRequest(n)), true)` gives `card_id(&l[2])` and `false` gives `card_id(&l[0])`, and stepping from card 0 forward lands on card 1, never on the number (1122 FR-008)
 - [ ] T032 [P] [US3] Add failing app tests: in `crates/micold-client/tests/overview.rs`, a number's `on_pr_link_keyboard_focus(n, true/false)` reaches the reducer as `Msg::Expansion(LinkFocusGained/LinkFocusLost(l, CardLink::PullRequest(n)))` and the issue link's as `(l, CardLink::Issue)`; dismissing a `MenuOrigin::KeyboardFromLink(PullRequest(n))` menu without a choice sets `focus_return.to_link == Some(PullRequest(n))`; in `crates/micold-client/src/main_tests.rs`, U5 `link_focus_escape_on_hidden_number_goes_to_card` (Escape on a focused row-3 number collapses the card, `link_focus_after` returns `card_id(l)`, the card stays collapsed, `focused_link()` is `None`), `link_focus_escape_on_row_one_number_stays` (re-focuses `card_link_id(l, PullRequest(n))`), `link_focus_moves_to_card_when_pull_request_goes` (a reading without the focused pull request), `card_link_shown_follows_the_form` (row-3 number false collapsed, true expanded); U6 `link_menu_opens_from_a_number` (`LinkMenuRequested(l, PullRequest(n))` opens with `KeyboardFromLink(PullRequest(n))` anchored in the number's bounds), `card_focus_return_focuses_the_number` (dismiss → `card_link_id(l, PullRequest(n))`; a choice → the card; a number no longer drawn when the menu closes → the card); the existing `link_menu_opens_from_the_link`, `card_focus_return_focuses_the_link`, `link_focus_moves_to_card_when_link_goes` and `link_focus_follows_removed_card` take `CardLink::Issue` and pass
 
 ### Implementation for User Story 3 part 2
 
 - [ ] T033 [US3] Implement in `crates/micold-core/src/overview_expansion.rs` the last-gain focus model of data-model §5 and research R6: `FocusPart { Card, Link(CardLink) }` (no `Both`, no `other()`), `Event::LinkFocusGained/LinkFocusLost(SessionLocation, CardLink)`, `link_held: Option<(SessionLocation, CardLink)>` (compared by location for "gone"), `JustLost.part` with its link, `focused_link() -> Option<(&SessionLocation, CardLink)>`, and the five transitions on the focused card exactly as listed there; `Listed`, `WindowBlurred`, `MenuClosed` and `Escape` keep their 1122 rules; T029 and 1121's K1 suite pass
-- [ ] T034 [US3] In `crates/micold-client/src/ui/material/overview_card.rs`, add `.on_pr_link_keyboard_focus(Fn(u64, bool) -> M)` and `.on_pr_link_menu(Fn(u64) -> M)`, passed through T024's shared link helper with the card's `on_page`; a number is focusable once `.on_pr_link_keyboard_focus` is set (R6, R7); T030 and T031 pass
-- [ ] T035 [US3] Wire the keyboard (R6): in `crates/micold-client/src/features/overview.rs`, `Msg::LinkMenuRequested(SessionLocation, CardLink)`, `MenuOrigin::KeyboardFromLink(CardLink)` and `FocusReturn.to_link: Option<CardLink>`; in `crates/micold-client/src/ui/overview.rs`, `card_link_shown(&State, &SessionLocation, CardLink) -> bool` (the issue link when `issue_link_for` is `Some`, a number when its row is in `rows(expanded)` at the card's current form) and each card's `.on_link_keyboard_focus` / `.on_pr_link_keyboard_focus` / `.on_link_menu_key` / `.on_pr_link_menu` sending the `CardLink`; in `crates/micold-client/src/main.rs`, `shown_focused_link` and `LinkFocus.link` hold `(SessionLocation, CardLink)` filtered by `card_link_shown`, `link_focus_handoff` hands off to the card when `card_link_shown` is false after the update, `link_focus_after` re-focuses `card_link_id(&l, link)` when the card changed form and the link is still shown, and `card_focus_return_id` returns `card_link_id(&target, link)` when shown, else the card (G4, G5); T032 passes
+- [ ] T034 [US3] In `crates/micold-client/src/ui/material/overview_card.rs`, add `.on_pr_link_keyboard_focus(Fn(u64, bool) -> M)` and `.on_pr_link_menu(Fn(u64) -> M)`, passed through T024's shared link helper with the card's `on_page`; a number is focusable once `.on_pr_link_keyboard_focus` is set (R6, R7); T030 passes
+- [ ] T035 [US3] Wire the keyboard (R6): in `crates/micold-client/src/features/overview.rs`, `Msg::LinkMenuRequested(SessionLocation, CardLink)`, `MenuOrigin::KeyboardFromLink(CardLink)` and `FocusReturn.to_link: Option<CardLink>`; in `crates/micold-client/src/ui/overview.rs`, `card_link_shown(&State, &SessionLocation, CardLink) -> bool` (the issue link when `issue_link_for` is `Some`, a number when its row is in `rows(expanded)` at the card's current form) and each card's `.on_link_keyboard_focus` / `.on_pr_link_keyboard_focus` / `.on_link_menu_key` / `.on_pr_link_menu` sending the `CardLink`; `step_card` there takes each card's id and all of its link ids (the issue link's and each listed number's, `card_link_id(&l, CardLink::…)`): its `cards: Vec<(Id, Id)>` becomes `Vec<(Id, Vec<Id>)>` and `is_link` and `from` match any of a card's link ids, and its caller in `crates/micold-client/src/main.rs` (the `CardStepped` arm, from `ui::overview::cards`) passes them; in `crates/micold-client/src/main.rs`, `shown_focused_link` and `LinkFocus.link` hold `(SessionLocation, CardLink)` filtered by `card_link_shown`, `link_focus_handoff` hands off to the card when `card_link_shown` is false after the update, `link_focus_after` re-focuses `card_link_id(&l, link)` when the card changed form and the link is still shown, and `card_focus_return_id` returns `card_link_id(&target, link)` when shown, else the card (G4, G5); T031 and T032 pass
 - [ ] T036 [US3] In `docs/user-guide/overview.md` *Keyboard* and *Pull requests*: Tab reaches the issue link and then each shown number, Enter or Space opens it, arrows step between cards, Escape collapses the card and the hidden numbers are skipped until it expands again (focus on a hidden number goes to the card), the Menu key or Shift+F10 on a number opens the card's menu and closing it returns to that number (FR-017)
 - [ ] T037 [US3] Visual pass through an `autopilot-worker` (`visual-pass` skill) on the client, quickstart §B4 by keyboard only; evidence in `specs/1123-overview-card-pr-list/visual-pass/`
 
@@ -233,7 +235,7 @@ and visual pass last.
 - Phase 2: T001, T003, T004, T005 together; T002, then T006.
 - Phase 4: T010, T011, T012 together; T013 then T014; T015 after T014; T016, T017 after T015.
 - Phase 5: T020, T021, T022 together; T023 first, then T024 and T025; T026 after both.
-- Phase 6: T029, T030, T031, T032 together; T033 and T034 together; T035 after both.
+- Phase 6: T029, T030, T031, T032 together; T033 and T034 together; T035 after both (it makes T031 pass).
 
 ## Parallel Example: Phase 2
 
@@ -246,21 +248,21 @@ then T002 pr_list types, then T006 query, parse and StatusReading.lists (with T0
 
 ### MVP First
 
-M1: the reading lists every pull request of a branch at no more GitHub cost, and the card's counts
-come from that list (*10+*).
+M1: the reading lists every pull request of a branch at no more GitHub cost, the card's counts
+come from that list (*10+*), and the card draws the rows, two collapsed and all expanded (US1 and
+US2 whole).
 
 ### Incremental Delivery
 
-M2 draws the rows (collapsed and expanded); M3 makes each number a link that opens the pull
-request by pointer; M4 completes the keyboard. Each merges green; no milestone leaves an existing
+M2 makes each number a link that opens the pull request by pointer; M3 completes the keyboard. Each merges green; no milestone leaves an existing
 behaviour broken.
 
 ## Notes
 
-- Between M2 and M3 the number is plain text: the row is complete information, and the user guide
-  says nothing of opening it until M3.
-- Between M3 and M4 numbers are no Tab stops (built `.focusable(false)`), so the keyboard behaves
-  exactly as before this feature; M4 makes them stops together with their focus, Menu, Page and
+- Between M1 and M2 the number is plain text: the row is complete information, and the user guide
+  says nothing of opening it until M2.
+- Between M2 and M3 numbers are no Tab stops (built `.focusable(false)`), so the keyboard behaves
+  exactly as before this feature; M3 makes them stops together with their focus, Menu, Page and
   hand-off rules.
 - Commit after each test/implementation pair; never log an address (FR-014, G7).
 
@@ -268,40 +270,31 @@ behaviour broken.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
-### M1 — The list read, counts from it 🎯 MVP
+### M1 — Pull request rows on the card 🎯 MVP
 
-- **Tasks**: T001–T009
-- **Deliverable**: on `main`, the status reading lists each branch's pull requests (newest ten open, any state and merged) for 43 GitHub requests per branch instead of 44, and the Overview card's counts come from that list: a full page reads *10+* where it read *100+*, and counts stay or go through rate limits and failures exactly as before.
-- **Satisfies**: US1 sc. 3, 4, 6, 8; FR-001, FR-003 and FR-004 as rules, FR-006, FR-007, FR-008, FR-013, FR-014 (`Debug`), FR-016, FR-017 (counts); SC-004, SC-005
-- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_status --test overview`; `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- pr_status`
+- **Tasks**: T001–T019
+- **Deliverable**: in the app and the showcase, each card shows its branch's pull requests as rows ("#12 Open checks failing", "#9 Merged"), two on a collapsed card with "+N more" and all of them expanded, never clipped at 280/380/480 px; the counts line comes from the same list (a full page reads *10+*) for 43 GitHub requests per branch instead of 44; rows and counts stay or go through rate limits and failures as today's counts do; the layout snapshot has `overview-pr-rows`.
+- **Satisfies**: US1 sc. 1–8; US2 sc. 1–3; FR-001–FR-008, FR-013, FR-014 (`Debug`), FR-015, FR-016, FR-017 (counts, rows, snapshot); SC-001, SC-004, SC-005, SC-006, SC-007
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card pull_request_indicator composition_contrast`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_status --test overview --test layout_snapshot --test showcase_completeness`; `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- pr_status`; quickstart §B1, §B2, §B5, §B6
 - **Depends on**: —
 - **Tier**: full
 
-### M2 — Pull request rows on the card
-
-- **Tasks**: T010–T019
-- **Deliverable**: in the app and the showcase, each card shows its branch's pull requests as rows ("#12 Open checks failing", "#9 Merged"), two on a collapsed card with "+N more" and all of them expanded, never clipped at 280/380/480 px; the layout snapshot has `overview-pr-rows`.
-- **Satisfies**: US1 sc. 1–7; US2 sc. 1–3; FR-002, FR-003, FR-004, FR-005, FR-015, FR-017 (rows, snapshot); SC-001, SC-006, SC-007
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card pull_request_indicator composition_contrast`; `scripts/build-lock.sh cargo test -p micold-client --test overview --test layout_snapshot --test showcase_completeness`; quickstart §B1, §B2, §B5, §B6
-- **Depends on**: M1
-- **Tier**: full
-
-### M3 — Open a pull request from its number
+### M2 — Open a pull request from its number
 
 - **Tasks**: T020–T028
 - **Deliverable**: a click on a row's number opens that pull request's page in the browser, with no ripple, no selection and no card activation; a click elsewhere on the row activates the card as before; a number whose pull request a later reading dropped opens nothing.
 - **Satisfies**: US3 sc. 1–3, 5; FR-009 (pointer), FR-011, FR-012, FR-014; SC-002 (click), SC-003
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card card_grid overview`; `scripts/build-lock.sh cargo test -p micold-client --test overview --test root_vocabulary_is_cross_cutting --test root_state_is_shared --test feature_write_isolation --test idle_requests_no_frames`; `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- pull_request_link issue_link`; quickstart §B3
-- **Depends on**: M2
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card card_grid overview`; `scripts/build-lock.sh cargo test -p micold-client --test overview --test root_vocabulary_is_cross_cutting --test root_state_is_shared --test feature_write_isolation --test idle_requests_no_frames`; `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- pull_request_link issue_link`; quickstart §B3
+- **Depends on**: M1
 - **Tier**: full
 
-### M4 — Pull request numbers by keyboard
+### M3 — Pull request numbers by keyboard
 
 - **Tasks**: T029–T037
-- **Deliverable**: with no pointer, Tab reaches each shown number after the issue link and Enter opens it; Escape collapses the card and hidden numbers are skipped (focus on one goes to the card); the Menu key on a number opens the card's menu and closing it returns to that number.
+- **Deliverable**: with no pointer, Tab reaches each shown number after the issue link and Enter opens it; the arrow keys from a number step to the neighbouring card; Escape collapses the card and hidden numbers are skipped (focus on one goes to the card); the Menu key on a number opens the card's menu and closing it returns to that number.
 - **Satisfies**: US3 sc. 4; FR-009 (keys), FR-010; SC-002 (keys)
 - **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card card_grid overview`; `scripts/build-lock.sh cargo test -p micold-client --test overview`; `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- link_menu card_focus_return link_focus pull_request_link`; quickstart §B4
-- **Depends on**: M3
+- **Depends on**: M2
 - **Tier**: full
 
 Polish (T038–T039) changes no code: the close unit does it in the close PR.

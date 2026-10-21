@@ -197,7 +197,9 @@ Client view: `OverviewCard` takes `.pull_requests(rows, more)` with `.on_pr_link
 `.pr_link_id(Fn(u64) -> Id)`; each number is a `TextLink` (feature 1122) with the same menu-key and
 page wiring as the issue link (`fn issue_link`, overview_card.rs ~l.522), factored into one helper
 both use. `CardGrid`'s per-card `link_id: Option<Id>` becomes `link_ids: Vec<Id>`, `over_link`
-true on any of them; the arrow step (`step_from`) maps every link id of a card to that card.
+true on any of them. The arrow step, `step_card` in `ui/overview.rs` (which holds one link per
+card today, `cards: Vec<(Id, Id)>`), takes each card's id and all of its link ids, so a step from
+any number counts from its card and never lands on a number.
 
 **Rationale**: FR-009 asks every 1122 link rule to hold for each number "in the same way": the
 same `TextLink`, the same grid path, the same expansion events. Naming the slot keeps
