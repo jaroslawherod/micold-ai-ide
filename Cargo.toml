@@ -127,6 +127,10 @@ futures-util = { version = "0.3", features = ["sink"] }
 # Feature 482 (R10): `highlighter` colours the Changes view's diff (iced_highlighter -> two-face,
 # syntect with the pure-Rust fancy-regex engine; MIT and MIT/Apache-2.0).
 iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy", "highlighter"] }
+# Feature 940 (research R4): the grammar set iced_highlighter already builds with, named directly
+# only so `ui::syntax::knows` can ask whether a token has a grammar other than plain text. Same
+# version and features as iced_highlighter's, so it adds no crate to the build.
+two-face = { version = "0.4.5", default-features = false, features = ["syntect-default-fancy"] }
 dark-light = "3.0"
 # --- terminal stack (client today; migrates into micold-daemon at T030) ---
 portable-pty = "0.9"

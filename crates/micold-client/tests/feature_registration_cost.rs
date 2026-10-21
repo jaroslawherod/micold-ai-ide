@@ -183,6 +183,14 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          type and never handles it: the root routes it to the transcript feature before the \
          session reducer runs (feature 939, T023)",
     ),
+    (
+        "structured_transcript",
+        "transcript_rich",
+        "RichCache — the window's render cache is the transcript's derived drawing state (feature \
+         940, research R8): the rich blocks' messages are `TranscriptMsg` variants, so the \
+         transcript's `update` routes them to the cache the root hands it, beside its own state, \
+         and names the cache's `Ticket`, `Part` and `HighlightJob` in them (T023)",
+    ),
 ];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.

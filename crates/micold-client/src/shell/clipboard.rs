@@ -24,6 +24,7 @@ use iced::Task;
 
 use micold_client::app::Message;
 use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::structured_transcript::TranscriptMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::Outcome;
 use micold_client::keymap;
@@ -35,6 +36,16 @@ use crate::App;
 pub fn interpret(outcome: Outcome) -> Task<Message> {
     match outcome {
         Outcome::ClipboardWrite(text) => iced::clipboard::write(text),
+        // Feature 940 (FR-012, research R5): the write, then the clipboard read back for the
+        // transcript feature to judge whether the copy held.
+        Outcome::ClipboardWriteChecked { text, ticket } => {
+            iced::clipboard::write(text).chain(iced::clipboard::read().map(move |read| {
+                Message::Session(SessionMsg::Transcript(TranscriptMsg::CopyChecked {
+                    ticket,
+                    read,
+                }))
+            }))
+        }
         // The root's, not the shell's: cross-feature consequences are interpreted by
         // `app::interpret` (contract O3). The shell partitions the queue before draining, so these
         // are unreachable here — listed rather than caught by a `_` so a new *effect request*
@@ -59,6 +70,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::FieldBlurred(_)
         | Outcome::SettingsOpened
         | Outcome::OpenLink(_)
+        | Outcome::CopyConfirmTimer { .. }
         | Outcome::Insert { .. }
         | Outcome::DaemonRegistryChanged(_)
         | Outcome::KubeContextsRequested

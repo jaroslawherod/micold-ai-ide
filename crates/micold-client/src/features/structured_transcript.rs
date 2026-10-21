@@ -6,6 +6,11 @@
 //! shell turns a [`Scroll`] into a scroll operation on `ui::transcript::transcript_scroll_id`
 //! (research R9).
 
+use crate::features::transcript_rich::{HighlightJob, Part, RichCache, Ticket, COPY_CONFIRM};
+use crate::features::{OpenRequest, Outcome};
+use micold_core::link::address::{classify, Address};
+use micold_core::markdown::CodeId;
+use micold_core::review::diff::Spans;
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::{EntryKey, Transcript};
 use micold_core::structured::{SequencedEvent, MAX_EVENTS};
@@ -95,6 +100,79 @@ pub enum TranscriptMsg {
         /// The session the view shows.
         session: SessionId,
     },
+    /// A link in a rich block was activated (feature 940, FR-004, RR-6).
+    OpenLink {
+        /// Its address, re-classified before anything opens.
+        url: String,
+    },
+    /// A code block's copy control was activated (feature 940, FR-011).
+    CopyCode {
+        session: SessionId,
+        key: EntryKey,
+        code: CodeId,
+    },
+    /// The clipboard read back after a copy's write (feature 940, FR-012, research R5).
+    CopyChecked {
+        ticket: Ticket,
+        /// What the clipboard held; `None` when it could not be read.
+        read: Option<String>,
+    },
+    /// A copy's confirmation is over (feature 940, FR-012).
+    CopyExpired { ticket: Ticket },
+    /// "Show in full" was activated on a part over the size limits (feature 940, FR-019).
+    ShowInFull {
+        session: SessionId,
+        key: EntryKey,
+        part: Part,
+    },
+    /// A highlight job's colours, in both schemes (feature 940, research R4).
+    Highlighted {
+        session: SessionId,
+        key: EntryKey,
+        part: Part,
+        spans: Spans,
+    },
+}
+
+impl TranscriptMsg {
+    /// The session whose view sent it; `None` for the window-wide answers (links, copy tickets).
+    pub fn session(&self) -> Option<SessionId> {
+        match self {
+            Self::Toggle { session, .. }
+            | Self::Scrolled { session, .. }
+            | Self::JumpToLatest { session }
+            | Self::Shown { session }
+            | Self::CopyCode { session, .. }
+            | Self::ShowInFull { session, .. }
+            | Self::Highlighted { session, .. } => Some(*session),
+            Self::OpenLink { .. } | Self::CopyChecked { .. } | Self::CopyExpired { .. } => None,
+        }
+    }
+}
+
+/// What a transcript message asks of the shell: a scroll (R9), effect requests (a link to open, a
+/// checked clipboard write, a confirmation timer) and highlight jobs (feature 940).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Effect {
+    pub scroll: Option<Scroll>,
+    pub outcomes: Vec<Outcome>,
+    pub jobs: Vec<HighlightJob>,
+}
+
+impl Effect {
+    fn scroll(scroll: Option<Scroll>) -> Self {
+        Self {
+            scroll,
+            ..Self::default()
+        }
+    }
+
+    fn outcome(outcome: Option<Outcome>) -> Self {
+        Self {
+            outcomes: outcome.into_iter().collect(),
+            ..Self::default()
+        }
+    }
 }
 
 /// The structured sessions' transcripts this window holds.
@@ -216,28 +294,67 @@ impl State {
         self.sessions.remove(&session);
     }
 
-    /// Apply a message of the view, and say which scroll operation the shell performs (R9).
-    pub fn update(&mut self, msg: TranscriptMsg) -> Option<Scroll> {
+    /// Apply a message of the view, and say what the shell performs: the scroll (R9), and for the
+    /// rich blocks' messages what `rich`, the window's render cache, asks for (feature 940).
+    pub fn update(&mut self, rich: &mut RichCache, msg: TranscriptMsg) -> Effect {
         match msg {
             TranscriptMsg::Toggle { session, key } => {
                 self.toggle(session, key);
-                None
+                Effect::default()
             }
             TranscriptMsg::Scrolled {
                 session,
                 offset,
                 viewport,
                 content,
-            } => (self.scrolled(session, offset, viewport, content) == FollowChange::Resumed)
-                .then_some(Scroll::End),
+            } => Effect::scroll(
+                (self.scrolled(session, offset, viewport, content) == FollowChange::Resumed)
+                    .then_some(Scroll::End),
+            ),
             TranscriptMsg::JumpToLatest { session } => {
                 self.jump_to_latest(session);
-                Some(Scroll::End)
+                Effect::scroll(Some(Scroll::End))
             }
-            TranscriptMsg::Shown { session } => Some(match self.follow(session) {
+            TranscriptMsg::Shown { session } => Effect::scroll(Some(match self.follow(session) {
                 Follow::Following => Scroll::End,
                 Follow::Detached { offset } => Scroll::To(offset),
+            })),
+            // RR-6: a renderer sends only activatable links; this re-checks a message built
+            // elsewhere.
+            TranscriptMsg::OpenLink { url } => Effect::outcome(match classify(&url) {
+                Address::Web(url) | Address::Mail(url) => {
+                    Some(Outcome::OpenLink(OpenRequest::Url(url)))
+                }
+                Address::File { .. } | Address::NotFollowable => None,
             }),
+            TranscriptMsg::CopyCode { session, key, code } => Effect::outcome(
+                rich.copy(session, &key, code)
+                    .map(|(text, ticket)| Outcome::ClipboardWriteChecked { text, ticket }),
+            ),
+            TranscriptMsg::CopyChecked { ticket, read } => Effect::outcome(
+                rich.copy_checked(ticket, read)
+                    .then_some(Outcome::CopyConfirmTimer {
+                        ticket,
+                        after: COPY_CONFIRM,
+                    }),
+            ),
+            TranscriptMsg::CopyExpired { ticket } => {
+                rich.copy_expired(ticket);
+                Effect::default()
+            }
+            TranscriptMsg::ShowInFull { session, key, part } => Effect {
+                jobs: rich.show_in_full(session, &key, part).into_iter().collect(),
+                ..Effect::default()
+            },
+            TranscriptMsg::Highlighted {
+                session,
+                key,
+                part,
+                spans,
+            } => {
+                rich.highlighted(session, &key, part, spans);
+                Effect::default()
+            }
         }
     }
 }

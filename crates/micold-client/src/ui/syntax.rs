@@ -10,6 +10,8 @@
 //! 4.5:1), so every colour is moved toward the scheme's `on_surface` by [`legible`] until it reads
 //! at 4.5:1 on the surface and on both diff tints.
 
+use std::collections::HashSet;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use iced::highlighter::{Settings, Stream, Theme};
@@ -18,6 +20,7 @@ use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, contrast, Rgb, Roles, AA_TEXT};
 
 use crate::features::changes::{cap_spans, SPAN_CAP};
+use crate::features::transcript_rich::Grammar;
 
 /// The highlighter theme of `scheme`.
 pub fn theme(scheme: ColorScheme) -> Theme {
@@ -27,9 +30,15 @@ pub fn theme(scheme: ColorScheme) -> Theme {
     }
 }
 
-/// The fills a syntax colour is read on: the diff pane's surface and the two line tints.
-pub fn fills(roles: Roles) -> [Rgb; 3] {
-    [roles.surface, roles.diff_added, roles.diff_removed]
+/// The fills a syntax colour is read on: the diff pane's surface, the two line tints, and the
+/// transcript's code surface (feature 940, SC-006).
+pub fn fills(roles: Roles) -> [Rgb; 4] {
+    [
+        roles.surface,
+        roles.diff_added,
+        roles.diff_removed,
+        roles.surface_container_high,
+    ]
 }
 
 /// `colour`, moved toward `roles.on_surface` just far enough to read at 4.5:1 on every fill a diff
@@ -40,7 +49,7 @@ pub fn legible(colour: Rgb, roles: Roles) -> Rgb {
             .iter()
             .all(|&fill| contrast(c, fill) >= AA_TEXT)
     };
-    // `on_surface` itself reads on all three (`diff_line_text_is_legible_on_the_added_and_removed_tints`),
+    // `on_surface` itself reads on all four (`diff_line_text_is_legible_on_the_added_and_removed_tints`),
     // so the walk ends there at the latest.
     (0..=STEPS)
         .map(|step| mix(colour, roles.on_surface, step as f32 / STEPS as f32))
@@ -78,6 +87,25 @@ fn capped(line: &str) -> &str {
         end -= 1;
     }
     &line[..end]
+}
+
+/// The grammar set the transcript's render cache decides highlight jobs with (feature 940, R4).
+pub const GRAMMAR: Grammar = Grammar { knows, token };
+
+/// Whether a grammar other than plain text exists for `token` (feature 940, FR-009): `token`
+/// names one of the highlighter's grammars by a file extension or by its name, ignoring case, as
+/// the highlighter's own lookup (`find_syntax_by_token`) matches it.
+pub fn knows(token: &str) -> bool {
+    static KNOWN: LazyLock<HashSet<String>> = LazyLock::new(|| {
+        two_face::syntax::extra_no_newlines()
+            .syntaxes()
+            .iter()
+            .filter(|syntax| syntax.name != "Plain Text")
+            .flat_map(|syntax| syntax.file_extensions.iter().chain([&syntax.name]))
+            .map(|token| token.to_lowercase())
+            .collect()
+    });
+    !token.is_empty() && KNOWN.contains(&token.to_lowercase())
 }
 
 /// The grammar token of `path`: its extension, else its file name (`Makefile`, `Dockerfile`).
@@ -130,6 +158,22 @@ fn highlight_lines_until<'a>(
         stream.commit();
     }
     Some(SideSpans(out))
+}
+
+/// A transcript highlight job's `lines` as `token`'s language in both schemes, each line's colours
+/// in `new` (feature 940, research R4); `None` once `budget` is spent.
+pub fn highlight_job(token: &str, lines: &[String], budget: Duration) -> Option<Spans> {
+    let deadline = Some(Instant::now() + budget);
+    let scheme = |scheme| {
+        Some(SchemeSpans {
+            old: SideSpans::default(),
+            new: highlight_lines_until(token, lines.iter().map(String::as_str), scheme, deadline)?,
+        })
+    };
+    Some(Spans {
+        light: scheme(ColorScheme::Light)?,
+        dark: scheme(ColorScheme::Dark)?,
+    })
 }
 
 /// All of `lines`, highlighted in `scheme` as `path`'s language; `None` once `deadline` has passed.
@@ -320,8 +364,14 @@ mod tests {
             let listed = fills(r);
             assert_eq!(
                 listed,
-                [r.surface, r.diff_added, r.diff_removed],
-                "a diff line is drawn on the surface or an added or removed tint ({scheme:?})"
+                [
+                    r.surface,
+                    r.diff_added,
+                    r.diff_removed,
+                    r.surface_container_high
+                ],
+                "a diff line is drawn on the surface or an added or removed tint, and a \
+                 transcript code block on the code surface (feature 940, SC-006) ({scheme:?})"
             );
             for (i, a) in listed.iter().enumerate() {
                 for b in &listed[i + 1..] {
@@ -330,6 +380,38 @@ mod tests {
                         "each fill is a distinct colour ({scheme:?}): {listed:?}"
                     );
                 }
+            }
+        }
+    }
+
+    /// Feature 940 T016 (FR-009): a fence's token is known when a grammar other than plain text
+    /// exists for it; unknown tokens and no token draw plain monospace.
+    #[test]
+    fn knows_the_tokens_a_grammar_exists_for() {
+        for token in ["rust", "sh", "yaml", "json", "py"] {
+            assert!(knows(token), "{token} has a grammar");
+        }
+        for token in ["teapot", "no-such-language", ""] {
+            assert!(!knows(token), "{token:?} has none");
+        }
+    }
+
+    /// Feature 940 T016 (SC-006): a colour `legible` returns reads on the code surface too.
+    #[test]
+    fn legible_lifts_colours_on_the_code_surface() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            assert!(fills(r).contains(&r.surface_container_high));
+            for raw in [
+                Rgb {
+                    r: 128,
+                    g: 128,
+                    b: 128,
+                },
+                r.surface_container_high,
+            ] {
+                let lifted = legible(raw, r);
+                assert!(contrast(lifted, r.surface_container_high) >= AA_TEXT);
             }
         }
     }

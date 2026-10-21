@@ -1190,7 +1190,18 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             omitted,
             events,
             live,
-        } => app.core.structured_events(session, omitted, &events, live),
+        } => {
+            // Feature 940 (RR-4): the session's render cache is refreshed with it; the highlight
+            // jobs that became due run off the update thread.
+            let jobs = app.core.structured_events(
+                session,
+                omitted,
+                &events,
+                live,
+                &micold_client::ui::syntax::GRAMMAR,
+            );
+            follow_up = crate::shell::transcript::highlight(jobs);
+        }
         DaemonMsg::SettingsChanged { settings } => {
             let pr_status_enabled = settings.pr_status_enabled;
             if let Some(job) = on_settings_changed(app, settings) {

@@ -541,7 +541,13 @@ pub fn transcript_pane_detached() -> State {
     state.session.active = Some(id);
 
     let lines = super::transcript::fixture_lines("tool-turn");
-    state.structured_events(id, 0, &super::transcript::sequenced(&lines, 0), false);
+    state.structured_events(
+        id,
+        0,
+        &super::transcript::sequenced(&lines, 0),
+        false,
+        &micold_client::ui::syntax::GRAMMAR,
+    );
     let card = state
         .structured_transcript
         .transcript(id)
