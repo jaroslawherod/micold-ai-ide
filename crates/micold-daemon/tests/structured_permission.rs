@@ -1,4 +1,5 @@
-//! #942 milestone M2 (T029–T031): a structured session's permission prompts at the daemon.
+//! #942 milestones M2 (T029–T031) and M3 (T035, T037): a structured session's permission prompts
+//! at the daemon, the activity a pending request gives its session, and its withdrawal.
 //!
 //! The stand-in `claude` of `support/structured.rs` makes real prompt-tool calls to the daemon's
 //! tool server with its own credential (`prompt`, `prompt-async`, research R13), and test clients
@@ -15,11 +16,13 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
-    ClientMsg, DaemonMsg, PermissionRequest, PromptChoice, PromptId, QuestionAnswer, Resolution,
+    ActivitySignal, ClientMsg, DaemonMsg, PermissionRequest, PromptChoice, PromptId,
+    QuestionAnswer, Resolution, WithdrawReason,
 };
 use micold_core::session::{PermissionMode, Session, SessionId, SessionLocation};
 use micold_core::structured::permission::{DecisionRefusal, RequestKind};
 use micold_core::terminal::LaunchMode;
+use micold_daemon::activity::{ActivityEvent, HookKind};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
 
@@ -33,8 +36,8 @@ mod mcp;
 mod structured;
 use conn::{connect, Client};
 use structured::{
-    fake_stream_cli, prompt_answer_count, prompt_answers, prompt_call_file, prompts_on,
-    stream_script, structured_session,
+    fake_stream_cli, fixture_lines, prompt_answer_count, prompt_answers, prompt_call_file,
+    prompts_on, stream_script, structured_session,
 };
 
 /// A daemon with a bound tool server and prompts on, holding one structured session per project.
@@ -42,7 +45,8 @@ struct Daemon {
     state: Arc<DaemonState>,
     projects: Vec<tempfile::TempDir>,
     ids: Vec<SessionId>,
-    _store: tempfile::TempDir,
+    sessions: Vec<Session>,
+    store: tempfile::TempDir,
     _bindings: tempfile::TempDir,
 }
 
@@ -53,28 +57,50 @@ impl Daemon {
         mcp::log();
         let projects: Vec<tempfile::TempDir> =
             (0..n).map(|_| tempfile::tempdir().unwrap()).collect();
-        let mut ids = Vec::new();
-        let listed = projects
+        let sessions: Vec<Session> = projects
             .iter()
-            .map(|project| {
+            .map(|_| {
                 let mut session = structured_session(SessionLocation::Default);
                 session.lifecycle = micold_core::session::SessionLifecycle::Idle;
-                ids.push(session.id);
-                (project.path().to_path_buf(), true, vec![session])
+                session
             })
             .collect();
+        let ids = sessions.iter().map(|session| session.id).collect();
         let store = tempfile::tempdir().unwrap();
-        let state = mcp::state_over(listed, store.path());
         let bindings = tempfile::tempdir().unwrap();
-        mcp::serve_tool_server(&state, bindings.path().to_path_buf()).await;
-        prompts_on(&state);
+        let state = Self::serve(&projects, &sessions, store.path(), bindings.path()).await;
         Self {
             state,
             projects,
             ids,
-            _store: store,
+            sessions,
+            store,
             _bindings: bindings,
         }
+    }
+
+    /// A state holding `sessions`, one per project, over `store`, with its tool server bound and
+    /// prompts on.
+    async fn serve(
+        projects: &[tempfile::TempDir],
+        sessions: &[Session],
+        store: &Path,
+        bindings: &Path,
+    ) -> Arc<DaemonState> {
+        let listed = projects
+            .iter()
+            .zip(sessions)
+            .map(|(project, session)| (project.path().to_path_buf(), true, vec![session.clone()]))
+            .collect();
+        let state = mcp::state_over(listed, store);
+        mcp::serve_tool_server(&state, bindings.to_path_buf()).await;
+        prompts_on(&state);
+        state
+    }
+
+    /// A second daemon over the same sessions and store, as after a restart.
+    async fn restarted(&self, bindings: &Path) -> Arc<DaemonState> {
+        Self::serve(&self.projects, &self.sessions, self.store.path(), bindings).await
     }
 
     fn dir(&self, n: usize) -> &Path {
@@ -90,6 +116,87 @@ impl Daemon {
             .unwrap()
             .expect("the structured session starts");
     }
+
+    /// Session `n`'s summary as the catalog lists it now.
+    fn summary(&self, n: usize) -> micold_core::protocol::messages::SessionSummary {
+        self.state
+            .catalog_snapshot()
+            .projects
+            .iter()
+            .flat_map(|project| &project.sessions)
+            .find(|session| session.id == self.ids[n])
+            .cloned()
+            .expect("the session is listed")
+    }
+
+    fn activity(&self, n: usize) -> ActivitySignal {
+        self.summary(n).activity
+    }
+
+    /// Send session `n`'s CLI a user message, opening a turn.
+    async fn say(&self, n: usize, text: &str) {
+        let (state, id, text) = (Arc::clone(&self.state), self.ids[n], text.to_string());
+        tokio::task::spawn_blocking(move || state.send_user_message(id, &text))
+            .await
+            .unwrap()
+            .expect("the message is delivered");
+    }
+
+    /// The pid of session `n`'s stand-in.
+    fn pid(&self, n: usize) -> String {
+        let file = self.dir(n).join("pid-record");
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        loop {
+            if let Ok(text) = std::fs::read_to_string(&file) {
+                if text.ends_with('\n') {
+                    return text.trim().to_string();
+                }
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the stand-in never wrote its pid"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// Make a prompt-tool call for `tool` with `input` as session `n`'s agent, from the test, and
+    /// hold the connection open: the answer is read with [`agent_answer`]. Unlike the stand-in's
+    /// own calls, this one outlives the stand-in's process.
+    async fn agent_call(&self, n: usize, tool_use_id: &str, input: Value) -> tokio::net::TcpStream {
+        use tokio::io::AsyncWriteExt;
+        let server = self.state.tool_server().expect("bound");
+        let (addr, bearer) = (server.addr(), server.credential_for(self.ids[n]));
+        let body = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "permission_prompt",
+                "arguments": {"tool_name": "Bash", "input": input, "tool_use_id": tool_use_id}}})
+        .to_string();
+        let mut agent = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let request = format!(
+            "POST /mcp HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/json\r\nAuthorization: Bearer {bearer}\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        );
+        agent.write_all(request.as_bytes()).await.unwrap();
+        agent
+    }
+}
+
+/// The answer the daemon sent on `agent`'s prompt call: its `content[0].text`, as JSON.
+async fn agent_answer(mut agent: tokio::net::TcpStream) -> Value {
+    use tokio::io::AsyncReadExt;
+    let mut reply = Vec::new();
+    tokio::time::timeout(Duration::from_secs(15), agent.read_to_end(&mut reply))
+        .await
+        .expect("the call is answered")
+        .expect("the reply is read");
+    let reply = String::from_utf8_lossy(&reply);
+    let (_head, body) = reply.split_once("\r\n\r\n").expect("an HTTP reply");
+    let json = &body[body.find('{').expect("a JSON body")..=body.rfind('}').unwrap()];
+    let result: Value = serde_json::from_str(json).expect("a JSON-RPC reply");
+    let text = result["result"]["content"][0]["text"]
+        .as_str()
+        .expect("a text answer");
+    serde_json::from_str(text).expect("the answer is JSON")
 }
 
 impl Drop for Daemon {
@@ -852,23 +959,11 @@ async fn a_question_request_is_answered_or_declined() {
 /// and a decision after that is refused.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_request_whose_agent_hangs_up_is_withdrawn() {
-    use tokio::io::AsyncWriteExt;
     let daemon = Daemon::new(1).await;
     let mut a = window(&daemon.state).await;
     daemon.start(0, "").await;
     let id = daemon.ids[0];
-    let server = daemon.state.tool_server().expect("bound");
-    let (addr, bearer) = (server.addr(), server.credential_for(id));
-    let body = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-        "params": {"name": "permission_prompt",
-            "arguments": {"tool_name": "Bash", "input": bash("sleep 1"), "tool_use_id": "toolu_h"}}})
-    .to_string();
-    let mut agent = tokio::net::TcpStream::connect(addr).await.unwrap();
-    let request = format!(
-        "POST /mcp HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/json\r\nAuthorization: Bearer {bearer}\r\nContent-Length: {}\r\n\r\n{body}",
-        body.len()
-    );
-    agent.write_all(request.as_bytes()).await.unwrap();
+    let agent = daemon.agent_call(0, "toolu_h", bash("sleep 1")).await;
     let shown = requested(&mut a).await;
     drop(agent);
     assert_eq!(
@@ -878,10 +973,284 @@ async fn a_request_whose_agent_hangs_up_is_withdrawn() {
             shown.id,
             Some("toolu_h".into()),
             Resolution::Withdrawn {
-                reason: micold_core::protocol::messages::WithdrawReason::AgentHungUp
+                reason: WithdrawReason::AgentHungUp
             }
         )
     );
     let late = decide(&mut a, 1, id, shown.id, PromptChoice::Allow).await;
     assert_refused(&late, DecisionRefusal::NotPending);
+}
+
+/// The attention count of session `n`: one more each time it began waiting out of view.
+fn attention_seq(daemon: &Daemon, n: usize) -> u64 {
+    daemon.summary(n).attention_seq
+}
+
+/// T035 (US5 s1–s2; FR-009, R8): while requests are pending the session is awaiting input, as a
+/// terminal session whose CLI asked for permission; the mark comes on the first request and goes on
+/// the last decision, the turn going on. The CLI's own `Notification` hook beside it counts no
+/// second notification.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pending_request_marks_its_session_waiting_until_the_last_is_decided() {
+    let daemon = Daemon::new(1).await;
+    let (mut a, mut b) = (window(&daemon.state).await, window(&daemon.state).await);
+    let dir = daemon.dir(0);
+    let before = attention_seq(&daemon, 0);
+    let script = [
+        prompt_async(dir, "p1", "Bash", bash("one")),
+        prompt_async(dir, "p2", "Bash", bash("two")),
+    ]
+    .concat();
+    daemon.start(0, &script).await;
+    let first = requested(&mut a).await;
+    let second = requested(&mut a).await;
+    assert_eq!(daemon.activity(0), ActivitySignal::AwaitingInput);
+    assert_eq!(
+        attention_seq(&daemon, 0),
+        before + 1,
+        "one needs-permission event"
+    );
+    // Every window is told, in the session list.
+    let listed = next_of(&mut b, |msg| match msg {
+        DaemonMsg::CatalogChanged { catalog } => catalog
+            .projects
+            .iter()
+            .flat_map(|project| &project.sessions)
+            .find(|session| session.id == daemon.ids[0])
+            .filter(|session| session.activity == ActivitySignal::AwaitingInput)
+            .map(|_| ()),
+        _ => None,
+    });
+    listed.await;
+
+    // The CLI fires its own `Notification` hook for the same request (R8).
+    daemon
+        .state
+        .note_activity(daemon.ids[0], ActivityEvent::Hook(HookKind::Notification));
+    assert_eq!(attention_seq(&daemon, 0), before + 1, "still one");
+
+    assert_ok(&decide(&mut a, 1, first.session, first.id, PromptChoice::Allow).await);
+    assert_eq!(
+        daemon.activity(0),
+        ActivitySignal::AwaitingInput,
+        "one request still pending"
+    );
+    assert_ok(&decide(&mut a, 2, second.session, second.id, PromptChoice::Allow).await);
+    assert_eq!(
+        daemon.activity(0),
+        ActivitySignal::Working,
+        "the turn goes on"
+    );
+    assert_eq!(attention_seq(&daemon, 0), before + 1);
+}
+
+/// T035 (FR-009): two sessions waiting are each marked, and a decision clears only its own.
+#[tokio::test(flavor = "multi_thread")]
+async fn two_sessions_waiting_are_marked_separately() {
+    let daemon = Daemon::new(2).await;
+    let mut a = window(&daemon.state).await;
+    for n in 0..2 {
+        let script = prompt(daemon.dir(n), "p1", "Bash", bash(&format!("job {n}")));
+        daemon.start(n, &script).await;
+    }
+    let mut ids = std::collections::HashMap::new();
+    for _ in 0..2 {
+        let request = requested(&mut a).await;
+        ids.insert(request.session, request.id);
+    }
+    assert_eq!(daemon.activity(0), ActivitySignal::AwaitingInput);
+    assert_eq!(daemon.activity(1), ActivitySignal::AwaitingInput);
+    let s1 = daemon.ids[1];
+    assert_ok(&decide(&mut a, 1, s1, ids[&s1], PromptChoice::Allow).await);
+    assert_eq!(daemon.activity(1), ActivitySignal::Working);
+    assert_eq!(daemon.activity(0), ActivitySignal::AwaitingInput);
+}
+
+/// What the CLI is told when its request was withdrawn while it still waited (FR-011).
+const TURN_ENDED: &str = "The turn ended before you answered.";
+
+/// Both windows are told request `id` was withdrawn for `reason` by `deadline` (SC-003).
+async fn withdrawn_everywhere(
+    windows: &mut [&mut Window],
+    id: PromptId,
+    reason: WithdrawReason,
+    deadline: tokio::time::Instant,
+) {
+    for window in windows.iter_mut() {
+        let (_, got, _, resolution) = tokio::time::timeout_at(deadline, resolved(window))
+            .await
+            .expect("withdrawn within 1 s");
+        assert_eq!((got, resolution), (id, Resolution::Withdrawn { reason }));
+    }
+}
+
+/// How a test ends a pending request's turn, process or session.
+enum Ending {
+    Kill,
+    Stop,
+    Remove,
+    TurnWithoutResult,
+}
+
+/// T037 (US6 s1–s2; FR-011, SC-003): a request the test's own agent call holds is withdrawn from
+/// both windows within 1 s of `ending`, for `reason`; the call, still waiting, is answered deny,
+/// and a decision after that is refused.
+async fn withdrawn_on(ending: Ending, reason: WithdrawReason) {
+    let daemon = Daemon::new(1).await;
+    let (mut a, mut b) = (window(&daemon.state).await, window(&daemon.state).await);
+    let script = match ending {
+        Ending::TurnWithoutResult => "await-stdin\nexit 0\n",
+        _ => "",
+    };
+    daemon.start(0, script).await;
+    let pid = daemon.pid(0);
+    let agent = daemon.agent_call(0, "toolu_w", bash("make")).await;
+    let shown = requested(&mut a).await;
+    assert_eq!(requested(&mut b).await.id, shown.id);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+    let (state, id) = (Arc::clone(&daemon.state), daemon.ids[0]);
+    match ending {
+        Ending::Kill => {
+            let killed = std::process::Command::new("kill")
+                .args(["-9", &pid])
+                .status()
+                .unwrap();
+            assert!(killed.success());
+        }
+        Ending::Stop => {
+            tokio::task::spawn_blocking(move || state.stop_session(id))
+                .await
+                .unwrap();
+        }
+        Ending::Remove => {
+            tokio::task::spawn_blocking(move || state.delete_session(id).map(|_| ()))
+                .await
+                .unwrap()
+                .expect("removed");
+        }
+        Ending::TurnWithoutResult => daemon.say(0, "go").await,
+    }
+    withdrawn_everywhere(&mut [&mut a, &mut b], shown.id, reason, deadline).await;
+    assert_eq!(agent_answer(agent).await, deny(TURN_ENDED));
+    let late = decide(&mut a, 1, daemon.ids[0], shown.id, PromptChoice::Allow).await;
+    assert!(
+        matches!(late, DaemonMsg::OperationError { .. }),
+        "refused: {late:?}"
+    );
+    if !matches!(ending, Ending::Remove) {
+        assert_refused(&late, DecisionRefusal::NotPending);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_request_is_withdrawn_when_its_process_is_killed() {
+    withdrawn_on(Ending::Kill, WithdrawReason::ProcessEnded).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_request_is_withdrawn_when_its_session_stops() {
+    withdrawn_on(Ending::Stop, WithdrawReason::SessionStopped).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_request_is_withdrawn_when_its_session_is_removed() {
+    withdrawn_on(Ending::Remove, WithdrawReason::SessionRemoved).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_request_is_withdrawn_when_its_turn_ends_without_a_result() {
+    withdrawn_on(Ending::TurnWithoutResult, WithdrawReason::TurnEnded).await;
+}
+
+/// T037 (US6 s1; R4, P-8): a `result` on the stream ends the turn — an interrupt ends it so — and
+/// withdraws the request the stand-in still waits on, which is answered deny.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_result_withdraws_the_request_and_the_cli_is_denied() {
+    let daemon = Daemon::new(1).await;
+    let (mut a, mut b) = (window(&daemon.state).await, window(&daemon.state).await);
+    let dir = daemon.dir(0);
+    let result = fixture_lines("text-turn.jsonl")
+        .into_iter()
+        .find(|line| line.contains(r#""type":"result""#))
+        .expect("the fixture ends its turn");
+    let script = format!(
+        "{}await-stdin\n{result}\n",
+        prompt_async(dir, "p1", "Bash", bash("ls"))
+    );
+    daemon.start(0, &script).await;
+    let shown = requested(&mut a).await;
+    assert_eq!(requested(&mut b).await.id, shown.id);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+    daemon.say(0, "go").await;
+    withdrawn_everywhere(
+        &mut [&mut a, &mut b],
+        shown.id,
+        WithdrawReason::TurnEnded,
+        deadline,
+    )
+    .await;
+    assert_eq!(prompt_answers(dir, 1), [deny(TURN_ENDED)]);
+    let late = decide(&mut a, 1, daemon.ids[0], shown.id, PromptChoice::Allow).await;
+    assert_refused(&late, DecisionRefusal::NotPending);
+}
+
+/// T037 (FR-011): nothing is pending after a daemon restart: a new daemon over the same sessions
+/// shows a connecting window no request, and refuses a decision for one the old daemon held.
+#[tokio::test(flavor = "multi_thread")]
+async fn nothing_is_pending_after_a_daemon_restart() {
+    let daemon = Daemon::new(1).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    daemon
+        .start(0, &prompt(dir, "p1", "Bash", bash("ls")))
+        .await;
+    let shown = requested(&mut a).await;
+    let bindings = tempfile::tempdir().unwrap();
+    let restarted = daemon.restarted(bindings.path()).await;
+    let mut fresh = window(&restarted).await;
+    assert!(
+        permission_messages_within(&mut fresh, Duration::from_millis(300))
+            .await
+            .is_empty(),
+        "no request replayed"
+    );
+    let late = decide(&mut fresh, 1, daemon.ids[0], shown.id, PromptChoice::Allow).await;
+    assert_refused(&late, DecisionRefusal::NotPending);
+}
+
+/// T037 (R9): a session's always-allow rules end with its process: the same call in its next
+/// process is asked again.
+#[tokio::test(flavor = "multi_thread")]
+async fn always_allow_rules_are_gone_after_the_process_ends() {
+    let daemon = Daemon::new(1).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    daemon
+        .start(0, &prompt(dir, "p1", "Bash", bash("make")))
+        .await;
+    let request = requested(&mut a).await;
+    assert_ok(
+        &decide(
+            &mut a,
+            1,
+            request.session,
+            request.id,
+            PromptChoice::AlwaysAllow,
+        )
+        .await,
+    );
+    assert_eq!(prompt_answers(dir, 1)[0]["behavior"], "allow");
+    let (state, id) = (Arc::clone(&daemon.state), daemon.ids[0]);
+    tokio::task::spawn_blocking(move || state.stop_session(id))
+        .await
+        .unwrap();
+    daemon
+        .start(0, &prompt(dir, "p2", "Bash", bash("make")))
+        .await;
+    let again = requested(&mut a).await;
+    assert_eq!(
+        again.tool_use_id.as_deref(),
+        Some("toolu_p2"),
+        "asked again"
+    );
 }

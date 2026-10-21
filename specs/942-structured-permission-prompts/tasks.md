@@ -203,15 +203,15 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 5: Daemon — waiting state and withdrawal (M3)
 
-- [ ] T035 [P] [US5] Integration tests in `daemon/tests/structured_permission.rs`: the session's
+- [x] T035 [P] [US5] Integration tests in `daemon/tests/structured_permission.rs`: the session's
   activity is `AwaitingInput` (*Blocked: needs permission*) while a request is pending and
   `Working` after a decision; with two requests pending it changes only on 0 → 1 and 1 → 0; a
   stand-in that also fires its own `Notification` hook makes the needs-permission notification
   count once; two sessions waiting are marked separately (FR-009, R8)
-- [ ] T036 [US5] Implement T035: on a session's first pending request `PromptRegistry::open` reports
+- [x] T036 [US5] Implement T035: on a session's first pending request `PromptRegistry::open` reports
   it and `daemon/src/state.rs` calls `note_activity(session, ActivityEvent::Hook(HookKind::Notification))`;
   a decision that leaves none applies `Hook(HookKind::PreToolUse)`; a withdrawal applies nothing
-- [ ] T037 [US6] Integration tests in `daemon/tests/structured_permission.rs`: a pending request
+- [x] T037 [US6] Integration tests in `daemon/tests/structured_permission.rs`: a pending request
   is withdrawn (`PermissionResolved { Withdrawn { reason } }` to every client within 1 s, the
   stand-in answered deny "The turn ended before you answered." while it still waits) when the
   stream carries a `result` (`TurnEnded`), on `TurnEndedWithoutResult`, when the process is killed
@@ -219,7 +219,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   up withdraws with `AgentHungUp` and answers nothing; a decision after withdrawal is refused
   `NotPending`; nothing is pending after a daemon restart; always-allow rules are gone after the
   process ends (FR-011, SC-003)
-- [ ] T038 [US6] Implement T037: `PromptRegistry::withdraw_session(session, reason)` and
+- [x] T038 [US6] Implement T037: `PromptRegistry::withdraw_session(session, reason)` and
   `withdraw(id, AgentHungUp)` in `daemon/src/permission.rs`; `daemon/src/structured.rs`'s reader
   calls the withdraw hook on `Result` and `TurnEndedWithoutResult`; `daemon/src/state.rs` withdraws
   on process end, stop and remove beside `confirmations_session_gone`, and drops the session's rules

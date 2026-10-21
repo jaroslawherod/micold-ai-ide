@@ -134,3 +134,17 @@ Red runs recorded live, each before its implementation existed; commands with
   structured_permission a_request_whose_agent`: 1 failed, `the message arrives` (no
   `PermissionResolved { Withdrawn { AgentHungUp } }`).
 - Green: `structured_permission` 14 passed.
+
+## M3 — waiting activity and withdrawal (T035–T038)
+
+### Cycle 5 — T035/T036 waiting activity, T037/T038 withdrawal
+
+- Red: the T035 and T037 tests written first against the M2 daemon (no activity on a request,
+  nothing withdrawn but on hang-up). `cargo test -p micold-daemon --test structured_permission`:
+  15 passed, 8 failed — the two T035 cases `left: Unknown, right: AwaitingInput`; the result, turn
+  ended without result, kill, stop and remove cases `withdrawn within 1 s: Elapsed`; the rules case
+  on a test fault (it compared the always-allow answer without its `updatedPermissions`, fixed).
+  `nothing_is_pending_after_a_daemon_restart` passed already (nothing was ever persisted): a guard.
+- First green attempt: 22 passed, 1 failed — a test fault: the `CatalogChanged` was read past by
+  `requested` on the same window; a second window now waits for it.
+- Green: `structured_permission` 23 passed, 4 runs of 4.
