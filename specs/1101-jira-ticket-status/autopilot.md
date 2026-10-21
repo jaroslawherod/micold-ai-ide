@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1101_show-a-jira-ticket-s-current-status
 - **Started**: 2026-10-20
 - **Phase**: implement
-- **Next step**: M3 implement (T028-T030)
+- **Next step**: M3 gate green and committed locally; push + open PR (push was denied by the permission classifier)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Status chip in the issue picker | #1155 | merged |
 | M2 | T014–T027 | full | Current status on the sidebar | #1190 | merged |
-| M3 | T028–T030 | full | Status on Overview cards | | implementing |
+| M3 | T028–T030 | full | Status on Overview cards | | | committed, not pushed |
 
 ## Decisions
 
