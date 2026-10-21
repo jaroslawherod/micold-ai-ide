@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,8 @@
 
 ## Notes
 
-- Two open markers, Q1 (FR-010: may the plan-limit event feed feature 490, amending its FR-012)
-  and Q2 (FR-026: how cost is shown for subscription-plan accounts), are left for the
-  clarify unit.
+- The two open markers, Q1 (FR-010: may the plan-limit event feed feature 490, amending its
+  FR-012) and Q2 (FR-026: how cost is shown for subscription-plan accounts), were resolved in the
+  clarify unit (ledger D4, D3); spec.md holds no marker.
 - Subagent, nested-subagent and background-task events are not in the existing recorded fixtures; FR-028 requires new
   recordings, and the Assumptions say what is not reported is left out.
