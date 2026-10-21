@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1101_show-a-jira-ticket-s-current-status
 - **Started**: 2026-10-20
 - **Phase**: implement
-- **Next step**: M2 verify: scoped gate, review A and B, visual pass, full gate, PR
+- **Next step**: M2 PR open; orchestrator waits on CI and merges, then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Status chip in the issue picker | #1155 | merged |
-| M2 | T014–T027 | full | Current status on the sidebar | | in review |
+| M2 | T014–T027 | full | Current status on the sidebar | | gated |
 | M3 | T028–T030 | full | Status on Overview cards | | pending |
 
 ## Decisions
