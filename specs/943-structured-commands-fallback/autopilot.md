@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M4 PR to open (orchestrator)
-- **Next step**: orchestrator opens the M4 PR from claude/project-thread-k392yq (title/body in the unit's scratchpad), waits on CI and merges; then M5 (T039–T042, provisional on decision 2). Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
+- **Phase**: M5 implemented (T039–T042 ticked, tests green), not yet gated or reviewed
+- **Next step**: M5 unit continues from *Handover*: scoped gate + review A (high), review B, full gate, PR files. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1239 | M1 | merged (rebase) | 8304c937 |
 | #1241 | M2 | merged (rebase) | 6b3b62c7 |
 | #1244 | M3 | merged (rebase) | 399f6be3 |
-| (to open) | M4 | gate green, reviews clean; pushed, PR to open by orchestrator | |
+| #1250 | M4 | merged (rebase) | 0b432628 |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | #1239 | merged |
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | #1241 | merged |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | merged |
-| M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | (to open) | PR to open |
-| M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pending |
+| M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | #1250 | merged |
+| M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | implemented, gate/reviews pending |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** | | pending |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** | | pending |
 | M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** | | pending |
@@ -89,7 +89,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 unit handed over at 155k context. Branch `claude/project-thread-k392yq` was reset to origin/main
+0b432628 (#1250 M4 merged) and carries one local commit, `feat(943): resume the conversation a
+/clear started` (not pushed; the remote branch still holds the pre-merge M4 commits, so push with
+`--force-with-lease`). Done: T039–T042 ticked, TDD log M5 written, `docs/daemon.md` paragraph
+after the model section; tests green (structured_resume 5, daemon lib 175, structured_model 10,
+structured_session 19, structured_commands 8, catalog_adoption 23, version_recovery 4,
+session_store/core lib conversation tests). No `PROTOCOL_VERSION` change (the handle is not on the
+wire). Built as option A, isolated: revert of this commit alone gives option B. Beyond tasks.md:
+the startup `present_interrupted_resumable` and start-time "conversation gone" checks ask about
+`resume_handle()` instead of the id. Next: verify.md step 1 (scoped gate + review A high on
+`origin/main...HEAD`), then review B (sonnet), full gate (`scripts/gate.sh`, cloud: no mise),
+then PR title/body into the scratchpad `943-M5/` (orchestrator opens it); PR body must say
+decision 2 is provisional and that reverting M5 alone gives option B.
 
 ## Open escalation
 
