@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M7 implement
-- **Next step**: M7 verify (see *Handover*): scoped gate + review A, review B + visual pass, full gate, open the M7 PR
+- **Phase**: M7 pr
+- **Next step**: orchestrator: wait on M7's PR CI and merge; then M8 waits on #941 (I-2)
 
 ## Pull requests
 
@@ -83,6 +83,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M6 (code-review high) | 1 | f57630e6ecbab071c1f308ae038e7bea8ae2dbae:80b87f4423a2d01f7ebc2f4c90c51f1b52183f67 | CLEAN: 3 MINOR (F1 a refused Show all cleared an answer's `sending` — fixed, `input_failed`; F2 the Bypass gate runs for an automatic start — declined; F3 no shell test of the start gate — added `a_bypass_start_is_created_only_by_its_confirmation`). `claude -p` with the brief and diff inline, 0 permission denials |
 | Review B M6 (conformance, sonnet) | 1 | a5abcb82e42d6a8e874f7972bd53b5f53eb5886e:b0449c8a6fcee16f488b7ee9e86ee9c8eafb9157 | CHANGES: 2 MAJOR (F1 the additional-session confirmation created in the create flow's current mode, so a Bypass chosen after a gated start skipped its confirmation — fixed, the mode travels in `PendingOp::CreateSession` and `AdditionalOpened`, red shown; F2 two parts of cycle 9 had no red — recorded as an explicit exception in the cycle log, the restore of main's sources being refused here), 1 MINOR (F3 route tests outside the Verify command — fixed, prose only: T053 and Verify name `--bin micold-ai-ide permission_prompts`). Verify given inline, 0 permission denials |
 | Review B M6 (conformance, sonnet) | 2 | efcb81b437004bf9df6e6fa0c6d1d48cd93c8857:afca60ee94cc3e8d5cdec06e07fe2d026838ff97 | CLEAN (fix diff; Verify re-run inline: shell routes 9, `structured_start_menu` 12, `features_permission_prompts` 22 passed), 0 permission denials |
+| Review A M7 (code-review high) | 1 | 257c2b6c54f8b83d657915841ee59e69982a4940:41a267c065996875862907ef31fd18f54bd4722d | CLEAN: 3 MINOR (F1 structured tool input shown twice; F2 the entry row changes shape when a request appears; F3 question rows pressable while sending — all declined). `claude -p` with the brief and diff inline, 0 permission denials. Before it: rebased onto main 79db5768, resolving `ui/transcript/mod.rs` and `ui/terminal.rs` against #944's `view_with_insights` (new `view_full`: session bar + insights + prompts; Insights messages to `SessionMsg::Insights`) |
+| Scoped gate M7 | 1–3 | adcfbcfc | red twice: `field_focus_call_sites` (the deny-message and plan-note fields did not track focus — fixed: `FieldId::PromptDenyMessage`/`PromptNote`, `focus::TrackFocusAs<M>`, `focused`/`on_focus` on `PromptsView`) and `root_vocabulary_is_cross_cutting` (`PermissionPrompts` is now emitted — its `NO_OWNER` entry removed); third run green (fmt, clippy -D warnings, 241 test binaries; whole `layout_snapshot` 86 passed) |
+| Review A M7 (scoped, sonnet) | 2 | eb1bba267c813a3566418f65dec5286d903479a7:adcfbcfcf041461d22670f5dd38852b27019ac5a | CLEAN on the gate-fix diff: 1 MINOR (F1 a focused request field is not cleared when its request ends — declined, M8). Not counted (red gate's fixes) |
+| Review B M7 (conformance, sonnet) | 1 | eb1bba267c813a3566418f65dec5286d903479a7:adcfbcfcf041461d22670f5dd38852b27019ac5a | CLEAN: 2 MINOR (F1 tool input twice — same as A F1, declined; F2 cycle 11's unit-test exception — accepted as logged). Verify given inline: `showcase_completeness` 46, `material_builder_api` 13, `layout_snapshot` 86, `transcript_permission_view` 12 passed; 0 permission denials |
+| Visual pass M7 | 1 | adcfbcfc | PASS light and dark, offscreen (tiny-skia, after `layout::settle`; the worker's `claude -p` had every build refused, and Xvfb here has no xdotool): the three `PromptCard` poses keep their action rows inside the card (Allow/Deny/Always allow + rule note; Approve and accept edits/Approve/Keep planning; Submit disabled while a question is unanswered/Decline), `ChoiceList` rings with a dot when chosen, checkbox glyphs ticked when chosen, Other row with its field; no overlap. MINOR noted: the checkbox glyph reads smaller than the radio ring. Evidence `visual-pass/m7-*.png`. A first capture without a redraw drew every button disabled — a harness artefact |
 
 ## Declined review findings
 
@@ -104,34 +109,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | Review A r1 | F2 MINOR: an approved plan's `PermissionResolved` waits for the mode change (≤ 10 s) | Deliberate: the broadcast names the mode the session has after the change (`Resolution::PlanApproved { mode }`); another client's decision meanwhile is refused as no longer pending, as for any request decided first. Commented in `decide_prompt` |
 | M5 | Review A r1 | F3 MINOR: the stand-in formats `control_response` JSON by hand | The stand-in is compiled by plain `rustc` with no crates (no serde); the tests pass it only plain text |
 | M6 | Review A r1 | F2 MINOR: the Bypass gate runs for an automatic start, which would pop the confirmation uninvited | The auto-start always asks for a terminal session (`StartRequested` doc, feature 938 FR-022), whose gate is `Create(Default)`; for a structured one, an unconfirmed Bypass create is what FR-014 forbids, so the confirmation is the right answer |
+| M7 | Review A r1 / B r1 | F1 MINOR: a tool request with no held diff shows its input as the summary line and again as pretty JSON | Deliberate (FR-006): the summary is the one-line command the user decides on, the JSON what the tool receives in full; for `Bash` they differ (description, timeout) |
+| M7 | Review A r1 | F2 MINOR: the entry row changes shape when a request appears under its card | Unconfirmed by the reviewer; the card's fold state lives in `State::is_open`, not in the widget tree, so at most transient widget state (a text selection) could reset; revisit if M8's live pass shows it |
+| M7 | Review A r1 | F3 MINOR: question rows stay pressable while an answer is sending | The reducer keeps the draft and `send` refuses while `sending`; edits made then are not sent. M8's live pass decides whether rows should grey out |
+| M7 | Review A r2 | F1 MINOR: a focused deny/note field keeps `focused_field` after its request ends, so terminals do not take keys until a click | Unreachable while the switch is off; M8 turns prompts on and owns the keyboard side (composer, T064–T066) — listed in *Follow-ups* for it |
 
 ## Handover
 
-M7 unit handed over at checkpoint (CONTEXT over 150k). Done, committed locally on
-`claude/project-thread-tt60gq` (not pushed; no PR yet):
-
-- T056–T063 implemented and ticked: `ui/material/choice_list.rs` (`ChoiceList`), `ui/material/prompt_card.rs`
-  (`PromptCard`), `style::{prompt_card, choice_ring, choice_dot}`, `ui/transcript/permission.rs`
-  (tool request block, plan view, question view, resolution labels, `PromptsView`, `request_view`),
-  `ui/transcript/mod.rs` `view_with_prompts` (requests under their card through
-  `entries::with_trailing`, else after the last entry; `view` unchanged in output), `ui/terminal.rs`
-  `transcript_body` now draws through `view_with_prompts` (unreachable for users while the daemon
-  switch is off), showcase `sections/prompts.rs` + two catalogue entries, gate
-  `tests/gates/prompt_card_fits.rs` (160 px = MIN_PANE_COLS × 8, both schemes), tests
-  `tests/transcript_permission_view.rs` (12), `showcase_completeness` / `material_builder_api` cases.
-  Cycle 11 in `tdd/cycle-log.md`.
-- Green so far (targeted): `transcript_permission_view` 12, `layout_snapshot -- prompt_card` 1,
-  `showcase_completeness` 46, `material_builder_api` 7, `showcase_captions` 13, lib unit tests of the
-  three new modules 9. `cargo fmt --all` applied. Clippy NOT run yet; whole `layout_snapshot`
-  (fixture `layout_snapshot.txt`) not run yet.
-
-Next step: verify.md from step 1 — scoped gate (`scripts/autopilot/scoped-gate.sh`) with review A
-(`code-review` high on `origin/main...HEAD`) in its shadow; then review B (conformance, sonnet) and the
-visual pass (showcase entries `ChoiceList`, `PromptCard` in light and dark: action rows inside the
-card, focus rings, marks), then the full gate (`/mnt/project-files/scripts/split-gate.sh` if
-`scripts/gate.sh` runs out of disk), then pr.md with the title the orchestrator gave:
-"#942: Structured session: permission prompts via permission-prompt-tool — M7", as a draft.
-Open findings: none yet (no review run).
+None.
 
 ## Open escalation
 
@@ -149,3 +134,5 @@ None.
   `permissions.allow` is ignored) refuses every Bash call and every Read outside tracked files,
   and still answers `VERDICT: CLEAN`. Check `permission_denials` in `--output-format json`; M4's
   review A got a real round only with the brief and diffs inline in its prompt.
+
+- For M8 (switch on): when a request ends while its deny-message or plan-note field holds the keyboard, clear `window.focused_field` (M7 review A r2 F1), else terminals ignore keys until a click.
