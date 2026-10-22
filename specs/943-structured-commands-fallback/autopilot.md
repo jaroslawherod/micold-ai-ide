@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M6 reviewed (A 2 rounds, B 1); full gate after rebase onto origin/main
-- **Next step**: M6 (T043–T049): implement, gate, reviews, PR files. Cross-feature holds: M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
+- **Phase**: M6 reviewed (A 2 rounds, B 1), full gate green at af86e20c (scripts/gate.sh) after rebase onto origin/main 2dddbef6; PR files written; orchestrator opens the PR
+- **Next step**: orchestrator opens the M6 PR from `943-M6/pr-title.txt`/`pr-body.md`, waits on CI, merges; then M7. Cross-feature holds: M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | merged |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | #1250 | merged |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | #1252 | merged |
-| M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | | in progress |
+| M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | | pushed, PR to open |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** | | pending |
 | M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** | | pending |
 | M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | pending |
@@ -83,6 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M6 (scoped, sonnet, claude -p) | 2 | 76906799b8e13477c72e5e1fabc01cf0bc64c39e:7c8ba98e26bf692037db1647e8f9d3d81f38969a | CLEAN (2 MINOR: a delayed command task is not tied to the process it was for — left, rare and a structured run refuses a terminal-only command; F2's ordering and the drop guard untested — left) |
 | Review B M6 (conformance, sonnet, claude -p) | 1 | 76906799b8e13477c72e5e1fabc01cf0bc64c39e:7c8ba98e26bf692037db1647e8f9d3d81f38969a | CLEAN |
 | Full gate M6 run 1 | — | 7c8ba98e | red: `structured_switch` test race (late `initialize` line of the ended structured run read as terminal input) — fixed in the test's `typed` |
+| Full gate M6 run 2 | — | af86e20c | green, after rebase onto origin/main 2dddbef6 (no conflicts, `PROTOCOL_VERSION` still 66 there → 67) |
 
 ## Declined review findings
 
@@ -116,3 +117,5 @@ None.
 - `micold-daemon --test attention_error_notice` `without_focus_the_first_reporting_window_gets_the_notice` is flaky (1 in 5 in isolation, M3 gate run 3); not this feature's, not touched by its diff.
 - Overlapping model picks (Review A M4 F2/F3, Review B M4 F1, all MINOR): a stale idle-pick note can take the deferred slot; a flushed-but-unanswered deferred pick's `previous` is inherited by the next busy pick; an idle pick does not clear a still-unflushed deferred one. Correlate the deferred slot with its `set_model` request id when M5/M6 touches `pick_model`.
 - `attention_error_notice` flake hit again in M4's full gate run 1 (passed on rerun).
+- Review A M6 F7: a `SessionStop` that arrives between a switch's stop and its start is undone by the start; hold the session gate across both (split `start_session`'s gated part) if it matters.
+- Review A M6 round 2 MINORs: a switch's delayed command task is not tied to the process it was for; the switch-ends-before-the-command ordering and the `SwitchEnding` guard have no test.
