@@ -328,8 +328,12 @@ CLI. It is multi-line and empty by default, and then the field starts empty as b
 | `{name}` | The name field |
 
 A placeholder with nothing to fill it renders empty, so `/speckit-autopilot #{issue}` gives
-`/speckit-autopilot #` until a ticket is entered. Write `{{` and `}}` for literal braces. A template
-the dialog cannot read, such as an unknown placeholder, fills the field with nothing. The template is
+`/speckit-autopilot #` until a ticket is entered. Write `{{` and `}}` for literal braces. Saving a template
+with a placeholder that does not exist, or a lone brace, is refused with a message naming it, for
+example `Unknown placeholder {issu}; valid: {issue}, {issue_title}, {issue_body}, {branch}, {type},
+{name}`, and the stored template stays as it was. A stored template the app can no longer read still
+lets Settings and the dialog open: the dialog fills the field with nothing, and Settings shows the
+same message under the field. The template is
 one setting for the whole app, kept by the session service, in the settings file as
 `default_prompt_template`. See [Adding a worktree](worktrees-and-sessions.md).
 

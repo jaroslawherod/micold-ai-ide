@@ -1123,6 +1123,7 @@ impl SettingsDraft {
         let env_include_timeout_secs = self.timeout()?;
         let long_task_threshold_secs = self.long_task_threshold()?;
         let plan_usage_warn_percent = self.plan_usage_warn()?;
+        default_prompt_error(&self.environment.default_prompt_template).map_or(Ok(()), Err)?;
 
         let mut profile = self.daemon.profile.clone();
         profile.image = image_choice(
@@ -1624,8 +1625,13 @@ impl SettingsDraft {
     /// Seed the draft from what is stored, so the form opens showing the current values.
     pub fn from_settings(settings: &Settings) -> Self {
         let profile_texts = ProfileTexts::of(&settings.daemon.sandbox);
+        // A stored template a later version rejects: the app starts, and Settings opens on the
+        // error (feature 1161, FR-013). The text is kept as stored.
+        let template_error = default_prompt_error(&settings.default_prompt_template);
         Self {
-            section: SettingsSection::default(),
+            section: template_error
+                .as_ref()
+                .map_or_else(SettingsSection::default, |e| e.section),
             appearance: AppearanceDraft {
                 theme: settings.theme,
                 reduce_motion: settings.reduce_motion,
@@ -1678,11 +1684,22 @@ impl SettingsDraft {
                 enabled: settings.jira_enabled,
                 ..JiraDraft::default()
             },
-            error: None,
+            error: template_error,
             baseline: Some(settings.clone()),
             required: RequiredMarks::default(),
         }
     }
+}
+
+/// Why `template` is not a usable default prompt template, if it is not (feature 1161, FR-005).
+fn default_prompt_error(template: &str) -> Option<FieldError> {
+    micold_core::prompt_template::PromptTemplate::parse(template)
+        .err()
+        .map(|problem| FieldError {
+            field: FieldId::SettingsDefaultPromptTemplate,
+            section: SettingsSection::Environment,
+            message: problem.to_string(),
+        })
 }
 
 /// Everything the user can do to their settings (feature 028, FR-001).

@@ -43,11 +43,11 @@
 
 **Independent test**: type `{issu}` in the setting and observe the message.
 
-- [ ] T015 [P] [US3] Write failing tests in `crates/micold-client/tests/features_settings.rs`: `SettingsDraft::validate` refuses `Do {issu}` with `Unknown placeholder {issu}; valid: {issue}, {issue_title}, {issue_body}, {branch}, {type}, {name}` and an unbalanced brace with its message, and nothing is sent or stored (US3 s1, FR-005); a valid template passes; opening Settings with an invalid stored template yields the error (US3 s2).
-- [ ] T016 [P] [US3] Write failing test in `crates/micold-client/tests/features_worktree_form.rs`: an invalid stored template renders as empty in the dialog and the form still opens (FR-013).
-- [ ] T017 [US3] Call `PromptTemplate::parse` from `SettingsDraft::validate` and on open in `crates/micold-client/src/features/settings.rs`; treat a parse `Err` as empty in `refresh_default_prompt` in `crates/micold-client/src/features/worktree_form.rs`.
-- [ ] T018 [US3] Error line under the field in `crates/micold-client/src/ui/settings/mod.rs` (glue; quickstart §B.1).
-- [ ] T019 [P] [US3] User guide: the validation message and the valid placeholder list in `docs/user-guide/settings.md`.
+- [x] T015 [P] [US3] Write failing tests in `crates/micold-client/tests/features_settings.rs`: `SettingsDraft::validate` refuses `Do {issu}` with `Unknown placeholder {issu}; valid: {issue}, {issue_title}, {issue_body}, {branch}, {type}, {name}` and an unbalanced brace with its message, and nothing is sent or stored (US3 s1, FR-005); a valid template passes; opening Settings with an invalid stored template yields the error (US3 s2).
+- [x] T016 [P] [US3] Write failing test in `crates/micold-client/tests/features_worktree_form.rs`: an invalid stored template renders as empty in the dialog and the form still opens (FR-013).
+- [x] T017 [US3] Call `PromptTemplate::parse` from `SettingsDraft::validate` and on open in `crates/micold-client/src/features/settings.rs`; treat a parse `Err` as empty in `refresh_default_prompt` in `crates/micold-client/src/features/worktree_form.rs`.
+- [x] T018 [US3] Error line under the field in `crates/micold-client/src/ui/settings/mod.rs` (glue; quickstart §B.1).
+- [x] T019 [P] [US3] User guide: the validation message and the valid placeholder list in `docs/user-guide/settings.md`.
 
 ## Phase 5: User Story 4 - MCP `create_session` and `create_worktree` (P2)
 

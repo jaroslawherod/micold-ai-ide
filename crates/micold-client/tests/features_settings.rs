@@ -3302,3 +3302,83 @@ fn an_empty_template_saves_as_empty() {
     let saved = draft.validate().unwrap().into_settings();
     assert_eq!(saved.default_prompt_template, "");
 }
+
+/// Feature 1161, US3: the default prompt template is checked on save, and the refusal names it.
+mod default_prompt_template {
+    use super::*;
+    use micold_core::settings::Settings;
+
+    const UNKNOWN: &str = "Unknown placeholder {issu}; valid: {issue}, {issue_title}, {issue_body}, {branch}, {type}, {name}";
+
+    fn refusal(template: &str) -> micold_client::features::settings::FieldError {
+        let mut draft = valid();
+        draft.environment.default_prompt_template = template.into();
+        draft
+            .validate()
+            .expect_err("the template is invalid")
+            .into_field()
+            .expect("a field error")
+    }
+
+    #[test]
+    fn an_unknown_placeholder_is_refused_with_its_name_and_the_valid_list() {
+        let error = refusal("Do {issu}");
+        assert_eq!(error.message, UNKNOWN);
+        assert_eq!(error.field, FieldId::SettingsDefaultPromptTemplate);
+        assert_eq!(error.section, SettingsSection::Environment);
+    }
+
+    #[test]
+    fn an_unbalanced_brace_is_refused() {
+        let error = refusal("Do {issue");
+        assert!(
+            error.message.contains("Unbalanced brace"),
+            "{}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn a_refused_save_stores_nothing() {
+        let mut draft = valid();
+        draft.environment.default_prompt_template = "Do {issu}".into();
+        assert!(draft.validated_for_save().is_none());
+        assert_eq!(
+            draft.error.as_ref().map(|e| e.message.as_str()),
+            Some(UNKNOWN)
+        );
+    }
+
+    #[test]
+    fn a_valid_template_passes_and_is_kept() {
+        let mut draft = valid();
+        draft.environment.default_prompt_template = "Fix #{issue} {{ok}}".into();
+        let saved = draft.validate().expect("valid");
+        assert_eq!(saved.default_prompt_template, "Fix #{issue} {{ok}}");
+    }
+
+    #[test]
+    fn opening_with_an_invalid_stored_template_shows_the_error() {
+        let settings = Settings {
+            default_prompt_template: "Do {issu}".into(),
+            ..Settings::default()
+        };
+        let draft = SettingsDraft::from_settings(&settings);
+        let error = draft.error.expect("the error is shown on open");
+        assert_eq!(error.message, UNKNOWN);
+        assert_eq!(draft.section, SettingsSection::Environment);
+        assert_eq!(
+            draft.environment.default_prompt_template, "Do {issu}",
+            "the text is kept"
+        );
+    }
+
+    #[test]
+    fn opening_with_a_valid_stored_template_shows_no_error() {
+        let settings = Settings {
+            default_prompt_template: "Do {issue}".into(),
+            ..Settings::default()
+        };
+        assert!(SettingsDraft::from_settings(&settings).error.is_none());
+    }
+}
