@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: implement M4 (done), gate and reviews pending
-- **Next step**: M4 (T032–T038) implemented and committed on claude/project-thread-k392yq over origin/main 399f6be3 (#1244 merged); fresh unit: verify.md — scoped gate + Review A (high), Review B, full gate (scripts/gate.sh), then PR files for the orchestrator. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8. Decision 2 provisional (M5 only)
+- **Phase**: M4 PR to open (orchestrator)
+- **Next step**: orchestrator opens the M4 PR from claude/project-thread-k392yq (title/body in the unit's scratchpad), waits on CI and merges; then M5 (T039–T042, provisional on decision 2). Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1239 | M1 | merged (rebase) | 8304c937 |
 | #1241 | M2 | merged (rebase) | 6b3b62c7 |
 | #1244 | M3 | merged (rebase) | 399f6be3 |
-| (to open) | M4 | implemented; gate and reviews pending | |
+| (to open) | M4 | gate green, reviews clean; pushed, PR to open by orchestrator | |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | #1239 | merged |
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | #1241 | merged |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | merged |
-| M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | implemented |
+| M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | (to open) | PR to open |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pending |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** | | pending |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** | | pending |
@@ -71,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M3 (conformance, sonnet, claude -p) | 1 | 2105909dc24a3b40e9538ce502b9218cd6591a49:96f78747275b52e8fd55a3e2e2514b83d3e5d7ad | CLEAN (1 MINOR: decisions rows 5/6 out of order — fixed) |
 | Review A M3 (scoped, sonnet, claude -p) | 2 | 11d7edc6f025b98bcf13b1e3ff5818157a428ec4:1a67fe6b3749d9b242a82e3022438aa9a70db9a1 | CLEAN (1 MINOR: `iter` split `snapshot` from its doc — fixed); F1, F4 fixes hold, F2, F5 declines stand |
 | Rebase review M3 (conflict resolution vs #941 M3, sonnet, claude -p) | 1 | 203ef720ba85b7e70a163cb969402b452c0d4b41:a4a9f93058c3628383b2401544c99c47b747d56a | CLEAN (3 MINOR: refusal before `Gone` in `change_queue_to`, queued `/x` not re-checked at delivery, failed initialize write only logged — left, none from the merge) |
+| Review A M4 (code-review high, claude -p) | 1 | 2cdae125317a8dfe192b01ed66e048b47c557658:f3cef1e18cd81480526543bf7467c4e58e9d801f | CLEAN (3 MINOR: F1 `SpawnPlan` doc comment detached — fixed; F2 a stale idle-pick note can take the deferred slot, F3 a flushed-but-unanswered deferred pick's `previous` inherited by the next busy pick — left, edge cases of overlapping picks) |
+| Review B M4 (conformance, sonnet, claude -p) | 1 | de30c437cac4be48233ba871b537a7524b9fc4eb:d5f63633b6dcdece9dd1c1272790e6b3b7e784b2 | CLEAN; Verify: structured_model 10, structured_session 19, session_store 44, protocol_roundtrip 22, schema_hash 10 passed (2 MINOR: an idle pick does not clear a still-unflushed deferred pick — left, same overlapping-picks family as A's F2/F3; decision 7 noted, no fix) |
 
 ## Declined review findings
 
@@ -86,7 +88,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 implemented (T032–T038 ticked, TDD log in tdd/cycle-log.md *M4*), committed, not pushed; checkpoint was OVER (263k). Next: verify.md — scoped gate with Review A (code-review high) on origin/main...HEAD, Review B (conformance, sonnet), full gate `scripts/gate.sh`, then pr.md (title/body files for the orchestrator, push with --force-with-lease). Verified so far: `structured_model` 10, `structured_session` 19, `structured_permission` 30, `structured_permission_mode` 13, `structured_commands` 8, `structured_input` 18, core lib/session_store/protocol_roundtrip/schema_hash/terminal_backend green; `cargo check --workspace --tests` clean; fmt applied. No open findings.
+None.
 
 ## Open escalation
 
@@ -95,3 +97,5 @@ None.
 ## Follow-ups not done
 
 - `micold-daemon --test attention_error_notice` `without_focus_the_first_reporting_window_gets_the_notice` is flaky (1 in 5 in isolation, M3 gate run 3); not this feature's, not touched by its diff.
+- Overlapping model picks (Review A M4 F2/F3, Review B M4 F1, all MINOR): a stale idle-pick note can take the deferred slot; a flushed-but-unanswered deferred pick's `previous` is inherited by the next busy pick; an idle pick does not clear a still-unflushed deferred one. Correlate the deferred slot with its `set_model` request id when M5/M6 touches `pick_model`.
+- `attention_error_notice` flake hit again in M4's full gate run 1 (passed on rerun).
