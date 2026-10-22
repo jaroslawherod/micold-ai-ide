@@ -502,6 +502,21 @@ pub fn ticket(dir_name: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+mod name_words_tests {
+    use super::name_words;
+
+    #[test]
+    fn the_descriptive_words_stay_as_slugged() {
+        assert_eq!(name_words("fix-42_login-crash"), "login crash");
+    }
+
+    #[test]
+    fn a_name_with_no_descriptive_part_falls_back_to_the_display_name() {
+        assert_eq!(name_words("fix"), super::display_name("fix"));
+    }
+}
+
+#[cfg(test)]
 mod ticket_tests {
     use super::ticket;
 
