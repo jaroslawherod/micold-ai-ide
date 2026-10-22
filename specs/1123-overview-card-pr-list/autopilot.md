@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: close
-- **Next step**: close unit: T038 (gate passed at 2abbffff, quickstart.md Results) and T039 (visual-pass.md) done; next speckit-tdd-verify (sonnet worker), fixes, close review, gate, close PR. Converge skipped: review B CLEAN for M1, M2, M3
+- **Next step**: close unit: tdd-verify r1 FAIL fixed (F1, F2, F4 tests red against their mutants, F5 named, F3 accepted as D14); next tdd-verify r2 (sonnet) and the close review r1 (session model), then Status Closed, gate, close PR. Converge skipped: review B CLEAN for M1, M2, M3
 
 ## Pull requests
 
@@ -46,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D11 | M1 | Pill contrast (T011 plan finding) | The tonal `Tag` (accent text on `style::chip`) measured 4.41:1 for *Open* and *Merged* in light; the pill is drawn solid (`Tag::solid`, fill `PrMark::role`, word `PrMark::on_role`), which passes 4.5:1 in every card state, on the body and under the selected layer, both schemes; research R9 amended | agent-resolved | composition_contrast.rs `an_overview_cards_pull_request_rows_are_legible_on_its_body` |
 | D12 | M1 | Row placement | Rows sit after the activity and progress lines and above the counts line (R9 "between the counts line and the activity line"; the counts line is the card's last line) | agent-resolved | overview_card.rs U1 test |
 | D13 | M1 | Expanded card's dash tooltip (visual r1 observation) | The dash keeps its reason as the tooltip on the expanded card too: spec Terms and US1 sc. 4 give the dash its reason as the tooltip on a card, and feature 1121 FR-004 removes only the title, branch and activity full-text tooltips ("plus every other row the collapsed card shows"); the drop predates 1123 (1121 `dafbd062`) | agent-resolved | overview_card.rs `the_dash_carries_its_reason_collapsed_and_expanded` |
+| D14 | close | tdd-verify close r1 F3: M1 T001–T018 (compile-red only) and the T022/T032 `tests/overview.rs` cases were never run red, and each milestone is one commit | Accepted exception: red cannot be produced after the fact. Mitigated by mutant-red: T032 by review B M3's mutants (overview.rs:1270, :2244, :2289), and tdd-verify close r1 ran 25 mutants over the M1–M3 behaviours, 22 caught; the 3 survivors (F1, F2, F4) now each fail a new test (tdd/cycle-log.md, Close fixes). No re-run of history | agent-resolved | tdd/verification.md F3; tdd/cycle-log.md |
 
 ## Review rounds
 
@@ -74,6 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M3 (T037) | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | FAIL: c1 reverse — Shift+Tab from z into the expanded-capable y lands on #13 (collapsed last), not #11, light and dark; forward walk PASS; c2–c6 PASS; c7 partial (no overflow); evidence specs/1123-overview-card-pr-list/visual-pass/m3/r2/ (112 PNGs, committed); root cause and fix in Fixes M3 r2 |
 | Review A M3 | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | CLEAN, no findings (note: `card_pr_list` doc guard holds for `link_focus_after`, not for `LinkFocus::of`; harmless, the handoff returns before `row` is used) |
 | Visual pass M3 (T037) | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | PASS: c1 full Tab and Shift+Tab walk light 1.0 and dark 2.0 (Shift+Tab from z lands on #11); c3, c4, c5 light 1.0 PASS; extra (Shift+Tab from Escape-collapsed z onto #11) PASS; c2, c6, c7 not re-run (passed r2); evidence specs/1123-overview-card-pr-list/visual-pass/m3/r3/ (39 PNGs, committed) |
+| TDD verify close (sonnet worker) | 1 | HEAD 804cc8de (base f1d7d1b5) | FAIL: F1 HIGH `card_link` `.focus_on_press(true)` mutant survives (no test clicks a focusable number); F2 HIGH `pr_rows` `failing: false` mutant survives; F3 HIGH process (M1 T001–T018 and two T022/T032 `tests/overview.rs` cases never run red); F4 MED unknown state on the merged page untested; F5 LOW unexplained `8` in the fork counts test. 25 mutants, 22 caught. Fixes: see Fixes close r1 below |
 
 ### Review A M1 round 2 verdict (verbatim)
 
@@ -799,6 +801,71 @@ The xdg-open log was not exercised this round, because criterion 2 was out of sc
 This was Xvfb with lavapipe, not a real display, and it covers static states and focus placement only.
 
 Cleanup: I killed my own client, daemon and Xvfb by PID, and removed /tmp/vp77, /tmp/vp1123m3r3 and .visual-pass/run.tccC57. Source was not edited, nothing was committed or pushed, and no hearthbot tools were called.
+
+### TDD verify close round 1 verdict (verbatim)
+
+````
+# 1123 tdd-verify r1
+
+VERDICT: FAIL. Two mutants survive inside DONE behaviors (F1, F2), and the cycle log records M1 and two app-test rows as having no red run.
+
+Report written to /home/user/micold-ai-ide/specs/1123-overview-card-pr-list/tdd/verification.md. It is the only change in the tree: `git status --short` shows just that untracked file. Nothing is committed or pushed, and no hearthbot tools were called. Audited HEAD is 804cc8de, since the worktree is ahead of 2abbffff only by the close commits.
+
+After all restores, the scoped 1123 suite is green:
+- **core:** 1456 lib tests plus the 7 pull_request_* integration targets.
+- **client:** 1084 lib, 679 bin, overview 88, features_pr_status 30, layout_snapshot 79.
+- **time:** 107 s warm.
+
+Findings:
+
+- **F1 (HIGH)** `crates/micold-client/src/ui/material/overview_card.rs:651`.
+  - **What:** changing `card_link`'s `.focus_on_press(false)` to `true` survives every scoped target. The issue link shares this line.
+  - **Why:** `a_click_on_a_number_leaves_the_keyboard_with_the_card_that_holds_it` (`card_grid.rs:3135`) mounts `numbered_grid()`, whose numbers have no focus reports. They are not Tab stops there, so `press_takes_focus` is never exercised.
+  - **Remediation:** add a test in `card_grid.rs` or `overview_card.rs` with a number made focusable via `.on_pr_link_keyboard_focus`. After a click on "#12", assert no `pr 12 focus true` report, that the number does not hold the keyboard, and that Enter still acts on the card that held it. Re-run mutant `.focus_on_press(true)` to confirm it fails.
+
+- **F2 (HIGH)** `crates/micold-client/src/ui/overview.rs:827`.
+  - **What:** `pr_rows` maps `failing: row.phrase == Some(StatusPhrase::ChecksFailing)` (the error tint on "checks failing"), and mutating it to `failing: false` survives all scoped targets. The only `failing: true` in the tests is a hand-built row at `card_grid.rs:3085`.
+  - **Why:** `layout_snapshot` checks geometry, not colour.
+  - **Remediation:** add a test in the `ui/overview.rs` tests that builds a `CardModel` with a failing-checks open pull request and a passing one. Assert `pr_rows(...)` gives `failing == true` only for the first. Optionally mount the card and assert the phrase tint is `roles.error`.
+
+- **F3 (HIGH, process)** `specs/1123-overview-card-pr-list/tdd/cycle-log.md` lines 19-25, 40 and 60.
+  - **What:** T001-T018 are recorded as "not captured" (compile-red only). The T022 and T032 `tests/overview.rs` cases are recorded as "written with the implementation (not run red)".
+  - **Why it fails:** the rubric classes these as TEST_AFTER, and git can't order any of it because each milestone is one commit with tests and source together.
+  - **Remediation:** it can't be cured retroactively. Record it as an accepted exception in tasks.md or the ledger. T032's later mutant-red (`overview.rs:1270`, `:2244`, `:2289`) mitigates it.
+
+- **F4 (MED)** `crates/micold-core/src/pull_request.rs:692`.
+  - **What:** an unknown state on the merged page is not tested to fail the chunk. Replacing `.map_err(|_| UNREADABLE)?` with `.unwrap_or(BranchPrState::Merged)` survives.
+  - **Why it's only MED:** the query asks `states: MERGED`, so this is close to equivalent in practice.
+  - **Remediation:** add a case in `crates/micold-core/tests/pull_request_parse.rs` or `pull_request_list.rs` with an `m0` node whose state is unknown (for example "FOO"). Assert the reading is `ReadingFailure::Passing`, mirroring `an_unknown_state_makes_the_read_passing_not_a_wrong_mark` (`pull_request_list.rs:148`).
+
+- **F5 (LOW)** `crates/micold-core/tests/pull_request_counts.rs`, the fork test. `counts(1, 3 + 8)` uses an unexplained `8`. Name it, or comment where the eight remaining merged nodes come from.
+
+Mutation: cargo-mutants is absent, so I ran 25 deliberate mutants, one at a time, each restored and checked to fail by a named test (not a compile error). 22 were caught and 3 survived (F1, F2, F4). They cover:
+- row order and dedupe
+- phrase precedence
+- counts and the `*10+*` flag
+- unknown state (open path caught, merged path F4)
+- fork filtering
+- `Debug` leaking the url
+- collapsed and expanded rows
+- the clearing of lists on an unavailable reading
+- `pull_request_link_for` (prefix check, any-number match)
+- the number passing `+1`
+- the Tab stop
+- `link_focus_handoff`
+- `from_another` inversion
+- the last-stop entry
+- the refocus by id
+
+Other results:
+- **Weakened existing tests:** none found. The diff over `f1d7d1b5..HEAD` showed only specified renames (`counts` to `lists`, the 100 cap to 10) and the `CardLink::Issue` signature change. `mergeable` is still asserted at `pull_request_query.rs:12`.
+- **Traceability:** FR-001 to FR-017 each have a test (FR-017 is docs only, untested). Nothing traces to nothing. There is no test-list `traces` column, so the mapping is by test name and by mutant.
+- **Not audited** (listed in the report): git ordering, a mutation score, the full smell catalogue over about 30 test modules, coverage, the Windows/macOS legs and `scripts/gate.sh`.
+
+I did not append remediation tasks to `tasks.md`, per `--no-tasks`.
+````
+
+Fixes close r1 (tdd-verify r1): F1 `a_click_on_a_focusable_number_leaves_the_keyboard_with_the_card_that_holds_it` (card_grid.rs; numbers wired with `.on_pr_link_keyboard_focus`, asserts `is_focused(pr-1-12) == false` after the click and Enter opens card 0); F2 `only_a_row_with_failing_checks_is_marked_failing` (ui/overview.rs, `pr_rows` over #12 failing and #11 passing); F4 `pull_request_an_unknown_state_on_the_merged_page_fails_the_reading` (pull_request_counts.rs, `m0` state `FOO` → `Err(Passing)`); F5 the fork test's `8` is `MERGED_ON_THE_RECENT_PAGE` with a comment (branch a's `r0` page); F3 accepted exception D14. Each new test FAILED against its survivor mutant (F1 `.focus_on_press(true)`: `left: Some(true) right: Some(false)`; F2 `failing: false`: panic at overview.rs:1274; F4 `.unwrap_or(BranchPrState::Merged)`: `left: Ok(…) right: Err(Passing)`), each mutant restored and the test green; `git status` showed no mutant left. Red runs in tdd/cycle-log.md, Close fixes. Report committed as tdd/verification.md.
 
 ## Declined review findings
 

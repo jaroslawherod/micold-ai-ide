@@ -102,7 +102,13 @@ fn pull_request_lists_leave_out_pull_requests_from_forks() {
     let merged = merged_nodes(&[(1, true), (2, true), (3, false), (4, false), (5, false)]);
     repository(&mut v).insert("m0".into(), merged);
     let reading = parse(&v, &["a", "b", "c"]).expect("readable");
-    assert_eq!(reading.lists["a"].counts(), counts(1, 3 + 8));
+    // Branch a's recent page (`r0`) of the fixture holds eight merged pull requests of its own
+    // (#310 … #217), listed beside the three non-fork nodes of the merged page above.
+    const MERGED_ON_THE_RECENT_PAGE: u8 = 8;
+    assert_eq!(
+        reading.lists["a"].counts(),
+        counts(1, 3 + MERGED_ON_THE_RECENT_PAGE)
+    );
     assert!(reading.lists["a"]
         .prs()
         .iter()
@@ -159,6 +165,17 @@ fn pull_request_a_missing_merged_alias_fails_the_whole_reading() {
         assert!(repository(&mut v).remove(alias).is_some());
         assert_eq!(parse(&v, &["a", "b", "c"]), Err(ReadingFailure::Passing));
     }
+}
+
+/// Data-model §2 (tdd-verify close r1 F4): an unknown state on the merged page fails the chunk,
+/// as on the open page, rather than reading as merged.
+#[test]
+fn pull_request_an_unknown_state_on_the_merged_page_fails_the_reading() {
+    let mut v = body_of("pr_three_branches.txt");
+    let mut merged = merged_nodes(&[(3, false)]);
+    merged["nodes"][0]["state"] = "FOO".into();
+    repository(&mut v).insert("m0".into(), merged);
+    assert_eq!(parse(&v, &["a", "b", "c"]), Err(ReadingFailure::Passing));
 }
 
 #[test]

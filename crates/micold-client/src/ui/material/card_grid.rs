@@ -3147,6 +3147,42 @@ mod tests {
         assert_eq!(m.send(enter, mouse::Cursor::Unavailable), ["open 0"]);
     }
 
+    /// U4, R7 (tdd-verify close r1 F1): a number that is a Tab stop, its focus reports wired,
+    /// still does not take the keyboard on a click: it reports nothing, it is not focused, and
+    /// Enter acts on card 0.
+    #[test]
+    fn a_click_on_a_focusable_number_leaves_the_keyboard_with_the_card_that_holds_it() {
+        let mut grid = numbered_grid();
+        grid.cards = grid
+            .cards
+            .into_iter()
+            .enumerate()
+            .map(|(i, card)| {
+                card.on_pr_link_keyboard_focus(move |n, f| format!("pr {i} {n} focus {f}"))
+            })
+            .collect();
+        let mut m = mounted(grid, 900.0, 4000.0);
+        m.focus_next();
+        let slot = slots(&m.node, 6)[1];
+        let at = painted_in(&mut m, slot, "#12");
+        assert!(m.press(at).is_empty(), "the press took the keyboard");
+        let released = m.send(
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            mouse::Cursor::Available(at),
+        );
+        assert_eq!(released, ["pr 1 12"]);
+        let number = iced::advanced::widget::Id::from("pr-1-12".to_string());
+        assert_eq!(
+            m.drive(iced::advanced::widget::operation::focusable::is_focused(
+                number
+            )),
+            Some(false),
+            "the click gave the number the keyboard"
+        );
+        let enter = super::super::test_support::named_key(iced::keyboard::key::Named::Enter);
+        assert_eq!(m.send(enter, mouse::Cursor::Unavailable), ["open 0"]);
+    }
+
     /// G3: a rest on a number asks for one timed wake while it waits, none once it is over.
     #[test]
     fn a_rest_on_a_number_asks_for_no_frame_once_it_is_over() {
