@@ -84,11 +84,11 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 3: Core — command list, terminal-only, classify, palette, model, control (M1)
 
-- [ ] T009 [P] [US4] Unit tests in `core/src/structured/commands/terminal_only.rs`: `TERMINAL_ONLY`
+- [X] T009 [P] [US4] Unit tests in `core/src/structured/commands/terminal_only.rs`: `TERMINAL_ONLY`
   holds at least `config`, `mcp`, `agents`, `login`, `logout`, each with a non-empty `why`, no
   duplicate name; `CHECKED_AGAINST` is the recorded CLI version; `BUILT_INS` holds `compact`,
   `clear`, `context`, `usage` and none of `TERMINAL_ONLY` (FR-011)
-- [ ] T010 [P] [US1] [US2] Tests in `core/tests/structured_commands.rs` (new):
+- [X] T010 [P] [US1] [US2] Tests in `core/tests/structured_commands.rs` (new):
   `commands::parse_initialize(&ControlOutcome)` on `command-initialize.jsonl`'s answer gives every
   command with name, description, argument hint, aliases and `builtin`, and every model with
   `value`, `display_name`, `description`; entries with a blank or non-string `name`/`value` are
@@ -100,14 +100,14 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   changes*); a skill and a custom command of one name are both kept; init lists alone → names
   without descriptions, kinds `Skill`/`Custom`; neither → `fallback()` with `ListSource::Fallback`
   (FR-007, FR-009, FR-011)
-- [ ] T011 [P] [US1] [US3] [US4] Unit tests in `core/src/structured/commands/mod.rs`:
+- [X] T011 [P] [US1] [US3] [US4] Unit tests in `core/src/structured/commands/mod.rs`:
   `classify_draft` table — `hello` → `Send`; `/` → `Send`; `/ x` → `Send`; `/speckit-plan #1` →
   `Send`; `/nosuchcmd` → `Send`; `/model` and `/model   ` → `Model(None)`; `/model haiku` →
   `Model(Some("haiku"))`; `/mcp`, `/settings`, `/doctor` (CLI-marked) → `TerminalOnly(name)`;
   `tell me about /mcp` → `Send`; `parse_invocation` keeps args as typed, including quotes, line
   breaks and non-ASCII text, and is `None` for the `Send` cases that are not `/name` (FR-001,
   FR-003, FR-010, FR-018)
-- [ ] T012 Create `core/src/structured/commands/{mod.rs,terminal_only.rs}` (`CommandKind`,
+- [X] T012 Create `core/src/structured/commands/{mod.rs,terminal_only.rs}` (`CommandKind`,
   `Command`, `CommandList`, `ListSource`, `TerminalOnly`, `TERMINAL_ONLY`, `CHECKED_AGAINST`,
   `BUILT_INS`, `parse_initialize`, `from_history`, `fallback`, `DraftCommand`, `classify_draft`,
   `CommandInvocation`, `parse_invocation`) until T009–T011 pass; register in
