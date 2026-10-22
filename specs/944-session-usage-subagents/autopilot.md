@@ -85,6 +85,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M5 (conformance, sonnet) | 1 | a84a0e014281834f46571f6bd14a88f5cfebef12:7e655fad00d43739faa88beb27fbdb0dc3f243a3 | CLEAN |
 | Visual pass M5 | — | — | not run: nothing draws the new state (M6 does) |
 | Full gate M5 | — | 7e655fad | green (`scripts/gate.sh`) |
+| Rebase M5 onto main | — | 80b87f44 | conflicts with #940/#941 in `app.rs` (State fields, `structured_events`, `forget_structured`) and the `feature_registration_cost` allowlist resolved by keeping both sides (insights applied after the transcript beside the rich refresh; forget drops transcript, rich cache, composer, insights); insights test passes `GRAMMAR`; no review (no logic beyond both sides). Full gate green (one flaky daemon `two_sessions_each_get_their_own_note` failure, 3/3 green alone, green on rerun) |
 
 ## Declined review findings
 
