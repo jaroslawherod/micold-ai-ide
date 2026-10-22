@@ -81,6 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M5 (conformance, sonnet) | 1 | f87c133e430c27b98cb5cc16d987e545768d27ea:4780eb3eaf8e292a0d9258ded2a646ea855a3756 | CLEAN: 1 MINOR (F1 T048 text still said `mode_change` — fixed, prose only). Verify output given inline (13 and 29 passed), 0 permission denials |
 | Review A M6 (code-review high) | 1 | f57630e6ecbab071c1f308ae038e7bea8ae2dbae:80b87f4423a2d01f7ebc2f4c90c51f1b52183f67 | CLEAN: 3 MINOR (F1 a refused Show all cleared an answer's `sending` — fixed, `input_failed`; F2 the Bypass gate runs for an automatic start — declined; F3 no shell test of the start gate — added `a_bypass_start_is_created_only_by_its_confirmation`). `claude -p` with the brief and diff inline, 0 permission denials |
 | Review B M6 (conformance, sonnet) | 1 | a5abcb82e42d6a8e874f7972bd53b5f53eb5886e:b0449c8a6fcee16f488b7ee9e86ee9c8eafb9157 | CHANGES: 2 MAJOR (F1 the additional-session confirmation created in the create flow's current mode, so a Bypass chosen after a gated start skipped its confirmation — fixed, the mode travels in `PendingOp::CreateSession` and `AdditionalOpened`, red shown; F2 two parts of cycle 9 had no red — recorded as an explicit exception in the cycle log, the restore of main's sources being refused here), 1 MINOR (F3 route tests outside the Verify command — fixed, prose only: T053 and Verify name `--bin micold-ai-ide permission_prompts`). Verify given inline, 0 permission denials |
+| Review B M6 (conformance, sonnet) | 2 | efcb81b437004bf9df6e6fa0c6d1d48cd93c8857:afca60ee94cc3e8d5cdec06e07fe2d026838ff97 | CLEAN (fix diff; Verify re-run inline: shell routes 9, `structured_start_menu` 12, `features_permission_prompts` 22 passed), 0 permission denials |
 
 ## Declined review findings
 
@@ -112,6 +113,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M6's first final gate failed once in `tests::pr_status::pr_list_read_a_second_ask_shares_the_read_under_way` (`the work an update returned has to finish: Elapsed`, the 10 s bound of `main_tests::messages`; untouched by #942). Isolated it passes 5 of 5 but takes 10.05 s each run, right at that bound: a load flake to watch.
 
 - M2's first final gate failed once in `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (`left: []`, no notice; untouched by #942); 5 of 5 isolated runs and the rerun gate passed. A load flake to watch. M4's final gate hit it once more (5 of 5 isolated runs and the rerun passed).
 

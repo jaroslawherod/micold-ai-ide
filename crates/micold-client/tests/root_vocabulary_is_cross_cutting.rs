@@ -77,7 +77,11 @@ const ALLOWED: &[(&str, &str)] = &[];
 /// `SidebarScrolled` and `TabStripScrolled` — route to the same `close_on_scroll_beneath`, and
 /// asked `tests/overlay_dismissal_delta.rs` through those instead. With the assertions moved onto
 /// a message the user can actually send, the unreachable variant had nothing left to record.
-const NO_OWNER: &[(&str, &str)] = &[];
+const NO_OWNER: &[(&str, &str)] = &[(
+    "PermissionPrompts",
+    "#942 M6 lands the permission prompts' render-free state and its shell half first; the \
+     request views (M7) and the mode control (M8) are what emit it, and the entry goes with them",
+)];
 
 // ---- Reading the source ------------------------------------------------------------------------
 
@@ -573,9 +577,10 @@ fn the_scan_finds_the_vocabulary_it_is_meant_to_read() {
     let scan = scan();
     assert_eq!(
         scan.variants.len(),
-        27,
-        "the root vocabulary is 21 feature wrappers (feature 813 added `Overview`, feature 803 \
-         `Navigation`, feature 968 `QuickSwitch`, feature 941 `Composer`) and 6 \
+        28,
+        "the root vocabulary is 22 feature wrappers (feature 813 added `Overview`, feature 803 \
+         `Navigation`, feature 968 `QuickSwitch`, feature 941 `Composer`, #942 \
+         `PermissionPrompts`) and 6 \
          cross-cutting variants (feature 1101 added `JiraStatusesRead`, SC-002); the \
          scan found {:?}",
         scan.variants.iter().map(|v| &v.name).collect::<Vec<_>>()
