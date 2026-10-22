@@ -95,7 +95,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             }
         }
         Msg::QueueEditCancelled(session) => app.core.composers.queue_edit_done(session),
-        Msg::Dropped { session, files } => app.core.composers.apply_drop(session, files),
+        Msg::Dropped { session, files } => app.core.composers.apply_drop(session, *files),
     }
     sync_editor(app, session);
     Task::none()
