@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: M1
-- **Next step**: M1 reviews clean, full gate `scripts/gate.sh` green at 81add926 (rebased on origin/main a608e0fc); branch pushed; orchestrator opens the M1 PR from the scratchpad pr-title.md/pr-body.md, then M2
+- **Phase**: M2
+- **Next step**: M2 review A + scoped gate
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1209 | Design: spec, clarifications, plan, research, contracts, tasks | merged (rebase) | 01c64cee744edf4036b2edd018dbd0677c015dba |
+| #1223 | M1: core decisions, fixtures, wire types | merged (rebase) | cdfafa66da143c85003745205c980ee0736c97db |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T022 | full | Core decisions (input, attachment, turn ids/asks, encoders, UserSent/InterruptAsked, transcript, saved queue), recorded fixtures, every wire type (one bump); daemon refuses new requests "Not available yet" | — | pending |
+| M1 | T001–T022 | full | Core decisions (input, attachment, turn ids/asks, encoders, UserSent/InterruptAsked, transcript, saved queue), recorded fixtures, every wire type (one bump); daemon refuses new requests "Not available yet" | #1223 | merged |
 | M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | — | pending |
 | M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | — | pending |
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | — | pending |
@@ -52,6 +53,10 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | 5 | clarify r2 | Send while idle with the queue on hold? | Delivered at once, ahead of the held queue, which stays on hold | agent | spec.md#User Story 3 AS2, Clarifications Q2 |
 | 2 | clarify r1 | Does the queue survive a service restart? | As the event history: saved under Save terminal history, memory only otherwise | agent | specs/938-structured-session-mode/spec.md#Clarifications Q3 |
 | 6 | M1 implement | The plan assumed postcard control frames; they are JSON (`protocol::codec`). How do 12 MiB of pictures fit 16 MiB frames? | `ImageAttachment` bytes are base64 in JSON, plain bytes in postcard; `MAX_MESSAGE_IMAGE_BYTES` 12 → 9 MiB (base64 12 MiB + text). No requirement changes (the limit is plan-level); research R8, data-model, wire.md, plan, tasks T005/T019 corrected | agent | crates/micold-core/src/protocol/codec.rs "Control messages … are always JSON" |
+| 7 | M2 implement | How does the driver learn a process ended, and tell a late end of an earlier process from the current one's? | The stdout reader reports its end too (`TurnClosed { by: Exit, turn: Option<TurnId>, process: serial }`); the driver holds the queue (`on_process_end`) only when the current primary is that process or none runs. `TurnClosed.turn` is `Option` (the plan's had none for an end between turns) | agent | plan R2/R6 name no exit signal; restart order: teardown → spawn → swap |
+| 8 | M2 implement | `UserSent` must precede the turn's lines but not be shown for a failed write | A note slot (`Emit.sending`) under the lock the reader holds across ending a turn and passing the event on: set before the write, passed on by the reader before the next line or by the writer after a good write, dropped on a failed one; the lock is never held across the write (no pipe deadlock) | agent | research R3; P-3 |
+| 9 | M2 implement | Reuse #942's control plumbing? | Not needed in M2: no control request is written (M3's interrupt uses `encode_interrupt`/`next_request_id`, and waits on the `result`, not `ControlWaiters`, per I-2). The input driver is spawned like #942's `spawn_mode_reports` (`server::spawn_input_driver`; tests spawn it) | agent | plan I-2 |
+| 10 | M2 implement | When does the activity follow the turn? | `TurnBegan` in the lock section that opens a turn; `TurnEnded` when the driver handles a `result` (or a failed write closes the turn) and the turn is idle in that same section, so a turn opened meanwhile is never shown idle; a process end leaves activity to supervision's `Ended` | agent | research R5, FR-011 |
 
 ## Review rounds
 

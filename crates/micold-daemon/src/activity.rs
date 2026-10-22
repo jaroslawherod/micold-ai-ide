@@ -47,6 +47,12 @@ pub enum ActivityEvent {
     /// The CLI reported it is ready for its first prompt (Pi's `session_start`, feature 034,
     /// FR-017). Not activity: the FSM ignores it, and the session stays `Unknown`.
     ReadyForInput,
+    /// The daemon opened a structured session's turn: it wrote a user message (feature 941,
+    /// research R5). Mapped as [`HookKind::UserPromptSubmit`].
+    TurnBegan,
+    /// A structured session's turn ended and no other opened: the daemon's own reading, mapped
+    /// as [`HookKind::Stop`] (feature 941, R5).
+    TurnEnded,
     /// The session's process exited or the supervisor gave up (terminal).
     Ended {
         /// Why it ended — mirrors [`ActivitySignal::Ended`]'s `reason` field.
@@ -93,12 +99,15 @@ impl Activity {
 
         match event {
             ActivityEvent::Hook(HookKind::UserPromptSubmit)
-            | ActivityEvent::Hook(HookKind::PreToolUse) => {
+            | ActivityEvent::Hook(HookKind::PreToolUse)
+            | ActivityEvent::TurnBegan => {
                 self.current = ActivitySignal::Working;
             }
             // Turn continues after a tool call — no change until `Stop`.
             ActivityEvent::Hook(HookKind::PostToolUse) => {}
-            ActivityEvent::Hook(HookKind::Stop) | ActivityEvent::Hook(HookKind::Notification) => {
+            ActivityEvent::Hook(HookKind::Stop)
+            | ActivityEvent::Hook(HookKind::Notification)
+            | ActivityEvent::TurnEnded => {
                 self.current = ActivitySignal::AwaitingInput;
             }
             ActivityEvent::Ended { reason, .. } => {
@@ -282,11 +291,13 @@ pub fn pi_tail_event(line: &str) -> Option<ActivityEvent> {
 /// never reaches here: it is ignored by the hook receiver (FR-024).
 pub fn turn_change(event: &ActivityEvent, lifted: bool) -> Option<TurnChange> {
     match event {
-        ActivityEvent::Hook(HookKind::UserPromptSubmit) => Some(TurnChange::PromptSubmitted),
+        ActivityEvent::Hook(HookKind::UserPromptSubmit) | ActivityEvent::TurnBegan => {
+            Some(TurnChange::PromptSubmitted)
+        }
         ActivityEvent::Hook(HookKind::PreToolUse) => Some(TurnChange::Working),
         ActivityEvent::SpinnerObserved if lifted => Some(TurnChange::Working),
         ActivityEvent::Hook(HookKind::Notification) => Some(TurnChange::AskedUser),
-        ActivityEvent::Hook(HookKind::Stop) => Some(TurnChange::Finished),
+        ActivityEvent::Hook(HookKind::Stop) | ActivityEvent::TurnEnded => Some(TurnChange::Finished),
         ActivityEvent::Hook(HookKind::PostToolUse)
         | ActivityEvent::SpinnerObserved
         | ActivityEvent::ReadyForInput
@@ -297,6 +308,23 @@ pub fn turn_change(event: &ActivityEvent, lifted: bool) -> Option<TurnChange> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_structured_turn_maps_as_the_prompt_and_stop_hooks() {
+        for (ours, hook) in [
+            (ActivityEvent::TurnBegan, HookKind::UserPromptSubmit),
+            (ActivityEvent::TurnEnded, HookKind::Stop),
+        ] {
+            let (mut a, mut b) = (Activity::new(), Activity::new());
+            a.apply(ours.clone());
+            b.apply(ActivityEvent::Hook(hook));
+            assert_eq!(a.signal(), b.signal());
+            assert_eq!(
+                turn_change(&ours, true),
+                turn_change(&ActivityEvent::Hook(hook), true)
+            );
+        }
+    }
 
     /// Feature 613, data-model "Mapping": each event's change to the turn clock.
     #[test]

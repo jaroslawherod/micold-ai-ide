@@ -38,7 +38,16 @@ const STAND_IN: &str = "claude.exe";
 ///   is written, as each prompt-tool answer is (`answer`) once it came, so a test sees which was
 ///   first;
 /// - `status <mode>` writes a `system`/`status` line reporting `permissionMode` `<mode>`;
+/// - `await-file <name>` blocks until the test creates `<name>` in the cwd, so a test holds a turn
+///   open (#941 T023);
+/// - `on-message <file>` replays the file once for each later stdin `user` line, one turn per
+///   message, skipping every other line (#941 T023); `on-message-gated <file>` does the same, but
+///   before the n-th message's replay (counted from 1) it waits for `turn-<n>` in the cwd, so a
+///   test decides when each turn's result is written. Neither returns while stdin is open;
 /// - any other line is written to stdout as it is, with a line end.
+///
+/// A stdin line containing `CLOSE-STDIN` is recorded and then the stand-in closes its stdin and
+/// reads no more, so the daemon's next write to it fails while the process runs on (#941 T024).
 ///
 /// When the script ends it idles until killed.
 const STAND_IN_SOURCE: &str = r##"
@@ -84,7 +93,12 @@ fn main() {
             {
                 let _ = writeln!(f, "{line}");
             }
+            let close = line.contains("CLOSE-STDIN");
             let _ = lines_tx.send(line);
+            if close {
+                close_stdin();
+                break;
+            }
         }
     });
 
@@ -118,6 +132,13 @@ fn main() {
                     "{{\"type\":\"system\",\"subtype\":\"status\",\"permissionMode\":\"{arg}\"}}"
                 );
             }
+            "await-file" => {
+                while !std::path::Path::new(arg).exists() {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+            }
+            "on-message" => on_message(&lines_rx, &mut out, arg, false),
+            "on-message-gated" => on_message(&lines_rx, &mut out, arg, true),
             "prompt" => prompt(&args, arg),
             "prompt-async" => {
                 let (args, file) = (args.clone(), arg.to_string());
@@ -131,6 +152,53 @@ fn main() {
     }
     loop {
         std::thread::sleep(std::time::Duration::from_secs(60));
+    }
+}
+
+/// Close this process's stdin, so a write to it fails.
+#[cfg(unix)]
+fn close_stdin() {
+    extern "C" {
+        fn close(fd: i32) -> i32;
+    }
+    // SAFETY: fd 0 is this process's stdin; nothing reads it after this.
+    unsafe {
+        close(0);
+    }
+}
+
+#[cfg(windows)]
+fn close_stdin() {
+    extern "system" {
+        fn GetStdHandle(which: u32) -> *mut std::ffi::c_void;
+        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+    }
+    // SAFETY: the standard input handle; nothing reads it after this.
+    unsafe {
+        CloseHandle(GetStdHandle(-10i32 as u32));
+    }
+}
+
+/// For each later stdin `user` line, replay `file`: one turn per message. `gated`: the n-th waits
+/// for `turn-<n>` in the cwd first.
+fn on_message(lines: &mpsc::Receiver<String>, out: &mut impl Write, file: &str, gated: bool) {
+    let mut n = 0;
+    while let Ok(line) = lines.recv() {
+        if !line.contains("\"type\":\"user\"") {
+            continue;
+        }
+        n += 1;
+        if gated {
+            let gate = format!("turn-{n}");
+            while !std::path::Path::new(&gate).exists() {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        }
+        let bytes = std::fs::read(file).expect("read the fixture");
+        for piece in bytes.split_inclusive(|b| *b == b'\n') {
+            let _ = out.write_all(piece);
+            let _ = out.flush();
+        }
     }
 }
 

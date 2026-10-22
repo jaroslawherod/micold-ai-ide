@@ -24,13 +24,16 @@ use micold_core::plan_usage::UsageReading;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
-    EnvIncludeFailure, RefusalReason, SessionProcess, SessionSummary, TerminalRef, WindowView,
-    WireLifecycle, WorktreeSnapshot, WorktreeStatus,
+    EnvIncludeFailure, RefusalReason, SessionProcess, SessionSummary, TerminalRef, TurnPhase,
+    WindowView, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::provider::{ActivitySource, ConversationIdentity, ToolServerSupport};
 use micold_core::session::{
     AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle,
     SessionLocation, ShellInstanceId, TerminalMode, RESTART_STABLE_AFTER,
+};
+use micold_core::structured::input::{
+    Message, QueueEntryId, QueueRefusal, QueuedMessage, SessionInput, Submit,
 };
 use micold_core::structured::UserMessageRefusal;
 use micold_core::terminal::{LaunchMode, LaunchSpec};
@@ -167,6 +170,9 @@ pub struct DaemonState {
     /// The ends of structured sessions' turns and processes, for their waiting prompt calls (#942
     /// FR-011). Outside `Inner`: a session's stdout reader signals it, and never takes that lock.
     prompt_endings: Arc<crate::permission::Endings>,
+    /// The turns structured sessions' stdout readers ended, and the ends of their output, on
+    /// their way to the input driver (#941 research R2): a reader never takes the state's lock.
+    input_feed: crate::plan_usage::Feed<crate::structured::TurnClosed>,
     /// Held across keeping a reading and telling the windows, so two sources offering at once
     /// push in the order they were kept (feature 944).
     plan_usage_offer: Mutex<()>,
@@ -212,6 +218,10 @@ struct Inner {
     /// apart from the process so a restart continues it and an exit keeps it (FR-009); dropped
     /// with the session's record (`remove_live_by_ids`).
     event_streams: HashMap<SessionId, Arc<crate::structured::EventStream>>,
+    /// Each structured session's input: its queue, the queue's hold and its turn counter (#941
+    /// research R1). Made by the session's first process start, kept across its processes, and
+    /// dropped with its event stream.
+    structured_inputs: HashMap<SessionId, SessionInput>,
     /// The bounds a new entry of `event_streams` gets (feature 938); lowered only by tests.
     event_bounds: crate::structured::StreamBounds,
     /// The final activity signal of a session whose process has exited, kept until it runs again
@@ -407,6 +417,16 @@ impl ResolvedEnv {
 /// Whether `cell` holds a finished attempt that failed (FR-022, BUG-454).
 fn holds_failure(cell: &EnvIncludeCell) -> bool {
     cell.get().is_some_and(ResolvedEnv::failed)
+}
+
+/// A user message whose turn a lock section opened, to be written off the lock
+/// ([`DaemonState::deliver`], #941 R2). Its text and pictures are never logged.
+pub struct Delivery {
+    session: SessionId,
+    child: Arc<StructuredSession>,
+    message: Message,
+    /// The queue entry it was, and who queued it: put back at the head should the write fail.
+    queued: Option<(QueueEntryId, u64)>,
 }
 
 /// One live process of a session.
@@ -778,6 +798,7 @@ impl DaemonState {
                 worktrees: HashMap::new(),
                 start_failures: HashMap::new(),
                 event_streams: HashMap::new(),
+                structured_inputs: HashMap::new(),
                 event_bounds: crate::structured::StreamBounds::default(),
                 ended: HashMap::new(),
                 env_include_cache: HashMap::new(),
@@ -823,6 +844,7 @@ impl DaemonState {
             plan_usage_feed: crate::plan_usage::Feed::default(),
             mode_reports: crate::plan_usage::Feed::default(),
             prompt_endings: Arc::default(),
+            input_feed: crate::plan_usage::Feed::default(),
             plan_usage_offer: Mutex::new(()),
         }
     }
@@ -1662,6 +1684,11 @@ impl DaemonState {
         &self.mode_reports
     }
 
+    /// The structured sessions' turn ends, for [`crate::server::spawn_input_driver`] (#941).
+    pub fn input_feed(&self) -> &crate::plan_usage::Feed<crate::structured::TurnClosed> {
+        &self.input_feed
+    }
+
     /// Turn plan usage on or off (feature 490, FR-002) and push `SettingsChanged` to every
     /// client; turning it off also drops the reading held and pushes `PlanUsageChanged { None }`.
     pub fn set_plan_usage_enabled(&self, on: bool) -> std::io::Result<()> {
@@ -1851,6 +1878,12 @@ impl DaemonState {
             // And each pending permission request, by the same rule (#942 FR-005).
             for request in inner.prompts.replay() {
                 let _ = tx.send(Frame::Control(request));
+            }
+            // And each structured session's input, by the same rule (#941 FR-009, FR-021).
+            for session in inner.structured_inputs.keys() {
+                if let Some(input) = Self::input_message(&inner, *session) {
+                    let _ = tx.send(Frame::Control(input));
+                }
             }
             inner.clients.insert(
                 id,
@@ -4434,8 +4467,9 @@ impl DaemonState {
             inner.ended.remove(&id);
             // And the history its last process left (feature 041, R4).
             inner.carried.remove(&id);
-            // And a structured session's events (feature 938).
+            // And a structured session's events (feature 938), and its input (#941).
             inner.event_streams.remove(&id);
+            inner.structured_inputs.remove(&id);
         }
         removed
     }
@@ -5123,7 +5157,12 @@ impl DaemonState {
                 micold_core::protocol::messages::WithdrawReason::ProcessEnded,
             )
         };
-        StructuredSession::spawn(id, spec, extra, on_event, on_end)
+        // A send fails only once the service is stopping.
+        let turn_ends = self.input_feed.sender();
+        let on_turn_end = move |closed| {
+            let _ = turn_ends.send(closed);
+        };
+        StructuredSession::spawn(id, spec, extra, on_event, on_turn_end, on_end)
             .map(|child| Proc::Structured(Arc::new(child)))
     }
 
@@ -5319,6 +5358,7 @@ impl DaemonState {
     /// Adopt a freshly-spawned process into the live registry as `id`'s `Primary` (attached by
     /// default), starting its input log at serial `0`.
     fn register_proc(&self, id: SessionId, proc: Proc) {
+        let structured = matches!(proc, Proc::Structured(_));
         let mut procs = HashMap::new();
         procs.insert(SessionProcess::Primary, proc);
         let mut inner = self.lock();
@@ -5343,6 +5383,9 @@ impl DaemonState {
         // shadowed anyway — but only for as long as this entry lives. Dropping it here is what
         // stops the next stop-then-start from re-showing the *old* run's ending (BUG-018).
         inner.ended.remove(&id);
+        if structured {
+            Self::structured_process_started(&mut inner, id);
+        }
     }
 
     /// After a start, learn which conversation a provider that mints its own ids (Codex, OpenCode)
@@ -5830,14 +5873,39 @@ impl DaemonState {
             return false;
         }
         let mut guard = self.lock();
-        // Reborrowed so the live sessions, the views and the catalog borrow apart.
-        let inner = &mut *guard;
+        // A structured session's turn is the daemon's own reading (#941 FR-011, research R5): the
+        // CLI's prompt and stop hooks would only say it later, or wrongly.
+        let structured_turn_hook = matches!(
+            event,
+            ActivityEvent::Hook(HookKind::UserPromptSubmit | HookKind::Stop)
+        ) && Self::kind_of(&guard, session) == Some(SessionKind::Structured);
+        if structured_turn_hook {
+            return false;
+        }
+        let (changed, notice) = Self::apply_activity(&mut guard, session, event);
+        drop(guard);
+        if let Some((target, notice)) = notice {
+            self.send(target, notice);
+        }
+        changed
+    }
+
+    /// [`Self::note_activity`]'s change, under the state lock: whether the signal (or the pause)
+    /// changed, and the error notice to send one window off the lock.
+    fn apply_activity(
+        inner: &mut Inner,
+        session: SessionId,
+        event: ActivityEvent,
+    ) -> (bool, Option<(ClientId, DaemonMsg)>) {
         let threshold = inner.effective_long_task_threshold();
         let turn_now = inner.turn_now();
         let Some(live) = inner.sessions.get_mut(&session) else {
-            return false;
+            return (false, None);
         };
-        let first_turn_evidence = matches!(event, ActivityEvent::Hook(HookKind::UserPromptSubmit));
+        let first_turn_evidence = matches!(
+            event,
+            ActivityEvent::Hook(HookKind::UserPromptSubmit) | ActivityEvent::TurnBegan
+        );
         let reported_error = matches!(event, ActivityEvent::Ended { error: true, .. });
         let before = live.activity.signal().clone();
         let event_for_turn = event.clone();
@@ -5886,11 +5954,7 @@ impl DaemonState {
         } else {
             None
         };
-        drop(guard);
-        if let Some((target, notice)) = notice {
-            self.send(target, notice);
-        }
-        changed || paused_changed
+        (changed || paused_changed, notice)
     }
 
     /// Record a provider-native agent report against its origin `session` (feature 552, FR-004).
@@ -6531,7 +6595,11 @@ impl DaemonState {
             return None;
         };
         live.respawned_at = Some(respawned_at);
+        let structured = matches!(session, Proc::Structured(_));
         let old = live.procs.insert(SessionProcess::Primary, session);
+        if structured {
+            Self::structured_process_started(&mut inner, id);
+        }
         // Swapped in, so the history it was seeded with is taken; a swap that found no session
         // leaves it for the next start (R4).
         Self::take_carried(&mut inner.carried, id, seeded);
@@ -6552,45 +6620,295 @@ impl DaemonState {
             .map(|(_, s)| s.kind)
     }
 
-    /// Deliver `text` to structured session `session`'s CLI as one user message (feature 938,
-    /// FR-008, research R7). The turn is checked and opened under the state lock, so of two
-    /// simultaneous messages the first wins; the write happens off it. Never logs the text.
+    /// Deliver `text` to structured session `session`'s CLI as one user message, or queue it
+    /// while a turn is open (feature 938, FR-008; #941 FR-018): [`Self::submit_user_message`],
+    /// then the write. **Blocking**. Never logs the text.
     pub fn send_user_message(
         &self,
         session: SessionId,
         text: &str,
     ) -> Result<(), crate::structured::UserMessageUndelivered> {
         use crate::structured::UserMessageUndelivered::{Refused, WriteFailed};
-        let child = self.accept_user_message(session, text).map_err(Refused)?;
-        child.write_user_message(text).map_err(WriteFailed)
+        let message = Message {
+            text: text.to_owned(),
+            images: Vec::new(),
+        };
+        match self.submit_user_message(0, session, message).map_err(Refused)? {
+            Some(delivery) => self.deliver(delivery).map_err(WriteFailed),
+            None => Ok(()),
+        }
     }
 
-    /// The first half of [`Self::send_user_message`]: check `text` against `session`'s turn and
-    /// open it, under the state lock, returning the process to write it to. It never blocks, so a
-    /// connection calls it in arrival order and only the write runs off the connection loop.
-    pub fn accept_user_message(
-        &self,
+    /// `session`'s primary process when it is a structured one.
+    fn structured_primary(inner: &Inner, session: SessionId) -> Option<&Arc<StructuredSession>> {
+        match inner
+            .sessions
+            .get(&session)?
+            .procs
+            .get(&SessionProcess::Primary)?
+        {
+            Proc::Structured(child) => Some(child),
+            Proc::Pty { .. } => None,
+        }
+    }
+
+    /// What every window is shown of `session`'s input (#941 contracts/wire.md
+    /// *StructuredInput*), when the daemon holds input state for it.
+    fn input_message(inner: &Inner, session: SessionId) -> Option<DaemonMsg> {
+        let input = inner.structured_inputs.get(&session)?;
+        let phase = Self::structured_primary(inner, session)
+            .map_or(TurnPhase::NotRunning, |child| child.phase());
+        let (queue, hold) = input.snapshot();
+        Some(DaemonMsg::StructuredInput {
+            session,
+            phase,
+            hold,
+            queue,
+        })
+    }
+
+    /// Tell every window `session`'s input, under the lock that changed it, so windows see the
+    /// changes in the order they were made (#941 FR-009, FR-021).
+    fn broadcast_input(inner: &Inner, session: SessionId) {
+        if let Some(input) = Self::input_message(inner, session) {
+            Self::broadcast_locked(inner, vec![input]);
+        }
+    }
+
+    /// A structured process of `session` was registered: its input is made on the first start,
+    /// a non-empty queue stays on hold (Q1), and every window is told.
+    fn structured_process_started(inner: &mut Inner, session: SessionId) {
+        inner
+            .structured_inputs
+            .entry(session)
+            .or_default()
+            .on_process_start();
+        Self::broadcast_input(inner, session);
+    }
+
+    /// The queue's head of `session`, popped and its turn opened, when the turn is idle, the
+    /// process runs and the queue is not on hold (#941 R2: called at the end of every lock section
+    /// that changes the queue, the hold or the turn). The caller writes it off the lock.
+    fn pump_locked(inner: &mut Inner, session: SessionId) -> Option<Delivery> {
+        let child = Arc::clone(Self::structured_primary(inner, session)?);
+        if !child.is_running() {
+            return None;
+        }
+        let input = inner.structured_inputs.get_mut(&session)?;
+        let mut turn = child.turn();
+        let (id, queued) = input.pump(&turn)?;
+        if turn.accept(id, true).is_err() {
+            // Not reached: `pump` read the turn idle under the same lock.
+            drop(turn);
+            input.put_back(queued);
+            return None;
+        }
+        drop(turn);
+        Some(Delivery {
+            session,
+            child,
+            message: queued.message,
+            queued: Some((queued.id, queued.queued_by)),
+        })
+    }
+
+    /// Follow `session`'s turn in its activity, in the lock section that read it (#941 FR-011):
+    /// `TurnBegan` when this section opened a turn, `TurnEnded` when `ended` and the turn is idle
+    /// now. Returns whether the catalog must be broadcast and the notice to send.
+    fn follow_turn(
+        inner: &mut Inner,
         session: SessionId,
-        text: &str,
-    ) -> Result<Arc<crate::structured::StructuredSession>, UserMessageRefusal> {
-        let inner = self.lock();
-        let primary = inner
+        opened: bool,
+        ended: bool,
+    ) -> (bool, Option<(ClientId, DaemonMsg)>) {
+        let idle = Self::structured_primary(inner, session)
+            .is_some_and(|child| child.is_running() && child.turn().is_idle());
+        if opened {
+            Self::apply_activity(inner, session, ActivityEvent::TurnBegan)
+        } else if ended && idle {
+            Self::apply_activity(inner, session, ActivityEvent::TurnEnded)
+        } else {
+            (false, None)
+        }
+    }
+
+    /// Off the lock: push the catalog when the activity changed, and send its notice.
+    fn after_turn_activity(&self, (changed, notice): (bool, Option<(ClientId, DaemonMsg)>)) {
+        if let Some((target, notice)) = notice {
+            self.send(target, notice);
+        }
+        if changed {
+            self.broadcast_catalog();
+        }
+    }
+
+    /// A message `client` sent to structured session `session` (#941 R2, FR-018, FR-032): under
+    /// the state lock, with the turn read in the same section, it is opened as the next turn
+    /// (`Some`, to [`Self::deliver`] off the lock) or queued (`None`), and every window is told;
+    /// or it is refused. Never logs the text or the pictures.
+    pub fn submit_user_message(
+        &self,
+        client: ClientId,
+        session: SessionId,
+        message: Message,
+    ) -> Result<Option<Delivery>, UserMessageRefusal> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let child = match inner
             .sessions
             .get(&session)
-            .and_then(|live| live.procs.get(&SessionProcess::Primary));
-        match primary {
-            Some(Proc::Structured(child)) => {
-                child.accept_user_message(text)?;
-                Ok(Arc::clone(child))
-            }
-            Some(Proc::Pty { .. }) => Err(UserMessageRefusal::NotStructured),
-            None if Self::kind_of(&inner, session) == Some(SessionKind::Terminal) => {
-                Err(UserMessageRefusal::NotStructured)
+            .and_then(|live| live.procs.get(&SessionProcess::Primary))
+        {
+            Some(Proc::Structured(child)) => Arc::clone(child),
+            Some(Proc::Pty { .. }) => return Err(UserMessageRefusal::NotStructured),
+            None if Self::kind_of(inner, session) == Some(SessionKind::Terminal) => {
+                return Err(UserMessageRefusal::NotStructured)
             }
             // Not running: `Blank` still comes first, as for a running session.
-            None if text.trim().is_empty() => Err(UserMessageRefusal::Blank),
-            None => Err(UserMessageRefusal::NotRunning),
+            None if message.is_blank() => return Err(UserMessageRefusal::Blank),
+            None => return Err(UserMessageRefusal::NotRunning),
+        };
+        let running = child.is_running();
+        let input = inner.structured_inputs.entry(session).or_default();
+        let mut delivery = {
+            let mut turn = child.turn();
+            match input.submit(message, client, !turn.is_idle(), running)? {
+                Submit::Deliver(id, message) => {
+                    turn.accept(id, running)?;
+                    Some(Delivery {
+                        session,
+                        child: Arc::clone(&child),
+                        message,
+                        queued: None,
+                    })
+                }
+                Submit::Queued(_) => None,
+            }
+        };
+        if delivery.is_none() {
+            delivery = Self::pump_locked(inner, session);
         }
+        let activity = Self::follow_turn(inner, session, delivery.is_some(), false);
+        Self::broadcast_input(inner, session);
+        drop(guard);
+        self.after_turn_activity(activity);
+        Ok(delivery)
+    }
+
+    /// Write `delivery` to its CLI (#941 FR-003, FR-019). **Blocking**: the write may wait on a
+    /// full pipe. A failed write of a queued message puts it back at the head of the queue, on
+    /// hold; either way the windows are told and the next delivery, if any, follows. Returns the
+    /// outcome of `delivery`'s own write.
+    pub fn deliver(&self, delivery: Delivery) -> io::Result<()> {
+        let mut outcome = None;
+        let mut next = Some(delivery);
+        while let Some(delivery) = next.take() {
+            let written = delivery.child.write_user_message(&delivery.message);
+            let failed = written.is_err();
+            outcome.get_or_insert(written);
+            if failed {
+                next = self.delivery_failed(delivery);
+            }
+        }
+        outcome.unwrap_or(Ok(()))
+    }
+
+    /// A write of `delivery` failed and its turn was closed again: a queued message goes back to
+    /// the head, held (edge case *Refusal or delivery failure*); the windows are told. The next
+    /// delivery the queue makes, if any.
+    fn delivery_failed(&self, delivery: Delivery) -> Option<Delivery> {
+        let session = delivery.session;
+        tracing::warn!(
+            session = %session.0,
+            queued = delivery.queued.is_some(),
+            "a user message could not be written to the structured session's CLI"
+        );
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        if let (Some((id, queued_by)), Some(input)) =
+            (delivery.queued, inner.structured_inputs.get_mut(&session))
+        {
+            input.put_back(QueuedMessage {
+                id,
+                message: delivery.message,
+                queued_by,
+            });
+        }
+        let next = Self::pump_locked(inner, session);
+        let activity = Self::follow_turn(inner, session, next.is_some(), true);
+        Self::broadcast_input(inner, session);
+        drop(guard);
+        self.after_turn_activity(activity);
+        next
+    }
+
+    /// The input driver's step for one turn end or output end a stdout reader reported (#941 R2,
+    /// FR-019, FR-022): the end of the current process's output holds a non-empty queue; then the
+    /// queue's head goes out when the turn is idle and the queue not on hold, the activity
+    /// follows, and every window is told. **Blocking**: it writes the delivery.
+    pub fn turn_closed(&self, closed: crate::structured::TurnClosed) {
+        let delivery = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
+            let session = closed.session;
+            if closed.by == crate::structured::ClosedBy::Exit {
+                // A late end of an earlier process leaves a running later one's queue alone.
+                let current = Self::structured_primary(inner, session)
+                    .is_none_or(|child| child.serial() == closed.process || !child.is_running());
+                if let Some(input) = inner
+                    .structured_inputs
+                    .get_mut(&session)
+                    .filter(|_| current)
+                {
+                    input.on_process_end();
+                }
+            }
+            let delivery = Self::pump_locked(inner, session);
+            let ended = closed.by == crate::structured::ClosedBy::Result;
+            let activity = Self::follow_turn(inner, session, delivery.is_some(), ended);
+            Self::broadcast_input(inner, session);
+            drop(guard);
+            self.after_turn_activity(activity);
+            delivery
+        };
+        if let Some(delivery) = delivery {
+            let _ = self.deliver(delivery);
+        }
+    }
+
+    /// A queue edit of `client` on `session`'s queue (#941 FR-020, FR-022): `change` under the
+    /// state lock, then the `pump` every such section ends with, and one `StructuredInput` to every
+    /// window. A session the daemon holds no input for has no entry: `Gone`. The delivery the
+    /// `pump` made, for [`Self::deliver`] off the lock.
+    pub fn change_queue<T>(
+        &self,
+        session: SessionId,
+        change: impl FnOnce(&mut SessionInput) -> Result<T, QueueRefusal>,
+    ) -> Result<(T, Option<Delivery>), QueueRefusal> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let input = inner
+            .structured_inputs
+            .get_mut(&session)
+            .ok_or(QueueRefusal::Gone)?;
+        let changed = change(input)?;
+        let delivery = Self::pump_locked(inner, session);
+        let activity = Self::follow_turn(inner, session, delivery.is_some(), false);
+        Self::broadcast_input(inner, session);
+        drop(guard);
+        self.after_turn_activity(activity);
+        Ok((changed, delivery))
+    }
+
+    /// **Send queued** from any window (#941 FR-022): the hold cleared once and the head delivered
+    /// when idle. A session with no input has nothing held.
+    pub fn release_queue(&self, session: SessionId) -> Option<Delivery> {
+        self.change_queue(session, |input| {
+            input.release();
+            Ok(())
+        })
+        .ok()
+        .and_then(|((), delivery)| delivery)
     }
 
     /// Whether a terminal-only request (input, resize, scrollback, interrupt) addressed to

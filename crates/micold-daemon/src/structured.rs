@@ -11,16 +11,17 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{self, BufRead, Read, Write};
 use std::process::{ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use micold_core::session::{KindRefusal, PermissionMode, SessionId};
 use micold_core::structured::control::{encode_set_mode, next_request_id};
+use micold_core::structured::input::Message;
 use micold_core::structured::{
-    encode_user_message, parse_line, ControlOutcome, EventHistory, LineSplitter, SequencedEvent,
-    StructuredEvent, TurnId, TurnState, UserMessageRefusal,
+    encode_user_message, parse_line, ControlOutcome, EventHistory, InterruptAsk, LineSplitter,
+    SequencedEvent, StructuredEvent, Turn, TurnId, TurnState, UserMessageRefusal,
 };
 use micold_core::terminal::{launch_args, LaunchSpec};
 use tokio::sync::{broadcast, oneshot};
@@ -217,6 +218,58 @@ impl ControlWaiters {
     }
 }
 
+/// What ended a turn ([`TurnClosed`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClosedBy {
+    /// The CLI's `result`.
+    Result,
+    /// The end of the process's output; `TurnClosed::turn` is the turn it cut off, if one was
+    /// open.
+    Exit,
+}
+
+/// A turn the stdout reader ended, or the end of a process's output, on its way to the input
+/// driver (#941 data-model *Daemon*, research R2). Named apart from the activity's turn end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TurnClosed {
+    pub session: SessionId,
+    /// The process's [`StructuredSession::serial`], so a late end of an earlier process is told
+    /// from the current one's.
+    pub process: u64,
+    /// The turn that ended; `None` for an output that ended between turns.
+    pub turn: Option<TurnId>,
+    pub by: ClosedBy,
+    /// Whether an interrupt was asked for during the turn.
+    pub interrupted: bool,
+}
+
+/// The serial of the next structured process this daemon run spawns.
+static NEXT_SERIAL: AtomicU64 = AtomicU64::new(1);
+
+/// Where a structured session's events go, in order: the stdout reader's events and the
+/// [`StructuredEvent::UserSent`] note of a message being written (#941 research R3). Its lock is
+/// held by the reader across ending a turn and passing the event on, and by a writer only to set
+/// or pass on its note, never across the write itself.
+struct Emit {
+    on_event: Box<dyn FnMut(StructuredEvent) + Send>,
+    /// The note of the message being written: passed on before the next line the reader reads,
+    /// or after the write, whichever is first; dropped when the write fails first.
+    sending: Option<StructuredEvent>,
+}
+
+impl Emit {
+    fn emit(&mut self, event: StructuredEvent) {
+        self.flush();
+        (self.on_event)(event);
+    }
+
+    fn flush(&mut self) {
+        if let Some(note) = self.sending.take() {
+            (self.on_event)(note);
+        }
+    }
+}
+
 /// One daemon-hosted structured session: the CLI's child process with piped stdin, stdout and
 /// stderr. Stdout is read line by line into events, stderr into the daemon's log (FR-010).
 pub struct StructuredSession {
@@ -229,10 +282,16 @@ pub struct StructuredSession {
     /// Control requests waiting for the CLI's answer, shared with the stdout reader.
     control: Arc<ControlWaiters>,
     /// This process's turn (research R7): a new process starts `Idle`, so a restart resets it.
-    /// Shared with the stdout reader, which ends the turn on a `result` and at end-of-file.
+    /// Shared with the stdout reader, which ends the turn on a `result` and at end-of-file. Taken
+    /// under the daemon's state lock by every decision on the turn (#941 R1), never the other way
+    /// round.
     turn: Arc<Mutex<TurnState>>,
-    /// How many turns this process opened: the last one's [`TurnId`].
-    turns: std::sync::atomic::AtomicU64,
+    /// Where events go, shared with the stdout reader (#941 R3).
+    emit: Arc<Mutex<Emit>>,
+    /// Set by the stdout reader at its end-of-file, before it reports the end.
+    stdout_ended: Arc<AtomicBool>,
+    /// This process's serial in the daemon run.
+    serial: u64,
     /// The stdout and stderr reader threads, joined by [`Self::teardown`].
     readers: Mutex<Vec<JoinHandle<()>>>,
     /// Set when both readers have seen end-of-file.
@@ -262,7 +321,8 @@ impl StructuredSession {
     /// the CLI writes to stdout reaches `on_event` as one event, in order, and a trailing partial
     /// line at end-of-file as one more (FR-014). A `result` ends the turn; at end-of-file a turn
     /// still in progress ends with a `TurnEndedWithoutResult` note, after the last line (R7), and
-    /// then `on_end` runs: the process's output is over (#942 FR-011).
+    /// then `on_end` runs: the process's output is over (#942 FR-011). `on_turn_end` is told of each
+    /// turn a `result` ended, after the event, and of the output's end, before `on_end` (#941 R2).
     ///
     /// Refused if `spec.cwd` does not exist (FR-006c), and for a CLI with no structured mode
     /// (FR-003).
@@ -273,6 +333,7 @@ impl StructuredSession {
         spec: &LaunchSpec,
         extra_args: &[OsString],
         on_event: impl FnMut(StructuredEvent) + Send + 'static,
+        on_turn_end: impl FnMut(TurnClosed) + Send + 'static,
         on_end: impl FnOnce() + Send + 'static,
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
@@ -316,22 +377,43 @@ impl StructuredSession {
         let reader_turn = Arc::clone(&turn);
         let control = Arc::new(ControlWaiters::new());
         let reader_control = Arc::clone(&control);
+        let mut on_event = on_event;
+        let emit = Arc::new(Mutex::new(Emit {
+            on_event: Box::new(move |event| {
+                if let StructuredEvent::ControlResponse {
+                    request_id,
+                    outcome,
+                    ..
+                } = &event
+                {
+                    reader_control.resolve(request_id, outcome);
+                }
+                on_event(event);
+            }),
+            sending: None,
+        }));
+        let reader_emit = Arc::clone(&emit);
+        let stdout_ended = Arc::new(AtomicBool::new(false));
+        let reader_ended = Arc::clone(&stdout_ended);
+        let serial = NEXT_SERIAL.fetch_add(1, Ordering::Relaxed);
+        let reader_control = Arc::clone(&control);
         let readers = [
             spawn_reader(
                 format!("stream-out-{id}"),
                 Arc::clone(&output_ended),
                 move || {
-                    let mut on_event = on_event;
-                    read_events(stdout, &reader_turn, |event| {
-                        if let StructuredEvent::ControlResponse {
-                            request_id,
-                            outcome,
-                            ..
-                        } = &event
-                        {
-                            reader_control.resolve(request_id, outcome);
+                    let mut on_turn_end = on_turn_end;
+                    read_events(stdout, &reader_turn, &reader_emit, |turn, by, interrupted| {
+                        if by == ClosedBy::Exit {
+                            reader_ended.store(true, Ordering::Release);
                         }
-                        on_event(event);
+                        on_turn_end(TurnClosed {
+                            session: id,
+                            process: serial,
+                            turn,
+                            by,
+                            interrupted,
+                        });
                     });
                     reader_control.close();
                     on_end();
@@ -357,7 +439,9 @@ impl StructuredSession {
             stdin: Mutex::new(stdin),
             control,
             turn,
-            turns: std::sync::atomic::AtomicU64::new(0),
+            emit,
+            stdout_ended,
+            serial,
             readers: Mutex::new(readers),
             output_ended,
             torn_down: AtomicBool::new(false),
@@ -394,26 +478,59 @@ impl StructuredSession {
         self.output_ended.all()
     }
 
-    /// Accept `text` as the next user message, opening a turn, or say why not (FR-008). The
-    /// daemon calls it under its state lock, so of two simultaneous messages the first wins; the
-    /// write is [`Self::write_user_message`], off the lock.
-    pub fn accept_user_message(&self, text: &str) -> Result<(), UserMessageRefusal> {
-        if text.trim().is_empty() {
-            return Err(UserMessageRefusal::Blank);
-        }
-        let running = self.is_alive() && !self.output_ended();
-        let mut turn = lock(&self.turn);
-        // Until M2 moves turn ids to the session's `SessionInput`, this process numbers its own.
-        let id = TurnId(self.turns.load(Ordering::Relaxed) + 1);
-        turn.accept(id, running)?;
-        self.turns.fetch_add(1, Ordering::Relaxed);
-        Ok(())
+    /// This process's serial in the daemon run: a later process of the session has a higher one.
+    pub fn serial(&self) -> u64 {
+        self.serial
     }
 
-    /// Write an accepted `text` to the CLI as one stream-json user message. On a failed write
-    /// nothing was delivered, so the turn it opened is closed again.
-    pub fn write_user_message(&self, text: &str) -> io::Result<()> {
-        let written = self.write_line(&encode_user_message(text, &[]));
+    /// Whether the CLI can be sent a message: the child runs and its output has not ended.
+    pub fn is_running(&self) -> bool {
+        self.is_alive() && !self.stdout_ended.load(Ordering::Acquire)
+    }
+
+    /// This process's turn, locked. The daemon takes it under its state lock, so every decision
+    /// on the turn (deliver, queue, interrupt) sees the turn as it is and opens one in the same
+    /// section that read it idle (#941 R1).
+    pub fn turn(&self) -> std::sync::MutexGuard<'_, TurnState> {
+        lock(&self.turn)
+    }
+
+    /// The turn as the windows are shown it (#941 contracts/wire.md *StructuredInput*).
+    pub fn phase(&self) -> micold_core::protocol::messages::TurnPhase {
+        use micold_core::protocol::messages::TurnPhase;
+        if !self.is_running() {
+            return TurnPhase::NotRunning;
+        }
+        match self.turn().now() {
+            Turn::Idle => TurnPhase::Idle,
+            Turn::InTurn {
+                turn, interrupt, ..
+            } => TurnPhase::Busy { turn, interrupt },
+        }
+    }
+
+    /// Write `message`, for which the daemon opened a turn, to the CLI as one stream-json user
+    /// message (#941 FR-003, FR-027), and note it as [`StructuredEvent::UserSent`] with its
+    /// pictures' names before any line of its turn (R3). On a failed write nothing was delivered:
+    /// the note is dropped and the turn closed again. Never logs the text or the pictures.
+    pub fn write_user_message(&self, message: &Message) -> io::Result<()> {
+        lock(&self.emit).sending = Some(StructuredEvent::UserSent {
+            text: message.text.clone(),
+            attachments: message
+                .images
+                .iter()
+                .map(|image| image.name().to_owned())
+                .collect(),
+        });
+        let written = self.write_line(&encode_user_message(&message.text, &message.images));
+        {
+            let mut emit = lock(&self.emit);
+            if written.is_ok() {
+                emit.flush();
+            } else {
+                emit.sending = None;
+            }
+        }
         if written.is_err() {
             lock(&self.turn).abandon();
         }
@@ -522,22 +639,53 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 /// Read `stdout` to its end, one event per line in order, the trailing partial line last (R4,
-/// FR-014), each followed by `turn` (R7). No line, however unreadable, stops the reading. At the
-/// end, a turn still in progress ends with its note, the last event of this process.
+/// FR-014), each followed by `turn` (R7) under `emit`'s lock, so a message written meanwhile is
+/// noted after the event that ended the turn before it (#941 R3). No line, however unreadable,
+/// stops the reading. Each turn a `result` ends is reported to `on_turn_end` after its event. At
+/// the end, a turn still in progress ends with its note, the last event of this process, and the
+/// end is reported with the turn it cut off.
 fn read_events(
     stdout: impl Read,
     turn: &Mutex<TurnState>,
-    mut on_event: impl FnMut(StructuredEvent),
+    emit: &Mutex<Emit>,
+    mut on_turn_end: impl FnMut(Option<TurnId>, ClosedBy, bool),
 ) {
     read_lines(stdout, |event| {
-        lock(turn).on_event(&event);
-        on_event(event);
+        let ended = {
+            let mut emit = lock(emit);
+            // The turn's lock is released before the event goes on, which takes the history's.
+            let ended = lock(turn).on_event(&event);
+            emit.emit(event);
+            ended
+        };
+        if let Some(ended) = ended {
+            on_turn_end(Some(ended.turn), ClosedBy::Result, ended.interrupted);
+        }
     });
-    // The turn's lock is released before `on_event`, which takes the history's.
-    let note = lock(turn).on_exit();
-    if let Some(note) = note {
-        on_event(note);
-    }
+    let cut_off = {
+        let mut emit = lock(emit);
+        let (cut_off, note) = {
+            let mut turn = lock(turn);
+            let cut_off = match turn.now() {
+                Turn::InTurn {
+                    turn, interrupt, ..
+                } => Some((turn, interrupt != InterruptAsk::None)),
+                Turn::Idle => None,
+            };
+            (cut_off, turn.on_exit())
+        };
+        // Passed on as it is: the note of a message whose write is still going on waits for that
+        // write's own outcome.
+        if let Some(note) = note {
+            (emit.on_event)(note);
+        }
+        cut_off
+    };
+    on_turn_end(
+        cut_off.map(|(turn, _)| turn),
+        ClosedBy::Exit,
+        cut_off.is_some_and(|(_, interrupted)| interrupted),
+    );
 }
 
 /// Read `stdout` to its end, one event per line in order, the trailing partial line last.
