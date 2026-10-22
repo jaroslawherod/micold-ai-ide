@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M2
-- **Next step**: M2 review A + scoped gate
+- **Next step**: M2 review B, then full gate
 
 ## Pull requests
 
@@ -71,6 +71,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review A M1 (code-review high) | 1 | b061491b31b1e8adfe7a819ba51179e7e88ac6bb:96a0defe7106c1484b328d9175dc173b7b440a05 | CHANGES: 2 MAJOR (Debug prints picture bytes; wire types outside the hashed source), 7 MINOR; fixed 2 MAJOR + 2 MINOR, 5 declined |
 | Review A M1 (scoped, sonnet) | 2 | 5f610c5dfb06d3b71341f75aa694d4278dc805d0:ca17d07da3d3242ae0a73a894ff08cf80dbcf877 | CLEAN: 2 MINOR (capture temp file fixed; picture-name check declined) |
 | Review B M1 (conformance, sonnet) | 1 | 2c163570b179fbb1922c81e07643980c76793802:ca17d07da3d3242ae0a73a894ff08cf80dbcf877 | CLEAN (Verify: daemon structured_session 16 passed; core green except the root-only permission test, which gate.sh runs unprivileged) |
+| Review A M2 (code-review high) | 1 | 29e7b03bf3c25a809d773ea3cf7e34f6ae868450:37dd08531ecdfbd87a01762e2b401eacfd59af71 | CLEAN: 2 MINOR (both declined) |
 
 ## Declined review findings
 
@@ -87,6 +88,14 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 - Review A M1 r1 F9 (blank check written in three places): the two daemon copies are M1's
   compile-only bridge that M2 removes (T008); MINOR.
 - Review A M1 r2 F1 (picture name not checked for `/`, `\` or empty): MINOR; the name is display text only, never joined to a path (pictures are held in memory and in the saved queue file, not as files).
+- Review A M2 r1 F1 (`Emit.sending` is one slot: a stdout line arriving while a write is in flight
+  can pass the note on before a write that then fails): MINOR; Decision 8 — the reader passes the
+  note on before the turn's next line by design, and a CLI writes no line for a turn it was never
+  sent; a write that fails after a line arrived means the CLI died, and the process end follows.
+- Review A M2 r1 F2 (one driver task serialises every session's delivery write, so a CLI that
+  stops reading stdin stalls others): MINOR; research R2 specifies one driver handling reports in
+  order, and a full 64 KiB pipe needs a CLI that has stopped reading mid-session; revisit with
+  M3's overdue handling if it shows.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

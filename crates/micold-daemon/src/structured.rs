@@ -403,18 +403,23 @@ impl StructuredSession {
                 Arc::clone(&output_ended),
                 move || {
                     let mut on_turn_end = on_turn_end;
-                    read_events(stdout, &reader_turn, &reader_emit, |turn, by, interrupted| {
-                        if by == ClosedBy::Exit {
-                            reader_ended.store(true, Ordering::Release);
-                        }
-                        on_turn_end(TurnClosed {
-                            session: id,
-                            process: serial,
-                            turn,
-                            by,
-                            interrupted,
-                        });
-                    });
+                    read_events(
+                        stdout,
+                        &reader_turn,
+                        &reader_emit,
+                        |turn, by, interrupted| {
+                            if by == ClosedBy::Exit {
+                                reader_ended.store(true, Ordering::Release);
+                            }
+                            on_turn_end(TurnClosed {
+                                session: id,
+                                process: serial,
+                                turn,
+                                by,
+                                interrupted,
+                            });
+                        },
+                    );
                     reader_control.close();
                     on_end();
                 },
