@@ -302,6 +302,41 @@ own id. A session that never cleared resumes its own id. The transcript of the n
 never listed as a second session. A `/clear` typed into a terminal session is not seen: a later
 launch resumes the last conversation the structured session saved.
 
+A Claude Code session can switch between a terminal session and a structured session with
+`SessionSwitchKind { req, session, to, command, confirmed }`. Only the daemon's catalog changes a
+session's kind, and only this way. The daemon ends the session's CLI as `SessionStop` does, then
+starts it in the other kind under the same session id, in the same folder, with the same terminals
+and sandbox:
+
+- **Conversation.** The new launch resumes the session's conversation (the one a `/clear` started,
+  if any). A session whose CLI never recorded a conversation starts a new one. If the resume fails,
+  the failure is reported as any failed start is, and the session keeps the new kind, so it can be
+  switched back.
+- **Model and mode.** Both launches carry the session's model choice. A structured launch carries
+  its permission mode; a terminal launch carries none.
+- **Kind.** The new kind is saved and goes out to every window in the next catalog. After a daemon
+  restart the session comes back in the kind it last had.
+- **History.** The event history is kept, and saved under **Save terminal history**, while the
+  session is a terminal session. A `KindSwitched` note marks each switch, after the last event of
+  the process that ended. What happens in the terminal is not added to it.
+- **Queue.** A queue the session has is put on hold and is not delivered while the session is a
+  terminal session, or after the switch back, until **Send queued**. A `SessionUserMessage` sent
+  while a switch runs is queued on hold too. Neither process receives it.
+- **Command.** With `command` set, a switch to terminal types that command into the terminal once
+  the CLI is ready for input, as a session's first prompt is typed. Only a terminal-only command is
+  allowed (`/mcp`, `/login` and the others listed above).
+
+The request is answered `OperationOk` once the new kind's process has started (or failed to), when
+the session already has kind `to`, or when a switch to `to` is already running, so two windows
+asking at once switch it once. It is refused with `OperationError` when:
+
+- the session runs another CLI (`Refused`);
+- a switch the other way is running (`Refused`);
+- `command` is set for a switch to structured, or is not a terminal-only command (`InvalidInput`);
+- `confirmed` is false and work is in progress: a turn is running, a permission request is pending,
+  or the terminal CLI reports it is working (`NeedsConfirmation`, with a sentence saying what would
+  end). Nothing changes. Sent again with `confirmed: true`, the switch ends that work.
+
 ## Project and worktree operations run through the daemon (User Story 3)
 
 Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a

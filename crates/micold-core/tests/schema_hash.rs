@@ -325,7 +325,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 64 → 65 for feature 1161's `default_prompt_template` on `DaemonSettings` and `SettingsSet`.
 ///
 /// And 65 → 66 for #943's model choice (M4): `SessionSummary.model`, `ClientMsg::SetSessionModel`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 66;
+///
+/// And 66 → 67 for #943's kind switch (M6): `ClientMsg::SessionSwitchKind`,
+/// `ErrorKind::NeedsConfirmation`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 67;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

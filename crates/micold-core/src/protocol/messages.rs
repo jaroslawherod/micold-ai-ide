@@ -944,6 +944,25 @@ pub enum ClientMsg {
         /// The model it is to run.
         model: crate::structured::model::ModelChoice,
     },
+    /// Switch a Claude Code session between structured and terminal (#943 FR-019–FR-025,
+    /// contracts/wire.md *SessionSwitchKind*): its CLI process ends and starts again in kind `to`,
+    /// resuming the same conversation under the same session. Answered `OperationOk` once the new
+    /// kind's process started (or failed to resume), when the session already is of kind `to`, or
+    /// when a switch to `to` is already running; refused for another CLI, a running switch the
+    /// other way, a `command` that is not a terminal-only command of a switch to terminal, and,
+    /// unless `confirmed`, work in progress (`ErrorKind::NeedsConfirmation`).
+    SessionSwitchKind {
+        /// Correlation id.
+        req: u64,
+        /// The session.
+        session: SessionId,
+        /// The kind it is to run as.
+        to: crate::session::SessionKind,
+        /// A terminal-only command typed into the terminal once its CLI is ready (FR-022).
+        command: Option<String>,
+        /// The user confirmed ending the work in progress (FR-021).
+        confirmed: bool,
+    },
 
     // --- Structured session input (feature 941, contracts/wire.md) ---
     /// Interrupt turn `turn` of a structured session (FR-013, FR-016). No answer: an interrupt of
@@ -2222,6 +2241,9 @@ pub enum ErrorKind {
     Refused,
     /// An unexpected internal error.
     Internal,
+    /// The operation ends work in progress and needs the user's confirmation first; the message
+    /// says what would end (#943 FR-021).
+    NeedsConfirmation,
 }
 
 /// Where the daemon writes its log.

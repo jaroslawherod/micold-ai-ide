@@ -946,8 +946,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_66() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 66);
+fn the_protocol_version_is_67() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 67);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -2785,4 +2785,34 @@ fn the_model_choice_rides_the_summary_and_set_session_model() {
         serde_json::from_str::<ClientMsg>(&bad).is_err(),
         "an invalid name never reaches the daemon"
     );
+}
+
+/// #943 T043 (FR-019–FR-025): `SessionSwitchKind` rides both wires, with and without a command and
+/// confirmed or not, and its `NeedsConfirmation` refusal does too (contracts/wire.md).
+#[test]
+fn a_kind_switch_and_its_confirmation_refusal_ride_both_wires() {
+    use micold_core::session::SessionKind;
+    for (to, command, confirmed) in [
+        (SessionKind::Terminal, Some("/mcp".to_string()), false),
+        (SessionKind::Terminal, None, true),
+        (SessionKind::Structured, None, false),
+    ] {
+        let switch = ClientMsg::SessionSwitchKind {
+            req: 9,
+            session: sid(),
+            to,
+            command,
+            confirmed,
+        };
+        json_roundtrip(&switch);
+        postcard_roundtrip(&switch);
+    }
+    let refused = DaemonMsg::OperationError {
+        req: 9,
+        kind: ErrorKind::NeedsConfirmation,
+        message: "a turn is in progress; switching ends it".into(),
+        detail: None,
+    };
+    json_roundtrip(&refused);
+    postcard_roundtrip(&refused);
 }

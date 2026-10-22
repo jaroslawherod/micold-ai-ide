@@ -425,6 +425,36 @@ async fn a_queued_message_edited_into_a_refused_command_keeps_its_text() {
     state.stop_session(id);
 }
 
+/// #943 T047, US1 scenario 8, FR-001: a command sent while a turn is open is queued by #941's
+/// input like any message, and reaches the CLI unchanged when its turn comes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_command_sent_while_busy_is_queued_and_delivered_unchanged() {
+    let project = tempfile::tempdir().unwrap();
+    let script = format!(
+        "on-message-gated {}\n",
+        fixture("text-turn.jsonl").display()
+    );
+    let (state, id) = started(project.path(), &script);
+    let mut client = connect(&state).await;
+    assert_ok(&send_text(&mut client, 1, id, "hello").await, "hello");
+    delivered_is(project.path(), &["hello"]).await;
+    let command = "/speckit-plan #943 --fast";
+    assert_ok(&send_text(&mut client, 2, id, command).await, command);
+    let (queued, _) = state
+        .change_queue(id, |input| {
+            Ok(input
+                .queued()
+                .map(|q| q.message.text.clone())
+                .collect::<Vec<_>>())
+        })
+        .expect("the queue");
+    assert_eq!(queued, [command], "queued, not written");
+    delivered_is(project.path(), &["hello"]).await;
+    std::fs::write(project.path().join("turn-1"), "").unwrap();
+    delivered_is(project.path(), &["hello", command]).await;
+    state.stop_session(id);
+}
+
 /// Review A M3 F4: the command list a refusal reads is the one the history holds (FR-009): the
 /// latest note while it is held, a later note in its place, the fallback once it is evicted.
 #[test]

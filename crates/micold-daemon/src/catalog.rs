@@ -882,6 +882,27 @@ impl Catalog {
         Ok(true)
     }
 
+    /// Switch session `id` to `kind` and persist it (#943 FR-019, FR-020): the one place a kind
+    /// changes (replaces 938 FR-002). `Ok(true)` when it changed, `Ok(false)` when it already was
+    /// `kind` (nothing written). A failed write leaves the earlier kind in place.
+    pub fn set_kind(&mut self, id: SessionId, kind: SessionKind) -> Result<bool, SetModeError> {
+        let (_, session) = self
+            .workspace
+            .find_session_mut(id)
+            .ok_or(SetModeError::NoSession)?;
+        if session.kind == kind {
+            return Ok(false);
+        }
+        let before = std::mem::replace(&mut session.kind, kind);
+        if let Err(e) = self.persist() {
+            if let Some((_, session)) = self.workspace.find_session_mut(id) {
+                session.kind = before;
+            }
+            return Err(SetModeError::Io(e));
+        }
+        Ok(true)
+    }
+
     /// Keep `handle`, the conversation session `id`'s CLI reported, as the one its later launches
     /// resume (#943 FR-005a, provisional: ledger decision 2), and persist it: `Ok(true)` when it
     /// changed, `Ok(false)` when it already was (nothing written). The session's own id is kept as

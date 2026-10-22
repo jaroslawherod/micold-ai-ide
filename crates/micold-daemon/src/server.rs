@@ -341,6 +341,19 @@ pub fn spawn_plan_usage_feed(state: Arc<DaemonState>) {
 }
 
 /// `OperationOk` for `req`, or `OperationError` with the refusal's sentence.
+/// The answer to a `SessionSwitchKind` (#943 contracts/wire.md): each refusal with its own kind.
+fn switch_answer(req: u64, outcome: Result<(), crate::state::SwitchRefusal>) -> DaemonMsg {
+    match outcome {
+        Ok(()) => ack_or_refused(req, Ok(())),
+        Err(refusal) => DaemonMsg::OperationError {
+            req,
+            kind: refusal.error_kind(),
+            message: refusal.to_string(),
+            detail: None,
+        },
+    }
+}
+
 fn ack_or_refused(req: u64, outcome: Result<(), String>) -> DaemonMsg {
     match outcome {
         Ok(()) => DaemonMsg::OperationOk {
@@ -849,6 +862,26 @@ where
                     tokio::spawn(async move {
                         let picked = state.finish_model_pick(asked).await;
                         state.send(id, ack_or_refused(req, picked));
+                    });
+                }
+            },
+            // #943 R8: begun here, in the order of this window's requests, so a message it sends
+            // next is queued on hold; ending and starting the processes runs off this loop.
+            ClientMsg::SessionSwitchKind {
+                req,
+                session,
+                to,
+                command,
+                confirmed,
+            } => match state.begin_switch(session, to, command, confirmed) {
+                crate::state::KindSwitch::Answered(answered) => {
+                    state.send(id, switch_answer(req, answered))
+                }
+                crate::state::KindSwitch::Begun(begun) => {
+                    let state = Arc::clone(state);
+                    tokio::spawn(async move {
+                        ops::switch_kind(&state, begun).await;
+                        state.send(id, switch_answer(req, Ok(())));
                     });
                 }
             },

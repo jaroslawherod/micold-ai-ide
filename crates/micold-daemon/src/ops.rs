@@ -770,6 +770,62 @@ pub async fn start_with_prompt(
     (session, typed)
 }
 
+/// Carry out a switch of kind [`DaemonState::begin_switch`] began (#943 R8 steps 4–5): the
+/// session's processes end as `SessionStop` ends them, its history notes the switch after the
+/// ended process's last event, and it starts in the new kind, resuming its conversation (a new
+/// one when its CLI never recorded one, FR-020) with its model choice and, when structured, its
+/// permission mode. A switch to terminal for a terminal-only command types it once the CLI is
+/// ready (FR-022). A start that fails is reported as any failed start is, and the new kind stays
+/// (US5 scenario 7). Messages sent meanwhile wait on hold (FR-025).
+pub async fn switch_kind(state: &Arc<DaemonState>, begun: crate::state::BegunSwitch) {
+    let crate::state::BegunSwitch {
+        session,
+        to,
+        command,
+        cwd,
+        cli,
+    } = begun;
+    let _ = stop_session(state, session).await;
+    let st = Arc::clone(state);
+    let launch = tokio::task::spawn_blocking(move || {
+        st.note_kind_switched(session, to);
+        st.switch_launch(session)
+    })
+    .await
+    .unwrap_or(LaunchMode::Resume);
+    let prompt = command.as_deref().map(|text| FirstPrompt {
+        text,
+        asked: tokio::time::Instant::now(),
+        require_bracketed: false,
+    });
+    // The session ran here before the switch: the location's other sessions do not stop it.
+    let (_, typed) = start_with_prompt(
+        state,
+        session,
+        &cwd,
+        cli,
+        launch,
+        micold_core::occupancy::Additional::Yes,
+        prompt,
+    )
+    .await;
+    if let Err(why) = typed {
+        tracing::warn!(
+            session = %session.0,
+            reason = %why.message(session),
+            "the switch's command was not typed"
+        );
+    }
+    let st = Arc::clone(state);
+    let _ = tokio::task::spawn_blocking(move || {
+        if let Some(delivery) = st.switch_ended(session) {
+            let _ = st.deliver(delivery);
+        }
+    })
+    .await;
+    tracing::info!(session = %session.0, ?to, "session switched kind");
+}
+
 /// Why [`create_worktree_with_session`] did not give a worktree with its session (feature 776).
 #[derive(Debug)]
 pub enum WorktreeStartFailure {

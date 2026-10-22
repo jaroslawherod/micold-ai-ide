@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M5 reviewed (A 2 rounds, B 1), full gate green (scripts/gate.sh), PR files written; orchestrator opens the PR
-- **Next step**: orchestrator opens the M5 PR from `943-M5/pr-title.txt`/`pr-body.md`, waits on CI, merges; then M6. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
+- **Phase**: M6 implemented (T043–T049 ticked); gate and reviews next
+- **Next step**: M6 (T043–T049): implement, gate, reviews, PR files. Cross-feature holds: M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1241 | M2 | merged (rebase) | 6b3b62c7 |
 | #1244 | M3 | merged (rebase) | 399f6be3 |
 | #1250 | M4 | merged (rebase) | 0b432628 |
+| #1252 | M5 | merged (rebase) | e479ea8f |
 
 ## Milestones
 
@@ -30,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | #1241 | merged |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | merged |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | #1250 | merged |
-| M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pushed, PR to open |
-| M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** | | pending |
+| M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | #1252 | merged |
+| M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | | in progress |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** | | pending |
 | M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** | | pending |
 | M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | pending |

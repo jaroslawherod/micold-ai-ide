@@ -173,14 +173,7 @@ impl SessionInput {
             return Err(UserMessageRefusal::NotRunning);
         }
         if busy || (!self.queue.is_empty() && !self.hold) {
-            let id = self.next_entry();
-            self.queue.push_back(QueuedMessage {
-                id,
-                message,
-                queued_by,
-            });
-            self.revision += 1;
-            return Ok(Submit::Queued(id));
+            return Ok(Submit::Queued(self.push(message, queued_by)));
         }
         Ok(Submit::Deliver(self.next_turn(), message))
     }
@@ -205,6 +198,38 @@ impl SessionInput {
     /// The user interrupted the turn: a non-empty queue goes on hold (Q2).
     pub fn on_interrupt(&mut self) {
         self.hold |= !self.queue.is_empty();
+    }
+
+    /// The session switches kind (#943 FR-024): a non-empty queue goes on hold, and stays so while
+    /// the session is a terminal session.
+    pub fn on_switch(&mut self) {
+        self.hold |= !self.queue.is_empty();
+    }
+
+    /// A message `queued_by` sent while the session switches kind (#943 FR-025): queued on hold,
+    /// so it goes out once, after **Send queued**, never to a process the switch is ending.
+    pub fn queue_held(
+        &mut self,
+        message: Message,
+        queued_by: u64,
+    ) -> Result<QueueEntryId, UserMessageRefusal> {
+        if message.is_blank() {
+            return Err(UserMessageRefusal::Blank);
+        }
+        self.hold = true;
+        Ok(self.push(message, queued_by))
+    }
+
+    /// Append `message` to the queue under a fresh entry id.
+    fn push(&mut self, message: Message, queued_by: u64) -> QueueEntryId {
+        let id = self.next_entry();
+        self.queue.push_back(QueuedMessage {
+            id,
+            message,
+            queued_by,
+        });
+        self.revision += 1;
+        id
     }
 
     /// The session's process ended or was stopped: a non-empty queue goes on hold (FR-022).
