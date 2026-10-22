@@ -86,3 +86,15 @@ Observed order (not assumed): the mounted Overview (real `CardGrid`, real `focus
 | Review A r2 F1 (MINOR, `card_pr_list` ignores the sidebar filter) | — (doc) | — | doc note on `card_pr_list`: card existence is checked first through `focus_return_target` |
 
 Scoped: client `--bin micold-ai-ide` link/shift_tab set 22 passed; `--lib -- ui::overview` 23; core `--lib -- overview_expansion pr_list` 68; clippy core+client `--all-targets -D warnings` clean.
+
+### Close fixes (tdd-verify close r1)
+
+The tests were added after the code, so each was run red against the mutant tdd-verify found surviving, then the mutant was restored and the test re-run green.
+
+| Finding | Test | Red (mutant) | Green |
+|---|---|---|---|
+| F1 HIGH | `--lib -- a_click_on_a_focusable_number_leaves_the_keyboard_with_the_card_that_holds_it` (`card_grid.rs`): numbers wired with `.on_pr_link_keyboard_focus`, card 0 holds the keyboard, click on card 1's "#12" | `card_link` `.focus_on_press(true)`: FAILED `left: Some(true) right: Some(false)` (`is_focused(pr-1-12)`) | restored, ok |
+| F2 HIGH | `--lib -- only_a_row_with_failing_checks_is_marked_failing` (`ui/overview.rs`): #12 checks failing, #11 checks passing | `pr_rows` `failing: false`: FAILED at overview.rs:1274 | restored, ok |
+| F4 MED | `--test pull_request_counts -- pull_request_an_unknown_state_on_the_merged_page_fails_the_reading`: `m0` node with state `FOO` | merged-page `.map_err(\|_\| UNREADABLE)?` → `.unwrap_or(BranchPrState::Merged)`: FAILED `left: Ok(StatusReading …) right: Err(Passing)` | restored, ok |
+| F5 LOW | `pull_request_lists_leave_out_pull_requests_from_forks`: the `8` named `MERGED_ON_THE_RECENT_PAGE` (branch a's `r0` page holds eight merged pull requests, #310 … #217) | — (naming only) | ok |
+| F3 HIGH (process) | — | not curable after the fact: accepted exception, recorded in the ledger (Decisions, D14) | — |

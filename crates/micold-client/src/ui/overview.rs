@@ -1256,6 +1256,25 @@ mod tests {
         state
     }
 
+    /// Feature 1123 FR-004, U1 (tdd-verify close r1 F2): only the row whose phrase is "checks
+    /// failing" is marked failing, which tints the phrase in the error role.
+    #[test]
+    fn only_a_row_with_failing_checks_is_marked_failing() {
+        use micold_core::pr_list::BranchPrList;
+        use micold_core::pull_request::CheckStatus;
+        let mut model = cards(&overview_of(1)).remove(1);
+        let prs = vec![
+            listed_pr(12, CheckStatus::Failing),
+            listed_pr(11, CheckStatus::Passing),
+        ];
+        model.pull_requests = Some(BranchPrList::new(prs, false, false));
+        let (rows, _) = pr_rows(&model, true);
+        let failing: Vec<_> = rows.iter().map(|r| (r.number, r.failing)).collect();
+        assert_eq!(failing.len(), 2);
+        assert!(failing.contains(&(12, true)), "{failing:?}");
+        assert!(failing.contains(&(11, false)), "{failing:?}");
+    }
+
     /// Feature 1123 T032, FR-009: on the mounted Overview, Tab from a card onto its number reports
     /// `LinkFocusGained(l, #12)` to the expansion, the number's Menu key asks for the card's menu
     /// from it, and Tab on reports its loss.
