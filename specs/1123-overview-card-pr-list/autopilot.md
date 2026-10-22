@@ -63,6 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | CHANGES: 2 MAJOR (F1 `pull_request_link_for` opens a listed address unchecked, unlike the sidebar and changes pane (FR-014); F2 the 6 px gutter of a number takes clicks across the 4 px between rows and into the line above), 3 MINOR (F3 `over_link` clones the id list per event; F4 page/menu chords wired onto numbers that are no Tab stops; F5 `ScreenBounds` computes `found` and `all_visible` in both modes, `found` doc wrong); all five fixed test-first (see Fixes M2 r1 below); none declined; round 2 on sonnet over the fix diff |
 | Review B M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | CLEAN |
 | Visual pass M2 (T028) | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | PASS all 6 (click #12 / #11 opens exactly that address, no ripple, Overview stays; pointer, underline, colour; pill activates the card; failing xdg-open toast; rows whole at 380 px); MINOR repaint lag of a hover underline under software rendering, not a defect; evidence `visual-pass/m2/` (26 files) |
+| Review A M2 | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | pending (sonnet, fix diff only) |
+| Visual pass M2 (T028) | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | pending (sonnet, numbers' gutter: pointer, press, underline) |
 
 ### Review A M1 round 2 verdict (verbatim)
 
