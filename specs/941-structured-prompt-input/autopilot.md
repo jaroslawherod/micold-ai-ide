@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M3
-- **Next step**: M3 verify (scoped gate + review A) — see Handover
+- **Next step**: M3 verify: scoped gate + review A
 
 ## Pull requests
 
@@ -60,6 +60,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | 11 | M3 implement | Reuse #942's control plumbing for the interrupt? | Yes, its encoder, ids and stdin mutex: `encode_interrupt(next_request_id())` written through the same `write_whole` under the stdin mutex `set_permission_mode` uses. `ControlWaiters` are not used (plan I-2): the answer is not awaited, the `result` ends the turn; its `control_response` resolves no waiter and is dropped there. The turn check, the `InterruptAsked` note and the write are made under the stdin mutex, so a request never reaches a later turn | agent | plan I-2; contracts/claude-input.md *Interrupt* |
 | 12 | M3 implement | Where is the interrupt asked, and how is the 10 s tested? | Asked in the connection's handler under the state lock (arrival order: a spawned ask let an interrupt sent before a message land after it); the write and the overdue timer run on a spawned task (`input_driver::interrupt`). The bound is `INTERRUPT_OVERDUE`, shortened by `DaemonState::set_interrupt_overdue` in tests, as `set_details_bound` is (no paused clock: the stand-in is a real process) | agent | T035 "shortens or pauses the clock" |
 | 13 | M3 implement | Which thread writes the saved queue? | A dedicated `queue-writer` thread started with the history store, fed by a channel: the history saver's task wakes on `SAVER_TICK`, which would delay a queue save, and tests would have to drive it. Snapshots are taken under the state lock with a global generation, only when `SessionInput::revision` changed and saving is on; the writer drops a generation older than one it wrote. A damaged file is replaced by the empty queue's save (removed) | agent | research R9; T038 |
+| 14 | M3 verify | The interrupt-vs-message race of the M2 handover: real? | Real and wider than noted: `deliver` runs on `spawn_blocking` after the turn opens, so an interrupt asked in between was written to the idle CLI before its message (red test). `StructuredSession::written` (the last turn whose message was written, set under the stdin mutex) replaces the wait on the pending note: `write_interrupt` waits until its turn's message is out | agent | tdd cycle 7 |
 | 10 | M2 implement | When does the activity follow the turn? | `TurnBegan` in the lock section that opens a turn; `TurnEnded` when the driver handles a `result` (or a failed write closes the turn) and the turn is idle in that same section, so a turn opened meanwhile is never shown idle; a process end leaves activity to supervision's `Ended` | agent | research R5, FR-011 |
 
 ## Review rounds
@@ -109,21 +110,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-M3 unit handed over at ~222k context (2026-10-22).
-- **Done**: branch reset to origin/main (M2 #1240 merged at 1781310b, recorded). T034–T038
-  implemented and ticked, committed at ddf3d7dc (not pushed, no PR). Local runs green:
-  `structured_input` 17, `structured_input_saved` 5, `structured_session` 16,
-  `structured_saved_history` 12, `structured_lifecycle` 7, `structured_resume` 4, core
-  `structured_input` 26. Mutants recorded in tdd/cycle-log.md (cycles 5–6). Decisions 11–13.
-- **Next step**: verify.md step 1 — `scripts/autopilot/scoped-gate.sh` detached, review A
-  (`code-review` high on origin/main...HEAD) in its shadow; then review B (conformance, sonnet),
-  full gate (`scripts/gate.sh`; rebase onto origin/main and `cargo fmt --all` first if main moved),
-  then the PR title/body files in the session scratchpad (do not open the PR; title
-  `#941: Structured session view: prompt input, interrupt and queued messages — M3 of 7: <what> (#941)`).
-- **Open findings**: none yet. Known narrow race noted for reviewers: `write_interrupt` waits while
-  a message note is pending, but a reader line flushing that note before the message's write could
-  let the interrupt precede it (needs a click within microseconds of Busy).
-- **Disk**: 14 GB free with target-shared at 16 GB; delete target-shared/ if a gate runs short.
+None.
 
 ## Open escalation
 
