@@ -801,8 +801,6 @@ fn wire_worktree_status(status: worktree::WorktreeStatus) -> WorktreeStatus {
     }
 }
 
-/// What `start_session` needs to spawn a session, resolved from the catalog under the lock and then
-/// used to spawn *outside* it.
 /// The answer to a model change for `SetSessionModel` on a terminal session (#943 contracts/wire.md):
 /// the choice is kept for the next launch all the same (FR-017).
 pub const TERMINAL_MODEL_REFUSAL: &str =
@@ -851,6 +849,8 @@ pub struct AskedModel {
     answer: tokio::sync::oneshot::Receiver<micold_core::structured::ControlOutcome>,
 }
 
+/// What `start_session` needs to spawn a session, resolved from the catalog under the lock and then
+/// used to spawn *outside* it.
 struct SpawnPlan {
     cwd: std::path::PathBuf,
     mode: TerminalMode,
