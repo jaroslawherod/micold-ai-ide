@@ -174,8 +174,10 @@ requests.
   (`classify_drop(paths, sniff)`) splits images from paths in drop order; paths go through feature
   487's `path_insert::plan_insertion` exactly as a terminal drop (FR-026, FR-028). The client reads
   the file (the files are on the window's machine, the daemon may be remote or sandboxed).
-- **Preview** (FR-027): iced's `image` feature, added to the workspace `iced` features; the window
-  decodes a thumbnail from the bytes it already holds. **Rejected**: no preview — FR-027;
+- **Preview** (FR-027): iced's image widget, added to the workspace `iced` features as
+  `image-without-codecs` with a direct `image` dependency naming the four codecs a drop accepts
+  (corrected in M5: iced's `image` feature turns on `image/default`, every format including AVIF's
+  encoder); the window decodes a thumbnail from the bytes it already holds. **Rejected**: no preview — FR-027;
   **rejected**: decoding in core with the `image` crate — core stays render-free.
 - **Rejected**: sending paths and letting the CLI read images — Claude Code reads a path as text
   unless told to, and a sandboxed or remote daemon does not see the window's files.

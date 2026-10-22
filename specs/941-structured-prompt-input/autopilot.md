@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M5
-- **Next step**: M5: scoped gate and review A
+- **Next step**: M5 PR: open from the PR files in the session scratchpad, then CI and merge
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | #1240 | merged |
 | M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | #1243 | merged |
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | #1246 | merged |
-| M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | — | in progress |
+| M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | (to open) | reviewed, gated |
 | M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | pending |
 | M7 | T063 | light | Interrupt withdraws a pending #942 request (daemon test); waits on #942 M3 | — | pending |
 
@@ -96,6 +96,9 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review B M4 (conformance, sonnet) | 2 | eb42ba55d87556ba0162a8114c2cf52b3174ce42:6066b32c5054a4ca635f77998f2416d85e190c53 | CLEAN: 1 MINOR (cycle-log case count; fixed, prose only) |
 | Full gate M4 | — | — | 1st red: clippy `large_enum_variant` on `composer::Msg::Dropped` (boxed); 2nd red: `root_vocabulary_is_cross_cutting` pin 26 → 27 (`Composer`); 3rd red: daemon `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` under load (no M4 change to the daemon; 5/5 green alone); green at 6066b32c, and at ea0ac0e8 after the rebase onto origin/main d16d74c1 (#1161 M1; no M4 wire change, no pin to move) |
 | Review A M5 (code-review high) | 1 | f8f897dadf089779ffa9a29b5fc7acc5450d0825:86313219a4781610fe3a448bf9b94a08b9a9bc74 | CHANGES: 2 MAJOR (no explicit builder test in material_builder_api: fixed, `the_composer_parts_are_built_and_chained`; showcase limited area cannot scroll: fixed, live claim dropped and `a_scrolled_held_area_draws_other_lines_at_the_same_height`), 3 MINOR (T049 wording: fixed; reduce-motion, key_binding/on_submit, editor max_height, PhantomData, image dep: declined) |
+| Review A M5 (scoped, sonnet) | 2 | 6c771212742f11c48eb8f63a78a4286ebebd2ce9:8e745e91a432afdd3a2f601874f796efdd0753d8 | CLEAN (fixes hold; declines stand) |
+| Review B M5 (conformance, sonnet) | 1 | 5846601b6efdf6a3d667ce97a94e1e4496aa816e:9400acbe1e9bc55c16f122f2a08859413afb2685 | CLEAN: 2 MINOR (unit tests test-after: recorded in the cycle log, mutant set; plan/research still said `image` and "No new crate": fixed, prose only). Verify: layout_snapshot 83, material_builder_api 12, showcase_completeness 45 passed |
+| Full gate M5 | — | — | rebased onto origin/main 420b051e (#1161 M2; no wire change, no pin to move). 1st red: daemon `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` under load (the M4 flake; review B's Verify build ran beside it; no M5 change to the daemon); green at 9400acbe (`scripts/gate.sh`). Visual pass not run: the change is showcase-only (nothing in the app draws the parts until M6); the geometry gate and contrast cases cover both schemes |
 
 ## Declined review findings
 
