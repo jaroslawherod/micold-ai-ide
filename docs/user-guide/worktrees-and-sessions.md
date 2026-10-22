@@ -1451,6 +1451,12 @@ Two places stay open to every session, so shared builds and autopilot keep worki
 - the main checkout's shared build directory, `target-shared/`;
 - autopilot's prefetch worktree, a worktree whose folder name starts with `autopilot-prefetch`.
 
+Shell commands are judged too, on a best-effort basis. A `Bash` call is denied when the folder it
+starts in is another worktree, when a `cd` or `pushd` chained with `&&`, `;` or `||` moves into
+one, or when a path it names (absolute, or starting `./` or `../`) points into one. Paths built by
+expansion, variables or command substitution, and what a nested script does, are not analysed, so
+the shell check can be bypassed; the edit and write checks are the strong guard.
+
 Reading files in another worktree is never blocked, and a worktree that has been removed is not
 protected. Only sessions of **Claude Code** are covered; other AI CLIs run unguarded, and a
 session whose worktree Micold cannot work out is let through rather than blocked.

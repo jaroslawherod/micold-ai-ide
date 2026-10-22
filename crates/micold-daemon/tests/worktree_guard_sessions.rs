@@ -62,6 +62,18 @@ impl Fixture {
         self.post(session, &body).await
     }
 
+    /// Post a `PreToolUse` for a `Bash` `command` started in `cwd`.
+    async fn bash(&self, session: u128, command: &str, cwd: &Path) -> (u16, Value) {
+        let body = json!({
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "cwd": cwd,
+        })
+        .to_string();
+        self.post(session, &body).await
+    }
+
     async fn post(&self, session: u128, body: &str) -> (u16, Value) {
         let id = SessionId::from_uuid(Uuid::from_u128(session));
         let token = self.receiver.token_for(id);
@@ -225,6 +237,28 @@ async fn a_default_session_is_allowed_in_the_root_and_denied_in_a_worktree_and_d
         f.judge(IN_A, "Write", &f.wt("a").join("x.rs")).await,
         (200, Value::Null)
     );
+}
+
+#[tokio::test]
+async fn a_bash_call_started_in_or_changing_into_another_worktree_is_denied() {
+    let f = fixture().await;
+    let (status, body) = f.bash(IN_A, "ls", &f.wt("b")).await;
+    assert_eq!(status, 200);
+    assert!(reason(&body).contains("create_session"), "{body}");
+    assert!(reason(&body).contains("Bash"), "{body}");
+    let (_, body) = f.bash(IN_A, "cd ../b && ls", &f.wt("a")).await;
+    assert!(reason(&body).contains("create_session"), "{body}");
+    for allowed in [
+        "ls",
+        "cd src && ls",
+        "cargo build --target-dir ../../../target-shared",
+    ] {
+        assert_eq!(
+            f.bash(IN_A, allowed, &f.wt("a")).await,
+            (200, Value::Null),
+            "{allowed}"
+        );
+    }
 }
 
 #[tokio::test]
