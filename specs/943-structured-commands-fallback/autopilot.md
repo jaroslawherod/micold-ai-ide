@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: pr M3
-- **Next step**: PR #1244 (M3) rebased onto origin/main 203ef720 (#941 M3), gate green (scripts/gate.sh, 621 suites ok), force-pushed; orchestrator: CI, mark ready, merge; then M4. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Phase**: implement M4 (done), gate and reviews pending
+- **Next step**: M4 (T032–T038) implemented and committed on claude/project-thread-k392yq over origin/main 399f6be3 (#1244 merged); fresh unit: verify.md — scoped gate + Review A (high), Review B, full gate (scripts/gate.sh), then PR files for the orchestrator. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8. Decision 2 provisional (M5 only)
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1237 | design (spec, plan, tasks) | merged (rebase) | f27e1182 |
 | #1239 | M1 | merged (rebase) | 8304c937 |
 | #1241 | M2 | merged (rebase) | 6b3b62c7 |
-| (to open) | M3 | gate green at 52887518, reviews clean; branch pushed | |
+| #1244 | M3 | merged (rebase) | 399f6be3 |
+| (to open) | M4 | implemented; gate and reviews pending | |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | #1239 | merged |
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | #1241 | merged |
-| M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | PR |
-| M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | pending |
+| M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | merged |
+| M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | implemented |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pending |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** | | pending |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** | | pending |
@@ -45,6 +46,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 4 | plan | FR-003: the CLI never writes a skill's expanded instructions to stdout; what goes behind the command? | The command's description; expansion only if a later CLI reports it; FR-003 and US1 s3 amended | agent | research.md R4, probe P-3 (2.1.307) |
 | 5 | tasks | analyze I1/I2: does only M2's chip wait on #941 M1, and are `saved.rs`/`provider.rs` in the plan? | M2 is held whole on #941 M1; plan tree lists both files (plan.md updated) | agent | analyze report I1, I2 |
 | 6 | implement M3 | T025/T030: stand-in answers `initialize` by default? Note appended by a task after `send_control`? | Stand-in answers only on an `initialize` directive (silent otherwise), so the 10 existing suites' exact event lists stay as they are; the stdout reader turns the answer into `CommandsReported` in the answer's place (deterministic order, raw answer not duplicated), and the request is written in `spawn` without waiting; `send_control` serves `set_permission_mode` and M4's `set_model` | agent | structured_* suites compare exact event lists (`events_of == fixture_events`) |
+| 7 | implement M4 | T036 "invalid name → OperationError": a `ModelName` is checked on decode (`try_from`), so a frame with an invalid name never reaches the dispatch | Covered at the wire: `protocol_roundtrip` asserts such a `SetSessionModel` does not decode; no daemon-side refusal path exists to test | agent | M1 `ModelName` serde `try_from`; codec decodes control frames as JSON |
+| 8 | implement M4 | T037: where does the busy pick wait, and how is its answer turned into a note? | The deferred choice lives in the `StructuredSession` (`defer_model`), written under the stdin mutex before the next user message or by the input driver's `turn_closed` after a `result` when idle; every `set_model` answer becomes a `ModelChanged` note in its place (a deferred refusal a `ModelRefused` note, an idle refusal only the requester's error); the state's `model_picks` keeps pick numbers (last wins) and the deferred pick's previous choice, put back on refusal via the `model_answers` feed; `PROTOCOL_VERSION` 66 | agent | data-model *PendingModel*; FR-015 "before any further user message" needs the write under the stdin mutex |
 
 ## Review rounds
 
@@ -83,7 +86,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 implemented (T032–T038 ticked, TDD log in tdd/cycle-log.md *M4*), committed, not pushed; checkpoint was OVER (263k). Next: verify.md — scoped gate with Review A (code-review high) on origin/main...HEAD, Review B (conformance, sonnet), full gate `scripts/gate.sh`, then pr.md (title/body files for the orchestrator, push with --force-with-lease). Verified so far: `structured_model` 10, `structured_session` 19, `structured_permission` 30, `structured_permission_mode` 13, `structured_commands` 8, `structured_input` 18, core lib/session_store/protocol_roundtrip/schema_hash/terminal_backend green; `cargo check --workspace --tests` clean; fmt applied. No open findings.
 
 ## Open escalation
 

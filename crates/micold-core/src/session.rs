@@ -520,9 +520,18 @@ pub struct Session {
     /// and mutable, through the daemon's `Catalog::set_permission_mode` only; always `Default` for
     /// a terminal session (FR-018).
     pub permission_mode: PermissionMode,
+    /// The model the user chose for the session (#943, FR-017): persisted and used on every
+    /// launch, in either kind. Changed through the daemon's `Catalog::set_model` only.
+    pub model: crate::structured::model::ModelChoice,
 }
 
 impl Session {
+    /// The conversation a resume of this session continues (#943 FR-020): every
+    /// `LaunchMode::Resume` names it. The session's own id; M5 may follow a `/clear` here.
+    pub fn resume_handle(&self) -> uuid::Uuid {
+        self.id.0
+    }
+
     /// A brand-new session at `location`, starting immediately (FR-010). Always starts
     /// attached to the AI CLI (feature 010 FR-010 — today's only behavior for a fresh session).
     ///
@@ -562,6 +571,7 @@ impl Session {
             agents: Vec::new(),
             kind,
             permission_mode: PermissionMode::Default,
+            model: crate::structured::model::ModelChoice::Default,
         }
     }
 
@@ -614,6 +624,7 @@ impl Session {
             agents: Vec::new(),
             kind,
             permission_mode: PermissionMode::Default,
+            model: crate::structured::model::ModelChoice::Default,
         }
     }
 
@@ -884,5 +895,26 @@ mod permission_mode_tests {
         for mode in &PermissionMode::ALL[1..] {
             assert!(!mode.is_default(), "{mode:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod resume_handle_tests {
+    use super::*;
+
+    /// #943 T033 (FR-020): until a `/clear` is followed (M5), a session resumes its own id.
+    #[test]
+    fn the_resume_handle_is_the_session_id() {
+        let session = Session::start_new_of_kind(
+            SessionLocation::Default,
+            AiCli::ClaudeCode,
+            SessionKind::Structured,
+        );
+        assert_eq!(session.resume_handle(), session.id.0);
+        assert_eq!(
+            session.model,
+            crate::structured::model::ModelChoice::Default,
+            "a new session runs the CLI's default"
+        );
     }
 }

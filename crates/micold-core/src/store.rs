@@ -26,6 +26,7 @@ use crate::session::{
     AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLocation,
     TerminalMode,
 };
+use crate::structured::model::ModelChoice;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -303,6 +304,10 @@ struct StoredSession {
     /// record is written exactly as before, and no `schema_version` bump is needed.
     #[serde(default, skip_serializing_if = "PermissionMode::is_default")]
     permission_mode: PermissionMode,
+    /// The session's model choice (#943, FR-017). Additive and defaulted, and not written for
+    /// `Default`, so an older record loads `Default` and no `schema_version` bump is needed.
+    #[serde(default, skip_serializing_if = "ModelChoice::is_default")]
+    model: ModelChoice,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -425,6 +430,7 @@ impl StoredSession {
             main: session.main,
             kind: session.kind,
             permission_mode: session.permission_mode,
+            model: session.model.clone(),
         }
     }
 
@@ -463,6 +469,7 @@ impl StoredSession {
         crate::agent_run::stop_running(&mut session.agents);
         session.main = self.main;
         session.permission_mode = self.permission_mode;
+        session.model = self.model;
         session
     }
 }

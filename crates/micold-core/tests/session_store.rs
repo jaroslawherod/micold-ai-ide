@@ -8,6 +8,7 @@ use micold_core::session::{
     SessionLocation, TerminalMode,
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
+use micold_core::structured::model::{ModelChoice, ModelName};
 use micold_core::workspace::Workspace;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -284,4 +285,66 @@ fn a_record_written_before_permission_modes_loads_as_default() {
     let session = &loaded.workspace.sessions.get(&PathBuf::from("/p")).unwrap()[0];
     assert_eq!(session.kind, SessionKind::Structured);
     assert_eq!(session.permission_mode, PermissionMode::Default, "FR-013");
+}
+
+/// #943 T032 (FR-017): a session's model choice, saved and loaded back; also the state file.
+fn round_trip_model(choice: ModelChoice) -> (Session, String) {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    let path = PathBuf::from("/home/dev/proj");
+    let mut session = Session::restored_of_kind(
+        SessionId::new(),
+        SessionLocation::Worktree("feat-x".to_string()),
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+        SessionKind::Structured,
+    );
+    session.model = choice;
+    let ws = Workspace {
+        projects: vec![Project {
+            path: path.clone(),
+            display_name: "proj".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        }],
+        active: None,
+        sessions: BTreeMap::from([(path.clone(), vec![session])]),
+        worktree_names: Default::default(),
+        ..Default::default()
+    };
+    store.save(&ws).unwrap();
+    let written = std::fs::read_to_string(store.project_state_path(&path)).unwrap();
+    let back = store.load().workspace.sessions.get(&path).unwrap()[0].clone();
+    (back, written)
+}
+
+#[test]
+fn a_named_model_round_trips_and_default_is_not_written() {
+    let haiku = ModelChoice::Named(ModelName::parse("haiku").unwrap());
+    let (back, written) = round_trip_model(haiku.clone());
+    assert_eq!(back.model, haiku, "FR-017");
+    assert!(written.contains("haiku"), "{written}");
+    let (back, written) = round_trip_model(ModelChoice::Default);
+    assert_eq!(back.model, ModelChoice::Default);
+    assert!(
+        !written.contains("\"model\""),
+        "a Default session is written exactly as before the feature: {written}"
+    );
+}
+
+#[test]
+fn a_record_written_before_model_choices_loads_default() {
+    // A structured session recorded before #943 M4: no "model" key.
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("projects.json");
+    std::fs::write(
+        &file,
+        r#"{"schema_version":1,"last_active":null,"projects":[{"path":"/p","display_name":"p","is_git_repo":true,"sessions":[{"id":"00000000-0000-0000-0000-000000000943","worktree_dir":"feat-x","title":null,"kind":"Structured"}]}]}"#,
+    )
+    .unwrap();
+    let loaded = JsonFileStore::at(file).load();
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    let session = &loaded.workspace.sessions.get(&PathBuf::from("/p")).unwrap()[0];
+    assert_eq!(session.model, ModelChoice::Default, "FR-017");
 }

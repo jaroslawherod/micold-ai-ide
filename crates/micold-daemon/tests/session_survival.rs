@@ -283,9 +283,11 @@ fn a_copilot_session_survives_a_daemon_restart_on_the_cli_it_was_started_on() {
         launch_args(&LaunchSpec {
             cwd: project.clone(),
             session_id: id.0,
+            resume_handle: id.0,
             provider,
             mode: LaunchMode::Resume,
             env: Vec::new(),
+            model: Default::default(),
         })
     };
     assert_eq!(

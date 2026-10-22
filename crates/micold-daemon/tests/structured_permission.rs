@@ -1455,6 +1455,35 @@ async fn a_mode_change_leaves_a_pending_request_alone() {
     assert_eq!(prompt_answers(dir, 1), [allow(bash("ls"))]);
 }
 
+/// #943 T036 (Edge Cases): a model pick while a request is pending leaves it pending; it is decided
+/// as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_pick_leaves_a_pending_request_alone() {
+    use micold_core::structured::model::{ModelChoice, ModelName};
+    let daemon = Daemon::new(1).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    let script = [
+        "models haiku\n".to_string(),
+        prompt_async(dir, "p1", "Bash", bash("ls")),
+    ]
+    .concat();
+    daemon.start(0, &script).await;
+    let request = requested(&mut a).await;
+    a.send(ClientMsg::SetSessionModel {
+        req: 1,
+        session: daemon.ids[0],
+        model: ModelChoice::Named(ModelName::parse("haiku").unwrap()),
+    })
+    .await;
+    assert_ok(&a.answer(1).await);
+    let shown = permission_messages_within(&mut a, Duration::from_millis(300)).await;
+    assert!(shown.is_empty(), "still pending: {shown:?}");
+    assert_eq!(prompt_answer_count(dir), 0, "unanswered");
+    assert_ok(&decide(&mut a, 2, request.session, request.id, PromptChoice::Allow).await);
+    assert_eq!(prompt_answers(dir, 1), [allow(bash("ls"))]);
+}
+
 /// T044 (SC-005): after a mode change the next tool request still reaches the daemon and is
 /// answered as before (that the CLI applies the mode is the `mode-change` fixture's evidence).
 #[tokio::test(flavor = "multi_thread")]

@@ -231,6 +231,7 @@ pub async fn run() -> io::Result<()> {
     spawn_history_saver(Arc::clone(&state));
     spawn_plan_usage_feed(Arc::clone(&state));
     spawn_mode_reports(Arc::clone(&state));
+    spawn_model_answers(Arc::clone(&state));
     spawn_input_driver(Arc::clone(&state));
 
     // The loopback activity-hook receiver (US2, T045/T046): bind an ephemeral 127.0.0.1 port and
@@ -361,6 +362,18 @@ pub fn spawn_mode_reports(state: Arc<DaemonState>) {
         tokio::spawn(async move {
             while let Some((session, mode)) = reports.recv().await {
                 state.follow_reported_mode(session, mode);
+            }
+        });
+    }
+}
+
+/// Spawn the task that follows the CLIs' answers to deferred model changes (#943 FR-016). Once per
+/// service: a second call finds the feed taken and does nothing.
+pub fn spawn_model_answers(state: Arc<DaemonState>) {
+    if let Some(mut answers) = state.model_answers().take_receiver() {
+        tokio::spawn(async move {
+            while let Some((session, answer)) = answers.recv().await {
+                state.follow_model_answer(session, answer);
             }
         });
     }
@@ -809,6 +822,24 @@ where
                     state.send(id, ack_or_refused(req, set));
                 });
             }
+            // An idle running session's CLI is asked here, so picks reach it in the order sent; its
+            // answer (up to 10 s) is waited for off the connection loop (#943 FR-015).
+            ClientMsg::SetSessionModel {
+                req,
+                session,
+                model,
+            } => match state.pick_model(session, model) {
+                crate::state::ModelPick::Answered(result) => {
+                    state.send(id, ack_or_refused(req, result))
+                }
+                crate::state::ModelPick::Asked(asked) => {
+                    let state = Arc::clone(state);
+                    tokio::spawn(async move {
+                        let picked = state.finish_model_pick(asked).await;
+                        state.send(id, ack_or_refused(req, picked));
+                    });
+                }
+            },
             ClientMsg::PermissionInput {
                 req,
                 session,

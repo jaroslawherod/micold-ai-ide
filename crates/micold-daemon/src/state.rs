@@ -35,6 +35,7 @@ use micold_core::session::{
 use micold_core::structured::input::{
     Message, QueueEntryId, QueueRefusal, QueuedMessage, SessionInput, Submit,
 };
+use micold_core::structured::model::ModelChoice;
 use micold_core::structured::UserMessageRefusal;
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
@@ -174,6 +175,9 @@ pub struct DaemonState {
     /// The permission modes structured sessions' CLIs report, on their way to
     /// [`Self::follow_reported_mode`] (#942 FR-016): a reader never takes the state's lock.
     mode_reports: crate::plan_usage::Feed<(SessionId, PermissionMode)>,
+    /// The CLIs' answers to model changes, on their way to [`Self::follow_model_answer`] (#943
+    /// FR-016): a reader never takes the state's lock.
+    model_answers: crate::plan_usage::Feed<(SessionId, ModelAnswer)>,
     /// The ends of structured sessions' turns and processes, for their waiting prompt calls (#942
     /// FR-011). Outside `Inner`: a session's stdout reader signals it, and never takes that lock.
     prompt_endings: Arc<crate::permission::Endings>,
@@ -319,6 +323,8 @@ struct Inner {
     /// Whether structured sessions ask through the prompt tool (#942 R14): off by default and
     /// never persisted, until the window can answer; turned on by tests.
     permission_prompts: bool,
+    /// Each structured session's model picks while this daemon runs (#943 FR-015, FR-016).
+    model_picks: HashMap<SessionId, ModelPicks>,
     /// What each connected window has in view (feature 039, W1.2). Under this lock because
     /// [`DaemonState::note_activity`] reads it in the same step as the change it judges.
     views: Views,
@@ -797,6 +803,54 @@ fn wire_worktree_status(status: worktree::WorktreeStatus) -> WorktreeStatus {
 
 /// What `start_session` needs to spawn a session, resolved from the catalog under the lock and then
 /// used to spawn *outside* it.
+/// The answer to a model change for `SetSessionModel` on a terminal session (#943 contracts/wire.md):
+/// the choice is kept for the next launch all the same (FR-017).
+pub const TERMINAL_MODEL_REFUSAL: &str =
+    "Model switching is for structured sessions; the choice is used at the next structured launch";
+
+/// One structured session's model picks in this daemon run (#943 FR-015, FR-016, Edge Cases).
+#[derive(Default)]
+struct ModelPicks {
+    /// The number of the latest pick.
+    latest: u64,
+    /// The number of the latest pick kept in the catalog: an earlier pick accepted after it is not.
+    kept: u64,
+    /// A pick deferred past a turn and not answered yet, with the choice it replaced.
+    deferred: Option<DeferredPick>,
+}
+
+/// A model pick deferred past a turn: put back to `previous` when the CLI refuses `chosen` (FR-016).
+struct DeferredPick {
+    chosen: ModelChoice,
+    previous: ModelChoice,
+}
+
+/// What a structured session's CLI answered to a model change, as its note says (#943 R7).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModelAnswer {
+    /// A `ModelChanged` note.
+    Accepted,
+    /// A `ModelRefused` note, for the model named.
+    Refused(String),
+}
+
+/// How far [`DaemonState::pick_model`] got: answered, or a running idle session's CLI asked, its
+/// answer for [`DaemonState::finish_model_pick`].
+pub enum ModelPick {
+    Answered(Result<(), String>),
+    Asked(AskedModel),
+}
+
+/// A `set_model` request written to an idle session's CLI, waiting for its answer.
+pub struct AskedModel {
+    session: SessionId,
+    pick: u64,
+    model: ModelChoice,
+    child: Arc<StructuredSession>,
+    request_id: String,
+    answer: tokio::sync::oneshot::Receiver<micold_core::structured::ControlOutcome>,
+}
+
 struct SpawnPlan {
     cwd: std::path::PathBuf,
     mode: TerminalMode,
@@ -810,6 +864,10 @@ struct SpawnPlan {
     /// in [`DaemonState::start_session`], which must not fire for a session that never had one.
     resumable: bool,
     scrollback: usize,
+    /// The conversation a resume continues (`Session::resume_handle`, #943 FR-020).
+    resume_handle: uuid::Uuid,
+    /// The session's model choice, launched with (#943 FR-017).
+    model: ModelChoice,
 }
 
 struct ClientHandle {
@@ -908,6 +966,7 @@ impl DaemonState {
                 confirmations: crate::mcp::confirm::Registry::default(),
                 prompts: crate::permission::PromptRegistry::default(),
                 permission_prompts: false,
+                model_picks: HashMap::new(),
                 views: Views::default(),
                 attention_unsaved: false,
                 long_task_threshold_override: None,
@@ -943,6 +1002,7 @@ impl DaemonState {
             plan_usage_rejections: crate::plan_usage::Rejections::default(),
             plan_usage_feed: crate::plan_usage::Feed::default(),
             mode_reports: crate::plan_usage::Feed::default(),
+            model_answers: crate::plan_usage::Feed::default(),
             prompt_endings: Arc::default(),
             input_feed: crate::plan_usage::Feed::default(),
             plan_usage_offer: Mutex::new(()),
@@ -3549,6 +3609,155 @@ impl DaemonState {
         })
     }
 
+    /// The model pick `ClientMsg::SetSessionModel` makes (#943 FR-014–FR-017, contracts/wire.md),
+    /// up to the CLI's answer. Persisted and answered at once for a session not running and for a
+    /// busy one, whose CLI is asked once its turn is over ([`StructuredSession::defer_model`]); a
+    /// terminal session's is persisted and answered [`TERMINAL_MODEL_REFUSAL`]. A running idle
+    /// session's CLI is asked here, before this returns, so picks sent one after another reach it in
+    /// that order; [`Self::finish_model_pick`] waits for the answer.
+    pub fn pick_model(&self, session: SessionId, model: ModelChoice) -> ModelPick {
+        let (child, pick) = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
+            let current = match inner.catalog.workspace().find_session(session) {
+                None => {
+                    return ModelPick::Answered(Err(
+                        crate::catalog::SetModeError::NoSession.to_string()
+                    ))
+                }
+                Some((_, s)) if s.kind == SessionKind::Terminal => {
+                    drop(guard);
+                    return ModelPick::Answered(
+                        self.keep_model(session, &model)
+                            .and(Err(TERMINAL_MODEL_REFUSAL.to_owned())),
+                    );
+                }
+                Some((_, s)) => s.model.clone(),
+            };
+            let Some(child) = Self::structured_primary(inner, session)
+                .filter(|child| child.is_running())
+                .cloned()
+            else {
+                drop(guard);
+                return ModelPick::Answered(self.keep_model(session, &model));
+            };
+            let busy = !child.turn().is_idle();
+            let picks = inner.model_picks.entry(session).or_default();
+            picks.latest += 1;
+            if busy {
+                let previous = picks.deferred.take().map_or(current, |d| d.previous);
+                picks.deferred = Some(DeferredPick {
+                    chosen: model.clone(),
+                    previous,
+                });
+                picks.kept = picks.latest;
+                child.defer_model(model.clone());
+                drop(guard);
+                return ModelPick::Answered(self.keep_model(session, &model));
+            }
+            (child, picks.latest)
+        };
+        match child.ask_model(&model) {
+            Ok((request_id, answer)) => ModelPick::Asked(AskedModel {
+                session,
+                pick,
+                model,
+                child,
+                request_id,
+                answer,
+            }),
+            Err(failed) => {
+                ModelPick::Answered(Err(crate::structured::model_change_failed(&failed)))
+            }
+        }
+    }
+
+    /// Wait for the CLI's answer to an idle session's pick (FR-015, FR-016): accepted, the choice is
+    /// kept and broadcast, unless a later pick was kept first; refused, the error is the CLI's
+    /// reason and the choice stays as it was.
+    pub async fn finish_model_pick(&self, asked: AskedModel) -> Result<(), String> {
+        let AskedModel {
+            session,
+            pick,
+            model,
+            child,
+            request_id,
+            answer,
+        } = asked;
+        child.model_answer(&request_id, answer).await?;
+        let latest = {
+            let mut inner = self.lock();
+            let picks = inner.model_picks.entry(session).or_default();
+            let latest = pick > picks.kept;
+            if latest {
+                picks.kept = pick;
+            }
+            latest
+        };
+        if latest {
+            self.keep_model(session, &model)?;
+        }
+        Ok(())
+    }
+
+    /// A session's CLI answered a model change (#943 R7): a deferred pick it refused is put back to
+    /// the choice before it, unless another pick was made since (FR-016).
+    pub fn follow_model_answer(&self, session: SessionId, answer: ModelAnswer) {
+        let restore = {
+            let mut inner = self.lock();
+            let Some(deferred) = inner
+                .model_picks
+                .get_mut(&session)
+                .and_then(|picks| picks.deferred.take())
+            else {
+                return;
+            };
+            match answer {
+                ModelAnswer::Refused(model) if model == deferred.chosen.cli_value() => {
+                    Some(deferred)
+                }
+                ModelAnswer::Refused(_) | ModelAnswer::Accepted => None,
+            }
+        };
+        if let Some(DeferredPick { chosen, previous }) = restore {
+            let unchanged = self
+                .launch_identity(session)
+                .is_some_and(|(_, model)| model == chosen);
+            if unchanged {
+                if let Err(err) = self.keep_model(session, &previous) {
+                    tracing::warn!(session = %session.0, %err, "the refused model choice was not put back");
+                }
+            }
+        }
+    }
+
+    /// The CLIs' answers to model changes, for [`crate::server::spawn_model_answers`].
+    pub fn model_answers(&self) -> &crate::plan_usage::Feed<(SessionId, ModelAnswer)> {
+        &self.model_answers
+    }
+
+    /// Persist `model` as `session`'s choice, broadcasting the catalog when it changed.
+    fn keep_model(&self, session: SessionId, model: &ModelChoice) -> Result<(), String> {
+        let changed = self
+            .lock()
+            .catalog
+            .set_model(session, model)
+            .map_err(|why| why.to_string())?;
+        if changed {
+            self.broadcast_catalog();
+        }
+        Ok(())
+    }
+
+    /// `session`'s resume handle and model choice as the catalog holds them (#943 FR-017, FR-020).
+    fn launch_identity(&self, session: SessionId) -> Option<(uuid::Uuid, ModelChoice)> {
+        self.lock()
+            .catalog
+            .workspace()
+            .find_session(session)
+            .map(|(_, s)| (s.resume_handle(), s.model.clone()))
+    }
+
     /// `session`'s permission mode as the catalog holds it.
     fn permission_mode_of(&self, session: SessionId) -> Option<PermissionMode> {
         self.lock()
@@ -5053,6 +5262,8 @@ impl DaemonState {
                                 SessionLifecycle::InterruptedResumable
                             ),
                             scrollback,
+                            resume_handle: s.resume_handle(),
+                            model: s.model.clone(),
                         })
                 })
         };
@@ -5179,10 +5390,12 @@ impl DaemonState {
                 let mut spec = LaunchSpec {
                     cwd: plan.cwd.clone(),
                     session_id: id.0,
+                    resume_handle: plan.resume_handle,
                     provider: plan.provider,
                     mode: launch,
                     env: ai_cli_env
                         .expect("the launch gate resolves every AI-CLI start's environment"),
+                    model: plan.model.clone(),
                 };
                 // The hook settings file follows the provider's `activity_source`, not the terminal
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
@@ -5303,6 +5516,7 @@ impl DaemonState {
         // wrote just before a mode change's `success` could land after the change is kept; the CLI
         // reports the new mode right after its `success` (P-9), which puts it back.
         let modes = self.mode_reports.sender();
+        let answers = self.model_answers.sender();
         let mut unknown_mode_logged = false;
         let on_event = move |event: micold_core::structured::StructuredEvent| {
             use micold_core::structured::StructuredEvent;
@@ -5333,6 +5547,16 @@ impl DaemonState {
                     }
                     None => {}
                 }
+            }
+            // A send fails only once the service is stopping.
+            match &event {
+                StructuredEvent::ModelChanged { .. } => {
+                    let _ = answers.send((id, ModelAnswer::Accepted));
+                }
+                StructuredEvent::ModelRefused { model, .. } => {
+                    let _ = answers.send((id, ModelAnswer::Refused(model.clone())));
+                }
+                _ => {}
             }
             let turn_ended = matches!(
                 event,
@@ -6722,12 +6946,18 @@ impl DaemonState {
         let mut seeded = None;
         let spawned = match mode {
             TerminalMode::AiCli => {
+                // The record as it is now: a model chosen since the last start is launched with.
+                let (resume_handle, model) = self
+                    .launch_identity(id)
+                    .unwrap_or((id.0, ModelChoice::Default));
                 let mut spec = LaunchSpec {
                     env: self.ai_cli_env_for(&cwd, provider),
                     cwd,
                     session_id: id.0,
+                    resume_handle,
                     provider,
                     mode: LaunchMode::Resume,
+                    model,
                 };
                 let kind = match dead {
                     Proc::Pty { .. } => SessionKind::Terminal,
@@ -7133,8 +7363,15 @@ impl DaemonState {
             let activity = Self::follow_turn(inner, session, delivery.is_some(), ended);
             Self::save_queue_locked(inner, session);
             Self::broadcast_input(inner, session);
+            // A model picked during the turn goes out now (#943 FR-015); a delivery writes it first.
+            let flush = Self::structured_primary(inner, session)
+                .filter(|child| ended && child.serial() == closed.process)
+                .cloned();
             drop(guard);
             self.after_turn_activity(activity);
+            if let Some(child) = flush {
+                child.flush_deferred_model();
+            }
             delivery
         };
         if let Some(delivery) = delivery {

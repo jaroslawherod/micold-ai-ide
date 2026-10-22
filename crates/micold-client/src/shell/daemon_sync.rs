@@ -3981,6 +3981,7 @@ pub(crate) mod tests {
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
             permission_mode: Default::default(),
+            model: Default::default(),
             lifecycle,
             activity: ActivitySignal::Unknown,
             input_serial,

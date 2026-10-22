@@ -269,6 +269,32 @@ turn in progress and leaves no `UserSent` note. A `QueueEdit` that would turn a 
 and the message keeps its text. The same rules apply to a session's first prompt. A prompt sent
 before the CLI's session init has arrived is checked against the documented list above only.
 
+A session's model is chosen with `SetSessionModel { req, session, model }`, where `model` is
+`Default` (the CLI's own default) or a model name. The choice is saved with the session, and every
+later launch of it, structured or terminal, starts the CLI with `--model <name>` (nothing for
+`Default`). Every resume names the session's conversation with `--resume`. What happens to the
+running CLI depends on the session:
+
+- **Running and idle.** The daemon writes one `set_model` control request to the CLI and waits up
+  to 10 seconds for the answer. The process keeps running and keeps the conversation. If the CLI
+  accepts, the choice is saved, every window gets the new catalog, a `ModelChanged` note with the
+  model the CLI named goes into the event history, and the request is answered `OperationOk`. If
+  the CLI refuses, or does not answer, the request is answered `OperationError` with the CLI's
+  reason, and the choice stays as it was.
+- **Running a turn.** The choice is saved and answered `OperationOk` at once. The turn in progress
+  is not interrupted. The `set_model` request is written when the turn's result arrives, or just
+  before the next message if one is sent first. The CLI's answer becomes a `ModelChanged` note, or a
+  `ModelRefused` note with its reason, in which case the choice goes back to what it was, unless
+  another pick came since. A later pick during the same turn replaces the earlier one.
+- **Not running.** The choice is saved and answered `OperationOk`. The next launch uses it.
+- **A terminal session.** The choice is saved for the next launch and the request is answered
+  `OperationError` ("Model switching is for structured sessions; the choice is used at the next
+  structured launch").
+
+Of two picks sent one after the other, the second wins: it is written to the CLI second, and an
+earlier pick accepted after it does not replace it in the catalog. A model name is one word of at
+most 128 bytes that does not start with `-`. A frame with any other name does not decode.
+
 ## Project and worktree operations run through the daemon (User Story 3)
 
 Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a

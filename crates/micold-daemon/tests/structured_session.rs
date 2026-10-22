@@ -959,9 +959,11 @@ fn bare_process(dir: &Path, script: &str) -> micold_daemon::structured::Structur
     let spec = micold_core::terminal::LaunchSpec {
         cwd: dir.to_path_buf(),
         session_id,
+        resume_handle: session_id,
         provider: AiCli::ClaudeCode,
         mode: LaunchMode::Fresh,
         env: Vec::new(),
+        model: Default::default(),
     };
     micold_daemon::structured::StructuredSession::spawn(
         SessionId(session_id),

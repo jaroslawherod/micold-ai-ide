@@ -19,9 +19,11 @@ use std::time::Duration;
 use micold_core::session::{KindRefusal, PermissionMode, SessionId};
 use micold_core::structured::commands::parse_initialize;
 use micold_core::structured::control::{
-    encode_initialize, encode_interrupt, encode_set_mode, next_request_id,
+    encode_initialize, encode_interrupt, encode_set_mode, encode_set_model, next_request_id,
+    parse_set_model,
 };
 use micold_core::structured::input::Message;
+use micold_core::structured::model::ModelChoice;
 use micold_core::structured::{
     encode_user_message, parse_line, ControlOutcome, EventHistory, InterruptAsk, LineSplitter,
     SequencedEvent, StructuredEvent, Turn, TurnId, TurnState, UserMessageRefusal,
@@ -270,6 +272,47 @@ impl ControlWaiters {
     }
 }
 
+/// A `set_model` request written to the CLI and not answered yet (#943 R7): the choice it asks
+/// for, and whether it was deferred past a turn (its refusal is then a [`StructuredEvent::ModelRefused`]
+/// note; an idle one's refusal is its requester's answer).
+struct ModelAsk {
+    choice: ModelChoice,
+    deferred: bool,
+}
+
+/// The `set_model` requests of one process waiting for their answers, by request id.
+type ModelAsks = Mutex<HashMap<String, ModelAsk>>;
+
+/// The note the answer to `ask` becomes, in the answer's place (#943 R7, FR-015, FR-016): an
+/// accepted change names the model the CLI resolved (the choice's name when it named none); a
+/// deferred one it refused, its reason; an idle refusal, nothing.
+fn model_note(ask: &ModelAsk, outcome: &ControlOutcome) -> Option<StructuredEvent> {
+    match outcome {
+        ControlOutcome::Success(_) => Some(StructuredEvent::ModelChanged {
+            model: parse_set_model(outcome).unwrap_or_else(|_| ask.choice.cli_value().to_owned()),
+        }),
+        ControlOutcome::Error { message, .. } if ask.deferred => {
+            Some(StructuredEvent::ModelRefused {
+                model: ask.choice.cli_value().to_owned(),
+                message: message.clone(),
+            })
+        }
+        ControlOutcome::Error { .. } => None,
+    }
+}
+
+/// Why a running session's CLI did not change its model (#943 FR-016): the sentence the user is
+/// shown.
+pub fn model_change_failed(failed: &ControlFailed) -> String {
+    match failed {
+        ControlFailed::NoAnswer => "Claude did not answer the model change.".to_owned(),
+        ControlFailed::Stopped => "Claude stopped before it answered.".to_owned(),
+        ControlFailed::Unsent(err) => {
+            format!("The model change could not be sent to the CLI: {err}")
+        }
+    }
+}
+
 /// What ended a turn ([`TurnClosed`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClosedBy {
@@ -336,6 +379,13 @@ pub struct StructuredSession {
     written: Mutex<Option<TurnId>>,
     /// Control requests waiting for the CLI's answer, shared with the stdout reader.
     control: Arc<ControlWaiters>,
+    /// The `set_model` requests not answered yet, shared with the stdout reader, which turns each
+    /// answer into its note (#943 R7).
+    model_asks: Arc<ModelAsks>,
+    /// A model chosen while a turn was in progress (#943 FR-015): written before the next user
+    /// message, or once the turn's `result` is in, whichever is first. A later pick replaces it.
+    /// Taken only under the stdin mutex, so it is written once.
+    deferred_model: Mutex<Option<ModelChoice>>,
     /// This process's turn (research R7): a new process starts `Idle`, so a restart resets it.
     /// Shared with the stdout reader, which ends the turn on a `result` and at end-of-file. Taken
     /// under the daemon's state lock by every decision on the turn (#941 R1), never the other way
@@ -438,6 +488,8 @@ impl StructuredSession {
         let reader_control = Arc::clone(&control);
         let initialize = next_request_id();
         let reader_initialize = initialize.clone();
+        let model_asks: Arc<ModelAsks> = Arc::default();
+        let reader_asks = Arc::clone(&model_asks);
         let mut on_event = on_event;
         let emit = Arc::new(Mutex::new(Emit {
             on_event: Box::new(move |event| {
@@ -457,6 +509,13 @@ impl StructuredSession {
                         return;
                     }
                     reader_control.resolve(request_id, outcome);
+                    // #943 R7: a `set_model` answer becomes its note in its place.
+                    if let Some(ask) = lock(&reader_asks).remove(request_id.as_str()) {
+                        if let Some(note) = model_note(&ask, outcome) {
+                            on_event(note);
+                        }
+                        return;
+                    }
                 }
                 on_event(event);
             }),
@@ -514,6 +573,8 @@ impl StructuredSession {
             stdin: Mutex::new(stdin),
             written: Mutex::new(None),
             control,
+            model_asks,
+            deferred_model: Mutex::new(None),
             turn,
             emit,
             stdout_ended,
@@ -607,6 +668,8 @@ impl StructuredSession {
         let line = encode_user_message(&message.text, &message.images);
         let written = {
             let mut stdin = lock(&self.stdin);
+            // A model chosen during the turn before goes first (#943 FR-015).
+            self.write_deferred_model(&mut stdin);
             let written = write_whole(&mut stdin, &line);
             if written.is_ok() {
                 // `turn`, not the turn open now: the CLI may already have ended it and a later
@@ -666,6 +729,90 @@ impl StructuredSession {
     /// Write one whole line to the CLI's stdin, under its mutex.
     fn write_line(&self, line: &str) -> io::Result<()> {
         write_whole(&mut lock(&self.stdin), line)
+    }
+
+    /// Ask the CLI to answer later turns with `choice` (#943 R7, FR-015): write one `set_model`
+    /// control request now, and hand back its id and the receiver of its answer, for
+    /// [`Self::model_answer`]. The answer also becomes a `ModelChanged` note in the events when it
+    /// accepts. A write that fails leaves nothing waiting.
+    pub fn ask_model(
+        &self,
+        choice: &ModelChoice,
+    ) -> Result<(String, oneshot::Receiver<ControlOutcome>), ControlFailed> {
+        let request_id = next_request_id();
+        let answer = self
+            .control
+            .wait_for(&request_id)
+            .ok_or(ControlFailed::Stopped)?;
+        self.note_model_ask(&request_id, choice, false);
+        if let Err(err) = self.write_line(&encode_set_model(&request_id, choice)) {
+            self.forget_model_ask(&request_id);
+            return Err(ControlFailed::Unsent(err));
+        }
+        Ok((request_id, answer))
+    }
+
+    /// The CLI's answer to [`Self::ask_model`]'s request `request_id`, waited for up to
+    /// [`CONTROL_ANSWER_BOUND`]: `Ok` when it accepted, else its reason (FR-016).
+    pub async fn model_answer(
+        &self,
+        request_id: &str,
+        answer: oneshot::Receiver<ControlOutcome>,
+    ) -> Result<(), String> {
+        let failed = match tokio::time::timeout(CONTROL_ANSWER_BOUND, answer).await {
+            Ok(Ok(ControlOutcome::Success(_))) => return Ok(()),
+            Ok(Ok(ControlOutcome::Error { message, .. })) => return Err(message),
+            Ok(Err(_)) => ControlFailed::Stopped,
+            Err(_) => ControlFailed::NoAnswer,
+        };
+        self.forget_model_ask(request_id);
+        Err(model_change_failed(&failed))
+    }
+
+    /// Ask the CLI for `choice` once the turn in progress is over (#943 FR-015): before the next
+    /// user message, or at the turn's `result` ([`Self::flush_deferred_model`]). Replaces a choice
+    /// deferred before and not written yet.
+    pub fn defer_model(&self, choice: ModelChoice) {
+        *lock(&self.deferred_model) = Some(choice);
+    }
+
+    /// Write the deferred model choice, if any, when no turn is open (#943 FR-015): the input
+    /// driver's step after a turn's `result`. A turn opened meanwhile writes it before its message.
+    pub fn flush_deferred_model(&self) {
+        let mut stdin = lock(&self.stdin);
+        if lock(&self.turn).is_idle() {
+            self.write_deferred_model(&mut stdin);
+        }
+    }
+
+    /// Write the deferred choice as a `set_model` request on `stdin`, whose mutex the caller holds;
+    /// its answer is a `ModelChanged` or `ModelRefused` note. A failed write is logged: the choice
+    /// stays persisted for the next launch.
+    fn write_deferred_model(&self, stdin: &mut Option<ChildStdin>) {
+        let Some(choice) = lock(&self.deferred_model).take() else {
+            return;
+        };
+        let request_id = next_request_id();
+        self.note_model_ask(&request_id, &choice, true);
+        if let Err(err) = write_whole(stdin, &encode_set_model(&request_id, &choice)) {
+            self.forget_model_ask(&request_id);
+            tracing::warn!(session = %self.id.0, %err, "the deferred model change could not be written");
+        }
+    }
+
+    fn note_model_ask(&self, request_id: &str, choice: &ModelChoice, deferred: bool) {
+        lock(&self.model_asks).insert(
+            request_id.to_owned(),
+            ModelAsk {
+                choice: choice.clone(),
+                deferred,
+            },
+        );
+    }
+
+    fn forget_model_ask(&self, request_id: &str) {
+        self.control.forget(request_id);
+        lock(&self.model_asks).remove(request_id);
     }
 
     /// Ask the CLI to switch to `mode` with a `set_permission_mode` control request, and wait for

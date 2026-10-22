@@ -230,9 +230,11 @@ fn child_side() -> bool {
     let spec = LaunchSpec {
         cwd: dir.clone(),
         session_id: uuid::Uuid::new_v4(),
+        resume_handle: uuid::Uuid::new_v4(),
         provider: AiCli::ClaudeCode,
         mode: LaunchMode::Fresh,
         env: env_for(&ai_dump),
+        model: Default::default(),
     };
     let ai = PtySession::spawn_ai_cli(
         SessionId::new(),
