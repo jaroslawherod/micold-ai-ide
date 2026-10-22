@@ -136,6 +136,44 @@ impl std::fmt::Debug for Editor {
     }
 }
 
+/// A dropped picture's preview (feature 941, US5): its image handle, made once from the bytes so
+/// the chip is not decoded again on every frame, and equal to any other so the draft compares by
+/// its own pictures.
+#[derive(Clone)]
+pub struct Preview(iced::widget::image::Handle);
+
+impl Preview {
+    /// A preview of the encoded picture `bytes`.
+    pub fn of(bytes: &[u8]) -> Self {
+        Self(iced::widget::image::Handle::from_bytes(bytes.to_vec()))
+    }
+
+    /// Whether this previews `bytes`.
+    pub fn shows(&self, bytes: &[u8]) -> bool {
+        matches!(&self.0, iced::widget::image::Handle::Bytes(_, b) if b.as_ref() == bytes)
+    }
+
+    /// The handle the chip draws.
+    pub fn handle(&self) -> iced::widget::image::Handle {
+        self.0.clone()
+    }
+}
+
+impl PartialEq for Preview {
+    /// Always equal: the preview mirrors a picture, which is compared on its own.
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Preview {}
+
+impl std::fmt::Debug for Preview {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Preview")
+    }
+}
+
 /// Every user interaction that can change application state.
 ///
 /// No longer `Copy`: some variants carry owned data (`PathBuf`, listing results).

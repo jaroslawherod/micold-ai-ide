@@ -246,13 +246,6 @@ struct App {
     /// holds the text (`OpenView::composer`); this holds what `text_editor` needs beside it, kept
     /// in step by `shell::changes`.
     composer: iced::widget::text_editor::Content,
-    /// Each structured session's composer editor (feature 941, R10): caret, selection and text,
-    /// beside the draft `core.composers` holds, with the draft generation it last showed. Kept in
-    /// step by `shell::composer`.
-    composer_editors: std::collections::HashMap<
-        micold_core::session::SessionId,
-        (micold_client::app::Editor, u64),
-    >,
 }
 
 /// The measurement run this process was asked for, or `None` for an ordinary launch.

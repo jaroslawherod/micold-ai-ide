@@ -5,8 +5,9 @@
 //! session's earlier messages (FR-023, FR-024), the send waiting for the service's answer and its
 //! restore (FR-005, SC-005), the notice line, the queued message being edited (FR-020), and the
 //! last `StructuredInput` the service sent (phase, hold, queue). The keys are decided by
-//! [`composer_key`] and [`transcript_key`]; the shell (`shell/composer.rs`) keeps the text
-//! editor beside each draft and sends what this decides.
+//! [`composer_key`] and [`transcript_key`]; each composer keeps its text editor beside its draft
+//! (autopilot Decision: here, not in the binary, so the view draws it), and the shell
+//! (`shell/composer.rs`) sends what this decides.
 //!
 //! The caret is the editor's: `(line, column)` with the column a byte offset into the line.
 
@@ -224,9 +225,12 @@ pub struct Composer {
     pub notice: Option<String>,
     pub editing: Option<QueueEditDraft>,
     pub remote: Option<InputState>,
-    /// Counts the times the composer itself replaced the draft (not typing), so the shell knows
-    /// when to show the draft in its editor again.
-    pub generation: u64,
+    /// The text editor the composer draws: the draft's text and caret, with its selection and
+    /// scroll. Typing edits it and then the draft; the composer replacing the draft (a send, a
+    /// restore, a history step, a drop, a queued message taken back) shows the new draft in it.
+    pub editor: crate::app::Editor,
+    /// A preview of each of the draft's pictures, in order, made once per picture.
+    pub previews: Vec<crate::app::Preview>,
 }
 
 impl Composer {
@@ -238,7 +242,29 @@ impl Composer {
 
     fn replace_draft(&mut self, draft: Draft) {
         self.draft = draft;
-        self.generation += 1;
+        self.show_draft();
+    }
+
+    /// Show the draft in the editor again, after the composer changed it.
+    fn show_draft(&mut self) {
+        self.editor = crate::app::Editor::at(&self.draft.text, self.draft.caret);
+        self.sync_previews();
+    }
+
+    /// One preview per picture of the draft, keeping each one already made.
+    fn sync_previews(&mut self) {
+        let made = std::mem::take(&mut self.previews);
+        self.previews = self
+            .draft
+            .images
+            .iter()
+            .map(|image| {
+                made.iter()
+                    .find(|p| p.shows(image.bytes()))
+                    .cloned()
+                    .unwrap_or_else(|| crate::app::Preview::of(image.bytes()))
+            })
+            .collect();
     }
 }
 
@@ -275,6 +301,8 @@ pub enum Msg {
     SendRequested(SessionId),
     /// The stop control: interrupt the turn in progress.
     StopRequested(SessionId),
+    /// **Stop session**, offered while an interrupt is overdue (FR-015).
+    StopSessionRequested(SessionId),
     /// **Send queued** (FR-022).
     SendQueuedRequested(SessionId),
     /// Remove a picture from the draft.
@@ -342,9 +370,21 @@ pub struct State {
     /// The open offer to switch a Claude session's kind, with its confirmation step once the
     /// service asked for one (#943 FR-010, FR-021, FR-022a). Its presence *is* the offer shown.
     pub switch_offer: Option<crate::features::session::SwitchOffer>,
+    /// The editor of a session that has no composer yet: empty.
+    blank: crate::app::Editor,
 }
 
 impl State {
+    /// The editor `session`'s composer draws: an empty one before it has a composer.
+    pub fn editor(&self, session: SessionId) -> &crate::app::Editor {
+        self.composer(session).map_or(&self.blank, |c| &c.editor)
+    }
+
+    /// `session`'s editor, to act on; its composer is made the first time.
+    pub fn editor_mut(&mut self, session: SessionId) -> &mut crate::app::Editor {
+        &mut self.entry(session).editor
+    }
+
     pub fn composer(&self, session: SessionId) -> Option<&Composer> {
         self.composers.get(&session)
     }
@@ -476,7 +516,7 @@ impl State {
         composer.history = None;
         composer.notice = None;
         let draft = std::mem::take(&mut composer.draft);
-        composer.generation += 1;
+        composer.show_draft();
         Some(draft)
     }
 
@@ -648,9 +688,10 @@ impl State {
 
     /// Remove the draft's picture at `index` (US5 AS4).
     pub fn remove_attachment(&mut self, session: SessionId, index: usize) {
-        let images = &mut self.entry(session).draft.images;
-        if index < images.len() {
-            images.remove(index);
+        let composer = self.entry(session);
+        if index < composer.draft.images.len() {
+            composer.draft.images.remove(index);
+            composer.sync_previews();
         }
     }
 
@@ -684,7 +725,7 @@ impl State {
             }
             refusals.extend(plan.refused.iter().map(|r| r.message()));
         }
-        composer.generation += 1;
+        composer.show_draft();
         if !refusals.is_empty() {
             composer.notice = Some(refusals.join("\n"));
         }

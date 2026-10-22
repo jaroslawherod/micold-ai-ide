@@ -7,6 +7,8 @@ pub mod cdk;
 /// The Changes view (feature 482): shown in place of the terminal pane while open.
 pub(crate) mod changes;
 pub mod compare;
+/// The structured session's composer under its transcript (feature 941).
+pub mod composer;
 pub mod confirm_additional_session;
 pub(crate) mod confirm_agent_request;
 pub mod confirm_bypass;
@@ -1276,7 +1278,10 @@ fn surface_key(id: crate::overlay::SurfaceId) -> u64 {
 pub fn subscription(state: &State) -> Subscription<Message> {
     // Feature 006 (FR-009): the focused terminal owns every key, Tab and Escape included.
     if state.terminal_focused() {
-        return Subscription::none();
+        // Feature 941 (FR-012): Escape on a busy structured session's transcript interrupts its
+        // turn. The composer's own Escape is its editor's, captured there, so it never reaches
+        // this listener as well.
+        return transcript_interrupt(state).unwrap_or_else(Subscription::none);
     }
     let mut subs = vec![focus_traversal()];
     // Held only while Escape has something to close, so pressing it with nothing open stays as
@@ -1404,6 +1409,44 @@ fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
 /// Escape, reported as having happened; the reducer asks the registry what it reaches.
 fn escape_dismissal() -> Subscription<Message> {
     iced::keyboard::listen().filter_map(escape_message)
+}
+
+/// The keys of the active session's transcript while it shows one and its turn can be interrupted
+/// (feature 941, FR-012): `None` otherwise, so Escape stays as inert as it was.
+fn transcript_interrupt(state: &State) -> Option<Subscription<Message>> {
+    let session = state.session.active?;
+    (crate::ui::terminal::shows_transcript(state, session) && state.composers.offers_stop(session))
+        .then(|| {
+            iced::keyboard::listen()
+                .with(session)
+                .filter_map(transcript_key_message)
+        })
+}
+
+/// A key press on `session`'s transcript, for the composer to decide (`transcript_key`).
+fn transcript_key_message(
+    (session, event): (micold_core::session::SessionId, iced::keyboard::Event),
+) -> Option<Message> {
+    use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
+    let iced::keyboard::Event::KeyPressed {
+        key,
+        physical_key,
+        modifiers,
+        text,
+        ..
+    } = event
+    else {
+        return None;
+    };
+    let press = crate::keymap::KeyInput {
+        key: to_keymap_key(&key)?,
+        mods: to_keymap_mods(modifiers),
+        text: text.map(|t| t.to_string()),
+        physical: to_keymap_physical(&physical_key),
+    };
+    Some(Message::Composer(
+        crate::features::composer::Msg::TranscriptKey { session, press },
+    ))
 }
 
 /// Tab and Shift+Tab, as a request to move the keyboard's focus.

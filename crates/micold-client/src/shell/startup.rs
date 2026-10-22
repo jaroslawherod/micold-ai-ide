@@ -437,7 +437,6 @@ fn boot() -> (App, Task<Message>) {
             placement: resolved_placement,
             sandbox: sandbox_state,
             composer: iced::widget::text_editor::Content::new(),
-            composer_editors: std::collections::HashMap::new(),
             sandbox_boot: boot_plan.clone(),
             sandbox_bring_up,
             version_mismatch: Default::default(),
