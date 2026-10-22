@@ -4,6 +4,7 @@
 //!
 //! Every case runs the stand-in of `support/structured.rs`, first on `PATH` for the whole test
 //! process, scripted per project through `.fake-stream`.
+// unix-only: the stand-in CLI of support/structured.rs is a POSIX shell script on PATH.
 #![cfg(unix)]
 
 use std::collections::HashMap;
