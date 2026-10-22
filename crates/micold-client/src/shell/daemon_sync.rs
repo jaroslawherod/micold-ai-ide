@@ -659,10 +659,7 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
             }
             PendingOp::AttachOfferDiscover { .. } => {}
             // Feature 941: the sent draft comes back to its composer (FR-005, SC-005).
-            PendingOp::ComposerSend { session } => {
-                app.core.composers.connection_lost(&[req]);
-                crate::shell::composer::sync_editor(app, session);
-            }
+            PendingOp::ComposerSend { .. } => app.core.composers.connection_lost(&[req]),
             PendingOp::QueueOp { session }
             | PendingOp::QueueEdit { session }
             | PendingOp::QueueTake { session }
@@ -1345,7 +1342,6 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             Some(PendingOp::QueueTake { session }) => {
                 if let OperationResult::Taken { text, images } = result {
                     app.core.composers.taken(session, text, images);
-                    crate::shell::composer::sync_editor(app, session);
                 }
             }
             Some(PendingOp::QueueOp { .. }) => {}
@@ -1359,7 +1355,6 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             Some(PendingOp::SessionModel { .. }) => {}
             Some(PendingOp::SwitchKind { request }) => {
                 app.core.switch_completed(&request);
-                crate::shell::composer::sync_editor(app, request.session);
             }
             Some(PendingOp::RunGroupPick { run }) => {
                 if let OperationResult::RunPicked {
@@ -1808,9 +1803,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             match app.pending_ops.remove(&req) {
                 // Feature 941: a refused send comes back to its composer unchanged, with the
                 // reason; a refused queue request is the composer's notice (FR-005, FR-020).
-                Some(PendingOp::ComposerSend { session }) => {
+                Some(PendingOp::ComposerSend { .. }) => {
                     app.core.composers.send_failed(req, &message);
-                    crate::shell::composer::sync_editor(app, session);
                 }
                 Some(
                     PendingOp::QueueOp { session }
@@ -3011,10 +3005,9 @@ pub(crate) fn follow_kind_changes(app: &mut App) {
     }
 }
 
-/// Drop a closed or removed session's editor and its composer requests still in flight, so a
-/// late answer cannot bring its composer back (the core forgets the draft in `forget_structured`).
+/// Drop a closed or removed session's composer requests still in flight, so a late answer cannot
+/// bring its composer back (the core forgets the draft and its editor in `forget_structured`).
 pub(crate) fn forget_composer(app: &mut App, id: SessionId) {
-    app.composer_editors.remove(&id);
     app.pending_ops.retain(|_, op| {
         !matches!(
             op,

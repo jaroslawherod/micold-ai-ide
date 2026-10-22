@@ -17,16 +17,16 @@ use crate::showcase::state::{Message, Showcase};
 use crate::ui::material::{AttachmentChip, BusyIndicator, QueueRow, TextArea};
 
 /// The height the posed text area stops growing at: about eight lines.
-pub const TEXT_AREA_LIMIT: f32 = 220.0;
+pub const TEXT_AREA_LIMIT: f32 = crate::ui::composer::MAX_HEIGHT;
 
 /// The width the composer's parts are posed at: a narrow pane's.
 const WIDTH: f32 = 520.0;
 
 /// The busy pose's words.
-pub const BUSY_LABEL: &str = "Claude is answering…";
+pub const BUSY_LABEL: &str = crate::ui::composer::BUSY;
 
 /// The idle pose's words.
-pub const IDLE_LABEL: &str = "Ready";
+pub const IDLE_LABEL: &str = crate::ui::composer::READY;
 
 /// The posed picture's file name.
 pub const ATTACHMENT_NAME: &str = "screenshot.png";

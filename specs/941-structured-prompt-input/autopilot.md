@@ -69,6 +69,9 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | 16 | M4 verify | The M4 handover left `composers.forget` unwired when a session closes: M4 or later? | M4: the composer state is M4's (T041–T047), and closing or removing a session already forgets its transcript in `app::State::forget_structured`; that now forgets the composer too and the shell drops its editor. Nothing drawn depends on it | agent | `shell/daemon_sync.rs` close/remove paths; test `closing_a_session_forgets_its_composer` |
 | 17 | M5 implement | T049 says add iced's `image` feature; it turns on `image/default` (AVIF via rav1e, EXR, TIFF, a dozen formats): build cost and new crates nothing reads | Plan deviation: the workspace `iced` gains `image-without-codecs` and a workspace `image` dependency (0.25, no default features, `png`, `jpeg`, `gif`, `webp`) names the four codecs FR-027 accepts; Cargo unifies them into iced's decoder. Cargo.lock gains `gif`, `image-webp`, `kamadak-exif` (iced_graphics' image feature), `color_quant`, `mutate_once`; plan's "No new crate" is false either way | agent | research R8, FR-027; iced 0.14 Cargo.toml `image = ["image-without-codecs", "image/default"]` |
 | 18 | M5 implement | How do the new components draw and take input? | `TextArea::max_height` is enforced by its chrome (laid out in the limit's room, node cut to it), not iced's `text_editor::max_height`, which stops at whole lines below the limit and adds its padding on top; `key_binding` replaces the default keys and `on_submit`. `BusyIndicator`'s indeterminate circular indicator is a ring of eight dots in quads turned through `Progress` (no canvas), idle keeps the ring's room so the words stay put. `QueueRow`'s actions are text buttons (each names itself and is a keyboard stop); `AttachmentChip` takes an `image::Handle` the caller makes once from the held bytes (a handle per frame is a new image to decode), its remove control a focusable icon button labelled `Remove <name>` by tooltip | agent | research R10 *Shared components*; Constitution VIII |
+| 19 | M6 implement | The plan keeps the composer editors in the binary (`App.composer_editors`); the view sees only the lib `State` | Plan deviation: each `features::composer::Composer` holds its `app::Editor` (precedent `features/settings.rs`) and its pictures' `app::Preview` handles, rebuilt whenever the composer replaces the draft (`show_draft`) or a picture is removed, so the editor is never stale and no generation is needed; `State::editor` gives an empty one before a composer exists. The shell acts on `composers.editor_mut` | agent | handover M6 unit 1; `ui::terminal::transcript_body` draws from `&State` |
+| 20 | M6 implement | Where do the composer's keys and the transcript's Escape come from? | `TextArea::key_binding` turns a focused press into a `KeyInput` and sends `Msg::Key` unless `composer_key` says `Edit`; `composing` is always false (winit delivers an IME composition as input-method events, not key presses). The transcript has focus when the window's keyboard is the pane's (`terminal_focused`) and the composer's editor did not capture the key: then `ui::subscription` listens for keys while the active session shows its transcript and is busy, and sends `Msg::TranscriptKey` | agent | FR-012; iced `keyboard::listen` skips captured events |
+| 21 | M6 implement | The view cannot see whether the session's service is connected (the outbox is the shell's) | The composer shows *not running* from the phase; *not connected* is said when a send finds no connection (`returned` with `NOT_CONNECTED`), as M4's reducer already does. **Stop session** (FR-015) is `Msg::StopSessionRequested`, sent as `SessionStop` only while `offers_stop_session` | agent | FR-006, FR-015 |
 
 ## Review rounds
 
@@ -141,38 +144,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-M6 unit 1 (context cap during exploration; no code written). Branch reset to origin/main 74907e8f
-(#1249 merged, recorded). Next: implement T055–T061. Findings to build on:
-
-- **Editor storage**: the composer editors live in the binary (`App.composer_editors`), but the
-  view (`ui::view_with` → `terminal::pane` / `panes::view` → `transcript_body`) and the layout
-  gates (`lay::view_of`) see only the lib `State`. Plan: move the `app::Editor` into
-  `features::composer::Composer` (precedent: `features/daemons_kube.rs`, `features/settings.rs`
-  hold `Editor`; `Editor` is Clone/Eq) plus a `shown` generation, synced by a
-  `State::editor_mut(session)`; add a `blank: Editor` to `composer::State` for a session with no
-  composer yet. `shell/composer.rs` `editor()`/`sync_editor()`, `daemon_sync.rs:2857` remove,
-  `startup.rs:439` and `main_tests.rs` (4 inits) follow. Record as a Decision (plan said binary).
-- **Previews**: `AttachmentChip` needs an `image::Handle` made once; `Handle::from_bytes` gets a
-  fresh id per call. Plan: an `app.rs` `Preview(Handle)` wrapper (eq always true) kept in
-  `Composer.previews`, rebuilt only when `draft.images` changes (reuse a handle whose bytes match).
-- **Keys**: no producer of `composer::Msg::Key` / `TranscriptKey` yet. `TextArea.key_binding`
-  closure: convert `KeyPress` via `terminal_pane::{to_keymap_key, to_keymap_mods,
-  to_keymap_physical}`, run `composer_key` on the draft's caret and line count (count lines only
-  on a press), return `Binding::Custom(Message::Composer(Msg::Key{..composing:false}))` unless the
-  intent is `Edit` (then `Binding::from_key_press`). `composing: false`: winit sends IME
-  composition as Ime events, not key presses (Decision). Transcript Escape: `app::on_escape`
-  (app.rs:1518) last arm, when no overlay/settings/overview and the active session shows its
-  transcript and `terminal_focused()`, → `Msg::TranscriptKey`.
-- **Stop session** (overdue, FR-015): no window message stops a session; add
-  `Msg::StopSessionRequested`, shell sends `ClientMsg::SessionStop{session}` when
-  `offers_stop_session`.
-- Labels: quickstart Part B uses **Working** / **Ready**; reuse `features::composer` notices
-  (`OVERDUE`, `NOT_RUNNING`, `NOT_CONNECTED`); I-1 = `status: Option<Element>` + `waiting: bool`,
-  I-4 = `completion: Option<Element>`, both `None` here.
-- M5 parts: `showcase/sections/composer.rs` shows each builder; `tests/gates/composer_parts_fit.rs`
-  is the gate pattern; `transcript_jump_control_fits.rs` lays out a covered structured pane
-  (`support::covered_states::transcript_pane_detached`).
-
+None.
 
 ## Open escalation
 

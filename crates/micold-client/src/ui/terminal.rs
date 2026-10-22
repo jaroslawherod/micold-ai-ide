@@ -770,8 +770,9 @@ fn session_provider(state: &State, id: SessionId) -> AiCli {
 
 /// A structured session's primary in a pane (feature 939, FR-001): the window's transcript of it,
 /// drawn through [`BlockRenderers::RICH`] (feature 940), its messages routed as the session
-/// feature's, with its pending permission requests in it (feature 942), whose messages go to
-/// the permission prompts.
+/// feature's, with its pending permission requests in it (feature 942), over the session's
+/// composer (feature 941, FR-001), which takes the height it needs and leaves the rest to the
+/// transcript (FR-008).
 pub(crate) fn transcript_body<'a>(
     state: &'a State,
     id: SessionId,
@@ -784,7 +785,7 @@ pub(crate) fn transcript_body<'a>(
     let shown = state.workspace.find_session(id).map(|(_, s)| s);
     let cli_running = shown.is_some_and(|s| s.lifecycle == SessionLifecycle::Running);
     let mode = shown.map(|s| s.permission_mode).unwrap_or_default();
-    crate::ui::transcript::view_full(
+    let transcript = crate::ui::transcript::view_full(
         &state.structured_transcript,
         crate::ui::transcript::InsightsCtx {
             state: &state.structured_insights,
@@ -810,11 +811,21 @@ pub(crate) fn transcript_body<'a>(
                 Message::Window(crate::features::window::Msg::FieldFocusChanged(id, focused))
             },
         }),
-    )
+    );
+    iced::widget::column![
+        container(transcript).height(Length::Fill),
+        crate::ui::composer::view(
+            state,
+            id,
+            tokens::roles(scheme),
+            crate::ui::composer::Seams::default()
+        ),
+    ]
+    .into()
 }
 
 /// Whether the pane for `id` is the transcript: a structured session with its AI tab displayed.
-fn shows_transcript(state: &State, id: SessionId) -> bool {
+pub(crate) fn shows_transcript(state: &State, id: SessionId) -> bool {
     state.active_sessions().iter().any(|s| {
         s.id == id
             && s.kind == micold_core::session::SessionKind::Structured

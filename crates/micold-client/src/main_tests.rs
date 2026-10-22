@@ -121,7 +121,6 @@ fn update_inner_applies_window_focus_changed() {
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         composer: iced::widget::text_editor::Content::new(),
-        composer_editors: std::collections::HashMap::new(),
         sandbox_boot: None,
         sandbox_bring_up: None,
         version_mismatch: Default::default(),
@@ -309,7 +308,6 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         composer: iced::widget::text_editor::Content::new(),
-        composer_editors: std::collections::HashMap::new(),
         sandbox_boot: None,
         sandbox_bring_up: None,
         version_mismatch: Default::default(),
@@ -1018,7 +1016,6 @@ fn base_app_fields() -> App {
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         composer: iced::widget::text_editor::Content::new(),
-        composer_editors: std::collections::HashMap::new(),
         sandbox_boot: None,
         sandbox_bring_up: None,
         version_mismatch: Default::default(),
@@ -4075,7 +4072,6 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         composer: iced::widget::text_editor::Content::new(),
-        composer_editors: std::collections::HashMap::new(),
         sandbox_boot: None,
         sandbox_bring_up: None,
         version_mismatch: Default::default(),
@@ -15364,16 +15360,12 @@ fn card_focus_return_focuses_the_number() {
 }
 
 #[test]
-fn closing_a_session_drops_its_editor_and_its_composer_requests() {
+fn closing_a_session_drops_its_composer_requests() {
     let mut app = base_app_fields();
     let (gone, kept) = (
         micold_core::session::SessionId::new(),
         micold_core::session::SessionId::new(),
     );
-    for id in [gone, kept] {
-        app.composer_editors
-            .insert(id, (micold_client::app::Editor::at("draft", (0, 5)), 1));
-    }
     app.pending_ops
         .insert(1, PendingOp::ComposerSend { session: gone });
     app.pending_ops
@@ -15382,8 +15374,6 @@ fn closing_a_session_drops_its_editor_and_its_composer_requests() {
         .insert(3, PendingOp::ComposerSend { session: kept });
     app.pending_ops.insert(4, PendingOp::DeleteSession);
     shell::daemon_sync::forget_composer(&mut app, gone);
-    assert!(!app.composer_editors.contains_key(&gone));
-    assert!(app.composer_editors.contains_key(&kept));
     let mut left: Vec<u64> = app.pending_ops.keys().copied().collect();
     left.sort_unstable();
     assert_eq!(

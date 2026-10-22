@@ -1,6 +1,6 @@
-//! The structured session composer's shell half (feature 941, T047, research R10): keeps one
-//! text editor per session beside the draft `features::composer` holds, maps key presses through
-//! `composer_key` / `transcript_key`, and sends what the reducer decided — messages, interrupts
+//! The structured session composer's shell half (feature 941, T047, research R10): acts on the
+//! text editor each composer in `features::composer` keeps beside its draft, maps key presses
+//! through `composer_key` / `transcript_key`, and sends what the reducer decided — messages, interrupts
 //! and queue requests. It decides nothing itself; the answers come back through
 //! `shell::daemon_sync`.
 
@@ -31,7 +31,6 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             let palette = app.core.composers.palette.palette(session);
             if let Some(key) = palette_key(palette, &press).filter(|_| !composing) {
                 app.core.palette_key(session, key);
-                sync_editor(app, session);
                 return Task::none();
             }
             let editor = editor(app, session);
@@ -50,6 +49,14 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::Edited { session, action } => edited(app, session, &action),
         Msg::SendRequested(session) => send(app, session),
         Msg::StopRequested(session) => interrupt(app, session),
+        Msg::StopSessionRequested(session) => {
+            // Offered only once an interrupt is overdue (FR-015); never without the user asking.
+            if app.core.composers.offers_stop_session(session) {
+                if let Some(outbox) = app.outbox_of(app.session_binding_of(session)) {
+                    outbox.send(ClientMsg::SessionStop { session });
+                }
+            }
+        }
         Msg::SendQueuedRequested(session) => {
             if app.core.composers.offers_send_queued(session) {
                 queue_request(app, session, PendingOp::QueueOp { session }, |req| {
@@ -128,7 +135,6 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::SwitchDismissed(_) => app.core.switch_dismissed(),
         Msg::LoginOffered(session) => app.core.login_offered(session),
     }
-    sync_editor(app, session);
     // The palette follows the draft, whoever changed it (#943 FR-007).
     app.core.composer_edited(session);
     Task::none()
@@ -152,6 +158,7 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::SwitchRequested { session, .. } => *session,
         Msg::SendRequested(session)
         | Msg::StopRequested(session)
+        | Msg::StopSessionRequested(session)
         | Msg::SendQueuedRequested(session)
         | Msg::QueueEditSaved(session)
         | Msg::QueueEditCancelled(session)
@@ -188,31 +195,9 @@ fn run(app: &mut App, session: SessionId, intent: KeyIntent) {
     }
 }
 
-/// `session`'s editor, made from its draft the first time it is asked for.
+/// `session`'s editor: the one its composer draws.
 fn editor(app: &mut App, session: SessionId) -> &mut Editor {
-    sync_editor(app, session);
-    &mut app
-        .composer_editors
-        .get_mut(&session)
-        .expect("sync_editor made it")
-        .0
-}
-
-/// Show the draft in the editor again when the composer replaced it (a send, a restore, a
-/// history step, a drop, a queued message taken back); typing leaves the editor alone.
-pub fn sync_editor(app: &mut App, session: SessionId) {
-    let (text, caret, generation) = app
-        .core
-        .composers
-        .composer(session)
-        .map_or((String::new(), (0, 0), 0), |c| {
-            (c.draft.text.clone(), c.draft.caret, c.generation)
-        });
-    let current = app.composer_editors.get(&session).map(|(_, g)| *g);
-    if current != Some(generation) {
-        app.composer_editors
-            .insert(session, (Editor::at(&text, caret), generation));
-    }
+    app.core.composers.editor_mut(session)
 }
 
 fn edited(app: &mut App, session: SessionId, action: &EditorAction) {
