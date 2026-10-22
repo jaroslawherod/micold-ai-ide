@@ -143,15 +143,12 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                 .on_link_rest(expansion(Event::LinkRested(location.clone())))
                 .on_link_keyboard_focus({
                     let location = location.clone();
-                    move |shown| {
-                        expansion(if shown {
-                            Event::LinkFocusGained(location.clone())
-                        } else {
-                            Event::LinkFocusLost(location.clone())
-                        })
-                    }
+                    move |shown| link_focus(&location, CardLink::Issue, shown)
                 })
-                .on_link_menu_key(Message::Overview(Msg::LinkMenuRequested(location.clone())))
+                .on_link_menu_key(Message::Overview(Msg::LinkMenuRequested(
+                    location.clone(),
+                    CardLink::Issue,
+                )))
                 // Feature 1123 (R8): a row's number opens its pull request, looked up by the root;
                 // a press on it does not activate the card (FR-009).
                 .on_pr_link({
@@ -161,6 +158,21 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                 .pr_link_id({
                     let location = location.clone();
                     move |n| card_link_id(&location, CardLink::PullRequest(n))
+                })
+                // Each drawn number is a Tab stop after the issue link, with every rule of the
+                // issue link's keys (FR-009, FR-010, R6, R7).
+                .on_pr_link_keyboard_focus({
+                    let location = location.clone();
+                    move |n, shown| link_focus(&location, CardLink::PullRequest(n), shown)
+                })
+                .on_pr_link_menu({
+                    let location = location.clone();
+                    move |n| {
+                        Message::Overview(Msg::LinkMenuRequested(
+                            location.clone(),
+                            CardLink::PullRequest(n),
+                        ))
+                    }
                 })
                 .scroll_id(card_scroll_id(&location))
                 .on_body_scroll(move |up, down| expansion(Event::BodyScrolled { up, down }))
@@ -228,6 +240,17 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     ContextArea::new(pane)
         .on_secondary_press(|_| Message::Overview(Msg::CardMenuDismissed))
         .into()
+}
+
+/// The expansion event of `link` of the card at `location` gaining (`shown`) or losing the keyboard
+/// (feature 1122, FR-008; feature 1123, R6).
+fn link_focus(location: &SessionLocation, link: CardLink, shown: bool) -> Message {
+    let location = location.clone();
+    Message::Overview(Msg::Expansion(if shown {
+        Event::LinkFocusGained(location, link)
+    } else {
+        Event::LinkFocusLost(location, link)
+    }))
 }
 
 /// The card the Overview's opening puts the keyboard on, its first (research R13); None with no
@@ -488,19 +511,67 @@ pub fn pull_request_link_for(
         .filter(|url| url.starts_with(crate::features::sidebar::GITHUB_ADDRESS_PREFIX))
 }
 
-/// Move the keyboard to the next (`forward`) or previous card of `cards` (feature 1122, R9,
-/// contract U4), counting from the focused card or from the card whose issue link is focused. It
-/// never stops on a link. Past the first or the last card it does what iced's `focus_previous` /
-/// `focus_next` do there; with nothing focused it takes the first or the last card.
-pub fn step_card<T: Send + 'static>(forward: bool, cards: &[SessionLocation]) -> impl Operation<T> {
+/// Whether `link` of the card at `location` is drawn now, so it can hold the keyboard (feature
+/// 1123, R6, R7): the issue link while the card has one; a number while the card lists its pull
+/// request in a row it draws at its current form (`rows(expanded)`, as the view reads it).
+pub fn card_link_shown(state: &State, location: &SessionLocation, link: CardLink) -> bool {
+    match link {
+        CardLink::Issue => issue_link_for(state, location).is_some(),
+        CardLink::PullRequest(number) => {
+            let Some(model) = cards(state)
+                .into_iter()
+                .find(|card| &card.location == location)
+            else {
+                return false;
+            };
+            let expanded = state.overview.expansion.expanded() == Some(location);
+            pr_rows(&model, expanded)
+                .0
+                .iter()
+                .any(|row| row.number == number)
+        }
+    }
+}
+
+/// Each card's id and the ids of all of its links, its issue link and each listed number (feature
+/// 1123, R6), for [`step_card`].
+pub fn card_stops(
+    cards: &[CardModel],
+) -> Vec<(iced::advanced::widget::Id, Vec<iced::advanced::widget::Id>)> {
+    cards
+        .iter()
+        .map(|card| {
+            let location = &card.location;
+            let numbers = card
+                .pull_requests
+                .iter()
+                .flat_map(|list| list.prs())
+                .map(|pr| card_link_id(location, CardLink::PullRequest(pr.number)));
+            let links = std::iter::once(card_link_id(location, CardLink::Issue))
+                .chain(numbers)
+                .collect();
+            (card_id(location), links)
+        })
+        .collect()
+}
+
+/// Move the keyboard to the next (`forward`) or previous card of `cards` (each card's id and its
+/// links' ids, [`card_stops`]; feature 1122, R9, contract U4), counting from the focused card or
+/// from the card one of whose links is focused (feature 1123, R6). It never stops on a link. Past
+/// the first or the last card it does what iced's `focus_previous` / `focus_next` do there; with
+/// nothing focused it takes the first or the last card.
+pub fn step_card<T: Send + 'static>(
+    forward: bool,
+    cards: &[(iced::advanced::widget::Id, Vec<iced::advanced::widget::Id>)],
+) -> impl Operation<T> {
     use iced::advanced::widget::operation::{Focusable, Outcome};
     use iced::advanced::widget::Id;
 
     /// The first pass: every focusable in order, and which one holds the keyboard.
     struct StepCard {
         forward: bool,
-        /// Each card's id and its link's id.
-        cards: Vec<(Id, Id)>,
+        /// Each card's id and its links' ids.
+        cards: Vec<(Id, Vec<Id>)>,
         seen: Vec<Option<Id>>,
         focused: Option<usize>,
     }
@@ -509,7 +580,7 @@ pub fn step_card<T: Send + 'static>(forward: bool, cards: &[SessionLocation]) ->
         fn is_link(&self, at: usize) -> bool {
             self.seen[at]
                 .as_ref()
-                .is_some_and(|id| self.cards.iter().any(|(_, link)| link == id))
+                .is_some_and(|id| self.cards.iter().any(|(_, links)| links.contains(id)))
         }
 
         /// Where the step counts from: the focused card, or the card of the focused link.
@@ -517,7 +588,7 @@ pub fn step_card<T: Send + 'static>(forward: bool, cards: &[SessionLocation]) ->
             let at = self.focused?;
             let card = self.seen[at]
                 .as_ref()
-                .and_then(|id| self.cards.iter().find(|(_, link)| link == id))
+                .and_then(|id| self.cards.iter().find(|(_, links)| links.contains(id)))
                 .and_then(|(card, _)| self.seen.iter().position(|s| s.as_ref() == Some(card)));
             Some(card.unwrap_or(at))
         }
@@ -581,10 +652,7 @@ pub fn step_card<T: Send + 'static>(forward: bool, cards: &[SessionLocation]) ->
 
     StepCard {
         forward,
-        cards: cards
-            .iter()
-            .map(|location| (card_id(location), card_link_id(location, CardLink::Issue)))
-            .collect(),
+        cards: cards.to_vec(),
         seen: Vec::new(),
         focused: None,
     }
@@ -1094,13 +1162,13 @@ mod tests {
             tabbed,
             [
                 expansion_message(Event::FocusLost(linked.clone())),
-                expansion_message(Event::LinkFocusGained(linked.clone())),
+                expansion_message(Event::LinkFocusGained(linked.clone(), CardLink::Issue)),
             ]
         );
         let none = iced::mouse::Cursor::Unavailable;
         let request = format!(
             "{:?}",
-            Message::Overview(Msg::LinkMenuRequested(linked.clone()))
+            Message::Overview(Msg::LinkMenuRequested(linked.clone(), CardLink::Issue))
         );
         for key in [
             key_with(Named::ContextMenu, Modifiers::empty()),
@@ -1111,14 +1179,15 @@ mod tests {
         let on = focus_moves(&mut mounted, 1);
         assert_eq!(
             on.first(),
-            Some(&expansion_message(Event::LinkFocusLost(linked)))
+            Some(&expansion_message(Event::LinkFocusLost(
+                linked,
+                CardLink::Issue
+            )))
         );
     }
 
-    /// Feature 1123 T022, Story 3 sc. 1: on the mounted Overview a click on a row's number asks
-    /// for that card's pull request by its number, and not for the card's activation.
-    #[test]
-    fn a_click_on_a_rows_number_asks_for_its_pull_request() {
+    /// `overview_of(1)` with #12 listed on `feat/0`, its checks failing (feature 1123).
+    fn overview_with_number_12() -> State {
         use micold_core::pr_list::{BranchPrList, ListedPr};
         use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
         let mut state = overview_of(1);
@@ -1137,6 +1206,51 @@ mod tests {
             .pr_status
             .lists
             .insert("feat/0".into(), BranchPrList::new(vec![pr], false, false));
+        state
+    }
+
+    /// Feature 1123 T032, FR-009: on the mounted Overview, Tab from a card onto its number reports
+    /// `LinkFocusGained(l, #12)` to the expansion, the number's Menu key asks for the card's menu
+    /// from it, and Tab on reports its loss.
+    #[test]
+    fn a_numbers_keyboard_reaches_the_expansion_and_the_menu() {
+        use iced::keyboard::{key::Named, Modifiers};
+        let state = overview_with_number_12();
+        let l = SessionLocation::Worktree("feat-0".into());
+        let number = CardLink::PullRequest(12);
+        let mut mounted = mount(&state);
+        mounted.drive(iced::advanced::widget::operation::focusable::focus::<()>(
+            card_id(&l),
+        ));
+        mounted.redraw();
+        assert_eq!(
+            focus_moves(&mut mounted, 1),
+            [
+                expansion_message(Event::FocusLost(l.clone())),
+                expansion_message(Event::LinkFocusGained(l.clone(), number)),
+            ]
+        );
+        let request = format!(
+            "{:?}",
+            Message::Overview(Msg::LinkMenuRequested(l.clone(), number))
+        );
+        let key =
+            crate::ui::material::test_support::key_with(Named::ContextMenu, Modifiers::empty());
+        assert_eq!(
+            mounted.send(key, iced::mouse::Cursor::Unavailable),
+            std::slice::from_ref(&request)
+        );
+        assert_eq!(
+            focus_moves(&mut mounted, 1).first(),
+            Some(&expansion_message(Event::LinkFocusLost(l, number)))
+        );
+    }
+
+    /// Feature 1123 T022, Story 3 sc. 1: on the mounted Overview a click on a row's number asks
+    /// for that card's pull request by its number, and not for the card's activation.
+    #[test]
+    fn a_click_on_a_rows_number_asks_for_its_pull_request() {
+        let state = overview_with_number_12();
         let mut mounted = mount(&state);
         let at = mounted
             .painted_text()
@@ -1344,28 +1458,60 @@ mod tests {
 
     // --- Feature 1122, contract U4: the arrows step over issue links -------------------------
 
+    /// The pull request on card 1 of [`stepping_models`] (feature 1123, T031).
+    const STEPPED_PR: u64 = 7;
+
     /// The Overview's three cards (Default and two worktrees), the middle one with an issue link
-    /// that takes Tab focus (as it does from M4), mounted as a grid.
-    fn stepping_grid() -> (Vec<SessionLocation>, Mounted<'static>) {
+    /// and a pull request row (feature 1123).
+    fn stepping_models() -> Vec<CardModel> {
+        use micold_core::pr_list::{BranchPrList, ListedPr};
+        use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
         let mut models = cards(&overview_of(2));
         models[1].issue_link = Some(IssueLink {
             label: "Issue #1".into(),
             address: "https://github.com/o/r/issues/1".into(),
         });
+        let pr = ListedPr {
+            number: STEPPED_PR,
+            url: format!("https://github.com/o/r/pull/{STEPPED_PR}"),
+            state: BranchPrState::Open,
+            checks: CheckStatus::None,
+            review: ReviewState::None,
+            conflict: false,
+            created_at: "2026-01-01T00:00:00Z".into(),
+        };
+        models[1].pull_requests = Some(BranchPrList::new(vec![pr], false, false));
+        models
+    }
+
+    /// [`stepping_models`] mounted as a grid, the issue link and the number taking Tab focus.
+    fn stepping_grid() -> (Vec<SessionLocation>, Mounted<'static>) {
+        let models = stepping_models();
         let locations: Vec<SessionLocation> = models.iter().map(|m| m.location.clone()).collect();
         let r = tokens::roles(ColorScheme::Dark);
         let grid: Vec<OverviewCard<'static, String>> = models
             .iter()
             .map(|model| {
+                let (rows, more) = pr_rows(model, false);
+                let location = model.location.clone();
                 OverviewCard::new(model, r)
                     .id(card_id(&model.location))
                     .on_press("open".to_string())
                     .on_issue_link("link".to_string())
                     .link_id(card_link_id(&model.location, CardLink::Issue))
                     .on_link_keyboard_focus(|_| String::new())
+                    .pull_requests(rows, more)
+                    .on_pr_link(|n| format!("pr {n}"))
+                    .pr_link_id(move |n| card_link_id(&location, CardLink::PullRequest(n)))
+                    .on_pr_link_keyboard_focus(|_, _| String::new())
             })
             .collect();
         (locations, Mounted::new(CardGrid::new(grid, r)))
+    }
+
+    /// `step_card` over [`stepping_models`].
+    fn stepped(forward: bool) -> impl Operation<()> {
+        step_card::<()>(forward, &card_stops(&stepping_models()))
     }
 
     fn focus_on(mounted: &mut Mounted<'_>, id: iced::advanced::widget::Id) {
@@ -1383,9 +1529,9 @@ mod tests {
         from: iced::advanced::widget::Id,
         forward: bool,
     ) -> Option<iced::advanced::widget::Id> {
-        let (locations, mut mounted) = stepping_grid();
+        let (_, mut mounted) = stepping_grid();
         focus_on(&mut mounted, from);
-        mounted.drive(step_card::<()>(forward, &locations));
+        mounted.drive(stepped(forward));
         focused(&mut mounted)
     }
 
@@ -1406,6 +1552,25 @@ mod tests {
         );
         assert_eq!(step_from(card_id(&l[2]), false), Some(card_id(&l[1])));
         assert_eq!(step_from(card_id(&l[1]), false), Some(card_id(&l[0])));
+    }
+
+    /// U4 (feature 1123, T031, FR-009): from a focused number the arrows step to the neighbouring
+    /// cards, counting from its card; from card 0 forward they land on card 1, never on its
+    /// number or its issue link (1122 FR-008).
+    #[test]
+    fn the_arrows_step_from_a_number_to_the_neighbouring_cards() {
+        let (l, mut mounted) = stepping_grid();
+        let number = card_link_id(&l[1], CardLink::PullRequest(STEPPED_PR));
+        focus_on(&mut mounted, number.clone());
+        assert_eq!(
+            focused(&mut mounted),
+            Some(number.clone()),
+            "fixture: a stop"
+        );
+        assert_eq!(step_from(number.clone(), true), Some(card_id(&l[2])));
+        assert_eq!(step_from(number, false), Some(card_id(&l[0])));
+        assert_eq!(step_from(card_id(&l[0]), true), Some(card_id(&l[1])));
+        assert_eq!(step_from(card_id(&l[2]), false), Some(card_id(&l[1])));
     }
 
     /// Review A F2 (M3): no worktree's name makes a card's id equal another card's link or body,
@@ -1462,11 +1627,11 @@ mod tests {
             traversed(card_id(&l[2]), true)
         );
         // With nothing focused: the first card forward, the last backward.
-        let (locations, mut mounted) = stepping_grid();
-        mounted.drive(step_card::<()>(true, &locations));
+        let (_, mut mounted) = stepping_grid();
+        mounted.drive(stepped(true));
         assert_eq!(focused(&mut mounted), Some(card_id(&l[0])));
-        let (locations, mut mounted) = stepping_grid();
-        mounted.drive(step_card::<()>(false, &locations));
+        let (_, mut mounted) = stepping_grid();
+        mounted.drive(stepped(false));
         assert_eq!(focused(&mut mounted), Some(card_id(&l[2])));
     }
 }

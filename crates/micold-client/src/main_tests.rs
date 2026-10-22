@@ -7705,26 +7705,7 @@ mod issue_source {
 
     /// A successful reading listing `numbers` open on `feat/42_crash`.
     fn read_numbers(app: &mut App, numbers: &[u64]) {
-        use micold_core::pr_list::{BranchPrList, ListedPr};
-        use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
-        let prs = numbers
-            .iter()
-            .map(|&number| ListedPr {
-                number,
-                url: format!("https://github.com/o/r/pull/{number}"),
-                state: BranchPrState::Open,
-                checks: CheckStatus::None,
-                review: ReviewState::None,
-                conflict: false,
-                created_at: format!("2026-01-01T00:00:{number:02}Z"),
-            })
-            .collect();
-        app.core.pr_status.enabled = true;
-        app.core.pr_status.read_at = Some(100);
-        app.core
-            .pr_status
-            .lists
-            .insert("feat/42_crash".into(), BranchPrList::new(prs, false, false));
+        super::list_numbers(app, "feat/42_crash", numbers);
     }
 
     fn click_number(app: &mut App, location: &micold_core::session::SessionLocation, n: u64) {
@@ -14446,7 +14427,7 @@ fn the_card_focus_return_waits_for_a_dialog_then_follows_the_card_or_the_first()
     let mut app = app_in_overview_with(&["feat-a", "feat-b"]);
     app.core.overview.focus_return = Some(micold_client::features::overview::FocusReturn {
         location: b.clone(),
-        to_link: false,
+        to_link: None,
     });
     let _ = update_inner(
         &mut app,
@@ -14618,6 +14599,31 @@ mod structured_transcript {
     }
 }
 
+/// A successful reading listing `numbers` open on `branch`, a higher number newer (so drawn
+/// first), each at its `o/r` address (feature 1123).
+fn list_numbers(app: &mut App, branch: &str, numbers: &[u64]) {
+    use micold_core::pr_list::{BranchPrList, ListedPr};
+    use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
+    let prs = numbers
+        .iter()
+        .map(|&number| ListedPr {
+            number,
+            url: format!("https://github.com/o/r/pull/{number}"),
+            state: BranchPrState::Open,
+            checks: CheckStatus::None,
+            review: ReviewState::None,
+            conflict: false,
+            created_at: format!("2026-01-01T00:00:{number:02}Z"),
+        })
+        .collect();
+    app.core.pr_status.enabled = true;
+    app.core.pr_status.read_at = Some(100);
+    app.core
+        .pr_status
+        .lists
+        .insert(branch.into(), BranchPrList::new(prs, false, false));
+}
+
 // ---- Feature 1122 M4 (FR-008, FR-009, contract U6): the issue link by keyboard, at the root ----
 
 /// The Overview on `dirs` of a project on `o/r` with the GitHub issues switch on, so a worktree
@@ -14640,7 +14646,7 @@ fn tab_onto_link(app: &mut App, dir: &str) {
     for event in [
         Event::FocusGained(l.clone()),
         Event::FocusLost(l.clone()),
-        Event::LinkFocusGained(l),
+        Event::LinkFocusGained(l, micold_core::overview_expansion::CardLink::Issue),
     ] {
         let _ = update_inner(app, Message::Overview(Msg::Expansion(event)));
     }
@@ -14654,15 +14660,27 @@ fn link_menu_opens_from_the_link() {
     let l = SessionLocation::Worktree("feat-1122_x".into());
     let mut app = app_with_links(&["feat-1122_x"]);
     assert_eq!(
-        keyboard_menu_request(&app, Msg::LinkMenuRequested(l.clone())),
-        Some((l.clone(), MenuOrigin::KeyboardFromLink))
+        keyboard_menu_request(
+            &app,
+            Msg::LinkMenuRequested(l.clone(), micold_core::overview_expansion::CardLink::Issue)
+        ),
+        Some((
+            l.clone(),
+            MenuOrigin::KeyboardFromLink(micold_core::overview_expansion::CardLink::Issue)
+        ))
     );
     assert_eq!(
         keyboard_menu_request(&app, Msg::CardMenuRequested(l.clone())),
         Some((l.clone(), MenuOrigin::Keyboard))
     );
     app.core.overview.open = false;
-    assert_eq!(keyboard_menu_request(&app, Msg::LinkMenuRequested(l)), None);
+    assert_eq!(
+        keyboard_menu_request(
+            &app,
+            Msg::LinkMenuRequested(l, micold_core::overview_expansion::CardLink::Issue)
+        ),
+        None
+    );
 }
 
 /// FR-009: closing a menu opened from the link without a choice returns the keyboard to the
@@ -14680,14 +14698,20 @@ fn card_focus_return_focuses_the_link() {
         card_focus_return_id(&mut app)
     };
     assert_eq!(
-        returned(MenuOrigin::KeyboardFromLink, true),
+        returned(
+            MenuOrigin::KeyboardFromLink(micold_core::overview_expansion::CardLink::Issue),
+            true
+        ),
         Some(card_link_id(
             &l,
             micold_core::overview_expansion::CardLink::Issue
         ))
     );
     assert_eq!(
-        returned(MenuOrigin::KeyboardFromLink, false),
+        returned(
+            MenuOrigin::KeyboardFromLink(micold_core::overview_expansion::CardLink::Issue),
+            false
+        ),
         Some(card_id(&l))
     );
     assert_eq!(returned(MenuOrigin::Keyboard, true), Some(card_id(&l)));
@@ -14719,7 +14743,11 @@ fn link_focus_moves_to_card_when_link_goes() {
         let mut app = app_with_links(&["feat-1122_x"]);
         tab_onto_link(&mut app, "feat-1122_x");
         let held = LinkFocus::of(&app);
-        assert_eq!(held.link, Some(l.clone()), "{way}");
+        assert_eq!(
+            held.link,
+            Some((l.clone(), micold_core::overview_expansion::CardLink::Issue)),
+            "{way}"
+        );
         remove(&mut app, way);
         assert_eq!(
             link_focus_after(&mut app, &held),
@@ -14765,7 +14793,10 @@ fn jira_base_url_adopted() {
     );
     tab_onto_link(&mut app, "feat-mic-87_add-login");
     let held = LinkFocus::of(&app);
-    assert_eq!(held.link, Some(l.clone()));
+    assert_eq!(
+        held.link,
+        Some((l.clone(), micold_core::overview_expansion::CardLink::Issue))
+    );
 
     settings.jira_base_urls.clear();
     let _ = crate::shell::daemon_sync::on_settings_changed(&mut app, settings);
@@ -14840,7 +14871,10 @@ fn shift_tab_onto_the_previous_cards_link_keeps_the_keyboard_on_it() {
     let _ = expansion_focus_move(&mut app, Event::FocusGained(b.clone()));
     assert_eq!(app.core.overview.expansion.expanded(), Some(&b), "fixture");
     assert_eq!(
-        expansion_focus_move(&mut app, Event::LinkFocusGained(a.clone())),
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusGained(a.clone(), micold_core::overview_expansion::CardLink::Issue)
+        ),
         Some(card_link_id(
             &a,
             micold_core::overview_expansion::CardLink::Issue
@@ -14848,7 +14882,10 @@ fn shift_tab_onto_the_previous_cards_link_keeps_the_keyboard_on_it() {
     );
     assert_eq!(app.core.overview.expansion.expanded(), Some(&a));
     assert_eq!(expansion_focus_move(&mut app, Event::FocusLost(b)), None);
-    assert_eq!(app.core.overview.expansion.focused_link(), Some(&a));
+    assert_eq!(
+        app.core.overview.expansion.focused_link(),
+        Some((&a, micold_core::overview_expansion::CardLink::Issue))
+    );
 }
 
 /// FR-008 (visual pass r1, M4, criteria 6 and 7): Escape on the focused link collapses its card,
@@ -14871,11 +14908,176 @@ fn escape_on_the_link_keeps_the_keyboard_on_it() {
     );
     let expansion = &app.core.overview.expansion;
     assert_eq!(expansion.expanded(), None);
-    assert_eq!(expansion.focused_link(), Some(&a));
+    assert_eq!(
+        expansion.focused_link(),
+        Some((&a, micold_core::overview_expansion::CardLink::Issue))
+    );
     // The hand-back's own report changes nothing.
     assert_eq!(
-        expansion_focus_move(&mut app, Event::LinkFocusGained(a)),
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusGained(a, micold_core::overview_expansion::CardLink::Issue)
+        ),
         None
     );
     assert_eq!(app.core.overview.expansion.expanded(), None);
+}
+
+// ---- Feature 1123 M3 (FR-009, FR-010, contracts U5, U6): the numbers by keyboard, at the root ----
+
+/// The card of `feat-1122_x` with its issue link and #11, #12, #13 listed: drawn #13, #12, #11,
+/// so #11 is row 3, which the collapsed card does not draw.
+fn app_with_numbers() -> (App, SessionLocation) {
+    let mut app = app_with_links(&["feat-1122_x"]);
+    list_numbers(&mut app, "feat/feat-1122_x", &[11, 12, 13]);
+    (app, SessionLocation::Worktree("feat-1122_x".into()))
+}
+
+/// The keyboard on the focused, expanded card's number `n` (card lost, then number gained).
+fn tab_onto_number(app: &mut App, l: &SessionLocation, n: u64) {
+    use micold_core::overview_expansion::Event;
+    for event in [
+        Event::FocusGained(l.clone()),
+        Event::FocusLost(l.clone()),
+        Event::LinkFocusGained(l.clone(), CardLink::PullRequest(n)),
+    ] {
+        let _ = expansion_focus_move(app, event);
+    }
+    assert_eq!(
+        app.core.overview.expansion.focused_link(),
+        Some((l, CardLink::PullRequest(n))),
+        "fixture: #{n} holds the keyboard"
+    );
+}
+
+/// FR-010, R6: a row-3 number is drawn only while its card is expanded; a row-1 number and the
+/// issue link either way; a number not listed never.
+#[test]
+fn card_link_shown_follows_the_form() {
+    use micold_client::ui::overview::card_link_shown;
+    use micold_core::overview_expansion::Event;
+    let (mut app, l) = app_with_numbers();
+    let shown = |app: &App, link| card_link_shown(&app.core, &l, link);
+    assert!(!shown(&app, CardLink::PullRequest(11)), "row 3, collapsed");
+    assert!(shown(&app, CardLink::PullRequest(13)), "row 1, collapsed");
+    assert!(shown(&app, CardLink::Issue));
+    let _ = expansion_focus_move(&mut app, Event::FocusGained(l.clone()));
+    assert_eq!(app.core.overview.expansion.expanded(), Some(&l), "fixture");
+    assert!(shown(&app, CardLink::PullRequest(11)), "row 3, expanded");
+    assert!(shown(&app, CardLink::PullRequest(13)), "row 1, expanded");
+    assert!(!shown(&app, CardLink::PullRequest(14)), "not listed");
+}
+
+/// U5, FR-010: Escape on a focused row-3 number collapses the card, which no longer draws it: the
+/// card takes the keyboard as a move inside it, and stays collapsed, also across its own report.
+#[test]
+fn link_focus_escape_on_hidden_number_goes_to_card() {
+    use micold_client::ui::overview::card_id;
+    use micold_core::overview_expansion::Event;
+    let (mut app, l) = app_with_numbers();
+    tab_onto_number(&mut app, &l, 11);
+    assert_eq!(app.core.overview.expansion.expanded(), Some(&l), "fixture");
+    assert_eq!(
+        expansion_focus_move(&mut app, Event::Escape),
+        Some(card_id(&l))
+    );
+    let expansion = &app.core.overview.expansion;
+    assert_eq!(expansion.expanded(), None);
+    assert_eq!(expansion.focused_link(), None);
+    assert_eq!(
+        expansion_focus_move(&mut app, Event::FocusGained(l.clone())),
+        None
+    );
+    assert_eq!(
+        app.core.overview.expansion.expanded(),
+        None,
+        "stays collapsed"
+    );
+}
+
+/// U5, FR-010: Escape on a focused row-1 number collapses the card, which still draws it: the
+/// keyboard is handed back to the number by its id.
+#[test]
+fn link_focus_escape_on_row_one_number_stays() {
+    use micold_client::ui::overview::card_link_id;
+    use micold_core::overview_expansion::Event;
+    let (mut app, l) = app_with_numbers();
+    tab_onto_number(&mut app, &l, 13);
+    assert_eq!(
+        expansion_focus_move(&mut app, Event::Escape),
+        Some(card_link_id(&l, CardLink::PullRequest(13)))
+    );
+    let expansion = &app.core.overview.expansion;
+    assert_eq!(expansion.expanded(), None);
+    assert_eq!(
+        expansion.focused_link(),
+        Some((&l, CardLink::PullRequest(13)))
+    );
+}
+
+/// U5, spec Edge Cases: a reading without the pull request whose number holds the keyboard moves
+/// the keyboard to its card, as a move inside the card; a reading that keeps it moves nothing.
+#[test]
+fn link_focus_moves_to_card_when_pull_request_goes() {
+    use micold_client::ui::overview::card_id;
+    let (mut app, l) = app_with_numbers();
+    tab_onto_number(&mut app, &l, 12);
+    let held = LinkFocus::of(&app);
+    list_numbers(&mut app, "feat/feat-1122_x", &[11, 12, 13, 14]);
+    assert_eq!(link_focus_after(&mut app, &held), None, "#12 stays");
+    let held = LinkFocus::of(&app);
+    list_numbers(&mut app, "feat/feat-1122_x", &[11, 13]);
+    assert_eq!(link_focus_after(&mut app, &held), Some(card_id(&l)));
+    let expansion = &app.core.overview.expansion;
+    assert_eq!(expansion.focused_link(), None);
+    assert_eq!(expansion.expanded(), Some(&l), "the card keeps its form");
+}
+
+/// U6, FR-009: a number's Menu key opens the card's menu as `KeyboardFromLink` of that number.
+#[test]
+fn link_menu_opens_from_a_number() {
+    use micold_client::features::overview::{MenuOrigin, Msg};
+    let (app, l) = app_with_numbers();
+    let number = CardLink::PullRequest(12);
+    assert_eq!(
+        keyboard_menu_request(&app, Msg::LinkMenuRequested(l.clone(), number)),
+        Some((l, MenuOrigin::KeyboardFromLink(number)))
+    );
+}
+
+/// U6, FR-009: closing a menu opened from a number without a choice returns the keyboard to the
+/// number; a choice returns it to the card, and so does a number no longer drawn on close.
+#[test]
+fn card_focus_return_focuses_the_number() {
+    use micold_client::features::overview::{MenuOrigin, Msg};
+    use micold_client::ui::overview::{card_id, card_link_id};
+    let number = CardLink::PullRequest(13);
+    let returned = |close: Msg, listed: &[u64]| {
+        let (mut app, _) = app_with_numbers();
+        open_card_menu(
+            &mut app,
+            "feat-1122_x",
+            MenuOrigin::KeyboardFromLink(number),
+        );
+        list_numbers(&mut app, "feat/feat-1122_x", listed);
+        let _ = update_inner(&mut app, Message::Overview(close));
+        card_focus_return_id(&mut app)
+    };
+    let l = SessionLocation::Worktree("feat-1122_x".into());
+    assert_eq!(
+        returned(Msg::CardMenuDismissed, &[11, 12, 13]),
+        Some(card_link_id(&l, number))
+    );
+    assert_eq!(
+        returned(
+            Msg::CardMenuEntryChosen(Box::new(Message::Overview(Msg::GridScrolled))),
+            &[11, 12, 13]
+        ),
+        Some(card_id(&l))
+    );
+    assert_eq!(
+        returned(Msg::CardMenuDismissed, &[11, 12]),
+        Some(card_id(&l)),
+        "#13 is gone"
+    );
 }

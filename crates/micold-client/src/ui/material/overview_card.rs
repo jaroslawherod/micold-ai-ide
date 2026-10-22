@@ -184,6 +184,8 @@ pub struct OverviewCard<'a, M> {
     pr_more: usize,
     on_pr_link: Option<ByNumber<'a, M>>,
     pr_link_id: Option<ByNumber<'a, iced::advanced::widget::Id>>,
+    on_pr_link_keyboard_focus: Option<Rc<dyn Fn(u64, bool) -> M + 'a>>,
+    on_pr_link_menu: Option<ByNumber<'a, M>>,
     _marker: PhantomData<&'a M>,
 }
 
@@ -222,6 +224,8 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             pr_more: 0,
             on_pr_link: None,
             pr_link_id: None,
+            on_pr_link_keyboard_focus: None,
+            on_pr_link_menu: None,
             _marker: PhantomData,
         }
     }
@@ -433,6 +437,23 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
     /// Name each number's link `f(number)`, so the grid can find its bounds (feature 1123, R6).
     pub fn pr_link_id(mut self, f: impl Fn(u64) -> iced::advanced::widget::Id + 'a) -> Self {
         self.pr_link_id = Some(Rc::new(f));
+        self
+    }
+
+    /// Make each drawn number a Tab stop after the issue link, in row order, publishing
+    /// `f(number, true)` when keyboard focus arrives on it and `f(number, false)` when it leaves
+    /// (feature 1123, FR-009, FR-010, R7). Enter and Space on it publish
+    /// [`Self::on_pr_link`]'s message; its Page keys are the card's [`Self::on_page`]. Without it no
+    /// number is a Tab stop, and a click still opens it.
+    pub fn on_pr_link_keyboard_focus(mut self, f: impl Fn(u64, bool) -> M + 'a) -> Self {
+        self.on_pr_link_keyboard_focus = Some(Rc::new(f));
+        self
+    }
+
+    /// Publish `f(number)` for the Menu key or Shift+F10 while that number holds the keyboard
+    /// (feature 1123, FR-009, as 1122 FR-009 on the issue link): the card's menu, opened from it.
+    pub fn on_pr_link_menu(mut self, f: impl Fn(u64) -> M + 'a) -> Self {
+        self.on_pr_link_menu = Some(Rc::new(f));
         self
     }
 
@@ -648,7 +669,8 @@ fn card_link<'a, M: Clone + 'a>(
 }
 
 /// A row's number: a card link publishing [`OverviewCard::on_pr_link`] for it, named by
-/// [`OverviewCard::pr_link_id`], and no Tab stop yet (feature 1123, R7); plain text without
+/// [`OverviewCard::pr_link_id`], a Tab stop once [`OverviewCard::on_pr_link_keyboard_focus`] is
+/// set (feature 1123, R7), its Menu key [`OverviewCard::on_pr_link_menu`]; plain text without
 /// `on_pr_link`. Its gutter reaches past the 4 px between rows and into the line above, so it
 /// takes the pointer on its label only (review A M2 r1 F2).
 fn pr_number<'a, M: Clone + 'a>(
@@ -656,14 +678,17 @@ fn pr_number<'a, M: Clone + 'a>(
     pr: &CardPrRow,
     p: Palette,
 ) -> Element<'a, M> {
+    let number = pr.number;
     match &card.on_pr_link {
         Some(f) => card_link(
             card,
             pr.label.clone(),
-            f(pr.number),
-            card.pr_link_id.as_ref().map(|id| id(pr.number)),
-            None,
-            None,
+            f(number),
+            card.pr_link_id.as_ref().map(|id| id(number)),
+            card.on_pr_link_keyboard_focus
+                .clone()
+                .map(|f| Rc::new(move |shown| f(number, shown)) as Rc<dyn Fn(bool) -> M + 'a>),
+            card.on_pr_link_menu.as_ref().map(|menu| menu(number)),
             true,
         ),
         None => Text::new(pr.label.clone(), TypeRole::Body, card.roles)
@@ -3385,14 +3410,19 @@ mod tests {
         }
     }
 
-    /// U2, R7: without `.on_pr_link_keyboard_focus` no number is a Tab stop, so Tab goes from the
-    /// card straight on; without `.on_pr_link` a number is plain text, and a click on it
-    /// activates the card.
+    /// U2, U3, R7: without `.on_pr_link_keyboard_focus` no number is a Tab stop, so Tab goes from
+    /// the card straight on, and with it each drawn number is one; without `.on_pr_link` a number
+    /// is plain text, and a click on it activates the card.
     #[test]
-    fn numbers_are_no_tab_stops_yet_and_plain_text_without_their_message() {
+    fn numbers_are_tab_stops_only_with_focus_reports_and_plain_text_without_their_message() {
         for expanded in [false, true] {
             let mut wired = in_room(numbered(expanded, true), 380.0);
             assert_eq!(wired.drive(Focusables(0)), Some(1), "expanded {expanded}");
+            let mut keyed = in_room(
+                numbered(expanded, true).on_pr_link_keyboard_focus(|n, f| format!("{n} {f}")),
+                380.0,
+            );
+            assert_eq!(keyed.drive(Focusables(0)), Some(3), "expanded {expanded}");
             let mut plain = in_room(numbered(expanded, false), 380.0);
             let at = centre_of(&mut plain, "#12");
             plain.press(at);
@@ -3461,5 +3491,189 @@ mod tests {
                 "expanded {expanded}"
             );
         }
+    }
+
+    // ---- Feature 1123 (T030, contract U3): numbers by keyboard ----
+
+    /// The rows a card draws: three when `expanded`, the first two collapsed (with one more).
+    fn drawn_rows(expanded: bool) -> (Vec<CardPrRow>, usize) {
+        let mut rows = two_rows();
+        if expanded {
+            rows.push(pr_row(10, PrMark::Merged, None));
+            (rows, 0)
+        } else {
+            (rows, 1)
+        }
+    }
+
+    /// The card of `model` with its issue link and its drawn rows' numbers wired for the keyboard:
+    /// `link focus f`, `pr N focus f`, `pr N menu`, and the card's own `card menu` and `page`.
+    fn keyed(model: &CardModel, expanded: bool) -> OverviewCard<'static, String> {
+        let (rows, more) = drawn_rows(expanded);
+        linked(model, expanded)
+            .pull_requests(rows, more)
+            .on_pr_link(|n| format!("pr {n}"))
+            .pr_link_id(|n| iced::advanced::widget::Id::from(format!("pr-{n}")))
+            .on_link_keyboard_focus(|f| format!("link focus {f}"))
+            .on_pr_link_keyboard_focus(|n, f| format!("pr {n} focus {f}"))
+            .on_pr_link_menu(|n| format!("pr {n} menu"))
+            .on_menu_key("card menu".to_string())
+            .on_page(|down| Some(format!("page {}", if down { "down" } else { "up" })))
+    }
+
+    /// What a redraw publishes, sorted: a move reports the loss and the gain in no fixed order.
+    fn moved(m: &mut Mounted<'_>) -> Vec<String> {
+        let mut published = m.redraw();
+        published.sort();
+        published
+    }
+
+    /// U3, FR-010, SC-002: Tab from the card goes to its issue link, then each drawn number in row
+    /// order, then the next card; Shift+Tab goes back the same way. Collapsed, only the two drawn
+    /// numbers are stops.
+    #[test]
+    fn tab_reaches_each_drawn_number_after_the_issue_link() {
+        use iced::advanced::widget::operation::focusable;
+        for expanded in [false, true] {
+            let mut m = Mounted::new_in(
+                iced::widget::column![
+                    container(keyed(&with_link(Some("feat/1122_x")), expanded))
+                        .height(Length::Fixed(400.0)),
+                    OverviewCard::<String>::new(&titled(), roles()).on_press("next".to_string()),
+                ],
+                Size::new(380.0, 2000.0),
+            );
+            let numbers: &[u64] = if expanded { &[12, 11, 10] } else { &[12, 11] };
+            let mut stops = vec!["link".to_string()];
+            stops.extend(numbers.iter().map(|n| format!("pr {n}")));
+            m.focus_next();
+            assert!(m.redraw().is_empty(), "expanded {expanded}");
+            m.focus_next();
+            assert_eq!(moved(&mut m), ["link focus true"], "expanded {expanded}");
+            for pair in stops.windows(2) {
+                m.focus_next();
+                let mut expected = vec![
+                    format!("{} focus false", pair[0]),
+                    format!("{} focus true", pair[1]),
+                ];
+                expected.sort();
+                assert_eq!(moved(&mut m), expected, "expanded {expanded}: {pair:?}");
+            }
+            m.focus_next();
+            let last = stops.last().expect("a stop");
+            assert_eq!(
+                moved(&mut m),
+                [format!("{last} focus false")],
+                "expanded {expanded}"
+            );
+            assert_eq!(
+                m.send(named_key(Named::Enter), mouse::Cursor::Unavailable),
+                ["next"],
+                "expanded {expanded}: Tab left the card"
+            );
+            m.drive(focusable::focus_previous::<()>());
+            assert_eq!(
+                moved(&mut m),
+                [format!("{last} focus true")],
+                "expanded {expanded}"
+            );
+            for pair in stops.windows(2).rev() {
+                m.drive(focusable::focus_previous::<()>());
+                let mut expected = vec![
+                    format!("{} focus false", pair[1]),
+                    format!("{} focus true", pair[0]),
+                ];
+                expected.sort();
+                assert_eq!(moved(&mut m), expected, "expanded {expanded}: {pair:?}");
+            }
+            m.drive(focusable::focus_previous::<()>());
+            assert_eq!(moved(&mut m), ["link focus false"], "expanded {expanded}");
+        }
+    }
+
+    /// `keyed` in a room, the keyboard on number `n` (by its id), the focus report drained.
+    fn on_number(model: &CardModel, expanded: bool, n: u64, size: Size) -> Mounted<'static> {
+        use iced::advanced::widget::operation::focusable::focus;
+        let mut m = Mounted::new_in(
+            container(keyed(model, expanded))
+                .width(Length::Fixed(size.width))
+                .height(Length::Fixed(size.height)),
+            size,
+        );
+        m.drive(focus::<()>(iced::advanced::widget::Id::from(format!(
+            "pr-{n}"
+        ))));
+        assert_eq!(m.redraw(), [format!("pr {n} focus true")]);
+        m
+    }
+
+    /// U3, FR-009: Enter and Space on a focused number publish its pull request with no ripple;
+    /// the Menu key and Shift+F10 publish its menu message, captured, not the card's; Page Up and
+    /// Page Down publish the card's page message.
+    #[test]
+    fn keys_on_a_focused_number_open_it_its_menu_and_page_the_card() {
+        use super::super::test_support::key_with;
+        use iced::keyboard::Modifiers;
+        let none = mouse::Cursor::Unavailable;
+        for expanded in [false, true] {
+            let size = Size::new(380.0, 400.0);
+            let model = with_link(Some("feat/1122_x"));
+            for key in [Named::Enter, Named::Space] {
+                let mut m = on_number(&model, expanded, 11, size);
+                assert_eq!(
+                    m.send(named_key(key), none),
+                    ["pr 11"],
+                    "expanded {expanded}: {key:?}"
+                );
+                assert!(
+                    ripple(&m).is_idle(),
+                    "expanded {expanded}: {key:?} on a number rippled"
+                );
+            }
+            let mut m = on_number(&model, expanded, 12, size);
+            for key in [
+                key_with(Named::ContextMenu, Modifiers::empty()),
+                key_with(Named::F10, Modifiers::SHIFT),
+            ] {
+                assert_eq!(
+                    m.send_captured(key.clone(), none),
+                    (vec!["pr 12 menu".to_string()], true),
+                    "expanded {expanded}: {key:?}"
+                );
+            }
+            for (key, page) in [(Named::PageDown, "page down"), (Named::PageUp, "page up")] {
+                assert_eq!(
+                    m.send_captured(named_key(key), none),
+                    (vec![page.to_string()], true),
+                    "expanded {expanded}"
+                );
+            }
+        }
+    }
+
+    /// U3, FR-009 (1122 FR-008): a number in the scrolled part of an expanded card's body is
+    /// scrolled into the body's viewport when it takes the keyboard.
+    #[test]
+    fn a_focused_number_below_the_fold_scrolls_into_the_body() {
+        let mut model = with_link(Some("feat/1122_x"));
+        model.display_name = "a long display name ".repeat(40);
+        let mut m = on_number(&model, true, 10, Size::new(380.0, 220.0));
+        let viewport = m.scrollables()[0].0;
+        let on_screen = |m: &mut Mounted<'_>| {
+            m.drive(crate::ui::focus::focused_bounds())
+                .flatten()
+                .expect("the number holds the keyboard")
+        };
+        let before = on_screen(&mut m);
+        assert!(
+            before.y > viewport.y + viewport.height,
+            "the number starts below the fold: {before:?} in {viewport:?}"
+        );
+        m.drive(crate::ui::focus::into_view::<()>());
+        let after = on_screen(&mut m);
+        assert!(
+            after.y >= viewport.y && after.y + after.height <= viewport.y + viewport.height,
+            "the number is in view: {after:?} in {viewport:?}"
+        );
     }
 }

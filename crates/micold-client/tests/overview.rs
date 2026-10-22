@@ -1909,6 +1909,7 @@ mod issue_link {
     use micold_client::ui::overview::issue_link_for;
     use micold_core::github::GithubRepo;
     use micold_core::issue_link::IssueLink;
+    use micold_core::overview_expansion::CardLink;
 
     const LINKED: &str = "feat-1122_overview-issue-link";
 
@@ -2127,7 +2128,7 @@ mod issue_link {
         for event in [
             Event::FocusGained(wt(LINKED)),
             Event::FocusLost(wt(LINKED)),
-            Event::LinkFocusGained(wt(LINKED)),
+            Event::LinkFocusGained(wt(LINKED), CardLink::Issue),
         ] {
             link_event(&mut state, event);
         }
@@ -2142,8 +2143,14 @@ mod issue_link {
         let mut state = on_the_link();
         let expansion = &state.overview.expansion;
         assert_eq!(expansion.expanded(), Some(&wt(LINKED)));
-        assert_eq!(expansion.focused_link(), Some(&wt(LINKED)));
-        link_event(&mut state, Event::LinkFocusLost(wt(LINKED)));
+        assert_eq!(
+            expansion.focused_link(),
+            Some((&wt(LINKED), CardLink::Issue))
+        );
+        link_event(
+            &mut state,
+            Event::LinkFocusLost(wt(LINKED), CardLink::Issue),
+        );
         link_event(&mut state, Event::FocusGained(wt("feat_no-ticket")));
         assert_eq!(
             state.overview.expansion.expanded(),
@@ -2158,7 +2165,10 @@ mod issue_link {
         let mut state = on_the_link();
         state.update(Message::EscapePressed);
         assert_eq!(state.overview.expansion.expanded(), None);
-        assert_eq!(state.overview.expansion.focused_link(), Some(&wt(LINKED)));
+        assert_eq!(
+            state.overview.expansion.focused_link(),
+            Some((&wt(LINKED), CardLink::Issue))
+        );
         assert!(state.overview.open);
     }
 
@@ -2168,20 +2178,20 @@ mod issue_link {
     fn a_menu_from_the_link_hands_the_keyboard_back_to_the_link() {
         use micold_client::features::overview::{FocusReturn, MenuOrigin};
         for (close, to_link) in [
-            (Msg::CardMenuDismissed, true),
+            (Msg::CardMenuDismissed, Some(CardLink::Issue)),
             (
                 Msg::CardMenuEntryChosen(Box::new(Message::Overview(Msg::GridScrolled))),
-                false,
+                None,
             ),
         ] {
             let mut state = on_the_link();
             state.update(Message::Overview(Msg::CardMenuOpened {
                 location: wt(LINKED),
                 anchor: (10, 10),
-                origin: MenuOrigin::KeyboardFromLink,
+                origin: MenuOrigin::KeyboardFromLink(CardLink::Issue),
             }));
             let menu = state.overview.card_menu.clone().expect("the menu is open");
-            assert_eq!(menu.origin, MenuOrigin::KeyboardFromLink);
+            assert_eq!(menu.origin, MenuOrigin::KeyboardFromLink(CardLink::Issue));
             assert_eq!(menu.highlighted, Some(0));
             state.update(Message::Overview(close.clone()));
             assert_eq!(
@@ -2202,8 +2212,88 @@ mod issue_link {
         state.update(Message::Overview(Msg::CardMenuDismissed));
         assert_eq!(
             state.overview.focus_return.map(|r| r.to_link),
-            Some(false),
+            Some(None),
             "the card's menu"
         );
+    }
+
+    // --- Feature 1123 M3: the numbers by keyboard (FR-009, FR-010, T032) ----------------------
+
+    /// FR-009, R6: a number's focus reports reach the expansion with its `CardLink`: a move from
+    /// the issue link to `#12` (in either report order) keeps the card expanded and names `#12`;
+    /// the number's loss to the next card moves the expansion on.
+    #[test]
+    fn a_numbers_focus_reports_reach_the_expansion() {
+        use micold_core::overview_expansion::Event;
+        let number = CardLink::PullRequest(12);
+        for gain_first in [false, true] {
+            let mut state = on_the_link();
+            let (gain, loss) = (
+                Event::LinkFocusGained(wt(LINKED), number),
+                Event::LinkFocusLost(wt(LINKED), CardLink::Issue),
+            );
+            let moves = if gain_first {
+                [gain, loss]
+            } else {
+                [loss, gain]
+            };
+            for event in moves {
+                link_event(&mut state, event);
+            }
+            let expansion = &state.overview.expansion;
+            assert_eq!(expansion.expanded(), Some(&wt(LINKED)), "{gain_first}");
+            assert_eq!(
+                expansion.focused_link(),
+                Some((&wt(LINKED), number)),
+                "{gain_first}"
+            );
+            link_event(&mut state, Event::LinkFocusLost(wt(LINKED), number));
+            link_event(&mut state, Event::FocusGained(wt("feat_no-ticket")));
+            assert_eq!(
+                state.overview.expansion.expanded(),
+                Some(&wt("feat_no-ticket")),
+                "{gain_first}"
+            );
+        }
+    }
+
+    /// FR-009 on a number: a menu opened from `#12` and dismissed hands the keyboard back to
+    /// `#12`; an entry's hand-back is the card's.
+    #[test]
+    fn a_menu_from_a_number_hands_the_keyboard_back_to_it() {
+        use micold_client::features::overview::{FocusReturn, MenuOrigin};
+        let number = CardLink::PullRequest(12);
+        for (close, to_link) in [
+            (Msg::CardMenuDismissed, Some(number)),
+            (
+                Msg::CardMenuEntryChosen(Box::new(Message::Overview(Msg::GridScrolled))),
+                None,
+            ),
+        ] {
+            let mut state = on_the_link();
+            state.update(Message::Overview(Msg::CardMenuOpened {
+                location: wt(LINKED),
+                anchor: (10, 10),
+                origin: MenuOrigin::KeyboardFromLink(number),
+            }));
+            assert_eq!(
+                state
+                    .overview
+                    .card_menu
+                    .as_ref()
+                    .map(|menu| menu.highlighted),
+                Some(Some(0)),
+                "a keyboard menu"
+            );
+            state.update(Message::Overview(close.clone()));
+            assert_eq!(
+                state.overview.focus_return,
+                Some(FocusReturn {
+                    location: wt(LINKED),
+                    to_link
+                }),
+                "{close:?}"
+            );
+        }
     }
 }

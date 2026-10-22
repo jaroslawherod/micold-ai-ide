@@ -44,11 +44,11 @@ pub enum Event {
     FocusGained(SessionLocation),
     /// A card lost keyboard focus.
     FocusLost(SessionLocation),
-    /// A card's issue link received keyboard (shown) focus (feature 1122, FR-008): focus on the
-    /// link counts as focus on its card.
-    LinkFocusGained(SessionLocation),
-    /// A card's issue link lost keyboard focus.
-    LinkFocusLost(SessionLocation),
+    /// One of a card's links received keyboard (shown) focus (feature 1122, FR-008; feature 1123,
+    /// FR-009): focus on a link counts as focus on its card.
+    LinkFocusGained(SessionLocation, CardLink),
+    /// One of a card's links lost keyboard focus.
+    LinkFocusLost(SessionLocation, CardLink),
     /// The Overview opened and put the keyboard on this card (research R13): the focus it reports
     /// next expands nothing (FR-013), and the card stays collapsed until focus moves.
     OpenFocused(SessionLocation),
@@ -71,31 +71,20 @@ pub enum Event {
     },
 }
 
-/// Which of the focused card's two keyboard stops reported focus last (feature 1122, data-model
-/// *Expansion*): the two reports of a move inside one card, in either order, are one move.
+/// Which of the focused card's keyboard stops reported the last gain (feature 1123, research R6,
+/// data-model §5): the two reports of a move inside one card, in either order, are one move, and
+/// the part that gained last holds the keyboard.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum FocusPart {
     /// The card itself.
     #[default]
     Card,
-    /// Its issue link.
-    Link,
-    /// Both, between the gain of one and the loss of the other.
-    Both,
-}
-
-impl FocusPart {
-    fn other(self) -> Self {
-        match self {
-            Self::Card => Self::Link,
-            Self::Link => Self::Card,
-            Self::Both => Self::Both,
-        }
-    }
+    /// One of its links.
+    Link(CardLink),
 }
 
 /// A focus loss of `part` of `location` and the expansion just before it: if the very next event
-/// is the gain of that card's other part, the two are one move inside the card and the loss is
+/// is the gain of another part of that card, the two are one move inside the card and the loss is
 /// undone ("just held", contract K5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct JustLost {
@@ -128,7 +117,7 @@ pub struct Expansion {
     focus_part: FocusPart,
     /// The link whose focus the open card menu took (FR-009): its loss waits for the next focus
     /// report ("held across the menu").
-    link_held: Option<SessionLocation>,
+    link_held: Option<(SessionLocation, CardLink)>,
     /// The previous event, when it was a focus loss of the focused card or its link.
     just_lost: Option<Box<JustLost>>,
 }
@@ -149,13 +138,16 @@ impl Expansion {
         self.body_edges
     }
 
-    /// The card whose issue link holds the keyboard (feature 1122, FR-008): not while an open
-    /// menu holds it (FR-009).
-    pub fn focused_link(&self) -> Option<&SessionLocation> {
-        let link = matches!(self.focus_part, FocusPart::Link | FocusPart::Both);
+    /// The card and which of its links holds the keyboard (feature 1122, FR-008; feature 1123):
+    /// not while an open menu holds it (FR-009).
+    pub fn focused_link(&self) -> Option<(&SessionLocation, CardLink)> {
+        let FocusPart::Link(link) = self.focus_part else {
+            return None;
+        };
         self.focused
             .as_ref()
-            .filter(|_| link && self.link_held.is_none())
+            .filter(|_| self.link_held.is_none())
+            .map(|location| (location, link))
     }
 
     /// Take in `event` (K1, data-model *Events and transitions*).
@@ -224,10 +216,10 @@ impl Expansion {
             }
             Event::FocusGained(location) => self.gained(location, FocusPart::Card, just_lost),
             Event::FocusLost(location) => self.lost(location, FocusPart::Card),
-            Event::LinkFocusGained(location) => {
-                self.gained(location, FocusPart::Link, just_lost);
+            Event::LinkFocusGained(location, link) => {
+                self.gained(location, FocusPart::Link(link), just_lost);
             }
-            Event::LinkFocusLost(location) => self.lost(location, FocusPart::Link),
+            Event::LinkFocusLost(location, link) => self.lost(location, FocusPart::Link(link)),
             Event::OpenFocused(location) => self.open_focus = Some(location),
             Event::Escape => {
                 if let Some((location, _)) = self.expanded.take() {
@@ -242,7 +234,7 @@ impl Expansion {
                 self.rest_held = false;
                 // The loss the link's menu deferred happens now: no link holds the keyboard under
                 // the menu once the window has lost it (review A F3, M4).
-                if let Some(held) = self.link_held.take() {
+                if let Some((held, _)) = self.link_held.take() {
                     self.lost_plain(held);
                 }
                 self.focus_held = false;
@@ -286,7 +278,12 @@ impl Expansion {
                     self.focused = None;
                     self.focus_escaped = false;
                 }
-                if gone(&self.link_held) {
+                if gone(
+                    &self
+                        .link_held
+                        .as_ref()
+                        .map(|(location, _)| location.clone()),
+                ) {
                     self.link_held = None;
                 }
                 if gone(&self.pointer_on) {
@@ -318,7 +315,7 @@ impl Expansion {
         part: FocusPart,
         just_lost: Option<Box<JustLost>>,
     ) {
-        if let Some(held) = self.link_held.take() {
+        if let Some((held, _)) = self.link_held.take() {
             if held == location {
                 // The return from the link's menu, to the link or to its card (FR-009).
                 self.focused = Some(location);
@@ -329,7 +326,8 @@ impl Expansion {
             self.lost_plain(held);
         }
         if let Some(lost) = just_lost {
-            if lost.location == location && lost.part == part.other() {
+            // A loss of any other part of this card, just before: one move inside it (R6).
+            if lost.location == location && lost.part != part {
                 *self = lost.before;
                 self.focus_part = part;
                 return;
@@ -341,8 +339,8 @@ impl Expansion {
                 // link that went to its card, contract U6) changes nothing.
                 return;
             }
-            // The card's other part holds the keyboard: a move inside the card.
-            self.focus_part = FocusPart::Both;
+            // Another part of the card holds the keyboard: a move inside the card, gain first.
+            self.focus_part = part;
             return;
         }
         self.focus_part = part;
@@ -363,15 +361,17 @@ impl Expansion {
     /// `part` of `location` lost the keyboard (K5).
     fn lost(&mut self, location: SessionLocation, part: FocusPart) {
         if self.focused.as_ref() == Some(&location) {
-            if self.focus_part == FocusPart::Both || self.focus_part == part.other() {
-                // The card's other part holds the keyboard: a move inside the card.
-                self.focus_part = part.other();
+            if part != self.focus_part {
+                // A later part already reported its gain: the old half of a move inside the card
+                // (or a stale report) changes nothing (R6).
                 return;
             }
-            if part == FocusPart::Link && self.menu_open {
-                // The link's Menu key opened the menu, which took the keyboard (FR-009).
-                self.link_held = Some(location);
-                return;
+            if let FocusPart::Link(link) = part {
+                if self.menu_open {
+                    // The link's Menu key opened the menu, which took the keyboard (FR-009).
+                    self.link_held = Some((location, link));
+                    return;
+                }
             }
             self.just_lost = Some(Box::new(JustLost {
                 location: location.clone(),
@@ -1070,11 +1070,11 @@ mod tests {
     }
 
     fn link_focus(name: &str) -> Event {
-        Event::LinkFocusGained(loc(name))
+        Event::LinkFocusGained(loc(name), CardLink::Issue)
     }
 
     fn link_lost(name: &str) -> Event {
-        Event::LinkFocusLost(loc(name))
+        Event::LinkFocusLost(loc(name), CardLink::Issue)
     }
 
     fn lost(name: &str) -> Event {
@@ -1094,7 +1094,7 @@ mod tests {
         assert_eq!(shown(&tabbed), Some("a".into()));
         assert_eq!(tabbed.cause(), Some(Cause::Focus));
         assert_eq!(tabbed.focused, Some(loc("a")));
-        assert_eq!(tabbed.focused_link(), Some(&loc("a")));
+        assert_eq!(tabbed.focused_link(), Some((&loc("a"), CardLink::Issue)));
     }
 
     /// K5, FR-008: after Escape, the same Tab does not re-expand the card.
@@ -1164,7 +1164,7 @@ mod tests {
         let back = after(events);
         assert_eq!(shown(&back), None);
         assert!(back.focus_escaped);
-        assert_eq!(back.focused_link(), Some(&loc("a")));
+        assert_eq!(back.focused_link(), Some((&loc("a"), CardLink::Issue)));
     }
 
     /// K5, FR-009: without Escape the card stays expanded across the link's menu.
@@ -1173,7 +1173,7 @@ mod tests {
         let mut events = link_menu_opened(false);
         let open = after(events.clone());
         assert_eq!(shown(&open), Some("a".into()));
-        assert_eq!(open.link_held, Some(loc("a")));
+        assert_eq!(open.link_held, Some((loc("a"), CardLink::Issue)));
         events.extend([Event::MenuClosed, link_focus("a")]);
         let back = after(events);
         assert_eq!(shown(&back), Some("a".into()));
@@ -1277,7 +1277,7 @@ mod tests {
         assert_eq!(shown(&tabbed), Some("b".into()));
         assert_eq!(tabbed.cause(), Some(Cause::Pointer));
         assert!(tabbed.focus_escaped);
-        assert_eq!(tabbed.focused_link(), Some(&loc("a")));
+        assert_eq!(tabbed.focused_link(), Some((&loc("a"), CardLink::Issue)));
     }
 
     /// K5: a listing that changes something (another card gone) still ends the pairing.
@@ -1314,6 +1314,216 @@ mod tests {
         assert_eq!(blurred.focused, None);
         assert_eq!(blurred.focused_link(), None);
         assert_eq!(shown(&blurred), None);
+    }
+
+    /// A part of card `name`'s keyboard stops: `None` is the card, `Some(link)` one of its links.
+    type Part = Option<CardLink>;
+
+    const CARD: Part = None;
+    const ISSUE: Part = Some(CardLink::Issue);
+
+    fn pr(number: u64) -> Part {
+        Some(CardLink::PullRequest(number))
+    }
+
+    fn gain(name: &str, part: Part) -> Event {
+        match part {
+            None => focus(name),
+            Some(link) => Event::LinkFocusGained(loc(name), link),
+        }
+    }
+
+    fn loss(name: &str, part: Part) -> Event {
+        match part {
+            None => lost(name),
+            Some(link) => Event::LinkFocusLost(loc(name), link),
+        }
+    }
+
+    /// The two reports of a keyboard move on card `name` from `from` to `to`, in either order
+    /// (feature 1123, research R6): iced reports a move as one loss and one gain.
+    fn moved(name: &str, from: Part, to: Part, gain_first: bool) -> Vec<Event> {
+        if gain_first {
+            vec![gain(name, to), loss(name, from)]
+        } else {
+            vec![loss(name, from), gain(name, to)]
+        }
+    }
+
+    /// Card A focused (expanded by focus), its issue link tabbed to, then Escape if `escaped`.
+    fn on_issue_link(escaped: bool, gain_first: bool) -> Vec<Event> {
+        let mut events = vec![focus("a")];
+        events.extend(moved("a", CARD, ISSUE, gain_first));
+        if escaped {
+            events.push(Event::Escape);
+        }
+        events
+    }
+
+    /// K5a (feature 1123, FR-010): a move from the issue link to a number on a focus-expanded
+    /// card, in either report order, keeps it expanded and names the number.
+    #[test]
+    fn a_move_from_link_to_link_keeps_the_card_expanded() {
+        for gain_first in [false, true] {
+            let mut events = on_issue_link(false, gain_first);
+            events.extend(moved("a", ISSUE, pr(12), gain_first));
+            let moved = after(events);
+            assert_eq!(shown(&moved), Some("a".into()), "gain first: {gain_first}");
+            assert_eq!(
+                moved.cause(),
+                Some(Cause::Focus),
+                "gain first: {gain_first}"
+            );
+            assert_eq!(
+                moved.focused_link(),
+                Some((&loc("a"), CardLink::PullRequest(12))),
+                "gain first: {gain_first}"
+            );
+        }
+    }
+
+    /// K5b (FR-010, 1122 FR-008): after Escape the same move leaves the card collapsed.
+    #[test]
+    fn a_move_from_link_to_link_after_escape_stays_collapsed() {
+        for gain_first in [false, true] {
+            let mut events = on_issue_link(true, gain_first);
+            events.extend(moved("a", ISSUE, pr(12), gain_first));
+            let moved = after(events);
+            assert_eq!(shown(&moved), None, "gain first: {gain_first}");
+            assert!(moved.focus_escaped, "gain first: {gain_first}");
+            assert_eq!(
+                moved.focused_link(),
+                Some((&loc("a"), CardLink::PullRequest(12))),
+                "gain first: {gain_first}"
+            );
+        }
+    }
+
+    /// K5c: card → number and back, expanded or Escape-collapsed, in either report order: no form
+    /// change; the number holds the keyboard, then nothing but the card.
+    #[test]
+    fn a_move_between_the_card_and_a_number_keeps_the_form() {
+        for escaped in [false, true] {
+            for gain_first in [false, true] {
+                let case = format!("escaped: {escaped}, gain first: {gain_first}");
+                let expected = (!escaped).then(|| "a".to_owned());
+                let mut events = vec![focus("a")];
+                if escaped {
+                    events.push(Event::Escape);
+                }
+                events.extend(moved("a", CARD, pr(7), gain_first));
+                let there = after(events.clone());
+                assert_eq!(shown(&there), expected, "{case}");
+                assert_eq!(
+                    there.focused_link(),
+                    Some((&loc("a"), CardLink::PullRequest(7))),
+                    "{case}"
+                );
+                events.extend(moved("a", pr(7), CARD, gain_first));
+                let back = after(events);
+                assert_eq!(shown(&back), expected, "{case}");
+                assert_eq!(back.focus_escaped, escaped, "{case}");
+                assert_eq!(back.focused, Some(loc("a")), "{case}");
+                assert_eq!(back.focused_link(), None, "{case}");
+            }
+        }
+    }
+
+    /// K5d: after a gain-first move from #1 to #2, #2 holds the keyboard; when it then loses it to
+    /// another card's gain, in either order, the card collapses and that card expands.
+    #[test]
+    fn a_number_that_gained_last_loses_to_another_card() {
+        for gain_first in [false, true] {
+            let mut events = vec![focus("a")];
+            events.extend(moved("a", CARD, pr(1), false));
+            events.extend(moved("a", pr(1), pr(2), true));
+            let on_two = after(events.clone());
+            assert_eq!(shown(&on_two), Some("a".into()));
+            assert_eq!(
+                on_two.focused_link(),
+                Some((&loc("a"), CardLink::PullRequest(2)))
+            );
+            if gain_first {
+                events.extend([focus("b"), loss("a", pr(2))]);
+            } else {
+                events.extend([loss("a", pr(2)), focus("b")]);
+            }
+            let left = after(events);
+            assert_eq!(shown(&left), Some("b".into()), "gain first: {gain_first}");
+            assert_eq!(left.focused, Some(loc("b")), "gain first: {gain_first}");
+            assert_eq!(left.focused_link(), None, "gain first: {gain_first}");
+        }
+    }
+
+    /// K5e: a stale loss of #1, arriving after #2 gained and the card took the keyboard back (in
+    /// either order), changes nothing.
+    #[test]
+    fn a_stale_loss_of_an_older_number_changes_nothing() {
+        for escaped in [false, true] {
+            for gain_first in [false, true] {
+                let case = format!("escaped: {escaped}, gain first: {gain_first}");
+                let mut events = vec![focus("a")];
+                events.extend(moved("a", CARD, pr(1), false));
+                if escaped {
+                    events.push(Event::Escape);
+                }
+                events.push(gain("a", pr(2)));
+                events.extend(moved("a", pr(2), CARD, gain_first));
+                let before = after(events.clone());
+                events.push(loss("a", pr(1)));
+                let stale = after(events);
+                assert_eq!(stale, before, "{case}");
+                assert_eq!(shown(&stale), (!escaped).then(|| "a".to_owned()), "{case}");
+                assert_eq!(stale.focused, Some(loc("a")), "{case}");
+                assert_eq!(stale.focused_link(), None, "{case}");
+            }
+        }
+    }
+
+    /// K5f (FR-009 on a number): the number's Menu key opens the menu, which takes the keyboard:
+    /// its loss is held, no link holds the keyboard under the menu, and the return gain restores
+    /// the number; a blur applies the held loss, a listing without the card drops it.
+    #[test]
+    fn a_numbers_menu_holds_its_focus_until_the_return() {
+        for gain_first in [false, true] {
+            let case = format!("gain first: {gain_first}");
+            let mut events = on_issue_link(false, gain_first);
+            events.extend(moved("a", ISSUE, pr(5), gain_first));
+            events.extend([Event::MenuOpened, loss("a", pr(5))]);
+            let open = after(events.clone());
+            assert_eq!(
+                open.link_held,
+                Some((loc("a"), CardLink::PullRequest(5))),
+                "{case}"
+            );
+            assert_eq!(open.focused_link(), None, "{case}");
+            assert_eq!(shown(&open), Some("a".into()), "{case}");
+
+            let mut back = events.clone();
+            back.extend([Event::MenuClosed, gain("a", pr(5))]);
+            let back = after(back);
+            assert_eq!(back.link_held, None, "{case}");
+            assert_eq!(shown(&back), Some("a".into()), "{case}");
+            assert_eq!(
+                back.focused_link(),
+                Some((&loc("a"), CardLink::PullRequest(5))),
+                "{case}"
+            );
+
+            let mut blurred = events.clone();
+            blurred.push(Event::WindowBlurred);
+            let blurred = after(blurred);
+            assert_eq!(blurred.link_held, None, "{case}");
+            assert_eq!(blurred.focused, None, "{case}");
+            assert_eq!(shown(&blurred), None, "{case}");
+
+            let mut gone = events;
+            gone.push(Event::Listed(vec![loc("b")]));
+            let gone = after(gone);
+            assert_eq!(gone.link_held, None, "{case}");
+            assert_eq!(gone.focused, None, "{case}");
+            assert_eq!(gone.focused_link(), None, "{case}");
+        }
     }
 
     /// K2, SC-006: a card expands within half a second of the pointer resting on it.
