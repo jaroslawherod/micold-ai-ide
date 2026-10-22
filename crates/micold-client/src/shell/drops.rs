@@ -117,12 +117,12 @@ fn read_for_composer(
         }
         Message::Composer(Msg::Dropped {
             session,
-            files: DroppedFiles {
+            files: Box::new(DroppedFiles {
                 plan,
                 reads,
                 shell,
                 sandbox,
-            },
+            }),
         })
     })
 }

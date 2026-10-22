@@ -300,7 +300,7 @@ pub enum Msg {
     /// Files dropped on `session`'s pane, read.
     Dropped {
         session: SessionId,
-        files: DroppedFiles,
+        files: Box<DroppedFiles>,
     },
 }
 
