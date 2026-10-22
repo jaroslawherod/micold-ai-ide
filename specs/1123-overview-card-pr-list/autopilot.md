@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: review M3
-- **Next step**: M3 T029–T036 done (red/green in tdd/cycle-log.md), scoped gate; review A r1 (session model), review B r1 (sonnet), visual pass r1 (sonnet, §B4 keyboard, T037) dispatched by the orchestrator; then fixes, full gate (scripts/gate.sh), M3 PR
+- **Next step**: M3 T029–T036 done (red/green in tdd/cycle-log.md), scoped gate; review A r1 (session model), review B r1 (sonnet), visual pass r1 (sonnet, §B4 keyboard, T037) dispatched by the orchestrator (scoped gate green but the root-only permission tests); then fixes, full gate (scripts/gate.sh), M3 PR
 
 ## Pull requests
 
@@ -66,6 +66,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M2 (T028) | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | PASS all 6 (click #12 / #11 opens exactly that address, no ripple, Overview stays; pointer, underline, colour; pill activates the card; failing xdg-open toast; rows whole at 380 px); MINOR repaint lag of a hover underline under software rendering, not a defect; evidence `visual-pass/m2/` (26 files) |
 | Review A M2 | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | CLEAN |
 | Visual pass M2 (T028) | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | PASS all 4 (top px of "#11" opens #11, no ripple; 3 px above "#12" activates the card with ripple, nothing opened; no underline in the old gutter; #12 and issue link still open exactly their address), light 1.0 and dark 2.0; evidence `visual-pass/m2/r2/` (30 files) |
+| Review A M3 | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | pending (orchestrator dispatches; prompt 1123-m3-prompt-review-a-r1.md) |
+| Review B M3 | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | pending (sonnet; prompt 1123-m3-prompt-review-b-r1.md) |
+| Visual pass M3 (T037) | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | pending (sonnet, §B4 keyboard; prompt 1123-m3-prompt-visual-r1.md) |
 
 ### Review A M1 round 2 verdict (verbatim)
 
