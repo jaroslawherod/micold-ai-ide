@@ -121,7 +121,27 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-None.
+M4 unit 2 (2026-10-22) implemented T039–T047 (all ticked) in commit 1a2f3dcd and handed over at the
+context cap before verify. `cargo test -p micold-client --test features_composer --test
+pane_drop_target` (the Verify) is green, as are `feature_registration_cost`,
+`feature_write_isolation`, `features_are_render_free`, `transcript_pane`; `cargo build -p
+micold-client` has no warnings; `cargo fmt --all` applied. Not run yet: clippy, the workspace tests,
+any gate. Next: verify.md from step 1 (scoped gate + review A high, review B sonnet, no visual pass:
+nothing is drawn), full gate, push, PR files (title "… M4 of 7: client composer state, sends and
+drops (#941)"). What a reviewer should know:
+- `features/composer.rs` (shape B, `Msg` → `shell/composer.rs`); `State.composers`;
+  `Message::Composer`; editors live in `App.composer_editors` with the draft `generation` they
+  showed (`shell::composer::sync_editor` rebuilds on a reducer-made change, never on typing).
+- Caret column is a byte offset (iced/cosmic-text's `Position.column`). `Editor::{at, act, caret,
+  line_count, text, move_line}` added in app.rs.
+- `daemon_sync::send_op_bound_req` (returns the req) added; `send_op_bound` delegates. PendingOp
+  gained `ComposerSend`, `QueueOp` (remove/release), `QueueEdit`, `QueueTake`; arms in
+  OperationOk/OperationError/`resolve_pending_of` (now keeps `(req, op)`), `describe`.
+- `app::State::is_structured_primary` (session.rs) replaces ui/terminal.rs's body;
+  `session::target_of(state, Option<Option<TerminalRef>>)`; `files_dropped` ignores `Composer`.
+- Workspace tokio gained the `fs` feature (drops read with `tokio::fs`).
+- Left for M6 (draw): focusing the composer after a drop; calling `composers.forget` when a session
+  closes is not wired (memory only, per window). Decision 15 records the restore-with-typed-text rule.
 
 ## Open escalation
 
