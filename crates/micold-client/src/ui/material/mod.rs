@@ -29,6 +29,7 @@ mod button;
 mod button_anatomy;
 mod card_grid;
 mod checkbox;
+mod choice_list;
 mod code_block;
 /// A component read against the container it is *rendered in*, not against the surfaces its own
 /// role was enumerated for. The first check here that reads a **composition** rather than the
@@ -102,6 +103,7 @@ mod picker_parity;
 mod picker_press;
 mod progress;
 mod progress_bar;
+mod prompt_card;
 mod queue_row;
 mod required_legend;
 mod resize_handle;
@@ -197,6 +199,7 @@ pub use busy_indicator::BusyIndicator;
 pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use card_grid::{CardGrid, Zoom};
 pub use checkbox::Checkbox;
+pub use choice_list::{ChoiceList, OTHER as CHOICE_OTHER, OTHER_PLACEHOLDER};
 pub use code_block::CodeBlock;
 pub use connection_banner::ConnectionBanner;
 pub use diff_view::{
@@ -227,6 +230,7 @@ pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;
 pub use progress_bar::ProgressBar;
+pub use prompt_card::PromptCard;
 pub use pull_request_indicator::{CheckMark, PrMark, PullRequestIndicator};
 pub use pull_request_row::PullRequestRow;
 pub use queue_row::QueueRow;

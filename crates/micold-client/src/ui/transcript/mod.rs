@@ -8,6 +8,7 @@ mod blocks;
 mod entries;
 mod insights;
 mod keyed;
+pub mod permission;
 mod rich;
 pub mod session_bar;
 
@@ -26,16 +27,19 @@ pub use insights::{
     task_status, thread_header, MeterView, SessionBarView, TaskRow, TaskStatus, ThreadHeader,
     BACKGROUND_TASKS, NEAR_COMPACTION,
 };
+pub use permission::PromptsView;
 pub use rich::EDIT_TOOLS;
 
+use crate::features::permission_prompts::Placement;
 use crate::features::structured_transcript::{Follow, State, TranscriptMsg};
 use crate::icons::Icon;
 use crate::ui::material::{Button, Scrollable};
 use iced::widget::{column, container, lazy, stack, Space};
 use iced::{Alignment, Element, Length};
 use keyed::KeyedColumn;
+use micold_core::protocol::messages::PromptId;
 use micold_core::session::SessionId;
-use micold_core::structured::transcript::{EntryId, Transcript};
+use micold_core::structured::transcript::{EntryId, EntryKey, Transcript};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::spacing;
 
@@ -52,6 +56,8 @@ enum RowKey {
     Omitted,
     Empty,
     Entry(EntryId),
+    /// A permission request whose tool card is not held, after the last entry (feature 942).
+    Prompt(PromptId),
 }
 
 /// The transcript of a session the window has heard nothing of: no entry, no thread.
@@ -81,7 +87,15 @@ pub fn view<'a>(
     renderers: &'a BlockRenderers,
     ctx: RenderCtx<'a>,
 ) -> Element<'a, TranscriptMsg> {
-    view_inner(state, None, session, renderers, ctx)
+    build(
+        state,
+        None,
+        session,
+        renderers,
+        ctx,
+        std::convert::identity,
+        None,
+    )
 }
 
 /// [`view`] with what feature 944 adds (contracts/transcript-extensions.md): the session bar at
@@ -94,12 +108,56 @@ pub fn view_with_insights<'a>(
     renderers: &'a BlockRenderers,
     ctx: RenderCtx<'a>,
 ) -> Element<'a, TranscriptMsg> {
-    let bar = container(session_bar::view(
-        insights.state,
+    view_full(
+        state,
+        insights,
         session,
-        insights.cli_running,
-        ctx.roles,
-    ))
+        renderers,
+        ctx,
+        std::convert::identity,
+        None,
+    )
+}
+
+/// [`view`] with `session`'s permission requests drawn in it (feature 942, research R11): each
+/// directly under the tool card of its call, through [`entries::with_trailing`], or after the last
+/// entry when the transcript does not hold that card; and under a card whose request ended in this
+/// window run, how it ended. The transcript's messages go through `on_transcript`, the requests'
+/// through `prompts.on_prompt`.
+pub fn view_with_prompts<'a, M: Clone + 'a>(
+    state: &'a State,
+    session: SessionId,
+    renderers: &'a BlockRenderers,
+    ctx: RenderCtx<'a>,
+    on_transcript: fn(TranscriptMsg) -> M,
+    prompts: PromptsView<'a, M>,
+) -> Element<'a, M> {
+    build(
+        state,
+        None,
+        session,
+        renderers,
+        ctx,
+        on_transcript,
+        Some(prompts),
+    )
+}
+
+/// The window's transcript: [`view_with_insights`] with the permission requests of
+/// [`view_with_prompts`] drawn in it when `prompts` is given.
+pub fn view_full<'a, M: Clone + 'a>(
+    state: &'a State,
+    insights: InsightsCtx<'a>,
+    session: SessionId,
+    renderers: &'a BlockRenderers,
+    ctx: RenderCtx<'a>,
+    on_transcript: fn(TranscriptMsg) -> M,
+    prompts: Option<PromptsView<'a, M>>,
+) -> Element<'a, M> {
+    let bar = container(
+        session_bar::view(insights.state, session, insights.cli_running, ctx.roles)
+            .map(on_transcript),
+    )
     .padding(iced::Padding {
         top: spacing::SM,
         bottom: 0.0,
@@ -109,68 +167,135 @@ pub fn view_with_insights<'a>(
     .width(Length::Fill);
     column![
         bar,
-        view_inner(state, Some(insights), session, renderers, ctx)
+        build(
+            state,
+            Some(insights),
+            session,
+            renderers,
+            ctx,
+            on_transcript,
+            prompts
+        )
     ]
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
 }
 
-fn view_inner<'a>(
+fn build<'a, M: Clone + 'a>(
     state: &'a State,
     insights: Option<InsightsCtx<'a>>,
     session: SessionId,
     renderers: &'a BlockRenderers,
     ctx: RenderCtx<'a>,
-) -> Element<'a, TranscriptMsg> {
+    on_transcript: fn(TranscriptMsg) -> M,
+    prompts: Option<PromptsView<'a, M>>,
+) -> Element<'a, M> {
     let roles = ctx.roles;
     let dark = ctx.scheme == ColorScheme::Dark;
-    let main = state.transcript(session);
+    let transcript = state.transcript(session);
     let scope = entries::Scope {
         session,
-        main: main.unwrap_or(empty_transcript()),
+        main: transcript.unwrap_or(empty_transcript()),
         insights,
     };
-    let list = KeyedColumn::new(rows(main).into_iter().map(|row| match row {
-        Row::Omitted(n) => (RowKey::Omitted, entries::omitted_notice(n, roles)),
-        Row::Empty => (RowKey::Empty, entries::no_output(roles)),
-        Row::Entry(entry) => {
-            let open = state.is_open(session, entry.key());
-            let stamp = ctx.cache.get(session, entry.key()).map_or(0, |d| d.stamp);
-            let extras = entries::insights_stamp(entry, &ctx, scope);
-            let key = (entry.key(), entry.revision(), open, dark, stamp, extras);
-            let drawn = lazy(key, move |_| {
-                let toggle = TranscriptMsg::Toggle {
-                    session,
-                    key: entry.key().clone(),
-                };
-                entries::entry(entry, open, toggle, renderers, &ctx, scope)
-            });
-            (RowKey::Entry(entry.id()), drawn.into())
+    let placed = prompts
+        .as_ref()
+        .map(|p| p.state.placement(session, transcript))
+        .unwrap_or_default();
+    let draw = prompts.as_ref().map(|p| permission::Draw {
+        renderers,
+        ctx,
+        on_transcript,
+        on_prompt: p.on_prompt,
+    });
+    // The request block of request `id`, `card` its tool call's entry when held.
+    let block = |id: PromptId, card| -> Option<Element<'a, M>> {
+        let (p, d) = (prompts.as_ref()?, draw.as_ref()?);
+        let shown = p.state.shown(session, id)?;
+        Some(permission::request_block(
+            shown,
+            card,
+            p.state.can_submit(session, id),
+            d,
+        ))
+    };
+    // Under the card of `key`: its pending requests, else how its last request ended.
+    let trailing = |entry: &'a micold_core::structured::transcript::Entry| {
+        let key = entry.key();
+        let under: Vec<Element<'a, M>> = placed
+            .iter()
+            .filter(|(placement, _)| matches!(placement, Placement::UnderCard(k) if k == key))
+            .filter_map(|(_, id)| block(*id, Some(entry)))
+            .collect();
+        if !under.is_empty() {
+            return Some(column(under).spacing(spacing::SM).into());
         }
-    }))
-    .spacing(spacing::MD)
-    .padding(spacing::MD)
-    .width(Length::Fill);
+        let EntryKey::Tool(tool_use_id) = key else {
+            return None;
+        };
+        let resolution = prompts.as_ref()?.state.resolution(session, tool_use_id)?;
+        Some(permission::resolution_row(resolution, roles))
+    };
+    let mut keyed: Vec<(RowKey, Element<'a, M>)> = rows(transcript)
+        .into_iter()
+        .map(|row| match row {
+            Row::Omitted(n) => (
+                RowKey::Omitted,
+                entries::omitted_notice(n, roles).map(on_transcript),
+            ),
+            Row::Empty => (RowKey::Empty, entries::no_output(roles).map(on_transcript)),
+            Row::Entry(entry) => {
+                let open = state.is_open(session, entry.key());
+                let stamp = ctx.cache.get(session, entry.key()).map_or(0, |d| d.stamp);
+                let extras = entries::insights_stamp(entry, &ctx, scope);
+                let key = (entry.key(), entry.revision(), open, dark, stamp, extras);
+                let drawn = lazy(key, move |_| {
+                    let toggle = TranscriptMsg::Toggle {
+                        session,
+                        key: entry.key().clone(),
+                    };
+                    entries::entry(entry, open, toggle, renderers, &ctx, scope)
+                });
+                let drawn = Element::from(drawn).map(on_transcript);
+                (
+                    RowKey::Entry(entry.id()),
+                    entries::with_trailing(drawn, trailing(entry)),
+                )
+            }
+        })
+        .collect();
+    keyed.extend(
+        placed
+            .iter()
+            .filter(|(placement, _)| *placement == Placement::AtEnd)
+            .filter_map(|(_, id)| Some((RowKey::Prompt(*id), block(*id, None)?))),
+    );
+    let list = KeyedColumn::new(keyed)
+        .spacing(spacing::MD)
+        .padding(spacing::MD)
+        .width(Length::Fill);
     let scrollable = Scrollable::new(list, roles)
         .id(transcript_scroll_id(session))
         .width(Length::Fill)
         .height(Length::Fill)
-        .on_scroll_metrics(move |offset, viewport, content| TranscriptMsg::Scrolled {
-            session,
-            offset,
-            viewport,
-            content,
+        .on_scroll_metrics(move |offset, viewport, content| {
+            on_transcript(TranscriptMsg::Scrolled {
+                session,
+                offset,
+                viewport,
+                content,
+            })
         })
-        .on_viewport_resize(move |_| TranscriptMsg::Shown { session });
+        .on_viewport_resize(move |_| on_transcript(TranscriptMsg::Shown { session }));
     // Always two layers, so detaching changes only the top one and the scrollable keeps its place
     // in the tree (and with it, its offset).
-    let jump: Element<'a, TranscriptMsg> = match state.follow(session) {
+    let jump: Element<'a, M> = match state.follow(session) {
         Follow::Following => Space::new().into(),
         Follow::Detached { .. } => container(
             Button::filled(JUMP_TO_LATEST, roles)
                 .leading(Icon::JumpToLatest)
-                .on_press(TranscriptMsg::JumpToLatest { session }),
+                .on_press(on_transcript(TranscriptMsg::JumpToLatest { session })),
         )
         .width(Length::Fill)
         .height(Length::Fill)

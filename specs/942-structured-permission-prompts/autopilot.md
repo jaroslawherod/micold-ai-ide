@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M6 PR
-- **Next step**: orchestrator waits on #1263's CI and merges it; then M7, which needs #939 M5–M6 on main (I-1)
+- **Phase**: M7 implement
+- **Next step**: M7 verify (see *Handover*): scoped gate + review A, review B + visual pass, full gate, open the M7 PR
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1208 | M3: daemon waiting activity and withdrawal | merged (rebase) | 802f46ebcbd3379fb50758ac94fde18e757e11b2 |
 | #1224 | M4: daemon mode persisted, created, launched | merged (rebase) | 4780eb3eaf8e292a0d9258ded2a646ea855a3756 |
 | #1231 | M5: mode change while running, following Claude, plan approval sets the mode | merged (rebase; CI's one red job `sandbox_real_provision_own_image_without_ssh_fails_in_reach`, a Docker Hub 502 pulling alpine:3, passed on one re-run) | 1403972ac7d6e4cc845004c89b558d8253ab33c7 |
-| #1263 | M6: client render-free prompt state and create-flow mode | open (draft) | — |
+| #1263 | M6: client render-free prompt state and create-flow mode | merged (rebase; after CI went green main moved and the PR conflicted in `crates/micold-client/src/app.rs` `forget_structured` with #944 structured_insights; the orchestrator rebased keeping both forgets, the full gate passed again, then merged) | b7f1b704e184ad5b1e0c905f4fb3d6e35569839d |
 
 ## Milestones
 
@@ -33,8 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | #1208 | merged |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | #1224 | merged |
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | #1231 | merged |
-| M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | #1263 (draft) | full gate green at 24c024c2 (scripts/gate.sh, third run: one load flake, then the root vocabulary guard fixed); review A clean, review B clean in r2 |
-| M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1) | — | pending |
+| M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | #1263 | merged |
+| M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1, met: #1203, #1206) | — | in progress |
 | M8 | T064–T069 | full | Window composer side, switch on, user guide, Part B; needs #941 on main (I-2) | — | pending |
 
 ## Decisions
@@ -107,7 +107,31 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M7 unit handed over at checkpoint (CONTEXT over 150k). Done, committed locally on
+`claude/project-thread-tt60gq` (not pushed; no PR yet):
+
+- T056–T063 implemented and ticked: `ui/material/choice_list.rs` (`ChoiceList`), `ui/material/prompt_card.rs`
+  (`PromptCard`), `style::{prompt_card, choice_ring, choice_dot}`, `ui/transcript/permission.rs`
+  (tool request block, plan view, question view, resolution labels, `PromptsView`, `request_view`),
+  `ui/transcript/mod.rs` `view_with_prompts` (requests under their card through
+  `entries::with_trailing`, else after the last entry; `view` unchanged in output), `ui/terminal.rs`
+  `transcript_body` now draws through `view_with_prompts` (unreachable for users while the daemon
+  switch is off), showcase `sections/prompts.rs` + two catalogue entries, gate
+  `tests/gates/prompt_card_fits.rs` (160 px = MIN_PANE_COLS × 8, both schemes), tests
+  `tests/transcript_permission_view.rs` (12), `showcase_completeness` / `material_builder_api` cases.
+  Cycle 11 in `tdd/cycle-log.md`.
+- Green so far (targeted): `transcript_permission_view` 12, `layout_snapshot -- prompt_card` 1,
+  `showcase_completeness` 46, `material_builder_api` 7, `showcase_captions` 13, lib unit tests of the
+  three new modules 9. `cargo fmt --all` applied. Clippy NOT run yet; whole `layout_snapshot`
+  (fixture `layout_snapshot.txt`) not run yet.
+
+Next step: verify.md from step 1 — scoped gate (`scripts/autopilot/scoped-gate.sh`) with review A
+(`code-review` high on `origin/main...HEAD`) in its shadow; then review B (conformance, sonnet) and the
+visual pass (showcase entries `ChoiceList`, `PromptCard` in light and dark: action rows inside the
+card, focus rings, marks), then the full gate (`/mnt/project-files/scripts/split-gate.sh` if
+`scripts/gate.sh` runs out of disk), then pr.md with the title the orchestrator gave:
+"#942: Structured session: permission prompts via permission-prompt-tool — M7", as a draft.
+Open findings: none yet (no review run).
 
 ## Open escalation
 

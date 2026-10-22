@@ -190,6 +190,13 @@ mod inline_diff_marker_fits;
 #[path = "gates/composer_parts_fit.rs"]
 mod composer_parts_fit;
 
+// --- A permission prompt's actions stay inside its card (feature 942, T057) -------------------
+
+// The tool request, plan approval and question views, as the showcase poses them, at the narrowest
+// pane width: every action of the row is drawn inside the card (FR-006, FR-007, FR-008).
+#[path = "gates/prompt_card_fits.rs"]
+mod prompt_card_fits;
+
 // --- The transcript's jump control fits its viewport (feature 939, T038) ------------------------
 
 // A structured session's pane, detached from the end: "Jump to latest" lies inside the

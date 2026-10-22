@@ -685,6 +685,28 @@ fn thread_stamp(
     }
 }
 
+/// An entry's drawn row with `trailing` directly under it (feature 942, I-1): a tool card's
+/// permission request block, or the label its request left once it ended. Without one the row is
+/// the entry alone, so a transcript with no requests keeps the tree it always had.
+pub fn with_trailing<'a, M: 'a>(
+    drawn: Element<'a, M>,
+    trailing: Option<Element<'a, M>>,
+) -> Element<'a, M> {
+    match trailing {
+        None => drawn,
+        Some(trailing) => column![
+            drawn,
+            iced::widget::container(trailing).padding(iced::Padding {
+                left: spacing::MD,
+                ..iced::Padding::ZERO
+            })
+        ]
+        .spacing(spacing::SM)
+        .width(Length::Fill)
+        .into(),
+    }
+}
+
 /// A footer: its status, then its figures as one caption line, then an error turn's text.
 fn footer_row(view: &FooterView, roles: Roles) -> Block {
     let mut line = row![status_label(view.status, roles)]

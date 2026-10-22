@@ -963,6 +963,41 @@ fn the_composer_components_are_posed() {
     }
 }
 
+/// Feature 942 (research R11, T056): the permission prompts' shared parts each have an entry
+/// posing what they draw — a choice list single and multiple, with Other chosen and its field, and
+/// a prompt card as each of the three request views.
+#[test]
+fn the_permission_prompt_components_are_posed() {
+    for (module, component, poses) in [
+        (
+            "material/choice_list.rs",
+            "ChoiceList",
+            &[
+                "single choice, one chosen",
+                "multiple choice with descriptions",
+                "Other chosen, with its field",
+            ][..],
+        ),
+        (
+            "material/prompt_card.rs",
+            "PromptCard",
+            &["a tool request", "a plan approval", "a question"][..],
+        ),
+    ] {
+        let entry = COMPONENTS
+            .iter()
+            .find(|e| e.module == module && e.component == component)
+            .unwrap_or_else(|| panic!("the gallery has a `{module}` / `{component}` entry"));
+        for pose in poses {
+            assert!(
+                entry.posed.contains(pose),
+                "the {component} entry poses `{pose}`: {:?}",
+                entry.posed
+            );
+        }
+    }
+}
+
 /// Feature 890 (FR-008, T019): the catalogue lists `FieldGroup`, posed with a note and without.
 #[test]
 fn the_field_group_is_listed_with_and_without_a_note() {

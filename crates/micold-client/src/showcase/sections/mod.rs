@@ -9,6 +9,7 @@ pub mod composer;
 pub mod controls;
 pub mod floating;
 pub mod motion;
+pub mod prompts;
 pub mod review;
 pub mod surfaces;
 pub mod terminal;

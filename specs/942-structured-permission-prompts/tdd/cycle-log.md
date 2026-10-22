@@ -221,3 +221,25 @@ Red runs recorded live, each before its implementation existed; commands with
   `Msg::AdditionalOpened`.
 - Green: the shell routes 9 passed, `structured_start_menu` 12, `features_permission_prompts` 22,
   `additional_session_provider` 5.
+
+### Cycle 11 — T056–T063 the window's request, plan and question views (M7)
+
+- Red: `showcase_completeness` `the_permission_prompt_components_are_posed`, `material_builder_api`
+  `the_prompt_parts_are_built_and_chained`, the gate `gates/prompt_card_fits.rs` and
+  `transcript_permission_view` (12 cases) written first. `layout_snapshot` did not compile —
+  `unresolved import micold_client::showcase::sections::prompts` and `…::ui::transcript::permission`;
+  `transcript_permission_view` waited behind it for the same imports. With the two components
+  declared but nothing posed, `the_permission_prompt_components_are_posed` failed at
+  `showcase_completeness.rs:990` (no `material/choice_list.rs` entry), and
+  `the_prompt_parts_are_built_and_chained` failed with `` `ChoiceList::option` consumes `self` ``
+  — the check looked for `pub fn option(mut self` on one line, which rustfmt splits; the check now
+  reads the parameters as `Tooltip`'s check does.
+- Green: `transcript_permission_view` 12 passed (four first failed on the test's side: the
+  plan and question requests after the long `prompt-tool-request` transcript were below the
+  800 px window, so those four draw an empty transcript, and the painted-text probe joins a
+  paragraph's lines with a space); `layout_snapshot -- prompt_card` 1, `showcase_completeness` 46,
+  `material_builder_api` 7, `showcase_captions` 13, the lib's `choice_list`, `prompt_card` and
+  `transcript::permission` unit tests 9.
+- **Exception (Constitution I)**: the components' own unit tests (`choice_list.rs`,
+  `prompt_card.rs`, `permission.rs` `tests`) were written with the code they test, in the same
+  file, and had no red of their own; the integration tests above drove the same behaviour red.
