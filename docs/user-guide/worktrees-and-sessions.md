@@ -1096,8 +1096,8 @@ the background service keeps the events it reports. It is Claude Code only.
   and every other entry, start a normal terminal session.
 - **Its row says so.** The label beside the name reads `claude, structured`, and so does the AI
   tab of its pane.
-- **Its pane is a transcript.** The conversation reads top to bottom, read-only, with no input
-  box:
+- **Its pane is a transcript** with a [composer](#writing-to-a-structured-session) under it. The
+  conversation reads top to bottom:
   - a **session start** entry with the model and the working folder;
   - your messages, headed **You**, and Claude's replies, formatted (see below);
   - a **turn footer** closing each turn: **Done** or **Failed**, how long the turn took, the
@@ -1241,14 +1241,56 @@ the background service keeps the events it reports. It is Claude Code only.
     asking**, with a warning icon. Use it only for work you would let Claude do unattended.
 
   Terminal sessions are unchanged: they ask in their own terminal screen, and have no mode here.
-- **It does not do yet** what the rest of this work adds: typing a prompt and
-  interrupting a turn ([#941](https://github.com/jaroslawherod/micold-ai-ide/issues/941)),
-  changing a running session's mode from its view
-  ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash commands and switching
-  a session between kinds ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
+- **A turn you interrupted** ends with **You interrupted this turn** instead of a footer, and a
+  message you sent with pictures names them under it (**Attached:** and the file names).
+- **It does not do yet** what the rest of this work adds: changing a running session's mode from
+  its view ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash commands and
+  switching a session between kinds ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
 - **Across a restart.** While [Save terminal history](./settings.md#terminal) is on, the events are
   kept across a restart of the background service; with it off they live in the service's memory
   only.
+
+#### Writing to a structured session
+
+Under the transcript sits the **composer**: a text area beside **Send**, with the session's state
+above it. A terminal session's pane has no composer and works as before.
+
+- **Send and new lines.** Enter sends the draft; Shift+Enter starts a new line. Text you paste
+  goes in as it is, line breaks, tabs and all. The composer grows with its lines up to about eight
+  and then scrolls inside itself, so the transcript stays in view; a draft of thousands of lines
+  stays responsive. A draft of only spaces is not sent.
+- **Earlier messages.** With the caret on the draft's first line, Up recalls your last message;
+  press it again for the one before. Down, with the caret on the last line, steps back toward the
+  newest, and past it brings back the draft you had. Inside a longer draft, Up and Down move the
+  caret as usual. A recalled message you edit and send is sent as a new message; the history keeps
+  the original.
+- **Busy and ready.** While Claude answers, the composer says **Working** beside a turning
+  indicator; when the turn ends it says **Ready**, in every window showing the session. The words
+  are there, not just a colour. Before the session's Claude Code runs, it says **Not running**,
+  **Send** is unavailable and your draft stays.
+- **Interrupting a turn.** While the session is working, **Stop** stands beside **Send**, and
+  Escape in the composer (or with the transcript focused) does the same: Claude Code is asked to
+  end the turn, the turn closes with **You interrupted this turn**, and the session is ready for
+  your next message — the process keeps running. If the interrupt has not taken effect after ten
+  seconds, the composer says so and offers **Stop session**; nothing is stopped unless you press
+  it.
+- **Queued messages.** Send while Claude is working and your message waits in a numbered row above
+  the composer instead. When the turn ends, the first queued message goes out on its own, then the
+  next, one turn each. Until then, each row offers **Edit** (change its text in place, then
+  **Save**), **Remove**, and — while your draft is empty — **Move to composer**. The queue belongs to
+  the session: every window shows the same rows in the same order.
+- **On hold.** After you interrupt a turn, or after the session service restarts, the queue stays
+  put and the composer says **Queue on hold** with **Send queued**: nothing queued goes out until
+  you press it (in any window). A message you send meanwhile goes at once, ahead of the held queue.
+- **Pictures.** Drop PNG, JPEG, GIF or WebP files on the pane and each becomes a chip above the text
+  area with its name and a preview; its remove control takes it off again. Other dropped files have
+  their paths inserted at the caret, quoted as a terminal drop would quote them. A picture over
+  3.75 MB, past 20 in one message or past 9 MB together is not attached, and the composer says
+  which and why. A message can be pictures alone.
+- **Your draft is kept.** Switch to another session or pane and back, and the draft, its pictures
+  and the caret are where you left them. A message the service could not take — not connected, the
+  session stopped, the connection lost before it confirmed — comes back into the composer with
+  the reason, nothing lost.
 
 ### Sessions on Codex and OpenCode
 
