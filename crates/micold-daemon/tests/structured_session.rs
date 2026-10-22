@@ -778,7 +778,10 @@ async fn messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal() {
     micold_daemon::server::spawn_input_driver(Arc::clone(&state));
     // The queued one is answered at once, the delivered one after its write: one at a time, as
     // `answer` drops the answers it does not wait for.
-    assert_ok(&send_text(&mut client, 3, id, "one").await, "the first of two");
+    assert_ok(
+        &send_text(&mut client, 3, id, "one").await,
+        "the first of two",
+    );
     assert_ok(
         &send_text(&mut client, 4, id, "two").await,
         "the second of two, queued",
@@ -909,8 +912,12 @@ async fn an_interrupt_is_ignored_and_pictures_over_the_limits_are_refused() {
         .expect("sent");
     let pictures: Vec<_> = (0..=MAX_IMAGES_PER_MESSAGE)
         .map(|n| {
-            admit(&[], &format!("shot-{n}.png"), b"\x89PNG\r\n\x1a\nIHDR".to_vec())
-                .expect("a picture")
+            admit(
+                &[],
+                &format!("shot-{n}.png"),
+                b"\x89PNG\r\n\x1a\nIHDR".to_vec(),
+            )
+            .expect("a picture")
         })
         .collect();
     let too_many = micold_core::structured::attachment::check_images(&pictures)

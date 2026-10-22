@@ -1067,10 +1067,9 @@ where
                                 Err(err) => DaemonMsg::OperationError {
                                     req,
                                     kind: ErrorKind::IoFailed,
-                                    message: crate::structured::UserMessageUndelivered::WriteFailed(
-                                        err,
-                                    )
-                                    .to_string(),
+                                    message:
+                                        crate::structured::UserMessageUndelivered::WriteFailed(err)
+                                            .to_string(),
                                     detail: None,
                                 },
                             };
@@ -1089,7 +1088,12 @@ where
                 keep,
             } => {
                 let changed = state.change_queue(session, |input| input.edit(entry, text, &keep));
-                answer_queue_change(state, id, req, changed.map(|((), d)| (OperationResult::Ack, d)));
+                answer_queue_change(
+                    state,
+                    id,
+                    req,
+                    changed.map(|((), d)| (OperationResult::Ack, d)),
+                );
             }
             ClientMsg::QueueRemove {
                 req,
@@ -1097,7 +1101,12 @@ where
                 entry,
             } => {
                 let changed = state.change_queue(session, |input| input.remove(entry));
-                answer_queue_change(state, id, req, changed.map(|((), d)| (OperationResult::Ack, d)));
+                answer_queue_change(
+                    state,
+                    id,
+                    req,
+                    changed.map(|((), d)| (OperationResult::Ack, d)),
+                );
             }
             ClientMsg::QueueTake {
                 req,

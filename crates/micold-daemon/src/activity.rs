@@ -297,7 +297,9 @@ pub fn turn_change(event: &ActivityEvent, lifted: bool) -> Option<TurnChange> {
         ActivityEvent::Hook(HookKind::PreToolUse) => Some(TurnChange::Working),
         ActivityEvent::SpinnerObserved if lifted => Some(TurnChange::Working),
         ActivityEvent::Hook(HookKind::Notification) => Some(TurnChange::AskedUser),
-        ActivityEvent::Hook(HookKind::Stop) | ActivityEvent::TurnEnded => Some(TurnChange::Finished),
+        ActivityEvent::Hook(HookKind::Stop) | ActivityEvent::TurnEnded => {
+            Some(TurnChange::Finished)
+        }
         ActivityEvent::Hook(HookKind::PostToolUse)
         | ActivityEvent::SpinnerObserved
         | ActivityEvent::ReadyForInput

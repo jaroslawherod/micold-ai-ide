@@ -5878,7 +5878,8 @@ impl DaemonState {
         let structured_turn_hook = matches!(
             event,
             ActivityEvent::Hook(HookKind::UserPromptSubmit | HookKind::Stop)
-        ) && Self::kind_of(&guard, session) == Some(SessionKind::Structured);
+        ) && Self::kind_of(&guard, session)
+            == Some(SessionKind::Structured);
         if structured_turn_hook {
             return false;
         }
@@ -6633,7 +6634,10 @@ impl DaemonState {
             text: text.to_owned(),
             images: Vec::new(),
         };
-        match self.submit_user_message(0, session, message).map_err(Refused)? {
+        match self
+            .submit_user_message(0, session, message)
+            .map_err(Refused)?
+        {
             Some(delivery) => self.deliver(delivery).map_err(WriteFailed),
             None => Ok(()),
         }

@@ -189,8 +189,10 @@ impl Window {
     }
 
     async fn answer(&mut self, req: u64) -> DaemonMsg {
-        self.until(&format!("the answer to {req}"), |w| w.answers.contains_key(&req))
-            .await;
+        self.until(&format!("the answer to {req}"), |w| {
+            w.answers.contains_key(&req)
+        })
+        .await;
         self.answers.remove(&req).expect("answered")
     }
 
@@ -352,7 +354,9 @@ async fn a_send_to_an_idle_session_is_one_line_equal_to_its_encoding() {
     for (n, (text, images)) in cases.iter().enumerate() {
         let req = n as u64 + 1;
         one.sees(id, "idle before the send", idle).await;
-        let got = one.request(message(req, id, text, images.clone()), req).await;
+        let got = one
+            .request(message(req, id, text, images.clone()), req)
+            .await;
         assert_ack(&got, text);
         let lines = {
             let deadline = Instant::now() + Duration::from_secs(10);
@@ -563,7 +567,9 @@ async fn one_sessions_input_never_reaches_another() {
         "a's send",
     );
     assert_ack(
-        &window.request(message(2, a, "queued on a", vec![]), 2).await,
+        &window
+            .request(message(2, a, "queued on a", vec![]), 2)
+            .await,
         "a's queued send",
     );
     window
@@ -599,9 +605,7 @@ async fn a_busy_send_is_queued_and_each_result_delivers_one() {
         "q2",
     );
     for window in [&mut one, &mut two] {
-        let seen = window
-            .sees(id, "two queued", |s| s.queue.len() == 2)
-            .await;
+        let seen = window.sees(id, "two queued", |s| s.queue.len() == 2).await;
         assert_eq!(seen.texts(), ["q1", "q2"], "in send order");
         assert_eq!(seen.queue[1].attachments[0].name, "shot.png");
         assert!(!seen.hold);
@@ -640,7 +644,9 @@ async fn a_turn_opened_before_the_driver_woke_keeps_the_queue_for_its_result() {
     assert_ack(&window.request(message(1, id, "m1", vec![]), 1).await, "m1");
     assert_ack(&window.request(message(2, id, "q1", vec![]), 2).await, "q1");
     end_turn(project.path(), 1);
-    window.until("t1's result", |w| !w.results().is_empty()).await;
+    window
+        .until("t1's result", |w| !w.results().is_empty())
+        .await;
     // No driver: the turn is idle with q1 waiting. This send queues behind q1, and its own lock
     // section delivers q1 as the next turn.
     assert_ack(&window.request(message(3, id, "m2", vec![]), 3).await, "m2");
@@ -671,7 +677,10 @@ async fn queue_edits_name_their_entry() {
         } else {
             vec![png("keep.png", 6), png("drop.png", 7)]
         };
-        assert_ack(&one.request(message(req, id, text, images), req).await, text);
+        assert_ack(
+            &one.request(message(req, id, text, images), req).await,
+            text,
+        );
     }
     let seen = two.sees(id, "three queued", |s| s.queue.len() == 3).await;
     let ids: Vec<QueueEntryId> = seen.queue.iter().map(|q| q.id).collect();
@@ -690,7 +699,10 @@ async fn queue_edits_name_their_entry() {
     let seen = two
         .sees(id, "the edit", |s| s.texts() == ["q1", "q2 edited", "q3"])
         .await;
-    assert_eq!(seen.queue[1].id, ids[1], "the edit keeps the entry and place");
+    assert_eq!(
+        seen.queue[1].id, ids[1],
+        "the edit keeps the entry and place"
+    );
     let names: Vec<&str> = seen.queue[1]
         .attachments
         .iter()
@@ -744,7 +756,8 @@ async fn queue_edits_name_their_entry() {
     drop(one);
     end_turn(project.path(), 1);
     delivered_is(project.path(), &["m1", "q2 edited"]).await;
-    two.sees(id, "the queue empty", |s| s.queue.is_empty()).await;
+    two.sees(id, "the queue empty", |s| s.queue.is_empty())
+        .await;
     let gone = "That message was already sent or removed";
     assert_refused(
         &two.request(edit(9, ids[1], "late", vec![]), 9).await,
@@ -863,14 +876,8 @@ async fn a_failed_delivery_returns_to_the_head_held() {
             .await,
         "the first",
     );
-    assert_ack(
-        &window.request(message(2, id, "q1", vec![]), 2).await,
-        "q1",
-    );
-    assert_ack(
-        &window.request(message(3, id, "q2", vec![]), 3).await,
-        "q2",
-    );
+    assert_ack(&window.request(message(2, id, "q1", vec![]), 2).await, "q1");
+    assert_ack(&window.request(message(3, id, "q2", vec![]), 3).await, "q2");
     end_turn(project.path(), 1);
     let seen = window
         .sees(id, "held after the failure", |s| s.hold && idle(s))
@@ -910,8 +917,10 @@ async fn two_windows_sending_at_once_deliver_one_and_queue_the_other() {
         one.sees(id, "the queued one out", |s| s.queue.is_empty() && s.busy())
             .await;
         end_turn(dir, (2 * i + 2) as usize);
-        one.sees(id, "idle", |s| idle(s) && s.queue.is_empty()).await;
-        two.sees(id, "idle", |s| idle(s) && s.queue.is_empty()).await;
+        one.sees(id, "idle", |s| idle(s) && s.queue.is_empty())
+            .await;
+        two.sees(id, "idle", |s| idle(s) && s.queue.is_empty())
+            .await;
     }
     let got = delivered(dir);
     assert_eq!(got.len(), 100, "every message delivered once");
@@ -934,9 +943,7 @@ async fn a_deleted_session_drops_its_input_state() {
     assert_ack(&window.request(message(2, id, "q1", vec![]), 2).await, "q1");
     window.sees(id, "queued", |s| s.queue.len() == 1).await;
     let mut before = Window::connect(&state).await;
-    before
-        .until("the replay", |w| w.last(id).is_some())
-        .await;
+    before.until("the replay", |w| w.last(id).is_some()).await;
 
     let (_, ptys) = state.delete_session(id).expect("deleted");
     for pty in ptys {
