@@ -1468,7 +1468,7 @@ mod switching {
         let (mut w, s) = structured();
         typed(&mut w, s, "/mcp");
         assert_eq!(w.send_intent(s), SendIntent::Nothing);
-        let offer = w.session.switch_offer.clone().expect("offered");
+        let offer = w.composers.switch_offer.clone().expect("offered");
         assert_eq!(
             (offer.session, offer.to, offer.command.as_deref()),
             (s, SessionKind::Terminal, Some("mcp"))
@@ -1478,7 +1478,7 @@ mod switching {
         assert_eq!(draft(&w, s), "/mcp", "the draft is kept while offered");
 
         w.switch_dismissed();
-        assert!(w.session.switch_offer.is_none());
+        assert!(w.composers.switch_offer.is_none());
         assert_eq!(draft(&w, s), "/mcp", "dismissing keeps the draft");
     }
 
@@ -1487,9 +1487,17 @@ mod switching {
         let (mut w, s) = structured();
         typed(&mut w, s, "/mc");
         w.palette_clicked(s, 0);
-        let offer = w.session.switch_offer.clone().expect("offered");
+        let offer = w.composers.switch_offer.clone().expect("offered");
         assert_eq!(offer.command.as_deref(), Some("mcp"));
-        assert!(w.command_palette.palette(s).is_none(), "the palette closed");
+        assert!(
+            w.composers.palette.palette(s).is_none(),
+            "the palette closed"
+        );
+        w.composer_edited(s);
+        assert!(
+            w.composers.palette.palette(s).is_none(),
+            "the draft the row was picked over does not reopen it beside the offer"
+        );
     }
 
     #[test]
@@ -1507,7 +1515,7 @@ mod switching {
                 confirmed: false,
             }
         );
-        assert!(w.session.switch_offer.is_none(), "the offer is answered");
+        assert!(w.composers.switch_offer.is_none(), "the offer is answered");
         assert_eq!(
             draft(&w, s),
             "/mcp",
@@ -1515,7 +1523,7 @@ mod switching {
         );
 
         w.switch_needs_confirmation(request.clone(), "A turn is in progress.".into());
-        let offer = w.session.switch_offer.clone().expect("asked again");
+        let offer = w.composers.switch_offer.clone().expect("asked again");
         assert_eq!(offer.confirm.as_deref(), Some("A turn is in progress."));
         let again = w.switch_confirmed().expect("a request");
         assert_eq!(
@@ -1565,7 +1573,7 @@ mod switching {
         );
         assert!(w.offers_login(s), "an auth_failed entry offers /login");
         w.login_offered(s);
-        let offer = w.session.switch_offer.clone().expect("offered");
+        let offer = w.composers.switch_offer.clone().expect("offered");
         assert_eq!(
             (offer.to, offer.command.as_deref()),
             (SessionKind::Terminal, Some("login"))

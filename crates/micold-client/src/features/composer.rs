@@ -22,7 +22,12 @@ use micold_core::session::SessionId;
 use micold_core::structured::attachment::{admit, AttachmentRefusal, DropPlan};
 use micold_core::structured::transcript::Transcript;
 
+use crate::features::command_palette::{classify, Classified, PaletteKey, Picked, SendIntent};
+use crate::features::session::{SwitchOffer, SwitchRequest, LOGIN_COMMAND, LOGIN_REASON};
 use crate::keymap::{Key, KeyInput, NamedKey};
+use micold_core::session::SessionKind;
+use micold_core::structured::model::ModelChoice;
+use micold_core::typeahead::Direction;
 
 /// The notice a send gets back when the connection to the service went before it was answered.
 pub const CONNECTION_LOST: &str =
@@ -332,6 +337,11 @@ pub enum Msg {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
     composers: HashMap<SessionId, Composer>,
+    /// The command palettes and model pickers open over these composers (#943).
+    pub palette: crate::features::command_palette::State,
+    /// The open offer to switch a Claude session's kind, with its confirmation step once the
+    /// service asked for one (#943 FR-010, FR-021, FR-022a). Its presence *is* the offer shown.
+    pub switch_offer: Option<crate::features::session::SwitchOffer>,
 }
 
 impl State {
@@ -376,6 +386,14 @@ impl State {
     /// Forget `session`'s composer (the session is gone).
     pub fn forget(&mut self, session: SessionId) {
         self.composers.remove(&session);
+        self.palette.forget(session);
+        if self
+            .switch_offer
+            .as_ref()
+            .is_some_and(|o| o.session == session)
+        {
+            self.switch_offer = None;
+        }
     }
 
     /// Step back to the next older message of `transcript`. `false` when there is none to step
@@ -706,4 +724,196 @@ fn file_name(path: &Path) -> String {
         || path.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
     )
+}
+
+/// The composer's commands (#943): the palette and the picker over the draft, what a send means,
+/// and the switch offer a terminal-only command or an authentication failure opens. Here because
+/// each writes the composer's own state (`composers`, its `palette` and `switch_offer`).
+impl crate::app::State {
+    /// The composer's draft changed: the palette follows it.
+    pub fn composer_edited(&mut self, session: SessionId) {
+        let (text, caret) = self
+            .composers
+            .draft(session)
+            .map(|d| (d.text.clone(), d.caret))
+            .unwrap_or_default();
+        let transcript = self.structured_transcript.transcript(session);
+        self.composers
+            .palette
+            .draft_changed(session, &text, caret, || {
+                transcript.map_or_else(
+                    micold_core::structured::commands::CommandList::fallback,
+                    |t| t.command_list(),
+                )
+            });
+    }
+
+    /// A key [`palette_key`] gave to the open palette.
+    pub fn palette_key(&mut self, session: SessionId, key: PaletteKey) {
+        match key {
+            PaletteKey::Up => self.composers.palette.step(session, Direction::Prev),
+            PaletteKey::Down => self.composers.palette.step(session, Direction::Next),
+            PaletteKey::Accept => self.palette_picked(session, None),
+            PaletteKey::Close => {
+                let text = self
+                    .composers
+                    .draft(session)
+                    .map(|d| d.text.clone())
+                    .unwrap_or_default();
+                self.composers.palette.dismiss(session, &text);
+            }
+        }
+    }
+
+    /// A click on the palette's row `row`.
+    pub fn palette_clicked(&mut self, session: SessionId, row: usize) {
+        self.palette_picked(session, Some(row));
+    }
+
+    fn palette_picked(&mut self, session: SessionId, row: Option<usize>) {
+        match self.composers.palette.pick(session, row) {
+            Some(Picked::Fill { text, caret }) => {
+                self.composers.replace_text(session, text, caret);
+            }
+            Some(Picked::TerminalOnly { command, reason }) => {
+                // The draft stays as typed; it must not reopen the palette beside the offer.
+                let text = self.composers.draft(session).map(|d| d.text.clone());
+                self.composers
+                    .palette
+                    .dismiss(session, &text.unwrap_or_default());
+                self.offer_switch(session, SessionKind::Terminal, Some(command), reason);
+            }
+            None => {}
+        }
+    }
+
+    /// Open `session`'s model picker (FR-014, FR-018).
+    pub fn open_model_picker(&mut self, session: SessionId) {
+        let current = self.model_choice(session);
+        let reported = self
+            .structured_transcript
+            .transcript(session)
+            .map(|t| t.reported_models().to_vec())
+            .unwrap_or_default();
+        self.composers
+            .palette
+            .open_picker(session, &reported, &current);
+    }
+
+    /// The name typed into `session`'s picker.
+    pub fn model_picker_typed(&mut self, session: SessionId, text: String) {
+        self.composers.palette.picker_typed(session, text);
+    }
+
+    /// Choose item `item` of `session`'s picker, else its typed name: the choice to send, or
+    /// `None` (nothing open, or the typed name refused, said in the composer's notice).
+    pub fn model_picked(&mut self, session: SessionId, item: Option<usize>) -> Option<ModelChoice> {
+        match self.composers.palette.picker_chose(session, item)? {
+            Ok(choice) => Some(choice),
+            Err(refusal) => {
+                self.composers.notice(session, refusal.to_string());
+                None
+            }
+        }
+    }
+
+    /// What sending `session`'s draft does (FR-010, FR-018): a message for the composer to send,
+    /// or handled here (the picker opened, the terminal offered, a refusal said), or a model to
+    /// ask the service for, its draft left for the shell to clear once the request went out.
+    /// `/model` alone leaves the composer; a terminal-only command stays until the switch is done.
+    pub fn send_intent(&mut self, session: SessionId) -> SendIntent {
+        let Some(text) = self.composers.draft(session).map(|d| d.text.clone()) else {
+            return SendIntent::Message;
+        };
+        match classify(&text, &self.command_list(session)) {
+            Classified::Message => SendIntent::Message,
+            Classified::Picker => {
+                self.composers.replace_text(session, String::new(), (0, 0));
+                self.open_model_picker(session);
+                SendIntent::Nothing
+            }
+            Classified::Model(Ok(choice)) => SendIntent::SetModel(choice),
+            Classified::Model(Err(refusal)) => {
+                self.composers.notice(session, refusal.to_string());
+                SendIntent::Nothing
+            }
+            Classified::TerminalOnly { command, reason } => {
+                self.offer_switch(session, SessionKind::Terminal, Some(command), reason);
+                SendIntent::Nothing
+            }
+        }
+    }
+
+    /// Offer to switch `session` to `to` for `command`, saying `reason` (FR-010).
+    pub fn offer_switch(
+        &mut self,
+        session: SessionId,
+        to: SessionKind,
+        command: Option<String>,
+        reason: String,
+    ) {
+        self.composers.switch_offer = Some(SwitchOffer {
+            session,
+            to,
+            command,
+            reason,
+            confirm: None,
+        });
+    }
+
+    /// The offer was dismissed: nothing changes, the draft stays (US4 scenario 1).
+    pub fn switch_dismissed(&mut self) {
+        self.composers.switch_offer = None;
+    }
+
+    /// The offer was confirmed: the request to send, confirmed when it was the confirmation
+    /// step. The draft stays until the service took the switch ([`Self::switch_completed`]).
+    pub fn switch_confirmed(&mut self) -> Option<SwitchRequest> {
+        let offer = self.composers.switch_offer.take()?;
+        Some(SwitchRequest {
+            session: offer.session,
+            to: offer.to,
+            command: offer.command,
+            confirmed: offer.confirm.is_some(),
+        })
+    }
+
+    /// The service answered `request` with `NeedsConfirmation`: ask the user, saying `message`
+    /// (FR-021).
+    pub fn switch_needs_confirmation(&mut self, request: SwitchRequest, message: String) {
+        self.composers.switch_offer = Some(SwitchOffer {
+            session: request.session,
+            to: request.to,
+            command: request.command,
+            reason: message.clone(),
+            confirm: Some(message),
+        });
+    }
+
+    /// The service took `request`: a draft that is its command, as sent, is used up; any other
+    /// draft stays (US4 scenario 2, FR-024).
+    pub fn switch_completed(&mut self, request: &SwitchRequest) {
+        let Some(command) = &request.command else {
+            return;
+        };
+        let sent = self
+            .composers
+            .draft(request.session)
+            .and_then(|d| micold_core::structured::commands::parse_invocation(&d.text))
+            .is_some_and(|i| &i.name == command);
+        if sent {
+            self.composers
+                .replace_text(request.session, String::new(), (0, 0));
+        }
+    }
+
+    /// The `/login` offer was taken: offer the terminal for it (FR-022a).
+    pub fn login_offered(&mut self, session: SessionId) {
+        self.offer_switch(
+            session,
+            SessionKind::Terminal,
+            Some(LOGIN_COMMAND.to_string()),
+            LOGIN_REASON.to_string(),
+        );
+    }
 }

@@ -305,9 +305,6 @@ pub struct State {
     /// `release_terminal`; `tests/terminal_bar_stability.rs` fails if that stops being
     /// true.
     pub terminal_released: bool,
-    /// The open offer to switch a Claude session's kind, with its confirmation step once the
-    /// service asked for one (#943 FR-010, FR-021, FR-022a). Its presence *is* the offer shown.
-    pub switch_offer: Option<SwitchOffer>,
     /// Sessions whose kind a catalog snapshot changed, for the shell to drop the old primary's
     /// terminal view and attach to the new one (#943 R11). Drained by [`Self::take_kind_changes`].
     pub kind_changes: Vec<SessionId>,
@@ -386,69 +383,6 @@ pub fn switch_entries(state: &crate::app::State, session: SessionId) -> Vec<Swit
 }
 
 impl crate::app::State {
-    /// Offer to switch `session` to `to` for `command`, saying `reason` (FR-010).
-    pub fn offer_switch(
-        &mut self,
-        session: SessionId,
-        to: SessionKind,
-        command: Option<String>,
-        reason: String,
-    ) {
-        self.session.switch_offer = Some(SwitchOffer {
-            session,
-            to,
-            command,
-            reason,
-            confirm: None,
-        });
-    }
-
-    /// The offer was dismissed: nothing changes, the draft stays (US4 scenario 1).
-    pub fn switch_dismissed(&mut self) {
-        self.session.switch_offer = None;
-    }
-
-    /// The offer was confirmed: the request to send, confirmed when it was the confirmation
-    /// step. The draft stays until the service took the switch ([`Self::switch_completed`]).
-    pub fn switch_confirmed(&mut self) -> Option<SwitchRequest> {
-        let offer = self.session.switch_offer.take()?;
-        Some(SwitchRequest {
-            session: offer.session,
-            to: offer.to,
-            command: offer.command,
-            confirmed: offer.confirm.is_some(),
-        })
-    }
-
-    /// The service answered `request` with `NeedsConfirmation`: ask the user, saying `message`
-    /// (FR-021).
-    pub fn switch_needs_confirmation(&mut self, request: SwitchRequest, message: String) {
-        self.session.switch_offer = Some(SwitchOffer {
-            session: request.session,
-            to: request.to,
-            command: request.command,
-            reason: message.clone(),
-            confirm: Some(message),
-        });
-    }
-
-    /// The service took `request`: a draft that is its command, as sent, is used up; any other
-    /// draft stays (US4 scenario 2, FR-024).
-    pub fn switch_completed(&mut self, request: &SwitchRequest) {
-        let Some(command) = &request.command else {
-            return;
-        };
-        let sent = self
-            .composers
-            .draft(request.session)
-            .and_then(|d| micold_core::structured::commands::parse_invocation(&d.text))
-            .is_some_and(|i| &i.name == command);
-        if sent {
-            self.composers
-                .replace_text(request.session, String::new(), (0, 0));
-        }
-    }
-
     /// A switching entry was chosen (US4 scenarios 3, 4): the request, with no command; `None`
     /// for a session that is not Claude Code's or already of kind `to`.
     pub fn switch_requested(&self, session: SessionId, to: SessionKind) -> Option<SwitchRequest> {
@@ -479,16 +413,6 @@ impl crate::app::State {
                 })
             })
             .unwrap_or(false)
-    }
-
-    /// The `/login` offer was taken: offer the terminal for it (FR-022a).
-    pub fn login_offered(&mut self, session: SessionId) {
-        self.offer_switch(
-            session,
-            SessionKind::Terminal,
-            Some(LOGIN_COMMAND.to_string()),
-            LOGIN_REASON.to_string(),
-        );
     }
 }
 

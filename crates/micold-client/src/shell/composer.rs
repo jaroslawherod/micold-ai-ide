@@ -28,7 +28,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             composing,
         } => {
             // The open command palette takes its keys before the composer (#943 FR-008a).
-            let palette = app.core.command_palette.palette(session);
+            let palette = app.core.composers.palette.palette(session);
             if let Some(key) = palette_key(palette, &press).filter(|_| !composing) {
                 app.core.palette_key(session, key);
                 sync_editor(app, session);
@@ -114,7 +114,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 set_model(app, session, choice);
             }
         }
-        Msg::ModelPickerClosed(session) => app.core.command_palette.close_picker(session),
+        Msg::ModelPickerClosed(session) => app.core.composers.palette.close_picker(session),
         Msg::SwitchRequested { session, to } => {
             if let Some(request) = app.core.switch_requested(session, to) {
                 switch_kind(app, request);
