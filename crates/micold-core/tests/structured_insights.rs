@@ -1234,9 +1234,12 @@ fn agent_call(events: &[SequencedEvent], parent: Option<&str>) -> String {
 
 /// The recordings' threads, counted by hand from the JSONL files: parented messages, tool calls,
 /// latest tool. Pins what `expected_threads` derives with the same grouping rule.
+/// A thread's parent tool use id, messages, tool calls and latest tool.
+type PinnedThread = (&'static str, u64, u64, &'static str);
+
 #[test]
 fn the_recorded_threads_hold_their_hand_counted_figures() {
-    let pinned: [(&str, &[(&str, u64, u64, &str)]); 3] = [
+    let pinned: [(&str, &[PinnedThread]); 3] = [
         (
             "subagent-turn",
             &[("toolu_016Evhgage4WoGiCC3qAXbiy", 4, 1, "Read")],
