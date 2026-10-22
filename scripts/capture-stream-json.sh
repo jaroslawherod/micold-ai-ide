@@ -2,7 +2,7 @@
 # Record one `claude` stream-json fixture for feature 938 (FR-024, research R11).
 #
 # Usage: scripts/capture-stream-json.sh [--image <file>] [--interrupt-after-first-delta] <name> "<prompt>"
-#            [--resume <id>] [-- <extra claude args>...]
+#            [--resume <id>] [--control <json>]... [-- <extra claude args>...]
 #
 # --image <file> (feature 941, P-5): the user message carries <prompt> as a text block, then the
 #   file as a base64 image block, its media type sniffed from the file's bytes (PNG, JPEG, GIF, WebP).
@@ -13,10 +13,13 @@
 # structured argv
 #   claude -p --input-format stream-json --output-format stream-json --verbose
 #          --include-partial-messages (--session-id <new uuid> | --resume <id>) [extra args]
-# writes <prompt> to stdin as one stream-json user message, and saves stdout verbatim to
+# writes each --control line (feature 943: a control request, or any stream-json line, in the order
+# given) and then <prompt> as one stream-json user message to stdin, and saves stdout verbatim to
 # crates/micold-core/tests/fixtures/stream-json/<name>.jsonl, scrubbed of the session uuid, the
 # scratch and home paths and account identifiers (fixed placeholders, see scrub_stream_json).
 # Prints the session uuid on stderr, so a later `--resume` capture can continue the conversation.
+# The scratch repo holds `notes.txt`, the project skill `greet` and the custom command `hello`
+# (feature 943's command fixtures).
 #
 # Needs a logged-in `claude`; CI has none and never runs this. Sourced (as
 # scripts/tests/capture-stream-json.test.sh does), it only defines the functions.
@@ -164,6 +167,31 @@ sys.exit(child.wait())
 ' "$1" "$INTERRUPT_LINE" "${@:2}"
 }
 
+# Give a scratch repo the files every capture may use: notes.txt, the project skill `greet` and the
+# project custom command `hello` (feature 943). Existing files are kept.
+prepare_scratch_repo() {
+  local repo="$1"
+  [ -d "$repo/.git" ] || git -C "$repo" init -q
+  [ -f "$repo/notes.txt" ] || printf 'The answer is 42.\n' > "$repo/notes.txt"
+  mkdir -p "$repo/.claude/skills/greet" "$repo/.claude/commands"
+  [ -f "$repo/.claude/skills/greet/SKILL.md" ] || cat > "$repo/.claude/skills/greet/SKILL.md" <<'SKILL'
+---
+name: greet
+description: Greet a person by name in one short sentence.
+---
+
+Greet the person named in the arguments in one short, friendly sentence. Use no tools.
+SKILL
+  [ -f "$repo/.claude/commands/hello.md" ] || cat > "$repo/.claude/commands/hello.md" <<'COMMAND'
+---
+description: Say hello to whatever the arguments name.
+argument-hint: <what to greet>
+---
+
+Reply with one short sentence saying hello to: $ARGUMENTS. Use no tools.
+COMMAND
+}
+
 capture_main() {
   set -euo pipefail
   local image="" interrupt=""
@@ -174,7 +202,8 @@ capture_main() {
       *) break ;;
     esac
   done
-  [ $# -ge 2 ] || { echo "usage: $0 [--image <file>] [--interrupt-after-first-delta] <name> \"<prompt>\" [--resume <id>] [-- <claude args>...]" >&2; exit 2; }
+  local usage="usage: $0 [--image <file>] [--interrupt-after-first-delta] <name> \"<prompt>\" [--resume <id>] [--control <json>]... [-- <claude args>...]"
+  [ $# -ge 2 ] || { echo "$usage" >&2; exit 2; }
   local name="$1" prompt="$2" line
   if [ -n "$image" ]; then
     line="$(image_message_line "$prompt" "$image")" || exit 1
@@ -183,13 +212,20 @@ capture_main() {
   fi
   shift 2
   local session_flag="--session-id" sid
+  local -a control=()
   sid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen | tr 'A-Z' 'a-z')"
-  if [ "${1:-}" = --resume ]; then
-    session_flag="--resume"
-    sid="$2"
-    shift 2
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --resume) session_flag="--resume"; sid="$2"; shift 2 ;;
+      --control) control+=("$2"); shift 2 ;;
+      --) shift; break ;;
+      *) echo "$usage" >&2; exit 2 ;;
+    esac
+  done
+  # Each --control line goes to stdin before the user message, in the order given (feature 943).
+  if [ ${#control[@]} -gt 0 ]; then
+    line="$(printf '%s\n' "${control[@]}")"$'\n'"$line"
   fi
-  [ "${1:-}" = -- ] && shift
 
   local root out repo
   root="$(git rev-parse --show-toplevel)"
@@ -199,8 +235,7 @@ capture_main() {
   repo="${TMPDIR:-/tmp}/micold-capture-$sid"
   mkdir -p "$repo"
   repo="$(cd "$repo" && pwd -P)"
-  [ -d "$repo/.git" ] || git -C "$repo" init -q
-  [ -f "$repo/notes.txt" ] || printf 'The answer is 42.\n' > "$repo/notes.txt"
+  prepare_scratch_repo "$repo"
 
   mkdir -p "$(dirname "$out")"
   # Forward subagent text and thinking, as the service's structured launch does (feature 944, R5).
