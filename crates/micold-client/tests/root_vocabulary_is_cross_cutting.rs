@@ -573,9 +573,9 @@ fn the_scan_finds_the_vocabulary_it_is_meant_to_read() {
     let scan = scan();
     assert_eq!(
         scan.variants.len(),
-        26,
-        "the root vocabulary is 20 feature wrappers (feature 813 added `Overview`, feature 803 \
-         `Navigation`, feature 968 `QuickSwitch`) and 6 \
+        27,
+        "the root vocabulary is 21 feature wrappers (feature 813 added `Overview`, feature 803 \
+         `Navigation`, feature 968 `QuickSwitch`, feature 941 `Composer`) and 6 \
          cross-cutting variants (feature 1101 added `JiraStatusesRead`, SC-002); the \
          scan found {:?}",
         scan.variants.iter().map(|v| &v.name).collect::<Vec<_>>()
