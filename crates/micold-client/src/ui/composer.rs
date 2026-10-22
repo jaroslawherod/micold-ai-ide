@@ -17,7 +17,9 @@ use micold_core::tokens::{spacing, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::composer::{composer_key, KeyIntent, Msg, QueueEditDraft};
+use crate::features::window::FieldId;
 use crate::keymap::KeyInput;
+use crate::ui::focus::TrackFocus;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
 use crate::ui::material::{
     AttachmentChip, BusyIndicator, Button, QueueRow, Scrollable, Text, TextArea, TextField,
@@ -81,7 +83,7 @@ pub fn view<'a>(
     for (index, queued) in queue.iter().enumerate() {
         let entry = queued.id;
         rows.push(match editing.filter(|e| e.entry == entry) {
-            Some(edit) => queue_edit(session, edit, roles),
+            Some(edit) => queue_edit(session, edit, state.window.focused_field, roles),
             None => QueueRow::new(index + 1, queued.text.clone(), roles)
                 .pictures(queued.attachments.len())
                 .on_edit(send(Msg::QueueEditStarted { session, entry }))
@@ -241,11 +243,13 @@ fn input_row<'a>(
 fn queue_edit<'a>(
     session: SessionId,
     edit: &'a QueueEditDraft,
+    focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
     let field = TextField::new("", &edit.text, roles)
         .on_input(move |text| send(Msg::QueueEditChanged { session, text }))
-        .on_submit(send(Msg::QueueEditSaved(session)));
+        .on_submit(send(Msg::QueueEditSaved(session)))
+        .track_focus(FieldId::QueuedMessage(session), focused);
     let pictures = edit.attachments.iter().enumerate().map(|(index, meta)| {
         Button::text(format!("Remove {}", meta.name), roles)
             .on_press(send(Msg::QueueEditAttachmentRemoved { session, index }))

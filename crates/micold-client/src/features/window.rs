@@ -279,6 +279,8 @@ pub enum FieldId {
     CleanupLoser(u8),
     /// The cleanup offer's **Delete the branch too** checkbox for run `n` (feature 483).
     CleanupBranch(u8),
+    /// A structured session's queued message, edited in place (feature 941, FR-020).
+    QueuedMessage(micold_core::session::SessionId),
 }
 
 /// What the window reports about itself (feature 028, FR-001).
