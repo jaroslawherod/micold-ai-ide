@@ -463,7 +463,7 @@ quickstart Part B.
   *Structured sessions* describes the context meter and its warning, the turn's cost and tokens
   (an estimate at API list prices) and the session totals, subagent threads under their card and
   the placeholder for an earlier step, and the background-task list and its states
-- [ ] T044 [US1] [US2] [US3] [US5] Quickstart Part B (steps 1–8) through the `visual-pass` skill,
+- [x] T044 [US1] [US2] [US3] [US5] Quickstart Part B (steps 1–8) through the `visual-pass` skill,
   evidence into `specs/944-session-usage-subagents/visual-pass/`; fix what it finds
 
 **Checkpoint**: M6 complete — the issue's acceptance is visible in the pane.
