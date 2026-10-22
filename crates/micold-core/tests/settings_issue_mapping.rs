@@ -182,6 +182,7 @@ fn other_writers_preserve_the_mapping() {
             "daemon",
             "daemons",
             "default_ai_cli",
+            "default_prompt_template",
             "desktop_notifications",
             "diff_layout",
             "env_include_enabled",
