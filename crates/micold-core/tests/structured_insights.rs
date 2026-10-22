@@ -740,12 +740,7 @@ fn malformed_figures_are_left_out_and_the_well_formed_ones_still_count() {
 
 #[test]
 fn a_malformed_response_usage_leaves_the_reading_without_a_figure() {
-    for bad in [
-        json!({ "input_tokens": "2", "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 1 }),
-        json!({ "input_tokens": 2, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": -1 }),
-        json!({ "input_tokens": 2 }),
-        json!("lots"),
-    ] {
+    let used_after = |bad: &Value| {
         let events = numbered(
             [
                 response("m", usage(10, 0, 0, 0), None),
@@ -753,13 +748,20 @@ fn a_malformed_response_usage_leaves_the_reading_without_a_figure() {
             ],
             0,
         );
-        let used = built(0, &events).context().used;
-        if bad.is_object() {
-            assert_eq!(used, None, "{bad}");
-        } else {
-            assert_eq!(used, Some(10), "{bad}: no usage object, no reading");
-        }
+        built(0, &events).context().used
+    };
+    for bad in [
+        json!({ "input_tokens": "2", "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 1 }),
+        json!({ "input_tokens": 2, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": -1 }),
+        json!({ "input_tokens": 2 }),
+    ] {
+        assert_eq!(used_after(&bad), None, "{bad}");
     }
+    assert_eq!(
+        used_after(&json!("lots")),
+        Some(10),
+        "no usage object, no reading"
+    );
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1228,6 +1230,46 @@ fn agent_call(events: &[SequencedEvent], parent: Option<&str>) -> String {
             _ => None,
         })
         .expect("an Agent call")
+}
+
+/// The recordings' threads, counted by hand from the JSONL files: parented messages, tool calls,
+/// latest tool. Pins what `expected_threads` derives with the same grouping rule.
+#[test]
+fn the_recorded_threads_hold_their_hand_counted_figures() {
+    let pinned: [(&str, &[(&str, u64, u64, &str)]); 3] = [
+        (
+            "subagent-turn",
+            &[("toolu_016Evhgage4WoGiCC3qAXbiy", 4, 1, "Read")],
+        ),
+        (
+            "nested-subagent",
+            &[
+                ("toolu_01PZta4CiZ6Lz22Jx6tVsYCQ", 4, 1, "Agent"),
+                ("toolu_014T71tSqvjKwnKV83yJ8tLK", 4, 1, "Read"),
+            ],
+        ),
+        (
+            "background-subagent",
+            &[("toolu_012YB28eQi4RFYSnc6APduis", 3, 1, "Read")],
+        ),
+    ];
+    for (name, threads) in pinned {
+        let insights = built(0, &fixture(name));
+        for &(parent, messages, tool_calls, latest) in threads {
+            let thread = insights
+                .thread(parent)
+                .unwrap_or_else(|| panic!("{name}: a thread for {parent}"));
+            assert_eq!(
+                (
+                    thread.messages,
+                    thread.tool_calls,
+                    thread.latest_tool.as_deref()
+                ),
+                (messages, tool_calls, Some(latest)),
+                "{name} {parent}"
+            );
+        }
+    }
 }
 
 #[test]

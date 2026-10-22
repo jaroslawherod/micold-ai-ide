@@ -472,9 +472,9 @@ quickstart Part B.
 
 ## Phase 10: Polish (close unit; no code)
 
-- [ ] T045 Run quickstart Part A in full and `mise run gate`; record the results (SC-007: every
+- [x] T045 Run quickstart Part A in full and `mise run gate`; record the results (SC-007: every
   existing terminal-session and plan-usage test passes unchanged) in the ledger
-- [ ] T046 Converge: check every FR and SC of spec.md against plan *Requirement Coverage* and the
+- [x] T046 Converge: check every FR and SC of spec.md against plan *Requirement Coverage* and the
   merged tests; tick the tasks
 
 ---

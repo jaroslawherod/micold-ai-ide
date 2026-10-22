@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: pr M6
-- **Next step**: M6 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI; then the close unit (T045–T046)
+- **Phase**: close
+- **Next step**: close unit — T045 gate + Part A, converge, tdd-verify, review, gate, PR files
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1205 | M3 — task table and subagent thread index | merged (rebase) | 46f4bdabc5a4316f2a192dffd12f679039c7a96e |
 | #1211 | M4 — meter parts and icons | merged (rebase) | 9160cab121845e7ebee2514f569e93ff21b111c1 |
 | #1222 | M5 — the window's insights state | merged (rebase) | 10fb81f6d6f575fcee5a70437fc196cb4e258bae |
+| #1264 | M6 — session bar, threads, background list | merged (rebase) | 79db576814d6e2531a55363efd637940288c7c7d |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | #1205 | merged |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | #1211 | merged |
 | M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | #1222 | merged |
-| M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | PR files written, gate green at e9d3018f |
+| M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | #1264 | merged |
 
 ## Decisions
 
@@ -94,6 +95,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M6 (T044) | 1 | 2875d57f | Showcase on Xvfb, light and dark (quickstart Part B needs a logged-in CLI, not in this container): the recorded subagent turn with its session bar — meter with threshold tick, totals; the `Agent` card's thread folded ("Subagent · finished · 1 tool call") and unfolded (the subagent's prompt and its `Read` card, indented); the four bar poses (normal, warning, no data, running task with its list). Warning reads in greyscale (icon + "Near compaction"). One finding fixed: the showcase pose's percent truncated (3%) where the core rounds (4%). Evidence in `visual-pass/m6-*.png`. Not seen at a display: steps needing a live CLI (B2 live, B4 stop, B5–B7); a failed thread is covered by `thread_header`'s test and #939's failed card |
 | Full gate M6 | 1 | e9d3018f | red: daemon `structured_commands::two_sessions_each_get_their_own_note` (the known flake, ledger prompt); green alone (8/8) |
 | Full gate M6 | 2 | e9d3018f | green (`scripts/gate.sh`) |
+| Full gate close (T045) | 1 | 79db5768 | green (`scripts/gate.sh`, 632 suites ok). Quickstart Part A inside it: `structured_insights` 49/49, `plan_usage_rate_limit_event` 9/9, `plan_usage_structured` 4/4, `structured_session` 19/19, `features_structured_insights` 22/22, lib `structured::insights` 12 and `progress_bar` 6 ok; every existing terminal-session and plan-usage suite passes unchanged (SC-007) |
+| Converge (T046) | 1 | 79db5768 | converged: FR-001–FR-028, SC-001–SC-007 and the five stories against plan *Requirement Coverage* and the merged code and tests; 0 missing, 0 partial, 0 contradicts, 0 unrequested; tasks.md unchanged (run because M1's review B ended CHANGES with no clean re-run) |
+| speckit-tdd-verify (close) | 1 | 79db5768 | FAIL (test-first evidence fails closed: no `tdd/test-list.md`, tests and code share commits; 6 mutants all caught). Fixed with tests: #1 the forwarding test asserts the terminal launch unconditionally (the inherited value, if any); #3 a test pins the recordings' thread counts by hand; #7 the malformed-usage test split, no branch. Declined #2, #4, #5, #6, #8 (see table); #9 resolved by this ledger's T045/T046 rows |
 | Full gate M5 | — | 7e655fad | green (`scripts/gate.sh`) |
 | Rebase M5 onto main | — | 80b87f44 | conflicts with #940/#941 in `app.rs` (State fields, `structured_events`, `forget_structured`) and the `feature_registration_cost` allowlist resolved by keeping both sides (insights applied after the transcript beside the rich refresh; forget drops transcript, rich cache, composer, insights); insights test passes `GRAMMAR`; no review (no logic beyond both sides). Full gate green (one flaky daemon `two_sessions_each_get_their_own_note` failure, 3/3 green alone, green on rerun) |
 
@@ -116,6 +120,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | A (code-review high) | F5 the thread shows no omitted notice | A thread is the nested transcript of the held events (E-2, R7); evicted parents are FR-017 placeholders (M6). The main transcript's notice already says the history is cut |
 | M5 | A (code-review high) | F7 insights skipped when the transcript has no session | Unreachable: `structured_transcript::apply` inserts the session before this reads it |
 | M5 | A (code-review high) | F8 an empty `Transcript` per fold message | `Transcript::new()` allocates nothing (empty `VecDeque`/`HashMap`) |
+| close | speckit-tdd-verify | #2 [HIGH] SC-002 and typed-delta assertions loosened in `structured_transcript.rs` (c54d81a2) | Not #944's change: c54d81a2 is `test(939)`, #939's flow's commit that made #939's guarantees hold over #944's recordings (this ledger's old follow-up); it keeps the strict comparison for the fixtures with no raw row mid-stream. Owned by #939 |
+| close | speckit-tdd-verify | #4 [MED] real clock and a 2 s silence in `plan_usage_structured.rs` | The service stamps `obtained_at` with the wall clock, so the check reads it against the wall clock; the elapsed check states SC-004's 10 s bound; a switched-off feed sends nothing, so "nothing shown" needs a bounded wait (no event to use as barrier) |
+| close | speckit-tdd-verify | #5 [MED] no red in history for 6 behaviours | Process record, not a test defect: `tdd/cycle-log.md` states each test-after behaviour; nothing to change after merge |
+| close | speckit-tdd-verify | #6 [MED] layout snapshot regenerated in the code's commit | The geometry was approved by visual pass M6 (light and dark, `visual-pass/m6-*.png`) and review B M6, recorded in *Review rounds* |
+| close | speckit-tdd-verify | #8 [LOW] orphaned doc comment above `subagent_parent` | In #939's test file, left by #939's commit c54d81a2; owned by #939 |
 
 ## Handover
 
@@ -127,10 +136,14 @@ None.
 
 ## Follow-ups not done
 
-- #939's transcript tests do not hold over #944's four new recordings (kept out of `RECORDED`, in
-  `RECORDED_944`): `every_event_of_every_recorded_fixture_is_accounted_for` fails at
-  `subagent-turn` seq 33 (a parented user text has no entry) and
-  `replaying_a_recorded_fixture_one_event_at_a_time_changes_only_the_streamed_entry` at
-  `background-command` ("SC-002, no text duplicated or lost"). For #939's flow.
+- Quickstart Part B steps that need a logged-in `claude` CLI with live sessions were **not run**
+  in the cloud container (no signed-in CLI): B1 live meter/footer hover, B2 "No data yet" on a live
+  session, B3 a live subagent thread turning finished and a nested one, B4 a live background
+  command and stopping mid-task ("ended without a report"), B5 the app bar's plan usage from a
+  structured session alone, B6 a second window on the same session, B7 the warning at the
+  threshold and the drop after compaction. The recorded-fixture showcase (visual pass M6) and the
+  tests cover their drawing and state; run them once on a desktop with a logged-in CLI.
+- #939's transcript tests over #944's four recordings: resolved by #939's c54d81a2 (they joined
+  `RECORDED`). Nothing left.
 - #939's footer cost: resolved by D7 (#939 labels it "session total"; #944 owns the per-turn
   cost). Nothing left for #939's flow.
