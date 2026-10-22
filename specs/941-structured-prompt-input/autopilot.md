@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M3
-- **Next step**: M3 verify (scoped gate + review A)
+- **Next step**: M3 verify (scoped gate + review A) — see Handover
 
 ## Pull requests
 
@@ -109,7 +109,21 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-None.
+M3 unit handed over at ~222k context (2026-10-22).
+- **Done**: branch reset to origin/main (M2 #1240 merged at 1781310b, recorded). T034–T038
+  implemented and ticked, committed at ddf3d7dc (not pushed, no PR). Local runs green:
+  `structured_input` 17, `structured_input_saved` 5, `structured_session` 16,
+  `structured_saved_history` 12, `structured_lifecycle` 7, `structured_resume` 4, core
+  `structured_input` 26. Mutants recorded in tdd/cycle-log.md (cycles 5–6). Decisions 11–13.
+- **Next step**: verify.md step 1 — `scripts/autopilot/scoped-gate.sh` detached, review A
+  (`code-review` high on origin/main...HEAD) in its shadow; then review B (conformance, sonnet),
+  full gate (`scripts/gate.sh`; rebase onto origin/main and `cargo fmt --all` first if main moved),
+  then the PR title/body files in the session scratchpad (do not open the PR; title
+  `#941: Structured session view: prompt input, interrupt and queued messages — M3 of 7: <what> (#941)`).
+- **Open findings**: none yet. Known narrow race noted for reviewers: `write_interrupt` waits while
+  a message note is pending, but a reader line flushing that note before the message's write could
+  let the interrupt precede it (needs a click within microseconds of Busy).
+- **Disk**: 14 GB free with target-shared at 16 GB; delete target-shared/ if a gate runs short.
 
 ## Open escalation
 
