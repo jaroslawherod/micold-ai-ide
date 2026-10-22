@@ -103,8 +103,15 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review A M5 (scoped, sonnet) | 2 | 6c771212742f11c48eb8f63a78a4286ebebd2ce9:8e745e91a432afdd3a2f601874f796efdd0753d8 | CLEAN (fixes hold; declines stand) |
 | Review B M5 (conformance, sonnet) | 1 | 5846601b6efdf6a3d667ce97a94e1e4496aa816e:9400acbe1e9bc55c16f122f2a08859413afb2685 | CLEAN: 2 MINOR (unit tests test-after: recorded in the cycle log, mutant set; plan/research still said `image` and "No new crate": fixed, prose only). Verify: layout_snapshot 83, material_builder_api 12, showcase_completeness 45 passed |
 | Full gate M5 | — | — | rebased onto origin/main 420b051e (#1161 M2; no wire change, no pin to move). 1st red: daemon `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` under load (the M4 flake; review B's Verify build ran beside it; no M5 change to the daemon); green at 9400acbe (`scripts/gate.sh`). Visual pass not run: the change is showcase-only (nothing in the app draws the parts until M6); the geometry gate and contrast cases cover both schemes |
+| Review A M6 (code-review, high) | 1 | 8f097b314b5ecdffbcf3a6c218ea7c69eb29fd30:3f7fb6023ed898e7b4b75ddd7c647f31206da85a | 9 findings: composer height unbounded (fixed: the queue scrolls inside `QUEUE_MAX_HEIGHT`, gate `a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view`); `KeyInput` conversion copied (fixed: `ui::composer::key_input`, also used by the app-chord listener); T061 pending (in progress); 6 declined |
 
 ## Declined review findings
+
+- Review A M6 r1 (IME: Enter during a composition sends): Decision 20; winit delivers a composition as `Ime` events and does not send the confirming Enter as a key press, and `KeyPress` carries no preedit state to read.
+- Review A M6 r1 (view passes `connected = true`): Decision 21; the connection is the shell's route, and a send without one comes back whole with `NOT_CONNECTED` (FR-005, FR-006).
+- Review A M6 r1 (`Preview` equal to any other): the `Editor` precedent beside it; a preview mirrors `draft.images`, which is compared, and `sync_previews` is the one writer of both.
+- Review A M6 r1 (`sync_previews` compares bytes; drop rebuilds the editor): MINOR; at most 20 pictures under 9 MB, on a send, restore or drop, never per keystroke; the M4 generation check rebuilt the editor on the same events.
+- Review A M6 r1 (transcript Escape only while `terminal_focused`): by design (Decision 20): with a field or surface holding the keyboard, Escape is that field's or surface's.
 
 - Review B M4 r1 F3 (MINOR, `sync_editor` recreates a forgotten session's editor on a late answer): `forget_composer` drops that session's composer requests in flight, so no late answer reaches it; `editor()` needs `sync_editor` to create a fresh session's editor before it has a composer.
 - Review A M4 r1 F3 (MINOR, drops read a whole picture before the size check): a read capped at the limit would make the TooLarge refusal name a wrong size; a drop is the user's own and is read off the UI thread.

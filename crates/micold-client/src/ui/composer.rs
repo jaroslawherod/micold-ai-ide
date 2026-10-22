@@ -20,12 +20,17 @@ use crate::features::composer::{composer_key, KeyIntent, Msg, QueueEditDraft};
 use crate::keymap::KeyInput;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
 use crate::ui::material::{
-    AttachmentChip, BusyIndicator, Button, QueueRow, Text, TextArea, TextField, TypeRole,
+    AttachmentChip, BusyIndicator, Button, QueueRow, Scrollable, Text, TextArea, TextField,
+    TypeRole,
 };
 
 /// The height the text area stops growing at, its lines then scrolling inside it (FR-008):
 /// about eight lines.
 pub const MAX_HEIGHT: f32 = 220.0;
+
+/// The height the queue's rows stop growing at, scrolling inside it past that: two rows and part
+/// of a third, which says there are more.
+pub const QUEUE_MAX_HEIGHT: f32 = 120.0;
 
 /// The status row's words while a turn is open (FR-010).
 pub const BUSY: &str = "Working";
@@ -72,9 +77,10 @@ pub fn view<'a>(
         .and_then(|c| c.remote.as_ref())
         .map_or(&[][..], |r| &r.queue[..]);
     let editing = composer.and_then(|c| c.editing.as_ref());
+    let mut rows: Vec<Element<'a, Message>> = Vec::new();
     for (index, queued) in queue.iter().enumerate() {
         let entry = queued.id;
-        parts.push(match editing.filter(|e| e.entry == entry) {
+        rows.push(match editing.filter(|e| e.entry == entry) {
             Some(edit) => queue_edit(session, edit, roles),
             None => QueueRow::new(index + 1, queued.text.clone(), roles)
                 .pictures(queued.attachments.len())
@@ -87,6 +93,15 @@ pub fn view<'a>(
                 )
                 .into(),
         });
+    }
+    if !rows.is_empty() {
+        // A long queue scrolls inside its own room, so the composer never pushes the transcript
+        // out of the pane (FR-008).
+        parts.push(
+            container(Scrollable::new(column(rows).spacing(spacing::XS), roles))
+                .max_height(QUEUE_MAX_HEIGHT)
+                .into(),
+        );
     }
 
     // The hold notice and **Send queued** (FR-022).
@@ -264,14 +279,13 @@ pub fn key_binding(
     if !matches!(press.status, Status::Focused { .. }) {
         return Binding::from_key_press(press);
     }
-    let Some(key) = to_keymap_key(&press.key) else {
+    let Some(input) = key_input(
+        &press.key,
+        &press.physical_key,
+        press.modifiers,
+        press.text.as_deref(),
+    ) else {
         return Binding::from_key_press(press);
-    };
-    let input = KeyInput {
-        key,
-        mods: to_keymap_mods(press.modifiers),
-        text: press.text.as_ref().map(ToString::to_string),
-        physical: to_keymap_physical(&press.physical_key),
     };
     match composer_key(&input, caret, lines, false, phase) {
         KeyIntent::Edit => Binding::from_key_press(press),
@@ -281,4 +295,20 @@ pub fn key_binding(
             composing: false,
         }))),
     }
+}
+
+/// A press as the keymap reads it; `None` for a key it does not know. Shared by the composer's
+/// binding and the transcript's listener.
+pub(crate) fn key_input(
+    key: &iced::keyboard::Key,
+    physical: &iced::keyboard::key::Physical,
+    modifiers: iced::keyboard::Modifiers,
+    text: Option<&str>,
+) -> Option<KeyInput> {
+    Some(KeyInput {
+        key: to_keymap_key(key)?,
+        mods: to_keymap_mods(modifiers),
+        text: text.map(str::to_owned),
+        physical: to_keymap_physical(physical),
+    })
 }
