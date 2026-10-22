@@ -45,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 15866164d7f79a3d92d85e3fb046d236eedcf7c4:c4edd43e6fdac03c072a44bd4b8263fdc3df7b3b | CLEAN (2 MINOR fixed, prose only) |
 | M2 Review A (high) | 1 | 149299858bf5c303889102a10e028a8747bb9b00:81aedcc51d63de8b9765c5fd8f52f682003d4162 | CLEAN (1 MINOR declined: cursor moves clear the error) |
 | M2 Review B (sonnet) | 1 | same | CLEAN (doc wrap MINOR fixed; T016 is a pin, M1 already rendered empty) |
+| M3 Review A (high) | 1 | 21739abdcec9137717faf4241050e429726a6132:802cec8ae6b7e1a908d844753c4e0f1382d2bffc | CLEAN (3 MINOR: F1 fixed, F2/F3 declined) |
+| M3 Review B (sonnet) | 1 | same | CLEAN (1 MINOR fixed: name_words unit test; Verify: 30+42+8 tests ok) |
 | M1 Review A (high) | 1 | ba211cda3dc12bd3d30cd91de2d6f81058dc21c2:b3829c225724e3d598cfabc541fe1660f5ce2ec0 | CHANGES: 1 MAJOR (body not in description pass; fixed), F2 fixed, F3 declined |
 | M1 Review A (high) | 2 (full, stale snapshot after rebase) | 02e4fc1536c51d3b8070bbceff63dbcbc0ced9c5:bdf034b4716832911ac413339ce3eefff4777286 | CLEAN (1 MINOR: validation is M2) |
 | M1 Review B (conformance) | 1 | same | CLEAN (MINOR: visual evidence lacks picked-issue shot; reducer tests cover US1 s1) |
@@ -53,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A | F2 ops.rs repeats the remote-list/choose_remote read of the github_issue path | MINOR, left: two short call sites, no shared type worth adding |
+| M3 | A | F3 lookup gated by github_issues_enabled | Intended: 550 FR-010 / 1102, nothing leaves the machine with GitHub issues off |
 | M1 | A | F3 `{issue}` is the ticket text even with no picked issue | Intended (plan: issue = ticket.trim(); a Jira ticket has no picked GitHub issue) |
 
 ## Notes

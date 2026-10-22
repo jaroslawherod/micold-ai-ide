@@ -654,12 +654,12 @@ struct LiveSession {
     last_active: micold_core::clock::Uptime,
 }
 
-/// How long `create_session` waits for a new session to be ready for its first prompt, counted
-/// from the request (feature 034, FR-017).
 /// How long a default prompt waits for an issue's title and body before rendering them empty
 /// (1161 FR-012).
 pub const PROMPT_LOOKUP_BOUND: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// How long `create_session` waits for a new session to be ready for its first prompt, counted
+/// from the request (feature 034, FR-017).
 pub const FIRST_PROMPT_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// [`micold_core::unix_time::unix_secs`] signed, as plan-usage readings carry it: when one was
