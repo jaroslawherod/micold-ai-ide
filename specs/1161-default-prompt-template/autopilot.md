@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
 - **Phase**: milestone M2
-- **Next step**: M2 gate, reviews, PR
+- **Next step**: M2 PR CI and merge, then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #1245 | merged |
-| M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #… | pending |
+| M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #… | in review |
 | M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #… | pending |
 
 ## Decisions
@@ -42,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 9c1a3ea4c4eafd8fac474ff9036262b2110d35ce:3f9fcba65f32e6fe61a0c04eb2b35443fbcb36f1 | CHANGES: 2 MAJOR, 2 MINOR (all fixed) |
 | Plan | 2 | 67a3b302e232e0f97f90ca37f8ed269e5ed8e9c9:4bbf066bfe6165d2de73d7111a10784a402091ba | CLEAN |
 | Tasks | 1 | 15866164d7f79a3d92d85e3fb046d236eedcf7c4:c4edd43e6fdac03c072a44bd4b8263fdc3df7b3b | CLEAN (2 MINOR fixed, prose only) |
+| M2 Review A (high) | 1 | 149299858bf5c303889102a10e028a8747bb9b00:81aedcc51d63de8b9765c5fd8f52f682003d4162 | CLEAN (1 MINOR declined: cursor moves clear the error) |
+| M2 Review B (sonnet) | 1 | same | CLEAN (doc wrap MINOR fixed; T016 is a pin, M1 already rendered empty) |
 | M1 Review A (high) | 1 | ba211cda3dc12bd3d30cd91de2d6f81058dc21c2:b3829c225724e3d598cfabc541fe1660f5ce2ec0 | CHANGES: 1 MAJOR (body not in description pass; fixed), F2 fixed, F3 declined |
 | M1 Review A (high) | 2 (full, stale snapshot after rebase) | 02e4fc1536c51d3b8070bbceff63dbcbc0ced9c5:bdf034b4716832911ac413339ce3eefff4777286 | CLEAN (1 MINOR: validation is M2) |
 | M1 Review B (conformance) | 1 | same | CLEAN (MINOR: visual evidence lacks picked-issue shot; reducer tests cover US1 s1) |
