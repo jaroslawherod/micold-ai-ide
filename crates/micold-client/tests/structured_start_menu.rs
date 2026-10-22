@@ -8,8 +8,8 @@ mod support;
 
 use micold_client::app::{Message, State};
 use micold_client::features::session::{
-    session_create, AvailabilityKey, AvailabilitySource, BypassStart, CliAvailability,
-    CliEntryAvailability, Msg, PressTarget, StartGate, StartIntent, StartMenu,
+    additional_opened, session_create, AvailabilityKey, AvailabilitySource, BypassStart,
+    CliAvailability, CliEntryAvailability, Msg, PressTarget, StartGate, StartIntent, StartMenu,
 };
 
 use micold_core::protocol::messages::ClientMsg;
@@ -236,4 +236,41 @@ fn cancelling_the_bypass_confirmation_returns_to_the_choice() {
         PermissionMode::Bypass,
         "with the choice as it was"
     );
+}
+
+#[test]
+fn an_additional_session_keeps_the_mode_of_the_start_that_opened_it() {
+    let mut state = State::default();
+    state.update(Message::Session(Msg::AdditionalOpened {
+        location: SessionLocation::Worktree("feat".into()),
+        provider: Some(AiCli::ClaudeCode),
+        kind: SessionKind::Structured,
+        permission_mode: PermissionMode::Plan,
+    }));
+    assert_eq!(state.session.additional_mode, PermissionMode::Plan);
+    state.update(Message::Session(Msg::StartModeChosen(
+        PermissionMode::Bypass,
+    )));
+    assert_eq!(
+        state.session.additional_mode,
+        PermissionMode::Plan,
+        "a later choice does not reach a confirmation already open"
+    );
+    state.update(Message::Session(Msg::AdditionalCancelled));
+    assert_eq!(state.session.additional_mode, PermissionMode::Default);
+}
+
+#[test]
+fn the_rows_another_session_confirmation_creates_in_default() {
+    let mut state = State::default();
+    state.update(Message::Session(Msg::StartModeChosen(
+        PermissionMode::Bypass,
+    )));
+    additional_opened(
+        &mut state,
+        SessionLocation::Worktree("feat".into()),
+        None,
+        SessionKind::Terminal,
+    );
+    assert_eq!(state.session.additional_mode, PermissionMode::Default);
 }

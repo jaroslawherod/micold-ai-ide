@@ -148,6 +148,10 @@ pub struct State {
     /// start that opened the confirmation chose; a terminal session from the row's menu. Set and
     /// cleared with [`Self::additional_target`].
     pub additional_kind: SessionKind,
+    /// The permission mode the confirmed additional session is created in (#942): the one the
+    /// start that opened the confirmation was gated in; `Default` from the row's menu. Set and
+    /// cleared with [`Self::additional_target`].
+    pub additional_mode: PermissionMode,
     /// A stopped session whose start another live session of its worktree blocks, awaiting the
     /// user's confirmation to run both (feature 776, FR-013, FR-016). Its presence *is* the
     /// confirm dialog being shown.
@@ -1324,6 +1328,7 @@ pub fn additional_opened(
     state.session.additional_target = Some(location);
     state.session.additional_provider = provider;
     state.session.additional_kind = kind;
+    state.session.additional_mode = PermissionMode::Default;
 }
 
 /// The additional-session confirmation was dismissed: nothing changes (FR-016).
@@ -1331,6 +1336,7 @@ pub fn additional_cancelled(state: &mut crate::app::State) {
     state.session.additional_target = None;
     state.session.additional_provider = None;
     state.session.additional_kind = SessionKind::Terminal;
+    state.session.additional_mode = PermissionMode::Default;
     state.session.blocked_start = None;
 }
 
@@ -1340,6 +1346,7 @@ pub fn additional_confirmed(state: &mut crate::app::State) {
     state.session.additional_target = None;
     state.session.additional_provider = None;
     state.session.additional_kind = SessionKind::Terminal;
+    state.session.additional_mode = PermissionMode::Default;
     state.session.blocked_start = None;
 }
 
@@ -1755,6 +1762,8 @@ pub enum Msg {
         provider: Option<AiCli>,
         /// The kind the start asked for (feature 938), kept for the confirmed session.
         kind: SessionKind,
+        /// The permission mode the start was gated in (#942), kept for the confirmed session.
+        permission_mode: PermissionMode,
     },
     /// The confirmation was accepted. The binary sends `SessionCreate` with
     /// `allow_additional_session: true`.
@@ -2094,7 +2103,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             location,
             provider,
             kind,
-        } => additional_opened(state, location, provider, kind),
+            permission_mode,
+        } => {
+            additional_opened(state, location, provider, kind);
+            state.session.additional_mode = permission_mode;
+        }
         Msg::AdditionalConfirmed => additional_confirmed(state),
         Msg::StartModeChosen(mode) => state.session.start_mode = mode,
         Msg::BypassStartOpened(start) => bypass_start_opened(state, start),

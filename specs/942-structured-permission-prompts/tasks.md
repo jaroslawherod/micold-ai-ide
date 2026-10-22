@@ -309,7 +309,8 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [x] T053 [US1] Wire `client/src/shell/daemon_sync.rs`: `PermissionRequested`/`PermissionResolved`/
   `PermissionInputText` into the feature; `PermissionDecision`, `PermissionInput` and
   `SetPermissionMode` sent with their `req` and their `OperationOk`/`OperationError` replies routed
-  back; a reducer test per route in `client/tests/features_permission_prompts.rs` first
+  back; a reducer test per route in `client/tests/features_permission_prompts.rs` first, and the
+  routes through the shell in `shell/daemon_sync.rs`'s `tests::permission_prompts` (binary-only)
 - [x] T054 [US2] Tests in `client/tests/structured_start_menu.rs`: the structured create flow
   carries a chosen mode into `SessionCreate.permission_mode` (none chosen → Default); choosing
   Bypass enters a confirmation step and only its confirm sends the create; cancelling returns to
@@ -483,7 +484,8 @@ window can answer. T070 (Polish, no code) is left to the close unit (milestones 
   decisions and mode changes; the structured create flow carries a mode with a Bypass
   confirmation step (no draw code yet)
 - **Satisfies**: FR-006–FR-009 and FR-014 at the state level; US1, US3, US4, US5 client logic
-- **Verify**: `cargo test -p micold-client --test features_permission_prompts --test structured_start_menu`
+- **Verify**: `cargo test -p micold-client --test features_permission_prompts --test structured_start_menu`,
+  and `cargo test -p micold-client --bin micold-ai-ide permission_prompts` for the shell routes
 - **Depends on**: M5
 - **Tier**: full
 
