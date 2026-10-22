@@ -102,6 +102,30 @@ impl EventStream {
         (omitted, events, history.next_seq())
     }
 
+    /// The session's command list as the history holds it ([`CommandList::from_history`], FR-009),
+    /// read under the history lock from the latest `Init` and `CommandsReported` alone, without
+    /// copying the history (#943 FR-010, FR-018).
+    ///
+    /// [`CommandList::from_history`]: micold_core::structured::commands::CommandList::from_history
+    pub fn command_list(&self) -> micold_core::structured::commands::CommandList {
+        let history = self.history.lock().unwrap_or_else(|e| e.into_inner());
+        let (mut init, mut reported) = (None, None);
+        for event in history.iter().rev() {
+            match event.event {
+                StructuredEvent::Init { .. } if init.is_none() => init = Some(event),
+                StructuredEvent::CommandsReported { .. } if reported.is_none() => {
+                    reported = Some(event)
+                }
+                _ => {}
+            }
+            if init.is_some() && reported.is_some() {
+                break;
+            }
+        }
+        let latest: Vec<SequencedEvent> = init.into_iter().chain(reported).cloned().collect();
+        micold_core::structured::commands::CommandList::from_history(&latest)
+    }
+
     /// The `seq` the next event gets: what the periodic saver counts (a save is due after a new
     /// event).
     pub fn next_seq(&self) -> u64 {

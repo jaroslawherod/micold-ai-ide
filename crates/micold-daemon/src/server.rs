@@ -1087,7 +1087,7 @@ where
                 text,
                 keep,
             } => {
-                let changed = state.change_queue(session, |input| input.edit(entry, text, &keep));
+                let changed = state.edit_queue(session, entry, text, &keep);
                 answer_queue_change(
                     state,
                     id,

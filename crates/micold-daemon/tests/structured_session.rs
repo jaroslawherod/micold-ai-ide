@@ -881,7 +881,10 @@ async fn a_message_reaches_only_its_own_session() {
     );
     delivered_is(&one, ["for one"]).await;
     tokio::time::sleep(Duration::from_millis(300)).await;
-    assert!(stdin_lines(&two).is_empty(), "the other session read nothing");
+    assert!(
+        stdin_lines(&two).is_empty(),
+        "the other session read nothing"
+    );
     for id in ids {
         state.stop_session(id);
     }
@@ -997,14 +1000,20 @@ async fn send_control_to_a_stopped_process_fails_stopped() {
     let process = bare_process(project.path(), "exit 0\n");
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while !process.output_ended() {
-        assert!(std::time::Instant::now() < deadline, "the output never ended");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the output never ended"
+        );
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     let id = micold_core::structured::control::next_request_id();
     let line = micold_core::structured::control::encode_interrupt(&id);
     let failed = process.send_control(&id, &line).await;
     assert!(
-        matches!(failed, Err(micold_daemon::structured::ControlFailed::Stopped)),
+        matches!(
+            failed,
+            Err(micold_daemon::structured::ControlFailed::Stopped)
+        ),
         "{failed:?}"
     );
 }
@@ -1020,7 +1029,10 @@ async fn send_control_unanswered_fails_no_answer_after_the_bound() {
     let asked = tokio::time::Instant::now();
     let failed = process.send_control(&id, &line).await;
     assert!(
-        matches!(failed, Err(micold_daemon::structured::ControlFailed::NoAnswer)),
+        matches!(
+            failed,
+            Err(micold_daemon::structured::ControlFailed::NoAnswer)
+        ),
         "{failed:?}"
     );
     assert!(asked.elapsed() >= micold_daemon::structured::CONTROL_ANSWER_BOUND);

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
 - **Phase**: implement M3
-- **Next step**: M3 implemented (T025–T031 ticked); gate, reviews A and B, then the M3 PR. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Next step**: M3 reviews done (A round 2 on the fix diff pending), full gate, then the M3 PR. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
@@ -42,8 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 2 | clarify r1 | After `/clear`, which conversation do later launches resume? (US1 s5) | **Provisional A, pending jaro**: structured sessions follow the CLI (FR-005a); terminal keeps BUG-904 trade-off. Revert to B/C if he picks otherwise | user (provisional, via coordinator) | BUG-904 decision 1; 582 FR-017 |
 | 3 | clarify r2 | Terminal launch after structured `/clear`; terminal `/clear` | Resume recorded handle; terminal `/clear` unseen | agent | 582 FR-017 |
 | 4 | plan | FR-003: the CLI never writes a skill's expanded instructions to stdout; what goes behind the command? | The command's description; expansion only if a later CLI reports it; FR-003 and US1 s3 amended | agent | research.md R4, probe P-3 (2.1.307) |
-| 6 | implement M3 | T025/T030: stand-in answers `initialize` by default? Note appended by a task after `send_control`? | Stand-in answers only on an `initialize` directive (silent otherwise), so the 10 existing suites' exact event lists stay as they are; the stdout reader turns the answer into `CommandsReported` in the answer's place (deterministic order, raw answer not duplicated), and the request is written in `spawn` without waiting; `send_control` serves `set_permission_mode` and M4's `set_model` | agent | structured_* suites compare exact event lists (`events_of == fixture_events`) |
 | 5 | tasks | analyze I1/I2: does only M2's chip wait on #941 M1, and are `saved.rs`/`provider.rs` in the plan? | M2 is held whole on #941 M1; plan tree lists both files (plan.md updated) | agent | analyze report I1, I2 |
+| 6 | implement M3 | T025/T030: stand-in answers `initialize` by default? Note appended by a task after `send_control`? | Stand-in answers only on an `initialize` directive (silent otherwise), so the 10 existing suites' exact event lists stay as they are; the stdout reader turns the answer into `CommandsReported` in the answer's place (deterministic order, raw answer not duplicated), and the request is written in `spawn` without waiting; `send_control` serves `set_permission_mode` and M4's `set_model` | agent | structured_* suites compare exact event lists (`events_of == fixture_events`) |
 
 ## Review rounds
 
@@ -63,6 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 (scoped, sonnet, claude -p) | 2 | 14e2380da76348b1a29deee35ad3148d064bdc0d:a250b25ff50da64feb5e8bbc502918aaf4c20724 | CLEAN |
 | Review B M2 (conformance, sonnet, claude -p) | 2 | 14e2380da76348b1a29deee35ad3148d064bdc0d:a250b25ff50da64feb5e8bbc502918aaf4c20724 | CLEAN; Verify: structured_transcript 71 passed, client lib transcript 7 passed |
 | Tasks review | 2 (sonnet, fix diff) | 0c12e486473d3a8cc0937758fdd4473a3e424f23:ee00a672e9c7ceefaa1edde46c12c37b7a0a103e | CLEAN (1 MINOR, fixed, prose only) |
+| Review A M3 (code-review high, claude -p) | 1 | 2105909dc24a3b40e9538ce502b9218cd6591a49:96f78747275b52e8fd55a3e2e2514b83d3e5d7ad | CHANGES: F1 MAJOR queue edit into `/model`/terminal-only reached the CLI — fixed (`edit_queue`, `QueueRefusal::Refused`, test); F2 MAJOR evicted note — declined (FR-009); F3 MINOR docs window before init — fixed, prose only; F4 MINOR history cloned per `/` message under the state lock — fixed (`EventStream::command_list`, test); F5 MINOR — declined |
+| Review B M3 (conformance, sonnet, claude -p) | 1 | 2105909dc24a3b40e9538ce502b9218cd6591a49:96f78747275b52e8fd55a3e2e2514b83d3e5d7ad | CLEAN (1 MINOR: decisions rows 5/6 out of order — fixed) |
 
 ## Declined review findings
 
@@ -70,12 +72,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Review A M1 F3 (MINOR, a user skill named `login`/`config` is marked terminal-only): declined — FR-011: "a command is terminal-only if either source says so", by name; with only the `init` lists the kind of a name is not known.
 - Review A M2 F8 (summary drawn inline, chip description and `era` unused in the window): declined — tasks.md T024 draws M2's arms with the existing pieces only; M8 T058 puts the command, compaction, clear and model markers in `DisclosureCard` (description and summary folded) and draws earlier eras as "before the clear"
 
+- Review A M3 F2 (MAJOR, refusals read a list the history may have evicted): declined — same as Review A M1 F1: FR-009 makes the list the one the history still holds; an `init`, with the CLI's own terminal-only names, precedes every turn, and the documented terminal-only commands and `/model` are refused from the fallback too.
+- Review A M3 F5 (MINOR, an empty `CommandsReported` hides an earlier non-empty one): declined — R1 as `CommandList::from_history` documents it: an empty latest note means that spawn's `initialize` was refused, and the latest `init`'s names count, not an older spawn's report.
+
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
 
-M3 unit handed over at 193k context (checkpoint OVER). **Done**: branch reset to origin/main 6b3b62c7 (branch-start.sh could not query #1241: gh GraphQL refused; merge SHA from the orchestrator); T025–T031 implemented, ticked and committed (f042dfc6, not pushed, no PR). `cargo test -p micold-daemon` over every `structured_*` suite plus `plan_usage_structured`: all green (structured_commands 6, structured_session 19, structured_permission_mode 13). **Next**: verify.md from step 1: scoped gate with review A (`code-review` high) on `origin/main...HEAD`, review B (conformance, sonnet), no visual pass (daemon only), full gate (`scripts/gate.sh`, cloud: no mise), then pr.md: title/body to the scratchpad `943-M3/pr-title.txt` and `pr-body.md`, push with `--force-with-lease`, return `PR: to open by orchestrator`. No open findings. Reviewers: watch decision 6 (deviation from T025/T030 wording).
+None.
 
 ## Open escalation
 
