@@ -16,8 +16,8 @@ pub use blocks::{
 pub use entries::{
     compacted_text, edit_meta, footer_view, model_changed_text, omitted_text, oversized_text, rows,
     subagent_count, subagent_notice_text, tool_header, tool_header_counted, tool_status,
-    user_message_text, CardHeader, FooterView, Row, Status, Tone, CLEARED, ENDED_WITHOUT_RESULT,
-    NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL, TERMINAL_PERIOD, THINKING_TITLE, USER_LABEL,
+    CardHeader, FooterView, Row, Status, Tone, CLEARED, ENDED_WITHOUT_RESULT, NO_OUTPUT,
+    ORPHAN_RESULT, RAW_LABEL, TERMINAL_PERIOD, THINKING_TITLE, USER_LABEL,
 };
 pub use rich::EDIT_TOOLS;
 

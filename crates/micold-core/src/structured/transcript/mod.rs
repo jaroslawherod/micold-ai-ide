@@ -19,6 +19,7 @@ pub use figures::{footer_figures, format_cost, format_duration, format_turns};
 pub use result::result_parts;
 pub use summary::{input_summary, SUMMARY_MAX_CHARS};
 
+use crate::structured::commands::CommandList;
 use crate::structured::sync::Continuity;
 use crate::structured::{SequencedEvent, StructuredEvent, MAX_EVENTS};
 use std::collections::{HashMap, VecDeque};
@@ -66,6 +67,8 @@ pub struct Transcript {
     era: u32,
     /// The latest `init` and `CommandsReported` held: the command list a chip reads (#943 FR-003).
     command_sources: Vec<SequencedEvent>,
+    /// The list `command_sources` make, once a chip needed it since they last changed.
+    commands: Option<CommandList>,
     /// The open turn's user message was a command: a synthetic answer is its output (#943 R4).
     command_turn: bool,
     /// The open turn's compaction marker: the synthetic summary and the CLI's
@@ -111,6 +114,7 @@ impl Transcript {
             interrupted: false,
             era: 0,
             command_sources: Vec::new(),
+            commands: None,
             command_turn: false,
             compaction: None,
             in_terminal: false,
