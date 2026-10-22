@@ -134,6 +134,8 @@ pub fn prompt_card_sample(pose: PromptPose, scheme: ColorScheme) -> Element<'sta
         PromptsView {
             state: &PROMPTS,
             on_prompt: |_| Message::NoOp,
+            focused: None,
+            on_focus: |_, _| Message::NoOp,
         },
         *SESSION,
         pose.id(),

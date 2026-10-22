@@ -77,11 +77,7 @@ const ALLOWED: &[(&str, &str)] = &[];
 /// `SidebarScrolled` and `TabStripScrolled` — route to the same `close_on_scroll_beneath`, and
 /// asked `tests/overlay_dismissal_delta.rs` through those instead. With the assertions moved onto
 /// a message the user can actually send, the unreachable variant had nothing left to record.
-const NO_OWNER: &[(&str, &str)] = &[(
-    "PermissionPrompts",
-    "#942 M6 lands the permission prompts' render-free state and its shell half first; the \
-     request views (M7) and the mode control (M8) are what emit it, and the entry goes with them",
-)];
+const NO_OWNER: &[(&str, &str)] = &[];
 
 // ---- Reading the source ------------------------------------------------------------------------
 

@@ -10,7 +10,9 @@ use crate::features::permission_prompts::{
     Action, Msg as PromptsMsg, Shown, State as PromptsState,
 };
 use crate::features::structured_transcript::TranscriptMsg;
+use crate::features::window::FieldId;
 use crate::icons::Icon;
+use crate::ui::focus::TrackFocusAs;
 use crate::ui::material::{Button, ChoiceList, IconLabel, PromptCard, Text, TextField, TypeRole};
 use iced::widget::column;
 use iced::widget::text::Wrapping;
@@ -56,6 +58,10 @@ pub const DECLINE: &str = "Decline";
 pub struct PromptsView<'a, M> {
     pub state: &'a PromptsState,
     pub on_prompt: fn(PromptsMsg) -> M,
+    /// The input that holds the keyboard, so a request's text field draws its focus (BUG-003).
+    pub focused: Option<FieldId>,
+    /// The message a request's text field reports a focus change with.
+    pub on_focus: fn(FieldId, bool) -> M,
 }
 
 /// What every request view draws with: the transcript's renderers and theme, and where each kind
@@ -65,6 +71,8 @@ pub(super) struct Draw<'a, M> {
     pub ctx: RenderCtx<'a>,
     pub on_transcript: fn(TranscriptMsg) -> M,
     pub on_prompt: fn(PromptsMsg) -> M,
+    pub focused: Option<FieldId>,
+    pub on_focus: fn(FieldId, bool) -> M,
 }
 
 /// The label a request leaves on its card once it has ended (research R11).
@@ -179,6 +187,8 @@ pub fn request_view<'a, M: Clone + 'a>(
         ctx,
         on_transcript,
         on_prompt: prompts.on_prompt,
+        focused: prompts.focused,
+        on_focus: prompts.on_focus,
     };
     Some(request_block(
         shown,
@@ -259,9 +269,11 @@ fn tool_view<'a, M: Clone + 'a>(
     }
     view = view
         .body(
-            TextField::new(DENY_PLACEHOLDER, &shown.draft.deny_message, roles).on_input(
-                move |text| on_prompt(PromptsMsg::DenyMessageEdited { session, id, text }),
-            ),
+            TextField::new(DENY_PLACEHOLDER, &shown.draft.deny_message, roles)
+                .on_input(move |text| {
+                    on_prompt(PromptsMsg::DenyMessageEdited { session, id, text })
+                })
+                .track_focus(FieldId::PromptDenyMessage(id), d.focused, d.on_focus),
         )
         .action(Button::filled(ALLOW, roles).on_press_maybe(send(Action::Allow)))
         .action(Button::outlined(DENY, roles).on_press_maybe(send(Action::Deny)));
@@ -287,7 +299,8 @@ fn plan_view<'a, M: Clone + 'a>(
         .body(wrapped(plan.to_owned(), TypeRole::Body, roles))
         .body(
             TextField::new(NOTE_PLACEHOLDER, &shown.draft.note, roles)
-                .on_input(move |text| on_prompt(PromptsMsg::NoteEdited { session, id, text })),
+                .on_input(move |text| on_prompt(PromptsMsg::NoteEdited { session, id, text }))
+                .track_focus(FieldId::PromptNote(id), d.focused, d.on_focus),
         )
         .action(
             Button::filled(APPROVE_ACCEPT_EDITS, roles)
