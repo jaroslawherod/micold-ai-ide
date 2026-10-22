@@ -160,6 +160,77 @@ fn the_icon_face_parses_and_is_the_face_that_measures() {
     );
 }
 
+/// `Font::MONOSPACE` measures with the committed monospace face, not the host's (feature 940).
+///
+/// The same class as the icon face: code lines resolved through the host's monospace family, and
+/// CI's Ubuntu runner measured every one of them 0.3–1.1px wider than the machine that recorded
+/// the fixture. Measured against the committed face's own advances, so a substitution fails here.
+#[test]
+fn the_monospace_face_parses_and_is_the_face_that_measures() {
+    let face = ttf_parser::Face::parse(lay::REFERENCE_MONO_FONT_BYTES, 0)
+        .expect("the committed monospace font must parse");
+    let family = face
+        .names()
+        .into_iter()
+        .filter(|n| n.name_id == ttf_parser::name_id::FAMILY)
+        .find_map(|n| n.to_string())
+        .expect("the monospace face must carry a decodable family name");
+    assert_eq!(family, lay::REFERENCE_MONO_FONT_FAMILY);
+    assert!(face.is_monospaced());
+
+    let _ = lay::renderer();
+
+    // Widths alone cannot tell two 0.6 em faces apart (the host this was recorded on had one), so
+    // also ask the database which face `Family::Monospace` resolves to: it must be the committed
+    // bytes, not a host file, even one of the same name.
+    {
+        use iced::advanced::graphics::text::cosmic_text::fontdb;
+        let mut fonts = iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system lock was poisoned");
+        let db = fonts.raw().db();
+        let id = db
+            .query(&fontdb::Query {
+                families: &[fontdb::Family::Monospace],
+                ..fontdb::Query::default()
+            })
+            .expect("Family::Monospace must resolve to a face");
+        let info = db.face(id).expect("the resolved face is in the database");
+        assert!(
+            info.families
+                .iter()
+                .any(|(name, _)| name == lay::REFERENCE_MONO_FONT_FAMILY)
+                && matches!(info.source, fontdb::Source::Binary(_)),
+            "Family::Monospace resolved to {:?} from {:?}, not the committed face",
+            info.families,
+            info.source
+        );
+    }
+
+    const PROBE: &str = "cargo test -- --nocapture";
+    let measured = measure(PROBE, iced::Font::MONOSPACE);
+    let expected: f32 = PROBE
+        .chars()
+        .map(|ch| {
+            let id = face
+                .glyph_index(ch)
+                .expect("the monospace face maps the probe");
+            f32::from(
+                face.glyph_hor_advance(id)
+                    .expect("the face must carry advances"),
+            ) * lay::DEFAULT_TEXT_SIZE
+                / f32::from(face.units_per_em())
+        })
+        .sum();
+
+    assert!(
+        (measured - expected).abs() <= 0.05,
+        "Font::MONOSPACE measured {measured:.2}px but the committed face advances {expected:.2}px. \
+         The renderer is shaping code with some other font — the monospace face is not loaded, \
+         the monospace family is not set, or a host font of the same name has won the lookup."
+    );
+}
+
 /// **The load-bearing half of the guard.**
 ///
 /// The global font database still loads the host's fonts, so a machine with its own `Roboto`

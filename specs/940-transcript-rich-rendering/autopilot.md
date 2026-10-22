@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
 - **Phase**: milestone M5
-- **Next step**: M5 PR: orchestrator opens it (title/body in the session scratchpad), then CI and merge
+- **Next step**: M5 PR #1234: CI attempt 2 after the red-CI fix (pinned test monospace face), then merge
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | #1220 | merged (528209c8) |
 | M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | #1229 | merged (7ce164cf) |
 | M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | #1232 | merged (1a625083) |
-| M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | pending (orchestrator opens) | full gate green at adfb12ea |
+| M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | #1234 (draft) | CI attempt 1 red (layout_snapshot, host monospace); fixed test-only, full gate green |
 
 ## Decisions
 
@@ -68,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M5 (real window headless, tiny-skia, recorded fixtures) | 1 | — | No findings: Part B steps 1, 2, 5, 7 pass; 3, 4, 8 not driven (no input/no second window), 6 thinking empty in fixture. Card titles faint = iced first-frame `Status::Disabled` (headless artefact). Evidence: `visual-pass/m5-record.md`, `m5-*.png` |
 | Review B M5 (conformance, sonnet) | 1 | 73eb296a5316cb2a2ab7913435cc3a31b23e46e1:7d5a14c06382d17351b077801690349100c73c11 | CHANGES: 1 MAJOR (T042 ticked with steps 3, 4, 6, 8 not seen; fixed: thinking rendered from a synthetic event, two-window same-document assertion added, record names the tests for the undriven steps), 2 MINOR (budget has no red: disclosed; table gate red not shown: disclosed). Verify: layout_snapshot 79/79, seam 2/2, rich renderers 7/7 |
 | Review B M5 (conformance, sonnet) | 2 | 1af36e37ec1e7d684293330b8e3a31e3d25ca17c:adfb12ea8c69558c9747585bec8f452610472ed5 | CLEAN: 1 MINOR (steps 3, 4, 8 and the sideways scroll still not driven on screen; recorded with their tests). Verify: features_transcript_rich 16, transcript_rich_renderers 7 passed |
+| Red CI M5 attempt 1 (ubuntu) | 1 | — | `layout_snapshot` `session-transcript-rich`: code lines 0.3–1.1px wider on CI. Root cause: the app ships no monospace face, so `Font::MONOSPACE` resolved on the host (Liberation Mono 0.600 em locally, a 0.602 em face on CI, DejaVu Sans Mono by its widths; macOS/Windows passed because they resolved Courier New, metric-compatible with Liberation Mono at 1229/2048 em); no earlier covered state drew code. Fix, test-only: `tests/support/layout.rs` loads a committed Fira Mono (`tests/fixtures/FiraMono-Regular.ttf`, OFL, provenance in `FONT-PROVENANCE.md`) as the monospace family; guard `the_monospace_face_parses_and_is_the_face_that_measures` (red with the pin removed); fixture regenerated (2 lines, 343.3→343.2). No non-test code, so no review A |
 
 ## Declined review findings
 

@@ -180,6 +180,10 @@ the gate was measuring text against a face the application does not draw with: r
 and wrong. It also loaded only Regular, while `TypeRole` resolves weight >= 500 to Medium, so every
 Medium label was measured with Regular metrics. Both are fixed; the duplicate file is deleted.
 
+Code is the exception: the application ships no monospace face, so `Font::MONOSPACE` resolves on
+the host and measured differently on CI's Ubuntu runner (feature 940). The snapshot pins a
+test-only Fira Mono for it; see `tests/fixtures/FONT-PROVENANCE.md`.
+
 `tests/layout_apparatus.rs` still guards this: if a system font named Roboto ever wins the family
 lookup, every measurement shifts at once. Read a mass geometry difference on one platform as a font
 problem, not as a layout regression.
