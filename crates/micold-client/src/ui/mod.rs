@@ -1366,7 +1366,6 @@ fn app_chord_listener() -> Subscription<Message> {
 /// `features::navigation::Msg::Pressed` for a navigation chord — and nothing for any other key.
 /// A named function, not a closure, for the same `TypeId` reason as [`escape_message`].
 fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
-    use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
     let iced::keyboard::Event::KeyPressed {
         key,
         modifiers,
@@ -1376,12 +1375,7 @@ fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
     else {
         return None;
     };
-    let input = crate::keymap::KeyInput {
-        key: to_keymap_key(&key)?,
-        mods: to_keymap_mods(modifiers),
-        text: None,
-        physical: to_keymap_physical(&physical_key),
-    };
+    let input = crate::ui::composer::key_input(&key, &physical_key, modifiers, None)?;
     if crate::keymap::is_overview_chord(&input.key, input.mods) {
         return Some(Message::Overview(crate::features::overview::Msg::Toggled {
             settings_open: false,
@@ -1427,7 +1421,6 @@ fn transcript_interrupt(state: &State) -> Option<Subscription<Message>> {
 fn transcript_key_message(
     (session, event): (micold_core::session::SessionId, iced::keyboard::Event),
 ) -> Option<Message> {
-    use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
     let iced::keyboard::Event::KeyPressed {
         key,
         physical_key,
@@ -1438,12 +1431,7 @@ fn transcript_key_message(
     else {
         return None;
     };
-    let press = crate::keymap::KeyInput {
-        key: to_keymap_key(&key)?,
-        mods: to_keymap_mods(modifiers),
-        text: text.map(|t| t.to_string()),
-        physical: to_keymap_physical(&physical_key),
-    };
+    let press = crate::ui::composer::key_input(&key, &physical_key, modifiers, text.as_deref())?;
     Some(Message::Composer(
         crate::features::composer::Msg::TranscriptKey { session, press },
     ))

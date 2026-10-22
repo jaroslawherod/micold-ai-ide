@@ -189,6 +189,20 @@ fn a_long_draft_grows_the_composer_to_its_limit_and_the_transcript_stays() {
 }
 
 #[test]
+fn a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view() {
+    let (mut state, id) = pane();
+    report(&mut state, id, busy(InterruptAsk::None), true, 12);
+    let text: Vec<String> = (1..=400).map(|n| format!("line {n}")).collect();
+    type_draft(&mut state, id, &text.join("\n"));
+    let (painted, transcript) = paint(state, id);
+    assert!(
+        transcript.height >= WINDOW.height / 4.0,
+        "the transcript keeps room above a crowded composer: {transcript:?}"
+    );
+    under_the_transcript(&painted, transcript, "Send");
+}
+
+#[test]
 fn busy_and_idle_say_so_and_only_busy_offers_stop() {
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
         let (mut state, id) = pane();
