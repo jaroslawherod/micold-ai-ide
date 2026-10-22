@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1163 | Design | merged | 7406e4cdc61cbf75bc88c92a2bee08913b6bdf71 |
 | #1245 | M1 | merged | d16d74c143b73ad6af5d341e32872e3711ce8dc6 |
+| #1247 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #1245 | merged |
-| M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #… | in review |
+| M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #1247 | in review |
 | M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #… | pending |
 
 ## Decisions
