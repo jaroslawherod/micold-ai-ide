@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: review M3
-- **Next step**: M3 T029–T036 done (red/green in tdd/cycle-log.md), scoped gate; review A r1 (session model), review B r1 (sonnet), visual pass r1 (sonnet, §B4 keyboard, T037) dispatched by the orchestrator (scoped gate green but the root-only permission tests); then fixes, full gate (scripts/gate.sh), M3 PR
+- **Next step**: M3 r1 fixes committed (25a52b64); review A r2 (sonnet, fix diff 00ddcce1..25a52b64) and visual pass r2 (sonnet, §B4) on snapshot c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa, dispatched by the orchestrator; when both clean: full gate (scripts/gate.sh), tick T037, M3 PR
 
 ## Pull requests
 
@@ -66,9 +66,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M2 (T028) | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | PASS all 6 (click #12 / #11 opens exactly that address, no ripple, Overview stays; pointer, underline, colour; pill activates the card; failing xdg-open toast; rows whole at 380 px); MINOR repaint lag of a hover underline under software rendering, not a defect; evidence `visual-pass/m2/` (26 files) |
 | Review A M2 | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | CLEAN |
 | Visual pass M2 (T028) | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | PASS all 4 (top px of "#11" opens #11, no ripple; 3 px above "#12" activates the card with ripple, nothing opened; no underline in the old gutter; #12 and issue link still open exactly their address), light 1.0 and dark 2.0; evidence `visual-pass/m2/r2/` (30 files) |
-| Review A M3 | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | pending (orchestrator dispatches; prompt 1123-m3-prompt-review-a-r1.md) |
-| Review B M3 | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | pending (sonnet; prompt 1123-m3-prompt-review-b-r1.md) |
-| Visual pass M3 (T037) | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | pending (sonnet, §B4 keyboard; prompt 1123-m3-prompt-visual-r1.md) |
+| Review A M3 | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | CHANGES: 1 MAJOR (F1 a number's keyboard focus lives in a row position's widget state, so a reading that reorders rows moves it to another PR), 2 MINOR (F2 `card_link_shown` builds every card per message; F3 duplicate `ListedPr` literal in a test fixture); all three fixed test-first (Fixes M3 r1 below); none declined; round 2 on sonnet over the fix diff |
+| Review B M3 | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | CLEAN, 1 MINOR (F1 T032 cases never run red): closed by mutants, red recorded in tdd/cycle-log.md |
+| Visual pass M3 (T037) | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | FAIL: c1 Tab in the expanded card goes #12 → the card (never #11, never the next card), Shift+Tab enters at #13; c3 Right on #12 lands on its own card; c2, c4, c5, c6 PASS; c7 partial (Page keys NOT RUN, no overflow); evidence specs/1123-overview-card-pr-list/visual-pass/m3/ (70 PNGs, committed); root cause and fixes in Fixes M3 r1 below |
+| Review A M3 | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | pending (sonnet, fix diff only; prompt 1123-m3-prompt-review-a-r2.md) |
+| Visual pass M3 (T037) | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | pending (sonnet, §B4 7 criteria light 1.0, Tab walk + c3 dark 2.0; prompt 1123-m3-prompt-visual-r2.md) |
 
 ### Review A M1 round 2 verdict (verbatim)
 
@@ -524,6 +526,125 @@ Evidence is in `/home/user/micold-ai-ide/specs/1123-overview-card-pr-list/visual
 
 Not run: light at 2.0 and dark at 1.0, nor anything outside these four criteria.
 ````
+
+### Review A M3 round 1 verdict (verbatim)
+````
+# M3 review A r1
+
+VERDICT: CHANGES
+F1 [MAJOR] crates/micold-client/src/main.rs:762 (`link_focus_after`) with crates/micold-core/src/overview_expansion.rs:364 (`lost`) — keyboard focus on a number lives in the `TakesTheKeyboard` tree state of a row *position*, not of a pull request number. iced diffs the rows column by position, and `TakesTheKeyboard::diff` resets nothing because `supplied` stays false. So when a new reading reorders the rows while a number holds the keyboard, the focus stays on the same row, which now draws a different PR. For example, #13 opens and sorts above #12, or #12 is merged and moves down into the merged group. The core still says `focused_link() == (A, #12)`. #12 is still drawn and the card's form did not change, so neither `link_focus_handoff` nor the `was != is` re-focus runs. Enter then opens #13, and the Menu key sends `LinkMenuRequested(A, #13)`. That row's later loss arrives as `LinkFocusLost(A, #13)`, and `lost()` drops it as `part != focus_part`. Card A then stays focus-expanded and focused after the keyboard has left it: Escape collapses A instead of closing the Overview. If the move is into the menu, `link_held` is never set and FR-009's menu return breaks. R6 itself rejects keying focus by position ("a reading that reorders rows would move focus to another pull request; the number is stable"), but the widget layer still does exactly that.
+   Evidence: `(was != is).then(|| micold_client::ui::overview::card_link_id(&location, link))`. The only re-focus is on a form change, and `card_link_shown` checks presence, not position.
+   Fix: in `LinkFocus`, also record the focused number's row index (its position in `rows(expanded)`). In `link_focus_after`, re-focus `card_link_id(&location, link)` when that index changed (or when `was != is`). Alternatively, key each row's widget subtree by its number so the tree state follows the PR. Add a main_tests case where a reading reorders the rows while a number is focused.
+F2 [MINOR] crates/micold-client/src/ui/overview.rs:517 (`card_link_shown`) — for `PullRequest(n)` it rebuilds every card with `cards(state)` and then full `CardPrRow`s through `pr_rows`, only to compare numbers. While a number holds the keyboard this runs 3–5 times per app message: `LinkFocus::of`, the hand-off, `shown_focused_link` after the update, and `card_focus_return_id`. `settle_card_menu` already guards `cards()` because of this same cost.
+   Evidence: `let Some(model) = cards(state).into_iter().find(|card| &card.location == location)`
+   Fix: look up only this location's PR list (shared with `pull_request_link_for`'s lookup) and test `list.prs()` up to `COLLAPSED_ROWS` when collapsed, or all of it when expanded, for `number == n`.
+F3 [MINOR] crates/micold-client/src/ui/overview.rs:1474 (`stepping_models`) — the test fixture copies the 8-field `ListedPr { … }` literal from `overview_with_number_12` in the same file. CLAUDE.md asks to extract the shared part instead, and this copy counts against `mise run duplication`.
+   Evidence: a second `ListedPr { number: …, … }` literal next to the existing one.
+   Fix: extract a `listed_pr(number)` helper and use it in both fixtures.
+````
+
+### Review B M3 round 1 verdict (verbatim)
+````
+# M3 review B r1
+
+VERDICT: CLEAN
+F1 [MINOR] specs/1123-overview-card-pr-list/tdd/cycle-log.md:M3 table, last-but-one row — Constitution I (tests first): the T032 `tests/overview.rs` cases and the mounted `ui/overview.rs` case (`a_numbers_keyboard_reaches_the_expansion_and_the_menu`) were never run red. The log says "written with the implementation (not run red)".
+   Evidence: "written with the implementation (not run red); the `CardLink`-carrying signatures did not exist before T035"
+   Fix: none needed for merge. The behaviour is also covered by the red-run U3, K5 and main_tests cases, and the signature argument holds. If you want it closed, mutate the reducer (for example drop the `CardLink` in `link_focus`) once, record the red failure, and revert.
+
+Verify results. All runs were on HEAD 00ddcce1, with the build env set.
+- `cargo test -p micold-core --all-targets` with the skip: the lib passed (1429 passed, 0 failed, including the `overview_expansion` K5/K1 suites).
+- Core integration tests: one other test fails, `settings_write_is_logged::a_refused_write_is_logged_as_a_failure_with_the_reason`. It is the same unwritable-file-as-root cause as the skipped test, in a file this diff does not touch. cargo stopped there without `--no-fail-fast`, so the core test binaries after it alphabetically were not run. M3's core change is only in the `overview_expansion` lib tests, which passed.
+- `--lib -- overview_card card_grid overview`: 182 passed, 0 failed.
+- The six client test binaries all passed: `overview` 88, `root_vocabulary_is_cross_cutting` 6, `root_state_is_shared` 4, `feature_write_isolation` 8, `idle_requests_no_frames` 14, `layout_snapshot` 79.
+- `--bin micold-ai-ide -- link_menu card_focus_return link_focus pull_request_link card_link_shown`: 15 passed, 0 failed.
+- Quickstart §B4 is the visual pass (T037) and was not run.
+
+Judgement of the deliberate choices: all four hold up.
+- Last-gain focus model: `gained` and `lost` in `overview_expansion.rs` match data-model §5 transition for transition. The one changed 1122 order (a loss of the part that gained last, before the older part's loss, is now a loss) is R6-consistent. The K5g tests keep the 1122 meaning.
+- `card_stops` lists every listed number: this is safe, because `step_card` only matches ids to find the owning card and never lands on a link.
+- Shift+Tab onto a collapsed card landing on its last drawn number: consistent with FR-010 and R7.
+- U6 anchor in the number's bounds: the U6 test `link_menu_opens_from_a_number` passes, so the anchor is left to the visual pass as you said.
+
+Scope, constitution and leftovers:
+- Scope: T029–T036 are ticked and implemented. No M4 work and no other feature's `specs/` are touched.
+- Constitution VII: the user guide is updated in both *Pull requests* and *Keyboard*.
+- Leftovers: no `todo!`, `dbg!` or `println!` in the diff.
+- Constitution VI: nothing in the diff is OS-specific.
+````
+
+### Visual pass M3 round 1 verdict (verbatim)
+````
+# M3 visual r1
+
+VISUAL PASS M3 1123 (T037) r1: FAIL. The Tab order inside an expanded card skips #11 and never reaches the next card, and Right on #12 goes to the wrong card. Criteria 2, 4, 5 and 6 PASS; 3 and 7 are partial.
+
+Setup: real client and daemon built from the worktree at HEAD 21f717c2 (code of 00ddcce1). The build log named micold-core, micold-client and micold-daemon. Ran on Xvfb :83 with lavapipe, a private HOME, data dir and runtime dir, a fake `claude`, a fake `gh` (rebuilt from scratch) and a fake `xdg-open` logger. The project origin is https://github.com/acme/widgets.git, pull request status and GitHub issues are on. Card order in the Overview: Default, v, w, x, y, z; v and w sit before y, z after.
+- feat-1123_y: #14 open approved, #13 draft pending, #12 merged, #11 closed.
+- feat-1123_z: #12 open approved, #9 merged.
+- feat-1123_v: #31 open approved.
+- x and w: no pull requests.
+
+I ran light 1.0 fully. Dark 2.0 covered only the Tab walk. All input was keyboard (xdotool key); the pointer was parked at the bottom right corner, except for the clicks that opened the Overview and refreshed the list. No source edited or committed. Evidence is 70 untracked PNGs in /home/user/micold-ai-ide/specs/1123-overview-card-pr-list/visual-pass/m3/, named light-1-b4-c<N>-*.png and dark-2-b4-c1-*.png.
+
+**1. FAIL (Tab order; light 1.0 and dark 2.0)**
+- Forward: y card (expands), Issue #1123, #14, #13, #12, then back to the y card itself. #11 is never a stop, and the next card (z) is never reached. Further Tabs repeat the Issue, #14, #13, #12 cycle. The card stays expanded throughout.
+- Shift+Tab from the z card enters y at #13, skipping #12 and #11. It then goes to #14, then the Issue link.
+- Shift+Tab from the y card goes to x's Issue link. Tab and Shift+Tab are not mirror images of each other.
+- Files:
+  - light-1-b4-c1-0-tab-y-card-expanded.png
+  - light-1-b4-c1-1-tab-issue-ring.png
+  - light-1-b4-c1-2-tab-14.png
+  - light-1-b4-c1-3-tab-13.png
+  - light-1-b4-c1-4-tab-12.png
+  - light-1-b4-c1-5-tab-11.png (shows the y card, not #11)
+  - light-1-b4-c1-6-tab-next-card-z.png (shows the Issue ring again)
+  - light-1-b4-c1-extra-tab-cycle-from-y-card-never-11.png
+  - light-1-b4-c1-shift-1..6-*.png
+  - light-1-b4-c5-1..3-shift-tab-*.png
+  - dark-2-b4-c1-1-y-issue-ring.png, dark-2-b4-c1-tab-14.png, -13.png, -12.png, -after12.png (y card), -after12b.png (Issue)
+- Suspect: the stop list looks like it is built from the collapsed rows (2) plus one, not the four expanded rows. I did not read the source.
+
+**2. PASS (light 1.0)**
+- With the ring on #12, Enter and then Space.
+- xdg-open log after Enter: `https://github.com/acme/widgets/pull/12`.
+- After Space it has two lines, both `https://github.com/acme/widgets/pull/12`, so exactly #12's address each time.
+- No ripple, the Overview stays open, nothing selected, the ring stays on #12.
+- Files: light-1-b4-c2-1-enter-on-12.png, light-1-b4-c2-2-space-on-12.png.
+
+**3. PARTIAL / FAIL**
+- From a number, Right goes to the next card from #14 (light-1-b4-c3c-2-right-from-14.png, ring on z). Down from #13 also goes to z (c3-7-12-down-to-next-card.png).
+- Up and Left from a number go to the previous card, x (c3b-5-left-from-number.png, c3-9-12-up-to-previous-card.png).
+- From x, Right lands on the y card itself (c3b-… and c3-5-previous-card-right-lands-on-y.png).
+- FAIL: with the ring on #12, Right goes to the y card itself instead of the next card z. Files: light-1-b4-c3b-1-ring-on-12-before-right.png, c3b-2-right-from-12.png.
+- Down and Up from #12 were not retested cleanly. Dark 2.0 not run.
+
+**4. PASS (light 1.0)**
+- Ring on #14, Escape: the card collapses and the ring stays on #14. Tab goes to #13, then to the z card.
+- #12 and #11 are skipped while collapsed.
+- Files: light-1-b4-c4-1-ring-on-14.png through c4-5-tab-again.png.
+
+**5. PASS with a caveat (light 1.0)**
+- #11 cannot be focused, so I used #12, the deepest reachable number.
+- Ring on #12, Escape: the card collapses and shows the card focus ring. Tab then goes to the Issue link. Shift+Tab goes back to the card.
+- Files: light-1-b4-c5-4-ring-on-12.png, c5-5-escape-on-12-card-ring.png, c5-6-tab-after-escape.png, c5-7-shift-tab-back.png.
+
+**6. PASS (light 1.0)**
+- With the ring on #13 and separately on #14, the Menu key and Shift+F10 each open the card's menu directly below that number.
+- Escape closes it without a choice and the ring is back on the number.
+- Files: light-1-b4-c6-1..5-*.png (#14) and light-1-b4-c6b-1..5-*.png (#13).
+
+**7. PARTIAL**
+- At a 1000x520 window, focusing #12 in the expanded y card scrolled the grid so the card and the number are in view. Files: light-1-b4-c7-1-short-window-ring-on-12.png and the c7 PageDown/PageUp files.
+- NOT RUN for Page Down and Page Up on the card body: the expanded card does not overflow at any size I reached, and the grid was already at the bottom.
+- One oddity: the first PageDown press in that window showed the project home page for one capture, and the Overview was back after PageUp. I could not reproduce it on the second try (light-1-b4-c7-2-pagedown.png, c7-3-pageup.png versus c7-2b/2c/3b), so it may be a transient capture.
+
+**Not covered:** dark 2.0 was run only for the criterion 1 Tab walk, which reproduces the light result. My attempt at the other criteria in dark 2.0 miscounted Tabs (the ring was on the card, not #12), so I deleted those PNGs and they are not evidence.
+
+I killed only my own processes (runtime dir /tmp/vp83) and removed /tmp/vp83. /tmp/vp1123m3 (the fake gh, xdg-open and start scripts) and the run directory /home/user/micold-ai-ide/.visual-pass/run.29QhMG are still on disk.
+````
+
+Fixes M3 r1 (review A, review B, visual): root cause of visual c1/c3: iced reports a Tab (or an arrow step) off a number loss first in tree order; the loss collapses the Focus-expanded card until the gain pairs with it, so a row-3+ number is not drawn for that one update and `link_focus_handoff` handed the keyboard to the card (Tab from #12 → card, Right from #12 → its own card, #11 never reached). The root tests only moved off rows 1–2 or gain first; U3 mounts a fixed form without the root. Fix: `link_focus_handoff` returns `None` unless the expansion still has that link holding the keyboard (`focused_link() == Some((l, link))`, as after Escape or a reading that dropped it). Shift+Tab mid-list (was a deliberate choice, contradicts FR-010 "Shift+Tab is its reverse"): `link_focus_after` re-focuses the expanded card's last link (`card_last_link(.., true)`) when the card expanded on a link gain that came from another card (`LinkFocus.focused`, new `Expansion::focused()`) at the collapsed card's last stop; a Tab within the card (loss first, no card focused in between) keeps its number. A F1: `LinkFocus.row` = `card_link_row` (the number's row at the card's form); a reading that moves the held number to another row re-focuses it by id. A F2: `card_pr_list` reads the worktree's branch list directly (shared with `pull_request_link_for`), core `BranchPrList::drawn(expanded)`; no `cards()` per message. A F3: `listed_pr(number, checks)` helper. B F1: mutants run the T032 cases red. Tests: main_tests `a_move_off_a_row_three_number_moves_no_focus_to_the_card`, `shift_tab_onto_a_collapsed_cards_number_goes_to_its_last`, `a_tab_onto_row_two_stays_on_it`, `a_reading_that_moves_the_focused_number_refocuses_it`. Red/green in tdd/cycle-log.md. Fix commit 25a52b64.
 
 ## Declined review findings
 
