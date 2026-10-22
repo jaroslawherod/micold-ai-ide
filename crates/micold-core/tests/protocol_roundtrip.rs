@@ -463,6 +463,9 @@ fn sample_summary() -> SessionSummary {
         kind: Default::default(),
         // Not the default, so a field that never encoded would read back `Default` (#942).
         permission_mode: PermissionMode::AcceptEdits,
+        model: micold_core::structured::model::ModelChoice::Named(
+            micold_core::structured::model::ModelName::parse("haiku").unwrap(),
+        ),
         title: SessionLabel::Named("Fix login".into()),
         lifecycle: WireLifecycle::Failed {
             reason: "crash loop".into(),
@@ -943,8 +946,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_65() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 65);
+fn the_protocol_version_is_66() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 66);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -1028,6 +1031,7 @@ fn the_permission_mode_rides_the_summary_and_the_create_and_defaults_when_absent
     for mode in PermissionMode::ALL {
         let summary = SessionSummary {
             permission_mode: mode,
+            model: Default::default(),
             ..sample_summary()
         };
         json_roundtrip(&summary);
@@ -2344,6 +2348,7 @@ fn the_main_marker_and_set_main_round_trip() {
         provider: AiCli::ClaudeCode,
         kind: Default::default(),
         permission_mode: Default::default(),
+        model: Default::default(),
         input_serial: 0,
         live_shells: Vec::new(),
         attention_seq: 0,
@@ -2739,4 +2744,45 @@ fn a_jira_base_url_change_round_trips_in_settings_set() {
             other => panic!("expected SettingsSet, got {other:?}"),
         }
     }
+}
+
+/// #943 T032 (FR-013, FR-017): a summary carries the session's model choice and `SetSessionModel`
+/// rides both wires; an older summary without it decodes as `Default`, and a name the app does not
+/// accept does not decode at all.
+#[test]
+fn the_model_choice_rides_the_summary_and_set_session_model() {
+    use micold_core::structured::model::{ModelChoice, ModelName};
+    for model in [
+        ModelChoice::Default,
+        ModelChoice::Named(ModelName::parse("haiku").unwrap()),
+    ] {
+        let summary = SessionSummary {
+            model: model.clone(),
+            ..sample_summary()
+        };
+        json_roundtrip(&summary);
+        postcard_roundtrip(&summary);
+        let set = ClientMsg::SetSessionModel {
+            req: 4,
+            session: sid(),
+            model,
+        };
+        json_roundtrip(&set);
+        postcard_roundtrip(&set);
+    }
+    let mut old = serde_json::to_value(sample_summary()).expect("a summary encodes");
+    old.as_object_mut()
+        .expect("an object")
+        .remove("model")
+        .expect("the summary carries its model");
+    let back: SessionSummary = serde_json::from_value(old).expect("an older summary decodes");
+    assert_eq!(back.model, ModelChoice::Default);
+    let bad = format!(
+        r#"{{"SetSessionModel":{{"req":1,"session":{},"model":{{"Named":"two words"}}}}}}"#,
+        serde_json::to_string(&sid()).unwrap()
+    );
+    assert!(
+        serde_json::from_str::<ClientMsg>(&bad).is_err(),
+        "an invalid name never reaches the daemon"
+    );
 }

@@ -1064,6 +1064,7 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
                 provider: AiCli::ClaudeCode,
                 kind: Default::default(),
                 permission_mode: Default::default(),
+                model: Default::default(),
                 input_serial: 0,
                 live_shells: Vec::new(),
                 attention_seq: 0,

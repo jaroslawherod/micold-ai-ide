@@ -122,9 +122,11 @@ fn two_sessions_in_one_worktree_on_different_clis_share_nothing() {
     let spec = |provider: AiCli, session_id: uuid::Uuid| LaunchSpec {
         cwd: cwd.clone(),
         session_id,
+        resume_handle: session_id,
         provider,
         mode: LaunchMode::Fresh,
         env: vec![("TERM".to_string(), "xterm-256color".to_string())],
+        model: Default::default(),
     };
     let claude = spec(AiCli::ClaudeCode, claude_id);
     let copilot = spec(AiCli::Copilot, copilot_id);

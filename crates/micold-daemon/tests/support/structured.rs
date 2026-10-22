@@ -58,6 +58,13 @@ const STAND_IN: &str = "claude.exe";
 /// - `reply <text>\t<file>` makes a later `on-message` replay `<file>` instead of its own file for a
 ///   user message whose text is exactly `<text>` (`/compact` → `command-compact.jsonl`, #943 R12);
 ///   `on-message` with no file replays only those;
+/// - `models <name>…` answers every later `set_model` control request on stdin (#943 T035), from
+///   the stdin reader, whatever the script is doing: a name in the list is accepted with
+///   `model-change.jsonl`'s `success` shape naming it, any other refused with
+///   `model-refused.jsonl`'s `error` (`Model '<name>' not found`, `not_found`); `models` with no
+///   name refuses all. Each accepted model is reported in every later `init` line the stand-in
+///   writes (`replay`, `on-message`), in place of the recorded one. A `set_model` request is
+///   recorded like every stdin line but, once `models` ran, reaches no other directive;
 /// - any other line is written to stdout as it is, with a line end.
 ///
 /// An `initialize` request is recorded like every stdin line, in order, but never reaches
@@ -69,7 +76,59 @@ const STAND_IN: &str = "claude.exe";
 /// When the script ends it idles until killed.
 const STAND_IN_SOURCE: &str = r##"
 use std::io::{BufRead, Write};
-use std::sync::mpsc;
+use std::sync::{mpsc, Mutex};
+
+/// The `models` directive's accept list (`None` until it ran) and the last model accepted.
+struct Models {
+    accept: Mutex<Option<Vec<String>>>,
+    accepted: Mutex<Option<String>>,
+}
+
+static MODELS: Models = Models {
+    accept: Mutex::new(None),
+    accepted: Mutex::new(None),
+};
+
+/// Answer a `set_model` request when the `models` directive ran; `false` leaves it to the script.
+fn answer_set_model(line: &str) -> bool {
+    if !line.contains("\"control_request\"") || !line.contains("\"subtype\":\"set_model\"") {
+        return false;
+    }
+    let accept = MODELS.accept.lock().unwrap().clone();
+    let Some(accept) = accept else { return false };
+    let id = string_after(line, "request_id").unwrap_or_default();
+    let model = string_after(line, "model").unwrap_or_default();
+    let answer = if accept.contains(&model) {
+        *MODELS.accepted.lock().unwrap() = Some(model.clone());
+        format!(
+            "{{\"type\":\"control_response\",\"response\":{{\"subtype\":\"success\",\"request_id\":\"{id}\",\"response\":{{\"model\":\"{model}\"}}}}}}"
+        )
+    } else {
+        format!(
+            "{{\"type\":\"control_response\",\"response\":{{\"subtype\":\"error\",\"request_id\":\"{id}\",\"error\":\"Model '{model}' not found\",\"error_code\":\"not_found\"}}}}"
+        )
+    };
+    let mut out = std::io::stdout().lock();
+    let _ = writeln!(out, "{answer}");
+    let _ = out.flush();
+    true
+}
+
+/// `piece`, a line the stand-in is about to write, with an `init` line's model replaced by the
+/// last one accepted.
+fn reported(piece: &[u8]) -> Vec<u8> {
+    let accepted = MODELS.accepted.lock().unwrap().clone();
+    let text = String::from_utf8_lossy(piece);
+    match accepted {
+        Some(model) if text.contains("\"subtype\":\"init\"") => {
+            let Some(at) = text.find("\"model\":\"") else { return piece.to_vec() };
+            let start = at + "\"model\":\"".len();
+            let end = text[start..].find('"').map_or(start, |n| start + n);
+            format!("{}{}{}", &text[..start], model, &text[end..]).into_bytes()
+        }
+        _ => piece.to_vec(),
+    }
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -116,6 +175,9 @@ fn main() {
                 let _ = init_tx.send(line);
                 continue;
             }
+            if answer_set_model(&line) {
+                continue;
+            }
             let _ = lines_tx.send(line);
             if close {
                 close_stdin();
@@ -133,7 +195,7 @@ fn main() {
             "replay" => {
                 let bytes = std::fs::read(arg).expect("read the fixture");
                 for piece in bytes.split_inclusive(|b| *b == b'\n') {
-                    let _ = out.write_all(piece);
+                    let _ = out.write_all(&reported(piece));
                     let _ = out.flush();
                 }
             }
@@ -149,6 +211,10 @@ fn main() {
                 std::process::exit(arg.parse().unwrap_or(0));
             }
             "control" => control(&lines_rx, &mut out, arg),
+            "models" => {
+                *MODELS.accept.lock().unwrap() =
+                    Some(arg.split_whitespace().map(str::to_string).collect());
+            }
             "initialize" => initialize(&init_rx, &mut out, arg),
             "reply" => {
                 if let Some((text, file)) = arg.split_once('\t') {
@@ -246,7 +312,7 @@ fn on_message(
         }
         let bytes = std::fs::read(file).expect("read the fixture");
         for piece in bytes.split_inclusive(|b| *b == b'\n') {
-            let _ = out.write_all(piece);
+            let _ = out.write_all(&reported(piece));
             let _ = out.flush();
         }
     }

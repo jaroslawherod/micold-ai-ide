@@ -28,8 +28,12 @@ pub enum LaunchMode {
 pub struct LaunchSpec {
     /// Process cwd — the worktree directory; scopes the session (research R6).
     pub cwd: PathBuf,
-    /// The session UUID (`--session-id`/`--resume` value).
+    /// The session UUID (`--session-id` value, and the key a minting provider binds its
+    /// conversation to).
     pub session_id: Uuid,
+    /// The conversation a [`LaunchMode::Resume`] continues (`--resume` value, #943 FR-020): filled
+    /// from `Session::resume_handle()`.
+    pub resume_handle: Uuid,
     /// Which AI CLI to launch (feature 026, FR-007) — taken from the session's own record, never
     /// re-derived. Without this field the seam does not reach the spawn at all: the argument
     /// builder below had no way to be told, so it named one provider and every session got that
@@ -39,6 +43,9 @@ pub struct LaunchSpec {
     pub mode: LaunchMode,
     /// Extra environment (e.g. `TERM=xterm-256color`).
     pub env: Vec<(String, String)>,
+    /// The session's model choice (#943 FR-017), launched as the provider's
+    /// [`model_args`](crate::provider::AiCliProvider::model_args).
+    pub model: crate::structured::model::ModelChoice,
 }
 
 /// Build the AI CLI argument vector for a launch spec. Pure, so the fresh/resume flag choice is
@@ -50,7 +57,13 @@ pub struct LaunchSpec {
 /// decision, and this one is now the session's.
 pub fn launch_args(spec: &LaunchSpec) -> Vec<String> {
     let provider = spec.provider.provider();
-    provider.launch_args_in(provider.config_dir().as_deref(), spec.session_id, spec.mode)
+    let id = match spec.mode {
+        LaunchMode::Fresh => spec.session_id,
+        LaunchMode::Resume => spec.resume_handle,
+    };
+    let mut args = provider.launch_args_in(provider.config_dir().as_deref(), id, spec.mode);
+    args.extend(provider.model_args(&spec.model));
+    args
 }
 
 /// Resolve the platform's default interactive shell command (feature 010, research R3;

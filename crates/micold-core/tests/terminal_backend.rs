@@ -29,9 +29,11 @@ fn spec_for(provider: AiCli, mode: LaunchMode, id: Uuid) -> LaunchSpec {
     LaunchSpec {
         cwd: PathBuf::from("/repo/.claude/worktrees/feat-x"),
         session_id: id,
+        resume_handle: id,
         provider,
         mode,
         env: vec![("TERM".to_string(), "xterm-256color".to_string())],
+        model: Default::default(),
     }
 }
 

@@ -931,6 +931,19 @@ pub enum ClientMsg {
         /// The mode it is to run in.
         mode: crate::session::PermissionMode,
     },
+    /// Choose the model of a session (#943 FR-014–FR-017, contracts/wire.md *SetSessionModel*).
+    /// Persisted with the session and launched with next. A running, idle structured session's CLI
+    /// is asked first and the choice kept only when it accepts; a busy one is answered at once and
+    /// its CLI asked at the turn's end, its answer a `ModelChanged` or `ModelRefused` event. A
+    /// terminal session's choice is persisted and answered `OperationError`.
+    SetSessionModel {
+        /// Correlation id.
+        req: u64,
+        /// The session.
+        session: SessionId,
+        /// The model it is to run.
+        model: crate::structured::model::ModelChoice,
+    },
 
     // --- Structured session input (feature 941, contracts/wire.md) ---
     /// Interrupt turn `turn` of a structured session (FR-013, FR-016). No answer: an interrupt of
@@ -1762,6 +1775,10 @@ pub struct SessionSummary {
     /// frame means [`PermissionMode::Default`].
     #[serde(default)]
     pub permission_mode: PermissionMode,
+    /// The session's model choice (#943, FR-013, FR-017): durable, from the record. Absent on an
+    /// older frame means [`ModelChoice::Default`](crate::structured::model::ModelChoice::Default).
+    #[serde(default)]
+    pub model: crate::structured::model::ModelChoice,
 }
 
 /// One agent run on a [`SessionSummary`] — the stored form, unchanged (feature 552).
@@ -2368,6 +2385,7 @@ mod attention_wire_tests {
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
             permission_mode: Default::default(),
+            model: Default::default(),
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: COUNTED,
@@ -2397,6 +2415,7 @@ mod attention_wire_tests {
             provider: AiCli::ClaudeCode,
             kind: Default::default(),
             permission_mode: Default::default(),
+            model: Default::default(),
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: 1,

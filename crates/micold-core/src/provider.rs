@@ -388,6 +388,12 @@ pub trait AiCliProvider {
         &[]
     }
 
+    /// The arguments that launch a session with the user's model `choice` (#943 FR-017), after
+    /// [`Self::launch_args`]. Empty by default: only Claude Code's model is chosen in the app.
+    fn model_args(&self, _choice: &crate::structured::model::ModelChoice) -> Vec<String> {
+        Vec::new()
+    }
+
     // --- attaching existing sessions (feature 582) ---
 
     /// The working directories under which this provider's store may hold sessions of the project
@@ -847,6 +853,10 @@ impl AiCliProvider for ClaudeProvider {
     fn input_readiness(&self) -> InputReadiness {
         // Its `SessionStart` hook never reaches an HTTP receiver (quickstart §B3).
         InputReadiness::OutputSettled
+    }
+
+    fn model_args(&self, choice: &crate::structured::model::ModelChoice) -> Vec<String> {
+        crate::structured::model::launch_args(choice)
     }
 
     fn structured_args(&self) -> Option<&'static [&'static str]> {
@@ -2616,6 +2626,69 @@ mod structured_args_tests {
                 AiCli::Copilot | AiCli::Pi | AiCli::Codex | AiCli::OpenCode => &[],
             };
             assert_eq!(which.provider().structured_env(), expected, "{which:?}");
+        }
+    }
+
+    fn claude_spec(mode: LaunchMode, model: &str) -> crate::terminal::LaunchSpec {
+        use crate::structured::model::{ModelChoice, ModelName};
+        crate::terminal::LaunchSpec {
+            cwd: "/w".into(),
+            session_id: Uuid::from_u128(1),
+            resume_handle: Uuid::from_u128(2),
+            provider: AiCli::ClaudeCode,
+            mode,
+            env: Vec::new(),
+            model: match model {
+                "" => ModelChoice::Default,
+                name => ModelChoice::Named(ModelName::parse(name).unwrap()),
+            },
+        }
+    }
+
+    /// #943 T033 (FR-017): a named model choice is `--model <name>` on a Claude launch, in a
+    /// terminal argv and a structured one alike; `Default` adds nothing.
+    #[test]
+    fn a_named_model_is_launched_with_model_and_default_with_nothing() {
+        for mode in [LaunchMode::Fresh, LaunchMode::Resume] {
+            let terminal = crate::terminal::launch_args(&claude_spec(mode, "haiku"));
+            let structured: Vec<String> = AiCli::ClaudeCode
+                .provider()
+                .structured_args()
+                .unwrap()
+                .iter()
+                .map(|a| a.to_string())
+                .chain(terminal.iter().cloned())
+                .collect();
+            for argv in [&terminal, &structured] {
+                let named: Vec<_> = argv.windows(2).filter(|w| w[0] == "--model").collect();
+                assert_eq!(named.len(), 1, "{argv:?}");
+                assert_eq!(named[0][1], "haiku");
+            }
+            let default = crate::terminal::launch_args(&claude_spec(mode, ""));
+            assert!(!default.iter().any(|a| a == "--model"), "{default:?}");
+        }
+    }
+
+    /// #943 T033 (FR-020): a resume names the spec's resume handle; a fresh start, the session id.
+    #[test]
+    fn a_resume_uses_the_resume_handle_and_a_fresh_start_the_session_id() {
+        let resume = crate::terminal::launch_args(&claude_spec(LaunchMode::Resume, ""));
+        assert_eq!(resume, ["--resume", &Uuid::from_u128(2).to_string()]);
+        let fresh = crate::terminal::launch_args(&claude_spec(LaunchMode::Fresh, ""));
+        assert_eq!(fresh, ["--session-id", &Uuid::from_u128(1).to_string()]);
+    }
+
+    /// No other CLI is given a model by the app (#943 FR-014: the picker is Claude's).
+    #[test]
+    fn only_claude_code_takes_a_model_choice() {
+        use crate::structured::model::{ModelChoice, ModelName};
+        let haiku = ModelChoice::Named(ModelName::parse("haiku").unwrap());
+        for which in AiCli::ALL {
+            let args = which.provider().model_args(&haiku);
+            match which {
+                AiCli::ClaudeCode => assert_eq!(args, ["--model", "haiku"]),
+                _ => assert!(args.is_empty(), "{which:?}"),
+            }
         }
     }
 }

@@ -624,9 +624,11 @@ fn a_created_session_records_the_cli_the_client_chose() {
         micold_core::terminal::launch_args(&micold_core::terminal::LaunchSpec {
             cwd: project.clone(),
             session_id: id.0,
+            resume_handle: id.0,
             provider,
             mode: micold_core::terminal::LaunchMode::Fresh,
             env: Vec::new(),
+            model: Default::default(),
         })
     };
     assert_eq!(

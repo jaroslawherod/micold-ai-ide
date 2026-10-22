@@ -212,25 +212,25 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 6: Daemon — model choice, `--model`, `set_model` (M4)
 
-- [ ] T032 [P] [US3] Tests in `core/tests/session_store.rs` and `core/tests/protocol_roundtrip.rs`:
+- [x] T032 [P] [US3] Tests in `core/tests/session_store.rs` and `core/tests/protocol_roundtrip.rs`:
   a legacy `StoredSession` without `model` loads `Default`; `Named` round-trips and `Default` is
   not written; `SessionSummary.model`, `SetSessionModel { req, session, model }` round-trip;
   `schema_hash` re-pinned after `PROTOCOL_VERSION` +1 (FR-017)
-- [ ] T033 [P] [US3] [US5] Unit tests in `core/src/session.rs` and `core/src/provider.rs` (Claude's
+- [x] T033 [P] [US3] [US5] Unit tests in `core/src/session.rs` and `core/src/provider.rs` (Claude's
   launch arguments): `Session::resume_handle()` returns the session id; a `LaunchSpec` with
   `model: Named("haiku")` gives `--model haiku` in both kinds and with `Default` no `--model`;
   `LaunchMode::Resume` uses `LaunchSpec.resume_handle` for `--resume` (FR-017, FR-020)
-- [ ] T034 Implement T032–T033: `Session.model`, `Session::resume_handle()` in `core/src/session.rs`;
+- [x] T034 Implement T032–T033: `Session.model`, `Session::resume_handle()` in `core/src/session.rs`;
   `StoredSession.model` in `core/src/store.rs`; `LaunchSpec.model`, `.resume_handle` in
   `core/src/terminal.rs` and their use in `core/src/provider.rs`; `SessionSummary.model`,
   `SetSessionModel` in `core/src/protocol/messages.rs`; `PROTOCOL_VERSION` +1 in
   `core/src/protocol/version.rs`; every `LaunchMode::Resume` site in `daemon/src/state.rs`,
   `daemon/src/server.rs`, `daemon/src/ops.rs` and `daemon/src/mcp/tools.rs` fills the spec from
   `Session::resume_handle()` and the model choice
-- [ ] T035 [US3] Extend the stand-in in `daemon/tests/support/structured.rs`: answer `set_model`
+- [x] T035 [US3] Extend the stand-in in `daemon/tests/support/structured.rs`: answer `set_model`
   from a scripted accept list with `model-change.jsonl`'s success shape, refuse others with
   `model-refused.jsonl`'s error; report the accepted model in the next `init`; record its argv
-- [ ] T036 [P] [US3] Tests in `daemon/tests/structured_model.rs` (new): idle `SetSessionModel` →
+- [x] T036 [P] [US3] Tests in `daemon/tests/structured_model.rs` (new): idle `SetSessionModel` →
   one `set_model` stdin line, same pid, a `ModelChanged` note seen by two clients within 1 s
   (SC-004), `OperationOk`, the summary's `model` and the catalog file hold the choice; busy → no
   control line until the turn's `result`, then the line before any further user message, the turn
@@ -241,11 +241,11 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   concurrent picks → the last one wins in the summary and on stdin (Edge Cases); restart and
   daemon restore → argv has `--model <choice>` and `--resume <id>` (FR-017); a pending #942
   request stays pending across a pick (Edge Cases); session A's pick never touches session B
-- [ ] T037 Implement T036: `Catalog::set_model` in `daemon/src/catalog.rs`; the per-session
+- [x] T037 Implement T036: `Catalog::set_model` in `daemon/src/catalog.rs`; the per-session
   `PendingModel` slot, the idle write through `send_control`, the turn-end write on #942's
   `Result` path, the notes and the restore on refusal in `daemon/src/state.rs`; dispatch
   `SetSessionModel` in `daemon/src/server.rs`
-- [ ] T038 [P] Update the structured argv assertion in `daemon/tests/structured_session.rs` only as
+- [x] T038 [P] Update the structured argv assertion in `daemon/tests/structured_session.rs` only as
   plan *Superseded assertions* allows (nothing for `Default`), and describe `SetSessionModel`, the
   deferred write and the model notes in `docs/daemon.md`
 

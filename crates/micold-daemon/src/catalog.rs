@@ -37,6 +37,7 @@ use micold_core::session::{
     AiCli, KindRefusal, ModeRefusal, PermissionMode, Session, SessionId, SessionKind, SessionLabel,
     SessionLifecycle, SessionLocation, TerminalMode,
 };
+use micold_core::structured::model::ModelChoice;
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
 use micold_core::settings::{
@@ -101,7 +102,9 @@ impl std::fmt::Display for CreateSessionError {
 
 impl std::error::Error for CreateSessionError {}
 
-/// Why [`Catalog::set_permission_mode`] changed nothing (#942, data-model *PermissionMode*).
+/// Why [`Catalog::set_permission_mode`] or [`Catalog::set_model`] changed nothing (#942,
+/// data-model *PermissionMode*; #943). `set_model` refuses nothing: a terminal session keeps its
+/// choice too (FR-017).
 #[derive(Debug)]
 pub enum SetModeError {
     /// No session has the id.
@@ -841,6 +844,27 @@ impl Catalog {
         if let Err(e) = self.persist() {
             if let Some((_, session)) = self.workspace.find_session_mut(id) {
                 session.permission_mode = before;
+            }
+            return Err(SetModeError::Io(e));
+        }
+        Ok(true)
+    }
+
+    /// Set session `id`'s model choice and persist it (#943, FR-017), in either kind: `Ok(true)`
+    /// when it changed, `Ok(false)` when it already was `model` (nothing written). A failed write
+    /// leaves the earlier choice in place.
+    pub fn set_model(&mut self, id: SessionId, model: &ModelChoice) -> Result<bool, SetModeError> {
+        let (_, session) = self
+            .workspace
+            .find_session_mut(id)
+            .ok_or(SetModeError::NoSession)?;
+        if session.model == *model {
+            return Ok(false);
+        }
+        let before = std::mem::replace(&mut session.model, model.clone());
+        if let Err(e) = self.persist() {
+            if let Some((_, session)) = self.workspace.find_session_mut(id) {
+                session.model = before;
             }
             return Err(SetModeError::Io(e));
         }
@@ -2089,6 +2113,7 @@ fn session_summary(session: &Session, removed: &HashSet<SessionId>) -> SessionSu
         provider: session.provider,
         kind: session.kind,
         permission_mode: session.permission_mode,
+        model: session.model.clone(),
         lifecycle: wire_lifecycle(session.lifecycle.clone()),
         activity: ActivitySignal::Unknown,
         input_serial: 0,
