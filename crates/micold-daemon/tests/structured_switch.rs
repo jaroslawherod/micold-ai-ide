@@ -138,13 +138,15 @@ fn delivered(dir: &Path) -> Vec<String> {
         .collect()
 }
 
-/// What was typed into the terminal stand-in in `dir` in its latest run, one entry per line.
+/// What was typed into the terminal stand-in in `dir` in its latest run, one entry per line. The
+/// `initialize` request an ended structured run may still have recorded after its records were
+/// cleared is no terminal input.
 fn typed(dir: &Path) -> Vec<String> {
     std::fs::read_to_string(dir.join("stdin-record"))
         .unwrap_or_default()
         .lines()
         .map(|line| line.trim().to_owned())
-        .filter(|line| !line.is_empty())
+        .filter(|line| !line.is_empty() && !structured::is_initialize(line))
         .collect()
 }
 

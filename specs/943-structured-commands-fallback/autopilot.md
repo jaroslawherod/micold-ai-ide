@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M6 implemented (T043–T049 ticked); gate and reviews next
+- **Phase**: M6 reviewed (A 2 rounds, B 1); full gate after rebase onto origin/main
 - **Next step**: M6 (T043–T049): implement, gate, reviews, PR files. Cross-feature holds: M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
 
 ## Pull requests
@@ -80,6 +80,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M5 (conformance, sonnet, claude -p) | 1 | 867788dfce74dede86870f3c81571eab6fae9772:7974aedb3455e248d3345bcefe9f870ddb4029e5 | CLEAN (1 MINOR: prune at state.rs:5075 asks about `id.0` — commented, same as A F3) |
 | Review A M5 (scoped, sonnet, claude -p) | 2 | 3c4426a7072784195c6e004d47742eb1517c99e8:7974aedb3455e248d3345bcefe9f870ddb4029e5 | CLEAN (1 MINOR: F4 untested — test added, red with the handle marking disabled) |
 | Review A M6 (code-review high, claude -p) | 1 | 80590d0f9c23e8957bda9f82aa3300084841e455:0f733011ca4071ab0e1728b7df887b204a52b1e3 | CHANGES (10 unranked): F1 `switching` stuck on a panic — fixed (drop guard `SwitchEnding`); F2 switch held through the command's readiness wait — fixed (switch ends once started, command typed on its own task); F3 already-terminal + command answered Ok untyped — fixed (`InvalidInput`, test, red with the guard off); F4 `permission_mode` doc — fixed, prose only; F5 misplaced doc — fixed; F8 `set_kind` copies `set_model` — fixed (`Catalog::change_session`, all three setters); F9 command-list lookup twice — fixed (`command_list_of`); F6, F7, F10 — declined/left |
+| Review A M6 (scoped, sonnet, claude -p) | 2 | 76906799b8e13477c72e5e1fabc01cf0bc64c39e:7c8ba98e26bf692037db1647e8f9d3d81f38969a | CLEAN (2 MINOR: a delayed command task is not tied to the process it was for — left, rare and a structured run refuses a terminal-only command; F2's ordering and the drop guard untested — left) |
+| Review B M6 (conformance, sonnet, claude -p) | 1 | 76906799b8e13477c72e5e1fabc01cf0bc64c39e:7c8ba98e26bf692037db1647e8f9d3d81f38969a | CLEAN |
+| Full gate M6 run 1 | — | 7c8ba98e | red: `structured_switch` test race (late `initialize` line of the ended structured run read as terminal input) — fixed in the test's `typed` |
 
 ## Declined review findings
 
