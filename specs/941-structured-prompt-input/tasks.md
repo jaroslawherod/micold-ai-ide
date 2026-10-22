@@ -371,25 +371,25 @@ file reads (Constitution I: `shell/` holds no decision).
 
 ## Phase 7: Window — composer under the transcript, user guide (M6)
 
-- [ ] T055 [P] [US1] [US4] [US5] Geometry gate `client/tests/gates/composer_fits.rs` (new),
+- [x] T055 [P] [US1] [US4] [US5] Geometry gate `client/tests/gates/composer_fits.rs` (new),
   registered in `client/tests/layout_snapshot.rs`: the composer sits under a structured primary's
   transcript and never under a terminal (FR-001); grows to its limit with the transcript still
   visible (FR-008); busy and idle show their label (FR-010); queue rows, the hold notice with
   **Send queued**, the overdue notice with **Stop session**, the notice line and the chips row fit
   their slots in both themes; the empty #942 status slot and #943 completion slot take no space
   (I-1, I-4)
-- [ ] T056 [P] [US2] SC-007 timing test `client/tests/composer_large_draft.rs` (new, release,
+- [x] T056 [P] [US2] SC-007 timing test `client/tests/composer_large_draft.rs` (new, release,
   `#[ignore]`): 10,000-line inserts and edits through `Editor::perform`, each under 100 ms
-- [ ] T057 [US1] [US3] [US4] `client/src/ui/composer.rs` (new), upper part: queue rows
+- [x] T057 [US1] [US3] [US4] `client/src/ui/composer.rs` (new), upper part: queue rows
   (`QueueRow`), the hold notice with **Send queued**, the notice line, the status row
   (`BusyIndicator`, the overdue notice with **Stop session**) and the I-1 slot
-- [ ] T058 [US1] [US2] [US5] `client/src/ui/composer.rs`, lower part: chips (`AttachmentChip`), the
+- [x] T058 [US1] [US2] [US5] `client/src/ui/composer.rs`, lower part: chips (`AttachmentChip`), the
   I-4 slot, `TextArea` with the composer's key binding and max height, Send / Stop
   (`Button`/`IconButton`); `client/src/ui/terminal.rs` lays the transcript over the composer when
   `shows_composer`; T055 passes
-- [ ] T059 [US3] [US5] `client/src/ui/transcript/entries.rs`: a user message's attachments line
+- [x] T059 [US3] [US5] `client/src/ui/transcript/entries.rs`: a user message's attachments line
   (names) and the `Interrupted` notice "You interrupted this turn" (FR-014, FR-030)
-- [ ] T060 [US1] [US2] [US3] [US4] [US5] User guide `docs/user-guide/worktrees-and-sessions.md`
+- [x] T060 [US1] [US2] [US3] [US4] [US5] User guide `docs/user-guide/worktrees-and-sessions.md`
   *Structured sessions*: the composer, its keys, history, attachments, busy/idle, interrupt,
   queue, hold and **Send queued**; #941 out of the not-yet list (FR-033)
 - [ ] T061 Quickstart Part B (steps 1–12, light and dark) through the `visual-pass` skill; evidence
