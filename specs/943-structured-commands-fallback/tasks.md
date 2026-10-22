@@ -53,7 +53,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 2: Foundational — events and notes every story needs (blocking)
 
-- [ ] T004 [P] Tests in `core/tests/structured_parse.rs` over the T003 fixtures: `Init` gains
+- [X] T004 [P] Tests in `core/tests/structured_parse.rs` over the T003 fixtures: `Init` gains
   `slash_commands`, `skills`, `terminal_slash_commands` (each absent → empty); `Assistant` gains
   `model` (`"<synthetic>"` in `command-builtin-output.jsonl`) and `error`
   (`"authentication_failed"` in `auth-failure.jsonl`); `User` gains `is_synthetic` (the summary line
@@ -62,21 +62,21 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `conversation_reset` → `ConversationReset { trigger: Some("clear"), raw }`; unknown keys ignored;
   every line still makes exactly one event (feature 938 FR-014); in `core/tests/structured_transcript.rs`
   the new events and notes make no entry and no raw row (until Phase 4 gives them entries)
-- [ ] T005 Implement T004 in `core/src/structured/event.rs` and `core/src/structured/parse.rs`
-- [ ] T006 [P] Tests for the daemon notes `CommandsReported { commands: Vec<ReportedCommand>,
+- [X] T005 Implement T004 in `core/src/structured/event.rs` and `core/src/structured/parse.rs`
+- [X] T006 [P] Tests for the daemon notes `CommandsReported { commands: Vec<ReportedCommand>,
   models: Vec<ReportedModel> }`, `ModelChanged { model }`, `ModelRefused { model, message }`,
   `KindSwitched { to: SessionKind }`: unit tests in `core/src/structured/saved.rs` that a history
   holding each round-trips through `encode_events` and its decoder unchanged and that `parse_line`
   never yields them; `line_len()` is `0` for each (data-model *Events*); round trip of each in a
   `StructuredEvents` frame in `core/tests/protocol_roundtrip.rs`
-- [ ] T007 Implement T006: the four variants and `ReportedCommand { name, description:
+- [X] T007 Implement T006: the four variants and `ReportedCommand { name, description:
   Option<String>, argument_hint: Option<String>, aliases: Vec<String>, builtin: bool }`,
   `ReportedModel { value, display_name: Option<String>, description: Option<String> }` in
   `core/src/structured/event.rs`; their `SavedEvent` variants in `core/src/structured/saved.rs`;
   the transcript builder (`core/src/structured/transcript/build.rs`) absorbs the new events and
   notes (no entry, no raw row) until Phase 4; `CompactBoundary`/`ConversationReset` no longer reach
   the transcript as raw rows
-- [ ] T008 Bump `PROTOCOL_VERSION` by one in `core/src/protocol/version.rs` and re-pin
+- [X] T008 Bump `PROTOCOL_VERSION` by one in `core/src/protocol/version.rs` and re-pin
   `core/tests/schema_hash.rs` (contracts/wire.md *Events*; on a rebase conflict take the higher + 1,
   I-8)
 

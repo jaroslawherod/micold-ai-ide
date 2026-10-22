@@ -26,6 +26,22 @@ pub const RECORDED: [&str; 9] = [
 /// The fixtures feature 941 recorded: an interrupted turn (P-4) and a message with a picture (P-5).
 pub const RECORDED_941: [&str; 2] = ["interrupt-turn", "image-turn"];
 
+/// #943's recordings: commands, model changes, an authentication failure and a resume after
+/// `/clear` (`tests/fixtures/stream-json/README.md`, *Commands, models and authentication*).
+pub const COMMAND_RECORDED: [&str; 11] = [
+    "command-initialize",
+    "command-skill",
+    "command-custom",
+    "command-compact",
+    "command-clear",
+    "command-builtin-output",
+    "command-unknown",
+    "model-change",
+    "model-refused",
+    "auth-failure",
+    "resume-after-clear",
+];
+
 /// The stdout of the permission-prompt recordings (#942,
 /// `tests/fixtures/permission-prompt/README.md`).
 pub const PROMPT_RECORDED: [&str; 6] = [
@@ -129,6 +145,7 @@ pub fn user_text(text: &str) -> StructuredEvent {
         text: text.to_string(),
     }];
     StructuredEvent::User {
+        is_synthetic: false,
         raw: message_line("user", json!(text), None),
         blocks,
         parent_tool_use_id: None,
@@ -144,6 +161,8 @@ pub fn assistant_block(block: ContentBlock) -> StructuredEvent {
 pub fn assistant_blocks(blocks: Vec<ContentBlock>) -> StructuredEvent {
     let content: Vec<Value> = blocks.iter().map(block_json).collect();
     StructuredEvent::Assistant {
+        error: None,
+        model: None,
         message_id: None,
         raw: message_line("assistant", Value::Array(content), None),
         blocks,
@@ -193,6 +212,7 @@ pub fn tool_result_json(id: &str, content: Value, is_error: bool) -> StructuredE
         None,
     );
     StructuredEvent::User {
+        is_synthetic: false,
         blocks: vec![block],
         parent_tool_use_id: None,
         raw,
@@ -228,12 +248,15 @@ pub fn with_parent(event: StructuredEvent, parent: &str) -> StructuredEvent {
             raw,
             ..
         } => StructuredEvent::Assistant {
+            error: None,
+            model: None,
             message_id,
             blocks,
             raw: reparent(&raw),
             parent_tool_use_id: Some(parent.to_string()),
         },
         StructuredEvent::User { blocks, raw, .. } => StructuredEvent::User {
+            is_synthetic: false,
             blocks,
             raw: reparent(&raw),
             parent_tool_use_id: Some(parent.to_string()),
@@ -267,6 +290,8 @@ pub fn with_message_id(event: StructuredEvent, id: &str) -> StructuredEvent {
             let mut value: Value = serde_json::from_str(&raw).expect("a synthetic line is JSON");
             value["message"]["id"] = json!(id);
             StructuredEvent::Assistant {
+                error: None,
+                model: None,
                 message_id: Some(id.to_string()),
                 blocks,
                 raw: value.to_string(),

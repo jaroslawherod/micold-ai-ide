@@ -27,6 +27,9 @@ fn typed(value: Value, line: &str) -> Option<StructuredEvent> {
     let raw = || line.to_string();
     match (value["type"].as_str()?, value["subtype"].as_str()) {
         ("system", Some("init")) => {
+            let slash_commands = names(&value["slash_commands"]);
+            let skills = names(&value["skills"]);
+            let terminal_slash_commands = names(&value["terminal_slash_commands"]);
             let init: InitLine = serde_json::from_value(value).ok()?;
             Some(StructuredEvent::Init {
                 session_id: init.session_id,
@@ -34,9 +37,25 @@ fn typed(value: Value, line: &str) -> Option<StructuredEvent> {
                 cwd: init.cwd,
                 tools: init.tools.into_iter().flatten().map(tool_name).collect(),
                 permission_mode: init.permission_mode,
+                slash_commands,
+                skills,
+                terminal_slash_commands,
                 raw: raw(),
             })
         }
+        ("system", Some("compact_boundary")) => {
+            let metadata = &value["compact_metadata"];
+            Some(StructuredEvent::CompactBoundary {
+                trigger: metadata["trigger"].as_str().map(str::to_string),
+                pre_tokens: metadata["pre_tokens"].as_u64(),
+                post_tokens: metadata["post_tokens"].as_u64(),
+                raw: raw(),
+            })
+        }
+        ("conversation_reset", _) => Some(StructuredEvent::ConversationReset {
+            trigger: value["trigger"].as_str().map(str::to_string),
+            raw: raw(),
+        }),
         ("system", Some("status")) => Some(StructuredEvent::Status {
             permission_mode: value["permissionMode"].as_str().map(str::to_string),
             raw: raw(),
@@ -60,19 +79,25 @@ fn typed(value: Value, line: &str) -> Option<StructuredEvent> {
             })
         }
         ("assistant", _) => {
+            let model = value["message"]["model"].as_str().map(str::to_string);
+            let error = value["error"].as_str().map(str::to_string);
             let line: MessageLine = serde_json::from_value(value).ok()?;
             Some(StructuredEvent::Assistant {
                 message_id: line.message.id,
                 blocks: line.message.content.into_blocks(),
                 parent_tool_use_id: line.parent_tool_use_id,
+                model,
+                error,
                 raw: raw(),
             })
         }
         ("user", _) => {
+            let is_synthetic = value["isSynthetic"].as_bool().unwrap_or(false);
             let line: MessageLine = serde_json::from_value(value).ok()?;
             Some(StructuredEvent::User {
                 blocks: line.message.content.into_blocks(),
                 parent_tool_use_id: line.parent_tool_use_id,
+                is_synthetic,
                 raw: raw(),
             })
         }
@@ -116,6 +141,16 @@ struct InitLine {
     tools: Option<Vec<Value>>,
     #[serde(default, rename = "permissionMode")]
     permission_mode: Option<String>,
+}
+
+/// The string entries of a JSON list; anything else (absent, `null`, not a list) is empty and a
+/// non-string entry is dropped (#943 R1).
+fn names(list: &Value) -> Vec<String> {
+    list.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|name| name.as_str().map(str::to_string))
+        .collect()
 }
 
 /// A tool's name, or the JSON text of an entry that is not a string.

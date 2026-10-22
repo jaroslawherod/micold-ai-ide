@@ -5,6 +5,7 @@
 //! them. Externally tagged (serde's default), because the wire is postcard, which cannot carry an
 //! internally tagged enum.
 
+use crate::session::SessionKind;
 use serde::{Deserialize, Serialize};
 
 /// One line the CLI wrote, typed; or a note the daemon adds (FR-014).
@@ -18,6 +19,12 @@ pub enum StructuredEvent {
         tools: Vec<String>,
         /// `permissionMode`: the mode the CLI started in (#942 FR-016).
         permission_mode: Option<String>,
+        /// `slash_commands`: every command name the CLI offers (#943 R1); absent → empty.
+        slash_commands: Vec<String>,
+        /// `skills`: the names among them that are skills (#943 R1); absent → empty.
+        skills: Vec<String>,
+        /// `terminal_slash_commands`: the names the CLI marks terminal-only (#943 R2).
+        terminal_slash_commands: Vec<String>,
         raw: String,
     },
     /// `{"type":"assistant"}`: one assistant message and its blocks.
@@ -25,12 +32,20 @@ pub enum StructuredEvent {
         message_id: Option<String>,
         blocks: Vec<ContentBlock>,
         parent_tool_use_id: Option<String>,
+        /// `message.model`: the model that answered; `"<synthetic>"` for an answer the CLI made
+        /// itself, such as a built-in command's output (#943 R4).
+        model: Option<String>,
+        /// The top-level `error`, such as `"authentication_failed"` (#943 R9).
+        error: Option<String>,
         raw: String,
     },
     /// `{"type":"user"}`: a user message; tool results arrive here.
     User {
         blocks: Vec<ContentBlock>,
         parent_tool_use_id: Option<String>,
+        /// `isSynthetic`: the CLI wrote the message itself, as the summary after a compaction
+        /// (#943 R5).
+        is_synthetic: bool,
         raw: String,
     },
     /// `{"type":"result"}`: the turn ended.
@@ -66,6 +81,19 @@ pub enum StructuredEvent {
         outcome: ControlOutcome,
         raw: String,
     },
+    /// `{"type":"system","subtype":"compact_boundary"}`: the conversation was compacted here; its
+    /// `compact_metadata` (#943 R5).
+    CompactBoundary {
+        trigger: Option<String>,
+        pre_tokens: Option<u64>,
+        post_tokens: Option<u64>,
+        raw: String,
+    },
+    /// `{"type":"conversation_reset"}`: the conversation started over (`/clear`, #943 R5).
+    ConversationReset {
+        trigger: Option<String>,
+        raw: String,
+    },
     /// Valid JSON of a type the model does not know, or a known type that does not fit (FR-012).
     Unrecognised { raw: String },
     /// A line that is not JSON (FR-013).
@@ -82,6 +110,18 @@ pub enum StructuredEvent {
     },
     /// Daemon note (feature 941): an interrupt request was written for the open turn.
     InterruptAsked,
+    /// Daemon note: the commands and models the CLI's `initialize` answer reported at a spawn
+    /// (#943 R1). Never produced by [`parse_line`](super::parse_line).
+    CommandsReported {
+        commands: Vec<ReportedCommand>,
+        models: Vec<ReportedModel>,
+    },
+    /// Daemon note: the CLI accepted a model change; `model` is the name it resolved (#943 R7).
+    ModelChanged { model: String },
+    /// Daemon note: the CLI refused a deferred model change, with its reason (#943 R7).
+    ModelRefused { model: String, message: String },
+    /// Daemon note: the session switched kind here (#943 R8).
+    KindSwitched { to: SessionKind },
 }
 
 /// `PartialEq` is total here: the only float, `total_cost_usd`, comes from JSON, which has no NaN,
@@ -100,11 +140,40 @@ impl StructuredEvent {
             | Self::StreamDelta { raw, .. }
             | Self::Status { raw, .. }
             | Self::ControlResponse { raw, .. }
+            | Self::CompactBoundary { raw, .. }
+            | Self::ConversationReset { raw, .. }
             | Self::Unrecognised { raw } => raw.len(),
             Self::Unreadable { text } | Self::UserSent { text, .. } => text.len(),
-            Self::TurnEndedWithoutResult | Self::OversizedOnWire { .. } | Self::InterruptAsked => 0,
+            Self::TurnEndedWithoutResult
+            | Self::OversizedOnWire { .. }
+            | Self::InterruptAsked
+            | Self::CommandsReported { .. }
+            | Self::ModelChanged { .. }
+            | Self::ModelRefused { .. }
+            | Self::KindSwitched { .. } => 0,
         }
     }
+}
+
+/// One command of the CLI's `initialize` answer (#943 R1, contracts/claude-commands.md).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportedCommand {
+    pub name: String,
+    pub description: Option<String>,
+    /// `argumentHint`; `None` when the CLI sent none or an empty one.
+    pub argument_hint: Option<String>,
+    pub aliases: Vec<String>,
+    /// `builtin: true`: one of the CLI's own commands.
+    pub builtin: bool,
+}
+
+/// One model of the CLI's `initialize` answer (#943 R7).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportedModel {
+    /// What `set_model` and `--model` take (`default`, `haiku`, …).
+    pub value: String,
+    pub display_name: Option<String>,
+    pub description: Option<String>,
 }
 
 /// How the CLI answered a control request (contracts/claude-permission.md *Mode change*).

@@ -8,14 +8,18 @@ use micold_core::structured::{
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
-use stream_json::{events_of, lines_of, PROMPT_RECORDED, RECORDED, RECORDED_941};
+use stream_json::{events_of, lines_of, COMMAND_RECORDED, PROMPT_RECORDED, RECORDED, RECORDED_941};
 
 /// Whether the line's `type` (and `subtype`, for `system`) is one the model types (R9).
 fn is_known_type(line: &str) -> bool {
     let value: serde_json::Value = serde_json::from_str(line).expect("a recorded line is JSON");
     match value["type"].as_str() {
         Some("assistant" | "user" | "result" | "stream_event" | "control_response") => true,
-        Some("system") => matches!(value["subtype"].as_str(), Some("init" | "status")),
+        Some("conversation_reset") => true,
+        Some("system") => matches!(
+            value["subtype"].as_str(),
+            Some("init" | "status" | "compact_boundary")
+        ),
         _ => false,
     }
 }
@@ -29,12 +33,18 @@ fn raw_of(event: &StructuredEvent) -> Option<&str> {
         | StructuredEvent::StreamDelta { raw, .. }
         | StructuredEvent::Status { raw, .. }
         | StructuredEvent::ControlResponse { raw, .. }
+        | StructuredEvent::CompactBoundary { raw, .. }
+        | StructuredEvent::ConversationReset { raw, .. }
         | StructuredEvent::Unrecognised { raw } => Some(raw),
         StructuredEvent::Unreadable { text } => Some(text),
         StructuredEvent::TurnEndedWithoutResult
         | StructuredEvent::OversizedOnWire { .. }
         | StructuredEvent::UserSent { .. }
-        | StructuredEvent::InterruptAsked => None,
+        | StructuredEvent::InterruptAsked
+        | StructuredEvent::CommandsReported { .. }
+        | StructuredEvent::ModelChanged { .. }
+        | StructuredEvent::ModelRefused { .. }
+        | StructuredEvent::KindSwitched { .. } => None,
     }
 }
 
@@ -63,6 +73,7 @@ fn every_recorded_line_is_one_event_in_order_and_every_known_type_is_typed() {
         .into_iter()
         .chain(PROMPT_RECORDED)
         .chain(RECORDED_941)
+        .chain(COMMAND_RECORDED)
     {
         let lines = lines_of(name);
         let events = events_of(&lines);
@@ -474,6 +485,7 @@ fn the_parser_never_makes_a_daemon_note_of_941() {
         .into_iter()
         .chain(PROMPT_RECORDED)
         .chain(RECORDED_941)
+        .chain(COMMAND_RECORDED)
     {
         for event in events_of(&lines_of(name)) {
             assert!(
@@ -515,4 +527,240 @@ fn the_interrupt_fixture_is_typed_line_by_line() {
     );
     assert!(matches!(last_result(&events_of(&lines_of("image-turn"))),
         StructuredEvent::Result { subtype, is_error: false, .. } if subtype == "success"));
+}
+
+// #943 T004 — the command, model and authentication lines (data-model *Events*), over #943's
+// recordings.
+
+fn inits(name: &str) -> Vec<StructuredEvent> {
+    events_of_fixture(name)
+        .into_iter()
+        .filter(|event| matches!(event, StructuredEvent::Init { .. }))
+        .collect()
+}
+
+#[test]
+fn init_carries_the_command_skill_and_terminal_only_lists() {
+    let StructuredEvent::Init {
+        slash_commands,
+        skills,
+        terminal_slash_commands,
+        ..
+    } = &inits("command-initialize")[0]
+    else {
+        unreachable!()
+    };
+    for name in [
+        "greet", "hello", "compact", "clear", "context", "model", "mcp",
+    ] {
+        assert!(
+            slash_commands.iter().any(|c| c == name),
+            "{name} in slash_commands: {slash_commands:?}"
+        );
+    }
+    assert!(skills.iter().any(|s| s == "greet"), "{skills:?}");
+    assert!(
+        !skills.iter().any(|s| s == "hello"),
+        "a custom command is not a skill"
+    );
+    assert_eq!(
+        terminal_slash_commands,
+        &["doctor", "color", "focus", "reload-plugins"].map(String::from)
+    );
+}
+
+#[test]
+fn an_init_without_the_lists_has_them_empty() {
+    match parse_line(r#"{"type":"system","subtype":"init","session_id":"s","slash_commands":null}"#)
+    {
+        StructuredEvent::Init {
+            slash_commands,
+            skills,
+            terminal_slash_commands,
+            ..
+        } => {
+            assert!(slash_commands.is_empty());
+            assert!(skills.is_empty());
+            assert!(terminal_slash_commands.is_empty());
+        }
+        other => panic!("an init, got {other:?}"),
+    }
+    match parse_line(r#"{"type":"system","subtype":"init","session_id":"s","skills":["a",7,"b"]}"#)
+    {
+        StructuredEvent::Init { skills, .. } => {
+            assert_eq!(skills, ["a", "b"], "a non-string entry is dropped")
+        }
+        other => panic!("an init, got {other:?}"),
+    }
+}
+
+fn assistants(name: &str) -> Vec<(Option<String>, Option<String>, Vec<ContentBlock>)> {
+    events_of_fixture(name)
+        .into_iter()
+        .filter_map(|event| match event {
+            StructuredEvent::Assistant {
+                model,
+                error,
+                blocks,
+                ..
+            } => Some((model, error, blocks)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_built_in_commands_answer_is_a_synthetic_assistant_message() {
+    let answers = assistants("command-builtin-output");
+    assert_eq!(answers.len(), 1);
+    let (model, error, blocks) = &answers[0];
+    assert_eq!(model.as_deref(), Some("<synthetic>"));
+    assert_eq!(error, &None);
+    match &blocks[..] {
+        [ContentBlock::Text { text }] => assert!(text.starts_with("## Context Usage"), "{text}"),
+        other => panic!("one text block, got {other:?}"),
+    }
+    let (model, _, _) = &assistants("model-change")[0];
+    assert_eq!(
+        model.as_deref(),
+        Some("claude-haiku-5-5"),
+        "a model turn names its model"
+    );
+}
+
+#[test]
+fn an_authentication_failure_is_an_assistant_error() {
+    let answers = assistants("auth-failure");
+    assert_eq!(answers.len(), 1);
+    let (model, error, blocks) = &answers[0];
+    assert_eq!(error.as_deref(), Some("authentication_failed"));
+    assert_eq!(model.as_deref(), Some("<synthetic>"));
+    assert!(
+        matches!(&blocks[..], [ContentBlock::Text { text }] if text.starts_with("Invalid API key")),
+        "{blocks:?}"
+    );
+    assert!(matches!(
+        last_result(&events_of(&lines_of("auth-failure"))),
+        StructuredEvent::Result { is_error: true, .. }
+    ));
+}
+
+#[test]
+fn a_compaction_is_a_boundary_then_a_synthetic_summary() {
+    let events = events_of_fixture("command-compact");
+    let boundary = events
+        .iter()
+        .position(|e| matches!(e, StructuredEvent::CompactBoundary { .. }))
+        .expect("a compact boundary");
+    match &events[boundary] {
+        StructuredEvent::CompactBoundary {
+            trigger,
+            pre_tokens,
+            post_tokens,
+            ..
+        } => {
+            assert_eq!(trigger.as_deref(), Some("manual"));
+            assert_eq!(*pre_tokens, Some(37155));
+            assert_eq!(*post_tokens, Some(6215));
+        }
+        _ => unreachable!(),
+    }
+    match &events[boundary + 1] {
+        StructuredEvent::User {
+            is_synthetic: true,
+            blocks,
+            ..
+        } => assert!(
+            matches!(&blocks[..], [ContentBlock::Text { text }] if text.starts_with("This session is being continued")),
+            "{blocks:?}"
+        ),
+        other => panic!("the synthetic summary follows the boundary, got {other:?}"),
+    }
+    let synthetic = events
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                StructuredEvent::User {
+                    is_synthetic: true,
+                    ..
+                }
+            )
+        })
+        .count();
+    assert_eq!(synthetic, 1, "only the summary is synthetic");
+}
+
+#[test]
+fn a_clear_is_a_conversation_reset_and_the_next_init_has_a_new_session() {
+    let events = events_of_fixture("command-clear");
+    let reset = events
+        .iter()
+        .position(|e| matches!(e, StructuredEvent::ConversationReset { .. }))
+        .expect("a conversation reset");
+    assert!(matches!(
+        &events[reset],
+        StructuredEvent::ConversationReset { trigger, .. } if trigger.as_deref() == Some("clear")
+    ));
+    let session_of = |e: &StructuredEvent| match e {
+        StructuredEvent::Init { session_id, .. } => Some(session_id.clone()),
+        _ => None,
+    };
+    let before = events[..reset]
+        .iter()
+        .find_map(session_of)
+        .expect("an init before");
+    let after = events[reset..]
+        .iter()
+        .find_map(session_of)
+        .expect("an init after");
+    assert_eq!(before, "<SESSION_ID>");
+    assert_ne!(after, before, "the init after a clear names a new session");
+}
+
+#[test]
+fn the_new_lines_tolerate_missing_and_unknown_fields() {
+    match parse_line(r#"{"type":"system","subtype":"compact_boundary","x":1}"#) {
+        StructuredEvent::CompactBoundary {
+            trigger: None,
+            pre_tokens: None,
+            post_tokens: None,
+            ..
+        } => {}
+        other => panic!("a boundary with no metadata, got {other:?}"),
+    }
+    match parse_line(
+        r#"{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"auto","pre_tokens":"lots","post_tokens":5,"new":true}}"#,
+    ) {
+        StructuredEvent::CompactBoundary {
+            trigger,
+            pre_tokens,
+            post_tokens,
+            ..
+        } => {
+            assert_eq!(trigger.as_deref(), Some("auto"));
+            assert_eq!(pre_tokens, None, "a count that is not a number is unknown");
+            assert_eq!(post_tokens, Some(5));
+        }
+        other => panic!("a boundary, got {other:?}"),
+    }
+    assert!(matches!(
+        parse_line(r#"{"type":"conversation_reset","unknown":[1]}"#),
+        StructuredEvent::ConversationReset { trigger: None, .. }
+    ));
+    assert!(matches!(
+        parse_line(r#"{"type":"user","isSynthetic":"yes","message":{"content":"x"}}"#),
+        StructuredEvent::User {
+            is_synthetic: false,
+            ..
+        }
+    ));
+    assert!(matches!(
+        parse_line(r#"{"type":"assistant","error":7,"message":{"model":["m"],"content":[]}}"#),
+        StructuredEvent::Assistant {
+            model: None,
+            error: None,
+            ..
+        }
+    ));
 }

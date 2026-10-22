@@ -148,7 +148,16 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             );
         }
         // The CLI's mode and control replies change the session, not the conversation (#942).
-        StructuredEvent::Status { .. } | StructuredEvent::ControlResponse { .. } => {}
+        // #943's compaction and clear lines and the daemon's command, model and kind notes get
+        // their entries in its M2; until then they make none.
+        StructuredEvent::Status { .. }
+        | StructuredEvent::ControlResponse { .. }
+        | StructuredEvent::CompactBoundary { .. }
+        | StructuredEvent::ConversationReset { .. }
+        | StructuredEvent::CommandsReported { .. }
+        | StructuredEvent::ModelChanged { .. }
+        | StructuredEvent::ModelRefused { .. }
+        | StructuredEvent::KindSwitched { .. } => {}
         StructuredEvent::Unrecognised { raw } => {
             transcript.open(at(0), seq, raw_row(raw, RawReason::Unrecognised));
         }

@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: tasks done
-- **Next step**: design PR to open (orchestrator, via GitHub MCP); after its merge, M1. Cross-feature holds: M2 ← #941 M1, M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Phase**: implement M1
+- **Next step**: M1 in progress (T001–T008 done; next T009–T018, then gate, reviews, PR). Cross-feature holds: M2 ← #941 M1, M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1237 | design (spec, plan, tasks) | merged (rebase) | f27e1182 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | | pending |
+| M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | | in progress |
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** | | pending |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | | pending |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | pending |
