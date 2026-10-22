@@ -813,7 +813,7 @@ pub(crate) fn transcript_body<'a>(
         }),
     );
     iced::widget::column![
-        container(transcript).height(Length::Fill),
+        transcript,
         crate::ui::composer::view(
             state,
             id,

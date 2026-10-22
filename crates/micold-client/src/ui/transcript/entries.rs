@@ -35,6 +35,10 @@ pub const THINKING_TITLE: &str = "Thinking";
 pub const USER_LABEL: &str = "You";
 /// What stands where a turn's footer would, when the process ended mid-turn (FR-004).
 pub const ENDED_WITHOUT_RESULT: &str = "The turn ended without a result";
+/// What stands where a turn's footer would, when the user interrupted it (feature 941, FR-014).
+pub const INTERRUPTED: &str = "You interrupted this turn";
+/// What a message sent with pictures names them under (feature 941, FR-030).
+pub const ATTACHED: &str = "Attached";
 /// What heads a result whose call is not in the transcript (FR-020): shown, never as an error.
 pub const ORPHAN_RESULT: &str = "Result of a tool call not shown";
 
@@ -301,14 +305,21 @@ pub(super) fn entry(
             caption(parts.join(" · "), roles)
         }
         // A command turn is its text as typed, `/name args` (#943 FR-003).
-        EntryKind::UserMessage { text, .. } => column![
-            caption(USER_LABEL, roles),
-            Text::new(plain_text(text), TypeRole::Body, roles)
-                .wrapping(Wrapping::WordOrGlyph)
-                .width(Length::Fill),
-        ]
-        .spacing(spacing::XS)
-        .into(),
+        EntryKind::UserMessage {
+            text, attachments, ..
+        } => {
+            let mut message = column![
+                caption(USER_LABEL, roles),
+                Text::new(plain_text(text), TypeRole::Body, roles)
+                    .wrapping(Wrapping::WordOrGlyph)
+                    .width(Length::Fill),
+            ]
+            .spacing(spacing::XS);
+            if let Some(line) = attachments_line(attachments) {
+                message = message.push(caption(line, roles));
+            }
+            message.into()
+        }
         EntryKind::AssistantText {
             text, streaming, ..
         } => (renderers.assistant_text)(
@@ -403,8 +414,11 @@ pub(super) fn entry(
         )
         .muted()
         .into(),
-        // Feature 941 draws the interrupted notice in M6; until then the turn ends with nothing.
-        EntryKind::Interrupted => iced::widget::Space::new().into(),
+        EntryKind::Interrupted => {
+            IconLabel::new(Icon::ToolNoResult, INTERRUPTED, TypeRole::Label, roles)
+                .muted()
+                .into()
+        }
         EntryKind::Oversized { original_bytes } => caption(oversized_text(*original_bytes), roles),
         // X5: one placeholder per thread whose parent is held nowhere (FR-017).
         EntryKind::SubagentNotice { count } => {
@@ -709,6 +723,11 @@ pub fn with_trailing<'a, M: 'a>(
     }
 }
 
+/// The line naming a user message's pictures, in order (FR-030); `None` without any.
+pub fn attachments_line(names: &[String]) -> Option<String> {
+    (!names.is_empty()).then(|| format!("{ATTACHED}: {}", names.join(", ")))
+}
+
 /// A footer: its status, then its figures as one caption line, then an error turn's text.
 fn footer_row(view: &FooterView, roles: Roles) -> Block {
     let mut line = row![status_label(view.status, roles)]
@@ -737,6 +756,15 @@ fn footer_row(view: &FooterView, roles: Roles) -> Block {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_message_with_pictures_names_them_in_order() {
+        assert_eq!(attachments_line(&[]), None);
+        assert_eq!(
+            attachments_line(&["a.png".to_owned(), "b.jpg".to_owned()]).as_deref(),
+            Some("Attached: a.png, b.jpg")
+        );
+    }
 
     #[test]
     fn a_compaction_marker_says_whether_the_cli_compacted_on_its_own() {

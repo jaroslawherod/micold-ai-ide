@@ -621,16 +621,23 @@ pub fn transcript_pane_insights() -> State {
 
 /// The project with one structured session open in its pane, its transcript `lines` applied and its
 /// render cache refreshed as the window's update does.
-fn structured_pane(lines: &[String]) -> (State, SessionId) {
-    use micold_core::session::SessionKind;
+pub fn structured_pane(lines: &[String]) -> (State, SessionId) {
+    session_pane(micold_core::session::SessionKind::Structured, lines)
+}
 
+/// As [`structured_pane`], with a session of `kind` (feature 941: a terminal session's pane for
+/// the composer gate).
+pub fn session_pane(
+    kind: micold_core::session::SessionKind,
+    lines: &[String],
+) -> (State, SessionId) {
     let session = Session::restored_of_kind(
         SessionId::new(),
         SessionLocation::Worktree("feat-short".to_string()),
         SessionLabel::Named("feat/short".to_string()),
         TerminalMode::AiCli,
         AiCli::ClaudeCode,
-        SessionKind::Structured,
+        kind,
     );
     let id = session.id;
     let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
@@ -1595,7 +1602,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // its bottom edge (`TRANSCRIPT_VIEWPORT`).
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 0, 0, 0, 1, 0],
                 },
             ],
         },
@@ -1620,7 +1627,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // its bottom edge (`TRANSCRIPT_VIEWPORT`).
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 0, 0, 0, 1, 0],
                 },
             ],
         },
@@ -1643,7 +1650,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 0, 0, 0, 1, 0],
                 },
             ],
         },
