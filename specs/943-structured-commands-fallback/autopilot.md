@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
 - **Phase**: implement M2
-- **Next step**: M2 (T019–T024) implemented on the branch; scoped gate, review A (high), review B, full gate, then the M2 PR (orchestrator opens it from the scratchpad 943-M2/pr-title.txt and pr-body.md). Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Next step**: M2 gate green at a250b25f, reviews A and B CLEAN in round 2; pushed. M2 PR to open (orchestrator, from the scratchpad 943-M2/pr-title.txt and pr-body.md), then after its merge M3. Visual pass not run: M2's window arms are interim captions and #940 markdown, replaced in M8 (T058), whose Part B pass covers them. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | #1239 | merged |
-| M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | | implement |
+| M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | to open | review |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | | pending |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | pending |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pending |
@@ -58,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Rebase review M1 (conflict resolution vs #941 M1, sonnet, claude -p) | 1 | daf7075aff3a43c20473739d35830934528dca79:40a159e175b97cc860d98471c79bd2068571abeb | CLEAN (2 MINOR, capture script: stray arg refused, interrupt id `micold-1` fixed — left) |
 | Review A M2 (code-review high, claude -p) | 1 | befd7222c84571107707c3cbec98dd2188e17c53:eefffe5c2121cffe5fd1e92ea8ac54417a711184 | CHANGES (8, unranked): F1 synthetic error as output, F2 empty/stderr local-command lines, F3 compaction state, F4 switch mid-turn, F5 chip rewrote the typed text and took paths, F6 list rebuilt per message — fixed with tests; F7 rich arms untested — test added; F8 summary/description not behind a disclosure — declined |
 | Review B M2 (conformance, sonnet, claude -p) | 1 | befd7222c84571107707c3cbec98dd2188e17c53:eefffe5c2121cffe5fd1e92ea8ac54417a711184 | CHANGES: F1 MAJOR T024 no red recorded — red observed by stubbing, logged; F2 MINOR stale counts — fixed |
+| Review A M2 (scoped, sonnet, claude -p) | 2 | 14e2380da76348b1a29deee35ad3148d064bdc0d:a250b25ff50da64feb5e8bbc502918aaf4c20724 | CLEAN |
+| Review B M2 (conformance, sonnet, claude -p) | 2 | 14e2380da76348b1a29deee35ad3148d064bdc0d:a250b25ff50da64feb5e8bbc502918aaf4c20724 | CLEAN; Verify: structured_transcript 71 passed, client lib transcript 7 passed |
 | Tasks review | 2 (sonnet, fix diff) | 0c12e486473d3a8cc0937758fdd4473a3e424f23:ee00a672e9c7ceefaa1edde46c12c37b7a0a103e | CLEAN (1 MINOR, fixed, prose only) |
 
 ## Declined review findings
