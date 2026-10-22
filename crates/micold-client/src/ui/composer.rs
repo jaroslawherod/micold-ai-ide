@@ -80,11 +80,15 @@ pub fn view<'a>(
         .map_or(&[][..], |r| &r.queue[..]);
     let editing = composer.and_then(|c| c.editing.as_ref());
     let mut rows: Vec<Element<'a, Message>> = Vec::new();
+    let mut edited = None;
     for (index, queued) in queue.iter().enumerate() {
         let entry = queued.id;
-        rows.push(match editing.filter(|e| e.entry == entry) {
-            Some(edit) => queue_edit(session, edit, state.window.focused_field, roles),
-            None => QueueRow::new(index + 1, queued.text.clone(), roles)
+        if let Some(edit) = editing.filter(|e| e.entry == entry) {
+            edited = Some(edit);
+            continue;
+        }
+        rows.push(
+            QueueRow::new(index + 1, queued.text.clone(), roles)
                 .pictures(queued.attachments.len())
                 .on_edit(send(Msg::QueueEditStarted { session, entry }))
                 .on_remove(send(Msg::QueueRemoveRequested { session, entry }))
@@ -94,7 +98,7 @@ pub fn view<'a>(
                         .then(|| send(Msg::QueueTakeRequested { session, entry })),
                 )
                 .into(),
-        });
+        );
     }
     if !rows.is_empty() {
         // A long queue scrolls inside its own room, so the composer never pushes the transcript
@@ -104,6 +108,11 @@ pub fn view<'a>(
                 .max_height(QUEUE_MAX_HEIGHT)
                 .into(),
         );
+    }
+    // The message being edited sits under the queue's room, never inside it: its field and
+    // **Save** / **Cancel** are taller than the room, which would hide them (T061 run 2, step 6).
+    if let Some(edit) = edited {
+        parts.push(queue_edit(session, edit, state.window.focused_field, roles));
     }
 
     // The hold notice and **Send queued** (FR-022).
@@ -158,9 +167,11 @@ pub fn view<'a>(
         parts.push(completion);
     }
 
-    parts.push(input_row(state, session, phase, roles));
-
-    container(column(parts).spacing(spacing::SM))
+    // The parts above the input row come and go; held in a column of their own, they leave the
+    // input row at the same place in the tree, so the text area keeps its state (focus, caret)
+    // when a queue row, a notice or a chip appears (T061 run 2, step 6).
+    let input = input_row(state, session, phase, roles);
+    container(column![column(parts).spacing(spacing::SM), input].spacing(spacing::SM))
         .padding([spacing::SM, spacing::MD])
         .width(Length::Fill)
         .into()

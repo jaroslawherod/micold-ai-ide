@@ -213,3 +213,19 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
   update), `TrackFocus for TextArea`, `FieldId::Composer(SessionId)`.
 - green: `cargo test -p micold-client --lib text_area` 14, `--test layout_snapshot composer` 14,
   `--test field_focus_call_sites --test features_composer --test terminal_focus` 6, 29, 33 passed.
+
+### Cycle 12 — the text area keeps its place; a queue edit outside the queue's room (T061 run 2 F2, F3)
+
+- found by: T061 visual pass run 2, step 6. F2: after a message was queued while busy, typing was
+  lost until a click: the input row's index in the composer's column moved when the queue row
+  appeared above it, so iced's positional diff gave the editor's state (its focus) to another
+  widget. F3: a queued message being edited sat inside the queue's 120 px room, its **Save** /
+  **Cancel** below the fold.
+- tests (red first): `composer_fits` `the_composer_keeps_the_keyboard_when_a_queue_row_appears_above_it`
+  (the window's tree: a press focuses the area, the state gains a queue row, the same tree is
+  diffed, a key → `Msg::Edited`; red before the fix) and
+  `a_queued_message_edited_in_a_long_queue_shows_save_and_cancel` (12 rows, the last edited; both
+  schemes; red on the old layout: `Save` not drawn).
+- fix: `ui::composer::view` holds the parts above the input row in a column of their own; the edited
+  queued message is drawn under the queue's room. Layout fixture re-recorded (one level deeper).
+- green: `layout_snapshot` 95, `features_composer` 29, `field_focus_call_sites` 6, `terminal_focus` 33.
