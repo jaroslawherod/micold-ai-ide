@@ -35,7 +35,7 @@ mod conn;
 mod history;
 #[path = "support/structured.rs"]
 mod structured;
-use conn::{answer, connect, Client};
+use conn::{answer, answers, connect, Client};
 use structured::{
     clear_records, events_until, fake_stream_cli, fixture, record, stdin_lines, stream_script,
     viewer,
@@ -515,8 +515,9 @@ async fn of_two_picks_the_last_one_wins() {
     let mut client = connect(&saved.state).await;
     send(&mut client, pick(1, id, &named("haiku"))).await;
     send(&mut client, pick(2, id, &named("sonnet"))).await;
-    assert_ok(&answer(&mut client, 1).await);
-    assert_ok(&answer(&mut client, 2).await);
+    for answered in answers(&mut client, &[1, 2]).await {
+        assert_ok(&answered);
+    }
     assert_eq!(models_asked(saved.dir(0)), ["haiku", "sonnet"]);
     assert_eq!(saved.listed(0), named("sonnet"));
     assert_eq!(saved.recorded(0), named("sonnet"));
