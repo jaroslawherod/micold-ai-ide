@@ -74,3 +74,15 @@ Why the unit tests missed the real-app path: iced reports a Tab between two numb
 | Review B r1 F1 (T032 never red) | mutants, reverted: view sends `CardLink::Issue` for numbers; `to_link` always `Issue`; `lost` without the `part != focus_part` return | `--lib -- a_numbers_keyboard_reaches` FAILED (overview.rs:1270); `--test overview -- numbers_focus_reports a_menu_from_a_number` 2 FAILED (overview.rs:2244, :2289) | restored; all green |
 
 Scoped after the fixes: core `--lib -- overview_expansion pr_list` 67 passed; client `--lib -- overview card_grid text_link` 200; `--bin micold-ai-ide` 678; `--test overview` 88, `layout_snapshot` 79, `root_vocabulary_is_cross_cutting` 6, `root_state_is_shared` 4, `idle_requests_no_frames` 14, `feature_write_isolation` 8; clippy core+client `--all-targets -D warnings` clean.
+
+### M3 fixes, round 2 (visual r2 criterion 1 reverse, review A r2 F1)
+
+Observed order (not assumed): the mounted Overview (real `CardGrid`, real `focus_previous` traversal, unsorted report) with z focus-expanded reports Shift+Tab onto y's collapsed last number as `FocusLost(z)` **then** `LinkFocusGained(y, #13)`: `CardGrid::update` hands every event to the expanded card first (card_grid.rs "The expanded card takes events first"), so z's loss beats the gain that is earlier in tree order. Each message is its own root update, so the gain saw `LinkFocus.focused == None` and `from_another` was false. The r1 root test fed gain-first (z collapsed's order); the mounted `focus_moves` helper sorts losses first, which hid the real order.
+
+| Task / finding | Test | Red | Green |
+|---|---|---|---|
+| Observed order | `--lib -- shift_tab_off_an_expanded_card_reports_its_loss_first` (mounted, unsorted) | — (characterises iced + `CardGrid`; passes on the unfixed tree, asserts `[FocusLost(z), LinkFocusGained(y, last)]`) | green |
+| Visual r2 c1 (Shift+Tab from z lands on #13) | `--bin micold-ai-ide -- shift_tab_loss_first_onto_a_collapsed_cards_number_goes_to_its_last`: b focused (expanded), `FocusLost(b)`, `LinkFocusGained(a, #12)`, then the in-card `LinkFocusLost(#12)`/`LinkFocusGained(#10)` | FAILED `left: Some(…overview-card-pr-12/feat-1122_x) right: Some(…overview-card-pr-10/feat-1122_x)` (main_tests.rs:15188) | core `Expansion::just_left()` (the card of K5's `just_lost`); `LinkFocus.focused = focused().or(just_left())`; core `just_left_names_the_card_for_one_event` |
+| Review A r2 F1 (MINOR, `card_pr_list` ignores the sidebar filter) | — (doc) | — | doc note on `card_pr_list`: card existence is checked first through `focus_return_target` |
+
+Scoped: client `--bin micold-ai-ide` link/shift_tab set 22 passed; `--lib -- ui::overview` 23; core `--lib -- overview_expansion pr_list` 68; clippy core+client `--all-targets -D warnings` clean.

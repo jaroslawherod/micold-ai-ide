@@ -144,6 +144,13 @@ impl Expansion {
         self.focused.as_ref()
     }
 
+    /// The card whose focus loss, of itself or a link, was the previous event (K5's "just held"):
+    /// a focus-expanded card reports its loss before a gain earlier in tree order (feature 1123,
+    /// visual pass M3 r2), so between the two no card is [`focused`](Self::focused).
+    pub fn just_left(&self) -> Option<&SessionLocation> {
+        self.just_lost.as_ref().map(|lost| &lost.location)
+    }
+
     /// The card and which of its links holds the keyboard (feature 1122, FR-008; feature 1123):
     /// not while an open menu holds it (FR-009).
     pub fn focused_link(&self) -> Option<(&SessionLocation, CardLink)> {
@@ -1090,6 +1097,20 @@ mod tests {
     /// Focus on A's card, then forward Tab onto A's link (card lost, then link gained).
     fn tabbed_to_link(name: &str) -> Vec<Event> {
         vec![focus(name), lost(name), link_focus(name)]
+    }
+
+    /// Feature 1123 (visual pass M3 r2): the card a loss just left is known for exactly the next
+    /// event, and a listing that changes nothing keeps it (K5).
+    #[test]
+    fn just_left_names_the_card_for_one_event() {
+        let left = after([focus("a"), lost("a")]);
+        assert_eq!(left.focused(), None);
+        assert_eq!(left.just_left(), Some(&loc("a")));
+        let mut listed = left.clone();
+        listed.apply(Event::Listed(vec![loc("a"), loc("b")]));
+        assert_eq!(listed.just_left(), Some(&loc("a")));
+        assert_eq!(after([focus("a"), lost("a"), focus("b")]).just_left(), None);
+        assert_eq!(after([focus("a"), lost("b")]).just_left(), None);
     }
 
     /// K5, FR-008, Story 3 sc.1: forward Tab from a card to its own link is a move inside the

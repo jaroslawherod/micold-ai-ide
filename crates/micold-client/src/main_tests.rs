@@ -15167,6 +15167,45 @@ fn shift_tab_onto_a_collapsed_cards_number_goes_to_its_last() {
     assert_eq!(expansion.expanded(), Some(&a));
 }
 
+/// FR-010, visual pass M3 r2 criterion 1: Shift+Tab from a focus-expanded card reports its loss
+/// first (the grid updates the expanded card first; `ui::overview` test
+/// `shift_tab_off_an_expanded_card_reports_its_loss_first`), so no card holds the keyboard when the
+/// previous card's collapsed last number gains it: the keyboard still goes on to the expanded
+/// card's last number, and the move inside that card (#12 lost, #10 gained) keeps #10.
+#[test]
+fn shift_tab_loss_first_onto_a_collapsed_cards_number_goes_to_its_last() {
+    use micold_client::ui::overview::card_link_id;
+    use micold_core::overview_expansion::Event;
+    let (a, b) = (
+        SessionLocation::Worktree("feat-1122_x".into()),
+        SessionLocation::Worktree("feat-1124_y".into()),
+    );
+    let mut app = app_with_links(&["feat-1122_x", "feat-1124_y"]);
+    list_numbers(&mut app, "feat/feat-1122_x", &[10, 11, 12, 13]);
+    let _ = expansion_focus_move(&mut app, Event::FocusGained(b.clone()));
+    assert_eq!(app.core.overview.expansion.expanded(), Some(&b));
+    assert_eq!(expansion_focus_move(&mut app, Event::FocusLost(b)), None);
+    assert_eq!(
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusGained(a.clone(), CardLink::PullRequest(12))
+        ),
+        Some(card_link_id(&a, CardLink::PullRequest(10)))
+    );
+    let numbers = [12, 10].map(CardLink::PullRequest);
+    assert_eq!(
+        expansion_focus_move(&mut app, Event::LinkFocusLost(a.clone(), numbers[0])),
+        None
+    );
+    assert_eq!(
+        expansion_focus_move(&mut app, Event::LinkFocusGained(a.clone(), numbers[1])),
+        Some(card_link_id(&a, numbers[1]))
+    );
+    let expansion = &app.core.overview.expansion;
+    assert_eq!(expansion.focused_link(), Some((&a, numbers[1])));
+    assert_eq!(expansion.expanded(), Some(&a));
+}
+
 /// U6, FR-009: a number's Menu key opens the card's menu as `KeyboardFromLink` of that number.
 #[test]
 fn link_menu_opens_from_a_number() {

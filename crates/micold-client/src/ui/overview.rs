@@ -511,6 +511,9 @@ pub fn pull_request_link_for(
 /// The pull request list the card at `location` draws its rows from, read straight from the
 /// window: its worktree's branch's list while the counts show (R5), as [`card`] reads it, without
 /// building every card (review A M3 r1 F2: the keyboard hand-offs ask this on every message).
+/// It does not ask whether the card is drawn at all: a worktree the sidebar's filter hides has no
+/// card yet still answers its list. Its callers check that first, through [`focus_return_target`]
+/// (review A M3 r2 F1).
 fn card_pr_list<'s>(
     state: &'s State,
     location: &SessionLocation,
@@ -1287,6 +1290,51 @@ mod tests {
         assert_eq!(
             focus_moves(&mut mounted, 1).first(),
             Some(&expansion_message(Event::LinkFocusLost(l, number)))
+        );
+    }
+
+    /// Feature 1123 FR-010 (visual pass M3 r2, criterion 1): the order the mounted Overview reports
+    /// Shift+Tab from a focus-expanded card onto the previous card's collapsed last number, unsorted.
+    /// The grid hands every event to the expanded card first, so its loss comes before the gain
+    /// that sits earlier in tree order: the root sees no card focused when the gain arrives.
+    #[test]
+    fn shift_tab_off_an_expanded_card_reports_its_loss_first() {
+        use iced::advanced::widget::operation::focusable;
+        use micold_core::pr_list::BranchPrList;
+        use micold_core::pull_request::CheckStatus;
+        let mut state = overview_of(2);
+        state.pr_status.enabled = true;
+        state.pr_status.read_at = Some(100);
+        let prs = [14, 13, 12, 11].map(|n| listed_pr(n, CheckStatus::Passing));
+        state.pr_status.lists.insert(
+            "feat/0".into(),
+            BranchPrList::new(prs.to_vec(), false, false),
+        );
+        let (y, z) = (
+            SessionLocation::Worktree("feat-0".into()),
+            SessionLocation::Worktree("feat-1".into()),
+        );
+        state
+            .overview
+            .expansion
+            .apply(Event::FocusGained(z.clone()));
+        assert_eq!(state.overview.expansion.expanded(), Some(&z));
+        let last = card_last_link(&state, &y, false).expect("y draws numbers");
+        let mut mounted = mount(&state);
+        mounted.drive(focusable::focus::<()>(card_id(&z)));
+        mounted.redraw();
+        mounted.drive(focusable::focus_previous::<()>());
+        let reported: Vec<_> = mounted
+            .redraw()
+            .into_iter()
+            .filter(|m| m.contains("Focus"))
+            .collect();
+        assert_eq!(
+            reported,
+            [
+                expansion_message(Event::FocusLost(z)),
+                expansion_message(Event::LinkFocusGained(y, last)),
+            ]
         );
     }
 
