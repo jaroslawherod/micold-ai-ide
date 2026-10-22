@@ -161,5 +161,34 @@ check "--interrupt-after-first-delta output is scrubbed (session id, cwd)" \
   "$(sed -n 1p "$fixture" 2>/dev/null)"
 rm -rf "$fake_root"
 
+# `--control <json>` (feature 943, T001): each control line goes to the CLI's stdin, in the order
+# given, before the user message; the scratch repo holds the project skill `greet` and the custom
+# command `hello` the command fixtures run. The stand-in `claude` echoes its stdin, then one line
+# per scratch file it finds.
+fake_root="$(mktemp -d)"
+mkdir -p "$fake_root/bin" "$fake_root/repo"
+cat > "$fake_root/bin/claude" <<'FAKE'
+#!/usr/bin/env bash
+cat
+[ -s .claude/skills/greet/SKILL.md ] && echo '{"file":"greet"}'
+[ -s .claude/commands/hello.md ] && echo '{"file":"hello"}'
+exit 0
+FAKE
+chmod +x "$fake_root/bin/claude"
+git -C "$fake_root/repo" init -q
+(cd "$fake_root/repo" \
+  && PATH="$fake_root/bin:$PATH" TMPDIR="$fake_root" capture_main probe "ping" \
+       --control '{"type":"control_request","request_id":"a","request":{"subtype":"initialize"}}' \
+       --control '{"type":"control_request","request_id":"b","request":{"subtype":"set_model","model":"haiku"}}' \
+       -- --model haiku) 2>/dev/null
+check "--control lines reach stdin in order, before the user message, and the scratch repo holds greet and hello" \
+  "$(printf '%s\n' \
+      '{"type":"control_request","request_id":"a","request":{"subtype":"initialize"}}' \
+      '{"type":"control_request","request_id":"b","request":{"subtype":"set_model","model":"haiku"}}' \
+      '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"ping"}]}}' \
+      '{"file":"greet"}' '{"file":"hello"}')" \
+  "$(cat "$fake_root/repo/crates/micold-core/tests/fixtures/stream-json/probe.jsonl" 2>/dev/null)"
+rm -rf "$fake_root"
+
 echo "$cases cases, $failures failed"
 [ "$failures" -eq 0 ]

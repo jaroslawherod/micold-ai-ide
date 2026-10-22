@@ -1,6 +1,6 @@
 # `claude` stream-json fixtures (feature 938, FR-024)
 
-Twelve of these files are **recorded**: the stdout of a real `claude` run, byte for byte, then
+All but three of these files are **recorded** (943's eleven in their own table below): the stdout of a real `claude` run, byte for byte, then
 scrubbed. Three are **synthetic**, written by hand: `tolerance.jsonl`, `insights-tolerance.jsonl` and
 `markdown-subset.md` (plain markdown, not stream-json; see below).
 
@@ -36,6 +36,30 @@ scrubbed. Three are **synthetic**, written by hand: `tolerance.jsonl`, `insights
 | `edit-turn.jsonl` (940) | `Make exactly three file changes in the current directory, one tool call each, and use no other tool. First, use the Write tool to create fruits.txt with these four lines: apple, banana, apple, cherry. Second, use the Edit tool once with replace_all set to true to replace every "apple" with "pear". Third, use the Edit tool once more, with old_string the three lines "banana", "pear", "cherry" and new_string the four lines "kiwi", "pear", "plum", "fig". Then reply with one short sentence.` | `--model claude-sonnet-5-5 --allowedTools Write Edit` | a `Write`, an `Edit` with `replace_all: true` and a multi-line `Edit` with a shared line, each with its `tool_result`; this CLI (2.1.306) has no `MultiEdit` tool, so MultiEdit is covered by `tests/edit_diff.rs`'s synthetic set |
 | `interrupt-turn.jsonl` (941) | `Write a long story of at least 1500 words about a lighthouse keeper. Do not use any tool.` | capture flag `--interrupt-after-first-delta` | P-4: the `control_request` `interrupt` written after the first text delta; its `control_response` `success`, the partial `assistant` message, the `[Request interrupted by user]` `user` line and a `result` `error_during_execution` (`terminal_reason: aborted_streaming`) |
 | `image-turn.jsonl` (941) | `Reply with one short sentence: what colour fills this picture?` | capture flag `--image red-square.png` (a 16×16 solid red PNG) | P-5: one user message with a text block and a base64 PNG block, answered and ended `success` |
+
+### Commands, models and authentication (943)
+
+Recorded 2026-10-22 with Claude Code `2.1.307` (model `claude-sonnet-5-5` unless the file shows
+otherwise), in the cloud dev container, by `scripts/capture-stream-json.sh`. Every scratch repo
+also holds the project skill `greet` (`.claude/skills/greet/SKILL.md`) and the custom command
+`hello` (`.claude/commands/hello.md`) the script writes. Argv as above; a `--control` line is
+written to stdin before the prompt, in the order listed. The command lists in the `init` lines and
+the `initialize` answer are the container's: its user and claude.ai-synced skills appear beside
+the CLI's built-ins.
+
+| Fixture | Prompt | `--control` lines, extra flags | Shows |
+|---|---|---|---|
+| `command-initialize.jsonl` | `Reply with the single word ready.` | `{"type":"control_request","request_id":"micold-1","request":{"subtype":"initialize"}}` | the `initialize` answer (P-1): `commands` with `description`, `argumentHint`, `aliases`, `builtin`, and `models`, before the turn's `init` |
+| `command-skill.jsonl` | `/greet Ada` | — | a project skill run with arguments; no expanded instructions on stdout |
+| `command-custom.jsonl` | `/hello world` | — | a project custom command run with arguments |
+| `command-compact.jsonl` | `/compact keep greetings` | user message `Reply with one short sentence greeting Ada.` | `status` `compacting`, `compact_result`, a fresh `init`, `compact_boundary` (`manual`, `pre_tokens`/`post_tokens`), the `isSynthetic` summary user line and a `<local-command-stdout>` user line |
+| `command-clear.jsonl` | `Reply with the single word after.` | user messages `Reply with the single word before.`, then `/clear` | `conversation_reset` (`trigger: "clear"`), then `init` lines with a new `session_id` (left unscrubbed: `80379009-…`) |
+| `command-builtin-output.jsonl` | `/context` | — | a built-in's text answer: an `assistant` line with `model: "<synthetic>"`, a `result` with `num_turns: 0` |
+| `command-unknown.jsonl` | `/nosuchcmd` | — | an unknown command handed to the model as text, and its ordinary reply |
+| `model-change.jsonl` | `Reply with the single word ready.` | `set_model` `haiku` (`micold-1`) | the `success` answer `{"model":"claude-haiku-5-5"}`, then a turn whose `init` and `assistant` report it |
+| `model-refused.jsonl` | `Reply with the single word ready.` | `set_model` `no-such-model-xyz` (`micold-1`) | the `error` answer (`Model 'no-such-model-xyz' not found`, `error_code: "not_found"`), the model unchanged |
+| `auth-failure.jsonl` | `Reply with the single word ready.` | run under `env -i` with only `PATH`, the proxy and CA variables, an empty `HOME` and `ANTHROPIC_API_KEY=sk-ant-invalid-key-for-fixture` (P-5) | a synthetic `assistant` line with top-level `error: "authentication_failed"`, then an error `result` |
+| `resume-after-clear.jsonl` | `Reply with one word: the word you replied with last.` | `--resume 80379009-…` (the post-clear `session_id` of `command-clear.jsonl`, in that capture's scratch repo) | the cleared conversation resumed: the answer is `after`, not `before` |
 
 The recorded files also carry the line types this CLI version writes that the model does not
 type (`active_goal`, `autocompact_state`, `rate_limit_event`, `system` subtypes other than

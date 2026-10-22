@@ -29,15 +29,15 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 1: Setup — recorded fixtures (FR-026, research R13)
 
-- [ ] T001 [P] Extend `scripts/tests/capture-stream-json.test.sh`: with a stand-in `claude` on
+- [X] T001 [P] Extend `scripts/tests/capture-stream-json.test.sh`: with a stand-in `claude` on
   `PATH` that echoes its stdin, `scripts/capture-stream-json.sh --control '<json>' …` writes each
   `--control` line (repeatable, in order) to the CLI's stdin before the first user message, and the
   scratch repo it prepares holds `.claude/skills/greet/SKILL.md` and `.claude/commands/hello.md`;
   fails until T002
-- [ ] T002 Extend `scripts/capture-stream-json.sh` with the repeatable `--control <json>` option and
+- [X] T002 Extend `scripts/capture-stream-json.sh` with the repeatable `--control <json>` option and
   the scratch project skill `greet` and custom command `hello` (T001 passes); the existing scrub
   step is reused, not copied
-- [ ] T003 Record with T002 against a logged-in Claude Code into
+- [X] T003 Record with T002 against a logged-in Claude Code into
   `core/tests/fixtures/stream-json/`: `command-initialize.jsonl` (P-1), `command-skill.jsonl`
   (`/greet Ada`), `command-custom.jsonl` (`/hello world`), `command-compact.jsonl`
   (`/compact keep greetings` after one turn), `command-clear.jsonl` (one turn, `/clear`, one turn:
