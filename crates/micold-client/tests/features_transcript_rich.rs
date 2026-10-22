@@ -39,6 +39,8 @@ fn sequenced(events: impl IntoIterator<Item = StructuredEvent>) -> Vec<Sequenced
 
 fn assistant(block: ContentBlock) -> StructuredEvent {
     StructuredEvent::Assistant {
+        error: None,
+        model: None,
         message_id: None,
         raw: json!({"type": "assistant", "message": {"content": []}}).to_string(),
         blocks: vec![block],
