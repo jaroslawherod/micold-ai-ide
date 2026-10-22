@@ -518,8 +518,9 @@ pub struct Session {
     /// switch of kind (#943 FR-019).
     pub kind: SessionKind,
     /// How a structured session asks before Claude uses a tool (#942, FR-013, FR-015). Persisted
-    /// and mutable, through the daemon's `Catalog::set_permission_mode` only; always `Default` for
-    /// a terminal session (FR-018).
+    /// and mutable, through the daemon's `Catalog::set_permission_mode` only. A session created
+    /// terminal has `Default`; a structured session switched to terminal keeps its mode for its
+    /// next structured launch, and no terminal launch uses it (FR-018, #943 FR-024).
     pub permission_mode: PermissionMode,
     /// The model the user chose for the session (#943, FR-017): persisted and used on every
     /// launch, in either kind. Changed through the daemon's `Catalog::set_model` only.

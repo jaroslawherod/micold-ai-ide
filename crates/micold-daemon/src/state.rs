@@ -3906,6 +3906,11 @@ impl DaemonState {
             Some(_) => return Err(SwitchRefusal::SwitchInProgress),
             None => {}
         }
+        if kind == to && command.is_some() {
+            return Err(SwitchRefusal::BadCommand(
+                "The session already is a terminal session: type the command there".into(),
+            ));
+        }
         if kind == to {
             return Ok(None);
         }
@@ -3940,17 +3945,13 @@ impl DaemonState {
         to: SessionKind,
         command: &str,
     ) -> Result<(), SwitchRefusal> {
-        use micold_core::structured::commands::{classify_draft, CommandList, DraftCommand};
+        use micold_core::structured::commands::{classify_draft, DraftCommand};
         if to == SessionKind::Structured {
             return Err(SwitchRefusal::BadCommand(
                 "Only a switch to the terminal takes a command".into(),
             ));
         }
-        let list = inner
-            .event_streams
-            .get(&session)
-            .map_or_else(CommandList::fallback, |stream| stream.command_list());
-        match classify_draft(command, &list) {
+        match classify_draft(command, &Self::command_list_of(inner, session)) {
             DraftCommand::TerminalOnly(_) => Ok(()),
             DraftCommand::Send | DraftCommand::Model(_) => Err(SwitchRefusal::BadCommand(
                 "The command of a switch to the terminal must be one that needs the terminal"
@@ -7589,6 +7590,18 @@ impl DaemonState {
         Ok(delivery)
     }
 
+    /// `session`'s command list as its event history holds it, the documented one without a history
+    /// (#943 FR-009).
+    fn command_list_of(
+        inner: &Inner,
+        session: SessionId,
+    ) -> micold_core::structured::commands::CommandList {
+        inner.event_streams.get(&session).map_or_else(
+            micold_core::structured::commands::CommandList::fallback,
+            |stream| stream.command_list(),
+        )
+    }
+
     /// `/model` and the terminal-only commands, by `session`'s command list as its history holds it,
     /// never reach the CLI, idle or busy (#943 R3, FR-010, FR-018); anything else may.
     fn refuse_app_handled(
@@ -7596,17 +7609,11 @@ impl DaemonState {
         session: SessionId,
         text: &str,
     ) -> Result<(), UserMessageRefusal> {
-        use micold_core::structured::commands::{
-            classify_draft, parse_invocation, CommandList, DraftCommand,
-        };
+        use micold_core::structured::commands::{classify_draft, parse_invocation, DraftCommand};
         if parse_invocation(text).is_none() {
             return Ok(());
         }
-        let list = inner
-            .event_streams
-            .get(&session)
-            .map_or_else(CommandList::fallback, |stream| stream.command_list());
-        match classify_draft(text, &list) {
+        match classify_draft(text, &Self::command_list_of(inner, session)) {
             DraftCommand::Send => Ok(()),
             DraftCommand::Model(_) => Err(UserMessageRefusal::ModelIsTheApps),
             DraftCommand::TerminalOnly(name) => Err(UserMessageRefusal::NeedsTerminal(name)),

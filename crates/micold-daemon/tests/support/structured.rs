@@ -204,7 +204,8 @@ fn main() {
                 .append(true)
                 .open("stdin-record")
             {
-                let _ = writeln!(f, "{line}");
+                // One write per line: two stand-ins sharing a folder never interleave halves.
+                let _ = f.write_all(format!("{line}\n").as_bytes());
             }
             let close = line.contains("CLOSE-STDIN");
             if line.contains("\"control_request\"") && line.contains("\"subtype\":\"initialize\"") {

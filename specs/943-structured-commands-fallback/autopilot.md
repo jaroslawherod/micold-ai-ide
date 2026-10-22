@@ -79,6 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M5 (code-review high, claude -p) | 1 | 867788dfce74dede86870f3c81571eab6fae9772:7974aedb3455e248d3345bcefe9f870ddb4029e5 | CHANGES: F1 MAJOR superseded handle unknown after a second `/clear` — fixed (`set_conversation` marks it archived with the provider, test); F2 MAJOR report race — declined; F3 MINOR — :5120 wrong, :5075 commented; F4 MINOR archive marks only the id — fixed; F5–F8 MINOR — declined/left |
 | Review B M5 (conformance, sonnet, claude -p) | 1 | 867788dfce74dede86870f3c81571eab6fae9772:7974aedb3455e248d3345bcefe9f870ddb4029e5 | CLEAN (1 MINOR: prune at state.rs:5075 asks about `id.0` — commented, same as A F3) |
 | Review A M5 (scoped, sonnet, claude -p) | 2 | 3c4426a7072784195c6e004d47742eb1517c99e8:7974aedb3455e248d3345bcefe9f870ddb4029e5 | CLEAN (1 MINOR: F4 untested — test added, red with the handle marking disabled) |
+| Review A M6 (code-review high, claude -p) | 1 | 80590d0f9c23e8957bda9f82aa3300084841e455:0f733011ca4071ab0e1728b7df887b204a52b1e3 | CHANGES (10 unranked): F1 `switching` stuck on a panic — fixed (drop guard `SwitchEnding`); F2 switch held through the command's readiness wait — fixed (switch ends once started, command typed on its own task); F3 already-terminal + command answered Ok untyped — fixed (`InvalidInput`, test, red with the guard off); F4 `permission_mode` doc — fixed, prose only; F5 misplaced doc — fixed; F8 `set_kind` copies `set_model` — fixed (`Catalog::change_session`, all three setters); F9 command-list lookup twice — fixed (`command_list_of`); F6, F7, F10 — declined/left |
 
 ## Declined review findings
 
@@ -94,6 +95,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | A | F2 (MAJOR, discovery or a restart before the async `init` report is persisted) | discovery keeps the first session per location (FR-012), so a live or catalogued session's slot is never filled by its successor, and BUG-904's continuation check archives a `/clear` successor of an occupied slot; a restart inside the feed hop resumes the pre-clear conversation (option B's behaviour), nothing lost |
 | M5 | A | F3 (MINOR, `id.0` at state.rs:5075/5120, client persist.rs) | :5120's closure already gets the resume handle from the catalog; :5075 prune: a session that followed `/clear` recorded its own conversation first (comment added); the client never sees the handle (not on the wire) |
 | M5 | A | F5–F8 (MINOR) | F5 `set_conversation` keeps the own id as `None`; F6 persist under the lock is the catalog's pattern (`keep_permission_mode`, `set_model`); F7 duplication left to a later refactor; F8 the stand-in is one process per launch, so the flag is per launch |
+
+- Review A M6 F6 (kind saved and broadcast before the old process stopped): R8 step 3 orders it so; the `switching` slot, not the kind, routes messages during the switch, and a model pick in that window is persisted either way (terminal branch keeps the choice).
+- Review A M6 F7 (a `SessionStop` between the switch's stop and start is undone): left as a follow-up; holding the gate across both needs `start_session`'s internals split out, and a stop sent during a switch is rare.
+- Review A M6 F10 (concurrency test counts starts, not stops; fixed sleeps in negative checks): MINOR, left — an extra stop without a start would show as a non-running session at the next iteration's start count.
 
 ## Handover
 

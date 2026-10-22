@@ -685,8 +685,8 @@ async fn a_failed_resume_keeps_the_new_kind_and_the_session_switches_back() {
 }
 
 /// FR-019, contracts/wire.md: another CLI's session is refused; a command with a switch to
-/// structured, or one that is not terminal-only, is invalid; a switch to the kind the session has
-/// is answered with nothing restarted.
+/// structured, one that is not terminal-only, or one for a session already terminal is invalid; a
+/// switch to the kind the session has is answered with nothing restarted.
 #[tokio::test(flavor = "multi_thread")]
 async fn refused_and_idle_switches_change_nothing() {
     let copilot = Rig::new(
@@ -701,6 +701,20 @@ async fn refused_and_idle_switches_change_nothing() {
         .await;
     assert_eq!(refused_as(&answer), ErrorKind::Refused, "{answer:?}");
     assert_eq!(copilot.kind(0), SessionKind::Terminal);
+
+    let terminal = Rig::claude(SessionKind::Terminal);
+    let mut window = Window::connect(&terminal.state).await;
+    let answer = window
+        .request(
+            switch(1, terminal.ids[0], SessionKind::Terminal, Some("/mcp")),
+            1,
+        )
+        .await;
+    assert_eq!(
+        refused_as(&answer),
+        ErrorKind::InvalidInput,
+        "a terminal session gets no command through a switch: {answer:?}"
+    );
 
     let rig = Rig::claude(SessionKind::Structured);
     let (id, dir) = (rig.ids[0], rig.dir(0));

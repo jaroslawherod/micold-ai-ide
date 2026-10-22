@@ -719,17 +719,43 @@ pub async fn start_with_prompt(
     additional: micold_core::occupancy::Additional,
     prompt: Option<FirstPrompt<'_>>,
 ) -> (SessionId, Result<(), FirstPromptUndelivered>) {
-    state.begin_start(session);
-    state.broadcast_catalog();
-    let started = start_session(state, session, launch, additional)
-        .await
-        .unwrap_or(false);
+    let started = start_announced(state, session, launch, additional).await;
     let Some(prompt) = prompt else {
         return (session, Ok(()));
     };
     if !started {
         return (session, Err(FirstPromptUndelivered::NotStarted));
     }
+    (
+        session,
+        type_first_prompt(state, session, cwd, cli, prompt).await,
+    )
+}
+
+/// Start `session` as [`start_session`] does, with every window told it is starting first; whether
+/// it is running.
+async fn start_announced(
+    state: &Arc<DaemonState>,
+    session: SessionId,
+    launch: LaunchMode,
+    additional: micold_core::occupancy::Additional,
+) -> bool {
+    state.begin_start(session);
+    state.broadcast_catalog();
+    start_session(state, session, launch, additional)
+        .await
+        .unwrap_or(false)
+}
+
+/// Type `prompt` into `session`, which has just started, as its next input once its CLI is ready
+/// (see [`create_session_with_prompt`]); a structured session gets it as a user message at once.
+async fn type_first_prompt(
+    state: &Arc<DaemonState>,
+    session: SessionId,
+    cwd: &Path,
+    cli: AiCli,
+    prompt: FirstPrompt<'_>,
+) -> Result<(), FirstPromptUndelivered> {
     // Stream-json input is read from the start: no trust or readiness wait (feature 938, R8).
     if state.session_kind(session) == Some(SessionKind::Structured) {
         let st = Arc::clone(state);
@@ -741,7 +767,7 @@ pub async fn start_with_prompt(
                     io::Error::other(e),
                 ))
             });
-        return (session, sent.map_err(FirstPromptUndelivered::Message));
+        return sent.map_err(FirstPromptUndelivered::Message);
     }
     let st = Arc::clone(state);
     let place = cwd.to_path_buf();
@@ -750,33 +776,30 @@ pub async fn start_with_prompt(
         .await
         .unwrap_or(true);
     if asks {
-        return (session, Err(FirstPromptUndelivered::AsksTrust(cli)));
+        return Err(FirstPromptUndelivered::AsksTrust(cli));
     }
     let bound = state.first_prompt_bound();
     if !state
         .wait_ready_for_input(session, prompt.asked + bound)
         .await
     {
-        return (session, Err(FirstPromptUndelivered::NotReady(cli, bound)));
+        return Err(FirstPromptUndelivered::NotReady(cli, bound));
     }
     let Some(pty) = state.primary_pty(session) else {
-        return (
-            session,
-            Err(FirstPromptUndelivered::Typing(Undelivered::NotRunning)),
-        );
+        return Err(FirstPromptUndelivered::Typing(Undelivered::NotRunning));
     };
-    let typed = write_submission(&pty, prompt.text, prompt.require_bracketed)
-        .map_err(FirstPromptUndelivered::Typing);
-    (session, typed)
+    write_submission(&pty, prompt.text, prompt.require_bracketed)
+        .map_err(FirstPromptUndelivered::Typing)
 }
 
 /// Carry out a switch of kind [`DaemonState::begin_switch`] began (#943 R8 steps 4–5): the
 /// session's processes end as `SessionStop` ends them, its history notes the switch after the
 /// ended process's last event, and it starts in the new kind, resuming its conversation (a new
 /// one when its CLI never recorded one, FR-020) with its model choice and, when structured, its
-/// permission mode. A switch to terminal for a terminal-only command types it once the CLI is
-/// ready (FR-022). A start that fails is reported as any failed start is, and the new kind stays
-/// (US5 scenario 7). Messages sent meanwhile wait on hold (FR-025).
+/// permission mode. A start that fails is reported as any failed start is, and the new kind stays
+/// (US5 scenario 7). Messages sent meanwhile wait on hold (FR-025). The switch is over once the new
+/// process started; a terminal-only command is then typed on a task of its own once the CLI is
+/// ready (FR-022), so neither the answer nor the session waits for that.
 pub async fn switch_kind(state: &Arc<DaemonState>, begun: crate::state::BegunSwitch) {
     let crate::state::BegunSwitch {
         session,
@@ -785,6 +808,11 @@ pub async fn switch_kind(state: &Arc<DaemonState>, begun: crate::state::BegunSwi
         cwd,
         cli,
     } = begun;
+    let asked = tokio::time::Instant::now();
+    let ending = SwitchEnding {
+        state: Some(Arc::clone(state)),
+        session,
+    };
     let _ = stop_session(state, session).await;
     let st = Arc::clone(state);
     let launch = tokio::task::spawn_blocking(move || {
@@ -793,37 +821,69 @@ pub async fn switch_kind(state: &Arc<DaemonState>, begun: crate::state::BegunSwi
     })
     .await
     .unwrap_or(LaunchMode::Resume);
-    let prompt = command.as_deref().map(|text| FirstPrompt {
-        text,
-        asked: tokio::time::Instant::now(),
-        require_bracketed: false,
-    });
     // The session ran here before the switch: the location's other sessions do not stop it.
-    let (_, typed) = start_with_prompt(
+    let started = start_announced(
         state,
         session,
-        &cwd,
-        cli,
         launch,
         micold_core::occupancy::Additional::Yes,
-        prompt,
     )
     .await;
-    if let Err(why) = typed {
-        tracing::warn!(
-            session = %session.0,
-            reason = %why.message(session),
-            "the switch's command was not typed"
-        );
-    }
-    let st = Arc::clone(state);
-    let _ = tokio::task::spawn_blocking(move || {
-        if let Some(delivery) = st.switch_ended(session) {
-            let _ = st.deliver(delivery);
+    ending.end().await;
+    tracing::info!(session = %session.0, ?to, started, "session switched kind");
+    let Some(command) = command.filter(|_| started) else {
+        return;
+    };
+    let state = Arc::clone(state);
+    tokio::spawn(async move {
+        let prompt = FirstPrompt {
+            text: &command,
+            asked,
+            require_bracketed: false,
+        };
+        if let Err(why) = type_first_prompt(&state, session, &cwd, cli, prompt).await {
+            tracing::warn!(
+                session = %session.0,
+                reason = %why.message(session),
+                "the switch's command was not typed"
+            );
         }
-    })
-    .await;
-    tracing::info!(session = %session.0, ?to, "session switched kind");
+    });
+}
+
+/// Ends a switch of kind on every way out of [`switch_kind`], a panic included: a session left
+/// switching would hold its messages for good (FR-025).
+struct SwitchEnding {
+    state: Option<Arc<DaemonState>>,
+    session: SessionId,
+}
+
+impl SwitchEnding {
+    /// End the switch now, and write the delivery that makes, if any.
+    async fn end(mut self) {
+        if let Some(state) = self.state.take() {
+            let session = self.session;
+            let _ = tokio::task::spawn_blocking(move || end_switch(&state, session)).await;
+        }
+    }
+}
+
+impl Drop for SwitchEnding {
+    fn drop(&mut self) {
+        if let Some(state) = self.state.take() {
+            let session = self.session;
+            drop(tokio::task::spawn_blocking(move || {
+                end_switch(&state, session)
+            }));
+        }
+    }
+}
+
+/// [`DaemonState::switch_ended`], and its delivery written. **Blocking**.
+fn end_switch(state: &DaemonState, session: SessionId) {
+    if let Some(delivery) = state.switch_ended(session) {
+        let _ = state.deliver(delivery);
+    }
 }
 
 /// Why [`create_worktree_with_session`] did not give a worktree with its session (feature 776).
