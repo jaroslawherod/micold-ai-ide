@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M4
-- **Next step**: M4 verify: gate + review A, review B, PR files
+- **Next step**: M4 PR: open from the PR files in the session scratchpad, then CI and merge
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T022 | full | Core decisions (input, attachment, turn ids/asks, encoders, UserSent/InterruptAsked, transcript, saved queue), recorded fixtures, every wire type (one bump); daemon refuses new requests "Not available yet" | #1223 | merged |
 | M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | #1240 | merged |
 | M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | #1243 | merged |
-| M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | — | pending |
+| M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | (to open) | reviewed, gated |
 | M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | — | pending |
 | M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | pending |
 | M7 | T063 | light | Interrupt withdraws a pending #942 request (daemon test); waits on #942 M3 | — | pending |
@@ -90,7 +90,8 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review A M4 (code-review high) | 1 | a6645123811153f70ca4ef415fdb1dc8847c539e:956e72ed7046e521afcf31de43eedcf96de89c11 | CHANGES: 1 MAJOR (session.rs doc comment split; fixed), 2 MINOR (late answer recreates a closed composer: fixed; capped image read: declined). Judged the composer forget on close right and M4's |
 | Review A M4 (scoped, sonnet) | 2 | 07e58e0efa5d4f8ed8f0c23d1bb72e3975f39b5b:c13b30c5bbe342cfc32c3fab540b1b133312bd27 | CLEAN: 1 MINOR (forget_composer under another fn's orphan doc block; fixed) |
 | Review B M4 (conformance, sonnet) | 1 | a6645123811153f70ca4ef415fdb1dc8847c539e:956e72ed7046e521afcf31de43eedcf96de89c11 | CHANGES: 1 MAJOR (no M4 cycle log / red evidence; fixed: Cycle 8 with a mutant set), 2 MINOR (shell editor removal untested: fixed; sync_editor on a forgotten session: declined). Verify: features_composer 29, pane_drop_target 5 passed. Judged the composer forget right and M4's |
-| Review B M4 (conformance, sonnet) | 2 | eb42ba55d87556ba0162a8114c2cf52b3174ce42:6066b32c5054a4ca635f77998f2416d85e190c53 | running |
+| Review B M4 (conformance, sonnet) | 2 | eb42ba55d87556ba0162a8114c2cf52b3174ce42:6066b32c5054a4ca635f77998f2416d85e190c53 | CLEAN: 1 MINOR (cycle-log case count; fixed, prose only) |
+| Full gate M4 | — | — | 1st red: clippy `large_enum_variant` on `composer::Msg::Dropped` (boxed); 2nd red: `root_vocabulary_is_cross_cutting` pin 26 → 27 (`Composer`); 3rd red: daemon `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` under load (no M4 change to the daemon; 5/5 green alone); green at 6066b32c, and at ea0ac0e8 after the rebase onto origin/main d16d74c1 (#1161 M1; no M4 wire change, no pin to move) |
 
 ## Declined review findings
 
@@ -137,5 +138,6 @@ None.
 
 ## Follow-ups not done
 
+- Flaky under a full gate's load (not M4's): daemon `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` saw no `SessionErrorNotice` once; 5/5 green alone.
 - M6 (draw): focus the composer after a drop (M4 has no draw code; the reducer half is T042).
 - Cloud container: `gh` unauthenticated; no gh steps run in the spec unit (none needed: no PR). Reviewers ran via `claude -p --agent autopilot-reviewer` (no Agent tool).
