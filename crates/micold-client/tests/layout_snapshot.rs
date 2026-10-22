@@ -197,6 +197,14 @@ mod composer_parts_fit;
 #[path = "gates/prompt_card_fits.rs"]
 mod prompt_card_fits;
 
+// --- The composer under a structured transcript (feature 941, T055) -----------------------------
+
+// The composer sits under a structured session's transcript and never under a terminal; grows to
+// its limit; says busy or ready; its queue, hold, overdue, notice and chips fit; the #942 and #943
+// slots take no room empty; an interrupted turn and a message's pictures are named.
+#[path = "gates/composer_fits.rs"]
+mod composer_fits;
+
 // --- The transcript's jump control fits its viewport (feature 939, T038) ------------------------
 
 // A structured session's pane, detached from the end: "Jump to latest" lies inside the

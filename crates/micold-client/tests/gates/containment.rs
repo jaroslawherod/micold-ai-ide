@@ -263,12 +263,13 @@ fn is_inline_link_gutter(state: &str, escape: &lay::Escape) -> bool {
 /// tool turn, and the transcript outgrows its viewport, so its end is reached by scrolling (and the
 /// state is detached, which is what shows "Jump to latest"). Like [`SETTINGS_PAGE_CONTENT`] it
 /// holds only there, and only past the **bottom** edge of the transcript's `Scrollable`
-/// ([`TRANSCRIPT_VIEWPORT`]). Feature 944 put the session bar above the scrollable (`1` before the
+/// ([`TRANSCRIPT_VIEWPORT`]). Feature 941 put the transcript in a column over the composer (the
+/// `0` after the pane's prefix). Feature 944 put the session bar above the scrollable (`1` before the
 /// last two steps) and added `session-transcript-insights`, whose open thread outgrows it too.
-const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/0/0/1/0/0"];
+const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/0/0/0/1/0/0"];
 
 /// The transcript's `Scrollable`: the parent of [`TRANSCRIPT_CONTENT`].
-const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/0/0/1/0";
+const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/0/0/0/1/0";
 
 /// The folded bodies of **feature 944's cards** in `session-transcript-insights` (T037): the
 /// background-task list's `AccordionSection`, the `Agent` card whose thread is open below it, and a
@@ -277,9 +278,9 @@ const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/0/0/1/0";
 /// body's padding (8px) and reveals it by clipping when it unfolds. Held only there and only by
 /// that padding, so a body that grew past it still fires.
 const FOLDED_BODY_REVEAL: &[&str] = &[
-    "0/0/0/1/1/0/0/0/0/1/1/0",
-    "0/0/0/1/1/0/0/1/0/0/4/0/0/1/0",
-    "0/0/0/1/1/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
+    "0/0/0/1/1/0/0/0/0/0/1/1/0",
+    "0/0/0/1/1/0/0/0/1/0/0/4/0/0/1/0",
+    "0/0/0/1/1/0/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
 ];
 
 /// The folded body's padding that [`FOLDED_BODY_REVEAL`] overhangs by (`spacing::SM`).

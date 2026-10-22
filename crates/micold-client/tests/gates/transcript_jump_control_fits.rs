@@ -45,7 +45,8 @@ impl<T> Operation<T> for Find {
     }
 }
 
-fn viewport(under: &StateUnderTest, id: Id) -> Rectangle {
+/// The bounds of the scrollable named `id` in `under`'s window (also the composer gate's).
+pub(crate) fn viewport(under: &StateUnderTest, id: Id) -> Rectangle {
     let renderer = lay::renderer();
     let mut element = lay::view_of(under);
     let mut tree = Tree::new(element.as_widget());
