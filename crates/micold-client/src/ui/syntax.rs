@@ -193,6 +193,22 @@ pub fn highlight_file(
     )
 }
 
+/// A whole file, highlighted in both schemes as `path`'s language, its colours in `new`; `None`
+/// once `budget` is spent (feature 1150: a browsed file).
+pub fn highlight_text(lines: &SideLines, path: &str, budget: Duration) -> Option<Spans> {
+    let deadline = Some(Instant::now() + budget);
+    let scheme = |scheme| {
+        Some(SchemeSpans {
+            old: SideSpans::default(),
+            new: highlight_file(lines, path, scheme, deadline)?,
+        })
+    };
+    Some(Spans {
+        light: scheme(ColorScheme::Light)?,
+        dark: scheme(ColorScheme::Dark)?,
+    })
+}
+
 /// Both versions of `loaded`, highlighted in both schemes as `path`'s language. The old version is
 /// read only up to the last of its lines the diff shows; the new one whole, because hidden lines
 /// of it can be revealed.

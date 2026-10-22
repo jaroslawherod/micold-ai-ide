@@ -1803,6 +1803,7 @@ mod head_version {
                 source: SourceKey::Pr(number),
                 path: RelPath::from_native(file).unwrap(),
                 result,
+                spans: Default::default(),
             },
         );
     }

@@ -7,10 +7,12 @@
 use std::collections::BTreeSet;
 
 use micold_client::features::changes::{
-    self, base_line, can_pick, committed_available, diff_body, list_body, pickable, DiffBody,
-    Effect, ListBody, Load, Msg, State, WholeFile, BOTH_HIDDEN, DEFAULT_ENTRY_NOTE,
+    self, base_line, browse_body, can_go_back, can_pick, committed_available, diff_body, list_body,
+    pickable, BrowseBody, DiffBody, Effect, ListBody, Load, Msg, State, WholeFile, BOTH_HIDDEN,
+    DEFAULT_ENTRY_NOTE,
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
+use micold_core::review::browse::{FileReadFailure, FileText};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
 use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, SideLines};
 use micold_core::review::expand::{GapKey, Position};
@@ -2729,4 +2731,315 @@ fn pickable_is_false_where_the_diff_allows_no_pick() {
     assert!(!pickable(view_of(&state), &path("b.rs")));
     gutter(&mut state, Some(3), Some(3), false);
     assert!(pick(&state).is_none());
+}
+
+// Feature 1150, M5: browsing repository files.
+
+fn file_text(lines: &[&str]) -> FileText {
+    let text = lines.join("\n") + "\n";
+    FileText {
+        lines: SideLines::from_bytes(text.as_bytes()).unwrap(),
+        bytes: text.len() as u64,
+    }
+}
+
+/// Open `p` in the browser and return the read it asks for.
+fn browse(state: &mut State, p: &str) -> u64 {
+    match changes::update(state, Msg::BrowseOpen(path(p))) {
+        Effect::ReadFile {
+            seq,
+            source,
+            path: asked,
+            force_large,
+            ..
+        } => {
+            assert_eq!(source, changes::SourceKey::Worktree);
+            assert_eq!(asked, path(p));
+            assert!(!force_large);
+            seq
+        }
+        other => panic!("browsing reads the file, got {other:?}"),
+    }
+}
+
+fn answer_file(state: &mut State, seq: u64, p: &str, result: Result<FileText, FileReadFailure>) {
+    changes::update(
+        state,
+        Msg::FileRead {
+            seq,
+            source: changes::SourceKey::Worktree,
+            path: path(p),
+            result,
+            spans: Default::default(),
+        },
+    );
+}
+
+/// `showing(..)` with the tree read and answered.
+fn with_tree(paths: &[&str]) -> State {
+    let mut state = showing(long_file("X"));
+    let Effect::ReadTree { seq, .. } = changes::update(&mut state, Msg::FilesPaneToggled) else {
+        panic!("showing the files reads the tree");
+    };
+    changes::update(
+        &mut state,
+        Msg::TreeRead {
+            seq,
+            result: Ok(paths.iter().map(|p| path(p)).collect()),
+        },
+    );
+    state
+}
+
+fn browsed_lines(state: &State) -> Vec<(Option<u32>, String)> {
+    match browse_body(view_of(state)) {
+        Some(BrowseBody::File(loaded)) => match &loaded.diff {
+            FileDiff::Text(hunks) => hunks
+                .iter()
+                .flat_map(|h| &h.lines)
+                .map(|l| (l.new, l.text.clone()))
+                .collect(),
+            other => panic!("a text file, got {other:?}"),
+        },
+        other => panic!("a browsed file, got {other:?}"),
+    }
+}
+
+/// FR-011, US5 s1. Opening a file the change does not touch reads it from the worktree and shows
+/// its numbered lines.
+#[test]
+fn opening_an_untouched_file_shows_its_numbered_lines() {
+    let mut state = with_tree(&["a.rs", "docs/x.md"]);
+    let seq = browse(&mut state, "docs/x.md");
+    assert!(matches!(
+        browse_body(view_of(&state)),
+        Some(BrowseBody::Reading)
+    ));
+    answer_file(&mut state, seq, "docs/x.md", Ok(file_text(&["one", "two"])));
+    assert_eq!(
+        browsed_lines(&state),
+        [(Some(1), "one".to_owned()), (Some(2), "two".to_owned())]
+    );
+}
+
+/// FR-015, US4 s3: pinned until #1149 specifies an anchor for a file the diff does not show.
+#[test]
+fn an_untouched_browsed_file_is_not_pickable() {
+    let mut state = with_tree(&["a.rs", "docs/x.md"]);
+    let seq = browse(&mut state, "docs/x.md");
+    answer_file(&mut state, seq, "docs/x.md", Ok(file_text(&["one"])));
+    let view = view_of(&state);
+    assert!(!pickable(view, &path("docs/x.md")));
+    assert!(!pickable(view, &path("b.rs")), "the diff under it neither");
+    assert!(!changes::pick_allowed(view));
+    gutter(&mut state, Some(1), Some(1), false);
+    assert!(pick(&state).is_none());
+}
+
+/// SC-006. Tree or picker, then select: at most 3 actions from the diff; Back is 1.
+#[test]
+fn a_file_opens_in_three_actions_and_back_in_one() {
+    let mut state = showing(long_file("X"));
+    let mut actions = 0;
+    let Effect::ReadTree { seq: tree, .. } = changes::update(&mut state, Msg::FilesPaneToggled)
+    else {
+        panic!("a tree read");
+    };
+    actions += 1;
+    changes::update(
+        &mut state,
+        Msg::TreeRead {
+            seq: tree,
+            result: Ok(vec![path("docs/x.md")]),
+        },
+    );
+    changes::update(&mut state, Msg::FolderToggled("docs".into()));
+    actions += 1;
+    browse(&mut state, "docs/x.md");
+    actions += 1;
+    assert!(actions <= 3);
+    assert!(can_go_back(view_of(&state)));
+    changes::update(&mut state, Msg::BrowseBack);
+    assert!(browse_body(view_of(&state)).is_none(), "one action back");
+}
+
+/// The picker ranks the tree's files by the typed text, and offers a typed path that is not in
+/// the tree (an ignored file) as the last candidate.
+#[test]
+fn the_picker_matches_the_tree_and_offers_a_typed_path() {
+    let mut state = with_tree(&["src/main.rs", "src/lib.rs", "README.md"]);
+    changes::update(&mut state, Msg::PathPickerChanged("lib".into()));
+    assert_eq!(
+        changes::picker_matches(view_of(&state)),
+        [path("src/lib.rs"), path("lib")]
+    );
+    changes::update(&mut state, Msg::PathPickerChanged("README.md".into()));
+    assert_eq!(
+        changes::picker_matches(view_of(&state)),
+        [path("README.md")]
+    );
+    changes::update(&mut state, Msg::PathPickerChanged(String::new()));
+    assert!(changes::picker_matches(view_of(&state)).is_empty());
+}
+
+/// The tree lists a folder's files only while the folder is open.
+#[test]
+fn the_tree_shows_a_folders_files_while_it_is_open() {
+    let mut state = with_tree(&["README.md", "docs/a.md", "docs/b.md"]);
+    let names = |state: &State| -> Vec<String> {
+        changes::tree_rows(view_of(state))
+            .iter()
+            .map(|row| format!("{}{}", row.depth, row.name))
+            .collect()
+    };
+    assert_eq!(names(&state), ["0docs", "0README.md"]);
+    changes::update(&mut state, Msg::FolderToggled("docs".into()));
+    assert_eq!(names(&state), ["0docs", "1a.md", "1b.md", "0README.md"]);
+}
+
+/// FR-013, US5 s3. Back restores the diff's file, scroll and expansion, against a refreshed diff.
+#[test]
+fn back_restores_the_diff_file_scroll_and_expansion() {
+    let mut state = with_tree(&["a.rs", "docs/x.md"]);
+    toggle_gap(&mut state, 0);
+    let lines = shown_lines(&state);
+    changes::update(
+        &mut state,
+        Msg::DiffScrolled {
+            offset: 300,
+            viewport: 400,
+        },
+    );
+    let seq = browse(&mut state, "docs/x.md");
+    answer_file(&mut state, seq, "docs/x.md", Ok(file_text(&["one"])));
+    // The diff is refreshed while the browsed file is on screen.
+    refresh(&mut state, &["a.rs", "b.rs"], long_file("Y"));
+    let effect = changes::update(&mut state, Msg::BrowseBack);
+    assert_eq!(effect, Effect::ScrollDiff { offset: 300 });
+    let view = view_of(&state);
+    assert!(browse_body(view).is_none());
+    assert_eq!(view.selected, Some(path("b.rs")));
+    assert_eq!(view.diff_offset, 300);
+    assert_eq!(shown_lines(&state), lines, "the opened run is still open");
+}
+
+/// Back from a file opened from another browsed file returns to that file, then to the diff.
+#[test]
+fn back_walks_through_the_files_it_came_from() {
+    let mut state = with_tree(&["a.rs", "x.md", "y.md"]);
+    let x = browse(&mut state, "x.md");
+    answer_file(&mut state, x, "x.md", Ok(file_text(&["x"])));
+    let y = browse(&mut state, "y.md");
+    answer_file(&mut state, y, "y.md", Ok(file_text(&["y"])));
+    let Effect::ReadFile {
+        seq, path: asked, ..
+    } = changes::update(&mut state, Msg::BrowseBack)
+    else {
+        panic!("back to a file re-reads it");
+    };
+    assert_eq!(asked, path("x.md"));
+    answer_file(&mut state, seq, "x.md", Ok(file_text(&["x"])));
+    assert_eq!(browsed_lines(&state)[0].1, "x");
+    changes::update(&mut state, Msg::BrowseBack);
+    assert!(browse_body(view_of(&state)).is_none());
+    assert_eq!(changes::update(&mut state, Msg::BrowseBack), Effect::None);
+}
+
+/// Back with nothing to return to changes nothing.
+#[test]
+fn back_with_an_empty_stack_is_a_no_op() {
+    let mut state = showing(long_file("X"));
+    let before = view_of(&state).clone();
+    assert_eq!(changes::update(&mut state, Msg::BrowseBack), Effect::None);
+    assert_eq!(view_of(&state), &before);
+}
+
+/// FR-015, US5 s5. "Open diff" is offered only for a file the change lists, and selects it.
+#[test]
+fn open_diff_is_offered_only_for_a_changed_file() {
+    let mut state = with_tree(&["a.rs", "docs/x.md"]);
+    let seq = browse(&mut state, "docs/x.md");
+    answer_file(&mut state, seq, "docs/x.md", Ok(file_text(&["x"])));
+    assert!(!changes::file_diff_available(view_of(&state)));
+    assert_eq!(changes::update(&mut state, Msg::OpenFileDiff), Effect::None);
+    assert!(browse_body(view_of(&state)).is_some(), "nothing happened");
+
+    let seq = browse(&mut state, "a.rs");
+    answer_file(&mut state, seq, "a.rs", Ok(file_text(&["a"])));
+    assert!(changes::file_diff_available(view_of(&state)));
+    let effect = changes::update(&mut state, Msg::OpenFileDiff);
+    assert!(matches!(effect, Effect::ReadDiff { .. }), "{effect:?}");
+    let view = view_of(&state);
+    assert!(browse_body(view).is_none());
+    assert_eq!(view.selected, Some(path("a.rs")));
+    assert!(!can_go_back(view));
+}
+
+/// FR-009. A file that cannot be shown says why, Back still works, and a large one can be forced.
+#[test]
+fn an_unshowable_file_says_why_and_back_still_works() {
+    for (why, large) in [
+        (FileReadFailure::Missing, false),
+        (FileReadFailure::Binary, false),
+        (FileReadFailure::TooLarge { bytes: 3_000_000 }, true),
+    ] {
+        let mut state = with_tree(&["a.rs", "big"]);
+        let seq = browse(&mut state, "big");
+        answer_file(&mut state, seq, "big", Err(why.clone()));
+        assert_eq!(
+            browse_body(view_of(&state)),
+            Some(BrowseBody::Failed {
+                message: why.message(),
+                large
+            })
+        );
+        changes::update(&mut state, Msg::BrowseBack);
+        assert!(browse_body(view_of(&state)).is_none());
+    }
+}
+
+#[test]
+fn show_anyway_reads_a_large_file_despite_the_limit() {
+    let mut state = with_tree(&["big"]);
+    let seq = browse(&mut state, "big");
+    answer_file(
+        &mut state,
+        seq,
+        "big",
+        Err(FileReadFailure::TooLarge { bytes: 3_000_000 }),
+    );
+    let Effect::ReadFile {
+        seq, force_large, ..
+    } = changes::update(&mut state, Msg::ShowLarge)
+    else {
+        panic!("a forced read");
+    };
+    assert!(force_large);
+    answer_file(&mut state, seq, "big", Ok(file_text(&["x"])));
+    assert_eq!(browsed_lines(&state).len(), 1);
+}
+
+/// An answer for a file other than the one waited for is dropped.
+#[test]
+fn a_late_answer_for_another_file_is_dropped() {
+    let mut state = with_tree(&["x.md", "y.md"]);
+    let x = browse(&mut state, "x.md");
+    let y = browse(&mut state, "y.md");
+    answer_file(&mut state, x, "x.md", Ok(file_text(&["x"])));
+    assert!(matches!(
+        browse_body(view_of(&state)),
+        Some(BrowseBody::Reading)
+    ));
+    answer_file(&mut state, y, "y.md", Ok(file_text(&["y"])));
+    assert_eq!(browsed_lines(&state)[0].1, "y");
+}
+
+/// Selecting a changed file in the list leaves the browser.
+#[test]
+fn selecting_a_listed_file_leaves_the_browser() {
+    let mut state = with_tree(&["x.md"]);
+    browse(&mut state, "x.md");
+    changes::update(&mut state, Msg::FileSelected(path("a.rs")));
+    assert!(browse_body(view_of(&state)).is_none());
+    assert!(!can_go_back(view_of(&state)));
 }
