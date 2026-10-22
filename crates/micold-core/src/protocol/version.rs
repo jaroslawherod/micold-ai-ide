@@ -227,7 +227,6 @@
 /// `CompactBoundary`, `ConversationReset` and the daemon notes `CommandsReported`, `ModelChanged`,
 /// `ModelRefused`, `KindSwitched`, and `Init`, `Assistant` and `User` gain fields, which shift the
 /// postcard layout `StructuredEvents` carries.
-
 ///
 /// And 64 → 65 for feature 1161's default prompt template (contracts/prompt-template.md):
 /// `default_prompt_template` on `DaemonSettings` and on `ClientMsg::SettingsSet`.
