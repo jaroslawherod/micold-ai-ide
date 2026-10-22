@@ -23,7 +23,7 @@ use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Color, Element, Font, Length, Padding};
 use micold_core::protocol::grid::{WireColor, WireStyle};
-use micold_core::protocol::messages::{SessionProcess, TerminalRef};
+use micold_core::protocol::messages::TerminalRef;
 use micold_core::session::{
     AiCli, SessionId, SessionLifecycle, ShellInstanceId, ShellLifecycle, TerminalMode,
 };
@@ -800,8 +800,7 @@ fn shows_transcript(state: &State, id: SessionId) -> bool {
 /// Whether `terminal` is a structured session's primary, which a tiled pane draws as its
 /// transcript (feature 939, research R15); a shell instance stays a terminal.
 pub(crate) fn is_structured_primary(state: &State, terminal: TerminalRef) -> bool {
-    matches!(terminal.process, SessionProcess::Primary)
-        && session_kind(state, terminal.session) == micold_core::session::SessionKind::Structured
+    state.is_structured_primary(terminal)
 }
 
 /// How session `id` runs its CLI; a terminal session when the projection does not list it.

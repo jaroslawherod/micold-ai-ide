@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M4
-- **Next step**: M4 implement (T039–T047), from the Handover's design notes
+- **Next step**: M4 verify (scoped gate + review A, review B, full gate), then PR files
 
 ## Pull requests
 
@@ -63,6 +63,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | 13 | M3 implement | Which thread writes the saved queue? | A dedicated `queue-writer` thread started with the history store, fed by a channel: the history saver's task wakes on `SAVER_TICK`, which would delay a queue save, and tests would have to drive it. Snapshots are taken under the state lock with a global generation, only when `SessionInput::revision` changed and saving is on; the writer drops a generation older than one it wrote. A damaged file is replaced by the empty queue's save (removed) | agent | research R9; T038 |
 | 14 | M3 verify | The interrupt-vs-message race of the M2 handover: real? | Real and wider than noted: `deliver` runs on `spawn_blocking` after the turn opens, so an interrupt asked in between was written to the idle CLI before its message (red test). `StructuredSession::written` (the last turn whose message was written, set under the stdin mutex) replaces the wait on the pending note: `write_interrupt` waits until its turn's message is out | agent | tdd cycle 7 |
 | 10 | M2 implement | When does the activity follow the turn? | `TurnBegan` in the lock section that opens a turn; `TurnEnded` when the driver handles a `result` (or a failed write closes the turn) and the turn is idle in that same section, so a turn opened meanwhile is never shown idle; a process end leaves activity to supervision's `Ended` | agent | research R5, FR-011 |
+| 15 | M4 implement | A send (or a `Taken` queued message) comes back while the user has typed a new draft: what does the composer hold? | The returned message goes back unchanged (text and pictures, FR-005/SC-005) with nothing typed lost: into an empty draft as it was; otherwise first, with the typed text after it on a new line, its pictures after the returned ones, and the caret kept in the typed text. The spec says only "unchanged"; displacing or dropping either would lose input | agent | spec.md FR-005, SC-005, US4 AS3 ("no draft is displaced") |
 
 ## Review rounds
 
@@ -120,39 +121,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-M4 unit 1 (2026-10-22) ran out of context while exploring; no code written. Branch reset to
-origin/main 203ef720 (M3 merged, ancestor checked by hand). Next: implement T039–T047 TDD, then
-verify.md. Exploration findings, so the next unit need not repeat them:
-
-- Core API on main: `structured::attachment::{admit(draft,&name,bytes), classify_drop(paths,sniff),
-  DropPlan{images,paths}, AttachmentRefusal: Display}`, `ImageMedia::sniff`, `ImageAttachment`
-  (fields `pub(crate)`; `name()`/`bytes()` accessors), `Transcript::user_messages()` (oldest
-  first, DoubleEnded), `path_insert::plan_insertion(paths, shell, target).text()/.refused`
-  (`Refusal::message()`). Wire: `ClientMsg::{SessionUserMessage{req,session,text,images},
-  TurnInterrupt{session,turn} (no answer), QueueEdit{req,session,entry,text,keep}, QueueRemove,
-  QueueTake, QueueRelease}`, `DaemonMsg::StructuredInput{session,phase:TurnPhase,hold,queue:
-  Vec<QueuedSummary>}` (ignored today at shell/daemon_sync.rs `DaemonMsg::StructuredInput { .. } => {}`
-  ~l.2067), `OperationResult::Taken{text,images}`.
-- Client plumbing: requests via `daemon_sync::send_op_bound(app, app.session_binding_of(session),
-  PendingOp::…, |req| ClientMsg::…)`; answers in `DaemonMsg::OperationOk/OperationError` match on
-  `app.pending_ops.remove(&req)` (~l.1247, ~l.1686); disconnect resolves pending ops in
-  `resolve_pending_of` (~l.510; add PendingOp arms there and in `PendingOp::describe` ~l.247).
-  Add `PendingOp::{ComposerSend{session}, QueueOp{session}, QueueTake{session}}`.
-- Drops: `shell/drops.rs::target_of` (binary) maps a pane to `DropTarget` (features/session.rs
-  ~l.1916: Outside/EmptyPane/Terminal); `files_dropped` in session.rs matches DropTarget
-  exhaustively. Plan: add `DropTarget::Composer(SessionId)`; move classification to a pure
-  `session::target_of(state, Option<Option<TerminalRef>>)` using a new `app::State::
-  is_structured_primary(terminal)` (lift from `ui/terminal.rs:802`, make ui delegate — no copy);
-  `files_dropped` returns nothing for Composer; drops.rs routes Composer groups to the composer
-  (tokio::fs reads → `apply_drop`), never through the session reducer.
-- Feature isolation: `tests/feature_registration_cost.rs` forbids one feature naming another
-  except listed pairs, so `features/composer.rs` must not name `session` (and vice versa) unless
-  an allowance with a reason is added. `tests/features_are_render_free.rs`: no "iced" in
-  features/ code (use `crate::app::{Editor, EditorAction}`; `changes::Msg::ComposerAction` is the
-  precedent). Register `pub mod composer;` in features/mod.rs; add `State.composers` in app.rs ~l.355.
-- Pending send restore when the user typed a new draft meanwhile is not specified (FR-005 says
-  "unchanged"): record a Decision for the choice (suggested: restore into an empty draft; else
-  keep the sent draft as the draft and the typed text after it on a new line, images sent first).
+None.
 
 ## Open escalation
 

@@ -71,6 +71,48 @@ impl Editor {
         self.0.perform(action.0.clone());
         self.0.text()
     }
+
+    /// An editor showing `text` with the caret at `caret` (line, byte column), as the composer
+    /// left its draft (feature 941).
+    pub fn at(text: &str, caret: (usize, usize)) -> Self {
+        let mut content = iced::widget::text_editor::Content::with_text(text);
+        content.move_to(iced::widget::text_editor::Cursor {
+            position: iced::widget::text_editor::Position {
+                line: caret.0,
+                column: caret.1,
+            },
+            selection: None,
+        });
+        Self(content)
+    }
+
+    /// Apply an action that edits nothing (a caret move, a selection, a scroll).
+    pub fn act(&mut self, action: &EditorAction) {
+        self.0.perform(action.0.clone());
+    }
+
+    /// The caret: line and byte column.
+    pub fn caret(&self) -> (usize, usize) {
+        let position = self.0.cursor().position;
+        (position.line, position.column)
+    }
+
+    /// How many lines the text has.
+    pub fn line_count(&self) -> usize {
+        self.0.line_count()
+    }
+
+    /// The text shown.
+    pub fn text(&self) -> String {
+        self.0.text()
+    }
+
+    /// Move the caret one line up or down (a history key with no history to step).
+    pub fn move_line(&mut self, up: bool) {
+        use iced::widget::text_editor::{Action, Motion};
+        self.0
+            .perform(Action::Move(if up { Motion::Up } else { Motion::Down }));
+    }
 }
 
 impl Clone for Editor {
@@ -228,6 +270,12 @@ pub enum Message {
     /// [`State::update_changes`]. `State::update` declines it.
     Changes(crate::features::changes::Msg),
 
+    // ---- Feature 941: a structured session's composer ----
+    /// The composer's keys, edits, sends, queue actions and drops; see
+    /// [`crate::features::composer::Msg`]. Shape B: each is a request only the shell can send, so
+    /// the entry is `shell/composer.rs`. `State::update` declines it.
+    Composer(crate::features::composer::Msg),
+
     // ---- Feature 483: Run in parallel ----
     /// The Run in parallel dialog's and the group list's messages; see
     /// [`crate::features::runs::Msg`]. The request a message makes is left in `runs.pending` for
@@ -358,6 +406,9 @@ pub struct State {
     pub transcript_rich: crate::features::transcript_rich::State,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
+    /// Each structured session's composer in this window (feature 941) -- see
+    /// [`crate::features::composer::State`].
+    pub composers: crate::features::composer::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
     pub runs: crate::features::runs::State,
     /// What the worktree Overview holds (feature 813) -- see [`crate::features::overview::State`].
@@ -1027,6 +1078,7 @@ impl State {
             | Message::Sandbox(_)
             | Message::PrStatus(_)
             | Message::Changes(_)
+            | Message::Composer(_)
             | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);

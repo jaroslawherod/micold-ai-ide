@@ -600,6 +600,20 @@ impl crate::app::State {
     /// ([`Self::sidebar_entries`], [`Self::worktree_tree`]) additionally filter out archived
     /// sessions themselves (bugfix BUG-003, FR-015a), so a closed session disappears from the
     /// sidebar. Empty when no project is active.
+    /// Whether `terminal` is a structured session's primary, which a pane draws as its transcript
+    /// over the composer (feature 939 R15, feature 941 R11); a shell instance stays a terminal.
+    pub fn is_structured_primary(
+        &self,
+        terminal: micold_core::protocol::messages::TerminalRef,
+    ) -> bool {
+        matches!(
+            terminal.process,
+            micold_core::protocol::messages::SessionProcess::Primary
+        ) && self.active_sessions().iter().any(|s| {
+            s.id == terminal.session && s.kind == micold_core::session::SessionKind::Structured
+        })
+    }
+
     pub fn active_sessions(&self) -> &[Session] {
         self.workspace
             .active
@@ -1924,6 +1938,23 @@ pub enum DropTarget {
     EmptyPane,
     /// Over a pane showing this terminal, focused or not (FR-005).
     Terminal(micold_core::protocol::messages::TerminalRef),
+    /// Over a pane showing this structured session's primary: its composer takes the drop
+    /// (feature 941, FR-026), and this reducer types nothing.
+    Composer(SessionId),
+}
+
+/// Where a drop on a pane lands, from what the pane shows: `None` for a pane closed by the
+/// settle, `Some(None)` for an empty one (feature 487; feature 941 R11).
+pub fn target_of(
+    state: &crate::app::State,
+    pane: Option<Option<micold_core::protocol::messages::TerminalRef>>,
+) -> DropTarget {
+    match pane {
+        None => DropTarget::Outside,
+        Some(None) => DropTarget::EmptyPane,
+        Some(Some(t)) if state.is_structured_primary(t) => DropTarget::Composer(t.session),
+        Some(Some(t)) => DropTarget::Terminal(t),
+    }
 }
 
 fn insertion_notice(message: String) -> crate::features::Outcome {
@@ -1968,7 +1999,8 @@ fn files_dropped(
         return Vec::new();
     }
     let terminal = match target {
-        DropTarget::Outside => return Vec::new(),
+        // The shell hands a composer's drop to the composer, never here.
+        DropTarget::Outside | DropTarget::Composer(_) => return Vec::new(),
         DropTarget::EmptyPane => {
             return vec![insertion_notice(
                 "Nothing was inserted: this pane shows no terminal.".to_string(),

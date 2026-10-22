@@ -246,6 +246,13 @@ struct App {
     /// holds the text (`OpenView::composer`); this holds what `text_editor` needs beside it, kept
     /// in step by `shell::changes`.
     composer: iced::widget::text_editor::Content,
+    /// Each structured session's composer editor (feature 941, R10): caret, selection and text,
+    /// beside the draft `core.composers` holds, with the draft generation it last showed. Kept in
+    /// step by `shell::composer`.
+    composer_editors: std::collections::HashMap<
+        micold_core::session::SessionId,
+        (micold_client::app::Editor, u64),
+    >,
 }
 
 /// The measurement run this process was asked for, or `None` for an ordinary launch.
@@ -1108,6 +1115,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Daemons(msg) => shell::daemons::update(app, msg),
         Message::PrStatus(msg) => shell::pr_status::update(app, msg),
         Message::Changes(msg) => shell::changes::update(app, msg),
+        Message::Composer(msg) => shell::composer::update(app, msg),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.

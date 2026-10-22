@@ -97,6 +97,23 @@ pub enum PendingOp {
         automatic: bool,
     },
     DeleteSession,
+    /// A composer's `SessionUserMessage` (feature 941): the composer holds the draft that was sent
+    /// under the same request, restored on a refusal or a lost connection (FR-005).
+    ComposerSend {
+        session: SessionId,
+    },
+    /// A `QueueRemove` or `QueueRelease` from `session`'s composer: a refusal is its notice.
+    QueueOp {
+        session: SessionId,
+    },
+    /// A `QueueEdit`: the edit ends when it is taken, and stays open with a notice when refused.
+    QueueEdit {
+        session: SessionId,
+    },
+    /// A `QueueTake`: the message it answers with becomes the composer's draft (FR-020).
+    QueueTake {
+        session: SessionId,
+    },
     /// A `WorktreeCreate`, carrying the project it was sent for. The project travels with the op
     /// rather than being read from `workspace.active` when the answer lands: the user may have
     /// closed or switched project while the create ran, and the answer is still about this one
@@ -248,6 +265,10 @@ impl PendingOp {
         match self {
             PendingOp::CreateSession { .. } => "create the session".into(),
             PendingOp::DeleteSession => "delete the session".into(),
+            PendingOp::ComposerSend { .. } => "send the message".into(),
+            PendingOp::QueueOp { .. } => "change the queued messages".into(),
+            PendingOp::QueueEdit { .. } => "edit the queued message".into(),
+            PendingOp::QueueTake { .. } => "move the queued message back".into(),
             PendingOp::RunGroupCreate => "start the runs".into(),
             PendingOp::RunGroupDismiss => "dismiss the group".into(),
             PendingOp::RunGroupPick { .. } => "pick the run".into(),
@@ -316,20 +337,30 @@ pub fn send_op_bound(
     op: PendingOp,
     build: impl FnOnce(u64) -> ClientMsg,
 ) {
+    let _ = send_op_bound_req(app, binding, op, build);
+}
+
+/// [`send_op_bound`], answering the request id it sent, or `None` when nothing was sent.
+pub fn send_op_bound_req(
+    app: &mut App,
+    binding: micold_core::daemons::Binding,
+    op: PendingOp,
+    build: impl FnOnce(u64) -> ClientMsg,
+) -> Option<u64> {
     use micold_client::links::Route;
     match app.route(binding) {
         Route::To(id) => {
-            let Some(daemon) = app.outbox_for(id) else {
-                return;
-            };
+            let daemon = app.outbox_for(id)?;
             let req = app.next_req;
             app.next_req += 1;
             daemon.send(build(req));
             register_pending(app, id, req, op);
+            Some(req)
         }
         Route::Unavailable { message } | Route::NoDaemon { message } => {
             app.core
                 .notify_error(format!("{message} — can't {} right now.", op.describe()));
+            None
         }
     }
 }
@@ -536,11 +567,11 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
     for req in reqs {
         app.pending_daemon.remove(&req);
         if let Some(op) = app.pending_ops.remove(&req) {
-            resolved.push(op);
+            resolved.push((req, op));
         }
     }
     let mut ended = Vec::new();
-    for op in resolved {
+    for (req, op) in resolved {
         let text = format!(
             "The session service disconnected before confirming the request to {} — \
              it may or may not have taken effect; reconnecting will show the current state.",
@@ -585,6 +616,14 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
                     .update(Message::Attach(AttachMsg::ApplyFailed(text)));
             }
             PendingOp::AttachOfferDiscover { .. } => {}
+            // Feature 941: the sent draft comes back to its composer (FR-005, SC-005).
+            PendingOp::ComposerSend { session } => {
+                app.core.composers.connection_lost(&[req]);
+                crate::shell::composer::sync_editor(app, session);
+            }
+            PendingOp::QueueOp { session }
+            | PendingOp::QueueEdit { session }
+            | PendingOp::QueueTake { session } => app.core.composers.notice(session, text),
             PendingOp::AttachOfferApply => {
                 app.core
                     .update(Message::Attach(AttachMsg::OfferApplyFailed(text)));
@@ -1246,6 +1285,16 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         // nothing to do; a `SessionCreate` additionally names the daemon-assigned id so we
         // select + view it.
         DaemonMsg::OperationOk { req, result } => match app.pending_ops.remove(&req) {
+            // Feature 941: the composer's answers (FR-005, FR-020).
+            Some(PendingOp::ComposerSend { .. }) => app.core.composers.send_acked(req),
+            Some(PendingOp::QueueEdit { session }) => app.core.composers.queue_edit_done(session),
+            Some(PendingOp::QueueTake { session }) => {
+                if let OperationResult::Taken { text, images } = result {
+                    app.core.composers.taken(session, text, images);
+                    crate::shell::composer::sync_editor(app, session);
+                }
+            }
+            Some(PendingOp::QueueOp { .. }) => {}
             Some(PendingOp::RunGroupPick { run }) => {
                 if let OperationResult::RunPicked {
                     group, integration, ..
@@ -1691,6 +1740,17 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             detail,
         } => {
             match app.pending_ops.remove(&req) {
+                // Feature 941: a refused send comes back to its composer unchanged, with the
+                // reason; a refused queue request is the composer's notice (FR-005, FR-020).
+                Some(PendingOp::ComposerSend { session }) => {
+                    app.core.composers.send_failed(req, &message);
+                    crate::shell::composer::sync_editor(app, session);
+                }
+                Some(
+                    PendingOp::QueueOp { session }
+                    | PendingOp::QueueEdit { session }
+                    | PendingOp::QueueTake { session },
+                ) => app.core.composers.notice(session, message),
                 // A failed worktree create shows in the form (keeps it open to retry), not a
                 // toast — mirroring the old local-create failure path. `detail` carries git's
                 // own stderr verbatim (feature 010, FR-006/SC-003): for a submodule fetch
@@ -2064,8 +2124,16 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             ));
             follow_up = Task::batch([follow_up, crate::shell::runs::run_pending(app)]);
         }
-        // Feature 941: the composer's state; M4 feeds it to the window, M1 only receives it.
-        DaemonMsg::StructuredInput { .. } => {}
+        // Feature 941: the composer's phase, hold and queue, for every window (FR-021).
+        DaemonMsg::StructuredInput {
+            session,
+            phase,
+            hold,
+            queue,
+        } => app.core.composers.input_reported(
+            session,
+            micold_client::features::composer::InputState { phase, hold, queue },
+        ),
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }

@@ -145,3 +145,42 @@ fn a_file_dropped_on_the_pane_view_is_reported_with_the_pane_under_the_pointer()
     };
     assert_eq!(dropped(m), Some((right, &PathBuf::from("/tmp/b.png"))));
 }
+
+/// Feature 941 (FR-026, R11): what a pane shows decides where its drop goes. A structured
+/// session's primary is drawn as its transcript over the composer, so the composer takes it; a
+/// terminal stays a terminal, an empty pane stays empty, and a pane gone by the settle is outside.
+#[test]
+fn a_pane_showing_a_structured_primary_is_the_composers_drop_target() {
+    use micold_client::features::session::{target_of, DropTarget};
+    use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
+    let start = |kind| {
+        Session::start_new_of_kind(
+            SessionLocation::Worktree("feat-00".into()),
+            AiCli::ClaudeCode,
+            kind,
+        )
+    };
+    let (structured, terminal) = (start(SessionKind::Structured), start(SessionKind::Terminal));
+    let (s, t) = (structured.id, terminal.id);
+    let mut workspace =
+        support::workspace_with(vec![("/fixture/project", vec![structured, terminal])]);
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+    let state = State {
+        workspace,
+        ..State::default()
+    };
+    let primary = |session| TerminalRef {
+        session,
+        process: SessionProcess::Primary,
+    };
+    assert_eq!(
+        target_of(&state, Some(Some(primary(s)))),
+        DropTarget::Composer(s)
+    );
+    assert_eq!(
+        target_of(&state, Some(Some(primary(t)))),
+        DropTarget::Terminal(primary(t))
+    );
+    assert_eq!(target_of(&state, Some(None)), DropTarget::EmptyPane);
+    assert_eq!(target_of(&state, None), DropTarget::Outside);
+}
