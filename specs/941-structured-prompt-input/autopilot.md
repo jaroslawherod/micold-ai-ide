@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M3
-- **Next step**: M3 verify: scoped gate + review A
+- **Next step**: M3 PR to open (pushed; title/body in the session scratchpad)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T022 | full | Core decisions (input, attachment, turn ids/asks, encoders, UserSent/InterruptAsked, transcript, saved queue), recorded fixtures, every wire type (one bump); daemon refuses new requests "Not available yet" | #1223 | merged |
 | M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | #1240 | merged |
-| M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | — | implemented |
+| M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | — | gate green, PR to open |
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | — | pending |
 | M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | — | pending |
 | M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | pending |
@@ -81,6 +81,9 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review B M2 (conformance, sonnet) | 2 | a3e725b524fc4ac20b51b32f9b8d9e8fa78c63e7:4ff69c045598722443a8f666d7b37f26db3dc7d2 | CLEAN (Verify 3×: structured_input 12 passed, structured_session 16 passed) |
 | Full gate M2 | — | — | 1st red: `structured_input.rs` lacked its `// unix-only:` reason (fixed); 2nd red: `a_user_message_is_one_line…` dropped `UserSent` (seq 0) in the sender's `answer` under load — test sends from a non-viewing connection now (test-only); green after rebase onto origin/main (#943 M1, PROTOCOL_VERSION 64; no M2 wire change) |
 | Review A M3 (code-review high) | 1 | d8da36895b5b8421117dd41244048463003010f1:3deb5c3b0611bd889e9c071452b7e17e263882fd | CHANGES: 1 MAJOR (written turn read after the write; fixed: `Delivery::turn`), 6 MINOR declined |
+| Review A M3 (scoped, sonnet) | 2 | 9c9b872e65da00c2b1e90c75b1d26be4e3552a96:e5bbe8ae9b6a356903a0e6f6ae1b63b8a942cf53 | CLEAN (fix holds; no ordering counterexample; declines stand) |
+| Review B M3 (conformance, sonnet) | 1 | b93566e90abb3dae86a4dcb4978023a93178aece:f346cb10855ed26bff69f4cfaaf8f5cb05b9d6e5 | CLEAN (Verify: structured_input 18 passed, structured_input_saved 5 passed) |
+| Full gate M3 | — | — | green at f346cb10 (`scripts/gate.sh`, after rebase onto origin/main 6b3b62c7; no wire change in M3). Scoped gate as root fails only the root-only unreadable-file tests |
 
 ## Declined review findings
 
