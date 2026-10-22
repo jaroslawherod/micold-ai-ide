@@ -32,6 +32,7 @@ pub struct TextLink<'a, M> {
     focus_on_press: bool,
     focusable: bool,
     inline: bool,
+    hit_on_label: bool,
 }
 
 impl<'a, M: Clone + 'a> TextLink<'a, M> {
@@ -49,6 +50,7 @@ impl<'a, M: Clone + 'a> TextLink<'a, M> {
             focus_on_press: true,
             focusable: true,
             inline: false,
+            hit_on_label: false,
         }
     }
 
@@ -105,6 +107,15 @@ impl<'a, M: Clone + 'a> TextLink<'a, M> {
         self.inline = inline;
         self
     }
+
+    /// Take the pointer, a click and a rest on the label's own box only, the gutter round it
+    /// keeping its room and the focus ring but leaving the pointer to what it spills over: for
+    /// links set closer together, or to the line above, than two gutters (feature 1123, a card's
+    /// pull request numbers, review A M2 r1 F2); `false` unless said otherwise.
+    pub fn hit_on_label(mut self, label_only: bool) -> Self {
+        self.hit_on_label = label_only;
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
@@ -123,6 +134,7 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
             underline: roles.primary,
             role: link.role,
             id: link.id.clone(),
+            hit_on_label: link.hit_on_label,
         };
         let mut focus = TakesTheKeyboard::new(Element::new(body), link.focusable)
             .key(Named::Enter, link.on_press.clone())
@@ -268,6 +280,19 @@ struct LinkBody<'a, M> {
     /// The link's id again, offered as a container: a link that is no Tab stop offers no
     /// focusable, and its bounds are still found by its id (feature 1122, R7).
     id: Option<iced::advanced::widget::Id>,
+    /// [`TextLink::hit_on_label`].
+    hit_on_label: bool,
+}
+
+impl<M> LinkBody<'_, M> {
+    /// Where the link takes the pointer, a click and a rest, laid out in `layout`: its whole box,
+    /// or the label's box inside the gutter with [`TextLink::hit_on_label`].
+    fn hit(&self, layout: Layout<'_>) -> Rectangle {
+        match layout.children().next() {
+            Some(label) if self.hit_on_label => label.bounds(),
+            _ => layout.bounds(),
+        }
+    }
 }
 
 /// The room on every side of the label, where the focus ring lands clear of the glyphs and of the
@@ -298,7 +323,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
         renderer: &iced::Renderer,
         operation: &mut dyn iced::advanced::widget::Operation,
     ) {
-        operation.container(self.id.as_ref(), layout.bounds());
+        operation.container(self.id.as_ref(), self.hit(layout));
         self.content
             .as_widget_mut()
             .operate(&mut tree.children[0], layout, renderer, operation);
@@ -323,7 +348,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
             cursor,
             viewport,
         );
-        if !cursor.is_over(layout.bounds()) {
+        if !cursor.is_over(self.hit(layout)) {
             return;
         }
         // The button's one child is the label, inside the padding.
@@ -360,7 +385,14 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
         // A release off the link, by mouse or finger, ends its press without being captured
         // (U1): the button would capture it, so it is told the press was lost instead, which it
         // drops quietly.
-        let bounds = layout.bounds();
+        let bounds = self.hit(layout);
+        // Off the hit box the button is told the pointer is away, so the gutter outside it takes
+        // no press.
+        let cursor = if cursor.is_over(bounds) {
+            cursor
+        } else {
+            mouse::Cursor::Unavailable
+        };
         let lost;
         let event = match *event {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
@@ -400,7 +432,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
         _viewport: &Rectangle,
         _renderer: &iced::Renderer,
     ) -> mouse::Interaction {
-        if cursor.is_over(layout.bounds()) {
+        if cursor.is_over(self.hit(layout)) {
             mouse::Interaction::Pointer
         } else {
             mouse::Interaction::None
@@ -480,6 +512,34 @@ mod tests {
         assert_eq!(pointer, mouse::Interaction::Pointer);
         press(&mut inline, edge);
         assert_eq!(release(&mut inline, edge).0, ["open"]);
+    }
+
+    /// `hit_on_label(true)` (review A 1123 M2 r1 F2): the gutter keeps its room but takes neither
+    /// the pointer nor a click; the label still takes both.
+    #[test]
+    fn a_link_hit_on_its_label_leaves_its_gutter_to_its_neighbours() {
+        let mut inline = mounted(link().inline(true).hit_on_label(true));
+        let inner = inline.node.children()[0].bounds();
+        let edge = Point::new(inner.x - GUTTER + 1.0, inner.y - GUTTER + 1.0);
+        let pointer_at = |m: &Mounted<'_>, at: Point| {
+            m.element.as_widget().mouse_interaction(
+                &m.tree,
+                Layout::new(&m.node),
+                mouse::Cursor::Available(at),
+                &Rectangle::with_size(m.room),
+                &m.renderer,
+            )
+        };
+        assert_eq!(pointer_at(&inline, edge), mouse::Interaction::None);
+        assert!(
+            !press(&mut inline, edge).1,
+            "the press in the gutter was captured"
+        );
+        assert!(release(&mut inline, edge).0.is_empty());
+        let label = Point::new(inner.x + 1.0, inner.y + 1.0);
+        assert_eq!(pointer_at(&inline, label), mouse::Interaction::Pointer);
+        press(&mut inline, label);
+        assert_eq!(release(&mut inline, label).0, ["open"]);
     }
 
     #[test]

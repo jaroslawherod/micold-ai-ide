@@ -468,7 +468,8 @@ pub fn issue_link_for(state: &State, location: &SessionLocation) -> Option<Issue
 
 /// The address of pull request `number` on the card at `location`, from what the window holds now
 /// (feature 1123, R8): the card's list, as its rows are drawn from it. `None` once a reading has
-/// dropped the number, the card is gone, or its rows are not shown.
+/// dropped the number, the card is gone, or its rows are not shown, and for an address that is no
+/// GitHub page.
 pub fn pull_request_link_for(
     state: &State,
     location: &SessionLocation,
@@ -482,6 +483,9 @@ pub fn pull_request_link_for(
         .iter()
         .find(|pr| pr.number == number)
         .map(|pr| pr.url.clone())
+        // A browser is handed only a GitHub page, as from the sidebar and the changes pane
+        // (FR-014, review A M2 r1 F1).
+        .filter(|url| url.starts_with(crate::features::sidebar::GITHUB_ADDRESS_PREFIX))
 }
 
 /// Move the keyboard to the next (`forward`) or previous card of `cards` (feature 1122, R9,

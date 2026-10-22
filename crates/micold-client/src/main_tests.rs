@@ -7770,6 +7770,27 @@ mod issue_source {
         assert!(opener.opened.lock().unwrap().is_empty());
     }
 
+    /// FR-014 (review A M2 r1 F1): a listed address that is no GitHub page is never handed to the
+    /// browser, as for the sidebar's and the changes pane's pull request links.
+    #[test]
+    fn pull_request_link_opens_no_address_off_github() {
+        let opener = Arc::new(super::pr_status_open::Recording::default());
+        let mut rig = pr_link_rig(&[12], &opener);
+        for url in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "https://example.com/pull/12",
+        ] {
+            if let Some(list) = rig.app.core.pr_status.lists.get_mut("feat/42_crash") {
+                let mut prs = list.prs().to_vec();
+                prs[0].url = url.into();
+                *list = micold_core::pr_list::BranchPrList::new(prs, false, false);
+            }
+            click_number(&mut rig.app, &crash(), 12);
+        }
+        assert!(opener.opened.lock().unwrap().is_empty());
+    }
+
     /// FR-012, Story 3 sc. 5: a browser that cannot be opened gives feature 031's notification,
     /// naming the address and the reason, and nothing of the Overview changes.
     #[test]

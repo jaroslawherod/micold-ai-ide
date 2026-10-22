@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: verify M2
-- **Next step**: M2 T020–T027 done (scoped gate green but the root-only `settings_refuses_save_over_failed_read`, which scripts/gate.sh runs unprivileged); review A r1, review B r1 and visual pass r1 (T028) dispatched together by the orchestrator; then fix, full gate, PR
+- **Next step**: M2 review A r1 CHANGES (F1–F5 fixed test-first), review B r1 CLEAN, visual r1 PASS; review A r2 (sonnet, fix diff) and visual r2 (sonnet, the numbers' gutter now takes no pointer) dispatched by the orchestrator; then full gate (scripts/gate.sh), PR
 
 ## Pull requests
 
@@ -60,9 +60,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M1 (T019) | 1 | f90ede204256368c08e24a5a1424b1227f6f8d9e:efff51eb33c28070a1d78fc3370019bc9b9c9be0 | PASS on §B1, §B2, §B5 (light 1.0), §B6; 1 MINOR observation: the expanded card's dash has no tooltip. Fixed test-first (D13): `the_dash_carries_its_reason_collapsed_and_expanded`, shared `counts_line`. 54 PNGs committed in visual-pass/m1/; T019 ticked |
 | Review A M1 | 2 | ff466f0efe74a00e9956be12c5f8f751be705d0e:80ebc12071cf736d5b2e6512f9a800f5002a10b1 (fix diff f90ede20:efff51eb → 80ebc120, sonnet) | CLEAN: F1, F3 fixed; F2 note matches `parse_status`; F4 declined part stands; D13 tooltip inside the expanded body, width unchanged. Review A done |
 | Visual pass M1 | 2 | ff466f0efe74a00e9956be12c5f8f751be705d0e:80ebc12071cf736d5b2e6512f9a800f5002a10b1 (expanded dash tooltip only) | PASS on all 3 criteria (same reason tooltip on the expanded dash, unavailable and off, light 1.0 and dark 2.0; layout unchanged; tooltip whole). 4 r2-* PNGs committed in visual-pass/m1/ |
-| Review A M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | pending (dispatched by the orchestrator) |
-| Review B M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | pending (sonnet) |
-| Visual pass M2 (T028) | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | pending (sonnet, quickstart §B3) |
+| Review A M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | CHANGES: 2 MAJOR (F1 `pull_request_link_for` opens a listed address unchecked, unlike the sidebar and changes pane (FR-014); F2 the 6 px gutter of a number takes clicks across the 4 px between rows and into the line above), 3 MINOR (F3 `over_link` clones the id list per event; F4 page/menu chords wired onto numbers that are no Tab stops; F5 `ScreenBounds` computes `found` and `all_visible` in both modes, `found` doc wrong); all five fixed test-first (see Fixes M2 r1 below); none declined; round 2 on sonnet over the fix diff |
+| Review B M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | CLEAN |
+| Visual pass M2 (T028) | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | PASS all 6 (click #12 / #11 opens exactly that address, no ripple, Overview stays; pointer, underline, colour; pill activates the card; failing xdg-open toast; rows whole at 380 px); MINOR repaint lag of a hover underline under software rendering, not a defect; evidence `visual-pass/m2/` (26 files) |
 
 ### Review A M1 round 2 verdict (verbatim)
 
@@ -333,6 +333,116 @@ NOT RUN: §B3 and §B4 were outside this prompt. The cards had no sessions, so t
 
 Cleanup: I killed only the processes with my runtime dir, then removed the `.visual-pass` run directory and /tmp/vp77. The fake gh and the fixture driver scripts remain in /tmp/vp1123 (fakebin/gh, start.sh, b12.sh, b5.sh, b6.sh).
 ````
+
+### Review A M2 round 1 verdict (verbatim)
+
+````
+# M2 review A r1
+
+VERDICT: CHANGES
+F1 [MAJOR] crates/micold-client/src/ui/overview.rs:472-485 — `pull_request_link_for` sends the reading's `pr.url` to the browser without checking it. The two other pull-request open paths only open addresses that start with `GITHUB_ADDRESS_PREFIX` (FR-014: "a pull request's address comes from a program's answer, and a browser is handed it, so nothing else than a GitHub page is"). Those paths are `sidebar::pull_request_address_to_open` (sidebar.rs:1146) and `shell::changes::pull_request_address` (changes.rs:80). If a `gh` answer carries a `file:`, `javascript:` or non-GitHub URL, a click on its number opens it.
+   Evidence: `.find(|pr| pr.number == number).map(|pr| pr.url.clone())`, which has no `.starts_with(GITHUB_ADDRESS_PREFIX)` check, unlike changes.rs:81.
+   Fix: end the chain with `.filter(|u| u.starts_with(crate::features::sidebar::GITHUB_ADDRESS_PREFIX))`. Add a U7 case to main_tests.rs: a listed non-GitHub address opens nothing.
+F2 [MAJOR] crates/micold-client/src/ui/material/overview_card.rs (`pr_number` / `card_link` building `TextLink::inline`) — The click area of each number includes a 6 px gutter (the `Spill` gutter "still takes a click and the pointer", text_link.rs:455). Rows sit only 24 px apart, so the click areas of adjacent numbers overlap by 8 px. iced hands the press to the earlier row first, so the top 2 px of "#11" open #12. The same gutter also reaches 6 px above the first row into the line above it, and a press there opens a pull request instead of activating the card (FR-011). The containment gate only allows the overhang. It does not test what a click there does.
+   Evidence: layout_snapshot.txt overview-pr-rows: row 0's link box is `627.3 231.0 36.4 32.0` (y 231–263), row 1's label is `633.3 261.0 24.4 20.0` (y 261–281), and row 1's link box is `627.3 255.0` (y 255–287).
+   Fix: keep the number's pointer area inside its own row. Options: leave the gutter out of the inline link's hit test (click on the label box, keep the gutter for the ring), clip the vertical gutter for row numbers, or set the row spacing to at least 2×GUTTER. Add a card_grid/overview_card test: a press at the top edge of the second row's number publishes that row's number, and a press just above the first row's number activates the card.
+F3 [MINOR] crates/micold-client/src/ui/material/card_grid.rs:555 — `over_link` runs on every mouse event and every redraw for the card under the pointer, and it clones the whole `Vec<Id>` (one String allocation per id) each time. The number ids are also `format!`ed twice per card in each view: in `rest_messages` and again in `pr_number`.
+   Evidence: `Some(r) if !r.link_ids.is_empty() => r.link_ids.clone(),`
+   Fix: have `ScreenBounds::of_any` take `&[Id]` (or borrow from it) so no clone is needed.
+F4 [MINOR] crates/micold-client/src/ui/material/overview_card.rs:~614 (`card_link`) — The shared helper wires the card's page-key chords and a cloned `on_page` Rc onto every pull request number. Numbers are built with `focus = None`/`.focusable(false)` in M2, so those chords can never fire.
+   Evidence: in M2 the numbers are never Tab stops, yet `card_link` attaches `on_page` without condition.
+   Fix: attach the page/menu chords only when `focus.is_some()`.
+F5 [MINOR] crates/micold-client/src/ui/focus.rs:~220-236 — `ScreenBounds` computes both `found` and `all_visible` on every match. In `of_any` mode `found` is never read, and in focused mode `all_visible` is never read. The doc on `found` ("the first match on screen") is wrong: `found` holds the unclipped bounds.
+   Evidence: `take` updates both fields in each mode.
+   Fix: compute only what the mode reads, or derive `FocusedBounds` from `all_visible`. Correct the doc either way.
+````
+
+### Review B M2 round 1 verdict (verbatim)
+
+````
+# M2 review B r1
+
+VERDICT: CLEAN
+````
+
+### Visual pass M2 round 1 verdict (verbatim)
+
+````
+# M2 visual r1
+
+VISUAL PASS M2 1123 (T028) r1: all six criteria PASS, with one MINOR observation (a hover underline that appeared late once, see 3). I could not look at the pointing-hand cursor image itself, only its X cursor name.
+
+Setup:
+- Real client and daemon built from the worktree at HEAD b3354c53 (source fdd7aafc). The build log named micold-core, micold-daemon and micold-client, and the client attached to its own daemon.
+- Ran on Xvfb :78 with lavapipe, a private HOME, data dir and runtime dir, a fake `claude`, and a fake `gh` rebuilt from the M1 report.
+- The fake `gh` answers branch `feat-1123_x` with #12 open (failing check) and #9 merged. For `feat-1123_y` it gives #14 open approved, #13 draft pending, #12 merged and #11 closed.
+- The project's origin is `https://github.com/acme/widgets.git`, pull request status is on, and the worktrees sit under `.claude/worktrees/`.
+- The fake `xdg-open` is first on PATH and appends its arguments to a log. It exits 1 only while a flag file exists, which was my switch for the failing case.
+- I ran light at 1.0 and dark at 2.0, and did the "pressed" captures with mouse-down plus a 0.1 to 0.15 s wait, so they show the state right after the press.
+- Nothing in the repo was edited or committed. Evidence is untracked in `/home/user/micold-ai-ide/specs/1123-overview-card-pr-list/visual-pass/m2/` (26 files). I killed only my own processes and removed `/tmp/vp1123b`, `/tmp/vp78` and the display socket.
+
+**1. Click "#12" on feat-1123_x: PASS**
+- Log after each click, in light 1.0 and dark 2.0: exactly one line, `https://github.com/acme/widgets/pull/12`.
+- The pressed and released captures show no ripple on the card. Nothing is selected in the sidebar, and the Overview stays open.
+- Files:
+  - `light-1-b3-click-12-pressed.png`
+  - `light-1-b3-click-12-after-release.png`
+  - `light-1-b3-click-12-sequence.png`
+  - `light-1-b3-click-12-overview-stays.png`
+  - `dark-2-b3-click-12-hover-pressed-released.png`
+  - `dark-2-b3-click-12-overview-stays.png`
+
+**2. Rest on feat-1123_y until it expands, click "#11": PASS**
+- Log, light 1.0 and dark 2.0: exactly `https://github.com/acme/widgets/pull/11`.
+- The card did not activate, there was no ripple, and the Overview stayed open.
+- Files:
+  - `light-1-b3-y-expanded.png`
+  - `light-1-b3-click-11-hover-pressed-released.png`
+  - `light-1-b3-click-11-overview-stays.png`
+  - `dark-2-b3-click-11-hover-pressed-released.png`
+  - `dark-2-b3-click-11-overview-stays.png`
+
+**3. Cursor, underline and colour: PASS (the cursor part covers only the X cursor name; one MINOR observation)**
+- Over "#12" and "#11" the X cursor name was `pointer`, and `default` over blank background. I read this with XFixes, since `import` does not draw the cursor.
+- The underline shows on hover for "#12" and "#11", in both themes.
+- The numbers are drawn in the same colour as "Issue #1123" on the same card.
+- MINOR: in dark 2.0, one capture taken about 0.8 s after the move still showed no underline on "#12" although the pointer was already `pointer`. A capture after 2.5 s showed it, so I read this as software-render repaint lag, not a defect.
+- The card body also reports `pointer`, so the cursor name alone does not tell number from card.
+- Files: `light-1-b3-hover-12-underline.png`, `dark-2-b3-hover-12-underline.png`.
+
+**4. Click the pill ("Open") on feat-1123_x: PASS**
+- The press shows the card ripple, a large circle in both themes.
+- The Overview then closes, the X location is selected and revealed in the sidebar, and the agent menu opens on its row. The agent menu is the same behaviour as any card click on a card with no sessions.
+- The xdg-open log stayed empty.
+- Files:
+  - `light-1-b3-pill-click-ripple-pressed-released.png`
+  - `light-1-b3-pill-click-overview-closed-revealed.png`
+  - `dark-2-b3-pill-click-ripple-pressed-released.png`
+  - `dark-2-b3-pill-click-overview-closed-revealed.png`
+
+**5. Failing xdg-open: PASS**
+- The log line was `FAIL https://github.com/acme/widgets/pull/12`, in both themes.
+- The toast reads "Couldn't open https://github.com/acme/widgets/pull/12: xdg-open exited with status 1" with a Dismiss button.
+- Nothing else changed: the Overview is still open and the card is not activated.
+- Files:
+  - `light-1-b3-fail-toast.png`
+  - `light-1-b3-fail-overview-unchanged.png`
+  - `dark-2-b3-fail-toast.png`
+  - `dark-2-b3-fail-overview-unchanged.png`
+
+**6. Rows as in M1, at 380 px: PASS**
+- I measured the card at about 380 px (logical) in light 1.0 and about 378 px in dark 2.0, by resizing the window.
+- The number and pill are whole on every row. No row overlaps the counts line. The expanded y card draws over its neighbour, as in M1.
+- Files:
+  - `light-1-b3-380px-feat-1123_x-card.png`
+  - `light-1-b3-380px-feat-1123_y-expanded.png`
+  - `dark-2-b3-380px-feat-1123_x-card.png`
+  - `dark-2-b3-380px-feat-1123_y-expanded.png`
+
+Not run: light at 2.0 and dark at 1.0 were not covered, and §B3 was only run on the two combinations above. Keyboard behaviour (§B4) is outside this prompt.
+````
+
+Fixes M2 r1 (review A): F1 `pull_request_link_for` ends with `.filter(starts_with(GITHUB_ADDRESS_PREFIX))`, U7 test `pull_request_link_opens_no_address_off_github`. F2 `TextLink::hit_on_label(true)` on the numbers only (the issue link keeps its gutter hit, 1122): `LinkBody::hit` is the label's box for the pointer, the press (off it the button sees no cursor), the underline and its container report, so the grid's `over_link` agrees; `ScreenBounds::of_any` now reads containers only, so a focusable number (M3) does not bring its gutter back; the gutter keeps its room and the ring; tests in overview_card (top pixel of "#11" opens #11; above "#12" activates the card, with ripple), card_grid (a rest there is a card rest), text_link. F3 `of_any(&[Id])` borrows the card's ids (the two `format!`s of a number id per view stay: one in `rest_messages`, one in the link; not worth a cache). F4 `card_link` wires the page/menu chords only when the link answers keys (`focus.is_some()`). F5 `ScreenBounds`: `found` only in focused mode (doc fixed: unclipped), `all_visible` only in `of_any` mode. Red/green in tdd/cycle-log.md.
 
 ## Declined review findings
 

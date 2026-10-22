@@ -552,7 +552,7 @@ impl<M> Grid<'_, M> {
         renderer: &iced::Renderer,
     ) -> bool {
         let ids = match self.rests.get(i) {
-            Some(r) if !r.link_ids.is_empty() => r.link_ids.clone(),
+            Some(r) if !r.link_ids.is_empty() => &r.link_ids,
             _ => return false,
         };
         let mut find = crate::ui::focus::ScreenBounds::of_any(ids);
@@ -3178,5 +3178,24 @@ mod tests {
             (vec!["link rest 1".to_string()], RedrawRequest::Wait)
         );
         assert_eq!(asked(t0 + EXPAND_REST * 2), (vec![], RedrawRequest::Wait));
+    }
+
+    /// Review A M2 r1 F2: the gutter round a number is its card's, as it is for the press: a
+    /// rest just above "#12", inside its gutter, is a rest on the card, not on a link.
+    #[test]
+    fn a_rest_in_a_numbers_gutter_is_a_rest_on_the_card() {
+        use micold_core::overview_expansion::EXPAND_REST;
+        let mut m = mounted(numbered_grid(), 900.0, 4000.0);
+        let slot = slots(&m.node, 6)[1];
+        let label = m
+            .painted_text()
+            .into_iter()
+            .find(|p| p.content == "#12" && slot.contains(p.bounds.center()))
+            .expect("#12 painted on card 1")
+            .bounds;
+        let at = Point::new(label.center_x(), label.y - 3.0);
+        let t0 = std::time::Instant::now();
+        assert_eq!(frame_at(&mut m, at, t0), NOTHING);
+        assert_eq!(frame_at(&mut m, at, t0 + EXPAND_REST), ["rest 1"]);
     }
 }

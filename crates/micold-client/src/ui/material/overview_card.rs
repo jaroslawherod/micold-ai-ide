@@ -604,13 +604,15 @@ fn issue_link<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>) -> Option<Element<'
         card.link_id.clone(),
         card.on_link_keyboard_focus.clone(),
         card.on_link_menu_key.clone(),
+        false,
     ))
 }
 
 /// One link on the card (feature 1122 U3, feature 1123 U2): `label` as a [`TextLink`] at the body
-/// role publishing `message`, named `id`. A click on it leaves the keyboard where it was (1122
-/// R7); it is a Tab stop only once its focus reports (`focus`) are wired; while it holds the
-/// keyboard its Menu key publishes `menu` and its Page keys page the card.
+/// role publishing `message`, named `id`, taking the pointer on its label only when
+/// `hit_on_label`. A click on it leaves the keyboard where it was (1122 R7); it is a Tab stop only
+/// once its focus reports (`focus`) are wired, and only then does it answer keys: its Menu key
+/// publishes `menu` and its Page keys page the card.
 fn card_link<'a, M: Clone + 'a>(
     card: &OverviewCard<'a, M>,
     label: String,
@@ -618,12 +620,15 @@ fn card_link<'a, M: Clone + 'a>(
     id: Option<iced::advanced::widget::Id>,
     focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
     menu: Option<M>,
+    hit_on_label: bool,
 ) -> Element<'a, M> {
+    let answers_keys = focus.is_some();
     let mut link = TextLink::new(label, message, card.roles)
         .role(TypeRole::Body)
         .inline(true)
+        .hit_on_label(hit_on_label)
         .focus_on_press(false)
-        .focusable(focus.is_some());
+        .focusable(answers_keys);
     if let Some(id) = id {
         link = link.id(id);
     }
@@ -631,7 +636,7 @@ fn card_link<'a, M: Clone + 'a>(
         link = link.on_keyboard_focus(move |shown| f(shown));
     }
     // The card's own keys stand down while it is targeted or its menu is open; so do the link's.
-    if !card.targeted && !card.menu_open {
+    if answers_keys && !card.targeted && !card.menu_open {
         if let Some(menu) = menu {
             link = link.on_menu_key(menu);
         }
@@ -644,7 +649,8 @@ fn card_link<'a, M: Clone + 'a>(
 
 /// A row's number: a card link publishing [`OverviewCard::on_pr_link`] for it, named by
 /// [`OverviewCard::pr_link_id`], and no Tab stop yet (feature 1123, R7); plain text without
-/// `on_pr_link`.
+/// `on_pr_link`. Its gutter reaches past the 4 px between rows and into the line above, so it
+/// takes the pointer on its label only (review A M2 r1 F2).
 fn pr_number<'a, M: Clone + 'a>(
     card: &OverviewCard<'a, M>,
     pr: &CardPrRow,
@@ -658,6 +664,7 @@ fn pr_number<'a, M: Clone + 'a>(
             card.pr_link_id.as_ref().map(|id| id(pr.number)),
             None,
             None,
+            true,
         ),
         None => Text::new(pr.label.clone(), TypeRole::Body, card.roles)
             .tint(p.on_body)
@@ -3418,5 +3425,41 @@ mod tests {
         );
         let bare = OverviewCard::<String>::new(&model, roles()).pull_requests(two_rows(), 1);
         assert!(bare.rest_messages().link_ids.is_empty());
+    }
+
+    /// Review A M2 r1 F2, FR-011: a number takes the pointer on its label only, not across the
+    /// gutter round it, which reaches past the 4 px between rows and into the line above: a press
+    /// on the top pixel of "#11" opens #11, not #12 above it, and a press just above "#12" (in its
+    /// gutter) activates the card, collapsed and expanded.
+    #[test]
+    fn a_number_takes_the_pointer_on_its_label_only() {
+        for expanded in [false, true] {
+            let mut m = in_room(numbered(expanded, true), 380.0);
+            let (first, second) = (
+                painted_where(&mut m, "#12").expect("#12 painted"),
+                painted_where(&mut m, "#11").expect("#11 painted"),
+            );
+            assert!(
+                second.y - (first.y + first.height) < 2.0 * super::super::text_link::GUTTER,
+                "fixture: the rows sit closer than two gutters"
+            );
+            let top_of_second = Point::new(second.center_x(), second.y + 1.0);
+            m.press(top_of_second);
+            assert_eq!(
+                release(&mut m, top_of_second),
+                ["pr 11"],
+                "expanded {expanded}"
+            );
+            settle(&mut m);
+            let mut m = in_room(numbered(expanded, true), 380.0);
+            let above_first = Point::new(first.center_x(), first.y - 3.0);
+            m.press(above_first);
+            assert!(!ripple(&m).is_idle(), "expanded {expanded}: no ripple");
+            assert_eq!(
+                release(&mut m, above_first),
+                ["open"],
+                "expanded {expanded}"
+            );
+        }
     }
 }
