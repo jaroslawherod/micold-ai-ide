@@ -87,10 +87,13 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review A M3 (scoped, sonnet) | 2 | 9c9b872e65da00c2b1e90c75b1d26be4e3552a96:e5bbe8ae9b6a356903a0e6f6ae1b63b8a942cf53 | CLEAN (fix holds; no ordering counterexample; declines stand) |
 | Review B M3 (conformance, sonnet) | 1 | b93566e90abb3dae86a4dcb4978023a93178aece:f346cb10855ed26bff69f4cfaaf8f5cb05b9d6e5 | CLEAN (Verify: structured_input 18 passed, structured_input_saved 5 passed) |
 | Full gate M3 | — | — | green at f346cb10 (`scripts/gate.sh`, after rebase onto origin/main 6b3b62c7; no wire change in M3). Scoped gate as root fails only the root-only unreadable-file tests |
-| Review A M4 (code-review high) | 1 | a6645123811153f70ca4ef415fdb1dc8847c539e:956e72ed7046e521afcf31de43eedcf96de89c11 | running |
+| Review A M4 (code-review high) | 1 | a6645123811153f70ca4ef415fdb1dc8847c539e:956e72ed7046e521afcf31de43eedcf96de89c11 | CHANGES: 1 MAJOR (session.rs doc comment split; fixed), 2 MINOR (late answer recreates a closed composer: fixed; capped image read: declined). Judged the composer forget on close right and M4's |
+| Review A M4 (scoped, sonnet) | 2 | 07e58e0efa5d4f8ed8f0c23d1bb72e3975f39b5b:c13b30c5bbe342cfc32c3fab540b1b133312bd27 | running |
 | Review B M4 (conformance, sonnet) | 1 | a6645123811153f70ca4ef415fdb1dc8847c539e:956e72ed7046e521afcf31de43eedcf96de89c11 | running |
 
 ## Declined review findings
+
+- Review A M4 r1 F3 (MINOR, drops read a whole picture before the size check): a read capped at the limit would make the TooLarge refusal name a wrong size; a drop is the user's own and is read off the UI thread.
 
 - Review A M1 r1 F2 (an asked interrupt closes the turn `Interrupted` whatever the result): spec
   research R4 and T013 decide it ("a turn holding the `InterruptAsked` note whose `result` is
