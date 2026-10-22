@@ -310,7 +310,7 @@ pub struct State {
     pub switch_offer: Option<SwitchOffer>,
     /// Sessions whose kind a catalog snapshot changed, for the shell to drop the old primary's
     /// terminal view and attach to the new one (#943 R11). Drained by [`Self::take_kind_changes`].
-    kind_changes: Vec<SessionId>,
+    pub kind_changes: Vec<SessionId>,
 }
 
 impl State {
@@ -346,8 +346,6 @@ pub struct SwitchOffer {
     pub command: Option<String>,
     pub reason: String,
     pub confirm: Option<String>,
-    /// The draft text that was sent as `command`: used up when the offer is confirmed.
-    draft: Option<String>,
 }
 
 /// A `SessionSwitchKind` to send (#943 contracts/wire.md).
@@ -388,15 +386,13 @@ pub fn switch_entries(state: &crate::app::State, session: SessionId) -> Vec<Swit
 }
 
 impl crate::app::State {
-    /// Offer to switch `session` to `to` for `command`, saying `reason`; `draft` is the draft
-    /// text that sent the command, if one did (FR-010).
+    /// Offer to switch `session` to `to` for `command`, saying `reason` (FR-010).
     pub fn offer_switch(
         &mut self,
         session: SessionId,
         to: SessionKind,
         command: Option<String>,
         reason: String,
-        draft: Option<String>,
     ) {
         self.session.switch_offer = Some(SwitchOffer {
             session,
@@ -404,7 +400,6 @@ impl crate::app::State {
             command,
             reason,
             confirm: None,
-            draft,
         });
     }
 
@@ -414,15 +409,9 @@ impl crate::app::State {
     }
 
     /// The offer was confirmed: the request to send, confirmed when it was the confirmation
-    /// step. A draft that sent the command is used up.
+    /// step. The draft stays until the service took the switch ([`Self::switch_completed`]).
     pub fn switch_confirmed(&mut self) -> Option<SwitchRequest> {
         let offer = self.session.switch_offer.take()?;
-        if let Some(sent) = &offer.draft {
-            if self.composers.draft(offer.session).map(|d| &d.text) == Some(sent) {
-                self.composers
-                    .replace_text(offer.session, String::new(), (0, 0));
-            }
-        }
         Some(SwitchRequest {
             session: offer.session,
             to: offer.to,
@@ -440,8 +429,24 @@ impl crate::app::State {
             command: request.command,
             reason: message.clone(),
             confirm: Some(message),
-            draft: None,
         });
+    }
+
+    /// The service took `request`: a draft that is its command, as sent, is used up; any other
+    /// draft stays (US4 scenario 2, FR-024).
+    pub fn switch_completed(&mut self, request: &SwitchRequest) {
+        let Some(command) = &request.command else {
+            return;
+        };
+        let sent = self
+            .composers
+            .draft(request.session)
+            .and_then(|d| micold_core::structured::commands::parse_invocation(&d.text))
+            .is_some_and(|i| &i.name == command);
+        if sent {
+            self.composers
+                .replace_text(request.session, String::new(), (0, 0));
+        }
     }
 
     /// A switching entry was chosen (US4 scenarios 3, 4): the request, with no command; `None`
@@ -458,22 +463,22 @@ impl crate::app::State {
             })
     }
 
-    /// Whether `session`'s transcript shows an authentication failure, which offers **Open in
+    /// Whether `session`'s latest answer is an authentication failure, which offers **Open in
     /// terminal** with `/login` (FR-022a).
     pub fn offers_login(&self, session: SessionId) -> bool {
         self.structured_transcript
             .transcript(session)
-            .is_some_and(|t| {
-                t.entries().any(|e| {
-                    matches!(
-                        e.kind(),
-                        micold_core::structured::transcript::EntryKind::AssistantText {
-                            auth_failed: true,
-                            ..
-                        }
-                    )
+            .and_then(|t| {
+                // The latest answer decides: a later turn that answered means signed in again.
+                t.entries().rev().find_map(|e| match e.kind() {
+                    micold_core::structured::transcript::EntryKind::AssistantText {
+                        auth_failed,
+                        ..
+                    } => Some(*auth_failed),
+                    _ => None,
                 })
             })
+            .unwrap_or(false)
     }
 
     /// The `/login` offer was taken: offer the terminal for it (FR-022a).
@@ -483,7 +488,6 @@ impl crate::app::State {
             SessionKind::Terminal,
             Some(LOGIN_COMMAND.to_string()),
             LOGIN_REASON.to_string(),
-            None,
         );
     }
 }

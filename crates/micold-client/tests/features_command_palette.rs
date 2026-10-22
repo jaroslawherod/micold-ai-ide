@@ -403,7 +403,11 @@ fn sending_slash_model_opens_the_picker_and_sends_nothing() {
 
     typed(&mut w, s, "/model haiku");
     assert_eq!(w.send_intent(s), SendIntent::SetModel(named("haiku")));
-    assert_eq!(draft(&w, s).0, "");
+    assert_eq!(
+        draft(&w, s).0,
+        "/model haiku",
+        "kept until the request went out (the shell clears it)"
+    );
 
     typed(&mut w, s, "/model default");
     assert_eq!(w.send_intent(s), SendIntent::SetModel(ModelChoice::Default));

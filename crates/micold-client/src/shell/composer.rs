@@ -243,7 +243,14 @@ fn send(app: &mut App, session: SessionId) {
     match app.core.send_intent(session) {
         SendIntent::Message => {}
         SendIntent::Nothing => return,
-        SendIntent::SetModel(choice) => return set_model(app, session, choice),
+        SendIntent::SetModel(choice) => {
+            if set_model(app, session, choice) {
+                app.core
+                    .composers
+                    .replace_text(session, String::new(), (0, 0));
+            }
+            return;
+        }
     }
     let connected = connected(app, session);
     let Some(draft) = app.core.composers.take_send(session, connected) else {
@@ -286,8 +293,8 @@ fn queue_request(
 }
 
 /// Ask the service to run `session` with `choice` (#943 FR-014); a refusal is the composer's
-/// notice.
-fn set_model(app: &mut App, session: SessionId, choice: ModelChoice) {
+/// notice. `false` when nothing could be sent.
+fn set_model(app: &mut App, session: SessionId, choice: ModelChoice) -> bool {
     let binding = app.session_binding_of(session);
     let sent = send_op_bound_req(app, binding, PendingOp::SessionModel { session }, |req| {
         ClientMsg::SetSessionModel {
@@ -301,6 +308,7 @@ fn set_model(app: &mut App, session: SessionId, choice: ModelChoice) {
             .composers
             .notice(session, NOT_CONNECTED.to_string());
     }
+    sent.is_some()
 }
 
 /// Ask the service to switch a session's kind (#943 FR-019–FR-022); a `NeedsConfirmation`
