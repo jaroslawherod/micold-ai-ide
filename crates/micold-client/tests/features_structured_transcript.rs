@@ -13,7 +13,9 @@ use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent, MAX
 use serde_json::json;
 
 fn assistant(blocks: Vec<ContentBlock>) -> StructuredEvent {
-    StructuredEvent::Assistant { error: None, model: None, 
+    StructuredEvent::Assistant {
+        error: None,
+        model: None,
         message_id: None,
         raw: json!({"type": "assistant", "message": {"content": []}}).to_string(),
         blocks,
@@ -30,7 +32,8 @@ fn tool_use(id: &str) -> StructuredEvent {
 }
 
 fn tool_result(id: &str) -> StructuredEvent {
-    StructuredEvent::User { is_synthetic: false, 
+    StructuredEvent::User {
+        is_synthetic: false,
         raw: json!({"type": "user", "message": {"content": [
             {"type": "tool_result", "tool_use_id": id, "content": "ok"}
         ]}})
