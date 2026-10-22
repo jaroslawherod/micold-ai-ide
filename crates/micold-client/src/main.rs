@@ -736,7 +736,9 @@ struct LinkFocus {
     project: Option<PathBuf>,
     /// The expanded card.
     expanded: Option<SessionLocation>,
-    /// The card that held the keyboard, itself or a link of it.
+    /// The card that held the keyboard, itself or a link of it, or that lost it in the update just
+    /// before: Shift+Tab off a focus-expanded card reports its loss first (the grid updates the
+    /// expanded card first), then the previous card's gain (visual pass M3 r2, criterion 1).
     focused: Option<SessionLocation>,
 }
 
@@ -750,7 +752,10 @@ impl LinkFocus {
             link,
             project: app.core.workspace.active.clone(),
             expanded: app.core.overview.expansion.expanded().cloned(),
-            focused: app.core.overview.expansion.focused().cloned(),
+            focused: {
+                let expansion = &app.core.overview.expansion;
+                expansion.focused().or(expansion.just_left()).cloned()
+            },
         }
     }
 }
@@ -779,9 +784,9 @@ fn link_focus_after(app: &mut App, before: &LinkFocus) -> Option<iced::advanced:
     if was != is {
         // The card expanded as its link took the keyboard from another card: Shift+Tab, which
         // lands on the collapsed card's last stop. The reverse of Tab goes on to the expanded
-        // card's last (feature 1123, FR-010; visual pass M3 r1, criterion 1). A Tab between two
-        // of its own numbers collapses it only between the loss and the gain, with no card
-        // focused in between.
+        // card's last (feature 1123, FR-010; visual pass M3 r1, criterion 1), whether the other
+        // card's loss came after the gain or just before it (r2). A Tab between two of its own
+        // numbers collapses it only between the loss and the gain, and that loss was this card's.
         let from_another = before
             .focused
             .as_ref()
