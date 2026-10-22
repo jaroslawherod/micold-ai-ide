@@ -57,16 +57,29 @@ async fn send(client: &mut conn::Client, msg: ClientMsg) {
     client.send(Frame::Control(msg)).await.expect("sent");
 }
 
-/// Whether `client` receives a `StructuredEvents` of `id` within `window`.
-async fn events_within(client: &mut conn::Client, id: SessionId, window: Duration) -> bool {
+/// Whether `client` receives a frame that `wanted` holds for within `window`.
+async fn receives(
+    client: &mut conn::Client,
+    window: Duration,
+    wanted: impl Fn(&Frame<DaemonMsg>) -> bool,
+) -> bool {
     let end = tokio::time::Instant::now() + window;
     while let Ok(Some(Ok(frame))) = tokio::time::timeout_at(end, client.next()).await {
-        if matches!(frame, Frame::Control(DaemonMsg::StructuredEvents { session, .. }) if session == id)
-        {
+        if wanted(&frame) {
             return true;
         }
     }
     false
+}
+
+/// Whether `frame` carries `id`'s events.
+fn is_events(id: SessionId) -> impl Fn(&Frame<DaemonMsg>) -> bool {
+    move |frame| matches!(frame, Frame::Control(DaemonMsg::StructuredEvents { session, .. }) if *session == id)
+}
+
+/// Whether `frame` is a screen of `id`'s `process`.
+fn is_screen_of(id: SessionId, process: SessionProcess) -> impl Fn(&Frame<DaemonMsg>) -> bool {
+    move |frame| matches!(frame, Frame::Grid(g) if g.session == id && g.process == process)
 }
 
 /// A running structured session viewed with `SetViewedSession` streams its events.
@@ -120,11 +133,19 @@ async fn reattaching_the_primary_of_a_single_view_streams_its_events_again() {
         session: id,
         process,
     };
-    send(&mut client, attach(SessionProcess::Shell(instance))).await;
+    let shell = SessionProcess::Shell(instance);
+    send(&mut client, attach(shell)).await;
     assert!(
-        !events_within(&mut client, id, Duration::from_millis(500)).await,
-        "the shell is shown, not the events"
+        receives(
+            &mut client,
+            Duration::from_secs(10),
+            is_screen_of(id, shell)
+        )
+        .await,
+        "the shell is shown"
     );
+    // The event stream stopped with the shell attached: attaching the primary starts a new one,
+    // which begins with the history again.
     send(&mut client, attach(SessionProcess::Primary)).await;
     let got = events_until(&mut client, id, |got| got.len() >= expected.len()).await;
     assert_eq!(
@@ -133,7 +154,7 @@ async fn reattaching_the_primary_of_a_single_view_streams_its_events_again() {
         "a fresh history after the attach"
     );
 
-    send(&mut client, attach(SessionProcess::Shell(instance))).await;
+    send(&mut client, attach(shell)).await;
     send(
         &mut client,
         ClientMsg::SessionCloseShell {
@@ -143,8 +164,74 @@ async fn reattaching_the_primary_of_a_single_view_streams_its_events_again() {
     )
     .await;
     assert!(
-        events_within(&mut client, id, Duration::from_secs(10)).await,
+        receives(&mut client, Duration::from_secs(10), is_events(id)).await,
         "closing the attached shell shows the events again"
+    );
+    state.stop_session(id);
+}
+
+/// Restarting the attached shell instance of a structured session attaches the fresh instance: the
+/// view shows it and input without a `process` reaches it.
+#[tokio::test(flavor = "multi_thread")]
+async fn restarting_the_attached_shell_of_a_structured_session_attaches_the_new_one() {
+    let project = tempfile::tempdir().unwrap();
+    let (state, id) = service_with_session(project.path());
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    let instance = ShellInstanceId(1);
+    let shell = SessionProcess::Shell(instance);
+    state.open_shell(id, instance).expect("shell opens");
+    let mut client = single_viewer(&state, project.path(), id).await;
+    send(
+        &mut client,
+        ClientMsg::SessionAttachProcess {
+            session: id,
+            process: shell,
+        },
+    )
+    .await;
+    assert!(
+        receives(
+            &mut client,
+            Duration::from_secs(10),
+            is_screen_of(id, shell)
+        )
+        .await
+    );
+    send(
+        &mut client,
+        ClientMsg::SessionRestartShell {
+            session: id,
+            instance,
+        },
+    )
+    .await;
+    let marker = project.path().join("restarted-shell-served");
+    send(
+        &mut client,
+        ClientMsg::SessionInput {
+            session: id,
+            serial: 0,
+            bytes: format!(": > '{}'\n", marker.display()).into_bytes(),
+            process: None,
+        },
+    )
+    .await;
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !marker.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the restarted shell is not attached: it never ran the typed command"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        receives(
+            &mut client,
+            Duration::from_secs(10),
+            is_screen_of(id, shell)
+        )
+        .await,
+        "the restarted shell is shown"
     );
     state.stop_session(id);
 }

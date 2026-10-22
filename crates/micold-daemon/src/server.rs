@@ -780,17 +780,16 @@ where
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => viewing.is_some(),
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => false,
                 };
-                if let Some(session) = viewing.filter(|_| concerns_view) {
+                if concerns_view && viewing.is_some() {
                     show_single_view(
                         state,
                         id,
                         &mut view_stream,
                         &mut terminal_streams,
                         &mut viewed_terminals,
-                        session,
+                        viewing,
                     );
-                }
-                if viewed_terminals.iter().any(|t| matches!(started, Ok(s) if s == t.session) || started.is_err()) {
+                } else if viewed_terminals.iter().any(|t| matches!(started, Ok(s) if s == t.session) || started.is_err()) {
                     sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
                 }
                 continue;
@@ -1304,28 +1303,20 @@ where
                 // case: the client sends `SessionStart` and `SetViewedSession` back to back, and the
                 // start no longer completes before this arrives (BUG-009, T125). `viewing` records
                 // the intent, and the session-started arm builds the stream when the session exists.
-                match session {
-                    Some(session) => show_single_view(
-                        state,
-                        id,
-                        &mut view_stream,
-                        &mut terminal_streams,
-                        &mut viewed_terminals,
-                        session,
-                    ),
-                    None => {
-                        viewed_terminals.clear();
-                        sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
-                        if let Some(prev) = view_stream.take() {
-                            prev.abort();
-                        }
-                    }
-                }
+                show_single_view(
+                    state,
+                    id,
+                    &mut view_stream,
+                    &mut terminal_streams,
+                    &mut viewed_terminals,
+                    session,
+                );
             }
             // --- Feature 011: shell instances + which process is attached ---
             ClientMsg::SessionAttachProcess { session, process } => {
                 let terminal = state.attach_process(session, process);
-                if state.attached_process(session) != Some(process) {
+                // `None` is also a structured primary's answer, which has no terminal to give.
+                if terminal.is_none() && state.attached_process(session) != Some(process) {
                     // The client asked to display a process the daemon does not have, so the two
                     // now disagree about what is attached — the client will show its new mode while
                     // the pane keeps streaming whatever it streamed before (FR-007). Silently
@@ -1344,7 +1335,7 @@ where
                         &mut view_stream,
                         &mut terminal_streams,
                         &mut viewed_terminals,
-                        session,
+                        Some(session),
                     );
                 } else if let Some((pty, framer)) = terminal {
                     restart_view(state, id, &mut view_stream, process, pty, framer);
@@ -1389,7 +1380,7 @@ where
                         &mut view_stream,
                         &mut terminal_streams,
                         &mut viewed_terminals,
-                        session,
+                        Some(session),
                     );
                 } else if let Some((pty, framer)) = reattached {
                     restart_view(
@@ -1408,14 +1399,26 @@ where
                 // A manual restart re-sources the session's directory (011 FR-007(b), BUG-442);
                 // `SessionOpenShell` stays cached.
                 state.forget_session_env(session);
-                // `close_shell` returns the primary it reattached to iff this instance was attached.
+                // Asked before `close_shell`, whose answer is `None` for a structured session's
+                // primary even when it reattached to it (BUG-1256).
+                let was_attached =
+                    state.attached_process(session) == Some(SessionProcess::Shell(instance));
                 let reattached_primary = state.close_shell(session, instance);
                 match state.open_shell(session, instance) {
-                    Ok(()) if reattached_primary.is_some() => {
+                    Ok(()) if was_attached => {
                         // It was attached: re-attach the fresh instance so view + input follow it.
-                        if let Some((pty, framer)) =
-                            state.attach_process(session, SessionProcess::Shell(instance))
-                        {
+                        let terminal =
+                            state.attach_process(session, SessionProcess::Shell(instance));
+                        if viewing == Some(session) {
+                            show_single_view(
+                                state,
+                                id,
+                                &mut view_stream,
+                                &mut terminal_streams,
+                                &mut viewed_terminals,
+                                Some(session),
+                            );
+                        } else if let Some((pty, framer)) = terminal {
                             restart_view(
                                 state,
                                 id,
@@ -1441,7 +1444,16 @@ where
                         // Respawn failed: fall back to the primary `close_shell` reattached to, so
                         // the view stream and input routing agree (both on Primary) instead of the
                         // view showing the dead shell while input goes to Primary.
-                        if let Some((pty, framer)) = reattached_primary {
+                        if was_attached && viewing == Some(session) {
+                            show_single_view(
+                                state,
+                                id,
+                                &mut view_stream,
+                                &mut terminal_streams,
+                                &mut viewed_terminals,
+                                Some(session),
+                            );
+                        } else if let Some((pty, framer)) = reattached_primary {
                             restart_view(
                                 state,
                                 id,
@@ -3039,29 +3051,30 @@ fn restart_view(
 /// Point a client's single view (`SetViewedSession`) at `session`'s attached process. A structured
 /// session's primary has no screen, only events (feature 938, R6): those stream the way a pane
 /// streams them, as a one-member terminal set, so a single-pane window shows its transcript too
-/// (BUG-1256). Any other process streams its screen through `view_stream`; the other is stopped.
+/// (BUG-1256). Any other process streams its screen through `view_stream`; the other is stopped,
+/// and both are for no session.
 fn show_single_view(
     state: &Arc<DaemonState>,
     id: crate::state::ClientId,
     view_stream: &mut Option<tokio::task::JoinHandle<()>>,
     terminal_streams: &mut TerminalStreams,
     viewed_terminals: &mut Vec<TerminalRef>,
-    session: micold_core::session::SessionId,
+    session: Option<micold_core::session::SessionId>,
 ) {
-    let process = state
-        .attached_process(session)
+    let process = session
+        .and_then(|s| state.attached_process(s))
         .unwrap_or(SessionProcess::Primary);
-    let structured = process == SessionProcess::Primary
-        && state.session_kind(session) == Some(micold_core::session::SessionKind::Structured);
-    viewed_terminals.clear();
-    if structured {
-        viewed_terminals.push(TerminalRef { session, process });
-    }
+    let structured = session.filter(|s| {
+        process == SessionProcess::Primary
+            && state.session_kind(*s) == Some(micold_core::session::SessionKind::Structured)
+    });
+    *viewed_terminals = structured
+        .map(|session| vec![TerminalRef { session, process }])
+        .unwrap_or_default();
     sync_terminal_streams(state, id, terminal_streams, viewed_terminals);
-    match state
-        .live_session(session)
-        .zip(state.session_framer(session))
-        .filter(|_| !structured)
+    match session
+        .filter(|_| structured.is_none())
+        .and_then(|s| state.live_session(s).zip(state.session_framer(s)))
     {
         Some((pty, framer)) => restart_view(state, id, view_stream, process, pty, framer),
         None => {
