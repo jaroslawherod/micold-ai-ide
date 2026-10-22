@@ -1,0 +1,12 @@
+# xdg-open log excerpts, visual pass M2 1123 r2 (fake xdg-open appends its argument)
+light 1.0, click mid "#12" (x card), collapsed:      https://github.com/acme/widgets/pull/12
+light 1.0, click centre "Issue #1123":               https://github.com/acme/widgets/issues/1123
+light 1.0, y card expanded, press y=425 (top px of #11 box 425..444): https://github.com/acme/widgets/pull/11
+light 1.0, same, y=426:                              https://github.com/acme/widgets/pull/11
+light 1.0, press y=282 (3 px above #12 box 285..304): [empty]
+dark 2.0, click mid "#12":                           https://github.com/acme/widgets/pull/12
+dark 2.0, click centre "Issue #1123":                https://github.com/acme/widgets/issues/1123
+dark 2.0, y expanded, press y=1306 (top px of #11 box 1306..1345): https://github.com/acme/widgets/pull/11
+dark 2.0, same, y=1308:                              https://github.com/acme/widgets/pull/11
+dark 2.0, press y=564 (6 px above #12 box 570..609): [empty]
+Measured label boxes (found by hover underline/hit probing): light 1.0 #12 x 346..370 y 285..304; #11 y 425..444, #12 above it ends y 420. dark 2.0 #12 x 692..740 y 570..609; #11 y 1306..1345, #12 above it ends y 1297.
