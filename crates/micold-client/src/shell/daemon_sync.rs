@@ -96,6 +96,8 @@ pub enum PendingOp {
         additional: bool,
         /// The start-up auto-start: its refusal stays a notice (feature 802, FR-004).
         automatic: bool,
+        /// The permission mode the create carried (#942), kept for the confirmation.
+        permission_mode: micold_core::session::PermissionMode,
     },
     DeleteSession,
     /// A composer's `SessionUserMessage` (feature 941): the composer holds the draft that was sent
@@ -1937,6 +1939,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     kind: session_kind,
                     additional,
                     automatic,
+                    permission_mode,
                 }) => {
                     let occupied = kind == micold_core::protocol::messages::ErrorKind::Refused
                         && detail
@@ -1952,6 +1955,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                                 location,
                                 provider: Some(provider),
                                 kind: session_kind,
+                                permission_mode,
                             }));
                     } else {
                         app.core.notify_error(message);
@@ -2840,6 +2844,7 @@ fn start_session(
                 location,
                 provider: Some(provider),
                 kind,
+                permission_mode: mode,
             }));
         return Task::none();
     }
@@ -2861,6 +2866,7 @@ fn start_session(
             kind,
             additional: false,
             automatic,
+            permission_mode: mode,
         };
         send_op_bound(app, binding, op, |req| {
             session_create(req, project, &location, provider, kind, mode, false)
@@ -2897,9 +2903,9 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
         );
     }
     let kind = app.core.session.additional_kind;
-    // #942: a structured start reaches this confirmation only after its mode's gate (a Bypass
-    // one after its own confirmation), so it is created in the mode the create flow holds.
-    let mode = app.core.session.start_mode_for(kind);
+    // #942: the mode of the start that opened the confirmation, which passed its gate (a Bypass
+    // one its own confirmation); `Default` for the row menu's.
+    let mode = app.core.session.additional_mode;
     if let (Some((location, provider)), Some(project)) = (
         app.core.additional_request(),
         app.core.workspace.active.clone(),
@@ -2911,6 +2917,7 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
             kind,
             additional: true,
             automatic: false,
+            permission_mode: mode,
         };
         let binding = app.location_binding(&project, &location);
         send_op_bound(app, binding, op, move |req| {
@@ -6271,6 +6278,44 @@ pub(crate) mod tests {
             assert!(app.core.session.bypass_start.is_none());
             let _ = on_bypass_start_confirmed(&mut app);
             assert!(drain_sent(&mut rx).is_empty(), "once");
+        }
+
+        /// Review B M6 F1: the additional-session confirmation creates in the mode of the start
+        /// that opened it, never in a Bypass chosen afterwards without its confirmation.
+        #[test]
+        fn an_additional_session_is_created_in_the_mode_its_start_was_gated_in() {
+            use micold_core::session::SessionKind;
+            let (mut app, mut rx, _) = app_with_session();
+            assert!(
+                !app.core.start_offered(&SessionLocation::Default),
+                "occupied"
+            );
+            app.core.session.start_mode = PermissionMode::Plan;
+            let _ = on_session_start_requested(
+                &mut app,
+                SessionLocation::Default,
+                AiCli::ClaudeCode,
+                SessionKind::Structured,
+                false,
+            );
+            assert!(
+                drain_sent(&mut rx).is_empty(),
+                "the confirmation opens first"
+            );
+            app.core.session.start_mode = PermissionMode::Bypass;
+            let _ = on_additional_session_confirmed(&mut app);
+            let ClientMsg::SessionCreate {
+                permission_mode,
+                allow_additional_session,
+                ..
+            } = sent_one(&mut rx)
+            else {
+                panic!("a SessionCreate")
+            };
+            assert_eq!(
+                (permission_mode, allow_additional_session),
+                (PermissionMode::Plan, true)
+            );
         }
 
         #[test]

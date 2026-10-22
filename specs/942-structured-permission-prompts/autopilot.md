@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
 - **Phase**: M6 verify
-- **Next step**: full gate and review B of M6, then PR
+- **Next step**: full gate and review B r2 of M6 (fix diff), then PR
 
 ## Pull requests
 
@@ -80,6 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M5 (code-review high) | 1 | f87c133e430c27b98cb5cc16d987e545768d27ea:4780eb3eaf8e292a0d9258ded2a646ea855a3756 | CLEAN: 3 MINOR (F1 a stale `status` report applied after a change — comment, declined; F2 plan resolution broadcast after the mode change — comment, declined; F3 stand-in formats JSON by hand — declined). `claude -p` with the brief and diff inline, 0 permission denials |
 | Review B M5 (conformance, sonnet) | 1 | f87c133e430c27b98cb5cc16d987e545768d27ea:4780eb3eaf8e292a0d9258ded2a646ea855a3756 | CLEAN: 1 MINOR (F1 T048 text still said `mode_change` — fixed, prose only). Verify output given inline (13 and 29 passed), 0 permission denials |
 | Review A M6 (code-review high) | 1 | f57630e6ecbab071c1f308ae038e7bea8ae2dbae:80b87f4423a2d01f7ebc2f4c90c51f1b52183f67 | CLEAN: 3 MINOR (F1 a refused Show all cleared an answer's `sending` — fixed, `input_failed`; F2 the Bypass gate runs for an automatic start — declined; F3 no shell test of the start gate — added `a_bypass_start_is_created_only_by_its_confirmation`). `claude -p` with the brief and diff inline, 0 permission denials |
+| Review B M6 (conformance, sonnet) | 1 | a5abcb82e42d6a8e874f7972bd53b5f53eb5886e:b0449c8a6fcee16f488b7ee9e86ee9c8eafb9157 | CHANGES: 2 MAJOR (F1 the additional-session confirmation created in the create flow's current mode, so a Bypass chosen after a gated start skipped its confirmation — fixed, the mode travels in `PendingOp::CreateSession` and `AdditionalOpened`, red shown; F2 two parts of cycle 9 had no red — recorded as an explicit exception in the cycle log, the restore of main's sources being refused here), 1 MINOR (F3 route tests outside the Verify command — fixed, prose only: T053 and Verify name `--bin micold-ai-ide permission_prompts`). Verify given inline, 0 permission denials |
 
 ## Declined review findings
 

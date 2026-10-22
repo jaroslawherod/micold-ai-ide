@@ -201,3 +201,23 @@ Red runs recorded live, each before its implementation existed; commands with
   permission_prompts`, written with the wiring) 8 passed, two of them added after review A
   (a refused Show all leaves an answer on its way; a Bypass start is created only by its
   confirmation).
+- **Exception (Constitution I), recorded after review B r1 F2**: two parts of this cycle had no
+  red of their own. The T054 cases of `structured_start_menu` compiled on the first run because
+  the `session.rs` half of T055 landed in the same library build, and the eight shell route tests
+  of T053 were written together with the wiring they drive. A red against the pre-M6 sources was
+  not taken afterwards: restoring `origin/main`'s client sources over the committed M6 tree was
+  refused in this container. The reducer tests that drive the same decisions
+  (`features_permission_prompts`) did show red, and every later fix below did.
+
+### Cycle 10 — review B r1 F1: the additional-session path keeps the gated mode
+
+- Red: `structured_start_menu` `an_additional_session_keeps_the_mode_of_the_start_that_opened_it`
+  and `the_rows_another_session_confirmation_creates_in_default`, and the shell test
+  `an_additional_session_is_created_in_the_mode_its_start_was_gated_in`, written first. The
+  shell test ran and failed for the reported reason — `left: (Bypass, true)`, `right: (Plan,
+  true)`: a start gated in Plan met an occupied location, Bypass was chosen afterwards, and the
+  confirmation created in Bypass with no Bypass confirmation; `structured_start_menu` did not
+  compile — no `additional_mode` on `session::State`, no `permission_mode` on
+  `Msg::AdditionalOpened`.
+- Green: the shell routes 9 passed, `structured_start_menu` 12, `features_permission_prompts` 22,
+  `additional_session_provider` 5.
