@@ -80,6 +80,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review B M2 (conformance, sonnet) | 1 | c036df0cd4e6f0f20bded9f400e77d2d8016736a:f647684b709efa9bc318e217ab35f37fc8438d29 | CHANGES: 1 MAJOR (mid-turn case of the superseded #938 test raced: the second turn had no pause; fixed, it holds its result too) |
 | Review B M2 (conformance, sonnet) | 2 | a3e725b524fc4ac20b51b32f9b8d9e8fa78c63e7:4ff69c045598722443a8f666d7b37f26db3dc7d2 | CLEAN (Verify 3×: structured_input 12 passed, structured_session 16 passed) |
 | Full gate M2 | — | — | 1st red: `structured_input.rs` lacked its `// unix-only:` reason (fixed); 2nd red: `a_user_message_is_one_line…` dropped `UserSent` (seq 0) in the sender's `answer` under load — test sends from a non-viewing connection now (test-only); green after rebase onto origin/main (#943 M1, PROTOCOL_VERSION 64; no M2 wire change) |
+| Review A M3 (code-review high) | 1 | d8da36895b5b8421117dd41244048463003010f1:3deb5c3b0611bd889e9c071452b7e17e263882fd | CHANGES: 1 MAJOR (written turn read after the write; fixed: `Delivery::turn`), 6 MINOR declined |
 
 ## Declined review findings
 
@@ -107,6 +108,11 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A r1 F2 (MINOR) | `write_interrupt` polls 1 ms with no bound | Every `Delivery` goes to `deliver`, whose write either records its turn or closes it, which ends the wait; a write blocked on the pipe is exactly what the interrupt must wait for |
+| M3 | A r1 F3 (MINOR) | a failed interrupt write leaves `Asked` with no timer | The write fails only when stdin is gone or broken: the process's end follows, and its EOF ends the turn and the ask |
+| M3 | A r1 F4 (MINOR) | a failed queue save is not retried | Same as the history store's one-shot event saves on a failed disk; the next queue change saves again; logged |
+| M3 | A r1 F5 (MINOR) | a saved queue is dropped when input already exists | The queue is loaded with the event stream before the session can start or take a message (load precedes start); no path creates the input first |
+| M3 | A r1 F6–F7 (MINOR) | snapshot clones under the lock; small per-session maps | Taste/efficiency: queues are a few messages; not fixed now |
 
 ## Handover
 
