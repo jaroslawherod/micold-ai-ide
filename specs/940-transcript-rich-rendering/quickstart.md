@@ -39,3 +39,16 @@ Prerequisite: a logged-in `claude` on `PATH`; the dev client with a structured s
    the other (Principle II).
 
 Record the pass with the `visual-pass` skill into `specs/940-transcript-rich-rendering/visual-pass/`.
+
+## Results (close, 2026-10-22)
+
+- **Part A**: `scripts/gate.sh` green at `18e9cf09` (9,440 passed, 0 failed); the markdown, edit
+  diff, rich cache, renderer and shared-component rows run inside it. The release budget was run in
+  M5 (2026-10-21): open with every card open `RICH` 118 ms (budget 1 s), slowest streamed markdown
+  delta 2.7 ms (budget 100 ms); not re-run at close.
+- **Part B**: recorded in M4 and M5 headless visual passes (`visual-pass/m4-*.png`,
+  `visual-pass/m5-record.md`): steps 1, 2, 5, 6 and 7 seen; steps 3, 4 and 8 covered by
+  `features_transcript_rich.rs` (copy, links, per-window copy state) and not driven on screen (no
+  pointer input or second window headless). Not run against a logged-in `claude`.
+- Known gaps, logged as follow-ups in `autopilot.md`: italic is drawn upright (no italic face
+  bundled); code and diffs use the host's monospace face (the app bundles none).
