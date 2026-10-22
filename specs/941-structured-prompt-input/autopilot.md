@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: M2
-- **Next step**: M2 PR to open (branch pushed; title/body in the session scratchpad)
+- **Phase**: M3
+- **Next step**: M3 verify (scoped gate + review A)
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1209 | Design: spec, clarifications, plan, research, contracts, tasks | merged (rebase) | 01c64cee744edf4036b2edd018dbd0677c015dba |
 | #1223 | M1: core decisions, fixtures, wire types | merged (rebase) | cdfafa66da143c85003745205c980ee0736c97db |
+| #1240 | M2: daemon delivers, queues, input driver, StructuredInput | merged (rebase) | 1781310b95438ce48d8006762ee0fc949f877343 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T022 | full | Core decisions (input, attachment, turn ids/asks, encoders, UserSent/InterruptAsked, transcript, saved queue), recorded fixtures, every wire type (one bump); daemon refuses new requests "Not available yet" | #1223 | merged |
-| M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | — (to open) | gate green at 00df9bc2, pushed |
-| M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | — | pending |
+| M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | #1240 | merged |
+| M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | — | implemented |
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | — | pending |
 | M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | — | pending |
 | M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | pending |
@@ -56,6 +57,9 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | 7 | M2 implement | How does the driver learn a process ended, and tell a late end of an earlier process from the current one's? | The stdout reader reports its end too (`TurnClosed { by: Exit, turn: Option<TurnId>, process: serial }`); the driver holds the queue (`on_process_end`) only when the current primary is that process or none runs. `TurnClosed.turn` is `Option` (the plan's had none for an end between turns) | agent | plan R2/R6 name no exit signal; restart order: teardown → spawn → swap |
 | 8 | M2 implement | `UserSent` must precede the turn's lines but not be shown for a failed write | A note slot (`Emit.sending`) under the lock the reader holds across ending a turn and passing the event on: set before the write, passed on by the reader before the next line or by the writer after a good write, dropped on a failed one; the lock is never held across the write (no pipe deadlock) | agent | research R3; P-3 |
 | 9 | M2 implement | Reuse #942's control plumbing? | Not needed in M2: no control request is written (M3's interrupt uses `encode_interrupt`/`next_request_id`, and waits on the `result`, not `ControlWaiters`, per I-2). The input driver is spawned like #942's `spawn_mode_reports` (`server::spawn_input_driver`; tests spawn it) | agent | plan I-2 |
+| 11 | M3 implement | Reuse #942's control plumbing for the interrupt? | Yes, its encoder, ids and stdin mutex: `encode_interrupt(next_request_id())` written through the same `write_whole` under the stdin mutex `set_permission_mode` uses. `ControlWaiters` are not used (plan I-2): the answer is not awaited, the `result` ends the turn; its `control_response` resolves no waiter and is dropped there. The turn check, the `InterruptAsked` note and the write are made under the stdin mutex, so a request never reaches a later turn | agent | plan I-2; contracts/claude-input.md *Interrupt* |
+| 12 | M3 implement | Where is the interrupt asked, and how is the 10 s tested? | Asked in the connection's handler under the state lock (arrival order: a spawned ask let an interrupt sent before a message land after it); the write and the overdue timer run on a spawned task (`input_driver::interrupt`). The bound is `INTERRUPT_OVERDUE`, shortened by `DaemonState::set_interrupt_overdue` in tests, as `set_details_bound` is (no paused clock: the stand-in is a real process) | agent | T035 "shortens or pauses the clock" |
+| 13 | M3 implement | Which thread writes the saved queue? | A dedicated `queue-writer` thread started with the history store, fed by a channel: the history saver's task wakes on `SAVER_TICK`, which would delay a queue save, and tests would have to drive it. Snapshots are taken under the state lock with a global generation, only when `SessionInput::revision` changed and saving is on; the writer drops a generation older than one it wrote. A damaged file is replaced by the empty queue's save (removed) | agent | research R9; T038 |
 | 10 | M2 implement | When does the activity follow the turn? | `TurnBegan` in the lock section that opens a turn; `TurnEnded` when the driver handles a `result` (or a failed write closes the turn) and the turn is idle in that same section, so a turn opened meanwhile is never shown idle; a process end leaves activity to supervision's `Ended` | agent | research R5, FR-011 |
 
 ## Review rounds

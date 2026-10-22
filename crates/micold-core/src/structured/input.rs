@@ -93,6 +93,9 @@ pub struct SessionInput {
     hold: bool,
     next_turn: u64,
     next_entry: u64,
+    /// Counts the changes of the queue's entries (not of the hold): what the daemon compares to
+    /// save a queue only when it changed (research R9).
+    revision: u64,
 }
 
 impl Default for SessionInput {
@@ -108,7 +111,30 @@ impl SessionInput {
             hold: false,
             next_turn: 1,
             next_entry: 1,
+            revision: 0,
         }
+    }
+
+    /// The queue a saved one restores (research R9): `messages` in order, with fresh ids, on hold
+    /// when there are any (Q1).
+    pub fn restored(messages: Vec<Message>) -> Self {
+        let mut input = Self::new();
+        for message in messages {
+            let id = input.next_entry();
+            input.queue.push_back(QueuedMessage {
+                id,
+                message,
+                queued_by: 0,
+            });
+        }
+        input.hold = !input.queue.is_empty();
+        input
+    }
+
+    /// Rises with every change of the queue's entries: a submit that queued, a delivery of the
+    /// head, an edit, a removal, a take, a put back.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// A fresh turn id, above every one given before.
@@ -149,6 +175,7 @@ impl SessionInput {
                 message,
                 queued_by,
             });
+            self.revision += 1;
             return Ok(Submit::Queued(id));
         }
         Ok(Submit::Deliver(self.next_turn(), message))
@@ -162,6 +189,7 @@ impl SessionInput {
             return None;
         }
         let head = self.queue.pop_front()?;
+        self.revision += 1;
         Some((self.next_turn(), head))
     }
 
@@ -224,6 +252,7 @@ impl SessionInput {
             return Err(QueueRefusal::Blank);
         }
         self.queue[at].message = edited;
+        self.revision += 1;
         Ok(())
     }
 
@@ -232,6 +261,7 @@ impl SessionInput {
         let at = self.position(id)?;
         let pulled = self.queue.remove(at).ok_or(QueueRefusal::Gone)?;
         self.hold &= !self.queue.is_empty();
+        self.revision += 1;
         Ok(pulled)
     }
 
@@ -251,6 +281,7 @@ impl SessionInput {
     pub fn put_back(&mut self, queued: QueuedMessage) {
         self.queue.push_front(queued);
         self.hold = true;
+        self.revision += 1;
     }
 
     /// Whether the queue is on hold.

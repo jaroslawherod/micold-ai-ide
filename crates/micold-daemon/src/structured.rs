@@ -17,7 +17,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use micold_core::session::{KindRefusal, PermissionMode, SessionId};
-use micold_core::structured::control::{encode_set_mode, next_request_id};
+use micold_core::structured::control::{encode_interrupt, encode_set_mode, next_request_id};
 use micold_core::structured::input::Message;
 use micold_core::structured::{
     encode_user_message, parse_line, ControlOutcome, EventHistory, InterruptAsk, LineSplitter,
@@ -153,6 +153,10 @@ impl std::fmt::Display for UserMessageUndelivered {
 /// How long the daemon waits for the CLI's answer to a control request (#942 data-model
 /// *ControlRequest*, FR-017).
 pub const CONTROL_ANSWER_BOUND: Duration = Duration::from_secs(10);
+
+/// How long an interrupt may go unanswered by the turn's end before every window is told it is
+/// overdue (#941 FR-015). Lowered only by tests (`DaemonState::set_interrupt_overdue`).
+pub const INTERRUPT_OVERDUE: Duration = Duration::from_secs(10);
 
 /// Why a running session's CLI did not change its permission mode (FR-017): the user is told this.
 #[derive(Debug)]
@@ -542,14 +546,42 @@ impl StructuredSession {
         written
     }
 
+    /// Ask the CLI to interrupt `turn` with an `interrupt` control request (#941 R4, P-4), when
+    /// `turn` is still this process's open turn, and note it as [`StructuredEvent::InterruptAsked`]
+    /// before the request goes out, so the note lands inside the turn. The check, the note and the
+    /// write are made under the stdin mutex: a message of a later turn is written only after it,
+    /// so the request never reaches a turn it was not for. The answer is not waited on: the turn's
+    /// `result` ends the turn (contracts/claude-input.md *Interrupt*), and an unanswered request
+    /// is what the overdue notice covers. `Ok(false)`: the turn ended first, nothing written.
+    pub fn write_interrupt(&self, turn: TurnId) -> io::Result<bool> {
+        loop {
+            let mut stdin = lock(&self.stdin);
+            {
+                let mut emit = lock(&self.emit);
+                if emit.sending.is_some() {
+                    // The turn's own message is still waiting for the stdin mutex: let it go
+                    // first, so the request follows the message it interrupts.
+                    drop(emit);
+                    drop(stdin);
+                    std::thread::sleep(Duration::from_millis(1));
+                    continue;
+                }
+                let open = matches!(
+                    lock(&self.turn).now(),
+                    Turn::InTurn { turn: open, .. } if open == turn
+                );
+                if !open {
+                    return Ok(false);
+                }
+                emit.emit(StructuredEvent::InterruptAsked);
+            }
+            return write_whole(&mut stdin, &encode_interrupt(&next_request_id())).map(|()| true);
+        }
+    }
+
     /// Write one whole line to the CLI's stdin, under its mutex.
     fn write_line(&self, line: &str) -> io::Result<()> {
-        match lock(&self.stdin).as_mut() {
-            Some(stdin) => stdin
-                .write_all(line.as_bytes())
-                .and_then(|()| stdin.flush()),
-            None => Err(io::Error::from(io::ErrorKind::BrokenPipe)),
-        }
+        write_whole(&mut lock(&self.stdin), line)
     }
 
     /// Ask the CLI to switch to `mode` with a `set_permission_mode` control request, and wait for
@@ -613,6 +645,16 @@ impl StructuredSession {
 impl Drop for StructuredSession {
     fn drop(&mut self) {
         self.teardown(crate::supervisor::TEARDOWN_WAIT);
+    }
+}
+
+/// Write one whole line to `stdin`, whose mutex the caller holds; a closed one is a broken pipe.
+fn write_whole(stdin: &mut Option<ChildStdin>, line: &str) -> io::Result<()> {
+    match stdin.as_mut() {
+        Some(stdin) => stdin
+            .write_all(line.as_bytes())
+            .and_then(|()| stdin.flush()),
+        None => Err(io::Error::from(io::ErrorKind::BrokenPipe)),
     }
 }
 

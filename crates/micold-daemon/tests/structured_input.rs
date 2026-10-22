@@ -1,6 +1,7 @@
-//! Feature 941, milestone M2 (T024, T025): a structured session's messages are delivered once to
-//! an idle CLI and queued while it is busy; every window sees the turn's phase, the queue and its
-//! hold; the sidebar's activity follows the turn.
+//! Feature 941, milestones M2 (T024, T025) and M3 (T035): a structured session's messages are
+//! delivered once to an idle CLI and queued while it is busy; every window sees the turn's phase,
+//! the queue and its hold; the sidebar's activity follows the turn; an interrupt ends the open turn
+//! with the process running on, is reported overdue when ignored, and holds the queue.
 //!
 //! Every case runs the stand-in of `support/structured.rs`, first on `PATH` for the whole test
 //! process, scripted per project through `.fake-stream`.
@@ -20,8 +21,10 @@ use micold_core::protocol::messages::{
 };
 use micold_core::session::{SessionId, SessionLocation};
 use micold_core::structured::attachment::{admit, ImageAttachment};
+use micold_core::structured::control::encode_interrupt;
+use micold_core::structured::transcript::{EntryKind, Transcript};
 use micold_core::structured::{
-    encode_user_message, SequencedEvent, StructuredEvent, UserMessageRefusal,
+    encode_user_message, SequencedEvent, StructuredEvent, TurnId, UserMessageRefusal,
 };
 use micold_core::terminal::LaunchMode;
 use micold_daemon::activity::{ActivityEvent, HookKind};
@@ -270,6 +273,7 @@ fn stdin_lines(dir: &Path) -> Vec<String> {
 fn delivered(dir: &Path) -> Vec<String> {
     stdin_lines(dir)
         .iter()
+        .filter(|line| line.contains("\"type\":\"user\""))
         .map(|line| {
             let value: serde_json::Value = serde_json::from_str(line).expect("a JSON line");
             let first = &value["message"]["content"][0];
@@ -330,6 +334,55 @@ async fn activity_is(state: &DaemonState, id: SessionId, expected: ActivitySigna
 
 fn idle(seen: &Seen) -> bool {
     seen.phase == TurnPhase::Idle
+}
+
+/// The interrupt control requests the stand-in in `dir` read, as lines.
+fn interrupts(dir: &Path) -> Vec<String> {
+    stdin_lines(dir)
+        .into_iter()
+        .filter(|line| line.contains("\"control_request\"") && line.contains("\"interrupt\""))
+        .collect()
+}
+
+/// The open turn and its interrupt, when `seen` is busy.
+fn busy_with(seen: &Seen) -> Option<(TurnId, InterruptAsk)> {
+    match seen.phase {
+        TurnPhase::Busy { turn, interrupt } => Some((turn, interrupt)),
+        _ => None,
+    }
+}
+
+fn asked(seen: &Seen) -> bool {
+    busy_with(seen).is_some_and(|(_, ask)| ask == InterruptAsk::Asked)
+}
+
+fn overdue(seen: &Seen) -> bool {
+    busy_with(seen).is_some_and(|(_, ask)| ask == InterruptAsk::Overdue)
+}
+
+fn interrupt(session: SessionId, turn: TurnId) -> ClientMsg {
+    ClientMsg::TurnInterrupt { session, turn }
+}
+
+/// The stand-in answers each interrupt with P-4's lines: the turn ends interrupted.
+fn honouring() -> String {
+    format!(
+        "on-interrupt {}\n",
+        fixture("interrupt-turn.jsonl").display()
+    )
+}
+
+/// The stand-in records each interrupt and does nothing; `turn-<n>` ends the n-th turn.
+fn ignoring() -> String {
+    format!(
+        "ignore-interrupt {}\n",
+        fixture("text-turn.jsonl").display()
+    )
+}
+
+/// The stand-in's pid, as it recorded it at its start in `dir`.
+fn stand_in_pid(dir: &Path) -> String {
+    structured::record(dir, "pid-record")
 }
 
 /// SC-001, FR-002, FR-003, FR-027: each send to an idle session is one stdin line equal to its
@@ -956,4 +1009,253 @@ async fn a_deleted_session_drops_its_input_state() {
         !after.inputs.contains_key(&id),
         "no input state replayed for a deleted session"
     );
+}
+
+// --- M3: interrupt (US3) ------------------------------------------------------------------------
+
+/// SC-003, FR-013, US3 AS1–AS2: an interrupt of the open turn writes one `encode_interrupt` line,
+/// pushes `InterruptAsked`, shows `Busy { Asked }`; the stand-in honouring it ends the turn and the
+/// session is idle within 3 s, 20 times over, with the same process; the transcript closes each
+/// turn `Interrupted`.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interrupt_ends_the_turn_and_the_same_process_runs_on() {
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let (state, id) = started(dir, &honouring());
+    let mut window = Window::viewing(&state, dir, id).await;
+    window.sees(id, "idle", idle).await;
+    let pid = stand_in_pid(dir);
+    let mut slow = 0;
+    for run in 1..=20u64 {
+        assert_ack(
+            &window
+                .request(message(run, id, &format!("m{run}"), vec![]), run)
+                .await,
+            "the message",
+        );
+        let seen = window.sees(id, "busy", Seen::busy).await;
+        let (turn, ask) = busy_with(&seen).expect("busy");
+        assert_eq!(ask, InterruptAsk::None, "no interrupt asked yet");
+        let asked_at = Instant::now();
+        window.send(interrupt(id, turn)).await;
+        window.sees(id, "the interrupt asked", asked).await;
+        window.sees(id, "idle after the interrupt", idle).await;
+        if asked_at.elapsed() > Duration::from_secs(3) {
+            slow += 1;
+        }
+        let lines = interrupts(dir);
+        assert_eq!(lines.len() as u64, run, "one interrupt line per turn");
+        let request: serde_json::Value =
+            serde_json::from_str(lines.last().unwrap()).expect("a JSON line");
+        let request_id = request["request_id"].as_str().expect("a request id");
+        assert_eq!(
+            format!("{}\n", lines.last().unwrap()),
+            encode_interrupt(request_id),
+            "the line is encode_interrupt's"
+        );
+    }
+    assert!(
+        slow <= 1,
+        "{slow} of 20 interrupts took over 3 s (SC-003: 95%)"
+    );
+    assert_eq!(stand_in_pid(dir), pid, "the same process before and after");
+    assert_eq!(structured::starts(dir), 1, "never restarted");
+    assert!(state.event_stream(id).is_some());
+
+    window
+        .until("20 results", |w| w.results().len() == 20)
+        .await;
+    let events: Vec<SequencedEvent> = window.events.iter().map(|(e, _)| e.clone()).collect();
+    let notes = events
+        .iter()
+        .filter(|e| e.event == StructuredEvent::InterruptAsked)
+        .count();
+    assert_eq!(notes, 20, "one InterruptAsked note per interrupt");
+    let mut transcript = Transcript::new();
+    transcript.apply(0, &events, false);
+    let interrupted = transcript
+        .entries()
+        .filter(|e| matches!(e.kind(), EntryKind::Interrupted))
+        .count();
+    assert_eq!(interrupted, 20, "each turn closes Interrupted");
+    assert!(
+        matches!(
+            transcript.entries().last().map(|e| e.kind()),
+            Some(EntryKind::Interrupted)
+        ),
+        "the transcript ends Interrupted"
+    );
+    state.stop_session(id);
+}
+
+/// FR-015, FR-016, US3 AS4–AS5: two windows interrupting the same turn write one line; an ignored
+/// interrupt becomes `Overdue` after the bound with the session still running; a second interrupt
+/// writes again and is `Asked`; the turn's own end clears it and the session is idle.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ignored_interrupt_goes_overdue_and_may_be_asked_again() {
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    fake_stream_cli();
+    let session = structured_session(SessionLocation::Default);
+    let id = session.id;
+    let state = service(dir, vec![session]);
+    // The test's clock: 10 s shortened, never slept.
+    state.set_interrupt_overdue(Duration::from_millis(400));
+    stream_script(dir, &ignoring());
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    micold_daemon::server::spawn_input_driver(Arc::clone(&state));
+    let mut one = Window::connect(&state).await;
+    let mut two = Window::connect(&state).await;
+    one.sees(id, "idle", idle).await;
+    assert_ack(&one.request(message(1, id, "m1", vec![]), 1).await, "m1");
+    let (turn, _) = busy_with(&one.sees(id, "busy", Seen::busy).await).unwrap();
+
+    one.send(interrupt(id, turn)).await;
+    two.send(interrupt(id, turn)).await;
+    one.sees(id, "asked", asked).await;
+    two.sees(id, "asked", asked).await;
+    let seen = one.sees(id, "overdue", overdue).await;
+    assert_eq!(
+        busy_with(&seen).map(|(t, _)| t),
+        Some(turn),
+        "the same turn"
+    );
+    two.sees(id, "overdue", overdue).await;
+    assert_eq!(interrupts(dir).len(), 1, "two windows, one interrupt line");
+    assert!(
+        one.last(id).unwrap().busy(),
+        "an overdue interrupt stops nothing: the session runs, its turn open"
+    );
+
+    two.send(interrupt(id, turn)).await;
+    two.sees(id, "asked again", asked).await;
+    two.sees(id, "overdue again", overdue).await;
+    assert_eq!(interrupts(dir).len(), 2, "an overdue ask is written again");
+
+    end_turn(dir, 1);
+    let seen = one.sees(id, "idle at the turn's end", idle).await;
+    assert!(seen.queue.is_empty());
+    two.sees(id, "idle", idle).await;
+    state.stop_session(id);
+}
+
+/// FR-016, FR-017, US3 AS3: an interrupt of an idle, a not-running or an unknown session, or
+/// naming a turn that is not the open one, writes nothing and answers nothing; `SessionInterrupt`
+/// on a structured primary is still refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interrupt_that_names_no_open_turn_writes_nothing() {
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let (state, id) = started(dir, &ignoring());
+    let mut window = Window::connect(&state).await;
+    window.sees(id, "idle", idle).await;
+    window.send(interrupt(id, TurnId(1))).await;
+    window.send(interrupt(SessionId::new(), TurnId(1))).await;
+    assert_ack(&window.request(message(1, id, "m1", vec![]), 1).await, "m1");
+    let (turn, _) = busy_with(&window.sees(id, "busy", Seen::busy).await).unwrap();
+    window.send(interrupt(id, TurnId(turn.0 + 1))).await;
+    window.send(interrupt(id, TurnId(turn.0 - 1))).await;
+    window.drain(Duration::from_millis(300)).await;
+    let seen = window.last(id).cloned().expect("seen");
+    assert_eq!(
+        busy_with(&seen),
+        Some((turn, InterruptAsk::None)),
+        "nothing asked"
+    );
+    end_turn(dir, 1);
+    window.sees(id, "idle", idle).await;
+    window.send(interrupt(id, turn)).await;
+    window.drain(Duration::from_millis(300)).await;
+    assert!(
+        interrupts(dir).is_empty(),
+        "nothing written: {:?}",
+        interrupts(dir)
+    );
+    assert!(
+        window.answers.is_empty(),
+        "nothing answered: {:?}",
+        window.answers
+    );
+    assert!(!window.last(id).unwrap().hold, "no queue, nothing held");
+
+    assert!(
+        state.refuses_terminal_request(id, None),
+        "SessionInterrupt on the structured primary is refused (FR-017)"
+    );
+    window
+        .send(ClientMsg::SessionInterrupt { session: id })
+        .await;
+    state.stop_session(id);
+    window
+        .sees(id, "not running", |s| s.phase == TurnPhase::NotRunning)
+        .await;
+    window.send(interrupt(id, turn)).await;
+    window.drain(Duration::from_millis(300)).await;
+    assert!(interrupts(dir).is_empty(), "nothing written");
+    assert_eq!(delivered(dir), ["m1"]);
+}
+
+/// Q2, US4 AS5: an interrupt with a queue holds it unchanged; the interrupted turn's end delivers
+/// nothing; one release delivers the head.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interrupt_holds_the_queue_and_its_end_delivers_nothing() {
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let (state, id) = started(dir, &honouring());
+    let mut window = Window::connect(&state).await;
+    window.sees(id, "idle", idle).await;
+    assert_ack(&window.request(message(1, id, "m1", vec![]), 1).await, "m1");
+    assert_ack(&window.request(message(2, id, "q1", vec![]), 2).await, "q1");
+    assert_ack(&window.request(message(3, id, "q2", vec![]), 3).await, "q2");
+    let seen = window.sees(id, "two queued", |s| s.queue.len() == 2).await;
+    let (turn, _) = busy_with(&seen).expect("busy");
+    window.send(interrupt(id, turn)).await;
+    let seen = window.sees(id, "idle, held", |s| idle(s) && s.hold).await;
+    assert_eq!(seen.texts(), ["q1", "q2"], "kept unchanged");
+    delivered_stays(dir, &["m1"]).await;
+    assert_ack(
+        &window
+            .request(
+                ClientMsg::QueueRelease {
+                    req: 4,
+                    session: id,
+                },
+                4,
+            )
+            .await,
+        "the release",
+    );
+    delivered_is(dir, &["m1", "q1"]).await;
+    let seen = window.sees(id, "q1 out", |s| s.texts() == ["q2"]).await;
+    assert!(!seen.hold && seen.busy());
+    state.stop_session(id);
+}
+
+/// R4, edge case *Interrupt racing the turn's end*: an interrupt naming the turn that just ended,
+/// sent between its `result` and the driver's wake-up, holds the queue, and never interrupts the
+/// turn the queue would have started.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_late_interrupt_naming_the_last_turn_holds_the_queue() {
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let (state, id) = started_without_driver(dir, &gated());
+    let mut window = Window::viewing(&state, dir, id).await;
+    window.sees(id, "idle", idle).await;
+    assert_ack(&window.request(message(1, id, "m1", vec![]), 1).await, "m1");
+    assert_ack(&window.request(message(2, id, "q1", vec![]), 2).await, "q1");
+    let seen = window.sees(id, "q1 queued", |s| s.queue.len() == 1).await;
+    let (turn, _) = busy_with(&seen).expect("busy");
+    end_turn(dir, 1);
+    window
+        .until("t1's result", |w| !w.results().is_empty())
+        .await;
+    window.send(interrupt(id, turn)).await;
+    window.sees(id, "held", |s| s.hold).await;
+    micold_daemon::server::spawn_input_driver(Arc::clone(&state));
+    delivered_stays(dir, &["m1"]).await;
+    assert!(interrupts(dir).is_empty(), "no turn was interrupted");
+    let seen = window.last(id).cloned().unwrap();
+    assert!(idle(&seen) && seen.hold);
+    assert_eq!(seen.texts(), ["q1"]);
+    state.stop_session(id);
 }

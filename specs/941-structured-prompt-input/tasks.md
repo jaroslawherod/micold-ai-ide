@@ -259,10 +259,10 @@ Story labels say which story each task serves.
 
 ## Phase 4: Daemon — interrupt, overdue, saved queue (M3)
 
-- [ ] T034 [P] [US3] Stand-in: `on-interrupt <file>` (on a stdin `control_request` interrupt, write
+- [x] T034 [P] [US3] Stand-in: `on-interrupt <file>` (on a stdin `control_request` interrupt, write
   P-4's `control_response` and replay the file) and `ignore-interrupt` (record the line, do nothing)
   in `daemon/tests/support/structured.rs`
-- [ ] T035 [P] [US3] Tests in `daemon/tests/structured_input.rs`: `TurnInterrupt` of the open turn
+- [x] T035 [P] [US3] Tests in `daemon/tests/structured_input.rs`: `TurnInterrupt` of the open turn
   writes one `encode_interrupt` line, pushes `InterruptAsked`, broadcasts `Busy { Asked }`; with
   `on-interrupt interrupt-turn.jsonl` the session is idle within 3 s over 20 runs with the same pid
   (SC-003, FR-013) and its transcript ends `Interrupted`; two clients interrupting write one line
@@ -274,17 +274,17 @@ Story labels say which story each task serves.
   (Q2); an interrupt naming `last_ended`, sent between the `result` and the driver's wake-up,
   holds the queue and never interrupts the turn the queue would start; `SessionInterrupt` on a
   structured primary is still refused (FR-017)
-- [ ] T036 [P] [US4] Tests in `daemon/tests/structured_input_saved.rs` (new): with **Save terminal
+- [x] T036 [P] [US4] Tests in `daemon/tests/structured_input_saved.rs` (new): with **Save terminal
   history** on, a queue with images survives a daemon restart, restored on hold with new ids; off,
   the queue is empty after a restart (Q4); the `.queue` file goes when the queue empties and on the
   session's delete or forget; a damaged file restores an empty queue and the events still load; two
   quick edits are saved in order (snapshot generation)
-- [ ] T037 [US3] Interrupt: `write_interrupt` in `daemon/src/structured.rs`; in `daemon/src/state.rs`
+- [x] T037 [US3] Interrupt: `write_interrupt` in `daemon/src/structured.rs`; in `daemon/src/state.rs`
   `ask_interrupt` under the lock, `on_interrupt` hold, the `last_ended` rule; in
   `daemon/src/input_driver.rs` one overdue timer per ask (`tokio::time::sleep(INTERRUPT_OVERDUE)`,
   `TurnState::overdue` with the ask's epoch, broadcast); `TurnInterrupt` dispatched in
   `daemon/src/server.rs`; T034–T035 pass
-- [ ] T038 [US4] Saved queue in `daemon/src/state.rs`: every queue change under saving on takes a
+- [x] T038 [US4] Saved queue in `daemon/src/state.rs`: every queue change under saving on takes a
   snapshot with an increasing generation and hands it to the history saver's thread, which drops a
   snapshot older than one it wrote; restored in `event_stream_loading`, on hold; removed with the
   session's files; T036 passes

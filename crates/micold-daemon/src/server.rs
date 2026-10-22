@@ -1127,8 +1127,12 @@ where
                 let delivery = state.release_queue(session);
                 answer_queue_change(state, id, req, Ok((OperationResult::Ack, delivery)));
             }
-            // Until M3 serves interrupts.
-            ClientMsg::TurnInterrupt { .. } => {}
+            ClientMsg::TurnInterrupt { session, turn } => {
+                // Asked in arrival order; written and timed off this connection's task.
+                if let Some(pending) = state.ask_interrupt(session, turn) {
+                    tokio::spawn(crate::input_driver::interrupt(Arc::clone(state), pending));
+                }
+            }
             ClientMsg::ScrollbackRequest {
                 session,
                 req,

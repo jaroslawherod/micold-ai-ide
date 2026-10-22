@@ -397,3 +397,46 @@ fn two_sessions_never_share_a_queue() {
     assert!(other.input.is_empty() && !other.input.is_held());
     assert_eq!(other.input.snapshot(), (vec![], false));
 }
+
+/// R9: a saved queue is restored in order with fresh ids and on hold; an empty one is not held.
+#[test]
+fn a_restored_queue_is_held_with_fresh_ids() {
+    let restored = SessionInput::restored(vec![text("a"), text("b")]);
+    assert!(restored.is_held(), "restored on hold (Q1)");
+    let queued: Vec<_> = restored.queued().collect();
+    assert_eq!(queued[0].message, text("a"));
+    assert_eq!(queued[1].message, text("b"));
+    assert!(queued[0].id < queued[1].id, "fresh ids, in order");
+    let empty = SessionInput::restored(Vec::new());
+    assert!(!empty.is_held() && empty.is_empty());
+}
+
+/// R9: the revision rises with every change of the entries and never with the hold alone.
+#[test]
+fn the_revision_follows_the_entries_not_the_hold() {
+    let mut session = busy_with(&["a", "b"]);
+    let ids = session.ids();
+    let mut last = session.input.revision();
+    fn changed(input: &SessionInput, last: &mut u64, what: &str) {
+        assert!(input.revision() > *last, "{what} changes the revision");
+        *last = input.revision();
+    }
+    session.input.edit(ids[0], "a2".into(), &[]).expect("edit");
+    changed(&session.input, &mut last, "an edit");
+    session.input.on_interrupt();
+    session.input.release();
+    assert_eq!(
+        session.input.revision(),
+        last,
+        "the hold alone changes nothing"
+    );
+    session.end_turn();
+    let (_, head) = session.input.pump(&session.turn).expect("the head");
+    changed(&session.input, &mut last, "a delivery");
+    session.input.put_back(head);
+    changed(&session.input, &mut last, "a put back");
+    session.input.remove(ids[1]).expect("remove");
+    changed(&session.input, &mut last, "a removal");
+    session.input.take(ids[0]).expect("take");
+    changed(&session.input, &mut last, "a take");
+}
