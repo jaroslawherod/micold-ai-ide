@@ -10,6 +10,7 @@ use super::changes::{content_of, Content};
 use super::diff::SideLines;
 use super::git::{object_sizes, read_bytes, worktree_bytes};
 use super::limits;
+use super::RelPath;
 use crate::github::GithubRepo;
 use crate::pull_request::PullRequestSource;
 
@@ -241,9 +242,131 @@ fn head_file(
     read_bytes(dir, &["cat-file", "blob", &spec], None).map_err(|_| FileReadFailure::Unreadable)
 }
 
+/// The files of the repository `source` shows, sorted (feature 1150, FR-011, research R4): for the
+/// worktree, tracked and untracked files git does not ignore that still exist on disk. A path git
+/// ignores is not listed; typing it reaches it through [`read_file`], which checks the disk.
+/// A pull request's tree is read at M6 (T047) and is not available yet.
+pub fn list_tree(source: &FileSource) -> Result<Vec<RelPath>, FileReadFailure> {
+    let FileSource::Worktree { dir } = source else {
+        return Err(FileReadFailure::HeadUnavailable);
+    };
+    let out = read_bytes(
+        dir,
+        &[
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        ],
+        None,
+    )
+    .map_err(|_| FileReadFailure::Unreadable)?;
+    let mut paths: Vec<RelPath> = out
+        .split(|b| *b == 0)
+        .filter(|name| !name.is_empty())
+        .filter_map(|name| std::str::from_utf8(name).ok())
+        .filter(|name| dir.join(name).symlink_metadata().is_ok())
+        .map(RelPath::from_git)
+        .collect();
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
+/// One place the reviewer can return to (data-model §4). Expansion lives with the file, so a frame
+/// keeps only what was selected and how far it was scrolled.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Frame {
+    /// The diff view, with `file` selected (none when no file was).
+    Diff {
+        /// The selected file.
+        file: Option<RelPath>,
+        /// The diff's scroll offset, in pixels.
+        offset: u32,
+    },
+    /// A browsed file.
+    File {
+        /// The file.
+        path: RelPath,
+        /// Its scroll offset, in pixels.
+        offset: u32,
+    },
+}
+
+/// The places the reviewer came from, most recent last (FR-013).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BrowseStack(Vec<Frame>);
+
+impl BrowseStack {
+    /// Remember `frame` as the place to return to.
+    pub fn push(&mut self, frame: Frame) {
+        self.0.push(frame);
+    }
+
+    /// The most recent place, removed; `None` (a no-op) when there is none.
+    pub fn back(&mut self) -> Option<Frame> {
+        self.0.pop()
+    }
+
+    /// Forget every place: the source changed, so none of them is on screen any more.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// Nowhere to go back to.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rel(path: &str) -> RelPath {
+        RelPath::from_native(path).unwrap()
+    }
+
+    fn diff_frame(file: &str, offset: u32) -> Frame {
+        Frame::Diff {
+            file: Some(rel(file)),
+            offset,
+        }
+    }
+
+    #[test]
+    fn back_returns_the_frames_in_reverse_order() {
+        let mut stack = BrowseStack::default();
+        stack.push(diff_frame("a.rs", 40));
+        stack.push(Frame::File {
+            path: rel("b.rs"),
+            offset: 7,
+        });
+        assert_eq!(
+            stack.back(),
+            Some(Frame::File {
+                path: rel("b.rs"),
+                offset: 7
+            })
+        );
+        assert_eq!(stack.back(), Some(diff_frame("a.rs", 40)));
+    }
+
+    #[test]
+    fn back_on_an_empty_stack_is_a_no_op() {
+        let mut stack = BrowseStack::default();
+        assert_eq!(stack.back(), None);
+        assert!(stack.is_empty());
+    }
+
+    #[test]
+    fn clearing_forgets_every_frame() {
+        let mut stack = BrowseStack::default();
+        stack.push(diff_frame("a.rs", 1));
+        stack.clear();
+        assert_eq!(stack.back(), None);
+    }
 
     #[test]
     fn a_relative_path_is_confined() {

@@ -7,7 +7,7 @@ use std::process::Command;
 
 use micold_core::github::GithubRepo;
 use micold_core::pull_request::FakePullRequestSource;
-use micold_core::review::browse::{read_file, Confined, FileReadFailure, FileSource};
+use micold_core::review::browse::{list_tree, read_file, Confined, FileReadFailure, FileSource};
 use micold_core::review::limits;
 
 fn git(dir: &Path, args: &[&str]) -> String {
@@ -250,4 +250,41 @@ fn a_local_head_is_read_without_gh() {
         read_file(&far, &path("src/a.rs"), false, None, 0),
         Err(FileReadFailure::HeadUnavailable)
     );
+}
+
+fn tree_names(source: &FileSource) -> Vec<String> {
+    list_tree(source)
+        .expect("a tree")
+        .iter()
+        .map(|p| p.as_str().to_owned())
+        .collect()
+}
+
+#[test]
+fn a_worktree_tree_lists_tracked_and_untracked_but_not_ignored_files() {
+    let (_dir, root, _head) = repo_with_head();
+    fs::write(root.join(".gitignore"), "ignored.log\n").unwrap();
+    git(&root, &["add", ".gitignore"]);
+    fs::write(root.join("ignored.log"), "x\n").unwrap();
+    fs::write(root.join("src/new.rs"), "n\n").unwrap();
+    assert_eq!(
+        tree_names(&worktree(&root)),
+        [".gitignore", "src/a.rs", "src/new.rs"]
+    );
+}
+
+#[test]
+fn a_tracked_file_deleted_from_disk_is_not_in_the_tree() {
+    let (_dir, root, _head) = repo_with_head();
+    fs::remove_file(root.join("src/a.rs")).unwrap();
+    assert!(tree_names(&worktree(&root)).is_empty());
+}
+
+#[test]
+fn an_ignored_file_is_still_readable_by_its_typed_path() {
+    let (_dir, root, _head) = repo_with_head();
+    fs::write(root.join(".gitignore"), "ignored.log\n").unwrap();
+    fs::write(root.join("ignored.log"), "x\n").unwrap();
+    let read = read_file(&worktree(&root), &path("ignored.log"), false, None, 0);
+    assert_eq!(read.unwrap().lines.len(), 1);
 }

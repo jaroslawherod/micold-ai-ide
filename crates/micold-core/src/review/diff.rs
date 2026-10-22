@@ -230,6 +230,36 @@ pub(crate) fn split_lines(text: &str) -> impl Iterator<Item = &str> {
         .map(|line| line.strip_suffix('\r').unwrap_or(line))
 }
 
+/// A whole file as a diff of nothing but context lines (feature 1150, FR-011): one hunk numbering
+/// every line on both sides alike, so the diff view draws a browsed file as it draws a diff. An
+/// empty file has no hunk.
+pub fn plain_file(lines: &SideLines) -> FileDiff {
+    let total = u32::try_from(lines.len()).unwrap_or(u32::MAX);
+    if total == 0 {
+        return FileDiff::Text(Vec::new());
+    }
+    let lines = (1..=total)
+        .filter_map(|n| {
+            lines.line(n).map(|text| DiffLine {
+                kind: LineKind::Context,
+                old: Some(n),
+                new: Some(n),
+                text: text.to_owned(),
+            })
+        })
+        .collect();
+    FileDiff::Text(vec![Hunk {
+        old_start: 1,
+        old_len: total,
+        new_start: 1,
+        new_len: total,
+        section: String::new(),
+        lines,
+        old_no_newline: false,
+        new_no_newline: false,
+    }])
+}
+
 /// `-a,b` or `+c,d` (the count defaults to 1).
 fn range(part: &str) -> Option<(u32, u32)> {
     let (start, len) = match part[1..].split_once(',') {
@@ -787,6 +817,32 @@ mod tests {
             FileDiff::Text(hunks) => Shaped::unshaped(hunks),
             _ => Shaped::default(),
         }
+    }
+
+    #[test]
+    fn a_plain_file_is_one_hunk_of_numbered_context_lines() {
+        let lines = SideLines::from_bytes(b"one\r\ntwo\nthree").unwrap();
+        let hunks = text(plain_file(&lines));
+        assert_eq!(hunks.len(), 1);
+        assert_eq!((hunks[0].new_start, hunks[0].new_len), (1, 3));
+        let shown: Vec<_> = hunks[0]
+            .lines
+            .iter()
+            .map(|l| (l.kind, l.old, l.new, l.text.as_str()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                (LineKind::Context, Some(1), Some(1), "one"),
+                (LineKind::Context, Some(2), Some(2), "two"),
+                (LineKind::Context, Some(3), Some(3), "three"),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_empty_plain_file_has_no_hunks() {
+        assert!(text(plain_file(&SideLines::default())).is_empty());
     }
 
     fn text(diff: FileDiff) -> Vec<Hunk> {

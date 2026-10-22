@@ -25,6 +25,7 @@ use micold_core::pull_request::{PullRequestSource, ReadingFailure};
 use micold_core::review::base::{ReviewScope, Toggles};
 use micold_core::review::browse::{self, Confined, FileReadFailure, FileSource, FileText};
 use micold_core::review::changes::ChangeList;
+use micold_core::review::diff::Spans;
 use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
 
@@ -240,6 +241,22 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                 answer,
             )
         }
+        Effect::ReadTree { seq, entry } => {
+            let answer = move |result: Result<Result<Vec<RelPath>, FileReadFailure>, String>| {
+                Message::Changes(Msg::TreeRead {
+                    seq,
+                    result: result.unwrap_or(Err(FileReadFailure::Unreadable)),
+                })
+            };
+            let Ok((dir, _git)) = local(app, &entry) else {
+                return Task::done(answer(Ok(Err(FileReadFailure::Unreadable))));
+            };
+            off_thread(
+                format!("tree seq={seq} entry={entry:?}"),
+                move || Ok(browse::list_tree(&FileSource::Worktree { dir })),
+                answer,
+            )
+        }
         Effect::ReadFile {
             seq,
             project,
@@ -326,16 +343,25 @@ fn read_file_requested(
 ) -> Task<Message> {
     let answer = {
         let path = path.clone();
-        move |result: Result<FileText, FileReadFailure>| {
+        move |(result, spans): (Result<FileText, FileReadFailure>, Spans)| {
             Message::Changes(Msg::FileRead {
                 seq,
                 source,
                 path: path.clone(),
                 result,
+                spans,
             })
         }
     };
-    let unavailable = || Task::done(answer(Err(FileReadFailure::HeadUnavailable)));
+    if source == SourceKey::Worktree {
+        return read_worktree_file(app, &entry, path, force_large, seq, answer);
+    }
+    let unavailable = || {
+        Task::done(answer((
+            Err(FileReadFailure::HeadUnavailable),
+            Spans::default(),
+        )))
+    };
     let Ok((dir, _git)) = local(app, &entry) else {
         return unavailable();
     };
@@ -368,9 +394,50 @@ fn read_file_requested(
                 started.elapsed().as_millis(),
                 if result.is_ok() { "ok" } else { "failed" }
             ));
-            result
+            (result, Spans::default())
         },
         answer,
+    )
+}
+
+/// Read a browsed worktree file off the update thread and colour it there too (feature 1150,
+/// FR-011): past [`HIGHLIGHT_BUDGET`] the lines show plain rather than wait.
+fn read_worktree_file(
+    app: &App,
+    entry: &SessionLocation,
+    path: RelPath,
+    force_large: bool,
+    seq: u64,
+    answer: impl Fn((Result<FileText, FileReadFailure>, Spans)) -> Message + Send + 'static,
+) -> Task<Message> {
+    let Ok((dir, _git)) = local(app, entry) else {
+        return Task::done(answer((Err(FileReadFailure::Unreadable), Spans::default())));
+    };
+    off_thread(
+        format!("browse seq={seq} path={path}"),
+        move || {
+            let read = Confined::new(path.as_str()).and_then(|confined| {
+                browse::read_file(
+                    &FileSource::Worktree { dir },
+                    &confined,
+                    force_large,
+                    None,
+                    micold_core::unix_time::unix_secs(),
+                )
+            });
+            let spans = match &read {
+                Ok(text) => syntax::highlight_text(&text.lines, path.as_str(), HIGHLIGHT_BUDGET)
+                    .unwrap_or_else(|| {
+                        crate::log_line(&format!("changes: {path} not highlighted"));
+                        Spans::default()
+                    }),
+                Err(_) => Spans::default(),
+            };
+            Ok((read, spans))
+        },
+        move |result| {
+            answer(result.unwrap_or((Err(FileReadFailure::Unreadable), Spans::default())))
+        },
     )
 }
 

@@ -15,14 +15,14 @@ use micold_core::pull_request::{
 };
 use micold_core::review::anchor::{self, locate, Located};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
-use micold_core::review::browse::{FileReadFailure, FileText};
+use micold_core::review::browse::{BrowseStack, FileReadFailure, FileText, Frame};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
 use micold_core::review::comment::{
     CommentId, CommentState, Move, Outcome, PrAnchor, ReviewComment, Scope, Status,
 };
 use micold_core::review::diff::{
-    parse_unified, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines, LoadedDiff,
-    SideLines, SideRow, Spans, UnifiedRow,
+    parse_unified, plain_file, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines,
+    LoadedDiff, SideLines, SideRow, Spans, UnifiedRow,
 };
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::pr_diff::PrDiff;
@@ -31,6 +31,7 @@ use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
 use micold_core::tokens::Rgb;
+use micold_core::typeahead::{rank, Query};
 
 /// The note beside the Default entry's unavailable Committed toggle (L1, US1 s9).
 pub const DEFAULT_ENTRY_NOTE: &str =
@@ -373,6 +374,205 @@ pub struct OpenView {
     /// [`update`] after every message that can change them. The hunks of the diff as read when
     /// nothing can be revealed.
     pub shaped: Shaped,
+    /// The repository file shown in place of the diff, when the reviewer is browsing (feature
+    /// 1150, FR-011). The diff, its selection, scroll and expansion stay as they were.
+    pub browse: Option<BrowsedFile>,
+    /// Where Back returns to (FR-013).
+    pub stack: BrowseStack,
+    /// The file tree and path picker.
+    pub files: FilesPane,
+}
+
+/// A repository file opened from the tree or the picker (feature 1150, data-model §8).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrowsedFile {
+    /// The file.
+    pub path: RelPath,
+    /// Its text, once read.
+    pub load: BrowseLoad,
+}
+
+/// How far reading a browsed file got.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BrowseLoad {
+    /// Read `seq` is under way; an answer with another is dropped.
+    Reading {
+        /// The read's sequence number.
+        seq: u64,
+    },
+    /// The file as context-only lines, coloured.
+    Ready(LoadedDiff),
+    /// The file cannot be shown (FR-009).
+    Failed(FileReadFailure),
+}
+
+/// What the diff pane shows while a repository file is browsed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BrowseBody<'a> {
+    /// The file is being read.
+    Reading,
+    /// The file cannot be shown; `large`: it is only over the size limit, so "Show anyway" reads it.
+    Failed {
+        /// The one line that says why.
+        message: String,
+        /// Offer "Show anyway".
+        large: bool,
+    },
+    /// The file's lines.
+    File(&'a LoadedDiff),
+}
+
+/// What the browsed file's pane shows, `None` while the diff is shown.
+pub fn browse_body(view: &OpenView) -> Option<BrowseBody<'_>> {
+    Some(match &view.browse.as_ref()?.load {
+        BrowseLoad::Reading { .. } => BrowseBody::Reading,
+        BrowseLoad::Failed(why) => BrowseBody::Failed {
+            message: why.message(),
+            large: matches!(why, FileReadFailure::TooLarge { .. }),
+        },
+        BrowseLoad::Ready(loaded) => BrowseBody::File(loaded),
+    })
+}
+
+/// Back has somewhere to return to (FR-013).
+pub fn can_go_back(view: &OpenView) -> bool {
+    !view.stack.is_empty()
+}
+
+/// The browsed file is one the change lists, so its diff can be opened (FR-015).
+pub fn file_diff_available(view: &OpenView) -> bool {
+    view.browse
+        .as_ref()
+        .is_some_and(|b| file_kind(view, &b.path).is_some())
+}
+
+/// The file tree and path picker of the list pane (feature 1150, FR-011, research R4).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FilesPane {
+    /// The pane shows the repository's files in place of the changed ones.
+    pub shown: bool,
+    /// The repository's files, as last read.
+    pub tree: Load<Vec<RelPath>>,
+    /// What was typed in the path picker.
+    pub picker: String,
+    /// The folders the tree shows open, as `/`-separated paths.
+    pub open_folders: BTreeSet<String>,
+}
+
+/// One row of the file tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeRow {
+    /// Nesting depth, 0 at the top.
+    pub depth: u16,
+    /// The folder's or file's own name.
+    pub name: String,
+    /// What it is.
+    pub kind: TreeKind,
+}
+
+/// A tree row's kind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TreeKind {
+    /// A folder, by its path from the root.
+    Folder {
+        /// The path.
+        path: String,
+        /// Its files are listed below it.
+        open: bool,
+    },
+    /// A file.
+    File(RelPath),
+}
+
+/// The files the tree last read: the ready list, or the one kept while it is read again.
+fn tree_files(view: &OpenView) -> &[RelPath] {
+    match &view.files.tree {
+        Load::Ready(files) => files,
+        Load::Loading {
+            last: Some(files), ..
+        } => files,
+        _ => &[],
+    }
+}
+
+/// A folder's contents while the tree is laid out.
+#[derive(Default)]
+struct Folder {
+    folders: BTreeMap<String, Folder>,
+    files: Vec<(String, RelPath)>,
+}
+
+/// The tree's visible rows: folders before files at each level, a folder's contents only while it
+/// is open (FR-011).
+pub fn tree_rows(view: &OpenView) -> Vec<TreeRow> {
+    let mut root = Folder::default();
+    for file in tree_files(view) {
+        let mut at = &mut root;
+        let mut parts = file.as_str().split('/').peekable();
+        while let Some(part) = parts.next() {
+            if parts.peek().is_some() {
+                at = at.folders.entry(part.to_owned()).or_default();
+            } else {
+                at.files.push((part.to_owned(), file.clone()));
+            }
+        }
+    }
+    fn walk(
+        folder: &Folder,
+        prefix: &str,
+        depth: u16,
+        open: &BTreeSet<String>,
+        out: &mut Vec<TreeRow>,
+    ) {
+        for (name, inner) in &folder.folders {
+            let path = format!("{prefix}{name}");
+            let is_open = open.contains(&path);
+            out.push(TreeRow {
+                depth,
+                name: name.clone(),
+                kind: TreeKind::Folder {
+                    path: path.clone(),
+                    open: is_open,
+                },
+            });
+            if is_open {
+                walk(inner, &format!("{path}/"), depth + 1, open, out);
+            }
+        }
+        for (name, path) in &folder.files {
+            out.push(TreeRow {
+                depth,
+                name: name.clone(),
+                kind: TreeKind::File(path.clone()),
+            });
+        }
+    }
+    let mut out = Vec::new();
+    walk(&root, "", 0, &view.files.open_folders, &mut out);
+    out
+}
+
+/// The most files the path picker lists.
+const PICKER_ROWS: usize = 50;
+
+/// The path picker's candidates for what was typed: the tree's files that match, best first, then
+/// the typed path itself when the tree does not hold it — a git-ignored file is reachable only so,
+/// and the read says whether it exists (FR-011).
+pub fn picker_matches(view: &OpenView) -> Vec<RelPath> {
+    let text = view.files.picker.trim();
+    if text.is_empty() {
+        return Vec::new();
+    }
+    let files = tree_files(view);
+    let mut out: Vec<RelPath> = rank(files, |p| p.as_str(), &Query::new(text))
+        .into_iter()
+        .take(PICKER_ROWS)
+        .map(|(i, _)| files[i].clone())
+        .collect();
+    if let Some(typed) = RelPath::from_native(text).filter(|typed| !files.contains(typed)) {
+        out.push(typed);
+    }
+    out
 }
 
 /// Which diff an expansion belongs to (feature 1150, data-model §2).
@@ -450,7 +650,7 @@ fn new_side(view: &OpenView) -> Option<&SideLines> {
 /// The whole-file toggle of the selected file: hidden for an added file or while a pull request's
 /// head version is read, disabled when there is no text version to show, else on or off (FR-004).
 pub fn whole_file(view: &OpenView) -> WholeFile {
-    let Some((key, path)) = selected_key(view) else {
+    let Some((key, path)) = selected_key(view).filter(|_| view.browse.is_none()) else {
         return WholeFile::Hidden;
     };
     if matches!(
@@ -1013,6 +1213,28 @@ pub enum Msg {
         path: RelPath,
         /// The text, or why there is none.
         result: Result<FileText, FileReadFailure>,
+        /// The text's syntax colours, when the shell coloured it (a browsed file); none otherwise.
+        spans: Spans,
+    },
+    /// A file of the repository was picked in the tree or the path picker (feature 1150, FR-011).
+    BrowseOpen(RelPath),
+    /// Back from a browsed file (FR-013).
+    BrowseBack,
+    /// "Open diff" on a browsed file the change lists (FR-015).
+    OpenFileDiff,
+    /// The path picker's text changed.
+    PathPickerChanged(String),
+    /// The list pane's "Files" toggle was pressed: the repository's tree in place of the changed
+    /// files, or back.
+    FilesPaneToggled,
+    /// A folder of the tree was opened or closed.
+    FolderToggled(String),
+    /// Tree read `seq` ended.
+    TreeRead {
+        /// The read it answers.
+        seq: u64,
+        /// The files, or why there are none.
+        result: Result<Vec<RelPath>, FileReadFailure>,
     },
     /// The diff scrolled or was resized.
     DiffScrolled {
@@ -1219,7 +1441,8 @@ pub enum Effect {
         project: PathBuf,
         /// The entry whose directory holds the objects.
         entry: SessionLocation,
-        /// Whose version: the pull request.
+        /// Whose version: a pull request's, or the worktree's own (a browsed file; `commit` and
+        /// `address` are then empty).
         source: SourceKey,
         /// The head commit.
         commit: String,
@@ -1229,6 +1452,13 @@ pub enum Effect {
         path: RelPath,
         /// Read it even over the size limit.
         force_large: bool,
+    },
+    /// List the repository's files for the entry as read `seq` (feature 1150, FR-011).
+    ReadTree {
+        /// The read's sequence number.
+        seq: u64,
+        /// The entry whose directory is listed.
+        entry: SessionLocation,
     },
     /// Scroll the diff to this offset, in pixels (a panel jump).
     ScrollDiff {
@@ -1332,6 +1562,9 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 source: Source::Changes,
                 expansions: BTreeMap::new(),
                 shaped: Shaped::default(),
+                browse: None,
+                stack: BrowseStack::default(),
+                files: FilesPane::default(),
             });
             request_read(state)
         }
@@ -1517,6 +1750,12 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.open.as_mut() else {
                 return Effect::None;
             };
+            // Choosing a changed file leaves the browser and forgets where Back led.
+            let was_browsing = view.browse.take().is_some();
+            view.stack.clear();
+            if was_browsing {
+                view.diff_offset = 0;
+            }
             if let Source::PullRequest(pr) = &mut view.source {
                 // A pull request's patches are held: choosing a file parses one, reads nothing.
                 pr.selected = Some(path);
@@ -1541,6 +1780,14 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.open.as_mut() else {
                 return Effect::None;
             };
+            // A browsed file over the limit is read despite it.
+            if let Some(BrowsedFile {
+                path,
+                load: BrowseLoad::Failed(FileReadFailure::TooLarge { .. }),
+            }) = view.browse.clone()
+            {
+                return request_browse(view, &mut state.next_seq, path, true);
+            }
             if let Source::PullRequest(pr) = &mut view.source {
                 if let Some(path) = pr.selected.clone() {
                     pr.shown_large.insert(path);
@@ -1555,8 +1802,71 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             view.shown_large.insert(path);
             request_diff(state, false)
         }
-        Msg::GapToggled(key) => {
+        Msg::BrowseOpen(path) => browse_open(state, path),
+        Msg::BrowseBack => browse_back(state),
+        Msg::OpenFileDiff => {
+            let Some(view) = state.open.as_ref().filter(|v| file_diff_available(v)) else {
+                return Effect::None;
+            };
+            let path = view.browse.as_ref().map(|b| b.path.clone());
+            match path.map(|path| update(state, Msg::FileSelected(path))) {
+                Some(Effect::None) => Effect::ScrollDiff { offset: 0 },
+                Some(effect) => effect,
+                None => Effect::None,
+            }
+        }
+        Msg::PathPickerChanged(text) => {
             if let Some(view) = state.open.as_mut() {
+                view.files.picker = text;
+            }
+            Effect::None
+        }
+        Msg::FolderToggled(folder) => {
+            if let Some(view) = state.open.as_mut() {
+                if !view.files.open_folders.remove(&folder) {
+                    view.files.open_folders.insert(folder);
+                }
+            }
+            Effect::None
+        }
+        Msg::FilesPaneToggled => {
+            let seq = state.next_seq;
+            let Some(view) = state.open.as_mut().filter(|v| v.source == Source::Changes) else {
+                return Effect::None;
+            };
+            view.files.shown = !view.files.shown;
+            if !view.files.shown {
+                return Effect::None;
+            }
+            state.next_seq += 1;
+            let last = match std::mem::take(&mut view.files.tree) {
+                Load::Ready(files) => Some(files),
+                Load::Loading { last, .. } => last,
+                _ => None,
+            };
+            view.files.tree = Load::Loading {
+                seq,
+                again: false,
+                last,
+            };
+            Effect::ReadTree {
+                seq,
+                entry: view.entry.clone(),
+            }
+        }
+        Msg::TreeRead { seq, result } => {
+            if let Some(view) = state.open.as_mut() {
+                if matches!(view.files.tree, Load::Loading { seq: s, .. } if s == seq) {
+                    view.files.tree = match result {
+                        Ok(files) => Load::Ready(files),
+                        Err(why) => Load::Failed(why.message()),
+                    };
+                }
+            }
+            Effect::None
+        }
+        Msg::GapToggled(key) => {
+            if let Some(view) = state.open.as_mut().filter(|v| v.browse.is_none()) {
                 if let Some(at) = selected_key(view).filter(|(_, p)| revealable(view, p)) {
                     if new_side(view).is_some() {
                         view.expansions.entry(at).or_default().toggle_key(key);
@@ -1566,7 +1876,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::WholeFileToggled => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.open.as_mut().filter(|v| v.browse.is_none()) {
                 if let (WholeFile::Available { on }, Some(at)) =
                     (whole_file(view), selected_key(view))
                 {
@@ -1580,7 +1890,31 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             source,
             path,
             result,
+            spans,
         } => {
+            if let Some(view) = state.open.as_mut() {
+                let waiting = view
+                    .browse
+                    .as_ref()
+                    .is_some_and(|b| b.path == path && b.load == (BrowseLoad::Reading { seq }));
+                if waiting && source == SourceKey::Worktree {
+                    let load = match result {
+                        Ok(text) => BrowseLoad::Ready(LoadedDiff {
+                            diff: plain_file(&text.lines),
+                            old: None,
+                            new: Some(text.lines),
+                            spans,
+                        }),
+                        Err(why) => BrowseLoad::Failed(why),
+                    };
+                    if let Some(browsed) = view.browse.as_mut() {
+                        browsed.load = load;
+                    }
+                    return Effect::ScrollDiff {
+                        offset: view.diff_offset,
+                    };
+                }
+            }
             if let Some(Source::PullRequest(pr)) = state.open.as_mut().map(|v| &mut v.source) {
                 let current = source == SourceKey::Pr(pr.number)
                     && pr.selected.as_ref() == Some(&path)
@@ -2448,6 +2782,82 @@ fn follow_head(state: &mut State) -> Option<Effect> {
     })
 }
 
+/// Read `path` from the worktree to show it in place of the diff.
+fn request_browse(
+    view: &mut OpenView,
+    next_seq: &mut u64,
+    path: RelPath,
+    force_large: bool,
+) -> Effect {
+    let seq = *next_seq;
+    *next_seq += 1;
+    view.browse = Some(BrowsedFile {
+        path: path.clone(),
+        load: BrowseLoad::Reading { seq },
+    });
+    Effect::ReadFile {
+        seq,
+        project: view.project.clone(),
+        entry: view.entry.clone(),
+        source: SourceKey::Worktree,
+        commit: String::new(),
+        address: String::new(),
+        path,
+        force_large,
+    }
+}
+
+/// Open `path` in the browser, remembering what was on screen as the place Back returns to. A
+/// pull request's files are browsed at M6; here only the entry's own changes browse.
+fn browse_open(state: &mut State, path: RelPath) -> Effect {
+    let Some(view) = state.open.as_mut().filter(|v| v.source == Source::Changes) else {
+        return Effect::None;
+    };
+    let shown = view
+        .browse
+        .as_ref()
+        .is_some_and(|b| b.path == path && !matches!(b.load, BrowseLoad::Failed(_)));
+    if shown {
+        return Effect::None;
+    }
+    let frame = match &view.browse {
+        Some(b) => Frame::File {
+            path: b.path.clone(),
+            offset: view.diff_offset,
+        },
+        None => Frame::Diff {
+            file: view.selected.clone(),
+            offset: view.diff_offset,
+        },
+    };
+    view.stack.push(frame);
+    view.diff_offset = 0;
+    view.files.picker.clear();
+    request_browse(view, &mut state.next_seq, path, false)
+}
+
+/// Return to the place the browser was entered from: the diff with its file, scroll and
+/// expansion (kept untouched meanwhile, and re-shaped against any refreshed diff), or the browsed
+/// file that was left.
+fn browse_back(state: &mut State) -> Effect {
+    let Some(view) = state.open.as_mut() else {
+        return Effect::None;
+    };
+    match view.stack.back() {
+        None => Effect::None,
+        Some(Frame::Diff { offset, .. }) => {
+            view.browse = None;
+            view.diff_offset = offset;
+            Effect::ScrollDiff { offset }
+        }
+        Some(Frame::File { path, offset }) => {
+            let effect = request_browse(view, &mut state.next_seq, path, false);
+            view.diff_offset = offset;
+            effect
+        }
+    }
+}
+
 /// Ask for the head version of the selected pull request file when it has one to show: a text
 /// file that is neither added nor deleted (FR-009). A pull request the list does not hold has no
 /// head commit to ask for, which the file's note says.
@@ -2501,6 +2911,8 @@ fn request_head(view: &mut OpenView, next_seq: &mut u64, force_large: bool) -> E
 /// belong to the file that was shown.
 fn reset_diff_pane(view: &mut OpenView) {
     close_new(view);
+    view.browse = None;
+    view.stack.clear();
     view.diff_offset = 0;
     view.slot_heights.clear();
 }
@@ -3039,7 +3451,9 @@ pub fn diff_body(view: &OpenView) -> DiffBody<'_> {
 /// context rows of that diff, so they follow it. Adds no rule of its own: a file the change does
 /// not touch is not pickable until #1149 specifies an anchor for it.
 pub fn pickable(view: &OpenView, file: &RelPath) -> bool {
-    selected_key(view).is_some_and(|(_, shown)| &shown == file) && can_pick(view)
+    view.browse.is_none()
+        && selected_key(view).is_some_and(|(_, shown)| &shown == file)
+        && can_pick(view)
 }
 
 /// [`pickable`] for the file the view shows: the check the pick handling and the diff pane make.

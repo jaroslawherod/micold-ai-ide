@@ -69,7 +69,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 (T036-T046) in progress, nothing committed before this commit; the tree is WIP and not yet compiled or gated (cargo check of micold-client was started, result unseen). M4 #1221 is merged (df514cb37); branch was reset to origin/main by branch-start.sh. Ledger table still says M4 "PR open": set it to merged (SHA df514cb373e4e93a20c4294b2518f2c689f03c89) in the next commit.
+
+Done (written, unverified):
+- core: `browse.rs` `list_tree`, `Frame`, `BrowseStack` + tests; `diff.rs` `plain_file` + tests; `tests/review_browse.rs` tree tests (T036, T037, T039, T040).
+- client reducer `features/changes.rs`: `BrowsedFile`/`BrowseLoad`/`BrowseBody`/`FilesPane`/`TreeRow`, `browse_body`, `can_go_back`, `file_diff_available`, `tree_rows`, `picker_matches`, Msgs BrowseOpen/BrowseBack/OpenFileDiff/PathPickerChanged/FilesPaneToggled/FolderToggled/TreeRead, `Msg::FileRead` gained `spans: Spans`, `Effect::ReadTree`; worktree browse reuses `Effect::ReadFile` with `source: SourceKey::Worktree` (empty commit/address); `pickable`/`whole_file`/GapToggled guard on `browse.is_none()`; tests appended to `tests/features_changes.rs` (T038, T041). `tests/features_pr_changes.rs` FileRead literal got `spans`.
+- shell `shell/changes.rs` (T042): `Effect::ReadTree` via `off_thread`, `read_worktree_file` (reads + `syntax::highlight_text`, new in `ui/syntax.rs`).
+
+Next: (1) `scripts/build-lock.sh cargo check -p micold-client --all-targets` and the root bin, fix compile errors, run `mise run test-core` and `cargo test -p micold-client --test features_changes browse` (also features_pr_changes). (2) T043 `ui/material/browse_bar.rs` BrowseBar (Back button, path via LineClamped, optional "Open diff"), register in `ui/material/mod.rs`, geometry test (same height with/without Open diff, long path stays in width; pattern: `review_panel_row.rs` tests + `test_support::size_of`). (3) T044 `ui/changes.rs`: a "Files" ToggleChip in `list_pane` (Msg::FilesPaneToggled, only Source::Changes); when `view.files.shown` show `Typeahead` (query `view.files.picker`, rows from `picker_matches` with `typeahead::match_one` spans, `.in_flow(true).open(!picker.is_empty())`, on_pick index -> BrowseOpen) over `TreeView` of `tree_rows` (folder: expandable + FolderToggled, file: on_press BrowseOpen); in `diff_pane_body`, when `browse_body(view)` is Some show BrowseBar (Back enabled via `can_go_back`, "Open diff" when `file_diff_available`) over Reading/Failed(+ "Show anyway" -> Msg::ShowLarge when `large`)/`DiffView::new(&loaded.diff, layout, r)` with spans, offset `view.diff_offset`, `.on_scroll` DiffScrolled, `.scroll_id(DIFF_SCROLL_ID)`, no gutter/gap. (4) T045 showcase `showcase/sections/review.rs` add BrowseBar. (5) T046 docs "Browsing the repository" in `docs/user-guide/reviewing-changes.md` (worktree files; tracked and untracked, ignored via typed path; Back; Open diff; pick not yet available in browsed files; PR head browsing is M6). (6) tick T036-T046 in tasks.md, then verify/review A+B/visual pass/full gate/PR per tasks/verify.md, review.md, gate.md, pr.md.
+
+Known gaps to note: `Msg::Changed` does not re-read a browsed file; FileSelected of the already-selected file while browsing resets diff_offset without a ScrollDiff; PR source browsing and PR tree are M6 (`list_tree` returns HeadUnavailable for PrHead).
 
 ## Open escalation
 
