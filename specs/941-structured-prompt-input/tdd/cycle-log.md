@@ -120,7 +120,7 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
 
 ### Cycle 8 — keys, history, sends, queue actions, drops (T039–T042 → T043–T047)
 
-- tests: `client/tests/features_composer.rs` (new, 28 cases: keys, `transcript_key`,
+- tests: `client/tests/features_composer.rs` (new, 28 cases, 29 with the M4 verify case below: keys, `transcript_key`,
   `shows_composer`; history back/forward; `can_send`, pending sends and their restore, lost
   connection, stop/stop-session/send-queued offers, `can_take`/`Taken`, queue edit draft, per-session
   drafts; drop insertion as `plan_insertion` plans it, 22 pictures, too-large and failed reads) and
