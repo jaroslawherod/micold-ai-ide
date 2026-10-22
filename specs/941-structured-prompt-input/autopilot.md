@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: M5
-- **Next step**: M5 PR: open from the PR files in the session scratchpad, then CI and merge
+- **Phase**: M6
+- **Next step**: M6 implement T055–T061
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1240 | M2: daemon delivers, queues, input driver, StructuredInput | merged (rebase) | 1781310b95438ce48d8006762ee0fc949f877343 |
 | #1243 | M3: daemon interrupt, overdue, hold on interrupt, saved queue | merged (rebase) | 203ef720ba85b7e70a163cb969402b452c0d4b41 |
 | #1246 | M4: client composer state, sends, drops | merged (rebase) | f114ea2ee0eb7e97c7e0ada228b26af6a870a383 |
+| #1249 | M5: shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator | merged (rebase) | 74907e8f7c158ee992f119e223772f52628c09a8 |
 
 ## Milestones
 
@@ -30,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | #1240 | merged |
 | M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | #1243 | merged |
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | #1246 | merged |
-| M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | (to open) | reviewed, gated |
-| M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | pending |
+| M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | #1249 | merged |
+| M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | in progress |
 | M7 | T063 | light | Interrupt withdraws a pending #942 request (daemon test); waits on #942 M3 | — | pending |
 
 T062 (Polish, no code) is left to the close unit; T063 is M7, waiting on #942 M3 (I-3).
@@ -140,7 +141,38 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-None.
+M6 unit 1 (context cap during exploration; no code written). Branch reset to origin/main 74907e8f
+(#1249 merged, recorded). Next: implement T055–T061. Findings to build on:
+
+- **Editor storage**: the composer editors live in the binary (`App.composer_editors`), but the
+  view (`ui::view_with` → `terminal::pane` / `panes::view` → `transcript_body`) and the layout
+  gates (`lay::view_of`) see only the lib `State`. Plan: move the `app::Editor` into
+  `features::composer::Composer` (precedent: `features/daemons_kube.rs`, `features/settings.rs`
+  hold `Editor`; `Editor` is Clone/Eq) plus a `shown` generation, synced by a
+  `State::editor_mut(session)`; add a `blank: Editor` to `composer::State` for a session with no
+  composer yet. `shell/composer.rs` `editor()`/`sync_editor()`, `daemon_sync.rs:2857` remove,
+  `startup.rs:439` and `main_tests.rs` (4 inits) follow. Record as a Decision (plan said binary).
+- **Previews**: `AttachmentChip` needs an `image::Handle` made once; `Handle::from_bytes` gets a
+  fresh id per call. Plan: an `app.rs` `Preview(Handle)` wrapper (eq always true) kept in
+  `Composer.previews`, rebuilt only when `draft.images` changes (reuse a handle whose bytes match).
+- **Keys**: no producer of `composer::Msg::Key` / `TranscriptKey` yet. `TextArea.key_binding`
+  closure: convert `KeyPress` via `terminal_pane::{to_keymap_key, to_keymap_mods,
+  to_keymap_physical}`, run `composer_key` on the draft's caret and line count (count lines only
+  on a press), return `Binding::Custom(Message::Composer(Msg::Key{..composing:false}))` unless the
+  intent is `Edit` (then `Binding::from_key_press`). `composing: false`: winit sends IME
+  composition as Ime events, not key presses (Decision). Transcript Escape: `app::on_escape`
+  (app.rs:1518) last arm, when no overlay/settings/overview and the active session shows its
+  transcript and `terminal_focused()`, → `Msg::TranscriptKey`.
+- **Stop session** (overdue, FR-015): no window message stops a session; add
+  `Msg::StopSessionRequested`, shell sends `ClientMsg::SessionStop{session}` when
+  `offers_stop_session`.
+- Labels: quickstart Part B uses **Working** / **Ready**; reuse `features::composer` notices
+  (`OVERDUE`, `NOT_RUNNING`, `NOT_CONNECTED`); I-1 = `status: Option<Element>` + `waiting: bool`,
+  I-4 = `completion: Option<Element>`, both `None` here.
+- M5 parts: `showcase/sections/composer.rs` shows each builder; `tests/gates/composer_parts_fit.rs`
+  is the gate pattern; `transcript_jump_control_fits.rs` lays out a covered structured pane
+  (`support::covered_states::transcript_pane_detached`).
+
 
 ## Open escalation
 
