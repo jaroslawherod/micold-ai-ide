@@ -273,13 +273,13 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 8: Daemon — switching kind (M6; needs #941 M2, I-2)
 
-- [ ] T043 [P] [US4] Tests in `core/tests/protocol_roundtrip.rs`: `SessionSwitchKind { req,
+- [x] T043 [P] [US4] Tests in `core/tests/protocol_roundtrip.rs`: `SessionSwitchKind { req,
   session, to, command, confirmed }` and `ErrorKind::NeedsConfirmation` round-trip; `schema_hash`
   re-pinned after `PROTOCOL_VERSION` +1
-- [ ] T044 Implement T043 in `core/src/protocol/messages.rs` and `core/src/protocol/version.rs`;
+- [x] T044 Implement T043 in `core/src/protocol/messages.rs` and `core/src/protocol/version.rs`;
   update the `Session::start_new_of_kind` doc comment in `core/src/session.rs` (only
   `Catalog::set_kind` changes a kind; replaces 938 FR-002)
-- [ ] T045 [P] [US4] [US5] Tests in `daemon/tests/structured_switch.rs` (new), with the PTY stand-in
+- [x] T045 [P] [US4] [US5] Tests in `daemon/tests/structured_switch.rs` (new), with the PTY stand-in
   for the terminal side: structured → terminal → structured keeps the `SessionId`, each launch's
   argv is the other kind with `--resume <resume_handle()>` and `--model <choice>`, the structured
   one with the permission mode and the terminal one with no `--permission-mode` (FR-020, FR-024);
@@ -289,7 +289,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   that fails is reported as today and the kind stays (US5 scenario 7); a Copilot session →
   `Refused`; `command` with `to: Structured` or a non-terminal-only command → `InvalidInput`;
   a same-kind switch → `OperationOk`, no restart
-- [ ] T046 [US4] [US5] Tests in `daemon/tests/structured_switch.rs`: busy, a pending #942
+- [x] T046 [US4] [US5] Tests in `daemon/tests/structured_switch.rs`: busy, a pending #942
   request, or a terminal session whose activity is `Working`, unconfirmed → `NeedsConfirmation`
   and nothing changes; `confirmed: true` → switches (FR-021); two concurrent switches, 50
   iterations → one stop, one start (FR-025); a `SessionUserMessage` during a switch is queued on
@@ -300,13 +300,13 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   (SC-005); switching session A never touches B; after a switch to terminal, a successor transcript
   the PTY stand-in writes as a continuation (a `/clear` typed in the terminal) is not adopted as a
   new session (BUG-904's check; spec clarification 4)
-- [ ] T047 [P] [US1] Test in `daemon/tests/structured_commands.rs`: a command sent while busy is
+- [x] T047 [P] [US1] Test in `daemon/tests/structured_commands.rs`: a command sent while busy is
   queued by #941's input and delivered unchanged when its turn comes (US1 scenario 8, FR-001)
-- [ ] T048 Implement T045–T047: `Catalog::set_kind` (`daemon/src/catalog.rs`); `switch_kind` with
+- [x] T048 Implement T045–T047: `Catalog::set_kind` (`daemon/src/catalog.rs`); `switch_kind` with
   the `switching` slot, confirmation, queue hold, notes, stop as `SessionStop` does and
   `ops::start_with_prompt(…, LaunchMode::Resume, command)` (`daemon/src/state.rs`,
   `daemon/src/ops.rs`); dispatch `SessionSwitchKind` (`daemon/src/server.rs`)
-- [ ] T049 [P] Update the 938 FR-002 tests that assert a kind never changes so they assert only
+- [x] T049 [P] Update the 938 FR-002 tests that assert a kind never changes so they assert only
   `Catalog::set_kind` changes it (plan *Superseded assertions*); describe `SessionSwitchKind` and
   the held queue in `docs/daemon.md`
 

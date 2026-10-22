@@ -331,6 +331,9 @@ struct Inner {
     permission_prompts: bool,
     /// Each structured session's model picks while this daemon runs (#943 FR-015, FR-016).
     model_picks: HashMap<SessionId, ModelPicks>,
+    /// The sessions switching kind, each with the kind it switches to (#943 R8, FR-025): set for
+    /// the whole switch, so a second request and the messages sent meanwhile see it.
+    switching: HashMap<SessionId, SessionKind>,
     /// What each connected window has in view (feature 039, W1.2). Under this lock because
     /// [`DaemonState::note_activity`] reads it in the same step as the change it judges.
     views: Views,
@@ -816,6 +819,79 @@ fn wire_worktree_status(status: worktree::WorktreeStatus) -> WorktreeStatus {
 pub const TERMINAL_MODEL_REFUSAL: &str =
     "Model switching is for structured sessions; the choice is used at the next structured launch";
 
+/// Why a switch of kind was refused (#943 contracts/wire.md *SessionSwitchKind*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SwitchRefusal {
+    /// No session has the id.
+    NoSession,
+    /// The session runs another CLI than Claude Code (FR-019).
+    NotClaude(AiCli),
+    /// Work is in progress and the request was not confirmed (FR-021): what would end.
+    NeedsConfirmation(&'static str),
+    /// A switch to the other kind is running (FR-025).
+    SwitchInProgress,
+    /// `command` was given with a switch to structured, or is not a terminal-only command.
+    BadCommand(String),
+    /// The new kind could not be saved; nothing changed.
+    NotSaved(String),
+}
+
+impl SwitchRefusal {
+    /// The wire's kind of this refusal.
+    pub fn error_kind(&self) -> micold_core::protocol::messages::ErrorKind {
+        use micold_core::protocol::messages::ErrorKind;
+        match self {
+            Self::NoSession => ErrorKind::NotFound,
+            Self::NotClaude(_) | Self::SwitchInProgress => ErrorKind::Refused,
+            Self::NeedsConfirmation(_) => ErrorKind::NeedsConfirmation,
+            Self::BadCommand(_) => ErrorKind::InvalidInput,
+            Self::NotSaved(_) => ErrorKind::IoFailed,
+        }
+    }
+}
+
+impl std::fmt::Display for SwitchRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoSession => f.write_str("no such session"),
+            Self::NotClaude(cli) => write!(
+                f,
+                "Only Claude Code sessions switch between the terminal and the structured view; \
+                 this one runs {}",
+                cli.provider().display_name()
+            ),
+            Self::NeedsConfirmation(why) => f.write_str(why),
+            Self::SwitchInProgress => {
+                f.write_str("The session is already switching to the other kind")
+            }
+            Self::BadCommand(why) => f.write_str(why),
+            Self::NotSaved(why) => write!(f, "the new kind could not be saved: {why}"),
+        }
+    }
+}
+
+/// How far [`DaemonState::begin_switch`] got: answered, or begun, for `ops::switch_kind` to
+/// carry out.
+pub enum KindSwitch {
+    Answered(Result<(), SwitchRefusal>),
+    Begun(BegunSwitch),
+}
+
+/// A switch of kind begun: the kind is saved and the session marked switching (#943 R8 step 3).
+#[derive(Debug, Clone)]
+pub struct BegunSwitch {
+    /// The session.
+    pub session: SessionId,
+    /// The kind it now has.
+    pub to: SessionKind,
+    /// The terminal-only command to type into the terminal once it is ready (FR-022).
+    pub command: Option<String>,
+    /// Where it runs.
+    pub cwd: PathBuf,
+    /// Its CLI.
+    pub cli: AiCli,
+}
+
 /// One structured session's model picks in this daemon run (#943 FR-015, FR-016, Edge Cases).
 #[derive(Default)]
 struct ModelPicks {
@@ -977,6 +1053,7 @@ impl DaemonState {
                 prompts: crate::permission::PromptRegistry::default(),
                 permission_prompts: false,
                 model_picks: HashMap::new(),
+                switching: HashMap::new(),
                 views: Views::default(),
                 attention_unsaved: false,
                 long_task_threshold_override: None,
@@ -3773,6 +3850,178 @@ impl DaemonState {
                 }
             }
         }
+    }
+
+    /// Begin the switch of `session` to kind `to` that `ClientMsg::SessionSwitchKind` asks for
+    /// (#943 R8 steps 1–3, contracts/wire.md): refused for another CLI than Claude Code, a
+    /// `command` that is not a terminal-only command of a switch to terminal, a switch the other
+    /// way already running and, unless `confirmed`, work in progress; answered at once when the
+    /// session already has kind `to` or a switch to `to` is running. Otherwise the new kind is
+    /// saved and broadcast, the session is marked switching and its queue held, and the switch is
+    /// [`KindSwitch::Begun`] for `ops::switch_kind`. In the caller's order of requests, so a
+    /// message sent after it is queued on hold.
+    pub fn begin_switch(
+        &self,
+        session: SessionId,
+        to: SessionKind,
+        command: Option<String>,
+        confirmed: bool,
+    ) -> KindSwitch {
+        let begun = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
+            match Self::switch_locked(inner, session, to, command, confirmed) {
+                Ok(Some(begun)) => begun,
+                Ok(None) => return KindSwitch::Answered(Ok(())),
+                Err(refusal) => return KindSwitch::Answered(Err(refusal)),
+            }
+        };
+        tracing::info!(session = %session.0, ?to, "session switching kind");
+        self.broadcast_catalog();
+        KindSwitch::Begun(begun)
+    }
+
+    /// [`Self::begin_switch`] under the state lock: `Ok(None)` when there is nothing to do.
+    fn switch_locked(
+        inner: &mut Inner,
+        session: SessionId,
+        to: SessionKind,
+        command: Option<String>,
+        confirmed: bool,
+    ) -> Result<Option<BegunSwitch>, SwitchRefusal> {
+        let (cwd, cli, kind) = inner
+            .catalog
+            .workspace()
+            .find_session(session)
+            .map(|(project, s)| (s.location.cwd(project), s.provider, s.kind))
+            .ok_or(SwitchRefusal::NoSession)?;
+        if SessionKind::Structured.check(cli).is_err() {
+            return Err(SwitchRefusal::NotClaude(cli));
+        }
+        if let Some(command) = &command {
+            Self::check_switch_command(inner, session, to, command)?;
+        }
+        match inner.switching.get(&session) {
+            Some(&running) if running == to => return Ok(None),
+            Some(_) => return Err(SwitchRefusal::SwitchInProgress),
+            None => {}
+        }
+        if kind == to {
+            return Ok(None);
+        }
+        if !confirmed {
+            if let Some(why) = Self::work_in_progress(inner, session) {
+                return Err(SwitchRefusal::NeedsConfirmation(why));
+            }
+        }
+        inner
+            .catalog
+            .set_kind(session, to)
+            .map_err(|e| SwitchRefusal::NotSaved(e.to_string()))?;
+        inner.switching.insert(session, to);
+        if let Some(input) = inner.structured_inputs.get_mut(&session) {
+            input.on_switch();
+        }
+        Self::broadcast_input(inner, session);
+        Ok(Some(BegunSwitch {
+            session,
+            to,
+            command,
+            cwd,
+            cli,
+        }))
+    }
+
+    /// A switch's `command` is typed into a terminal, and only a terminal-only one is (FR-022), by
+    /// the command list `session`'s history holds.
+    fn check_switch_command(
+        inner: &Inner,
+        session: SessionId,
+        to: SessionKind,
+        command: &str,
+    ) -> Result<(), SwitchRefusal> {
+        use micold_core::structured::commands::{classify_draft, CommandList, DraftCommand};
+        if to == SessionKind::Structured {
+            return Err(SwitchRefusal::BadCommand(
+                "Only a switch to the terminal takes a command".into(),
+            ));
+        }
+        let list = inner
+            .event_streams
+            .get(&session)
+            .map_or_else(CommandList::fallback, |stream| stream.command_list());
+        match classify_draft(command, &list) {
+            DraftCommand::TerminalOnly(_) => Ok(()),
+            DraftCommand::Send | DraftCommand::Model(_) => Err(SwitchRefusal::BadCommand(
+                "The command of a switch to the terminal must be one that needs the terminal"
+                    .into(),
+            )),
+        }
+    }
+
+    /// What a switch of `session` would end (FR-021): a turn in progress, a pending permission
+    /// request, or a terminal CLI that reports it is working; `None` when nothing.
+    fn work_in_progress(inner: &Inner, session: SessionId) -> Option<&'static str> {
+        if inner.prompts.has_pending(session) {
+            return Some("A permission request is waiting; switching now withdraws it");
+        }
+        let live = inner.sessions.get(&session)?;
+        match live.procs.get(&SessionProcess::Primary)? {
+            Proc::Structured(child) if child.is_running() && !child.turn().is_idle() => {
+                Some("A turn is in progress; switching now ends it")
+            }
+            Proc::Pty { .. } if live.activity.signal() == &ActivitySignal::Working => {
+                Some("Claude Code is working; switching now ends its work")
+            }
+            _ => None,
+        }
+    }
+
+    /// Note in `session`'s event history that it switched to `to` (#943 R8, FR-023), after its
+    /// earlier process's last event: the pair of notes brackets the terminal period. A session
+    /// with no event history, in this run or saved, gets none. **Blocking**: a saved history is
+    /// read.
+    pub fn note_kind_switched(&self, session: SessionId, to: SessionKind) {
+        if let Some(stream) = self.event_stream_loading(session, false) {
+            stream.push(micold_core::structured::StructuredEvent::KindSwitched { to });
+        }
+    }
+
+    /// How a switch launches `session`'s CLI (FR-020): resuming its conversation when the CLI
+    /// recorded one, or when where it records them is unknown; a new one otherwise. **Blocking**.
+    pub fn switch_launch(&self, session: SessionId) -> LaunchMode {
+        let found = self
+            .lock()
+            .catalog
+            .workspace()
+            .find_session(session)
+            .map(|(project, s)| (s.provider, s.location.cwd(project), s.resume_handle()));
+        let Some((cli, cwd, handle)) = found else {
+            return LaunchMode::Resume;
+        };
+        let provider = cli.provider();
+        match provider.config_dir() {
+            Some(config) if !provider.has_recorded_conversation(&config, &cwd, handle) => {
+                LaunchMode::Fresh
+            }
+            _ => LaunchMode::Resume,
+        }
+    }
+
+    /// The switch of `session` is over (#943 R8 step 5): messages go out again as the queue allows,
+    /// which a queue held by the switch does not until **Send queued**. The delivery that makes,
+    /// for [`Self::deliver`].
+    pub fn switch_ended(&self, session: SessionId) -> Option<Delivery> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        inner.switching.remove(&session);
+        let delivery = Self::pump_locked(inner, session);
+        let activity = Self::follow_turn(inner, session, delivery.is_some(), false);
+        Self::save_queue_locked(inner, session);
+        Self::broadcast_input(inner, session);
+        drop(guard);
+        self.after_turn_activity(activity);
+        delivery
     }
 
     /// The CLIs' answers to model changes, for [`crate::server::spawn_model_answers`].
@@ -7212,6 +7461,9 @@ impl DaemonState {
     /// process runs and the queue is not on hold (#941 R2: called at the end of every lock section
     /// that changes the queue, the hold or the turn). The caller writes it off the lock.
     fn pump_locked(inner: &mut Inner, session: SessionId) -> Option<Delivery> {
+        if inner.switching.contains_key(&session) {
+            return None;
+        }
         let child = Arc::clone(Self::structured_primary(inner, session)?);
         if !child.is_running() {
             return None;
@@ -7277,6 +7529,18 @@ impl DaemonState {
     ) -> Result<Option<Delivery>, UserMessageRefusal> {
         let mut guard = self.lock();
         let inner = &mut *guard;
+        if inner.switching.contains_key(&session) {
+            // Neither the process being ended nor the one starting gets it (#943 FR-025).
+            Self::refuse_app_handled(inner, session, &message.text)?;
+            inner
+                .structured_inputs
+                .entry(session)
+                .or_default()
+                .queue_held(message, client)?;
+            Self::save_queue_locked(inner, session);
+            Self::broadcast_input(inner, session);
+            return Ok(None);
+        }
         let child = match inner
             .sessions
             .get(&session)

@@ -514,7 +514,8 @@ pub struct Session {
     /// persisted, bounded, and never read from a name. A `Running` run is `Stopped` once the
     /// session exits or the daemon restarts.
     pub agents: Vec<crate::agent_run::AgentRun>,
-    /// Terminal or structured (feature 938).
+    /// Terminal or structured (feature 938). Changed only by the daemon's `Catalog::set_kind`, a
+    /// switch of kind (#943 FR-019).
     pub kind: SessionKind,
     /// How a structured session asks before Claude uses a tool (#942, FR-013, FR-015). Persisted
     /// and mutable, through the daemon's `Catalog::set_permission_mode` only; always `Default` for
@@ -547,9 +548,10 @@ impl Session {
         Self::start_new_of_kind(location, provider, SessionKind::Terminal)
     }
 
-    /// A brand-new session of `kind` (feature 938, FR-002): the kind is fixed here for the
-    /// session's whole life, as `provider` is. [`Session::start_new`] is this with
-    /// [`SessionKind::Terminal`].
+    /// A brand-new session of `kind` (feature 938, FR-002, as #943 FR-019 replaces it): the kind is
+    /// chosen here and changes only by a switch of kind, which the daemon's `Catalog::set_kind`
+    /// alone makes; the provider is fixed for the session's whole life. [`Session::start_new`] is
+    /// this with [`SessionKind::Terminal`].
     pub fn start_new_of_kind(
         location: SessionLocation,
         provider: AiCli,

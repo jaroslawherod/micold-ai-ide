@@ -233,7 +233,10 @@
 ///
 /// And 65 → 66 for #943's model choice (M4): `model` on `SessionSummary` and
 /// `ClientMsg::SetSessionModel`, which shift the postcard layout.
-pub const PROTOCOL_VERSION: u32 = 66;
+///
+/// And 66 → 67 for #943's kind switch (M6): `ClientMsg::SessionSwitchKind` and
+/// `ErrorKind::NeedsConfirmation`.
+pub const PROTOCOL_VERSION: u32 = 67;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

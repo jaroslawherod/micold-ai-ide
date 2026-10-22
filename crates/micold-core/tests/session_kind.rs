@@ -1,6 +1,7 @@
 //! Feature 938 T004 — a session's kind (FR-001, FR-002, FR-003, FR-004; SC-004): terminal by
-//! default and for every session recorded before the feature, chosen at construction and never
-//! changed, structured only for Claude Code, persisted without a schema bump.
+//! default and for every session recorded before the feature, chosen at construction and changed
+//! only by the daemon's catalog (a switch of kind, #943 FR-019, which replaces FR-002), structured
+//! only for Claude Code, persisted without a schema bump.
 
 use micold_core::project::{Availability, Project};
 use micold_core::session::{
@@ -124,12 +125,19 @@ fn the_constructors_without_a_kind_make_terminal_sessions() {
     );
 }
 
+/// #943 FR-019 replaces 938 FR-002: a session has no kind setter of its own; the daemon's catalog
+/// is the one place that changes a kind, by a switch (plan *Superseded assertions*).
 #[test]
-fn a_session_has_no_kind_setter() {
+fn only_the_catalog_changes_a_kind() {
     let source = include_str!("../src/session.rs");
     assert!(
         !source.contains("fn set_kind"),
-        "the kind is chosen at creation and never changes for the session's life (FR-002)"
+        "a session's kind is not changed through the session itself"
+    );
+    let catalog = include_str!("../../micold-daemon/src/catalog.rs");
+    assert!(
+        catalog.contains("pub fn set_kind("),
+        "the catalog's `set_kind` is how a switch changes a kind (FR-019)"
     );
 }
 
