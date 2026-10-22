@@ -107,6 +107,11 @@ daemon side lands first.
   trade-off (a `/clear` typed in the terminal is not seen). Added FR-005a. _(decided by user —
   provisional A, pending jaro; revert to B (keep 582 FR-017 everywhere) or C (app-handled `/clear`)
   if he picks otherwise)_
+- Q: (plan) The CLI's stream-json output never carries a skill's or custom command's expanded
+  instructions (recorded, Claude Code 2.1.307: only `<command-name>`/`<command-args>` with
+  `--replay-user-messages`, nothing without). What does FR-003 show behind the command? → A: The
+  command's description from the session command list; the expansion only if a later CLI reports
+  it. FR-003 and US1 scenario 3 amended. _(agent-resolved: research.md R4, probe P-3)_
 - Q: When switched to the terminal after a structured `/clear`, which handle does the terminal
   launch resume, and what after a `/clear` typed in the terminal? → A: The recorded handle
   (FR-005a, FR-020); a terminal `/clear` is not seen, so switching back resumes the last handle the
@@ -143,7 +148,8 @@ structured session runs `/speckit-specify` to its first question.
    first user message (feature 938 FR-007) and runs.
 3. **Given** the CLI expanded a skill or custom command into its instructions, **When** the turn
    is shown, **Then** the transcript shows the user's turn as the command name and its arguments,
-   with the expanded instructions collapsed behind it, not as the raw instructions.
+   with the command's description (and the expanded instructions, when the CLI reports them)
+   collapsed behind it, never as the raw instructions.
 4. **Given** the user sends `/compact` (with or without instructions), **When** the CLI compacts
    the conversation, **Then** the session is busy until it is done, and the transcript shows a
    marker that the conversation was compacted at that point, with the summary available behind it;
@@ -393,7 +399,9 @@ model choice and the permission mode are as before.
   session as they run in a terminal session of the same location; a session's first prompt that is
   a command MUST be delivered and run the same way.
 - **FR-003**: The transcript MUST show a user turn that invoked a skill or custom command as the
-  command name and its arguments, with the expanded instructions available collapsed behind it.
+  command name and its arguments, with the command's description available collapsed behind it,
+  and the expanded instructions too when the CLI reports them; the raw instructions MUST NOT stand
+  in for the user's turn.
 - **FR-004**: A compaction (asked for with `/compact`, or done by the CLI on its own) MUST be shown
   in the transcript as a marker at the point it happened, with the summary available behind it;
   turns before it MUST stay visible.
