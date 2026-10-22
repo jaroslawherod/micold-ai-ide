@@ -229,6 +229,31 @@ impl Transcript {
         })
     }
 
+    /// The session's command list (#943 FR-009): made from the latest `init` and
+    /// `CommandsReported` the history held, else the fallback list.
+    pub fn command_list(&self) -> CommandList {
+        self.commands
+            .clone()
+            .unwrap_or_else(|| CommandList::from_history(&self.command_sources))
+    }
+
+    /// The models the latest `CommandsReported` note named (#943 FR-014); empty without one.
+    pub fn reported_models(&self) -> &[crate::structured::ReportedModel] {
+        self.command_sources
+            .iter()
+            .find_map(|e| match &e.event {
+                StructuredEvent::CommandsReported { models, .. } => Some(models.as_slice()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    /// The model the session runs as the CLI last reported it (#943 FR-013), from the held
+    /// events.
+    pub fn session_model(&self) -> Option<String> {
+        crate::structured::model::session_model(&self.events)
+    }
+
     /// The held events of the sub-agent run by tool use `tool_use_id`, in order (FR-024, #944).
     pub fn subagent_events<'a>(
         &'a self,

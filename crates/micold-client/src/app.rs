@@ -422,6 +422,9 @@ pub struct State {
     /// The structured sessions' permission prompts in this window (#942) -- see
     /// [`crate::features::permission_prompts::State`].
     pub permission_prompts: crate::features::permission_prompts::State,
+    /// Each structured session's command palette and model picker in this window (#943) -- see
+    /// [`crate::features::command_palette::State`].
+    pub command_palette: crate::features::command_palette::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
     pub runs: crate::features::runs::State,
     /// What the worktree Overview holds (feature 813) -- see [`crate::features::overview::State`].
@@ -1002,6 +1005,7 @@ impl State {
         self.structured_transcript.forget(session);
         self.transcript_rich.forget(session);
         self.composers.forget(session);
+        self.command_palette.forget(session);
         self.structured_insights.forget(session);
         self.permission_prompts.forget(session);
     }

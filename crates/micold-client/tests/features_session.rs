@@ -1409,3 +1409,294 @@ fn a_structured_sessions_caption_says_so() {
         "claude, structured"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// #943 T052, T053 — switching a Claude session between structured and terminal, render-free
+// (FR-010, FR-019, FR-021, FR-022a, FR-024; US4 scenarios 1, 3–5, 7, 8)
+// ---------------------------------------------------------------------------------------
+
+mod switching {
+    use micold_client::app::State;
+    use micold_client::catalog_sync::reconcile_catalog;
+    use micold_client::features::command_palette::SendIntent;
+    use micold_client::features::session::{
+        switch_entries, SwitchEntry, SwitchRequest, OPEN_IN_STRUCTURED, OPEN_IN_TERMINAL,
+    };
+    use micold_core::daemons::DaemonId;
+    use micold_core::protocol::messages::{
+        CatalogSnapshot, ProjectSnapshot, SessionSummary, WireLifecycle,
+    };
+    use micold_core::session::{AiCli, Session, SessionId, SessionKind, SessionLocation};
+    use micold_core::structured::{parse_line, SequencedEvent};
+    use std::path::PathBuf;
+
+    const PROJECT: &str = "/fixture/project";
+
+    fn session(provider: AiCli, kind: SessionKind) -> Session {
+        Session::start_new_of_kind(SessionLocation::Worktree("feat-00".into()), provider, kind)
+    }
+
+    fn window(sessions: Vec<Session>) -> State {
+        let mut workspace = super::support::workspace_with(vec![(PROJECT, sessions)]);
+        workspace.active = workspace.projects.first().map(|p| p.path.clone());
+        State {
+            workspace,
+            ..State::default()
+        }
+    }
+
+    fn structured() -> (State, SessionId) {
+        let s = session(AiCli::ClaudeCode, SessionKind::Structured);
+        let id = s.id;
+        (window(vec![s]), id)
+    }
+
+    fn typed(w: &mut State, s: SessionId, text: &str) {
+        w.composers.edited(s, text.to_string(), (0, text.len()));
+        w.composer_edited(s);
+    }
+
+    fn draft(w: &State, s: SessionId) -> String {
+        w.composers
+            .draft(s)
+            .map(|d| d.text.clone())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn sending_a_terminal_only_command_offers_the_terminal_and_sends_nothing() {
+        let (mut w, s) = structured();
+        typed(&mut w, s, "/mcp");
+        assert_eq!(w.send_intent(s), SendIntent::Nothing);
+        let offer = w.session.switch_offer.clone().expect("offered");
+        assert_eq!(
+            (offer.session, offer.to, offer.command.as_deref()),
+            (s, SessionKind::Terminal, Some("mcp"))
+        );
+        assert!(!offer.reason.is_empty(), "says why");
+        assert_eq!(offer.confirm, None, "not yet a confirmation");
+        assert_eq!(draft(&w, s), "/mcp", "the draft is kept while offered");
+
+        w.switch_dismissed();
+        assert!(w.session.switch_offer.is_none());
+        assert_eq!(draft(&w, s), "/mcp", "dismissing keeps the draft");
+    }
+
+    #[test]
+    fn picking_a_terminal_only_row_offers_the_terminal() {
+        let (mut w, s) = structured();
+        typed(&mut w, s, "/mc");
+        w.palette_clicked(s, 0);
+        let offer = w.session.switch_offer.clone().expect("offered");
+        assert_eq!(offer.command.as_deref(), Some("mcp"));
+        assert!(w.command_palette.palette(s).is_none(), "the palette closed");
+    }
+
+    #[test]
+    fn confirming_sends_the_switch_and_a_needs_confirmation_answer_asks_again() {
+        let (mut w, s) = structured();
+        typed(&mut w, s, "/mcp");
+        let _ = w.send_intent(s);
+        let request = w.switch_confirmed().expect("a request");
+        assert_eq!(
+            request,
+            SwitchRequest {
+                session: s,
+                to: SessionKind::Terminal,
+                command: Some("mcp".into()),
+                confirmed: false,
+            }
+        );
+        assert!(w.session.switch_offer.is_none(), "the offer is answered");
+        assert_eq!(draft(&w, s), "", "the command went to the switch");
+
+        w.switch_needs_confirmation(request.clone(), "A turn is in progress.".into());
+        let offer = w.session.switch_offer.clone().expect("asked again");
+        assert_eq!(offer.confirm.as_deref(), Some("A turn is in progress."));
+        let again = w.switch_confirmed().expect("a request");
+        assert_eq!(
+            again,
+            SwitchRequest {
+                confirmed: true,
+                ..request
+            }
+        );
+    }
+
+    #[test]
+    fn an_authentication_failure_offers_login_in_the_terminal() {
+        let (mut w, s) = structured();
+        assert!(!w.offers_login(s));
+        let failed = parse_line(
+            r#"{"type":"assistant","error":"authentication_failed","message":{"id":"m1","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"Invalid API key · Please run /login"}]},"session_id":"s"}"#,
+        );
+        w.structured_transcript.apply(
+            s,
+            0,
+            &[SequencedEvent {
+                seq: 0,
+                event: failed,
+            }],
+            true,
+        );
+        assert!(w.offers_login(s), "an auth_failed entry offers /login");
+        w.login_offered(s);
+        let offer = w.session.switch_offer.clone().expect("offered");
+        assert_eq!(
+            (offer.to, offer.command.as_deref()),
+            (SessionKind::Terminal, Some("login"))
+        );
+    }
+
+    fn summary(id: SessionId, kind: SessionKind) -> SessionSummary {
+        SessionSummary {
+            id,
+            worktree_dir: Some("feat-00".into()),
+            title: micold_core::session::SessionLabel::Pending,
+            lifecycle: WireLifecycle::Running,
+            activity: micold_core::protocol::messages::ActivitySignal::Unknown,
+            provider: AiCli::ClaudeCode,
+            kind,
+            permission_mode: Default::default(),
+            model: Default::default(),
+            input_serial: 0,
+            live_shells: Vec::new(),
+            attention_seq: 0,
+            unread: false,
+            origin: None,
+            agents: Vec::new(),
+            main: false,
+            paused_on_user: false,
+            hook_activity: None,
+        }
+    }
+
+    fn snapshot(sessions: Vec<SessionSummary>) -> CatalogSnapshot {
+        CatalogSnapshot {
+            schema_version: 1,
+            last_active: Some(PathBuf::from(PROJECT)),
+            projects: vec![ProjectSnapshot {
+                pane_layout: None,
+                path: PathBuf::from(PROJECT),
+                display_name: "project".into(),
+                is_git_repo: true,
+                available: true,
+                worktrees: Vec::new(),
+                sessions,
+            }],
+            env_include_failures: Vec::new(),
+        }
+    }
+
+    fn kind_of(w: &State, s: SessionId) -> SessionKind {
+        w.workspace
+            .find_session(s)
+            .map(|(_, x)| x.kind)
+            .expect("held")
+    }
+
+    #[test]
+    fn a_kind_change_in_a_snapshot_is_followed_and_the_draft_survives() {
+        let (mut w, s) = structured();
+        typed(&mut w, s, "half a thought");
+        reconcile_catalog(
+            &mut w,
+            DaemonId(1),
+            &snapshot(vec![summary(s, SessionKind::Terminal)]),
+            false,
+        );
+        assert_eq!(kind_of(&w, s), SessionKind::Terminal);
+        assert_eq!(
+            w.session.take_kind_changes(),
+            vec![s],
+            "the shell drops the old primary's view and attaches to the new one"
+        );
+        assert_eq!(draft(&w, s), "half a thought");
+
+        reconcile_catalog(
+            &mut w,
+            DaemonId(1),
+            &snapshot(vec![summary(s, SessionKind::Terminal)]),
+            false,
+        );
+        assert!(
+            w.session.take_kind_changes().is_empty(),
+            "no change, no reattach"
+        );
+
+        reconcile_catalog(
+            &mut w,
+            DaemonId(1),
+            &snapshot(vec![summary(s, SessionKind::Structured)]),
+            false,
+        );
+        assert_eq!(kind_of(&w, s), SessionKind::Structured);
+        assert_eq!(w.session.take_kind_changes(), vec![s]);
+        assert_eq!(draft(&w, s), "half a thought", "back again, still there");
+    }
+
+    #[test]
+    fn a_snapshot_carries_the_model_choice_into_the_window() {
+        let (mut w, s) = structured();
+        let mut reported = summary(s, SessionKind::Structured);
+        reported.model = micold_core::structured::model::ModelChoice::Named(
+            micold_core::structured::model::ModelName::parse("haiku").expect("valid"),
+        );
+        reconcile_catalog(
+            &mut w,
+            DaemonId(1),
+            &snapshot(vec![reported.clone()]),
+            false,
+        );
+        let held = w.workspace.find_session(s).map(|(_, x)| x.model.clone());
+        assert_eq!(held, Some(reported.model));
+    }
+
+    // ---- T053 ----
+
+    #[test]
+    fn a_claude_session_offers_the_other_kind_and_other_clis_offer_nothing() {
+        let structured = session(AiCli::ClaudeCode, SessionKind::Structured);
+        let terminal = session(AiCli::ClaudeCode, SessionKind::Terminal);
+        let others: Vec<Session> = [AiCli::Copilot, AiCli::Pi, AiCli::Codex, AiCli::OpenCode]
+            .into_iter()
+            .map(|cli| session(cli, SessionKind::Terminal))
+            .collect();
+        let (s, t) = (structured.id, terminal.id);
+        let other_ids: Vec<SessionId> = others.iter().map(|o| o.id).collect();
+        let mut all = vec![structured, terminal];
+        all.extend(others);
+        let w = window(all);
+
+        assert_eq!(
+            switch_entries(&w, s),
+            vec![SwitchEntry {
+                label: OPEN_IN_TERMINAL,
+                to: SessionKind::Terminal
+            }]
+        );
+        assert_eq!(
+            switch_entries(&w, t),
+            vec![SwitchEntry {
+                label: OPEN_IN_STRUCTURED,
+                to: SessionKind::Structured
+            }]
+        );
+        for other in other_ids {
+            assert!(switch_entries(&w, other).is_empty(), "FR-019");
+        }
+
+        for (id, to) in [(s, SessionKind::Terminal), (t, SessionKind::Structured)] {
+            let request = w.switch_requested(id, to).expect("a Claude session");
+            assert_eq!(
+                request,
+                SwitchRequest {
+                    session: id,
+                    to,
+                    command: None,
+                    confirmed: false
+                }
+            );
+        }
+    }
+}

@@ -113,8 +113,12 @@ pub fn launch_args(choice: &ModelChoice) -> Vec<String> {
 
 /// The model the session runs (FR-013): the latest an `init` reported or a change the CLI
 /// accepted (`ModelChanged`) named.
-pub fn session_model(events: &[SequencedEvent]) -> Option<String> {
-    events.iter().rev().find_map(|e| match &e.event {
+pub fn session_model<'a, I>(events: I) -> Option<String>
+where
+    I: IntoIterator<Item = &'a SequencedEvent>,
+    I::IntoIter: DoubleEndedIterator,
+{
+    events.into_iter().rev().find_map(|e| match &e.event {
         StructuredEvent::Init {
             model: Some(model), ..
         }

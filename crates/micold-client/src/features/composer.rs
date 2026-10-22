@@ -302,6 +302,30 @@ pub enum Msg {
         session: SessionId,
         files: Box<DroppedFiles>,
     },
+    /// A click on the command palette's row `row` (#943 FR-008a).
+    PaletteClicked { session: SessionId, row: usize },
+    /// Open the model picker from the view (#943 FR-014).
+    ModelPickerRequested(SessionId),
+    /// The name typed into the model picker.
+    ModelPickerTyped { session: SessionId, text: String },
+    /// A model picked: item `item`, or the typed name when `None`.
+    ModelPicked {
+        session: SessionId,
+        item: Option<usize>,
+    },
+    /// The model picker left without a pick.
+    ModelPickerClosed(SessionId),
+    /// **Open in terminal** / **Open in structured view** chosen (#943 US4 scenarios 3, 4).
+    SwitchRequested {
+        session: SessionId,
+        to: micold_core::session::SessionKind,
+    },
+    /// The switch offer or its confirmation accepted (#943 FR-010, FR-021).
+    SwitchConfirmed(SessionId),
+    /// The switch offer dismissed: nothing changes.
+    SwitchDismissed(SessionId),
+    /// The `/login` offer beside an authentication failure taken (#943 FR-022a).
+    LoginOffered(SessionId),
 }
 
 /// Every session's composer in this window (data-model *Composers*).
@@ -334,6 +358,19 @@ impl State {
         let draft = &mut self.entry(session).draft;
         draft.text = text;
         draft.caret = caret;
+    }
+
+    /// The draft's text becomes `text` with the caret at `caret`, its pictures kept: the
+    /// palette filled a command in, or a command the app handles was used up (#943 FR-008a).
+    pub fn replace_text(&mut self, session: SessionId, text: String, caret: (usize, usize)) {
+        let composer = self.entry(session);
+        composer.history = None;
+        let images = std::mem::take(&mut composer.draft.images);
+        composer.replace_draft(Draft {
+            text,
+            caret,
+            images,
+        });
     }
 
     /// Forget `session`'s composer (the session is gone).

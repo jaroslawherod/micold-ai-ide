@@ -314,32 +314,32 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 9: Client — render-free palette, picker, switch state (M7; needs #941 M4, I-3)
 
-- [ ] T050 [P] [US2] Tests in `client/tests/features_command_palette.rs` (new): typing `/` in an
+- [x] T050 [P] [US2] Tests in `client/tests/features_command_palette.rs` (new): typing `/` in an
   empty draft opens `PaletteState` with the session's `CommandList` grouped; `sp` narrows and
   selects the first; Up/Down move; Tab, Enter and a click fill `/<name> ` and close without
   sending; Escape closes, leaves the draft and does not interrupt the turn; deleting the `/` or
   moving the caret out closes; `palette_key` returns `None` while closed so `composer_key` runs;
   no match → the "no command matches" state and Enter sends as typed; a terminal-only row carries
   its words; a fallback list carries its note (US2 scenarios 1–8, FR-007–FR-010)
-- [ ] T051 [US3] Tests in `client/tests/features_command_palette.rs`: `ModelPickerState` lists
+- [x] T051 [US3] Tests in `client/tests/features_command_palette.rs`: `ModelPickerState` lists
   Default plus `CommandsReported.models`, else `MODEL_SHORTCUTS`, marks the current
   `session_model`, accepts a typed name; picking sends `SetSessionModel`; sending `/model` opens
   the picker and sends nothing, `/model haiku` sends `SetSessionModel(haiku)` (FR-013, FR-014,
   FR-018); the header text (a render-free function) says the session model as last reported and
   "your choice" or Default; after a pick on a busy session it keeps the reported model, with the
   new choice, until the `ModelChanged` note arrives (US3 scenario 4)
-- [ ] T052 [P] [US4] [US5] Tests in `client/tests/features_session.rs`: sending or picking a
+- [x] T052 [P] [US4] [US5] Tests in `client/tests/features_session.rs`: sending or picking a
   terminal-only command opens `SwitchOffer { to: Terminal, command, reason }` and sends nothing;
   dismissing keeps the draft; confirming sends `SessionSwitchKind`; `NeedsConfirmation` opens the
   confirmation step and confirming resends with `confirmed: true`; an `auth_failed` entry offers
   `/login`; a kind change in a catalog snapshot drops the old terminal emulator and attaches to the
   new primary, and the window's draft survives (FR-010, FR-021, FR-022a, FR-024)
-- [ ] T053 [US4] Tests in `client/tests/features_session.rs`: a render-free
+- [x] T053 [US4] Tests in `client/tests/features_session.rs`: a render-free
   `switch_entries(state, session)` gives **Open in terminal** for a structured Claude session and
   **Open in structured view** for a terminal Claude session (switched or created as terminal), each
   sending `SessionSwitchKind` with no command (US4 scenarios 3–4), and nothing for Copilot, Pi,
   Codex or OpenCode sessions (FR-019, US4 scenario 7)
-- [ ] T054 Implement T050–T053 in `client/src/features/command_palette.rs` (new),
+- [x] T054 Implement T050–T053 in `client/src/features/command_palette.rs` (new),
   `client/src/features/session.rs`, `client/src/shell/daemon_sync.rs` and `client/src/app.rs`
 
 ---
