@@ -263,9 +263,11 @@ one user message, like any other text, with these exceptions:
   `/config` (and its alias `/settings`), `/mcp`, `/agents`, `/login` and `/logout`, plus any command
   the CLI itself marks as terminal-only in its session init.
 
-The daemon reads the session's command list from its event history. A refused command never
-reaches the CLI. It is not queued behind a turn in progress and leaves no `UserSent` note. The same
-rules apply to a session's first prompt.
+The daemon reads the session's command list from the latest session init and `CommandsReported`
+note its event history holds. A refused command never reaches the CLI. It is not queued behind a
+turn in progress and leaves no `UserSent` note. A `QueueEdit` that would turn a queued message into such a command is refused with the same sentence,
+and the message keeps its text. The same rules apply to a session's first prompt. A prompt sent
+before the CLI's session init has arrived is checked against the documented list above only.
 
 ## Project and worktree operations run through the daemon (User Story 3)
 

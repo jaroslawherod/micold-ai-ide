@@ -7046,12 +7046,11 @@ impl DaemonState {
         if parse_invocation(text).is_none() {
             return Ok(());
         }
-        let events = inner
+        let list = inner
             .event_streams
             .get(&session)
-            .map(|stream| stream.saved_snapshot().1)
-            .unwrap_or_default();
-        match classify_draft(text, &CommandList::from_history(&events)) {
+            .map_or_else(CommandList::fallback, |stream| stream.command_list());
+        match classify_draft(text, &list) {
             DraftCommand::Send => Ok(()),
             DraftCommand::Model(_) => Err(UserMessageRefusal::ModelIsTheApps),
             DraftCommand::TerminalOnly(name) => Err(UserMessageRefusal::NeedsTerminal(name)),
@@ -7152,8 +7151,37 @@ impl DaemonState {
         session: SessionId,
         change: impl FnOnce(&mut SessionInput) -> Result<T, QueueRefusal>,
     ) -> Result<(T, Option<Delivery>), QueueRefusal> {
+        self.change_queue_to(session, None, change)
+    }
+
+    /// Edit `entry` of `session`'s queue to `text`, keeping the pictures at `keep`, as
+    /// [`Self::change_queue`]; an edit into `/model` or a terminal-only command is refused as a
+    /// send of it is, and the entry keeps its text (#943 FR-010, FR-018).
+    pub fn edit_queue(
+        &self,
+        session: SessionId,
+        entry: QueueEntryId,
+        text: String,
+        keep: &[u32],
+    ) -> Result<((), Option<Delivery>), QueueRefusal> {
+        let checked = text.clone();
+        self.change_queue_to(session, Some(&checked), |input| {
+            input.edit(entry, text, keep)
+        })
+    }
+
+    /// [`Self::change_queue`], refused first when `text` is a command the CLI never gets.
+    fn change_queue_to<T>(
+        &self,
+        session: SessionId,
+        text: Option<&str>,
+        change: impl FnOnce(&mut SessionInput) -> Result<T, QueueRefusal>,
+    ) -> Result<(T, Option<Delivery>), QueueRefusal> {
         let mut guard = self.lock();
         let inner = &mut *guard;
+        if let Some(text) = text {
+            Self::refuse_app_handled(inner, session, text).map_err(QueueRefusal::Refused)?;
+        }
         let input = inner
             .structured_inputs
             .get_mut(&session)

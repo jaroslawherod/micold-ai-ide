@@ -99,6 +99,11 @@ impl EventHistory {
     }
 
     /// How many events were evicted, and the retained events, oldest first.
+    /// The held events, oldest first, without copying them.
+    pub fn iter(&self) -> std::collections::vec_deque::Iter<'_, SequencedEvent> {
+        self.events.iter()
+    }
+
     pub fn snapshot(&self) -> (u64, Vec<SequencedEvent>) {
         (self.omitted, self.events.iter().cloned().collect())
     }

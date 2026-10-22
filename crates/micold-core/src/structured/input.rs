@@ -59,12 +59,15 @@ pub enum Submit {
 }
 
 /// Why a queue edit changed nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueueRefusal {
     /// The entry was delivered or removed meanwhile.
     Gone,
     /// The edit would leave the entry with nothing to send.
     Blank,
+    /// The edit would make the entry a command the CLI never gets: `/model` or a terminal-only
+    /// one, refused as a send of it is (#943 FR-010, FR-018).
+    Refused(UserMessageRefusal),
 }
 
 impl fmt::Display for QueueRefusal {
@@ -72,6 +75,7 @@ impl fmt::Display for QueueRefusal {
         match self {
             Self::Gone => f.write_str("That message was already sent or removed"),
             Self::Blank => UserMessageRefusal::Blank.fmt(f),
+            Self::Refused(why) => why.fmt(f),
         }
     }
 }

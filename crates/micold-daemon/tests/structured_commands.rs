@@ -370,3 +370,86 @@ async fn model_and_terminal_only_commands_are_refused_and_never_reach_the_cli() 
         state.stop_session(id);
     }
 }
+
+/// Review A M3 F1 (FR-010, FR-018): a queued message edited into `/model` or a terminal-only
+/// command is refused with the sentence a send gets, keeps its text, and reaches the CLI as it was.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_queued_message_edited_into_a_refused_command_keeps_its_text() {
+    let project = tempfile::tempdir().unwrap();
+    let script = format!(
+        "initialize\non-message-gated {}\n",
+        fixture("text-turn.jsonl").display()
+    );
+    let (state, id) = started(project.path(), &script);
+    reported(&state, id).await;
+    let mut client = connect(&state).await;
+    assert_ok(&send_text(&mut client, 1, id, "hello").await, "hello");
+    delivered_is(project.path(), &["hello"]).await;
+    assert_ok(&send_text(&mut client, 2, id, "queued").await, "queued");
+    let (entries, _) = state
+        .change_queue(id, |input| {
+            Ok(input.queued().map(|q| q.id).collect::<Vec<_>>())
+        })
+        .expect("the queue");
+    let terminal_only = format!("/{} now", TERMINAL_ONLY[0].name);
+    let edits = [
+        ("/model haiku", "/model is handled by the app".to_owned()),
+        (
+            terminal_only.as_str(),
+            format!("/{} needs the terminal", TERMINAL_ONLY[0].name),
+        ),
+    ];
+    for (req, (text, reason)) in (3..).zip(edits) {
+        client
+            .send(Frame::Control(ClientMsg::QueueEdit {
+                req,
+                session: id,
+                entry: entries[0],
+                text: text.into(),
+                keep: vec![],
+            }))
+            .await
+            .expect("sent");
+        match answer(&mut client, req).await {
+            DaemonMsg::OperationError { message, .. } => {
+                assert!(
+                    message.contains(&reason),
+                    "{text}: {message} lacks {reason}"
+                )
+            }
+            other => panic!("{text}: the edit was not refused: {other:?}"),
+        }
+    }
+    std::fs::write(project.path().join("turn-1"), "").unwrap();
+    delivered_is(project.path(), &["hello", "queued"]).await;
+    state.stop_session(id);
+}
+
+/// Review A M3 F4: the command list a refusal reads is the one the history holds (FR-009): the
+/// latest note while it is held, a later note in its place, the fallback once it is evicted.
+#[test]
+fn the_command_list_is_the_one_the_history_holds() {
+    use micold_core::structured::commands::{CommandList, ListSource};
+    use micold_daemon::structured::{EventStream, StreamBounds};
+    let stream = EventStream::with_bounds(StreamBounds {
+        max_events: 3,
+        ..StreamBounds::default()
+    });
+    let held = |stream: &EventStream| CommandList::from_history(&stream.saved_snapshot().1);
+    assert_eq!(stream.command_list(), CommandList::fallback());
+    for commands in [recorded_commands(), recorded_commands()[..1].to_vec()] {
+        stream.push(StructuredEvent::CommandsReported {
+            commands,
+            models: vec![],
+        });
+        stream.push(StructuredEvent::ModelChanged { model: "m".into() });
+        assert_eq!(stream.command_list().source(), ListSource::Session);
+        assert_eq!(stream.command_list(), held(&stream));
+    }
+    for n in 0..3 {
+        stream.push(StructuredEvent::ModelChanged {
+            model: format!("m{n}"),
+        });
+    }
+    assert_eq!(stream.command_list(), CommandList::fallback(), "evicted");
+}
