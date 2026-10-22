@@ -324,27 +324,27 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 9: Window — requests in the transcript (M7; needs #939 M5–M6 on `main`, I-1)
 
-- [ ] T056 [P] [US1] Add showcase entries and builder-API checks for `ChoiceList` and `PromptCard`
+- [x] T056 [P] [US1] Add showcase entries and builder-API checks for `ChoiceList` and `PromptCard`
   so `client/tests/showcase_completeness.rs` and `client/tests/material_builder_api.rs` fail until
   both components exist
-- [ ] T057 [P] [US1] Geometry gate `client/tests/gates/prompt_card_fits.rs`, registered in
+- [x] T057 [P] [US1] Geometry gate `client/tests/gates/prompt_card_fits.rs`, registered in
   `client/tests/layout_snapshot.rs`: the action row stays inside the card at the narrowest pane
   width, for the tool, plan and question variants
-- [ ] T058 [US4] Implement `client/src/ui/material/choice_list.rs` (`ChoiceList`: single or multiple
+- [x] T058 [US4] Implement `client/src/ui/material/choice_list.rs` (`ChoiceList`: single or multiple
   choice rows, each label + description, an optional Other text row; builder API, theming, keyboard
   focus) and register it in `client/src/ui/material/mod.rs` and `client/src/showcase/`
-- [ ] T059 [US1] Implement `client/src/ui/material/prompt_card.rs` (`PromptCard`: bordered block with
+- [x] T059 [US1] Implement `client/src/ui/material/prompt_card.rs` (`PromptCard`: bordered block with
   a title, a body element and an action row; builder API) and register it likewise; T056–T057 pass
-- [ ] T060 [US1] Draw the request block in `client/src/ui/transcript/permission.rs` (new): tool name,
+- [x] T060 [US1] Draw the request block in `client/src/ui/transcript/permission.rs` (new): tool name,
   the input in the tool's familiar form where #939's tool card has one, else structured text; a
   bounded preview with **Show all** (sends `PermissionInput`); **Allow**, **Deny** with an optional
   message field, **Always allow** with its rule sentence; the card's *Allowed* / *Denied* /
   *Withdrawn* label; requests whose card is not held drawn after the last entry
-- [ ] T061 [US1] Let the tool card of `client/src/ui/transcript/entries.rs` take the request block as
+- [x] T061 [US1] Let the tool card of `client/src/ui/transcript/entries.rs` take the request block as
   an optional trailing element (I-1), fed from `placement`
-- [ ] T062 [US3] Draw the plan view in `client/src/ui/transcript/permission.rs`: the whole plan with
+- [x] T062 [US3] Draw the plan view in `client/src/ui/transcript/permission.rs`: the whole plan with
   **Approve and accept edits**, **Approve**, **Keep planning** and its note field
-- [ ] T063 [US4] Draw the question view in `client/src/ui/transcript/permission.rs`: each question's
+- [x] T063 [US4] Draw the question view in `client/src/ui/transcript/permission.rs`: each question's
   header and text, a `ChoiceList` per question, **Submit** enabled by `can_submit`, **Decline**
 
 ---

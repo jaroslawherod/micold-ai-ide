@@ -770,7 +770,8 @@ fn session_provider(state: &State, id: SessionId) -> AiCli {
 
 /// A structured session's primary in a pane (feature 939, FR-001): the window's transcript of it,
 /// drawn through [`BlockRenderers::RICH`] (feature 940), its messages routed as the session
-/// feature's.
+/// feature's, with its pending permission requests in it (feature 942), whose messages go to
+/// the permission prompts.
 pub(crate) fn transcript_body<'a>(
     state: &'a State,
     id: SessionId,
@@ -782,7 +783,7 @@ pub(crate) fn transcript_body<'a>(
         .active_sessions()
         .iter()
         .any(|s| s.id == id && s.lifecycle == SessionLifecycle::Running);
-    crate::ui::transcript::view_with_insights(
+    crate::ui::transcript::view_full(
         &state.structured_transcript,
         crate::ui::transcript::InsightsCtx {
             state: &state.structured_insights,
@@ -795,11 +796,15 @@ pub(crate) fn transcript_body<'a>(
             scheme,
             cache: &state.transcript_rich,
         },
+        |msg| match msg {
+            TranscriptMsg::Insights(msg) => Message::Session(SessionMsg::Insights(msg)),
+            msg => Message::Session(SessionMsg::Transcript(msg)),
+        },
+        Some(crate::ui::transcript::PromptsView {
+            state: &state.permission_prompts,
+            on_prompt: Message::PermissionPrompts,
+        }),
     )
-    .map(|msg| match msg {
-        TranscriptMsg::Insights(msg) => Message::Session(SessionMsg::Insights(msg)),
-        msg => Message::Session(SessionMsg::Transcript(msg)),
-    })
 }
 
 /// Whether the pane for `id` is the transcript: a structured session with its AI tab displayed.

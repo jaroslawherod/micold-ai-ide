@@ -505,6 +505,50 @@ pub fn queue_row(r: Roles) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A permission request's card in the transcript (feature 942, `PromptCard`): an **outlined** card
+/// — `surface_container_low`, a 1dp `outline_variant` edge and no shadow — so it reads apart from
+/// the raised tool card above it as something waiting for the user, and depth never doubles as a
+/// border (contract §1.5).
+pub fn prompt_card(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_low))),
+        text_color: Some(color(r.on_surface)),
+        border: Border {
+            color: color(r.outline_variant),
+            width: CARD_OUTLINE,
+            radius: shape::MEDIUM.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// A single-choice row's mark (feature 942, `ChoiceList`): a fully rounded 2dp ring, `primary`
+/// when chosen and `on_surface_variant` when not — the mark of a radio button, which the library
+/// has no primitive for. The dot inside a chosen ring is [`choice_dot`].
+pub fn choice_ring(r: Roles, chosen: bool) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        border: Border {
+            color: color(if chosen {
+                r.primary
+            } else {
+                r.on_surface_variant
+            }),
+            width: 2.0,
+            radius: shape::FULL.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// The dot inside a chosen single-choice ring: `primary`, fully rounded.
+pub fn choice_dot(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.primary))),
+        border: radius(shape::FULL),
+        ..container::Style::default()
+    }
+}
+
 /// A chip on an opaque fill — the accent as the *background*, with its own on-colour for the label.
 ///
 /// [`chip`] above draws the accent at 20% over whatever is behind it, which reads as an accent only

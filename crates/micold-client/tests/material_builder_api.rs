@@ -204,3 +204,63 @@ fn the_composer_parts_are_built_and_chained() {
         }
     }
 }
+
+/// Feature 942 (T056): the permission prompts' parts are components built like every other — a
+/// constructor, chainable steps and `.into()`, no public fields.
+#[test]
+fn the_prompt_parts_are_built_and_chained() {
+    let declared = declarations();
+    let sources = inventory::library_sources();
+    for (module, name, steps) in [
+        (
+            "material/choice_list.rs",
+            "ChoiceList",
+            &[
+                "multiple",
+                "option",
+                "on_choose",
+                "other",
+                "on_other",
+                "on_other_input",
+            ][..],
+        ),
+        (
+            "material/prompt_card.rs",
+            "PromptCard",
+            &["leading", "body", "action", "note", "error"][..],
+        ),
+    ] {
+        let d = declared
+            .iter()
+            .find(|d| d.module == module && d.name == name)
+            .unwrap_or_else(|| panic!("`{name}` is declared in {module}"));
+        assert!(
+            d.is_component() && d.has_constructor && !d.public_fields,
+            "`{name}` is a component with a constructor and no public fields"
+        );
+        assert!(
+            d.non_builder_methods.is_empty(),
+            "`{name}`: {:?}",
+            d.non_builder_methods
+        );
+        let (_, src) = sources
+            .iter()
+            .find(|(m, _)| m.ends_with(module))
+            .unwrap_or_else(|| panic!("{module}'s source"));
+        for step in steps {
+            let at = src
+                .find(&format!("pub fn {step}("))
+                .unwrap_or_else(|| panic!("`{name}::{step}` is declared"));
+            let signature = &src[at..at + src[at..].find('{').expect("a body")];
+            let params = &signature[signature.find('(').expect("parameters") + 1..];
+            assert!(
+                params.trim_start().starts_with("mut self"),
+                "`{name}::{step}` consumes `self`: {signature}"
+            );
+            assert!(
+                signature.trim_end().ends_with("-> Self"),
+                "`{name}::{step}` returns `Self`: {signature}"
+            );
+        }
+    }
+}
