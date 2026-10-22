@@ -674,18 +674,47 @@ pub async fn viewer(
     project: &Path,
     id: micold_core::session::SessionId,
 ) -> crate::conn::Client {
-    use futures_util::SinkExt;
-    use micold_core::protocol::codec::Frame;
     use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
-    let mut client = crate::conn::connect_as(state, "test-client").await;
-    client
-        .send(Frame::Control(ClientMsg::SetViewedTerminals {
+    viewing_with(
+        state,
+        ClientMsg::SetViewedTerminals {
             project: project.to_path_buf(),
             terminals: vec![TerminalRef {
                 session: id,
                 process: SessionProcess::Primary,
             }],
-        }))
+        },
+    )
+    .await
+}
+
+/// A client of `state` viewing `id` as a single-pane window does, with `SetViewedSession`.
+pub async fn single_viewer(
+    state: &std::sync::Arc<micold_daemon::state::DaemonState>,
+    project: &Path,
+    id: micold_core::session::SessionId,
+) -> crate::conn::Client {
+    use micold_core::protocol::messages::ClientMsg;
+    viewing_with(
+        state,
+        ClientMsg::SetViewedSession {
+            project: project.to_path_buf(),
+            session: Some(id),
+        },
+    )
+    .await
+}
+
+/// A client of `state` that has sent `view`.
+async fn viewing_with(
+    state: &std::sync::Arc<micold_daemon::state::DaemonState>,
+    view: micold_core::protocol::messages::ClientMsg,
+) -> crate::conn::Client {
+    use futures_util::SinkExt;
+    use micold_core::protocol::codec::Frame;
+    let mut client = crate::conn::connect_as(state, "test-client").await;
+    client
+        .send(Frame::Control(view))
         .await
         .expect("the view is sent");
     client

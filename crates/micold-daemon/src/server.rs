@@ -780,7 +780,7 @@ where
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => viewing.is_some(),
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => false,
                 };
-                if concerns_view && viewing.is_some() {
+                if concerns_view {
                     show_single_view(
                         state,
                         id,
@@ -1316,7 +1316,9 @@ where
             ClientMsg::SessionAttachProcess { session, process } => {
                 let terminal = state.attach_process(session, process);
                 // `None` is also a structured primary's answer, which has no terminal to give.
-                if terminal.is_none() && state.attached_process(session) != Some(process) {
+                let events = state.attached_process(session) == Some(process)
+                    && state.refuses_terminal_request(session, Some(process));
+                if terminal.is_none() && !events {
                     // The client asked to display a process the daemon does not have, so the two
                     // now disagree about what is attached — the client will show its new mode while
                     // the pane keeps streaming whatever it streamed before (FR-007). Silently
@@ -3061,22 +3063,23 @@ fn show_single_view(
     viewed_terminals: &mut Vec<TerminalRef>,
     session: Option<micold_core::session::SessionId>,
 ) {
-    let process = session
-        .and_then(|s| state.attached_process(s))
-        .unwrap_or(SessionProcess::Primary);
-    let structured = session.filter(|s| {
-        process == SessionProcess::Primary
-            && state.session_kind(*s) == Some(micold_core::session::SessionKind::Structured)
-    });
+    // The rule that refuses a terminal request to it (FR-019): the attached process is the AI one.
+    let structured = session.filter(|s| state.refuses_terminal_request(*s, None));
     *viewed_terminals = structured
-        .map(|session| vec![TerminalRef { session, process }])
+        .map(|session| {
+            vec![TerminalRef {
+                session,
+                process: SessionProcess::Primary,
+            }]
+        })
         .unwrap_or_default();
     sync_terminal_streams(state, id, terminal_streams, viewed_terminals);
-    match session
-        .filter(|_| structured.is_none())
-        .and_then(|s| state.live_session(s).zip(state.session_framer(s)))
-    {
-        Some((pty, framer)) => restart_view(state, id, view_stream, process, pty, framer),
+    let screen = session.filter(|_| structured.is_none()).and_then(|s| {
+        let process = state.attached_process(s)?;
+        Some((process, state.live_session(s)?, state.session_framer(s)?))
+    });
+    match screen {
+        Some((process, pty, framer)) => restart_view(state, id, view_stream, process, pty, framer),
         None => {
             if let Some(prev) = view_stream.take() {
                 prev.abort();
