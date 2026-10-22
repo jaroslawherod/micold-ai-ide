@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M5 PR
-- **Next step**: orchestrator waits on #1231's CI and merges it (main moved 23 commits since 4780eb3e, none touching M5's files); then milestone M6
+- **Phase**: M6 verify
+- **Next step**: full gate and review B of M6, then PR
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1204 | M2: daemon holds and decides prompt requests (switch off) | merged (rebase) | 0c33edd153cba2c02c9f41dfe584253b6a15056b |
 | #1208 | M3: daemon waiting activity and withdrawal | merged (rebase) | 802f46ebcbd3379fb50758ac94fde18e757e11b2 |
 | #1224 | M4: daemon mode persisted, created, launched | merged (rebase) | 4780eb3eaf8e292a0d9258ded2a646ea855a3756 |
-| #1231 | M5: mode change while running, following Claude, plan approval sets the mode | open (draft) | — |
+| #1231 | M5: mode change while running, following Claude, plan approval sets the mode | merged (rebase; CI's one red job `sandbox_real_provision_own_image_without_ssh_fails_in_reach`, a Docker Hub 502 pulling alpine:3, passed on one re-run) | 1403972ac7d6e4cc845004c89b558d8253ab33c7 |
 
 ## Milestones
 
@@ -31,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T024–T034 | full | Daemon holds and decides prompt requests (switch off), wire Permission*, stand-in prompt | #1204 | merged |
 | M3 | T035–T038 | full | Daemon: waiting activity and withdrawal | #1208 | merged |
 | M4 | T039–T042 | full | Daemon: mode persisted, created, launched | #1224 | merged |
-| M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | #1231 (draft) | full gate green (scripts/gate.sh, first run), reviews A and B clean; TDD red: the new tests did not compile (no `spawn_mode_reports`, `CONTROL_ANSWER_BOUND`, `DaemonState::set_permission_mode`) |
-| M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | pending |
+| M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | #1231 | merged |
+| M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | — | in progress |
 | M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1) | — | pending |
 | M8 | T064–T069 | full | Window composer side, switch on, user guide, Part B; needs #941 on main (I-2) | — | pending |
 
@@ -79,6 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4 (conformance, sonnet) | 1 | f8700e0a018d6a318ee5f4a40732448129c58b9c:3196a9e7f9874a86042c6a3a1ed57e42270b8ef0 | CLEAN: 2 MINOR (F1 cycle log uncommitted — fixed, committed; F2 Verify not run, its `cargo test` refused — the unit ran Verify: 5 passed; 8 and 39 passed) |
 | Review A M5 (code-review high) | 1 | f87c133e430c27b98cb5cc16d987e545768d27ea:4780eb3eaf8e292a0d9258ded2a646ea855a3756 | CLEAN: 3 MINOR (F1 a stale `status` report applied after a change — comment, declined; F2 plan resolution broadcast after the mode change — comment, declined; F3 stand-in formats JSON by hand — declined). `claude -p` with the brief and diff inline, 0 permission denials |
 | Review B M5 (conformance, sonnet) | 1 | f87c133e430c27b98cb5cc16d987e545768d27ea:4780eb3eaf8e292a0d9258ded2a646ea855a3756 | CLEAN: 1 MINOR (F1 T048 text still said `mode_change` — fixed, prose only). Verify output given inline (13 and 29 passed), 0 permission denials |
+| Review A M6 (code-review high) | 1 | f57630e6ecbab071c1f308ae038e7bea8ae2dbae:80b87f4423a2d01f7ebc2f4c90c51f1b52183f67 | CLEAN: 3 MINOR (F1 a refused Show all cleared an answer's `sending` — fixed, `input_failed`; F2 the Bypass gate runs for an automatic start — declined; F3 no shell test of the start gate — added `a_bypass_start_is_created_only_by_its_confirmation`). `claude -p` with the brief and diff inline, 0 permission denials |
 
 ## Declined review findings
 
@@ -99,6 +100,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | Review A r1 | F1 MINOR: a `status` report the CLI wrote just before a change's `success` can be applied after the change and revert it | The CLI writes `status` with the new mode right after its `success` (P-9), which restores it; ordering reports against control answers would need sequence numbers across the feed. Commented in `spawn_structured` |
 | M5 | Review A r1 | F2 MINOR: an approved plan's `PermissionResolved` waits for the mode change (≤ 10 s) | Deliberate: the broadcast names the mode the session has after the change (`Resolution::PlanApproved { mode }`); another client's decision meanwhile is refused as no longer pending, as for any request decided first. Commented in `decide_prompt` |
 | M5 | Review A r1 | F3 MINOR: the stand-in formats `control_response` JSON by hand | The stand-in is compiled by plain `rustc` with no crates (no serde); the tests pass it only plain text |
+| M6 | Review A r1 | F2 MINOR: the Bypass gate runs for an automatic start, which would pop the confirmation uninvited | The auto-start always asks for a terminal session (`StartRequested` doc, feature 938 FR-022), whose gate is `Create(Default)`; for a structured one, an unconfirmed Bypass create is what FR-014 forbids, so the confirmation is the right answer |
 
 ## Handover
 

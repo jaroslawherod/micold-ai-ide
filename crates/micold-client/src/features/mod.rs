@@ -328,6 +328,7 @@ pub mod kube_clone;
 pub mod navigation;
 pub mod notifications;
 pub mod overview;
+pub mod permission_prompts;
 pub mod plan_usage;
 pub mod pr_status;
 pub mod project;

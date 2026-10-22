@@ -288,7 +288,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 8: Client — render-free prompt state (M6)
 
-- [ ] T049 [P] [US1] Reducer tests in `client/tests/features_permission_prompts.rs` (new):
+- [x] T049 [P] [US1] Reducer tests in `client/tests/features_permission_prompts.rs` (new):
   `PermissionRequested` adds a `Shown` under its session, a second one for a held id is ignored;
   `PermissionResolved` removes it and records the resolution by tool use id (*Allowed*, *Denied*,
   *Withdrawn*); `choice(id, Allow | AlwaysAllow | Deny)` builds the `PromptChoice` with the typed
@@ -296,27 +296,27 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   session's state is dropped with the session; two sessions are isolated; `placement` gives
   `UnderCard(EntryKey::Tool(id))` when the transcript holds the card, else `AtEnd`; the input
   preview's cut flag is `input_bytes > input_preview.len()`
-- [ ] T050 [US3] [US4] Reducer tests in `client/tests/features_permission_prompts.rs`: the plan
+- [x] T050 [US3] [US4] Reducer tests in `client/tests/features_permission_prompts.rs`: the plan
   text is held whole; Approve, Approve and accept edits and Keep planning with a note build their
   choices; `can_submit` is false until every question has a chosen option or a chosen, non-blank
   Other, a single-choice question holds one option, a multi-select several; `choice` is `None`
   while not submittable; Decline builds `DeclineQuestion` (FR-007, FR-008)
-- [ ] T051 [US5] Reducer test in `client/tests/features_permission_prompts.rs`: `waiting(session)`
+- [x] T051 [US5] Reducer test in `client/tests/features_permission_prompts.rs`: `waiting(session)`
   is true while any request of that session is pending and false after the last resolves
-- [ ] T052 [US1] Implement `client/src/features/permission_prompts.rs` (data-model *Client state*) and
+- [x] T052 [US1] Implement `client/src/features/permission_prompts.rs` (data-model *Client state*) and
   register it in `client/src/features/mod.rs`; add `State.permission_prompts` to `client/src/app.rs`;
   T049–T051 pass
-- [ ] T053 [US1] Wire `client/src/shell/daemon_sync.rs`: `PermissionRequested`/`PermissionResolved`/
+- [x] T053 [US1] Wire `client/src/shell/daemon_sync.rs`: `PermissionRequested`/`PermissionResolved`/
   `PermissionInputText` into the feature; `PermissionDecision`, `PermissionInput` and
   `SetPermissionMode` sent with their `req` and their `OperationOk`/`OperationError` replies routed
   back; a reducer test per route in `client/tests/features_permission_prompts.rs` first
-- [ ] T054 [US2] Tests in `client/tests/structured_start_menu.rs`: the structured create flow
+- [x] T054 [US2] Tests in `client/tests/structured_start_menu.rs`: the structured create flow
   carries a chosen mode into `SessionCreate.permission_mode` (none chosen → Default); choosing
   Bypass enters a confirmation step and only its confirm sends the create; cancelling returns to
   the choice; a terminal create sends Default (FR-014); and in
   `client/tests/features_permission_prompts.rs`, a mode change of an existing session to Bypass
   (the mode control, FR-017) goes through a confirmation state before `SetPermissionMode` is sent
-- [ ] T055 [US2] Implement T054 in `client/src/features/session.rs` and the mode-change confirmation
+- [x] T055 [US2] Implement T054 in `client/src/features/session.rs` and the mode-change confirmation
   state in `client/src/features/permission_prompts.rs` (state only; no draw code)
 
 ---

@@ -60,7 +60,7 @@ use micold_core::cli_reason::{
 };
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionKind, SessionLocation, ShellInstanceId,
+    AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLocation, ShellInstanceId,
 };
 use micold_core::terminal::LaunchMode;
 use std::collections::{BTreeSet, HashMap};
@@ -166,6 +166,12 @@ pub struct State {
     /// The location rather than a boolean: the list's items have to name where the session will
     /// start, and every sidebar row can open its own.
     pub start_menu: Option<StartMenu>,
+    /// The permission mode the structured create flow carries (#942 FR-014): `Default` until the
+    /// user chooses another. A terminal create sends `Default` whatever it holds.
+    pub start_mode: PermissionMode,
+    /// A structured start in Bypass awaiting its confirmation (#942 FR-014). Its presence *is* the
+    /// confirmation dialog being shown, as [`Self::remove_target`]'s is.
+    pub bypass_start: Option<BypassStart>,
     /// Where the last press on a start affordance landed, in window pixels (feature 026, T089,
     /// FR-029d).
     ///
@@ -1726,6 +1732,18 @@ pub enum Msg {
     /// Dismiss the remove confirmation without removing anything.
     RemoveCancelled,
 
+    // ---- #942: the structured create flow's permission mode (FR-014) ----
+    /// The structured create flow's mode was chosen.
+    StartModeChosen(PermissionMode),
+    /// A structured start in Bypass was asked for: its confirmation opens, and nothing is created
+    /// until it is accepted.
+    BypassStartOpened(BypassStart),
+    /// The Bypass confirmation was accepted. The binary reads
+    /// [`State::bypass_start_request`] before this runs and sends the create.
+    BypassStartConfirmed,
+    /// The Bypass confirmation was dismissed: the start list opens again where it was.
+    BypassStartCancelled,
+
     // ---- Feature 776: helper sessions and the main session ----
     /// "Start another session..." was chosen on an occupied location; opens the confirmation.
     AdditionalRequested(SessionLocation),
@@ -2078,6 +2096,14 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             kind,
         } => additional_opened(state, location, provider, kind),
         Msg::AdditionalConfirmed => additional_confirmed(state),
+        Msg::StartModeChosen(mode) => state.session.start_mode = mode,
+        Msg::BypassStartOpened(start) => bypass_start_opened(state, start),
+        Msg::BypassStartConfirmed => state.session.bypass_start = None,
+        Msg::BypassStartCancelled => {
+            if let Some(start) = state.session.bypass_start.take() {
+                state.session.start_menu = start.menu;
+            }
+        }
         Msg::AdditionalCancelled => additional_cancelled(state),
         Msg::StartBlocked(id) => start_blocked(state, id),
         Msg::MakeMainRequested(_) => make_main_requested(state),
@@ -2330,6 +2356,34 @@ pub enum StartIntent {
 }
 
 impl State {
+    /// Whether a person's start of `kind` creates now, and in which mode, or first confirms
+    /// Bypass (#942 FR-014). A terminal start creates in `Default`.
+    pub fn start_gate(&self, kind: SessionKind) -> StartGate {
+        match self.start_mode_for(kind) {
+            PermissionMode::Bypass => StartGate::ConfirmBypass,
+            mode => StartGate::Create(mode),
+        }
+    }
+
+    /// The mode a start of `kind` is created in: the create flow's for a structured one,
+    /// `Default` for a terminal one (#942 FR-014).
+    pub fn start_mode_for(&self, kind: SessionKind) -> PermissionMode {
+        match kind {
+            SessionKind::Structured => self.start_mode,
+            SessionKind::Terminal => PermissionMode::Default,
+        }
+    }
+
+    /// The location, CLI and mode of the start the open Bypass confirmation would create.
+    pub fn bypass_start_request(&self) -> Option<(SessionLocation, AiCli, PermissionMode)> {
+        let start = self.bypass_start.as_ref()?;
+        Some((
+            start.location.clone(),
+            start.provider,
+            PermissionMode::Bypass,
+        ))
+    }
+
     /// The CLI a new session should run: the per-session override if one was chosen, otherwise the
     /// stored default (FR-004).
     ///
@@ -2677,6 +2731,61 @@ pub fn start_menu_anchored(state: &mut crate::app::State, anchor: (u16, u16)) {
 /// The "start a session on…" list was dismissed without choosing.
 pub fn start_menu_dismissed(state: &mut crate::app::State) {
     state.session.start_menu = None;
+}
+
+/// A structured start in Bypass, held while its confirmation is shown (#942 FR-014).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BypassStart {
+    /// Where the session would run.
+    pub location: SessionLocation,
+    /// The CLI it would run.
+    pub provider: AiCli,
+    /// The start list it was chosen from, open again when the confirmation is dismissed.
+    pub menu: Option<StartMenu>,
+}
+
+/// What a person's start asks for once its mode is known (#942 FR-014).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartGate {
+    /// Send the create with this mode.
+    Create(PermissionMode),
+    /// Bypass was chosen: confirm it before anything is created.
+    ConfirmBypass,
+}
+
+/// Open the Bypass confirmation for `start`.
+fn bypass_start_opened(state: &mut crate::app::State, start: BypassStart) {
+    state.clear_for_dialog();
+    state.session.bypass_start = Some(start);
+}
+
+/// The `SessionCreate` of a start (#942 FR-014, FR-018): it carries `mode` for a structured
+/// session, and `Default` for a terminal one, which runs in no mode of this feature's.
+pub fn session_create(
+    req: u64,
+    project: PathBuf,
+    location: &SessionLocation,
+    provider: AiCli,
+    kind: SessionKind,
+    mode: PermissionMode,
+    allow_additional_session: bool,
+) -> micold_core::protocol::messages::ClientMsg {
+    let worktree_dir = match location {
+        SessionLocation::Worktree(dir) => dir.clone(),
+        SessionLocation::Default => String::new(),
+    };
+    micold_core::protocol::messages::ClientMsg::SessionCreate {
+        permission_mode: match kind {
+            SessionKind::Structured => mode,
+            SessionKind::Terminal => PermissionMode::Default,
+        },
+        req,
+        project,
+        worktree_dir,
+        provider,
+        kind,
+        allow_additional_session,
+    }
 }
 
 /// The "start a session on…" list, as a floating surface (feature 026, T033).
