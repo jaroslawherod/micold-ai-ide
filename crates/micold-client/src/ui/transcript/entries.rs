@@ -668,7 +668,9 @@ fn thread_stamp(
     };
     parent.hash(h);
     thread_header(&view).summary.hash(h);
-    let Some(thread) = insights.state.thread(session, parent) else {
+    let thread = insights.state.thread(session, parent);
+    thread.is_some().hash(h);
+    let Some(thread) = thread else {
         return;
     };
     for e in thread.entries() {

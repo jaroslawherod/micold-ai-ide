@@ -199,6 +199,14 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          reducer only carries the type and never handles it: the root routes it to the insights \
          feature (feature 944, T036)",
     ),
+    (
+        "structured_transcript",
+        "structured_insights",
+        "InsightsMsg — the transcript view's entries draw feature 944's threads and task list, and \
+         a view's `Block` carries only `TranscriptMsg`, so their fold messages ride in it as \
+         `TranscriptMsg::Insights`; the transcript's `update` never handles one: the pane's view \
+         hands it to the insights feature as `session::Msg::Insights` (feature 944, D18 b)",
+    ),
 ];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.

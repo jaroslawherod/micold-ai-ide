@@ -81,6 +81,9 @@ pub const MUTATORS: &[&str] = &[
     "pop",
     // `transcript_rich.refresh` derives a session's render cache from its transcript (feature 940).
     "refresh",
+    // `transcript_rich.refresh_all` does so from its transcript and its open subagent threads
+    // (feature 944, D18 c).
+    "refresh_all",
     "push",
     "push_str",
     "remove",
@@ -114,6 +117,9 @@ pub const READERS: &[&str] = &[
     // `structured_transcript.transcript` hands out a session's transcript by shared reference;
     // the root passes it to the insights feature, which reads it (feature 944, T036).
     "transcript",
+    // `structured_insights.open_threads` lends a session's open subagent threads, which the render
+    // cache is refreshed from (feature 944, D18 c).
+    "open_threads",
     "all",
     "and_then",
     // `session.answer_in_use` hands back the answer a row's list is drawn from, which the store
