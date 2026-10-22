@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M5 implemented (T039–T042 ticked, tests green), not yet gated or reviewed
-- **Next step**: M5 unit continues from *Handover*: scoped gate + review A (high), review B, full gate, PR files. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
+- **Phase**: M5 reviewed (A 2 rounds, B 1), full gate green (scripts/gate.sh), PR files written; orchestrator opens the PR
+- **Next step**: orchestrator opens the M5 PR from `943-M5/pr-title.txt`/`pr-body.md`, waits on CI, merges; then M6. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | #1241 | merged |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | merged |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | #1250 | merged |
-| M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | implemented, gate/reviews pending |
+| M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pushed, PR to open |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** | | pending |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** | | pending |
 | M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** | | pending |
@@ -75,6 +75,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4 (conformance, sonnet, claude -p) | 1 | de30c437cac4be48233ba871b537a7524b9fc4eb:d5f63633b6dcdece9dd1c1272790e6b3b7e784b2 | CLEAN; Verify: structured_model 10, structured_session 19, session_store 44, protocol_roundtrip 22, schema_hash 10 passed (2 MINOR: an idle pick does not clear a still-unflushed deferred pick — left, same overlapping-picks family as A's F2/F3; decision 7 noted, no fix) |
 | Rebase M4 onto origin/main f114ea2e (#941 M4) | — | — | clean rebase, no conflicts; full gate red once on `structured_model` `of_two_picks_the_last_one_wins` (test race: `answer(1)` skipped req 2's earlier answer) — fixed with `conn::answers` (both answers in either order), test-only; full gate green at 5081fdc1; rebased again onto origin/main 420b051e (#1161 M2, client settings only), full gate green at 010a8946 |
 
+| Review A M5 (code-review high, claude -p) | 1 | 867788dfce74dede86870f3c81571eab6fae9772:7974aedb3455e248d3345bcefe9f870ddb4029e5 | CHANGES: F1 MAJOR superseded handle unknown after a second `/clear` — fixed (`set_conversation` marks it archived with the provider, test); F2 MAJOR report race — declined; F3 MINOR — :5120 wrong, :5075 commented; F4 MINOR archive marks only the id — fixed; F5–F8 MINOR — declined/left |
+| Review B M5 (conformance, sonnet, claude -p) | 1 | 867788dfce74dede86870f3c81571eab6fae9772:7974aedb3455e248d3345bcefe9f870ddb4029e5 | CLEAN (1 MINOR: prune at state.rs:5075 asks about `id.0` — commented, same as A F3) |
+| Review A M5 (scoped, sonnet, claude -p) | 2 | 3c4426a7072784195c6e004d47742eb1517c99e8:7974aedb3455e248d3345bcefe9f870ddb4029e5 | CLEAN (1 MINOR: F4 untested — test added, red with the handle marking disabled) |
+
 ## Declined review findings
 
 - Review A M1 F1 (MAJOR, command list and model lost when the history evicts `Init` and `CommandsReported`): declined — FR-009 says the list is the one reported at the latest start *whose events the session still holds*, and the fallback when they are no longer held; an `init` precedes every turn, so the latest one is recent.
@@ -86,22 +90,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M5 | A | F2 (MAJOR, discovery or a restart before the async `init` report is persisted) | discovery keeps the first session per location (FR-012), so a live or catalogued session's slot is never filled by its successor, and BUG-904's continuation check archives a `/clear` successor of an occupied slot; a restart inside the feed hop resumes the pre-clear conversation (option B's behaviour), nothing lost |
+| M5 | A | F3 (MINOR, `id.0` at state.rs:5075/5120, client persist.rs) | :5120's closure already gets the resume handle from the catalog; :5075 prune: a session that followed `/clear` recorded its own conversation first (comment added); the client never sees the handle (not on the wire) |
+| M5 | A | F5–F8 (MINOR) | F5 `set_conversation` keeps the own id as `None`; F6 persist under the lock is the catalog's pattern (`keep_permission_mode`, `set_model`); F7 duplication left to a later refactor; F8 the stand-in is one process per launch, so the flag is per launch |
 
 ## Handover
 
-M5 unit handed over at 155k context. Branch `claude/project-thread-k392yq` was reset to origin/main
-0b432628 (#1250 M4 merged) and carries one local commit, `feat(943): resume the conversation a
-/clear started` (not pushed; the remote branch still holds the pre-merge M4 commits, so push with
-`--force-with-lease`). Done: T039–T042 ticked, TDD log M5 written, `docs/daemon.md` paragraph
-after the model section; tests green (structured_resume 5, daemon lib 175, structured_model 10,
-structured_session 19, structured_commands 8, catalog_adoption 23, version_recovery 4,
-session_store/core lib conversation tests). No `PROTOCOL_VERSION` change (the handle is not on the
-wire). Built as option A, isolated: revert of this commit alone gives option B. Beyond tasks.md:
-the startup `present_interrupted_resumable` and start-time "conversation gone" checks ask about
-`resume_handle()` instead of the id. Next: verify.md step 1 (scoped gate + review A high on
-`origin/main...HEAD`), then review B (sonnet), full gate (`scripts/gate.sh`, cloud: no mise),
-then PR title/body into the scratchpad `943-M5/` (orchestrator opens it); PR body must say
-decision 2 is provisional and that reverting M5 alone gives option B.
+None.
 
 ## Open escalation
 

@@ -362,7 +362,11 @@ fn a_conversation_handle_round_trips_and_none_is_not_written() {
     let handle = Uuid::from_u128(0x943_0005);
     let (back, written) = round_trip_structured(|session| session.conversation = Some(handle));
     assert_eq!(back.conversation, Some(handle), "FR-005a");
-    assert_eq!(back.resume_handle(), handle, "a restart resumes the cleared conversation");
+    assert_eq!(
+        back.resume_handle(),
+        handle,
+        "a restart resumes the cleared conversation"
+    );
     assert!(written.contains(&handle.to_string()), "{written}");
     let (back, written) = round_trip_structured(|_| {});
     assert_eq!(back.conversation, None);

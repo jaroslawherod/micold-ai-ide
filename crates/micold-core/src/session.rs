@@ -924,7 +924,10 @@ mod resume_handle_tests {
             crate::structured::model::ModelChoice::Default,
             "a new session runs the CLI's default"
         );
-        assert_eq!(session.conversation, None, "a new session has cleared nothing");
+        assert_eq!(
+            session.conversation, None,
+            "a new session has cleared nothing"
+        );
     }
 
     /// #943 T039 (FR-005a, provisional M5): after a `/clear`, every resume names the
