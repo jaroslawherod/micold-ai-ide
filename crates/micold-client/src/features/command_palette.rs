@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 
-use micold_core::session::{SessionId, SessionKind};
+use micold_core::session::SessionId;
 use micold_core::structured::commands::palette::{accept, filter, palette_query, PaletteSelection};
 use micold_core::structured::commands::{
     classify_draft, Command, CommandList, DraftCommand, ListSource, CLI_MARKED_WHY,
@@ -313,11 +313,11 @@ impl State {
         }
     }
 
-    /// Escape: close over the draft `text`, which stays as it is.
+    /// Escape, or a terminal-only row picked: close over the draft `text`, which stays as it is
+    /// and does not reopen the palette until it changes.
     pub fn dismiss(&mut self, session: SessionId, text: &str) {
-        if self.palettes.remove(&session).is_some() {
-            self.dismissed.insert(session, text.to_string());
-        }
+        self.palettes.remove(&session);
+        self.dismissed.insert(session, text.to_string());
     }
 
     /// Accept row `row` (the selected one when `None`), closing the palette.
@@ -389,7 +389,7 @@ impl State {
 }
 
 /// How a draft of `text` is sent, with `list` the session's commands (FR-010, FR-018).
-fn classify(text: &str, list: &CommandList) -> Classified {
+pub(crate) fn classify(text: &str, list: &CommandList) -> Classified {
     match classify_draft(text, list) {
         DraftCommand::Send => Classified::Message,
         DraftCommand::Model(None) => Classified::Picker,
@@ -409,7 +409,7 @@ fn classify(text: &str, list: &CommandList) -> Classified {
     }
 }
 
-enum Classified {
+pub(crate) enum Classified {
     Message,
     Picker,
     Model(Result<ModelChoice, ModelRefusal>),
@@ -439,109 +439,5 @@ impl crate::app::State {
             .transcript(session)
             .and_then(|t| t.session_model());
         model_header(reported.as_deref(), &self.model_choice(session))
-    }
-
-    /// The composer's draft changed: the palette follows it.
-    pub fn composer_edited(&mut self, session: SessionId) {
-        let (text, caret) = self
-            .composers
-            .draft(session)
-            .map(|d| (d.text.clone(), d.caret))
-            .unwrap_or_default();
-        let transcript = self.structured_transcript.transcript(session);
-        self.command_palette
-            .draft_changed(session, &text, caret, || {
-                transcript.map_or_else(CommandList::fallback, |t| t.command_list())
-            });
-    }
-
-    /// A key [`palette_key`] gave to the open palette.
-    pub fn palette_key(&mut self, session: SessionId, key: PaletteKey) {
-        match key {
-            PaletteKey::Up => self.command_palette.step(session, Direction::Prev),
-            PaletteKey::Down => self.command_palette.step(session, Direction::Next),
-            PaletteKey::Accept => self.palette_picked(session, None),
-            PaletteKey::Close => {
-                let text = self
-                    .composers
-                    .draft(session)
-                    .map(|d| d.text.clone())
-                    .unwrap_or_default();
-                self.command_palette.dismiss(session, &text);
-            }
-        }
-    }
-
-    /// A click on the palette's row `row`.
-    pub fn palette_clicked(&mut self, session: SessionId, row: usize) {
-        self.palette_picked(session, Some(row));
-    }
-
-    fn palette_picked(&mut self, session: SessionId, row: Option<usize>) {
-        match self.command_palette.pick(session, row) {
-            Some(Picked::Fill { text, caret }) => {
-                self.composers.replace_text(session, text, caret);
-            }
-            Some(Picked::TerminalOnly { command, reason }) => {
-                self.offer_switch(session, SessionKind::Terminal, Some(command), reason);
-            }
-            None => {}
-        }
-    }
-
-    /// Open `session`'s model picker (FR-014, FR-018).
-    pub fn open_model_picker(&mut self, session: SessionId) {
-        let current = self.model_choice(session);
-        let reported = self
-            .structured_transcript
-            .transcript(session)
-            .map(|t| t.reported_models().to_vec())
-            .unwrap_or_default();
-        self.command_palette
-            .open_picker(session, &reported, &current);
-    }
-
-    /// The name typed into `session`'s picker.
-    pub fn model_picker_typed(&mut self, session: SessionId, text: String) {
-        self.command_palette.picker_typed(session, text);
-    }
-
-    /// Choose item `item` of `session`'s picker, else its typed name: the choice to send, or
-    /// `None` (nothing open, or the typed name refused, said in the composer's notice).
-    pub fn model_picked(&mut self, session: SessionId, item: Option<usize>) -> Option<ModelChoice> {
-        match self.command_palette.picker_chose(session, item)? {
-            Ok(choice) => Some(choice),
-            Err(refusal) => {
-                self.composers.notice(session, refusal.to_string());
-                None
-            }
-        }
-    }
-
-    /// What sending `session`'s draft does (FR-010, FR-018): a message for the composer to send,
-    /// or handled here (the picker opened, the terminal offered, a refusal said), or a model to
-    /// ask the service for, its draft left for the shell to clear once the request went out.
-    /// `/model` alone leaves the composer; a terminal-only command stays until the switch is done.
-    pub fn send_intent(&mut self, session: SessionId) -> SendIntent {
-        let Some(text) = self.composers.draft(session).map(|d| d.text.clone()) else {
-            return SendIntent::Message;
-        };
-        match classify(&text, &self.command_list(session)) {
-            Classified::Message => SendIntent::Message,
-            Classified::Picker => {
-                self.composers.replace_text(session, String::new(), (0, 0));
-                self.open_model_picker(session);
-                SendIntent::Nothing
-            }
-            Classified::Model(Ok(choice)) => SendIntent::SetModel(choice),
-            Classified::Model(Err(refusal)) => {
-                self.composers.notice(session, refusal.to_string());
-                SendIntent::Nothing
-            }
-            Classified::TerminalOnly { command, reason } => {
-                self.offer_switch(session, SessionKind::Terminal, Some(command), reason);
-                SendIntent::Nothing
-            }
-        }
     }
 }

@@ -86,6 +86,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M6 run 1 | — | 7c8ba98e | red: `structured_switch` test race (late `initialize` line of the ended structured run read as terminal input) — fixed in the test's `typed` |
 | Full gate M6 run 2 | — | af86e20c | green, after rebase onto origin/main 2dddbef6 (no conflicts, `PROTOCOL_VERSION` still 66 there → 67) |
 | Review A M7 (code-review high, claude -p) | 1 | 680a6287dbd32baea23edcbb6743a94f45d274a1:f69e3ab27d5d0953fac3b519cfac593e5a2eff1c | CHANGES: F1 MAJOR `/login` offered for ever after one auth failure — fixed (latest answer decides, test); F2 draft lost on a confirmation or refused switch — fixed (draft used up only on the switch's `OperationOk`, `switch_completed`, tests); F3 `/model <name>` draft lost when not connected — fixed (cleared only once sent); F4 connect-path reconcile left kind changes queued — fixed (`follow_kind_changes` there too); scoped check red: `terminal_size_reporting` built `session::State` with `..Default` over a private field — fixed (`kind_changes` pub) |
+| Review A M7 (scoped, sonnet, claude -p) | 2 | e54e773ad3b63812f8aa40d85774109a6b42e1c4:60e69c6bc6f588c804c40a0973558addfcdfb039 | CLEAN |
+| Review B M7 (conformance, sonnet, claude -p) | 1 | e54e773ad3b63812f8aa40d85774109a6b42e1c4:60e69c6bc6f588c804c40a0973558addfcdfb039 | CHANGES: F1 MAJOR a click on a terminal-only row reopened the palette beside the offer — fixed (pick dismisses over the draft; red test); F2 MINOR T052/T053 red evidence thin — fixed (mutation recorded). Verify: `features_command_palette` 14, `features_session` 69 passed |
+| Scoped check M7 run 2 | — | 60e69c6b | red: `feature_write_isolation` (unclassified methods; `command_palette` writing `composers`) — fixed: the glue moved to `features/composer.rs`, palette state and switch offer held in `composers` |
 
 ## Declined review findings
 

@@ -98,7 +98,8 @@ fn typed(window: &mut Window, session: SessionId, text: &str) {
 
 fn rows(window: &Window, session: SessionId) -> Vec<String> {
     window
-        .command_palette
+        .composers
+        .palette
         .palette(session)
         .expect("the palette is open")
         .rows()
@@ -107,7 +108,7 @@ fn rows(window: &Window, session: SessionId) -> Vec<String> {
 }
 
 fn highlighted(window: &Window, session: SessionId) -> Option<String> {
-    let palette = window.command_palette.palette(session)?;
+    let palette = window.composers.palette.palette(session)?;
     let at = palette.highlight()?;
     palette.rows().nth(at).map(|c| c.name.clone())
 }
@@ -126,7 +127,7 @@ fn draft(window: &Window, session: SessionId) -> (String, (usize, usize)) {
 fn a_slash_in_an_empty_draft_opens_the_palette_grouped_by_kind() {
     let (mut w, s) = window(Some(started(vec![])));
     typed(&mut w, s, "/");
-    let palette = w.command_palette.palette(s).expect("open");
+    let palette = w.composers.palette.palette(s).expect("open");
     let kinds: Vec<CommandKind> = palette.rows().map(|c| c.kind).collect();
     let mut sorted = kinds.clone();
     sorted.sort();
@@ -150,7 +151,7 @@ fn typing_narrows_and_selects_the_first_match_and_the_arrows_move_it() {
     assert_eq!(rows(&w, s), ["speckit-plan", "speckit-specify"]);
     assert_eq!(highlighted(&w, s).as_deref(), Some("speckit-plan"));
 
-    let down = palette_key(w.command_palette.palette(s), &press(NamedKey::ArrowDown));
+    let down = palette_key(w.composers.palette.palette(s), &press(NamedKey::ArrowDown));
     assert_eq!(down, Some(PaletteKey::Down));
     w.palette_key(s, PaletteKey::Down);
     assert_eq!(highlighted(&w, s).as_deref(), Some("speckit-specify"));
@@ -177,14 +178,14 @@ fn tab_enter_and_a_click_fill_the_command_and_close_without_sending() {
                 } else {
                     NamedKey::Enter
                 };
-                let k = palette_key(w.command_palette.palette(s), &press(named))
+                let k = palette_key(w.composers.palette.palette(s), &press(named))
                     .expect("the palette takes it");
                 assert_eq!(k, PaletteKey::Accept);
                 w.palette_key(s, k);
             }
         }
         assert_eq!(draft(&w, s), ("/review ".to_string(), (0, 8)), "{how}");
-        assert!(w.command_palette.palette(s).is_none(), "{how}: closed");
+        assert!(w.composers.palette.palette(s).is_none(), "{how}: closed");
         assert!(
             w.composers.composer(s).is_some_and(|c| c.pending.is_none()),
             "{how}: nothing sent"
@@ -196,22 +197,25 @@ fn tab_enter_and_a_click_fill_the_command_and_close_without_sending() {
 fn escape_closes_the_palette_keeps_the_draft_and_does_not_interrupt() {
     let (mut w, s) = window(Some(started(vec![])));
     typed(&mut w, s, "/sp");
-    let k = palette_key(w.command_palette.palette(s), &press(NamedKey::Escape));
+    let k = palette_key(w.composers.palette.palette(s), &press(NamedKey::Escape));
     assert_eq!(
         k,
         Some(PaletteKey::Close),
         "the palette's, not composer_key's Interrupt"
     );
     w.palette_key(s, PaletteKey::Close);
-    assert!(w.command_palette.palette(s).is_none());
+    assert!(w.composers.palette.palette(s).is_none());
     assert_eq!(draft(&w, s).0, "/sp");
     w.composer_edited(s);
     assert!(
-        w.command_palette.palette(s).is_none(),
+        w.composers.palette.palette(s).is_none(),
         "the same draft does not reopen it"
     );
     typed(&mut w, s, "/spe");
-    assert!(w.command_palette.palette(s).is_some(), "typing reopens it");
+    assert!(
+        w.composers.palette.palette(s).is_some(),
+        "typing reopens it"
+    );
 }
 
 #[test]
@@ -219,23 +223,26 @@ fn deleting_the_slash_or_leaving_the_name_closes_the_palette() {
     let (mut w, s) = window(Some(started(vec![])));
     typed(&mut w, s, "/sp");
     typed(&mut w, s, "");
-    assert!(w.command_palette.palette(s).is_none(), "the / deleted");
+    assert!(w.composers.palette.palette(s).is_none(), "the / deleted");
 
     typed(&mut w, s, "/sp");
     typed(&mut w, s, "/sp ");
     assert!(
-        w.command_palette.palette(s).is_none(),
+        w.composers.palette.palette(s).is_none(),
         "caret past the name"
     );
 
     typed(&mut w, s, "/sp");
     w.composers.edited(s, "/sp".into(), (0, 0));
     w.composer_edited(s);
-    assert!(w.command_palette.palette(s).is_none(), "caret before the /");
+    assert!(
+        w.composers.palette.palette(s).is_none(),
+        "caret before the /"
+    );
 
     for text in ["x/sp", "/ sp"] {
         typed(&mut w, s, text);
-        assert!(w.command_palette.palette(s).is_none(), "{text}");
+        assert!(w.composers.palette.palette(s).is_none(), "{text}");
     }
 }
 
@@ -252,7 +259,7 @@ fn palette_key_is_none_while_closed_so_composer_key_runs() {
     let (mut w, s) = window(Some(started(vec![])));
     typed(&mut w, s, "/sp");
     assert_eq!(
-        palette_key(w.command_palette.palette(s), &press(NamedKey::ArrowLeft)),
+        palette_key(w.composers.palette.palette(s), &press(NamedKey::ArrowLeft)),
         None,
         "keys the palette does not use stay the editor's"
     );
@@ -262,7 +269,7 @@ fn palette_key_is_none_while_closed_so_composer_key_runs() {
 fn no_match_says_so_and_enter_sends_as_typed() {
     let (mut w, s) = window(Some(started(vec![])));
     typed(&mut w, s, "/zzz");
-    let palette = w.command_palette.palette(s).expect("open");
+    let palette = w.composers.palette.palette(s).expect("open");
     assert_eq!(palette.rows().count(), 0);
     assert_eq!(palette.no_match_note(), Some(NO_MATCH));
     assert_eq!(
@@ -277,7 +284,7 @@ fn no_match_says_so_and_enter_sends_as_typed() {
 fn a_terminal_only_row_carries_its_words() {
     let (mut w, s) = window(Some(started(vec![])));
     typed(&mut w, s, "/mc");
-    let palette = w.command_palette.palette(s).expect("open");
+    let palette = w.composers.palette.palette(s).expect("open");
     let mcp = palette.rows().next().expect("mcp listed");
     assert_eq!(mcp.name, "mcp");
     assert_eq!(row_tag(mcp), Some(OPENS_IN_TERMINAL));
@@ -294,7 +301,7 @@ fn a_terminal_only_row_carries_its_words() {
 fn a_session_with_no_reported_list_offers_the_fallback_with_its_note() {
     let (mut w, s) = window(None);
     typed(&mut w, s, "/");
-    let palette = w.command_palette.palette(s).expect("open");
+    let palette = w.composers.palette.palette(s).expect("open");
     assert_eq!(palette.source_note(), Some(FALLBACK_NOTE));
     let names = rows(&w, s);
     for name in ["compact", "clear", "model", "mcp"] {
@@ -331,7 +338,8 @@ fn set_choice(w: &mut Window, s: SessionId, choice: ModelChoice) {
 }
 
 fn picker_items(w: &Window, s: SessionId) -> Vec<ModelChoice> {
-    w.command_palette
+    w.composers
+        .palette
         .picker(s)
         .expect("the picker is open")
         .items()
@@ -350,7 +358,7 @@ fn the_picker_lists_default_and_the_reported_models_and_marks_the_current() {
         [ModelChoice::Default, named("opus"), named("haiku")],
         "Default once, then the CLI's models"
     );
-    let picker = w.command_palette.picker(s).expect("open");
+    let picker = w.composers.palette.picker(s).expect("open");
     let marked: Vec<bool> = picker
         .items()
         .iter()
@@ -370,7 +378,7 @@ fn without_reported_models_the_picker_offers_the_shortcuts_and_a_typed_name() {
     w.model_picker_typed(s, "claude-opus-4-1".into());
     let chosen = w.model_picked(s, None);
     assert_eq!(chosen, Some(named("claude-opus-4-1")), "the typed name");
-    assert!(w.command_palette.picker(s).is_none(), "closed");
+    assert!(w.composers.palette.picker(s).is_none(), "closed");
 
     w.open_model_picker(s);
     w.model_picker_typed(s, "two words".into());
@@ -398,7 +406,7 @@ fn sending_slash_model_opens_the_picker_and_sends_nothing() {
     let (mut w, s) = window(Some(started(vec![])));
     typed(&mut w, s, "/model");
     assert_eq!(w.send_intent(s), SendIntent::Nothing);
-    assert!(w.command_palette.picker(s).is_some(), "the picker opened");
+    assert!(w.composers.palette.picker(s).is_some(), "the picker opened");
     assert_eq!(draft(&w, s).0, "", "the command is used up");
 
     typed(&mut w, s, "/model haiku");

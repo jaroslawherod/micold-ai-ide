@@ -84,6 +84,21 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "composer",
+        "command_palette",
+        "State, classify, PaletteKey, Picked, SendIntent — the command palette and the model picker \
+         open over the composer's draft and fill it, so their state is held in the composer's and \
+         their pure decisions are read here; the composer is the one feature that writes the \
+         draft (#943, data-model.md *Client*)",
+    ),
+    (
+        "composer",
+        "session",
+        "SwitchOffer, SwitchRequest, LOGIN_COMMAND, LOGIN_REASON — a terminal-only command sent \
+         from the composer offers a kind switch; the offer is the composer's state, its shape and \
+         words the session feature's pure types (#943 FR-010, FR-022a)",
+    ),
+    (
         "quick_switch",
         "sidebar",
         "RowRef — the palette remembers the sidebar's keyboard row when it opens and gives it back \
