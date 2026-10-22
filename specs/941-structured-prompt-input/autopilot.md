@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M6
-- **Next step**: M6 implement T055–T061
+- **Next step**: M6 verify: review B r2 and T061 visual pass in flight, then rebase, full gate, PR files (see Handover)
 
 ## Pull requests
 
@@ -152,7 +152,22 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-None.
+M6 unit 2 (context cap). T055–T060 done and committed (ticked); scoped gate green at 290a6b0d.
+Review A M6 r1 done (2 fixed, 6 declined, recorded). Review B M6 r1 CHANGES (F1 fixed, F2 = Verify
+not observed because the disk filled). In flight when this unit returned (detached `claude -p`):
+
+- **Review B M6 round 2** (sonnet, snapshot 34c80f3c2e2cb53d0487f7283df7e65f4a1bcec5:600112b48d621bfb19a70e5882d1a093e7153672):
+  log `/tmp/claude-0/-home-user-micold-ai-ide/97d8ad62-542e-5a1d-b84e-f338965e4056/scratchpad/reviewB2.log` (ends `REVIEW_EXIT=`); it re-runs Verify into `b2v1.log` / `b2v2.log` there.
+  Record its row in *Review rounds*; this round counts (it follows fixes to B's own MAJOR).
+- **T061 visual pass** (Quickstart Part B, light and dark) by an `autopilot-worker` following
+  `.claude/skills/visual-pass/SKILL.md`: log `/tmp/claude-0/-home-user-micold-ai-ide/97d8ad62-542e-5a1d-b84e-f338965e4056/scratchpad/visual.log` (ends `VISUAL_EXIT=`), evidence in
+  `specs/941-structured-prompt-input/visual-pass/`. Record per-step results in the ledger, fix
+  anything real (then scoped gate), tick T061.
+
+Next: when both are done, rebase onto origin/main (main is at PROTOCOL_VERSION 66; M6 has no wire
+change, so no pin moves), `cargo fmt --all`, delete `target-shared/` (disk is ~40 GB; a gate plus
+a release build filled it once), run the full gate `scripts/gate.sh`, then write the PR title/body
+files (do not open the PR). Open follow-up kept: focus the composer after a drop.
 
 ## Open escalation
 
