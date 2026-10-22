@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M6 reviewed (A 2 rounds, B 1), full gate green at af86e20c (scripts/gate.sh) after rebase onto origin/main 2dddbef6; PR files written; orchestrator opens the PR
-- **Next step**: orchestrator opens the M6 PR from `943-M6/pr-title.txt`/`pr-body.md`, waits on CI, merges; then M7. Cross-feature holds: M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7/M8
+- **Phase**: M7 implementing (branch reset to origin/main 319e8706)
+- **Next step**: M7 T050–T054: implement, verify, PR. Cross-feature holds: M8 ← #941 M6, M9 ← #942 M7/M8
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1244 | M3 | merged (rebase) | 399f6be3 |
 | #1250 | M4 | merged (rebase) | 0b432628 |
 | #1252 | M5 | merged (rebase) | e479ea8f |
+| #1257 | M6 | merged (rebase) | 319e8706 |
 
 ## Milestones
 
@@ -31,9 +32,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | #1241 | merged |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | merged |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | #1250 | merged |
-| M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | #1252 | merged |
-| M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | | pushed, PR to open |
-| M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** | | pending |
+| M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation (decision 2: A, confirmed) | #1252 | merged |
+| M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | #1257 | merged |
+| M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | | in progress |
 | M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** | | pending |
 | M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | pending |
 
@@ -42,7 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | 1 | clarify r1 | Terminal-period turns shown in the transcript? (US5 s2) | Only marked, not rebuilt from the CLI store; FR-023 updated | agent | 938 spec US7; 582 Out of Scope |
-| 2 | clarify r1 | After `/clear`, which conversation do later launches resume? (US1 s5) | **Provisional A, pending jaro**: structured sessions follow the CLI (FR-005a); terminal keeps BUG-904 trade-off. Revert to B/C if he picks otherwise | user (provisional, via coordinator) | BUG-904 decision 1; 582 FR-017 |
+| 2 | clarify r1 | After `/clear`, which conversation do later launches resume? (US1 s5) | **A** (confirmed by jaro 2026-10-22, no longer provisional): structured sessions follow the CLI (FR-005a); terminal keeps BUG-904 trade-off. M5 stands as merged | user (jaro, 2026-10-22) | BUG-904 decision 1; 582 FR-017 |
 | 3 | clarify r2 | Terminal launch after structured `/clear`; terminal `/clear` | Resume recorded handle; terminal `/clear` unseen | agent | 582 FR-017 |
 | 4 | plan | FR-003: the CLI never writes a skill's expanded instructions to stdout; what goes behind the command? | The command's description; expansion only if a later CLI reports it; FR-003 and US1 s3 amended | agent | research.md R4, probe P-3 (2.1.307) |
 | 5 | tasks | analyze I1/I2: does only M2's chip wait on #941 M1, and are `saved.rs`/`provider.rs` in the plan? | M2 is held whole on #941 M1; plan tree lists both files (plan.md updated) | agent | analyze report I1, I2 |

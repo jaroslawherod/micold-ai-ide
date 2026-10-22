@@ -117,7 +117,7 @@ their committed form, re-recorded in M1 with the capture script.
   turn (#941's turn state) — no extra state.
 - **Rejected — dropping entries before a compaction**: the spec keeps them visible.
 
-## R6. Conversation handle after `/clear` (FR-005a) — PROVISIONAL (ledger decision 2)
+## R6. Conversation handle after `/clear` (FR-005a) (ledger decision 2: option A, confirmed 2026-10-22)
 
 - **Decision**: the daemon records, per structured session, the `session_id` of the latest `init`
   as the session's **conversation handle** whenever it differs from the recorded one, persists it
