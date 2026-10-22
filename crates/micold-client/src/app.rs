@@ -1177,6 +1177,8 @@ impl State {
                 let _ = self.update_transcript(msg);
             }
             // Feature 944: the insights' fold messages are the insights feature's.
+            // The highlight jobs an opened thread asks for are the shell's to run (`main.rs` takes
+            // this message first); here they are dropped, as the transcript's scroll is above.
             Message::Session(crate::features::session::Msg::Insights(msg)) => {
                 let _ = self.update_insights(msg, &crate::ui::syntax::GRAMMAR);
             }

@@ -26,7 +26,6 @@ use support::layout::{painted_text_settled_at, renderer};
 use support::transcript::{ctx, fixture_lines, sequenced};
 
 #[path = "../../micold-core/tests/support/stream_json.rs"]
-#[allow(dead_code)]
 mod stream_json;
 use stream_json::{tool_use, user_text, with_parent};
 
