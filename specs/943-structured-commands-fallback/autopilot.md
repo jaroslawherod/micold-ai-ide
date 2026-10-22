@@ -75,7 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 unit handed over at 193k context (checkpoint OVER). **Done**: branch reset to origin/main 6b3b62c7 (branch-start.sh could not query #1241: gh GraphQL refused; merge SHA from the orchestrator); T025–T031 implemented, ticked and committed (f042dfc6, not pushed, no PR). `cargo test -p micold-daemon` over every `structured_*` suite plus `plan_usage_structured`: all green (structured_commands 6, structured_session 19, structured_permission_mode 13). **Next**: verify.md from step 1: scoped gate with review A (`code-review` high) on `origin/main...HEAD`, review B (conformance, sonnet), no visual pass (daemon only), full gate (`scripts/gate.sh`, cloud: no mise), then pr.md: title/body to the scratchpad `943-M3/pr-title.txt` and `pr-body.md`, push with `--force-with-lease`, return `PR: to open by orchestrator`. No open findings. Reviewers: watch decision 6 (deviation from T025/T030 wording).
 
 ## Open escalation
 
