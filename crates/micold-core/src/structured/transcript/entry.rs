@@ -1,5 +1,7 @@
 //! The transcript's entries (data-model.md *Entry*): what one structured session shows, in order.
 
+use crate::structured::commands::CommandInvocation;
+
 /// An entry's place in one build of a transcript: monotonic, so the entry list is addressed by
 /// `id - first id` and eviction from the front is O(1) (research R2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -24,6 +26,7 @@ pub struct Entry {
     key: EntryKey,
     opened_at: u64,
     revision: u64,
+    era: u32,
     kind: EntryKind,
 }
 
@@ -33,6 +36,7 @@ impl Entry {
         key: EntryKey,
         opened_at: u64,
         revision: u64,
+        era: u32,
         kind: EntryKind,
     ) -> Self {
         Self {
@@ -40,6 +44,7 @@ impl Entry {
             key,
             opened_at,
             revision,
+            era,
             kind,
         }
     }
@@ -60,6 +65,12 @@ impl Entry {
     /// Rises on every change to this entry, and only to this entry (FR-016, SC-002).
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// The conversation the entry belongs to: `0` until the first `/clear`, then one more after
+    /// each [`EntryKind::Cleared`], which opens its era (#943 FR-005).
+    pub fn era(&self) -> u32 {
+        self.era
     }
 
     pub fn kind(&self) -> &EntryKind {
@@ -87,9 +98,36 @@ pub enum EntryKind {
     UserMessage {
         text: String,
         attachments: Vec<String>,
+        /// The text read as `/name args`, drawn as a command chip (#943 FR-003).
+        command: Option<CommandChip>,
     },
     /// An assistant text block.
-    AssistantText { text: String, streaming: bool },
+    AssistantText {
+        text: String,
+        streaming: bool,
+        /// The CLI marked the message an authentication failure (#943 FR-022a, R9).
+        auth_failed: bool,
+    },
+    /// A built-in command's answer: the CLI's synthetic text after a command turn, markdown
+    /// (#943 FR-006, R4).
+    CommandOutput { text: String },
+    /// The conversation was compacted here; `summary` is the CLI's synthetic summary text, once
+    /// it arrives (#943 FR-004, R5).
+    Compacted {
+        trigger: Option<String>,
+        summary: Option<String>,
+    },
+    /// The conversation was cleared here; it opens the next era (#943 FR-005).
+    Cleared,
+    /// The model answering from here on, or, `refused`, the CLI's reason for keeping the one it
+    /// had (#943 FR-015, FR-016).
+    ModelChanged {
+        model: String,
+        refused: Option<String>,
+    },
+    /// The session ran in the terminal here; the turns of that period are not in the transcript
+    /// (#943 FR-023).
+    TerminalPeriod,
     /// A thinking block, shown as a thinking card.
     Thinking { text: String, streaming: bool },
     /// A tool use, shown as a card holding its result.
@@ -113,6 +151,15 @@ pub enum EntryKind {
     SubagentNotice { count: u64 },
     /// An event or block the transcript does not model, with its original text (FR-003).
     Raw { text: String, reason: RawReason },
+}
+
+/// A user message sent as a command, and what the session's command list said of it when it was
+/// sent (#943 FR-003): a later list does not change it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandChip {
+    pub invocation: CommandInvocation,
+    pub description: Option<String>,
+    pub argument_hint: Option<String>,
 }
 
 /// A tool use and, once it arrives, its result (FR-007, FR-008).

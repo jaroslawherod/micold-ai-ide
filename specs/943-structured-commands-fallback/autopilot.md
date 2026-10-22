@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: implement M1
-- **Next step**: M1 rebased onto origin/main after #941 M1 (cdfafa66): `PROTOCOL_VERSION` now 63 → 64 for #943; gate green, force-pushed. M1 PR to open (orchestrator, from the scratchpad 943-M1/pr-title.txt and pr-body.md), then after its merge M2 (held on #941 M1). Cross-feature holds: M2 ← #941 M1, M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Phase**: implement M2
+- **Next step**: M2 (T019–T024) implemented on the branch; scoped gate, review A (high), review B, full gate, then the M2 PR (orchestrator opens it from the scratchpad 943-M2/pr-title.txt and pr-body.md). Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1237 | design (spec, plan, tasks) | merged (rebase) | f27e1182 |
+| #1239 | M1 | merged (rebase) | 8304c937 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | to open | review |
-| M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** | | pending |
+| M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | #1239 | merged |
+| M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | | implement |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | | pending |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | pending |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pending |

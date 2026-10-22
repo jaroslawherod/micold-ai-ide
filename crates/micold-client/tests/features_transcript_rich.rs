@@ -136,7 +136,9 @@ fn text_and_thinking_become_documents_and_edit_cards_diffs() {
         for entry in t.entries() {
             let derived = cache.get(s, entry.key());
             match entry.kind() {
-                EntryKind::AssistantText { text, streaming }
+                EntryKind::AssistantText {
+                    text, streaming, ..
+                }
                 | EntryKind::Thinking { text, streaming } => {
                     let d = derived.expect("text is derived");
                     assert_eq!(d.revision, entry.revision());

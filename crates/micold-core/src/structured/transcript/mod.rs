@@ -12,8 +12,8 @@ mod stream;
 mod summary;
 
 pub use entry::{
-    Entry, EntryId, EntryKey, EntryKind, Outcome, RawReason, ResultPart, ToolCard, ToolResultView,
-    ToolStatus, TurnFooter,
+    CommandChip, Entry, EntryId, EntryKey, EntryKind, Outcome, RawReason, ResultPart, ToolCard,
+    ToolResultView, ToolStatus, TurnFooter,
 };
 pub use figures::{footer_figures, format_cost, format_duration, format_turns};
 pub use result::result_parts;
@@ -62,6 +62,17 @@ pub struct Transcript {
     /// The open turn was interrupted (an `InterruptAsked` note or the CLI's interrupted text, R4):
     /// its end is an `Interrupted` notice, not a footer (FR-014).
     interrupted: bool,
+    /// The era new entries open in: one more after each `/clear` (#943 FR-005).
+    era: u32,
+    /// The latest `init` and `CommandsReported` held: the command list a chip reads (#943 FR-003).
+    command_sources: Vec<SequencedEvent>,
+    /// The open turn's user message was a command: a synthetic answer is its output (#943 R4).
+    command_turn: bool,
+    /// The open turn's compaction marker: the synthetic summary and the CLI's
+    /// `<local-command-stdout>` line after it go into it (#943 R5).
+    compaction: Option<EntryId>,
+    /// A `KindSwitched { to: Terminal }` opened a terminal period not yet closed (#943 FR-023).
+    in_terminal: bool,
 }
 
 impl Default for Transcript {
@@ -98,6 +109,11 @@ impl Transcript {
             rebuilds: 0,
             in_turn: false,
             interrupted: false,
+            era: 0,
+            command_sources: Vec::new(),
+            command_turn: false,
+            compaction: None,
+            in_terminal: false,
         }
     }
 
@@ -231,7 +247,7 @@ impl Transcript {
         let id = EntryId(self.first_id + self.entries.len() as u64);
         self.revision += 1;
         self.entries
-            .push_back(Entry::new(id, key, seq, self.revision, kind));
+            .push_back(Entry::new(id, key, seq, self.revision, self.era, kind));
         id
     }
 
