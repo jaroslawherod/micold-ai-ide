@@ -92,7 +92,8 @@ On 2026-10-22 `origin/main` has #938, #939, #940 M1–M4, #942 M1–M4 (M5 in re
 | I-7 | `EntryKind` match arms | #940, #941, #944 | New arms are exhaustive-match compile errors in whichever lands second; that one adds them. |
 | I-8 | Wire version | #941 M1, #942 M5, #944 | Rebase conflict on `PROTOCOL_VERSION`/`schema_hash.rs`: take the higher + 1. |
 
-**Milestones that wait on others' code**: M2 (command chip only) on #941 M1; M6 on #941 M2; M7 on
+**Milestones that wait on others' code**: M2 on #941 M1 (for the command chip; the milestone is held
+whole so the chip ships with the other entries); M6 on #941 M2; M7 on
 #941 M4; M8 on #941 M6; M9 on #942 M7 for `PromptCard` (else `Dialog`) and on #942 M8 for SC-007.
 M1, M3, M4 and M5 build on `main` as it is.
 
@@ -117,6 +118,7 @@ specs/943-structured-commands-fallback/
 ```text
 crates/micold-core/src/
 ├── structured/
+│   ├── saved.rs                  # SavedEvent variants for the four daemon notes
 │   ├── event.rs, parse.rs        # Init lists; Assistant.model/error; User.is_synthetic;
 │   │                             #   CompactBoundary, ConversationReset; notes CommandsReported,
 │   │                             #   ModelChanged, ModelRefused, KindSwitched
@@ -134,7 +136,8 @@ crates/micold-core/src/
 ├── session.rs                    # Session.model; resume_handle() (M4: returns id);
 │                                 #   Session.conversation and resume_handle's body (M5)
 ├── store.rs                      # StoredSession.model, .conversation
-├── terminal.rs                   # LaunchSpec.model, .resume_handle; launch_args adds --model
+├── terminal.rs                   # LaunchSpec.model, .resume_handle
+├── provider.rs                   # Claude launch args: --model, --resume <resume_handle>
 ├── protocol/messages.rs          # SessionSummary.model; SetSessionModel; SessionSwitchKind;
 │                                 #   ErrorKind::NeedsConfirmation
 └── protocol/version.rs           # +1 in M1, M4, M6
@@ -252,7 +255,7 @@ before M8.
 | M | Delivers | Depends on |
 |---|---|---|
 | M1 | Core: event/parse additions, `commands` (list, kinds, terminal-only, classify, invocation), `palette`, `model`, control encoders; recorded fixtures and capture option; wire bump for the events | — |
-| M2 | Core transcript: command chip, `CommandOutput`, `Compacted`, `Cleared` + eras, `ModelChanged`, `TerminalPeriod`, `auth_failed` | M1; the chip part on #941 M1 (I-1) |
+| M2 | Core transcript: command chip, `CommandOutput`, `Compacted`, `Cleared` + eras, `ModelChanged`, `TerminalPeriod`, `auth_failed` | M1; #941 M1 for the chip (I-1), held whole |
 | M3 | Daemon: `send_control` (I-4); `initialize` at spawn → `CommandsReported`; `/model` and terminal-only refused in `SessionUserMessage`; stand-in `initialize` and command fixtures | M1 |
 | M4 | Daemon: model choice persisted, `--model` at launch, `Session::resume_handle()` (returns the id) and `LaunchSpec.resume_handle` with every `--resume` site switched to them, `SetSessionModel`, idle and deferred `set_model`, notes, summary field (wire +1); stand-in `set_model` | M3 |
 | M5 | Daemon: `Session.conversation`, `Catalog::set_conversation`, tracking the latest `init`'s id, `resume_handle()` returning it, `known_session_ids` including it — **provisional (ledger decision 2)**; revert this milestone alone for decision B | M4 |
