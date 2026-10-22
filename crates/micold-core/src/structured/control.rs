@@ -3,6 +3,8 @@
 //! ([`StructuredEvent::ControlResponse`](super::StructuredEvent::ControlResponse)).
 //! Render-free and process-free; the daemon writes the line and waits for the answer.
 
+use super::model::{ModelChoice, ModelRefusal};
+use super::ControlOutcome;
 use crate::session::PermissionMode;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -28,9 +30,51 @@ pub fn encode_set_mode(request_id: &str, mode: PermissionMode) -> String {
 /// The line that asks the CLI to cancel the turn in progress (contracts/claude-input.md
 /// *Interrupt*, P-4), ending in `\n`. The CLI answers it and ends the turn with a `result`.
 pub fn encode_interrupt(request_id: &str) -> String {
+    encode_bare_request(request_id, "interrupt")
+}
+
+/// The line that asks the CLI for its commands and models (#943 R1, contracts/claude-commands.md),
+/// written once per structured spawn before any user message; ends in `\n`.
+pub fn encode_initialize(request_id: &str) -> String {
+    encode_bare_request(request_id, "initialize")
+}
+
+/// The line that asks the CLI to answer later turns with `choice` (#943 R7); `Default` is
+/// `"default"`. Ends in `\n`.
+pub fn encode_set_model(request_id: &str, choice: &ModelChoice) -> String {
     let request_id = serde_json::Value::from(request_id);
+    let model = serde_json::Value::from(choice.cli_value());
     format!(
-        "{{\"type\":\"control_request\",\"request_id\":{request_id},\"request\":{{\"subtype\":\"interrupt\"}}}}\n"
+        "{{\"type\":\"control_request\",\"request_id\":{request_id},\"request\":{{\"subtype\":\"set_model\",\"model\":{model}}}}}\n"
+    )
+}
+
+/// The model the CLI resolved a `set_model` to, or why it did not change: its refusal, or
+/// [`ModelRefusal::NoAnswer`] for a success that names no model (#943 R7).
+pub fn parse_set_model(outcome: &ControlOutcome) -> Result<String, ModelRefusal> {
+    match outcome {
+        ControlOutcome::Success(answer) => serde_json::from_str::<serde_json::Value>(answer)
+            .ok()
+            .and_then(|answer| {
+                answer["model"]
+                    .as_str()
+                    .filter(|model| !model.trim().is_empty())
+                    .map(str::to_string)
+            })
+            .ok_or(ModelRefusal::NoAnswer),
+        ControlOutcome::Error { message, code } => Err(ModelRefusal::Refused {
+            message: message.clone(),
+            code: code.clone(),
+        }),
+    }
+}
+
+/// A `control_request` line whose request carries only its `subtype`; ends in `\n`.
+fn encode_bare_request(request_id: &str, subtype: &str) -> String {
+    let request_id = serde_json::Value::from(request_id);
+    let subtype = serde_json::Value::from(subtype);
+    format!(
+        "{{\"type\":\"control_request\",\"request_id\":{request_id},\"request\":{{\"subtype\":{subtype}}}}}\n"
     )
 }
 
@@ -73,6 +117,76 @@ mod tests {
         let line = encode_set_mode("a\"b", PermissionMode::Plan);
         let value: serde_json::Value = serde_json::from_str(&line).expect("JSON");
         assert_eq!(value["request_id"], "a\"b");
+    }
+
+    #[test]
+    fn initialize_and_set_model_are_the_contracts_one_lines() {
+        use crate::structured::model::{ModelChoice, ModelName};
+        assert_eq!(
+            encode_initialize("micold-1"),
+            "{\"type\":\"control_request\",\"request_id\":\"micold-1\",\"request\":{\"subtype\":\"initialize\"}}\n"
+        );
+        assert_eq!(
+            encode_set_model("micold-2", &ModelChoice::Named(ModelName::parse("haiku").unwrap())),
+            "{\"type\":\"control_request\",\"request_id\":\"micold-2\",\"request\":{\"subtype\":\"set_model\",\"model\":\"haiku\"}}\n"
+        );
+        assert_eq!(
+            encode_set_model("micold-3", &ModelChoice::Default),
+            "{\"type\":\"control_request\",\"request_id\":\"micold-3\",\"request\":{\"subtype\":\"set_model\",\"model\":\"default\"}}\n"
+        );
+        let odd = ModelChoice::Named(ModelName::parse("a\"b\\c").unwrap());
+        let value: serde_json::Value =
+            serde_json::from_str(&encode_set_model("x", &odd)).expect("JSON");
+        assert_eq!(value["request"]["model"], "a\"b\\c");
+    }
+
+    /// The outcome of the fixture's one control request.
+    fn recorded_outcome(fixture: &str) -> crate::structured::ControlOutcome {
+        fixture
+            .lines()
+            .find_map(|line| match crate::structured::parse_line(line) {
+                crate::structured::StructuredEvent::ControlResponse { outcome, .. } => {
+                    Some(outcome)
+                }
+                _ => None,
+            })
+            .expect("a control response")
+    }
+
+    #[test]
+    fn a_set_model_answer_is_the_resolved_model_or_the_clis_refusal() {
+        use crate::structured::model::ModelRefusal;
+        use crate::structured::ControlOutcome;
+        let changed = recorded_outcome(include_str!(
+            "../../tests/fixtures/stream-json/model-change.jsonl"
+        ));
+        assert_eq!(
+            parse_set_model(&changed),
+            Ok("claude-haiku-5-5".to_string())
+        );
+        let refused = recorded_outcome(include_str!(
+            "../../tests/fixtures/stream-json/model-refused.jsonl"
+        ));
+        assert_eq!(
+            parse_set_model(&refused),
+            Err(ModelRefusal::Refused {
+                message: "Model 'no-such-model-xyz' not found".into(),
+                code: Some("not_found".into()),
+            })
+        );
+        for answer in [
+            "null",
+            "{}",
+            r#"{"model":7}"#,
+            r#"{"model":""}"#,
+            "not json",
+        ] {
+            assert_eq!(
+                parse_set_model(&ControlOutcome::Success(answer.into())),
+                Err(ModelRefusal::NoAnswer),
+                "{answer}"
+            );
+        }
     }
 
     #[test]
