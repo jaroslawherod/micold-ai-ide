@@ -18,6 +18,8 @@ suite: scoped 1123 suite green after every restore (core 1456 lib + 7 integratio
 
 # TDD Verification: Overview cards, pull request list with state, linked
 
+> **Round-1 report, audited at 804cc8de; superseded.** F1, F2 and F4 are fixed (tdd/cycle-log.md, Close fixes, commit 71dc3a74), verified by tdd-verify round 2: PASS (autopilot.md, TDD verify close round 2). F3 is accepted as the exception D14 (autopilot.md, Decisions). F5 is fixed (the named `MERGED_ON_THE_RECENT_PAGE`). The verdict below is the round-1 state.
+
 **Verdict: FAIL.** Two deliberate mutants inside DONE behaviors survive (a third, near-equivalent, is F4) the whole scoped suite (a click on a
 Tab-stop number takes the keyboard; the "checks failing" error tint is never asserted through `pr_rows`), and
 the cycle log itself records the M1 rows (T001-T018) as green-only and two app-test rows as "not run red".
