@@ -26,3 +26,20 @@ requests (open approved, draft pending, merged, closed); branch `feat-1123_z` wi
    and closing it returns to that number.
 5. Rate-limit then offline (fake source): rows stay. Unavailable: dash, rows gone.
 6. 280, 380, 480 px; light and dark; scale 1.0 and 2.0: numbers and pills whole.
+
+## Results
+
+### A. Automated (T038, close unit, 2026-10-22, HEAD 2abbffff = origin/main after M3)
+
+- `scripts/gate.sh` (fmt, clippy core and workspace with `-D warnings`, `cargo test --workspace`,
+  `scripts/tests/*.test.sh`): passed, `GATE_EXIT=0`. 615 test binaries: 9556 passed, 0 failed,
+  17 ignored. Every shell test passed. The gate's workspace run covers `micold-core` (K1–K6, Q1–Q2,
+  P1–P7), the client tests U1–U7 and `layout_snapshot.rs` with covered state `overview-pr-rows`.
+- `grep -n "url" crates/micold-core/src/pr_list.rs` shows only the field (l.24, documented "Never
+  logged, never serialised") and a test fixture (l.226). `ListedPr` has a hand-written `Debug` that
+  prints the number and the state only (l.38–46), and nothing in the file derives `Serialize`.
+
+### B. Visual pass (T039)
+
+See [visual-pass.md](visual-pass.md): §B1–§B6 PASS, with the Page keys on a number only partly
+exercised.

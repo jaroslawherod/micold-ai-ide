@@ -203,8 +203,8 @@ quickstart §B4.
 
 Code-free; done by the close unit in the close PR.
 
-- [ ] T038 Run quickstart §A (`mise run test-core`, the client tests it names, `scripts/gate.sh`, and `grep -n "url" crates/micold-core/src/pr_list.rs` shows no `Debug` or log use of it) and record the result in `specs/1123-overview-card-pr-list/quickstart.md`
-- [ ] T039 Record the whole quickstart §B result in `specs/1123-overview-card-pr-list/visual-pass.md` from the evidence of T019, T028 and T037
+- [X] T038 Run quickstart §A (`mise run test-core`, the client tests it names, `scripts/gate.sh`, and `grep -n "url" crates/micold-core/src/pr_list.rs` shows no `Debug` or log use of it) and record the result in `specs/1123-overview-card-pr-list/quickstart.md`
+- [X] T039 Record the whole quickstart §B result in `specs/1123-overview-card-pr-list/visual-pass.md` from the evidence of T019, T028 and T037
 
 ---
 
