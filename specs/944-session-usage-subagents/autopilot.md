@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: implement M6
-- **Next step**: M6 verify — visual pass, reviews A/B, full gate, PR files
+- **Phase**: pr M6
+- **Next step**: M6 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI; then the close unit (T045–T046)
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | #1205 | merged |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | #1211 | merged |
 | M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | #1222 | merged |
-| M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | verify: full gate |
+| M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | PR files written, gate green at e9d3018f |
 
 ## Decisions
 
@@ -92,6 +92,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Scoped gate M6 | 3 | 2875d57f | green |
 | Review B M6 (conformance, sonnet) | 1 | 3b5dfedd:2875d57f | CLEAN (Verify: `layout_snapshot`, `transcript_insights_view`) |
 | Visual pass M6 (T044) | 1 | 2875d57f | Showcase on Xvfb, light and dark (quickstart Part B needs a logged-in CLI, not in this container): the recorded subagent turn with its session bar — meter with threshold tick, totals; the `Agent` card's thread folded ("Subagent · finished · 1 tool call") and unfolded (the subagent's prompt and its `Read` card, indented); the four bar poses (normal, warning, no data, running task with its list). Warning reads in greyscale (icon + "Near compaction"). One finding fixed: the showcase pose's percent truncated (3%) where the core rounds (4%). Evidence in `visual-pass/m6-*.png`. Not seen at a display: steps needing a live CLI (B2 live, B4 stop, B5–B7); a failed thread is covered by `thread_header`'s test and #939's failed card |
+| Full gate M6 | 1 | e9d3018f | red: daemon `structured_commands::two_sessions_each_get_their_own_note` (the known flake, ledger prompt); green alone (8/8) |
+| Full gate M6 | 2 | e9d3018f | green (`scripts/gate.sh`) |
 | Full gate M5 | — | 7e655fad | green (`scripts/gate.sh`) |
 | Rebase M5 onto main | — | 80b87f44 | conflicts with #940/#941 in `app.rs` (State fields, `structured_events`, `forget_structured`) and the `feature_registration_cost` allowlist resolved by keeping both sides (insights applied after the transcript beside the rich refresh; forget drops transcript, rich cache, composer, insights); insights test passes `GRAMMAR`; no review (no logic beyond both sides). Full gate green (one flaky daemon `two_sessions_each_get_their_own_note` failure, 3/3 green alone, green on rerun) |
 
