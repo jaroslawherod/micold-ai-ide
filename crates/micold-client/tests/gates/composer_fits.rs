@@ -391,3 +391,150 @@ fn a_press_on_a_queued_message_being_edited_reports_its_field() {
         focused_fields(&messages)
     );
 }
+
+/// The window's tree for `state`, laid out and settled; `tree` is reused when given, as a frame
+/// does after the state moved on.
+fn frame<'a>(
+    under: &'a StateUnderTest,
+    tree: Option<iced::advanced::widget::Tree>,
+    renderer: &iced::Renderer,
+) -> (
+    iced::Element<'a, Message>,
+    iced::advanced::widget::Tree,
+    iced::advanced::layout::Node,
+) {
+    use iced::advanced::{layout, widget::Tree};
+    let mut element = lay::view_of(under);
+    let mut tree = match tree {
+        Some(mut tree) => {
+            tree.diff(element.as_widget());
+            tree
+        }
+        None => Tree::new(element.as_widget()),
+    };
+    let limits = layout::Limits::new(iced::Size::ZERO, WINDOW);
+    let node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    lay::settle(
+        &mut element,
+        &mut tree,
+        &node,
+        renderer,
+        std::time::Instant::now(),
+        0..lay::SETTLE_FRAMES,
+        WINDOW,
+    );
+    let node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    (element, tree, node)
+}
+
+/// What `event` publishes on `element`, with the pointer at `at`.
+fn deliver(
+    element: &mut iced::Element<'_, Message>,
+    tree: &mut iced::advanced::widget::Tree,
+    node: &iced::advanced::layout::Node,
+    renderer: &iced::Renderer,
+    event: iced::Event,
+    at: Option<iced::Point>,
+) -> Vec<Message> {
+    use iced::advanced::{clipboard, Layout, Shell};
+    let mut published = Vec::new();
+    let mut shell = Shell::new(&mut published);
+    element.as_widget_mut().update(
+        tree,
+        &event,
+        Layout::new(node),
+        at.map_or(
+            iced::mouse::Cursor::Unavailable,
+            iced::mouse::Cursor::Available,
+        ),
+        renderer,
+        &mut clipboard::Null,
+        &mut shell,
+        &Rectangle::with_size(WINDOW),
+    );
+    published
+}
+
+/// A message queued while busy puts a row above the text area; the text area keeps the keyboard,
+/// so the next key still edits the draft (T061 visual pass run 2, step 6: before, the row took the
+/// editor's place in the tree and the editor's focus went with it).
+#[test]
+fn the_composer_keeps_the_keyboard_when_a_queue_row_appears_above_it() {
+    use iced::keyboard;
+    let renderer = lay::renderer();
+    let (mut state, id) = pane();
+    report(&mut state, id, busy(InterruptAsk::None), false, 0);
+    let (painted, _) = paint(state.clone(), id);
+    let send = find(&painted, "Send");
+    let at = iced::Point::new(
+        send.origin.x - 300.0,
+        send.origin.y + send.natural_height / 2.0,
+    );
+    let under = StateUnderTest::new(state.clone());
+    let (mut element, mut tree, node) = frame(&under, None, &renderer);
+    let pressed = deliver(
+        &mut element,
+        &mut tree,
+        &node,
+        &renderer,
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        Some(at),
+    );
+    assert_eq!(focused_fields(&pressed), vec![FieldId::Composer(id)]);
+    drop(element);
+    for message in pressed {
+        state.update(message);
+    }
+    report(&mut state, id, busy(InterruptAsk::None), false, 1);
+
+    let under = StateUnderTest::new(state);
+    let (mut element, mut tree, node) = frame(&under, Some(tree), &renderer);
+    let typed = deliver(
+        &mut element,
+        &mut tree,
+        &node,
+        &renderer,
+        iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Character("a".into()),
+            modified_key: keyboard::Key::Character("a".into()),
+            physical_key: keyboard::key::Physical::Code(keyboard::key::Code::KeyA),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::empty(),
+            text: Some("a".into()),
+            repeat: false,
+        }),
+        None,
+    );
+    assert!(
+        typed.iter().any(|m| matches!(
+            m,
+            Message::Composer(micold_client::features::composer::Msg::Edited { session, .. })
+                if *session == id
+        )),
+        "the key edits the draft once the queue row is drawn"
+    );
+}
+
+/// A queued message edited in a long queue shows its **Save** and **Cancel** whole, outside the
+/// queue's scrolled room (FR-020; T061 visual pass run 2, step 6: they were cut off below it).
+#[test]
+fn a_queued_message_edited_in_a_long_queue_shows_save_and_cancel() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let (mut state, id) = pane();
+        report(&mut state, id, busy(InterruptAsk::None), false, 12);
+        assert!(state.composers.start_queue_edit(id, QueueEntryId(12)));
+        let (painted, transcript) = paint(themed(state, scheme), id);
+        for part in ["Save", "Cancel"] {
+            under_the_transcript(&painted, transcript, part);
+            let text = find(&painted, part);
+            assert!(
+                text.clip.y <= text.origin.y + TOLERANCE
+                    && text.origin.y + text.natural_height
+                        <= text.clip.y + text.clip.height + TOLERANCE,
+                "`{part}` at {:?} is drawn whole, not cut by {:?}",
+                text.origin,
+                text.clip
+            );
+        }
+    }
+}
