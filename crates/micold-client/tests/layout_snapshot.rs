@@ -182,6 +182,14 @@ mod code_block_wheel;
 #[path = "gates/inline_diff_marker_fits.rs"]
 mod inline_diff_marker_fits;
 
+// --- The composer's shared parts hold their content (feature 941, T048) -------------------------
+
+// The showcase's text area grows to its height limit and then holds it; a busy indicator draws its
+// words busy or idle; a queue row is one line beside its position and count; a chip holds its name
+// (FR-008, FR-010).
+#[path = "gates/composer_parts_fit.rs"]
+mod composer_parts_fit;
+
 // --- The transcript's jump control fits its viewport (feature 939, T038) ------------------------
 
 // A structured session's pane, detached from the end: "Jump to latest" lies inside the

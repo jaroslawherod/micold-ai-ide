@@ -19,6 +19,8 @@ mod activity_badge;
 #[cfg(test)]
 mod anatomy_size;
 mod animation;
+mod attachment_chip;
+mod busy_indicator;
 mod button;
 /// §7.3's horizontal paddings, read off the laid-out button. `anatomy_size` covers the height and
 /// the touch target; a button is content-sized across, so no size check can see its inset.
@@ -99,6 +101,7 @@ mod picker_parity;
 mod picker_press;
 mod progress;
 mod progress_bar;
+mod queue_row;
 mod required_legend;
 mod resize_handle;
 mod review_comment;
@@ -187,6 +190,8 @@ pub use accordion_group::AccordionGroup;
 pub use accordion_section::AccordionSection;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
+pub use attachment_chip::AttachmentChip;
+pub use busy_indicator::BusyIndicator;
 pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use card_grid::{CardGrid, Zoom};
 pub use checkbox::Checkbox;
@@ -222,6 +227,7 @@ pub use progress::StageProgress;
 pub use progress_bar::ProgressBar;
 pub use pull_request_indicator::{CheckMark, PrMark, PullRequestIndicator};
 pub use pull_request_row::PullRequestRow;
+pub use queue_row::QueueRow;
 pub use required_legend::RequiredLegend;
 pub use resize_handle::{ResizeHandle, WIDTH as RESIZE_HANDLE_WIDTH};
 pub use review_comment::{CardState, ReviewCommentCard};

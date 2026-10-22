@@ -7,6 +7,10 @@
 //!
 //! Builder form: `TextArea::new(&content, roles).placeholder("Comment").on_action(Msg::Edit)
 //! .on_submit(Msg::Save).into()`.
+//!
+//! Feature 941 (FR-008): `.max_height(…)` stops the growth at a height, past which the lines scroll
+//! inside the area; `.key_binding(…)` replaces the default keys, for a composer whose Enter sends
+//! and whose Up and Down step through its history.
 
 use crate::ui::cdk::passthrough::forward_to_child;
 use iced::advanced::text::highlighter::PlainText;
@@ -45,7 +49,12 @@ pub struct TextArea<'a, M> {
     placeholder: String,
     on_action: Option<Box<dyn Fn(Action) -> M + 'a>>,
     on_submit: Option<M>,
+    key_binding: Option<KeyBindingFn<'a, M>>,
+    max_height: Option<f32>,
 }
+
+/// What a key press does, as `.key_binding(…)` decides it.
+type KeyBindingFn<'a, M> = Box<dyn Fn(KeyPress) -> Option<Binding<M>> + 'a>;
 
 impl<'a, M: Clone + 'a> TextArea<'a, M> {
     /// An area over `content`, themed by `roles`; read-only until [`Self::on_action`].
@@ -56,6 +65,8 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
             placeholder: String::new(),
             on_action: None,
             on_submit: None,
+            key_binding: None,
+            max_height: None,
         }
     }
 
@@ -76,6 +87,21 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
         self.on_submit = Some(message);
         self
     }
+
+    /// Decide every key press with `f` instead of the editor's default bindings (and
+    /// [`Self::on_submit`]'s Ctrl/Cmd+Enter): `None` ignores the key, and
+    /// `Binding::from_key_press(press)` keeps the default for it.
+    pub fn key_binding(mut self, f: impl Fn(KeyPress) -> Option<Binding<M>> + 'a) -> Self {
+        self.key_binding = Some(Box::new(f));
+        self
+    }
+
+    /// Grow with the lines up to `height`, the whole field's, then hold it and scroll the lines
+    /// inside (FR-008). Never below [`MIN_HEIGHT`].
+    pub fn max_height(mut self, height: f32) -> Self {
+        self.max_height = Some(height.max(MIN_HEIGHT));
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
@@ -83,6 +109,7 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
         let r = area.roles;
         let line = super::TypeRole::Body;
         let on_submit = area.on_submit;
+        let key_binding = area.key_binding;
         let mut editor = TextEditor::<PlainText, M, iced::Theme, iced::Renderer>::new(area.content)
             .placeholder(area.placeholder)
             .size(line.size())
@@ -108,6 +135,9 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
                 }
             })
             .key_binding(move |press: KeyPress| {
+                if let Some(f) = &key_binding {
+                    return f(press);
+                }
                 let submit = matches!(press.key.as_ref(), Key::Named(key::Named::Enter))
                     && press.modifiers.command()
                     && matches!(press.status, text_editor::Status::Focused { .. });
@@ -122,6 +152,7 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
         Element::new(Chrome {
             editor: editor.into(),
             roles: r,
+            max_height: area.max_height,
         })
     }
 }
@@ -131,6 +162,8 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
 struct Chrome<'a, M> {
     editor: Element<'a, M>,
     roles: Roles,
+    /// The height growth stops at, the field's whole height.
+    max_height: Option<f32>,
 }
 
 impl<M> Chrome<'_, M> {
@@ -169,10 +202,23 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Chrome<'a, M> {
         renderer: &iced::Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
+        // Held at the limit, the editor is laid out in the limit's room — its own viewport, which
+        // scrolls — and its node cut to the limit: the editor's layout adds its padding on top of
+        // the room it was given, so the room alone would overshoot by the padding.
+        let limits = match self.max_height {
+            Some(max) => limits.max_height(max),
+            None => *limits,
+        };
         let child = self
             .editor
             .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits);
+            .layout(&mut tree.children[0], renderer, &limits);
+        let child = match self.max_height {
+            Some(max) if child.size().height > max => {
+                layout::Node::new(Size::new(child.size().width, max))
+            }
+            _ => child,
+        };
         layout::Node::with_children(child.size(), vec![child])
     }
 
@@ -307,8 +353,12 @@ mod tests {
 
     /// The height `content`'s area takes laid out `width` wide.
     fn height(content: &Content, width: f32) -> f32 {
-        let mut element: Element<'_, ()> =
-            TextArea::new(content, LIGHT).placeholder("Comment").into();
+        laid_out_height(TextArea::new(content, LIGHT).placeholder("Comment"), width)
+    }
+
+    /// The height `area` takes laid out `width` wide.
+    fn laid_out_height(area: TextArea<'_, ()>, width: f32) -> f32 {
+        let mut element: Element<'_, ()> = area.into();
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
         element
@@ -349,5 +399,80 @@ mod tests {
         assert!(focused > idle);
         assert_eq!(focused_colour, super::super::style::color(LIGHT.primary));
         assert_ne!(idle_colour, focused_colour);
+    }
+
+    fn lines(n: usize) -> Content {
+        let text = (1..=n).map(|i| format!("line {i}")).collect::<Vec<_>>();
+        Content::with_text(&text.join("\n"))
+    }
+
+    /// FR-008: below its limit the area grows as before; past it, it holds the limit.
+    #[test]
+    fn past_its_max_height_the_area_holds_it() {
+        let limited = |content: &Content| {
+            laid_out_height(TextArea::new(content, LIGHT).max_height(200.0), 400.0)
+        };
+        let (three, forty) = (lines(3), lines(40));
+        assert_eq!(limited(&three), height(&three, 400.0), "under the limit");
+        assert!(limited(&three) < 200.0);
+        assert_eq!(limited(&forty), 200.0, "the limit holds");
+        assert!(height(&forty, 400.0) > 200.0, "unlimited it would grow");
+        assert_eq!(
+            laid_out_height(TextArea::new(&three, LIGHT).max_height(10.0), 400.0),
+            MIN_HEIGHT,
+            "never below one field"
+        );
+    }
+
+    /// FR-008: the wheel over a held area scrolls its lines inside it.
+    #[test]
+    fn the_wheel_scrolls_a_held_area_inside() {
+        use super::super::test_support::Mounted;
+        use iced::advanced::mouse;
+        let forty = lines(40);
+        let area =
+            TextArea::new(&forty, LIGHT)
+                .max_height(200.0)
+                .on_action(|action| match action {
+                    Action::Scroll { .. } => "scroll".to_string(),
+                    _ => "other".to_string(),
+                });
+        let mut m = Mounted::new_in(area, Size::new(400.0, 600.0));
+        let inside = iced::Point::new(100.0, 100.0);
+        let out = m.send(
+            Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Lines { x: 0.0, y: -3.0 },
+            }),
+            mouse::Cursor::Available(inside),
+        );
+        assert_eq!(out, vec!["scroll".to_string()]);
+    }
+
+    /// A key binding decides the keys: Enter sends instead of breaking the line, and a key it
+    /// hands back to the default still edits.
+    #[test]
+    fn a_key_binding_replaces_the_default_keys() {
+        use super::super::test_support::{named_key, Mounted};
+        use iced::advanced::mouse;
+        let content = Content::with_text("draft");
+        let area = || {
+            TextArea::new(&content, LIGHT)
+                .on_action(|_| "edit".to_string())
+                .key_binding(|press| match press.key.as_ref() {
+                    Key::Named(key::Named::Enter) => Some(Binding::Custom("send".to_string())),
+                    Key::Named(key::Named::Escape) => None,
+                    _ => Binding::from_key_press(press),
+                })
+        };
+        let mut m = Mounted::new(area());
+        m.focus_next();
+        let send = |m: &mut Mounted<'_>, k| m.send(named_key(k), mouse::Cursor::Unavailable);
+        assert_eq!(send(&mut m, key::Named::Enter), vec!["send".to_string()]);
+        assert!(send(&mut m, key::Named::Escape).is_empty(), "ignored");
+        assert_eq!(
+            send(&mut m, key::Named::Backspace),
+            vec!["edit".to_string()],
+            "the default still edits"
+        );
     }
 }

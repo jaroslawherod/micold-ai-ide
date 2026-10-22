@@ -303,27 +303,36 @@ const LONG_REPLY: &str = "Not changed: reading it twice is what keeps the cached
     let the two drift apart for one frame on every";
 
 thread_local! {
-    /// The text areas' contents: an empty one and a multi-line one. Leaked once per thread, as the
-    /// page holds them for its whole run and `TextArea` borrows them for the frame.
-    static AREAS: &'static [text_editor::Content; 2] = Box::leak(Box::new([
+    /// The text areas' contents: an empty one, a multi-line one and one past the height limit.
+    /// Leaked once per thread, as the page holds them for its whole run and `TextArea` borrows them for the frame.
+    static AREAS: &'static [text_editor::Content; 3] = Box::leak(Box::new([
         text_editor::Content::new(),
         text_editor::Content::with_text(
             "Pass the height through instead of reading it twice.\n\
              `draw` already gets the width from the caller,\n\
              so the two stay in step.",
         ),
+        text_editor::Content::with_text(&TALL_DRAFT),
     ]));
 }
+
+/// A draft of thirty lines, past the limited area's height.
+static TALL_DRAFT: LazyLock<String> = LazyLock::new(|| {
+    (1..=30)
+        .map(|n| format!("Line {n} of a long draft"))
+        .collect::<Vec<_>>()
+        .join("\n")
+});
 
 /// The width a text area or card is posed at: about the diff pane's in a laptop window.
 const COMMENT_WIDTH: f32 = 480.0;
 
-/// `TextArea` — empty with its placeholder, and grown to three lines. The empty one takes focus
-/// when clicked (its edits go nowhere here), which is the focused pose.
+/// `TextArea` — empty with its placeholder, grown to three lines, and held at its height limit
+/// (feature 941). The empty one takes focus when clicked (its edits go nowhere here), which is the focused pose.
 pub fn text_area<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    let [empty, multi] = AREAS.with(|areas| {
-        let areas: &'static [text_editor::Content; 2] = areas;
-        [&areas[0], &areas[1]]
+    let [empty, multi, tall] = AREAS.with(|areas| {
+        let areas: &'static [text_editor::Content; 3] = areas;
+        [&areas[0], &areas[1], &areas[2]]
     });
     let sized = |area: TextArea<'a, Message>| container(area).width(Length::Fixed(COMMENT_WIDTH));
     arrange(
@@ -340,6 +349,12 @@ pub fn text_area<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
             posed(
                 "multi-line",
                 sized(TextArea::new(multi, roles).placeholder("Comment")),
+                roles,
+            ),
+            // Feature 941 (FR-008): a draft past the composer's limit holds it and scrolls inside.
+            posed(
+                "at its height limit, scrolling inside",
+                super::composer::text_area_sample(tall, roles),
                 roles,
             ),
         ],

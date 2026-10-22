@@ -136,3 +136,32 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
 - M4 verify: closing or removing a session forgets its composer (`forget_structured`), and the
   shell drops its editor and its composer requests in flight (`forget_composer`; tests
   `closing_a_session_forgets_its_composer`, `closing_a_session_drops_its_editor_and_its_composer_requests`).
+
+## M5 — shared components: TextArea limits, AttachmentChip, QueueRow, BusyIndicator (T048–T054)
+
+### Cycle 9 — the composer's parts and the showcase (T048 → T049–T054)
+
+- tests: `tests/gates/composer_parts_fit.rs` (new, 4 cases in `layout_snapshot`, both schemes: a
+  text area grows to its limit and holds it; a busy indicator draws its words busy and idle; a queue
+  row is one line with its position, count and actions; a chip draws its name inside itself);
+  `showcase_completeness` `the_composer_components_are_posed`; unit tests in `text_area.rs`
+  (`past_its_max_height_the_area_holds_it`, `the_wheel_scrolls_a_held_area_inside`,
+  `a_key_binding_replaces_the_default_keys`), `busy_indicator.rs` (3), `attachment_chip.rs` (4,
+  incl. the remove control as one labelled keyboard stop), `queue_row.rs` (4, incl. three keyboard
+  stops in order); `composition_contrast` `a_queue_rows_and_an_attachment_chips_words_are_legible_on_their_plates`.
+  `material_builder_api` holds the three new builders through its scanner.
+- red: `cargo test -p micold-client --test layout_snapshot --test showcase_completeness --no-run` →
+  `error[E0432]: unresolved import micold_client::showcase::sections::composer`;
+  `cargo test -p micold-client --test showcase_completeness the_composer_components_are_posed` →
+  `panicked at crates/micold-client/tests/showcase_completeness.rs:957:13` (the TextArea entry had no
+  limit pose). The components' unit tests were written with each component (test-after, recorded):
+  a mutant set on the finished code (the chrome's clamp off; `one_line` keeps the line breaks; the
+  busy label not drawn) → 4 of 24 unit cases failed (`past_its_max_height_the_area_holds_it`,
+  `the_label_is_drawn_busy_and_idle`, `idle_keeps_the_rings_room`,
+  `one_line_joins_lines_and_pictures_are_counted`). Restored.
+- first green run caught two real faults: iced's `text_editor::max_height` held 40 lines at 172, not
+  the 200 asked (Decision 18), and the queue row's unit test room was too narrow for its text.
+- green: `cargo test -p micold-client --test layout_snapshot --test material_builder_api --test
+  showcase_completeness --test showcase_captions --test showcase_tab --test icons` → 83, 11, 45, 7,
+  1, 7 passed; `--lib` component and contrast cases 23 and 16 passed.
+

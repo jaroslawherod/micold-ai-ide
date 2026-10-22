@@ -348,23 +348,23 @@ file reads (Constitution I: `shell/` holds no decision).
 
 ## Phase 6: Shared components (M5, Constitution VIII)
 
-- [ ] T048 [P] [US1] [US2] [US4] [US5] Tests: `client/tests/material_builder_api.rs` and
+- [x] T048 [P] [US1] [US2] [US4] [US5] Tests: `client/tests/material_builder_api.rs` and
   `client/tests/showcase_completeness.rs` cover `TextArea::key_binding` / `max_height`,
   `AttachmentChip`, `QueueRow`, `BusyIndicator`; light and dark theme snapshots for each in
   `client/tests/layout_snapshot.rs`; a geometry gate that `TextArea` grows with its lines up to
   `max_height` and then scrolls inside; `BusyIndicator` always shows its text label (FR-010);
   `QueueRow` cuts its text to one line and shows its position and attachment count; each control
   is reachable by Tab and has a label
-- [ ] T049 Add `"image"` to the workspace `iced` features in `Cargo.toml` (research R8)
-- [ ] T050 [US2] `client/src/ui/material/text_area.rs`: `.key_binding(…)` and `.max_height(…)`
+- [x] T049 Add `"image"` to the workspace `iced` features in `Cargo.toml` (research R8)
+- [x] T050 [US2] `client/src/ui/material/text_area.rs`: `.key_binding(…)` and `.max_height(…)`
   (FR-008)
-- [ ] T051 [P] [US5] `client/src/ui/material/attachment_chip.rs` (new): thumbnail decoded from the
+- [x] T051 [P] [US5] `client/src/ui/material/attachment_chip.rs` (new): thumbnail decoded from the
   held bytes, file name, remove control
-- [ ] T052 [P] [US4] `client/src/ui/material/queue_row.rs` (new): position, one-line text,
+- [x] T052 [P] [US4] `client/src/ui/material/queue_row.rs` (new): position, one-line text,
   attachment count, Edit / Remove / Move to composer
-- [ ] T053 [P] [US1] `client/src/ui/material/busy_indicator.rs` (new): indeterminate circular
+- [x] T053 [P] [US1] `client/src/ui/material/busy_indicator.rs` (new): indeterminate circular
   indicator plus a text label, never colour alone
-- [ ] T054 Register the three in `client/src/ui/material/mod.rs`; showcase entries in
+- [x] T054 Register the three in `client/src/ui/material/mod.rs`; showcase entries in
   `client/src/showcase/sections/`; T048 passes
 
 ---

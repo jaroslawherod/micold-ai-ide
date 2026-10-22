@@ -5,6 +5,7 @@
 //! be one file to read rather than six to reconcile.
 
 pub mod atoms;
+pub mod composer;
 pub mod controls;
 pub mod floating;
 pub mod motion;
