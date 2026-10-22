@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: M3 PR
-- **Next step**: review A r3 CLEAN and visual pass r3 PASS; T037 ticked; full gate (scripts/gate.sh) passed; M3 PR opened by the orchestrator from pr-title.txt / pr-body.md; then the close unit (T038–T039)
+- **Phase**: close
+- **Next step**: close unit: T038 (gate passed at 2abbffff, quickstart.md Results) and T039 (visual-pass.md) done; next speckit-tdd-verify (sonnet worker), fixes, close review, gate, close PR. Converge skipped: review B CLEAN for M1, M2, M3
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1230 | design (spec, plan, tasks) | merged (rebase) | 9607e14b |
 | #1233 | M1: pull request rows on the card | merged (rebase) | 97148cd2 |
 | #1235 | M2: open a pull request from its number | merged (rebase) | dc647329 |
+| #1238 | M3: numbers as Tab stops, arrows and hand-offs per link | merged (rebase); the orchestrator added a commit renaming `visual-pass/m3/light-1-b4-c3c-5-ring-?.png` to `...-ring-unknown.png` ('?' broke the Windows checkout); evidence file names keep to [A-Za-z0-9._-] | 2abbffff |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T019 | full | Cards show pull request rows (#N, state pill, status words), two collapsed with "+N more", all expanded; counts derive from the same list and read *10+* (43 requests per branch, was 44); snapshot `overview-pr-rows` | #1233 | merged |
 | M2 | T020–T028 | full | A click on a row's number opens the pull request, no card activation | #1235 | merged |
-| M3 | T029–T037 | full | Numbers are Tab stops with every 1122 link rule, arrows step from a number; Escape/menu hand-offs per link | — | in progress |
+| M3 | T029–T037 | full | Numbers are Tab stops with every 1122 link rule, arrows step from a number; Escape/menu hand-offs per link | #1238 | merged |
 
 ## Decisions
 
