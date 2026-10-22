@@ -281,6 +281,8 @@ pub enum FieldId {
     CleanupBranch(u8),
     /// A structured session's queued message, edited in place (feature 941, FR-020).
     QueuedMessage(micold_core::session::SessionId),
+    /// A structured session's composer (feature 941, FR-001).
+    Composer(micold_core::session::SessionId),
 }
 
 /// What the window reports about itself (feature 028, FR-001).

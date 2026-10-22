@@ -18,8 +18,9 @@ use crate::support::layout::{self as lay, Overflow, StateUnderTest, WINDOW};
 use crate::transcript_jump_control_fits::viewport;
 use iced::widget::text_editor::{Action, Edit};
 use iced::Rectangle;
-use micold_client::app::{EditorAction, State};
+use micold_client::app::{EditorAction, Message, State};
 use micold_client::features::composer::{DroppedFiles, InputState, OVERDUE};
+use micold_client::features::window::{FieldId, Msg as WindowMsg};
 use micold_client::ui::composer::{Seams, BUSY, MAX_HEIGHT, ON_HOLD, PLACEHOLDER, READY};
 use micold_client::ui::transcript::transcript_scroll_id;
 use micold_core::path_insert::ShellKind;
@@ -318,5 +319,75 @@ fn an_interrupted_turn_closes_with_its_notice_and_a_message_names_its_pictures()
     find(
         &painted,
         &format!("{}: {PICTURE}", micold_client::ui::transcript::ATTACHED),
+    );
+}
+
+/// The fields `messages` report as having gained the keyboard.
+fn focused_fields(messages: &[Message]) -> Vec<FieldId> {
+    messages
+        .iter()
+        .filter_map(|m| match m {
+            Message::Window(WindowMsg::FieldFocusChanged(field, true)) => Some(*field),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A press on the composer's text area reports it as the window's focused field, so the window
+/// stops handing keys to the pane: without the report `KeyboardElsewhere` took the editor's focus
+/// back on the first key and nothing typed reached the draft (T061 visual pass, step 1).
+#[test]
+fn a_press_on_the_composer_takes_the_keyboard_from_the_pane() {
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    assert!(
+        state.terminal_focused(),
+        "the pane holds the keyboard first"
+    );
+    let (painted, _) = paint(state.clone(), id);
+    let send = find(&painted, "Send");
+    let at = iced::Point::new(
+        send.origin.x - 200.0,
+        send.origin.y + send.natural_height / 2.0,
+    );
+    let under = StateUnderTest::new(state.clone());
+    let messages = lay::messages_after(
+        lay::view_of(&under),
+        &lay::renderer(),
+        &[lay::Input::Press(at, iced::mouse::Button::Left)],
+    );
+    assert_eq!(focused_fields(&messages), vec![FieldId::Composer(id)]);
+    for message in messages {
+        state.update(message);
+    }
+    assert!(
+        !state.terminal_focused(),
+        "a focused composer keeps its keys from the pane"
+    );
+}
+
+/// The queued message edited in place reports its field's focus the same way (FR-020).
+#[test]
+fn a_press_on_a_queued_message_being_edited_reports_its_field() {
+    let (mut state, id) = pane();
+    report(&mut state, id, busy(InterruptAsk::None), false, 1);
+    assert!(state.composers.start_queue_edit(id, QueueEntryId(1)));
+    let (painted, _) = paint(state.clone(), id);
+    let cancel = find(&painted, "Cancel");
+    // The field sits above the Save / Cancel row: press down the column above it.
+    let presses: Vec<lay::Input> = (1..40)
+        .map(|n| {
+            lay::Input::Press(
+                iced::Point::new(cancel.origin.x - 200.0, cancel.origin.y - 4.0 * n as f32),
+                iced::mouse::Button::Left,
+            )
+        })
+        .collect();
+    let under = StateUnderTest::new(state);
+    let messages = lay::messages_after(lay::view_of(&under), &lay::renderer(), &presses);
+    assert!(
+        focused_fields(&messages).contains(&FieldId::QueuedMessage(id)),
+        "the queued message's field reports its focus: {:?}",
+        focused_fields(&messages)
     );
 }

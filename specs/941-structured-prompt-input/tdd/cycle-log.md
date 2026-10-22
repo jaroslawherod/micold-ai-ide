@@ -195,3 +195,21 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
 - green: `cargo test -p micold-client --test layout_snapshot --test features_composer --test
   overlay_registry --test field_focus_call_sites` → 91, 29, 24, 6 passed; `--release --test
   composer_large_draft -- --ignored` → 1 passed.
+
+### Cycle 11 — the composer and the queued message's field take the keyboard (T061 finding, review B M6 r2 F1)
+
+- found by: the T061 visual pass (step 1, the composer took no typed text: a press focused it and
+  the first key dropped the focus). Cause: the composer's `TextArea` never reported its focus, so
+  `State::terminal_focused()` stayed true and `KeyboardElsewhere` cleared every widget's focus on
+  the key. Review B r2 F1: the queued message's `track_focus` (round 1 fix) had no test.
+- tests: `text_area.rs` `a_press_reports_the_editors_focus_and_a_press_elsewhere_its_loss`;
+  `tests/gates/composer_fits.rs` `a_press_on_the_composer_takes_the_keyboard_from_the_pane` (the
+  window's view, a press on the area → `FieldFocusChanged(Composer(id), true)`, and after it
+  `terminal_focused()` is false) and `a_press_on_a_queued_message_being_edited_reports_its_field`.
+- order: test-after (the fix and the tests in one sitting), backed by mutants: the composer's
+  `.track_focus(FieldId::Composer(..))` removed → the composer gate failed (`left: []`); the queued
+  message's `.track_focus` removed → its gate failed; the other passed each time. Restored.
+- fix: `TextArea::on_focus_change` (Chrome keeps the last report, publishes after the editor's own
+  update), `TrackFocus for TextArea`, `FieldId::Composer(SessionId)`.
+- green: `cargo test -p micold-client --lib text_area` 14, `--test layout_snapshot composer` 14,
+  `--test field_focus_call_sites --test features_composer --test terminal_focus` 6, 29, 33 passed.
