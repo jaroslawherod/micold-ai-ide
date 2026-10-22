@@ -464,7 +464,7 @@ fn app_with_threads() -> (App, SessionId) {
         0,
         [tool_use("p", "Agent", "{}"), sub_text("p says one", "p")],
     );
-    app.structured_events(s, 0, &events, false);
+    let _jobs = app.structured_events(s, 0, &events, false, &micold_client::ui::syntax::GRAMMAR);
     (app, s)
 }
 
