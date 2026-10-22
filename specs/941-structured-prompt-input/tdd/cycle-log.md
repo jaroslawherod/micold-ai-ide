@@ -111,3 +111,7 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
 - green: `write_user_message` records the turn it wrote under the stdin mutex, and
   `write_interrupt` waits until its turn's message is written (a failed write closes the turn,
   which ends the wait). `structured_input` 18 passed, 3 runs.
+- review A r1 F1: the turn recorded as written is now the one the daemon opened for the message
+  (`Delivery::turn`, passed to `write_user_message`), not the turn open after the write: the CLI
+  could end it and a later turn open in between. No deterministic test (needs the result to land
+  between the write and the record); the change removes the read.

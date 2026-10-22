@@ -522,11 +522,11 @@ impl StructuredSession {
         }
     }
 
-    /// Write `message`, for which the daemon opened a turn, to the CLI as one stream-json user
+    /// Write `message`, for which the daemon opened `turn`, to the CLI as one stream-json user
     /// message (#941 FR-003, FR-027), and note it as [`StructuredEvent::UserSent`] with its
     /// pictures' names before any line of its turn (R3). On a failed write nothing was delivered:
     /// the note is dropped and the turn closed again. Never logs the text or the pictures.
-    pub fn write_user_message(&self, message: &Message) -> io::Result<()> {
+    pub fn write_user_message(&self, turn: TurnId, message: &Message) -> io::Result<()> {
         lock(&self.emit).sending = Some(StructuredEvent::UserSent {
             text: message.text.clone(),
             attachments: message
@@ -540,11 +540,9 @@ impl StructuredSession {
             let mut stdin = lock(&self.stdin);
             let written = write_whole(&mut stdin, &line);
             if written.is_ok() {
-                // The daemon opened this message's turn before handing it here, and no other
-                // message is written while it is open: the open turn is this message's.
-                if let Turn::InTurn { turn, .. } = lock(&self.turn).now() {
-                    *lock(&self.written) = Some(turn);
-                }
+                // `turn`, not the turn open now: the CLI may already have ended it and a later
+                // one opened, whose message is not written yet.
+                *lock(&self.written) = Some(turn);
             }
             written
         };

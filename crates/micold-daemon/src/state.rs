@@ -439,6 +439,8 @@ fn holds_failure(cell: &EnvIncludeCell) -> bool {
 pub struct Delivery {
     session: SessionId,
     child: Arc<StructuredSession>,
+    /// The turn the section opened for it.
+    turn: micold_core::structured::TurnId,
     message: Message,
     /// The queue entry it was, and who queued it: put back at the head should the write fail.
     queued: Option<(QueueEntryId, u64)>,
@@ -6925,6 +6927,7 @@ impl DaemonState {
         Some(Delivery {
             session,
             child,
+            turn: id,
             message: queued.message,
             queued: Some((queued.id, queued.queued_by)),
         })
@@ -6996,6 +6999,7 @@ impl DaemonState {
                     Some(Delivery {
                         session,
                         child: Arc::clone(&child),
+                        turn: id,
                         message,
                         queued: None,
                     })
@@ -7022,7 +7026,9 @@ impl DaemonState {
         let mut outcome = None;
         let mut next = Some(delivery);
         while let Some(delivery) = next.take() {
-            let written = delivery.child.write_user_message(&delivery.message);
+            let written = delivery
+                .child
+                .write_user_message(delivery.turn, &delivery.message);
             let failed = written.is_err();
             outcome.get_or_insert(written);
             if failed {
