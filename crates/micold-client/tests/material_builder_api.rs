@@ -149,3 +149,58 @@ fn the_tooltips_wait_modes_and_options_are_four_chainable_steps() {
         );
     }
 }
+
+/// Feature 941 (T048): the composer's parts are components built like every other — a
+/// constructor, chainable steps and `.into()`, no public fields — and `TextArea`'s new options are
+/// two more chainable steps.
+#[test]
+fn the_composer_parts_are_built_and_chained() {
+    let declared = declarations();
+    for (module, name, steps) in [
+        (
+            "material/text_area.rs",
+            "TextArea",
+            &["key_binding", "max_height"][..],
+        ),
+        (
+            "material/attachment_chip.rs",
+            "AttachmentChip",
+            &["on_remove"][..],
+        ),
+        (
+            "material/queue_row.rs",
+            "QueueRow",
+            &["pictures", "on_edit", "on_remove", "on_move_to_composer"][..],
+        ),
+        ("material/busy_indicator.rs", "BusyIndicator", &["busy"][..]),
+    ] {
+        let d = declared
+            .iter()
+            .find(|d| d.module == module && d.name == name)
+            .unwrap_or_else(|| panic!("`{name}` is declared in {module}"));
+        assert!(
+            d.is_component() && d.has_constructor && !d.public_fields,
+            "`{name}` is a component with a constructor and no public fields"
+        );
+        assert!(
+            d.non_builder_methods.is_empty(),
+            "`{name}`: {:?}",
+            d.non_builder_methods
+        );
+        let sources = inventory::library_sources();
+        let (_, src) = sources
+            .iter()
+            .find(|(m, _)| m.ends_with(module))
+            .unwrap_or_else(|| panic!("{module}'s source"));
+        for step in steps {
+            let at = src
+                .find(&format!("pub fn {step}(mut self"))
+                .unwrap_or_else(|| panic!("`{name}::{step}` consumes `self`"));
+            let signature = &src[at..at + src[at..].find('{').expect("a body")];
+            assert!(
+                signature.trim_end().ends_with("-> Self"),
+                "`{name}::{step}` returns `Self`: {signature}"
+            );
+        }
+    }
+}

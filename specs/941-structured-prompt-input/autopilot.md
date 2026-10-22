@@ -95,6 +95,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review B M4 (conformance, sonnet) | 1 | a6645123811153f70ca4ef415fdb1dc8847c539e:956e72ed7046e521afcf31de43eedcf96de89c11 | CHANGES: 1 MAJOR (no M4 cycle log / red evidence; fixed: Cycle 8 with a mutant set), 2 MINOR (shell editor removal untested: fixed; sync_editor on a forgotten session: declined). Verify: features_composer 29, pane_drop_target 5 passed. Judged the composer forget right and M4's |
 | Review B M4 (conformance, sonnet) | 2 | eb42ba55d87556ba0162a8114c2cf52b3174ce42:6066b32c5054a4ca635f77998f2416d85e190c53 | CLEAN: 1 MINOR (cycle-log case count; fixed, prose only) |
 | Full gate M4 | — | — | 1st red: clippy `large_enum_variant` on `composer::Msg::Dropped` (boxed); 2nd red: `root_vocabulary_is_cross_cutting` pin 26 → 27 (`Composer`); 3rd red: daemon `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` under load (no M4 change to the daemon; 5/5 green alone); green at 6066b32c, and at ea0ac0e8 after the rebase onto origin/main d16d74c1 (#1161 M1; no M4 wire change, no pin to move) |
+| Review A M5 (code-review high) | 1 | f8f897dadf089779ffa9a29b5fc7acc5450d0825:86313219a4781610fe3a448bf9b94a08b9a9bc74 | CHANGES: 2 MAJOR (no explicit builder test in material_builder_api: fixed, `the_composer_parts_are_built_and_chained`; showcase limited area cannot scroll: fixed, live claim dropped and `a_scrolled_held_area_draws_other_lines_at_the_same_height`), 3 MINOR (T049 wording: fixed; reduce-motion, key_binding/on_submit, editor max_height, PhantomData, image dep: declined) |
 
 ## Declined review findings
 
@@ -130,6 +131,9 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | M3 | A r1 F4 (MINOR) | a failed queue save is not retried | Same as the history store's one-shot event saves on a failed disk; the next queue change saves again; logged |
 | M3 | A r1 F5 (MINOR) | a saved queue is dropped when input already exists | The queue is loaded with the event stream before the session can start or take a message (load precedes start); no path creates the input first |
 | M3 | A r1 F6–F7 (MINOR) | snapshot clones under the lock; small per-session maps | Taste/efficiency: queues are a few messages; not fixed now |
+| Review A M5 F3 | `BusyIndicator` ignores reduce-motion; copies `Bar`'s loop | `StageProgress`'s indeterminate bar, the precedent, ignores it too, and an indeterminate indicator that stops says nothing is happening; the loop is five lines, not worth a shared helper |
+| Review A M5 F4 | `key_binding` silences `on_submit`; clamp the node instead of `TextEditor::max_height` | Documented: `key_binding` replaces the default keys and `on_submit` by design (the composer's Enter is its own). `TextEditor::max_height` held 40 lines at 172 for a 200 limit (Decision 18) |
+| Review A M5 F5 | `image` dependency unused; `PhantomData<&'a ()>` | The dependency is how the four codecs reach iced's decoder (commented in both Cargo.toml files, Decision 17); the marker is `IconButton`'s pattern for a builder whose `From` names `'a` |
 
 ## Handover
 

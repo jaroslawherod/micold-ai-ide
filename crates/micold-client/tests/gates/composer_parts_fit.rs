@@ -49,8 +49,8 @@ fn a_text_area_grows_with_its_lines_up_to_its_limit_and_then_holds_it() {
                     .collect::<Vec<_>>()
                     .join("\n");
                 let content = Content::with_text(&text);
-                let mut renderer = lay::renderer();
-                let records = lay::resolve(text_area_sample(&content, roles), &mut renderer);
+                let renderer = lay::renderer();
+                let records = lay::resolve(text_area_sample(&content, roles), &renderer);
                 root_of(&records).height
             })
             .collect();
