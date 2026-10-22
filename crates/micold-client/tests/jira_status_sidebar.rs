@@ -1,7 +1,8 @@
 //! A Jira ticket's status on the sidebar and how it is kept fresh (feature 1101, M2: FR-003 to
 //! FR-008, FR-010, FR-014, FR-015; SC-002, SC-003).
 //!
-//! The refresh driver lives in the binary, so these tests drive what it drives: the state's
+//! The refresh driver lives in the binary; its own tests (the gate, the clear, the Focus throttle)
+//! are `jira_status_driver` in `main_tests.rs`. These drive what the driver drives: the state's
 //! `plan` and `apply`, `read_statuses` through a `FakeJiraSource`, and the painted sidebar.
 
 mod support;
@@ -100,9 +101,13 @@ fn the_chip_stands_beside_the_key_tag() {
 fn a_worktree_without_a_ticket_or_a_status_has_no_chip() {
     let mut state = state_with(&["fix-ABC-1_login", "chore-plain"]);
     let source = FakeJiraSource::new().with_statuses(Ok(vec![("ABC-1".into(), None)]));
+    let before = painted(&state);
     refresh(&mut state, &source, Trigger::Open, secs(0));
     assert!(state.jira_status.board.status_of("ABC-1").is_none());
     assert_eq!(source.status_calls(), vec![vec!["ABC-1".to_string()]]);
+    // Nothing was added to the sidebar: the key tag stays and no chip joins it.
+    assert_eq!(painted(&state), before);
+    assert!(shows(&state, "ABC-1"));
 }
 
 #[test]
@@ -139,7 +144,7 @@ fn a_done_ticket_keeps_its_chip() {
 }
 
 #[test]
-fn a_failed_refresh_keeps_the_last_status_marked_stale() {
+fn a_failed_refresh_keeps_the_last_status_marked_stale_and_asks_nothing_more() {
     let mut state = state_with(&["fix-ABC-1_login"]);
     let source = FakeJiraSource::new().with_statuses(Ok(vec![read("ABC-1", "To Do", "new")]));
     refresh(&mut state, &source, Trigger::Open, secs(0));
@@ -149,6 +154,8 @@ fn a_failed_refresh_keeps_the_last_status_marked_stale() {
     assert!(entry.stale);
     assert_eq!(entry.status.name, "To Do");
     assert!(shows(&state, "To Do"));
+    // The failure raised no request of its own: only the open read and the focus read were made.
+    assert_eq!(source.status_calls().len(), 2);
 }
 
 #[test]
@@ -163,10 +170,12 @@ fn a_ticket_jira_no_longer_returns_is_retired() {
 }
 
 #[test]
-fn switching_off_or_changing_project_clears_the_chips() {
+fn clearing_the_state_drops_the_chips_from_the_sidebar() {
     let mut state = state_with(&["fix-ABC-1_login"]);
     let source = FakeJiraSource::new().with_statuses(Ok(vec![read("ABC-1", "To Do", "new")]));
     refresh(&mut state, &source, Trigger::Open, secs(0));
+    assert!(shows(&state, "To Do"));
+    // That switching off or removing the connection calls this is `jira_status_driver`'s test.
     state.jira_status.clear();
     assert!(state.jira_status.board.is_idle());
     assert!(!shows(&state, "To Do"));

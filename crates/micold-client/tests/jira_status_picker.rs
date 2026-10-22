@@ -48,7 +48,7 @@ fn search_results_show_their_status_too() {
 }
 
 #[test]
-fn the_chip_text_is_painted_only_for_rows_with_a_status() {
+fn every_status_name_is_painted_for_rows_with_one_and_none_for_a_row_without() {
     let painted = |issues| -> Vec<String> {
         painted_text_settled(view_of(&state_with(form_with(issues, ""))), &mut renderer())
             .into_iter()
@@ -60,7 +60,12 @@ fn the_chip_text_is_painted_only_for_rows_with_a_status() {
         assert!(with.iter().any(|t| t == name), "{name} painted: {with:?}");
     }
     let without = painted(vec![ticket(4, "Delta", None)]);
-    assert!(!without.iter().any(|t| t == "To Do"), "{without:?}");
+    for name in ["To Do", "In Progress", "In Review"] {
+        assert!(
+            !without.iter().any(|t| t == name),
+            "{name} painted: {without:?}"
+        );
+    }
 }
 
 #[test]

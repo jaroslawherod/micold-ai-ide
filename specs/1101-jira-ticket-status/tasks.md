@@ -100,3 +100,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `cargo test -p micold-client --test jira_status_overview`
 - **Depends on**: M2
 - **Tier**: full
+
+## Phase 6: TDD remediation
+
+Verdict FAIL (`tdd/verification.md`): the feature is not done until T031-T035 are cleared. Each task is proven by mutating the named line, seeing the new test fail, restoring, and running `scripts/build-lock.sh cargo test -p micold-client --test <file>` green.
+
+- [X] T031 [US2] Finding 1: add a behavioral test of the refresh driver `crates/micold-client/src/shell/jira_refresh.rs` (drive `after_update` / `on_focus` against `FakeJiraSource`; in the binary's `main_tests.rs` or by moving the driver's decision into `crates/micold-client/src/features/jira_status.rs`): zero source calls with the switch off or no connection (SC-004, FR-006), one read for a restored project, and removing the `jira_request` gate fails it (the off-UI-thread check was dropped: declined in the ledger)
+- [X] T032 [US2] Finding 3: a test that turning the switch off or removing the connection through the real update path clears the painted chip (`jira_refresh.rs:36-39`); replace the self-calling `clear()` in `crates/micold-client/tests/jira_status_sidebar.rs:165` (mutant: delete `state.clear()` must fail)
+- [X] T033 [US2] Finding 2: a test that `on_focus` honours the 5-minute throttle through the driver (`jira_refresh.rs:25`; mutant: `Trigger::Focus` to `Trigger::Open` must fail)
+- [X] T034 [US2] Finding 4: a painted/element-level test that a stale chip is dimmed and its tooltip reads "may be out of date" (`crates/micold-client/src/ui/material/status_chip.rs:77-80`; mutants `if false` and tooltip `false` must fail)
+- [X] T035 [US3] Finding 5: an Overview failure case in `crates/micold-client/tests/jira_status_overview.rs` showing the card's chip stale after a failed refresh (`crates/micold-client/src/ui/overview.rs:438`; mutant: stale always `false` must fail)
+- [X] T036 [US2] Findings 6, 10: assert the painted sidebar has no chip in `jira_status_sidebar.rs:100`, and that a failed refresh makes no extra source call before the next event (`jira_status_sidebar.rs:142`)
+- [X] T037 Finding 7: write `specs/1101-jira-ticket-status/tdd/test-list.md` and add the missing M1 cycle-log entry in `tdd/cycle-log.md`

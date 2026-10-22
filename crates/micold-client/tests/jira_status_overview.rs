@@ -11,7 +11,9 @@ use iced::Element;
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::sandbox::Sandbox;
+use micold_client::ui::overview;
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::github::IssueLoadError;
 use micold_core::jira::{ApiToken, FakeJiraSource, JiraConnection};
 use micold_core::jira_status::{read_statuses, KeyedStatus, TicketStatus, Trigger};
 use support::layout as lay;
@@ -32,12 +34,17 @@ fn read(key: &str, name: &str, category: &str) -> KeyedStatus {
 fn state_with(dirs: &[&str], statuses: Vec<KeyedStatus>) -> State {
     let mut state = state_with_active();
     deliver(&mut state, dirs.iter().map(|d| listed(d)).collect());
-    refresh(&mut state, statuses, Duration::ZERO, Trigger::Open);
+    refresh(&mut state, Ok(statuses), Duration::ZERO, Trigger::Open);
     state
 }
 
-fn refresh(state: &mut State, statuses: Vec<KeyedStatus>, now: Duration, trigger: Trigger) {
-    let source = FakeJiraSource::new().with_statuses(Ok(statuses));
+fn refresh(
+    state: &mut State,
+    answer: Result<Vec<KeyedStatus>, IssueLoadError>,
+    now: Duration,
+    trigger: Trigger,
+) {
+    let source = FakeJiraSource::new().with_statuses(answer);
     let token = ApiToken::parse("sentinel-token-0123").unwrap();
     let worktrees = state.worktree.worktrees.clone();
     let project = conn().project_key;
@@ -92,7 +99,7 @@ fn both_places_follow_a_changed_status_together() {
     );
     refresh(
         &mut state,
-        vec![read("ABC-1", "In Review", "indeterminate")],
+        Ok(vec![read("ABC-1", "In Review", "indeterminate")]),
         Duration::from_secs(600),
         Trigger::Focus,
     );
@@ -119,4 +126,34 @@ fn a_lowercase_directory_name_still_finds_its_ticket() {
         vec![read("ABC-1", "In Review", "indeterminate")],
     );
     assert_eq!(count(&painted(&mut state, true), "In Review"), 2);
+}
+
+/// The status the card is given, and whether it is marked stale (FR-008, FR-010).
+fn card_status_of(state: &State) -> (String, bool) {
+    let models = overview::cards(state);
+    let model = models
+        .iter()
+        .find(|m| overview::card_status(state, m).is_some())
+        .expect("the linked worktree's card has a status");
+    let (status, stale) = overview::card_status(state, model).unwrap();
+    (status.name.clone(), stale)
+}
+
+#[test]
+fn a_failed_refresh_keeps_the_card_status_and_marks_it_stale_as_the_sidebar_does() {
+    let mut state = state_with(
+        &["fix-ABC-1_login"],
+        vec![read("ABC-1", "In Progress", "indeterminate")],
+    );
+    assert_eq!(card_status_of(&state), ("In Progress".to_string(), false));
+    refresh(
+        &mut state,
+        Err(IssueLoadError::RateLimited),
+        Duration::from_secs(600),
+        Trigger::Focus,
+    );
+    assert!(state.jira_status.board.status_of("ABC-1").unwrap().stale);
+    assert_eq!(card_status_of(&state), ("In Progress".to_string(), true));
+    // The last status stays painted on both surfaces.
+    assert_eq!(count(&painted(&mut state, true), "In Progress"), 2);
 }
