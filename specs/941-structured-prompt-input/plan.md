@@ -27,8 +27,11 @@ Details: [research.md](research.md), [data-model.md](data-model.md), [contracts/
 
 **Primary Dependencies**: existing only — `serde`/`postcard` (wire, saved queue), `serde_json`
 (stdin lines), `base64` (workspace crate, newly used by `micold-core` for image blocks), `tokio`
-(input driver, overdue timer), `iced` 0.14 with its `image` feature newly enabled for previews
-(research R8), the shared `ui/material` library. No new crate.
+(input driver, overdue timer), `iced` 0.14 with its `image-without-codecs` feature newly enabled for previews and a direct `image`
+dependency naming the PNG, JPEG, GIF and WebP codecs (research R8; corrected in M5, ledger
+Decision 17: iced's `image` feature would build every format), the shared `ui/material` library.
+New crates, from those codecs only: `gif`, `image-webp`, `kamadak-exif`, `color_quant`,
+`mutate_once`.
 
 **Storage**: the queue under **Save terminal history** as `<session>.queue` beside `<session>.events`
 in the existing `HistoryStore` directory (research R9); otherwise daemon memory. Drafts and history
