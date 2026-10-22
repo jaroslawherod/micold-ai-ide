@@ -263,17 +263,44 @@ fn is_inline_link_gutter(state: &str, escape: &lay::Escape) -> bool {
 /// tool turn, and the transcript outgrows its viewport, so its end is reached by scrolling (and the
 /// state is detached, which is what shows "Jump to latest"). Like [`SETTINGS_PAGE_CONTENT`] it
 /// holds only there, and only past the **bottom** edge of the transcript's `Scrollable`
-/// ([`TRANSCRIPT_VIEWPORT`]).
-const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/0/0/0/0"];
+/// ([`TRANSCRIPT_VIEWPORT`]). Feature 944 put the session bar above the scrollable (`1` before the
+/// last two steps) and added `session-transcript-insights`, whose open thread outgrows it too.
+const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/0/0/1/0/0"];
 
 /// The transcript's `Scrollable`: the parent of [`TRANSCRIPT_CONTENT`].
-const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/0/0/0";
+const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/0/0/1/0";
+
+/// The folded bodies of **feature 944's cards** in `session-transcript-insights` (T037): the
+/// background-task list's `AccordionSection`, the `Agent` card whose thread is open below it, and a
+/// card inside that thread, each folded. Each body is a `material::Expand` at rest, the same
+/// mechanism as [`CLIP_REVEALED`]: it reports `0` high to its parent while its child keeps the
+/// body's padding (8px) and reveals it by clipping when it unfolds. Held only there and only by
+/// that padding, so a body that grew past it still fires.
+const FOLDED_BODY_REVEAL: &[&str] = &[
+    "0/0/0/1/1/0/0/0/0/1/1/0",
+    "0/0/0/1/1/0/0/1/0/0/4/0/0/1/0",
+    "0/0/0/1/1/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
+];
+
+/// The folded body's padding that [`FOLDED_BODY_REVEAL`] overhangs by (`spacing::SM`).
+const FOLDED_BODY_PADDING: f32 = 8.0;
+
+/// Whether `escape`, in the covered state `state`, is a folded card's body of
+/// [`FOLDED_BODY_REVEAL`].
+fn is_folded_body(state: &str, escape: &lay::Escape) -> bool {
+    state == "session-transcript-insights"
+        && FOLDED_BODY_REVEAL.contains(&escape.child_path.as_str())
+        && escape.edge == "bottom"
+        && (escape.overhang - FOLDED_BODY_PADDING).abs() <= TOLERANCE
+}
 
 /// Whether `escape`, in the covered state `state`, is the transcript outgrowing its viewport
 /// downwards, which is the only overhang [`TRANSCRIPT_CONTENT`] allows.
 fn is_transcript_scroll(state: &str, escape: &lay::Escape) -> bool {
-    matches!(state, "session-transcript-pane" | "session-transcript-rich")
-        && TRANSCRIPT_CONTENT.contains(&escape.child_path.as_str())
+    matches!(
+        state,
+        "session-transcript-pane" | "session-transcript-rich" | "session-transcript-insights"
+    ) && TRANSCRIPT_CONTENT.contains(&escape.child_path.as_str())
         && escape.parent_path == TRANSCRIPT_VIEWPORT
         && escape.edge == "bottom"
 }
@@ -297,6 +324,8 @@ fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str>
         Some("INLINE_LINK_GUTTER")
     } else if is_transcript_scroll(state, escape) {
         Some("TRANSCRIPT_CONTENT")
+    } else if is_folded_body(state, escape) {
+        Some("FOLDED_BODY_REVEAL")
     } else {
         None
     }
@@ -339,6 +368,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(INLINE_LINK_GUTTER)
         .chain(PR_NUMBER_GUTTER)
         .chain(TRANSCRIPT_CONTENT)
+        .chain(FOLDED_BODY_REVEAL)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(

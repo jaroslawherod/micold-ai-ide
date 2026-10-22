@@ -9,6 +9,7 @@
 
 use crate::app::{Message, State};
 use crate::features::session::Msg as SessionMsg;
+use crate::features::structured_transcript::TranscriptMsg;
 use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -775,8 +776,18 @@ pub(crate) fn transcript_body<'a>(
     id: SessionId,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
-    crate::ui::transcript::view(
+    // Feature 944: the window's insights of the session; a running task or subagent of a session
+    // whose CLI is not running shows as ended (FR-018, FR-022).
+    let cli_running = state
+        .active_sessions()
+        .iter()
+        .any(|s| s.id == id && s.lifecycle == SessionLifecycle::Running);
+    crate::ui::transcript::view_with_insights(
         &state.structured_transcript,
+        crate::ui::transcript::InsightsCtx {
+            state: &state.structured_insights,
+            cli_running,
+        },
         id,
         &BlockRenderers::RICH,
         RenderCtx {
@@ -785,7 +796,10 @@ pub(crate) fn transcript_body<'a>(
             cache: &state.transcript_rich,
         },
     )
-    .map(|msg| Message::Session(SessionMsg::Transcript(msg)))
+    .map(|msg| match msg {
+        TranscriptMsg::Insights(msg) => Message::Session(SessionMsg::Insights(msg)),
+        msg => Message::Session(SessionMsg::Transcript(msg)),
+    })
 }
 
 /// Whether the pane for `id` is the transcript: a structured session with its AI tab displayed.

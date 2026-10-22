@@ -8,17 +8,22 @@ use super::blocks::{
     plain_text, AssistantText, Block, BlockRef, BlockRenderers, RenderCtx, ThinkingText, ToolInput,
     ToolResult,
 };
+use super::insights::{
+    footer_view_with, placeholder_title, task_status, thread_header, TaskStatus,
+};
+use crate::features::structured_insights::{self, InsightsMsg};
 use crate::features::structured_transcript::TranscriptMsg;
 use crate::icons::Icon;
-use crate::ui::material::{DisclosureCard, IconLabel, Text, TypeRole};
+use crate::ui::material::{DisclosureCard, IconLabel, Text, Tooltip, TypeRole};
 use iced::widget::text::Wrapping;
-use iced::widget::{column, row};
-use iced::{Alignment, Element, Length};
+use iced::widget::{column, container, row};
+use iced::{Alignment, Element, Length, Padding};
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::{
     footer_figures, Entry, EntryKind, Outcome, ToolCard, ToolStatus, Transcript, TurnFooter,
 };
 use micold_core::tokens::{spacing, Roles};
+use std::hash::{Hash, Hasher};
 
 /// What an empty transcript says (FR-006).
 pub const NO_OUTPUT: &str = "No output yet";
@@ -121,6 +126,8 @@ pub struct FooterView {
     pub figures: Vec<String>,
     /// An error turn's text.
     pub error_text: Option<String>,
+    /// What its tooltip says, one line each (feature 944, FR-006, FR-026); none: no tooltip.
+    pub details: Vec<String>,
 }
 
 /// `footer`'s view.
@@ -141,6 +148,7 @@ pub fn footer_view(footer: &TurnFooter) -> FooterView {
         status,
         figures: footer_figures(footer),
         error_text: footer.error_text.clone(),
+        details: Vec::new(),
     }
 }
 
@@ -246,25 +254,43 @@ fn first_line(text: &str) -> &str {
         .unwrap_or("")
 }
 
-/// `entry` of `session`, folded or `open`, its block content drawn by `renderers`.
-pub fn entry(
+/// What feature 944 draws with a session's transcript (contracts/transcript-extensions.md): the
+/// window's insights of the session and whether its CLI runs (FR-018, FR-022).
+#[derive(Debug, Clone, Copy)]
+pub struct InsightsCtx<'a> {
+    pub state: &'a structured_insights::State,
+    pub cli_running: bool,
+}
+
+/// The session an entry belongs to and, when the window holds its insights, what #944 adds to the
+/// entries: the turn's figures (X2), threads (X3, X5) and task states (X4).
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Scope<'a> {
+    pub session: SessionId,
+    /// The session's main transcript, which says which threads have no card (FR-017).
+    pub main: &'a Transcript,
+    pub insights: Option<InsightsCtx<'a>>,
+}
+
+/// `entry` of `scope`'s session, folded or `open`, `on_toggle` sent by its header, its block
+/// content drawn by `renderers`.
+pub(super) fn entry(
     entry: &Entry,
-    session: SessionId,
     open: bool,
+    on_toggle: TranscriptMsg,
     renderers: &BlockRenderers,
     ctx: &RenderCtx<'_>,
+    scope: Scope<'_>,
 ) -> Block {
     let roles = ctx.roles;
+    let session = scope.session;
     let block = |streaming| BlockRef {
         session,
         key: entry.key(),
         revision: entry.revision(),
         streaming,
     };
-    let toggle = || TranscriptMsg::Toggle {
-        session,
-        key: entry.key().clone(),
-    };
+    let toggle = || on_toggle.clone();
     match entry.kind() {
         EntryKind::SessionStart { model, cwd, .. } => {
             let mut parts = vec!["Session started".to_owned()];
@@ -336,9 +362,15 @@ pub fn entry(
                 card.into()
             }
         }
-        EntryKind::ToolCall(card) => {
-            tool_card(card, open, toggle(), block(card.streaming), renderers, ctx)
-        }
+        EntryKind::ToolCall(card) => tool_card(
+            card,
+            open,
+            toggle(),
+            block(card.streaming),
+            renderers,
+            ctx,
+            scope,
+        ),
         EntryKind::OrphanResult {
             parts, is_error, ..
         } => column![
@@ -355,7 +387,12 @@ pub fn entry(
         ]
         .spacing(spacing::XS)
         .into(),
-        EntryKind::Footer(footer) => footer_row(&footer_view(footer), roles),
+        EntryKind::Footer(footer) => {
+            let turn = scope
+                .insights
+                .and_then(|i| i.state.turn(session, entry.key()));
+            footer_row(&footer_view_with(footer, turn), roles)
+        }
         EntryKind::TurnEndedWithoutResult => IconLabel::new(
             Icon::ToolNoResult,
             ENDED_WITHOUT_RESULT,
@@ -367,7 +404,22 @@ pub fn entry(
         // Feature 941 draws the interrupted notice in M6; until then the turn ends with nothing.
         EntryKind::Interrupted => iced::widget::Space::new().into(),
         EntryKind::Oversized { original_bytes } => caption(oversized_text(*original_bytes), roles),
-        EntryKind::SubagentNotice { count } => caption(subagent_notice_text(*count), roles),
+        // X5: one placeholder per thread whose parent is held nowhere (FR-017).
+        EntryKind::SubagentNotice { count } => {
+            let placeholders: Vec<Block> = scope
+                .insights
+                .and_then(|i| i.state.insights(session))
+                .map(|i| i.unknown_threads(scope.main))
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|t| thread_card(&t.parent, None, true, renderers, ctx, scope))
+                .collect();
+            if placeholders.is_empty() {
+                caption(subagent_notice_text(*count), roles)
+            } else {
+                column(placeholders).spacing(spacing::SM).into()
+            }
+        }
         EntryKind::Raw { text, .. } => column![
             caption(RAW_LABEL, roles),
             Text::new(plain_text(text), TypeRole::Caption, roles)
@@ -382,7 +434,8 @@ pub fn entry(
 }
 
 /// A tool-call card: the header from [`tool_header`], the input and the result through their
-/// renderers once open.
+/// renderers once open; with the insights, the state of the background task it started in its
+/// header (X4) and the thread of the subagent it started under it (X3).
 fn tool_card(
     card: &ToolCard,
     open: bool,
@@ -390,6 +443,7 @@ fn tool_card(
     block: BlockRef<'_>,
     renderers: &BlockRenderers,
     ctx: &RenderCtx<'_>,
+    scope: Scope<'_>,
 ) -> Block {
     let roles = ctx.roles;
     // Counted only from the revision drawn, as the body's diff is (`rich.rs`), so a header never
@@ -406,6 +460,13 @@ fn tool_card(
     if let Some(count) = header.subagents {
         status = status.push(Text::new(count, TypeRole::Caption, roles).muted());
     }
+    let task = scope.insights.and_then(|i| {
+        let task = background_task(i, block.session, &card.id)?;
+        Some(task_status(task, i.cli_running))
+    });
+    if let Some(task) = task {
+        status = status.push(task_label_view(task, roles));
+    }
     let shell = DisclosureCard::new(header.title, on_toggle, roles)
         .leading(Icon::ToolCall)
         .summary(header.summary)
@@ -413,8 +474,13 @@ fn tool_card(
         .trailing(status)
         .open(open)
         .failed(header.failed);
+    let thread = thread_card(&card.id, Some(card.status), false, renderers, ctx, scope);
+    let with_thread = |card: Block| match thread {
+        Some(thread) => column![card, thread].spacing(spacing::SM).into(),
+        None => card,
+    };
     if !open {
-        return shell.into();
+        return with_thread(shell.into());
     }
     let mut body = column![(renderers.tool_input)(
         &ToolInput {
@@ -437,7 +503,184 @@ fn tool_card(
             ctx,
         ));
     }
-    shell.body(body).into()
+    with_thread(shell.body(body).into())
+}
+
+/// The background task the tool call `tool_use_id` started (X4, FR-021); a foreground
+/// subagent's state is its thread's summary (X3).
+fn background_task<'a>(
+    insights: InsightsCtx<'a>,
+    session: SessionId,
+    tool_use_id: &str,
+) -> Option<&'a micold_core::structured::insights::Task> {
+    insights
+        .state
+        .insights(session)?
+        .task_for_tool(tool_use_id)
+        .filter(|task| task.background)
+}
+
+/// A task's state drawn as an `IconLabel` in its tone (X4, FR-021).
+pub(super) fn task_label_view<M: 'static>(task: TaskStatus, roles: Roles) -> Element<'static, M> {
+    let label = IconLabel::new(task.icon, task.label, TypeRole::Label, roles);
+    match task.tone {
+        Tone::Muted => label.muted().into(),
+        Tone::Error => label.tint(roles.error).label_tint(roles.error).into(),
+    }
+}
+
+/// The folded or open thread of the subagent the tool call `parent` started, indented under its
+/// card (X3, FR-015, FR-016), or under a placeholder naming `parent` when no card is held (X5,
+/// FR-017); `card` is the parent card's status. `None` while no event of the thread is held.
+fn thread_card(
+    parent: &str,
+    card: Option<ToolStatus>,
+    placeholder: bool,
+    renderers: &BlockRenderers,
+    ctx: &RenderCtx<'_>,
+    scope: Scope<'_>,
+) -> Option<Block> {
+    let insights = scope.insights?;
+    let session = scope.session;
+    let roles = ctx.roles;
+    let view = insights
+        .state
+        .thread_view(session, parent, card, insights.cli_running)?;
+    let header = thread_header(&view);
+    let toggle = TranscriptMsg::Insights(InsightsMsg::ToggleThread {
+        session,
+        parent: parent.to_owned(),
+    });
+    let (title, summary) = if placeholder {
+        (placeholder_title(parent), header.summary)
+    } else {
+        (header.summary, String::new())
+    };
+    let thread = insights.state.thread(session, parent);
+    let mut shell = DisclosureCard::new(title, toggle, roles)
+        .leading(Icon::Subagent)
+        .summary(summary)
+        .open(thread.is_some())
+        .failed(header.failed.is_some());
+    if let Some(failed) = header.failed {
+        shell = shell.trailing(status_label(failed, roles));
+    }
+    if let Some(thread) = thread {
+        shell = shell.body(thread_body(thread, renderers, ctx, scope, insights));
+    }
+    let indented = container(shell).padding(Padding {
+        left: spacing::LG,
+        ..Padding::ZERO
+    });
+    Some(indented.into())
+}
+
+/// An open thread's entries, each drawn as the main transcript's are, its cards folded by this
+/// window's insights (FR-015, E-2, E-3).
+fn thread_body(
+    thread: &Transcript,
+    renderers: &BlockRenderers,
+    ctx: &RenderCtx<'_>,
+    scope: Scope<'_>,
+    insights: InsightsCtx<'_>,
+) -> Block {
+    let session = scope.session;
+    let entries: Vec<Block> = thread
+        .entries()
+        .map(|e| {
+            let open = insights.state.entry_open(session, e.key());
+            let toggle = TranscriptMsg::Insights(InsightsMsg::ToggleEntry {
+                session,
+                key: e.key().clone(),
+            });
+            entry(e, open, toggle, renderers, ctx, scope)
+        })
+        .collect();
+    if entries.is_empty() {
+        return no_output(ctx.roles);
+    }
+    column(entries)
+        .spacing(spacing::SM)
+        .width(Length::Fill)
+        .into()
+}
+
+/// What `entry`'s drawing reads from the insights, hashed: the part of its lazy key that changes
+/// when a thread, a task or the turn's figures change while the entry does not (research R12 of
+/// #939). Zero without insights.
+pub(super) fn insights_stamp(entry: &Entry, ctx: &RenderCtx<'_>, scope: Scope<'_>) -> u64 {
+    let Some(insights) = scope.insights else {
+        return 0;
+    };
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    stamp_into(entry, ctx, scope, insights, &mut hasher);
+    hasher.finish()
+}
+
+fn stamp_into(
+    entry: &Entry,
+    ctx: &RenderCtx<'_>,
+    scope: Scope<'_>,
+    insights: InsightsCtx<'_>,
+    h: &mut impl Hasher,
+) {
+    let session = scope.session;
+    let Some(held) = insights.state.insights(session) else {
+        return;
+    };
+    match entry.kind() {
+        EntryKind::ToolCall(card) => {
+            if let Some(task) = background_task(insights, session, &card.id) {
+                task_status(task, insights.cli_running).label.hash(h);
+            }
+            thread_stamp(&card.id, Some(card.status), ctx, scope, insights, h);
+        }
+        EntryKind::Footer(footer) => {
+            let turn = insights.state.turn(session, entry.key());
+            let view = footer_view_with(footer, turn);
+            (view.figures, view.details).hash(h);
+        }
+        EntryKind::SubagentNotice { .. } => {
+            for thread in held.unknown_threads(scope.main) {
+                thread_stamp(&thread.parent, None, ctx, scope, insights, h);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The thread of `parent` as drawn: its header, whether it is open, and each open entry's key,
+/// revision, fold, cache stamp and own insights.
+fn thread_stamp(
+    parent: &str,
+    card: Option<ToolStatus>,
+    ctx: &RenderCtx<'_>,
+    scope: Scope<'_>,
+    insights: InsightsCtx<'_>,
+    h: &mut impl Hasher,
+) {
+    let session = scope.session;
+    let Some(view) = insights
+        .state
+        .thread_view(session, parent, card, insights.cli_running)
+    else {
+        return;
+    };
+    parent.hash(h);
+    thread_header(&view).summary.hash(h);
+    let Some(thread) = insights.state.thread(session, parent) else {
+        return;
+    };
+    for e in thread.entries() {
+        e.key().hash(h);
+        e.revision().hash(h);
+        insights.state.entry_open(session, e.key()).hash(h);
+        ctx.cache
+            .get(session, e.key())
+            .map_or(0, |d| d.stamp)
+            .hash(h);
+        stamp_into(e, ctx, scope, insights, h);
+    }
 }
 
 /// A footer: its status, then its figures as one caption line, then an error turn's text.
@@ -448,6 +691,11 @@ fn footer_row(view: &FooterView, roles: Roles) -> Block {
     if !view.figures.is_empty() {
         line = line.push(Text::new(view.figures.join(" · "), TypeRole::Caption, roles).muted());
     }
+    let line: Element<'static, TranscriptMsg> = if view.details.is_empty() {
+        line.into()
+    } else {
+        Tooltip::new(line, view.details.join("\n"), roles).into()
+    };
     let mut footer = column![line].spacing(spacing::XS);
     if let Some(error) = &view.error_text {
         footer = footer.push(

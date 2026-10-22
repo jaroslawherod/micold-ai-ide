@@ -384,10 +384,22 @@ impl State {
         transcript: &Transcript,
         grammar: &Grammar,
     ) -> Vec<HighlightJob> {
+        self.refresh_all(session, [transcript], grammar)
+    }
+
+    /// [`Self::refresh`] over several transcripts of `session`: its main transcript and the
+    /// subagent threads the window shows (feature 944, US3 scenario 2), whose entry keys are
+    /// unique across the session.
+    pub fn refresh_all<'t>(
+        &mut self,
+        session: SessionId,
+        transcripts: impl IntoIterator<Item = &'t Transcript>,
+        grammar: &Grammar,
+    ) -> Vec<HighlightJob> {
         let s = self.sessions.entry(session).or_default();
         let mut present = HashSet::new();
         let mut jobs = Vec::new();
-        for entry in transcript.entries() {
+        for entry in transcripts.into_iter().flat_map(Transcript::entries) {
             let Some(source) = Source::of(entry.kind()) else {
                 continue;
             };

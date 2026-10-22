@@ -396,6 +396,31 @@ pub fn disclosure_card<'a>(
                 transcript_sample(showcase, roles),
                 roles,
             ),
+            posed(
+                "a recorded subagent turn with its session bar: press the thread's header",
+                insights_sample(showcase, roles),
+                roles,
+            ),
+            posed(
+                "the session bar: context meter with its threshold, and the session totals",
+                session_bar_sample(BarPose::Normal, roles),
+                roles,
+            ),
+            posed(
+                "the session bar near compaction: icon and words, not colour alone",
+                session_bar_sample(BarPose::Warning, roles),
+                roles,
+            ),
+            posed(
+                "the session bar before the first reply",
+                session_bar_sample(BarPose::NoData, roles),
+                roles,
+            ),
+            posed(
+                "the session bar with a background task running, its list unfolded",
+                session_bar_sample(BarPose::Running, roles),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )
@@ -417,6 +442,87 @@ fn transcript_sample<'a>(showcase: &'a Showcase, roles: Roles) -> Element<'a, Me
     iced::widget::container(view.map(Message::Transcript))
         .height(Length::Fixed(TRANSCRIPT_SAMPLE_HEIGHT))
         .into()
+}
+
+/// The transcript view with feature 944's insights over the recorded subagent turn, its CLI
+/// running, in a pane of fixed height: the session bar on top, the `Agent` card's thread folded
+/// under it and opening live (T042).
+fn insights_sample<'a>(showcase: &'a Showcase, roles: Roles) -> Element<'a, Message> {
+    let view = crate::ui::transcript::view_with_insights(
+        showcase.transcript(),
+        crate::ui::transcript::InsightsCtx {
+            state: showcase.insights(),
+            cli_running: true,
+        },
+        samples::INSIGHTS_SESSION,
+        &crate::ui::transcript::BlockRenderers::PLAIN,
+        crate::ui::transcript::RenderCtx {
+            roles,
+            scheme: showcase.scheme,
+            cache: showcase.block_cache(),
+        },
+    );
+    iced::widget::container(view.map(Message::Transcript))
+        .height(Length::Fixed(TRANSCRIPT_SAMPLE_HEIGHT))
+        .into()
+}
+
+/// Which session bar a pose shows (feature 944, T042).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BarPose {
+    Normal,
+    Warning,
+    NoData,
+    Running,
+}
+
+/// A structured session's bar (feature 944, X1) as `pose` says, its figures from the same view
+/// model the transcript pane draws.
+fn session_bar_sample(pose: BarPose, roles: Roles) -> Element<'static, Message> {
+    use crate::ui::transcript::{
+        meter_view, running_text, session_bar, task_status, SessionBarView, TaskRow,
+    };
+    use micold_core::structured::insights::{ContextState, Task, TaskKind, TaskState};
+
+    let measured = |used: u64, warning| ContextState::Measured {
+        used,
+        window: 1_000_000,
+        percent: used / 10_000,
+        threshold: Some(800_000),
+        warning,
+    };
+    let context = match pose {
+        BarPose::Normal | BarPose::Running => measured(37_141, false),
+        BarPose::Warning => measured(812_400, true),
+        BarPose::NoData => ContextState::NoData,
+    };
+    let task = Task {
+        task_id: "sample".into(),
+        tool_use_id: None,
+        description: "sleep 20; echo done".into(),
+        kind: Some(TaskKind::Command),
+        background: true,
+        state: TaskState::Running,
+        outcome: None,
+        activity: None,
+    };
+    let running = pose == BarPose::Running;
+    let view = SessionBarView {
+        meter: meter_view(&context),
+        totals: (pose != BarPose::NoData).then(|| "$0.1400 est. · 3 turns".to_owned()),
+        totals_details: Vec::new(),
+        running: running_text(usize::from(running)),
+        tasks: if running {
+            vec![TaskRow {
+                kind: crate::ui::transcript::kind_icon(task.kind),
+                description: task.description.clone(),
+                status: task_status(&task, true),
+            }]
+        } else {
+            Vec::new()
+        },
+    };
+    session_bar::bar(&view, samples::TRANSCRIPT_SESSION, running, roles).map(Message::Transcript)
 }
 
 /// The transcript sample's pane height: a few entries in view, the rest a scroll away.

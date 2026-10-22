@@ -303,10 +303,18 @@ pub const TOOL_TURN: &str =
 pub const TRANSCRIPT_SESSION: micold_core::session::SessionId =
     micold_core::session::SessionId(uuid::Uuid::from_u128(0x939));
 
-/// A window's transcript state holding [`TOOL_TURN`] as [`TRANSCRIPT_SESSION`]'s history.
-pub fn transcript() -> crate::features::structured_transcript::State {
+/// The recorded subagent turn the session-bar sample shows (feature 944, T042), compiled in.
+pub const SUBAGENT_TURN: &str =
+    include_str!("../../../micold-core/tests/fixtures/stream-json/subagent-turn.jsonl");
+
+/// The session-bar sample's session, fixed as [`TRANSCRIPT_SESSION`] is.
+pub const INSIGHTS_SESSION: micold_core::session::SessionId =
+    micold_core::session::SessionId(uuid::Uuid::from_u128(0x944));
+
+/// A recording's lines, numbered from `0` as a history holds them.
+fn events_of(recording: &str) -> Vec<micold_core::structured::SequencedEvent> {
     use micold_core::structured::{parse_line, SequencedEvent};
-    let events: Vec<SequencedEvent> = TOOL_TURN
+    recording
         .lines()
         .filter(|line| !line.is_empty())
         .zip(0u64..)
@@ -314,9 +322,26 @@ pub fn transcript() -> crate::features::structured_transcript::State {
             seq,
             event: parse_line(line),
         })
-        .collect();
+        .collect()
+}
+
+/// A window's transcript state holding [`TOOL_TURN`] as [`TRANSCRIPT_SESSION`]'s history and
+/// [`SUBAGENT_TURN`] as [`INSIGHTS_SESSION`]'s.
+pub fn transcript() -> crate::features::structured_transcript::State {
     let mut state = crate::features::structured_transcript::State::default();
-    state.apply(TRANSCRIPT_SESSION, 0, &events, false);
+    state.apply(TRANSCRIPT_SESSION, 0, &events_of(TOOL_TURN), false);
+    state.apply(INSIGHTS_SESSION, 0, &events_of(SUBAGENT_TURN), false);
+    state
+}
+
+/// The window's insights of [`INSIGHTS_SESSION`] in `transcript`, its thread folded (feature 944).
+pub fn insights(
+    transcript: &crate::features::structured_transcript::State,
+) -> crate::features::structured_insights::State {
+    let mut state = crate::features::structured_insights::State::default();
+    if let Some(main) = transcript.transcript(INSIGHTS_SESSION) {
+        state.apply(INSIGHTS_SESSION, 0, &events_of(SUBAGENT_TURN), false, main);
+    }
     state
 }
 

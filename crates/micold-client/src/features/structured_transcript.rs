@@ -132,6 +132,10 @@ pub enum TranscriptMsg {
         part: Part,
         spans: Spans,
     },
+    /// A message of what feature 944 draws in the transcript (a thread, a card inside one, the
+    /// background-task list): the insights feature's, which the window's view hands to it as
+    /// `session::Msg::Insights`; this feature does nothing with it.
+    Insights(crate::features::structured_insights::InsightsMsg),
 }
 
 impl TranscriptMsg {
@@ -145,6 +149,7 @@ impl TranscriptMsg {
             | Self::CopyCode { session, .. }
             | Self::ShowInFull { session, .. }
             | Self::Highlighted { session, .. } => Some(*session),
+            Self::Insights(msg) => Some(msg.session()),
             Self::OpenLink { .. } | Self::CopyChecked { .. } | Self::CopyExpired { .. } => None,
         }
     }
@@ -355,6 +360,7 @@ impl State {
                 rich.highlighted(session, &key, part, spans);
                 Effect::default()
             }
+            TranscriptMsg::Insights(_) => Effect::default(),
         }
     }
 }

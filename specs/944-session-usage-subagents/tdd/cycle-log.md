@@ -173,3 +173,31 @@ Each test was written and run red before its implementation, recorded here as it
   added test-after (green at once: it pins the partial-eviction rebuild no earlier test reached);
   the fold test renamed to what it checks; threads gone are folded before the rebuild loop →
   `features_structured_insights` 22/22.
+
+## M6 — session bar, threads and background tasks in the view (T037–T044)
+
+The view model (`ui/transcript/insights.rs`) and the drawing were written together with their test
+file, so red was taken by stubbing: each view-model function (`meter_view`, `task_status`,
+`running_text`, `session_bar_view`, `thread_header`, `placeholder_title`, `footer_view_with`) given
+`todo!("red: not implemented")` as its first line, and `view_with_insights` reduced to #939's view
+(no session bar, no insights in the entries); then the files restored.
+
+- **Red, T038–T041**: `cargo test -p micold-client --test transcript_insights_view` → 3 passed,
+  19 failed, each on a stub or on the missing drawing (the thread header, the placeholder, the
+  card's task state, the session bar not painted). The three passes are test-after: the
+  `ToggleEntry` fold of a card inside a thread (state written with the drawing), `kind_icon`, and
+  `TranscriptMsg::Insights`'s session.
+- **Green**: 21/22, then `a_thread_is_folded_under_its_card_and_shows_its_entries_once_opened`
+  failed for a real reason: the `Agent` card's header carried the foreground subagent task's
+  label ("Finished · The number is 42…"), which X4 means only for a background task. Fixed
+  (`background_task` filters `task.background`) and the test now also asserts the card carries no
+  task state → 22/22.
+- **Red, T037** (`gates/session_bar_fits.rs`): with the bar's row not wrapping
+  (`column![line]` for `line.wrap()`), `cargo test -p micold-client --test layout_snapshot
+  session_bar_fits` → the one-row test passes and
+  `at_the_smallest_window_each_figure_is_whole_inside_the_pane` fails: "the session bar draws the
+  running count at Size { width: 640.0, height: 480.0 }" (pushed out of the pane). **Green** with the
+  wrap → 2/2; `layout_snapshot` 85/85 after the fixture was regenerated for the new
+  `session-transcript-insights` state and the bar above the two existing transcript states. The
+  containment gate found three folded bodies (`material::Expand` at rest, 8 px of padding in a 0 px
+  parent) in the new state; recorded with their reason as `FOLDED_BODY_REVEAL`.

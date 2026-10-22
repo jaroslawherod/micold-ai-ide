@@ -1303,11 +1303,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Feature 939 (R9): the transcript view's messages, and the scroll they ask for.
         Message::Session(SessionMsg::Transcript(msg)) => shell::transcript::update(app, msg),
-        // Feature 944: a thread or the background-task list folded; nothing to scroll.
-        Message::Session(SessionMsg::Insights(msg)) => {
-            app.core.update_insights(msg);
-            Task::none()
-        }
+        // Feature 944: a thread, a card in one or the background-task list folded; nothing to
+        // scroll, and an opened thread's blocks are highlighted as the main transcript's are.
+        Message::Session(SessionMsg::Insights(msg)) => shell::transcript::highlight(
+            app.core
+                .update_insights(msg, &micold_client::ui::syntax::GRAMMAR),
+        ),
         // Feature 776 (FR-016): the confirmed request goes on the wire as an explicit additional
         // session; the created one is selected by the reply as any created session is.
         Message::Session(SessionMsg::AdditionalConfirmed) => {

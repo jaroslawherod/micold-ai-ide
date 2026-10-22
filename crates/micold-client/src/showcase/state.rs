@@ -194,6 +194,8 @@ pub struct Showcase {
     transcript: crate::features::structured_transcript::State,
     /// Its block cache, empty in #939 (contracts/block-renderers.md R-4).
     block_cache: crate::ui::transcript::BlockCache,
+    /// The session-bar sample's insights: a recorded subagent turn (feature 944, T042).
+    insights: crate::features::structured_insights::State,
 }
 
 impl Showcase {
@@ -232,7 +234,13 @@ impl Showcase {
             typeahead_open: false,
             transcript: super::samples::transcript(),
             block_cache: crate::ui::transcript::BlockCache::default(),
+            insights: super::samples::insights(&super::samples::transcript()),
         }
+    }
+
+    /// The session-bar sample's insights.
+    pub fn insights(&self) -> &crate::features::structured_insights::State {
+        &self.insights
     }
 
     /// The transcript sample's window state.
@@ -470,6 +478,14 @@ impl Showcase {
             Message::TypeaheadDismissed => self.typeahead_open = false,
             // The scroll it may ask for is the application shell's to perform; the gallery's
             // scrollable keeps its own place.
+            // Feature 944: a thread, a card in one or the task list folded.
+            Message::Transcript(
+                crate::features::structured_transcript::TranscriptMsg::Insights(msg),
+            ) => {
+                let empty = micold_core::structured::transcript::Transcript::new();
+                let main = self.transcript.transcript(msg.session()).unwrap_or(&empty);
+                self.insights.update(msg, main);
+            }
             Message::Transcript(msg) => {
                 let _ = self.transcript.update(&mut self.block_cache, msg);
             }
