@@ -1195,6 +1195,60 @@ async fn an_interrupt_that_names_no_open_turn_writes_nothing() {
     assert_eq!(delivered(dir), ["m1"]);
 }
 
+/// R4, contracts/claude-input.md *Interrupt*: an interrupt asked after a message opened its turn,
+/// but before that message's write ran, waits for it: the request is written after the message it
+/// interrupts, never to an idle CLI ahead of it.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interrupt_asked_before_its_message_is_written_follows_it() {
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let (state, id) = started(dir, &honouring());
+    let mut window = Window::connect(&state).await;
+    window.sees(id, "idle", idle).await;
+    let (client, _rx) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test".into(),
+        },
+    ));
+    let delivery = state
+        .submit_user_message(
+            client,
+            id,
+            micold_core::structured::input::Message {
+                text: "m1".into(),
+                images: vec![],
+            },
+        )
+        .expect("accepted")
+        .expect("opened as the next turn");
+    let (turn, _) = busy_with(&window.sees(id, "busy", Seen::busy).await).unwrap();
+    let pending = state.ask_interrupt(id, turn).expect("an interrupt to write");
+    let writer = tokio::spawn(micold_daemon::input_driver::interrupt(
+        Arc::clone(&state),
+        pending,
+    ));
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        stdin_lines(dir).is_empty(),
+        "nothing written before the message: {:?}",
+        stdin_lines(dir)
+    );
+    let deliverer = Arc::clone(&state);
+    tokio::task::spawn_blocking(move || deliverer.deliver(delivery))
+        .await
+        .unwrap()
+        .expect("written");
+    window.sees(id, "idle after the interrupt", idle).await;
+    let lines = stdin_lines(dir);
+    assert_eq!(lines.len(), 2, "the message, then the request: {lines:?}");
+    assert!(lines[0].contains("\"type\":\"user\""), "first the message");
+    assert_eq!(interrupts(dir), [lines[1].clone()], "then the interrupt");
+    writer.abort();
+    state.stop_session(id);
+}
+
 /// Q2, US4 AS5: an interrupt with a queue holds it unchanged; the interrupted turn's end delivers
 /// nothing; one release delivers the head.
 #[tokio::test(flavor = "multi_thread")]

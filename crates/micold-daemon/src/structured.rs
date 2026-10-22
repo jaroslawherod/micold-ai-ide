@@ -283,6 +283,9 @@ pub struct StructuredSession {
     /// R6). Behind a mutex so a write takes `&self` and two writes never interleave; `None` once
     /// teardown closed it.
     stdin: Mutex<Option<ChildStdin>>,
+    /// The last turn whose user message was written to stdin. Set and read only under the stdin
+    /// mutex, so an interrupt sees whether its turn's message is out yet (#941 R4).
+    written: Mutex<Option<TurnId>>,
     /// Control requests waiting for the CLI's answer, shared with the stdout reader.
     control: Arc<ControlWaiters>,
     /// This process's turn (research R7): a new process starts `Idle`, so a restart resets it.
@@ -446,6 +449,7 @@ impl StructuredSession {
             id,
             process,
             stdin: Mutex::new(stdin),
+            written: Mutex::new(None),
             control,
             turn,
             emit,
@@ -531,7 +535,19 @@ impl StructuredSession {
                 .map(|image| image.name().to_owned())
                 .collect(),
         });
-        let written = self.write_line(&encode_user_message(&message.text, &message.images));
+        let line = encode_user_message(&message.text, &message.images);
+        let written = {
+            let mut stdin = lock(&self.stdin);
+            let written = write_whole(&mut stdin, &line);
+            if written.is_ok() {
+                // The daemon opened this message's turn before handing it here, and no other
+                // message is written while it is open: the open turn is this message's.
+                if let Turn::InTurn { turn, .. } = lock(&self.turn).now() {
+                    *lock(&self.written) = Some(turn);
+                }
+            }
+            written
+        };
         {
             let mut emit = lock(&self.emit);
             if written.is_ok() {
@@ -558,20 +574,21 @@ impl StructuredSession {
             let mut stdin = lock(&self.stdin);
             {
                 let mut emit = lock(&self.emit);
-                if emit.sending.is_some() {
-                    // The turn's own message is still waiting for the stdin mutex: let it go
-                    // first, so the request follows the message it interrupts.
-                    drop(emit);
-                    drop(stdin);
-                    std::thread::sleep(Duration::from_millis(1));
-                    continue;
-                }
                 let open = matches!(
                     lock(&self.turn).now(),
                     Turn::InTurn { turn: open, .. } if open == turn
                 );
                 if !open {
                     return Ok(false);
+                }
+                if *lock(&self.written) != Some(turn) {
+                    // The turn is open but its own message is not written yet (its write is
+                    // spawned after the turn opens): let it go first, so the request follows the
+                    // message it interrupts. A failed write closes the turn, which ends this wait.
+                    drop(emit);
+                    drop(stdin);
+                    std::thread::sleep(Duration::from_millis(1));
+                    continue;
                 }
                 emit.emit(StructuredEvent::InterruptAsked);
             }

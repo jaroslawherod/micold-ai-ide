@@ -99,3 +99,15 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
   Restored.
 - green: `structured_input_saved` 5 passed; `structured_session` 16, `structured_saved_history`
   12, `structured_lifecycle` 7, `structured_resume` 4, core `structured_input` 26 passed.
+
+### Cycle 7 — an interrupt never precedes its turn's message (M3 verify)
+
+- test: `daemon/tests/structured_input.rs`
+  `an_interrupt_asked_before_its_message_is_written_follows_it` opens a turn with
+  `submit_user_message`, asks and spawns its interrupt before calling `deliver`.
+- red: the interrupt was written to the idle CLI first (`nothing written before the message:
+  ["…interrupt…"]`): the message's write is spawned after its turn opens, so the old wait on the
+  pending `UserSent` note covered only a write already started.
+- green: `write_user_message` records the turn it wrote under the stdin mutex, and
+  `write_interrupt` waits until its turn's message is written (a failed write closes the turn,
+  which ends the wait). `structured_input` 18 passed, 3 runs.
