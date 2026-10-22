@@ -232,6 +232,7 @@ pub async fn run() -> io::Result<()> {
     spawn_plan_usage_feed(Arc::clone(&state));
     spawn_mode_reports(Arc::clone(&state));
     spawn_model_answers(Arc::clone(&state));
+    spawn_conversation_reports(Arc::clone(&state));
     spawn_input_driver(Arc::clone(&state));
 
     // The loopback activity-hook receiver (US2, T045/T046): bind an ephemeral 127.0.0.1 port and
@@ -374,6 +375,18 @@ pub fn spawn_model_answers(state: Arc<DaemonState>) {
         tokio::spawn(async move {
             while let Some((session, answer)) = answers.recv().await {
                 state.follow_model_answer(session, answer);
+            }
+        });
+    }
+}
+
+/// Spawn the task that keeps the conversations structured sessions' CLIs report (#943 FR-005a).
+/// Once per service: a second call finds the feed taken and does nothing.
+pub fn spawn_conversation_reports(state: Arc<DaemonState>) {
+    if let Some(mut reports) = state.conversation_reports().take_receiver() {
+        tokio::spawn(async move {
+            while let Some((session, handle)) = reports.recv().await {
+                state.follow_reported_conversation(session, handle);
             }
         });
     }

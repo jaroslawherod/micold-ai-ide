@@ -295,6 +295,13 @@ Of two picks sent one after the other, the second wins: it is written to the CLI
 earlier pick accepted after it does not replace it in the catalog. A model name is one word of at
 most 128 bytes that does not start with `-`. A frame with any other name does not decode.
 
+After a `/clear` in a structured session, the CLI starts a new conversation and names it in its
+next session init. The daemon saves that conversation with the session, and every later launch
+resumes it, after a restart and after a daemon restart. The session keeps its
+own id. A session that never cleared resumes its own id. The transcript of the new conversation is
+never listed as a second session. A `/clear` typed into a terminal session is not seen: a later
+launch resumes the last conversation the structured session saved.
+
 ## Project and worktree operations run through the daemon (User Story 3)
 
 Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a

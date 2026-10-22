@@ -180,6 +180,10 @@ pub struct DaemonState {
     /// The CLIs' answers to model changes, on their way to [`Self::follow_model_answer`] (#943
     /// FR-016): a reader never takes the state's lock.
     model_answers: crate::plan_usage::Feed<(SessionId, ModelAnswer)>,
+    /// The conversations structured sessions' CLIs report in `init` lines that differ from the one
+    /// launched, on their way to [`Self::follow_reported_conversation`] (#943 FR-005a,
+    /// provisional): a reader never takes the state's lock.
+    conversation_reports: crate::plan_usage::Feed<(SessionId, uuid::Uuid)>,
     /// The ends of structured sessions' turns and processes, for their waiting prompt calls (#942
     /// FR-011). Outside `Inner`: a session's stdout reader signals it, and never takes that lock.
     prompt_endings: Arc<crate::permission::Endings>,
@@ -1010,6 +1014,7 @@ impl DaemonState {
             plan_usage_feed: crate::plan_usage::Feed::default(),
             mode_reports: crate::plan_usage::Feed::default(),
             model_answers: crate::plan_usage::Feed::default(),
+            conversation_reports: crate::plan_usage::Feed::default(),
             prompt_endings: Arc::default(),
             input_feed: crate::plan_usage::Feed::default(),
             plan_usage_offer: Mutex::new(()),
@@ -1948,6 +1953,21 @@ impl DaemonState {
     /// [`crate::server::spawn_mode_reports`].
     pub fn mode_reports(&self) -> &crate::plan_usage::Feed<(SessionId, PermissionMode)> {
         &self.mode_reports
+    }
+
+    /// The feed of the conversations structured sessions' CLIs report (#943 FR-005a), drained by
+    /// [`crate::server::spawn_conversation_reports`].
+    pub fn conversation_reports(&self) -> &crate::plan_usage::Feed<(SessionId, uuid::Uuid)> {
+        &self.conversation_reports
+    }
+
+    /// The conversation `session`'s CLI reported in an `init` line (#943 FR-005a, provisional:
+    /// ledger decision 2): kept, so every later launch resumes it, when it differs from the
+    /// recorded one. Not on the wire.
+    pub fn follow_reported_conversation(&self, session: SessionId, handle: uuid::Uuid) {
+        if let Err(err) = self.lock().catalog.set_conversation(session, handle) {
+            tracing::warn!(session = %session.0, %err, "the conversation the CLI reported was not kept");
+        }
     }
 
     /// The structured sessions' turn ends, for [`crate::server::spawn_input_driver`] (#941).
@@ -5382,7 +5402,9 @@ impl DaemonState {
                 && provider.identity() == ConversationIdentity::AppAssigned
             {
                 let gone = match provider.config_dir() {
-                    Some(config) => !provider.has_recorded_conversation(&config, &plan.cwd, id.0),
+                    Some(config) => {
+                        !provider.has_recorded_conversation(&config, &plan.cwd, plan.resume_handle)
+                    }
                     // An unresolvable config directory is ignorance, not evidence of absence —
                     // attempt the resume and let the CLI answer.
                     None => false,
@@ -5541,6 +5563,10 @@ impl DaemonState {
         // reports the new mode right after its `success` (P-9), which puts it back.
         let modes = self.mode_reports.sender();
         let answers = self.model_answers.sender();
+        // The conversation this run continues; an `init` naming another one (after a `/clear`) is
+        // kept for every later launch (#943 FR-005a).
+        let conversations = self.conversation_reports.sender();
+        let mut conversation = spec.resume_handle;
         let mut unknown_mode_logged = false;
         let on_event = move |event: micold_core::structured::StructuredEvent| {
             use micold_core::structured::StructuredEvent;
@@ -5570,6 +5596,16 @@ impl DaemonState {
                         );
                     }
                     None => {}
+                }
+            }
+            if let StructuredEvent::Init { session_id, .. } = &event {
+                match uuid::Uuid::parse_str(session_id) {
+                    Ok(reported) if reported != conversation => {
+                        conversation = reported;
+                        // A send fails only once the service is stopping.
+                        let _ = conversations.send((id, reported));
+                    }
+                    _ => {}
                 }
             }
             // A send fails only once the service is stopping.

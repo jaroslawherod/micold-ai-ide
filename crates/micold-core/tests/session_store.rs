@@ -289,6 +289,12 @@ fn a_record_written_before_permission_modes_loads_as_default() {
 
 /// #943 T032 (FR-017): a session's model choice, saved and loaded back; also the state file.
 fn round_trip_model(choice: ModelChoice) -> (Session, String) {
+    round_trip_structured(|session| session.model = choice)
+}
+
+/// A structured session, changed by `edit`, saved and loaded back: the loaded session and the
+/// project's state file as written.
+fn round_trip_structured(edit: impl FnOnce(&mut Session)) -> (Session, String) {
     let dir = tempfile::tempdir().unwrap();
     let store = JsonFileStore::at(dir.path().join("projects.json"));
     let path = PathBuf::from("/home/dev/proj");
@@ -300,7 +306,7 @@ fn round_trip_model(choice: ModelChoice) -> (Session, String) {
         AiCli::ClaudeCode,
         SessionKind::Structured,
     );
-    session.model = choice;
+    edit(&mut session);
     let ws = Workspace {
         projects: vec![Project {
             path: path.clone(),
@@ -347,4 +353,39 @@ fn a_record_written_before_model_choices_loads_default() {
     assert_eq!(loaded.status, LoadStatus::Loaded);
     let session = &loaded.workspace.sessions.get(&PathBuf::from("/p")).unwrap()[0];
     assert_eq!(session.model, ModelChoice::Default, "FR-017");
+}
+
+/// #943 T039 (FR-005a, provisional M5): the conversation a `/clear` started is saved with the
+/// session, and a session that never cleared is written exactly as before.
+#[test]
+fn a_conversation_handle_round_trips_and_none_is_not_written() {
+    let handle = Uuid::from_u128(0x943_0005);
+    let (back, written) = round_trip_structured(|session| session.conversation = Some(handle));
+    assert_eq!(back.conversation, Some(handle), "FR-005a");
+    assert_eq!(back.resume_handle(), handle, "a restart resumes the cleared conversation");
+    assert!(written.contains(&handle.to_string()), "{written}");
+    let (back, written) = round_trip_structured(|_| {});
+    assert_eq!(back.conversation, None);
+    assert_eq!(back.resume_handle(), back.id.0);
+    assert!(
+        !written.contains("\"conversation\""),
+        "a session that never cleared is written exactly as before: {written}"
+    );
+}
+
+#[test]
+fn a_record_written_before_conversation_handles_resumes_its_own_id() {
+    // A structured session recorded before #943 M5: no "conversation" key.
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("projects.json");
+    std::fs::write(
+        &file,
+        r#"{"schema_version":1,"last_active":null,"projects":[{"path":"/p","display_name":"p","is_git_repo":true,"sessions":[{"id":"00000000-0000-0000-0000-000000000943","worktree_dir":"feat-x","title":null,"kind":"Structured"}]}]}"#,
+    )
+    .unwrap();
+    let loaded = JsonFileStore::at(file).load();
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    let session = &loaded.workspace.sessions.get(&PathBuf::from("/p")).unwrap()[0];
+    assert_eq!(session.conversation, None, "FR-005a");
+    assert_eq!(session.resume_handle(), session.id.0);
 }

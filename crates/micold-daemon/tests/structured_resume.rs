@@ -7,6 +7,10 @@
 //! The stand-in of `support/structured.rs` records its argv in the session's folder. A conversation
 //! is "recorded" the way `session_survival.rs` records one: a transcript file in `claude`'s layout
 //! under `CLAUDE_CONFIG_DIR`, which this binary points at a directory of its own, once.
+//!
+//! Feature 943, milestone M5 (T041, FR-005a, provisional: ledger decision 2): after a `/clear` the
+//! session keeps the conversation the CLI reported, and every later launch resumes that one under
+//! the same session; a session that never cleared resumes its own id, as the cases above check.
 // unix-only: the stand-in CLI of support/structured.rs is a POSIX shell script on PATH.
 #![cfg(unix)]
 
@@ -480,4 +484,129 @@ fn a_resume_whose_conversation_is_gone_fails_as_a_terminal_sessions_does() {
         "{terminal:?}"
     );
     assert_eq!(gone_resume(SessionKind::Structured), terminal);
+}
+
+/// The conversation `command-clear.jsonl`'s CLI reported after the `/clear` (#943 R6).
+const CLEARED: &str = "80379009-a6f6-4aa3-9170-8b140af6bd5e";
+
+/// The conversation the catalog saved in `store` holds for `id` (#943 FR-005a).
+fn saved_conversation(store: &Path, id: SessionId) -> Option<uuid::Uuid> {
+    Catalog::load(
+        Box::new(JsonFileStore::at(store.join("projects.json"))),
+        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
+    )
+    .workspace()
+    .find_session(id)
+    .and_then(|(_, s)| s.conversation)
+}
+
+/// #943 T041, US1 scenario 5, FR-005a, SC-005: after `/clear` the saved catalog names the new
+/// conversation; a restart and a restore after a daemon restart resume it under the same session,
+/// and the discovery pass adopts no second session for its transcript, which does not open with
+/// the `/clear` command, so only the recorded handle keeps it from being adopted.
+#[tokio::test(flavor = "multi_thread")]
+async fn after_a_clear_every_later_launch_resumes_the_cleared_conversation() {
+    setup();
+    let store = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    // Canonical, so the stand-in's cwd and the daemon's project name one transcript folder.
+    let dir = &project.path().canonicalize().unwrap();
+    save_project(store.path(), dir);
+    let state = daemon(store.path());
+    micold_daemon::server::spawn_input_driver(Arc::clone(&state));
+    micold_daemon::server::spawn_conversation_reports(Arc::clone(&state));
+    let id = state
+        .create_session_of_kind(
+            dir,
+            "",
+            AiCli::ClaudeCode,
+            SessionKind::Structured,
+            micold_core::occupancy::Additional::Yes,
+        )
+        .expect("created");
+    let cleared = SessionId::from_uuid(uuid::Uuid::parse_str(CLEARED).unwrap());
+    stream_script(
+        dir,
+        &format!(
+            "{}on-message\n",
+            structured::reply("/clear", "command-clear.jsonl")
+        ),
+    );
+    let starting = Arc::clone(&state);
+    tokio::task::spawn_blocking(move || starting.start_session(id, LaunchMode::Fresh))
+        .await
+        .unwrap()
+        .expect("the session starts");
+    record_conversation(dir, id);
+    let mut client = connect(&state).await;
+    send(
+        &mut client,
+        ClientMsg::SessionUserMessage {
+            req: 1,
+            session: id,
+            text: "/clear".into(),
+            images: vec![],
+        },
+    )
+    .await;
+    let answered = answer(&mut client, 1).await;
+    assert!(
+        matches!(answered, DaemonMsg::OperationOk { .. }),
+        "{answered:?}"
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while saved_conversation(store.path(), id) != Some(cleared.0) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the cleared conversation was never saved: {:?}",
+            saved_conversation(store.path(), id)
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(transcript(dir, cleared).exists(), "the stand-in recorded it");
+    assert_eq!(
+        state.discover_external_sessions(dir),
+        0,
+        "the cleared conversation is no second session"
+    );
+    assert_eq!(state.sessions_for(dir).len(), 1);
+
+    state.stop_session(id);
+    clear_records(dir);
+    stream_script(dir, &replay("resume-init.jsonl"));
+    send(
+        &mut client,
+        ClientMsg::SessionRestart {
+            session: id,
+            allow_additional_session: true,
+        },
+    )
+    .await;
+    started_times(dir, 2).await;
+    assert!(resumes(&argv(dir), cleared), "restart: {:?}", argv(dir));
+    assert_eq!(summary(&state, dir, id).kind, SessionKind::Structured);
+    state.stop_session(id);
+    drop(client);
+
+    clear_records(dir);
+    let restarted = daemon(store.path());
+    restarted.present_interrupted_resumable_at_startup();
+    assert_eq!(
+        summary(&restarted, dir, id).lifecycle,
+        WireLifecycle::InterruptedResumable
+    );
+    assert_eq!(restarted.discover_external_sessions(dir), 0);
+    assert_eq!(restarted.sessions_for(dir).len(), 1, "one session, its own id");
+    let mut client = connect(&restarted).await;
+    send(
+        &mut client,
+        ClientMsg::SessionStart {
+            session: id,
+            allow_additional_session: true,
+        },
+    )
+    .await;
+    started_times(dir, 3).await;
+    assert!(resumes(&argv(dir), cleared), "restore: {:?}", argv(dir));
+    restarted.stop_session(id);
 }
