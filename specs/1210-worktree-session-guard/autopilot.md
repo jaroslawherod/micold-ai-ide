@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | #1225 | merged |
-| M2 | T011–T014 | full | Bash commands judged | #1248 | in review |
+| M2 | T011–T014 | full | Bash commands judged | #1248 | in review; red CI (windows path separators in shell.rs tests) fixed |
 | M3 | T015–T017 | full | EnterWorktree and git worktree add denied | - | pending |
 | M4 | T018–T020 | full | create_worktree hand-off text | - | pending |
 | M5 | T021–T027 | full | Opt-out setting and toggle | - | pending |
