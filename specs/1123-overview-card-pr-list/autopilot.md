@@ -76,6 +76,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | CLEAN, no findings (note: `card_pr_list` doc guard holds for `link_focus_after`, not for `LinkFocus::of`; harmless, the handoff returns before `row` is used) |
 | Visual pass M3 (T037) | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | PASS: c1 full Tab and Shift+Tab walk light 1.0 and dark 2.0 (Shift+Tab from z lands on #11); c3, c4, c5 light 1.0 PASS; extra (Shift+Tab from Escape-collapsed z onto #11) PASS; c2, c6, c7 not re-run (passed r2); evidence specs/1123-overview-card-pr-list/visual-pass/m3/r3/ (39 PNGs, committed) |
 | TDD verify close (sonnet worker) | 1 | HEAD 804cc8de (base f1d7d1b5) | FAIL: F1 HIGH `card_link` `.focus_on_press(true)` mutant survives (no test clicks a focusable number); F2 HIGH `pr_rows` `failing: false` mutant survives; F3 HIGH process (M1 T001–T018 and two T022/T032 `tests/overview.rs` cases never run red); F4 MED unknown state on the merged page untested; F5 LOW unexplained `8` in the fork counts test. 25 mutants, 22 caught. Fixes: see Fixes close r1 below |
+| TDD verify close (sonnet worker) | 2 | 1d667e6ddf023a788d9cecd9035665b970c88810:71dc3a74b21fc7848107dbf74ce978f61e831dcd (fix commit 71dc3a74 over 804cc8de; scoped: the three survivors, F3, F5) | pending |
+| Close review (session model) | 1 | 1d667e6ddf023a788d9cecd9035665b970c88810:71dc3a74b21fc7848107dbf74ce978f61e831dcd (close diff 2abbffff..71dc3a74: correctness of tests, truth of docs) | pending |
 
 ### Review A M1 round 2 verdict (verbatim)
 
