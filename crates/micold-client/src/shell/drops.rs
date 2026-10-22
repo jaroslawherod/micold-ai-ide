@@ -57,6 +57,11 @@ pub fn on_drops_settled(app: &mut App) -> Task<Message> {
     };
     Task::batch(groups.into_iter().map(|(pane, paths)| {
         let target = target_of(app, pane);
+        // A structured pane's drop is its composer's (feature 941, FR-026): read off the UI
+        // thread, then attached or inserted there; the session reducer types nothing.
+        if let DropTarget::Composer(session) = target {
+            return read_for_composer(session, paths, shell, sandbox.clone());
+        }
         let effects = app
             .core
             .update_session_for_effects(SessionMsg::FilesDropped {
@@ -82,12 +87,63 @@ pub fn login_shell_kind() -> micold_core::path_insert::ShellKind {
 
 /// What `pane` shows now. A pane closed between the drop and the settle is `Outside`.
 fn target_of(app: &App, pane: PaneId) -> DropTarget {
-    crate::shell::panes::layout(app)
+    let shown = crate::shell::panes::layout(app)
         .and_then(|l| l.panes().into_iter().find(|p| p.id() == pane))
-        .map_or(DropTarget::Outside, |p| match p.terminal() {
-            Some(t) => DropTarget::Terminal(t),
-            None => DropTarget::EmptyPane,
+        .map(|p| p.terminal());
+    micold_client::features::session::target_of(&app.core, shown)
+}
+
+/// Read a structured pane's dropped files off the UI thread (feature 941, R11): sniff each for a
+/// picture, read the pictures whole, and hand every read, `Ok` or `Err`, to the composer, which
+/// attaches, inserts or refuses (FR-027 to FR-029).
+fn read_for_composer(
+    session: micold_core::session::SessionId,
+    paths: Vec<PathBuf>,
+    shell: micold_core::path_insert::ShellKind,
+    sandbox: Option<micold_core::path_insert::SandboxShare>,
+) -> Task<Message> {
+    use micold_client::features::composer::{DroppedFiles, Msg};
+    Task::future(async move {
+        let mut sniffed = Vec::with_capacity(paths.len());
+        for path in &paths {
+            sniffed.push(sniff(path).await);
+        }
+        let plan = micold_core::structured::attachment::classify_drop(&paths, |p| {
+            paths.iter().position(|q| q == p).and_then(|i| sniffed[i])
+        });
+        let mut reads = Vec::with_capacity(plan.images.len());
+        for path in &plan.images {
+            reads.push(tokio::fs::read(path).await.map_err(|e| e.to_string()));
+        }
+        Message::Composer(Msg::Dropped {
+            session,
+            files: DroppedFiles {
+                plan,
+                reads,
+                shell,
+                sandbox,
+            },
         })
+    })
+}
+
+/// The picture format a file starts with; `None` for a folder, anything else, or a file that
+/// cannot be opened (it is then inserted as its path).
+async fn sniff(path: &std::path::Path) -> Option<micold_core::protocol::messages::ImageMedia> {
+    use tokio::io::AsyncReadExt;
+    if !tokio::fs::metadata(path).await.ok()?.is_file() {
+        return None;
+    }
+    let mut file = tokio::fs::File::open(path).await.ok()?;
+    let mut head = [0u8; 16];
+    let mut filled = 0;
+    while filled < head.len() {
+        match file.read(&mut head[filled..]).await.ok()? {
+            0 => break,
+            n => filled += n,
+        }
+    }
+    micold_core::protocol::messages::ImageMedia::sniff(&head[..filled])
 }
 
 /// Type `text` at `terminal`'s input. Bracketed when the program asked for it, as a paste is, so a

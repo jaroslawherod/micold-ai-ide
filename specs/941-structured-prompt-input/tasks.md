@@ -296,7 +296,7 @@ Story labels say which story each task serves.
 All decisions live in `client/src/features/composer.rs`; `shell/` only routes messages and does the
 file reads (Constitution I: `shell/` holds no decision).
 
-- [ ] T039 [P] [US1] [US2] [US3] Tests in `client/tests/features_composer.rs` (new) for
+- [x] T039 [P] [US1] [US2] [US3] Tests in `client/tests/features_composer.rs` (new) for
   `composer_key(press, caret, lines, composing, phase)`: Enter → `Send`; Enter while an IME
   composition is open → `Edit`; Shift+Enter → `NewLine`; Up on the first line → `HistoryBack`, on
   another line → `Edit`; Down on the last line → `HistoryForward`, elsewhere `Edit`; Escape →
@@ -304,12 +304,12 @@ file reads (Constitution I: `shell/` holds no decision).
   gives `Interrupt` for Escape on a focused transcript only when `Busy` (FR-012);
   `shows_composer(pane)` is true for a pane showing a structured primary and false for a terminal
   or an empty pane (FR-001)
-- [ ] T040 [US2] History tests in `client/tests/features_composer.rs`: `HistoryBack` recalls from
+- [x] T040 [US2] History tests in `client/tests/features_composer.rs`: `HistoryBack` recalls from
   `Transcript::user_messages()` newest first down to the oldest; `HistoryForward` past the newest
   restores the saved draft unchanged (FR-024); editing a recalled message leaves the history
   unchanged; a session without messages keeps Up/Down as caret moves; Up, Enter resends the
   previous message (SC-006)
-- [ ] T041 [US1] [US3] [US4] Send and queue-state tests in `client/tests/features_composer.rs`:
+- [x] T041 [US1] [US3] [US4] Send and queue-state tests in `client/tests/features_composer.rs`:
   `can_send` false for a blank draft, a not-running session, a lost connection, a pending send
   (FR-004, FR-006); a send empties the draft and keeps it as pending; `OperationError` restores the
   draft's text and images unchanged with the reason as the notice; a lost connection restores
@@ -318,27 +318,27 @@ file reads (Constitution I: `shell/` holds no decision).
   leaves it (FR-015); `offers_send_queued` only held and running; `can_take` only with an empty
   draft and `Taken` becomes the draft (FR-020); queue edit draft (text, kept attachments); drafts,
   chips and caret are per session and survive switching (FR-007, FR-031)
-- [ ] T042 [US5] Drop tests in `client/tests/features_composer.rs` and
+- [x] T042 [US5] Drop tests in `client/tests/features_composer.rs` and
   `client/tests/pane_drop_target.rs`: a pane showing a structured primary is
   `DropTarget::Composer(session)`, a terminal pane stays `Terminal` (existing tests unchanged);
   `apply_drop(plan, reads)` inserts a drop's non-images and folders at the caret exactly as
   `plan_insertion` plans them for a terminal drop of the same files (FR-026, FR-028); 22 images
   attach the first 20 and the notice names the rest; a too-large file and a read that failed
   (`Err` from the shell's read) are not attached and the notice names each (`Unreadable`, FR-029)
-- [ ] T043 [US1] [US2] [US3] `client/src/features/composer.rs`: `Composers`, `Composer`, `Draft`,
+- [x] T043 [US1] [US2] [US3] `client/src/features/composer.rs`: `Composers`, `Composer`, `Draft`,
   `KeyIntent`, `composer_key`, `transcript_key`, `shows_composer`, `HistoryWalk` until T039–T040
   pass
-- [ ] T044 [US1] [US4] `client/src/features/composer.rs`: `InputState`, pending sends and their
+- [x] T044 [US1] [US4] `client/src/features/composer.rs`: `InputState`, pending sends and their
   restore, notices, queue edit draft, `can_send`, `offers_stop`, `offers_stop_session`,
   `offers_send_queued`, `can_take` until T041 passes
-- [ ] T045 [US5] `client/src/features/composer.rs`: `apply_drop` (classify with `classify_drop`,
+- [x] T045 [US5] `client/src/features/composer.rs`: `apply_drop` (classify with `classify_drop`,
   `admit` each image, insert paths with `plan_insertion`, notice for refusals) until T042's
   reducer cases pass
-- [ ] T046 [US5] `DropTarget::Composer` and `target_of` for structured panes in
+- [x] T046 [US5] `DropTarget::Composer` and `target_of` for structured panes in
   `client/src/features/session.rs`; `client/src/shell/drops.rs` reads a structured pane's image
   files off the UI thread (`tokio::fs`) and passes each result, `Ok` or `Err`, to `apply_drop`;
   T042 passes
-- [ ] T047 [US1] [US4] Wiring, no decisions: `client/src/shell/daemon_sync.rs` passes
+- [x] T047 [US1] [US4] Wiring, no decisions: `client/src/shell/daemon_sync.rs` passes
   `StructuredInput`, send and queue answers and disconnects to the composer;
   `client/src/shell/composer.rs` (new) keeps one `app::Editor` per session and maps key presses
   through `composer_key` / `transcript_key` to sends, history steps, interrupts and queue requests;

@@ -20,6 +20,7 @@ pub mod capabilities;
 pub mod changes;
 pub mod changes_watch;
 pub mod clipboard;
+pub mod composer;
 pub mod connection;
 pub mod daemon_sync;
 pub mod daemons;

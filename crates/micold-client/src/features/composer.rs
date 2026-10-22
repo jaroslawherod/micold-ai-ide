@@ -1,0 +1,672 @@
+//! The structured session's composer, render-free (feature 941, data-model *Window*, research
+//! R10, R11).
+//!
+//! Per session and per window (FR-007): the draft (text, caret, pictures), the walk through the
+//! session's earlier messages (FR-023, FR-024), the send waiting for the service's answer and its
+//! restore (FR-005, SC-005), the notice line, the queued message being edited (FR-020), and the
+//! last `StructuredInput` the service sent (phase, hold, queue). The keys are decided by
+//! [`composer_key`] and [`transcript_key`]; the shell (`shell/composer.rs`) keeps the text
+//! editor beside each draft and sends what this decides.
+//!
+//! The caret is the editor's: `(line, column)` with the column a byte offset into the line.
+
+use std::collections::HashMap;
+use std::path::Path;
+
+use micold_core::path_insert::{plan_insertion, InsertTarget, SandboxShare, ShellKind};
+use micold_core::protocol::messages::{
+    AttachmentMeta, ImageAttachment, InterruptAsk, QueueEntryId, QueuedSummary, TerminalRef,
+    TurnPhase,
+};
+use micold_core::session::SessionId;
+use micold_core::structured::attachment::{admit, AttachmentRefusal, DropPlan};
+use micold_core::structured::transcript::Transcript;
+
+use crate::keymap::{Key, KeyInput, NamedKey};
+
+/// The notice a send gets back when the connection to the service went before it was answered.
+pub const CONNECTION_LOST: &str =
+    "The connection to the session service was lost before it confirmed the message; it is back \
+     in the composer.";
+
+/// The notice of an interrupt the CLI has not acted on (FR-015).
+pub const OVERDUE: &str =
+    "The interrupt has not taken effect yet. You can interrupt again or stop the session.";
+
+/// What the composer says while it cannot send (FR-006).
+pub const NOT_CONNECTED: &str = "Not connected to the session service: the draft is kept.";
+/// See [`NOT_CONNECTED`].
+pub const NOT_RUNNING: &str = "The session is not running: the draft is kept.";
+
+/// The notice of a queue edit whose entry was sent or removed meanwhile.
+pub const EDIT_GONE: &str = "The queued message was sent or removed before the edit was saved.";
+
+/// What a key press in the composer means (data-model *KeyIntent*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyIntent {
+    /// Send the draft (or queue it while busy).
+    Send,
+    /// Insert a line break.
+    NewLine,
+    /// Recall the next older message.
+    HistoryBack,
+    /// Recall the next newer message, or the draft past the newest.
+    HistoryForward,
+    /// Interrupt the turn in progress.
+    Interrupt,
+    /// Not the composer's: the editor has it (typing, caret moves, an IME composition).
+    Edit,
+}
+
+fn is_busy(phase: TurnPhase) -> bool {
+    matches!(phase, TurnPhase::Busy { .. })
+}
+
+fn plain(press: &KeyInput) -> bool {
+    !press.mods.ctrl && !press.mods.alt && !press.mods.logo
+}
+
+/// What `press` means in a composer whose caret is at `caret` in a draft of `lines` lines, while
+/// an IME composition is open (`composing`) or not, for a session in `phase` (FR-002, FR-012,
+/// FR-023). No key needs a platform modifier (R12).
+pub fn composer_key(
+    press: &KeyInput,
+    caret: (usize, usize),
+    lines: usize,
+    composing: bool,
+    phase: TurnPhase,
+) -> KeyIntent {
+    if composing || !plain(press) {
+        return KeyIntent::Edit;
+    }
+    let Key::Named(named) = press.key else {
+        return KeyIntent::Edit;
+    };
+    match named {
+        NamedKey::Enter if press.mods.shift => KeyIntent::NewLine,
+        NamedKey::Enter => KeyIntent::Send,
+        NamedKey::ArrowUp if !press.mods.shift && caret.0 == 0 => KeyIntent::HistoryBack,
+        NamedKey::ArrowDown if !press.mods.shift && caret.0 + 1 >= lines.max(1) => {
+            KeyIntent::HistoryForward
+        }
+        NamedKey::Escape if !press.mods.shift && is_busy(phase) => KeyIntent::Interrupt,
+        _ => KeyIntent::Edit,
+    }
+}
+
+/// What `press` means on a focused transcript: Escape interrupts a busy session (FR-012).
+pub fn transcript_key(press: &KeyInput, phase: TurnPhase) -> KeyIntent {
+    match press.key {
+        Key::Named(NamedKey::Escape) if plain(press) && !press.mods.shift && is_busy(phase) => {
+            KeyIntent::Interrupt
+        }
+        _ => KeyIntent::Edit,
+    }
+}
+
+/// Whether a pane showing `pane` (none: an empty pane) shows the composer: only a structured
+/// session's primary, which the pane draws as its transcript (FR-001).
+pub fn shows_composer(state: &crate::app::State, pane: Option<TerminalRef>) -> bool {
+    pane.is_some_and(|terminal| state.is_structured_primary(terminal))
+}
+
+/// A message being written: its text, the caret and its pictures in the order attached.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Draft {
+    pub text: String,
+    pub caret: (usize, usize),
+    pub images: Vec<ImageAttachment>,
+}
+
+impl Draft {
+    /// Text other than whitespace, or a picture (FR-004).
+    pub fn is_sendable(&self) -> bool {
+        !self.text.trim().is_empty() || !self.images.is_empty()
+    }
+
+    /// Nothing at all: no text, not even whitespace, and no picture.
+    pub fn is_empty(&self) -> bool {
+        self.text.is_empty() && self.images.is_empty()
+    }
+
+    /// A draft of `text` with the caret at its end.
+    fn at_end(text: String, images: Vec<ImageAttachment>) -> Self {
+        let caret = end_of(&text);
+        Self {
+            text,
+            caret,
+            images,
+        }
+    }
+
+    /// `returned` put back into this draft without losing either: into an empty draft as it
+    /// was; otherwise first, with this draft's text after it on a new line and the caret kept in
+    /// that text (autopilot Decision 15).
+    fn put_back(self, returned: Draft) -> Draft {
+        if self.is_empty() {
+            return returned;
+        }
+        let shift = returned.text.split('\n').count();
+        let mut images = returned.images;
+        images.extend(self.images);
+        Draft {
+            text: format!("{}\n{}", returned.text, self.text),
+            caret: (self.caret.0 + shift, self.caret.1),
+            images,
+        }
+    }
+}
+
+/// The caret at the end of `text`.
+fn end_of(text: &str) -> (usize, usize) {
+    let mut lines = text.split('\n');
+    let last = lines.next_back().unwrap_or("");
+    (text.matches('\n').count(), last.len())
+}
+
+/// The byte offset of `caret` in `text`, clamped to the text and to a character boundary.
+fn offset_of(text: &str, caret: (usize, usize)) -> usize {
+    let mut start = 0;
+    for (index, line) in text.split('\n').enumerate() {
+        if index == caret.0 {
+            let mut column = caret.1.min(line.len());
+            while !line.is_char_boundary(column) {
+                column -= 1;
+            }
+            return start + column;
+        }
+        start += line.len() + 1;
+    }
+    text.len()
+}
+
+/// Where the user is in the session's earlier messages (FR-023, FR-024).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryWalk {
+    /// How far back: 0 is the newest message.
+    pub index: usize,
+    /// The draft the user had before stepping in, restored past the newest.
+    pub saved: Draft,
+}
+
+/// The last `StructuredInput` the service sent for the session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InputState {
+    pub phase: TurnPhase,
+    /// The queue is on hold until **Send queued**.
+    pub hold: bool,
+    pub queue: Vec<QueuedSummary>,
+}
+
+/// A queued message being edited in place (FR-020): its new text and the pictures it keeps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueueEditDraft {
+    pub entry: QueueEntryId,
+    pub text: String,
+    /// The pictures kept, as the window shows them.
+    pub attachments: Vec<AttachmentMeta>,
+    /// Their indexes in the queued message, for `QueueEdit::keep`.
+    pub keep: Vec<u32>,
+}
+
+/// One session's composer in this window.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Composer {
+    pub draft: Draft,
+    pub history: Option<HistoryWalk>,
+    /// The send waiting for its answer: its request and the draft that was sent.
+    pub pending: Option<(u64, Draft)>,
+    pub notice: Option<String>,
+    pub editing: Option<QueueEditDraft>,
+    pub remote: Option<InputState>,
+    /// Counts the times the composer itself replaced the draft (not typing), so the shell knows
+    /// when to show the draft in its editor again.
+    pub generation: u64,
+}
+
+impl Composer {
+    fn phase(&self) -> TurnPhase {
+        self.remote
+            .as_ref()
+            .map_or(TurnPhase::NotRunning, |r| r.phase)
+    }
+
+    fn replace_draft(&mut self, draft: Draft) {
+        self.draft = draft;
+        self.generation += 1;
+    }
+}
+
+/// Files dropped on a structured session's pane, as the shell read them (FR-026 to FR-029).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DroppedFiles {
+    /// The drop split into pictures and other paths.
+    pub plan: DropPlan,
+    /// Each of `plan.images`' reads, in order: its bytes, or why it could not be read.
+    pub reads: Vec<Result<Vec<u8>, String>>,
+    /// The shell the paths are quoted for, as for a terminal drop.
+    pub shell: ShellKind,
+    /// What a sandboxed session shares, as for a terminal drop.
+    pub sandbox: Option<SandboxShare>,
+}
+
+/// What the composer feature hears: the shell's half (`shell/composer.rs`) runs each.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// A key pressed in `session`'s composer, while an IME composition is open or not.
+    Key {
+        session: SessionId,
+        press: KeyInput,
+        composing: bool,
+    },
+    /// A key pressed on `session`'s focused transcript.
+    TranscriptKey { session: SessionId, press: KeyInput },
+    /// The text editor of `session`'s composer did something.
+    Edited {
+        session: SessionId,
+        action: crate::app::EditorAction,
+    },
+    /// The send control.
+    SendRequested(SessionId),
+    /// The stop control: interrupt the turn in progress.
+    StopRequested(SessionId),
+    /// **Send queued** (FR-022).
+    SendQueuedRequested(SessionId),
+    /// Remove a picture from the draft.
+    AttachmentRemoved { session: SessionId, index: usize },
+    /// Remove a queued message.
+    QueueRemoveRequested {
+        session: SessionId,
+        entry: QueueEntryId,
+    },
+    /// Move a queued message back into the composer.
+    QueueTakeRequested {
+        session: SessionId,
+        entry: QueueEntryId,
+    },
+    /// Start editing a queued message.
+    QueueEditStarted {
+        session: SessionId,
+        entry: QueueEntryId,
+    },
+    /// The queued message's new text.
+    QueueEditChanged { session: SessionId, text: String },
+    /// Drop one of the queued message's pictures.
+    QueueEditAttachmentRemoved { session: SessionId, index: usize },
+    /// Save the queue edit.
+    QueueEditSaved(SessionId),
+    /// Leave the queue edit unsaved.
+    QueueEditCancelled(SessionId),
+    /// Files dropped on `session`'s pane, read.
+    Dropped {
+        session: SessionId,
+        files: DroppedFiles,
+    },
+}
+
+/// Every session's composer in this window (data-model *Composers*).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    composers: HashMap<SessionId, Composer>,
+}
+
+impl State {
+    pub fn composer(&self, session: SessionId) -> Option<&Composer> {
+        self.composers.get(&session)
+    }
+
+    pub fn draft(&self, session: SessionId) -> Option<&Draft> {
+        self.composer(session).map(|c| &c.draft)
+    }
+
+    fn entry(&mut self, session: SessionId) -> &mut Composer {
+        self.composers.entry(session).or_default()
+    }
+
+    /// The phase the service last reported for `session`; not running until it reports.
+    pub fn phase(&self, session: SessionId) -> TurnPhase {
+        self.composer(session)
+            .map_or(TurnPhase::NotRunning, Composer::phase)
+    }
+
+    /// The editor now shows `text` with the caret at `caret`: the user typed or moved.
+    pub fn edited(&mut self, session: SessionId, text: String, caret: (usize, usize)) {
+        let draft = &mut self.entry(session).draft;
+        draft.text = text;
+        draft.caret = caret;
+    }
+
+    /// Forget `session`'s composer (the session is gone).
+    pub fn forget(&mut self, session: SessionId) {
+        self.composers.remove(&session);
+    }
+
+    /// Step back to the next older message of `transcript`. `false` when there is none to step
+    /// to, so Up stays a caret move (FR-023).
+    pub fn history_back(&mut self, session: SessionId, transcript: Option<&Transcript>) -> bool {
+        let Some(transcript) = transcript else {
+            return false;
+        };
+        let count = transcript.user_messages().count();
+        if count == 0 {
+            return false;
+        }
+        let composer = self.entry(session);
+        let index = match &composer.history {
+            None => {
+                composer.history = Some(HistoryWalk {
+                    index: 0,
+                    saved: composer.draft.clone(),
+                });
+                0
+            }
+            // At the oldest already: nothing older, and an edit of it stays.
+            Some(walk) if walk.index + 1 >= count => return true,
+            Some(walk) => walk.index + 1,
+        };
+        if let Some(walk) = composer.history.as_mut() {
+            walk.index = index;
+        }
+        recall(composer, transcript, index, false);
+        true
+    }
+
+    /// Step forward to the next newer message, or past the newest to the draft the user had
+    /// (FR-024). `false` outside the history, so Down stays a caret move.
+    pub fn history_forward(&mut self, session: SessionId, transcript: Option<&Transcript>) -> bool {
+        let composer = self.entry(session);
+        let Some(walk) = composer.history.take() else {
+            return false;
+        };
+        match (walk.index, transcript) {
+            (0, _) | (_, None) => composer.replace_draft(walk.saved),
+            (index, Some(transcript)) => {
+                composer.history = Some(HistoryWalk {
+                    index: index - 1,
+                    saved: walk.saved,
+                });
+                recall(composer, transcript, index - 1, true);
+            }
+        }
+        true
+    }
+
+    /// Why `session`'s composer cannot send now, whatever the draft holds (FR-006).
+    pub fn unavailable(&self, session: SessionId, connected: bool) -> Option<&'static str> {
+        if !connected {
+            Some(NOT_CONNECTED)
+        } else if self.phase(session) == TurnPhase::NotRunning {
+            Some(NOT_RUNNING)
+        } else {
+            None
+        }
+    }
+
+    /// Whether the draft can be sent: sendable, connected, running and no send waiting (FR-004,
+    /// FR-006). A busy session takes it into its queue.
+    pub fn can_send(&self, session: SessionId, connected: bool) -> bool {
+        self.unavailable(session, connected).is_none()
+            && self
+                .composer(session)
+                .is_some_and(|c| c.pending.is_none() && c.draft.is_sendable())
+    }
+
+    /// Take the draft to send it, emptying the composer; `None` when it cannot be sent. The
+    /// shell sends it and hands it back with [`State::sending`] (or [`State::returned`]).
+    pub fn take_send(&mut self, session: SessionId, connected: bool) -> Option<Draft> {
+        if !self.can_send(session, connected) {
+            return None;
+        }
+        let composer = self.entry(session);
+        composer.history = None;
+        composer.notice = None;
+        let draft = std::mem::take(&mut composer.draft);
+        composer.generation += 1;
+        Some(draft)
+    }
+
+    /// `draft` went out as request `req`; kept until its answer.
+    pub fn sending(&mut self, session: SessionId, req: u64, draft: Draft) {
+        self.entry(session).pending = Some((req, draft));
+    }
+
+    /// `draft` could not be sent at all: back into the composer, with `reason`.
+    pub fn returned(&mut self, session: SessionId, draft: Draft, reason: &str) {
+        let composer = self.entry(session);
+        let current = std::mem::take(&mut composer.draft);
+        composer.replace_draft(current.put_back(draft));
+        composer.notice = Some(reason.to_string());
+    }
+
+    /// The service refused or failed send `req`: its draft comes back unchanged, with the reason
+    /// (FR-005, SC-005). `false` when no composer waits on `req`.
+    pub fn send_failed(&mut self, req: u64, reason: &str) -> bool {
+        let Some((session, draft)) = self.take_pending(req) else {
+            return false;
+        };
+        self.returned(session, draft, reason);
+        true
+    }
+
+    /// The connection carrying sends `reqs` went: each comes back (FR-005, SC-005).
+    pub fn connection_lost(&mut self, reqs: &[u64]) {
+        for req in reqs {
+            self.send_failed(*req, CONNECTION_LOST);
+        }
+    }
+
+    /// The service took send `req`.
+    pub fn send_acked(&mut self, req: u64) {
+        self.take_pending(req);
+    }
+
+    fn take_pending(&mut self, req: u64) -> Option<(SessionId, Draft)> {
+        self.composers
+            .iter_mut()
+            .find_map(|(session, composer)| match composer.pending.take() {
+                Some((r, draft)) if r == req => Some((*session, draft)),
+                other => {
+                    composer.pending = other;
+                    None
+                }
+            })
+    }
+
+    /// The service's `StructuredInput` for `session`. A queue edit whose entry left the queue
+    /// ends with a notice.
+    pub fn input_reported(&mut self, session: SessionId, input: InputState) {
+        let composer = self.entry(session);
+        let gone = composer
+            .editing
+            .as_ref()
+            .is_some_and(|e| !input.queue.iter().any(|q| q.id == e.entry));
+        if gone {
+            composer.editing = None;
+            composer.notice = Some(EDIT_GONE.to_string());
+        }
+        composer.remote = Some(input);
+    }
+
+    /// Put `notice` on `session`'s composer (a queue request's refusal).
+    pub fn notice(&mut self, session: SessionId, notice: String) {
+        self.entry(session).notice = Some(notice);
+    }
+
+    /// The stop control and the interrupt key (FR-012): only while busy.
+    pub fn offers_stop(&self, session: SessionId) -> bool {
+        is_busy(self.phase(session))
+    }
+
+    /// Stopping the session, offered once the interrupt is overdue (FR-015).
+    pub fn offers_stop_session(&self, session: SessionId) -> bool {
+        matches!(
+            self.phase(session),
+            TurnPhase::Busy {
+                interrupt: InterruptAsk::Overdue,
+                ..
+            }
+        )
+    }
+
+    /// The overdue interrupt's notice, while it is overdue (FR-015).
+    pub fn overdue_notice(&self, session: SessionId) -> Option<&'static str> {
+        self.offers_stop_session(session).then_some(OVERDUE)
+    }
+
+    /// **Send queued**: a held queue of a running session (FR-022).
+    pub fn offers_send_queued(&self, session: SessionId) -> bool {
+        self.phase(session) != TurnPhase::NotRunning
+            && self
+                .composer(session)
+                .and_then(|c| c.remote.as_ref())
+                .is_some_and(|r| r.hold)
+    }
+
+    fn queued(&self, session: SessionId, entry: QueueEntryId) -> Option<&QueuedSummary> {
+        self.composer(session)?
+            .remote
+            .as_ref()?
+            .queue
+            .iter()
+            .find(|q| q.id == entry)
+    }
+
+    /// Moving `entry` back into the composer: only while the draft is empty, so no draft is
+    /// displaced (FR-020).
+    pub fn can_take(&self, session: SessionId, entry: QueueEntryId) -> bool {
+        self.queued(session, entry).is_some() && self.draft(session).is_none_or(Draft::is_empty)
+    }
+
+    /// A queued message came back (`Taken`): it becomes the draft. Typed meanwhile, the draft is
+    /// kept after it, as a send's restore keeps it.
+    pub fn taken(&mut self, session: SessionId, text: String, images: Vec<ImageAttachment>) {
+        let composer = self.entry(session);
+        composer.history = None;
+        let current = std::mem::take(&mut composer.draft);
+        composer.replace_draft(current.put_back(Draft::at_end(text, images)));
+    }
+
+    /// Start editing queued message `entry` in place; `false` when it is not queued.
+    pub fn start_queue_edit(&mut self, session: SessionId, entry: QueueEntryId) -> bool {
+        let Some(queued) = self.queued(session, entry).cloned() else {
+            return false;
+        };
+        let keep = (0..queued.attachments.len() as u32).collect();
+        self.entry(session).editing = Some(QueueEditDraft {
+            entry,
+            text: queued.text,
+            attachments: queued.attachments,
+            keep,
+        });
+        true
+    }
+
+    pub fn queue_edit_text(&mut self, session: SessionId, text: String) {
+        if let Some(editing) = self.entry(session).editing.as_mut() {
+            editing.text = text;
+        }
+    }
+
+    /// Drop the edited message's picture shown at `index`.
+    pub fn queue_edit_remove_attachment(&mut self, session: SessionId, index: usize) {
+        if let Some(editing) = self.entry(session).editing.as_mut() {
+            if index < editing.keep.len() {
+                editing.keep.remove(index);
+                editing.attachments.remove(index);
+            }
+        }
+    }
+
+    /// The `QueueEdit` to send: the entry, its new text and the pictures it keeps.
+    pub fn queue_edit_request(
+        &self,
+        session: SessionId,
+    ) -> Option<(QueueEntryId, String, Vec<u32>)> {
+        let editing = self.composer(session)?.editing.as_ref()?;
+        Some((editing.entry, editing.text.clone(), editing.keep.clone()))
+    }
+
+    /// The edit was saved, or left: it ends.
+    pub fn queue_edit_done(&mut self, session: SessionId) {
+        self.entry(session).editing = None;
+    }
+
+    /// Remove the draft's picture at `index` (US5 AS4).
+    pub fn remove_attachment(&mut self, session: SessionId, index: usize) {
+        let images = &mut self.entry(session).draft.images;
+        if index < images.len() {
+            images.remove(index);
+        }
+    }
+
+    /// Files dropped on `session`'s pane (FR-026 to FR-029): each picture read is admitted in
+    /// order, the other paths are inserted at the caret as a terminal drop of the same files
+    /// inserts them, and every refusal is named in the notice.
+    pub fn apply_drop(&mut self, session: SessionId, files: DroppedFiles) {
+        let composer = self.entry(session);
+        let mut refusals: Vec<String> = Vec::new();
+        for (path, read) in files.plan.images.iter().zip(files.reads) {
+            let name = file_name(path);
+            let admitted = read
+                .map_err(|why| AttachmentRefusal::Unreadable {
+                    name: name.clone(),
+                    why,
+                })
+                .and_then(|bytes| admit(&composer.draft.images, &name, bytes));
+            match admitted {
+                Ok(image) => composer.draft.images.push(image),
+                Err(refusal) => refusals.push(refusal.to_string()),
+            }
+        }
+        if !files.plan.paths.is_empty() {
+            let target = files
+                .sandbox
+                .as_ref()
+                .map_or(InsertTarget::Host, SandboxShare::target);
+            let plan = plan_insertion(&files.plan.paths, files.shell, target);
+            if let Some(text) = plan.text() {
+                insert_at_caret(&mut composer.draft, &text);
+            }
+            refusals.extend(plan.refused.iter().map(|r| r.message()));
+        }
+        composer.generation += 1;
+        if !refusals.is_empty() {
+            composer.notice = Some(refusals.join("\n"));
+        }
+    }
+}
+
+/// Show message `index` (0 the newest) of `transcript` as the draft, the caret on its first line
+/// stepping back and on its last stepping forward, so the next press steps again.
+fn recall(composer: &mut Composer, transcript: &Transcript, index: usize, forward: bool) {
+    let text = transcript
+        .user_messages()
+        .rev()
+        .nth(index)
+        .unwrap_or_default()
+        .to_string();
+    let caret = if forward {
+        end_of(&text)
+    } else {
+        (0, text.split('\n').next().unwrap_or("").len())
+    };
+    composer.replace_draft(Draft {
+        text,
+        caret,
+        images: Vec::new(),
+    });
+}
+
+fn insert_at_caret(draft: &mut Draft, text: &str) {
+    let at = offset_of(&draft.text, draft.caret);
+    draft.text.insert_str(at, text);
+    draft.caret = end_of(&draft.text[..at + text.len()]);
+}
+
+/// The name a dropped file is attached under: its file name, no directory.
+fn file_name(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
+}

@@ -113,6 +113,8 @@ tokio = { version = "1.53", features = [
     "signal",
     # Child stdio for the `ssh` transport (feature 489): the system `ssh` is a spawned child.
     "process",
+    # A drop on a structured pane reads its pictures off the UI thread (feature 941, R11).
+    "fs",
 ] }
 tokio-util = { version = "0.7.19", features = ["codec"] }
 interprocess = { version = "2.4.2", features = ["tokio"] }
