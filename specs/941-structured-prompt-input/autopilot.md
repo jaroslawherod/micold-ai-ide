@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M2
-- **Next step**: M2 review B, then full gate
+- **Next step**: M2 full gate, push, PR
 
 ## Pull requests
 
@@ -73,6 +73,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review B M1 (conformance, sonnet) | 1 | 2c163570b179fbb1922c81e07643980c76793802:ca17d07da3d3242ae0a73a894ff08cf80dbcf877 | CLEAN (Verify: daemon structured_session 16 passed; core green except the root-only permission test, which gate.sh runs unprivileged) |
 | Review A M2 (code-review high) | 1 | 29e7b03bf3c25a809d773ea3cf7e34f6ae868450:37dd08531ecdfbd87a01762e2b401eacfd59af71 | CLEAN: 2 MINOR (both declined) |
 | Review B M2 (conformance, sonnet) | 1 | c036df0cd4e6f0f20bded9f400e77d2d8016736a:f647684b709efa9bc318e217ab35f37fc8438d29 | CHANGES: 1 MAJOR (mid-turn case of the superseded #938 test raced: the second turn had no pause; fixed, it holds its result too) |
+| Review B M2 (conformance, sonnet) | 2 | a3e725b524fc4ac20b51b32f9b8d9e8fa78c63e7:4ff69c045598722443a8f666d7b37f26db3dc7d2 | CLEAN (Verify 3×: structured_input 12 passed, structured_session 16 passed) |
 
 ## Declined review findings
 
