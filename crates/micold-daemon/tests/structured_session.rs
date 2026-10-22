@@ -764,7 +764,8 @@ async fn messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal() {
     let state = service(project.path(), vec![session, terminal]);
     stream_script(
         project.path(),
-        &(answering_turn(1500) + "await-stdin\n" + &replay("text-turn.jsonl")),
+        // The second turn also holds its result, so "two" is seen alone before the third goes out.
+        &(answering_turn(1500) + &answering_turn(1500)),
     );
     state.start_session(id, LaunchMode::Fresh).expect("starts");
     let mut client = viewer(&state, project.path(), id).await;
