@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
 - **Phase**: implement M1
-- **Next step**: M1 PR to open (orchestrator, from the scratchpad 943-M1/pr-title.txt and pr-body.md), then after its merge M2 (held on #941 M1). Cross-feature holds: M2 ← #941 M1, M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Next step**: M1 rebased onto origin/main after #941 M1 (cdfafa66): `PROTOCOL_VERSION` now 63 → 64 for #943; gate green, force-pushed. M1 PR to open (orchestrator, from the scratchpad 943-M1/pr-title.txt and pr-body.md), then after its merge M2 (held on #941 M1). Cross-feature holds: M2 ← #941 M1, M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
@@ -54,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | de7f53dab39c9aba91fd555cefc704e366ccdb3f:ee00a672e9c7ceefaa1edde46c12c37b7a0a103e | CHANGES: 1 MAJOR (Part B 3 / SC-007 moved M8 → M9), 3 MINOR — all fixed |
 | Review A M1 (code-review high, claude -p) | 1 | b4e6c0e3cf0eba349e147e1a9bc80ace36b899ad:243190ac73d4e596d907aa24c2fa7b7d53e2a50c | CHANGES: 1 MAJOR (F1, declined: FR-009), 3 MINOR — F2, F4 fixed; F3 declined |
 | Review B M1 (conformance, sonnet, claude -p) | 1 | 557f97e288a5a97b5363b42e3a56b2574406c567:cc1452181d4d44824e386a36d97cb82a8687e126 | CLEAN |
+| Rebase review M1 (conflict resolution vs #941 M1, sonnet, claude -p) | 1 | daf7075aff3a43c20473739d35830934528dca79:40a159e175b97cc860d98471c79bd2068571abeb | CLEAN (2 MINOR, capture script: stray arg refused, interrupt id `micold-1` fixed — left) |
 | Tasks review | 2 (sonnet, fix diff) | 0c12e486473d3a8cc0937758fdd4473a3e424f23:ee00a672e9c7ceefaa1edde46c12c37b7a0a103e | CLEAN (1 MINOR, fixed, prose only) |
 
 ## Declined review findings
