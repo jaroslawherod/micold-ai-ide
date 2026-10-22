@@ -803,6 +803,10 @@ pub(crate) fn transcript_body<'a>(
         Some(crate::ui::transcript::PromptsView {
             state: &state.permission_prompts,
             on_prompt: Message::PermissionPrompts,
+            focused: state.window.focused_field,
+            on_focus: |id, focused| {
+                Message::Window(crate::features::window::Msg::FieldFocusChanged(id, focused))
+            },
         }),
     )
 }

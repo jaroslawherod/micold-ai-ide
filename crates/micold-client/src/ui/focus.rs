@@ -65,6 +65,31 @@ impl<'a> TrackFocus for Checkbox<'a, Message> {
     }
 }
 
+/// [`TrackFocus`] for an input of a view generic over its message: feature 942's request cards,
+/// drawn inside the transcript, whose messages the window maps. The same join, with `report` the
+/// message a focus change sends.
+pub trait TrackFocusAs<M> {
+    /// Report this input's focus as `id` through `report`, and draw it from `focused`.
+    fn track_focus(
+        self,
+        id: FieldId,
+        focused: Option<FieldId>,
+        report: fn(FieldId, bool) -> M,
+    ) -> Self;
+}
+
+impl<'a, M: Clone + 'a> TrackFocusAs<M> for TextField<'a, M> {
+    fn track_focus(
+        self,
+        id: FieldId,
+        focused: Option<FieldId>,
+        report: fn(FieldId, bool) -> M,
+    ) -> Self {
+        self.active(focused == Some(id))
+            .on_focus_change(move |focused| report(id, focused))
+    }
+}
+
 /// A select joins the one blur route (feature 937, contract C4, research R3): leaving it reports
 /// `FieldFocusChanged(id, false)` like a text field's blur does, so the owning draft can mark it.
 ///

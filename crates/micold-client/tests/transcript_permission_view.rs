@@ -31,6 +31,7 @@ const RULE: &str = "Bash commands that start with \"echo hi\"";
 enum Out {
     Transcript(TranscriptMsg),
     Prompt(PromptsMsg),
+    Focus,
 }
 
 fn tool_request(session: SessionId, tool_use_id: &str) -> PermissionRequest {
@@ -110,6 +111,8 @@ fn element<'a>(
         PromptsView {
             state: prompts,
             on_prompt: Out::Prompt,
+            focused: None,
+            on_focus: |_, _| Out::Focus,
         },
     )
 }

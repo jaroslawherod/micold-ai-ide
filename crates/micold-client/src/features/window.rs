@@ -200,6 +200,10 @@ pub enum FieldId {
     DaemonCredential(micold_core::sandbox::CredentialShare),
     /// Settings → Daemons: one AI CLI's checkbox in the form (feature 806).
     DaemonAiCli(micold_core::session::AiCli),
+    /// A tool permission request's deny-message field (feature 942).
+    PromptDenyMessage(micold_core::protocol::messages::PromptId),
+    /// A plan request's note field (feature 942).
+    PromptNote(micold_core::protocol::messages::PromptId),
     /// Settings → Daemons: the form's keep-running-after-sign-out checkbox (feature 804).
     DaemonSurviveLogout,
     /// Settings → Daemons: the form's processor limit (feature 804).

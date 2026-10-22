@@ -208,6 +208,8 @@ fn build<'a, M: Clone + 'a>(
         ctx,
         on_transcript,
         on_prompt: p.on_prompt,
+        focused: p.focused,
+        on_focus: p.on_focus,
     });
     // The request block of request `id`, `card` its tool call's entry when held.
     let block = |id: PromptId, card| -> Option<Element<'a, M>> {
