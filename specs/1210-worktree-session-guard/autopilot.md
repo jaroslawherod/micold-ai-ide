@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1214 | Design | merged | 46582900eb258d140dd971d45c5d5e39e35131d3 |
 | #1225 | M1 | merged | 575961879f7902b37fe9cbcfdd7f17be621bb12c |
+| #1248 | M2 | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | #1225 | merged |
-| M2 | T011–T014 | full | Bash commands judged | - | in review |
+| M2 | T011–T014 | full | Bash commands judged | #1248 | in review |
 | M3 | T015–T017 | full | EnterWorktree and git worktree add denied | - | pending |
 | M4 | T018–T020 | full | create_worktree hand-off text | - | pending |
 | M5 | T021–T027 | full | Opt-out setting and toggle | - | pending |
