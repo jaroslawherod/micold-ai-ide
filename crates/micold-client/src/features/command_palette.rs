@@ -483,7 +483,7 @@ impl crate::app::State {
                 self.composers.replace_text(session, text, caret);
             }
             Some(Picked::TerminalOnly { command, reason }) => {
-                self.offer_switch(session, SessionKind::Terminal, Some(command), reason, None);
+                self.offer_switch(session, SessionKind::Terminal, Some(command), reason);
             }
             None => {}
         }
@@ -520,8 +520,8 @@ impl crate::app::State {
 
     /// What sending `session`'s draft does (FR-010, FR-018): a message for the composer to send,
     /// or handled here (the picker opened, the terminal offered, a refusal said), or a model to
-    /// ask the service for. A command handled here leaves the composer, but a terminal-only one,
-    /// which stays until the offer is answered.
+    /// ask the service for, its draft left for the shell to clear once the request went out.
+    /// `/model` alone leaves the composer; a terminal-only command stays until the switch is done.
     pub fn send_intent(&mut self, session: SessionId) -> SendIntent {
         let Some(text) = self.composers.draft(session).map(|d| d.text.clone()) else {
             return SendIntent::Message;
@@ -533,22 +533,13 @@ impl crate::app::State {
                 self.open_model_picker(session);
                 SendIntent::Nothing
             }
-            Classified::Model(Ok(choice)) => {
-                self.composers.replace_text(session, String::new(), (0, 0));
-                SendIntent::SetModel(choice)
-            }
+            Classified::Model(Ok(choice)) => SendIntent::SetModel(choice),
             Classified::Model(Err(refusal)) => {
                 self.composers.notice(session, refusal.to_string());
                 SendIntent::Nothing
             }
             Classified::TerminalOnly { command, reason } => {
-                self.offer_switch(
-                    session,
-                    SessionKind::Terminal,
-                    Some(command),
-                    reason,
-                    Some(text),
-                );
+                self.offer_switch(session, SessionKind::Terminal, Some(command), reason);
                 SendIntent::Nothing
             }
         }

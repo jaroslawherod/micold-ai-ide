@@ -1352,8 +1352,13 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             Some(PendingOp::SetPermissionMode { session }) => {
                 app.core.permission_prompts.mode_applied(session);
             }
-            // #943: the model and the kind arrive on the catalog snapshot and in the events.
-            Some(PendingOp::SessionModel { .. } | PendingOp::SwitchKind { .. }) => {}
+            // #943: the model and the kind arrive on the catalog snapshot and in the events; a
+            // switch's command is used up once the switch is done (US4 scenario 2).
+            Some(PendingOp::SessionModel { .. }) => {}
+            Some(PendingOp::SwitchKind { request }) => {
+                app.core.switch_completed(&request);
+                crate::shell::composer::sync_editor(app, request.session);
+            }
             Some(PendingOp::RunGroupPick { run }) => {
                 if let OperationResult::RunPicked {
                     group, integration, ..
@@ -2322,6 +2327,7 @@ pub fn on_connected(
     }
     micold_client::catalog_sync::note_lost_sessions(&mut app.core, daemon, &catalog);
     reconcile_catalog(&mut app.core, daemon, &catalog, false);
+    follow_kind_changes(app);
     // The boot-time foreground resolve ran before this catalog existed, so for a client that has
     // just started it answered `NoSessionsForKey` against a project whose sessions were still on
     // the wire. Ask again now that they are here (`010` BUG-013) — before `active_session` is read

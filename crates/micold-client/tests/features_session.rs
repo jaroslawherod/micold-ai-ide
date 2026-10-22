@@ -1508,7 +1508,11 @@ mod switching {
             }
         );
         assert!(w.session.switch_offer.is_none(), "the offer is answered");
-        assert_eq!(draft(&w, s), "", "the command went to the switch");
+        assert_eq!(
+            draft(&w, s),
+            "/mcp",
+            "kept until the service takes the switch"
+        );
 
         w.switch_needs_confirmation(request.clone(), "A turn is in progress.".into());
         let offer = w.session.switch_offer.clone().expect("asked again");
@@ -1521,6 +1525,26 @@ mod switching {
                 ..request
             }
         );
+        assert_eq!(
+            draft(&w, s),
+            "/mcp",
+            "a refused or unconfirmed switch keeps it"
+        );
+        w.switch_completed(&again);
+        assert_eq!(draft(&w, s), "", "the command went to the terminal");
+    }
+
+    #[test]
+    fn a_completed_switch_leaves_a_draft_that_is_not_its_command() {
+        let (mut w, s) = structured();
+        typed(&mut w, s, "something else");
+        w.switch_completed(&SwitchRequest {
+            session: s,
+            to: SessionKind::Terminal,
+            command: Some("mcp".into()),
+            confirmed: false,
+        });
+        assert_eq!(draft(&w, s), "something else");
     }
 
     #[test]
@@ -1546,6 +1570,19 @@ mod switching {
             (offer.to, offer.command.as_deref()),
             (SessionKind::Terminal, Some("login"))
         );
+        let answered = parse_line(
+            r#"{"type":"assistant","message":{"id":"m2","role":"assistant","model":"claude-sonnet-4-5","content":[{"type":"text","text":"Signed in, carrying on."}]},"session_id":"s"}"#,
+        );
+        w.structured_transcript.apply(
+            s,
+            0,
+            &[SequencedEvent {
+                seq: 1,
+                event: answered,
+            }],
+            true,
+        );
+        assert!(!w.offers_login(s), "a later answer means signed in again");
     }
 
     fn summary(id: SessionId, kind: SessionKind) -> SessionSummary {
