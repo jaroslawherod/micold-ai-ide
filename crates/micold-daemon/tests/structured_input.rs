@@ -40,7 +40,9 @@ mod mcp;
 mod structured;
 use conn::Client;
 use history::service;
-use structured::{clear_records, fake_stream_cli, fixture, stream_script, structured_session};
+use structured::{
+    clear_records, fake_stream_cli, fixture, stdin_lines, stream_script, structured_session,
+};
 
 /// One turn per message, each `result` written once the test creates `turn-<n>`.
 fn gated() -> String {
@@ -258,15 +260,6 @@ fn assert_refused(answer: &DaemonMsg, sentence: &str, what: &str) {
         } => assert_eq!(message, sentence, "{what}: the refusal sentence"),
         other => panic!("{what}: not refused: {other:?}"),
     }
-}
-
-/// The lines the stand-in in `dir` read on stdin so far.
-fn stdin_lines(dir: &Path) -> Vec<String> {
-    std::fs::read_to_string(dir.join("stdin-record"))
-        .unwrap_or_default()
-        .lines()
-        .map(str::to_owned)
-        .collect()
 }
 
 /// The text block of each user message the stand-in read (empty for a message of pictures only).

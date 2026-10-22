@@ -17,7 +17,10 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use micold_core::session::{KindRefusal, PermissionMode, SessionId};
-use micold_core::structured::control::{encode_interrupt, encode_set_mode, next_request_id};
+use micold_core::structured::commands::parse_initialize;
+use micold_core::structured::control::{
+    encode_initialize, encode_interrupt, encode_set_mode, next_request_id,
+};
 use micold_core::structured::input::Message;
 use micold_core::structured::{
     encode_user_message, parse_line, ControlOutcome, EventHistory, InterruptAsk, LineSplitter,
@@ -158,6 +161,17 @@ pub const CONTROL_ANSWER_BOUND: Duration = Duration::from_secs(10);
 /// overdue (#941 FR-015). Lowered only by tests (`DaemonState::set_interrupt_overdue`).
 pub const INTERRUPT_OVERDUE: Duration = Duration::from_secs(10);
 
+/// Why a control request got no answer from the CLI (#943 I-4).
+#[derive(Debug)]
+pub enum ControlFailed {
+    /// No answer within [`CONTROL_ANSWER_BOUND`].
+    NoAnswer,
+    /// The process's output ended first.
+    Stopped,
+    /// Writing the request to the CLI's stdin failed.
+    Unsent(io::Error),
+}
+
 /// Why a running session's CLI did not change its permission mode (FR-017): the user is told this.
 #[derive(Debug)]
 pub enum ModeChangeFailed {
@@ -169,6 +183,16 @@ pub enum ModeChangeFailed {
     Stopped,
     /// Writing the request to the CLI's stdin failed.
     Unsent(io::Error),
+}
+
+impl From<ControlFailed> for ModeChangeFailed {
+    fn from(failed: ControlFailed) -> Self {
+        match failed {
+            ControlFailed::NoAnswer => Self::NoAnswer,
+            ControlFailed::Stopped => Self::Stopped,
+            ControlFailed::Unsent(err) => Self::Unsent(err),
+        }
+    }
 }
 
 impl std::fmt::Display for ModeChangeFailed {
@@ -331,6 +355,10 @@ impl StructuredSession {
     /// then `on_end` runs: the process's output is over (#942 FR-011). `on_turn_end` is told of each
     /// turn a `result` ended, after the event, and of the output's end, before `on_end` (#941 R2).
     ///
+    /// The first line written to the CLI's stdin is an `initialize` control request (#943 R1); its
+    /// answer reaches `on_event` as a [`StructuredEvent::CommandsReported`] note in the answer's
+    /// place, and a refused answer as nothing.
+    ///
     /// Refused if `spec.cwd` does not exist (FR-006c), and for a CLI with no structured mode
     /// (FR-003).
     ///
@@ -384,6 +412,8 @@ impl StructuredSession {
         let reader_turn = Arc::clone(&turn);
         let control = Arc::new(ControlWaiters::new());
         let reader_control = Arc::clone(&control);
+        let initialize = next_request_id();
+        let reader_initialize = initialize.clone();
         let mut on_event = on_event;
         let emit = Arc::new(Mutex::new(Emit {
             on_event: Box::new(move |event| {
@@ -393,6 +423,15 @@ impl StructuredSession {
                     ..
                 } = &event
                 {
+                    // #943 R1: the answer to the spawn's `initialize` becomes, in its place, the
+                    // `CommandsReported` note; a refusal adds nothing.
+                    if *request_id == reader_initialize {
+                        if let ControlOutcome::Success(_) = outcome {
+                            let (commands, models) = parse_initialize(outcome);
+                            on_event(StructuredEvent::CommandsReported { commands, models });
+                        }
+                        return;
+                    }
                     reader_control.resolve(request_id, outcome);
                 }
                 on_event(event);
@@ -445,7 +484,7 @@ impl StructuredSession {
                 return Err(e);
             }
         };
-        Ok(Self {
+        let session = Self {
             id,
             process,
             stdin: Mutex::new(stdin),
@@ -458,7 +497,13 @@ impl StructuredSession {
             readers: Mutex::new(readers),
             output_ended,
             torn_down: AtomicBool::new(false),
-        })
+        };
+        // #943 R1: ask for the commands and models before anything else reaches stdin; the
+        // answer is not waited for. A CLI that cannot take it leaves the list unknown.
+        if let Err(err) = session.write_line(&encode_initialize(&initialize)) {
+            tracing::warn!(session = %id.0, %err, "the initialize request could not be written");
+        }
+        Ok(session)
     }
 
     /// The session's stable identity.
@@ -604,23 +649,37 @@ impl StructuredSession {
     /// not touched. The write may block briefly on the pipe, as a user message's does.
     pub async fn set_permission_mode(&self, mode: PermissionMode) -> Result<(), ModeChangeFailed> {
         let request_id = next_request_id();
+        match self
+            .send_control(&request_id, &encode_set_mode(&request_id, mode))
+            .await?
+        {
+            ControlOutcome::Success(_) => Ok(()),
+            ControlOutcome::Error { message, .. } => Err(ModeChangeFailed::Refused(message)),
+        }
+    }
+
+    /// Write `line`, a control request for `request_id`, to the CLI's stdin and wait up to
+    /// [`CONTROL_ANSWER_BOUND`] for its answer (#942 R6, #943 I-4). A request already pending is
+    /// not touched. The write may block briefly on the pipe, as a user message's does.
+    pub async fn send_control(
+        &self,
+        request_id: &str,
+        line: &str,
+    ) -> Result<ControlOutcome, ControlFailed> {
         let answer = self
             .control
-            .wait_for(&request_id)
-            .ok_or(ModeChangeFailed::Stopped)?;
-        if let Err(err) = self.write_line(&encode_set_mode(&request_id, mode)) {
-            self.control.forget(&request_id);
-            return Err(ModeChangeFailed::Unsent(err));
+            .wait_for(request_id)
+            .ok_or(ControlFailed::Stopped)?;
+        if let Err(err) = self.write_line(line) {
+            self.control.forget(request_id);
+            return Err(ControlFailed::Unsent(err));
         }
         match tokio::time::timeout(CONTROL_ANSWER_BOUND, answer).await {
-            Ok(Ok(ControlOutcome::Success(_))) => Ok(()),
-            Ok(Ok(ControlOutcome::Error { message, .. })) => {
-                Err(ModeChangeFailed::Refused(message))
-            }
-            Ok(Err(_)) => Err(ModeChangeFailed::Stopped),
+            Ok(Ok(outcome)) => Ok(outcome),
+            Ok(Err(_)) => Err(ControlFailed::Stopped),
             Err(_) => {
-                self.control.forget(&request_id);
-                Err(ModeChangeFailed::NoAnswer)
+                self.control.forget(request_id);
+                Err(ControlFailed::NoAnswer)
             }
         }
     }

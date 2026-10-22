@@ -51,7 +51,17 @@ const STAND_IN: &str = "claude.exe";
 ///   not return while stdin is open;
 /// - `ignore-interrupt <file>`: `on-message-gated <file>`, named for what the tests use it for: an
 ///   interrupt is recorded and nothing else is done with it, so only `turn-<n>` ends a turn;
+/// - `initialize` waits for the daemon's `initialize` control request and answers it with
+///   `command-initialize.jsonl`'s recorded answer for its `request_id` (#943 R12);
+///   `initialize error <code> <text>` refuses it instead. Without the directive it is never answered
+///   (silent), so a suite that does not ask for the list sees no note in its events;
+/// - `reply <text>\t<file>` makes a later `on-message` replay `<file>` instead of its own file for a
+///   user message whose text is exactly `<text>` (`/compact` → `command-compact.jsonl`, #943 R12);
+///   `on-message` with no file replays only those;
 /// - any other line is written to stdout as it is, with a line end.
+///
+/// An `initialize` request is recorded like every stdin line, in order, but never reaches
+/// `await-stdin`, `control` or `on-message`: only the `initialize` directive reads it.
 ///
 /// A stdin line containing `CLOSE-STDIN` is recorded and then the stand-in closes its stdin and
 /// reads no more, so the daemon's next write to it fails while the process runs on (#941 T024).
@@ -89,6 +99,7 @@ fn main() {
     }
 
     let (lines_tx, lines_rx) = mpsc::channel::<String>();
+    let (init_tx, init_rx) = mpsc::channel::<String>();
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
         for line in stdin.lock().lines() {
@@ -101,6 +112,10 @@ fn main() {
                 let _ = writeln!(f, "{line}");
             }
             let close = line.contains("CLOSE-STDIN");
+            if line.contains("\"control_request\"") && line.contains("\"subtype\":\"initialize\"") {
+                let _ = init_tx.send(line);
+                continue;
+            }
             let _ = lines_tx.send(line);
             if close {
                 close_stdin();
@@ -111,6 +126,7 @@ fn main() {
 
     let script = std::fs::read_to_string(".fake-stream").unwrap_or_default();
     let mut out = std::io::stdout();
+    let mut replies: Vec<(String, String)> = Vec::new();
     for line in script.lines() {
         let (cmd, arg) = line.split_once(' ').unwrap_or((line, ""));
         match cmd {
@@ -133,6 +149,12 @@ fn main() {
                 std::process::exit(arg.parse().unwrap_or(0));
             }
             "control" => control(&lines_rx, &mut out, arg),
+            "initialize" => initialize(&init_rx, &mut out, arg),
+            "reply" => {
+                if let Some((text, file)) = arg.split_once('\t') {
+                    replies.push((text.to_string(), file.to_string()));
+                }
+            }
             "status" => {
                 let _ = writeln!(
                     out,
@@ -144,8 +166,10 @@ fn main() {
                     std::thread::sleep(std::time::Duration::from_millis(5));
                 }
             }
-            "on-message" => on_message(&lines_rx, &mut out, arg, false),
-            "on-message-gated" | "ignore-interrupt" => on_message(&lines_rx, &mut out, arg, true),
+            "on-message" => on_message(&lines_rx, &mut out, arg, &replies, false),
+            "on-message-gated" | "ignore-interrupt" => {
+                on_message(&lines_rx, &mut out, arg, &replies, true)
+            }
             "on-interrupt" => on_interrupt(&lines_rx, &mut out, arg),
             "prompt" => prompt(&args, arg),
             "prompt-async" => {
@@ -187,9 +211,16 @@ fn close_stdin() {
     }
 }
 
-/// For each later stdin `user` line, replay `file`: one turn per message. `gated`: the n-th waits
-/// for `turn-<n>` in the cwd first.
-fn on_message(lines: &mpsc::Receiver<String>, out: &mut impl Write, file: &str, gated: bool) {
+/// For each later stdin `user` line, replay `file`, or the `replies` file for its text: one turn
+/// per message; a message with neither gets no turn. `gated`: the n-th waits for `turn-<n>` in the
+/// cwd first.
+fn on_message(
+    lines: &mpsc::Receiver<String>,
+    out: &mut impl Write,
+    file: &str,
+    replies: &[(String, String)],
+    gated: bool,
+) {
     let mut n = 0;
     while let Ok(line) = lines.recv() {
         if !line.contains("\"type\":\"user\"") {
@@ -201,6 +232,17 @@ fn on_message(lines: &mpsc::Receiver<String>, out: &mut impl Write, file: &str, 
             while !std::path::Path::new(&gate).exists() {
                 std::thread::sleep(std::time::Duration::from_millis(5));
             }
+        }
+        let text = line
+            .find("\"text\":\"")
+            .map(|at| json_string(&line[at + 8..]))
+            .unwrap_or_default();
+        let file = replies
+            .iter()
+            .find(|(said, _)| *said == text)
+            .map_or(file, |(_, reply)| reply.as_str());
+        if file.is_empty() {
+            continue;
         }
         let bytes = std::fs::read(file).expect("read the fixture");
         for piece in bytes.split_inclusive(|b| *b == b'\n') {
@@ -230,6 +272,30 @@ fn on_interrupt(lines: &mpsc::Receiver<String>, out: &mut impl Write, file: &str
             }
         }
     }
+}
+
+/// Wait for the daemon's `initialize` request and answer it as `how` says: the recorded answer
+/// (`""`) or `error <code> <text>`.
+fn initialize(requests: &mpsc::Receiver<String>, out: &mut impl Write, how: &str) {
+    let Ok(request) = requests.recv() else { return };
+    let id = string_after(&request, "request_id").unwrap_or_default();
+    let answer = match how.split_once(' ') {
+        Some(("error", rest)) => {
+            let (code, text) = rest.split_once(' ').unwrap_or((rest, ""));
+            format!(
+                "{{\"type\":\"control_response\",\"response\":{{\"subtype\":\"error\",\"request_id\":\"{id}\",\"error\":\"{text}\",\"error_code\":\"{code}\"}}}}"
+            )
+        }
+        _ => {
+            let recorded = std::fs::read_to_string(INITIALIZE_ANSWER).expect("read the recorded answer");
+            recorded
+                .lines()
+                .find(|line| line.contains("\"control_response\"") && line.contains("\"commands\""))
+                .expect("the recorded answer")
+                .replace("\"request_id\":\"micold-1\"", &format!("\"request_id\":\"{id}\""))
+        }
+    };
+    let _ = writeln!(out, "{answer}");
 }
 
 /// Wait for the next `control_request` line on stdin and answer it as `how` says: `success`,
@@ -347,7 +413,12 @@ pub fn fake_stream_cli() {
         let dir = std::env::temp_dir().join(format!("micold-938-stream-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("a directory for the stand-in");
         let source = dir.join("stand_in.rs");
-        std::fs::write(&source, STAND_IN_SOURCE).expect("write the stand-in's source");
+        let answer = fixture("command-initialize.jsonl");
+        let source_text = format!(
+            "const INITIALIZE_ANSWER: &str = {:?};\n{STAND_IN_SOURCE}",
+            answer.display().to_string()
+        );
+        std::fs::write(&source, source_text).expect("write the stand-in's source");
         let exe = dir.join(STAND_IN);
         let rustc_name = if cfg!(windows) { "rustc.exe" } else { "rustc" };
         let rustc = std::env::var_os("RUSTC")
@@ -403,6 +474,27 @@ pub const RECORDED: [&str; 5] = [
     "error-result.jsonl",
     "resume-init.jsonl",
 ];
+
+/// Whether `line`, read from a stand-in's stdin, is the daemon's `initialize` request (#943 R1).
+pub fn is_initialize(line: &str) -> bool {
+    line.contains("\"control_request\"") && line.contains("\"subtype\":\"initialize\"")
+}
+
+/// The stdin lines the stand-in in `dir` recorded so far, but the `initialize` request every
+/// structured spawn writes first (#943 R1); none when it recorded nothing.
+pub fn stdin_lines(dir: &Path) -> Vec<String> {
+    std::fs::read_to_string(dir.join("stdin-record"))
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| !is_initialize(line))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// A `reply` directive: a later `on-message` replays the fixture `name` for a message `text`.
+pub fn reply(text: &str, name: &str) -> String {
+    format!("reply {text}\t{}\n", fixture(name).display())
+}
 
 /// What the stand-in does at its next start in `dir`.
 pub fn stream_script(dir: &Path, directives: &str) {

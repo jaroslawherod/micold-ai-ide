@@ -39,7 +39,7 @@ mod structured;
 use conn::{connect, Client};
 use structured::{
     fake_stream_cli, fixture_lines, prompt_answer_count, prompt_answers, prompt_call_file,
-    prompts_on, stream_script, structured_session,
+    prompts_on, stdin_lines, stream_script, structured_session,
 };
 
 /// A daemon with a bound tool server and prompts on, holding one structured session per project.
@@ -1279,9 +1279,8 @@ fn order(dir: &Path, n: usize) -> Vec<String> {
 
 /// The `set_permission_mode` requests the stand-in in `dir` read on stdin: the mode of each.
 fn modes_asked(dir: &Path) -> Vec<String> {
-    std::fs::read_to_string(dir.join("stdin-record"))
-        .unwrap_or_default()
-        .lines()
+    stdin_lines(dir)
+        .iter()
         .filter(|line| line.contains("control_request"))
         .map(|line| {
             let request: Value = serde_json::from_str(line).expect("a JSON line");
