@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
 - **Phase**: milestone M3
-- **Next step**: M3 scoped gate, reviews A and B, full gate, PR
+- **Next step**: M3 PR CI and merge, then the close unit
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1163 | Design | merged | 7406e4cdc61cbf75bc88c92a2bee08913b6bdf71 |
 | #1245 | M1 | merged | d16d74c143b73ad6af5d341e32872e3711ce8dc6 |
 | #1247 | M2 | merged | 420b051e5b3be4610a19347b44f37099bed72ccb |
+| #1251 | M3 | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #1245 | merged |
 | M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #1247 | merged |
-| M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #… | in progress |
+| M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #1251 | in review |
 
 ## Decisions
 
