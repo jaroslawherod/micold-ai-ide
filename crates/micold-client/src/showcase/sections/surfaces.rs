@@ -487,7 +487,8 @@ fn session_bar_sample(pose: BarPose, roles: Roles) -> Element<'static, Message> 
     let measured = |used: u64, warning| ContextState::Measured {
         used,
         window: 1_000_000,
-        percent: used / 10_000,
+        // Whole and rounded half up, as the core's reading is.
+        percent: (used + 5_000) / 10_000,
         threshold: Some(800_000),
         warning,
     };
