@@ -177,18 +177,18 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 5: Daemon — command list at spawn, app-handled commands refused (M3)
 
-- [ ] T025 [US1] Extend the stand-in in `daemon/tests/support/structured.rs`: answer an
+- [x] T025 [US1] Extend the stand-in in `daemon/tests/support/structured.rs`: answer an
   `initialize` control request with `command-initialize.jsonl`'s recorded answer (a directive
   makes it silent or an `error`); replay a named fixture for a given user-message text
   (`/compact` → `command-compact.jsonl`, …); record every stdin line in order
-- [ ] T026 [P] [US1] Tests in `daemon/tests/structured_session.rs` and `daemon/tests/structured_permission_mode.rs`:
+- [x] T026 [P] [US1] Tests in `daemon/tests/structured_session.rs` and `daemon/tests/structured_permission_mode.rs`:
   extracting `StructuredSession::send_control(request_id, line) -> Result<ControlOutcome,
   ControlFailed>` leaves every existing `set_permission_mode` test passing unchanged; a stopped
   process → `ControlFailed::Stopped`, no answer within `CONTROL_ANSWER_BOUND` → `NoAnswer` (I-4)
-- [ ] T027 Implement T026 in `daemon/src/structured.rs`: `send_control`, `ControlFailed { NoAnswer,
+- [x] T027 Implement T026 in `daemon/src/structured.rs`: `send_control`, `ControlFailed { NoAnswer,
   Stopped, Unsent }`, `set_permission_mode` built on it, `ModeChangeFailed` from `ControlFailed`
   plus `ControlOutcome::Error`
-- [ ] T028 [P] [US1] [US2] Tests in `daemon/tests/structured_commands.rs` (new): after a structured
+- [x] T028 [P] [US1] [US2] Tests in `daemon/tests/structured_commands.rs` (new): after a structured
   spawn the stand-in's first stdin line is one `initialize` request, before any user message; its
   answer is appended as one `CommandsReported` note, seen by a connected client and by a client
   that connects later (handshake replay, FR-009); a silent or refused `initialize` adds no note
@@ -196,16 +196,16 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   unchanged as one user message (FR-002); `/hello world`, `/speckit-plan #1` and `/nosuchcmd` sent
   as `SessionUserMessage` reach stdin unchanged (FR-001, SC-001 at the daemon); two structured
   sessions each get their own note (Principle II)
-- [ ] T029 [US3] [US4] Tests in `daemon/tests/structured_commands.rs`: `SessionUserMessage`
+- [x] T029 [US3] [US4] Tests in `daemon/tests/structured_commands.rs`: `SessionUserMessage`
   with `/model`, `/model haiku`, each `TERMINAL_ONLY` name and `/settings` → `OperationError`
   ("/model is handled by the app" / "/<name> needs the terminal"), the stand-in's stdin unchanged,
   no event appended (FR-010, FR-018, SC-006)
-- [ ] T030 Implement T028–T029: write `encode_initialize` through `send_control` right after each
+- [x] T030 Implement T028–T029: write `encode_initialize` through `send_control` right after each
   structured spawn and append `CommandsReported` from `parse_initialize` in
   `daemon/src/structured.rs` / `daemon/src/state.rs`; classify `SessionUserMessage` text with
   `classify_draft` over the session's `CommandList::from_history` before it reaches the process,
   in `daemon/src/state.rs`
-- [ ] T031 [P] Describe the `initialize` request at spawn, the `CommandsReported` note and the
+- [x] T031 [P] Describe the `initialize` request at spawn, the `CommandsReported` note and the
   `SessionUserMessage` refusals in `docs/daemon.md`
 
 ---

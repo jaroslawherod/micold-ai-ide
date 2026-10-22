@@ -10,7 +10,7 @@ use serde::Serialize;
 use super::attachment::ImageAttachment;
 
 /// Why a user message was not delivered (data-model *UserMessageRefusal*).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UserMessageRefusal {
     /// The text is empty or only whitespace.
     Blank,
@@ -20,6 +20,12 @@ pub enum UserMessageRefusal {
     TurnInProgress,
     /// The session is a terminal session: type into its terminal instead.
     NotStructured,
+    /// `/model`, with or without a name: the app's model picker handles it, never the CLI
+    /// (#943 FR-018).
+    ModelIsTheApps,
+    /// A terminal-only command, by the name sent (`settings`, `mcp`, …): it runs only in the
+    /// terminal (#943 FR-010).
+    NeedsTerminal(String),
 }
 
 impl fmt::Display for UserMessageRefusal {
@@ -32,6 +38,15 @@ impl fmt::Display for UserMessageRefusal {
             }
             Self::NotStructured => {
                 "This is a terminal session: type into its terminal to send it a message"
+            }
+            Self::ModelIsTheApps => {
+                "/model is handled by the app, not sent to Claude Code: choose the model in the session's view"
+            }
+            Self::NeedsTerminal(name) => {
+                return write!(
+                    f,
+                    "/{name} needs the terminal: open the session in the terminal to run it"
+                )
             }
         })
     }

@@ -43,7 +43,7 @@ mod mcp;
 mod structured;
 use conn::{answer, connect, Client};
 use history::{ai_session, service};
-use structured::{clear_records, fake_stream_cli, record, stream_script};
+use structured::{clear_records, fake_stream_cli, record, stdin_lines, stream_script};
 
 /// Arguments that change a CLI's permission configuration; a terminal session carries none.
 const PERMISSION_FLAGS: [&str; 4] = [
@@ -504,8 +504,8 @@ impl Drop for Saved {
 
 /// The control requests the stand-in in `dir` read on its stdin, as JSON.
 fn control_requests(dir: &Path) -> Vec<serde_json::Value> {
-    record(dir, "stdin-record")
-        .lines()
+    stdin_lines(dir)
+        .iter()
         .filter(|line| line.contains("control_request"))
         .map(|line| serde_json::from_str(line).expect("a JSON line"))
         .collect()
@@ -653,9 +653,9 @@ async fn a_session_not_running_is_persisted_at_once_and_launched_in_its_new_mode
     let launch = saved.start("").await;
     assert_eq!(launched_mode(&launch), Some("plan".into()), "{launch:#?}");
     assert!(
-        !std::fs::read_to_string(saved.dir().join("stdin-record"))
-            .unwrap_or_default()
-            .contains("control_request"),
+        !stdin_lines(saved.dir())
+            .iter()
+            .any(|line| line.contains("control_request")),
         "nothing asked of the new process"
     );
 }

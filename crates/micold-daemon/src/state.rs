@@ -6980,11 +6980,16 @@ impl DaemonState {
             .get(&session)
             .and_then(|live| live.procs.get(&SessionProcess::Primary))
         {
-            Some(Proc::Structured(child)) => Arc::clone(child),
+            Some(Proc::Structured(child)) => Some(Arc::clone(child)),
             Some(Proc::Pty { .. }) => return Err(UserMessageRefusal::NotStructured),
             None if Self::kind_of(inner, session) == Some(SessionKind::Terminal) => {
                 return Err(UserMessageRefusal::NotStructured)
             }
+            None => None,
+        };
+        Self::refuse_app_handled(inner, session, &message.text)?;
+        let child = match child {
+            Some(child) => child,
             // Not running: `Blank` still comes first, as for a running session.
             None if message.is_blank() => return Err(UserMessageRefusal::Blank),
             None => return Err(UserMessageRefusal::NotRunning),
@@ -7016,6 +7021,31 @@ impl DaemonState {
         drop(guard);
         self.after_turn_activity(activity);
         Ok(delivery)
+    }
+
+    /// `/model` and the terminal-only commands, by `session`'s command list as its history holds it,
+    /// never reach the CLI, idle or busy (#943 R3, FR-010, FR-018); anything else may.
+    fn refuse_app_handled(
+        inner: &Inner,
+        session: SessionId,
+        text: &str,
+    ) -> Result<(), UserMessageRefusal> {
+        use micold_core::structured::commands::{
+            classify_draft, parse_invocation, CommandList, DraftCommand,
+        };
+        if parse_invocation(text).is_none() {
+            return Ok(());
+        }
+        let events = inner
+            .event_streams
+            .get(&session)
+            .map(|stream| stream.saved_snapshot().1)
+            .unwrap_or_default();
+        match classify_draft(text, &CommandList::from_history(&events)) {
+            DraftCommand::Send => Ok(()),
+            DraftCommand::Model(_) => Err(UserMessageRefusal::ModelIsTheApps),
+            DraftCommand::TerminalOnly(name) => Err(UserMessageRefusal::NeedsTerminal(name)),
+        }
     }
 
     /// Write `delivery` to its CLI (#941 FR-003, FR-019). **Blocking**: the write may wait on a

@@ -243,6 +243,30 @@ started with `--allow-dangerously-skip-permissions` but without the prompt tool,
 before. Only the daemon's tests turn them on (`DaemonState::set_permission_prompts`); the switch is
 never saved.
 
+#### Slash commands of structured sessions (#943, in progress)
+
+Each time the daemon starts a structured Claude session's CLI, the first line it writes to the
+CLI's input is an `initialize` control request, before any message. The daemon does not wait for
+the answer. When it comes, it is kept as one `CommandsReported` note in the session's event history,
+at the place where the answer arrived: the commands the CLI offers (name, description, argument
+hint, aliases, built-in or not) and the models it offers. Windows receive the note like any other
+event, and a window that connects later gets it with the rest of the history. The raw answer is not
+kept beside the note. A refused answer, or no answer, adds nothing, and the session runs and takes
+messages as before. Each start asks again, and the latest note is the one that counts.
+
+A `SessionUserMessage` that starts with `/` and a command name is sent to the CLI as typed, as
+one user message, like any other text, with these exceptions:
+
+- `/model`, with or without a model name, is refused with `OperationError` ("/model is handled by
+  the app"). The app's model picker handles it.
+- A terminal-only command is refused with `OperationError` ("/<name> needs the terminal"). These are
+  `/config` (and its alias `/settings`), `/mcp`, `/agents`, `/login` and `/logout`, plus any command
+  the CLI itself marks as terminal-only in its session init.
+
+The daemon reads the session's command list from its event history. A refused command never
+reaches the CLI. It is not queued behind a turn in progress and leaves no `UserSent` note. The same
+rules apply to a session's first prompt.
+
 ## Project and worktree operations run through the daemon (User Story 3)
 
 Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a

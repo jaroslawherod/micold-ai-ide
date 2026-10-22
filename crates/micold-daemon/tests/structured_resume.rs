@@ -39,7 +39,7 @@ use conn::{answer, connect, Client};
 use history::service;
 use structured::{
     clear_records, events_of, events_until, fake_stream_cli, fixture, fixture_events, record,
-    seqs_increase, starts, stream_script, structured_session, viewer, Received,
+    seqs_increase, starts, stdin_lines, stream_script, structured_session, viewer, Received,
 };
 
 /// The seven structured arguments, in order (FR-005).
@@ -120,9 +120,8 @@ fn answering() -> String {
 
 /// The texts of the user messages the stand-in has read in `dir`, none when it read none.
 fn delivered(dir: &Path) -> Vec<String> {
-    std::fs::read_to_string(dir.join("stdin-record"))
-        .unwrap_or_default()
-        .lines()
+    stdin_lines(dir)
+        .iter()
         .map(|line| {
             let value: serde_json::Value = serde_json::from_str(line).expect("a JSON line");
             value["message"]["content"][0]["text"]

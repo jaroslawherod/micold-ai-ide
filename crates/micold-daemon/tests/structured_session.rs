@@ -32,7 +32,7 @@ use conn::{answer, connect, Client};
 use history::{ai_session, service};
 use structured::{
     events_of, events_until, fake_stream_cli, fixture, fixture_events, record, seqs_increase,
-    stream_script, structured_session, viewer, RECORDED,
+    stdin_lines, stream_script, structured_session, viewer, RECORDED,
 };
 
 /// The seven structured arguments, in order (FR-005).
@@ -615,8 +615,8 @@ fn assert_refused(answer: &DaemonMsg, why: UserMessageRefusal, what: &str) {
 
 /// The texts of the user messages the stand-in read in `dir`, one per stdin line.
 fn delivered(dir: &Path) -> Vec<String> {
-    record(dir, "stdin-record")
-        .lines()
+    stdin_lines(dir)
+        .iter()
         .map(|line| {
             let value: serde_json::Value = serde_json::from_str(line).expect("a JSON line");
             value["message"]["content"][0]["text"]
@@ -881,13 +881,7 @@ async fn a_message_reaches_only_its_own_session() {
     );
     delivered_is(&one, ["for one"]).await;
     tokio::time::sleep(Duration::from_millis(300)).await;
-    assert!(
-        !two.join("stdin-record").exists()
-            || std::fs::read_to_string(two.join("stdin-record"))
-                .unwrap()
-                .is_empty(),
-        "the other session read nothing"
-    );
+    assert!(stdin_lines(&two).is_empty(), "the other session read nothing");
     for id in ids {
         state.stop_session(id);
     }
@@ -951,4 +945,83 @@ async fn an_idle_interrupt_is_ignored_and_pictures_over_the_limits_are_refused()
     );
     delivered_is(project.path(), ["plain"]).await;
     state.stop_session(id);
+}
+
+/// A structured process of the stand-in in `dir`, started with `script`, outside any daemon state:
+/// what `StructuredSession::send_control` is tested on (#943 T026).
+fn bare_process(dir: &Path, script: &str) -> micold_daemon::structured::StructuredSession {
+    fake_stream_cli();
+    stream_script(dir, script);
+    let session_id = uuid::Uuid::new_v4();
+    let spec = micold_core::terminal::LaunchSpec {
+        cwd: dir.to_path_buf(),
+        session_id,
+        provider: AiCli::ClaudeCode,
+        mode: LaunchMode::Fresh,
+        env: Vec::new(),
+    };
+    micold_daemon::structured::StructuredSession::spawn(
+        SessionId(session_id),
+        &spec,
+        &[],
+        |_| {},
+        |_| {},
+        || {},
+    )
+    .expect("the stand-in spawns")
+}
+
+/// #943 T026 (I-4): `send_control` writes the line and returns the CLI's answer for its id.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_control_returns_the_clis_answer_to_the_request() {
+    let project = tempfile::tempdir().unwrap();
+    let process = bare_process(project.path(), "control success\n");
+    let id = micold_core::structured::control::next_request_id();
+    let line = micold_core::structured::control::encode_set_mode(
+        &id,
+        micold_core::session::PermissionMode::Plan,
+    );
+    let outcome = process.send_control(&id, &line).await.expect("answered");
+    match outcome {
+        micold_core::structured::ControlOutcome::Success(answer) => {
+            assert!(answer.contains("\"plan\""), "{answer}")
+        }
+        other => panic!("not a success: {other:?}"),
+    }
+}
+
+/// #943 T026 (I-4): a process whose output ended answers nothing: `Stopped`, at once.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_control_to_a_stopped_process_fails_stopped() {
+    let project = tempfile::tempdir().unwrap();
+    let process = bare_process(project.path(), "exit 0\n");
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !process.output_ended() {
+        assert!(std::time::Instant::now() < deadline, "the output never ended");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let id = micold_core::structured::control::next_request_id();
+    let line = micold_core::structured::control::encode_interrupt(&id);
+    let failed = process.send_control(&id, &line).await;
+    assert!(
+        matches!(failed, Err(micold_daemon::structured::ControlFailed::Stopped)),
+        "{failed:?}"
+    );
+}
+
+/// #943 T026 (I-4): a request the CLI never answers fails `NoAnswer` once
+/// `CONTROL_ANSWER_BOUND` passed (on tokio's paused clock).
+#[tokio::test(start_paused = true)]
+async fn send_control_unanswered_fails_no_answer_after_the_bound() {
+    let project = tempfile::tempdir().unwrap();
+    let process = bare_process(project.path(), "control none\n");
+    let id = micold_core::structured::control::next_request_id();
+    let line = micold_core::structured::control::encode_interrupt(&id);
+    let asked = tokio::time::Instant::now();
+    let failed = process.send_control(&id, &line).await;
+    assert!(
+        matches!(failed, Err(micold_daemon::structured::ControlFailed::NoAnswer)),
+        "{failed:?}"
+    );
+    assert!(asked.elapsed() >= micold_daemon::structured::CONTROL_ANSWER_BOUND);
 }
