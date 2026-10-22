@@ -122,6 +122,7 @@ fn a_history_message_that_does_not_continue_rebuilds() {
         vec![EntryKind::UserMessage {
             text: "three".to_string(),
             attachments: vec![],
+            command: None,
         }],
         "a history after a live event replaces the entries"
     );
@@ -205,6 +206,7 @@ fn an_entry_is_found_by_its_key() {
         Some(&EntryKind::UserMessage {
             text: "hi".to_string(),
             attachments: vec![],
+            command: None,
         }),
         "an entry is found by its positional key"
     );
@@ -258,7 +260,9 @@ fn a_text_turn_is_session_start_reply_and_a_success_footer() {
         other => panic!("the transcript starts with the session, got {other:?}"),
     }
     match &entries[1] {
-        EntryKind::AssistantText { text, streaming } => {
+        EntryKind::AssistantText {
+            text, streaming, ..
+        } => {
             assert!(
                 text.contains("blue"),
                 "the reply is the recording's answer, which names a colour: {text}"
@@ -306,6 +310,7 @@ fn a_user_text_event_is_a_user_message_in_its_place() {
         EntryKind::UserMessage {
             text: "hello".to_string(),
             attachments: vec![],
+            command: None,
         }
     );
 }
@@ -367,7 +372,8 @@ fn every_unmodelled_line_and_block_is_a_raw_row_in_its_place() {
             .map(|e| e.kind()),
         Some(&EntryKind::AssistantText {
             text: "before".to_string(),
-            streaming: false
+            streaming: false,
+            auth_failed: false,
         })
     );
     match transcript
@@ -672,10 +678,12 @@ fn a_nested_transcript_shows_its_sub_agent_as_top_level() {
             EntryKind::UserMessage {
                 text: "sub prompt".to_string(),
                 attachments: vec![],
+                command: None,
             },
             EntryKind::AssistantText {
                 text: "sub reply".to_string(),
-                streaming: false
+                streaming: false,
+                auth_failed: false,
             },
         ],
         "the sub-agent's messages, and nothing of the main session or other sub-agents"
@@ -849,7 +857,8 @@ fn each_text_delta_grows_the_same_reply_in_place() {
         kind,
         EntryKind::AssistantText {
             text: String::new(),
-            streaming: true
+            streaming: true,
+            auth_failed: false,
         },
         "the reply appears at its block start"
     );
@@ -878,7 +887,8 @@ fn each_text_delta_grows_the_same_reply_in_place() {
             now_kind,
             EntryKind::AssistantText {
                 text: text.clone(),
-                streaming: true
+                streaming: true,
+                auth_failed: false,
             },
             "FR-014"
         );
@@ -1004,7 +1014,8 @@ fn the_finished_message_replaces_the_streamed_text_once_in_place() {
         entries[1].2,
         EntryKind::AssistantText {
             text: "Hello.".to_string(),
-            streaming: false
+            streaming: false,
+            auth_failed: false,
         },
         "the finished text, once (US3 scenario 2, FR-015)"
     );
@@ -1041,11 +1052,13 @@ fn the_finished_message_replaces_the_streamed_text_once_in_place() {
         vec![
             EntryKind::AssistantText {
                 text: "part".to_string(),
-                streaming: true
+                streaming: true,
+                auth_failed: false,
             },
             EntryKind::AssistantText {
                 text: "Other.".to_string(),
-                streaming: false
+                streaming: false,
+                auth_failed: false,
             },
         ]
     );
@@ -1061,7 +1074,8 @@ fn the_finished_message_replaces_the_streamed_text_once_in_place() {
         kinds(&unknown),
         vec![EntryKind::AssistantText {
             text: "Whole.".to_string(),
-            streaming: false
+            streaming: false,
+            auth_failed: false,
         }]
     );
 }
@@ -1078,6 +1092,7 @@ fn deltas_never_finished_keep_their_partial_text() {
     let partial = EntryKind::AssistantText {
         text: "half a th".to_string(),
         streaming: false,
+        auth_failed: false,
     };
 
     let mut events = streamed();
@@ -1091,7 +1106,8 @@ fn deltas_never_finished_keep_their_partial_text() {
             EntryKind::TurnEndedWithoutResult,
             EntryKind::AssistantText {
                 text: "after".to_string(),
-                streaming: false
+                streaming: false,
+                auth_failed: false,
             },
         ],
         "the turn's end closes the stream; a later message does not supersede"
@@ -1119,6 +1135,7 @@ fn an_unknown_stream_event_or_delta_is_a_raw_row() {
         EntryKind::AssistantText {
             text: String::new(),
             streaming: true,
+            auth_failed: false,
         },
         EntryKind::Raw {
             text: raw_of(&unknown_event),
@@ -1242,7 +1259,8 @@ fn every_event_of_every_recorded_fixture_is_accounted_for() {
                             ContentBlock::Text { text } => assert!(
                                 all.contains(&EntryKind::AssistantText {
                                     text: text.clone(),
-                                    streaming: false
+                                    streaming: false,
+                                    auth_failed: false,
                                 }),
                                 "{at}: its text"
                             ),
@@ -1438,7 +1456,8 @@ fn a_streamed_block_superseded_by_another_kind_stops_streaming_when_the_stream_c
             },
             EntryKind::AssistantText {
                 text: "Answer.".to_string(),
-                streaming: false
+                streaming: false,
+                auth_failed: false,
             },
         ]
     );
@@ -1549,6 +1568,7 @@ fn a_sent_message_is_a_user_message_with_its_pictures_names() {
         vec![EntryKind::UserMessage {
             text: "look".into(),
             attachments: vec!["a.png".into(), "b.gif".into()],
+            command: None,
         }]
     );
 }
@@ -1631,8 +1651,7 @@ fn the_history_is_the_sent_texts_oldest_first_never_the_absorbed_interrupt_text(
     assert!(kinds(&restored).contains(&EntryKind::Interrupted));
 }
 
-// #943 T004/T006 — a compaction boundary, a conversation reset and the daemon's command, model
-// and kind notes make no entry and no raw row until the transcript gives them entries (M2).
+// #943 T004/T006 — a compaction boundary and a conversation reset make no raw row.
 
 #[test]
 fn compaction_and_clear_lines_make_no_raw_row() {
@@ -1650,25 +1669,257 @@ fn compaction_and_clear_lines_make_no_raw_row() {
     }
 }
 
+// -- #943 M2 (T019, T020, T022): command turns, compaction, clear, model and terminal markers --
+
+use micold_core::session::SessionKind;
+use micold_core::structured::commands::CommandInvocation;
+use micold_core::structured::transcript::CommandChip;
+use micold_core::structured::ReportedCommand;
+
+/// `name`'s recorded lines with the daemon's `UserSent` notes put back where it wrote them:
+/// `sent[0]` first, `sent[i]` right after the fixture's `i`-th turn result.
+fn with_sent(name: &str, sent: &[&str]) -> Vec<SequencedEvent> {
+    let mut events = Vec::new();
+    let mut sent = sent.iter();
+    events.extend(sent.next().map(|text| user_sent(text, &[])));
+    for e in events_of(&lines_of(name)) {
+        let ends_turn = matches!(e.event, StructuredEvent::Result { .. });
+        events.push(e.event);
+        if ends_turn {
+            events.extend(sent.next().map(|text| user_sent(text, &[])));
+        }
+    }
+    sequenced(events)
+}
+
+/// The fixtures of #943 as the daemon holds them: each with the user's messages.
+fn command_histories() -> Vec<(&'static str, Vec<SequencedEvent>)> {
+    vec![
+        (
+            "command-builtin-output",
+            with_sent("command-builtin-output", &["/context"]),
+        ),
+        (
+            "command-compact",
+            with_sent(
+                "command-compact",
+                &[
+                    "Reply with one short sentence greeting Ada.",
+                    "/compact keep greetings",
+                ],
+            ),
+        ),
+        (
+            "command-clear",
+            with_sent(
+                "command-clear",
+                &[
+                    "Reply with the single word before.",
+                    "/clear",
+                    "Reply with the single word after.",
+                ],
+            ),
+        ),
+        (
+            "command-unknown",
+            with_sent("command-unknown", &["/nosuchcmd"]),
+        ),
+        ("command-skill", with_sent("command-skill", &["/greet Ada"])),
+        (
+            "command-custom",
+            with_sent("command-custom", &["/hello world"]),
+        ),
+        (
+            "auth-failure",
+            with_sent("auth-failure", &["Reply with the single word ready."]),
+        ),
+    ]
+}
+
+/// The first text of the fixture's first assistant line.
+fn recorded_assistant_text(name: &str) -> String {
+    events_of(&lines_of(name))
+        .into_iter()
+        .find_map(|e| match e.event {
+            StructuredEvent::Assistant { blocks, .. } => blocks.into_iter().find_map(|b| match b {
+                ContentBlock::Text { text } => Some(text),
+                _ => None,
+            }),
+            _ => None,
+        })
+        .expect("the fixture has an assistant text")
+}
+
+fn eras(transcript: &Transcript) -> Vec<u32> {
+    transcript.entries().map(|e| e.era()).collect()
+}
+
 #[test]
-fn the_daemons_command_model_and_kind_notes_make_no_entry() {
-    use micold_core::session::SessionKind;
-    use micold_core::structured::{ReportedCommand, ReportedModel};
-    let notes = [
-        StructuredEvent::CommandsReported {
-            commands: vec![ReportedCommand {
-                name: "greet".into(),
-                description: Some("Greet".into()),
-                argument_hint: None,
-                aliases: vec![],
-                builtin: false,
-            }],
-            models: vec![ReportedModel {
-                value: "haiku".into(),
-                display_name: Some("Haiku".into()),
-                description: None,
-            }],
-        },
+fn a_built_ins_synthetic_answer_after_its_command_is_command_output_unchanged() {
+    let transcript = built(&with_sent("command-builtin-output", &["/context"]));
+    let outputs: Vec<_> = kinds(&transcript)
+        .into_iter()
+        .filter(|k| matches!(k, EntryKind::CommandOutput { .. }))
+        .collect();
+    assert_eq!(
+        outputs,
+        vec![EntryKind::CommandOutput {
+            text: recorded_assistant_text("command-builtin-output")
+        }]
+    );
+    assert!(
+        !kinds(&transcript)
+            .iter()
+            .any(|k| matches!(k, EntryKind::AssistantText { .. })),
+        "the output is never an assistant text"
+    );
+}
+
+#[test]
+fn a_synthetic_answer_after_a_plain_message_stays_an_assistant_text() {
+    let transcript = built(&with_sent("command-builtin-output", &["what is /context?"]));
+    assert!(!kinds(&transcript)
+        .iter()
+        .any(|k| matches!(k, EntryKind::CommandOutput { .. })));
+}
+
+#[test]
+fn a_compaction_is_one_marker_holding_the_summary_and_every_earlier_entry_stays() {
+    let events = with_sent(
+        "command-compact",
+        &[
+            "Reply with one short sentence greeting Ada.",
+            "/compact keep greetings",
+        ],
+    );
+    let transcript = built(&events);
+    let all = kinds(&transcript);
+    let compacted: Vec<_> = all
+        .iter()
+        .filter(|k| matches!(k, EntryKind::Compacted { .. }))
+        .collect();
+    assert_eq!(compacted.len(), 1, "{all:#?}");
+    let EntryKind::Compacted { trigger, summary } = compacted[0] else {
+        unreachable!()
+    };
+    assert_eq!(trigger.as_deref(), Some("manual"));
+    assert!(
+        summary
+            .as_deref()
+            .is_some_and(|s| s.starts_with("This session is being continued")),
+        "{summary:?}"
+    );
+    for kind in &all {
+        if let EntryKind::UserMessage { text, .. } = kind {
+            assert!(
+                !text.contains("This session is being continued"),
+                "the synthetic summary is not a user entry"
+            );
+            assert!(!text.contains("<local-command-stdout>"), "no CLI markup");
+        }
+    }
+    // Everything before the marker is what the history before the boundary builds.
+    let at = events
+        .iter()
+        .position(|e| matches!(e.event, StructuredEvent::CompactBoundary { .. }))
+        .unwrap();
+    let before = kinds(&built(&events[..at]));
+    let marker = all
+        .iter()
+        .position(|k| matches!(k, EntryKind::Compacted { .. }))
+        .unwrap();
+    assert_eq!(all[..marker], before[..], "every entry before it kept");
+    assert!(before.contains(&EntryKind::AssistantText {
+        text: "Hello, Ada, it's nice to meet you!".into(),
+        streaming: false,
+        auth_failed: false,
+    }));
+}
+
+#[test]
+fn a_clear_is_one_marker_and_splits_the_entries_into_eras() {
+    let transcript = built(&with_sent(
+        "command-clear",
+        &[
+            "Reply with the single word before.",
+            "/clear",
+            "Reply with the single word after.",
+        ],
+    ));
+    let all = kinds(&transcript);
+    let cleared: Vec<usize> = all
+        .iter()
+        .enumerate()
+        .filter(|(_, k)| matches!(k, EntryKind::Cleared))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(cleared.len(), 1, "{all:#?}");
+    let at = cleared[0];
+    let eras = eras(&transcript);
+    assert!(eras[..at].iter().all(|&era| era == 0), "{eras:?}");
+    assert!(eras[at + 1..].iter().all(|&era| era == 1), "{eras:?}");
+    let era_of = |word: &str| {
+        transcript
+            .entries()
+            .find(|e| matches!(e.kind(), EntryKind::AssistantText { text, .. } if text == word))
+            .map(|e| e.era())
+    };
+    assert_eq!(era_of("before"), Some(0));
+    assert_eq!(era_of("after"), Some(1));
+}
+
+#[test]
+fn an_unknown_commands_reply_is_an_assistant_text() {
+    let transcript = built(&with_sent("command-unknown", &["/nosuchcmd"]));
+    let all = kinds(&transcript);
+    assert!(all.iter().any(
+        |k| matches!(k, EntryKind::AssistantText { text, .. } if text.contains("/nosuchcmd"))
+    ));
+    assert!(!all
+        .iter()
+        .any(|k| matches!(k, EntryKind::CommandOutput { .. })));
+}
+
+#[test]
+fn only_the_authentication_failure_is_flagged() {
+    let mut histories = command_histories();
+    histories.extend(
+        RECORDED
+            .iter()
+            .map(|name| (*name, events_of(&lines_of(name)))),
+    );
+    for (name, events) in histories {
+        let flags: Vec<bool> = kinds(&built(&events))
+            .into_iter()
+            .filter_map(|k| match k {
+                EntryKind::AssistantText { auth_failed, .. } => Some(auth_failed),
+                _ => None,
+            })
+            .collect();
+        let expected = name == "auth-failure";
+        assert!(
+            !flags.is_empty() || !expected,
+            "{name}: has an assistant text"
+        );
+        assert!(flags.iter().all(|&f| f == expected), "{name}: {flags:?}");
+    }
+}
+
+#[test]
+fn a_saved_command_history_restores_to_the_same_transcript() {
+    for (name, events) in command_histories() {
+        let (_, restored) =
+            decode_events(&encode_events(0, &events)).expect("the saved history decodes");
+        let restored = built(&sequenced(restored));
+        let whole = built(&events);
+        assert_eq!(kinds(&restored), kinds(&whole), "{name}");
+        assert_eq!(eras(&restored), eras(&whole), "{name}");
+    }
+}
+
+#[test]
+fn a_model_note_is_a_model_marker_and_a_refusal_carries_the_reason() {
+    let transcript = built(&sequenced([
         StructuredEvent::ModelChanged {
             model: "claude-haiku-5-5".into(),
         },
@@ -1676,20 +1927,152 @@ fn the_daemons_command_model_and_kind_notes_make_no_entry() {
             model: "x".into(),
             message: "Model 'x' not found".into(),
         },
-        StructuredEvent::KindSwitched {
-            to: SessionKind::Terminal,
-        },
-        StructuredEvent::ConversationReset {
-            trigger: Some("clear".into()),
-            raw: r#"{"type":"conversation_reset","trigger":"clear"}"#.into(),
-        },
-        StructuredEvent::CompactBoundary {
-            trigger: Some("manual".into()),
-            pre_tokens: Some(2),
-            post_tokens: Some(1),
-            raw: r#"{"type":"system","subtype":"compact_boundary"}"#.into(),
-        },
-    ];
-    let transcript = built(&sequenced(notes));
+    ]));
+    assert_eq!(
+        kinds(&transcript),
+        vec![
+            EntryKind::ModelChanged {
+                model: "claude-haiku-5-5".into(),
+                refused: None,
+            },
+            EntryKind::ModelChanged {
+                model: "x".into(),
+                refused: Some("Model 'x' not found".into()),
+            },
+        ]
+    );
+}
+
+fn switched(to: SessionKind) -> StructuredEvent {
+    StructuredEvent::KindSwitched { to }
+}
+
+fn a_turn(text: &str) -> Vec<StructuredEvent> {
+    vec![
+        user_sent(text, &[]),
+        assistant_block(ContentBlock::Text {
+            text: text.to_uppercase(),
+        }),
+        turn_result(false, "success", None),
+    ]
+}
+
+#[test]
+fn a_switch_pair_is_one_terminal_period_between_the_entries_before_and_after() {
+    let before = a_turn("a");
+    let after = a_turn("b");
+    let mut events = before.clone();
+    events.push(switched(SessionKind::Terminal));
+    events.push(switched(SessionKind::Structured));
+    events.extend(after.clone());
+    let mut expected = kinds(&built(&sequenced(before)));
+    expected.push(EntryKind::TerminalPeriod);
+    expected.extend(kinds(&built(&sequenced(after))));
+    assert_eq!(kinds(&built(&sequenced(events))), expected);
+}
+
+#[test]
+fn an_unclosed_switch_to_terminal_is_one_terminal_period_at_the_end() {
+    let before = a_turn("a");
+    let mut events = before.clone();
+    events.push(switched(SessionKind::Terminal));
+    let mut expected = kinds(&built(&sequenced(before)));
+    expected.push(EntryKind::TerminalPeriod);
+    assert_eq!(kinds(&built(&sequenced(events))), expected);
+}
+
+#[test]
+fn each_terminal_period_is_one_marker() {
+    let mut events = Vec::new();
+    for word in ["a", "b"] {
+        events.extend(a_turn(word));
+        events.push(switched(SessionKind::Terminal));
+        // A repeated note inside the period opens nothing more.
+        events.push(switched(SessionKind::Terminal));
+        events.push(switched(SessionKind::Structured));
+    }
+    events.extend(a_turn("c"));
+    let periods = kinds(&built(&sequenced(events)))
+        .into_iter()
+        .filter(|k| *k == EntryKind::TerminalPeriod)
+        .count();
+    assert_eq!(periods, 2);
+}
+
+fn reported(description: &str, hint: Option<&str>) -> StructuredEvent {
+    StructuredEvent::CommandsReported {
+        commands: vec![ReportedCommand {
+            name: "greet".into(),
+            description: Some(description.into()),
+            argument_hint: hint.map(Into::into),
+            aliases: vec![],
+            builtin: false,
+        }],
+        models: vec![],
+    }
+}
+
+fn chips(transcript: &Transcript) -> Vec<Option<CommandChip>> {
+    kinds(transcript)
+        .into_iter()
+        .filter_map(|k| match k {
+            EntryKind::UserMessage { command, .. } => Some(command),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_sent_command_is_a_chip_with_the_description_of_the_list_held_then() {
+    let transcript = built(&sequenced([
+        reported("Greet someone", Some("<name>")),
+        user_sent("/greet Ada", &[]),
+        reported("Greet anyone", None),
+        user_sent("/greet  Bob and Eve", &[]),
+        user_sent("hello", &[]),
+    ]));
+    assert_eq!(
+        chips(&transcript),
+        vec![
+            Some(CommandChip {
+                invocation: CommandInvocation {
+                    name: "greet".into(),
+                    args: "Ada".into(),
+                },
+                description: Some("Greet someone".into()),
+                argument_hint: Some("<name>".into()),
+            }),
+            Some(CommandChip {
+                invocation: CommandInvocation {
+                    name: "greet".into(),
+                    args: "Bob and Eve".into(),
+                },
+                description: Some("Greet anyone".into()),
+                argument_hint: None,
+            }),
+            None,
+        ]
+    );
+}
+
+#[test]
+fn a_command_the_list_does_not_hold_is_a_chip_without_a_description() {
+    let transcript = built(&with_sent("command-unknown", &["/nosuchcmd"]));
+    assert_eq!(
+        chips(&transcript),
+        vec![Some(CommandChip {
+            invocation: CommandInvocation {
+                name: "nosuchcmd".into(),
+                args: String::new(),
+            },
+            description: None,
+            argument_hint: None,
+        })]
+    );
+}
+
+#[test]
+fn a_command_list_note_makes_no_entry() {
+    let transcript = built(&sequenced([reported("Greet", None)]));
     assert_eq!(kinds(&transcript), vec![], "no entry, no raw row");
 }

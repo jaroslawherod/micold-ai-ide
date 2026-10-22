@@ -70,7 +70,7 @@ write-and-wait taken out of `set_permission_mode` (M3). `ControlFailed` **new**:
 
 | Item | Change | FR |
 |---|---|---|
-| `EntryKind::UserMessage` | `+ command: Option<CommandInvocation>` (from `parse_invocation` of the `UserSent` text; #941) | FR-003 |
+| `EntryKind::UserMessage` | `+ command: Option<CommandChip>`: `CommandChip { invocation: CommandInvocation, description, argument_hint }`, from `parse_invocation` of the `UserSent` text (#941) and the `CommandList` the history holds at that point | FR-003 |
 | `EntryKind::CommandOutput` **new** | `{ text }`: a synthetic assistant text after a command user turn | FR-006 |
 | `EntryKind::Compacted` **new** | `{ trigger: Option<String>, summary: Option<String> }`: a `CompactBoundary` plus the `is_synthetic` user text after it | FR-004 |
 | `EntryKind::Cleared` **new** | from `ConversationReset` | FR-005 |

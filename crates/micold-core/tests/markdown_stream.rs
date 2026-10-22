@@ -111,7 +111,10 @@ fn replaying_the_recorded_turn_delta_by_delta_gives_the_same_documents() {
     for event in &events {
         transcript.apply(0, std::slice::from_ref(event), true);
         for entry in transcript.entries() {
-            let EntryKind::AssistantText { text, streaming } = entry.kind() else {
+            let EntryKind::AssistantText {
+                text, streaming, ..
+            } = entry.kind()
+            else {
                 continue;
             };
             let doc = documents

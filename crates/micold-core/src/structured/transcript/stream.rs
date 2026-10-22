@@ -90,6 +90,7 @@ fn start_block(transcript: &mut Transcript, seq: u64, index: u64, raw: &str) {
             EntryKind::AssistantText {
                 text: text("text"),
                 streaming: true,
+                auth_failed: false,
             },
         )),
         (Some("thinking"), _) => Some(transcript.open(

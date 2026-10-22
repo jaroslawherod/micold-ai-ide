@@ -16,7 +16,8 @@ use iced::widget::{column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::{
-    footer_figures, Entry, EntryKind, Outcome, ToolCard, ToolStatus, Transcript, TurnFooter,
+    footer_figures, CommandChip, Entry, EntryKind, Outcome, ToolCard, ToolStatus, Transcript,
+    TurnFooter,
 };
 use micold_core::tokens::{spacing, Roles};
 
@@ -158,6 +159,43 @@ pub fn oversized_text(original_bytes: u64) -> String {
     format!("An event of {original_bytes} bytes was too large to show")
 }
 
+/// What a `/clear` marker says (#943 FR-005).
+pub const CLEARED: &str = "Conversation cleared: the turns above are from before the clear";
+
+/// What a terminal period's marker says (#943 FR-023).
+pub const TERMINAL_PERIOD: &str = "The conversation continued in the terminal; those turns are \
+     not shown here, the terminal's scrollback holds them";
+
+/// A user message as the transcript shows it: a command as `/name args` (#943 FR-003), else
+/// its text.
+pub fn user_message_text(text: &str, command: Option<&CommandChip>) -> String {
+    match command {
+        Some(CommandChip { invocation, .. }) if invocation.args.is_empty() => {
+            format!("/{}", invocation.name)
+        }
+        Some(CommandChip { invocation, .. }) => {
+            format!("/{} {}", invocation.name, invocation.args)
+        }
+        None => text.to_owned(),
+    }
+}
+
+/// What a compaction marker says (#943 FR-004).
+pub fn compacted_text(trigger: Option<&str>) -> String {
+    match trigger {
+        Some("auto") => "Conversation compacted automatically".to_owned(),
+        _ => "Conversation compacted".to_owned(),
+    }
+}
+
+/// What a model marker says (#943 FR-015, FR-016).
+pub fn model_changed_text(model: &str, refused: Option<&str>) -> String {
+    match refused {
+        None => format!("Model changed to {model}"),
+        Some(reason) => format!("Model {model} was refused: {reason}"),
+    }
+}
+
 /// What a notice of sub-agent messages naming no card says (FR-024).
 pub fn subagent_notice_text(count: u64) -> String {
     format!("{} not shown", subagent_count(count))
@@ -249,21 +287,54 @@ pub fn entry(
             parts.extend(cwd.iter().cloned());
             caption(parts.join(" · "), roles)
         }
-        EntryKind::UserMessage { text, .. } => column![
+        EntryKind::UserMessage { text, command, .. } => column![
             caption(USER_LABEL, roles),
-            Text::new(plain_text(text), TypeRole::Body, roles)
-                .wrapping(Wrapping::WordOrGlyph)
-                .width(Length::Fill),
+            Text::new(
+                plain_text(&user_message_text(text, command.as_ref())),
+                TypeRole::Body,
+                roles
+            )
+            .wrapping(Wrapping::WordOrGlyph)
+            .width(Length::Fill),
         ]
         .spacing(spacing::XS)
         .into(),
-        EntryKind::AssistantText { text, streaming } => (renderers.assistant_text)(
+        EntryKind::AssistantText {
+            text, streaming, ..
+        } => (renderers.assistant_text)(
             &AssistantText {
                 block: block(*streaming),
                 text,
             },
             ctx,
         ),
+        // #943: the window's disclosure cards for these come in its M8 (T058) and M9 (T064).
+        EntryKind::CommandOutput { text } => (renderers.assistant_text)(
+            &AssistantText {
+                block: block(false),
+                text,
+            },
+            ctx,
+        ),
+        EntryKind::Compacted { trigger, summary } => {
+            let mut marker =
+                column![caption(compacted_text(trigger.as_deref()), roles)].spacing(spacing::XS);
+            if let Some(summary) = summary {
+                marker = marker.push((renderers.assistant_text)(
+                    &AssistantText {
+                        block: block(false),
+                        text: summary,
+                    },
+                    ctx,
+                ));
+            }
+            marker.into()
+        }
+        EntryKind::Cleared => caption(CLEARED, roles),
+        EntryKind::ModelChanged { model, refused } => {
+            caption(model_changed_text(model, refused.as_deref()), roles)
+        }
+        EntryKind::TerminalPeriod => caption(TERMINAL_PERIOD, roles),
         EntryKind::Thinking { text, streaming } => {
             let card = DisclosureCard::new(THINKING_TITLE, toggle(), roles)
                 .leading(Icon::Thinking)
@@ -405,4 +476,64 @@ fn footer_row(view: &FooterView, roles: Roles) -> Block {
         );
     }
     footer.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::structured::commands::CommandInvocation;
+
+    fn chip(name: &str, args: &str) -> CommandChip {
+        CommandChip {
+            invocation: CommandInvocation {
+                name: name.into(),
+                args: args.into(),
+            },
+            description: Some("ignored here".into()),
+            argument_hint: None,
+        }
+    }
+
+    #[test]
+    fn a_command_turn_reads_as_the_command_and_its_arguments() {
+        let typed = "/greet  Ada";
+        assert_eq!(
+            user_message_text(typed, Some(&chip("greet", "Ada"))),
+            "/greet Ada"
+        );
+        assert_eq!(
+            user_message_text("/clear", Some(&chip("clear", ""))),
+            "/clear"
+        );
+        assert_eq!(user_message_text("hello", None), "hello");
+    }
+
+    #[test]
+    fn a_compaction_marker_says_whether_the_cli_compacted_on_its_own() {
+        assert_eq!(compacted_text(Some("manual")), "Conversation compacted");
+        assert_eq!(compacted_text(None), "Conversation compacted");
+        assert_eq!(
+            compacted_text(Some("auto")),
+            "Conversation compacted automatically"
+        );
+    }
+
+    #[test]
+    fn a_model_marker_names_the_model_or_the_refusal() {
+        assert_eq!(
+            model_changed_text("claude-haiku-5-5", None),
+            "Model changed to claude-haiku-5-5"
+        );
+        assert_eq!(
+            model_changed_text("x", Some("Model 'x' not found")),
+            "Model x was refused: Model 'x' not found"
+        );
+    }
+
+    #[test]
+    fn the_clear_and_terminal_markers_say_where_the_turns_are() {
+        assert!(CLEARED.contains("before the clear"));
+        assert!(TERMINAL_PERIOD.contains("not shown"));
+        assert!(TERMINAL_PERIOD.contains("scrollback"));
+    }
 }

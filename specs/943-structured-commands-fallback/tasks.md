@@ -142,7 +142,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 4: Core transcript — command turns, markers, eras (M2; the chip needs #941 M1, I-1)
 
-- [ ] T019 [P] [US1] Tests in `core/tests/structured_transcript.rs`: `command-builtin-output.jsonl`
+- [x] T019 [P] [US1] Tests in `core/tests/structured_transcript.rs`: `command-builtin-output.jsonl`
   → the synthetic assistant text after the command's user turn is one `CommandOutput { text }`
   holding the markdown text unchanged, never an `AssistantText`; `command-compact.jsonl` → one
   `Compacted { trigger: Some("manual"), summary: Some(…) }`, the `is_synthetic` summary is not a
@@ -150,22 +150,22 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `era 0`, after it `era 1`; `command-unknown.jsonl` → the model's reply as `AssistantText`;
   `auth-failure.jsonl` → its `AssistantText` has `auth_failed: true`, every other fixture `false`;
   a saved history of each restores to the same transcript (FR-004–FR-006, FR-022a)
-- [ ] T020 [US3] [US5] Tests in `core/tests/structured_transcript.rs`: a `ModelChanged` note →
+- [x] T020 [US3] [US5] Tests in `core/tests/structured_transcript.rs`: a `ModelChanged` note →
   `ModelChanged { model, refused: None }`, a `ModelRefused` note → `refused: Some(message)`;
   `KindSwitched { to: Terminal }` then `KindSwitched { to: Structured }` → exactly one
   `TerminalPeriod` between the entries before and after, with no entry repeated or missing; an
   unclosed `to: Terminal` at the end → one `TerminalPeriod`; two periods → two (FR-015, FR-016,
   FR-023)
-- [ ] T021 Implement T019–T020 in `core/src/structured/transcript/entry.rs` (`CommandOutput`,
+- [x] T021 Implement T019–T020 in `core/src/structured/transcript/entry.rs` (`CommandOutput`,
   `Compacted`, `Cleared`, `ModelChanged`, `TerminalPeriod`, `AssistantText.auth_failed`,
   `Entry.era`) and `core/src/structured/transcript/build.rs`
-- [ ] T022 [US1] Tests in `core/tests/structured_transcript.rs`: a `UserSent` note (#941 M1) with
+- [x] T022 [US1] Tests in `core/tests/structured_transcript.rs`: a `UserSent` note (#941 M1) with
   `/greet Ada` → `UserMessage { command: Some(CommandInvocation { name: "greet", args: "Ada" }) }`;
   plain text → `command: None`; the command's description and argument hint are those of the
   `CommandList` held at that point of the history (a later `CommandsReported` does not change an
   earlier chip) (FR-003)
-- [ ] T023 Implement T022 in `core/src/structured/transcript/build.rs` and `entry.rs`
-- [ ] T024 [US1] Draw the new `EntryKind` arms in `client/src/ui/transcript/entries.rs` with the
+- [x] T023 Implement T022 in `core/src/structured/transcript/build.rs` and `entry.rs`
+- [x] T024 [US1] Draw the new `EntryKind` arms in `client/src/ui/transcript/entries.rs` with the
   existing pieces only (caption for `Cleared`, `ModelChanged`, `TerminalPeriod`; #940's markdown
   for `CommandOutput`; caption plus the summary as markdown for `Compacted`; `/name args` as the
   user text for a chip), each line's text from a render-free function with a unit test (as

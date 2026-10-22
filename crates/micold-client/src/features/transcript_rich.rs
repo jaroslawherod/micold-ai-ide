@@ -137,10 +137,21 @@ enum Source<'a> {
 impl<'a> Source<'a> {
     fn of(kind: &'a EntryKind) -> Option<Self> {
         match kind {
-            EntryKind::AssistantText { text, streaming }
+            EntryKind::AssistantText {
+                text, streaming, ..
+            }
             | EntryKind::Thinking { text, streaming } => Some(Self::Text {
                 text,
                 streaming: *streaming,
+            }),
+            // #943: a command's output and a compaction's summary are markdown too.
+            EntryKind::CommandOutput { text }
+            | EntryKind::Compacted {
+                summary: Some(text),
+                ..
+            } => Some(Self::Text {
+                text,
+                streaming: false,
             }),
             EntryKind::ToolCall(card) if EDIT_TOOLS.contains(&card.name.as_str()) => {
                 Some(Self::Edit {

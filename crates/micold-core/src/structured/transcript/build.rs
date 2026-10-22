@@ -2,10 +2,18 @@
 //! rules*).
 
 use super::entry::{
-    EntryKey, EntryKind, Outcome, RawReason, ToolCard, ToolResultView, ToolStatus, TurnFooter,
+    CommandChip, EntryKey, EntryKind, Outcome, RawReason, ToolCard, ToolResultView, ToolStatus,
+    TurnFooter,
 };
 use super::{parent_of, result::result_parts, stream, summary::input_summary, Scope, Transcript};
+use crate::session::SessionKind;
+use crate::structured::commands::{parse_invocation, CommandList};
 use crate::structured::{ContentBlock, SequencedEvent, StructuredEvent};
+
+/// `message.model` of an answer the CLI made itself, such as a built-in's output (#943 R4).
+const SYNTHETIC_MODEL: &str = "<synthetic>";
+/// The `error` of an assistant message the CLI wrote for a failed authentication (#943 R9).
+const AUTH_FAILED: &str = "authentication_failed";
 
 /// How an event stands to the transcript's scope (research R7).
 enum Role<'a> {
@@ -54,6 +62,7 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             cwd,
             ..
         } => {
+            hold_command_source(transcript, seq, event);
             transcript.open(
                 at(0),
                 seq,
@@ -68,22 +77,48 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             blocks,
             raw,
             message_id,
+            model,
+            error,
             ..
         } => {
             transcript.in_turn = true;
-            push_blocks(
-                transcript,
-                seq,
-                blocks,
-                raw,
-                Speaker::Assistant(message_id.as_deref()),
-            );
+            let auth_failed = error.as_deref() == Some(AUTH_FAILED);
+            let speaker = Speaker::Assistant {
+                message_id: message_id.as_deref(),
+                output: !auth_failed
+                    && transcript.command_turn
+                    && model.as_deref() == Some(SYNTHETIC_MODEL),
+                auth_failed,
+            };
+            push_blocks(transcript, seq, blocks, raw, speaker);
         }
-        StructuredEvent::User { blocks, raw, .. } => {
+        StructuredEvent::User {
+            blocks,
+            raw,
+            is_synthetic,
+            ..
+        } => {
             transcript.in_turn = true;
             if is_interrupted_text(blocks) {
                 // The CLI's own mark of an interrupt: absorbed, it marks the turn (FR-014).
                 transcript.interrupted = true;
+            } else if let (true, Some(marker)) = (*is_synthetic, transcript.compaction) {
+                // The compaction's summary: behind its marker, never a user entry (#943 R5).
+                let summary = block_text(blocks);
+                transcript.change(marker, |kind| {
+                    if let EntryKind::Compacted { summary: held, .. } = kind {
+                        *held = Some(summary);
+                    }
+                });
+            } else if let Some(output) = local_command_stdout(blocks) {
+                // The CLI's own report of a command it ran: its output, without the markup
+                // (FR-006); after a compaction it only repeats the marker.
+                if transcript.compaction.is_none() {
+                    let kind = EntryKind::CommandOutput {
+                        text: output.to_string(),
+                    };
+                    transcript.open(at(0), seq, kind);
+                }
             } else {
                 push_blocks(transcript, seq, blocks, raw, Speaker::User);
             }
@@ -128,9 +163,12 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
         }
         StructuredEvent::UserSent { text, attachments } => {
             transcript.in_turn = true;
+            let command = command_chip(transcript, text);
+            transcript.command_turn = command.is_some();
             let kind = EntryKind::UserMessage {
                 text: text.clone(),
                 attachments: attachments.clone(),
+                command,
             };
             transcript.open(at(0), seq, kind);
         }
@@ -148,16 +186,42 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             );
         }
         // The CLI's mode and control replies change the session, not the conversation (#942).
-        // #943's compaction and clear lines and the daemon's command, model and kind notes get
-        // their entries in its M2; until then they make none.
-        StructuredEvent::Status { .. }
-        | StructuredEvent::ControlResponse { .. }
-        | StructuredEvent::CompactBoundary { .. }
-        | StructuredEvent::ConversationReset { .. }
-        | StructuredEvent::CommandsReported { .. }
-        | StructuredEvent::ModelChanged { .. }
-        | StructuredEvent::ModelRefused { .. }
-        | StructuredEvent::KindSwitched { .. } => {}
+        StructuredEvent::Status { .. } | StructuredEvent::ControlResponse { .. } => {}
+        StructuredEvent::CommandsReported { .. } => hold_command_source(transcript, seq, event),
+        StructuredEvent::CompactBoundary { trigger, .. } => {
+            let kind = EntryKind::Compacted {
+                trigger: trigger.clone(),
+                summary: None,
+            };
+            transcript.compaction = Some(transcript.open(at(0), seq, kind));
+        }
+        StructuredEvent::ConversationReset { .. } => {
+            transcript.era += 1;
+            transcript.open(at(0), seq, EntryKind::Cleared);
+        }
+        StructuredEvent::ModelChanged { model } => {
+            let kind = EntryKind::ModelChanged {
+                model: model.clone(),
+                refused: None,
+            };
+            transcript.open(at(0), seq, kind);
+        }
+        StructuredEvent::ModelRefused { model, message } => {
+            let kind = EntryKind::ModelChanged {
+                model: model.clone(),
+                refused: Some(message.clone()),
+            };
+            transcript.open(at(0), seq, kind);
+        }
+        // One marker per terminal period: the note that opens it, until one closes it.
+        StructuredEvent::KindSwitched { to } => match to {
+            SessionKind::Terminal if !transcript.in_terminal => {
+                transcript.in_terminal = true;
+                transcript.open(at(0), seq, EntryKind::TerminalPeriod);
+            }
+            SessionKind::Terminal => {}
+            SessionKind::Structured => transcript.in_terminal = false,
+        },
         StructuredEvent::Unrecognised { raw } => {
             transcript.open(at(0), seq, raw_row(raw, RawReason::Unrecognised));
         }
@@ -174,6 +238,59 @@ fn is_interrupted_text(blocks: &[ContentBlock]) -> bool {
         if text.starts_with("[Request interrupted by user") && text.ends_with(']'))
 }
 
+/// The text blocks' text, joined.
+fn block_text(blocks: &[ContentBlock]) -> String {
+    blocks
+        .iter()
+        .filter_map(|block| match block {
+            ContentBlock::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// The CLI's report of a command it ran, `<local-command-stdout>…</local-command-stdout>`: the
+/// text inside (#943 R5).
+fn local_command_stdout(blocks: &[ContentBlock]) -> Option<&str> {
+    let [ContentBlock::Text { text }] = blocks else {
+        return None;
+    };
+    let inner = text
+        .trim()
+        .strip_prefix("<local-command-stdout>")?
+        .strip_suffix("</local-command-stdout>")?;
+    Some(inner.trim())
+}
+
+/// Keeps `event`, an `init` or a `CommandsReported` note, as the latest of its kind: what the
+/// command list at this point of the history is made from.
+fn hold_command_source(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
+    let kind = std::mem::discriminant(event);
+    transcript
+        .command_sources
+        .retain(|held| std::mem::discriminant(&held.event) != kind);
+    transcript.command_sources.push(SequencedEvent {
+        seq,
+        event: event.clone(),
+    });
+}
+
+/// `text` read as a command, described by the command list the history holds now (FR-003).
+fn command_chip(transcript: &Transcript, text: &str) -> Option<CommandChip> {
+    let invocation = parse_invocation(text)?;
+    let list = CommandList::from_history(&transcript.command_sources);
+    let command = list
+        .commands()
+        .iter()
+        .find(|c| c.answers_to(&invocation.name));
+    Some(CommandChip {
+        description: command.and_then(|c| c.description.clone()),
+        argument_hint: command.and_then(|c| c.argument_hint.clone()),
+        invocation,
+    })
+}
+
 fn raw_row(text: &str, reason: RawReason) -> EntryKind {
     EntryKind::Raw {
         text: text.to_string(),
@@ -184,8 +301,13 @@ fn raw_row(text: &str, reason: RawReason) -> EntryKind {
 #[derive(Clone, Copy)]
 enum Speaker<'a> {
     User,
-    /// The message's id, when known.
-    Assistant(Option<&'a str>),
+    Assistant {
+        /// The message's id, when known.
+        message_id: Option<&'a str>,
+        /// Its text is a command's output (#943 R4).
+        output: bool,
+        auth_failed: bool,
+    },
 }
 
 /// One entry per block, keyed by the block's position, except a tool result, which goes into its
@@ -204,7 +326,9 @@ fn push_blocks(
             block: u32::try_from(index).unwrap_or(u32::MAX),
         };
         let streamed = match speaker {
-            Speaker::Assistant(message_id) if !matches!(block, ContentBlock::ToolResult { .. }) => {
+            Speaker::Assistant { message_id, .. }
+                if !matches!(block, ContentBlock::ToolResult { .. }) =>
+            {
                 stream::supersede(transcript, message_id)
             }
             _ => None,
@@ -216,10 +340,13 @@ fn push_blocks(
                     Speaker::User => EntryKind::UserMessage {
                         text,
                         attachments: Vec::new(),
+                        command: None,
                     },
-                    Speaker::Assistant(_) => EntryKind::AssistantText {
+                    Speaker::Assistant { output: true, .. } => EntryKind::CommandOutput { text },
+                    Speaker::Assistant { auth_failed, .. } => EntryKind::AssistantText {
                         text,
                         streaming: false,
+                        auth_failed,
                     },
                 };
                 open_or_replace(transcript, streamed, key, seq, kind);
@@ -258,9 +385,17 @@ fn open_or_replace(
     seq: u64,
     kind: EntryKind,
 ) {
-    let same_kind = streamed
-        .and_then(|id| transcript.get(id))
-        .is_some_and(|e| std::mem::discriminant(e.kind()) == std::mem::discriminant(&kind));
+    // A command's output takes the place of the text streamed for it.
+    let same_kind = streamed.and_then(|id| transcript.get(id)).is_some_and(|e| {
+        std::mem::discriminant(e.kind()) == std::mem::discriminant(&kind)
+            || matches!(
+                (e.kind(), &kind),
+                (
+                    EntryKind::AssistantText { .. },
+                    EntryKind::CommandOutput { .. }
+                )
+            )
+    });
     match streamed {
         Some(id) if same_kind => transcript.change(id, |old| *old = kind),
         _ => {
@@ -340,6 +475,8 @@ fn push_tool_result(
 fn end_turn(transcript: &mut Transcript) {
     transcript.in_turn = false;
     transcript.interrupted = false;
+    transcript.command_turn = false;
+    transcript.compaction = None;
     for card in std::mem::take(&mut transcript.turn_cards) {
         let running = matches!(
             transcript.get(card).map(|e| e.kind()),
