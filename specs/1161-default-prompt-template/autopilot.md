@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #PRN | in review |
+| M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #1245 | in review |
 | M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #… | pending |
 | M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #… | pending |
 
