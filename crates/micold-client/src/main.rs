@@ -35,6 +35,7 @@ use micold_core::frame_probe::{
     FrameProbe, ProbeConfig, Scene, SceneFacts, ENV_VAR as FRAME_PROBE_ENV,
     SCENE_ENV_VAR as FRAME_PROBE_SCENE_ENV,
 };
+use micold_core::overview_expansion::CardLink;
 use micold_core::protocol::grid::LineId;
 use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
 use micold_core::session::{SessionId, SessionLocation, ShellInstanceId, TerminalMode};
@@ -680,11 +681,13 @@ fn card_focus_return(app: &mut App) -> Option<Task<Message>> {
     card_focus_return_id(app).map(iced::widget::operation::focus)
 }
 
-/// The control [`card_focus_return`] focuses: the card, or its issue link when the menu was
-/// opened from the link and closed without a choice (feature 1122, FR-009), the card when that
-/// link has gone since.
+/// The control [`card_focus_return`] focuses: the card, or the link the menu was opened from when
+/// it closed without a choice (feature 1122, FR-009; feature 1123, any link of the card), the card
+/// when that link is no longer drawn.
 fn card_focus_return_id(app: &mut App) -> Option<iced::advanced::widget::Id> {
-    use micold_client::ui::overview::{card_id, card_link_id, focus_return_target, issue_link_for};
+    use micold_client::ui::overview::{
+        card_id, card_link_id, card_link_shown, focus_return_target,
+    };
     if !app.core.overview.open || micold_client::overlay::registry::open_dialog(&app.core).is_some()
     {
         return None;
@@ -701,30 +704,31 @@ fn card_focus_return_id(app: &mut App) -> Option<iced::advanced::widget::Id> {
         app.core.overview.focus_return.take()?;
     let target = focus_return_target(&app.core, &location)?;
     app.core.overview.focus_landed = Some(target.clone());
-    let link = to_link && target == location && issue_link_for(&app.core, &target).is_some();
-    Some(if link {
-        card_link_id(&target, micold_core::overview_expansion::CardLink::Issue)
-    } else {
-        card_id(&target)
+    let link =
+        to_link.filter(|&link| target == location && card_link_shown(&app.core, &target, link));
+    Some(match link {
+        Some(link) => card_link_id(&target, link),
+        None => card_id(&target),
     })
 }
 
-/// The card whose issue link holds the keyboard, while that link is shown (feature 1122): read
-/// before an update, for [`link_focus_handoff`] after it.
-fn shown_focused_link(app: &App) -> Option<SessionLocation> {
+/// The card and which of its links holds the keyboard, while that link is drawn (feature 1122;
+/// feature 1123, R6): read before an update, for [`link_focus_handoff`] after it.
+fn shown_focused_link(app: &App) -> Option<(SessionLocation, CardLink)> {
     let overview = &app.core.overview;
-    let location = overview
+    let (location, link) = overview
         .expansion
         .focused_link()
         .filter(|_| overview.open)?;
-    micold_client::ui::overview::issue_link_for(&app.core, location).map(|_| location.clone())
+    micold_client::ui::overview::card_link_shown(&app.core, location, link)
+        .then(|| (location.clone(), link))
 }
 
 /// What the link's keyboard hand-offs compare across one update (feature 1122).
 #[derive(Debug, Clone, PartialEq)]
 struct LinkFocus {
-    /// The card whose issue link held the keyboard, while shown ([`shown_focused_link`]).
-    link: Option<SessionLocation>,
+    /// The card and its link that held the keyboard, while drawn ([`shown_focused_link`]).
+    link: Option<(SessionLocation, CardLink)>,
     /// The active project: a switch moves no focus (972; review A F2, M4).
     project: Option<PathBuf>,
     /// The expanded card.
@@ -751,32 +755,30 @@ fn link_focus_after(app: &mut App, before: &LinkFocus) -> Option<iced::advanced:
     if let Some(card) = link_focus_handoff(app, before.link.clone()) {
         return Some(card);
     }
-    // The link sits in a different place in the collapsed and the expanded card, so a change of
+    // A link sits in a different place in the collapsed and the expanded card, so a change of
     // form rebuilds it without the keyboard (visual pass r1, M4): Shift+Tab onto the previous
-    // card's link expands that card, and Escape on a link collapses its card.
-    let link = shown_focused_link(app)?;
-    let was = before.expanded.as_ref() == Some(&link);
-    let is = app.core.overview.expansion.expanded() == Some(&link);
-    (was != is).then(|| {
-        micold_client::ui::overview::card_link_id(
-            &link,
-            micold_core::overview_expansion::CardLink::Issue,
-        )
-    })
+    // card's link expands that card, and Escape on a link collapses its card. A link still drawn
+    // takes it back; one no longer drawn was handed to its card above (feature 1123, R6).
+    let (location, link) = shown_focused_link(app)?;
+    let was = before.expanded.as_ref() == Some(&location);
+    let is = app.core.overview.expansion.expanded() == Some(&location);
+    (was != is).then(|| micold_client::ui::overview::card_link_id(&location, link))
 }
 
 /// The control the keyboard moves to when the update took away the link that held it (feature
 /// 1122, spec Edge Cases, contract U6): the link's card while it is listed, else where a removed
 /// focused card's keyboard goes (feature 972, FR-011). The card's taking the keyboard back from
-/// its own link is a move inside the card, so its form stays (FR-008).
+/// its own link is a move inside the card, so its form stays (FR-008). A link is taken away when
+/// it is no longer drawn: a gone issue link, a pull request a reading dropped, or a number Escape
+/// hid by collapsing its card (feature 1123, R6, R7).
 fn link_focus_handoff(
     app: &mut App,
-    held: Option<SessionLocation>,
+    held: Option<(SessionLocation, CardLink)>,
 ) -> Option<iced::advanced::widget::Id> {
     use micold_client::features::overview::Msg;
-    use micold_client::ui::overview::{card_id, focus_return_target, issue_link_for};
+    use micold_client::ui::overview::{card_id, card_link_shown, focus_return_target};
     use micold_core::overview_expansion::Event;
-    let location = held?;
+    let (location, link) = held?;
     if !app.core.overview.open {
         return None;
     }
@@ -785,13 +787,13 @@ fn link_focus_handoff(
         // The card went with its link.
         return Some(card_id(&target));
     }
-    if issue_link_for(&app.core, &location).is_some() {
+    if card_link_shown(&app.core, &location, link) {
         return None;
     }
     // The card takes the keyboard from its own link: card gained, then link lost (K5).
     for event in [
         Event::FocusGained(location.clone()),
-        Event::LinkFocusLost(location),
+        Event::LinkFocusLost(location, link),
     ] {
         app.core.update(Message::Overview(Msg::Expansion(event)));
     }
@@ -799,8 +801,8 @@ fn link_focus_handoff(
 }
 
 /// The card a keyboard menu request is for and the origin its menu opens with: the card's Menu key
-/// opens it as [`MenuOrigin::Keyboard`](micold_client::features::overview::MenuOrigin), the link's
-/// as `KeyboardFromLink` (feature 1122, R9). `None` with the Overview closed or an activation
+/// opens it as [`MenuOrigin::Keyboard`](micold_client::features::overview::MenuOrigin), a link's
+/// as `KeyboardFromLink` of that link (feature 1122, R9; feature 1123). `None` with the Overview closed or an activation
 /// pending (feature 972), or for any other message.
 fn keyboard_menu_request(
     app: &App,
@@ -815,7 +817,9 @@ fn keyboard_menu_request(
     }
     match msg {
         Msg::CardMenuRequested(location) => Some((location, MenuOrigin::Keyboard)),
-        Msg::LinkMenuRequested(location) => Some((location, MenuOrigin::KeyboardFromLink)),
+        Msg::LinkMenuRequested(location, link) => {
+            Some((location, MenuOrigin::KeyboardFromLink(link)))
+        }
         _ => None,
     }
 }
@@ -870,7 +874,7 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
     };
     // Feature 972 (FR-009, FR-010): the keyboard's way into the card menu and through it.
     let msg = match msg {
-        Msg::CardMenuRequested(_) | Msg::LinkMenuRequested(_) => {
+        Msg::CardMenuRequested(_) | Msg::LinkMenuRequested(..) => {
             let Some((location, origin)) = keyboard_menu_request(app, msg) else {
                 return Task::none();
             };
@@ -923,12 +927,13 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
             let moved = if micold_client::ui::dialog_keeps_focus(&app.core) {
                 micold_client::ui::dialog_focus_move_task(forward)
             } else {
-                let cards: Vec<_> = micold_client::ui::overview::cards(&app.core)
-                    .into_iter()
-                    .map(|card| card.location)
-                    .collect();
+                // Each card with all of its links, so a step from any of them counts from
+                // the card and never lands on one (feature 1123, R6).
+                let stops = micold_client::ui::overview::card_stops(
+                    &micold_client::ui::overview::cards(&app.core),
+                );
                 iced::advanced::widget::operate(micold_client::ui::overview::step_card(
-                    forward, &cards,
+                    forward, &stops,
                 ))
             };
             return moved.chain(micold_client::ui::scroll_focused_into_view());

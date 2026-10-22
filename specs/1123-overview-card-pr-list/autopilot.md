@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: gate M2
-- **Next step**: M2 review A r2 CLEAN, visual r2 PASS all 4, T028 ticked; full gate (scripts/gate.sh), push, M2 PR (title/body in scratchpad); orchestrator opens and merges it, then M3 (T029–T037)
+- **Phase**: review M3
+- **Next step**: M3 T029–T036 done (red/green in tdd/cycle-log.md), scoped gate; review A r1 (session model), review B r1 (sonnet), visual pass r1 (sonnet, §B4 keyboard, T037) dispatched by the orchestrator; then fixes, full gate (scripts/gate.sh), M3 PR
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1230 | design (spec, plan, tasks) | merged (rebase) | 9607e14b |
 | #1233 | M1: pull request rows on the card | merged (rebase) | 97148cd2 |
+| #1235 | M2: open a pull request from its number | merged (rebase) | dc647329 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T019 | full | Cards show pull request rows (#N, state pill, status words), two collapsed with "+N more", all expanded; counts derive from the same list and read *10+* (43 requests per branch, was 44); snapshot `overview-pr-rows` | #1233 | merged |
-| M2 | T020–T028 | full | A click on a row's number opens the pull request, no card activation | — | in progress |
-| M3 | T029–T037 | full | Numbers are Tab stops with every 1122 link rule, arrows step from a number; Escape/menu hand-offs per link | — | pending |
+| M2 | T020–T028 | full | A click on a row's number opens the pull request, no card activation | #1235 | merged |
+| M3 | T029–T037 | full | Numbers are Tab stops with every 1122 link rule, arrows step from a number; Escape/menu hand-offs per link | — | in progress |
 
 ## Decisions
 
