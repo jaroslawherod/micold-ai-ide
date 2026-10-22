@@ -316,3 +316,35 @@ pub(crate) fn key_input(
         physical: to_keymap_physical(physical),
     })
 }
+
+/// The keys of the active session's transcript while it shows one and its turn can be interrupted
+/// (feature 941, FR-012): `None` otherwise, so Escape stays as inert as it was.
+pub(crate) fn transcript_interrupt(state: &State) -> Option<iced::Subscription<Message>> {
+    let session = state.session.active?;
+    (crate::ui::terminal::shows_transcript(state, session) && state.composers.offers_stop(session))
+        .then(|| {
+            iced::keyboard::listen()
+                .with(session)
+                .filter_map(transcript_key_message)
+        })
+}
+
+/// A key press on `session`'s transcript, for the composer to decide (`transcript_key`).
+fn transcript_key_message(
+    (session, event): (micold_core::session::SessionId, iced::keyboard::Event),
+) -> Option<Message> {
+    let iced::keyboard::Event::KeyPressed {
+        key,
+        physical_key,
+        modifiers,
+        text,
+        ..
+    } = event
+    else {
+        return None;
+    };
+    let press = crate::ui::composer::key_input(&key, &physical_key, modifiers, text.as_deref())?;
+    Some(Message::Composer(
+        crate::features::composer::Msg::TranscriptKey { session, press },
+    ))
+}

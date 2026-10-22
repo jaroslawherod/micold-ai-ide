@@ -165,3 +165,33 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
   showcase_completeness --test showcase_captions --test showcase_tab --test icons` → 83, 11, 45, 7,
   1, 7 passed; `--lib` component and contrast cases 23 and 16 passed.
 
+
+## M6 — composer under the structured transcript, user guide (T055–T061)
+
+### Cycle 10 — the composer drawn, its keys, the transcript's notices (T055, T056 → T057–T059)
+
+- tests: `tests/gates/composer_fits.rs` (new, 8 cases in `layout_snapshot`, both schemes where the
+  colour could matter: the composer under a structured transcript and none under a terminal; a long
+  draft grows it to its limit with the transcript kept; busy and idle in words, Stop only while
+  busy; queue rows, hold notice with Send queued, overdue notice with Stop session, notice line and
+  chips under the transcript; the I-1 and I-4 slots take room only when filled; an interrupted turn
+  closes with its notice and a message names its pictures; a long queue and a long draft leave the
+  transcript and Send in view); `tests/composer_large_draft.rs` (new, release, `#[ignore]`: every
+  keystroke into a 10,000-line draft under 100 ms); unit test `entries.rs`
+  `a_message_with_pictures_names_them_in_order`.
+- order: test-after, recorded. The view (T057, T058) was written first, to settle where the editor
+  lives (Decision 19), then the gate. Its first runs were red on real faults: the placeholder is not
+  a paragraph the painter sees (assertion dropped, commented), and the transcript was squeezed to
+  197 px by a crowded composer (`a_long_queue_and_a_long_draft_…`, review A's finding: the queue now
+  scrolls in `QUEUE_MAX_HEIGHT` 120). The timing test was red on the setup paste (399 ms for 10,000
+  lines in one action); the budget holds typing, the paste is setup.
+- mutant set on the finished code: the interrupted notice drawn as nothing, and the queue's height
+  cap removed → `an_interrupted_turn_closes_with_its_notice_and_a_message_names_its_pictures` and
+  `a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view` failed, the other 6 passed.
+  Restored.
+- the tree moved under the transcript's viewport: `containment` `TRANSCRIPT_CONTENT` /
+  `TRANSCRIPT_VIEWPORT` and the covered states' `transcript.viewport` anchor one level deeper; the
+  layout snapshot re-recorded (only `session-transcript-pane` and `session-transcript-rich` change).
+- green: `cargo test -p micold-client --test layout_snapshot --test features_composer --test
+  overlay_registry --test field_focus_call_sites` → 91, 29, 24, 6 passed; `--release --test
+  composer_large_draft -- --ignored` → 1 passed.
