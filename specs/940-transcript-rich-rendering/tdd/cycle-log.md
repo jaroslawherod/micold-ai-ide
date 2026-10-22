@@ -122,3 +122,11 @@ each test task written before its implementation task, run red, then made green.
   `sessions_and_windows_share_nothing` (M3) gains the assertion that two windows' caches derive
   the same document for one session (test-after: it passed on first run, as M3's derivation is
   pure).
+
+## Close (2026-10-22) — tdd-verify fixes
+
+- Findings 1 and 7 of `tdd/verification.md` (T043, T044), test-only refactors with no behaviour:
+  `cargo test -p micold-client --test features_transcript_rich --test layout_snapshot` 16 passed and
+  79 passed after the edits; `scripts/gate.sh` green at `77e6071e` (9,440 passed, 0 failed).
+- Nine deliberate mutants (verification.md *Mutation results*): 8 failed their tests, 1 equivalent;
+  each restored and the tree checked clean.

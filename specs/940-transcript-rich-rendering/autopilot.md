@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #940
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
-- **Phase**: close
-- **Next step**: close unit: tdd-verify, Polish, review, gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1229 | M3 rich cache | merged | 7ce164cfa2e5323ab82807db03e80e35bacd9af2 |
 | #1232 | M4 shared components | merged | 1a6250835d61c5cf2c800e8ce131f35051f63215 |
 | #1234 | M5 rich renderers (+ red-CI fix faaa2d66: pinned a committed Fira Mono in `tests/support/layout.rs`) | merged | 18e9cf0979d5afd37492f8840aa4694d7052a934 |
+| pending (orchestrator opens) | close: tdd-verify (FAIL on ordering only), quickstart results, two test-strength fixes, spec closed | open | — |
 
 ## Milestones
 
@@ -70,9 +71,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M5 (conformance, sonnet) | 1 | 73eb296a5316cb2a2ab7913435cc3a31b23e46e1:7d5a14c06382d17351b077801690349100c73c11 | CHANGES: 1 MAJOR (T042 ticked with steps 3, 4, 6, 8 not seen; fixed: thinking rendered from a synthetic event, two-window same-document assertion added, record names the tests for the undriven steps), 2 MINOR (budget has no red: disclosed; table gate red not shown: disclosed). Verify: layout_snapshot 79/79, seam 2/2, rich renderers 7/7 |
 | Review B M5 (conformance, sonnet) | 2 | 1af36e37ec1e7d684293330b8e3a31e3d25ca17c:adfb12ea8c69558c9747585bec8f452610472ed5 | CLEAN: 1 MINOR (steps 3, 4, 8 and the sideways scroll still not driven on screen; recorded with their tests). Verify: features_transcript_rich 16, transcript_rich_renderers 7 passed |
 | Red CI M5 attempt 1 (ubuntu) | 1 | — | `layout_snapshot` `session-transcript-rich`: code lines 0.3–1.1px wider on CI. Root cause: the app ships no monospace face, so `Font::MONOSPACE` resolved on the host (Liberation Mono 0.600 em locally, a 0.602 em face on CI, DejaVu Sans Mono by its widths; macOS/Windows passed because they resolved Courier New, metric-compatible with Liberation Mono at 1229/2048 em); no earlier covered state drew code. Fix, test-only: `tests/support/layout.rs` loads a committed Fira Mono (`tests/fixtures/FiraMono-Regular.ttf`, OFL, provenance in `FONT-PROVENANCE.md`) as the monospace family; guard `the_monospace_face_parses_and_is_the_face_that_measures` (red with the pin removed); fixture regenerated (2 lines, 343.3→343.2). No non-test code, so no review A |
+| tdd-verify (close) | 1 | — | FAIL on test-first ordering only: 10 disclosed test-after behaviours; 0 HIGH smells (7 from a fresh `autopilot-reviewer`: 2 fixed, 2 declined, 3 kept); 9 mutants, 8 caught, 1 equivalent; SC-001..007 covered. `tdd/verification.md` |
+| Review close (correctness of tests, truth of docs) | 1 | e2332cfcb3cb71432d1897cbe679df5692f12aff:77e6071e23d91cb2b7f897f0b95879783a0f13bd | CHANGES: 2 MAJOR (gate counts cited for a tree no gate had run on yet; T043/T044 run counts not in the cycle log) — fixed, prose only, after the gate at 77e6071e passed: cite that gate, cycle log gains a Close entry; 1 MINOR (K4's tests unnamed) fixed |
+| Gate (close) | — | 77e6071e | `scripts/gate.sh` green: 9,440 passed, 0 failed, 17 ignored |
 
 ## Declined review findings
 
+- tdd-verify smell F2 (wall-clock budgets) and F3/F4 (oracle stripper, scheme × pose gates): declined/kept with reasons in `tdd/verification.md` *Findings*.
 - Review A M3 F2 (a late answer of an older job for a part whose content changed under the same `CodeId` can overwrite the newer spans): MINOR; same-key content changes only on a rebuild from a different history, the line count must still match, and the job carries no fingerprint by the data model (`HighlightJob { session, key, part, token, lines }`, `Highlighted { session, key, part, spans }`).
 - Review A M1 #8 (`code_blocks` builds a Vec, `code` scans): MINOR; ids are few per reply and the renderer reads them from M3's cache, not per frame.
 - Review A M1 #9 (lone trailing `\r` read as a complete line ending): a lone `\r` is a CommonMark line ending; the `\n` that may follow only completes the same CRLF ending, so the line before it is complete either way.

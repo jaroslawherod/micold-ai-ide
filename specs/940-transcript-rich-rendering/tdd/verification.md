@@ -14,7 +14,7 @@ criteria_total: 7 # SC-001..SC-007; FR-001..FR-022 traced through tasks.md only
 criteria_covered: 7
 mutation_score: null # no mutation tool (tdd-profile: cargo-mutants absent); 9 deliberate mutants, 8 caught, 1 equivalent
 mutants_survived: 1 # K7, judged equivalent
-suite: scripts/gate.sh at 18e9cf09 — 9440 passed, 0 failed, 17 ignored (release-only budgets and runtime-gated suites)
+suite: scripts/gate.sh at 18e9cf09 and at 77e6071e (the close's two test fixes) — each 9440 passed, 0 failed, 17 ignored (release-only budgets and runtime-gated suites)
 ---
 
 # TDD Verification: Structured session rich rendering
@@ -96,14 +96,14 @@ From the fresh-context smell pass (7 findings), vetted against the cited lines.
 ## Mutation results
 
 No mutation tool. Deliberate mutants, one at a time, each restored with `git checkout` and checked
-clean; the close's full gate ran on the restored tree:
+clean (`git status` clean after the run); the close's full gate then ran on the restored tree at `77e6071e`, green:
 
 | Mutant | Behavior | Survived | Judgment |
 |---|---|---|---|
 | K1 `markdown/inline.rs` `activatable` → `true` | FR-011 web/mail only | No | `web_and_mail_links_are_activatable_and_others_are_not` |
 | K2 `markdown/fence.rs` tag not lower-cased | fence tokens | No | `the_token_is_lower_cased`, `aliases_map_to_their_grammar_token` |
 | K3 `markdown/mod.rs` `update` reuses the open slice when the text does not extend | M-4 incremental = fresh | No | `a_text_that_does_not_extend_the_old_one_is_parsed_afresh` |
-| K4 `structured/edit_diff.rs` deleted lines as `Context` | SC-003 round trip | No | 7 tests, the recorded round trip among them |
+| K4 `structured/edit_diff.rs` deleted lines as `Context` | SC-003 round trip | No | 7 of 15: `an_edit_is_one_hunk_of_removed_added_and_shared_lines`, `a_multi_edit_has_one_hunk_per_edit_in_order`, `every_recorded_edit_and_write_round_trips`, `every_synthetic_edit_and_write_round_trips`, `no_line_numbers_are_part_of_a_hunk`, `unknown_extra_fields_are_ignored`, `a_large_edit_finishes_and_round_trips` |
 | K5 `features/transcript_rich.rs` copy `Copied` without comparing the read-back | SC-005, FR-012 | No | `the_read_back_decides_copied_or_failed_and_asks_for_the_timer` |
 | K6 same file, refresh keeps entries the transcript dropped | prune | No | `keys_the_transcript_no_longer_holds_are_pruned`, `spans_for_a_part_that_is_gone_are_not_stored` |
 | K7 same file, `copy_expired` drops its ticket guard | stale timer ignored | Yes | equivalent: `tickets` holds only each block's current ticket (`copy` removes the old one, refresh retains matching ones), so a stale ticket returns at the lookup before the guard; `only_the_current_tickets_expiry_returns_the_control_to_idle` covers the behaviour |
