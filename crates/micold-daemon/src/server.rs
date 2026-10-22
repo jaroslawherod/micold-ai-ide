@@ -781,14 +781,14 @@ where
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => false,
                 };
                 if let Some(session) = viewing.filter(|_| concerns_view) {
-                    if let Some((pty, framer)) =
-                        state.live_session(session).zip(state.session_framer(session))
-                    {
-                        let process = state
-                            .attached_process(session)
-                            .unwrap_or(SessionProcess::Primary);
-                        restart_view(state, id, &mut view_stream, process, pty, framer);
-                    }
+                    show_single_view(
+                        state,
+                        id,
+                        &mut view_stream,
+                        &mut terminal_streams,
+                        &mut viewed_terminals,
+                        session,
+                    );
                 }
                 if viewed_terminals.iter().any(|t| matches!(started, Ok(s) if s == t.session) || started.is_err()) {
                     sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
@@ -1300,25 +1300,22 @@ where
             ClientMsg::SetViewedSession { project, session } => {
                 state.set_viewed(id, project, session);
                 viewing = session;
-                // The single view replaces a pane set (feature 484).
-                viewed_terminals.clear();
-                sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
-                match session.and_then(|s| state.live_session(s).zip(state.session_framer(s))) {
-                    Some((pty, framer)) => restart_view(
+                // The single view replaces a pane set (feature 484). Not live *yet* is the ordinary
+                // case: the client sends `SessionStart` and `SetViewedSession` back to back, and the
+                // start no longer completes before this arrives (BUG-009, T125). `viewing` records
+                // the intent, and the session-started arm builds the stream when the session exists.
+                match session {
+                    Some(session) => show_single_view(
                         state,
                         id,
                         &mut view_stream,
-                        session
-                            .and_then(|s| state.attached_process(s))
-                            .unwrap_or(SessionProcess::Primary),
-                        pty,
-                        framer,
+                        &mut terminal_streams,
+                        &mut viewed_terminals,
+                        session,
                     ),
-                    // Not live *yet* is the ordinary case now: the client sends `SessionStart` and
-                    // `SetViewedSession` back to back, and the start no longer completes before this
-                    // arrives (BUG-009, T125). `viewing` above records the intent, and the
-                    // session-started arm builds the stream when the session exists.
                     None => {
+                        viewed_terminals.clear();
+                        sync_terminal_streams(state, id, &mut terminal_streams, &viewed_terminals);
                         if let Some(prev) = view_stream.take() {
                             prev.abort();
                         }
@@ -1327,20 +1324,30 @@ where
             }
             // --- Feature 011: shell instances + which process is attached ---
             ClientMsg::SessionAttachProcess { session, process } => {
-                match state.attach_process(session, process) {
-                    Some((pty, framer)) => {
-                        restart_view(state, id, &mut view_stream, process, pty, framer)
-                    }
+                let terminal = state.attach_process(session, process);
+                if state.attached_process(session) != Some(process) {
                     // The client asked to display a process the daemon does not have, so the two
                     // now disagree about what is attached — the client will show its new mode while
                     // the pane keeps streaming whatever it streamed before (FR-007). Silently
                     // ignoring this is what let a Regular Terminal toggle do nothing at all with no
                     // trace anywhere (BUG-001, feature 010-regular-terminal-mode).
-                    None => tracing::warn!(
+                    tracing::warn!(
                         session = %session.0,
                         ?process,
                         "attach requested for a process the session does not have"
-                    ),
+                    );
+                } else if viewing == Some(session) {
+                    // A structured primary has no terminal: its events stream instead (BUG-1256).
+                    show_single_view(
+                        state,
+                        id,
+                        &mut view_stream,
+                        &mut terminal_streams,
+                        &mut viewed_terminals,
+                        session,
+                    );
+                } else if let Some((pty, framer)) = terminal {
+                    restart_view(state, id, &mut view_stream, process, pty, framer);
                 }
             }
             ClientMsg::SessionOpenShell { session, instance } => {
@@ -1371,7 +1378,20 @@ where
                 }
             }
             ClientMsg::SessionCloseShell { session, instance } => {
-                if let Some((pty, framer)) = state.close_shell(session, instance) {
+                let was_attached =
+                    state.attached_process(session) == Some(SessionProcess::Shell(instance));
+                let reattached = state.close_shell(session, instance);
+                if was_attached && viewing == Some(session) {
+                    // Back on the primary, which for a structured session is its events (BUG-1256).
+                    show_single_view(
+                        state,
+                        id,
+                        &mut view_stream,
+                        &mut terminal_streams,
+                        &mut viewed_terminals,
+                        session,
+                    );
+                } else if let Some((pty, framer)) = reattached {
                     restart_view(
                         state,
                         id,
@@ -3013,6 +3033,42 @@ fn restart_view(
     }
     if let Some(tx) = state.frame_sender(id) {
         *current = Some(tokio::spawn(stream_view(process, pty, framer, tx)));
+    }
+}
+
+/// Point a client's single view (`SetViewedSession`) at `session`'s attached process. A structured
+/// session's primary has no screen, only events (feature 938, R6): those stream the way a pane
+/// streams them, as a one-member terminal set, so a single-pane window shows its transcript too
+/// (BUG-1256). Any other process streams its screen through `view_stream`; the other is stopped.
+fn show_single_view(
+    state: &Arc<DaemonState>,
+    id: crate::state::ClientId,
+    view_stream: &mut Option<tokio::task::JoinHandle<()>>,
+    terminal_streams: &mut TerminalStreams,
+    viewed_terminals: &mut Vec<TerminalRef>,
+    session: micold_core::session::SessionId,
+) {
+    let process = state
+        .attached_process(session)
+        .unwrap_or(SessionProcess::Primary);
+    let structured = process == SessionProcess::Primary
+        && state.session_kind(session) == Some(micold_core::session::SessionKind::Structured);
+    viewed_terminals.clear();
+    if structured {
+        viewed_terminals.push(TerminalRef { session, process });
+    }
+    sync_terminal_streams(state, id, terminal_streams, viewed_terminals);
+    match state
+        .live_session(session)
+        .zip(state.session_framer(session))
+        .filter(|_| !structured)
+    {
+        Some((pty, framer)) => restart_view(state, id, view_stream, process, pty, framer),
+        None => {
+            if let Some(prev) = view_stream.take() {
+                prev.abort();
+            }
+        }
     }
 }
 
