@@ -305,6 +305,187 @@ pub struct State {
     /// `release_terminal`; `tests/terminal_bar_stability.rs` fails if that stops being
     /// true.
     pub terminal_released: bool,
+    /// The open offer to switch a Claude session's kind, with its confirmation step once the
+    /// service asked for one (#943 FR-010, FR-021, FR-022a). Its presence *is* the offer shown.
+    pub switch_offer: Option<SwitchOffer>,
+    /// Sessions whose kind a catalog snapshot changed, for the shell to drop the old primary's
+    /// terminal view and attach to the new one (#943 R11). Drained by [`Self::take_kind_changes`].
+    kind_changes: Vec<SessionId>,
+}
+
+impl State {
+    /// The sessions whose kind changed since the last call, oldest first.
+    pub fn take_kind_changes(&mut self) -> Vec<SessionId> {
+        std::mem::take(&mut self.kind_changes)
+    }
+
+    /// A catalog snapshot changed `session`'s kind.
+    pub(crate) fn kind_changed(&mut self, session: SessionId) {
+        if !self.kind_changes.contains(&session) {
+            self.kind_changes.push(session);
+        }
+    }
+}
+
+/// The session menu's and the view's entry for a structured Claude session (US4 scenario 3).
+pub const OPEN_IN_TERMINAL: &str = "Open in terminal";
+/// The entry for a Claude terminal session (US4 scenario 4).
+pub const OPEN_IN_STRUCTURED: &str = "Open in structured view";
+/// Why an authentication failure offers the terminal (FR-022a).
+pub const LOGIN_REASON: &str = "Signing in to Claude Code needs its terminal: /login runs there.";
+/// The terminal-only command an authentication failure offers.
+pub const LOGIN_COMMAND: &str = "login";
+
+/// An offer to switch `session` to kind `to` (#943 FR-010, FR-022a): for `command` (entered as
+/// the terminal's first input), saying `reason`. `confirm` holds the service's reason once it
+/// asked for confirmation (FR-021).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwitchOffer {
+    pub session: SessionId,
+    pub to: SessionKind,
+    pub command: Option<String>,
+    pub reason: String,
+    pub confirm: Option<String>,
+    /// The draft text that was sent as `command`: used up when the offer is confirmed.
+    draft: Option<String>,
+}
+
+/// A `SessionSwitchKind` to send (#943 contracts/wire.md).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwitchRequest {
+    pub session: SessionId,
+    pub to: SessionKind,
+    pub command: Option<String>,
+    pub confirmed: bool,
+}
+
+/// One switching entry a session's menu and view offer (#943 FR-019, US4 scenarios 3, 4, 7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SwitchEntry {
+    pub label: &'static str,
+    pub to: SessionKind,
+}
+
+/// The switching entries for `session`: the other kind for a Claude Code session, nothing for
+/// any other CLI's (FR-019).
+pub fn switch_entries(state: &crate::app::State, session: SessionId) -> Vec<SwitchEntry> {
+    let Some((_, s)) = state.workspace.find_session(session) else {
+        return Vec::new();
+    };
+    if s.provider != AiCli::ClaudeCode {
+        return Vec::new();
+    }
+    vec![match s.kind {
+        SessionKind::Structured => SwitchEntry {
+            label: OPEN_IN_TERMINAL,
+            to: SessionKind::Terminal,
+        },
+        SessionKind::Terminal => SwitchEntry {
+            label: OPEN_IN_STRUCTURED,
+            to: SessionKind::Structured,
+        },
+    }]
+}
+
+impl crate::app::State {
+    /// Offer to switch `session` to `to` for `command`, saying `reason`; `draft` is the draft
+    /// text that sent the command, if one did (FR-010).
+    pub fn offer_switch(
+        &mut self,
+        session: SessionId,
+        to: SessionKind,
+        command: Option<String>,
+        reason: String,
+        draft: Option<String>,
+    ) {
+        self.session.switch_offer = Some(SwitchOffer {
+            session,
+            to,
+            command,
+            reason,
+            confirm: None,
+            draft,
+        });
+    }
+
+    /// The offer was dismissed: nothing changes, the draft stays (US4 scenario 1).
+    pub fn switch_dismissed(&mut self) {
+        self.session.switch_offer = None;
+    }
+
+    /// The offer was confirmed: the request to send, confirmed when it was the confirmation
+    /// step. A draft that sent the command is used up.
+    pub fn switch_confirmed(&mut self) -> Option<SwitchRequest> {
+        let offer = self.session.switch_offer.take()?;
+        if let Some(sent) = &offer.draft {
+            if self.composers.draft(offer.session).map(|d| &d.text) == Some(sent) {
+                self.composers
+                    .replace_text(offer.session, String::new(), (0, 0));
+            }
+        }
+        Some(SwitchRequest {
+            session: offer.session,
+            to: offer.to,
+            command: offer.command,
+            confirmed: offer.confirm.is_some(),
+        })
+    }
+
+    /// The service answered `request` with `NeedsConfirmation`: ask the user, saying `message`
+    /// (FR-021).
+    pub fn switch_needs_confirmation(&mut self, request: SwitchRequest, message: String) {
+        self.session.switch_offer = Some(SwitchOffer {
+            session: request.session,
+            to: request.to,
+            command: request.command,
+            reason: message.clone(),
+            confirm: Some(message),
+            draft: None,
+        });
+    }
+
+    /// A switching entry was chosen (US4 scenarios 3, 4): the request, with no command; `None`
+    /// for a session that is not Claude Code's or already of kind `to`.
+    pub fn switch_requested(&self, session: SessionId, to: SessionKind) -> Option<SwitchRequest> {
+        switch_entries(self, session)
+            .iter()
+            .any(|e| e.to == to)
+            .then_some(SwitchRequest {
+                session,
+                to,
+                command: None,
+                confirmed: false,
+            })
+    }
+
+    /// Whether `session`'s transcript shows an authentication failure, which offers **Open in
+    /// terminal** with `/login` (FR-022a).
+    pub fn offers_login(&self, session: SessionId) -> bool {
+        self.structured_transcript
+            .transcript(session)
+            .is_some_and(|t| {
+                t.entries().any(|e| {
+                    matches!(
+                        e.kind(),
+                        micold_core::structured::transcript::EntryKind::AssistantText {
+                            auth_failed: true,
+                            ..
+                        }
+                    )
+                })
+            })
+    }
+
+    /// The `/login` offer was taken: offer the terminal for it (FR-022a).
+    pub fn login_offered(&mut self, session: SessionId) {
+        self.offer_switch(
+            session,
+            SessionKind::Terminal,
+            Some(LOGIN_COMMAND.to_string()),
+            LOGIN_REASON.to_string(),
+            None,
+        );
+    }
 }
 
 /// What the service answered about AI CLIs, and what that answer describes (FR-023b, FR-023c).

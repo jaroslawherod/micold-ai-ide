@@ -131,6 +131,15 @@ pub enum PendingOp {
     QueueTake {
         session: SessionId,
     },
+    /// A `SetSessionModel` (#943 FR-014): a refusal is `session`'s composer notice.
+    SessionModel {
+        session: SessionId,
+    },
+    /// A `SessionSwitchKind` (#943 FR-019–FR-021): a `NeedsConfirmation` answer asks the user
+    /// to confirm `request`; another refusal is the composer's notice.
+    SwitchKind {
+        request: micold_client::features::session::SwitchRequest,
+    },
     /// A `WorktreeCreate`, carrying the project it was sent for. The project travels with the op
     /// rather than being read from `workspace.active` when the answer lands: the user may have
     /// closed or switched project while the create ran, and the answer is still about this one
@@ -289,6 +298,8 @@ impl PendingOp {
             PendingOp::PermissionDecision { .. } => "answer the request".into(),
             PendingOp::PermissionInput { .. } => "show the whole input".into(),
             PendingOp::SetPermissionMode { .. } => "change the permission mode".into(),
+            PendingOp::SessionModel { .. } => "change the session's model".into(),
+            PendingOp::SwitchKind { .. } => "switch the session's kind".into(),
             PendingOp::RunGroupCreate => "start the runs".into(),
             PendingOp::RunGroupDismiss => "dismiss the group".into(),
             PendingOp::RunGroupPick { .. } => "pick the run".into(),
@@ -653,7 +664,11 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
             }
             PendingOp::QueueOp { session }
             | PendingOp::QueueEdit { session }
-            | PendingOp::QueueTake { session } => app.core.composers.notice(session, text),
+            | PendingOp::QueueTake { session }
+            | PendingOp::SessionModel { session } => app.core.composers.notice(session, text),
+            PendingOp::SwitchKind { request } => {
+                app.core.composers.notice(request.session, text);
+            }
             // #942: the requests themselves were dropped with the connection, and the reconnect
             // replays those still pending; a mode change says it may not have applied.
             PendingOp::PermissionDecision { .. } | PendingOp::PermissionInput { .. } => {}
@@ -1191,6 +1206,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         }
         DaemonMsg::CatalogChanged { catalog } => {
             reconcile_catalog(&mut app.core, daemon, &catalog, true);
+            follow_kind_changes(app);
             // The worktree list may have gained a row (created, discovered, included, or valid
             // again): ask about it (feature 033, contract C1 A5).
             sync_cli_availability(app);
@@ -1336,6 +1352,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             Some(PendingOp::SetPermissionMode { session }) => {
                 app.core.permission_prompts.mode_applied(session);
             }
+            // #943: the model and the kind arrive on the catalog snapshot and in the events.
+            Some(PendingOp::SessionModel { .. } | PendingOp::SwitchKind { .. }) => {}
             Some(PendingOp::RunGroupPick { run }) => {
                 if let OperationResult::RunPicked {
                     group, integration, ..
@@ -1790,7 +1808,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 Some(
                     PendingOp::QueueOp { session }
                     | PendingOp::QueueEdit { session }
-                    | PendingOp::QueueTake { session },
+                    | PendingOp::QueueTake { session }
+                    | PendingOp::SessionModel { session },
                 ) => app.core.composers.notice(session, message),
                 // #942: a refused answer or input request shows on the request (FR-012); a
                 // refused mode change is the session's notice (FR-017).
@@ -1804,6 +1823,14 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     .input_failed(session, id, message),
                 Some(PendingOp::SetPermissionMode { session }) => {
                     app.core.permission_prompts.mode_failed(session, message);
+                }
+                // #943 FR-021: work in progress asks the user first; any other refusal is said.
+                Some(PendingOp::SwitchKind { request }) => {
+                    if kind == micold_core::protocol::messages::ErrorKind::NeedsConfirmation {
+                        app.core.switch_needs_confirmation(request, message);
+                    } else {
+                        app.core.composers.notice(request.session, message);
+                    }
                 }
                 // A failed worktree create shows in the form (keeps it open to retry), not a
                 // toast — mirroring the old local-create failure path. `detail` carries git's
@@ -2957,6 +2984,23 @@ pub fn on_session_selected(app: &mut App, id: SessionId) -> Task<Message> {
     Task::none()
 }
 
+/// Follow the sessions whose kind a snapshot changed (#943 R11): the old primary's terminal view
+/// goes, and the displayed one attaches to its new primary. The composer's draft is kept.
+pub(crate) fn follow_kind_changes(app: &mut App) {
+    for id in app.core.session.take_kind_changes() {
+        let primary = TerminalRef {
+            session: id,
+            process: SessionProcess::Primary,
+        };
+        app.grids.remove(&primary);
+        app.scrollback_inflight
+            .retain(|_, (session, _)| *session != id || app.grids.keys().any(|t| t.session == id));
+        if app.core.session.active == Some(id) {
+            attach_current_process(app, id);
+        }
+    }
+}
+
 /// Drop a closed or removed session's editor and its composer requests still in flight, so a
 /// late answer cannot bring its composer back (the core forgets the draft in `forget_structured`).
 pub(crate) fn forget_composer(app: &mut App, id: SessionId) {
@@ -2967,8 +3011,9 @@ pub(crate) fn forget_composer(app: &mut App, id: SessionId) {
             PendingOp::ComposerSend { session }
             | PendingOp::QueueOp { session }
             | PendingOp::QueueEdit { session }
-            | PendingOp::QueueTake { session } if *session == id
-        )
+            | PendingOp::QueueTake { session }
+            | PendingOp::SessionModel { session } if *session == id
+        ) && !matches!(op, PendingOp::SwitchKind { request } if request.session == id)
     });
 }
 
@@ -4969,6 +5014,55 @@ pub(crate) mod tests {
 
         let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
         assert_eq!(list[0].kind, micold_core::session::SessionKind::Structured);
+    }
+
+    /// #943 R11: a switch reaches a window as a kind change in a snapshot; the window drops the
+    /// old primary's terminal view and attaches to the new primary.
+    #[test]
+    fn a_kind_change_drops_the_old_primary_view_and_attaches_again() {
+        let path = "/repo/demo";
+        let (mut app, mut rx) = connected_app();
+        let id = SessionId::new();
+        let mut summary = summary_on(id, "A", WireLifecycle::Running, AiCli::ClaudeCode);
+        summary.kind = micold_core::session::SessionKind::Structured;
+        let daemon = micold_core::daemons::DaemonId(1);
+        reconcile_catalog(
+            &mut app.core,
+            daemon,
+            &snapshot_with(path, vec![summary.clone()]),
+            false,
+        );
+        app.core.workspace.active = Some(PathBuf::from(path));
+        app.core.session.active = Some(id);
+        follow_kind_changes(&mut app);
+        while rx.try_recv().is_ok() {}
+        let primary = TerminalRef {
+            session: id,
+            process: SessionProcess::Primary,
+        };
+        app.grids.insert(primary, Default::default());
+
+        summary.kind = micold_core::session::SessionKind::Terminal;
+        reconcile_catalog(
+            &mut app.core,
+            daemon,
+            &snapshot_with(path, vec![summary]),
+            false,
+        );
+        follow_kind_changes(&mut app);
+
+        assert!(
+            !app.grids.contains_key(&primary),
+            "the old primary's view is gone"
+        );
+        assert!(
+            matches!(
+                rx.try_recv(),
+                Ok(ClientMsg::SessionAttachProcess { session, process: SessionProcess::Primary })
+                    if session == id
+            ),
+            "the window attaches to the new primary"
+        );
     }
 
     /// And a session already in the model is not re-derived from the snapshot.

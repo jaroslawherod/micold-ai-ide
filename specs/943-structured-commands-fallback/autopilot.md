@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M7 implementing (branch reset to origin/main 319e8706)
-- **Next step**: M7 T050–T054: implement, verify, PR. Cross-feature holds: M8 ← #941 M6, M9 ← #942 M7/M8
+- **Phase**: M7 implemented (T050–T054 ticked); verify next
+- **Next step**: M7 verify: scoped gate + review A (high), review B, full gate, PR files. Cross-feature holds: M8 ← #941 M6, M9 ← #942 M7/M8
 
 ## Pull requests
 

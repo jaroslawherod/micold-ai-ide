@@ -7,10 +7,13 @@
 use iced::widget::text_editor::{Action, Edit};
 use iced::Task;
 use micold_client::app::{Editor, EditorAction, Message};
+use micold_client::features::command_palette::{palette_key, SendIntent};
 use micold_client::features::composer::Msg;
 use micold_client::features::composer::{composer_key, transcript_key, KeyIntent, NOT_CONNECTED};
+use micold_client::features::session::SwitchRequest;
 use micold_core::protocol::messages::{ClientMsg, TurnPhase};
 use micold_core::session::SessionId;
+use micold_core::structured::model::ModelChoice;
 
 use crate::shell::daemon_sync::{send_op_bound, send_op_bound_req, PendingOp};
 use crate::App;
@@ -24,6 +27,13 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             press,
             composing,
         } => {
+            // The open command palette takes its keys before the composer (#943 FR-008a).
+            let palette = app.core.command_palette.palette(session);
+            if let Some(key) = palette_key(palette, &press).filter(|_| !composing) {
+                app.core.palette_key(session, key);
+                sync_editor(app, session);
+                return Task::none();
+            }
             let editor = editor(app, session);
             let (caret, lines) = (editor.caret(), editor.line_count());
             let phase = app.core.composers.phase(session);
@@ -96,8 +106,31 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         }
         Msg::QueueEditCancelled(session) => app.core.composers.queue_edit_done(session),
         Msg::Dropped { session, files } => app.core.composers.apply_drop(session, *files),
+        Msg::PaletteClicked { session, row } => app.core.palette_clicked(session, row),
+        Msg::ModelPickerRequested(session) => app.core.open_model_picker(session),
+        Msg::ModelPickerTyped { session, text } => app.core.model_picker_typed(session, text),
+        Msg::ModelPicked { session, item } => {
+            if let Some(choice) = app.core.model_picked(session, item) {
+                set_model(app, session, choice);
+            }
+        }
+        Msg::ModelPickerClosed(session) => app.core.command_palette.close_picker(session),
+        Msg::SwitchRequested { session, to } => {
+            if let Some(request) = app.core.switch_requested(session, to) {
+                switch_kind(app, request);
+            }
+        }
+        Msg::SwitchConfirmed(_) => {
+            if let Some(request) = app.core.switch_confirmed() {
+                switch_kind(app, request);
+            }
+        }
+        Msg::SwitchDismissed(_) => app.core.switch_dismissed(),
+        Msg::LoginOffered(session) => app.core.login_offered(session),
     }
     sync_editor(app, session);
+    // The palette follows the draft, whoever changed it (#943 FR-007).
+    app.core.composer_edited(session);
     Task::none()
 }
 
@@ -112,12 +145,21 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::QueueEditStarted { session, .. }
         | Msg::QueueEditChanged { session, .. }
         | Msg::QueueEditAttachmentRemoved { session, .. }
-        | Msg::Dropped { session, .. } => *session,
+        | Msg::Dropped { session, .. }
+        | Msg::PaletteClicked { session, .. }
+        | Msg::ModelPickerTyped { session, .. }
+        | Msg::ModelPicked { session, .. }
+        | Msg::SwitchRequested { session, .. } => *session,
         Msg::SendRequested(session)
         | Msg::StopRequested(session)
         | Msg::SendQueuedRequested(session)
         | Msg::QueueEditSaved(session)
-        | Msg::QueueEditCancelled(session) => *session,
+        | Msg::QueueEditCancelled(session)
+        | Msg::ModelPickerRequested(session)
+        | Msg::ModelPickerClosed(session)
+        | Msg::SwitchConfirmed(session)
+        | Msg::SwitchDismissed(session)
+        | Msg::LoginOffered(session) => *session,
     }
 }
 
@@ -197,6 +239,12 @@ fn connected(app: &App, session: SessionId) -> bool {
 
 /// Send the draft: delivered, or queued while busy (FR-004 to FR-006, FR-017).
 fn send(app: &mut App, session: SessionId) {
+    // A command the app handles never reaches the CLI (#943 FR-010, FR-018).
+    match app.core.send_intent(session) {
+        SendIntent::Message => {}
+        SendIntent::Nothing => return,
+        SendIntent::SetModel(choice) => return set_model(app, session, choice),
+    }
     let connected = connected(app, session);
     let Some(draft) = app.core.composers.take_send(session, connected) else {
         return;
@@ -235,4 +283,44 @@ fn queue_request(
 ) {
     let binding = app.session_binding_of(session);
     send_op_bound(app, binding, op, build);
+}
+
+/// Ask the service to run `session` with `choice` (#943 FR-014); a refusal is the composer's
+/// notice.
+fn set_model(app: &mut App, session: SessionId, choice: ModelChoice) {
+    let binding = app.session_binding_of(session);
+    let sent = send_op_bound_req(app, binding, PendingOp::SessionModel { session }, |req| {
+        ClientMsg::SetSessionModel {
+            req,
+            session,
+            model: choice,
+        }
+    });
+    if sent.is_none() {
+        app.core
+            .composers
+            .notice(session, NOT_CONNECTED.to_string());
+    }
+}
+
+/// Ask the service to switch a session's kind (#943 FR-019–FR-022); a `NeedsConfirmation`
+/// answer asks the user (`shell::daemon_sync`).
+fn switch_kind(app: &mut App, request: SwitchRequest) {
+    let session = request.session;
+    let binding = app.session_binding_of(session);
+    let op = PendingOp::SwitchKind {
+        request: request.clone(),
+    };
+    let sent = send_op_bound_req(app, binding, op, |req| ClientMsg::SessionSwitchKind {
+        req,
+        session,
+        to: request.to,
+        command: request.command,
+        confirmed: request.confirmed,
+    });
+    if sent.is_none() {
+        app.core
+            .composers
+            .notice(session, NOT_CONNECTED.to_string());
+    }
 }

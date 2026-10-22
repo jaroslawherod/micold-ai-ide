@@ -167,6 +167,7 @@ pub fn reconcile_catalog(
     // borrowed. `note_background_restart` itself no-ops for the active project's session, so
     // background-ness isn't checked here.
     let mut newly_restarting: Vec<SessionId> = Vec::new();
+    let mut kind_changed: Vec<SessionId> = Vec::new();
     // A session the daemon lists again is no longer lost to it.
     for project in &snapshot.projects {
         for summary in &project.sessions {
@@ -198,6 +199,12 @@ pub fn reconcile_catalog(
                 // The daemon owns which session of a location is main (feature 776, R14).
                 existing.main = summary.main;
                 existing.origin = summary.origin;
+                // The model choice and the kind, which a switch changes (#943 FR-017, R11).
+                existing.model = summary.model.clone();
+                if existing.kind != summary.kind {
+                    existing.kind = summary.kind;
+                    kind_changed.push(existing.id);
+                }
                 // Adopt the daemon's label only when it has a real one: a title, or a label derived
                 // from the first turn (feature 032, C8.5). The daemon now overlays the live OSC-0
                 // title onto the summary (T047), but a summary can still be `Pending` before either
@@ -254,6 +261,7 @@ pub fn reconcile_catalog(
                 s.unread = summary.unread;
                 s.main = summary.main;
                 s.origin = summary.origin;
+                s.model = summary.model.clone();
                 list.push(s);
             }
         }
@@ -284,6 +292,9 @@ pub fn reconcile_catalog(
     core.settings.lost_sessions.retain(|id| held.contains(id));
     for id in newly_restarting {
         core.note_background_restart(id);
+    }
+    for id in kind_changed {
+        core.session.kind_changed(id);
     }
     announce_start_failures(core, snapshot);
     // Replaced whole on every snapshot applied, the welcome included (011 FR-022, BUG-454).
