@@ -72,6 +72,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review A M1 (scoped, sonnet) | 2 | 5f610c5dfb06d3b71341f75aa694d4278dc805d0:ca17d07da3d3242ae0a73a894ff08cf80dbcf877 | CLEAN: 2 MINOR (capture temp file fixed; picture-name check declined) |
 | Review B M1 (conformance, sonnet) | 1 | 2c163570b179fbb1922c81e07643980c76793802:ca17d07da3d3242ae0a73a894ff08cf80dbcf877 | CLEAN (Verify: daemon structured_session 16 passed; core green except the root-only permission test, which gate.sh runs unprivileged) |
 | Review A M2 (code-review high) | 1 | 29e7b03bf3c25a809d773ea3cf7e34f6ae868450:37dd08531ecdfbd87a01762e2b401eacfd59af71 | CLEAN: 2 MINOR (both declined) |
+| Review B M2 (conformance, sonnet) | 1 | c036df0cd4e6f0f20bded9f400e77d2d8016736a:f647684b709efa9bc318e217ab35f37fc8438d29 | CHANGES: 1 MAJOR (mid-turn case of the superseded #938 test raced: the second turn had no pause; fixed, it holds its result too) |
 
 ## Declined review findings
 
