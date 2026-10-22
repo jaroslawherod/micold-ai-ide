@@ -276,6 +276,13 @@ pub enum Message {
     /// the entry is `shell/composer.rs`. `State::update` declines it.
     Composer(crate::features::composer::Msg),
 
+    // ---- #942: a structured session's permission prompts ----
+    /// The request views' drafts and answers and the mode control; see
+    /// [`crate::features::permission_prompts::Msg`]. Shape B: an answer, the whole input and a
+    /// mode change are requests only the shell can send, so the entry is
+    /// `shell/permission_prompts.rs`. `State::update` declines it.
+    PermissionPrompts(crate::features::permission_prompts::Msg),
+
     // ---- Feature 483: Run in parallel ----
     /// The Run in parallel dialog's and the group list's messages; see
     /// [`crate::features::runs::Msg`]. The request a message makes is left in `runs.pending` for
@@ -412,6 +419,9 @@ pub struct State {
     /// Each structured session's composer in this window (feature 941) -- see
     /// [`crate::features::composer::State`].
     pub composers: crate::features::composer::State,
+    /// The structured sessions' permission prompts in this window (#942) -- see
+    /// [`crate::features::permission_prompts::State`].
+    pub permission_prompts: crate::features::permission_prompts::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
     pub runs: crate::features::runs::State,
     /// What the worktree Overview holds (feature 813) -- see [`crate::features::overview::State`].
@@ -981,13 +991,14 @@ impl State {
         }
     }
 
-    /// Forget a closed or removed session's transcript, its render cache, its composer and its
-    /// insights.
+    /// Forget a closed or removed session's transcript, its render cache, its composer, its
+    /// insights and its permission prompts.
     pub fn forget_structured(&mut self, session: micold_core::session::SessionId) {
         self.structured_transcript.forget(session);
         self.transcript_rich.forget(session);
         self.composers.forget(session);
         self.structured_insights.forget(session);
+        self.permission_prompts.forget(session);
     }
 
     /// Apply a message of the insights shown with a structured session's transcript (feature
@@ -1102,6 +1113,7 @@ impl State {
             | Message::PrStatus(_)
             | Message::Changes(_)
             | Message::Composer(_)
+            | Message::PermissionPrompts(_)
             | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);

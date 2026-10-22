@@ -39,6 +39,7 @@ pub mod os_theme;
 pub mod overview_watch;
 pub mod panes;
 pub mod pasted_image;
+pub mod permission_prompts;
 pub mod persist;
 pub mod pr_status;
 pub mod quick_switch;

@@ -1116,6 +1116,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::PrStatus(msg) => shell::pr_status::update(app, msg),
         Message::Changes(msg) => shell::changes::update(app, msg),
         Message::Composer(msg) => shell::composer::update(app, msg),
+        Message::PermissionPrompts(msg) => shell::permission_prompts::update(app, msg),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.
@@ -1312,6 +1313,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // session; the created one is selected by the reply as any created session is.
         Message::Session(SessionMsg::AdditionalConfirmed) => {
             shell::daemon_sync::on_additional_session_confirmed(app)
+        }
+        // #942 FR-014: the confirmed Bypass start is created, which the pure reducer cannot do.
+        Message::Session(SessionMsg::BypassStartConfirmed) => {
+            shell::daemon_sync::on_bypass_start_confirmed(app)
         }
         // Feature 776 (FR-021): fire-and-forget; the catalog update is the answer.
         Message::Session(SessionMsg::MakeMainRequested(id)) => {

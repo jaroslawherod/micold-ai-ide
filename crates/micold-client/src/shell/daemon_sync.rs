@@ -56,7 +56,8 @@ use micold_client::app::Message;
 use micold_client::catalog_sync::{attach_log_line, reconcile_catalog, wire_to_worktree_status};
 use micold_client::features::agent_confirm::Msg as AgentConfirmMsg;
 use micold_client::features::session::{
-    AvailabilityKey, AvailabilitySource, CliAvailability, EnvIncludeSettings,
+    session_create, AvailabilityKey, AvailabilitySource, BypassStart, CliAvailability,
+    EnvIncludeSettings, StartGate,
 };
 use micold_client::features::worktree_form::{
     BranchSource, Msg as FormMsg, ResolutionState, WorktreeForm, WorktreeFormStatus,
@@ -108,6 +109,20 @@ pub enum PendingOp {
     },
     /// A `QueueEdit`: the edit ends when it is taken, and stays open with a notice when refused.
     QueueEdit {
+        session: SessionId,
+    },
+    /// A `PermissionDecision` (#942): a refusal shows on the request, which can be answered again.
+    PermissionDecision {
+        session: SessionId,
+        id: micold_core::protocol::messages::PromptId,
+    },
+    /// A `PermissionInput` (#942, research R10): answered `PermissionInputText`.
+    PermissionInput {
+        session: SessionId,
+        id: micold_core::protocol::messages::PromptId,
+    },
+    /// A `SetPermissionMode` (#942 FR-017): a refusal is the session's notice.
+    SetPermissionMode {
         session: SessionId,
     },
     /// A `QueueTake`: the message it answers with becomes the composer's draft (FR-020).
@@ -269,6 +284,9 @@ impl PendingOp {
             PendingOp::QueueOp { .. } => "change the queued messages".into(),
             PendingOp::QueueEdit { .. } => "edit the queued message".into(),
             PendingOp::QueueTake { .. } => "move the queued message back".into(),
+            PendingOp::PermissionDecision { .. } => "answer the request".into(),
+            PendingOp::PermissionInput { .. } => "show the whole input".into(),
+            PendingOp::SetPermissionMode { .. } => "change the permission mode".into(),
             PendingOp::RunGroupCreate => "start the runs".into(),
             PendingOp::RunGroupDismiss => "dismiss the group".into(),
             PendingOp::RunGroupPick { .. } => "pick the run".into(),
@@ -496,6 +514,16 @@ pub fn on_disconnected(app: &mut App, daemon: DaemonId) -> Task<Message> {
     // Content on screen is now stale; the banner says so (FR-027). The subscription is
     // already auto-reconnecting with backoff.
     app.disconnected.insert(daemon);
+    // #942: this daemon's requests end with the connection; the next handshake replays the ones
+    // still pending (contracts/wire.md). A session no project knows is dropped too.
+    for session in app.core.permission_prompts.sessions() {
+        if app
+            .daemon_of_session(session)
+            .is_none_or(|owner| owner == daemon)
+        {
+            app.core.permission_prompts.connection_lost(session);
+        }
+    }
     if !was_active {
         // A daemon the window is not looking at: its own pending requests are resolved below and
         // nothing about what is on screen changes.
@@ -624,6 +652,12 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
             PendingOp::QueueOp { session }
             | PendingOp::QueueEdit { session }
             | PendingOp::QueueTake { session } => app.core.composers.notice(session, text),
+            // #942: the requests themselves were dropped with the connection, and the reconnect
+            // replays those still pending; a mode change says it may not have applied.
+            PendingOp::PermissionDecision { .. } | PendingOp::PermissionInput { .. } => {}
+            PendingOp::SetPermissionMode { session } => {
+                app.core.permission_prompts.mode_failed(session, text);
+            }
             PendingOp::AttachOfferApply => {
                 app.core
                     .update(Message::Attach(AttachMsg::OfferApplyFailed(text)));
@@ -1295,6 +1329,11 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 }
             }
             Some(PendingOp::QueueOp { .. }) => {}
+            // #942: the request closes on its `PermissionResolved`; the mode on the catalog.
+            Some(PendingOp::PermissionDecision { .. } | PendingOp::PermissionInput { .. }) => {}
+            Some(PendingOp::SetPermissionMode { session }) => {
+                app.core.permission_prompts.mode_applied(session);
+            }
             Some(PendingOp::RunGroupPick { run }) => {
                 if let OperationResult::RunPicked {
                     group, integration, ..
@@ -1751,6 +1790,19 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     | PendingOp::QueueEdit { session }
                     | PendingOp::QueueTake { session },
                 ) => app.core.composers.notice(session, message),
+                // #942: a refused answer or input request shows on the request (FR-012); a
+                // refused mode change is the session's notice (FR-017).
+                Some(PendingOp::PermissionDecision { session, id }) => app
+                    .core
+                    .permission_prompts
+                    .decision_failed(session, id, message),
+                Some(PendingOp::PermissionInput { session, id }) => app
+                    .core
+                    .permission_prompts
+                    .input_failed(session, id, message),
+                Some(PendingOp::SetPermissionMode { session }) => {
+                    app.core.permission_prompts.mode_failed(session, message);
+                }
                 // A failed worktree create shows in the form (keeps it open to retry), not a
                 // toast — mirroring the old local-create failure path. `detail` carries git's
                 // own stderr verbatim (feature 010, FR-006/SC-003): for a submodule fetch
@@ -2134,6 +2186,25 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             session,
             micold_client::features::composer::InputState { phase, hold, queue },
         ),
+        // #942: a structured session's permission requests, for every window (FR-005).
+        DaemonMsg::PermissionRequested { request } => {
+            app.core.permission_prompts.requested(request);
+        }
+        DaemonMsg::PermissionResolved {
+            session,
+            id,
+            tool_use_id,
+            resolution,
+        } => app
+            .core
+            .permission_prompts
+            .resolved(session, id, tool_use_id, resolution),
+        DaemonMsg::PermissionInputText { req, text } => {
+            if let Some(&PendingOp::PermissionInput { session, id }) = app.pending_ops.get(&req) {
+                app.pending_ops.remove(&req);
+                app.core.permission_prompts.input_text(session, id, text);
+            }
+        }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }
@@ -2714,7 +2785,53 @@ pub fn on_session_start_requested(
     automatic: bool,
 ) -> Task<Message> {
     // Chosen from the override list, or pressed directly — either way the list is done.
-    app.core.session.start_menu = None;
+    let menu = app.core.session.start_menu.take();
+    // #942 FR-014: a structured start in Bypass is confirmed before anything is created.
+    let mode = match app.core.session.start_gate(kind) {
+        StartGate::Create(mode) => mode,
+        StartGate::ConfirmBypass => {
+            app.core
+                .update(Message::Session(SessionMsg::BypassStartOpened(
+                    BypassStart {
+                        location,
+                        provider,
+                        menu,
+                    },
+                )));
+            return Task::none();
+        }
+    };
+    start_session(app, location, provider, kind, mode, automatic)
+}
+
+/// The Bypass confirmation of a structured start was accepted (#942 FR-014): the start goes on as
+/// any other, in Bypass.
+pub fn on_bypass_start_confirmed(app: &mut App) -> Task<Message> {
+    let request = app.core.session.bypass_start_request();
+    app.core
+        .update(Message::Session(SessionMsg::BypassStartConfirmed));
+    match request {
+        Some((location, provider, mode)) => start_session(
+            app,
+            location,
+            provider,
+            micold_core::session::SessionKind::Structured,
+            mode,
+            false,
+        ),
+        None => Task::none(),
+    }
+}
+
+/// [`on_session_start_requested`] once the mode is settled.
+fn start_session(
+    app: &mut App,
+    location: SessionLocation,
+    provider: micold_core::session::AiCli,
+    kind: micold_core::session::SessionKind,
+    mode: micold_core::session::PermissionMode,
+    automatic: bool,
+) -> Task<Message> {
     // Feature 802 (FR-001, FR-007): a person's start at a location this window sees occupied asks
     // instead of sending a create the daemon would refuse. The auto-start's location is free.
     if !automatic && !app.core.start_offered(&location) {
@@ -2730,10 +2847,6 @@ pub fn on_session_start_requested(
     // `CatalogChanged` push (reconciled into the core) and is selected + focused when the
     // `OperationOk { SessionCreated }` reply names its id.
     if let Some(project) = app.core.workspace.active.clone() {
-        let worktree_dir = match &location {
-            SessionLocation::Worktree(dir) => dir.clone(),
-            SessionLocation::Default => String::new(),
-        };
         // Copies the field across and no more (feature 026, T030a). The
         // default-vs-override resolution happened in `features/session.rs`, which a test
         // can link; this handler is in the GUI binary, which no integration test can, and a
@@ -2743,20 +2856,14 @@ pub fn on_session_start_requested(
         let binding = app.location_binding(&project, &location);
         let op = PendingOp::CreateSession {
             project: project.clone(),
-            location,
+            location: location.clone(),
             provider,
             kind,
             additional: false,
             automatic,
         };
-        send_op_bound(app, binding, op, |req| ClientMsg::SessionCreate {
-            permission_mode: Default::default(),
-            req,
-            project,
-            worktree_dir,
-            provider,
-            kind,
-            allow_additional_session: false,
+        send_op_bound(app, binding, op, |req| {
+            session_create(req, project, &location, provider, kind, mode, false)
         });
     }
     Task::none()
@@ -2770,20 +2877,9 @@ fn additional_session_request(
     location: &SessionLocation,
     provider: micold_core::session::AiCli,
     kind: micold_core::session::SessionKind,
+    mode: micold_core::session::PermissionMode,
 ) -> ClientMsg {
-    let worktree_dir = match location {
-        SessionLocation::Worktree(dir) => dir.clone(),
-        SessionLocation::Default => String::new(),
-    };
-    ClientMsg::SessionCreate {
-        permission_mode: Default::default(),
-        req,
-        project,
-        worktree_dir,
-        provider,
-        kind,
-        allow_additional_session: true,
-    }
+    session_create(req, project, location, provider, kind, mode, true)
 }
 
 /// The additional-session confirmation was accepted (feature 776, FR-016, FR-017): ask the daemon
@@ -2801,6 +2897,9 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
         );
     }
     let kind = app.core.session.additional_kind;
+    // #942: a structured start reaches this confirmation only after its mode's gate (a Bypass
+    // one after its own confirmation), so it is created in the mode the create flow holds.
+    let mode = app.core.session.start_mode_for(kind);
     if let (Some((location, provider)), Some(project)) = (
         app.core.additional_request(),
         app.core.workspace.active.clone(),
@@ -2815,7 +2914,7 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
         };
         let binding = app.location_binding(&project, &location);
         send_op_bound(app, binding, op, move |req| {
-            additional_session_request(req, project, &location, provider, kind)
+            additional_session_request(req, project, &location, provider, kind, mode)
         });
     }
     app.core
@@ -3888,6 +3987,7 @@ pub(crate) mod tests {
             &location,
             micold_core::session::AiCli::ClaudeCode,
             SessionKind::Structured,
+            micold_core::session::PermissionMode::Default,
         );
         assert!(matches!(
             msg,
@@ -3909,6 +4009,7 @@ pub(crate) mod tests {
             &location,
             micold_core::session::AiCli::ClaudeCode,
             micold_core::session::SessionKind::Terminal,
+            micold_core::session::PermissionMode::Default,
         );
         assert!(matches!(
             msg,
@@ -5879,5 +5980,305 @@ pub(crate) mod tests {
             micold_core::attention::NotificationKind::SessionError
         );
         assert_eq!(shown[0].title, "B stopped with an error");
+    }
+
+    // --- #942 T053: the permission prompts' routes, through the shell ---------------------------
+
+    mod permission_prompts {
+        use super::*;
+        use micold_client::features::permission_prompts::{Action, Msg as PromptsMsg};
+        use micold_core::protocol::messages::{
+            ErrorKind, PermissionRequest, PromptChoice, PromptId, Resolution,
+        };
+        use micold_core::session::PermissionMode;
+        use micold_core::structured::permission::request::RequestKind;
+
+        const ID: PromptId = PromptId(3);
+        const DAEMON: micold_core::daemons::DaemonId = micold_core::daemons::DaemonId(1);
+
+        /// A connected window with one session of the active project, and the requests it sent.
+        fn app_with_session() -> (
+            App,
+            iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+            SessionId,
+        ) {
+            let (mut app, id) =
+                app_with_session_b(std::sync::Arc::new(RecordingNotifier::default()));
+            let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+            app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+            (app, rx, id)
+        }
+
+        fn requested(session: SessionId) -> DaemonMsg {
+            DaemonMsg::PermissionRequested {
+                request: PermissionRequest {
+                    id: ID,
+                    session,
+                    tool_use_id: Some("toolu_3".into()),
+                    tool_name: "Bash".into(),
+                    input_preview: "{}".into(),
+                    input_bytes: 90_000,
+                    kind: RequestKind::Tool,
+                    always_allow: None,
+                },
+            }
+        }
+
+        fn refused(req: u64, message: &str) -> DaemonMsg {
+            DaemonMsg::OperationError {
+                req,
+                kind: ErrorKind::Refused,
+                message: message.into(),
+                detail: None,
+            }
+        }
+
+        /// The one request sent since the last drain, and its `req`.
+        fn sent_one(
+            rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        ) -> ClientMsg {
+            let mut sent = drain_sent(rx);
+            assert_eq!(sent.len(), 1, "one request: {sent:?}");
+            sent.remove(0)
+        }
+
+        #[test]
+        fn a_request_is_held_and_its_resolution_closes_it() {
+            let (mut app, _rx, session) = app_with_session();
+            let _ = on_daemon_event(&mut app, DAEMON, requested(session));
+            assert!(app.core.permission_prompts.waiting(session));
+            let _ = on_daemon_event(
+                &mut app,
+                DAEMON,
+                DaemonMsg::PermissionResolved {
+                    session,
+                    id: ID,
+                    tool_use_id: Some("toolu_3".into()),
+                    resolution: Resolution::Denied,
+                },
+            );
+            assert!(!app.core.permission_prompts.waiting(session));
+            assert_eq!(
+                app.core.permission_prompts.resolution(session, "toolu_3"),
+                Some(Resolution::Denied)
+            );
+        }
+
+        #[test]
+        fn an_answer_is_sent_with_its_req_and_a_refusal_comes_back_to_the_request() {
+            let (mut app, mut rx, session) = app_with_session();
+            let _ = on_daemon_event(&mut app, DAEMON, requested(session));
+            let _ = drain_sent(&mut rx);
+
+            let submit = PromptsMsg::Submitted {
+                session,
+                id: ID,
+                action: Action::Allow,
+            };
+            let _ = crate::shell::permission_prompts::update(&mut app, submit.clone());
+            let ClientMsg::PermissionDecision {
+                req,
+                session: to,
+                id,
+                choice,
+            } = sent_one(&mut rx)
+            else {
+                panic!("a PermissionDecision")
+            };
+            assert_eq!((to, id, choice), (session, ID, PromptChoice::Allow));
+            let shown = app
+                .core
+                .permission_prompts
+                .shown(session, ID)
+                .expect("shown");
+            assert!(shown.sending);
+
+            let _ = crate::shell::permission_prompts::update(&mut app, submit);
+            assert!(
+                drain_sent(&mut rx).is_empty(),
+                "no second answer while one is on its way"
+            );
+
+            let _ = on_daemon_event(&mut app, DAEMON, refused(req, "Already answered."));
+            let shown = app
+                .core
+                .permission_prompts
+                .shown(session, ID)
+                .expect("shown");
+            assert!(!shown.sending);
+            assert_eq!(shown.error.as_deref(), Some("Already answered."));
+        }
+
+        #[test]
+        fn show_all_asks_for_the_whole_input_and_its_text_comes_back() {
+            let (mut app, mut rx, session) = app_with_session();
+            let _ = on_daemon_event(&mut app, DAEMON, requested(session));
+            let _ = drain_sent(&mut rx);
+
+            let _ = crate::shell::permission_prompts::update(
+                &mut app,
+                PromptsMsg::ShowAllRequested { session, id: ID },
+            );
+            let ClientMsg::PermissionInput { req, id, .. } = sent_one(&mut rx) else {
+                panic!("a PermissionInput")
+            };
+            assert_eq!(id, ID);
+            let _ = on_daemon_event(
+                &mut app,
+                DAEMON,
+                DaemonMsg::PermissionInputText {
+                    req,
+                    text: r#"{"command":"all"}"#.into(),
+                },
+            );
+            assert_eq!(
+                app.core
+                    .permission_prompts
+                    .shown(session, ID)
+                    .and_then(|s| s.full_input.as_deref()),
+                Some(r#"{"command":"all"}"#)
+            );
+        }
+
+        #[test]
+        fn a_mode_change_is_sent_and_its_replies_are_routed_back() {
+            let (mut app, mut rx, session) = app_with_session();
+            let _ = crate::shell::permission_prompts::update(
+                &mut app,
+                PromptsMsg::ModeRequested {
+                    session,
+                    mode: PermissionMode::Plan,
+                },
+            );
+            let ClientMsg::SetPermissionMode { req, mode, .. } = sent_one(&mut rx) else {
+                panic!("a SetPermissionMode")
+            };
+            assert_eq!(mode, PermissionMode::Plan);
+            assert_eq!(
+                app.core.permission_prompts.mode_change(session),
+                Some(PermissionMode::Plan)
+            );
+            let _ = on_daemon_event(
+                &mut app,
+                DAEMON,
+                DaemonMsg::OperationOk {
+                    req,
+                    result: OperationResult::Ack,
+                },
+            );
+            assert_eq!(app.core.permission_prompts.mode_change(session), None);
+
+            let _ = crate::shell::permission_prompts::update(
+                &mut app,
+                PromptsMsg::ModeRequested {
+                    session,
+                    mode: PermissionMode::AcceptEdits,
+                },
+            );
+            let ClientMsg::SetPermissionMode { req, .. } = sent_one(&mut rx) else {
+                panic!("a SetPermissionMode")
+            };
+            let _ = on_daemon_event(&mut app, DAEMON, refused(req, "Claude refused."));
+            assert_eq!(
+                app.core.permission_prompts.notice(session),
+                Some("Claude refused.")
+            );
+        }
+
+        #[test]
+        fn a_mode_change_to_bypass_is_sent_only_by_its_confirmation() {
+            let (mut app, mut rx, session) = app_with_session();
+            let _ = crate::shell::permission_prompts::update(
+                &mut app,
+                PromptsMsg::ModeRequested {
+                    session,
+                    mode: PermissionMode::Bypass,
+                },
+            );
+            assert!(drain_sent(&mut rx).is_empty(), "nothing before the confirm");
+            let _ = crate::shell::permission_prompts::update(&mut app, PromptsMsg::ModeConfirmed);
+            let ClientMsg::SetPermissionMode {
+                mode, session: to, ..
+            } = sent_one(&mut rx)
+            else {
+                panic!("a SetPermissionMode")
+            };
+            assert_eq!((to, mode), (session, PermissionMode::Bypass));
+        }
+
+        #[test]
+        fn a_refused_show_all_leaves_an_answer_on_its_way() {
+            let (mut app, mut rx, session) = app_with_session();
+            let _ = on_daemon_event(&mut app, DAEMON, requested(session));
+            let _ = crate::shell::permission_prompts::update(
+                &mut app,
+                PromptsMsg::Submitted {
+                    session,
+                    id: ID,
+                    action: Action::Deny,
+                },
+            );
+            let _ = crate::shell::permission_prompts::update(
+                &mut app,
+                PromptsMsg::ShowAllRequested { session, id: ID },
+            );
+            let sent = drain_sent(&mut rx);
+            let Some(&ClientMsg::PermissionInput { req, .. }) = sent.last() else {
+                panic!("a PermissionInput last: {sent:?}")
+            };
+            let _ = on_daemon_event(&mut app, DAEMON, refused(req, "No longer pending."));
+            let shown = app
+                .core
+                .permission_prompts
+                .shown(session, ID)
+                .expect("shown");
+            assert!(shown.sending, "the answer is still on its way");
+            assert_eq!(shown.error.as_deref(), Some("No longer pending."));
+        }
+
+        /// #942 FR-014: a structured start in Bypass sends nothing until its confirmation, and
+        /// the confirmation sends one create in Bypass.
+        #[test]
+        fn a_bypass_start_is_created_only_by_its_confirmation() {
+            use micold_core::session::SessionKind;
+            let (mut app, mut rx, _) = app_with_session();
+            app.core.session.start_mode = PermissionMode::Bypass;
+            let location = SessionLocation::Worktree("wt".into());
+            let _ = on_session_start_requested(
+                &mut app,
+                location.clone(),
+                AiCli::ClaudeCode,
+                SessionKind::Structured,
+                false,
+            );
+            assert!(drain_sent(&mut rx).is_empty(), "nothing before the confirm");
+            assert!(app.core.session.bypass_start.is_some());
+
+            let _ = on_bypass_start_confirmed(&mut app);
+            let ClientMsg::SessionCreate {
+                permission_mode,
+                kind,
+                worktree_dir,
+                ..
+            } = sent_one(&mut rx)
+            else {
+                panic!("a SessionCreate")
+            };
+            assert_eq!(
+                (permission_mode, kind, worktree_dir.as_str()),
+                (PermissionMode::Bypass, SessionKind::Structured, "wt")
+            );
+            assert!(app.core.session.bypass_start.is_none());
+            let _ = on_bypass_start_confirmed(&mut app);
+            assert!(drain_sent(&mut rx).is_empty(), "once");
+        }
+
+        #[test]
+        fn a_lost_connection_drops_the_requests_of_its_sessions() {
+            let (mut app, _rx, session) = app_with_session();
+            let _ = on_daemon_event(&mut app, DAEMON, requested(session));
+            let _ = on_disconnected(&mut app, DAEMON);
+            assert!(!app.core.permission_prompts.waiting(session));
+        }
     }
 }

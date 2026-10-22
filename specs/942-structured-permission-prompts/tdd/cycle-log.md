@@ -182,3 +182,22 @@ Red runs recorded live, each before its implementation existed; commands with
   (core already had `ClientMsg::SetPermissionMode`, version 62, and its round-trip test).
 - Green: `structured_permission_mode` 13 passed (the no-answer case waits the 10 s bound),
   `structured_permission` 29 passed (the M2 plan test now answers the stand-in's control request).
+
+## M6 — client: render-free prompt state and create-flow mode (T049–T055)
+
+### Cycle 9 — T049–T055 prompt state, shell routes, the create flow's mode
+
+- Red: `features_permission_prompts.rs` (T049–T051, T053's feature routes, T054's mode-change
+  confirmation) and the T054 cases of `structured_start_menu.rs` written first. `cargo test -p
+  micold-client --test features_permission_prompts --test structured_start_menu --no-run`: did not
+  compile — `unresolved import micold_client::features::permission_prompts`. (The
+  `session.rs` half of T055 was written while that build ran and the library build picked it up,
+  so `structured_start_menu` had no red of its own; its cases were checked to fail by reading
+  them against the pre-M6 `session.rs`, which has no `start_gate`, `BypassStart` or
+  `session_create`.)
+- Green: `features_permission_prompts` 22 passed, `structured_start_menu` 10 (6 before M6),
+  `feature_registration_cost` 7, `feature_write_isolation` 8, `features_are_render_free` 2,
+  `additional_session_provider` 5; the shell routes (`shell::daemon_sync::tests::
+  permission_prompts`, written with the wiring) 8 passed, two of them added after review A
+  (a refused Show all leaves an answer on its way; a Bypass start is created only by its
+  confirmation).
