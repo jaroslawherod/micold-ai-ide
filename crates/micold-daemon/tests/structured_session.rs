@@ -893,13 +893,14 @@ async fn a_message_reaches_only_its_own_session() {
     }
 }
 
-// --- Feature 941: what the daemon does not serve yet, and pictures over the limits ------------
+// --- Feature 941: an interrupt of an idle session, and pictures over the limits ---------------
 
-/// Until M3, an interrupt changes and answers nothing (nothing reaches the CLI's stdin); a message
+/// An interrupt of an idle session changes and answers nothing (nothing reaches the CLI's stdin,
+/// FR-016); a message
 /// whose pictures pass the limits is refused with the attachment's sentence and nothing is
 /// written; a plain message is delivered as in #938.
 #[tokio::test(flavor = "multi_thread")]
-async fn an_interrupt_is_ignored_and_pictures_over_the_limits_are_refused() {
+async fn an_idle_interrupt_is_ignored_and_pictures_over_the_limits_are_refused() {
     use micold_core::protocol::messages::ErrorKind;
     use micold_core::structured::attachment::{admit, MAX_IMAGES_PER_MESSAGE};
     use micold_core::structured::TurnId;

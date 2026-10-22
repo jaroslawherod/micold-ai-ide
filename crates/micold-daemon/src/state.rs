@@ -148,7 +148,10 @@ pub struct DaemonState {
     /// The saved terminal histories (feature 041, data-model §5), set once at startup by
     /// `server::run`. Absent for tests that give the state none: nothing is then saved or loaded,
     /// and a history is carried in memory only.
-    history_store: std::sync::OnceLock<micold_core::terminal_history::HistoryStore>,
+    history_store: std::sync::OnceLock<Arc<micold_core::terminal_history::HistoryStore>>,
+    /// How long an interrupt goes unanswered before it is overdue (#941 FR-015):
+    /// [`crate::structured::INTERRUPT_OVERDUE`] unless a test shortened it.
+    interrupt_overdue: Mutex<std::time::Duration>,
     /// The app's data directory, where pasted images of sessions without a worktree are kept
     /// (feature 487). Set once at startup; absent for tests that give the state none, which then
     /// remove and sweep only what lies in worktrees.
@@ -226,6 +229,14 @@ struct Inner {
     /// research R1). Made by the session's first process start, kept across its processes, and
     /// dropped with its event stream.
     structured_inputs: HashMap<SessionId, SessionInput>,
+    /// Where a queue's snapshots go to be saved (#941 research R9): the queue writer's channel,
+    /// made with the history store; `None` without one.
+    queue_saves: Option<std::sync::mpsc::Sender<QueueSnapshot>>,
+    /// The generation the next queue snapshot gets: one counter for every session, so the writer
+    /// tells a snapshot older than one it wrote.
+    queue_generation: u64,
+    /// The [`SessionInput::revision`] each session's last snapshot was taken at.
+    queue_saved: HashMap<SessionId, u64>,
     /// The bounds a new entry of `event_streams` gets (feature 938); lowered only by tests.
     event_bounds: crate::structured::StreamBounds,
     /// The final activity signal of a session whose process has exited, kept until it runs again
@@ -431,6 +442,84 @@ pub struct Delivery {
     message: Message,
     /// The queue entry it was, and who queued it: put back at the head should the write fail.
     queued: Option<(QueueEntryId, u64)>,
+}
+
+/// A structured session's queue as it was at one change, on its way to the queue writer (#941
+/// research R9). Its pictures are never logged.
+pub struct QueueSnapshot {
+    session: SessionId,
+    /// Rises with every snapshot of any session: the writer drops one older than one it wrote.
+    generation: u64,
+    entries: Vec<Message>,
+}
+
+/// Start the one thread that writes queue snapshots to `store`, in generation order (research
+/// R9): a snapshot older than one already written for its session is dropped, so two quick
+/// changes never land out of order. Saving off, the store writes nothing; a removed session's
+/// snapshot writes nothing either (`HistoryStore::forget`). The thread ends with the state.
+fn spawn_queue_writer(
+    store: Arc<micold_core::terminal_history::HistoryStore>,
+) -> Option<std::sync::mpsc::Sender<QueueSnapshot>> {
+    let (sender, snapshots) = std::sync::mpsc::channel::<QueueSnapshot>();
+    let spawned = std::thread::Builder::new()
+        .name("queue-writer".into())
+        .spawn(move || {
+            let mut written: HashMap<SessionId, u64> = HashMap::new();
+            for snapshot in snapshots {
+                let last = written.entry(snapshot.session).or_insert(0);
+                if snapshot.generation <= *last {
+                    continue;
+                }
+                *last = snapshot.generation;
+                if let Err(err) = store.save_queue(snapshot.session, &snapshot.entries) {
+                    tracing::warn!(session = %snapshot.session.0, %err, "the queue was not saved");
+                }
+            }
+        });
+    match spawned {
+        Ok(_) => Some(sender),
+        Err(err) => {
+            tracing::warn!(%err, "no queue writer: queues are kept in memory only");
+            None
+        }
+    }
+}
+
+/// An interrupt the daemon wrote, for its overdue timer (#941 FR-015).
+#[derive(Debug, Clone, Copy)]
+pub struct AskedInterrupt {
+    pub session: SessionId,
+    /// The process it was written to ([`StructuredSession::serial`]).
+    pub process: u64,
+    pub turn: micold_core::structured::TurnId,
+    /// The ask's epoch in its turn.
+    pub ask: u32,
+}
+
+/// An interrupt asked for under the state lock, to be written off it ([`DaemonState::ask_interrupt`]).
+pub struct PendingInterrupt {
+    child: Arc<StructuredSession>,
+    asked: AskedInterrupt,
+}
+
+impl PendingInterrupt {
+    /// Write the request to the CLI (FR-013): the ask, for its overdue timer, when it was written;
+    /// `None` when the turn ended first or the CLI's stdin is gone (its process end follows and
+    /// ends the turn). **Blocking**: the write may wait on the pipe.
+    pub fn write(self) -> Option<AskedInterrupt> {
+        match self.child.write_interrupt(self.asked.turn) {
+            Ok(true) => Some(self.asked),
+            Ok(false) => None,
+            Err(err) => {
+                tracing::warn!(
+                    session = %self.asked.session.0,
+                    %err,
+                    "the interrupt could not be written"
+                );
+                None
+            }
+        }
+    }
 }
 
 /// One live process of a session.
@@ -803,6 +892,9 @@ impl DaemonState {
                 start_failures: HashMap::new(),
                 event_streams: HashMap::new(),
                 structured_inputs: HashMap::new(),
+                queue_saves: None,
+                queue_generation: 0,
+                queue_saved: HashMap::new(),
                 event_bounds: crate::structured::StreamBounds::default(),
                 ended: HashMap::new(),
                 env_include_cache: HashMap::new(),
@@ -840,6 +932,7 @@ impl DaemonState {
             auth_token: std::sync::OnceLock::new(),
             terminal_colors: TerminalColors::default(),
             history_store: std::sync::OnceLock::new(),
+            interrupt_overdue: Mutex::new(crate::structured::INTERRUPT_OVERDUE),
             pasted_data_dir: std::sync::OnceLock::new(),
             ai_clis_dir: std::sync::OnceLock::new(),
             history_directory_warned: std::sync::atomic::AtomicBool::new(false),
@@ -926,7 +1019,28 @@ impl DaemonState {
         if !enabled {
             self.log_undeleted(&store.purge());
         }
-        let _ = self.history_store.set(store);
+        let store = Arc::new(store);
+        if self.history_store.set(Arc::clone(&store)).is_ok() {
+            self.lock().queue_saves = spawn_queue_writer(store);
+        }
+    }
+
+    /// How long an interrupt goes unanswered before every window is told it is overdue (#941
+    /// FR-015).
+    pub fn interrupt_overdue(&self) -> std::time::Duration {
+        *self
+            .interrupt_overdue
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Shorten (or lengthen) the interrupt's overdue bound, so a test need not wait 10 s to see
+    /// it pass.
+    pub fn set_interrupt_overdue(&self, bound: std::time::Duration) {
+        *self
+            .interrupt_overdue
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = bound;
     }
 
     /// The scheme sessions answer colour queries for (`006` FR-003a, BUG-007). Clones share it.
@@ -2329,6 +2443,13 @@ impl DaemonState {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .mark_all_due();
+                // Every queue is saved from now on, also those that have not changed since.
+                let mut inner = self.lock();
+                inner.queue_saved.clear();
+                let sessions: Vec<_> = inner.structured_inputs.keys().copied().collect();
+                for session in sessions {
+                    Self::save_queue_locked(&mut inner, session);
+                }
             }
         }
         self.broadcast(DaemonMsg::SettingsChanged { settings });
@@ -4531,6 +4652,7 @@ impl DaemonState {
             // And a structured session's events (feature 938), and its input (#941).
             inner.event_streams.remove(&id);
             inner.structured_inputs.remove(&id);
+            inner.queue_saved.remove(&id);
         }
         removed
     }
@@ -5246,7 +5368,7 @@ impl DaemonState {
         id: SessionId,
         create: bool,
     ) -> Option<Arc<crate::structured::EventStream>> {
-        use micold_core::terminal_history::EventsLoad;
+        use micold_core::terminal_history::{EventsLoad, QueueLoad};
         let bounds = {
             let inner = self.lock();
             if let Some(stream) = inner.event_streams.get(&id) {
@@ -5275,6 +5397,21 @@ impl DaemonState {
                 create.then(|| crate::structured::EventStream::with_bounds(bounds))
             }
         }?;
+        // The queue saved with it (#941 R9), restored on hold; a damaged one is not restored.
+        let mut queue_damaged = false;
+        let queue = match self.history_store.get().map(|store| store.load_queue(id)) {
+            Some(QueueLoad::Queue(entries)) => entries,
+            Some(QueueLoad::Damaged(reason)) => {
+                tracing::warn!(
+                    session = %id.0,
+                    %reason,
+                    "the saved queue could not be read; starting without it"
+                );
+                queue_damaged = true;
+                Vec::new()
+            }
+            Some(QueueLoad::None) | None => Vec::new(),
+        };
         let mut inner = self.lock();
         // A session removed while its file was read has no stream made for it: nothing would drop
         // it again.
@@ -5303,7 +5440,19 @@ impl DaemonState {
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .events_restored(id, count);
                 }
-                Arc::clone(entry.insert(Arc::new(loaded)))
+                let stream = Arc::clone(entry.insert(Arc::new(loaded)));
+                if !queue.is_empty() && !inner.structured_inputs.contains_key(&id) {
+                    let restored = SessionInput::restored(queue);
+                    // What the file holds already: saved again only after a change.
+                    inner.queue_saved.insert(id, restored.revision());
+                    inner.structured_inputs.insert(id, restored);
+                    Self::broadcast_input(&inner, id);
+                } else if queue_damaged {
+                    // Its file is replaced by the empty queue's: removed.
+                    inner.structured_inputs.entry(id).or_default();
+                    Self::save_queue_locked(&mut inner, id);
+                }
+                stream
             }
         };
         Some(stream)
@@ -6858,6 +7007,7 @@ impl DaemonState {
             delivery = Self::pump_locked(inner, session);
         }
         let activity = Self::follow_turn(inner, session, delivery.is_some(), false);
+        Self::save_queue_locked(inner, session);
         Self::broadcast_input(inner, session);
         drop(guard);
         self.after_turn_activity(activity);
@@ -6905,6 +7055,7 @@ impl DaemonState {
         }
         let next = Self::pump_locked(inner, session);
         let activity = Self::follow_turn(inner, session, next.is_some(), true);
+        Self::save_queue_locked(inner, session);
         Self::broadcast_input(inner, session);
         drop(guard);
         self.after_turn_activity(activity);
@@ -6935,6 +7086,7 @@ impl DaemonState {
             let delivery = Self::pump_locked(inner, session);
             let ended = closed.by == crate::structured::ClosedBy::Result;
             let activity = Self::follow_turn(inner, session, delivery.is_some(), ended);
+            Self::save_queue_locked(inner, session);
             Self::broadcast_input(inner, session);
             drop(guard);
             self.after_turn_activity(activity);
@@ -6963,6 +7115,7 @@ impl DaemonState {
         let changed = change(input)?;
         let delivery = Self::pump_locked(inner, session);
         let activity = Self::follow_turn(inner, session, delivery.is_some(), false);
+        Self::save_queue_locked(inner, session);
         Self::broadcast_input(inner, session);
         drop(guard);
         self.after_turn_activity(activity);
@@ -6978,6 +7131,86 @@ impl DaemonState {
         })
         .ok()
         .and_then(|((), delivery)| delivery)
+    }
+
+    /// Hand a snapshot of `session`'s queue to the queue writer when it changed since the last one
+    /// and **Save terminal history** is on (#941 research R9). Under the lock that changed it, so
+    /// snapshots are numbered in the order of the changes.
+    fn save_queue_locked(inner: &mut Inner, session: SessionId) {
+        if !inner.catalog.save_terminal_history() {
+            return;
+        }
+        let (Some(saves), Some(input)) =
+            (&inner.queue_saves, inner.structured_inputs.get(&session))
+        else {
+            return;
+        };
+        let revision = input.revision();
+        if inner.queue_saved.get(&session) == Some(&revision) {
+            return;
+        }
+        inner.queue_generation += 1;
+        let snapshot = QueueSnapshot {
+            session,
+            generation: inner.queue_generation,
+            entries: input.queued().map(|q| q.message.clone()).collect(),
+        };
+        if saves.send(snapshot).is_ok() {
+            inner.queue_saved.insert(session, revision);
+        }
+    }
+
+    /// An interrupt of `turn` of structured session `session` from any window (#941 R4, FR-013,
+    /// FR-016, Q2), under the lock, in the order the window's requests arrive: when `turn` is the
+    /// open turn and not already asked, it is `Asked` and a non-empty queue goes on hold; when it
+    /// names the turn that ended last, only the hold — it never interrupts a later turn. The
+    /// request to write off the lock ([`PendingInterrupt::write`]); nothing for any other session
+    /// or turn.
+    pub fn ask_interrupt(
+        &self,
+        session: SessionId,
+        turn: micold_core::structured::TurnId,
+    ) -> Option<PendingInterrupt> {
+        use micold_core::structured::InterruptOutcome;
+        let (child, ask) = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
+            let child = Arc::clone(Self::structured_primary(inner, session)?);
+            if !child.is_running() {
+                return None;
+            }
+            let input = inner.structured_inputs.entry(session).or_default();
+            let mut state = child.turn();
+            let ask = match state.ask_interrupt(turn) {
+                InterruptOutcome::Write { ask } => Some(ask),
+                InterruptOutcome::AlreadyAsked => return None,
+                InterruptOutcome::NotThisTurn if state.last_ended() == Some(turn) => None,
+                InterruptOutcome::NotThisTurn => return None,
+            };
+            drop(state);
+            input.on_interrupt();
+            Self::broadcast_input(inner, session);
+            (child, ask?)
+        };
+        let asked = AskedInterrupt {
+            session,
+            process: child.serial(),
+            turn,
+            ask,
+        };
+        Some(PendingInterrupt { child, asked })
+    }
+
+    /// The overdue bound of `asked` passed (#941 FR-015): when the same process's turn is still on
+    /// that ask, it becomes `Overdue` and every window is told. Nothing is stopped.
+    pub fn interrupt_went_overdue(&self, asked: AskedInterrupt) {
+        let inner = self.lock();
+        let Some(child) = Self::structured_primary(&inner, asked.session) else {
+            return;
+        };
+        if child.serial() == asked.process && child.turn().overdue(asked.turn, asked.ask) {
+            Self::broadcast_input(&inner, asked.session);
+        }
     }
 
     /// Whether a terminal-only request (input, resize, scrollback, interrupt) addressed to

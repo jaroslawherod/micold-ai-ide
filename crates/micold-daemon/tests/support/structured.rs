@@ -44,6 +44,13 @@ const STAND_IN: &str = "claude.exe";
 ///   message, skipping every other line (#941 T023); `on-message-gated <file>` does the same, but
 ///   before the n-th message's replay (counted from 1) it waits for `turn-<n>` in the cwd, so a
 ///   test decides when each turn's result is written. Neither returns while stdin is open;
+/// - `on-interrupt <file>`: on each later stdin `control_request` `interrupt` line, write P-4's
+///   `control_response` `success` for its `request_id`, then replay the file without its own
+///   `control_response` lines, so each interrupted turn ends with the file's `result` (#941 T034);
+///   every other line is skipped, so a user line opens a turn that only an interrupt ends. Does
+///   not return while stdin is open;
+/// - `ignore-interrupt <file>`: `on-message-gated <file>`, named for what the tests use it for: an
+///   interrupt is recorded and nothing else is done with it, so only `turn-<n>` ends a turn;
 /// - any other line is written to stdout as it is, with a line end.
 ///
 /// A stdin line containing `CLOSE-STDIN` is recorded and then the stand-in closes its stdin and
@@ -138,7 +145,8 @@ fn main() {
                 }
             }
             "on-message" => on_message(&lines_rx, &mut out, arg, false),
-            "on-message-gated" => on_message(&lines_rx, &mut out, arg, true),
+            "on-message-gated" | "ignore-interrupt" => on_message(&lines_rx, &mut out, arg, true),
+            "on-interrupt" => on_interrupt(&lines_rx, &mut out, arg),
             "prompt" => prompt(&args, arg),
             "prompt-async" => {
                 let (args, file) = (args.clone(), arg.to_string());
@@ -198,6 +206,28 @@ fn on_message(lines: &mpsc::Receiver<String>, out: &mut impl Write, file: &str, 
         for piece in bytes.split_inclusive(|b| *b == b'\n') {
             let _ = out.write_all(piece);
             let _ = out.flush();
+        }
+    }
+}
+
+/// For each later stdin `interrupt` control request: answer it, then replay `file` without its
+/// `control_response` lines (P-4).
+fn on_interrupt(lines: &mpsc::Receiver<String>, out: &mut impl Write, file: &str) {
+    while let Ok(line) = lines.recv() {
+        if !line.contains("\"control_request\"") || !line.contains("\"interrupt\"") {
+            continue;
+        }
+        let id = string_after(&line, "request_id").unwrap_or_default();
+        let _ = writeln!(
+            out,
+            "{{\"type\":\"control_response\",\"response\":{{\"subtype\":\"success\",\"request_id\":\"{id}\",\"response\":{{\"still_queued\":[]}}}}}}"
+        );
+        let text = std::fs::read_to_string(file).expect("read the fixture");
+        for piece in text.split_inclusive('\n') {
+            if !piece.contains("\"control_response\"") {
+                let _ = out.write_all(piece.as_bytes());
+                let _ = out.flush();
+            }
         }
     }
 }

@@ -67,3 +67,35 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
   and 16 passed; `structured_permission*`, `structured_lifecycle`, `structured_history`,
   `structured_resume`, `structured_saved_history`, `plan_usage_structured`,
   `mcp_create_session`, `activity_pipeline`, the daemon lib: all pass.
+
+## M3 — daemon interrupts a turn and keeps the queue across restarts (T034–T038)
+
+### Cycle 5 — interrupt, overdue, hold on interrupt (T034, T035 → T037)
+
+- tests: `daemon/tests/structured_input.rs` gains 5 cases (20 honoured interrupts with the same
+  pid, one `encode_interrupt` line each, `InterruptAsked`, transcript `Interrupted`, idle within
+  3 s; two windows → one line, `Overdue` after a shortened bound, asked again, cleared by the
+  turn's end; idle / unknown / other-turn / ended-turn / not-running interrupts write nothing and
+  `SessionInterrupt` stays refused; an interrupt holds the queue and its end delivers nothing; a
+  late interrupt naming `last_ended` holds the queue and interrupts nothing); stand-in directives
+  `on-interrupt <file>` and `ignore-interrupt <file>` (T034).
+- red: written against `DaemonState::set_interrupt_overdue` and the stand-in directives, which did
+  not exist (the target did not compile). After green, a mutant (`ask_interrupt` without
+  `on_interrupt`; `write_interrupt` never writes) → 4 of the 5 new cases failed. Restored.
+- green: `cargo test -p micold-daemon --test structured_input` → 17 passed. A first green run
+  showed an interrupt sent before a message landing after it (it was asked on a spawned task):
+  the ask now runs in the connection's handler, in arrival order; only the write and the timer
+  are spawned.
+
+### Cycle 6 — the saved queue (T036 → T038)
+
+- tests: `daemon/tests/structured_input_saved.rs` (new, 5 cases: restart restores the queue with
+  its picture on hold and delivers nothing; saving off keeps nothing; the file goes when the queue
+  empties and with the session's delete and the project's forget; a damaged file restores an empty
+  queue and the events still load; 20 quick edits end with the last saved); core
+  `structured_input.rs` gains `SessionInput::restored` and `revision` cases.
+- red: the target did not compile before `SessionInput::restored`/`revision`; after green, a
+  mutant (`save_queue_locked` saves nothing) → 4 of 5 failed (saving off passes, as it should).
+  Restored.
+- green: `structured_input_saved` 5 passed; `structured_session` 16, `structured_saved_history`
+  12, `structured_lifecycle` 7, `structured_resume` 4, core `structured_input` 26 passed.
