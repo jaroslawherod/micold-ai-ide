@@ -2076,3 +2076,100 @@ fn a_command_list_note_makes_no_entry() {
     let transcript = built(&sequenced([reported("Greet", None)]));
     assert_eq!(kinds(&transcript), vec![], "no entry, no raw row");
 }
+
+fn synthetic_answer(text: &str, error: Option<&str>) -> StructuredEvent {
+    StructuredEvent::Assistant {
+        message_id: None,
+        blocks: vec![ContentBlock::Text { text: text.into() }],
+        parent_tool_use_id: None,
+        model: Some("<synthetic>".into()),
+        error: error.map(Into::into),
+        raw: r#"{"type":"assistant","message":{"model":"<synthetic>","content":[]}}"#.into(),
+    }
+}
+
+#[test]
+fn a_synthetic_error_after_a_command_stays_an_assistant_text() {
+    let transcript = built(&sequenced([
+        user_sent("/context", &[]),
+        synthetic_answer("Prompt is too long", Some("invalid_request")),
+    ]));
+    assert!(kinds(&transcript).contains(&EntryKind::AssistantText {
+        text: "Prompt is too long".into(),
+        streaming: false,
+        auth_failed: false,
+    }));
+}
+
+#[test]
+fn the_clis_command_report_is_output_without_markup_and_an_empty_one_is_nothing() {
+    let transcript = built(&sequenced([
+        user_sent("/hooks", &[]),
+        user_text("<local-command-stdout></local-command-stdout>"),
+        user_text("<local-command-stderr>no hooks file</local-command-stderr>"),
+    ]));
+    let all = kinds(&transcript);
+    assert_eq!(
+        all[1..],
+        [EntryKind::CommandOutput {
+            text: "no hooks file".into()
+        }]
+    );
+}
+
+#[test]
+fn a_message_about_a_path_is_no_command() {
+    let transcript = built(&sequenced([user_sent("/var/log/x fails", &[])]));
+    assert_eq!(chips(&transcript), vec![None]);
+}
+
+#[test]
+fn a_switch_to_terminal_ends_the_open_turn() {
+    let transcript = built(&sequenced([
+        user_sent("/context", &[]),
+        tool_use("t1", "Bash", "{}"),
+        switched(SessionKind::Terminal),
+        switched(SessionKind::Structured),
+        synthetic_answer("Not a command output", None),
+    ]));
+    assert_eq!(card_of(&transcript, "t1").status, ToolStatus::NoResult);
+    assert!(kinds(&transcript).contains(&EntryKind::AssistantText {
+        text: "Not a command output".into(),
+        streaming: false,
+        auth_failed: false,
+    }));
+}
+
+#[test]
+fn a_compaction_keeps_its_first_summary() {
+    let synthetic = |text: &str| match user_text(text) {
+        StructuredEvent::User {
+            blocks,
+            raw,
+            parent_tool_use_id,
+            ..
+        } => StructuredEvent::User {
+            blocks,
+            raw,
+            parent_tool_use_id,
+            is_synthetic: true,
+        },
+        _ => unreachable!(),
+    };
+    let transcript = built(&sequenced([
+        user_sent("/compact", &[]),
+        StructuredEvent::CompactBoundary {
+            trigger: Some("manual".into()),
+            pre_tokens: None,
+            post_tokens: None,
+            raw: r#"{"type":"system","subtype":"compact_boundary"}"#.into(),
+        },
+        synthetic("  "),
+        synthetic("the summary"),
+        synthetic("a later synthetic line"),
+    ]));
+    assert!(kinds(&transcript).contains(&EntryKind::Compacted {
+        trigger: Some("manual".into()),
+        summary: Some("the summary".into()),
+    }));
+}

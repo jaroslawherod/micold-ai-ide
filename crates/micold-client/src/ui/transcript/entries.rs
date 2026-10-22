@@ -16,8 +16,7 @@ use iced::widget::{column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::{
-    footer_figures, CommandChip, Entry, EntryKind, Outcome, ToolCard, ToolStatus, Transcript,
-    TurnFooter,
+    footer_figures, Entry, EntryKind, Outcome, ToolCard, ToolStatus, Transcript, TurnFooter,
 };
 use micold_core::tokens::{spacing, Roles};
 
@@ -166,20 +165,6 @@ pub const CLEARED: &str = "Conversation cleared: the turns above are from before
 pub const TERMINAL_PERIOD: &str = "The conversation continued in the terminal; those turns are \
      not shown here, the terminal's scrollback holds them";
 
-/// A user message as the transcript shows it: a command as `/name args` (#943 FR-003), else
-/// its text.
-pub fn user_message_text(text: &str, command: Option<&CommandChip>) -> String {
-    match command {
-        Some(CommandChip { invocation, .. }) if invocation.args.is_empty() => {
-            format!("/{}", invocation.name)
-        }
-        Some(CommandChip { invocation, .. }) => {
-            format!("/{} {}", invocation.name, invocation.args)
-        }
-        None => text.to_owned(),
-    }
-}
-
 /// What a compaction marker says (#943 FR-004).
 pub fn compacted_text(trigger: Option<&str>) -> String {
     match trigger {
@@ -287,15 +272,12 @@ pub fn entry(
             parts.extend(cwd.iter().cloned());
             caption(parts.join(" · "), roles)
         }
-        EntryKind::UserMessage { text, command, .. } => column![
+        // A command turn is its text as typed, `/name args` (#943 FR-003).
+        EntryKind::UserMessage { text, .. } => column![
             caption(USER_LABEL, roles),
-            Text::new(
-                plain_text(&user_message_text(text, command.as_ref())),
-                TypeRole::Body,
-                roles
-            )
-            .wrapping(Wrapping::WordOrGlyph)
-            .width(Length::Fill),
+            Text::new(plain_text(text), TypeRole::Body, roles)
+                .wrapping(Wrapping::WordOrGlyph)
+                .width(Length::Fill),
         ]
         .spacing(spacing::XS)
         .into(),
@@ -481,32 +463,6 @@ fn footer_row(view: &FooterView, roles: Roles) -> Block {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_core::structured::commands::CommandInvocation;
-
-    fn chip(name: &str, args: &str) -> CommandChip {
-        CommandChip {
-            invocation: CommandInvocation {
-                name: name.into(),
-                args: args.into(),
-            },
-            description: Some("ignored here".into()),
-            argument_hint: None,
-        }
-    }
-
-    #[test]
-    fn a_command_turn_reads_as_the_command_and_its_arguments() {
-        let typed = "/greet  Ada";
-        assert_eq!(
-            user_message_text(typed, Some(&chip("greet", "Ada"))),
-            "/greet Ada"
-        );
-        assert_eq!(
-            user_message_text("/clear", Some(&chip("clear", ""))),
-            "/clear"
-        );
-        assert_eq!(user_message_text("hello", None), "hello");
-    }
 
     #[test]
     fn a_compaction_marker_says_whether_the_cli_compacted_on_its_own() {

@@ -2,8 +2,8 @@
 //! rules*).
 
 use super::entry::{
-    CommandChip, EntryKey, EntryKind, Outcome, RawReason, ToolCard, ToolResultView, ToolStatus,
-    TurnFooter,
+    CommandChip, EntryId, EntryKey, EntryKind, Outcome, RawReason, ToolCard, ToolResultView,
+    ToolStatus, TurnFooter,
 };
 use super::{parent_of, result::result_parts, stream, summary::input_summary, Scope, Transcript};
 use crate::session::SessionKind;
@@ -85,7 +85,7 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             let auth_failed = error.as_deref() == Some(AUTH_FAILED);
             let speaker = Speaker::Assistant {
                 message_id: message_id.as_deref(),
-                output: !auth_failed
+                output: error.is_none()
                     && transcript.command_turn
                     && model.as_deref() == Some(SYNTHETIC_MODEL),
                 auth_failed,
@@ -104,20 +104,13 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
                 transcript.interrupted = true;
             } else if let (true, Some(marker)) = (*is_synthetic, transcript.compaction) {
                 // The compaction's summary: behind its marker, never a user entry (#943 R5).
-                let summary = block_text(blocks);
-                transcript.change(marker, |kind| {
-                    if let EntryKind::Compacted { summary: held, .. } = kind {
-                        *held = Some(summary);
-                    }
-                });
-            } else if let Some(output) = local_command_stdout(blocks) {
+                hold_summary(transcript, marker, block_text(blocks));
+            } else if let Some(output) = local_command_output(blocks) {
                 // The CLI's own report of a command it ran: its output, without the markup
-                // (FR-006); after a compaction it only repeats the marker.
-                if transcript.compaction.is_none() {
-                    let kind = EntryKind::CommandOutput {
-                        text: output.to_string(),
-                    };
-                    transcript.open(at(0), seq, kind);
+                // (FR-006); after a compaction it only repeats the marker, and an empty one says
+                // nothing.
+                if transcript.compaction.is_none() && !output.is_empty() {
+                    transcript.open(at(0), seq, EntryKind::CommandOutput { text: output });
                 }
             } else {
                 push_blocks(transcript, seq, blocks, raw, Speaker::User);
@@ -163,6 +156,7 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
         }
         StructuredEvent::UserSent { text, attachments } => {
             transcript.in_turn = true;
+            transcript.compaction = None;
             let command = command_chip(transcript, text);
             transcript.command_turn = command.is_some();
             let kind = EntryKind::UserMessage {
@@ -196,6 +190,7 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             transcript.compaction = Some(transcript.open(at(0), seq, kind));
         }
         StructuredEvent::ConversationReset { .. } => {
+            transcript.compaction = None;
             transcript.era += 1;
             transcript.open(at(0), seq, EntryKind::Cleared);
         }
@@ -216,6 +211,11 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
         // One marker per terminal period: the note that opens it, until one closes it.
         StructuredEvent::KindSwitched { to } => match to {
             SessionKind::Terminal if !transcript.in_terminal => {
+                // The structured run ends here: a turn it left open gets no result.
+                if transcript.in_turn {
+                    stream::close(transcript);
+                    end_turn(transcript);
+                }
                 transcript.in_terminal = true;
                 transcript.open(at(0), seq, EntryKind::TerminalPeriod);
             }
@@ -250,17 +250,34 @@ fn block_text(blocks: &[ContentBlock]) -> String {
         .join("\n\n")
 }
 
-/// The CLI's report of a command it ran, `<local-command-stdout>…</local-command-stdout>`: the
-/// text inside (#943 R5).
-fn local_command_stdout(blocks: &[ContentBlock]) -> Option<&str> {
-    let [ContentBlock::Text { text }] = blocks else {
-        return None;
-    };
-    let inner = text
-        .trim()
-        .strip_prefix("<local-command-stdout>")?
-        .strip_suffix("</local-command-stdout>")?;
-    Some(inner.trim())
+/// Puts `summary` behind the compaction marker `marker`: the first one that says anything.
+fn hold_summary(transcript: &mut Transcript, marker: EntryId, summary: String) {
+    if summary.trim().is_empty() {
+        return;
+    }
+    transcript.change(marker, |kind| {
+        if let EntryKind::Compacted { summary: held, .. } = kind {
+            held.get_or_insert(summary);
+        }
+    });
+}
+
+/// The CLI's report of a command it ran, every text block of the message wrapped in
+/// `<local-command-stdout>` or `<local-command-stderr>`: the texts inside, joined (#943 R5).
+fn local_command_output(blocks: &[ContentBlock]) -> Option<String> {
+    let mut texts = Vec::new();
+    for block in blocks {
+        let ContentBlock::Text { text } = block else {
+            return None;
+        };
+        let text = text.trim();
+        let inner = ["stdout", "stderr"].iter().find_map(|stream| {
+            text.strip_prefix(&format!("<local-command-{stream}>"))?
+                .strip_suffix(&format!("</local-command-{stream}>"))
+        })?;
+        texts.push(inner.trim());
+    }
+    (!texts.is_empty()).then(|| texts.join("\n\n").trim().to_string())
 }
 
 /// Keeps `event`, an `init` or a `CommandsReported` note, as the latest of its kind: what the
@@ -274,12 +291,16 @@ fn hold_command_source(transcript: &mut Transcript, seq: u64, event: &Structured
         seq,
         event: event.clone(),
     });
+    transcript.commands = None;
 }
 
 /// `text` read as a command, described by the command list the history holds now (FR-003).
-fn command_chip(transcript: &Transcript, text: &str) -> Option<CommandChip> {
-    let invocation = parse_invocation(text)?;
-    let list = CommandList::from_history(&transcript.command_sources);
+fn command_chip(transcript: &mut Transcript, text: &str) -> Option<CommandChip> {
+    // A command's name holds no `/`: `/var/log/x fails` is a message about a path.
+    let invocation = parse_invocation(text).filter(|i| !i.name.contains('/'))?;
+    let list = transcript
+        .commands
+        .get_or_insert_with(|| CommandList::from_history(&transcript.command_sources));
     let command = list
         .commands()
         .iter()

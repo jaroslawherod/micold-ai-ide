@@ -170,6 +170,69 @@ fn text_and_thinking_become_documents_and_edit_cards_diffs() {
     }
 }
 
+/// #943: a command's output and a compaction's summary are markdown, as an answer is.
+#[test]
+fn command_output_and_a_compaction_summary_become_documents() {
+    let s = SessionId::new();
+    let synthetic = StructuredEvent::Assistant {
+        error: None,
+        model: Some("<synthetic>".into()),
+        message_id: None,
+        raw: json!({"type": "assistant", "message": {"content": []}}).to_string(),
+        blocks: vec![ContentBlock::Text {
+            text: "## Context".into(),
+        }],
+        parent_tool_use_id: None,
+    };
+    let boundary = |trigger: &str| StructuredEvent::CompactBoundary {
+        trigger: Some(trigger.into()),
+        pre_tokens: None,
+        post_tokens: None,
+        raw: "{}".into(),
+    };
+    let t = transcript_of([
+        StructuredEvent::UserSent {
+            text: "/context".into(),
+            attachments: vec![],
+        },
+        synthetic,
+        boundary("manual"),
+        StructuredEvent::User {
+            blocks: vec![ContentBlock::Text {
+                text: "**summary**".into(),
+            }],
+            parent_tool_use_id: None,
+            is_synthetic: true,
+            raw: "{}".into(),
+        },
+        boundary("auto"),
+    ]);
+    let mut cache = RichCache::default();
+    cache.refresh(s, &t, &GRAMMAR);
+    let mut documents = 0;
+    for entry in t.entries() {
+        let derived = cache.get(s, entry.key());
+        match entry.kind() {
+            EntryKind::CommandOutput { text }
+            | EntryKind::Compacted {
+                summary: Some(text),
+                ..
+            } => {
+                assert_eq!(
+                    derived.expect("derived").body,
+                    DerivedBody::Text(Document::parse(text, false))
+                );
+                documents += 1;
+            }
+            _ => assert!(derived.is_none(), "{:?}", entry.kind()),
+        }
+    }
+    assert_eq!(
+        documents, 2,
+        "the output and the first summary; no summary, no document"
+    );
+}
+
 #[test]
 fn an_edit_card_has_no_diff_while_its_input_streams_or_when_it_is_malformed() {
     let s = SessionId::new();

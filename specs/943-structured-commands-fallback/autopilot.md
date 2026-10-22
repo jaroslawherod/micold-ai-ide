@@ -56,12 +56,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (code-review high, claude -p) | 1 | b4e6c0e3cf0eba349e147e1a9bc80ace36b899ad:243190ac73d4e596d907aa24c2fa7b7d53e2a50c | CHANGES: 1 MAJOR (F1, declined: FR-009), 3 MINOR — F2, F4 fixed; F3 declined |
 | Review B M1 (conformance, sonnet, claude -p) | 1 | 557f97e288a5a97b5363b42e3a56b2574406c567:cc1452181d4d44824e386a36d97cb82a8687e126 | CLEAN |
 | Rebase review M1 (conflict resolution vs #941 M1, sonnet, claude -p) | 1 | daf7075aff3a43c20473739d35830934528dca79:40a159e175b97cc860d98471c79bd2068571abeb | CLEAN (2 MINOR, capture script: stray arg refused, interrupt id `micold-1` fixed — left) |
+| Review A M2 (code-review high, claude -p) | 1 | befd7222c84571107707c3cbec98dd2188e17c53:eefffe5c2121cffe5fd1e92ea8ac54417a711184 | CHANGES (8, unranked): F1 synthetic error as output, F2 empty/stderr local-command lines, F3 compaction state, F4 switch mid-turn, F5 chip rewrote the typed text and took paths, F6 list rebuilt per message — fixed with tests; F7 rich arms untested — test added; F8 summary/description not behind a disclosure — declined |
+| Review B M2 (conformance, sonnet, claude -p) | 1 | befd7222c84571107707c3cbec98dd2188e17c53:eefffe5c2121cffe5fd1e92ea8ac54417a711184 | CHANGES: F1 MAJOR T024 no red recorded — red observed by stubbing, logged; F2 MINOR stale counts — fixed |
 | Tasks review | 2 (sonnet, fix diff) | 0c12e486473d3a8cc0937758fdd4473a3e424f23:ee00a672e9c7ceefaa1edde46c12c37b7a0a103e | CLEAN (1 MINOR, fixed, prose only) |
 
 ## Declined review findings
 
 - Review A M1 F1 (MAJOR, command list and model lost when the history evicts `Init` and `CommandsReported`): declined — FR-009 says the list is the one reported at the latest start *whose events the session still holds*, and the fallback when they are no longer held; an `init` precedes every turn, so the latest one is recent.
 - Review A M1 F3 (MINOR, a user skill named `login`/`config` is marked terminal-only): declined — FR-011: "a command is terminal-only if either source says so", by name; with only the `init` lists the kind of a name is not known.
+- Review A M2 F8 (summary drawn inline, chip description and `era` unused in the window): declined — tasks.md T024 draws M2's arms with the existing pieces only; M8 T058 puts the command, compaction, clear and model markers in `DisclosureCard` (description and summary folded) and draws earlier eras as "before the clear"
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
