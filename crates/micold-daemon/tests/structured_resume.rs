@@ -563,7 +563,10 @@ async fn after_a_clear_every_later_launch_resumes_the_cleared_conversation() {
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    assert!(transcript(dir, cleared).exists(), "the stand-in recorded it");
+    assert!(
+        transcript(dir, cleared).exists(),
+        "the stand-in recorded it"
+    );
     assert_eq!(
         state.discover_external_sessions(dir),
         0,
@@ -596,7 +599,11 @@ async fn after_a_clear_every_later_launch_resumes_the_cleared_conversation() {
         WireLifecycle::InterruptedResumable
     );
     assert_eq!(restarted.discover_external_sessions(dir), 0);
-    assert_eq!(restarted.sessions_for(dir).len(), 1, "one session, its own id");
+    assert_eq!(
+        restarted.sessions_for(dir).len(),
+        1,
+        "one session, its own id"
+    );
     let mut client = connect(&restarted).await;
     send(
         &mut client,
@@ -609,4 +616,64 @@ async fn after_a_clear_every_later_launch_resumes_the_cleared_conversation() {
     started_times(dir, 3).await;
     assert!(resumes(&argv(dir), cleared), "restore: {:?}", argv(dir));
     restarted.stop_session(id);
+}
+
+/// #943 FR-005a, SC-005 (review A M5 F1): a second `/clear` replaces the handle, and the
+/// conversation the first one started is marked archived with the provider, so no discovery pass
+/// adopts it once the catalog no longer names it; the current one is marked only when the session
+/// is archived.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_superseded_cleared_conversation_is_no_second_session() {
+    let home = setup();
+    let store = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let dir = &project.path().canonicalize().unwrap();
+    save_project(store.path(), dir);
+    let state = daemon(store.path());
+    let id = state
+        .create_session_of_kind(
+            dir,
+            "",
+            AiCli::ClaudeCode,
+            SessionKind::Structured,
+            micold_core::occupancy::Additional::Yes,
+        )
+        .expect("created");
+    let first = SessionId::from_uuid(uuid::Uuid::new_v4());
+    let second = SessionId::from_uuid(uuid::Uuid::new_v4());
+    for conversation in [id, first, second] {
+        record_conversation(dir, conversation);
+    }
+    state.follow_reported_conversation(id, first.0);
+    state.follow_reported_conversation(id, second.0);
+    assert_eq!(saved_conversation(store.path(), id), Some(second.0));
+    let provider = AiCli::ClaudeCode.provider();
+    assert!(
+        provider.is_archived(home, dir, first.0),
+        "the superseded conversation is marked"
+    );
+    assert!(
+        !provider.is_archived(home, dir, second.0),
+        "the current conversation is not"
+    );
+    assert_eq!(
+        state.discover_external_sessions(dir),
+        0,
+        "neither cleared conversation is a second session"
+    );
+    assert_eq!(state.sessions_for(dir).len(), 1);
+
+    // Archiving the session marks its current conversation too (review A M5 F4).
+    drop(state);
+    let mut catalog = Catalog::load(
+        Box::new(JsonFileStore::at(store.path().join("projects.json"))),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    );
+    catalog.archive_session(id).expect("archived");
+    assert!(
+        provider.is_archived(home, dir, second.0),
+        "the archived session's conversation is marked"
+    );
 }

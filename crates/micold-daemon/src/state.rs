@@ -5096,6 +5096,8 @@ impl DaemonState {
                     .entry(*which)
                     .or_insert_with(|| provider.config_dir());
                 match config {
+                    // The session's own id, not its resume handle: a session that followed a
+                    // `/clear` recorded its own conversation before it, so it is never empty.
                     Some(config) => !provider.has_recorded_conversation(config, cwd, id.0),
                     None => false,
                 }

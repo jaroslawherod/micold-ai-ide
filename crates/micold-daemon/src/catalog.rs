@@ -55,6 +55,17 @@ use micold_core::worktree::worktrees_root;
 /// `archived` flag was already set by the caller. A free function (not a `Catalog` method) so it
 /// can be called while a session list borrowed from `self.workspace` is still mutably held.
 fn mark_archived_durable(project: &Path, session: &Session) {
+    mark_conversation_archived(project, session, session.id.0);
+    // The conversation a `/clear` started, too (#943 FR-005a): once the session is dropped from
+    // the catalog nothing else keeps discovery from adopting it.
+    if let Some(conversation) = session.conversation {
+        mark_conversation_archived(project, session, conversation);
+    }
+}
+
+/// [`mark_archived_durable`] for one `conversation` of `session`: its own id, or a conversation a
+/// `/clear` started that a later one superseded (#943 FR-005a).
+fn mark_conversation_archived(project: &Path, session: &Session, conversation: uuid::Uuid) {
     // Feature 026: the provider comes from the session's own record. A per-session path where the
     // record is already in hand, so this is the one genuinely mechanical substitution in the
     // daemon — and it has to happen, because a Copilot session's marker belongs in Copilot's store,
@@ -68,8 +79,8 @@ fn mark_archived_durable(project: &Path, session: &Session) {
         return;
     };
     let cwd = session.location.cwd(project);
-    if let Err(err) = provider.mark_archived(&config_dir, &cwd, session.id.0) {
-        tracing::warn!(session = %session.id.0, %err, "failed to write durable archive marker");
+    if let Err(err) = provider.mark_archived(&config_dir, &cwd, conversation) {
+        tracing::warn!(session = %session.id.0, %conversation, %err, "failed to write durable archive marker");
     }
 }
 
@@ -874,13 +885,15 @@ impl Catalog {
     /// Keep `handle`, the conversation session `id`'s CLI reported, as the one its later launches
     /// resume (#943 FR-005a, provisional: ledger decision 2), and persist it: `Ok(true)` when it
     /// changed, `Ok(false)` when it already was (nothing written). The session's own id is kept as
-    /// no handle. A failed write leaves the earlier handle in place.
+    /// no handle. A failed write leaves the earlier handle in place. A handle it replaces is
+    /// marked archived with the provider, as the session's own id is when it is archived, so the
+    /// discovery pass never adopts that superseded conversation once it is no longer known here.
     pub fn set_conversation(
         &mut self,
         id: SessionId,
         handle: uuid::Uuid,
     ) -> Result<bool, SetModeError> {
-        let (_, session) = self
+        let (project, session) = self
             .workspace
             .find_session_mut(id)
             .ok_or(SetModeError::NoSession)?;
@@ -894,6 +907,9 @@ impl Catalog {
                 session.conversation = before;
             }
             return Err(SetModeError::Io(e));
+        }
+        if let (Some(superseded), Some((_, session))) = (before, self.workspace.find_session(id)) {
+            mark_conversation_archived(&project, session, superseded);
         }
         Ok(true)
     }
@@ -2251,12 +2267,18 @@ mod conversation_tests {
         assert_eq!(catalog.set_conversation(id, cleared).ok(), Some(true));
         assert_eq!(catalog.set_conversation(id, cleared).ok(), Some(false));
         let known = catalog.known_session_ids(Path::new("/p"));
-        assert!(known.contains(&id.0) && known.contains(&cleared), "{known:?}");
+        assert!(
+            known.contains(&id.0) && known.contains(&cleared),
+            "{known:?}"
+        );
         let session = catalog.workspace().find_session(id).unwrap().1;
         assert_eq!(session.resume_handle(), cleared);
         assert_eq!(catalog.set_conversation(id, id.0).ok(), Some(true));
         let session = catalog.workspace().find_session(id).unwrap().1;
-        assert_eq!(session.conversation, None, "the session's own id is no handle");
+        assert_eq!(
+            session.conversation, None,
+            "the session's own id is no handle"
+        );
         assert!(matches!(
             catalog.set_conversation(SessionId::new(), cleared),
             Err(SetModeError::NoSession)
