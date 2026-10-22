@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M6
-- **Next step**: M6 verify: review B r2 and T061 visual pass in flight, then rebase, full gate, PR files (see Handover)
+- **Next step**: M6 PR (files written); decide T061's open F1 (feature 938 daemon) and F5 (see Handover)
 
 ## Pull requests
 
@@ -107,9 +107,11 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review B M6 (conformance, sonnet) | 1 | 024a92f1b81ccd66a58c4ad756b1f2ba490f42f0:69bbaa1aa433bcbf179fec8ec1867b3f7ae657e5 | CHANGES: F1 MAJOR no M6 cycle-log entry (fixed: Cycle 10, test-after recorded with a mutant set); F2 MAJOR Verify not observed (disk full in the container: `target-shared/debug` cleared, Verify re-run in round 2); F3 MINOR `connected = true` (Decision 21) |
 | Review B M6 (conformance, sonnet) | 2 | 34c80f3c2e2cb53d0487f7283df7e65f4a1bcec5:600112b48d621bfb19a70e5882d1a093e7153672 | CHANGES: round 1 fixes hold (Verify observed: layout_snapshot 91, features_composer 29, composer_large_draft release 1 passed). F1 MAJOR the queued message's `track_focus` had no test (fixed: `composer_fits` `a_press_on_a_queued_message_being_edited_reports_its_field`, red under its mutant, Cycle 11); F2 MINOR visual-pass evidence untracked, T061 open (committed with the T061 fix); F3 MINOR mutant set covers 2 of 8 gate cases (declined: optional; Cycle 11 adds two mutants) |
 | T061 visual pass (worker, run 1) | — | 6025ed71 | FAIL step 1: typed text never reached the composer (a press focused it, the first key dropped the focus); steps 2–12 not checkable after it. Real: the composer's `TextArea` did not report its focus, so `terminal_focused()` stayed true and `KeyboardElsewhere` cleared it on each key. Fixed (`TextArea::on_focus_change`, `FieldId::Composer`, Cycle 11); pass re-run after the gate |
+| T061 visual pass (worker, run 2) | — | a66f4504 | Step 1 fix holds (typing, Enter, Shift+Enter, Up/Down, Escape reach the composer). PASS 2, 3, 5 (Escape); PARTIAL 4, 7, 8, 11; NOT CHECKABLE 9 (no XDND source, no 10 MB image); FAIL 1, 6, 10, 12 on: F1 single-pane transcript stays *No output yet* (daemon: `SetViewedSession` streams a PTY via `restart_view`, a structured primary's events only via `sync_terminal_streams` for a pane set; feature 938's code, follow-up); F2 focus lost after a queue-send (fixed 4f041f8d, Cycle 12); F3 queue edit's Save/Cancel cut off by the queue's room (fixed 4f041f8d, Cycle 12); F4 service down reads *not running* (declined, Decision 21); F5 Tab never visibly reached Send / Send queued / queue actions (open, follow-up). Evidence: `visual-pass/` (22 crops, light and dark) |
 
 ## Declined review findings
 
+- T061 run 2 F4 (service down: the composer says *not running*, never *not connected*): Decision 21; the window's banner says *Not connected to the session service*, and a send without a connection comes back whole with `NOT_CONNECTED`.
 - Review A M6 r1 (IME: Enter during a composition sends): Decision 20; winit delivers a composition as `Ime` events and does not send the confirming Enter as a key press, and `KeyPress` carries no preedit state to read.
 - Review A M6 r1 (view passes `connected = true`): Decision 21; the connection is the shell's route, and a send without one comes back whole with `NOT_CONNECTED` (FR-005, FR-006).
 - Review A M6 r1 (`Preview` equal to any other): the `Editor` precedent beside it; a preview mirrors `draft.images`, which is compared, and `sync_previews` is the one writer of both.
@@ -154,28 +156,24 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-M6 unit 2 (context cap). T055–T060 done and committed (ticked); scoped gate green at 290a6b0d.
-Review A M6 r1 done (2 fixed, 6 declined, recorded). Review B M6 r1 CHANGES (F1 fixed, F2 = Verify
-not observed because the disk filled). In flight when this unit returned (detached `claude -p`):
-
-- **Review B M6 round 2** (sonnet, snapshot 34c80f3c2e2cb53d0487f7283df7e65f4a1bcec5:600112b48d621bfb19a70e5882d1a093e7153672):
-  log `/tmp/claude-0/-home-user-micold-ai-ide/97d8ad62-542e-5a1d-b84e-f338965e4056/scratchpad/reviewB2.log` (ends `REVIEW_EXIT=`); it re-runs Verify into `b2v1.log` / `b2v2.log` there.
-  Record its row in *Review rounds*; this round counts (it follows fixes to B's own MAJOR).
-- **T061 visual pass** (Quickstart Part B, light and dark) by an `autopilot-worker` following
-  `.claude/skills/visual-pass/SKILL.md`: log `/tmp/claude-0/-home-user-micold-ai-ide/97d8ad62-542e-5a1d-b84e-f338965e4056/scratchpad/visual.log` (ends `VISUAL_EXIT=`), evidence in
-  `specs/941-structured-prompt-input/visual-pass/`. Record per-step results in the ledger, fix
-  anything real (then scoped gate), tick T061.
-
-Next: when both are done, rebase onto origin/main (main is at PROTOCOL_VERSION 66; M6 has no wire
-change, so no pin moves), `cargo fmt --all`, delete `target-shared/` (disk is ~40 GB; a gate plus
-a release build filled it once), run the full gate `scripts/gate.sh`, then write the PR title/body
-files (do not open the PR). Open follow-up kept: focus the composer after a drop.
+M6 unit 3. Fixed and committed: the composer reports its focus (T061 run 1, 9e25d574→rebased a66f4504,
+Cycle 11; review B r2 F1's test); the text area keeps its focus as the queue grows and a queue edit
+draws whole (T061 run 2 F2, F3; 4f041f8d, Cycle 12). Rebased onto origin/main 0b432628 (no wire
+change, no pin moved). Full gate green at a66f4504 and again on 4f041f8d (one red before it: the client
+binary's `pr_status::pr_list_read_a_second_ask_shares_the_read_under_way` timed out under load,
+4 of 4 green alone, not M6's code). PR title/body written to the scratchpad. T061 left unticked: run 2 still has F1
+(feature 938's daemon, single pane shows no transcript) and F5 (Tab reach) open; see *Follow-ups*.
+Orchestrator decides: open M6 with F1/F5 as follow-ups, or hold for them.
 
 ## Open escalation
 
 None.
 
 ## Follow-ups not done
+
+- M6 visual F1 (not 941's code, blocks Part B in one pane): a structured session's transcript stays *No output yet* in a single-pane layout. The daemon streams a structured primary's events only from `sync_terminal_streams` (a `SetViewedTerminals` pane set, sent only for 2+ panes); `SetViewedSession` → `restart_view` streams a PTY, which a structured session lacks (`crates/micold-daemon/src/server.rs` ~1286, ~3022). Feature 938; needs a BUG and its own fix.
+- M6 visual F5: Tab never visibly reached Send, Send queued or the queue-row actions (8 presses, either layout; in two panes Tab went to the focused pane). Not diagnosed: whether the composer's area passes Tab on, and whether the structured pane should take Tab like a terminal.
+- M6 visual: editing a queued message needs a click on its field first (the edit form replaces the row; nothing focuses it).
 
 - Flaky under a full gate's load (not M4's): daemon `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` saw no `SessionErrorNotice` once; 5/5 green alone.
 - M6 (draw): focus the composer after a drop (M4 has no draw code; the reducer half is T042).
