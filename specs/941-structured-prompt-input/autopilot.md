@@ -131,9 +131,9 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | M3 | A r1 F4 (MINOR) | a failed queue save is not retried | Same as the history store's one-shot event saves on a failed disk; the next queue change saves again; logged |
 | M3 | A r1 F5 (MINOR) | a saved queue is dropped when input already exists | The queue is loaded with the event stream before the session can start or take a message (load precedes start); no path creates the input first |
 | M3 | A r1 F6–F7 (MINOR) | snapshot clones under the lock; small per-session maps | Taste/efficiency: queues are a few messages; not fixed now |
-| Review A M5 F3 | `BusyIndicator` ignores reduce-motion; copies `Bar`'s loop | `StageProgress`'s indeterminate bar, the precedent, ignores it too, and an indeterminate indicator that stops says nothing is happening; the loop is five lines, not worth a shared helper |
-| Review A M5 F4 | `key_binding` silences `on_submit`; clamp the node instead of `TextEditor::max_height` | Documented: `key_binding` replaces the default keys and `on_submit` by design (the composer's Enter is its own). `TextEditor::max_height` held 40 lines at 172 for a 200 limit (Decision 18) |
-| Review A M5 F5 | `image` dependency unused; `PhantomData<&'a ()>` | The dependency is how the four codecs reach iced's decoder (commented in both Cargo.toml files, Decision 17); the marker is `IconButton`'s pattern for a builder whose `From` names `'a` |
+- Review A M5 r1 F3 (MINOR, `BusyIndicator` ignores reduce-motion; copies `Bar`'s loop): `StageProgress`'s indeterminate bar, the precedent, ignores it too, and an indeterminate indicator that stops says nothing is happening; the loop is five lines, not worth a shared helper.
+- Review A M5 r1 F4 (MINOR, `key_binding` silences `on_submit`; clamp the node instead of `TextEditor::max_height`): documented — `key_binding` replaces the default keys and `on_submit` by design (the composer's Enter is its own); `TextEditor::max_height` held 40 lines at 172 for a 200 limit (Decision 18).
+- Review A M5 r1 F5 (MINOR, `image` dependency unused; `PhantomData<&'a ()>`): the dependency is how the four codecs reach iced's decoder (commented in both Cargo.toml files, Decision 17); the marker is `IconButton`'s pattern for a builder whose `From` names `'a`.
 
 ## Handover
 
