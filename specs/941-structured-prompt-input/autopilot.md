@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: M3
-- **Next step**: M3 PR to open (pushed; title/body in the session scratchpad)
+- **Phase**: M4
+- **Next step**: M4 implement (T039–T047), from the Handover's design notes
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1209 | Design: spec, clarifications, plan, research, contracts, tasks | merged (rebase) | 01c64cee744edf4036b2edd018dbd0677c015dba |
 | #1223 | M1: core decisions, fixtures, wire types | merged (rebase) | cdfafa66da143c85003745205c980ee0736c97db |
 | #1240 | M2: daemon delivers, queues, input driver, StructuredInput | merged (rebase) | 1781310b95438ce48d8006762ee0fc949f877343 |
+| #1243 | M3: daemon interrupt, overdue, hold on interrupt, saved queue | merged (rebase) | 203ef720ba85b7e70a163cb969402b452c0d4b41 |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T022 | full | Core decisions (input, attachment, turn ids/asks, encoders, UserSent/InterruptAsked, transcript, saved queue), recorded fixtures, every wire type (one bump); daemon refuses new requests "Not available yet" | #1223 | merged |
 | M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | #1240 | merged |
-| M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | — | gate green, PR to open |
+| M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | #1243 | merged |
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | — | pending |
 | M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | — | pending |
 | M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | pending |
@@ -119,7 +120,39 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-None.
+M4 unit 1 (2026-10-22) ran out of context while exploring; no code written. Branch reset to
+origin/main 203ef720 (M3 merged, ancestor checked by hand). Next: implement T039–T047 TDD, then
+verify.md. Exploration findings, so the next unit need not repeat them:
+
+- Core API on main: `structured::attachment::{admit(draft,&name,bytes), classify_drop(paths,sniff),
+  DropPlan{images,paths}, AttachmentRefusal: Display}`, `ImageMedia::sniff`, `ImageAttachment`
+  (fields `pub(crate)`; `name()`/`bytes()` accessors), `Transcript::user_messages()` (oldest
+  first, DoubleEnded), `path_insert::plan_insertion(paths, shell, target).text()/.refused`
+  (`Refusal::message()`). Wire: `ClientMsg::{SessionUserMessage{req,session,text,images},
+  TurnInterrupt{session,turn} (no answer), QueueEdit{req,session,entry,text,keep}, QueueRemove,
+  QueueTake, QueueRelease}`, `DaemonMsg::StructuredInput{session,phase:TurnPhase,hold,queue:
+  Vec<QueuedSummary>}` (ignored today at shell/daemon_sync.rs `DaemonMsg::StructuredInput { .. } => {}`
+  ~l.2067), `OperationResult::Taken{text,images}`.
+- Client plumbing: requests via `daemon_sync::send_op_bound(app, app.session_binding_of(session),
+  PendingOp::…, |req| ClientMsg::…)`; answers in `DaemonMsg::OperationOk/OperationError` match on
+  `app.pending_ops.remove(&req)` (~l.1247, ~l.1686); disconnect resolves pending ops in
+  `resolve_pending_of` (~l.510; add PendingOp arms there and in `PendingOp::describe` ~l.247).
+  Add `PendingOp::{ComposerSend{session}, QueueOp{session}, QueueTake{session}}`.
+- Drops: `shell/drops.rs::target_of` (binary) maps a pane to `DropTarget` (features/session.rs
+  ~l.1916: Outside/EmptyPane/Terminal); `files_dropped` in session.rs matches DropTarget
+  exhaustively. Plan: add `DropTarget::Composer(SessionId)`; move classification to a pure
+  `session::target_of(state, Option<Option<TerminalRef>>)` using a new `app::State::
+  is_structured_primary(terminal)` (lift from `ui/terminal.rs:802`, make ui delegate — no copy);
+  `files_dropped` returns nothing for Composer; drops.rs routes Composer groups to the composer
+  (tokio::fs reads → `apply_drop`), never through the session reducer.
+- Feature isolation: `tests/feature_registration_cost.rs` forbids one feature naming another
+  except listed pairs, so `features/composer.rs` must not name `session` (and vice versa) unless
+  an allowance with a reason is added. `tests/features_are_render_free.rs`: no "iced" in
+  features/ code (use `crate::app::{Editor, EditorAction}`; `changes::Msg::ComposerAction` is the
+  precedent). Register `pub mod composer;` in features/mod.rs; add `State.composers` in app.rs ~l.355.
+- Pending send restore when the user typed a new draft meanwhile is not specified (FR-005 says
+  "unchanged"): record a Decision for the choice (suggested: restore into an empty draft; else
+  keep the sent draft as the draft and the typed text after it on a new line, images sent first).
 
 ## Open escalation
 
