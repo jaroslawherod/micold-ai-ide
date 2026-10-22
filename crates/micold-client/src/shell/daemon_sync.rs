@@ -2856,6 +2856,21 @@ pub fn on_session_selected(app: &mut App, id: SessionId) -> Task<Message> {
 /// bugfix BUG-003); here we additionally record the durable, provider-side suppression
 /// marker (FR-020c) so a still-existing `claude` transcript is never reconstructed by
 /// reconciliation on a later project open.
+/// Drop a closed or removed session's editor and its composer requests still in flight, so a
+/// late answer cannot bring its composer back (the core forgets the draft in `forget_structured`).
+fn forget_composer(app: &mut App, id: SessionId) {
+    app.composer_editors.remove(&id);
+    app.pending_ops.retain(|_, op| {
+        !matches!(
+            op,
+            PendingOp::ComposerSend { session }
+            | PendingOp::QueueOp { session }
+            | PendingOp::QueueEdit { session }
+            | PendingOp::QueueTake { session } if *session == id
+        )
+    });
+}
+
 /// Close (archive) a session: route through the daemon's `SessionDelete`, which archives it
 /// durably (anti-resurrection marker) and stops its process (T055). The pure-core update
 /// archives the record in memory for instant feedback; the daemon reconciles other windows.
@@ -2868,7 +2883,7 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
     // counter must survive a reconnect for loss detection to hold.
     app.stamper.forget(id);
     app.core.forget_structured(id);
-    app.composer_editors.remove(&id);
+    forget_composer(app, id);
     // Addressed to the daemon the session runs on, whichever location is in view.
     let binding = app.session_binding_of(id);
     send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
@@ -2921,7 +2936,7 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
             .retain(|_, (session, _)| *session != id);
         app.stamper.forget(id); // T114, as in the close path above.
         app.core.forget_structured(id);
-        app.composer_editors.remove(&id);
+        forget_composer(app, id);
         let binding = app.session_binding_of(id);
         send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
             ClientMsg::SessionDelete { req, session: id }
