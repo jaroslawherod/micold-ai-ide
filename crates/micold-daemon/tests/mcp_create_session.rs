@@ -12,9 +12,9 @@
 
 #[path = "support/mcp.rs"]
 mod mcp_support;
+#[path = "support/stand_in_cli.rs"]
+mod stand_in_cli;
 
-use std::ffi::OsString;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -27,6 +27,7 @@ use micold_core::session::{AiCli, SessionId, TerminalMode};
 use micold_daemon::hooks::{self, HookReceiver};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
+use stand_in_cli::{install_cli, trust_project, Env};
 
 /// The tests change process-wide variables (`PATH`, `HOME`, …); one at a time.
 static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -35,39 +36,6 @@ static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const WINDOW_BOUND: Duration = Duration::from_secs(2);
 
 const PROMPT: &str = "print the branch name";
-
-/// Every variable a test changes, restored on drop.
-struct Env {
-    saved: Vec<(&'static str, Option<OsString>)>,
-}
-
-impl Env {
-    fn set(vars: &[(&'static str, Option<OsString>)]) -> Self {
-        let saved = vars
-            .iter()
-            .map(|(name, value)| {
-                let previous = std::env::var_os(name);
-                match value {
-                    Some(value) => std::env::set_var(name, value),
-                    None => std::env::remove_var(name),
-                }
-                (*name, previous)
-            })
-            .collect();
-        Self { saved }
-    }
-}
-
-impl Drop for Env {
-    fn drop(&mut self) {
-        for (name, previous) in self.saved.drain(..) {
-            match previous {
-                Some(value) => std::env::set_var(name, value),
-                None => std::env::remove_var(name),
-            }
-        }
-    }
-}
 
 /// Stand-in CLIs on a `PATH` that holds nothing else of the user's, a fake home whose Claude and
 /// Copilot records trust the project, a project with worktrees `b` and `gone` (whose directory has
@@ -271,20 +239,6 @@ impl Drop for Sandbox {
     }
 }
 
-/// Each CLI's own record that it trusts `project` (and so every worktree below it), as the real
-/// ones write it: `~/.claude.json` and `~/.copilot/config.json` with its leading comment.
-fn trust_project(home: &Path, project: &Path) {
-    let claude = json!({"projects": {project.to_str().unwrap(): {"hasTrustDialogAccepted": true}}});
-    std::fs::write(home.join(".claude.json"), claude.to_string()).unwrap();
-    std::fs::create_dir_all(home.join(".copilot")).unwrap();
-    let copilot = json!({"trustedFolders": [project]});
-    std::fs::write(
-        home.join(".copilot/config.json"),
-        format!("// This file is managed automatically.\n{copilot}"),
-    )
-    .unwrap();
-}
-
 /// The first-prompt bound for tests whose CLI does become ready and must get its prompt (#617).
 ///
 /// Readiness by the output-settled rule takes [`SETTLE_AFTER`] (1.5 s) of quiet after the CLI
@@ -294,32 +248,6 @@ fn trust_project(home: &Path, project: &Path) {
 /// It stays well under the 30 s Pi delay `pi_without_its_event_is_ready_once_its_output_settles`
 /// relies on, so that test still proves readiness came from the settled output.
 const READY_BOUND: Duration = Duration::from_secs(15);
-
-/// A stand-in CLI: records its launch; `draws` makes it print a prompt; Pi reports `session_start`
-/// through the component's log after `<bin>/pi.delay` seconds (0.3 by default). Everything typed
-/// into it is appended to `<bin>/<command>.input`.
-fn install_cli(bin: &Path, command: &str, draws: bool) {
-    let dir = bin.display();
-    let draw = if draws { "printf 'ready> '\n" } else { "" };
-    let report = if command == "pi" {
-        format!(
-            "( sleep \"$(cat '{dir}/pi.delay' 2>/dev/null || echo 0.3)\"; \
-             printf '{{\"type\":\"session_start\"}}\\n' >> \"$MICOLD_PI_ACTIVITY_LOG\" ) &\n"
-        )
-    } else {
-        String::new()
-    };
-    let path = bin.join(command);
-    std::fs::write(
-        &path,
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{dir}/{command}.launches'\n{draw}{report}\
-             exec cat >> '{dir}/{command}.input'\n"
-        ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-}
 
 fn session_in(
     catalog: &CatalogSnapshot,

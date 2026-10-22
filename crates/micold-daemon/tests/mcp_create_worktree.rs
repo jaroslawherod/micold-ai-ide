@@ -774,6 +774,7 @@ mod github_issue {
             number,
             title: title.to_string(),
             labels: labels.iter().map(|l| l.to_string()).collect(),
+            body_text: String::new(),
         }
     }
 

@@ -50,7 +50,23 @@ fn an_open_issue_gives_its_number_title_and_labels() {
             number: 123,
             title: "Login crash".into(),
             labels: vec!["bug".into(), "ui".into()],
+            body_text: String::new(),
         }))
+    );
+}
+
+/// 1161 T020: the single-issue read carries the whole plain-text body for the prompt template.
+#[test]
+fn an_open_issue_gives_its_body_text() {
+    let got = parse(
+        r#"{"data":{"repository":{"issue":{"number":42,"title":"t","state":"OPEN",
+        "labels":{"nodes":[]},"bodyText":"It crashes.\n\nSteps: open it."}}}}"#,
+    );
+    let snapshot = got.unwrap().unwrap();
+    assert_eq!(snapshot.body_text, "It crashes.\n\nSteps: open it.");
+    assert!(
+        micold_core::github::ISSUE_QUERY.contains("bodyText"),
+        "the query asks for the body"
     );
 }
 

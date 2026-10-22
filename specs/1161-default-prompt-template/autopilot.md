@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1161
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
-- **Phase**: milestone M2
-- **Next step**: M2 PR CI and merge, then M3
+- **Phase**: milestone M3
+- **Next step**: M3 scoped gate, reviews A and B, full gate, PR
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1163 | Design | merged | 7406e4cdc61cbf75bc88c92a2bee08913b6bdf71 |
 | #1245 | M1 | merged | d16d74c143b73ad6af5d341e32872e3711ce8dc6 |
-| #1247 | M2 | open | |
+| #1247 | M2 | merged | 420b051e5b3be4610a19347b44f37099bed72ccb |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #1245 | merged |
-| M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #1247 | in review |
-| M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #… | pending |
+| M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #1247 | merged |
+| M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #… | in progress |
 
 ## Decisions
 
@@ -54,6 +54,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A | F3 `{issue}` is the ticket text even with no picked issue | Intended (plan: issue = ticket.trim(); a Jira ticket has no picked GitHub issue) |
+
+## Notes
+
+- M3 deviation from plan wording: `{name}` over MCP is `naming::name_words(dir)` (the slugged descriptive words, lower case, new helper), not `display_name`, so the T002 shared fixture (`name: crash`) renders identically in the dialog and over MCP (FR-011). The Jira privacy test `jira_is_requested_only_on_named_events` mentions no `IssueSnapshot`, so T020 changed no Jira test.
 
 ## Handover
 

@@ -7460,6 +7460,7 @@ mod issue_source {
                 number: 42,
                 title: "Crash when opening empty project".into(),
                 labels: vec![],
+                body_text: String::new(),
             })),
         );
         rig.app.core.settings.github_issues_enabled = enabled;

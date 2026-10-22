@@ -1347,11 +1347,25 @@ pub fn next_description_cursor(
 }
 
 /// One issue known to be open (550 contracts/issue-lookup.md).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct IssueSnapshot {
     pub number: u64,
     pub title: String,
     pub labels: Vec<String>,
+    /// The whole body as plain text, for the default prompt template (1161 FR-014). Never printed
+    /// by `Debug`, persisted or serialised.
+    pub body_text: String,
+}
+
+impl fmt::Debug for IssueSnapshot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IssueSnapshot")
+            .field("number", &self.number)
+            .field("title", &self.title)
+            .field("labels", &self.labels)
+            .field("body_text", &"<redacted>")
+            .finish()
+    }
 }
 
 impl IssueSnapshot {
@@ -1399,7 +1413,7 @@ pub trait IssueLookup: crate::issue_details::IssueDetailsSource {
 /// The GraphQL document for one issue by number. One line, like [`LIST_QUERY`].
 pub const ISSUE_QUERY: &str = "query($owner: String!, $name: String!, $n: Int!) { \
 repository(owner: $owner, name: $name) { issue(number: $n) { number title state \
-labels(first: 20) { nodes { name } } } } }";
+labels(first: 20) { nodes { name } } bodyText } } }";
 
 /// The arguments after `gh` for one issue: only the owner, the name and the number leave the
 /// machine (FR-008). The number is the only typed (`-F`) variable.
@@ -1460,6 +1474,7 @@ pub fn parse_lookup(stdout: &[u8]) -> Result<Result<IssueSnapshot, NotOpen>, Iss
         number: issue.number(),
         title: issue.title().to_string(),
         labels: issue.labels().to_vec(),
+        body_text: issue.body().to_string(),
     }))
 }
 

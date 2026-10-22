@@ -554,7 +554,9 @@ const TOOLS: &[Tool] = &[
                         worktree and its one session are created together (default CLI: the \
                         user's default from Settings)."},
                 "prompt": {"type": "string",
-                    "description": "The session's first input, typed once its CLI is ready."},
+                    "description": "The session's first input, typed once its CLI is ready. Without \
+                        one, the user's default prompt template from Settings is typed, if \
+                        they set one."},
             })
         },
         required: &[],
@@ -605,7 +607,9 @@ const TOOLS: &[Tool] = &[
             root) running an AI CLI (default: the user's default from Settings). With prompt, \
             the prompt is typed as the session's first input once its CLI is ready, and the call \
             returns once it is (prompt_delivered: true) or 60 s after the request \
-            (prompt_delivered: false). A worktree has at most one session by \
+            (prompt_delivered: false). Without a prompt, the user's default prompt template from \
+            Settings, if set, is rendered for the worktree and typed instead. A worktree has at \
+            most one session by \
             default: a second is refused, naming the existing one and the way to ask for another. \
             Pass allow_additional_session: true to start another beside it on purpose (the limit \
             is soft: policy, the CLI check and every other check still apply). A person is asked to \
@@ -619,7 +623,8 @@ const TOOLS: &[Tool] = &[
                     "description": "A worktree ref from list_worktrees, or \"default\"."},
                 "ai_cli": {"type": "string",
                     "enum": AiCli::ALL.map(AiCli::tool_name)},
-                "prompt": {"type": "string", "description": "The session's first input."},
+                "prompt": {"type": "string", "description": "The session's first input; without one, \
+                    the user's default prompt template from Settings, if set."},
                 "allow_additional_session": {"type": "boolean", "default": false,
                     "description": "Create the session even though the worktree already has \
                         one, leaving the existing session untouched."},
