@@ -197,6 +197,14 @@ mod composer_parts_fit;
 #[path = "gates/transcript_jump_control_fits.rs"]
 mod transcript_jump_control_fits;
 
+// --- The session bar's figures stay whole inside the pane (feature 944, T037) -------------------
+
+// A structured session's pane with the meter warning, the totals, a running background task and an
+// open subagent thread: in the layout window the three figures share one row; at the smallest
+// window each is drawn whole inside the pane.
+#[path = "gates/session_bar_fits.rs"]
+mod session_bar_fits;
+
 // --- The rich transcript's table wraps in its cells (feature 940, T037) --------------------------
 
 // The recorded markdown reply in a narrow transcript: each table cell inside its column, and a long

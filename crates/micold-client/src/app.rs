@@ -985,7 +985,12 @@ impl State {
             Some(transcript) => {
                 self.structured_insights
                     .apply(session, omitted, events, live, transcript);
-                self.transcript_rich.refresh(session, transcript, grammar)
+                let threads = self.structured_insights.open_threads(session);
+                self.transcript_rich.refresh_all(
+                    session,
+                    std::iter::once(transcript).chain(threads),
+                    grammar,
+                )
             }
             None => Vec::new(),
         }
@@ -1003,7 +1008,15 @@ impl State {
 
     /// Apply a message of the insights shown with a structured session's transcript (feature
     /// 944): a subagent thread or the background-task list folded or unfolded.
-    pub fn update_insights(&mut self, msg: crate::features::structured_insights::InsightsMsg) {
+    ///
+    /// The session's render cache is refreshed with the threads now open, so a thread's blocks
+    /// are drawn as the main transcript's are (US3 scenario 2); returns the highlight jobs the
+    /// shell runs.
+    pub fn update_insights(
+        &mut self,
+        msg: crate::features::structured_insights::InsightsMsg,
+        grammar: &crate::features::transcript_rich::Grammar,
+    ) -> Vec<crate::features::transcript_rich::HighlightJob> {
         let session = msg.session();
         let empty = micold_core::structured::transcript::Transcript::new();
         let main = self
@@ -1011,6 +1024,12 @@ impl State {
             .transcript(session)
             .unwrap_or(&empty);
         self.structured_insights.update(msg, main);
+        let Some(main) = self.structured_transcript.transcript(session) else {
+            return Vec::new();
+        };
+        let threads = self.structured_insights.open_threads(session);
+        self.transcript_rich
+            .refresh_all(session, std::iter::once(main).chain(threads), grammar)
     }
 
     /// Apply a message of the transcript view and hand back what only the shell can perform: the
@@ -1171,7 +1190,7 @@ impl State {
             }
             // Feature 944: the insights' fold messages are the insights feature's.
             Message::Session(crate::features::session::Msg::Insights(msg)) => {
-                self.update_insights(msg);
+                let _ = self.update_insights(msg, &crate::ui::syntax::GRAMMAR);
             }
             Message::Session(msg) => {
                 let outcomes = crate::features::session::update(self, msg);

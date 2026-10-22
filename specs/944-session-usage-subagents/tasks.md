@@ -424,7 +424,7 @@ quickstart Part B.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T037 [US1] Geometry gate `crates/micold-client/tests/gates/session_bar_fits.rs`, wired into
+- [x] T037 [US1] Geometry gate `crates/micold-client/tests/gates/session_bar_fits.rs`, wired into
   `crates/micold-client/tests/layout_snapshot.rs`: at the narrowest transcript pane width the
   meter, the totals and the running-task count stay on one row inside the pane, the warning icon
   and "Near compaction" included (SC-005); `layout_snapshot` gains a transcript pane state with the
@@ -432,7 +432,7 @@ quickstart Part B.
 
 ### Implementation
 
-- [ ] T038 [US1] [US2] [US5] X1 (contracts/transcript-extensions.md): the session bar in a new
+- [x] T038 [US1] [US2] [US5] X1 (contracts/transcript-extensions.md): the session bar in a new
   `crates/micold-client/src/ui/transcript/session_bar.rs` — `ProgressBar` with `.marker` and
   `.warning`, `context_label` (no bar for `TokensOnly`, "No data yet" for `NoData`), the warning
   `Icon::UsageWarning` + "Near compaction", `totals_line`, and while any run "N background tasks
@@ -440,12 +440,12 @@ quickstart Part B.
   an `AccordionSection`, folded by default and sent `InsightsMsg::ToggleBackgroundTasks`, with one
   row per background task (kind icon, description, `task_label` + icon, outcome); drawn at the top
   of `ui::transcript::view` in `crates/micold-client/src/ui/transcript/mod.rs`; T037 passes
-- [ ] T039 [US2] X2 (first confirm the footer #939 M5 merged: its view model and its "session
+- [x] T039 [US2] X2 (first confirm the footer #939 M5 merged: its view model and its "session
   total" label; adapt to its shape per E-5): after #939's duration and "session total" in the footer entry
   (`crates/micold-client/src/ui/transcript/entries.rs`), the turn's `turn_figures` from
   `turn(seq)`, with `turn_details` (cached input, per-model rows, the estimate note) in its tooltip
   (FR-006, FR-026); a turn without figures adds nothing
-- [ ] T040 [US3] X3 and X5 in `crates/micold-client/src/ui/transcript/entries.rs`: a tool-call card
+- [x] T040 [US3] X3 and X5 in `crates/micold-client/src/ui/transcript/entries.rs`: a tool-call card
   whose id has a thread draws, inside its body, a nested `DisclosureCard` headed by
   `thread_summary_line`, folded by default, toggled by `InsightsMsg::ToggleThread`, whose body draws
   the open thread's nested `Transcript` entries through #939's per-entry draw functions and the
@@ -453,13 +453,13 @@ quickstart Part B.
   (FR-014–FR-016); the `SubagentNotice` entry is replaced in place by one placeholder
   `DisclosureCard` per `unknown_threads` entry, headed "Subagent of an earlier step (<parent id>)",
   opening the same way (FR-017); a failed thread shows "Failed" with `Icon::ToolFailed` (E-4)
-- [ ] T041 [US5] X4 in `crates/micold-client/src/ui/transcript/entries.rs`: a tool-call card whose id
+- [x] T041 [US5] X4 in `crates/micold-client/src/ui/transcript/entries.rs`: a tool-call card whose id
   has a task (`task_for_tool`) shows the task's `task_label` and state icon as a trailing
   `IconLabel` in its header (FR-021)
-- [ ] T042 [P] [US1] Showcase: a session bar over a fixture (normal, warning, no data, with a
+- [x] T042 [P] [US1] Showcase: a session bar over a fixture (normal, warning, no data, with a
   running background task) in `crates/micold-client/src/showcase/sections/` beside #939's
   transcript entry; `showcase_completeness` stays green
-- [ ] T043 [P] [US1] [US2] [US3] [US5] User guide (FR-027): `docs/user-guide/worktrees-and-sessions.md`
+- [x] T043 [P] [US1] [US2] [US3] [US5] User guide (FR-027): `docs/user-guide/worktrees-and-sessions.md`
   *Structured sessions* describes the context meter and its warning, the turn's cost and tokens
   (an estimate at API list prices) and the session totals, subagent threads under their card and
   the placeholder for an earlier step, and the background-task list and its states

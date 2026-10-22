@@ -11,7 +11,7 @@ use micold_core::session::SessionId;
 use micold_core::structured::insights::{SessionInsights, SubagentState, ThreadView, TurnUsage};
 use micold_core::structured::transcript::{is_subagent_event, EntryKey, ToolStatus, Transcript};
 use micold_core::structured::SequencedEvent;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// What the insights shown with a transcript say (data-model.md *Messages*), carried by the
 /// session message family as `session::Msg::Insights`.
@@ -29,15 +29,22 @@ pub enum InsightsMsg {
         /// The session whose list it is.
         session: SessionId,
     },
+    /// A card inside an open thread was activated: unfold or fold it (US3 scenario 2).
+    ToggleEntry {
+        /// The session whose transcript holds the thread.
+        session: SessionId,
+        /// The card, an entry of an open thread.
+        key: EntryKey,
+    },
 }
 
 impl InsightsMsg {
     /// The session the message is about.
     pub fn session(&self) -> SessionId {
         match self {
-            Self::ToggleThread { session, .. } | Self::ToggleBackgroundTasks { session } => {
-                *session
-            }
+            Self::ToggleThread { session, .. }
+            | Self::ToggleBackgroundTasks { session }
+            | Self::ToggleEntry { session, .. } => *session,
         }
     }
 }
@@ -54,6 +61,8 @@ struct SessionExtras {
     insights: SessionInsights,
     /// The nested transcripts of the open threads, by parent tool use id; absent is folded.
     open_threads: HashMap<String, Transcript>,
+    /// The cards of open threads the user unfolded, by key (keys are unique across a session).
+    open_entries: HashSet<EntryKey>,
     /// The background-task list is unfolded.
     tasks_open: bool,
     /// The main transcript's `(rebuilds, omitted)` at the last apply: a rebuild builds the open
@@ -73,6 +82,7 @@ impl PartialEq for SessionExtras {
         };
         self.insights == other.insights
             && self.tasks_open == other.tasks_open
+            && self.open_entries == other.open_entries
             && self.seen == other.seen
             && self.open_threads.len() == other.open_threads.len()
             && self.open_threads.iter().all(|(parent, a)| {
@@ -85,6 +95,20 @@ impl PartialEq for SessionExtras {
 }
 
 impl Eq for SessionExtras {}
+
+impl SessionExtras {
+    /// Whether an open thread holds the entry `key`.
+    fn holds_entry(&self, key: &EntryKey) -> bool {
+        self.open_threads.values().any(|t| t.entry(key).is_some())
+    }
+
+    /// Fold the cards no open thread holds any more.
+    fn forget_folded_entries(&mut self) {
+        let threads = &self.open_threads;
+        self.open_entries
+            .retain(|key| threads.values().any(|t| t.entry(key).is_some()));
+    }
+}
 
 /// The main transcript's marks that say its held events were replaced or cut at the front.
 fn marks(main: &Transcript) -> (u64, Option<u64>) {
@@ -143,6 +167,9 @@ impl State {
                 *thread = nested(parent, main);
             }
         }
+        if rebuilt || evicted {
+            s.forget_folded_entries();
+        }
     }
 
     /// `session`'s insights, when this window has heard of it.
@@ -169,6 +196,34 @@ impl State {
             s.open_threads
                 .insert(parent.to_string(), nested(parent, main));
         }
+        s.forget_folded_entries();
+    }
+
+    /// Unfold the card `key` of an open thread, or fold it when it is open. A card no open
+    /// thread holds opens nothing, as #939's late toggle does.
+    pub fn toggle_entry(&mut self, session: SessionId, key: EntryKey) {
+        let Some(s) = self.sessions.get_mut(&session) else {
+            return;
+        };
+        if !s.open_entries.remove(&key) && s.holds_entry(&key) {
+            s.open_entries.insert(key);
+        }
+    }
+
+    /// Whether the card `key` of an open thread is unfolded; folded by default.
+    pub fn entry_open(&self, session: SessionId, key: &EntryKey) -> bool {
+        self.sessions
+            .get(&session)
+            .is_some_and(|s| s.open_entries.contains(key))
+    }
+
+    /// The open threads of `session`, each a nested transcript: what the render cache derives
+    /// beside the main transcript (feature 940, RR-4).
+    pub fn open_threads(&self, session: SessionId) -> impl Iterator<Item = &Transcript> {
+        self.sessions
+            .get(&session)
+            .into_iter()
+            .flat_map(|s| s.open_threads.values())
     }
 
     /// The open thread of `parent`; `None` while it is folded.
@@ -223,6 +278,7 @@ impl State {
                 self.toggle_thread(session, &parent, main)
             }
             InsightsMsg::ToggleBackgroundTasks { session } => self.toggle_tasks(session),
+            InsightsMsg::ToggleEntry { session, key } => self.toggle_entry(session, key),
         }
     }
 }

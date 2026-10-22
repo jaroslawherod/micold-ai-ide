@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: pr M5
-- **Next step**: M5 PR — pushed; orchestrator opens the PR from the title/body files and waits on CI
+- **Phase**: implement M6
+- **Next step**: M6 verify — visual pass, reviews A/B, full gate, PR files
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1202 | M2 — structured sessions feed plan usage | merged (rebase) | cdbd2c7badf911b6d8ff6b5d93bb8bd75941efb4 |
 | #1205 | M3 — task table and subagent thread index | merged (rebase) | 46f4bdabc5a4316f2a192dffd12f679039c7a96e |
 | #1211 | M4 — meter parts and icons | merged (rebase) | 9160cab121845e7ebee2514f569e93ff21b111c1 |
+| #1222 | M5 — the window's insights state | merged (rebase) | 10fb81f6d6f575fcee5a70437fc196cb4e258bae |
 
 ## Milestones
 
@@ -30,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T022 | full | Plan-usage indicator fed by structured sessions' `rate_limit_event`; subagent text forwarded; 490 Settings note + guide | #1202 | merged |
 | M3 | T023–T028 | full | Core task table + subagent thread index (I4, I5) on the recordings | #1205 | merged |
 | M4 | T029–T033 | full | `ProgressBar::marker/warning`, two icons, showcase | #1211 | merged |
-| M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | — | PR files written, gate green at 7e655fad |
-| M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | blocked on **#939 M4, M5, M6** (and M4, M5) |
+| M5 | T034–T036 | full | Client `features::structured_insights` state + routing + `InsightsMsg` | #1222 | merged |
+| M6 | T037–T044 | full | Session bar + X1–X5 drawing, layout gate, guide *Structured sessions*, Part B | — | implementing |
 
 ## Decisions
 
@@ -54,6 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D15 | implement M3 | Points data-model.md leaves open in the task table and thread index | (a) A terminal state changes only by a later `task_started` (data-model): a report after `EndedWithoutReport` still sets the outcome, not the state. (b) `threads_owned_by` takes the main `Transcript` too (`Main`/`Unknown` need it); data-model operations line updated. (c) `thread_view` with no subagent task and no card status → `Running` (as a card with no result), the client's `cli_running` overlay ends it. (d) `task_label` joins the outcome as `"<State> · <outcome>"`. (e) A tool call id already held by a thread is not counted again | agent | data-model.md *TaskTable*, *ThreadIndex*; tasks.md T025 |
 | D16 | verify M3 | Which `init` means the CLI restarted (FR-022)? | The CLI writes an `init` at the start of every turn of one process; 2.1.306 adds `startup_timing` only to a process's first. Only that one ends running tasks; contract, data-model and research R6 updated. Also: a report after an inferred `EndedWithoutReport` sets the reported state (data-model transitions), and `running_background` takes `cli_running` | agent | `background-command.jsonl` / `background-subagent.jsonl`: two inits each, `startup_timing` on the first only; every other recording's single init has it; review A M3 F1, F3, F4 |
 | D17 | implement M5 | #939's real seam differs from plan R10 / T036 | (a) #939 routes `StructuredEvents` in `app::State::structured_events` (called by `shell/daemon_sync.rs`), not in daemon_sync itself; the insights are applied there right after the transcript, and `forget_structured` drops both, so #939's two forget paths (close, remove) cover it. (b) #939's shell routing test lives in `main_tests.rs` mod `structured_transcript`; T036 extends it there. (c) `InsightsMsg` is `session::Msg::Insights`, routed by the root (`app.rs`) and the shell (`main.rs`) to `App::update_insights`, which passes the session's main transcript (an empty one if none). (d) Beyond data-model's operations: `insights`, `turn(session, &EntryKey)`, `tasks_open`, `thread_view(.., cli_running)` (Running → EndedWithoutResult, D15c) and `running_background(.., cli_running)`. (e) Open threads not rebuilt are appended to as live, so a history split over several messages keeps them whole. No user-visible change | agent | `app.rs` `structured_events`; `main_tests.rs` `mod structured_transcript` |
+| D18 | implement M6 | #939–#941's real view differs from contracts/transcript-extensions.md X1–X5 | (a) A thread's card is drawn indented **under** its parent card, not inside the card's body, so its one-line summary shows while the card is folded (FR-015). (b) #939's `Block` is `Element<TranscriptMsg>`: #944's messages ride as `TranscriptMsg::Insights(InsightsMsg)`, which the pane maps to `session::Msg::Insights`; new `InsightsMsg::ToggleEntry` folds cards inside threads, per window (E-3), since #939's toggle opens only main-transcript keys. (c) #940's render cache is refreshed over the main transcript **and** the open threads (`refresh_all`; `update_insights` returns the highlight jobs), so a thread renders as the main transcript does (US3 s2). (d) `ui::transcript::view_with_insights` beside #939's `view`, which stays bar-less for #939's tests; the session bar sits above the scrollable, so the transcript viewport's path gains a step (`containment.rs`, covered-state anchors). (e) X4 shows only a **background** task's state: a foreground subagent's task is its thread's summary. (f) X2's figures follow all of #939's (duration, session total, turns); the estimate note joins the footer's details whenever #939 shows a session total. (g) T037's narrowest width: one pane at `MIN_WINDOW_SIZE` (640×480) beside the default sidebar, where the bar's row wraps and each figure stays whole inside the pane; one row in the 1280×800 layout window. `MIN_PANE_COLS` (160 px) holds no row of these figures. (h) `cli_running` = the session's lifecycle is `Running`. No spec behaviour changed | agent | `ui/transcript/entries.rs` `Block`; `features/structured_transcript.rs` `toggle`; `transcript_rich.rs` `refresh` |
 
 ## Review rounds
 

@@ -570,6 +570,55 @@ pub fn transcript_pane_rich() -> State {
     state
 }
 
+/// A structured session's pane with feature 944's session bar and one open subagent thread
+/// (T037): the recorded `subagent-turn`, then a compaction threshold below the context used (the
+/// meter's warning) and a background command still running, its CLI running, the thread of the
+/// `Agent` call unfolded.
+pub fn transcript_pane_insights() -> State {
+    use micold_core::session::SessionLifecycle;
+
+    let mut lines = super::transcript::fixture_lines("subagent-turn");
+    lines.push(
+        serde_json::json!({
+            "type": "autocompact_state",
+            "value": {"enabled": true, "threshold": 30_000},
+            "session_id": "<SESSION_ID>",
+        })
+        .to_string(),
+    );
+    lines.push(
+        serde_json::json!({
+            "type": "system", "subtype": "task_started", "session_id": "<SESSION_ID>",
+            "task_id": "bg1", "tool_use_id": "toolu_bg", "description": "sleep 20; echo done",
+            "task_type": "local_bash", "is_backgrounded": true,
+        })
+        .to_string(),
+    );
+    let (mut state, id) = structured_pane(&lines);
+    for session in state
+        .workspace
+        .sessions
+        .values_mut()
+        .flatten()
+        .filter(|s| s.id == id)
+    {
+        session.lifecycle = SessionLifecycle::Running;
+    }
+    let main = state
+        .structured_transcript
+        .transcript(id)
+        .expect("the pane holds a transcript")
+        .clone();
+    let insights = state.structured_insights.insights(id).expect("insights");
+    let parent = insights
+        .threads_owned_by(&micold_core::structured::insights::Owner::Main, &main)
+        .first()
+        .map(|t| t.parent.clone())
+        .expect("the recording holds a subagent thread");
+    state.structured_insights.toggle_thread(id, &parent, &main);
+    state
+}
+
 /// The project with one structured session open in its pane, its transcript `lines` applied and its
 /// render cache refreshed as the window's update does.
 fn structured_pane(lines: &[String]) -> (State, SessionId) {
@@ -1544,7 +1593,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // its bottom edge (`TRANSCRIPT_VIEWPORT`).
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 0, 0, 0],
+                    path: &[0, 0, 1, 1, 0, 0, 1, 0],
                 },
             ],
         },
@@ -1569,7 +1618,30 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // its bottom edge (`TRANSCRIPT_VIEWPORT`).
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 0, 0, 0],
+                    path: &[0, 0, 1, 1, 0, 0, 1, 0],
+                },
+            ],
+        },
+        // --- Feature 944: the session bar and an open subagent thread (T037) --------------------
+        //
+        // The meter in its warning, the totals, a running background task and the `Agent` call's
+        // thread unfolded under its card. `gates/session_bar_fits.rs` holds the bar's figures
+        // whole inside the pane.
+        CoveredState {
+            name: "session-transcript-insights",
+            build: || StateUnderTest::new(transcript_pane_insights()),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                Anchor {
+                    name: "transcript.viewport",
+                    path: &[0, 0, 1, 1, 0, 0, 1, 0],
                 },
             ],
         },

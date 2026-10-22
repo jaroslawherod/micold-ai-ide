@@ -6,8 +6,10 @@
 
 mod blocks;
 mod entries;
+mod insights;
 mod keyed;
 mod rich;
+pub mod session_bar;
 
 pub use blocks::{
     plain_text, unshown_caption, AssistantText, Block, BlockCache, BlockRef, BlockRenderers,
@@ -16,19 +18,24 @@ pub use blocks::{
 pub use entries::{
     compacted_text, edit_meta, footer_view, model_changed_text, omitted_text, oversized_text, rows,
     subagent_count, subagent_notice_text, tool_header, tool_header_counted, tool_status,
-    CardHeader, FooterView, Row, Status, Tone, CLEARED, ENDED_WITHOUT_RESULT, NO_OUTPUT,
-    ORPHAN_RESULT, RAW_LABEL, TERMINAL_PERIOD, THINKING_TITLE, USER_LABEL,
+    CardHeader, FooterView, InsightsCtx, Row, Status, Tone, CLEARED, ENDED_WITHOUT_RESULT,
+    NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL, TERMINAL_PERIOD, THINKING_TITLE, USER_LABEL,
+};
+pub use insights::{
+    footer_view_with, kind_icon, meter_view, placeholder_title, running_text, session_bar_view,
+    task_status, thread_header, MeterView, SessionBarView, TaskRow, TaskStatus, ThreadHeader,
+    BACKGROUND_TASKS, NEAR_COMPACTION,
 };
 pub use rich::EDIT_TOOLS;
 
 use crate::features::structured_transcript::{Follow, State, TranscriptMsg};
 use crate::icons::Icon;
 use crate::ui::material::{Button, Scrollable};
-use iced::widget::{container, lazy, stack, Space};
+use iced::widget::{column, container, lazy, stack, Space};
 use iced::{Alignment, Element, Length};
 use keyed::KeyedColumn;
 use micold_core::session::SessionId;
-use micold_core::structured::transcript::EntryId;
+use micold_core::structured::transcript::{EntryId, Transcript};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::spacing;
 
@@ -45,6 +52,12 @@ enum RowKey {
     Omitted,
     Empty,
     Entry(EntryId),
+}
+
+/// The transcript of a session the window has heard nothing of: no entry, no thread.
+fn empty_transcript() -> &'static Transcript {
+    static EMPTY: std::sync::OnceLock<Transcript> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(Transcript::new)
 }
 
 /// The label of the control that resumes following (FR-017).
@@ -68,25 +81,74 @@ pub fn view<'a>(
     renderers: &'a BlockRenderers,
     ctx: RenderCtx<'a>,
 ) -> Element<'a, TranscriptMsg> {
+    view_inner(state, None, session, renderers, ctx)
+}
+
+/// [`view`] with what feature 944 adds (contracts/transcript-extensions.md): the session bar at
+/// the top (X1), above the scrolling entries, and in the entries the turn's figures (X2), the
+/// subagent threads (X3, X5) and the background tasks' states (X4), from `insights`.
+pub fn view_with_insights<'a>(
+    state: &'a State,
+    insights: InsightsCtx<'a>,
+    session: SessionId,
+    renderers: &'a BlockRenderers,
+    ctx: RenderCtx<'a>,
+) -> Element<'a, TranscriptMsg> {
+    let bar = container(session_bar::view(
+        insights.state,
+        session,
+        insights.cli_running,
+        ctx.roles,
+    ))
+    .padding(iced::Padding {
+        top: spacing::SM,
+        bottom: 0.0,
+        left: spacing::MD,
+        right: spacing::MD,
+    })
+    .width(Length::Fill);
+    column![
+        bar,
+        view_inner(state, Some(insights), session, renderers, ctx)
+    ]
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
+}
+
+fn view_inner<'a>(
+    state: &'a State,
+    insights: Option<InsightsCtx<'a>>,
+    session: SessionId,
+    renderers: &'a BlockRenderers,
+    ctx: RenderCtx<'a>,
+) -> Element<'a, TranscriptMsg> {
     let roles = ctx.roles;
     let dark = ctx.scheme == ColorScheme::Dark;
-    let list = KeyedColumn::new(
-        rows(state.transcript(session))
-            .into_iter()
-            .map(|row| match row {
-                Row::Omitted(n) => (RowKey::Omitted, entries::omitted_notice(n, roles)),
-                Row::Empty => (RowKey::Empty, entries::no_output(roles)),
-                Row::Entry(entry) => {
-                    let open = state.is_open(session, entry.key());
-                    let stamp = ctx.cache.get(session, entry.key()).map_or(0, |d| d.stamp);
-                    let key = (entry.key(), entry.revision(), open, dark, stamp);
-                    let drawn = lazy(key, move |_| {
-                        entries::entry(entry, session, open, renderers, &ctx)
-                    });
-                    (RowKey::Entry(entry.id()), drawn.into())
-                }
-            }),
-    )
+    let main = state.transcript(session);
+    let scope = entries::Scope {
+        session,
+        main: main.unwrap_or(empty_transcript()),
+        insights,
+    };
+    let list = KeyedColumn::new(rows(main).into_iter().map(|row| match row {
+        Row::Omitted(n) => (RowKey::Omitted, entries::omitted_notice(n, roles)),
+        Row::Empty => (RowKey::Empty, entries::no_output(roles)),
+        Row::Entry(entry) => {
+            let open = state.is_open(session, entry.key());
+            let stamp = ctx.cache.get(session, entry.key()).map_or(0, |d| d.stamp);
+            let extras = entries::insights_stamp(entry, &ctx, scope);
+            let key = (entry.key(), entry.revision(), open, dark, stamp, extras);
+            let drawn = lazy(key, move |_| {
+                let toggle = TranscriptMsg::Toggle {
+                    session,
+                    key: entry.key().clone(),
+                };
+                entries::entry(entry, open, toggle, renderers, &ctx, scope)
+            });
+            (RowKey::Entry(entry.id()), drawn.into())
+        }
+    }))
     .spacing(spacing::MD)
     .padding(spacing::MD)
     .width(Length::Fill);
