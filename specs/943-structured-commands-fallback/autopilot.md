@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M7 reviewed (A 2 rounds, B 2), full gate green at 972fd90d (split-gate.sh) after rebase onto origin/main b7f1b704; pushed; PR files written; orchestrator opens the PR
+- **Phase**: M7 reviewed (A 2 rounds, B 2), full gate green at 32b8657f (split-gate.sh) after rebase onto origin/main 79db5768; pushed; PR files written; orchestrator opens the PR
 - **Next step**: orchestrator opens the M7 PR from `943-M7/pr-title.txt`/`pr-body.md`, waits on CI, merges; then M8 (holds: M8 ← #941 M6, M9 ← #942 M7/M8)
 
 ## Pull requests
@@ -93,6 +93,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M7 run 1 | — | 0e7b9b19 | red: `micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (no daemon change in M7; passed 5 of 5 reruns alone — timing flake under the gate's load) |
 | Full gate M7 run 2 | — | 0e7b9b19 | green (split-gate.sh, ALL_GREEN) |
 | Full gate M7 run 3 | — | 972fd90d | green (split-gate.sh, ALL_GREEN) after rebase onto origin/main b7f1b704 (#942 M6; conflicts in `app.rs` and `daemon_sync.rs` PendingOp arms resolved keeping both; no wire change in M7) |
+| Full gate M7 run 4 | — | 32b8657f | green (split-gate.sh) after rebase onto origin/main 79db5768 (#944 M6; no conflicts) |
 
 ## Declined review findings
 
