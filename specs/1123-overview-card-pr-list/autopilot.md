@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
 - **Phase**: review M3
-- **Next step**: M3 r1 fixes committed (25a52b64); review A r2 (sonnet, fix diff 00ddcce1..25a52b64) and visual pass r2 (sonnet, §B4) on snapshot c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa, dispatched by the orchestrator; when both clean: full gate (scripts/gate.sh), tick T037, M3 PR
+- **Next step**: M3 r2 fixes committed (3936855c); review A r3 (sonnet, fix diff 25a52b64..3936855c) and visual pass r3 (sonnet, c1 full walk light 1.0 + dark 2.0, quick c3–c5) on snapshot 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63, dispatched by the orchestrator; when both clean: full gate (scripts/gate.sh), tick T037, M3 PR
 
 ## Pull requests
 
