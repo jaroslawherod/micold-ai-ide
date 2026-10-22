@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use micold_core::github::{parse_list_page, parse_search, GithubRepo, Issue};
+use micold_core::github::{parse_list_page, parse_search, GithubRepo, Issue, IssueSnapshot};
 
 /// U28 — `{:?}` shows what identifies the issue, and not who reported it.
 #[test]
@@ -59,6 +59,29 @@ fn the_whole_body_is_held_and_never_printed() {
     for debug in [format!("{issue:?}"), format!("{issue:#?}")] {
         assert!(!debug.contains("a-private-detail"), "{debug}");
     }
+}
+
+/// Feature 1161, T020: a single-issue read holds the whole body for a prompt template; it is not
+/// printed, and the type cannot be persisted or sent (FR-014, SC-006 of 034).
+#[test]
+fn a_snapshots_body_is_never_printed_or_serialised() {
+    let snapshot = IssueSnapshot {
+        number: 7,
+        title: "T".into(),
+        labels: vec![],
+        body_text: "a-private-detail".into(),
+    };
+    for debug in [format!("{snapshot:?}"), format!("{snapshot:#?}")] {
+        assert!(!debug.contains("a-private-detail"), "{debug}");
+    }
+    let source = fs::read_to_string(crates_dir().join("micold-core/src/github.rs")).unwrap();
+    let at = source.find("pub struct IssueSnapshot {").unwrap();
+    let attributes = source[..at].rsplit("\n\n").next().unwrap();
+    assert!(
+        !attributes.contains("Serialize"),
+        "`IssueSnapshot` derives no `Serialize`: {attributes}"
+    );
+    assert!(!source.contains("Serialize for IssueSnapshot"));
 }
 
 /// U28 — `{:?}` does not print what the issue's body says.

@@ -431,6 +431,18 @@ pub fn parse_tags(dir_name: &str) -> Vec<Tag> {
     tags
 }
 
+/// The words of a directory name's descriptive part as the form's name field held them (slugified,
+/// so lower case), for the default prompt template's `{name}` (1161 FR-014); the whole name's
+/// display form when there is no descriptive part.
+pub fn name_words(dir_name: &str) -> String {
+    let words = split_name(dir_name).desc.join(" ");
+    if words.is_empty() {
+        display_name(dir_name)
+    } else {
+        words
+    }
+}
+
 /// Derive a human-friendly display name from a worktree directory name (FR-017).
 ///
 /// Removes the leading type token and the ticket, turns separators into spaces, and

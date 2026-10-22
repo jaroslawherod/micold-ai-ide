@@ -33,6 +33,7 @@ use micold_core::mcp::tools::{
     SessionRef, StartSession, WorktreeRef,
 };
 use micold_core::naming::{self, DerivedNames, NamingError};
+use micold_core::prompt_template::PromptTemplate;
 use micold_core::protocol::messages::{
     ActivitySignal, ConfirmOperation, ProjectSnapshot, SessionSummary, WireLifecycle,
     WorktreeStatus,
@@ -1063,7 +1064,15 @@ async fn create_with_optional_session(
             additional: micold_core::occupancy::Additional::No,
         },
     )?;
-    let first = start.prompt.as_deref().map(|text| ops::FirstPrompt {
+    let prompt = first_prompt_for(
+        state,
+        project,
+        &names.dir_name,
+        &names.branch,
+        start.prompt.clone(),
+    )
+    .await;
+    let first = prompt.as_deref().map(|text| ops::FirstPrompt {
         text,
         asked,
         // A terminal without bracketed paste still gets the prompt, as one plain submission.
@@ -1086,9 +1095,38 @@ async fn create_with_optional_session(
              no session, and create_session starts one"
         )),
     })?;
-    session_reply(state, caller, session, cli, start.prompt.is_some(), typed)
+    session_reply(state, caller, session, cli, prompt.is_some(), typed)
         .await
         .map(Some)
+}
+
+/// The first prompt a new session in worktree `dir_name` gets (1161 FR-008, FR-009, R8): a
+/// non-blank `explicit` prompt as it is, the template not even parsed; otherwise the default
+/// template rendered against the worktree's facts. A blank template, one that does not parse or
+/// one that renders blank leaves `explicit` as it came, so the call is as it was before the
+/// template existed (SC-003, FR-012).
+async fn first_prompt_for(
+    state: &Arc<DaemonState>,
+    project: &Path,
+    dir_name: &str,
+    branch: &str,
+    explicit: Option<String>,
+) -> Option<String> {
+    if explicit
+        .as_deref()
+        .is_some_and(|text| !text.trim().is_empty())
+    {
+        return explicit;
+    }
+    let st = Arc::clone(state);
+    let template = tokio::task::spawn_blocking(move || st.default_prompt_template())
+        .await
+        .unwrap_or_default();
+    let Ok(template) = PromptTemplate::parse(&template) else {
+        return explicit;
+    };
+    let facts = ops::prompt_facts(state, project, dir_name, branch).await;
+    template.render(&facts).or(explicit)
 }
 
 /// Add a session's `create_session` reply fields to a worktree row.
@@ -1512,6 +1550,13 @@ async fn create_session(
         return Err(OpError::service_error(why));
     }
 
+    let branch = project
+        .worktrees
+        .iter()
+        .find(|wt| wt.dir_name == dir)
+        .and_then(|wt| wt.branch.clone())
+        .unwrap_or_default();
+    let prompt = first_prompt_for(state, &project.path, &dir, &branch, prompt).await;
     let prompt_given = prompt.is_some();
     let first = prompt.as_deref().map(|text| ops::FirstPrompt {
         text,

@@ -15,10 +15,13 @@ use std::task::{Context, Poll, Waker};
 
 use alacritty_terminal::term::TermMode;
 use micold_core::cli_reason::{self, AttemptDir, Explanation};
-use micold_core::git::GitCli;
+use micold_core::git::parse_remote_list;
+use micold_core::git::{Git, GitCli};
+use micold_core::github::{choose_remote, RemoteChoice};
 use micold_core::mcp::submission::encode_submission;
 use micold_core::naming::DerivedNames;
 use micold_core::project::{validate_rename, RenameError};
+use micold_core::prompt_template::WorktreeFacts;
 use micold_core::session::{AiCli, SessionId, SessionKind};
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -558,6 +561,54 @@ pub async fn cli_unavailable(state: &Arc<DaemonState>, cwd: &Path, cli: AiCli) -
         cli_reason::explain_one(cli, env, crate::state::place(&image), AttemptDir::Dir(cwd));
     state.invalidate_env_include(cwd);
     Some(format!("{reason} {action}"))
+}
+
+/// The facts the default prompt template renders against for the worktree `dir_name` on `branch`
+/// (1161 FR-014, research R5). `{issue}` is the directory's ticket; the title and body are read
+/// from GitHub only for a numeric ticket, with GitHub issues turned on, and stay empty on any
+/// error or when the read outlasts the state's prompt lookup bound (FR-012). Jira keys are never
+/// looked up. The wait runs on the blocking pool.
+pub async fn prompt_facts(
+    state: &Arc<DaemonState>,
+    project: &Path,
+    dir_name: &str,
+    branch: &str,
+) -> WorktreeFacts {
+    use micold_core::naming::{name_words, parse_tags, ticket, Tag};
+    let issue = ticket(dir_name).unwrap_or_default();
+    let mut facts = WorktreeFacts {
+        type_: parse_tags(dir_name)
+            .into_iter()
+            .find_map(|tag| match tag {
+                Tag::Type(t) => Some(t.as_str().to_string()),
+                _ => None,
+            })
+            .unwrap_or_default(),
+        name: name_words(dir_name),
+        branch: branch.to_string(),
+        issue,
+        ..WorktreeFacts::default()
+    };
+    let Ok(number) = facts.issue.parse::<u32>() else {
+        return facts;
+    };
+    if !state.github_issues_enabled() {
+        return facts;
+    }
+    let (st, project) = (Arc::clone(state), project.to_path_buf());
+    let read = tokio::task::spawn_blocking(move || {
+        let raw = GitCli::new().remote_list(&project).ok()?;
+        let repo = match choose_remote(&parse_remote_list(&raw)) {
+            RemoteChoice::Github { repo, .. } => repo,
+            RemoteChoice::NoGithubRemote => return None,
+        };
+        st.issue_lookup(&project)?.read_issue(&repo, number).ok()
+    });
+    if let Ok(Ok(Some(snapshot))) = tokio::time::timeout(state.prompt_lookup_bound(), read).await {
+        facts.issue_title = snapshot.title;
+        facts.issue_body = snapshot.body_text;
+    }
+    facts
 }
 
 /// Where a new session goes and what it runs (see [`create_session_with_prompt`]).

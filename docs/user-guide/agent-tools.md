@@ -192,6 +192,13 @@ The app never guesses from a worktree's name, its branch or when it appeared.
 
 ### The first prompt
 
+Without a prompt, `create_session` (and `create_worktree`, when `ai_cli` or `prompt` makes it start
+a session) types your default prompt template from Settings, filled in for the worktree: its issue
+reference, branch, type and name, and the issue's title and body when GitHub answers within 5
+seconds (otherwise those two stay empty). A prompt you pass always wins, and the template is then
+not used. With no template set nothing is typed, and a template alone never makes `create_worktree`
+start a session.
+
 When `create_session` is given a prompt, it waits until the new session's AI CLI is ready to take
 it, types it in, and submits it once. A prompt of several lines arrives as one message. How the
 service knows the CLI is ready depends on the CLI:

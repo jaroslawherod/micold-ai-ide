@@ -127,6 +127,8 @@ pub struct DaemonState {
     first_prompt_bound: Mutex<std::time::Duration>,
     /// How long a `github_issue` call waits for the issue's details (837 FR-011).
     details_bound: Mutex<std::time::Duration>,
+    /// How long the default prompt template waits for an issue's title and body (1161 R5).
+    prompt_lookup_bound: Mutex<std::time::Duration>,
     /// Where `create_worktree`'s `github_issue` reads the issue (550): `None` outside tests, which
     /// locates the user's `gh` per call.
     issue_lookup: Mutex<Option<IssueLookupFactory>>,
@@ -648,6 +650,10 @@ struct LiveSession {
 
 /// How long `create_session` waits for a new session to be ready for its first prompt, counted
 /// from the request (feature 034, FR-017).
+/// How long a default prompt waits for an issue's title and body before rendering them empty
+/// (1161 FR-012).
+pub const PROMPT_LOOKUP_BOUND: std::time::Duration = std::time::Duration::from_secs(5);
+
 pub const FIRST_PROMPT_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// [`micold_core::unix_time::unix_secs`] signed, as plan-usage readings carry it: when one was
@@ -929,6 +935,7 @@ impl DaemonState {
             tool_server: std::sync::OnceLock::new(),
             first_prompt_bound: Mutex::new(FIRST_PROMPT_BOUND),
             details_bound: Mutex::new(micold_core::issue_details::DETAILS_BOUND),
+            prompt_lookup_bound: Mutex::new(PROMPT_LOOKUP_BOUND),
             issue_lookup: Mutex::new(None),
             session_started: tokio::sync::broadcast::channel(64).0,
             auth_token: std::sync::OnceLock::new(),
@@ -1146,6 +1153,23 @@ impl DaemonState {
     /// FR-011): `micold_core::issue_details::DETAILS_BOUND` unless a test shortened it.
     pub fn details_bound(&self) -> std::time::Duration {
         *self.details_bound.lock().expect("details bound poisoned")
+    }
+
+    /// How long a default prompt waits for the issue's title and body (1161 FR-012):
+    /// [`PROMPT_LOOKUP_BOUND`] unless a test shortened it.
+    pub fn prompt_lookup_bound(&self) -> std::time::Duration {
+        *self
+            .prompt_lookup_bound
+            .lock()
+            .expect("prompt lookup bound poisoned")
+    }
+
+    /// Shorten the prompt lookup bound, so a test need not wait 5 s to see it pass.
+    pub fn set_prompt_lookup_bound(&self, bound: std::time::Duration) {
+        *self
+            .prompt_lookup_bound
+            .lock()
+            .expect("prompt lookup bound poisoned") = bound;
     }
 
     /// Shorten (or lengthen) the details bound, so a test need not wait 10 s to see it pass.
