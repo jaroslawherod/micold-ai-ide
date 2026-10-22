@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
 - **Phase**: implement M1
-- **Next step**: M1 in progress (T001–T018 done; next scoped gate, review A, review B, full gate, PR). Cross-feature holds: M2 ← #941 M1, M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Next step**: M1 PR to open (orchestrator, from the scratchpad 943-M1/pr-title.txt and pr-body.md), then after its merge M2 (held on #941 M1). Cross-feature holds: M2 ← #941 M1, M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | | in progress |
+| M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | to open | review |
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** | | pending |
 | M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | | pending |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | pending |
@@ -53,6 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | speckit-analyze | 1 (sonnet) | — | 0 CRITICAL, 1 HIGH (C1), 4 MEDIUM, 5 LOW — C1, C2, G1, I1, I2, U1–U3 fixed (I1/I2 in plan.md); I3 left to jaro (decision 2), D1 informational |
 | Tasks review | 1 | de7f53dab39c9aba91fd555cefc704e366ccdb3f:ee00a672e9c7ceefaa1edde46c12c37b7a0a103e | CHANGES: 1 MAJOR (Part B 3 / SC-007 moved M8 → M9), 3 MINOR — all fixed |
 | Review A M1 (code-review high, claude -p) | 1 | b4e6c0e3cf0eba349e147e1a9bc80ace36b899ad:243190ac73d4e596d907aa24c2fa7b7d53e2a50c | CHANGES: 1 MAJOR (F1, declined: FR-009), 3 MINOR — F2, F4 fixed; F3 declined |
+| Review B M1 (conformance, sonnet, claude -p) | 1 | 557f97e288a5a97b5363b42e3a56b2574406c567:cc1452181d4d44824e386a36d97cb82a8687e126 | CLEAN |
 | Tasks review | 2 (sonnet, fix diff) | 0c12e486473d3a8cc0937758fdd4473a3e424f23:ee00a672e9c7ceefaa1edde46c12c37b7a0a103e | CLEAN (1 MINOR, fixed, prose only) |
 
 ## Declined review findings
