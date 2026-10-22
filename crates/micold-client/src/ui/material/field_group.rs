@@ -15,6 +15,7 @@ use super::{Text, TypeRole};
 pub struct FieldGroup<'a, M> {
     label: String,
     note: Option<String>,
+    error: Option<String>,
     children: Vec<Element<'a, M>>,
     roles: Roles,
 }
@@ -25,6 +26,7 @@ impl<'a, M: 'a> FieldGroup<'a, M> {
         Self {
             label: label.into(),
             note: None,
+            error: None,
             children: Vec::new(),
             roles,
         }
@@ -33,6 +35,12 @@ impl<'a, M: 'a> FieldGroup<'a, M> {
     /// An explanation of the whole group, directly under the label.
     pub fn note(mut self, text: impl Into<String>) -> Self {
         self.note = Some(text.into());
+        self
+    }
+
+    /// A failure of the whole group, in the error colour under the children.
+    pub fn error(mut self, text: Option<String>) -> Self {
+        self.error = text;
         self
     }
 
@@ -58,9 +66,12 @@ impl<'a, M: 'a> From<FieldGroup<'a, M>> for Element<'a, M> {
         if let Some(note) = group.note {
             head = head.push(Text::new(note, TypeRole::Caption, roles).muted());
         }
-        let children = column(group.children)
+        let mut children = column(group.children)
             .spacing(spacing::SM)
             .width(Length::Fill);
+        if let Some(error) = group.error {
+            children = children.push(Text::new(error, TypeRole::Caption, roles).tint(roles.error));
+        }
         column![head, children]
             .spacing(spacing::SM)
             .width(Length::Fill)

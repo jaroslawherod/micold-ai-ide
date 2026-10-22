@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1161
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
-- **Phase**: milestone M1
-- **Next step**: M1 PR CI and merge, then M2
+- **Phase**: milestone M2
+- **Next step**: M2 gate, reviews, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1163 | Design | merged | 7406e4cdc61cbf75bc88c92a2bee08913b6bdf71 |
+| #1245 | M1 | merged | d16d74c143b73ad6af5d341e32872e3711ce8dc6 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #1245 | in review |
+| M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #1245 | merged |
 | M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #… | pending |
 | M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #… | pending |
 

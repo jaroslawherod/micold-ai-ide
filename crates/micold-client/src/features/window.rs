@@ -251,6 +251,8 @@ pub enum FieldId {
     SettingsEnvIncludeTimeout,
     /// Settings: the long-task threshold (feature 613, S5).
     SettingsLongTaskThreshold,
+    /// Settings: the default prompt template (feature 1161).
+    SettingsDefaultPromptTemplate,
     /// Settings: **Show Claude plan usage** (feature 490, FR-001).
     SettingsPlanUsageEnabled,
     /// Settings: the Claude plan-usage warning threshold (feature 490, FR-005).

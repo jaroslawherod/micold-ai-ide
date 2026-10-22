@@ -454,6 +454,17 @@ mod default_prompt_template {
         form
     }
 
+    /// FR-013: a stored template the dialog cannot read renders as empty and the form stays open.
+    #[test]
+    fn an_invalid_stored_template_renders_empty_and_the_form_stays_editing() {
+        let form = form("Do {issu}");
+        assert_eq!(form.first_prompt, "");
+        assert_eq!(
+            form.status,
+            micold_client::features::worktree_form::WorktreeFormStatus::Editing
+        );
+    }
+
     fn with_issue_42(mut form: WorktreeForm) -> WorktreeForm {
         let issue = Issue::new(
             42,

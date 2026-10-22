@@ -274,6 +274,11 @@ pub fn view<'a>(
         .note(format!(
             "Pre-fills a new worktree's first prompt. Placeholders: {placeholders}. Use {{{{ and }}}} for literal braces."
         ))
+        .error(super::error_for(
+            draft,
+            SettingsSection::Environment,
+            FieldId::SettingsDefaultPromptTemplate,
+        ))
         .push(
             TextArea::new(draft.environment.default_prompt_editor.content(), roles)
                 .placeholder("/speckit-autopilot #{issue}")
