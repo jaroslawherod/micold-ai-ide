@@ -448,6 +448,26 @@ mod tests {
         assert_eq!(out, vec!["scroll".to_string()]);
     }
 
+    /// FR-008: a scroll performed on a held area's content moves its lines inside it — what is
+    /// drawn changes — and the area keeps its height.
+    #[test]
+    fn a_scrolled_held_area_draws_other_lines_at_the_same_height() {
+        use super::super::test_support::Mounted;
+        let drawn = |content: &Content| {
+            let area = TextArea::<String>::new(content, LIGHT).max_height(200.0);
+            let mut m = Mounted::new_in(area, Size::new(400.0, 600.0));
+            (m.drawn(Color::WHITE).0, m.container().height)
+        };
+        let mut forty = lines(40);
+        let (before, height) = drawn(&forty);
+        let (again, _) = drawn(&forty);
+        assert_eq!(before, again, "drawing is repeatable");
+        forty.perform(Action::Scroll { lines: 10 });
+        let (after, scrolled_height) = drawn(&forty);
+        assert_ne!(before, after, "the lines moved");
+        assert_eq!(height, scrolled_height);
+    }
+
     /// A key binding decides the keys: Enter sends instead of breaking the line, and a key it
     /// hands back to the default still edits.
     #[test]

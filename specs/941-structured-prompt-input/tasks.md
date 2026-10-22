@@ -355,7 +355,7 @@ file reads (Constitution I: `shell/` holds no decision).
   `max_height` and then scrolls inside; `BusyIndicator` always shows its text label (FR-010);
   `QueueRow` cuts its text to one line and shows its position and attachment count; each control
   is reachable by Tab and has a label
-- [x] T049 Add `"image"` to the workspace `iced` features in `Cargo.toml` (research R8)
+- [x] T049 Add `"image"` to the workspace `iced` features in `Cargo.toml` (research R8) — done as `image-without-codecs` plus the four codecs (ledger Decision 17)
 - [x] T050 [US2] `client/src/ui/material/text_area.rs`: `.key_binding(…)` and `.max_height(…)`
   (FR-008)
 - [x] T051 [P] [US5] `client/src/ui/material/attachment_chip.rs` (new): thumbnail decoded from the

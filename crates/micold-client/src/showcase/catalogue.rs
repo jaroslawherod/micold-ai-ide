@@ -996,10 +996,9 @@ pub const COMPONENTS: &[Entry] = &[
             "multi-line",
             "at its height limit, scrolling inside",
         ],
-        live: &[
-            "click the empty area: its indicator thickens",
-            "scroll the limited area: its lines move inside it",
-        ],
+        // The limited area is a still: the page performs no edits, so its lines do not scroll
+        // here; `text_area.rs`'s tests drive the scroll.
+        live: &["click the empty area: its indicator thickens"],
         interactive: true,
         section: Section::Components,
         layout: Layout::FullWidth,
