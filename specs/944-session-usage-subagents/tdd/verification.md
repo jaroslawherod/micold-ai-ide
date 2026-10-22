@@ -133,8 +133,8 @@ Untested criteria: none. Tests tracing to nothing: none found.
 ## Remediation (close unit)
 
 - Finding 1: fixed. `a_structured_launch_forwards_subagent_text` asserts the terminal launch
-  unconditionally, expecting the value the test process itself holds, if any (run green with and
-  without the variable set).
+  unconditionally, expecting the value the test process itself holds, if any (run green alone with and
+  without the variable set, and in the close gate at ea52d6d8).
 - Finding 3: fixed. `the_recorded_threads_hold_their_hand_counted_figures` pins each recording's
   thread counts as literals.
 - Finding 7: fixed. `a_malformed_response_usage_leaves_the_reading_without_a_figure` asserts each
