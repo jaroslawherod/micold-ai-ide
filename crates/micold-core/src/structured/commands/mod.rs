@@ -1,6 +1,7 @@
 //! A structured session's commands (#943): the command list the CLI reported, merged with the
 //! terminal-only list (research R1, R2), and how a draft that starts with `/` is read (R3).
 
+pub mod palette;
 mod terminal_only;
 
 pub use terminal_only::{TerminalOnly, BUILT_INS, CHECKED_AGAINST, CLI_MARKED_WHY, TERMINAL_ONLY};

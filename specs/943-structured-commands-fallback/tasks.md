@@ -112,7 +112,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `BUILT_INS`, `parse_initialize`, `from_history`, `fallback`, `DraftCommand`, `classify_draft`,
   `CommandInvocation`, `parse_invocation`) until T009–T011 pass; register in
   `core/src/structured/mod.rs`
-- [ ] T013 [P] [US2] Tests in `core/tests/command_palette.rs` (new): `palette_query(draft, caret)`
+- [X] T013 [P] [US2] Tests in `core/tests/command_palette.rs` (new): `palette_query(draft, caret)`
   is `Some` for `/`, `/sp` (caret at end), `None` for `x/sp`, `/ sp`, `/sp x` with the caret after
   the space, an empty draft; `filter` orders FR-008's tiers (equal, prefix, word-prefix after `-`
   `_` `:`, rest), case-insensitive, alphabetical within a tier; an empty query lists all grouped
@@ -120,23 +120,23 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   fixtures' `init` lists (its shortest unique prefix lists it first; its full name lists it first);
   `accept(name)` gives `/<name> ` with the caret after it; 200 recorded-shape items filtered 1,000
   times, every single filter under SC-003's 100 ms (the maximum, not only the mean)
-- [ ] T014 Implement `core/src/structured/commands/palette.rs` (`palette_query`, `filter`,
+- [X] T014 Implement `core/src/structured/commands/palette.rs` (`palette_query`, `filter`,
   `PaletteSelection` over `typeahead::move_highlight`, `accept`) until T013 passes
-- [ ] T015 [P] [US3] Unit tests in `core/src/structured/model.rs`: `ModelName::parse` refuses blank,
+- [X] T015 [P] [US3] Unit tests in `core/src/structured/model.rs`: `ModelName::parse` refuses blank,
   whitespace-holding and > 128-byte names (`ModelRefusal::Invalid`); `launch_args(Default)` is
   empty, `launch_args(Named("haiku"))` is `["--model", "haiku"]`; `MODEL_SHORTCUTS` = `sonnet`,
   `opus`, `haiku`; `session_model` is the latest of `Init.model` and `ModelChanged.model` over a
   history; `ModelChoice` serde: `Default` skipped, a missing field reads `Default`
-- [ ] T016 Implement `core/src/structured/model.rs` (`ModelChoice`, `ModelName`, `ModelRefusal`,
+- [X] T016 Implement `core/src/structured/model.rs` (`ModelChoice`, `ModelName`, `ModelRefusal`,
   `launch_args`, `MODEL_SHORTCUTS`, `session_model`) until T015 passes; register in
   `core/src/structured/mod.rs`
-- [ ] T017 [P] [US1] [US3] Unit tests in `core/src/structured/control.rs`: `encode_initialize(id)`
+- [X] T017 [P] [US1] [US3] Unit tests in `core/src/structured/control.rs`: `encode_initialize(id)`
   and `encode_set_model(id, &choice)` give exactly the one-line JSON of
   [contracts/claude-commands.md](contracts/claude-commands.md) ending in `\n` (`Default` →
   `"model":"default"`); `parse_set_model` on `model-change.jsonl`'s answer → `Ok("claude-haiku-…")`,
   on `model-refused.jsonl`'s → `Err(Refused { message: "Model 'no-such-model-xyz' not found", code:
   Some("not_found") })`
-- [ ] T018 Implement T017 in `core/src/structured/control.rs`
+- [X] T018 Implement T017 in `core/src/structured/control.rs`
 
 ---
 

@@ -13,6 +13,7 @@ mod history;
 pub mod input;
 pub mod insights;
 mod lines;
+pub mod model;
 mod parse;
 pub mod permission;
 mod saved;
