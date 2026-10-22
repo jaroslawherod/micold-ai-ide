@@ -93,12 +93,25 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-None.
+M2 unit handed over at the context cap after implementing (no review or gate run yet).
+
+- **Done**: T023–T033 implemented and ticked; commit fe9e7814 on `claude/project-thread-ik47pq`
+  (branch reset to origin/main cdfafa66 first; not pushed, no PR). Verify
+  `cargo test -p micold-daemon --test structured_input --test structured_session` → 12 and 16
+  passed; `structured_permission*`, `structured_lifecycle`, `structured_history`,
+  `structured_resume`, `structured_saved_history`, `plan_usage_structured`, `mcp_create_session`,
+  `activity_pipeline` and the daemon lib pass. Decisions 7–10 record the plan deviations; cycle 4
+  in `tdd/cycle-log.md`. No wire change (PROTOCOL_VERSION stays 63).
+- **Next**: verify.md step 1 — scoped gate detached + review A (`code-review` high) on
+  `origin/main...HEAD`; then review B (conformance, sonnet) once; no visual change (daemon only);
+  rebase onto origin/main (`cargo fmt --all`), full gate `scripts/gate.sh`; write
+  `pr-title.md` / `pr-body.md` in the scratchpad (do not open the PR), push with
+  `--force-with-lease=claude/project-thread-ik47pq:`.
+- **Open findings**: none yet.
 
 ## Open escalation
 
-None. (Clarify r1 Q1/Q2 are with the user as decision cards; the recommended defaults are applied
-as Decisions 3–4 until they answer.)
+None.
 
 ## Follow-ups not done
 
