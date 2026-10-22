@@ -729,26 +729,39 @@ fn shown_focused_link(app: &App) -> Option<(SessionLocation, CardLink)> {
 struct LinkFocus {
     /// The card and its link that held the keyboard, while drawn ([`shown_focused_link`]).
     link: Option<(SessionLocation, CardLink)>,
+    /// Where that link was drawn ([`card_link_row`](micold_client::ui::overview::card_link_row)):
+    /// a number's row (feature 1123, review A M3 r1 F1).
+    row: Option<usize>,
     /// The active project: a switch moves no focus (972; review A F2, M4).
     project: Option<PathBuf>,
     /// The expanded card.
     expanded: Option<SessionLocation>,
+    /// The card that held the keyboard, itself or a link of it.
+    focused: Option<SessionLocation>,
 }
 
 impl LinkFocus {
     fn of(app: &App) -> Self {
+        let link = shown_focused_link(app);
         Self {
-            link: shown_focused_link(app),
+            row: link.as_ref().and_then(|(location, link)| {
+                micold_client::ui::overview::card_link_row(&app.core, location, *link)
+            }),
+            link,
             project: app.core.workspace.active.clone(),
             expanded: app.core.overview.expansion.expanded().cloned(),
+            focused: app.core.overview.expansion.focused().cloned(),
         }
     }
 }
 
 /// The control the keyboard moves to after an update, given [`LinkFocus`] before it (feature
 /// 1122): none across a project switch; the card when the update took away the link that held
-/// the keyboard ([`link_focus_handoff`]); the link again when its card changed form under it.
+/// the keyboard ([`link_focus_handoff`]); the link again when its card changed form under it, or
+/// when a reading moved it to another row (feature 1123); the expanded card's last link when
+/// Shift+Tab entered the collapsed card at its last.
 fn link_focus_after(app: &mut App, before: &LinkFocus) -> Option<iced::advanced::widget::Id> {
+    use micold_client::ui::overview::{card_last_link, card_link_id, card_link_row};
     if app.core.workspace.active != before.project {
         return None;
     }
@@ -760,9 +773,34 @@ fn link_focus_after(app: &mut App, before: &LinkFocus) -> Option<iced::advanced:
     // card's link expands that card, and Escape on a link collapses its card. A link still drawn
     // takes it back; one no longer drawn was handed to its card above (feature 1123, R6).
     let (location, link) = shown_focused_link(app)?;
+    let held = before.link.as_ref() == Some(&(location.clone(), link));
     let was = before.expanded.as_ref() == Some(&location);
     let is = app.core.overview.expansion.expanded() == Some(&location);
-    (was != is).then(|| micold_client::ui::overview::card_link_id(&location, link))
+    if was != is {
+        // The card expanded as its link took the keyboard from another card: Shift+Tab, which
+        // lands on the collapsed card's last stop. The reverse of Tab goes on to the expanded
+        // card's last (feature 1123, FR-010; visual pass M3 r1, criterion 1). A Tab between two
+        // of its own numbers collapses it only between the loss and the gain, with no card
+        // focused in between.
+        let from_another = before
+            .focused
+            .as_ref()
+            .is_some_and(|focused| *focused != location);
+        let entered = is
+            && !held
+            && from_another
+            && card_last_link(&app.core, &location, false) == Some(link);
+        let to = entered
+            .then(|| card_last_link(&app.core, &location, true))
+            .flatten()
+            .unwrap_or(link);
+        return Some(card_link_id(&location, to));
+    }
+    // The keyboard lives in a row's widget, not in a number: a reading that moved the number to
+    // another row left the keyboard on whichever number that row now draws, so it is handed back
+    // to the number by its id (review A M3 r1 F1).
+    (held && card_link_row(&app.core, &location, link) != before.row)
+        .then(|| card_link_id(&location, link))
 }
 
 /// The control the keyboard moves to when the update took away the link that held it (feature
@@ -788,6 +826,13 @@ fn link_focus_handoff(
         return Some(card_id(&target));
     }
     if card_link_shown(&app.core, &location, link) {
+        return None;
+    }
+    // The link is no longer drawn, but the expansion no longer has it holding the keyboard
+    // either: the update was the keyboard leaving it. iced reports a Tab between two numbers loss
+    // first, and that loss collapses the card until the gain pairs with it, so a row-3 number is
+    // briefly not drawn; it was not taken away (visual pass M3 r1, criteria 1 and 3).
+    if app.core.overview.expansion.focused_link() != Some((&location, link)) {
         return None;
     }
     // The card takes the keyboard from its own link: card gained, then link lost (K5).

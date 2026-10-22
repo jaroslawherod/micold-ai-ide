@@ -138,6 +138,12 @@ impl Expansion {
         self.body_edges
     }
 
+    /// The card that holds the keyboard, itself or one of its links (feature 1123: the root tells
+    /// Shift+Tab from another card onto this card's link from a move inside the card).
+    pub fn focused(&self) -> Option<&SessionLocation> {
+        self.focused.as_ref()
+    }
+
     /// The card and which of its links holds the keyboard (feature 1122, FR-008; feature 1123):
     /// not while an open menu holds it (FR-009).
     pub fn focused_link(&self) -> Option<(&SessionLocation, CardLink)> {
