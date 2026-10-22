@@ -607,6 +607,17 @@ fn drafts_pictures_and_carets_are_kept_per_session() {
     );
 }
 
+#[test]
+fn closing_a_session_forgets_its_composer() {
+    let mut window = Window::default();
+    let (a, b) = (SessionId::new(), SessionId::new());
+    window.composers.edited(a, "for a".into(), (0, 5));
+    window.composers.edited(b, "for b".into(), (0, 5));
+    window.forget_structured(a);
+    assert!(window.composers.composer(a).is_none());
+    assert_eq!(text_of(&window.composers, b), "for b");
+}
+
 // ---- T042: drops (reducer half) ----
 
 #[test]

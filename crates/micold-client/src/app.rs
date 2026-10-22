@@ -973,10 +973,11 @@ impl State {
         }
     }
 
-    /// Forget a closed or removed session's transcript and its render cache.
+    /// Forget a closed or removed session's transcript, its render cache and its composer.
     pub fn forget_structured(&mut self, session: micold_core::session::SessionId) {
         self.structured_transcript.forget(session);
         self.transcript_rich.forget(session);
+        self.composers.forget(session);
     }
 
     /// Apply a message of the transcript view and hand back what only the shell can perform: the

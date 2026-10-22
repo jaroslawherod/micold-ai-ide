@@ -2868,6 +2868,7 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
     // counter must survive a reconnect for loss detection to hold.
     app.stamper.forget(id);
     app.core.forget_structured(id);
+    app.composer_editors.remove(&id);
     // Addressed to the daemon the session runs on, whichever location is in view.
     let binding = app.session_binding_of(id);
     send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
@@ -2920,6 +2921,7 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
             .retain(|_, (session, _)| *session != id);
         app.stamper.forget(id); // T114, as in the close path above.
         app.core.forget_structured(id);
+        app.composer_editors.remove(&id);
         let binding = app.session_binding_of(id);
         send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
             ClientMsg::SessionDelete { req, session: id }
