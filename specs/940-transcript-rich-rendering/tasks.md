@@ -533,3 +533,15 @@ before #939 M6 has merged (research R14); M1 begins with T001's re-check.
   (`specs/940-transcript-rich-rendering/visual-pass/`)
 - **Depends on**: M1, M2, M3, M4
 - **Tier**: full
+
+## Phase 8: TDD remediation (close)
+
+From `tdd/verification.md` (verdict FAIL on test-first ordering only; nothing here blocks the close:
+the test-after behaviours cannot be re-ordered after the fact, and each has a test that catches a
+mutant).
+
+- [x] T043 Finding 1: `crates/micold-client/tests/features_transcript_rich.rs` `recorded` builds its
+  fixtures with `support::transcript::{fixture_lines, sequenced}` instead of its own loader. Done
+  when `cargo test -p micold-client --test features_transcript_rich` passes (16/16).
+- [x] T044 Finding 7: `crates/micold-client/tests/gates/code_block_fits.rs` names one code line's
+  height `CODE_LINE`. Done when `cargo test -p micold-client --test layout_snapshot` passes (79/79).

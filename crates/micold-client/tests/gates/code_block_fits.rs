@@ -26,6 +26,9 @@ const ROOM: Size = Size::new(280.0, 400.0);
 /// How far apart two parts of one row may sit vertically: a label line.
 const ROW: f32 = 24.0;
 
+/// The tallest one code line may be: a line of the code font, not two.
+const CODE_LINE: f32 = 20.0;
+
 #[test]
 fn a_code_blocks_header_parts_stay_in_its_header_row_and_a_long_line_scrolls_inside() {
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
@@ -87,7 +90,7 @@ fn a_code_blocks_header_parts_stay_in_its_header_row_and_a_long_line_scrolls_ins
                 "{what}: the sample's long line is wider than the room: {long:?}"
             );
             assert!(
-                long.natural_height <= 20.0,
+                long.natural_height <= CODE_LINE,
                 "{what}: the long line is one line, not wrapped: {long:?}"
             );
             assert!(

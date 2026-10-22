@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #940
 - **Worktree branch**: claude/project-thread-x8n8q6
 - **Started**: 2026-10-21
-- **Phase**: milestone M5
-- **Next step**: M5 PR #1234: CI attempt 2 after the red-CI fix (pinned test monospace face), then merge
+- **Phase**: close
+- **Next step**: close unit: tdd-verify, Polish, review, gate, close PR
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1220 | M2 edit diff (+ orchestrator commit 5bcb6f83: Windows "Report rust-cache hit" CI step failed on every cache miss — find/du on a missing target/ under pipefail) | merged | 528209c8d15fd0e5f109ae49e0202fdaba01b842 |
 | #1229 | M3 rich cache | merged | 7ce164cfa2e5323ab82807db03e80e35bacd9af2 |
 | #1232 | M4 shared components | merged | 1a6250835d61c5cf2c800e8ce131f35051f63215 |
+| #1234 | M5 rich renderers (+ red-CI fix faaa2d66: pinned a committed Fira Mono in `tests/support/layout.rs`) | merged | 18e9cf0979d5afd37492f8840aa4694d7052a934 |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T013–T015 | full | edit diff in core: recorded edits round-trip, malformed → None | #1220 | merged (528209c8) |
 | M3 | T016–T024 | full | window's render-free rich cache: derive/prune, highlight jobs, checked copy, web/mail link opens | #1229 | merged (7ce164cf) |
 | M4 | T025–T034 | full | shared MarkdownView, CodeBlock, InlineDiff, LinkText, DisclosureCard::meta with gates and showcase | #1232 | merged (1a625083) |
-| M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | #1234 (draft) | CI attempt 1 red (layout_snapshot, host monospace); fixed test-only, full gate green |
+| M5 | T035–T042 | full | transcript draws with BlockRenderers::RICH; budget; user guide; Part B | #1234 | merged (18e9cf09) |
 
 ## Decisions
 
@@ -101,9 +102,11 @@ None.
 
 - Markdown model edge cases outside the guarantee (research R2 *Refined in M1*): a definition whose title spans three or more lines can still absorb a paragraph a line later; link and image titles are not shown; a duplicate-label definition inside a quote or list item is not shown (review A M1 r2 MINOR).
 
-- Italic emphasis is drawn upright: the bundled fonts are Roboto Regular and Medium only, so `Style::Italic` finds no face (visual pass M4). Needs a Roboto Italic asset with its provenance entry (FR-003); not in M4's tasks.
+- Italic emphasis is drawn upright: the bundled fonts are Roboto Regular and Medium only, so `Style::Italic` finds no face (visual pass M4). Needs a Roboto Italic asset with its provenance entry (FR-003); not in M4's tasks. **For jaro to decide**: bundle Roboto Italic, or accept upright emphasis.
 
-- LinkText per-link focus ring (review A M4 F2): draw the ring round the focused link's spans (`Paragraph::span_bounds`) instead of the paragraph; fix before #940 closes or file an issue.
+- The shipped app bundles no monospace font: `Font::MONOSPACE` ("Noto Sans Mono") falls back to whatever monospace face the host has (Liberation Mono or DejaVu Sans Mono on Linux, Courier New on macOS and Windows), so code blocks, inline code and diffs render in a different face, with different widths, per machine. The layout test is pinned to a committed Fira Mono since #1234 (faaa2d66), but users still see the host's face. **For jaro to decide**: bundle a monospace face (Fira Mono or Noto Sans Mono, OFL, with a `assets/fonts/PROVENANCE.md` entry) and point `Font::MONOSPACE` at it, or accept the host fallback.
+
+- LinkText per-link focus ring (review A M4 F2): draw the ring round the focused link's spans (`Paragraph::span_bounds`) instead of the paragraph. Not fixed before close (behaviour, not a Polish task); **for jaro to decide**: file an issue.
 
 - Rich budget with highlight spans applied (review A M5 F4, declined as MINOR): feed the jobs back in `transcript_open_budget.rs` before the timed frames.
 

@@ -16,25 +16,17 @@ use micold_core::review::limits::{MAX_CHANGED_LINES, MAX_VERSION_BYTES};
 use micold_core::session::SessionId;
 use micold_core::structured::edit_diff::edit_diff;
 use micold_core::structured::transcript::{Entry, EntryKey, EntryKind, Transcript};
-use micold_core::structured::{
-    parse_line, ContentBlock, LineSplitter, SequencedEvent, StructuredEvent,
-};
+use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent};
 use micold_core::tokens::Rgb;
 use serde_json::json;
+
+mod support;
 
 // ---- fixtures ----
 
 /// A recorded stream-json fixture of the core's, numbered from `0` as a history holds it.
 fn recorded(name: &str) -> Vec<SequencedEvent> {
-    let path = format!(
-        "{}/../micold-core/tests/fixtures/stream-json/{name}.jsonl",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("fixture {path} reads: {e}"));
-    let mut splitter = LineSplitter::default();
-    let mut lines = splitter.push(&bytes);
-    lines.extend(splitter.finish());
-    sequenced(lines.iter().map(|line| parse_line(line)))
+    support::transcript::sequenced(&support::transcript::fixture_lines(name), 0)
 }
 
 fn sequenced(events: impl IntoIterator<Item = StructuredEvent>) -> Vec<SequencedEvent> {

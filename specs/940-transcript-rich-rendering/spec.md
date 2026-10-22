@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Closed 2026-10-22 — shipped in PRs #1187, #1216, #1220, #1229, #1232, #1234
 
 **Input**: GitHub issue #940 "Structured session view: markdown, syntax-highlighted code and diffs
 for Edit/Write". "Part of the structured-session (stream-json) UI epic. Keeps the PTY/TUI session
