@@ -69,17 +69,30 @@ impl StatusChip {
     }
 }
 
+impl StatusChip {
+    /// The colour the chip is drawn in: the category's tint, dimmed toward the surface when stale.
+    fn tint(&self) -> Rgb {
+        let accent = Self::accent(self.status.category, self.roles);
+        if self.stale {
+            over(accent, STALE_STRENGTH, self.roles.surface)
+        } else {
+            accent
+        }
+    }
+
+    /// The tooltip (and screen-reader) text of the chip as built.
+    fn label(&self) -> String {
+        Self::accessible_text(&self.status, self.stale)
+    }
+}
+
 impl<'a, M: 'a> From<StatusChip> for Element<'a, M> {
     fn from(chip: StatusChip) -> Self {
-        let mut accent = StatusChip::accent(chip.status.category, chip.roles);
-        if chip.stale {
-            accent = over(accent, STALE_STRENGTH, chip.roles.surface);
-        }
-        let mut tag = Tag::new(chip.status.name.clone(), accent);
+        let mut tag = Tag::new(chip.status.name.clone(), chip.tint());
         if chip.status.name.chars().count() > SHORT_NAME {
             tag = tag.truncate_to(MAX_WIDTH);
         }
-        let label = StatusChip::accessible_text(&chip.status, chip.stale);
+        let label = chip.label();
         Tooltip::new(Element::from(tag), label, chip.roles).into()
     }
 }
@@ -114,6 +127,22 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// What the chip is built from, not the static helper: a stale chip is dimmed and says so,
+    /// a fresh one is neither (FR-008, FR-013).
+    #[test]
+    fn a_stale_chip_is_dimmed_and_its_tooltip_says_so() {
+        let r = roles(ColorScheme::Dark);
+        let s = status(Some(StatusCategory::InProgress));
+        let fresh = StatusChip::new(&s, r);
+        let stale = StatusChip::new(&s, r).stale(true);
+        assert_eq!(fresh.tint(), StatusChip::accent(s.category, r));
+        assert_ne!(stale.tint(), fresh.tint(), "a stale chip is dimmed");
+        assert_eq!(fresh.label(), "In Review");
+        assert_eq!(stale.label(), "In Review, may be out of date");
+        // And the element is built from them without panicking, stale or not.
+        let _: Element<'_, ()> = stale.into();
     }
 
     #[test]

@@ -144,8 +144,22 @@ fn a_status_read_starts_only_from_focus_and_project_open() {
     assert!(calls
         .iter()
         .all(|c| c.starts_with("crates/micold-client/src/shell/jira_refresh.rs")));
-    assert_eq!(occurrences("jira_refresh::on_focus(").len(), 1);
-    assert_eq!(occurrences("jira_refresh::after_update(").len(), 1);
+    // The driver tests in `main_tests.rs` call the entry points too; they start no read of their own.
+    assert_eq!(
+        occurrences("jira_refresh::on_focus(")
+            .iter()
+            .filter(|(file, _)| !file.ends_with("main_tests.rs"))
+            .count(),
+        1
+    );
+    // The driver tests in `main_tests.rs` call the entry points too; they start no read of their own.
+    assert_eq!(
+        occurrences("jira_refresh::after_update(")
+            .iter()
+            .filter(|(file, _)| !file.ends_with("main_tests.rs"))
+            .count(),
+        1
+    );
     // The status read reaches Jira through the same gate as the picker's.
     assert_eq!(occurrences(".jira_source()").len(), 1);
 }

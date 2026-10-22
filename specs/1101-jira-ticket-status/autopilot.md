@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1101
 - **Worktree branch**: feat/1101_show-a-jira-ticket-s-current-status
 - **Started**: 2026-10-20
-- **Phase**: implement
-- **Next step**: M3 rebased onto origin/main, PR #1218 open; wait for CI and merge
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1152 | Design PR | merged | 537bf0d5193e751dbd41b377a70dd6488db31ba0 |
 | #1155 | M1 | merged | 473538658f1b4835f0fba0eddf67d95bfe608269 |
 | #1190 | M2 | merged | 856f61a1a505e97ddc45dff92c9e1e66eb6e0338 |
-| #1218 | M3 | open | |
+| #1218 | M3 | merged | 5f21379140eea6b81084f7a64abd2d6dbe94863b |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Status chip in the issue picker | #1155 | merged |
 | M2 | T014–T027 | full | Current status on the sidebar | #1190 | merged |
-| M3 | T028–T030 | full | Status on Overview cards | #1218 | open |
+| M3 | T028–T030 | full | Status on Overview cards | #1218 | merged |
 
 ## Decisions
 
@@ -49,11 +49,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A | 1 | b90ff0c14cecbbde6895835d88fb8fe279889418:d0923323fa64e10532127c327f54ca41bc28e4c8 | 10 findings; fixed: fmt, per-message cost (dormant skip), connection change drops statuses and re-reads (also covers Jira enabled after open), clock doc; rest declined (below) |
 | M2 review B | 1 | 421a6d147b3dcd974dc351c312ad4804fe5e40da:a6da24e84c8e4b28b4081d93e49ac37606053282 | CHANGES: 1 MAJOR (red not recorded; fixed by mutation runs, logged in cycle-log), 1 MINOR (task paths; fixed). Verify green |
 | M2 review B | 2 | a1a93f4838d3a7f483a464ee2fe5dc9a19f32d3a:a162785b7ae08f9218cfd80c2aba2e718d8cac52 | CHANGES: 1 MAJOR (no test of the Settings disclosure; fixed with a painted-text test, red by mutation), 2 MINOR (cycle-log notes added). Verify could not run in the reviewer behind the gate lock; the full gate runs the tests |
+| Close review | 1 | 28e0027d74b7eda7dd01241e9f14c28cdda982e3:0023889612158307a7c2e523913f1af97a3c1c7b | CLEAN (2 MINOR: F1 tint formula assert declined to keep the gated tree; F2 T031 wording fixed, prose only) |
 
 ## Declined review findings
 
 - M3 review B F1 (T029 names `features/overview.rs`, chip is filled in `ui/overview.rs::card_status` where the cards are built): kept, noted here.
 - M3 review A F1 (no test of expanded card chip): declined, MINOR.
+- Close, tdd-verify T019 "update returns before the source answers" test: not written, MINOR; the driver tests cover every other T019 claim and the other findings are fixed with mutation proof (cycle-log Fix section).
+- Close, converge note: feature 533 FR-005b/FR-020 not amended with a pointer to 1101 FR-006b: left, cross-reference only.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

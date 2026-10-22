@@ -425,7 +425,7 @@ pub fn settle_card_menu(state: &mut State) {
 
 /// The status of the Jira ticket a card's worktree is linked to, from the one board every
 /// surface reads (feature 1101, FR-010). A numeric (GitHub) ticket is never on the board.
-fn card_status<'s>(
+pub fn card_status<'s>(
     state: &'s State,
     model: &CardModel,
 ) -> Option<(&'s micold_core::jira_status::TicketStatus, bool)> {

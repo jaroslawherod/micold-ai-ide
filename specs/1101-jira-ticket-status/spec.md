@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: Closed 2026-10-22 — shipped in PRs #1152, #1155, #1190, #1218
 
 **Input**: User description: "Show a Jira ticket's current status (GitHub issue #1101). A Jira ticket shown in Micold (issue picker rows in the New worktree form, a worktree's linked ticket) does not show its current Jira status, so there is no way to tell whether a ticket is To Do, In Progress or In Review without opening Jira. Read the ticket's status (name and status category) from Jira and show it wherever a Jira ticket appears, refreshed so it reflects the ticket's status now, not the status when it was first loaded. Alternative considered: opening the ticket in Jira."
 

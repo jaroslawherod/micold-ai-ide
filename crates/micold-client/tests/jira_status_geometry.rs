@@ -40,7 +40,7 @@ fn a_long_status_name_is_truncated_and_leaves_the_title_where_it_was() {
 }
 
 #[test]
-fn a_row_without_a_chip_has_unchanged_layout() {
+fn a_row_with_a_chip_has_the_layout_of_one_without() {
     let (a, _) = painted_for(None);
     let (b, others) = painted_for(Some(("To Do", "new")));
     assert_eq!(a, b);

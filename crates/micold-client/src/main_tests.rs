@@ -15303,3 +15303,135 @@ fn closing_a_session_drops_its_editor_and_its_composer_requests() {
         "only the closed session's composer requests go"
     );
 }
+
+// --- feature 1101: the shell's status-refresh driver (`shell/jira_refresh.rs`) ----------------
+//
+// The reducer's tests drive `plan`/`apply` by hand; these drive the driver itself: the gate, the
+// clear when the switch goes off, and the Focus trigger's 5-minute throttle, against a fake source
+// whose calls are counted. The clock is the real one, so "within five minutes" is "right after".
+
+mod jira_status_driver {
+    use super::*;
+    use micold_core::jira::{connection_key, FakeJiraSource, JiraConnection};
+    use micold_core::jira_status::TicketStatus;
+    use micold_core::worktree::WorktreeStatus::Valid;
+    use std::sync::Arc;
+
+    struct Rig {
+        app: App,
+        source: Arc<FakeJiraSource>,
+        _dir: tempfile::TempDir,
+    }
+
+    /// Switch on, connected, token stored, a worktree linked to `ABC-1`, the project just opened.
+    fn rig() -> Rig {
+        rig_answering(Ok(vec![(
+            "ABC-1".to_string(),
+            TicketStatus::from_jira(Some("In Progress"), Some("indeterminate")),
+        )]))
+    }
+
+    fn rig_answering(
+        answer: Result<
+            Vec<micold_core::jira_status::KeyedStatus>,
+            micold_core::github::IssueLoadError,
+        >,
+    ) -> Rig {
+        let dir = tempfile::tempdir().unwrap();
+        let source = Arc::new(FakeJiraSource::new().with_statuses(answer));
+        let mut app = app_on_demo(&[("fix-ABC-1_login", Valid, true)]);
+        app.caps = app
+            .caps
+            .clone()
+            .with_jira(source.clone(), dir.path().to_path_buf());
+        app.core.settings.jira_enabled = true;
+        app.core.settings.jira_connections.insert(
+            connection_key(std::path::Path::new(DEMO)),
+            JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
+        );
+        std::fs::write(
+            micold_core::store::jira_token_path(dir.path(), std::path::Path::new(DEMO)),
+            "sentinel-token-0123",
+        )
+        .unwrap();
+        app.core.jira_status.project_opened();
+        Rig {
+            app,
+            source,
+            _dir: dir,
+        }
+    }
+
+    fn after_update(rig: &mut Rig) {
+        let work = shell::jira_refresh::after_update(&mut rig.app);
+        settle(&mut rig.app, work);
+    }
+
+    fn on_focus(rig: &mut Rig) {
+        let work = shell::jira_refresh::on_focus(&mut rig.app);
+        settle(&mut rig.app, work);
+    }
+
+    fn chip(rig: &Rig) -> bool {
+        rig.app.core.jira_status.board.status_of("ABC-1").is_some()
+    }
+
+    #[test]
+    fn an_opened_project_reads_once_and_shows_the_status() {
+        let mut rig = rig();
+        after_update(&mut rig);
+        assert_eq!(rig.source.status_calls(), vec![vec!["ABC-1".to_string()]]);
+        assert!(chip(&rig));
+        after_update(&mut rig);
+        assert_eq!(rig.source.status_calls().len(), 1, "one read per open");
+    }
+
+    #[test]
+    fn with_the_switch_off_or_no_connection_no_status_is_asked() {
+        for off in [
+            |app: &mut App| app.core.settings.jira_enabled = false,
+            |app: &mut App| app.core.settings.jira_connections.clear(),
+        ] {
+            let mut rig = rig();
+            off(&mut rig.app);
+            after_update(&mut rig);
+            on_focus(&mut rig);
+            assert!(rig.source.status_calls().is_empty());
+            assert!(!chip(&rig));
+        }
+    }
+
+    #[test]
+    fn switching_the_integration_off_or_removing_the_connection_clears_the_chips() {
+        for off in [
+            |app: &mut App| app.core.settings.jira_enabled = false,
+            |app: &mut App| app.core.settings.jira_connections.clear(),
+        ] {
+            let mut rig = rig();
+            after_update(&mut rig);
+            assert!(chip(&rig));
+            off(&mut rig.app);
+            after_update(&mut rig);
+            assert!(rig.app.core.jira_status.board.is_idle());
+            assert!(!chip(&rig));
+        }
+    }
+
+    #[test]
+    fn a_focus_within_five_minutes_of_the_open_read_does_not_ask_again() {
+        let mut rig = rig();
+        after_update(&mut rig);
+        on_focus(&mut rig);
+        assert_eq!(rig.source.status_calls().len(), 1);
+    }
+
+    #[test]
+    fn a_failed_read_shows_no_chip_and_asks_nothing_more_until_the_next_event() {
+        let mut rig = rig_answering(Err(micold_core::github::IssueLoadError::RateLimited));
+        after_update(&mut rig);
+        after_update(&mut rig);
+        after_update(&mut rig);
+        assert_eq!(rig.source.status_calls().len(), 1, "no retry of its own");
+        assert!(!chip(&rig));
+    }
+}
