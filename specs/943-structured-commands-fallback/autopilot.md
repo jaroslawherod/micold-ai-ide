@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
 - **Phase**: pr M3
-- **Next step**: M3 PR to open by the orchestrator (branch pushed; title and body in the unit scratchpad `943-M3/`), CI, merge; then M4. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Next step**: PR #1244 (M3) rebased onto origin/main 203ef720 (#941 M3), gate green (scripts/gate.sh, 621 suites ok), force-pushed; orchestrator: CI, mark ready, merge; then M4. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | #1239 | merged |
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | #1241 | merged |
-| M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | (to open) | PR |
+| M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | #1244 | PR |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | pending |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pending |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** | | pending |
@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 (code-review high, claude -p) | 1 | 2105909dc24a3b40e9538ce502b9218cd6591a49:96f78747275b52e8fd55a3e2e2514b83d3e5d7ad | CHANGES: F1 MAJOR queue edit into `/model`/terminal-only reached the CLI — fixed (`edit_queue`, `QueueRefusal::Refused`, test); F2 MAJOR evicted note — declined (FR-009); F3 MINOR docs window before init — fixed, prose only; F4 MINOR history cloned per `/` message under the state lock — fixed (`EventStream::command_list`, test); F5 MINOR — declined |
 | Review B M3 (conformance, sonnet, claude -p) | 1 | 2105909dc24a3b40e9538ce502b9218cd6591a49:96f78747275b52e8fd55a3e2e2514b83d3e5d7ad | CLEAN (1 MINOR: decisions rows 5/6 out of order — fixed) |
 | Review A M3 (scoped, sonnet, claude -p) | 2 | 11d7edc6f025b98bcf13b1e3ff5818157a428ec4:1a67fe6b3749d9b242a82e3022438aa9a70db9a1 | CLEAN (1 MINOR: `iter` split `snapshot` from its doc — fixed); F1, F4 fixes hold, F2, F5 declines stand |
+| Rebase review M3 (conflict resolution vs #941 M3, sonnet, claude -p) | 1 | 203ef720ba85b7e70a163cb969402b452c0d4b41:a4a9f93058c3628383b2401544c99c47b747d56a | CLEAN (3 MINOR: refusal before `Gone` in `change_queue_to`, queued `/x` not re-checked at delivery, failed initialize write only logged — left, none from the merge) |
 
 ## Declined review findings
 
