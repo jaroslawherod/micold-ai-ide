@@ -214,14 +214,16 @@ fn a_structured_launch_forwards_subagent_text() {
     state
         .start_session(t, LaunchMode::Fresh)
         .expect("terminal starts");
-    // Unless the test itself runs with the variable set, which a terminal session inherits.
-    if std::env::var_os("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT").is_none() {
-        assert_eq!(
-            record(dir, "forward-record"),
-            "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT\n",
-            "a terminal session is launched as before"
-        );
-    }
+    // A terminal session gets the variable only as it inherits it from the test's own environment.
+    let inherited = match std::env::var("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT") {
+        Ok(value) => format!("CLAUDE_CODE_FORWARD_SUBAGENT_TEXT={value}\n"),
+        Err(_) => "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT\n".to_string(),
+    };
+    assert_eq!(
+        record(dir, "forward-record"),
+        inherited,
+        "a terminal session is launched as before"
+    );
     assert!(state.stop_session(t));
     structured::clear_records(dir);
 

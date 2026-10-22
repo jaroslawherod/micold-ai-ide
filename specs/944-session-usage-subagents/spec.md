@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Closed 2026-10-22 — shipped in PRs #1194, #1199, #1202, #1205, #1211, #1222, #1264 and the close PR
 
 **Input**: GitHub issue #944 "Structured session: usage, context meter, subagents and background
 tasks". "Part of the structured-session (stream-json) UI epic. Keeps the PTY/TUI session mode as

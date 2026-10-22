@@ -43,3 +43,8 @@ with a structured session; **Show Claude plan usage** on.
    alone).
 
 Record the pass with the `visual-pass` skill into `specs/944-session-usage-subagents/visual-pass/`.
+
+**Results at close (2026-10-22).** Part A ran inside the full gate at 79db5768, green (counts in the
+ledger's *Review rounds*). Part B: the recorded-fixture showcase covered steps 1, 3 and 8 visually
+(visual pass M6, light and dark); steps 1–7 against a live, logged-in CLI were **not run** (the
+cloud container has none) and stay a follow-up in the ledger.
