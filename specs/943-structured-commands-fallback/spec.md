@@ -86,6 +86,20 @@ daemon side lands first.
   terminal history**: as feature 938 defines them. **Composer**, **draft**, **queue**, **busy**,
   **idle**: as feature 941 defines them. **Permission mode**: as feature 942 defines it.
 
+## Clarifications
+
+### Session 2026-10-22
+
+- Q: When switched back to structured, are the turns the user had in the terminal period shown in
+  the transcript (rebuilt from Claude Code's stored conversation) or only marked? → A: Only marked.
+  The transcript is built from the session's event history alone; the terminal-period marker says
+  the conversation continued in the terminal and that those turns are not shown here (they stay in
+  the terminal's scrollback, saved under **Save terminal history**). No turn count, which would need
+  reading Claude Code's store. _(agent-resolved: specs/938-structured-session-mode/spec.md#User
+  Story 7 — a history not saved "starts at the resume", never rebuilt from the CLI's store;
+  specs/582-attach-provider-worktrees-sessions/spec.md#Out of Scope — "Importing a provider's
+  conversation history into Micold's own terminal history")_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Run skills and commands from the composer (Priority: P1)
@@ -286,9 +300,9 @@ model choice and the permission mode are as before.
 2. **Given** a session switched back to structured, **When** its view is shown, **Then** the
    transcript holds the event history from before the switch, then a marker saying the
    conversation continued in the terminal, then the resumed run's events, with no gap or duplicate
-   at either seam [NEEDS CLARIFICATION: should turns the user had in the terminal period be shown
-   in the transcript (rebuilt from Claude Code's own stored conversation), or only marked as "N
-   turns in the terminal, not shown"?].
+   at either seam; the turns of the terminal period are not shown in the transcript (it is built
+   only from the event history), and the marker says so and that the terminal's own scrollback
+   holds them.
 3. **Given** a session with a queue (feature 941), **When** it is switched to terminal, **Then** the
    queue is kept on hold and nothing in it is delivered to the terminal; the terminal view says
    how many queued messages wait for the structured view; **When** it is switched back, **Then**
@@ -440,6 +454,8 @@ model choice and the permission mode are as before.
   in terminal** with `/login`, beside the CLI's error.
 - **FR-023**: Switching back to structured MUST show the event history from before the switch,
   then a marker for the terminal period, then the resumed run's events, with no gap or duplicate;
+  the terminal period's turns MUST NOT be rebuilt into the transcript from Claude Code's stored
+  conversation, and the marker MUST say they are not shown;
   the event history MUST be kept, and saved under **Save terminal history** (feature 938 FR-021a),
   while the session is a terminal session.
 - **FR-024**: A switch MUST keep the session's queue (feature 941), on hold and undelivered while
