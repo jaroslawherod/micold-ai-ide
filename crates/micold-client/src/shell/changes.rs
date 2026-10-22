@@ -155,6 +155,7 @@ const NOT_LOCAL: &str =
 fn run(app: &mut App, effect: Effect) -> Task<Message> {
     match effect {
         Effect::None => Task::none(),
+        Effect::Batch(effects) => Task::batch(effects.into_iter().map(|effect| run(app, effect))),
         Effect::ReadPullRequests {
             seq,
             project,

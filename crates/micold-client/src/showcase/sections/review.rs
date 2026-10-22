@@ -36,8 +36,8 @@ use micold_core::tokens;
 use crate::ui::syntax;
 
 use crate::ui::material::{
-    CardState, DiffLayout, DiffView, InlineDiff, ReviewCommentCard, ReviewPanelRow, Tag, Text,
-    TextArea, TypeRole, VirtualRows, PANEL_ROW_HEIGHT,
+    BrowseBar, CardState, DiffLayout, DiffView, InlineDiff, ReviewCommentCard, ReviewPanelRow, Tag,
+    Text, TextArea, TypeRole, VirtualRows, PANEL_ROW_HEIGHT,
 };
 
 /// Rows in the long-list pose: the length research R11 measures the list at.
@@ -482,6 +482,47 @@ pub fn review_panel_row<'a>(
                     ReviewCommentCard::new(COMMENT, CardState::Sent, roles).highlighted(true),
                 )
                 .width(Length::Fixed(COMMENT_WIDTH)),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// `BrowseBar` — Back beside the path, with and without "Open diff", a path longer than the bar and
+/// Back with nothing to return to (feature 1150). What has to be checked by eye is that the strip
+/// keeps one height and the long path is cut, not wrapped.
+pub fn browse_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let long = "crates/micold-client/src/features/some/deeply/nested/module/path/file.rs";
+    let sized = |bar: BrowseBar<'a, Message>| container(bar).width(Length::Fixed(COMMENT_WIDTH));
+    arrange(
+        vec![
+            posed(
+                "Back only",
+                sized(BrowseBar::new("src/lib.rs", roles).on_back(Message::NoOp)),
+                roles,
+            ),
+            posed(
+                "with Open diff",
+                sized(
+                    BrowseBar::new("src/lib.rs", roles)
+                        .on_back(Message::NoOp)
+                        .on_open_diff(Message::NoOp),
+                ),
+                roles,
+            ),
+            posed(
+                "long path",
+                sized(
+                    BrowseBar::new(long, roles)
+                        .on_back(Message::NoOp)
+                        .on_open_diff(Message::NoOp),
+                ),
+                roles,
+            ),
+            posed(
+                "Back disabled",
+                sized(BrowseBar::new("src/lib.rs", roles)),
                 roles,
             ),
         ],

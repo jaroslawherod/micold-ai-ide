@@ -190,6 +190,19 @@ A file with more than 5,000 changed lines, or a version larger than 2 MB, is not
 away. The diff area shows how many lines were added and removed and a **Show diff** button; press it
 to read and show the whole diff. The view remembers the choice for that file until it closes.
 
+### Browsing the repository
+
+Press **Files** beside the Committed and Uncommitted toggles to list every file of the worktree
+instead of the changed ones: tracked and untracked files, but not ignored ones. Open a folder to see
+its files, then press a file to read it in the right pane, with line numbers and syntax colouring.
+Type in **Open file by path** to narrow the list and pick a match; a path you type that is ignored
+by git but exists in the worktree opens too.
+
+Press **Back** above the file to return to what you were reading, with the same file, scroll
+position and expanded lines. When the change modifies the browsed file, **Open diff** switches to
+its diff. Picking lines for a comment is not yet available in a file you browse. Browsing at a
+pull request's head version is added separately.
+
 ### Keeping up with changes
 
 The view keeps itself current while it is open. When a file in the entry is created, edited,

@@ -84,17 +84,17 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ### Worktree browsing, tree, picker, back
 
-- [ ] T036 [P] [US5] Write failing tests in `crates/micold-core/tests/review_browse.rs` and `crates/micold-core/src/review/diff.rs`: `list_tree` for worktree changes (tracked and untracked, ignored excluded), `plain_file` yields context-only lines with CR stripped
-- [ ] T037 [P] [US5] Write failing `BrowseStack` tests (push, back, empty back is a no-op, clear on source change) in `crates/micold-core/src/review/browse.rs`
-- [ ] T038 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `pickable` is false for untouched browsed files (pinned until #1149; FR-015, US4 scenario 3), SC-006 action count (tree or picker, select: at most 3 actions; Back: 1), `BrowseOpen`, `PathPickerChanged`, `TreeRead`, `BrowseBack` restores file, scroll and expansion (against a refreshed diff), `OpenFileDiff` only when the change modifies the file, missing/binary/large messages with Back working, large "Show anyway"
-- [ ] T039 [US5] Implement `list_tree` (worktree: `git ls-files -z --cached --others --exclude-standard`; typed ignored path checked on disk) and `BrowseStack` in `crates/micold-core/src/review/browse.rs`
-- [ ] T040 [US5] Implement `plain_file(&SideLines) -> FileDiff` in `crates/micold-core/src/review/diff.rs`
-- [ ] T041 [US5] Add `BrowsedFile`, `Effect::ReadTree`, `Msg::{BrowseOpen, BrowseBack, OpenFileDiff, PathPickerChanged, TreeRead}` in `crates/micold-client/src/features/changes.rs` (T038 green)
-- [ ] T042 [US5] Run `Effect::ReadTree` on a blocking thread in `crates/micold-client/src/shell/changes.rs`
-- [ ] T043 [P] [US5] Write a failing geometry-gate test for `BrowseBar` and the tree/picker header, then create the shared `BrowseBar` component (Back, path, "Open diff") in `crates/micold-client/src/ui/material/browse_bar.rs` and register it
-- [ ] T044 [US5] Add the file tree (`TreeView`), path picker (`Typeahead`) and browse header to the list pane in `crates/micold-client/src/ui/changes.rs`
-- [ ] T045 [P] [US5] Add `BrowseBar` to `crates/micold-client/src/showcase/sections/review.rs`
-- [ ] T046 [US5] Document "Browsing the repository" in `docs/user-guide/reviewing-changes.md`
+- [x] T036 [P] [US5] Write failing tests in `crates/micold-core/tests/review_browse.rs` and `crates/micold-core/src/review/diff.rs`: `list_tree` for worktree changes (tracked and untracked, ignored excluded), `plain_file` yields context-only lines with CR stripped
+- [x] T037 [P] [US5] Write failing `BrowseStack` tests (push, back, empty back is a no-op, clear on source change) in `crates/micold-core/src/review/browse.rs`
+- [x] T038 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `pickable` is false for untouched browsed files (pinned until #1149; FR-015, US4 scenario 3), SC-006 action count (tree or picker, select: at most 3 actions; Back: 1), `BrowseOpen`, `PathPickerChanged`, `TreeRead`, `BrowseBack` restores file, scroll and expansion (against a refreshed diff), `OpenFileDiff` only when the change modifies the file, missing/binary/large messages with Back working, large "Show anyway"
+- [x] T039 [US5] Implement `list_tree` (worktree: `git ls-files -z --cached --others --exclude-standard`; typed ignored path checked on disk) and `BrowseStack` in `crates/micold-core/src/review/browse.rs`
+- [x] T040 [US5] Implement `plain_file(&SideLines) -> FileDiff` in `crates/micold-core/src/review/diff.rs`
+- [x] T041 [US5] Add `BrowsedFile`, `Effect::ReadTree`, `Msg::{BrowseOpen, BrowseBack, OpenFileDiff, PathPickerChanged, TreeRead}` in `crates/micold-client/src/features/changes.rs` (T038 green)
+- [x] T042 [US5] Run `Effect::ReadTree` on a blocking thread in `crates/micold-client/src/shell/changes.rs`
+- [x] T043 [P] [US5] Write a failing geometry-gate test for `BrowseBar` and the tree/picker header, then create the shared `BrowseBar` component (Back, path, "Open diff") in `crates/micold-client/src/ui/material/browse_bar.rs` and register it
+- [x] T044 [US5] Add the file tree (`TreeView`), path picker (`Typeahead`) and browse header to the list pane in `crates/micold-client/src/ui/changes.rs`
+- [x] T045 [P] [US5] Add `BrowseBar` to `crates/micold-client/src/showcase/sections/review.rs`
+- [x] T046 [US5] Document "Browsing the repository" in `docs/user-guide/reviewing-changes.md`
 
 ### Pull request head browsing
 

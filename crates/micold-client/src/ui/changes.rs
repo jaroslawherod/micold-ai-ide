@@ -16,20 +16,24 @@ use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb, Roles};
+use micold_core::typeahead::{match_one, Query};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    self as changes, adjacent, base_line, card_model, committed_available, composer_placed,
-    diff_body, discard_prompt, file_comments, list_body, panel_groups, panel_rows, pending_counts,
+    self as changes, adjacent, base_line, browse_body, can_go_back, card_model,
+    committed_available, composer_placed, diff_body, discard_prompt, file_comments,
+    file_diff_available, list_body, panel_groups, panel_rows, pending_counts, picker_matches,
     pr_header, review_of, review_toolbar_label, section, selected_file, send_action, status_counts,
-    tidy_actions, whole_file, ComposerTarget, DiffBody, ListBody, Msg, OpenView, PrSection, Source,
-    Step, WholeFile, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT, WHOLE_FILE_UNAVAILABLE,
+    tidy_actions, tree_rows, whole_file, BrowseBody, ComposerTarget, DiffBody, ListBody, Load, Msg,
+    OpenView, PrSection, Source, Step, TreeKind, WholeFile, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
+    WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
-    status_label, Button, ButtonVariant, CardState, DiffView, IconButton, PullRequestIndicator,
-    PullRequestRow, ReviewCommentCard, ReviewPanelRow, StageProgress, Tag, Text, TextArea,
-    ToggleChip, Tooltip, TypeRole, VirtualRows,
+    status_label, BrowseBar, Button, ButtonVariant, CardState, DiffView, IconButton,
+    PullRequestIndicator, PullRequestRow, ReviewCommentCard, ReviewPanelRow, StageProgress, Tag,
+    Text, TextArea, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow,
+    VirtualRows,
 };
 
 /// The heading of the comments whose lines the diff on screen does not show (C3).
@@ -236,6 +240,8 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
             .disabled(!available),
         ToggleChip::new("Uncommitted", Message::Changes(Msg::UncommittedToggled), r)
             .active(view.toggles.uncommitted),
+        ToggleChip::new("Files", Message::Changes(Msg::FilesPaneToggled), r)
+            .active(view.files.shown),
     ]
     .spacing(spacing::SM);
     // The toggles shape the entry's own list, which a shown pull request replaces.
@@ -250,6 +256,9 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
         pane = pane.push(Text::new(DEFAULT_ENTRY_NOTE, TypeRole::Caption, r).muted());
     }
 
+    if view.source == Source::Changes && view.files.shown {
+        return pane.push(files_pane(view, r)).into();
+    }
     let list: Element<'a, Message> = match list_body(view) {
         ListBody::Loading => Text::new("Reading changes…", TypeRole::Body, r)
             .muted()
@@ -292,6 +301,117 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
         }
     };
     pane.push(list).into()
+}
+
+/// The repository's files in place of the changed ones (FR-011): a path picker over the file tree.
+fn files_pane<'a>(view: &'a OpenView, r: Roles) -> Element<'a, Message> {
+    let tree: Element<'a, Message> = match &view.files.tree {
+        Load::Failed(message) => Text::new(message.clone(), TypeRole::Body, r)
+            .tint(r.error)
+            .into(),
+        Load::Idle | Load::Loading { last: None, .. } => {
+            Text::new("Reading files…", TypeRole::Body, r)
+                .muted()
+                .into()
+        }
+        _ => {
+            let items: Vec<TreeItem<'a, Message>> = tree_rows(view)
+                .into_iter()
+                .map(|row| match row.kind {
+                    TreeKind::Folder { path, open } => {
+                        TreeItem::new(row.depth, row.name, r.on_surface)
+                            .expandable(open, Message::Changes(Msg::FolderToggled(path)))
+                    }
+                    TreeKind::File(path) => TreeItem::new(row.depth, row.name, r.on_surface)
+                        .selected(view.browse.as_ref().is_some_and(|b| b.path == path))
+                        .on_press(Message::Changes(Msg::BrowseOpen(path))),
+                })
+                .collect();
+            crate::ui::material::Scrollable::new(TreeView::new(items, r), r)
+                .height(Length::Fill)
+                .into()
+        }
+    };
+    let matches = picker_matches(view);
+    let query = Query::new(view.files.picker.trim());
+    let rows: Vec<TypeaheadRow> = matches
+        .iter()
+        .map(|path| {
+            let spans = match_one(path.as_str(), &query)
+                .map(|m| m.spans)
+                .unwrap_or_default();
+            TypeaheadRow::new(path.as_str(), spans)
+        })
+        .collect();
+    let picker = Typeahead::new(
+        &view.files.picker,
+        rows,
+        |text| Message::Changes(Msg::PathPickerChanged(text)),
+        r,
+    )
+    .placeholder("Open file by path…")
+    .in_flow(true)
+    .open(!view.files.picker.trim().is_empty())
+    .on_pick(move |index| {
+        matches.get(index).cloned().map_or(
+            Message::Changes(Msg::PathPickerChanged(String::new())),
+            |p| Message::Changes(Msg::BrowseOpen(p)),
+        )
+    });
+    column![picker, tree]
+        .spacing(spacing::SM)
+        .height(Length::Fill)
+        .into()
+}
+
+/// A browsed file in the diff pane: its bar over the file's lines, or why they are not shown.
+fn browsed_pane<'a>(
+    view: &'a OpenView,
+    body: BrowseBody<'a>,
+    layout: DiffLayout,
+    scheme: ColorScheme,
+    r: Roles,
+) -> Element<'a, Message> {
+    let path = view.browse.as_ref().map_or("", |b| b.path.as_str());
+    let mut bar = BrowseBar::new(path, r);
+    if can_go_back(view) {
+        bar = bar.on_back(Message::Changes(Msg::BrowseBack));
+    }
+    if file_diff_available(view) {
+        bar = bar.on_open_diff(Message::Changes(Msg::OpenFileDiff));
+    }
+    let content: Element<'a, Message> = match body {
+        BrowseBody::Reading => StageProgress::new("Loading file…", r).into(),
+        BrowseBody::Failed { message, large } => {
+            let mut lines =
+                column![Text::new(message, TypeRole::Body, r).tint(r.error)].spacing(spacing::SM);
+            if large {
+                lines = lines.push(
+                    Button::outlined("Show anyway", r).on_press(Message::Changes(Msg::ShowLarge)),
+                );
+            }
+            lines.into()
+        }
+        BrowseBody::File(loaded) => {
+            let spans = match scheme {
+                ColorScheme::Light => &loaded.spans.light,
+                ColorScheme::Dark => &loaded.spans.dark,
+            };
+            DiffView::new(&loaded.diff, layout, r)
+                .scroll_id(DIFF_SCROLL_ID.clone())
+                .spans(spans)
+                .offset(view.diff_offset)
+                .viewport(view.diff_viewport)
+                .on_scroll(|offset, viewport| {
+                    Message::Changes(Msg::DiffScrolled { offset, viewport })
+                })
+                .into()
+        }
+    };
+    column![Element::from(bar), content]
+        .spacing(spacing::SM)
+        .height(Length::Fill)
+        .into()
 }
 
 /// The pull requests of the worktree's branches, above the file list (features 775, 1003): the
@@ -492,6 +612,9 @@ fn diff_pane_body<'a>(
 ) -> Element<'a, Message> {
     let layout = state.changes.layout;
     let r = tokens::roles(scheme);
+    if let Some(body) = browse_body(view) {
+        return browsed_pane(view, body, layout, scheme, r);
+    }
     // D1, FR-006: the layout is a setting, so its choice shows whatever the pane holds.
     let layouts = row![
         ToggleChip::new(

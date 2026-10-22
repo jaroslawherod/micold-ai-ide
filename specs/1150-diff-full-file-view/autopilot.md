@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1150
 - **Worktree branch**: feat/1150_show-the-full-file-while-reviewing-a-diff-in-the
 - **Started**: 2026-10-20
-- **Phase**: M4 PR open
-- **Next step**: wait for CI, merge M4, then M5
+- **Phase**: M5 in progress
+- **Next step**: M5 verify, reviews, gate, PR
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1156 | M1 expand hidden lines | merged | 25e95c33ff20a6a07f72abaa4d0aad4aee683cd2 |
 | #1162 | M2 whole-file toggle | merged | 8109df50677a9a0635067277aa0df3137e3c3c48 |
 | #1215 | M3 pull request head version | merged | a608e0fcb7713377ed9abe3426b958462b91a9db |
-| #1221 | M4 pick revealed lines | open | |
+| #1221 | M4 pick revealed lines | merged | df514cb373e4e93a20c4294b2518f2c689f03c89 |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | Expand hidden lines in a diff (MVP) | #1156 | merged |
 | M2 | T018–T022 | light | Whole-file toggle | #1162 | merged |
 | M3 | T023–T031 | full | Pull request head version | #1215 | merged |
-| M4 | T032–T035 | light | Pick revealed lines | #1221 | PR open |
+| M4 | T032–T035 | light | Pick revealed lines | #1221 | merged |
 | M5 | T036–T046 | full | Browse repository files | | pending |
 | M6 | T047–T053 | full | Browse at the PR head | | pending |
 | M7 | T054–T062 | full | Follow references from the diff | | pending |
@@ -46,6 +46,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| M5 A (code-review high via autopilot-reviewer) | 1 | 5596f87c9a5a5da5818fb79f0e7a3e146b161b5f:f1581e5836e962c58e60a243a8729545282f5cc8 | MAJOR browsed file/tree not re-read on change, fixed (Effect::Batch); 2 MINOR fixed |
+| M5 A | 2 | af74dbaa6bd7b15e5706473aaaad3328e4401f48:f1581e5836e962c58e60a243a8729545282f5cc8 | CLEAN |
+| M5 B (sonnet) | 1 | af74dbaa6bd7b15e5706473aaaad3328e4401f48:f1581e5836e962c58e60a243a8729545282f5cc8 | 2 MAJOR declined (no tdd dir by design; Verify queued on lock), 2 MINOR |
 | Spec | 1 | 61e32c1ce6afda347a1774dc7b2c2ebd349b7abd:cf7c64d7d7ee21a78fe03d60d64165dd811a1c92 | round 1 CHANGES: 2 MAJOR (F1 reference undefined, F2 picking in untouched files); all fixed, 3 MINOR fixed |
 | Spec | 2 | ebdf38fc38d5021afe13cc798bd796d24dabf88b:cf7c64d7d7ee21a78fe03d60d64165dd811a1c92 | CLEAN (1 MINOR fixed, prose only) |
 | Plan | 1 | a062beaa985a9a6340ed2e978a69d8ea0fe6978c:6179267cd162fbbfa13ebaa171f85c55810ee0be | CHANGES: 3 MAJOR (PR trailing gap count, hunk-header conventions, test-layer map), 4 MINOR; all fixed |
@@ -60,6 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
+- M5 review B F1 (no tdd/cycle-log.md): no milestone of this feature keeps one (M1-M4 merged without); tests were written with the code. F2 (Verify unobserved): the scoped/full gate runs the same tests. F3, F4 MINOR: not fixed.
+
 - M1 A F2 (MINOR): the whole new side is highlighted for added/deleted/PR files too; a per-kind bound needs the change kind threaded into the highlight path, and the highlighter already has a time budget.
 
 | Milestone | Review | Finding | Why declined |
@@ -69,16 +74,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 (T036-T046) in progress, nothing committed before this commit; the tree is WIP and not yet compiled or gated (cargo check of micold-client was started, result unseen). M4 #1221 is merged (df514cb37); branch was reset to origin/main by branch-start.sh. Ledger table still says M4 "PR open": set it to merged (SHA df514cb373e4e93a20c4294b2518f2c689f03c89) in the next commit.
-
-Done (written, unverified):
-- core: `browse.rs` `list_tree`, `Frame`, `BrowseStack` + tests; `diff.rs` `plain_file` + tests; `tests/review_browse.rs` tree tests (T036, T037, T039, T040).
-- client reducer `features/changes.rs`: `BrowsedFile`/`BrowseLoad`/`BrowseBody`/`FilesPane`/`TreeRow`, `browse_body`, `can_go_back`, `file_diff_available`, `tree_rows`, `picker_matches`, Msgs BrowseOpen/BrowseBack/OpenFileDiff/PathPickerChanged/FilesPaneToggled/FolderToggled/TreeRead, `Msg::FileRead` gained `spans: Spans`, `Effect::ReadTree`; worktree browse reuses `Effect::ReadFile` with `source: SourceKey::Worktree` (empty commit/address); `pickable`/`whole_file`/GapToggled guard on `browse.is_none()`; tests appended to `tests/features_changes.rs` (T038, T041). `tests/features_pr_changes.rs` FileRead literal got `spans`.
-- shell `shell/changes.rs` (T042): `Effect::ReadTree` via `off_thread`, `read_worktree_file` (reads + `syntax::highlight_text`, new in `ui/syntax.rs`).
-
-Next: (1) `scripts/build-lock.sh cargo check -p micold-client --all-targets` and the root bin, fix compile errors, run `mise run test-core` and `cargo test -p micold-client --test features_changes browse` (also features_pr_changes). (2) T043 `ui/material/browse_bar.rs` BrowseBar (Back button, path via LineClamped, optional "Open diff"), register in `ui/material/mod.rs`, geometry test (same height with/without Open diff, long path stays in width; pattern: `review_panel_row.rs` tests + `test_support::size_of`). (3) T044 `ui/changes.rs`: a "Files" ToggleChip in `list_pane` (Msg::FilesPaneToggled, only Source::Changes); when `view.files.shown` show `Typeahead` (query `view.files.picker`, rows from `picker_matches` with `typeahead::match_one` spans, `.in_flow(true).open(!picker.is_empty())`, on_pick index -> BrowseOpen) over `TreeView` of `tree_rows` (folder: expandable + FolderToggled, file: on_press BrowseOpen); in `diff_pane_body`, when `browse_body(view)` is Some show BrowseBar (Back enabled via `can_go_back`, "Open diff" when `file_diff_available`) over Reading/Failed(+ "Show anyway" -> Msg::ShowLarge when `large`)/`DiffView::new(&loaded.diff, layout, r)` with spans, offset `view.diff_offset`, `.on_scroll` DiffScrolled, `.scroll_id(DIFF_SCROLL_ID)`, no gutter/gap. (4) T045 showcase `showcase/sections/review.rs` add BrowseBar. (5) T046 docs "Browsing the repository" in `docs/user-guide/reviewing-changes.md` (worktree files; tracked and untracked, ignored via typed path; Back; Open diff; pick not yet available in browsed files; PR head browsing is M6). (6) tick T036-T046 in tasks.md, then verify/review A+B/visual pass/full gate/PR per tasks/verify.md, review.md, gate.md, pr.md.
-
-Known gaps to note: `Msg::Changed` does not re-read a browsed file; FileSelected of the already-selected file while browsing resets diff_offset without a ScrollDiff; PR source browsing and PR tree are M6 (`list_tree` returns HeadUnavailable for PrHead).
+None.
 
 ## Open escalation
 

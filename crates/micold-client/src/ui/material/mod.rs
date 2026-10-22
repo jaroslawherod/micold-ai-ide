@@ -20,6 +20,7 @@ mod activity_badge;
 mod anatomy_size;
 mod animation;
 mod attachment_chip;
+mod browse_bar;
 mod busy_indicator;
 mod button;
 /// §7.3's horizontal paddings, read off the laid-out button. `anatomy_size` covers the height and
@@ -191,6 +192,7 @@ pub use accordion_section::AccordionSection;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use attachment_chip::AttachmentChip;
+pub use browse_bar::BrowseBar;
 pub use busy_indicator::BusyIndicator;
 pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use card_grid::{CardGrid, Zoom};
