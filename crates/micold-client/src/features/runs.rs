@@ -528,6 +528,9 @@ pub enum Msg {
 }
 
 /// What the shell must do after a message.
+// `Send(ClientMsg)` is the common effect and `SettingsSet` carries the default prompt template, so the
+// enum crossed the size threshold; boxing every `Send` site would only add allocations.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
     /// Nothing.
