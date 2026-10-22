@@ -594,12 +594,6 @@ impl crate::app::State {
             .collect()
     }
 
-    /// Sessions hosted by the active project (FR-011), **including archived ones** — used by
-    /// callers that need the raw record (e.g. [`Self::sessions_in_worktree`], which only cares
-    /// about location, not visibility). Sidebar-rendering call sites
-    /// ([`Self::sidebar_entries`], [`Self::worktree_tree`]) additionally filter out archived
-    /// sessions themselves (bugfix BUG-003, FR-015a), so a closed session disappears from the
-    /// sidebar. Empty when no project is active.
     /// Whether `terminal` is a structured session's primary, which a pane draws as its transcript
     /// over the composer (feature 939 R15, feature 941 R11); a shell instance stays a terminal.
     pub fn is_structured_primary(
@@ -614,6 +608,12 @@ impl crate::app::State {
         })
     }
 
+    /// Sessions hosted by the active project (FR-011), **including archived ones** — used by
+    /// callers that need the raw record (e.g. [`Self::sessions_in_worktree`], which only cares
+    /// about location, not visibility). Sidebar-rendering call sites
+    /// ([`Self::sidebar_entries`], [`Self::worktree_tree`]) additionally filter out archived
+    /// sessions themselves (bugfix BUG-003, FR-015a), so a closed session disappears from the
+    /// sidebar. Empty when no project is active.
     pub fn active_sessions(&self) -> &[Session] {
         self.workspace
             .active
