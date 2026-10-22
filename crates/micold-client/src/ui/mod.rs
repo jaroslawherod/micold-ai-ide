@@ -1281,7 +1281,7 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         // Feature 941 (FR-012): Escape on a busy structured session's transcript interrupts its
         // turn. The composer's own Escape is its editor's, captured there, so it never reaches
         // this listener as well.
-        return transcript_interrupt(state).unwrap_or_else(Subscription::none);
+        return crate::ui::composer::transcript_interrupt(state).unwrap_or_else(Subscription::none);
     }
     let mut subs = vec![focus_traversal()];
     // Held only while Escape has something to close, so pressing it with nothing open stays as
@@ -1403,38 +1403,6 @@ fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
 /// Escape, reported as having happened; the reducer asks the registry what it reaches.
 fn escape_dismissal() -> Subscription<Message> {
     iced::keyboard::listen().filter_map(escape_message)
-}
-
-/// The keys of the active session's transcript while it shows one and its turn can be interrupted
-/// (feature 941, FR-012): `None` otherwise, so Escape stays as inert as it was.
-fn transcript_interrupt(state: &State) -> Option<Subscription<Message>> {
-    let session = state.session.active?;
-    (crate::ui::terminal::shows_transcript(state, session) && state.composers.offers_stop(session))
-        .then(|| {
-            iced::keyboard::listen()
-                .with(session)
-                .filter_map(transcript_key_message)
-        })
-}
-
-/// A key press on `session`'s transcript, for the composer to decide (`transcript_key`).
-fn transcript_key_message(
-    (session, event): (micold_core::session::SessionId, iced::keyboard::Event),
-) -> Option<Message> {
-    let iced::keyboard::Event::KeyPressed {
-        key,
-        physical_key,
-        modifiers,
-        text,
-        ..
-    } = event
-    else {
-        return None;
-    };
-    let press = crate::ui::composer::key_input(&key, &physical_key, modifiers, text.as_deref())?;
-    Some(Message::Composer(
-        crate::features::composer::Msg::TranscriptKey { session, press },
-    ))
 }
 
 /// Tab and Shift+Tab, as a request to move the keyboard's focus.
