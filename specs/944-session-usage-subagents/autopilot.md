@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #944
 - **Worktree branch**: claude/project-thread-lllxzt
 - **Started**: 2026-10-21
-- **Phase**: close
-- **Next step**: close unit — T045 gate + Part A, converge, tdd-verify, review, gate, PR files
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1211 | M4 — meter parts and icons | merged (rebase) | 9160cab121845e7ebee2514f569e93ff21b111c1 |
 | #1222 | M5 — the window's insights state | merged (rebase) | 10fb81f6d6f575fcee5a70437fc196cb4e258bae |
 | #1264 | M6 — session bar, threads, background list | merged (rebase) | 79db576814d6e2531a55363efd637940288c7c7d |
+| (close PR) | Close — T045–T046, tdd-verify fixes, spec closed | PR files written, gate green at ea52d6d8 | — |
 
 ## Milestones
 
@@ -98,6 +99,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate close (T045) | 1 | 79db5768 | green (`scripts/gate.sh`, 632 suites ok). Quickstart Part A inside it: `structured_insights` 49/49, `plan_usage_rate_limit_event` 9/9, `plan_usage_structured` 4/4, `structured_session` 19/19, `features_structured_insights` 22/22, lib `structured::insights` 12 and `progress_bar` 6 ok; every existing terminal-session and plan-usage suite passes unchanged (SC-007) |
 | Converge (T046) | 1 | 79db5768 | converged: FR-001–FR-028, SC-001–SC-007 and the five stories against plan *Requirement Coverage* and the merged code and tests; 0 missing, 0 partial, 0 contradicts, 0 unrequested; tasks.md unchanged (run because M1's review B ended CHANGES with no clean re-run) |
 | speckit-tdd-verify (close) | 1 | 79db5768 | FAIL (test-first evidence fails closed: no `tdd/test-list.md`, tests and code share commits; 6 mutants all caught). Fixed with tests: #1 the forwarding test asserts the terminal launch unconditionally (the inherited value, if any); #3 a test pins the recordings' thread counts by hand; #7 the malformed-usage test split, no branch. Declined #2, #4, #5, #6, #8 (see table); #9 resolved by this ledger's T045/T046 rows |
+| Close review (fresh subagent) | 1 | 460b39bc:c424e641 | CLEAN; 2 MINOR fixed in the ledger: the counts in the T045 row are from 79db5768, before the close's test fixes (covered by the close gate below); the forwarding test ran green alone with and without `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1` set |
+| Full gate close | 1 | c424e641 | red: clippy `type_complexity` on the pinned-threads array; a `PinnedThread` alias added (ea52d6d8) |
+| Full gate close | 2 | ea52d6d8 | green (`scripts/gate.sh`, 632 suites ok): `structured_insights` 50/50, `structured_session` 19/19 |
 | Full gate M5 | — | 7e655fad | green (`scripts/gate.sh`) |
 | Rebase M5 onto main | — | 80b87f44 | conflicts with #940/#941 in `app.rs` (State fields, `structured_events`, `forget_structured`) and the `feature_registration_cost` allowlist resolved by keeping both sides (insights applied after the transcript beside the rich refresh; forget drops transcript, rich cache, composer, insights); insights test passes `GRAMMAR`; no review (no logic beyond both sides). Full gate green (one flaky daemon `two_sessions_each_get_their_own_note` failure, 3/3 green alone, green on rerun) |
 
