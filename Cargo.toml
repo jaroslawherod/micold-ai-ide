@@ -128,7 +128,12 @@ futures-util = { version = "0.3", features = ["sink"] }
 # --- client (iced) deps ---
 # Feature 482 (R10): `highlighter` colours the Changes view's diff (iced_highlighter -> two-face,
 # syntect with the pure-Rust fancy-regex engine; MIT and MIT/Apache-2.0).
-iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy", "highlighter"] }
+# Feature 941 (research R8): `image-without-codecs` draws a dropped picture's preview in the
+# composer's attachment chip; the `image` dependency below names the four codecs a drop accepts
+# (PNG, JPEG, GIF, WebP). iced's own `image` feature turns on `image/default`, whose AVIF encoder
+# (rav1e) and a dozen other formats nothing here reads would join the build.
+iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy", "highlighter", "image-without-codecs"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 # Feature 940 (research R4): the grammar set iced_highlighter already builds with, named directly
 # only so `ui::syntax::knows` can ask whether a token has a grammar other than plain text. Same
 # version and features as iced_highlighter's, so it adds no crate to the build.

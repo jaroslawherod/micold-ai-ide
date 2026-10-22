@@ -47,6 +47,8 @@ kube = { workspace = true }
 k8s-openapi = { workspace = true }
 micold-core = { workspace = true }
 iced = { workspace = true }
+# Feature 941 (research R8): the codecs iced's image widget decodes a dropped picture's preview with.
+image = { workspace = true }
 two-face = { workspace = true }
 dark-light = { workspace = true }
 # The client no longer hosts a PTY (sessions live in micold-daemon); it keeps `alacritty_terminal`

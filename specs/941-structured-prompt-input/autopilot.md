@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M5
-- **Next step**: M5: implement T048–T054
+- **Next step**: M5: scoped gate and review A
 
 ## Pull requests
 
@@ -66,6 +66,8 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | 10 | M2 implement | When does the activity follow the turn? | `TurnBegan` in the lock section that opens a turn; `TurnEnded` when the driver handles a `result` (or a failed write closes the turn) and the turn is idle in that same section, so a turn opened meanwhile is never shown idle; a process end leaves activity to supervision's `Ended` | agent | research R5, FR-011 |
 | 15 | M4 implement | A send (or a `Taken` queued message) comes back while the user has typed a new draft: what does the composer hold? | The returned message goes back unchanged (text and pictures, FR-005/SC-005) with nothing typed lost: into an empty draft as it was; otherwise first, with the typed text after it on a new line, its pictures after the returned ones, and the caret kept in the typed text. The spec says only "unchanged"; displacing or dropping either would lose input | agent | spec.md FR-005, SC-005, US4 AS3 ("no draft is displaced") |
 | 16 | M4 verify | The M4 handover left `composers.forget` unwired when a session closes: M4 or later? | M4: the composer state is M4's (T041–T047), and closing or removing a session already forgets its transcript in `app::State::forget_structured`; that now forgets the composer too and the shell drops its editor. Nothing drawn depends on it | agent | `shell/daemon_sync.rs` close/remove paths; test `closing_a_session_forgets_its_composer` |
+| 17 | M5 implement | T049 says add iced's `image` feature; it turns on `image/default` (AVIF via rav1e, EXR, TIFF, a dozen formats): build cost and new crates nothing reads | Plan deviation: the workspace `iced` gains `image-without-codecs` and a workspace `image` dependency (0.25, no default features, `png`, `jpeg`, `gif`, `webp`) names the four codecs FR-027 accepts; Cargo unifies them into iced's decoder. Cargo.lock gains `gif`, `image-webp`, `kamadak-exif` (iced_graphics' image feature), `color_quant`, `mutate_once`; plan's "No new crate" is false either way | agent | research R8, FR-027; iced 0.14 Cargo.toml `image = ["image-without-codecs", "image/default"]` |
+| 18 | M5 implement | How do the new components draw and take input? | `TextArea::max_height` is enforced by its chrome (laid out in the limit's room, node cut to it), not iced's `text_editor::max_height`, which stops at whole lines below the limit and adds its padding on top; `key_binding` replaces the default keys and `on_submit`. `BusyIndicator`'s indeterminate circular indicator is a ring of eight dots in quads turned through `Progress` (no canvas), idle keeps the ring's room so the words stay put. `QueueRow`'s actions are text buttons (each names itself and is a keyboard stop); `AttachmentChip` takes an `image::Handle` the caller makes once from the held bytes (a handle per frame is a new image to decode), its remove control a focusable icon button labelled `Remove <name>` by tooltip | agent | research R10 *Shared components*; Constitution VIII |
 
 ## Review rounds
 

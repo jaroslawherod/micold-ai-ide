@@ -483,6 +483,28 @@ pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A dropped picture's chip in the composer (feature 941, `AttachmentChip`): a tonal
+/// `surface_container_high` plate at the small corner, its depth from tone and not a border.
+pub fn attachment_chip(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_high))),
+        text_color: Some(color(r.on_surface)),
+        border: radius(shape::SMALL),
+        ..container::Style::default()
+    }
+}
+
+/// A queued message's row above the composer (feature 941, `QueueRow`): the tonal
+/// `surface_container_low` the composer's own plate sits on, at the medium corner.
+pub fn queue_row(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_low))),
+        text_color: Some(color(r.on_surface)),
+        border: radius(shape::MEDIUM),
+        ..container::Style::default()
+    }
+}
+
 /// A chip on an opaque fill — the accent as the *background*, with its own on-colour for the label.
 ///
 /// [`chip`] above draws the accent at 20% over whatever is behind it, which reads as an accent only

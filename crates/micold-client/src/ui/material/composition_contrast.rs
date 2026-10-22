@@ -692,3 +692,49 @@ fn rich_transcript_text_is_legible_on_its_fills() {
         violations.join("\n  ")
     );
 }
+
+/// `QueueRow` and `AttachmentChip` (feature 941, T048): on each one's own plate, in both schemes,
+/// the text reads at 4.5:1 — a queued message, its muted position and count, and its text-button
+/// actions at rest, hovered and pressed; a chip's name and its remove glyph.
+#[test]
+fn a_queue_rows_and_an_attachment_chips_words_are_legible_on_their_plates() {
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = style::theme(scheme);
+        let plate = |s: iced::widget::container::Style, what: &str| match s.background {
+            Some(Background::Color(c)) => style::to_rgb(c),
+            other => panic!("{scheme:?}: the {what} paints a colour fill, not {other:?}"),
+        };
+        let row = plate(style::queue_row(r)(&theme), "queue row");
+        let chip = plate(style::attachment_chip(r)(&theme), "attachment chip");
+        let action = Variant::Text.style(r, None);
+        for (state, status) in STATES {
+            let s = action(&theme, status);
+            let ratio = contrast(style::to_rgb(s.text_color), behind(row, &s));
+            if ratio < AA_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / queue action {state}: {ratio:.2}:1 (needs {AA_TEXT})"
+                ));
+            }
+        }
+        for (what, ink, ground) in [
+            ("queued text", r.on_surface, row),
+            ("position and count", r.on_surface_variant, row),
+            ("chip name", r.on_surface, chip),
+            ("chip remove glyph", r.on_surface_variant, chip),
+        ] {
+            let ratio = contrast(ink, ground);
+            if ratio < AA_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / {what}: {ratio:.2}:1 (needs {AA_TEXT})"
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "composer parts below contrast:\n{}",
+        violations.join("\n")
+    );
+}

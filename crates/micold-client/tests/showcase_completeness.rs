@@ -918,6 +918,51 @@ fn the_rich_transcript_components_are_posed() {
     }
 }
 
+/// Feature 941 (research R10, T048): the composer's shared parts each have an entry posing what
+/// they draw — the text area at its height limit, a chip with its preview, a queue row with its
+/// actions and without Move to composer, and the busy indicator busy and idle.
+#[test]
+fn the_composer_components_are_posed() {
+    for (module, component, poses) in [
+        (
+            "material/text_area.rs",
+            "TextArea",
+            &["at its height limit, scrolling inside"][..],
+        ),
+        (
+            "material/attachment_chip.rs",
+            "AttachmentChip",
+            &["a picture with its preview", "a long file name"][..],
+        ),
+        (
+            "material/queue_row.rs",
+            "QueueRow",
+            &[
+                "first, with its actions",
+                "a long text with pictures",
+                "without Move to composer",
+            ][..],
+        ),
+        (
+            "material/busy_indicator.rs",
+            "BusyIndicator",
+            &["busy", "idle"][..],
+        ),
+    ] {
+        let entry = COMPONENTS
+            .iter()
+            .find(|e| e.module == module && e.component == component)
+            .unwrap_or_else(|| panic!("the gallery has a `{module}` / `{component}` entry"));
+        for pose in poses {
+            assert!(
+                entry.posed.contains(pose),
+                "the {component} entry poses `{pose}`: {:?}",
+                entry.posed
+            );
+        }
+    }
+}
+
 /// Feature 890 (FR-008, T019): the catalogue lists `FieldGroup`, posed with a note and without.
 #[test]
 fn the_field_group_is_listed_with_and_without_a_note() {
