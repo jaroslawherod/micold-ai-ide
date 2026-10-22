@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1162 | M2 whole-file toggle | merged | 8109df50677a9a0635067277aa0df3137e3c3c48 |
 | #1215 | M3 pull request head version | merged | a608e0fcb7713377ed9abe3426b958462b91a9db |
 | #1221 | M4 pick revealed lines | merged | df514cb373e4e93a20c4294b2518f2c689f03c89 |
+| #1253 | M5 browse repository files | open | |
 
 ## Milestones
 
