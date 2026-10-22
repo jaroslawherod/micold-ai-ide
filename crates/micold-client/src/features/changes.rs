@@ -1383,6 +1383,8 @@ pub enum Msg {
 pub enum Effect {
     /// Nothing.
     None,
+    /// Several effects, run together.
+    Batch(Vec<Effect>),
     /// Read the change list of `entry` under `toggles` as read `seq`.
     ReadList {
         /// The read's sequence number.
@@ -1786,6 +1788,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 load: BrowseLoad::Failed(FileReadFailure::TooLarge { .. }),
             }) = view.browse.clone()
             {
+                view.shown_large.insert(path.clone());
                 return request_browse(view, &mut state.next_seq, path, true);
             }
             if let Source::PullRequest(pr) = &mut view.source {
@@ -1830,7 +1833,6 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::FilesPaneToggled => {
-            let seq = state.next_seq;
             let Some(view) = state.open.as_mut().filter(|v| v.source == Source::Changes) else {
                 return Effect::None;
             };
@@ -1838,21 +1840,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             if !view.files.shown {
                 return Effect::None;
             }
-            state.next_seq += 1;
-            let last = match std::mem::take(&mut view.files.tree) {
-                Load::Ready(files) => Some(files),
-                Load::Loading { last, .. } => last,
-                _ => None,
-            };
-            view.files.tree = Load::Loading {
-                seq,
-                again: false,
-                last,
-            };
-            Effect::ReadTree {
-                seq,
-                entry: view.entry.clone(),
-            }
+            request_tree(view, &mut state.next_seq)
         }
         Msg::TreeRead { seq, result } => {
             if let Some(view) = state.open.as_mut() {
@@ -2782,6 +2770,43 @@ fn follow_head(state: &mut State) -> Option<Effect> {
     })
 }
 
+/// Read the repository's files again, keeping the list on screen meanwhile.
+fn request_tree(view: &mut OpenView, next_seq: &mut u64) -> Effect {
+    let seq = *next_seq;
+    *next_seq += 1;
+    let last = match std::mem::take(&mut view.files.tree) {
+        Load::Ready(files) => Some(files),
+        Load::Loading { last, .. } => last,
+        _ => None,
+    };
+    view.files.tree = Load::Loading {
+        seq,
+        again: false,
+        last,
+    };
+    Effect::ReadTree {
+        seq,
+        entry: view.entry.clone(),
+    }
+}
+
+/// After a change, the worktree's files may differ: read the browsed file and the shown tree again
+/// (FR-014: the worktree's current version).
+fn refresh_browsed(state: &mut State) -> Vec<Effect> {
+    let Some(view) = state.open.as_mut().filter(|v| v.source == Source::Changes) else {
+        return Vec::new();
+    };
+    let mut effects = Vec::new();
+    if let Some(path) = view.browse.as_ref().map(|b| b.path.clone()) {
+        let force = view.shown_large.contains(&path);
+        effects.push(request_browse(view, &mut state.next_seq, path, force));
+    }
+    if view.files.shown {
+        effects.push(request_tree(view, &mut state.next_seq));
+    }
+    effects
+}
+
 /// Read `path` from the worktree to show it in place of the diff.
 fn request_browse(
     view: &mut OpenView,
@@ -2833,7 +2858,8 @@ fn browse_open(state: &mut State, path: RelPath) -> Effect {
     view.stack.push(frame);
     view.diff_offset = 0;
     view.files.picker.clear();
-    request_browse(view, &mut state.next_seq, path, false)
+    let force = view.shown_large.contains(&path);
+    request_browse(view, &mut state.next_seq, path, force)
 }
 
 /// Return to the place the browser was entered from: the diff with its file, scroll and
@@ -2845,13 +2871,16 @@ fn browse_back(state: &mut State) -> Effect {
     };
     match view.stack.back() {
         None => Effect::None,
-        Some(Frame::Diff { offset, .. }) => {
+        Some(Frame::Diff { file, offset }) => {
             view.browse = None;
+            // A file the change no longer lists leaves nothing to keep the place of.
+            let offset = if view.selected == file { offset } else { 0 };
             view.diff_offset = offset;
             Effect::ScrollDiff { offset }
         }
         Some(Frame::File { path, offset }) => {
-            let effect = request_browse(view, &mut state.next_seq, path, false);
+            let force = view.shown_large.contains(&path);
+            let effect = request_browse(view, &mut state.next_seq, path, force);
             view.diff_offset = offset;
             effect
         }
@@ -3093,7 +3122,13 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
     } else {
         // The kept selection may have changed under the new list: read its diff again, keeping
         // the old one on screen meanwhile.
-        request_diff(state, true)
+        let diff = request_diff(state, true);
+        let mut effects = refresh_browsed(state);
+        if effects.is_empty() {
+            return diff;
+        }
+        effects.insert(0, diff);
+        Effect::Batch(effects)
     }
 }
 

@@ -1265,13 +1265,17 @@ fn answer_list(state: &mut State, effect: Effect, paths: &[&str]) -> Effect {
     let Effect::ReadList { seq, .. } = effect else {
         panic!("a list read, got {effect:?}");
     };
-    changes::update(
+    match changes::update(
         state,
         Msg::ListRead {
             seq,
             result: Ok(list(paths)),
         },
-    )
+    ) {
+        // The diff's read leads; a browsed file's and the tree's re-reads follow it.
+        Effect::Batch(mut effects) => effects.remove(0),
+        effect => effect,
+    }
 }
 
 /// Answer the diff read `effect` asked for with `diff`.
@@ -2867,16 +2871,16 @@ fn a_file_opens_in_three_actions_and_back_in_one() {
 /// the tree (an ignored file) as the last candidate.
 #[test]
 fn the_picker_matches_the_tree_and_offers_a_typed_path() {
-    let mut state = with_tree(&["src/main.rs", "src/lib.rs", "README.md"]);
+    let mut state = with_tree(&["src/main.rs", "src/lib.rs", "NOTES.txt"]);
     changes::update(&mut state, Msg::PathPickerChanged("lib".into()));
     assert_eq!(
         changes::picker_matches(view_of(&state)),
         [path("src/lib.rs"), path("lib")]
     );
-    changes::update(&mut state, Msg::PathPickerChanged("README.md".into()));
+    changes::update(&mut state, Msg::PathPickerChanged("NOTES.txt".into()));
     assert_eq!(
         changes::picker_matches(view_of(&state)),
-        [path("README.md")]
+        [path("NOTES.txt")]
     );
     changes::update(&mut state, Msg::PathPickerChanged(String::new()));
     assert!(changes::picker_matches(view_of(&state)).is_empty());
@@ -2885,16 +2889,16 @@ fn the_picker_matches_the_tree_and_offers_a_typed_path() {
 /// The tree lists a folder's files only while the folder is open.
 #[test]
 fn the_tree_shows_a_folders_files_while_it_is_open() {
-    let mut state = with_tree(&["README.md", "docs/a.md", "docs/b.md"]);
+    let mut state = with_tree(&["NOTES.txt", "docs/a.md", "docs/b.md"]);
     let names = |state: &State| -> Vec<String> {
         changes::tree_rows(view_of(state))
             .iter()
             .map(|row| format!("{}{}", row.depth, row.name))
             .collect()
     };
-    assert_eq!(names(&state), ["0docs", "0README.md"]);
+    assert_eq!(names(&state), ["0docs", "0NOTES.txt"]);
     changes::update(&mut state, Msg::FolderToggled("docs".into()));
-    assert_eq!(names(&state), ["0docs", "1a.md", "1b.md", "0README.md"]);
+    assert_eq!(names(&state), ["0docs", "1a.md", "1b.md", "0NOTES.txt"]);
 }
 
 /// FR-013, US5 s3. Back restores the diff's file, scroll and expansion, against a refreshed diff.
@@ -2921,6 +2925,83 @@ fn back_restores_the_diff_file_scroll_and_expansion() {
     assert_eq!(view.selected, Some(path("b.rs")));
     assert_eq!(view.diff_offset, 300);
     assert_eq!(shown_lines(&state), lines, "the opened run is still open");
+}
+
+/// FR-014: a change re-reads the browsed file and the shown tree, so neither shows stale text.
+#[test]
+fn a_change_re_reads_the_browsed_file_and_the_tree() {
+    let mut state = with_tree(&["a.rs", "docs/x.md"]);
+    let seq = browse(&mut state, "docs/x.md");
+    answer_file(&mut state, seq, "docs/x.md", Ok(file_text(&["old"])));
+    let effect = changes::update(&mut state, Msg::Changed);
+    let Effect::ReadList { seq: list_seq, .. } = effect else {
+        panic!("a list read, got {effect:?}");
+    };
+    let Effect::Batch(effects) = changes::update(
+        &mut state,
+        Msg::ListRead {
+            seq: list_seq,
+            result: Ok(list(&["a.rs"])),
+        },
+    ) else {
+        panic!("the list answer re-reads more than the diff");
+    };
+    let file = effects
+        .iter()
+        .find_map(|e| match e {
+            Effect::ReadFile { seq, path, .. } => Some((*seq, path.clone())),
+            _ => None,
+        })
+        .expect("the browsed file is read again");
+    assert_eq!(file.1, path("docs/x.md"));
+    let tree = effects
+        .iter()
+        .find_map(|e| match e {
+            Effect::ReadTree { seq, .. } => Some(*seq),
+            _ => None,
+        })
+        .expect("the tree is read again");
+    answer_file(&mut state, file.0, "docs/x.md", Ok(file_text(&["new"])));
+    assert_eq!(browsed_lines(&state)[0].1, "new");
+    changes::update(
+        &mut state,
+        Msg::TreeRead {
+            seq: tree,
+            result: Ok(vec![path("a.rs"), path("docs/x.md"), path("docs/y.md")]),
+        },
+    );
+    changes::update(&mut state, Msg::FolderToggled("docs".into()));
+    // docs, its two files, and a.rs.
+    assert_eq!(changes::tree_rows(view_of(&state)).len(), 4);
+}
+
+/// A file the change stopped listing while it was browsed: Back lands at the top, not at the
+/// recorded place of a file that is gone.
+#[test]
+fn back_to_a_diff_whose_file_left_the_list_starts_at_the_top() {
+    let mut state = with_tree(&["a.rs", "docs/x.md"]);
+    changes::update(
+        &mut state,
+        Msg::DiffScrolled {
+            offset: 300,
+            viewport: 400,
+        },
+    );
+    let seq = browse(&mut state, "docs/x.md");
+    answer_file(&mut state, seq, "docs/x.md", Ok(file_text(&["one"])));
+    let effect = changes::update(&mut state, Msg::Changed);
+    let Effect::ReadList { seq: list_seq, .. } = effect else {
+        panic!("a list read, got {effect:?}");
+    };
+    changes::update(
+        &mut state,
+        Msg::ListRead {
+            seq: list_seq,
+            result: Ok(list(&["z.rs"])),
+        },
+    );
+    let effect = changes::update(&mut state, Msg::BrowseBack);
+    assert_eq!(effect, Effect::ScrollDiff { offset: 0 });
 }
 
 /// Back from a file opened from another browsed file returns to that file, then to the diff.

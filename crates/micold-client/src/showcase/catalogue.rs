@@ -1075,6 +1075,18 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::FullWidth,
         render: sections::review::review_panel_row,
     },
+    Entry {
+        module: "material/browse_bar.rs",
+        component: "BrowseBar",
+        variants: &[],
+        density: &[],
+        posed: &["Back only", "with Open diff", "long path", "Back disabled"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::review::browse_bar,
+    },
     // ---- floating surfaces and their triggers -----------------------------------------------
     // `MenuItem` and `TreeItem` are deliberately absent: they are *records* the caller
     // fills in, not components — no element conversion, public fields — and the builder-API gate
