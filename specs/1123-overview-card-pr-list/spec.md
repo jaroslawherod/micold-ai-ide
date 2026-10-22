@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Closed 2026-10-22 — shipped in PRs #1230, #1233, #1235, #1238 and the close PR
 
 **Input**: User description: "Implement GitHub issue #1123: Overview cards: pull request list with
 state, linked. Blocked by: #1121 (expanded view for the rest of the list). The app reads PR counts

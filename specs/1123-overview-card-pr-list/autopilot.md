@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: close
-- **Next step**: close unit: tdd-verify r1 FAIL fixed (F1, F2, F4 tests red against their mutants, F5 named, F3 accepted as D14); next tdd-verify r2 (sonnet) and the close review r1 (session model), then Status Closed, gate, close PR. Converge skipped: review B CLEAN for M1, M2, M3
+- **Phase**: done
+- **Next step**: handoff. Close PR open (spec Closed, tdd-verify r2 PASS, close review r1 CLEAN, its MINOR fixed, full gate green); the run ends when it merges. D3/D4 stay orchestrator default, owner card pending
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1233 | M1: pull request rows on the card | merged (rebase) | 97148cd2 |
 | #1235 | M2: open a pull request from its number | merged (rebase) | dc647329 |
 | #1238 | M3: numbers as Tab stops, arrows and hand-offs per link | merged (rebase); the orchestrator added a commit renaming `visual-pass/m3/light-1-b4-c3c-5-ring-?.png` to `...-ring-unknown.png` ('?' broke the Windows checkout); evidence file names keep to [A-Za-z0-9._-] | 2abbffff |
+| close (number set by the orchestrator) | close: spec Closed, tdd-verify close fixes, verification report pointer | open | — |
 
 ## Milestones
 
@@ -76,8 +77,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | CLEAN, no findings (note: `card_pr_list` doc guard holds for `link_focus_after`, not for `LinkFocus::of`; harmless, the handoff returns before `row` is used) |
 | Visual pass M3 (T037) | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | PASS: c1 full Tab and Shift+Tab walk light 1.0 and dark 2.0 (Shift+Tab from z lands on #11); c3, c4, c5 light 1.0 PASS; extra (Shift+Tab from Escape-collapsed z onto #11) PASS; c2, c6, c7 not re-run (passed r2); evidence specs/1123-overview-card-pr-list/visual-pass/m3/r3/ (39 PNGs, committed) |
 | TDD verify close (sonnet worker) | 1 | HEAD 804cc8de (base f1d7d1b5) | FAIL: F1 HIGH `card_link` `.focus_on_press(true)` mutant survives (no test clicks a focusable number); F2 HIGH `pr_rows` `failing: false` mutant survives; F3 HIGH process (M1 T001–T018 and two T022/T032 `tests/overview.rs` cases never run red); F4 MED unknown state on the merged page untested; F5 LOW unexplained `8` in the fork counts test. 25 mutants, 22 caught. Fixes: see Fixes close r1 below |
-| TDD verify close (sonnet worker) | 2 | 1d667e6ddf023a788d9cecd9035665b970c88810:71dc3a74b21fc7848107dbf74ce978f61e831dcd (fix commit 71dc3a74 over 804cc8de; scoped: the three survivors, F3, F5) | pending |
-| Close review (session model) | 1 | 1d667e6ddf023a788d9cecd9035665b970c88810:71dc3a74b21fc7848107dbf74ce978f61e831dcd (close diff 2abbffff..71dc3a74: correctness of tests, truth of docs) | pending |
+| TDD verify close (sonnet worker) | 2 | 1d667e6ddf023a788d9cecd9035665b970c88810:71dc3a74b21fc7848107dbf74ce978f61e831dcd (fix commit 71dc3a74 over 804cc8de; scoped: the three survivors, F3, F5) | PASS: F1, F2, F4 tests each FAILED against their survivor mutant and pass restored; F5 named constant true; F3/D14 honest; no findings |
+| Close review (session model) | 1 | 1d667e6ddf023a788d9cecd9035665b970c88810:71dc3a74b21fc7848107dbf74ce978f61e831dcd (close diff 2abbffff..71dc3a74: correctness of tests, truth of docs) | CLEAN, 1 MINOR (F1 tdd/verification.md reads as the current r1 FAIL): fixed, a round-1/superseded note under its title (Fixes close review r1); prose only, no round 2 |
 
 ### Review A M1 round 2 verdict (verbatim)
 
@@ -868,6 +869,43 @@ I did not append remediation tasks to `tasks.md`, per `--no-tasks`.
 ````
 
 Fixes close r1 (tdd-verify r1): F1 `a_click_on_a_focusable_number_leaves_the_keyboard_with_the_card_that_holds_it` (card_grid.rs; numbers wired with `.on_pr_link_keyboard_focus`, asserts `is_focused(pr-1-12) == false` after the click and Enter opens card 0); F2 `only_a_row_with_failing_checks_is_marked_failing` (ui/overview.rs, `pr_rows` over #12 failing and #11 passing); F4 `pull_request_an_unknown_state_on_the_merged_page_fails_the_reading` (pull_request_counts.rs, `m0` state `FOO` → `Err(Passing)`); F5 the fork test's `8` is `MERGED_ON_THE_RECENT_PAGE` with a comment (branch a's `r0` page); F3 accepted exception D14. Each new test FAILED against its survivor mutant (F1 `.focus_on_press(true)`: `left: Some(true) right: Some(false)`; F2 `failing: false`: panic at overview.rs:1274; F4 `.unwrap_or(BranchPrState::Merged)`: `left: Ok(…) right: Err(Passing)`), each mutant restored and the test green; `git status` showed no mutant left. Red runs in tdd/cycle-log.md, Close fixes. Report committed as tdd/verification.md.
+
+### TDD verify close round 2 verdict (verbatim)
+
+````
+# 1123 tdd-verify r2
+
+VERDICT: PASS
+
+1. F1: `card_link` `.focus_on_press(true)` (overview_card.rs:651) -> `a_click_on_a_focusable_number_leaves_the_keyboard_with_the_card_that_holds_it` FAILED at card_grid.rs:3175 (`left: Some(true) right: Some(false)`, an assertion, not a compile error). The test wires `.on_pr_link_keyboard_focus` on every card, so the number is focusable. It asserts the press emits nothing, the release emits "pr 1 12", `is_focused(pr-1-12)` is Some(false), and Enter then gives "open 0". That matches U4/R7.
+2. F2: `failing: false` (overview.rs:827) -> `only_a_row_with_failing_checks_is_marked_failing` FAILED at overview.rs:1274 (the (12,true) assertion). `failing: true` -> FAILED at overview.rs:1275 (the (11,false) assertion).
+3. F4: merged-page `.map_err(|_| UNREADABLE)?` -> `.unwrap_or(BranchPrState::Merged)` (pull_request.rs:692) -> `pull_request_an_unknown_state_on_the_merged_page_fails_the_reading` FAILED at pull_request_counts.rs:178 (`left: Ok(StatusReading…) right: Err(Passing)`).
+4. F5: `r0` in pr_three_branches.txt has 8 MERGED nodes (#310, 299, 295, 271, 266, 263, 219, 217) plus #269 CLOSED and #347 OPEN. `MERGED_ON_THE_RECENT_PAGE: u8 = 8` is named, and its comment (branch a's `r0` page, #310 … #217) is true.
+5. F3: D14 and the cycle-log "Close fixes" table are honest. Both say red cannot be produced after the fact and that the exception is accepted. Neither claims a red run for T001–T018 or the T032 tests. The mitigation names real tests and mutants: review B M3's mutants (overview.rs:1270, :2244, :2289), the close r1 run of 25 mutants (22 caught), and the F1, F2 and F4 tests.
+   - `scripts/autopilot/brief.py items … D14` returns "not found". It does not handle Decisions rows, so I read D14 at autopilot.md line 49 directly.
+   - The cycle-log red outputs match what I observed.
+
+Green runs:
+- `-p micold-client --lib -- card_grid ui::overview`: ok, 84 passed, 0 failed.
+- `-p micold-core --test pull_request_counts`: ok, 6 passed, 0 failed.
+
+I restored each mutant with `git checkout -- <file>` right after its run. `git status --short` is empty at the end. I made no commits and no edits, and did not append a Round 2 section to verification.md.
+
+Findings: none.
+````
+
+### Close review round 1 verdict (verbatim)
+
+````
+# 1123 close review r1
+
+VERDICT: CLEAN
+F1 [MINOR] specs/1123-overview-card-pr-list/tdd/verification.md:1-9, 207 — The report is committed as the current file but still says the r1 state in the present tense ("verdict: FAIL", "mutants_survived: 3", "Two deliberate mutants … survive"). Commit 71dc3a74 adds tests that kill F1, F2 and F4, so a reader of the file alone sees a FAIL that the close fixes already resolved.
+   Evidence: `verdict: FAIL` / `verified_at: 804cc8de`. The file has no pointer to cycle-log "Close fixes" or to autopilot.md "Fixes close r1".
+   Fix: Add one line under the title saying this is the round-1 report at 804cc8de and that F1, F2 and F4 are fixed in tdd/cycle-log.md (Close fixes), with F3 accepted as D14. Another option is to let tdd-verify r2 overwrite the file.
+````
+
+Fixes close review r1: F1 a note under the title of tdd/verification.md says it is the round-1 report at 804cc8de, F1/F2/F4 fixed (tdd/cycle-log.md, Close fixes; tdd-verify r2 PASS), F5 named, F3 accepted as D14. Spec **Status** set to Closed 2026-10-22.
 
 ## Declined review findings
 
