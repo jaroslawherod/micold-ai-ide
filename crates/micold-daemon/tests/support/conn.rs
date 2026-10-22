@@ -198,19 +198,28 @@ pub async fn connect_and_attach(state: &Arc<DaemonState>, project: &Path) -> Cli
 
 /// The `OperationOk`/`OperationError` answering `req`, within 20 s.
 pub async fn answer(client: &mut Client, req: u64) -> DaemonMsg {
+    answers(client, &[req]).await.remove(0)
+}
+
+/// The answers to `reqs`, in the order of `reqs`, whatever order they arrive in.
+pub async fn answers(client: &mut Client, reqs: &[u64]) -> Vec<DaemonMsg> {
+    let mut got: Vec<Option<DaemonMsg>> = reqs.iter().map(|_| None).collect();
     tokio::time::timeout(Duration::from_secs(20), async {
-        loop {
-            match client.next().await.expect("stream open").unwrap() {
-                Frame::Control(
-                    m @ (DaemonMsg::OperationError { req: r, .. }
-                    | DaemonMsg::OperationOk { req: r, .. }),
-                ) if r == req => return m,
-                _ => continue,
+        while got.iter().any(Option::is_none) {
+            if let Frame::Control(
+                m @ (DaemonMsg::OperationError { req: r, .. }
+                | DaemonMsg::OperationOk { req: r, .. }),
+            ) = client.next().await.expect("stream open").unwrap()
+            {
+                if let Some(i) = reqs.iter().position(|&q| q == r) {
+                    got[i] = Some(m);
+                }
             }
         }
     })
     .await
-    .expect("the request is answered")
+    .expect("the request is answered");
+    got.into_iter().flatten().collect()
 }
 
 /// A service whose catalog and settings live in `store_dir`. Called twice over one directory, the
