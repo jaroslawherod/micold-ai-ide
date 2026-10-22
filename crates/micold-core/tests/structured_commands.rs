@@ -223,6 +223,27 @@ fn a_later_report_replaces_an_earlier_one() {
 }
 
 #[test]
+fn a_later_spawn_that_reports_nothing_falls_back_to_its_init_lists() {
+    let earlier = ReportedCommand {
+        name: "gone".into(),
+        description: None,
+        argument_hint: None,
+        aliases: vec![],
+        builtin: false,
+    };
+    let init = micold_core::structured::parse_line(
+        r#"{"type":"system","subtype":"init","session_id":"s","slash_commands":["now"]}"#,
+    );
+    let history = sequenced([note((vec![earlier], vec![])), note((vec![], vec![])), init]);
+    let list = CommandList::from_history(&history);
+    assert!(
+        kinds_of(&list, "gone").is_empty(),
+        "the earlier spawn's report is stale"
+    );
+    assert_eq!(kinds_of(&list, "now"), [CommandKind::Custom]);
+}
+
+#[test]
 fn a_skill_and_a_custom_command_of_one_name_are_both_kept() {
     let dup = || ReportedCommand {
         name: "dup".into(),

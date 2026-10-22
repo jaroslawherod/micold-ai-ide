@@ -75,16 +75,19 @@ impl CommandList {
         self.source
     }
 
-    /// The list a history implies (R1): the latest `CommandsReported` note with commands, kinds
-    /// from the latest `init`'s `skills`; without one, the latest `init`'s names; without either,
+    /// The list a history implies (R1): the latest `CommandsReported` note's commands, kinds
+    /// from the latest `init`'s `skills`; when that note reports none (its spawn's `initialize`
+    /// was refused) or there is none, the latest `init`'s names; without either,
     /// [`fallback`](Self::fallback). A later report replaces an earlier one.
     pub fn from_history(events: &[SequencedEvent]) -> Self {
-        let reported = events.iter().rev().find_map(|e| match &e.event {
-            StructuredEvent::CommandsReported { commands, .. } if !commands.is_empty() => {
-                Some(commands)
-            }
-            _ => None,
-        });
+        let reported = events
+            .iter()
+            .rev()
+            .find_map(|e| match &e.event {
+                StructuredEvent::CommandsReported { commands, .. } => Some(commands),
+                _ => None,
+            })
+            .filter(|commands| !commands.is_empty());
         let init = events.iter().rev().find_map(|e| match &e.event {
             StructuredEvent::Init {
                 slash_commands,
