@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: review M3
-- **Next step**: M3 r2 fixes committed (3936855c); review A r3 (sonnet, fix diff 25a52b64..3936855c) and visual pass r3 (sonnet, c1 full walk light 1.0 + dark 2.0, quick c3–c5) on snapshot 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63, dispatched by the orchestrator; when both clean: full gate (scripts/gate.sh), tick T037, M3 PR
+- **Phase**: M3 PR
+- **Next step**: review A r3 CLEAN and visual pass r3 PASS; T037 ticked; full gate (scripts/gate.sh) passed; M3 PR opened by the orchestrator from pr-title.txt / pr-body.md; then the close unit (T038–T039)
 
 ## Pull requests
 
@@ -71,8 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M3 (T037) | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | FAIL: c1 Tab in the expanded card goes #12 → the card (never #11, never the next card), Shift+Tab enters at #13; c3 Right on #12 lands on its own card; c2, c4, c5, c6 PASS; c7 partial (Page keys NOT RUN, no overflow); evidence specs/1123-overview-card-pr-list/visual-pass/m3/ (70 PNGs, committed); root cause and fixes in Fixes M3 r1 below |
 | Review A M3 | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | CLEAN, 1 MINOR (F1 `card_pr_list` scans every worktree, not the sidebar-filtered cards; harmless, `focus_return_target` runs first): doc note on `card_pr_list` (Fixes M3 r2) |
 | Visual pass M3 (T037) | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | FAIL: c1 reverse — Shift+Tab from z into the expanded-capable y lands on #13 (collapsed last), not #11, light and dark; forward walk PASS; c2–c6 PASS; c7 partial (no overflow); evidence specs/1123-overview-card-pr-list/visual-pass/m3/r2/ (112 PNGs, committed); root cause and fix in Fixes M3 r2 |
-| Review A M3 | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | pending (sonnet, fix diff only; prompt 1123-m3-prompt-review-a-r3.md) |
-| Visual pass M3 (T037) | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | pending (sonnet, c1 full Tab + Shift+Tab walk light 1.0 and dark 2.0, quick re-check c3–c5; prompt 1123-m3-prompt-visual-r3.md) |
+| Review A M3 | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | CLEAN, no findings (note: `card_pr_list` doc guard holds for `link_focus_after`, not for `LinkFocus::of`; harmless, the handoff returns before `row` is used) |
+| Visual pass M3 (T037) | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | PASS: c1 full Tab and Shift+Tab walk light 1.0 and dark 2.0 (Shift+Tab from z lands on #11); c3, c4, c5 light 1.0 PASS; extra (Shift+Tab from Escape-collapsed z onto #11) PASS; c2, c6, c7 not re-run (passed r2); evidence specs/1123-overview-card-pr-list/visual-pass/m3/r3/ (39 PNGs, committed) |
 
 ### Review A M1 round 2 verdict (verbatim)
 
@@ -742,6 +742,62 @@ Evidence: 112 untracked PNGs in /home/user/micold-ai-ide/specs/1123-overview-car
 - Source not edited, nothing committed or pushed, no hearthbot tools called.
 
 Fixes M3 r2 (review A r2, visual r2): the event order was observed, not assumed: the mounted Overview (real `CardGrid`, real `focus_previous`, unsorted) with z focus-expanded reports Shift+Tab onto y's collapsed last number as `FocusLost(z)` then `LinkFocusGained(y, #13)`, because `CardGrid::update` hands every event to the expanded card first; each is its own root update, so the gain saw `LinkFocus.focused == None` (`from_another` false) and kept #13. r1's root test fed gain first (a collapsed z's order) and the mounted `focus_moves` helper sorts losses first, which hid it. Fix: core `Expansion::just_left()` (the card of K5's `just_lost`, one event); `LinkFocus.focused = focused().or(just_left())`. A Tab inside the card stays put (its loss is the same card). A r2 F1: doc note on `card_pr_list`. Tests: ui/overview `shift_tab_off_an_expanded_card_reports_its_loss_first` (observed order), main_tests `shift_tab_loss_first_onto_a_collapsed_cards_number_goes_to_its_last` (red: landed on #12 instead of #10), core `just_left_names_the_card_for_one_event`. Red/green in tdd/cycle-log.md. Fix commit 3936855c.
+
+### Review A M3 round 3 verdict (verbatim)
+# M3 review A r3
+
+VERDICT: CLEAN
+
+All three requested test runs pass:
+- micold-client bin filter: 22 passed.
+- micold-client lib `ui::overview`: 23 passed.
+- micold-core lib `overview_expansion pr_list`: 68 passed.
+
+I reviewed the fix diff by hand against `git diff 25a52b64 3936855c -- crates`. I did not invoke the `code-review` skill, since the prompt said fix diff only.
+
+Nothing at BLOCKER or MAJOR level. One note, not a finding:
+- `card_pr_list` (crates/micold-client/src/ui/overview.rs ~514): the doc says its callers check the card is drawn first through `focus_return_target`. That holds for `link_focus_after`, which runs `link_focus_handoff` first.
+- It does not hold for `LinkFocus::of`, which computes `row` through `shown_focused_link` with no such guard. The worst case is a stale `row` for a filtered-out card, and the handoff returns before `row` is used. The note is accurate enough for the F1 purpose.
+### Visual pass M3 round 3 verdict (verbatim)
+# M3 visual r3
+
+VISUAL PASS M3 1123 (T037) r3: PASS. Criterion 1 (full Tab and Shift+Tab walk) holds in light 1.0 and dark 2.0, and the r2 bug is gone: Shift+Tab from z now lands on #11. The quick re-checks of 3, 4 and 5 in light 1.0 pass, and so does the extra case (Shift+Tab into y after Escape on z). Criteria 2, 6 and 7 were not re-run, as instructed.
+
+Setup: client and daemon rebuilt from the tree at HEAD 1ff4cbba (3936855c fix plus ledger commits). The build log named micold-core, micold-client and micold-daemon, and I checked that the client binary contains the `just_left` fix. Ran on Xvfb :77 with lavapipe, a private HOME, data dir and runtime dir (/tmp/vp77). The /tmp/vp1123m3 scripts were gone, so I rebuilt the fixture:
+- A fake `gh`, serving the PR data from crates/micold-core/tests/fixtures/gh/pr_four_states.txt: feat-1123_y has #14 open approved, #13 draft pending, #12 merged and #11 closed; the other branches have no pull requests.
+- A fake `claude` and a fake `xdg-open` logger.
+- origin https://github.com/acme/widgets.git, with PR status and GitHub issues on.
+- Card order: Default, v, x, y, z (v and x before y, z after), each with an "Issue #1123" link.
+
+All checks were keyboard only (xdotool key), with the pointer parked at the bottom-right corner. The only clicks were the ones that opened the Overview and refreshed the worktree list. The first card read in dark showed dashes until I pressed refresh. After that, y showed its rows.
+
+Evidence: 39 untracked PNGs in /home/user/micold-ai-ide/specs/1123-overview-card-pr-list/visual-pass/m3/r3/, with names starting `<theme>-<scale>-b4-`.
+
+1. PASS, light 1.0 and dark 2.0.
+- Forward: y card (expanded), Issue #1123, #14, #13, #12, #11, then the z card. The ring was on each of these in turn, and the card stayed expanded throughout.
+  - Light: light-1-b4-c1-0-tab-y-card-expanded, -1-tab-issue, -2-tab-14, -3-tab-13, -4-tab-12, -5-tab-11, -6-tab-next-card-z.
+  - Dark: dark-2-b4-c1-0..6, the same names.
+- Reverse: from z's own Issue link, the first Shift+Tab goes to the z card. The next ones go to #11, #12, #13, #14, Issue #1123, then the y card, in that order. The card stayed expanded throughout.
+  - Light: light-1-b4-c1-shift-0-z-card, -1-11, -2-12, -3-13, -4-14, -5-issue, -6-y-card.
+  - Dark: dark-2-b4-c1-shift-0..6, the same names.
+
+2. NOT RUN.
+
+3. PASS (light 1.0, #12 only). With the ring on #12, Right moved to the next card z and never onto a number or a link. Files: light-1-b4-c3-12-0-ring-on-12.png and light-1-b4-c3-12-1-right-to-next-card.png.
+
+4. PASS (light 1.0, #14). Escape collapsed the card and the ring stayed on #14. Tab went to #13, and the next Tab went to the z card, so #12 and #11 were skipped. Files: light-1-b4-c4-14-0-ring-on-14, -1-escape-on-14, -2-tab-13, -3-tab-leaves-z-card.
+
+5. PASS (light 1.0, #11). Escape collapsed the card and the y card itself showed the focus ring. Tab then went to the Issue link. Files: light-1-b4-c5-11-0-ring-on-11, -1-escape-on-11-card-ring, -2-tab-to-issue. I did not press Enter on the card.
+
+Extra, PASS (light 1.0). With z focused, Escape collapsed it and the ring stayed on the z card. Shift+Tab then landed on y's #11, with y expanded. Files: light-1-b4-c1b-0-escape-on-z-collapsed.png and light-1-b4-c1b-1-shift-tab-from-collapsed-z-lands-11.png.
+
+6 and 7: NOT RUN.
+
+The xdg-open log was not exercised this round, because criterion 2 was out of scope.
+
+This was Xvfb with lavapipe, not a real display, and it covers static states and focus placement only.
+
+Cleanup: I killed my own client, daemon and Xvfb by PID, and removed /tmp/vp77, /tmp/vp1123m3r3 and .visual-pass/run.tccC57. Source was not edited, nothing was committed or pushed, and no hearthbot tools were called.
 
 ## Declined review findings
 
