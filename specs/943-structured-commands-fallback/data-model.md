@@ -85,7 +85,7 @@ write-and-wait taken out of `set_permission_mode` (M3). `ControlFailed` **new**:
 |---|---|---|
 | `Session.model` | `ModelChoice`, persisted; set only through `Catalog::set_model` | FR-017 |
 | `Session::resume_handle()` (M4) | `Uuid`: the id in M4; `conversation` or the id from M5 on | FR-020 |
-| `Session.conversation` (**provisional, M5**) | `Option<Uuid>` | FR-005a |
+| `Session.conversation` (M5) | `Option<Uuid>` | FR-005a |
 | `Session.kind` | now mutable through `Catalog::set_kind` only; doc comment updated (replaces 938 FR-002) | FR-019 |
 | `StoredSession` | `+ model` (serde default, skip when `Default`), `+ conversation` (serde default, skip when `None`); no `schema_version` bump | FR-017, FR-005a |
 | `LaunchSpec` (M4) | `+ model: ModelChoice`, `+ resume_handle: Uuid` (used instead of `session_id` for `LaunchMode::Resume`; filled from `Session::resume_handle()`) | FR-017, FR-020 |

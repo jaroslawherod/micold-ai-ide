@@ -32,7 +32,7 @@
 ## Notes
 
 - Both [NEEDS CLARIFICATION] markers were resolved in clarify (2026-10-22): US1 s5 → FR-005a
-  (provisional, pending the user's answer); US5 s2 → FR-023 (terminal-period turns only marked).
+  (option A, confirmed by the user 2026-10-22); US5 s2 → FR-023 (terminal-period turns only marked).
 - Command names (`/compact`, `/model`, `/mcp`, ...) are the user-facing vocabulary of the issue, not
   implementation details.
 - The edge case "Login lost" is covered by User Story 4 scenario 8 and FR-022a.

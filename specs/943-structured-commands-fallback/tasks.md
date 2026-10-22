@@ -251,7 +251,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ---
 
-## Phase 7: Daemon — conversation handle after `/clear` (M5, provisional: ledger decision 2)
+## Phase 7: Daemon — conversation handle after `/clear` (M5, ledger decision 2: option A, confirmed)
 
 - [x] T039 [P] [US1] [US5] Tests in `core/tests/session_store.rs` and unit tests in
   `core/src/session.rs`: `StoredSession.conversation` absent → `None`, round-trips, not written when
@@ -428,8 +428,7 @@ MVP is M1: the core knows a session's commands, which need the terminal, how a d
 how the palette orders names, what model a session runs, and the control lines, all against
 recorded fixtures. M2–M7 add one layer each, observable through their own tests; nothing is visible
 to users before M8 (palette, model picker, markers, with their guide), and M9 completes the
-terminal fallback. M5 is provisional (ledger decision 2): reverting it alone returns to 582
-FR-017's resume rule.
+terminal fallback. M5 follows ledger decision 2 (option A, confirmed by jaro 2026-10-22).
 
 ## Milestones
 
@@ -495,7 +494,7 @@ build on `main` as it is. **M2 needs #941 M1; M6 #941 M2; M7 #941 M4; M8 #941 M6
 - **Depends on**: M3
 - **Tier**: full
 
-### M5 — Daemon: resume the conversation a `/clear` started (provisional)
+### M5 — Daemon: resume the conversation a `/clear` started
 
 - **Tasks**: T039–T042
 - **Deliverable**: after `/clear` in a structured session, restart and daemon restore resume the
@@ -503,8 +502,7 @@ build on `main` as it is. **M2 needs #941 M1; M6 #941 M2; M7 #941 M4; M8 #941 M6
 - **Satisfies**: FR-005a; US1 scenario 5 (resume part); SC-005 (handle)
 - **Verify**: `cargo test -p micold-daemon --test structured_resume`;
   `cargo test -p micold-core --test session_store`
-- **Depends on**: M4. **Provisional — ledger decision 2 (pending jaro)**: under decision B this
-  milestone is dropped (or reverted alone); under C it is replaced
+- **Depends on**: M4. Ledger decision 2: option A, confirmed by jaro 2026-10-22
 - **Tier**: full
 
 ### M6 — Daemon: switch a Claude session between structured and terminal

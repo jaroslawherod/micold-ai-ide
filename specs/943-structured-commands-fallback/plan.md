@@ -20,7 +20,7 @@ and an authentication failure (R4, R5, R9). The model is a persisted per-session
 daemon stops the CLI and starts it in the other kind with `--resume`, keeping the session's
 identity, queue (held), model and permission mode, and brackets the terminal period in the event
 history with two `KindSwitched` notes (R8). The conversation handle a structured session follows
-after `/clear` (FR-005a) is provisional and isolated in one milestone (R6). The window adds a
+after `/clear` (FR-005a) is isolated in one milestone (R6; ledger decision 2, option A confirmed). The window adds a
 shared `CommandPalette`, a model picker on `Typeahead`, the switch offer and confirmation, and the
 markers. Details: [research.md](research.md), [data-model.md](data-model.md),
 [contracts/](contracts/).
@@ -33,7 +33,7 @@ markers. Details: [research.md](research.md), [data-model.md](data-model.md),
 `postcard` (wire), `tokio` (control waits, the deferred model write), `uuid`, `iced` 0.14 and the
 shared `ui/material` library. No new crate.
 
-**Storage**: `model` and (provisional) `conversation` in the existing catalog file
+**Storage**: `model` and `conversation` in the existing catalog file
 (`StoredSession`, additive defaulted fields, no `schema_version` bump); the command list and model
 notes in the existing structured event history, saved under **Save terminal history** like every
 event. Nothing else.
@@ -207,7 +207,7 @@ tests against the stand-in; **client** = `micold-client` reducer tests; **gate**
 | FR-003 | R4; `UserMessage.command` | core (chip from `UserSent`; description from the list held then); §B 3 |
 | FR-004 | R5 `Compacted` | core (`command-compact.jsonl`: one entry, summary held, earlier entries kept); §B 4 |
 | FR-005 | R5 `Cleared`, `era` | core (`command-clear.jsonl`: marker, earlier era); §B 4 |
-| FR-005a (provisional) | R6, M5 | core (store round trip, `resume_handle`); daemon (stand-in `/clear` → new init id → restart, daemon restore and switch use `--resume <new>`; discovery adopts no second session) |
+| FR-005a | R6, M5 | core (store round trip, `resume_handle`); daemon (stand-in `/clear` → new init id → restart, daemon restore and switch use `--resume <new>`; discovery adopts no second session) |
 | FR-006 | R4 `CommandOutput` | core (`command-builtin-output.jsonl`: markdown text, no markup) |
 | FR-007 | R1, R10 | core (merge, kinds, groups); client (palette opens on `/`); §B 1 |
 | FR-008 | R10 `filter` | core (`command_palette.rs` tier table; SC-002 over recorded names) |
@@ -258,7 +258,7 @@ before M8.
 | M2 | Core transcript: command chip, `CommandOutput`, `Compacted`, `Cleared` + eras, `ModelChanged`, `TerminalPeriod`, `auth_failed` | M1; #941 M1 for the chip (I-1), held whole |
 | M3 | Daemon: `send_control` (I-4); `initialize` at spawn → `CommandsReported`; `/model` and terminal-only refused in `SessionUserMessage`; stand-in `initialize` and command fixtures | M1 |
 | M4 | Daemon: model choice persisted, `--model` at launch, `Session::resume_handle()` (returns the id) and `LaunchSpec.resume_handle` with every `--resume` site switched to them, `SetSessionModel`, idle and deferred `set_model`, notes, summary field (wire +1); stand-in `set_model` | M3 |
-| M5 | Daemon: `Session.conversation`, `Catalog::set_conversation`, tracking the latest `init`'s id, `resume_handle()` returning it, `known_session_ids` including it — **provisional (ledger decision 2)**; revert this milestone alone for decision B | M4 |
+| M5 | Daemon: `Session.conversation`, `Catalog::set_conversation`, tracking the latest `init`'s id, `resume_handle()` returning it, `known_session_ids` including it (ledger decision 2, option A confirmed) | M4 |
 | M6 | Daemon: `SessionSwitchKind` (wire +1), `Catalog::set_kind`, confirmation, `switching`, notes, stop + start with handle/model/mode and first input, queue hold, history kept while terminal | M4, M5 (or without it under decision B), #941 M2 (I-2) |
 | M7 | Client render-free: `features/command_palette.rs`, model picker state, `SwitchOffer` and confirmation, kind-change reattach, `daemon_sync` wiring | M2, M4, M6, #941 M4 (I-3) |
 | M8 | Window: shared `CommandPalette` (showcase, snapshot, gate), palette in the composer slot, model picker and header, transcript chips and markers; guide: palette and model picker; Part B 1–5 | M7, #941 M6 |

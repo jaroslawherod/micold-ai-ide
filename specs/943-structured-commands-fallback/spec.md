@@ -105,8 +105,7 @@ daemon side lands first.
   the conversation handle reported by its latest init and resumes that on every later launch in
   either kind; the session's identity does not change. Terminal sessions keep feature 582 FR-017's
   trade-off (a `/clear` typed in the terminal is not seen). Added FR-005a. _(decided by user —
-  provisional A, pending jaro; revert to B (keep 582 FR-017 everywhere) or C (app-handled `/clear`)
-  if he picks otherwise)_
+  option A, confirmed by jaro 2026-10-22)_
 - Q: (plan) The CLI's stream-json output never carries a skill's or custom command's expanded
   instructions (recorded, Claude Code 2.1.307: only `<command-name>`/`<command-args>` with
   `--replay-user-messages`, nothing without). What does FR-003 show behind the command? → A: The
