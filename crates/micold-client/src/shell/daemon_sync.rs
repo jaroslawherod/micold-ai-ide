@@ -2851,14 +2851,9 @@ pub fn on_session_selected(app: &mut App, id: SessionId) -> Task<Message> {
     Task::none()
 }
 
-/// Close a session: kill both its processes (AI CLI and shell, feature 010 FR-014) and
-/// drop the runtime handles. The pure core archives (not deletes) the record (FR-015a,
-/// bugfix BUG-003); here we additionally record the durable, provider-side suppression
-/// marker (FR-020c) so a still-existing `claude` transcript is never reconstructed by
-/// reconciliation on a later project open.
 /// Drop a closed or removed session's editor and its composer requests still in flight, so a
 /// late answer cannot bring its composer back (the core forgets the draft in `forget_structured`).
-fn forget_composer(app: &mut App, id: SessionId) {
+pub(crate) fn forget_composer(app: &mut App, id: SessionId) {
     app.composer_editors.remove(&id);
     app.pending_ops.retain(|_, op| {
         !matches!(
@@ -2871,6 +2866,11 @@ fn forget_composer(app: &mut App, id: SessionId) {
     });
 }
 
+/// Close a session: kill both its processes (AI CLI and shell, feature 010 FR-014) and
+/// drop the runtime handles. The pure core archives (not deletes) the record (FR-015a,
+/// bugfix BUG-003); here we additionally record the durable, provider-side suppression
+/// marker (FR-020c) so a still-existing `claude` transcript is never reconstructed by
+/// reconciliation on a later project open.
 /// Close (archive) a session: route through the daemon's `SessionDelete`, which archives it
 /// durably (anti-resurrection marker) and stops its process (T055). The pure-core update
 /// archives the record in memory for instant feedback; the daemon reconciles other windows.

@@ -115,3 +115,24 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
   (`Delivery::turn`, passed to `write_user_message`), not the turn open after the write: the CLI
   could end it and a later turn open in between. No deterministic test (needs the result to land
   between the write and the record); the change removes the read.
+
+## M4 — client composer state, sends and drops (T039–T047)
+
+### Cycle 8 — keys, history, sends, queue actions, drops (T039–T042 → T043–T047)
+
+- tests: `client/tests/features_composer.rs` (new, 28 cases: keys, `transcript_key`,
+  `shows_composer`; history back/forward; `can_send`, pending sends and their restore, lost
+  connection, stop/stop-session/send-queued offers, `can_take`/`Taken`, queue edit draft, per-session
+  drafts; drop insertion as `plan_insertion` plans it, 22 pictures, too-large and failed reads) and
+  `client/tests/pane_drop_target.rs` gains the structured pane's `DropTarget::Composer` case.
+- red: written against `features::composer` and `DropTarget::Composer`, which did not exist (both
+  targets did not compile on origin/main 203ef720). Recorded at M4 verify (review B F1), a mutant set
+  on the finished code (Enter → `Edit`; `history_back` sees no transcript; `returned` drops the
+  returned draft; `apply_drop` reads no picture; `target_of` never `Composer`) → 13 of 29
+  `features_composer` cases and the new `pane_drop_target` case failed, the rest of each target
+  passing. Restored.
+- green: `cargo test -p micold-client --test features_composer --test pane_drop_target` → 29 and 5
+  passed.
+- M4 verify: closing or removing a session forgets its composer (`forget_structured`), and the
+  shell drops its editor and its composer requests in flight (`forget_composer`; tests
+  `closing_a_session_forgets_its_composer`, `closing_a_session_drops_its_editor_and_its_composer_requests`).
