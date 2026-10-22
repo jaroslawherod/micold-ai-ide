@@ -195,11 +195,11 @@ Story labels say which story each task serves.
 
 ## Phase 3: Daemon — deliver, queue, busy/idle to every window (M2)
 
-- [ ] T023 [P] [US1] [US4] Stand-in in `daemon/tests/support/structured.rs`: `on-message <file>`
+- [x] T023 [P] [US1] [US4] Stand-in in `daemon/tests/support/structured.rs`: `on-message <file>`
   (for each later stdin `user` line, replay the file: one turn per message) and `await-file <name>`
   (block until the test creates `<name>` in the cwd, so a test holds a turn open); document both
   in the stand-in's comment
-- [ ] T024 [P] [US1] [US5] Tests in `daemon/tests/structured_input.rs` (new): a send to an idle
+- [x] T024 [P] [US1] [US5] Tests in `daemon/tests/structured_input.rs` (new): a send to an idle
   session writes one stdin line equal to `encode_user_message` — single, multi-line, non-ASCII,
   tabs, a text with two images (image blocks in attach order) and two images with no text (no text
   block) (SC-001, FR-002, FR-027) — answers `Ack`, and reaches two viewing clients once as
@@ -209,7 +209,7 @@ Story labels say which story each task serves.
   from the `result` within 1 s, a CLI `Stop` hook mid-turn does not flip it, and #942's
   `Notification` waiting state still wins (FR-011); a failed write answers `IoFailed` and queues
   nothing (FR-005); send, queue and busy on session A never reach session B (FR-031)
-- [ ] T025 [US4] Queue tests in `daemon/tests/structured_input.rs`: a busy send writes nothing to
+- [x] T025 [US4] Queue tests in `daemon/tests/structured_input.rs`: a busy send writes nothing to
   stdin, answers `Ack` and adds an entry to every client's `StructuredInput` (FR-018); two queued go
   out alone, the first after the first `result`, the second after the second (FR-019); a queued
   message with an image goes out with its image block; a send that opened t2 before the driver
@@ -224,34 +224,34 @@ Story labels say which story each task serves.
   held (Q5); a queued delivery whose write fails returns to the head, held; two clients send to an
   idle session concurrently, 50 iterations: one delivered, one queued, both see the same queue
   (FR-032); the session's delete drops its input state
-- [ ] T026 [US4] Change the superseded #938 assertion (plan *Superseded assertions*): the mid-turn
+- [x] T026 [US4] Change the superseded #938 assertion (plan *Superseded assertions*): the mid-turn
   case of `messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` in
   `daemon/tests/structured_session.rs` now asserts the message is queued; its blank, stopped and
   terminal cases are unchanged
-- [ ] T027 [US1] `daemon/src/structured.rs`: `turn: Arc<Mutex<TurnState>>`; an `on_turn_end`
+- [x] T027 [US1] `daemon/src/structured.rs`: `turn: Arc<Mutex<TurnState>>`; an `on_turn_end`
   callback the reader calls after ending a turn on a `result` or end of file, sending
   `TurnClosed { session, turn, by: Result | Exit, interrupted }` on the `input_feed`;
   `write_user_message(text, images)` writes `encode_user_message` and pushes `UserSent`
   (attachment names only) before any line of the turn can be read; text and image bytes are never
   logged (`core/tests/prompt_text_is_never_logged.rs` still passes); the turn id now comes from
   `SessionInput::next_turn` (T008's counter goes)
-- [ ] T028 [US1] [US4] `daemon/src/input_driver.rs` (new): one task on the `input_feed`
+- [x] T028 [US1] [US4] `daemon/src/input_driver.rs` (new): one task on the `input_feed`
   (`tokio::sync::mpsc`); per `TurnClosed`, under the state lock, `SessionInput::pump` and open the
   turn in the same section, write off the lock, broadcast `StructuredInput`
-- [ ] T029 [US1] `daemon/src/state.rs` — submit: `DaemonInner.structured_inputs` created with the
+- [x] T029 [US1] `daemon/src/state.rs` — submit: `DaemonInner.structured_inputs` created with the
   event stream and removed with it (delete, forget); `SessionUserMessage` → `submit` under the lock
   with `TurnState` read in the same section (R1 lock order), `pump`, one `StructuredInput` to every
   client; handshake replay of every session's `StructuredInput` beside #942's request replay
-- [ ] T030 [US4] `daemon/src/state.rs` — queue ops: edit, remove, take and release under the lock,
+- [x] T030 [US4] `daemon/src/state.rs` — queue ops: edit, remove, take and release under the lock,
   each ending with `pump` and one `StructuredInput` to every client; `Taken` answered to the
   requester only
-- [ ] T031 [US4] `daemon/src/state.rs` — hold and failure: `on_process_end` when the process ends
+- [x] T031 [US4] `daemon/src/state.rs` — hold and failure: `on_process_end` when the process ends
   or is stopped, `on_process_start` on every spawn; a failed write of a delivery `put_back`s the
   entry at the head, held, and broadcasts
-- [ ] T032 [US1] `daemon/src/activity.rs`: `ActivityEvent::TurnBegan` / `TurnEnded` mapped like
+- [x] T032 [US1] `daemon/src/activity.rs`: `ActivityEvent::TurnBegan` / `TurnEnded` mapped like
   `UserPromptSubmit` / `Stop`, fed when the daemon opens and ends a turn; for a structured session
   the CLI's `UserPromptSubmit` and `Stop` hooks are ignored, `Notification` still applies
-- [ ] T033 [US1] [US4] `daemon/src/server.rs`: `SessionUserMessage` (with images) submits and answers
+- [x] T033 [US1] [US4] `daemon/src/server.rs`: `SessionUserMessage` (with images) submits and answers
   per [contracts/wire.md](contracts/wire.md); `QueueEdit`, `QueueRemove`, `QueueTake`,
   `QueueRelease` dispatched; `TurnInterrupt` still ignored until M3; T023–T026 pass
 

@@ -734,7 +734,12 @@ async fn a_user_message_is_one_line_and_its_answer_reaches_every_viewer() {
     let text = "two lines\n\"quoted\" — zażółć 🦀 m3-secret-marker";
     assert_ok(&send_text(&mut first, 1, id, text).await, "the message");
     delivered_is(project.path(), [text]).await;
-    let expected = fixture_events("text-turn.jsonl");
+    // The daemon's note of the message (#941 R3), then the CLI's answer.
+    let mut expected = vec![StructuredEvent::UserSent {
+        text: text.into(),
+        attachments: vec![],
+    }];
+    expected.extend(fixture_events("text-turn.jsonl"));
     for client in [&mut first, &mut second] {
         let got = events_until(client, id, complete(expected.len())).await;
         assert_eq!(events_of(&got), expected, "the answer reached the viewer");
@@ -746,8 +751,9 @@ async fn a_user_message_is_one_line_and_its_answer_reaches_every_viewer() {
     state.stop_session(id);
 }
 
-/// FR-008: blank, mid-turn and back-to-back messages are refused with their sentence; after the
-/// result a message is accepted again; a stopped session and a terminal session refuse.
+/// FR-008: blank messages are refused with their sentence, as are messages to a stopped session
+/// and to a terminal session. Mid-turn and back-to-back messages are queued and each result
+/// delivers one (#941 FR-018, FR-019, superseding #938's refusal).
 #[tokio::test(flavor = "multi_thread")]
 async fn messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal() {
     let project = tempfile::tempdir().unwrap();
@@ -767,31 +773,24 @@ async fn messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal() {
         let got = send_text(&mut client, req, id, blank).await;
         assert_refused(&got, UserMessageRefusal::Blank, "a blank message");
     }
-    // Back to back: the second arrives before the first's result.
-    client
-        .send(Frame::Control(user_message(3, id, "one")))
-        .await
-        .unwrap();
-    client
-        .send(Frame::Control(user_message(4, id, "two")))
-        .await
-        .unwrap();
-    assert_ok(&answer(&mut client, 3).await, "the first of two");
-    let got = answer(&mut client, 4).await;
-    assert_refused(
-        &got,
-        UserMessageRefusal::TurnInProgress,
-        "the second of two",
+    // Back to back: the second arrives before the first's result. Feature 941 (FR-018)
+    // supersedes the refusal: a message mid-turn is queued, and each result delivers one.
+    micold_daemon::server::spawn_input_driver(Arc::clone(&state));
+    // The queued one is answered at once, the delivered one after its write: one at a time, as
+    // `answer` drops the answers it does not wait for.
+    assert_ok(&send_text(&mut client, 3, id, "one").await, "the first of two");
+    assert_ok(
+        &send_text(&mut client, 4, id, "two").await,
+        "the second of two, queued",
     );
     let got = send_text(&mut client, 5, id, "before the result").await;
-    assert_refused(&got, UserMessageRefusal::TurnInProgress, "mid-turn");
+    assert_ok(&got, "mid-turn, queued");
+    delivered_is(project.path(), ["one"]).await;
 
     events_until(&mut client, id, |got| got.iter().any(is_result)).await;
-    assert_ok(
-        &send_text(&mut client, 6, id, "after").await,
-        "after the result",
-    );
-    delivered_is(project.path(), ["one", "after"]).await;
+    delivered_is(project.path(), ["one", "two"]).await;
+    events_until(&mut client, id, |got| got.iter().any(is_result)).await;
+    delivered_is(project.path(), ["one", "two", "before the result"]).await;
 
     state.stop_session(id);
     let got = send_text(&mut client, 7, id, "stopped").await;
@@ -887,22 +886,20 @@ async fn a_message_reaches_only_its_own_session() {
     }
 }
 
-// --- Feature 941 M1 (T021): the new requests before the daemon serves them -------------------
+// --- Feature 941: what the daemon does not serve yet, and pictures over the limits ------------
 
-/// Until M2–M3, the queue requests are refused "Not available yet", an interrupt changes and
-/// answers nothing (nothing reaches the CLI's stdin), a message with pictures is refused, and one
-/// without is delivered as in #938.
+/// Until M3, an interrupt changes and answers nothing (nothing reaches the CLI's stdin); a message
+/// whose pictures pass the limits is refused with the attachment's sentence and nothing is
+/// written; a plain message is delivered as in #938.
 #[tokio::test(flavor = "multi_thread")]
-async fn the_941_requests_are_refused_or_ignored_until_the_daemon_serves_them() {
+async fn an_interrupt_is_ignored_and_pictures_over_the_limits_are_refused() {
     use micold_core::protocol::messages::ErrorKind;
-    use micold_core::structured::attachment::admit;
-    use micold_core::structured::{QueueEntryId, TurnId};
+    use micold_core::structured::attachment::{admit, MAX_IMAGES_PER_MESSAGE};
+    use micold_core::structured::TurnId;
 
     let project = tempfile::tempdir().unwrap();
     let (state, id) = started(project.path(), &answering_turn(0));
     let mut client = connect(&state).await;
-    let entry = QueueEntryId(1);
-    let picture = admit(&[], "shot.png", b"\x89PNG\r\n\x1a\nIHDR".to_vec()).expect("a picture");
     client
         .send(Frame::Control(ClientMsg::TurnInterrupt {
             session: id,
@@ -910,45 +907,31 @@ async fn the_941_requests_are_refused_or_ignored_until_the_daemon_serves_them() 
         }))
         .await
         .expect("sent");
-    let requests = [
-        ClientMsg::QueueEdit {
-            req: 11,
-            session: id,
-            entry,
-            text: "x".into(),
-            keep: vec![],
-        },
-        ClientMsg::QueueRemove {
-            req: 12,
-            session: id,
-            entry,
-        },
-        ClientMsg::QueueTake {
-            req: 13,
-            session: id,
-            entry,
-        },
-        ClientMsg::QueueRelease {
-            req: 14,
-            session: id,
-        },
-        ClientMsg::SessionUserMessage {
+    let pictures: Vec<_> = (0..=MAX_IMAGES_PER_MESSAGE)
+        .map(|n| {
+            admit(&[], &format!("shot-{n}.png"), b"\x89PNG\r\n\x1a\nIHDR".to_vec())
+                .expect("a picture")
+        })
+        .collect();
+    let too_many = micold_core::structured::attachment::check_images(&pictures)
+        .expect_err("one picture too many")
+        .to_string();
+    client
+        .send(Frame::Control(ClientMsg::SessionUserMessage {
             req: 15,
             session: id,
-            text: "with a picture".into(),
-            images: vec![picture],
-        },
-    ];
-    for (req, msg) in (11..).zip(requests) {
-        client.send(Frame::Control(msg)).await.expect("sent");
-        match answer(&mut client, req).await {
-            DaemonMsg::OperationError {
-                kind: ErrorKind::Refused,
-                message,
-                ..
-            } => assert_eq!(message, "Not available yet", "request {req}"),
-            other => panic!("request {req}: not refused: {other:?}"),
-        }
+            text: "with pictures".into(),
+            images: pictures,
+        }))
+        .await
+        .expect("sent");
+    match answer(&mut client, 15).await {
+        DaemonMsg::OperationError {
+            kind: ErrorKind::Refused,
+            message,
+            ..
+        } => assert_eq!(message, too_many, "the attachment's sentence"),
+        other => panic!("not refused: {other:?}"),
     }
     assert_ok(
         &send_text(&mut client, 16, id, "plain").await,

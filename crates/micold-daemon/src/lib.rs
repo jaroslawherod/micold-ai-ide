@@ -20,6 +20,7 @@ pub mod hooks;
 /// Bounded HTTP/1.1 request handling shared by the loopback listeners (hooks, tool server).
 pub mod http;
 pub mod idle;
+pub mod input_driver;
 pub mod logging;
 pub mod mcp;
 pub mod ops;

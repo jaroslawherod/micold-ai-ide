@@ -326,7 +326,12 @@ async fn stop_start_and_restart_resume_the_same_conversation() {
     let state = service(dir, vec![session]);
     stream_script(dir, &answering());
     start_with_prompt(&state, id, dir).await;
-    let first = fixture_events("text-turn.jsonl");
+    // The daemon's note of the first prompt (#941 R3), then the CLI's answer.
+    let mut first = vec![micold_core::structured::StructuredEvent::UserSent {
+        text: PROMPT.into(),
+        attachments: vec![],
+    }];
+    first.extend(fixture_events("text-turn.jsonl"));
     let mut watching = viewer(&state, dir, id).await;
     events_until(&mut watching, id, |got| got.len() >= first.len()).await;
     record_conversation(dir, id);

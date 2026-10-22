@@ -44,3 +44,26 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
   them, the queue requests had no arm (the workspace did not build).
 - green: `server.rs` refuses them "Not available yet", ignores `TurnInterrupt`, refuses a message
   with pictures → the test passes, with #938's `structured_session` and `structured_resume` tests.
+
+## M2 — daemon delivers, queues and reports busy/idle (T023–T033)
+
+### Cycle 4 — stand-in, delivery, queue, hold, activity (T023–T026 → T027–T033)
+
+- tests: `daemon/tests/structured_input.rs` (new, 12 cases: encoding of six sends, busy/idle
+  within 1 s and the handshake replay, activity from the turn, `IoFailed`, isolation of two
+  sessions, queue order, the driver race, queue edits, hold on exit/stop and release, a failed
+  queued delivery, 50 concurrent two-window sends, delete); stand-in directives `await-file`,
+  `on-message`, `on-message-gated` and the `CLOSE-STDIN` line (T023);
+  `structured_session.rs` mid-turn case now queues (T026), the M1 "Not available yet" test
+  replaced by an interrupt-ignored / pictures-over-the-limits test; `structured_session` and
+  `structured_resume` expectations gain the `UserSent` note.
+- red: written against names that did not exist on `origin/main`
+  (`server::spawn_input_driver`, the stand-in's `on-message-gated`, `StructuredInput`
+  broadcasts): the target did not compile, and with stubs the queue tests timed out. After green,
+  a mutant of `state.rs` (`turn_closed` never pumps; the structured hook filter off) →
+  structured_input 5 passed, 7 failed (queue order, driver race, activity, hold, failed
+  delivery, edits, concurrent sends). Restored.
+- green: `cargo test -p micold-daemon --test structured_input --test structured_session` → 12
+  and 16 passed; `structured_permission*`, `structured_lifecycle`, `structured_history`,
+  `structured_resume`, `structured_saved_history`, `plan_usage_structured`,
+  `mcp_create_session`, `activity_pipeline`, the daemon lib: all pass.
