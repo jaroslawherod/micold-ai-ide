@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M7 implemented (T050–T054 ticked); verify next
-- **Next step**: M7 verify: scoped gate + review A (high), review B, full gate, PR files. Cross-feature holds: M8 ← #941 M6, M9 ← #942 M7/M8
+- **Phase**: M7 reviewed (A 2 rounds, B 2), full gate green at 0e7b9b19 (split-gate.sh); pushed; PR files written; orchestrator opens the PR
+- **Next step**: orchestrator opens the M7 PR from `943-M7/pr-title.txt`/`pr-body.md`, waits on CI, merges; then M8 (holds: M8 ← #941 M6, M9 ← #942 M7/M8)
 
 ## Pull requests
 
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | #1250 | merged |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation (decision 2: A, confirmed) | #1252 | merged |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | #1257 | merged |
-| M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | | in progress |
+| M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | | pushed, PR to open |
 | M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** | | pending |
 | M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | pending |
 
@@ -89,6 +89,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M7 (scoped, sonnet, claude -p) | 2 | e54e773ad3b63812f8aa40d85774109a6b42e1c4:60e69c6bc6f588c804c40a0973558addfcdfb039 | CLEAN |
 | Review B M7 (conformance, sonnet, claude -p) | 1 | e54e773ad3b63812f8aa40d85774109a6b42e1c4:60e69c6bc6f588c804c40a0973558addfcdfb039 | CHANGES: F1 MAJOR a click on a terminal-only row reopened the palette beside the offer — fixed (pick dismisses over the draft; red test); F2 MINOR T052/T053 red evidence thin — fixed (mutation recorded). Verify: `features_command_palette` 14, `features_session` 69 passed |
 | Scoped check M7 run 2 | — | 60e69c6b | red: `feature_write_isolation` (unclassified methods; `command_palette` writing `composers`) — fixed: the glue moved to `features/composer.rs`, palette state and switch offer held in `composers` |
+| Review B M7 (scoped, sonnet, claude -p) | 2 | c421317b74053b04c2d9df1f5163cf8d58f430b3:0e7b9b19e14e0569a4a849fa0490b69514ca2f02 | CLEAN |
+| Full gate M7 run 1 | — | 0e7b9b19 | red: `micold-daemon attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (no daemon change in M7; passed 5 of 5 reruns alone — timing flake under the gate's load) |
+| Full gate M7 run 2 | — | 0e7b9b19 | green (split-gate.sh, ALL_GREEN) |
 
 ## Declined review findings
 
