@@ -51,6 +51,7 @@ pub struct TextArea<'a, M> {
     on_submit: Option<M>,
     key_binding: Option<KeyBindingFn<'a, M>>,
     max_height: Option<f32>,
+    on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
 
 /// What a key press does, as `.key_binding(…)` decides it.
@@ -67,6 +68,7 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
             on_submit: None,
             key_binding: None,
             max_height: None,
+            on_focus_change: None,
         }
     }
 
@@ -93,6 +95,14 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
     /// `Binding::from_key_press(press)` keeps the default for it.
     pub fn key_binding(mut self, f: impl Fn(KeyPress) -> Option<Binding<M>> + 'a) -> Self {
         self.key_binding = Some(Box::new(f));
+        self
+    }
+
+    /// Report the editor gaining (`true`) and losing (`false`) the keyboard, so the application
+    /// knows a field holds it: without the report a window that gives keys to its terminal takes
+    /// the focus back on the first key (feature 941, `KeyboardElsewhere`).
+    pub fn on_focus_change(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
+        self.on_focus_change = Some(Box::new(f));
         self
     }
 
@@ -153,6 +163,7 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
             editor: editor.into(),
             roles: r,
             max_height: area.max_height,
+            on_focus_change: area.on_focus_change,
         })
     }
 }
@@ -164,7 +175,13 @@ struct Chrome<'a, M> {
     roles: Roles,
     /// The height growth stops at, the field's whole height.
     max_height: Option<f32>,
+    /// What the editor's focus changing sends.
+    on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
+
+/// The editor's focus as last reported.
+#[derive(Default)]
+struct Reported(bool);
 
 impl<M> Chrome<'_, M> {
     fn focused(tree: &Tree) -> bool {
@@ -185,11 +202,11 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Chrome<'a, M> {
         children, diff);
 
     fn tag(&self) -> tree::Tag {
-        tree::Tag::stateless()
+        tree::Tag::of::<Reported>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::None
+        tree::State::new(Reported::default())
     }
 
     fn size(&self) -> Size<Length> {
@@ -302,6 +319,15 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Chrome<'a, M> {
                 shell,
                 viewport,
             );
+        }
+        // After the editor: the event that moves its focus is the one it has just handled.
+        if let Some(on_focus_change) = &self.on_focus_change {
+            let focused = Self::focused(tree);
+            let reported = tree.state.downcast_mut::<Reported>();
+            if reported.0 != focused {
+                reported.0 = focused;
+                shell.publish(on_focus_change(focused));
+            }
         }
     }
 
@@ -494,5 +520,28 @@ mod tests {
             vec!["edit".to_string()],
             "the default still edits"
         );
+    }
+
+    /// Feature 941: a press in the area reports its focus, and a press outside it the loss, so the
+    /// application knows a field holds the keyboard (without it, the first key typed in a
+    /// structured session's composer went back to the window and was lost).
+    #[test]
+    fn a_press_reports_the_editors_focus_and_a_press_elsewhere_its_loss() {
+        use super::super::test_support::Mounted;
+        use iced::Point;
+        let content = Content::with_text("draft");
+        let mut m = Mounted::new(
+            TextArea::new(&content, LIGHT)
+                .on_action(|_| "edit".to_string())
+                .on_focus_change(|focused| format!("focus={focused}")),
+        );
+        let inside = m.container().center();
+        assert!(m.press(inside).contains(&"focus=true".to_string()));
+        assert!(
+            !m.press(inside).iter().any(|m| m.starts_with("focus=")),
+            "reported once, not on every press"
+        );
+        let outside = Point::new(inside.x, m.container().y + m.container().height + 100.0);
+        assert!(m.press(outside).contains(&"focus=false".to_string()));
     }
 }

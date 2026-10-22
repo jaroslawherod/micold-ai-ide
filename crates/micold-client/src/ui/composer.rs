@@ -219,7 +219,8 @@ fn input_row<'a>(
                 action: EditorAction(action),
             })
         })
-        .key_binding(move |press| key_binding(session, press, caret, lines, phase));
+        .key_binding(move |press| key_binding(session, press, caret, lines, phase))
+        .track_focus(FieldId::Composer(session), None);
     let mut controls = row![container(area).width(Length::Fill)]
         .spacing(spacing::SM)
         .align_y(Alignment::End);

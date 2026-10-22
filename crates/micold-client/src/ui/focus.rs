@@ -29,7 +29,7 @@
 use crate::app::Message;
 use crate::features::window::FieldId;
 use crate::features::window::Msg as WindowMsg;
-use crate::ui::material::{Checkbox, Select, TextField};
+use crate::ui::material::{Checkbox, Select, TextArea, TextField};
 
 use iced::advanced::widget::operation::scrollable::{AbsoluteOffset, Scrollable};
 use iced::advanced::widget::operation::{Focusable, Outcome};
@@ -100,6 +100,16 @@ where
 {
     fn track_focus(self, id: FieldId, _focused: Option<FieldId>) -> Self {
         self.on_blur(Message::Window(WindowMsg::FieldFocusChanged(id, false)))
+    }
+}
+
+/// A text area reports its focus on the same route; it draws its focus off its editor's own
+/// state, so, like a select, it is not told (`focused` unused).
+impl<'a> TrackFocus for TextArea<'a, Message> {
+    fn track_focus(self, id: FieldId, _focused: Option<FieldId>) -> Self {
+        self.on_focus_change(move |focused| {
+            Message::Window(WindowMsg::FieldFocusChanged(id, focused))
+        })
     }
 }
 
