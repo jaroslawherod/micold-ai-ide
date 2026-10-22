@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: implement M3
-- **Next step**: M3 reviews clean (A round 2, B round 1); full gate, then the M3 PR. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Phase**: pr M3
+- **Next step**: M3 PR to open by the orchestrator (branch pushed; title and body in the unit scratchpad `943-M3/`), CI, merge; then M4. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1237 | design (spec, plan, tasks) | merged (rebase) | f27e1182 |
 | #1239 | M1 | merged (rebase) | 8304c937 |
 | #1241 | M2 | merged (rebase) | 6b3b62c7 |
+| (to open) | M3 | gate green at 52887518, reviews clean; branch pushed | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Core: commands, terminal-only, palette, model, control vs recorded fixtures | #1239 | merged |
 | M2 | T019–T024 | full | Core transcript: chips, command output, compact/clear, model and terminal markers. **Needs #941 M1** (met) | #1241 | merged |
-| M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | | in progress |
+| M3 | T025–T031 | full | Daemon: command list at spawn; `/model` and terminal-only refused | (to open) | PR |
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | | pending |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation — **provisional, decision 2** | | pending |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** | | pending |
@@ -89,4 +90,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- `micold-daemon --test attention_error_notice` `without_focus_the_first_reporting_window_gets_the_notice` is flaky (1 in 5 in isolation, M3 gate run 3); not this feature's, not touched by its diff.
