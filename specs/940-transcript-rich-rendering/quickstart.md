@@ -42,7 +42,7 @@ Record the pass with the `visual-pass` skill into `specs/940-transcript-rich-ren
 
 ## Results (close, 2026-10-22)
 
-- **Part A**: `scripts/gate.sh` green at `18e9cf09` (9,440 passed, 0 failed); the markdown, edit
+- **Part A**: `scripts/gate.sh` green on main at `18e9cf09` and again on the close's tree at `77e6071e` (each 9,440 passed, 0 failed, 17 ignored); the markdown, edit
   diff, rich cache, renderer and shared-component rows run inside it. The release budget was run in
   M5 (2026-10-21): open with every card open `RICH` 118 ms (budget 1 s), slowest streamed markdown
   delta 2.7 ms (budget 100 ms); not re-run at close.
