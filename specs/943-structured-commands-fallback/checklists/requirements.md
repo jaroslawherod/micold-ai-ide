@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,8 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers are open for the clarify unit: User Story 1 scenario 5 (which
-  conversation a restart continues after `/clear`) and User Story 5 scenario 2 (whether turns made
-  in the terminal period appear in the transcript).
+- Both [NEEDS CLARIFICATION] markers were resolved in clarify (2026-10-22): US1 s5 → FR-005a
+  (provisional, pending the user's answer); US5 s2 → FR-023 (terminal-period turns only marked).
 - Command names (`/compact`, `/model`, `/mcp`, ...) are the user-facing vocabulary of the issue, not
   implementation details.
 - The edge case "Login lost" is covered by User Story 4 scenario 8 and FR-022a.

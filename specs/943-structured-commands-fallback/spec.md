@@ -100,6 +100,20 @@ daemon side lands first.
   specs/582-attach-provider-worktrees-sessions/spec.md#Out of Scope — "Importing a provider's
   conversation history into Micold's own terminal history")_
 
+- Q: After `/clear` in a structured session, which conversation does a later restart, resume or
+  switch of kind continue? → A: The cleared one. A structured session follows the CLI: it keeps
+  the conversation handle reported by its latest init and resumes that on every later launch in
+  either kind; the session's identity does not change. Terminal sessions keep feature 582 FR-017's
+  trade-off (a `/clear` typed in the terminal is not seen). Added FR-005a. _(decided by user —
+  provisional A, pending jaro; revert to B (keep 582 FR-017 everywhere) or C (app-handled `/clear`)
+  if he picks otherwise)_
+- Q: When switched to the terminal after a structured `/clear`, which handle does the terminal
+  launch resume, and what after a `/clear` typed in the terminal? → A: The recorded handle
+  (FR-005a, FR-020); a terminal `/clear` is not seen, so switching back resumes the last handle the
+  structured session recorded, and discovery treats the terminal's successor transcript as a
+  continuation, not a new session. _(agent-resolved:
+  specs/582-attach-provider-worktrees-sessions/spec.md#FR-017, bugs/BUG-904.md#Decisions)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Run skills and commands from the composer (Priority: P1)
@@ -136,10 +150,9 @@ structured session runs `/speckit-specify` to its first question.
    earlier turns stay visible above it.
 5. **Given** the user sends `/clear`, **When** the CLI starts over, **Then** the transcript shows a
    marker that the conversation was cleared, earlier turns stay visible above it marked as before
-   the clear, and later turns continue the cleared conversation [NEEDS CLARIFICATION: after a
-   `/clear`, which conversation does a later restart, resume or switch of kind continue: the new,
-   cleared one (the app follows the CLI to it), or does the app treat `/clear` itself, as an
-   app-handled command that starts the session's conversation over under the app's control?].
+   the clear, and later turns continue the cleared conversation; every later restart, restore
+   after a daemon restart or switch of kind resumes the cleared conversation (the one the CLI
+   reported at the clear), not the one before it (FR-005a).
 6. **Given** a built-in command that answers with text and no model turn (such as `/context`),
    **When** it is sent, **Then** its output is shown in the transcript as the command's output,
    readable, without the CLI's internal markup.
@@ -386,6 +399,12 @@ model choice and the permission mode are as before.
   turns before it MUST stay visible.
 - **FR-005**: A `/clear` MUST be shown in the transcript as a marker at the point it happened, with
   the turns before it still visible and marked as belonging to the conversation before the clear.
+- **FR-005a**: A structured session MUST keep, with the session, the conversation handle its CLI
+  last reported (the session identity of its latest init, which changes on `/clear`) and MUST
+  resume that conversation on every later launch in either kind (restart, restore after a daemon
+  restart, switch of kind); the session's own identity MUST NOT change. A `/clear` run inside the
+  terminal screen is not seen (as for terminal sessions today, feature 582 FR-017): a later launch
+  resumes the last conversation handle the structured session recorded.
 - **FR-006**: The output of a built-in command that answers without a model turn MUST be shown in
   the transcript as that command's output, without the CLI's internal markup.
 
@@ -442,8 +461,8 @@ model choice and the permission mode are as before.
   to structured, from its view and its menu, replacing feature 938 FR-002; sessions of other AI
   CLIs MUST NOT offer it, and a request to switch one MUST be refused with a reason.
 - **FR-020**: A switch MUST end the session's CLI process and start it in the other kind resuming
-  the same conversation (or, for a session whose conversation has not started, starting it as a new
-  one), keeping the session's identity, worktree, sandbox and terminals; the new kind MUST be
+  the same conversation (its recorded conversation handle, FR-005a; or, for a session whose
+  conversation has not started, starting it as a new one), keeping the session's identity, worktree, sandbox and terminals; the new kind MUST be
   persisted and shown in every window and wherever sessions are listed.
 - **FR-021**: A switch asked for while a turn is in progress, a permission request is pending, or
   a terminal session's CLI reports it is working MUST be confirmed by the user first, saying that
@@ -503,6 +522,8 @@ model choice and the permission mode are as before.
   reported, and whether the CLI marks it terminal-only; as of the session's latest start.
 - **Terminal-only list**: the application's documented commands that need the terminal, with why,
   and the Claude Code version they were checked against.
+- **Conversation handle**: per Claude Code session: the conversation a launch resumes; the session's
+  identity until a structured session's CLI reports another (after `/clear`); persisted.
 - **Model choice**: per session: Default or a model name; persisted with the session.
 - **Session model**: the model the CLI last reported for the session.
 - **Session kind** (from feature 938): now changeable by a switch; persisted.
