@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1161
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
-- **Phase**: milestone M3
-- **Next step**: M3 PR CI and merge, then the close unit
+- **Phase**: close
+- **Next step**: free disk (/home 100%), then close tasks 3-7: tests for tdd/verification.md findings 2-5 (tasks T025-T029), gate, review, close PR
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1163 | Design | merged | 7406e4cdc61cbf75bc88c92a2bee08913b6bdf71 |
 | #1245 | M1 | merged | d16d74c143b73ad6af5d341e32872e3711ce8dc6 |
 | #1247 | M2 | merged | 420b051e5b3be4610a19347b44f37099bed72ccb |
-| #1251 | M3 | open | |
+| #1251 | M3 | merged | 169ef801b357b40a4284f785d500e25916e18afc |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T014 | full | Template in Settings, pre-fills the dialog's first prompt | #1245 | merged |
 | M2 | T015–T019 | light | Validation in Settings; bad stored template renders empty | #1247 | merged |
-| M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #1251 | in review |
+| M3 | T020–T024 | full | MCP create_session/create_worktree render the template | #1251 | merged |
 
 ## Decisions
 
@@ -70,8 +70,10 @@ None.
 
 ## Open escalation
 
-None. <or: the banner as sent, and when>
+Close unit blocked 2026-10-22: /home is 100% full (~300 MB free; target-shared 468G). `mise run sweep` refuses while another worktree's `cargo test -p micold-daemon hooks` runs; forcing it (SWEEP_FORCE=1) would break that build. No gate or test can run. Ask: free disk (let that build end, then `mise run sweep`) or approve SWEEP_FORCE=1.
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- `git_credential_grant` fails locally only, under the global `url.insteadOf` rewrite (seen in M3); not fixed, outside this flow.
+- Quickstart §B step 4 (MCP, live) not run by eye: covered by `mcp_default_prompt.rs` (real PTY, stand-in CLI); steps 1-3 have visual/c3,c5,c11.
+- tdd/verification.md (BLOCKED: no test list or cycle log; suite not run, disk full). Remediation T025-T029 in tasks.md; test-strength findings 2-5 (reducer-driven dialog tests, settings-to-form path, 5 s bound, github_issues_enabled off) still to do.

@@ -103,3 +103,13 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 Polish (quickstart §B results, task ticks) changes no code: left to the close unit. M1 has 14 tasks (over the 10-task guide) but US1 and US2 share one rendering path and the dialog needs the setting, its daemon path and the Settings field to be observable; no acceptance scenario split yields a deliverable on its own.
+
+## Phase 6: TDD remediation
+
+Source: `tdd/verification.md` (verdict BLOCKED). The feature is not done until T025 and T026 are cleared.
+
+- [ ] T025 (finding 1) Run `/speckit-tdd-plan` to create `specs/1161-default-prompt-template/tdd/test-list.md`, then run the whole suite once the disk has room (`mise run gate`) and record the result; re-run `/speckit-tdd-verify` to lift BLOCKED. Test-first order of M1-M3 cannot be recovered; record it as `LIKELY` at best.
+- [ ] T026 (findings 2, 3) Add tests in `crates/micold-client/tests/features_worktree_form.rs` that drive `Msg::TypeSelected`, `TicketChanged`, `NameChanged`, issue pick and listing arrival through the reducer with a template set and assert `first_prompt`; add one test that a stored `DaemonSettings.default_prompt_template` reaches the opened form (`crates/micold-client/src/shell/`). Proof: removing the `refresh_default_prompt()` call at `worktree_form.rs:1221` makes one fail; `cargo test -p micold-client --test features_worktree_form`.
+- [ ] T027 (finding 4) Pin `PROMPT_LOOKUP_BOUND` to 5 s in a unit test in `crates/micold-daemon/src/state.rs` (US4 s6). Proof: `cargo test -p micold-daemon --lib state::`.
+- [ ] T028 (finding 5) Add a case to `crates/micold-daemon/tests/mcp_default_prompt.rs` with `github_issues_enabled` off asserting no lookup and empty title/body. Proof: deleting the gate at `ops.rs:600` fails it; `cargo test -p micold-daemon --test mcp_default_prompt`.
+- [ ] T029 (finding 7) Split the two-scenario tests at `mcp_default_prompt.rs:274` and `:315` into one scenario each. Proof: `cargo test -p micold-daemon --test mcp_default_prompt`.
