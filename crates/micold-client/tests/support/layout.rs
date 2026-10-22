@@ -51,6 +51,22 @@ pub const REFERENCE_ICON_FONT_BYTES: &[u8] =
 /// The family the icon face reports, as the application names it (`material/glyph.rs`).
 pub const REFERENCE_ICON_FONT_FAMILY: &str = "Material Symbols Outlined";
 
+/// The monospace face `Font::MONOSPACE` measures with. **Test-only**, unlike the faces above.
+///
+/// The application ships no monospace face: `Font::MONOSPACE` is `Family::Monospace`, which
+/// cosmic-text resolves to `Noto Sans Mono` when the host has it and otherwise to whatever
+/// monospaced host face its lookup lands on. So no committed file is "the face the application
+/// draws code with", and measuring the host's left every code line host-dependent: feature 940's
+/// `session-transcript-rich` was recorded on a host whose lookup landed on a 0.600 em face
+/// (Liberation Mono) and CI's Ubuntu runner on a 0.602 em one (DejaVu Sans Mono, by its widths),
+/// every code line 0.3–1.1px wider. Pinning a committed
+/// face here is what makes the geometry machine-independent; the widths are Fira Mono's, not a
+/// promise about any one platform's. Provenance: `tests/fixtures/FONT-PROVENANCE.md`.
+pub const REFERENCE_MONO_FONT_BYTES: &[u8] = include_bytes!("../fixtures/FiraMono-Regular.ttf");
+
+/// The family the monospace face reports (name ID 1), set as the database's monospace family.
+pub const REFERENCE_MONO_FONT_FAMILY: &str = "Fira Mono";
+
 /// The family name the pinned face reports (name ID 1).
 pub const REFERENCE_FONT_FAMILY: &str = "Roboto";
 
@@ -179,6 +195,14 @@ pub fn renderer() -> iced::Renderer {
             .write()
             .expect("the global font system lock was poisoned")
             .load_font(Cow::Borrowed(REFERENCE_ICON_FONT_BYTES));
+        let mut fonts = iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system lock was poisoned");
+        fonts.load_font(Cow::Borrowed(REFERENCE_MONO_FONT_BYTES));
+        fonts
+            .raw()
+            .db_mut()
+            .set_monospace_family(REFERENCE_MONO_FONT_FAMILY);
     });
 
     block_on(<iced::Renderer as Headless>::new(

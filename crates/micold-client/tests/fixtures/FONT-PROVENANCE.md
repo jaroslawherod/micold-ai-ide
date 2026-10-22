@@ -8,7 +8,13 @@
 | `Roboto-Medium.ttf` | the type roles that resolve to weight >= 500 (`material/text.rs`) |
 | `MaterialSymbolsOutlined.ttf` | icons, which are glyphs and are shaped and measured like any other text |
 
-See `assets/fonts/PROVENANCE.md` for their source, versions and licences. This file records why the
+One more face is committed here, **for the tests only**, because the application ships none:
+
+| File | Role in the snapshot |
+|---|---|
+| `FiraMono-Regular.ttf` | `Font::MONOSPACE` (code blocks, inline code, diff and tool-result lines), set as the database's monospace family |
+
+See `assets/fonts/PROVENANCE.md` for the shipped faces' source, versions and licences. This file records why the
 snapshot uses them and what breaks if that changes.
 
 ## This file used to describe a second copy, and that was the defect
@@ -52,3 +58,21 @@ That is the failure mode to watch for: not a face that is absent, but a face tha
 which measures something plausible and wrong. `the_icon_face_parses_and_is_the_face_that_measures`
 pins each glyph to the committed face's own advance rather than to a constant, so a substitution
 fails rather than being recorded.
+
+## The monospace face (feature 940)
+
+The application draws code in `Font::MONOSPACE` (`Family::Monospace`) and ships no monospace face,
+so cosmic-text resolves it on the host: `Noto Sans Mono` when installed, otherwise whichever
+monospaced host face its lookup lands on. `session-transcript-rich`, the first covered state with
+code in it, was recorded on a host that resolved Liberation Mono (0.600 em) and failed on CI's
+Ubuntu runner, which resolved a 0.602 em face (DejaVu Sans Mono, by its widths): every code line
+0.3–1.1px wider, heights and positions unchanged. `tests/support/layout.rs` now loads
+`FiraMono-Regular.ttf` and sets it as the monospace family, so code measures the same everywhere.
+Its widths are Fira Mono's, not a promise about the face any one platform draws code with.
+`the_monospace_face_parses_and_is_the_face_that_measures` (`layout_apparatus.rs`) asserts that
+`Family::Monospace` resolves to these committed bytes, not to a host file, even one of the same name.
+
+- **Upstream**: [mozilla/Fira](https://github.com/mozilla/Fira), `ttf/FiraMono-Regular.ttf`, fetched
+  2026-10-21 at `fd8c8c0a3d353cd99e8ca1662942d165e6961407`; Fira Mono Regular, version 3.206.
+- **SHA-256**: `8c86f2963208a353c3435e28ecb38a99ab68f14d7433ba00c1822cef9a9c1b44`
+- **Licence**: SIL Open Font License 1.1, verbatim upstream `LICENSE` in `LICENSE-FiraMono-OFL.txt`.
