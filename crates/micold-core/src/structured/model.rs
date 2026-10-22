@@ -12,8 +12,9 @@ pub const MAX_MODEL_NAME_BYTES: usize = 128;
 /// (FR-014).
 pub const MODEL_SHORTCUTS: [&str; 3] = ["sonnet", "opus", "haiku"];
 
-/// A model name: non-blank, no whitespace, at most [`MAX_MODEL_NAME_BYTES`]. Checked again when
-/// read back from the store.
+/// A model name: non-blank, no whitespace, not starting with `-` (so it is never read as another
+/// launch flag after `--model`), at most [`MAX_MODEL_NAME_BYTES`]. Checked again when read back
+/// from the store.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct ModelName(String);
@@ -21,6 +22,7 @@ pub struct ModelName(String);
 impl ModelName {
     pub fn parse(name: &str) -> Result<Self, ModelRefusal> {
         let valid = !name.is_empty()
+            && !name.starts_with('-')
             && name.len() <= MAX_MODEL_NAME_BYTES
             && !name.contains(char::is_whitespace);
         if valid {
@@ -135,7 +137,16 @@ mod tests {
         );
         assert!(ModelName::parse("claude-opus-5-5[1m]").is_ok());
         assert!(ModelName::parse(&"m".repeat(128)).is_ok());
-        for bad in ["", "   ", "two words", "tab\there", "line\n", " haiku"] {
+        for bad in [
+            "",
+            "   ",
+            "two words",
+            "tab\there",
+            "line\n",
+            " haiku",
+            "--resume",
+            "-m",
+        ] {
             assert_eq!(ModelName::parse(bad), Err(ModelRefusal::Invalid), "{bad:?}");
         }
         assert_eq!(
