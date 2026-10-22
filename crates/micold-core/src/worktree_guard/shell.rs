@@ -155,10 +155,11 @@ fn segments(command: &str) -> Vec<Vec<String>> {
 mod tests {
     use super::*;
 
+    /// Separators are normalised to `/`: `Path::join` uses the platform one.
     fn run(command: &str) -> Vec<String> {
         targets(command, Path::new("/p/a"))
             .iter()
-            .map(|p| p.to_string_lossy().into_owned())
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
             .collect()
     }
 
@@ -233,6 +234,6 @@ mod tests {
 
     #[test]
     fn a_windows_spelling_is_followed() {
-        assert_eq!(run("cd 'C:\\x\\y'"), ["/p/a", "C:\\x\\y"]);
+        assert_eq!(run("cd 'C:\\x\\y'"), ["/p/a", "C:/x/y"]);
     }
 }
