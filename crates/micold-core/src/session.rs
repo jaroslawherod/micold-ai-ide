@@ -523,13 +523,19 @@ pub struct Session {
     /// The model the user chose for the session (#943, FR-017): persisted and used on every
     /// launch, in either kind. Changed through the daemon's `Catalog::set_model` only.
     pub model: crate::structured::model::ModelChoice,
+    /// The conversation a structured session's CLI last reported when it is not the session's
+    /// own id, as after a `/clear` (#943 FR-005a, provisional: ledger decision 2). Persisted;
+    /// changed through the daemon's `Catalog::set_conversation` only, and read only through
+    /// [`Session::resume_handle`].
+    pub conversation: Option<uuid::Uuid>,
 }
 
 impl Session {
-    /// The conversation a resume of this session continues (#943 FR-020): every
-    /// `LaunchMode::Resume` names it. The session's own id; M5 may follow a `/clear` here.
+    /// The conversation a resume of this session continues (#943 FR-020, FR-005a): every
+    /// `LaunchMode::Resume` names it. The conversation a `/clear` started when one was recorded,
+    /// else the session's own id.
     pub fn resume_handle(&self) -> uuid::Uuid {
-        self.id.0
+        self.conversation.unwrap_or(self.id.0)
     }
 
     /// A brand-new session at `location`, starting immediately (FR-010). Always starts
@@ -572,6 +578,7 @@ impl Session {
             kind,
             permission_mode: PermissionMode::Default,
             model: crate::structured::model::ModelChoice::Default,
+            conversation: None,
         }
     }
 
@@ -625,6 +632,7 @@ impl Session {
             kind,
             permission_mode: PermissionMode::Default,
             model: crate::structured::model::ModelChoice::Default,
+            conversation: None,
         }
     }
 
@@ -916,5 +924,22 @@ mod resume_handle_tests {
             crate::structured::model::ModelChoice::Default,
             "a new session runs the CLI's default"
         );
+        assert_eq!(session.conversation, None, "a new session has cleared nothing");
+    }
+
+    /// #943 T039 (FR-005a, provisional M5): after a `/clear`, every resume names the
+    /// conversation the CLI reported, and the session keeps its own id.
+    #[test]
+    fn the_resume_handle_follows_the_recorded_conversation() {
+        let mut session = Session::start_new_of_kind(
+            SessionLocation::Default,
+            AiCli::ClaudeCode,
+            SessionKind::Structured,
+        );
+        let id = session.id;
+        let cleared = uuid::Uuid::from_u128(0x943_0005);
+        session.conversation = Some(cleared);
+        assert_eq!(session.resume_handle(), cleared);
+        assert_eq!(session.id, id, "the session's own identity never changes");
     }
 }

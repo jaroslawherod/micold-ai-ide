@@ -253,18 +253,18 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 7: Daemon — conversation handle after `/clear` (M5, provisional: ledger decision 2)
 
-- [ ] T039 [P] [US1] [US5] Tests in `core/tests/session_store.rs` and unit tests in
+- [x] T039 [P] [US1] [US5] Tests in `core/tests/session_store.rs` and unit tests in
   `core/src/session.rs`: `StoredSession.conversation` absent → `None`, round-trips, not written when
   `None`; `resume_handle()` returns `conversation` when set, else the session id (FR-005a)
-- [ ] T040 [US1] Extend the stand-in in `daemon/tests/support/structured.rs`: after a `/clear` user
+- [x] T040 [US1] Extend the stand-in in `daemon/tests/support/structured.rs`: after a `/clear` user
   message, the next `init` carries a new `session_id` (from `command-clear.jsonl`) and the stand-in
   writes a transcript file under that id in its config dir
-- [ ] T041 [P] [US1] [US5] Tests in `daemon/tests/structured_resume.rs`: after `/clear` the
+- [x] T041 [P] [US1] [US5] Tests in `daemon/tests/structured_resume.rs`: after `/clear` the
   catalog's `conversation` is the new id; a restart and a daemon restore launch with
   `--resume <new id>` and the same `SessionId`; the discovery pass adopts no second session for the
   post-clear transcript (`known_session_ids` includes the handle); a session without `/clear`
   resumes its own id as before
-- [ ] T042 Implement T039–T041: `Session.conversation`, `resume_handle()` returning it
+- [x] T042 Implement T039–T041: `Session.conversation`, `resume_handle()` returning it
   (`core/src/session.rs`), `StoredSession.conversation` (`core/src/store.rs`),
   `Catalog::set_conversation` and the handle in `known_session_ids` (`daemon/src/catalog.rs`), the
   latest `init`'s `session_id` recorded when it differs (`daemon/src/state.rs`)

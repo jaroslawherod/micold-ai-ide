@@ -308,6 +308,11 @@ struct StoredSession {
     /// `Default`, so an older record loads `Default` and no `schema_version` bump is needed.
     #[serde(default, skip_serializing_if = "ModelChoice::is_default")]
     model: ModelChoice,
+    /// The conversation a structured session resumes after a `/clear` (#943 FR-005a,
+    /// provisional). Additive and defaulted, and not written when `None`, so an older record
+    /// resumes its own id and no `schema_version` bump is needed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    conversation: Option<uuid::Uuid>,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -431,6 +436,7 @@ impl StoredSession {
             kind: session.kind,
             permission_mode: session.permission_mode,
             model: session.model.clone(),
+            conversation: session.conversation,
         }
     }
 
@@ -470,6 +476,7 @@ impl StoredSession {
         session.main = self.main;
         session.permission_mode = self.permission_mode;
         session.model = self.model;
+        session.conversation = self.conversation;
         session
     }
 }

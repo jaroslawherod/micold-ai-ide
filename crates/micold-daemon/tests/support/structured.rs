@@ -65,6 +65,12 @@ const STAND_IN: &str = "claude.exe";
 ///   name refuses all. Each accepted model is reported in every later `init` line the stand-in
 ///   writes (`replay`, `on-message`), in place of the recorded one. A `set_model` request is
 ///   recorded like every stdin line but, once `models` ran, reaches no other directive;
+/// - after an `on-message` user message whose text is exactly `/clear` (#943 T040), the next `init`
+///   line written that names a conversation id (as `command-clear.jsonl`'s post-clear `init` does;
+///   the recorded `<SESSION_ID>` placeholder is none) is that conversation's start: the stand-in
+///   records it, as `claude` does, in a transcript file under `CLAUDE_CONFIG_DIR` in `claude`'s
+///   layout (`projects/<cwd with non-alphanumerics as '-'>/<id>.jsonl`), one `{}` line, which does
+///   not open with the `/clear` command;
 /// - any other line is written to stdout as it is, with a line end.
 ///
 /// An `initialize` request is recorded like every stdin line, in order, but never reaches
@@ -88,6 +94,35 @@ static MODELS: Models = Models {
     accept: Mutex::new(None),
     accepted: Mutex::new(None),
 };
+
+/// Set by a `/clear` user message: the next `init` naming a conversation starts it (#943 T040).
+static CLEARED: Mutex<bool> = Mutex::new(false);
+
+/// After a `/clear`, record the conversation the `init` line `text` names, as `claude` does.
+fn record_cleared_conversation(text: &str) {
+    if !text.contains("\"subtype\":\"init\"") {
+        return;
+    }
+    let Some(id) = string_after(text, "session_id") else { return };
+    let named = id.len() == 36 && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+    let mut cleared = CLEARED.lock().unwrap();
+    if !*cleared || !named {
+        return;
+    }
+    *cleared = false;
+    let (Some(config), Ok(cwd)) = (std::env::var_os("CLAUDE_CONFIG_DIR"), std::env::current_dir())
+    else {
+        return;
+    };
+    let key: String = cwd
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let dir = std::path::Path::new(&config).join("projects").join(key);
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(dir.join(format!("{id}.jsonl")), "{}\n");
+}
 
 /// Answer a `set_model` request when the `models` directive ran; `false` leaves it to the script.
 fn answer_set_model(line: &str) -> bool {
@@ -115,10 +150,11 @@ fn answer_set_model(line: &str) -> bool {
 }
 
 /// `piece`, a line the stand-in is about to write, with an `init` line's model replaced by the
-/// last one accepted.
+/// last one accepted; after a `/clear`, an `init` naming a conversation records it.
 fn reported(piece: &[u8]) -> Vec<u8> {
     let accepted = MODELS.accepted.lock().unwrap().clone();
     let text = String::from_utf8_lossy(piece);
+    record_cleared_conversation(&text);
     match accepted {
         Some(model) if text.contains("\"subtype\":\"init\"") => {
             let Some(at) = text.find("\"model\":\"") else { return piece.to_vec() };
@@ -303,6 +339,9 @@ fn on_message(
             .find("\"text\":\"")
             .map(|at| json_string(&line[at + 8..]))
             .unwrap_or_default();
+        if text == "/clear" {
+            *CLEARED.lock().unwrap() = true;
+        }
         let file = replies
             .iter()
             .find(|(said, _)| *said == text)

@@ -871,6 +871,33 @@ impl Catalog {
         Ok(true)
     }
 
+    /// Keep `handle`, the conversation session `id`'s CLI reported, as the one its later launches
+    /// resume (#943 FR-005a, provisional: ledger decision 2), and persist it: `Ok(true)` when it
+    /// changed, `Ok(false)` when it already was (nothing written). The session's own id is kept as
+    /// no handle. A failed write leaves the earlier handle in place.
+    pub fn set_conversation(
+        &mut self,
+        id: SessionId,
+        handle: uuid::Uuid,
+    ) -> Result<bool, SetModeError> {
+        let (_, session) = self
+            .workspace
+            .find_session_mut(id)
+            .ok_or(SetModeError::NoSession)?;
+        let conversation = (handle != id.0).then_some(handle);
+        if session.conversation == conversation {
+            return Ok(false);
+        }
+        let before = std::mem::replace(&mut session.conversation, conversation);
+        if let Err(e) = self.persist() {
+            if let Some((_, session)) = self.workspace.find_session_mut(id) {
+                session.conversation = before;
+            }
+            return Err(SetModeError::Io(e));
+        }
+        Ok(true)
+    }
+
     /// Whether `location` of `project` has an un-archived session (feature 776).
     pub fn occupancy(&self, project: &Path, location: &SessionLocation) -> Occupancy {
         self.workspace
@@ -1810,7 +1837,9 @@ impl Catalog {
     /// ask (feature 026), because a set-wide answer from one CLI reports every session of the other
     /// as having no conversation, so none of them is ever offered as resumable. Lifecycle is not persisted (S3), so this
     /// mutates in memory only — no write. Regular (shell) sessions have no conversation to resume, so
-    /// they are never marked. Returns the count marked (diagnostics).
+    /// they are never marked. Returns the count marked (diagnostics). The id `is_resumable` is asked
+    /// about is the conversation a resume would continue ([`Session::resume_handle`]): the
+    /// session's own id unless a `/clear` was followed (#943 FR-005a).
     ///
     /// A recorded conversation is also the evidence that repairs a mis-persisted `mode` (BUG:
     /// "a worktree session starts with a plain terminal instead of its claude session"). `mode`
@@ -1837,7 +1866,9 @@ impl Catalog {
                 // session?", which is what decides *both* the lifecycle and the mode repair below.
                 // Passing the record's own (possibly damaged) mode would let the damage suppress its
                 // own detection.
-                if !is_resumable(session.id, &cwd, TerminalMode::AiCli, session.provider) {
+                // The conversation a resume would continue (#943 FR-005a), not always the id.
+                let handle = SessionId::from_uuid(session.resume_handle());
+                if !is_resumable(handle, &cwd, TerminalMode::AiCli, session.provider) {
                     continue;
                 }
                 if session.mode != TerminalMode::AiCli {
@@ -1894,7 +1925,9 @@ impl Catalog {
             .collect()
     }
 
-    /// The ids this catalog already has a record of at `project`, archived ones included.
+    /// The ids this catalog already has a record of at `project`, archived ones included, and the
+    /// conversation each structured session continues after a `/clear` (#943 FR-005a), so its
+    /// transcript is never adopted as a second session.
     ///
     /// Archived ones **included** deliberately: discovery must not resurrect a session the user
     /// closed, and the durable provider-side marker is the belt to this braces. Subtracting them
@@ -1904,7 +1937,11 @@ impl Catalog {
         self.workspace
             .sessions
             .get(project)
-            .map(|list| list.iter().map(|s| s.id.0).collect())
+            .map(|list| {
+                list.iter()
+                    .flat_map(|s| std::iter::once(s.id.0).chain(s.conversation))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -2168,6 +2205,62 @@ fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
         SessionLifecycle::Restarting { attempts } => WireLifecycle::Restarting { attempts },
         SessionLifecycle::Failed { reason, attempts } => WireLifecycle::Failed { reason, attempts },
         SessionLifecycle::InterruptedResumable => WireLifecycle::InterruptedResumable,
+    }
+}
+
+#[cfg(test)]
+mod conversation_tests {
+    //! #943 T041/T042 (FR-005a, provisional M5): the conversation a `/clear` started.
+
+    use super::*;
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::SessionKind;
+    use micold_core::settings::JsonFileSettingsStore;
+    use micold_core::store::{JsonFileStore, ProjectStore};
+    use micold_core::workspace::Workspace;
+
+    /// A catalog saved in a directory of its own, holding one structured session at `/p`.
+    fn catalog_with_session() -> (tempfile::TempDir, Catalog, SessionId) {
+        let dir = tempfile::tempdir().unwrap();
+        let session = Session::start_new_of_kind(
+            SessionLocation::Default,
+            AiCli::ClaudeCode,
+            SessionKind::Structured,
+        );
+        let id = session.id;
+        let project = std::path::PathBuf::from("/p");
+        JsonFileStore::at(dir.path().join("catalog.json"))
+            .save(&Workspace {
+                projects: vec![Project::new(project.clone(), true, Availability::Available)],
+                sessions: std::collections::BTreeMap::from([(project, vec![session])]),
+                ..Default::default()
+            })
+            .unwrap();
+        let catalog = Catalog::load(
+            Box::new(JsonFileStore::at(dir.path().join("catalog.json"))),
+            Box::new(JsonFileSettingsStore::at(dir.path().join("settings.json"))),
+        );
+        (dir, catalog, id)
+    }
+
+    #[test]
+    fn a_reported_conversation_is_kept_known_and_resumed_and_the_own_id_is_none() {
+        let (_dir, mut catalog, id) = catalog_with_session();
+        let cleared = uuid::Uuid::from_u128(0x943_0005);
+        assert_eq!(catalog.set_conversation(id, id.0).ok(), Some(false));
+        assert_eq!(catalog.set_conversation(id, cleared).ok(), Some(true));
+        assert_eq!(catalog.set_conversation(id, cleared).ok(), Some(false));
+        let known = catalog.known_session_ids(Path::new("/p"));
+        assert!(known.contains(&id.0) && known.contains(&cleared), "{known:?}");
+        let session = catalog.workspace().find_session(id).unwrap().1;
+        assert_eq!(session.resume_handle(), cleared);
+        assert_eq!(catalog.set_conversation(id, id.0).ok(), Some(true));
+        let session = catalog.workspace().find_session(id).unwrap().1;
+        assert_eq!(session.conversation, None, "the session's own id is no handle");
+        assert!(matches!(
+            catalog.set_conversation(SessionId::new(), cleared),
+            Err(SetModeError::NoSession)
+        ));
     }
 }
 
