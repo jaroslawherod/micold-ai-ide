@@ -731,8 +731,11 @@ async fn a_user_message_is_one_line_and_its_answer_reaches_every_viewer() {
     let (state, id) = started(project.path(), &answering_turn(0));
     let mut first = viewer(&state, project.path(), id).await;
     let mut second = viewer(&state, project.path(), id).await;
+    // Sent from a connection that views nothing: `answer` drops the frames it does not wait
+    // for, and a viewer's `UserSent` can reach it before the `OperationOk`.
+    let mut sender = connect(&state).await;
     let text = "two lines\n\"quoted\" — zażółć 🦀 m3-secret-marker";
-    assert_ok(&send_text(&mut first, 1, id, text).await, "the message");
+    assert_ok(&send_text(&mut sender, 1, id, text).await, "the message");
     delivered_is(project.path(), [text]).await;
     // The daemon's note of the message (#941 R3), then the CLI's answer.
     let mut expected = vec![StructuredEvent::UserSent {
