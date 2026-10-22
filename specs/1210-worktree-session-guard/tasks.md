@@ -40,10 +40,10 @@
 
 **Independent Test**: `mise run test-core` shell tests; daemon test of a Bash deny; quickstart B step 1 with a shell command.
 
-- [ ] T011 [P] [US1] Write failing tests for `crates/micold-core/src/worktree_guard/shell.rs`: quote-aware tokeniser, split on `&&`, `;`, `||`, newline; running directory tracked through `cd`/`pushd`; absolute, `./` and `../` path tokens judged; starting directory from the payload's top-level `cwd` (FR-011); variables, substitution and nested scripts are not analysed (documented limit, test that they allow).
-- [ ] T012 [US1] Implement `shell.rs` and wire `ToolCall::Bash` into `decide` in `worktree_guard/mod.rs`, with decision tests for `cd ../other && ls`, a Bash `cwd` inside another worktree, own-worktree and allowlist paths still allowed (after T011).
-- [ ] T013 [US1] Daemon test and wiring: `PreToolUse` Bash payload with `cwd` in another worktree gets the deny body (`crates/micold-daemon/src/hooks.rs`); the hook reads top-level `cwd` into `GuardInput.session_cwd` (after T012).
-- [ ] T014 [US1] Update `docs/user-guide/worktrees-and-sessions.md`: shell commands are judged best effort; expansion, variables and nested scripts are not analysed.
+- [x] T011 [P] [US1] Write failing tests for `crates/micold-core/src/worktree_guard/shell.rs`: quote-aware tokeniser, split on `&&`, `;`, `||`, newline; running directory tracked through `cd`/`pushd`; absolute, `./` and `../` path tokens judged; starting directory from the payload's top-level `cwd` (FR-011); variables, substitution and nested scripts are not analysed (documented limit, test that they allow).
+- [x] T012 [US1] Implement `shell.rs` and wire `ToolCall::Bash` into `decide` in `worktree_guard/mod.rs`, with decision tests for `cd ../other && ls`, a Bash `cwd` inside another worktree, own-worktree and allowlist paths still allowed (after T011).
+- [x] T013 [US1] Daemon test and wiring: `PreToolUse` Bash payload with `cwd` in another worktree gets the deny body (`crates/micold-daemon/src/hooks.rs`); the hook reads top-level `cwd` into `GuardInput.session_cwd` (after T012).
+- [x] T014 [US1] Update `docs/user-guide/worktrees-and-sessions.md`: shell commands are judged best effort; expansion, variables and nested scripts are not analysed.
 
 ## Phase 5: User Story 2 - Worktree creation by other means is blocked (P1)
 

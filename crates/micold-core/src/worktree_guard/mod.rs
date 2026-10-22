@@ -6,6 +6,7 @@
 //! [`GuardVerdict::Deny`] into the hook's deny body (`contracts/pretooluse-guard.md`).
 
 pub mod paths;
+pub mod shell;
 
 use std::path::{Path, PathBuf};
 
@@ -131,7 +132,12 @@ pub fn decide(input: &GuardInput, facts: &dyn PathFacts) -> GuardVerdict {
             };
             judge(input, own, facts, tool, &target)
         }
-        ToolCall::Bash { .. } | ToolCall::Other => GuardVerdict::Allow,
+        ToolCall::Bash { command } => shell::targets(command, &input.session_cwd)
+            .iter()
+            .map(|target| judge(input, own, facts, "Bash", target))
+            .find(|verdict| matches!(verdict, GuardVerdict::Deny { .. }))
+            .unwrap_or(GuardVerdict::Allow),
+        ToolCall::Other => GuardVerdict::Allow,
     }
 }
 
@@ -353,6 +359,64 @@ mod tests {
         let mut i = input(in_a(), &format!("{A}/nested/x.rs"));
         i.worktrees.push(format!("{A}/nested").into());
         assert!(denied(&verdict(&i)));
+    }
+
+    fn bash(binding: SessionBinding, cwd: &str, command: &str) -> GuardVerdict {
+        let mut i = input(binding, "");
+        i.session_cwd = cwd.into();
+        i.tool = ToolCall::Bash {
+            command: command.into(),
+        };
+        verdict(&i)
+    }
+
+    #[test]
+    fn a_bash_call_is_denied_when_its_working_directory_is_another_worktree() {
+        let v = bash(in_a(), B, "ls");
+        let GuardVerdict::Deny { message, .. } = v else {
+            panic!("expected a deny, got {v:?}");
+        };
+        assert!(message.contains("create_session") && message.contains("Bash"));
+    }
+
+    #[test]
+    fn a_chained_cd_or_a_path_argument_into_another_worktree_is_denied() {
+        for command in [
+            "cd ../b && ls",
+            "true; pushd ../b",
+            &format!("cd {B} && git status"),
+            &format!("cat {B}/src/x.rs"),
+            "cp x ../b/y",
+            "echo hi > ../b/f",
+        ] {
+            assert!(denied(&bash(in_a(), A, command)), "{command}");
+        }
+        assert!(denied(&bash(default_session(), ROOT, &format!("cd {A}"))));
+    }
+
+    #[test]
+    fn bash_calls_in_the_own_worktree_and_the_allowlist_are_allowed() {
+        let prefetch = format!("{ROOT}/.claude/worktrees/autopilot-prefetch-1");
+        for command in [
+            "ls",
+            "cd src && cargo test",
+            "cd ./src; ls ../src",
+            &format!("cargo build --target-dir {ROOT}/target-shared"),
+            &format!("cd {prefetch} && ls"),
+            "cat /tmp/x /dev/null",
+        ] {
+            assert_eq!(bash(in_a(), A, command), GuardVerdict::Allow, "{command}");
+        }
+        assert_eq!(
+            bash(default_session(), ROOT, "cd src && ls"),
+            GuardVerdict::Allow
+        );
+    }
+
+    #[test]
+    fn bash_paths_built_by_expansion_are_not_judged() {
+        assert_eq!(bash(in_a(), A, "cd $B && ls"), GuardVerdict::Allow);
+        assert_eq!(bash(in_a(), A, "bash -c 'cd ../b'"), GuardVerdict::Allow);
     }
 
     #[test]
