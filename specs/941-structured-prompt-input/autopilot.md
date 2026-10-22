@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M2
-- **Next step**: M2 full gate, push, PR
+- **Next step**: M2 PR to open (branch pushed; title/body in the session scratchpad)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T022 | full | Core decisions (input, attachment, turn ids/asks, encoders, UserSent/InterruptAsked, transcript, saved queue), recorded fixtures, every wire type (one bump); daemon refuses new requests "Not available yet" | #1223 | merged |
-| M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | — | pending |
+| M2 | T023–T033 | full | Daemon delivers, queues, input driver, StructuredInput broadcast, hold on exit/start, activity from the turn | — (to open) | gate green at 00df9bc2, pushed |
 | M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | — | pending |
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | — | pending |
 | M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | — | pending |
@@ -74,6 +74,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review A M2 (code-review high) | 1 | 29e7b03bf3c25a809d773ea3cf7e34f6ae868450:37dd08531ecdfbd87a01762e2b401eacfd59af71 | CLEAN: 2 MINOR (both declined) |
 | Review B M2 (conformance, sonnet) | 1 | c036df0cd4e6f0f20bded9f400e77d2d8016736a:f647684b709efa9bc318e217ab35f37fc8438d29 | CHANGES: 1 MAJOR (mid-turn case of the superseded #938 test raced: the second turn had no pause; fixed, it holds its result too) |
 | Review B M2 (conformance, sonnet) | 2 | a3e725b524fc4ac20b51b32f9b8d9e8fa78c63e7:4ff69c045598722443a8f666d7b37f26db3dc7d2 | CLEAN (Verify 3×: structured_input 12 passed, structured_session 16 passed) |
+| Full gate M2 | — | — | 1st red: `structured_input.rs` lacked its `// unix-only:` reason (fixed); 2nd red: `a_user_message_is_one_line…` dropped `UserSent` (seq 0) in the sender's `answer` under load — test sends from a non-viewing connection now (test-only); green after rebase onto origin/main (#943 M1, PROTOCOL_VERSION 64; no M2 wire change) |
 
 ## Declined review findings
 
@@ -104,21 +105,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-M2 unit handed over at the context cap after implementing (no review or gate run yet).
-
-- **Done**: T023–T033 implemented and ticked; commit fe9e7814 on `claude/project-thread-ik47pq`
-  (branch reset to origin/main cdfafa66 first; not pushed, no PR). Verify
-  `cargo test -p micold-daemon --test structured_input --test structured_session` → 12 and 16
-  passed; `structured_permission*`, `structured_lifecycle`, `structured_history`,
-  `structured_resume`, `structured_saved_history`, `plan_usage_structured`, `mcp_create_session`,
-  `activity_pipeline` and the daemon lib pass. Decisions 7–10 record the plan deviations; cycle 4
-  in `tdd/cycle-log.md`. No wire change (PROTOCOL_VERSION stays 63).
-- **Next**: verify.md step 1 — scoped gate detached + review A (`code-review` high) on
-  `origin/main...HEAD`; then review B (conformance, sonnet) once; no visual change (daemon only);
-  rebase onto origin/main (`cargo fmt --all`), full gate `scripts/gate.sh`; write
-  `pr-title.md` / `pr-body.md` in the scratchpad (do not open the PR), push with
-  `--force-with-lease=claude/project-thread-ik47pq:`.
-- **Open findings**: none yet.
+None.
 
 ## Open escalation
 
