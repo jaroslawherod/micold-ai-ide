@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1123
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-21
-- **Phase**: verify M2
-- **Next step**: M2 review A r1 CHANGES (F1–F5 fixed test-first), review B r1 CLEAN, visual r1 PASS; review A r2 (sonnet, fix diff) and visual r2 (sonnet, the numbers' gutter now takes no pointer) dispatched by the orchestrator; then full gate (scripts/gate.sh), PR
+- **Phase**: gate M2
+- **Next step**: M2 review A r2 CLEAN, visual r2 PASS all 4, T028 ticked; full gate (scripts/gate.sh), push, M2 PR (title/body in scratchpad); orchestrator opens and merges it, then M3 (T029–T037)
 
 ## Pull requests
 
@@ -63,8 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | CHANGES: 2 MAJOR (F1 `pull_request_link_for` opens a listed address unchecked, unlike the sidebar and changes pane (FR-014); F2 the 6 px gutter of a number takes clicks across the 4 px between rows and into the line above), 3 MINOR (F3 `over_link` clones the id list per event; F4 page/menu chords wired onto numbers that are no Tab stops; F5 `ScreenBounds` computes `found` and `all_visible` in both modes, `found` doc wrong); all five fixed test-first (see Fixes M2 r1 below); none declined; round 2 on sonnet over the fix diff |
 | Review B M2 | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | CLEAN |
 | Visual pass M2 (T028) | 1 | 717f870f752a633152b69951b55ba435b4891f69:fdd7aafc797a4f309d635a0ec1e3b92676b89316 | PASS all 6 (click #12 / #11 opens exactly that address, no ripple, Overview stays; pointer, underline, colour; pill activates the card; failing xdg-open toast; rows whole at 380 px); MINOR repaint lag of a hover underline under software rendering, not a defect; evidence `visual-pass/m2/` (26 files) |
-| Review A M2 | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | pending (sonnet, fix diff only) |
-| Visual pass M2 (T028) | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | pending (sonnet, numbers' gutter: pointer, press, underline) |
+| Review A M2 | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | CLEAN |
+| Visual pass M2 (T028) | 2 | 69f5a87fc59f94a621559d93b4e44075144dcf69:ed5f2b9b6f85e6e9335b6c67261608180f3a2dcf | PASS all 4 (top px of "#11" opens #11, no ripple; 3 px above "#12" activates the card with ripple, nothing opened; no underline in the old gutter; #12 and issue link still open exactly their address), light 1.0 and dark 2.0; evidence `visual-pass/m2/r2/` (30 files) |
 
 ### Review A M1 round 2 verdict (verbatim)
 
@@ -445,6 +445,81 @@ Not run: light at 2.0 and dark at 1.0 were not covered, and §B3 was only run on
 ````
 
 Fixes M2 r1 (review A): F1 `pull_request_link_for` ends with `.filter(starts_with(GITHUB_ADDRESS_PREFIX))`, U7 test `pull_request_link_opens_no_address_off_github`. F2 `TextLink::hit_on_label(true)` on the numbers only (the issue link keeps its gutter hit, 1122): `LinkBody::hit` is the label's box for the pointer, the press (off it the button sees no cursor), the underline and its container report, so the grid's `over_link` agrees; `ScreenBounds::of_any` now reads containers only, so a focusable number (M3) does not bring its gutter back; the gutter keeps its room and the ring; tests in overview_card (top pixel of "#11" opens #11; above "#12" activates the card, with ripple), card_grid (a rest there is a card rest), text_link. F3 `of_any(&[Id])` borrows the card's ids (the two `format!`s of a number id per view stay: one in `rest_messages`, one in the link; not worth a cache). F4 `card_link` wires the page/menu chords only when the link answers keys (`focus.is_some()`). F5 `ScreenBounds`: `found` only in focused mode (doc fixed: unclipped), `all_visible` only in `of_any` mode. Red/green in tdd/cycle-log.md.
+
+
+### Review A M2 round 2 verdict (verbatim)
+# M2 review A r2
+
+VERDICT: CLEAN
+
+### Visual pass M2 round 2 verdict (verbatim)
+````
+# M2 visual r2
+
+VISUAL PASS M2 1123 (T028) r2: all four criteria PASS, in light 1.0 and dark 2.0. One limit: I could only read the X cursor name, not see the cursor image.
+
+Setup: real client and daemon built from the worktree at code ed5f2b9b (HEAD 61502fd3 adds only a ledger change). The client attached to its own daemon. Xvfb :83 with lavapipe, private HOME, data and runtime dirs, fake `gh`, fake `claude`, and a logging fake `xdg-open` first on PATH. Fake `gh` and origin were set up as in r1: `feat-1123_x` has #12 open (checks failing) and #9 merged; `feat-1123_y` has #14 open approved, #13 draft pending, #12 merged, #11 closed. Origin is https://github.com/acme/widgets.git and pull request status is on. I rebuilt the fake `gh` because the r1 scripts were gone.
+
+I found each label's box by probing where the hover underline starts and stops, one pixel at a time:
+- Light 1.0: #12 on x is x 346..370, y 285..304. On the expanded y card, #12's box ends at y 420 and #11's box is y 425..444.
+- Dark 2.0: #12 on x is x 692..740, y 570..609. On y, #12 ends at y 1297 and #11's box is y 1306..1345.
+- The rows between boxes belong to the card: 4 px (light) and 8 px (dark) between rows, and 6 px (light) and 12 px (dark) of gutter round each label.
+
+Evidence is in `/home/user/micold-ai-ide/specs/1123-overview-card-pr-list/visual-pass/m2/r2/` (30 files, untracked, repo not edited, nothing pushed). The log excerpts are in `xdg-open-log.txt` there. I killed only my own processes and removed my temp dirs.
+
+**1. Top 1–2 px of "#11" on expanded feat-1123_y: PASS**
+- Light, press and release at y=425 (first px of the box) and y=426: log is exactly `https://github.com/acme/widgets/pull/11` each time, never /12. No ripple, Overview stays.
+- Dark 2.0, y=1306 and y=1308: the same result.
+- Files:
+  - `light-1-r2-c1-y-expanded-hover-top-px-of-11.png`
+  - `light-1-r2-c1-top-px-y425-pressed-no-ripple.png`
+  - `light-1-r2-c1-top-px-y425-released.png`
+  - `light-1-r2-c1-top-px-y426-pressed-no-ripple.png`
+  - `light-1-r2-c1-whole-window-overview-stays.png`
+  - `dark-2-r2-c1-y-expanded-hover-top-px-of-11.png`
+  - `dark-2-r2-c1-top-px-y1306-pressed-no-ripple.png`
+  - `dark-2-r2-c1-top-px-y1306-released.png`
+  - `dark-2-r2-c1-top-px-y1308-pressed-no-ripple.png`
+  - `dark-2-r2-c1-whole-window-overview-stays.png`
+
+**2. Press 2–4 px above "#12" on feat-1123_x (old gutter): PASS**
+- Light, y=282 (3 px above the box): the card ripples, the Overview closes, X is selected and revealed in the sidebar with its agent menu open (as in r1 for any card click). The log is empty.
+- Dark 2.0, y=564 (3 logical px above): the same. The pressed capture shows the ripple on the collapsed card, so the card had not already expanded.
+- In the light run the card had already started expanding at the press, so the dark capture is the stricter one.
+- Files:
+  - `light-1-r2-c2-above-12-y282-pressed-ripple.png`
+  - `light-1-r2-c2-above-12-y282-after-release.png`
+  - `dark-2-r2-c2-above-12-y564-pressed-ripple.png`
+  - `dark-2-r2-c2-above-12-y564-after-release.png`
+
+**3. Pointer in the old gutter versus on the label: PASS**
+- On the label: underline drawn, X cursor `pointer`.
+- 3 px left of the label, and 3 px above it (both themes): no underline, and the cursor is `pointer`, the same as on the card body. The card body and the gutter both report `pointer`, so the cursor name alone cannot tell them apart. The underline is what separates them.
+- A pointer that rests in the gutter expands the card after about 0.8 s, as any card rest does. The no-underline captures were taken at 0.4 s, before that.
+- Files:
+  - `light-1-r2-c3-pointer-on-label-underline.png`
+  - `light-1-r2-c3-pointer-in-left-gutter-no-underline.png`
+  - `light-1-r2-c3-pointer-in-top-gutter-no-underline.png`
+  - `light-1-r2-c3-pointer-in-left-gutter-after-rest-card-expanded.png`
+  - `dark-2-r2-c3-pointer-on-label-underline.png`
+  - `dark-2-r2-c3-pointer-in-left-gutter-no-underline.png`
+  - `dark-2-r2-c3-pointer-in-top-gutter-no-underline.png`
+
+**4. Regression: PASS**
+- Click in the middle of "#12": log is exactly `.../pull/12`, no ripple, Overview stays, in both themes.
+- Click at the centre of "Issue #1123": log is exactly `https://github.com/acme/widgets/issues/1123`, in both themes.
+- Files:
+  - `light-1-r2-c4-click-12-pressed-no-ripple.png`
+  - `light-1-r2-c4-click-12-after-release-overview-stays.png`
+  - `light-1-r2-c4-click-12-whole-window.png`
+  - `light-1-r2-c4-issue-link-pressed.png`
+  - `light-1-r2-c4-issue-link-after-release.png`
+  - `dark-2-r2-c4-click-12-pressed-no-ripple.png`
+  - `dark-2-r2-c4-click-12-after-release-overview-stays.png`
+  - `dark-2-r2-c4-issue-link-pressed.png`
+
+Not run: light at 2.0 and dark at 1.0, nor anything outside these four criteria.
+````
 
 ## Declined review findings
 
