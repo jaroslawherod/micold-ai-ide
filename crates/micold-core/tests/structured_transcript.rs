@@ -16,7 +16,7 @@ use stream_json::{
     assistant_block, assistant_blocks, block_delta, block_start, events_of, input_json_delta,
     lines_of, message_start, sequenced, stream_event, stream_marker, text_delta, thinking_block,
     thinking_delta, tool_result, tool_use, turn_result, user_sent, user_text, with_message_id,
-    with_parent, without_stream_events, PROMPT_RECORDED, RECORDED,
+    with_parent, without_stream_events, COMMAND_RECORDED, PROMPT_RECORDED, RECORDED,
 };
 
 /// A transcript built from `events` in one history message.
@@ -1629,4 +1629,67 @@ fn the_history_is_the_sent_texts_oldest_first_never_the_absorbed_interrupt_text(
         ["tell a long story", "second"]
     );
     assert!(kinds(&restored).contains(&EntryKind::Interrupted));
+}
+
+// #943 T004/T006 — a compaction boundary, a conversation reset and the daemon's command, model
+// and kind notes make no entry and no raw row until the transcript gives them entries (M2).
+
+#[test]
+fn compaction_and_clear_lines_make_no_raw_row() {
+    for name in COMMAND_RECORDED {
+        let transcript = built(&finished_events_of(name));
+        for kind in kinds(&transcript) {
+            if let EntryKind::Raw { text, .. } = &kind {
+                assert!(
+                    !text.contains("\"compact_boundary\"")
+                        && !text.contains("\"conversation_reset\""),
+                    "{name}: {text}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_daemons_command_model_and_kind_notes_make_no_entry() {
+    use micold_core::session::SessionKind;
+    use micold_core::structured::{ReportedCommand, ReportedModel};
+    let notes = [
+        StructuredEvent::CommandsReported {
+            commands: vec![ReportedCommand {
+                name: "greet".into(),
+                description: Some("Greet".into()),
+                argument_hint: None,
+                aliases: vec![],
+                builtin: false,
+            }],
+            models: vec![ReportedModel {
+                value: "haiku".into(),
+                display_name: Some("Haiku".into()),
+                description: None,
+            }],
+        },
+        StructuredEvent::ModelChanged {
+            model: "claude-haiku-5-5".into(),
+        },
+        StructuredEvent::ModelRefused {
+            model: "x".into(),
+            message: "Model 'x' not found".into(),
+        },
+        StructuredEvent::KindSwitched {
+            to: SessionKind::Terminal,
+        },
+        StructuredEvent::ConversationReset {
+            trigger: Some("clear".into()),
+            raw: r#"{"type":"conversation_reset","trigger":"clear"}"#.into(),
+        },
+        StructuredEvent::CompactBoundary {
+            trigger: Some("manual".into()),
+            pre_tokens: Some(2),
+            post_tokens: Some(1),
+            raw: r#"{"type":"system","subtype":"compact_boundary"}"#.into(),
+        },
+    ];
+    let transcript = built(&sequenced(notes));
+    assert_eq!(kinds(&transcript), vec![], "no entry, no raw row");
 }

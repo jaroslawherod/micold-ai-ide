@@ -8,7 +8,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::history::MAX_BYTES;
-use super::{parse_line, SequencedEvent, StructuredEvent};
+use super::{parse_line, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent};
+use crate::session::SessionKind;
 use crate::terminal_history::format::{frame, unframe};
 use crate::terminal_history::DamageReason;
 
@@ -42,6 +43,22 @@ enum SavedEvent {
         attachments: Vec<String>,
     },
     InterruptAsked,
+    /// The daemon's notes (#943), saved whole: no line holds them. Appended after the variants
+    /// above, so a version-1 file keeps its meaning.
+    CommandsReported {
+        commands: Vec<ReportedCommand>,
+        models: Vec<ReportedModel>,
+    },
+    ModelChanged {
+        model: String,
+    },
+    ModelRefused {
+        model: String,
+        message: String,
+    },
+    KindSwitched {
+        to: SessionKind,
+    },
 }
 
 impl SavedEvent {
@@ -55,6 +72,8 @@ impl SavedEvent {
             | StructuredEvent::StreamDelta { raw, .. }
             | StructuredEvent::Status { raw, .. }
             | StructuredEvent::ControlResponse { raw, .. }
+            | StructuredEvent::CompactBoundary { raw, .. }
+            | StructuredEvent::ConversationReset { raw, .. }
             | StructuredEvent::Unrecognised { raw } => SavedEvent::Line(raw.clone()),
             StructuredEvent::Unreadable { text } => SavedEvent::Unreadable(text.clone()),
             StructuredEvent::TurnEndedWithoutResult => SavedEvent::TurnEndedWithoutResult,
@@ -64,6 +83,20 @@ impl SavedEvent {
             },
             StructuredEvent::InterruptAsked => SavedEvent::InterruptAsked,
             StructuredEvent::OversizedOnWire { .. } => return None,
+            StructuredEvent::CommandsReported { commands, models } => {
+                SavedEvent::CommandsReported {
+                    commands: commands.clone(),
+                    models: models.clone(),
+                }
+            }
+            StructuredEvent::ModelChanged { model } => SavedEvent::ModelChanged {
+                model: model.clone(),
+            },
+            StructuredEvent::ModelRefused { model, message } => SavedEvent::ModelRefused {
+                model: model.clone(),
+                message: message.clone(),
+            },
+            StructuredEvent::KindSwitched { to } => SavedEvent::KindSwitched { to: *to },
         })
     }
 
@@ -76,6 +109,14 @@ impl SavedEvent {
                 StructuredEvent::UserSent { text, attachments }
             }
             SavedEvent::InterruptAsked => StructuredEvent::InterruptAsked,
+            SavedEvent::CommandsReported { commands, models } => {
+                StructuredEvent::CommandsReported { commands, models }
+            }
+            SavedEvent::ModelChanged { model } => StructuredEvent::ModelChanged { model },
+            SavedEvent::ModelRefused { model, message } => {
+                StructuredEvent::ModelRefused { model, message }
+            }
+            SavedEvent::KindSwitched { to } => StructuredEvent::KindSwitched { to },
         }
     }
 }
@@ -252,6 +293,74 @@ mod tests {
     fn a_file_over_the_cap_is_too_large() {
         let bytes = vec![0; MAX_EVENTS_FILE_BYTES as usize + 1];
         assert_eq!(decode_events(&bytes), Err(DamageReason::TooLarge));
+    }
+
+    /// #943 T006: the daemon's notes, one of each.
+    fn every_note() -> Vec<StructuredEvent> {
+        use crate::session::SessionKind;
+        use crate::structured::{ReportedCommand, ReportedModel};
+        vec![
+            StructuredEvent::CommandsReported {
+                commands: vec![ReportedCommand {
+                    name: "config".into(),
+                    description: Some("Set a setting by key".into()),
+                    argument_hint: Some("key=value".into()),
+                    aliases: vec!["settings".into()],
+                    builtin: true,
+                }],
+                models: vec![ReportedModel {
+                    value: "haiku".into(),
+                    display_name: Some("Haiku".into()),
+                    description: Some("Fastest".into()),
+                }],
+            },
+            StructuredEvent::CommandsReported {
+                commands: vec![],
+                models: vec![],
+            },
+            StructuredEvent::ModelChanged {
+                model: "claude-haiku-5-5".into(),
+            },
+            StructuredEvent::ModelRefused {
+                model: "no-such-model-xyz".into(),
+                message: "Model 'no-such-model-xyz' not found".into(),
+            },
+            StructuredEvent::KindSwitched {
+                to: SessionKind::Terminal,
+            },
+            StructuredEvent::KindSwitched {
+                to: SessionKind::Structured,
+            },
+        ]
+    }
+
+    #[test]
+    fn a_history_holding_each_note_round_trips_unchanged() {
+        let mut events = every_kind();
+        events.extend(every_note());
+        let bytes = encode_events(2, &sequenced(2, events.clone()));
+        assert_eq!(decode_events(&bytes), Ok((2, events)));
+    }
+
+    #[test]
+    fn a_note_keeps_no_line_text_and_no_line_parses_as_a_note() {
+        for note in every_note() {
+            assert_eq!(note.text_len(), 0, "{note:?}");
+        }
+        for line in [
+            r#"{"type":"commands_reported","commands":[],"models":[]}"#,
+            r#"{"CommandsReported":{"commands":[],"models":[]}}"#,
+            r#"{"ModelChanged":{"model":"m"}}"#,
+            r#"{"type":"model_changed","model":"m"}"#,
+            r#"{"ModelRefused":{"model":"m","message":"x"}}"#,
+            r#"{"KindSwitched":{"to":"Terminal"}}"#,
+        ] {
+            let event = parse_line(line);
+            assert!(
+                matches!(event, StructuredEvent::Unrecognised { .. }),
+                "{line} → {event:?}"
+            );
+        }
     }
 
     /// A version-1 file, byte for byte: a change of encoding fails this until

@@ -21,7 +21,10 @@ pub mod transcript;
 mod turn;
 mod user_message;
 
-pub use event::{ContentBlock, ControlOutcome, Delta, SequencedEvent, StructuredEvent, Usage};
+pub use event::{
+    ContentBlock, ControlOutcome, Delta, ReportedCommand, ReportedModel, SequencedEvent,
+    StructuredEvent, Usage,
+};
 pub use history::{EventHistory, MAX_BYTES, MAX_EVENTS};
 pub use input::{
     Message, QueueEntryId, QueueRefusal, QueuedMessage, QueuedSummary, Release, SessionInput,

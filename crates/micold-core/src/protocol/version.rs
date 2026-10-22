@@ -222,7 +222,12 @@
 /// `ClientMsg::{TurnInterrupt, QueueEdit, QueueRemove, QueueTake, QueueRelease}`,
 /// `DaemonMsg::StructuredInput`, `OperationResult::Taken`, and `StructuredEvent` gains `UserSent`
 /// and `InterruptAsked`.
-pub const PROTOCOL_VERSION: u32 = 63;
+///
+/// And 63 → 64 for #943's commands, models and kind switches (M1): `StructuredEvent` gains
+/// `CompactBoundary`, `ConversationReset` and the daemon notes `CommandsReported`, `ModelChanged`,
+/// `ModelRefused`, `KindSwitched`, and `Init`, `Assistant` and `User` gain fields, which shift the
+/// postcard layout `StructuredEvents` carries.
+pub const PROTOCOL_VERSION: u32 = 64;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

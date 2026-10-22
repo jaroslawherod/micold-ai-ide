@@ -317,7 +317,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 62 → 63 for #941's prompt input (M1): `SessionUserMessage.images`, `TurnInterrupt`, the
 /// queue edits, `StructuredInput`, `OperationResult::Taken`, `StructuredEvent::{UserSent,
 /// InterruptAsked}`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 63;
+///
+/// And 63 → 64 for #943's `StructuredEvent` additions (M1): `CompactBoundary`, `ConversationReset`,
+/// `CommandsReported`, `ModelChanged`, `ModelRefused`, `KindSwitched` and the new `Init`,
+/// `Assistant` and `User` fields, which shift the postcard layout `StructuredEvents` carries.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 64;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

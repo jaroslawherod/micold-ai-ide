@@ -939,8 +939,82 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_63() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 63);
+fn the_protocol_version_is_64() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 64);
+}
+
+/// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
+/// `StructuredEvents` frame unchanged on both wires (contracts/wire.md *Events*).
+#[test]
+fn the_command_model_and_kind_events_round_trip_in_a_structured_events_frame() {
+    use micold_core::session::SessionKind;
+    use micold_core::structured::{
+        parse_line, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent,
+    };
+    let events = [
+        StructuredEvent::CommandsReported {
+            commands: vec![
+                ReportedCommand {
+                    name: "config".into(),
+                    description: Some("Set a setting by key".into()),
+                    argument_hint: Some("key=value".into()),
+                    aliases: vec!["settings".into()],
+                    builtin: true,
+                },
+                ReportedCommand {
+                    name: "greet".into(),
+                    description: None,
+                    argument_hint: None,
+                    aliases: vec![],
+                    builtin: false,
+                },
+            ],
+            models: vec![ReportedModel {
+                value: "haiku".into(),
+                display_name: Some("Haiku".into()),
+                description: None,
+            }],
+        },
+        StructuredEvent::ModelChanged {
+            model: "claude-haiku-5-5".into(),
+        },
+        StructuredEvent::ModelRefused {
+            model: "x".into(),
+            message: "Model 'x' not found".into(),
+        },
+        StructuredEvent::KindSwitched {
+            to: SessionKind::Terminal,
+        },
+        StructuredEvent::KindSwitched {
+            to: SessionKind::Structured,
+        },
+        parse_line(
+            r#"{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":3,"post_tokens":1}}"#,
+        ),
+        parse_line(r#"{"type":"conversation_reset","trigger":"clear"}"#),
+        parse_line(
+            r#"{"type":"system","subtype":"init","session_id":"s","slash_commands":["a"],"skills":["a"],"terminal_slash_commands":["b"]}"#,
+        ),
+        parse_line(
+            r#"{"type":"assistant","error":"authentication_failed","message":{"model":"<synthetic>","content":[]}}"#,
+        ),
+        parse_line(r#"{"type":"user","isSynthetic":true,"message":{"content":"summary"}}"#),
+    ];
+    let msg = DaemonMsg::StructuredEvents {
+        session: sid(),
+        omitted: 0,
+        events: events
+            .into_iter()
+            .enumerate()
+            .map(|(seq, event)| SequencedEvent {
+                seq: seq as u64,
+                event,
+            })
+            .collect(),
+        live: true,
+    };
+    json_roundtrip(&msg);
+    postcard_roundtrip(&msg);
 }
 
 /// #942 M4 (FR-013, FR-015): a summary and a create carry the session's permission mode on both

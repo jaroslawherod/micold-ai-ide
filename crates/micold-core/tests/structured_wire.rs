@@ -98,6 +98,9 @@ fn a_session_summary_carries_its_kind_and_defaults_to_terminal() {
 fn every_variant() -> Vec<StructuredEvent> {
     vec![
         StructuredEvent::Init {
+            skills: vec![],
+            slash_commands: vec![],
+            terminal_slash_commands: vec![],
             session_id: "s".into(),
             model: Some("m".into()),
             cwd: Some("/w".into()),
@@ -123,6 +126,8 @@ fn every_variant() -> Vec<StructuredEvent> {
             raw: "{\"type\":\"control_response\"}".into(),
         },
         StructuredEvent::Assistant {
+            error: None,
+            model: None,
             message_id: Some("msg".into()),
             blocks: vec![
                 ContentBlock::Text { text: "hi".into() },
@@ -140,6 +145,7 @@ fn every_variant() -> Vec<StructuredEvent> {
             raw: "{\"type\":\"assistant\"}".into(),
         },
         StructuredEvent::User {
+            is_synthetic: false,
             blocks: vec![ContentBlock::ToolResult {
                 tool_use_id: "t1".into(),
                 content: "ok".into(),
