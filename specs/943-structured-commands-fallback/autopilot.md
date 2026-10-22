@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
 - **Phase**: implement M3
-- **Next step**: M3 reviews done (A round 2 on the fix diff pending), full gate, then the M3 PR. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
+- **Next step**: M3 reviews clean (A round 2, B round 1); full gate, then the M3 PR. Cross-feature holds: M6 ← #941 M2, M7 ← #941 M4, M8 ← #941 M6, M9 ← #942 M7 (PromptCard) and #942 M8 (SC-007). Decision 2 provisional (M5 only)
 
 ## Pull requests
 
@@ -65,6 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 2 (sonnet, fix diff) | 0c12e486473d3a8cc0937758fdd4473a3e424f23:ee00a672e9c7ceefaa1edde46c12c37b7a0a103e | CLEAN (1 MINOR, fixed, prose only) |
 | Review A M3 (code-review high, claude -p) | 1 | 2105909dc24a3b40e9538ce502b9218cd6591a49:96f78747275b52e8fd55a3e2e2514b83d3e5d7ad | CHANGES: F1 MAJOR queue edit into `/model`/terminal-only reached the CLI — fixed (`edit_queue`, `QueueRefusal::Refused`, test); F2 MAJOR evicted note — declined (FR-009); F3 MINOR docs window before init — fixed, prose only; F4 MINOR history cloned per `/` message under the state lock — fixed (`EventStream::command_list`, test); F5 MINOR — declined |
 | Review B M3 (conformance, sonnet, claude -p) | 1 | 2105909dc24a3b40e9538ce502b9218cd6591a49:96f78747275b52e8fd55a3e2e2514b83d3e5d7ad | CLEAN (1 MINOR: decisions rows 5/6 out of order — fixed) |
+| Review A M3 (scoped, sonnet, claude -p) | 2 | 11d7edc6f025b98bcf13b1e3ff5818157a428ec4:1a67fe6b3749d9b242a82e3022438aa9a70db9a1 | CLEAN (1 MINOR: `iter` split `snapshot` from its doc — fixed); F1, F4 fixes hold, F2, F5 declines stand |
 
 ## Declined review findings
 
