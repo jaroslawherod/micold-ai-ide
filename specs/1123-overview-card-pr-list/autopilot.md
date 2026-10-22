@@ -69,8 +69,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | CHANGES: 1 MAJOR (F1 a number's keyboard focus lives in a row position's widget state, so a reading that reorders rows moves it to another PR), 2 MINOR (F2 `card_link_shown` builds every card per message; F3 duplicate `ListedPr` literal in a test fixture); all three fixed test-first (Fixes M3 r1 below); none declined; round 2 on sonnet over the fix diff |
 | Review B M3 | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | CLEAN, 1 MINOR (F1 T032 cases never run red): closed by mutants, red recorded in tdd/cycle-log.md |
 | Visual pass M3 (T037) | 1 | adfaa044ae461d40e5fedbb3b054a7e320502cb7:00ddcce1a2f928cba64291e3fa304a607ca8c2d0 | FAIL: c1 Tab in the expanded card goes #12 → the card (never #11, never the next card), Shift+Tab enters at #13; c3 Right on #12 lands on its own card; c2, c4, c5, c6 PASS; c7 partial (Page keys NOT RUN, no overflow); evidence specs/1123-overview-card-pr-list/visual-pass/m3/ (70 PNGs, committed); root cause and fixes in Fixes M3 r1 below |
-| Review A M3 | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | pending (sonnet, fix diff only; prompt 1123-m3-prompt-review-a-r2.md) |
-| Visual pass M3 (T037) | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | pending (sonnet, §B4 7 criteria light 1.0, Tab walk + c3 dark 2.0; prompt 1123-m3-prompt-visual-r2.md) |
+| Review A M3 | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | CLEAN, 1 MINOR (F1 `card_pr_list` scans every worktree, not the sidebar-filtered cards; harmless, `focus_return_target` runs first): doc note on `card_pr_list` (Fixes M3 r2) |
+| Visual pass M3 (T037) | 2 | c6661ae6c7eb63f25e1a06499bcb2afa79d4f93c:25a52b6400124f1b26d7b29897c53d5e84a5f6aa | FAIL: c1 reverse — Shift+Tab from z into the expanded-capable y lands on #13 (collapsed last), not #11, light and dark; forward walk PASS; c2–c6 PASS; c7 partial (no overflow); evidence specs/1123-overview-card-pr-list/visual-pass/m3/r2/ (112 PNGs, committed); root cause and fix in Fixes M3 r2 |
+| Review A M3 | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | pending (sonnet, fix diff only; prompt 1123-m3-prompt-review-a-r3.md) |
+| Visual pass M3 (T037) | 3 | 615b34ec08ec4ad136e728e09350aef53067e5d8:3936855cd36b61b71171722afa48aa03b8717b63 | pending (sonnet, c1 full Tab + Shift+Tab walk light 1.0 and dark 2.0, quick re-check c3–c5; prompt 1123-m3-prompt-visual-r3.md) |
 
 ### Review A M1 round 2 verdict (verbatim)
 
@@ -645,6 +647,101 @@ I killed only my own processes (runtime dir /tmp/vp83) and removed /tmp/vp83. /t
 ````
 
 Fixes M3 r1 (review A, review B, visual): root cause of visual c1/c3: iced reports a Tab (or an arrow step) off a number loss first in tree order; the loss collapses the Focus-expanded card until the gain pairs with it, so a row-3+ number is not drawn for that one update and `link_focus_handoff` handed the keyboard to the card (Tab from #12 → card, Right from #12 → its own card, #11 never reached). The root tests only moved off rows 1–2 or gain first; U3 mounts a fixed form without the root. Fix: `link_focus_handoff` returns `None` unless the expansion still has that link holding the keyboard (`focused_link() == Some((l, link))`, as after Escape or a reading that dropped it). Shift+Tab mid-list (was a deliberate choice, contradicts FR-010 "Shift+Tab is its reverse"): `link_focus_after` re-focuses the expanded card's last link (`card_last_link(.., true)`) when the card expanded on a link gain that came from another card (`LinkFocus.focused`, new `Expansion::focused()`) at the collapsed card's last stop; a Tab within the card (loss first, no card focused in between) keeps its number. A F1: `LinkFocus.row` = `card_link_row` (the number's row at the card's form); a reading that moves the held number to another row re-focuses it by id. A F2: `card_pr_list` reads the worktree's branch list directly (shared with `pull_request_link_for`), core `BranchPrList::drawn(expanded)`; no `cards()` per message. A F3: `listed_pr(number, checks)` helper. B F1: mutants run the T032 cases red. Tests: main_tests `a_move_off_a_row_three_number_moves_no_focus_to_the_card`, `shift_tab_onto_a_collapsed_cards_number_goes_to_its_last`, `a_tab_onto_row_two_stays_on_it`, `a_reading_that_moves_the_focused_number_refocuses_it`. Red/green in tdd/cycle-log.md. Fix commit 25a52b64.
+
+### Review A M3 round 2 verdict (verbatim)
+
+# M3 review A r2
+
+VERDICT: CLEAN
+F1 [MINOR] crates/micold-client/src/ui/overview.rs:514 (`card_pr_list`) — F2's direct lookup is not exactly what the card view draws. `cards()` iterates `sidebar_entries()`, which applies the sidebar tag/search filter and returns nothing without an active project. `card_pr_list` scans every entry in `state.worktree.worktrees`. A worktree filtered out of the sidebar has no card but still answers `card_link_shown` true. This is harmless today: in `link_focus_handoff`, `focus_return_target` returns a different target for a card that is not drawn, and that check runs before `card_link_shown`. In `card_focus_return_id`, the `target == location` check also runs first.
+   Evidence: `.worktrees.iter().find(|worktree| &worktree.dir_name == dir)` against `card(app, &Place::Worktree(node))` fed from `sidebar_entries()`.
+   Fix: optional. Either note in the doc comment that card existence is checked separately by `focus_return_target`, or add a test with a filtered-out worktree.
+
+Not run: the `code-review` skill (I judged the fix diff by hand). I also did not run the repo-wide `mise run gate`.
+
+Tests run: 21 client tests and 67 core tests, 0 failed (`cargo test -p micold-client --bin micold-ai-ide -- link_focus link_menu card_focus_return card_link_shown pull_request_link shift_tab escape_on a_reading_that_moves a_move_off a_tab_onto_row_two` and `cargo test -p micold-core --lib -- overview_expansion pr_list`). HEAD is bd796a1a with a clean tree.
+
+How each round-1 item was checked:
+- **Visual c1/c3 (handoff guard):** the root cause is right. A Tab or arrow off a number reports the loss first, so the core's `focused_link()` is already None when `link_focus_handoff` runs. That is why the guard `focused_link() != Some((&location, link))` stops the false handoff. Three real departures still hand off, because they leave `focused_link()` equal to the held link:
+  - Escape on a hidden number: it only collapses the card and keeps the focus.
+  - A window blur: it collapses and keeps the focus.
+  - A reading that drops the number or removes the card: the card-removed case returns earlier on `target != location`, before the guard.
+  When the loss clears `focused`, the keyboard is leaving the card, so no widget is stranded. The `a_move_off_a_row_three_number_moves_no_focus_to_the_card` test passes.
+- **Shift+Tab (FR-010):** the guard is sound.
+  - Shift+Tab reports the gain on the earlier card in tree order first, while the other card still holds the focus. So `before.focused` is that other card, and `!held`, `from_another` and "link is the collapsed card's last stop" all hold.
+  - A Tab inside the card reports the loss first, which clears `focused`. So `from_another` is false and the number is kept (`a_tab_onto_row_two_stays_on_it` passes).
+  - A card with two or fewer numbers resolves to the same link. The issue-link-only case from 1122 resolves to `Issue`, so it is kept. A hover-expanded card has `was == is`, so the redirect is skipped.
+- **F1 (focused number's row moved):** `LinkFocus.row` is `card_link_row`, and `held && row changed` re-focuses the number by id. The `a_reading_that_moves_the_focused_number_refocuses_it` test shows the stale `LinkFocusLost(13)` moves nothing, and `focused_link()` and `expanded()` are unchanged.
+- **F2 (`card_pr_list`):** it matches what the card view draws for the cases the prompt names.
+  - The Default card has no branch, which is `PrDisplay::Hidden` and no list.
+  - Counts hidden maps to `pr_status.enabled` plus `lists.get`.
+  - `BranchPrList::drawn` is shared with `rows`, and the `rows` result is unchanged.
+  The one gap is F1 above.
+- **F3:** `listed_pr` is extracted and both fixtures use it.
+
+### Visual pass M3 round 2 verdict (verbatim)
+
+# M3 visual r2
+
+VISUAL PASS M3 1123 (T037) r2: FAIL. Criterion 1 still fails in the reverse direction, in light 1.0 and dark 2.0. Criteria 2, 3, 4, 5 and 6 PASS, and 7 is partial.
+
+Setup: client and daemon rebuilt from the tree at HEAD bd796a1a (includes the fix commit 25a52b64). The build log named micold-core, micold-daemon and micold-client. Ran on Xvfb :83 with lavapipe, a private HOME, data dir and runtime dir (/tmp/vp83), the fake claude, gh and xdg-open from r1, origin https://github.com/acme/widgets.git, PR status and GitHub issues on. Card order: Default, v, w, x, y, z. feat-1123_y has #14 open approved, #13 draft pending, #12 merged and #11 closed, plus the "Issue #1123" link. z has #12 open and #9 merged. All checks were keyboard only (xdotool key), pointer parked at the bottom-right corner. The exceptions were the clicks that opened the Overview and refreshed the list, plus one re-open after a mis-navigation.
+
+Evidence: 112 untracked PNGs in /home/user/micold-ai-ide/specs/1123-overview-card-pr-list/visual-pass/m3/r2/, named light-1-b4-* and dark-2-b4-*.
+
+**1. FAIL**
+- Forward walk PASS in light and dark: the y card (expanded), "Issue #1123", #14, #13, #12, #11, then the next card z. The card stays expanded throughout.
+  - Files: light-1-b4-c1-0-tab-y-card, -1-tab-issue, -2-tab-14, -3-tab-13, -4-tab-12, -5-tab-11, -6-tab-next-card.
+  - Dark: dark-2-b4-c1-0..6, same names.
+- Reverse FAIL in light and dark: Shift+Tab from the z card lands on #13, skipping #11 and #12.
+  - The next stops are #14, Issue #1123, the y card, then x's Issue link and the x card. The first stop is wrong, so this is the same symptom as r1.
+  - The light capture did not change after waiting 3 s.
+  - Files: light-1-b4-c1-0-shift-11.png (it actually shows #13), -1-shift-12 (#14), -2-shift-13 (Issue), -3-shift-14 (y card), -4-shift-issue (x Issue), -5-shift-y-card (x card).
+  - Dark: dark-2-b4-c1-0-shift-11 … -5-shift-y-card, same ring positions.
+- Suspected cause, from `link_focus_after` in crates/micold-client/src/main.rs (lines 785-796). I did not test it.
+  - `from_another` uses `before.focused`. If iced reports the z card's focus loss as its own update, the next update (the gain on #13) sees `before.focused == None`.
+  - That makes `from_another` false, so `entered` is false and the card's last link is never selected.
+  - A real-GUI test on the Shift+Tab path would show it.
+
+**2. PASS (light 1.0)**
+- With the ring on #12, Enter then Space. The xdg-open log after Enter had `https://github.com/acme/widgets/pull/12`. After Space it had that same line twice, so each press logged exactly #12's address.
+- No ripple, the Overview stayed open, nothing selected, ring stayed on #12.
+- Files: light-1-b4-c2-0-ring-on-12, -1-enter-on-12, -2-space-on-12.
+
+**3. PASS (light 1.0 and dark 2.0)**
+- Ring on #14, #12 and #11 separately: Right and Down went to z (the next card). Left and Up went to x (the previous card). From x, Right landed on the y card itself. No move ever went onto a number or a link.
+- Light files: light-1-b4-c3-{14,12,11}-0..9-*.png (the 12 and 14 sets use the same 0-8 / 0-9 numbering).
+- Dark files: dark-2-b4-c3-{14,12,11}-0..9-*.png.
+- In the 14 and 12 sets the step after the numbered ring capture is "back" navigation, which in the reverse walk shows the bug above but does not affect this verdict.
+
+**4. PASS (light 1.0)**
+- Ring on #14, Escape: the card collapsed and the ring stayed on #14. Tab went to #13, the next Tab went to the z card (#12 and #11 skipped).
+- Files: light-1-b4-c4-0-ring-on-14, -1-escape-on-14, -2-tab-13, -3-tab-leaves.
+
+**5. PASS (light 1.0)**
+- Re-expanded by keyboard (the row-3 and row-4 numbers were reached by Shift+Tab then Tab). Ring on #11, Escape: the card collapsed and the y card itself shows the focus ring. Tab then went to "Issue #1123".
+- The same with #12.
+- Observation, not a criterion: after Escape and Tab to Issue, the card stays collapsed with the ring on the Issue link, and Tab from there reaches only #14 and #13.
+- Files: light-1-b4-c5-0-ring-on-11, -1-escape-on-11, -2-tab-after-escape, c5-3-start (ring on #12), -4-escape-on-12, -5-tab-after-escape.
+- I did not press Enter on the card, only Tab.
+
+**6. PASS (light 1.0)**
+- Ring on #13 (row 2, collapsed card) and on #11 (row 4, expanded card). The Menu key and, separately, Shift+F10 each opened the card's menu directly below that number. Escape closed it with no choice and the ring was back on the number.
+- Files: light-1-b4-c6-0..4-* (#13) and light-1-b4-c6b-0..4-* (#11).
+
+**7. PARTIAL (light 1.0)**
+- In a 1000x520 window, a focused #11 in the expanded y card is scrolled into view; the card and the number are fully visible (light-1-b4-c7-1-ring-on-11.png, with c7-0-small-window for the start).
+- Page Down and Page Up (c7-2-pagedown, c7-3-pageup) scrolled only the Overview grid slightly, which was already near the bottom.
+- NOT RUN for scrolling the expanded card's own body, because the body does not overflow at any size I reached.
+
+**Notes**
+- I deleted three PNGs from a mis-navigation (a Tab miscount in which Enter hit z's card and left the Overview) and re-captured criterion 5 for #12.
+- Dark 2.0 shows the cards in one column, so Right and Down in dark are exercised in a stacked layout.
+- Cleaned up: killed my client and daemon by runtime dir /tmp/vp83, removed /tmp/vp83, my temp seq dirs and .visual-pass/run.DnLjGV.
+- Left in place: the Xvfb :83 left running from r1, the old r1 run dir .visual-pass/run.29QhMG, and the scripts in /tmp/vp1123m3 (start.sh now points at the removed run.DnLjGV).
+- Source not edited, nothing committed or pushed, no hearthbot tools called.
+
+Fixes M3 r2 (review A r2, visual r2): the event order was observed, not assumed: the mounted Overview (real `CardGrid`, real `focus_previous`, unsorted) with z focus-expanded reports Shift+Tab onto y's collapsed last number as `FocusLost(z)` then `LinkFocusGained(y, #13)`, because `CardGrid::update` hands every event to the expanded card first; each is its own root update, so the gain saw `LinkFocus.focused == None` (`from_another` false) and kept #13. r1's root test fed gain first (a collapsed z's order) and the mounted `focus_moves` helper sorts losses first, which hid it. Fix: core `Expansion::just_left()` (the card of K5's `just_lost`, one event); `LinkFocus.focused = focused().or(just_left())`. A Tab inside the card stays put (its loss is the same card). A r2 F1: doc note on `card_pr_list`. Tests: ui/overview `shift_tab_off_an_expanded_card_reports_its_loss_first` (observed order), main_tests `shift_tab_loss_first_onto_a_collapsed_cards_number_goes_to_its_last` (red: landed on #12 instead of #10), core `just_left_names_the_card_for_one_event`. Red/green in tdd/cycle-log.md. Fix commit 3936855c.
 
 ## Declined review findings
 
