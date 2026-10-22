@@ -847,56 +847,43 @@ impl Catalog {
         if session.kind != SessionKind::Structured {
             return Err(SetModeError::Refused(ModeRefusal::NotStructured));
         }
-        let before = session.permission_mode;
-        if before == mode {
-            return Ok(false);
-        }
-        session.permission_mode = mode;
-        if let Err(e) = self.persist() {
-            if let Some((_, session)) = self.workspace.find_session_mut(id) {
-                session.permission_mode = before;
-            }
-            return Err(SetModeError::Io(e));
-        }
-        Ok(true)
+        self.change_session(id, mode, |session| &mut session.permission_mode)
     }
 
     /// Set session `id`'s model choice and persist it (#943, FR-017), in either kind: `Ok(true)`
     /// when it changed, `Ok(false)` when it already was `model` (nothing written). A failed write
     /// leaves the earlier choice in place.
     pub fn set_model(&mut self, id: SessionId, model: &ModelChoice) -> Result<bool, SetModeError> {
-        let (_, session) = self
-            .workspace
-            .find_session_mut(id)
-            .ok_or(SetModeError::NoSession)?;
-        if session.model == *model {
-            return Ok(false);
-        }
-        let before = std::mem::replace(&mut session.model, model.clone());
-        if let Err(e) = self.persist() {
-            if let Some((_, session)) = self.workspace.find_session_mut(id) {
-                session.model = before;
-            }
-            return Err(SetModeError::Io(e));
-        }
-        Ok(true)
+        self.change_session(id, model.clone(), |session| &mut session.model)
     }
 
     /// Switch session `id` to `kind` and persist it (#943 FR-019, FR-020): the one place a kind
     /// changes (replaces 938 FR-002). `Ok(true)` when it changed, `Ok(false)` when it already was
     /// `kind` (nothing written). A failed write leaves the earlier kind in place.
     pub fn set_kind(&mut self, id: SessionId, kind: SessionKind) -> Result<bool, SetModeError> {
+        self.change_session(id, kind, |session| &mut session.kind)
+    }
+
+    /// Set the field `field` picks of session `id` to `value` and persist it: `Ok(true)` when it
+    /// changed, `Ok(false)` when it already was `value` (nothing written). A failed write puts the
+    /// earlier value back.
+    fn change_session<T: PartialEq>(
+        &mut self,
+        id: SessionId,
+        value: T,
+        field: fn(&mut Session) -> &mut T,
+    ) -> Result<bool, SetModeError> {
         let (_, session) = self
             .workspace
             .find_session_mut(id)
             .ok_or(SetModeError::NoSession)?;
-        if session.kind == kind {
+        if *field(session) == value {
             return Ok(false);
         }
-        let before = std::mem::replace(&mut session.kind, kind);
+        let before = std::mem::replace(field(session), value);
         if let Err(e) = self.persist() {
             if let Some((_, session)) = self.workspace.find_session_mut(id) {
-                session.kind = before;
+                *field(session) = before;
             }
             return Err(SetModeError::Io(e));
         }

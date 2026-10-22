@@ -340,7 +340,6 @@ pub fn spawn_plan_usage_feed(state: Arc<DaemonState>) {
     }
 }
 
-/// `OperationOk` for `req`, or `OperationError` with the refusal's sentence.
 /// The answer to a `SessionSwitchKind` (#943 contracts/wire.md): each refusal with its own kind.
 fn switch_answer(req: u64, outcome: Result<(), crate::state::SwitchRefusal>) -> DaemonMsg {
     match outcome {
@@ -354,6 +353,7 @@ fn switch_answer(req: u64, outcome: Result<(), crate::state::SwitchRefusal>) -> 
     }
 }
 
+/// `OperationOk` for `req`, or `OperationError` with the refusal's sentence.
 fn ack_or_refused(req: u64, outcome: Result<(), String>) -> DaemonMsg {
     match outcome {
         Ok(()) => DaemonMsg::OperationOk {
