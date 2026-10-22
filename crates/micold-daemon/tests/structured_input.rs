@@ -1224,7 +1224,9 @@ async fn an_interrupt_asked_before_its_message_is_written_follows_it() {
         .expect("accepted")
         .expect("opened as the next turn");
     let (turn, _) = busy_with(&window.sees(id, "busy", Seen::busy).await).unwrap();
-    let pending = state.ask_interrupt(id, turn).expect("an interrupt to write");
+    let pending = state
+        .ask_interrupt(id, turn)
+        .expect("an interrupt to write");
     let writer = tokio::spawn(micold_daemon::input_driver::interrupt(
         Arc::clone(&state),
         pending,
