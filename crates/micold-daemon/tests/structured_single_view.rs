@@ -23,8 +23,8 @@ mod history;
 mod structured;
 use history::service;
 use structured::{
-    events_of, events_until, fake_stream_cli, fixture, fixture_events, stream_script,
-    structured_session,
+    events_of, events_until, fake_stream_cli, fixture, fixture_events, single_viewer,
+    stream_script, structured_session,
 };
 
 const FIXTURE: &str = "text-turn.jsonl";
@@ -37,20 +37,6 @@ fn service_with_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
     let state = service(project, vec![session]);
     stream_script(project, &format!("replay {}\n", fixture(FIXTURE).display()));
     (state, id)
-}
-
-/// A client of `state` viewing `id` as a single-pane window does.
-async fn single_viewer(state: &Arc<DaemonState>, project: &Path, id: SessionId) -> conn::Client {
-    let mut client = conn::connect_as(state, "test-client").await;
-    send(
-        &mut client,
-        ClientMsg::SetViewedSession {
-            project: project.to_path_buf(),
-            session: Some(id),
-        },
-    )
-    .await;
-    client
 }
 
 async fn send(client: &mut conn::Client, msg: ClientMsg) {
@@ -197,6 +183,8 @@ async fn restarting_the_attached_shell_of_a_structured_session_attaches_the_new_
         )
         .await
     );
+    // Drop the old instance's frames, so a frame of the shell below is the new instance's.
+    receives(&mut client, Duration::from_millis(500), |_| false).await;
     send(
         &mut client,
         ClientMsg::SessionRestartShell {
