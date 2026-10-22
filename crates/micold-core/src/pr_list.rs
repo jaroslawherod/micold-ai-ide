@@ -119,13 +119,20 @@ impl BranchPrList {
     /// The rows a card draws and how many are not drawn (FR-002, FR-005): the first two collapsed,
     /// all of them expanded (and then none left out).
     pub fn rows(&self, expanded: bool) -> (Vec<PrRow>, usize) {
+        let drawn = self.drawn(expanded);
+        let rows = drawn.iter().map(PrRow::of).collect();
+        (rows, self.prs.len() - drawn.len())
+    }
+
+    /// The pull requests of the rows a card draws, in row order: what [`Self::rows`] draws, with no
+    /// row built (feature 1123, R6: which number sits in which row).
+    pub fn drawn(&self, expanded: bool) -> &[ListedPr] {
         let shown = if expanded {
             self.prs.len()
         } else {
             self.prs.len().min(COLLAPSED_ROWS)
         };
-        let rows = self.prs[..shown].iter().map(PrRow::of).collect();
-        (rows, self.prs.len() - shown)
+        &self.prs[..shown]
     }
 }
 

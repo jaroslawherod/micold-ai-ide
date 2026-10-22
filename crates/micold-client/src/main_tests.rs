@@ -15023,7 +15023,7 @@ fn link_focus_moves_to_card_when_pull_request_goes() {
     let (mut app, l) = app_with_numbers();
     tab_onto_number(&mut app, &l, 12);
     let held = LinkFocus::of(&app);
-    list_numbers(&mut app, "feat/feat-1122_x", &[11, 12, 13, 14]);
+    list_numbers(&mut app, "feat/feat-1122_x", &[10, 11, 12, 13]);
     assert_eq!(link_focus_after(&mut app, &held), None, "#12 stays");
     let held = LinkFocus::of(&app);
     list_numbers(&mut app, "feat/feat-1122_x", &[11, 13]);
@@ -15031,6 +15031,140 @@ fn link_focus_moves_to_card_when_pull_request_goes() {
     let expansion = &app.core.overview.expansion;
     assert_eq!(expansion.focused_link(), None);
     assert_eq!(expansion.expanded(), Some(&l), "the card keeps its form");
+}
+
+/// Review A M3 r1 F1, R6: a reading that moves the focused number to another row (a newer pull
+/// request sorts above it) hands the keyboard back to that number by its id, since the widget
+/// that held it now draws another one; the stale report of the row's new number moves nothing.
+#[test]
+fn a_reading_that_moves_the_focused_number_refocuses_it() {
+    use micold_client::ui::overview::card_link_id;
+    let (mut app, l) = app_with_numbers();
+    tab_onto_number(&mut app, &l, 12);
+    let held = LinkFocus::of(&app);
+    list_numbers(&mut app, "feat/feat-1122_x", &[11, 12, 13, 14]);
+    assert_eq!(
+        link_focus_after(&mut app, &held),
+        Some(card_link_id(&l, CardLink::PullRequest(12)))
+    );
+    assert_eq!(
+        expansion_focus_move(
+            &mut app,
+            micold_core::overview_expansion::Event::LinkFocusLost(
+                l.clone(),
+                CardLink::PullRequest(13)
+            )
+        ),
+        None
+    );
+    let expansion = &app.core.overview.expansion;
+    assert_eq!(
+        expansion.focused_link(),
+        Some((&l, CardLink::PullRequest(12)))
+    );
+    assert_eq!(expansion.expanded(), Some(&l));
+}
+
+/// Visual pass M3 r1, criteria 1 and 3, FR-010: iced reports a forward Tab between two numbers in
+/// tree order, the loss before the gain. The loss of a row-3 number collapses the card until the
+/// gain pairs with it, so for that moment the number is not drawn; that is the keyboard leaving,
+/// not a number taken away under it: the root moves nothing (it used to hand the keyboard to the
+/// card, so Tab from row 3 went back to the card, and Right from it too).
+#[test]
+fn a_move_off_a_row_three_number_moves_no_focus_to_the_card() {
+    use micold_core::overview_expansion::Event;
+    let (mut app, l) = app_with_numbers();
+    list_numbers(&mut app, "feat/feat-1122_x", &[10, 11, 12, 13]);
+    tab_onto_number(&mut app, &l, 11);
+    assert_eq!(
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusLost(l.clone(), CardLink::PullRequest(11))
+        ),
+        None,
+        "Tab or an arrow off #11"
+    );
+    // The gain pairs with the loss and the card takes its form back: the root re-focuses #10 by
+    // its id, as on any change of form (a no-op when it still holds the keyboard), and not the
+    // expanded card's last number: no other card held the keyboard.
+    assert_eq!(
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusGained(l.clone(), CardLink::PullRequest(10))
+        ),
+        Some(micold_client::ui::overview::card_link_id(
+            &l,
+            CardLink::PullRequest(10)
+        ))
+    );
+    let expansion = &app.core.overview.expansion;
+    assert_eq!(
+        expansion.focused_link(),
+        Some((&l, CardLink::PullRequest(10)))
+    );
+    assert_eq!(expansion.expanded(), Some(&l));
+}
+
+/// A forward Tab from row 1 to row 2, the collapsed card's last number, is no Shift+Tab into the
+/// card: the keyboard stays on row 2.
+#[test]
+fn a_tab_onto_row_two_stays_on_it() {
+    use micold_client::ui::overview::card_link_id;
+    use micold_core::overview_expansion::Event;
+    let (mut app, l) = app_with_numbers();
+    list_numbers(&mut app, "feat/feat-1122_x", &[10, 11, 12, 13]);
+    tab_onto_number(&mut app, &l, 13);
+    assert_eq!(
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusLost(l.clone(), CardLink::PullRequest(13))
+        ),
+        None
+    );
+    assert_eq!(
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusGained(l.clone(), CardLink::PullRequest(12))
+        ),
+        Some(card_link_id(&l, CardLink::PullRequest(12)))
+    );
+}
+
+/// Visual pass M3 r1, criterion 1, FR-010 (Shift+Tab is the reverse of Tab): Shift+Tab from the
+/// next card lands on the collapsed card's last drawn number, row 2; the card then expands, and
+/// the root moves the keyboard on to the expanded card's last number, where Tab left it.
+#[test]
+fn shift_tab_onto_a_collapsed_cards_number_goes_to_its_last() {
+    use micold_client::ui::overview::card_link_id;
+    use micold_core::overview_expansion::Event;
+    let (a, b) = (
+        SessionLocation::Worktree("feat-1122_x".into()),
+        SessionLocation::Worktree("feat-1124_y".into()),
+    );
+    let mut app = app_with_links(&["feat-1122_x", "feat-1124_y"]);
+    list_numbers(&mut app, "feat/feat-1122_x", &[10, 11, 12, 13]);
+    let _ = expansion_focus_move(&mut app, Event::FocusGained(b.clone()));
+    assert_eq!(
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusGained(a.clone(), CardLink::PullRequest(12))
+        ),
+        Some(card_link_id(&a, CardLink::PullRequest(10)))
+    );
+    assert_eq!(expansion_focus_move(&mut app, Event::FocusLost(b)), None);
+    assert_eq!(
+        expansion_focus_move(
+            &mut app,
+            Event::LinkFocusGained(a.clone(), CardLink::PullRequest(10))
+        ),
+        None
+    );
+    let expansion = &app.core.overview.expansion;
+    assert_eq!(
+        expansion.focused_link(),
+        Some((&a, CardLink::PullRequest(10)))
+    );
+    assert_eq!(expansion.expanded(), Some(&a));
 }
 
 /// U6, FR-009: a number's Menu key opens the card's menu as `KeyboardFromLink` of that number.

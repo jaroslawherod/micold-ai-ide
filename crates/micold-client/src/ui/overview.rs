@@ -498,10 +498,7 @@ pub fn pull_request_link_for(
     location: &SessionLocation,
     number: u64,
 ) -> Option<String> {
-    cards(state)
-        .into_iter()
-        .find(|card| &card.location == location)?
-        .pull_requests?
+    card_pr_list(state, location)?
         .prs()
         .iter()
         .find(|pr| pr.number == number)
@@ -511,26 +508,65 @@ pub fn pull_request_link_for(
         .filter(|url| url.starts_with(crate::features::sidebar::GITHUB_ADDRESS_PREFIX))
 }
 
-/// Whether `link` of the card at `location` is drawn now, so it can hold the keyboard (feature
-/// 1123, R6, R7): the issue link while the card has one; a number while the card lists its pull
-/// request in a row it draws at its current form (`rows(expanded)`, as the view reads it).
-pub fn card_link_shown(state: &State, location: &SessionLocation, link: CardLink) -> bool {
+/// The pull request list the card at `location` draws its rows from, read straight from the
+/// window: its worktree's branch's list while the counts show (R5), as [`card`] reads it, without
+/// building every card (review A M3 r1 F2: the keyboard hand-offs ask this on every message).
+fn card_pr_list<'s>(
+    state: &'s State,
+    location: &SessionLocation,
+) -> Option<&'s micold_core::pr_list::BranchPrList> {
+    let SessionLocation::Worktree(dir) = location else {
+        return None;
+    };
+    let branch = state
+        .worktree
+        .worktrees
+        .iter()
+        .find(|worktree| &worktree.dir_name == dir)?
+        .branch
+        .as_deref()?;
+    state
+        .pr_status
+        .enabled
+        .then(|| state.pr_status.lists.get(branch))
+        .flatten()
+}
+
+/// Where `link` of the card at `location` is drawn now, or `None` while it is not drawn (feature
+/// 1123, R6, R7): the issue link while the card has one (its one place, 0); a number at its row
+/// while the card draws its pull request at its current form (`rows(expanded)`, as the view reads
+/// it). The row tells the root when a reading moved the number to another widget (review A M3 r1
+/// F1).
+pub fn card_link_row(state: &State, location: &SessionLocation, link: CardLink) -> Option<usize> {
     match link {
-        CardLink::Issue => issue_link_for(state, location).is_some(),
+        CardLink::Issue => issue_link_for(state, location).map(|_| 0),
         CardLink::PullRequest(number) => {
-            let Some(model) = cards(state)
-                .into_iter()
-                .find(|card| &card.location == location)
-            else {
-                return false;
-            };
             let expanded = state.overview.expansion.expanded() == Some(location);
-            pr_rows(&model, expanded)
-                .0
+            card_pr_list(state, location)?
+                .drawn(expanded)
                 .iter()
-                .any(|row| row.number == number)
+                .position(|pr| pr.number == number)
         }
     }
+}
+
+/// Whether `link` of the card at `location` is drawn now, so it can hold the keyboard
+/// ([`card_link_row`]).
+pub fn card_link_shown(state: &State, location: &SessionLocation, link: CardLink) -> bool {
+    card_link_row(state, location, link).is_some()
+}
+
+/// The last Tab stop among the card's links when it is drawn `expanded` or collapsed: its last
+/// drawn number, else its issue link (feature 1123, FR-010), where Shift+Tab enters the card.
+pub fn card_last_link(
+    state: &State,
+    location: &SessionLocation,
+    expanded: bool,
+) -> Option<CardLink> {
+    card_pr_list(state, location)
+        .and_then(|list| list.drawn(expanded).last())
+        .map(|pr| CardLink::PullRequest(pr.number))
+        .or_else(|| issue_link_for(state, location).map(|_| CardLink::Issue))
 }
 
 /// Each card's id and the ids of all of its links, its issue link and each listed number (feature
@@ -1186,22 +1222,30 @@ mod tests {
         );
     }
 
-    /// `overview_of(1)` with #12 listed on `feat/0`, its checks failing (feature 1123).
-    fn overview_with_number_12() -> State {
-        use micold_core::pr_list::{BranchPrList, ListedPr};
-        use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
-        let mut state = overview_of(1);
-        state.pr_status.enabled = true;
-        state.pr_status.read_at = Some(100);
-        let pr = ListedPr {
-            number: 12,
-            url: "https://github.com/o/r/pull/12".into(),
+    /// Open pull request `number` on `o/r` with `checks` (feature 1123).
+    fn listed_pr(
+        number: u64,
+        checks: micold_core::pull_request::CheckStatus,
+    ) -> micold_core::pr_list::ListedPr {
+        use micold_core::pull_request::{BranchPrState, ReviewState};
+        micold_core::pr_list::ListedPr {
+            number,
+            url: format!("https://github.com/o/r/pull/{number}"),
             state: BranchPrState::Open,
-            checks: CheckStatus::Failing,
+            checks,
             review: ReviewState::None,
             conflict: false,
             created_at: "2026-01-01T00:00:00Z".into(),
-        };
+        }
+    }
+
+    /// `overview_of(1)` with #12 listed on `feat/0`, its checks failing (feature 1123).
+    fn overview_with_number_12() -> State {
+        use micold_core::pr_list::BranchPrList;
+        let mut state = overview_of(1);
+        state.pr_status.enabled = true;
+        state.pr_status.read_at = Some(100);
+        let pr = listed_pr(12, micold_core::pull_request::CheckStatus::Failing);
         state
             .pr_status
             .lists
@@ -1464,22 +1508,13 @@ mod tests {
     /// The Overview's three cards (Default and two worktrees), the middle one with an issue link
     /// and a pull request row (feature 1123).
     fn stepping_models() -> Vec<CardModel> {
-        use micold_core::pr_list::{BranchPrList, ListedPr};
-        use micold_core::pull_request::{BranchPrState, CheckStatus, ReviewState};
+        use micold_core::pr_list::BranchPrList;
         let mut models = cards(&overview_of(2));
         models[1].issue_link = Some(IssueLink {
             label: "Issue #1".into(),
             address: "https://github.com/o/r/issues/1".into(),
         });
-        let pr = ListedPr {
-            number: STEPPED_PR,
-            url: format!("https://github.com/o/r/pull/{STEPPED_PR}"),
-            state: BranchPrState::Open,
-            checks: CheckStatus::None,
-            review: ReviewState::None,
-            conflict: false,
-            created_at: "2026-01-01T00:00:00Z".into(),
-        };
+        let pr = listed_pr(STEPPED_PR, micold_core::pull_request::CheckStatus::None);
         models[1].pull_requests = Some(BranchPrList::new(vec![pr], false, false));
         models
     }
