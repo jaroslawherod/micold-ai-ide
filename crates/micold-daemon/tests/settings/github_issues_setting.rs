@@ -13,8 +13,6 @@ use micold_core::protocol::messages::{DaemonMsg, DaemonSettings, OperationResult
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::ProjectStore;
 
-/// A service whose catalog and settings live in `store_dir`; called twice over one directory, the
-/// second service is the first one restarted.
 /// Send `SettingsSet { github_issues_enabled }` and wait for the acknowledgement.
 async fn set(client: &mut Client, req: u64, on: Option<bool>) {
     client

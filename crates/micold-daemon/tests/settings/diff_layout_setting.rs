@@ -15,8 +15,6 @@ use micold_daemon::state::DaemonState;
 use crate::conn;
 use conn::{connect_with_settings, service, settings_set, Client, SettingsPatch};
 
-/// A service whose catalog and settings live in `store_dir`. Called twice over one directory, the
-/// second service is the first one restarted.
 /// A `SettingsSet` that names only the diff layout.
 fn set_layout(req: u64, layout: DiffLayout) -> ClientMsg {
     settings_set(

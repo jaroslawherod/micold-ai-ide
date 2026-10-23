@@ -15,8 +15,6 @@ use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{DaemonMsg, DaemonSettings, OperationResult};
 use micold_daemon::state::DaemonState;
 
-/// A service whose catalog and settings live in `store_dir`. Called twice over one directory, the
-/// second service is the first one restarted.
 /// Send a `SettingsSet` that names the pull request switch and the scrollback and nothing else,
 /// and wait until the service acknowledges it.
 async fn set(
