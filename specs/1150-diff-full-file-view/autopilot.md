@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1150
 - **Worktree branch**: feat/1150_show-the-full-file-while-reviewing-a-diff-in-the
 - **Started**: 2026-10-20
-- **Phase**: M5 in progress
-- **Next step**: M5 verify, reviews, gate, PR
+- **Phase**: M6 PR open
+- **Next step**: orchestrator merges M6 PR, then M7
 
 ## Pull requests
 
@@ -21,7 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1162 | M2 whole-file toggle | merged | 8109df50677a9a0635067277aa0df3137e3c3c48 |
 | #1215 | M3 pull request head version | merged | a608e0fcb7713377ed9abe3426b958462b91a9db |
 | #1221 | M4 pick revealed lines | merged | df514cb373e4e93a20c4294b2518f2c689f03c89 |
-| #1253 | M5 browse repository files | open | |
+| #1253 | M5 browse repository files | merged | 2dddbef617146c535dadbc0dd5687169836fa50a |
+| M6 | M6 browse at the PR head | pending | |
 
 ## Milestones
 
@@ -31,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T018–T022 | light | Whole-file toggle | #1162 | merged |
 | M3 | T023–T031 | full | Pull request head version | #1215 | merged |
 | M4 | T032–T035 | light | Pick revealed lines | #1221 | merged |
-| M5 | T036–T046 | full | Browse repository files | | pending |
+| M5 | T036–T046 | full | Browse repository files | #1253 | merged |
 | M6 | T047–T053 | full | Browse at the PR head | | pending |
 | M7 | T054–T062 | full | Follow references from the diff | | pending |
 
@@ -61,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | 3213adb2c03edaa4431e840ab07b5a36c88de031:6179267cd162fbbfa13ebaa171f85c55810ee0be | CLEAN (3 MINOR fixed, prose only) |
 | M3 A (code-review high) + B (autopilot-reviewer sonnet) | 1 | ba4b1ee6541e38c40fea2c613f9b159e0ef8dadb:6a15094430c1a28268aa59eb561f688cb798d3f8 | A: fixed size gate before local blob read, force_large on ShowLarge, stale head_text reset; B: MAJOR fixed (local head read no longer needs gh), MINOR no shell test for address parsing left |
 | M4 A+B (autopilot-reviewer sonnet, combined) | 1 | 63ac6f9f17622829cba16564ff524073c9b47aae:a608e0fcb7713377ed9abe3426b958462b91a9db | MAJOR fmt fixed (cargo fmt); MINOR duplicate selected check fixed via pick_allowed; own gate run caught PR-source selection regression, fixed via selected_key |
+| M6 A (code-review high) + B (autopilot-reviewer sonnet) | 1 | 964f9451e7ccc2c3b4b0b0c906a8e52392086d17:2dddbef617146c535dadbc0dd5687169836fa50a | A: fixed submodule entries in local head tree, Back frame uses selected_file for PRs, tree reset on source change, scroll messages skip snapshot, commit_is_local helper, PR tree on remote entry answers HeadUnavailable; B: CLEAN, MINOR fixed (test names contain `browse`). Visual pass not run in client (visual-pass/m6.md) |
 
 ## Declined review findings
 
@@ -72,10 +74,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | M3 | A | remote-daemon entries get no GitHub fallback | head_file needs a local checkout dir for the local-first read and the confinement; remote entries are out of scope (FR-014 local-first) |
 | M3 | A | submodule/symlink JSON from contents API; backslash in Confined; head_note string compare; off_thread duplication; worktree symlink TOCTOU | MINOR or unused path (Worktree source not used yet); Confined backslash rule is spec'd (test a_relative_path_is_confined) |
+| M6 | A | re-read of the browsed path after a source switch leaves no Back target | data-model §4 and the spec edge case say: stack cleared and the browsed path re-read (or shown missing) |
+| M6 | A | tree_at timeout/rate limit have no distinct message; fake script queue duplicated | MINOR; spec maps every head failure to HeadUnavailable; duplication below budget |
 
 ## Handover
 
-None.
+M6 (T047-T053) is implemented, ticked, reviewed (A fixed, B CLEAN) and documented; visual pass recorded as not run in the client (visual-pass/m6.md). The code is committed locally as one WIP commit and NOT pushed. Left to do:
+1. A full gate was started detached (`mise run gate`, log `gate-*.log` in the previous unit's scratchpad) and was still waiting on the shared build lock held by other worktrees. Do not trust it: run `GIT_CONFIG_GLOBAL=/dev/null mise run gate` detached again on the committed tree, wait with hold.sh (use a Monitor on `GATE_EXIT=` if hold.sh says STOP).
+2. Fix anything it reports (the new client tests in features_pr_changes.rs, `browse_*` and `switching_pull_request_*`, were never run green: the first run did not include them; core tests and the older client tests were green before the review fixes).
+3. Set ledger Phase/Next step, `git fetch && git rebase origin/main`, push `--force-with-lease -u origin HEAD`, open PR `feat(1150): browse repository files at the pull request head (M6) (#1150)` with the pr.md body (Review A: 10 findings, 6 fixed, 4 declined/noted; Review B sonnet CLEAN, Verify: review_browse head and features_pr_changes browse), record PR number in the ledger, return DONE.
 
 ## Open escalation
 

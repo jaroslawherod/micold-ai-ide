@@ -21,7 +21,7 @@ use micold_client::features::settings;
 use micold_client::ui::syntax;
 use micold_core::git::Git;
 use micold_core::github::GithubRepo;
-use micold_core::pull_request::{PullRequestSource, ReadingFailure};
+use micold_core::pull_request::{PullRequestSource, ReadingFailure, TreeListing};
 use micold_core::review::base::{ReviewScope, Toggles};
 use micold_core::review::browse::{self, Confined, FileReadFailure, FileSource, FileText};
 use micold_core::review::changes::ChangeList;
@@ -242,22 +242,14 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                 answer,
             )
         }
-        Effect::ReadTree { seq, entry } => {
-            let answer = move |result: Result<Result<Vec<RelPath>, FileReadFailure>, String>| {
-                Message::Changes(Msg::TreeRead {
-                    seq,
-                    result: result.unwrap_or(Err(FileReadFailure::Unreadable)),
-                })
-            };
-            let Ok((dir, _git)) = local(app, &entry) else {
-                return Task::done(answer(Ok(Err(FileReadFailure::Unreadable))));
-            };
-            off_thread(
-                format!("tree seq={seq} entry={entry:?}"),
-                move || Ok(browse::list_tree(&FileSource::Worktree { dir })),
-                answer,
-            )
-        }
+        Effect::ReadTree {
+            seq,
+            project,
+            entry,
+            source,
+            commit,
+            address,
+        } => read_tree_requested(app, seq, project, entry, source, commit, address),
         Effect::ReadFile {
             seq,
             project,
@@ -396,6 +388,59 @@ fn read_file_requested(
                 if result.is_ok() { "ok" } else { "failed" }
             ));
             (result, Spans::default())
+        },
+        answer,
+    )
+}
+
+/// List the repository's files at the shown source's version (feature 1150, FR-011, FR-014): the
+/// worktree's own, or the pull request's head, read as a head file is (local objects first, then
+/// one `gh` request).
+fn read_tree_requested(
+    app: &App,
+    seq: u64,
+    project: PathBuf,
+    entry: SessionLocation,
+    source: SourceKey,
+    commit: String,
+    address: String,
+) -> Task<Message> {
+    let answer = move |result: Result<Result<TreeListing, FileReadFailure>, String>| {
+        Message::Changes(Msg::TreeRead {
+            seq,
+            result: result.unwrap_or(Err(FileReadFailure::Unreadable)),
+        })
+    };
+    let Ok((dir, _git)) = local(app, &entry) else {
+        let why = if source == SourceKey::Worktree {
+            FileReadFailure::Unreadable
+        } else {
+            FileReadFailure::HeadUnavailable
+        };
+        return Task::done(answer(Ok(Err(why))));
+    };
+    let label = format!("tree seq={seq} entry={entry:?}");
+    if source == SourceKey::Worktree {
+        return off_thread(
+            label,
+            move || Ok(browse::list_tree(&FileSource::Worktree { dir }, None, 0)),
+            answer,
+        );
+    }
+    let Some(repo) = repo_of_address(&address) else {
+        return Task::done(answer(Ok(Err(FileReadFailure::HeadUnavailable))));
+    };
+    let gh = crate::shell::pr_status::pull_request_source(app, &project);
+    off_thread(
+        label,
+        move || {
+            let gh = gh();
+            let source = FileSource::PrHead { dir, repo, commit };
+            Ok(browse::list_tree(
+                &source,
+                gh.as_deref().map(|gh| gh as &dyn PullRequestSource),
+                micold_core::unix_time::unix_secs(),
+            ))
         },
         answer,
     )

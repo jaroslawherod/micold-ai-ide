@@ -98,13 +98,13 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ### Pull request head browsing
 
-- [ ] T047 [P] [US5] Write failing unit tests for `tree_at` (recursive trees args, `truncated` flag, failure mapping) and the fake's `with_tree_answer` in `crates/micold-core/src/pull_request.rs`
-- [ ] T048 [P] [US5] Write failing integration tests in `crates/micold-core/tests/review_browse.rs`: head tree vs worktree tree, untracked/ignored never listed for a PR, path missing at head gives the FR-009 message
-- [ ] T049 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: browsing under a PR reads the head, switching PR/source clears the stack and re-reads the browsed path (or shows missing), truncated tree note and typed path still read
-- [ ] T050 [US5] Implement `PullRequestSource::tree_at` and the fake answer in `crates/micold-core/src/pull_request.rs` (T047 green)
-- [ ] T051 [US5] Extend `list_tree` for `FileSource::PrHead` (`git ls-tree -r -z --name-only`, else `tree_at`) in `crates/micold-core/src/review/browse.rs` (T048 green)
-- [ ] T052 [US5] Source-switch handling and truncated-tree note in `crates/micold-client/src/features/changes.rs` (T049 green)
-- [ ] T053 [US5] Document PR-head browsing in `docs/user-guide/reviewing-changes.md`
+- [x] T047 [P] [US5] Write failing unit tests for `tree_at` (recursive trees args, `truncated` flag, failure mapping) and the fake's `with_tree_answer` in `crates/micold-core/src/pull_request.rs`
+- [x] T048 [P] [US5] Write failing integration tests in `crates/micold-core/tests/review_browse.rs`: head tree vs worktree tree, untracked/ignored never listed for a PR, path missing at head gives the FR-009 message
+- [x] T049 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: browsing under a PR reads the head, switching PR/source clears the stack and re-reads the browsed path (or shows missing), truncated tree note and typed path still read
+- [x] T050 [US5] Implement `PullRequestSource::tree_at` and the fake answer in `crates/micold-core/src/pull_request.rs` (T047 green)
+- [x] T051 [US5] Extend `list_tree` for `FileSource::PrHead` (`git ls-tree -r -z --name-only`, else `tree_at`) in `crates/micold-core/src/review/browse.rs` (T048 green)
+- [x] T052 [US5] Source-switch handling and truncated-tree note in `crates/micold-client/src/features/changes.rs` (T049 green)
+- [x] T053 [US5] Document PR-head browsing in `docs/user-guide/reviewing-changes.md`
 
 ### References in diff lines
 

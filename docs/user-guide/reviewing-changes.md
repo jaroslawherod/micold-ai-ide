@@ -200,8 +200,15 @@ by git but exists in the worktree opens too.
 
 Press **Back** above the file to return to what you were reading, with the same file, scroll
 position and expanded lines. When the change modifies the browsed file, **Open diff** switches to
-its diff. Picking lines for a comment is not yet available in a file you browse. Browsing at a
-pull request's head version is added separately.
+its diff. Picking lines for a comment is not yet available in a file you browse.
+
+With a pull request shown, **Files** stays available and lists the files of the pull request's head
+commit, including the ones it does not change; untracked and ignored files of the worktree are never
+listed. A file you open is the pull request's version, read from your repository when it has the
+commit and from GitHub otherwise. When GitHub lists only part of a very large tree, a note says so;
+a path you type still opens. Choosing another pull request, or the working tree, reads the file you
+were browsing again at that version, says so if it does not exist there, and forgets where **Back**
+led.
 
 ### Keeping up with changes
 

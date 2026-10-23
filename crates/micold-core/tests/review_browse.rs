@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use micold_core::github::GithubRepo;
-use micold_core::pull_request::FakePullRequestSource;
+use micold_core::pull_request::{FakePullRequestSource, TreeListing};
 use micold_core::review::browse::{list_tree, read_file, Confined, FileReadFailure, FileSource};
 use micold_core::review::limits;
 
@@ -253,8 +253,9 @@ fn a_local_head_is_read_without_gh() {
 }
 
 fn tree_names(source: &FileSource) -> Vec<String> {
-    list_tree(source)
+    list_tree(source, None, 0)
         .expect("a tree")
+        .paths
         .iter()
         .map(|p| p.as_str().to_owned())
         .collect()
@@ -287,4 +288,68 @@ fn an_ignored_file_is_still_readable_by_its_typed_path() {
     fs::write(root.join("ignored.log"), "x\n").unwrap();
     let read = read_file(&worktree(&root), &path("ignored.log"), false, None, 0);
     assert_eq!(read.unwrap().lines.len(), 1);
+}
+
+fn pr_head(root: &Path, commit: &str) -> FileSource {
+    FileSource::PrHead {
+        dir: root.to_path_buf(),
+        repo: repo(),
+        commit: commit.into(),
+    }
+}
+
+#[test]
+fn a_head_tree_is_the_commits_files_not_the_worktrees() {
+    let (_dir, root, head) = repo_with_head();
+    fs::write(root.join(".gitignore"), "ignored.log\n").unwrap();
+    fs::write(root.join("ignored.log"), "x\n").unwrap();
+    fs::write(root.join("src/new.rs"), "n\n").unwrap();
+    fs::write(root.join("src/a.rs"), "edited\n").unwrap();
+    let listing = list_tree(&pr_head(&root, &head), None, 0).expect("a tree");
+    let names: Vec<&str> = listing.paths.iter().map(|p| p.as_str()).collect();
+    assert_eq!(names, ["src/a.rs"]);
+    assert!(!listing.truncated);
+    assert_eq!(
+        tree_names(&worktree(&root)),
+        [".gitignore", "src/a.rs", "src/new.rs"]
+    );
+}
+
+#[test]
+fn a_head_commit_that_is_not_local_asks_github_for_its_tree() {
+    let (_dir, root, _head) = repo_with_head();
+    let far = "0123456789abcdef0123456789abcdef01234567";
+    let listing = TreeListing {
+        paths: vec![micold_core::review::RelPath::from_native("far.rs").unwrap()],
+        truncated: true,
+    };
+    let fake = FakePullRequestSource::new().with_tree_answer(listing.clone());
+    assert_eq!(list_tree(&pr_head(&root, far), Some(&fake), 0), Ok(listing));
+    assert_eq!(
+        fake.tree_calls(),
+        [("acme/widgets".to_string(), far.to_string())]
+    );
+    assert_eq!(
+        list_tree(&pr_head(&root, far), None, 0),
+        Err(FileReadFailure::HeadUnavailable)
+    );
+}
+
+#[test]
+fn a_path_missing_at_the_head_gives_the_does_not_exist_message() {
+    let (_dir, root, head) = repo_with_head();
+    fs::write(root.join("only_here.rs"), "x\n").unwrap();
+    let missing = read_file(
+        &pr_head(&root, &head),
+        &path("only_here.rs"),
+        false,
+        None,
+        0,
+    )
+    .expect_err("not at the head");
+    assert_eq!(missing, FileReadFailure::Missing);
+    assert_eq!(
+        missing.message(),
+        "This file does not exist in this version"
+    );
 }
