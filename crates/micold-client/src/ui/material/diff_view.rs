@@ -1628,7 +1628,7 @@ mod tests {
     fn pieces_cut_the_text_at_syntax_spans_and_references_alike() {
         let text = "use a/b.rs;";
         let syntax = [(0..3, LIGHT.primary)];
-        let got = pieces(text, &syntax, &[4..10]);
+        let got = pieces(text, &syntax, std::slice::from_ref(&(4..10)));
         let shown: Vec<(&str, bool, bool)> = got
             .iter()
             .map(|p| (&text[p.range.clone()], p.colour.is_some(), p.link.is_some()))
@@ -1643,7 +1643,11 @@ mod tests {
             ]
         );
         // A reference across a colour boundary is cut there but both halves link.
-        let across = pieces("abcdef", &[(0..3, LIGHT.primary)], &[1..5]);
+        let across = pieces(
+            "abcdef",
+            &[(0..3, LIGHT.primary)],
+            std::slice::from_ref(&(1..5)),
+        );
         let links: Vec<_> = across.iter().map(|p| (p.range.clone(), p.link)).collect();
         assert_eq!(
             links,

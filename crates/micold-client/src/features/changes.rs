@@ -2962,17 +2962,18 @@ fn browse_open(state: &mut State, path: RelPath, line: Option<u32>) -> Effect {
         .as_ref()
         .is_some_and(|b| b.path == path && !matches!(b.load, BrowseLoad::Failed(_)));
     if shown {
-        // Followed again to a line of the file already shown: scroll to it.
-        return match line {
-            Some(line) if matches!(&view.browse, Some(b) if matches!(b.load, BrowseLoad::Ready(_))) =>
-            {
-                view.diff_offset = offset_of_line(line);
-                Effect::ScrollDiff {
-                    offset: view.diff_offset,
-                }
-            }
-            _ => Effect::None,
+        // Followed again to a line of the file already shown: scroll to it, or once it is read.
+        let Some((line, browsed)) = line.zip(view.browse.as_mut()) else {
+            return Effect::None;
         };
+        if matches!(browsed.load, BrowseLoad::Ready(_)) {
+            view.diff_offset = offset_of_line(line);
+            return Effect::ScrollDiff {
+                offset: view.diff_offset,
+            };
+        }
+        browsed.line = Some(line);
+        return Effect::None;
     }
     let frame = match &view.browse {
         Some(b) => Frame::File {

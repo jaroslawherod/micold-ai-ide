@@ -157,7 +157,7 @@ mod tests {
     use super::*;
 
     const FILES: [&str; 8] = [
-        "README.md",
+        "TOP.md",
         "src/main.rs",
         "src/ui/mod.rs",
         "src/ui/button.rs",
@@ -200,9 +200,9 @@ mod tests {
         );
         assert_eq!(one("\"../main.rs\"", "src/ui/mod.rs").1, "src/main.rs");
         assert_eq!(one("see src/main.rs", "src/ui/mod.rs").1, "src/main.rs");
-        assert_eq!(one("README.md", "src/ui/mod.rs").1, "README.md");
+        assert_eq!(one("TOP.md", "src/ui/mod.rs").1, "TOP.md");
         // Climbing out of the repository names nothing.
-        assert!(refs("\"../../../README.md\"", "src/ui/mod.rs").is_empty());
+        assert!(refs("\"../../../TOP.md\"", "src/ui/mod.rs").is_empty());
     }
 
     #[test]
