@@ -503,6 +503,8 @@ After you update Micold, a container daemon still running the previous version s
   its own. **Stop** stops the daemon's container, which stops its running processes, and **Start**
   brings the container up again with this app's version.
 - **The daemon is newer than the app:** update the app.
+- **The container still runs the released daemon image:** **Stop** is offered, but **Start** would
+  meet the same daemon again; the banner's **Restart service** replaces the container.
 
 The banner's **Restart service** does the same as **Stop** then **Start**, for the daemon of the
 worktree you are looking at only: it never stops the host daemon or another container.

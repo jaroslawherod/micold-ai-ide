@@ -33,7 +33,7 @@ use micold_client::features::connection::Msg as ConnectionMsg;
 #[derive(Debug, Clone)]
 enum RestartTarget {
     /// The container the sandbox boot owns: stopped and removed, and the boot brings it up again.
-    Boot(crate::shell::sandbox::BootPlan),
+    Boot,
     /// Another container daemon: its container is stopped and kept, then the daemon started again.
     Container(DaemonId),
     /// The host daemon, stopped by its recorded pid over its endpoint.
@@ -43,12 +43,16 @@ enum RestartTarget {
 }
 
 fn restart_target(app: &App) -> RestartTarget {
-    let boot = app.sandbox_boot.clone();
+    let boot = app.sandbox_boot.is_some();
     let Some(id) = app.active_daemon() else {
-        return boot.map_or(RestartTarget::Host, RestartTarget::Boot);
+        return if boot {
+            RestartTarget::Boot
+        } else {
+            RestartTarget::Host
+        };
     };
-    if let Some(plan) = boot.filter(|_| id == app.sandbox_daemon()) {
-        return RestartTarget::Boot(plan);
+    if boot && id == app.sandbox_daemon() {
+        return RestartTarget::Boot;
     }
     match app.core.settings.daemons.get(id).map(|e| &e.runtime) {
         Some(DaemonRuntime::Container(_)) => RestartTarget::Container(id),
@@ -75,7 +79,10 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
         // the container up with a dead process inside — the orphan US6 scenario 4 is about. Stop
         // the container itself; the banner that results carries the action that brings a fresh one
         // up (FR-036, T110).
-        RestartTarget::Boot(plan) => {
+        RestartTarget::Boot => {
+            let Some(plan) = app.sandbox_boot.clone() else {
+                return Task::none();
+            };
             app.core.notify_info(
                 "Stopping the sandbox — running processes are stopped, but your sessions are \
                  preserved and can be resumed.",
@@ -97,8 +104,13 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
                 "Restarting the daemon {name} — running processes are stopped, but your sessions \
                  are preserved and can be resumed."
             ));
-            crate::shell::daemons::stop_container_of(app, id, move |_| {
-                Message::Daemons(micold_client::features::daemons::Msg::Started(id))
+            // Started only once the old daemon is gone: a re-dial would meet it again.
+            crate::shell::daemons::stop_container_of(app, id, move |stopped| {
+                if stopped {
+                    Message::Daemons(micold_client::features::daemons::Msg::Started(id))
+                } else {
+                    crate::shell::daemons::container_not_stopped(&name)
+                }
             })
             .unwrap_or_else(Task::none)
         }
@@ -341,7 +353,7 @@ mod tests {
         assert!(!said.contains("sandbox"), "{said}");
 
         view_worktree_on(&mut app, first);
-        assert!(matches!(restart_target(&app), RestartTarget::Boot(_)));
+        assert!(matches!(restart_target(&app), RestartTarget::Boot));
     }
 
     /// A daemon on a host the app does not own is not stopped from here: its row says how.

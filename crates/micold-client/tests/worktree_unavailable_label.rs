@@ -79,7 +79,9 @@ fn a_version_mismatch_shows_both_versions_and_the_way_out() {
         text.starts_with("daemon Box version mismatch: client 1.2.0, daemon 1.1.0"),
         "{text}"
     );
-    assert!(text.contains("restart"), "{text}");
+    // A container daemon's way out is its row's Stop, then Start (spec 806 FR-007, BUG-1165).
+    assert!(text.contains("(daemon is older)"), "{text}");
+    assert!(text.contains("Stop this daemon, then Start it"), "{text}");
 }
 
 #[test]
