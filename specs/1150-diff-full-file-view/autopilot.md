@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1253 | M5 browse repository files | merged | 2dddbef617146c535dadbc0dd5687169836fa50a |
 | #1282 | M6 browse at the PR head | merged | 47cfcc3c58d5f371ad5dfb0afa73e3a2ee83d5d6 |
 | #1291 | M7 follow references from the diff | merged | 93a720fbdd2f462287624d7bf4405eb19b810f85 |
-| (close) | Close the spec | open | |
+| #1293 | Close the spec | open | |
 
 ## Milestones
 

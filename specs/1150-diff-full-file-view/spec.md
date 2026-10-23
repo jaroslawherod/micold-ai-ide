@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Closed 2026-10-23 — shipped in PRs #1151, #1156, #1162, #1215, #1221, #1253, #1282, #1291, and the close PR (client visual pass of the browse flow outstanding, T066)
+**Status**: Closed 2026-10-23 — shipped in PRs #1151, #1156, #1162, #1215, #1221, #1253, #1282, #1291, #1293 (client visual pass of the browse flow outstanding, T066)
 
 **Input**: User description: "Show the full file while reviewing a diff in the Changes view (including a pull request's) (issue #1150). The Changes view shows only the changed hunks with a few lines of context, so a reviewer cannot read the surrounding code or look at files the change does not touch. Wanted: navigate the repository's code: open any file of the repo, including files the change does not affect (e.g. a file tree or path picker, and following a reference from the diff into another file), and go back to the diff; files are read at the PR head version for a PR's diff, the worktree's version otherwise. Also: while reviewing a diff, including a pull request's, view the file's full code: expand hidden unchanged lines (per gap or a whole-file toggle), with syntax colouring and line numbers as in the diff. Works for the worktree's own changes and for a PR's diff (the PR head version). Lines revealed this way can be picked for review comments wherever picking is allowed (see #1149). Relates to #482, #1003, #1149."
 
