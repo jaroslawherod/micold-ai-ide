@@ -1116,6 +1116,11 @@ impl State {
             ) => {
                 let _ = crate::features::changes::update(&mut self.changes, msg);
             }
+            // #942: the Bypass mode confirmation is a registered dialog too; closing it (Escape,
+            // the scrim, another dialog opening) sends nothing, so it is pure state here.
+            Message::PermissionPrompts(crate::features::permission_prompts::Msg::ModeCancelled) => {
+                self.permission_prompts.cancel_mode();
+            }
             // Daemon connection messages are runtime, not pure state — the binary handles them in
             // `update_inner` and never routes them here. Listed explicitly (not a catch-all) so the
             // core reducer stays exhaustive over `Message` and a future variant is a compile error.

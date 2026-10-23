@@ -779,15 +779,11 @@ pub(crate) fn transcript_body<'a>(
 ) -> Element<'a, Message> {
     // Feature 944: the window's insights of the session; a running task or subagent of a session
     // whose CLI is not running shows as ended (FR-018, FR-022).
-    let shown = state.active_sessions().iter().find(|s| s.id == id);
+    // #942: and its permission mode, for the Bypass label (FR-014); from whichever project lists
+    // the session.
+    let shown = state.workspace.find_session(id).map(|(_, s)| s);
     let cli_running = shown.is_some_and(|s| s.lifecycle == SessionLifecycle::Running);
-    // #942: the session's permission mode, for the Bypass label (FR-014), from whichever project
-    // lists it.
-    let mode = state
-        .workspace
-        .find_session(id)
-        .map(|(_, s)| s.permission_mode)
-        .unwrap_or_default();
+    let mode = shown.map(|s| s.permission_mode).unwrap_or_default();
     crate::ui::transcript::view_full(
         &state.structured_transcript,
         crate::ui::transcript::InsightsCtx {

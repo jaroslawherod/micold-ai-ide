@@ -532,7 +532,7 @@ window could answer; M8 turns it on, and M9 adds the composer side. T070 (Polish
 - **Verify**: quickstart Part B steps 1–4, 6, 7, 9–11 (without the composer parts) recorded in
   `visual-pass/`; `cargo test -p micold-daemon --test structured_session`;
   `cargo test -p micold-client --test features_permission_prompts`, `--bin micold-ai-ide
-  permission_prompts`, `--bin micold-ai-ide start_list_items confirm_bypass`; `scripts/check-user-guide-updated.sh`
+  permission_prompts`, `--lib start_list_items confirm_bypass`; `scripts/check-user-guide-updated.sh`
 - **Depends on**: M7
 - **Tier**: full
 
