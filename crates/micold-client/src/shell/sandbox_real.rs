@@ -442,13 +442,16 @@ async fn sandbox_real_container_daemon_runs_a_session_end_to_end() {
     link.shows(&format!("{STANDIN_ECHO}hello from the e2e"), step)
         .await;
 
-    // The session stops.
+    // The session stops. The daemon tells every window with a `CatalogChanged` in which the
+    // session is `Idle` (`stop_session_gated`), not with a `SessionChanged`.
     outbox.send(ClientMsg::SessionStop { session });
     link.until("the session stopping", step, |msg| match msg {
-        ConnectionMsg::Event(DaemonMsg::SessionChanged {
-            session: s,
-            summary,
-        }) if *s == session && summary.lifecycle == WireLifecycle::Idle => Some(()),
+        ConnectionMsg::Event(DaemonMsg::CatalogChanged { catalog }) => catalog
+            .projects
+            .iter()
+            .flat_map(|p| &p.sessions)
+            .any(|s| s.id == session && s.lifecycle == WireLifecycle::Idle)
+            .then_some(()),
         _ => None,
     })
     .await;
