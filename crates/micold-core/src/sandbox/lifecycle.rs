@@ -226,6 +226,12 @@ pub enum StaleReason {
     /// since #1002 carries: it may mount the user's SSH agent or git credential store from wherever
     /// they were at its creation, which no path known today can rule out (FR-001, decision D17).
     MadeBeforeCredentialRemoval,
+    /// Not attached to the network this posture needs: after a switch between `Outbound` and
+    /// `NoOutbound` it would keep the old posture's network (#1290).
+    DifferentNetwork {
+        found: Vec<String>,
+        expected: String,
+    },
 }
 
 impl StaleReason {
@@ -237,6 +243,10 @@ impl StaleReason {
             }
             StaleReason::RetiredCredentialMount { destination } => format!(
                 "the existing sandbox mounts `{destination}`, a git credential no sandbox may hold"
+            ),
+            StaleReason::DifferentNetwork { found, expected } => format!(
+                "the existing sandbox is on network(s) {found:?}, not `{expected}`, which the \
+                 network setting needs"
             ),
             StaleReason::MadeBeforeCredentialRemoval => "the existing sandbox was made before git \
                 credentials were withdrawn from sandboxes, and may still hold them"
@@ -265,6 +275,7 @@ pub fn adopt(
     existing: Option<&ContainerFacts>,
     expected_image: &str,
     retired: &[std::path::PathBuf],
+    expected_network: &str,
 ) -> Adoption {
     let Some(facts) = existing else {
         return Adoption::Create;
@@ -296,6 +307,18 @@ pub fn adopt(
     // nothing, and is replaced by the basic image like any other difference.
     if facts.running && facts.image != expected_image && is_released_image(&facts.image) {
         return Adoption::Legacy(id);
+    }
+
+    // Each network posture has its own network, and a container keeps the one it was created on:
+    // reusing it after a switch to `NoOutbound` would leave outbound open (#1290). Running or not.
+    if !facts.networks.iter().any(|n| n == expected_network) {
+        return Adoption::Replace {
+            id,
+            reason: StaleReason::DifferentNetwork {
+                found: facts.networks.clone(),
+                expected: expected_network.to_string(),
+            },
+        };
     }
 
     if facts.image != expected_image {
@@ -401,6 +424,7 @@ where
         existing.as_ref(),
         profile.image.reference(),
         &mounts.retired,
+        &spec.network_name,
     );
 
     // Read before the decision is consumed, and only for the two branches that keep a container
@@ -532,7 +556,12 @@ fn adopt_winner<R: ContainerRuntime>(
                 },
             )
         })?;
-    match adopt(Some(&facts), expected_image, &spec.mounts.retired) {
+    match adopt(
+        Some(&facts),
+        expected_image,
+        &spec.mounts.retired,
+        &spec.network_name,
+    ) {
         Adoption::Attach(id) => Ok(Created::Won {
             id,
             facts,
@@ -1098,6 +1127,7 @@ mod mounted_tests {
             Ok(())
         }
         fn remove(&self, _id: &ContainerId) -> Result<(), RuntimeError> {
+            self.calls.lock().unwrap().push("remove");
             Ok(())
         }
         fn inspect(&self, _id: &ContainerId) -> Result<ContainerFacts, RuntimeError> {
@@ -1140,6 +1170,7 @@ mod mounted_tests {
             fingerprint: None,
             mount_destinations: DESTINATIONS.map(str::to_string).to_vec(),
             git_identity_free: true,
+            networks: vec!["micold-net".to_string()],
         }
     }
 
@@ -1191,6 +1222,21 @@ mod mounted_tests {
 
     fn basic() -> String {
         SandboxProfile::default().image.reference().to_string()
+    }
+
+    /// #1290: a container left on the other posture's network is replaced, not attached to, so a
+    /// switch to `NoOutbound` cannot keep an open network. Running or stopped.
+    #[test]
+    fn a_container_on_another_postures_network_is_replaced_and_recreated() {
+        for running in [true, false] {
+            let mut old = existing(&basic(), running);
+            old.networks = vec!["micold-net-outbound".to_string()];
+            let fake = Fake::seen(Some(old));
+            let (result, _) = attempt(&fake, &CancelToken::new());
+            result.unwrap();
+            assert_eq!(fake.called("remove"), 1, "running={running}");
+            assert_eq!(fake.called("create"), 1, "running={running}");
+        }
     }
 
     #[test]
@@ -1330,12 +1376,16 @@ mod adoption_tests {
             fingerprint: fingerprint.map(str::to_string),
             mount_destinations: Vec::new(),
             git_identity_free: true,
+            networks: vec!["micold-net".to_string()],
         }
     }
 
     #[test]
     fn nothing_there_means_create_one() {
-        assert_eq!(adopt(None, "micold-daemon:0.27.0", &[]), Adoption::Create);
+        assert_eq!(
+            adopt(None, "micold-daemon:0.27.0", &[], "micold-net"),
+            Adoption::Create
+        );
     }
 
     #[test]
@@ -1344,7 +1394,7 @@ mod adoption_tests {
         // user left running, on every launch.
         let f = facts("micold-daemon:0.27.0", Some("abc"), true);
         assert_eq!(
-            adopt(Some(&f), "micold-daemon:0.27.0", &[]),
+            adopt(Some(&f), "micold-daemon:0.27.0", &[], "micold-net"),
             Adoption::Attach(ContainerId("9f2b".into()))
         );
     }
@@ -1355,7 +1405,7 @@ mod adoption_tests {
         // up as a recovery.
         let f = facts("micold-daemon:0.27.0", Some("abc"), false);
         assert_eq!(
-            adopt(Some(&f), "micold-daemon:0.27.0", &[]),
+            adopt(Some(&f), "micold-daemon:0.27.0", &[], "micold-net"),
             Adoption::Start(ContainerId("9f2b".into()))
         );
     }
@@ -1363,7 +1413,7 @@ mod adoption_tests {
     #[test]
     fn a_different_image_is_replaced_with_the_reason_named() {
         let f = facts("micold-daemon:0.26.0", Some("abc"), true);
-        match adopt(Some(&f), "micold-daemon:0.27.0", &[]) {
+        match adopt(Some(&f), "micold-daemon:0.27.0", &[], "micold-net") {
             Adoption::Replace { reason, .. } => {
                 let text = reason.describe();
                 assert!(text.contains("0.26.0"), "{text}");
@@ -1379,7 +1429,7 @@ mod adoption_tests {
         // daemon is current, and provisioning replaces a stale one in place (R10).
         let f = facts("micold-basic:dev", Some("old"), true);
         assert_eq!(
-            adopt(Some(&f), "micold-basic:dev", &[]),
+            adopt(Some(&f), "micold-basic:dev", &[], "micold-net"),
             Adoption::Attach(ContainerId("9f2b".into()))
         );
     }
@@ -1392,7 +1442,8 @@ mod adoption_tests {
             adopt(
                 Some(&running),
                 crate::sandbox::basic_image::BASIC_IMAGE,
-                &[]
+                &[],
+                "micold-net"
             ),
             Adoption::Legacy(ContainerId("9f2b".into()))
         );
@@ -1401,13 +1452,19 @@ mod adoption_tests {
             adopt(
                 Some(&stopped),
                 crate::sandbox::basic_image::BASIC_IMAGE,
-                &[]
+                &[],
+                "micold-net"
             ),
             Adoption::Replace { .. }
         ));
         let other = facts("acme/x:1", None, true);
         assert!(matches!(
-            adopt(Some(&other), crate::sandbox::basic_image::BASIC_IMAGE, &[]),
+            adopt(
+                Some(&other),
+                crate::sandbox::basic_image::BASIC_IMAGE,
+                &[],
+                "micold-net"
+            ),
             Adoption::Replace { .. }
         ));
     }
@@ -1418,7 +1475,7 @@ mod adoption_tests {
         let mut ours = facts("micold-daemon:0.27.0", Some("abc"), true);
         ours.mount_destinations = vec!["/home/u/.git-credentials".into()];
         assert_eq!(
-            adopt(Some(&ours), "micold-daemon:0.27.0", &retired),
+            adopt(Some(&ours), "micold-daemon:0.27.0", &retired, "micold-net"),
             Adoption::Replace {
                 id: ContainerId("9f2b".into()),
                 reason: StaleReason::RetiredCredentialMount {
@@ -1436,7 +1493,8 @@ mod adoption_tests {
             adopt(
                 Some(&legacy),
                 crate::sandbox::basic_image::BASIC_IMAGE,
-                &retired
+                &retired,
+                "micold-net"
             ),
             Adoption::Replace {
                 reason: StaleReason::RetiredCredentialMount { .. },
@@ -1446,7 +1504,7 @@ mod adoption_tests {
         // Without the mount the same container is attached as before.
         ours.mount_destinations = vec!["/home/u/project".into()];
         assert_eq!(
-            adopt(Some(&ours), "micold-daemon:0.27.0", &retired),
+            adopt(Some(&ours), "micold-daemon:0.27.0", &retired, "micold-net"),
             Adoption::Attach(ContainerId("9f2b".into()))
         );
     }
@@ -1459,7 +1517,10 @@ mod adoption_tests {
         };
         let mut ours = facts("micold-daemon:0.27.0", Some("abc"), true);
         ours.git_identity_free = false;
-        assert_eq!(adopt(Some(&ours), "micold-daemon:0.27.0", &[]), replaced);
+        assert_eq!(
+            adopt(Some(&ours), "micold-daemon:0.27.0", &[], "micold-net"),
+            replaced
+        );
         let mut legacy = facts(
             "ghcr.io/jaroslawherod/micold-daemon:0.30.0",
             Some("abc"),
@@ -1467,13 +1528,18 @@ mod adoption_tests {
         );
         legacy.git_identity_free = false;
         assert_eq!(
-            adopt(Some(&legacy), crate::sandbox::basic_image::BASIC_IMAGE, &[]),
+            adopt(
+                Some(&legacy),
+                crate::sandbox::basic_image::BASIC_IMAGE,
+                &[],
+                "micold-net"
+            ),
             replaced
         );
         // Labelled, the same container is attached as before.
         ours.git_identity_free = true;
         assert_eq!(
-            adopt(Some(&ours), "micold-daemon:0.27.0", &[]),
+            adopt(Some(&ours), "micold-daemon:0.27.0", &[], "micold-net"),
             Adoption::Attach(ContainerId("9f2b".into()))
         );
     }

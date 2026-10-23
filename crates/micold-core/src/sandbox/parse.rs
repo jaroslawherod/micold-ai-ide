@@ -155,6 +155,10 @@ pub struct ContainerFacts {
     /// #1002 withdrew the user's git identity from sandboxes. A container without it may mount the
     /// user's SSH agent or git credential store, wherever they were at its creation.
     pub git_identity_free: bool,
+    /// The names of the networks the container is attached to, from `NetworkSettings.Networks`.
+    /// Empty when the inspection names none, which [`adopt`](crate::sandbox::lifecycle::adopt) reads
+    /// as "not on the network this posture needs" (#1290).
+    pub networks: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -167,6 +171,14 @@ struct ContainerDoc {
     config: Option<ConfigDoc>,
     #[serde(alias = "Mounts")]
     mounts: Option<Vec<MountDoc>>,
+    #[serde(alias = "NetworkSettings")]
+    network_settings: Option<NetworkSettingsDoc>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NetworkSettingsDoc {
+    #[serde(alias = "Networks")]
+    networks: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 
 /// One entry of a container's `Mounts` array. Docker and Podman both spell it this way.
@@ -228,6 +240,11 @@ pub fn container(stdout: &str) -> Result<ContainerFacts, RuntimeError> {
             .into_iter()
             .filter_map(|m| m.destination)
             .collect(),
+        networks: doc
+            .network_settings
+            .and_then(|n| n.networks)
+            .map(|n| n.into_keys().collect())
+            .unwrap_or_default(),
     })
 }
 

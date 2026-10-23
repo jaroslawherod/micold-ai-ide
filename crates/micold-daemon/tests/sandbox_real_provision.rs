@@ -223,6 +223,7 @@ fn facts_of(container: &str) -> ContainerFacts {
         image: parts.next().unwrap_or_default().to_string(),
         fingerprint: None,
         mount_destinations: Vec::new(),
+        networks: vec![LEGACY_NETWORK.to_string()],
         // The harness stamps its containers as `argv::create` does since #1002.
         git_identity_free: parts.next() == Some("none"),
     }
@@ -254,7 +255,7 @@ async fn sandbox_real_provision_a_running_legacy_container_is_attached_then_repl
 
     let before = facts_of(LEGACY_CONTAINER);
     assert_eq!(
-        adopt(Some(&before), &image(), &[]),
+        adopt(Some(&before), &image(), &[], LEGACY_NETWORK),
         Adoption::Legacy(micold_core::sandbox::runtime::ContainerId(
             before.id.clone()
         )),
