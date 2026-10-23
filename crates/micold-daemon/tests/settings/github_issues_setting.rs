@@ -11,7 +11,6 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{DaemonMsg, DaemonSettings, OperationResult};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
-use micold_core::store::ProjectStore;
 
 /// Send `SettingsSet { github_issues_enabled }` and wait for the acknowledgement.
 async fn set(client: &mut Client, req: u64, on: Option<bool>) {
