@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
 - **Phase**: close
-- **Next step**: free disk (/home 100%), then close tasks 3-7: tests for tdd/verification.md findings 2-5 (tasks T025-T029), gate, review, close PR
+- **Next step**: workers for T026-T029, rerun tdd-verify, diff review, full gate, close PR
 
 ## Pull requests
 
@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | create_worktree with neither ai_cli nor prompt starts a session when a template exists? | No | agent-resolved | spec.md FR-009 |
+| D2 | close | /home 100% full blocked the gate: free disk or approve SWEEP_FORCE=1? | Disk freed (456G free); no force needed | user | `df -h /home` 454G free |
 
 ## Review rounds
 
@@ -70,7 +71,7 @@ None.
 
 ## Open escalation
 
-Close unit blocked 2026-10-22: /home is 100% full (~300 MB free; target-shared 468G). `mise run sweep` refuses while another worktree's `cargo test -p micold-daemon hooks` runs; forcing it (SWEEP_FORCE=1) would break that build. No gate or test can run. Ask: free disk (let that build end, then `mise run sweep`) or approve SWEEP_FORCE=1.
+Close unit blocked 2026-10-23: T026-T029 tests are written (uncommitted-then-wip commit) but never compiled or run. The shared build lock is held by pid 3885262 (feat-1150 worktree gate; its `cargo test --workspace`, pid 4154298, has run 11h+, looks hung); 4+ jobs queue behind it, including this worktree's two worker runs. Killing another worktree's job is not mine to do (the auto-mode classifier also refused). Ask: (Recommended) kill pid 3885262 / 4154298 (or have its owner do it), then continue this unit; or approve MICOLD_NO_BUILD_LOCK=1 for this unit's test runs.
 
 ## Follow-ups not done
 
