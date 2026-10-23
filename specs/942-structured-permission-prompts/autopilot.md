@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
 - **Phase**: M8 verify
-- **Next step**: M8: rebase onto origin/main, full gate, push, open the draft PR
+- **Next step**: M8: draft PR open; orchestrator waits on CI and merges
 
 ## Pull requests
 
@@ -76,6 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M8 | 1 | 6448f48d | Red: `feature_write_isolation` `every_method_called_on_state_is_classified` — `permission_prompts.cancel_mode` (the new core arm) in neither MUTATORS nor READERS; classified as a mutator. B's F3 test (`choosing_a_mode_leaves_the_start_list_open`) added with it |
 | Full gate M8 | 2 | d9d497ae | Red: `popover_displacement` `every_popover_is_in_the_table` (37 vs 35): the two Bypass confirmations had no rows in `overlay_registry.rs`'s dialog list; added (22 dialogs, 46 states, `DIALOGS` 26), which also runs them through `one_dialog_at_a_time` and the Escape checks |
 | Full gate M8 | 3 | 3483245a | Green (`/mnt/project-files/scripts/split-gate.sh`, CI's order; records the tree for the push hook) |
+| Full gate M8 | 4 | c744917d | Green after rebasing onto origin/main bb728f25 (clean rebase; `split-gate.sh`, CI's order) |
 | Spec review | 1 | e384ed34098b974a962950905d077d5e736d9aec:9ad0504870e12886d671ea3f4124162315386f78 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec review | 2 | 004bb5b1f949c41b2cca2730ff420b7af0b6099f:f13d3e811a532c30a69e9475c01265080385e3f8 | CLEAN: 3 MINOR (fixed, prose only) |
 | Plan review | 1 | f2b7b32bfd45c20bf89137e325eab23124ae2413:bdd0ffab5e0b7317d1c13b816299b6c68b23a5bf | CLEAN: 1 MINOR (fixed, prose only) |
