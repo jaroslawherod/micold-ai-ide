@@ -690,7 +690,10 @@ mod default_prompt_template_through_the_reducer {
             },
         );
         let picked = form(&state).first_prompt.clone();
-        assert!(picked.contains("|Crash on save|"), "listing arrival and pick: {picked}");
+        assert!(
+            picked.contains("|Crash on save|"),
+            "listing arrival and pick: {picked}"
+        );
         assert!(picked.contains("#42|"), "{picked}");
         assert!(picked.ends_with("|"), "no body has arrived yet: {picked}");
 
