@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1210
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
-- **Phase**: milestone M5 (PR open)
-- **Next step**: merge M5, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1248 | M2 | merged | b2239469a15c1a45c89ec03e545bcac6319d9b3a |
 | #1268 | M3 | merged | 4a10e58536eeb026d8df0addfc79a81da440af81 |
 | #1294 | M4 | merged | 85d6478ef7628e280c72a1e30a2d6e868ee0da82 |
+| #1295 | M5 | merged | f8d2257e9c0f112ac40a6a3e85cb74b9d46eaa10 |
+| PR_CLOSE | Close | open | |
 
 ## Milestones
 
@@ -30,13 +32,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T011–T014 | full | Bash commands judged | #1248 | merged |
 | M3 | T015–T017 | full | EnterWorktree and git worktree add denied | #1268 | merged |
 | M4 | T018–T020 | full | create_worktree hand-off text | #1294 | merged |
-| M5 | T021–T027 | full | Opt-out setting and toggle | #1295 | in review |
+| M5 | T021–T027 | full | Opt-out setting and toggle | #1295 | merged |
 
 ## Decisions
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | 1 | tasks | Prefetch worktree name (plan flag) | No repo convention (grep of scripts, .claude, docs finds none); keep `autopilot-prefetch` prefix constant; spec assumption corrected | agent | research.md R5, T001 |
+| 2 | close | tdd-verify finding 1 (no recorded red, T029) | Exempt: milestones were built without a TDD cycle log and a red cannot be reconstructed after squash-merge. Tests are strong (9 of 9 hand mutants caught, 9 of 9 criteria covered) | agent | tdd/verification.md |
 | 2 | tasks | JSON deny from HTTP hook unverified (plan flag) | T002 is the first task of M1; negative result escalates | agent | tasks.md T002 |
 | 3 | tasks | US4 allowlist placement | Folded into M1 so the live guard cannot block target-shared writes or prefetch worktrees on main | agent | milestones.md rule 6 |
 

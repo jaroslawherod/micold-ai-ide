@@ -4,30 +4,11 @@
 
 use crate::conn;
 
-use conn::{connect_with_settings, settings_set, SettingsPatch};
-use std::sync::Arc;
+use conn::{connect_with_settings, service, settings_set, SettingsPatch};
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{DaemonMsg, OperationResult};
-use micold_core::settings::JsonFileSettingsStore;
-use micold_core::store::{JsonFileStore, ProjectStore};
-use micold_core::workspace::Workspace;
-use micold_daemon::catalog::Catalog;
-use micold_daemon::state::DaemonState;
-
-fn service(store_dir: &std::path::Path) -> Arc<DaemonState> {
-    let projects_path = store_dir.join("projects.json");
-    if !projects_path.exists() {
-        JsonFileStore::at(projects_path.clone())
-            .save(&Workspace::default())
-            .unwrap();
-    }
-    Arc::new(DaemonState::new(Catalog::load(
-        Box::new(JsonFileStore::at(projects_path)),
-        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
-    )))
-}
 
 #[tokio::test]
 async fn turning_the_guard_off_is_persisted_and_reported_in_the_next_welcome() {

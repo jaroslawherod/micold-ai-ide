@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Closed 2026-10-23 — shipped in PRs #1214, #1225, #1248, #1268, #1294, #1295, PR_CLOSE
 
 **Input**: User description: "Guard: stop sessions from working inside a worktree they created (issue #1210). An agent called `create_worktree`, then moved into the new worktree and did the work in its own session instead of handing it to a dedicated session via `create_session`. Per-repo rules (#944) are per-repo, miss `git -C <dir> worktree add`, do not cover `create_worktree`, and nothing blocks working in another worktree's path. Micold should enforce this itself, for every project, with no per-repo setup."
 
