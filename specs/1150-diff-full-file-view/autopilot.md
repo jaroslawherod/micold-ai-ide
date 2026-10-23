@@ -80,6 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 None.
+
 ## Open escalation
 
 None.
