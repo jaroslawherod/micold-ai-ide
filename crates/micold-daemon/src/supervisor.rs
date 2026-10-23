@@ -271,9 +271,11 @@ pub(crate) enum EnvEdit {
 }
 
 /// The edits every session spawn makes before its own variables are applied: on Windows
-/// [`prefer_process_path`], then [`strip_inherited_terminal_identity`].
+/// [`prefer_process_path`], then [`strip_inherited_terminal_identity`], and the removal of the
+/// daemon's own `MICOLD_DATA_DIR` (1286): it beats `XDG_DATA_HOME` in `micold_core::paths`, so a
+/// micold build run inside a session would otherwise write the live state directory.
 pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
-    let mut edits = Vec::new();
+    let mut edits = vec![EnvEdit::Remove(micold_core::paths::DATA_DIR_ENV.into())];
     #[cfg(windows)]
     edits.extend(prefer_process_path(target));
     edits.extend(strip_inherited_terminal_identity(target));
@@ -803,6 +805,19 @@ impl Dimensions for TermSizeShim {
 
 #[cfg(all(test, unix))]
 mod tests {
+    #[test]
+    fn a_spawned_command_does_not_inherit_the_daemons_data_dir_variable() {
+        let mut cmd = std::process::Command::new("true");
+        micold_core::process::no_window(&mut cmd);
+        cmd.env(micold_core::paths::DATA_DIR_ENV, "/var/lib/micold-ai-ide");
+        super::apply_env_hygiene(&mut cmd);
+        let value = cmd
+            .get_envs()
+            .find(|(k, _)| *k == std::ffi::OsStr::new(micold_core::paths::DATA_DIR_ENV))
+            .map(|(_, v)| v);
+        assert_eq!(value, Some(None), "removed, not merely unset");
+    }
+
     use super::*;
     use std::time::{Duration, Instant};
 
