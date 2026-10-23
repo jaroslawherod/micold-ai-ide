@@ -22,11 +22,13 @@ use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::attach::{
-    AttachItem, AttachOutcome, AttachResult, DiscoveryNote, DiscoveryReport, RefuseReason,
-    ResumableSession, ResumableStatus, SkipReason, UnresumableReason,
+    cap_per_location, AttachItem, AttachOutcome, AttachResult, AttachTarget, DiscoveryNote,
+    DiscoveryReport, RefuseReason, ResumableSession, ResumableStatus, SkipReason,
+    UnresumableReason,
 };
 use micold_core::notify::{Level, Notification};
-use micold_core::occupancy::ExistingSession;
+use micold_core::occupancy::{occupancy, ExistingSession, Occupancy};
+use micold_core::session::{Session, SessionLocation};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -52,23 +54,48 @@ pub struct Offer {
 }
 
 impl Offer {
-    /// The report's stored sessions that can be resumed, as apply targets.
-    pub fn targets(&self) -> Vec<AttachItem> {
+    /// The report's stored sessions that "Resume all" can catalogue, as apply targets: the newest
+    /// resumable session of each worktree that has none (feature 776, FR-012; BUG-1164).
+    pub fn targets(&self, catalog: &[Session]) -> Vec<AttachItem> {
+        let resumable: Vec<&ResumableSession> = self
+            .offerable(catalog)
+            .into_iter()
+            .filter(|s| can_resume(s))
+            .collect();
+        cap_per_location(resumable, &BTreeSet::new(), |s| {
+            (s.target.clone(), s.last_activity)
+        })
+        .into_iter()
+        .map(|s| AttachItem::Session {
+            id: s.id,
+            replace: false,
+            allow_additional_session: false,
+        })
+        .collect()
+    }
+
+    /// The report's stored sessions the offer shows: those whose worktree has no session in
+    /// `catalog`. A session of an occupied worktree is resumed from "Attach existing…", which
+    /// asks replace or keep both (776 FR-008b/c); "Resume all" could only be refused for it.
+    pub fn offerable(&self, catalog: &[Session]) -> Vec<&ResumableSession> {
         self.report
             .iter()
             .flat_map(|(_, r)| r.sessions.iter())
-            .filter(|s| can_resume(s))
-            .map(|s| AttachItem::Session {
-                id: s.id,
-                replace: false,
-                allow_additional_session: false,
+            .filter(|s| {
+                let location = match &s.target {
+                    AttachTarget::Default => SessionLocation::Default,
+                    AttachTarget::Worktree { dir_name } => {
+                        SessionLocation::Worktree(dir_name.clone())
+                    }
+                };
+                matches!(occupancy(catalog, &location), Occupancy::Free)
             })
             .collect()
     }
 
-    /// How many stored sessions the report offers.
-    pub fn session_count(&self) -> usize {
-        self.report.as_ref().map_or(0, |(_, r)| r.sessions.len())
+    /// How many stored sessions the offer shows.
+    pub fn session_count(&self, catalog: &[Session]) -> usize {
+        self.offerable(catalog).len()
     }
 }
 
@@ -84,6 +111,7 @@ pub fn offer_visible(state: &crate::app::State) -> bool {
     };
     asked == project
         && !report.is_empty()
+        && state.attach.offer.session_count(state.active_sessions()) > 0
         && !state.attach.offer.dismissed.contains(project)
         && !state.workspace.unreadable_projects.contains(project)
 }
@@ -374,7 +402,8 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         }
         Msg::OfferAttachAll => {
             if offer_visible(state) && state.attach.offer.in_flight.is_empty() {
-                state.attach.offer.in_flight = state.attach.offer.targets();
+                let targets = state.attach.offer.targets(state.active_sessions());
+                state.attach.offer.in_flight = targets;
             }
             Vec::new()
         }
