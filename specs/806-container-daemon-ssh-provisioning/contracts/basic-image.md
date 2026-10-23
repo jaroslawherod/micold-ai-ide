@@ -3,7 +3,7 @@
 ## Image (`packaging/basic/`, `NEW`) — FR-002
 
 - `Containerfile`: `FROM docker.io/library/node:24-trixie-slim` (Node for npm-installed CLIs, glibc
-  2.41), plus `openssh-server`, `git`, `openssh-client`, `ca-certificates`, `util-linux` (`flock`),
+  2.41), plus `openssh-server`, `git`, `git-lfs` (#1288), `openssh-client`, `ca-certificates`, `util-linux` (`flock`),
   and what `packaging/sandbox/Containerfile` installs for sessions today, minus the daemon `COPY`,
   the AI CLI `ARG`/`npm install` block, `MICOLD_LISTEN_ADDR`, `MICOLD_TOKEN_PATH` and `EXPOSE 7727`.
   Keeps `XDG_DATA_HOME=/var/lib` and the Pi/OpenCode offline env. `EXPOSE 2222`. No `USER`.
