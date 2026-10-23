@@ -164,6 +164,22 @@ mod tests {
         (key.to_string(), value.to_string())
     }
 
+    /// The sanitizer keeps `filter.lfs.*` (`required = true`), so a basic image without `git-lfs`
+    /// fails every checkout of an LFS-tracked file in the sandbox.
+    #[test]
+    fn the_basic_image_ships_git_lfs_because_the_shared_lfs_filter_is_kept() {
+        let out = sanitize_gitconfig(&[
+            e("filter.lfs.clean", "git-lfs clean -- %f"),
+            e("filter.lfs.required", "true"),
+        ]);
+        assert!(out.contains("[filter \"lfs\"]"), "{out}");
+        let containerfile = include_str!("../../../../packaging/basic/Containerfile");
+        assert!(
+            containerfile.lines().any(|l| l.trim() == "git-lfs \\"),
+            "packaging/basic/Containerfile must apt-get install git-lfs"
+        );
+    }
+
     #[test]
     fn every_credential_helper_setting_is_dropped() {
         let out = sanitize_gitconfig(&[
