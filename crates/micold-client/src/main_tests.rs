@@ -3601,7 +3601,12 @@ fn a_stored_default_prompt_template_reaches_the_opened_form() {
         },
     );
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
-    let form = app.core.worktree_form.form.as_ref().expect("the form is open");
+    let form = app
+        .core
+        .worktree_form
+        .form
+        .as_ref()
+        .expect("the form is open");
     assert_eq!(form.default_prompt_template, "/speckit-autopilot #{issue}");
     assert_eq!(form.first_prompt, "/speckit-autopilot #");
 }
