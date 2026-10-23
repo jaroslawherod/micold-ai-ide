@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | D1 | spec | create_worktree with neither ai_cli nor prompt starts a session when a template exists? | No | agent-resolved | spec.md FR-009 |
 | D2 | close | /home 100% full blocked the gate: free disk or approve SWEEP_FORCE=1? | Disk freed (456G free); no force needed | user | `df -h /home` 454G free |
+| D3 | close | Build lock held 11h+ by a feat-1150 gate: kill it or bypass the lock? | No action; that run is not hung and the queue drained | user | coordinator relay 2026-10-23; ps shows queue moving |
 
 ## Review rounds
 
@@ -71,7 +72,7 @@ None.
 
 ## Open escalation
 
-Close unit blocked 2026-10-23: T026-T029 tests are written (uncommitted-then-wip commit) but never compiled or run. The shared build lock is held by pid 3885262 (feat-1150 worktree gate; its `cargo test --workspace`, pid 4154298, has run 11h+, looks hung); 4+ jobs queue behind it, including this worktree's two worker runs. Killing another worktree's job is not mine to do (the auto-mode classifier also refused). Ask: (Recommended) kill pid 3885262 / 4154298 (or have its owner do it), then continue this unit; or approve MICOLD_NO_BUILD_LOCK=1 for this unit's test runs.
+None.
 
 ## Follow-ups not done
 
