@@ -6182,7 +6182,7 @@ pub(crate) mod tests {
             use micold_client::features::window::FieldId;
             let (mut app, _rx, session) = app_with_session();
             let _ = on_daemon_event(&mut app, DAEMON, requested(session));
-            app.core.window.focused_field = Some(FieldId::PromptDenyMessage(ID));
+            app.core.window.focused_field = Some(FieldId::PromptDenyMessage(session, ID));
             let resolved = DaemonMsg::PermissionResolved {
                 session,
                 id: PromptId(4),
@@ -6192,7 +6192,7 @@ pub(crate) mod tests {
             let _ = on_daemon_event(&mut app, DAEMON, resolved);
             assert_eq!(
                 app.core.window.focused_field,
-                Some(FieldId::PromptDenyMessage(ID)),
+                Some(FieldId::PromptDenyMessage(session, ID)),
                 "another request's end leaves it"
             );
             let resolved = DaemonMsg::PermissionResolved {

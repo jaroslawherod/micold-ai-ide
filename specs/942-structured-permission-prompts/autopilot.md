@@ -68,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Review A M8 (code-review high) | 1 | ee0e359b8647849961a2f14424cf9c9eab0298f1:2ecf9e9eaa23625479047f65c2f6a7f2625b7c2b | CHANGES: 8 findings; F1 (a `PromptId` is unique per daemon only, so the focus release could miss) MAJOR fixed (`FieldId::Prompt*` carry the session); F2 mode confirmation opens without `clear_for_dialog` fixed (shell clears before it opens); F3 release lives in root `app.rs` moved to `features/window.rs` (manual call sites kept, declined part); F4 mode looked up in the active project only fixed (`workspace.find_session`); F5 stale R14 docs fixed; F6 a Bypass pick stuck for later starts fixed (reset to Default after a confirmed Bypass start); F7 doc comment fixed; F8 declined |
 | Spec review | 1 | e384ed34098b974a962950905d077d5e736d9aec:9ad0504870e12886d671ea3f4124162315386f78 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec review | 2 | 004bb5b1f949c41b2cca2730ff420b7af0b6099f:f13d3e811a532c30a69e9475c01265080385e3f8 | CLEAN: 3 MINOR (fixed, prose only) |
 | Plan review | 1 | f2b7b32bfd45c20bf89137e325eab23124ae2413:bdd0ffab5e0b7317d1c13b816299b6c68b23a5bf | CLEAN: 1 MINOR (fixed, prose only) |
@@ -98,6 +99,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Phase | Review | Finding | Why declined |
 |---|---|---|---|
+| M8 | Review A r1 | F3 (part) MINOR: the focus release must be called by hand after each path that ends a request | Every path that removes a pending request is one of `resolved`, `connection_lost`, `forget`, and each now calls it; reading the field as unfocused when its request is gone would touch every key-routing read of `focused_field` for one feature |
+| M8 | Review A r1 | F8 MINOR: `start_dialog`/`mode_dialog` are near copies, and `EFFECT` repeats the label's words | Two six-line lookups over different state with different messages share `modal` already; the dialog's sentence and the bar's label are separate texts the spec gives separately (FR-014 confirmation, US2 scenario 4 label) |
 | tasks | speckit-analyze | C1 MEDIUM: sandboxed-session edge case has no task | a sandboxed session runs the daemon and its CLI in the same container (feature 027), so the prompt call is the same loopback tool-server call with the same credential that T029 covers; reachability in the container is already the sandbox suite's (`sandbox_real_mcp.rs`) |
 | tasks | speckit-analyze | C4 LOW: no real `SessionInterrupt` test | #941's; plan I-4: an interrupt ends the turn with a `result`, which T037 covers |
 

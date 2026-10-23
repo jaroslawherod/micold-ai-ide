@@ -211,6 +211,11 @@ fn choosing_bypass_enters_a_confirmation_and_only_its_confirm_creates() {
     assert_eq!(state.session.bypass_start, None);
     assert_eq!(state.session.bypass_start_request(), None, "once");
     assert_eq!(
+        state.session.start_gate(SessionKind::Structured),
+        StartGate::Create(PermissionMode::Default),
+        "Bypass is the confirmed start's only: the next is in Default"
+    );
+    assert_eq!(
         mode_of(&create(SessionKind::Structured, PermissionMode::Bypass)),
         PermissionMode::Bypass
     );

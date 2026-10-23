@@ -171,7 +171,8 @@ pub struct State {
     /// start, and every sidebar row can open its own.
     pub start_menu: Option<StartMenu>,
     /// The permission mode the structured create flow carries (#942 FR-014): `Default` until the
-    /// user chooses another. A terminal create sends `Default` whatever it holds.
+    /// user chooses another, and again after a confirmed Bypass start. A terminal create sends
+    /// `Default` whatever it holds.
     pub start_mode: PermissionMode,
     /// A structured start in Bypass awaiting its confirmation (#942 FR-014). Its presence *is* the
     /// confirmation dialog being shown, as [`Self::remove_target`]'s is.
@@ -2240,7 +2241,12 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::AdditionalConfirmed => additional_confirmed(state),
         Msg::StartModeChosen(mode) => state.session.start_mode = mode,
         Msg::BypassStartOpened(start) => bypass_start_opened(state, start),
-        Msg::BypassStartConfirmed => state.session.bypass_start = None,
+        Msg::BypassStartConfirmed => {
+            state.session.bypass_start = None;
+            // Bypass is confirmed for the one start that asked for it: the next structured start
+            // is in Default again unless the user picks otherwise (#942 FR-014).
+            state.session.start_mode = PermissionMode::Default;
+        }
         Msg::BypassStartCancelled => {
             if let Some(start) = state.session.bypass_start.take() {
                 state.session.start_menu = start.menu;

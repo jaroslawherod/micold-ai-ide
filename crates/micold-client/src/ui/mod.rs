@@ -1025,7 +1025,8 @@ pub(crate) fn strip_tab_menu_labels(
 /// The AI CLIs a session can be started on, for one location (feature 026, T033; 037 FR-010,
 /// BUG-753).
 ///
-/// Every supported CLI, named by `display_name()` — through `Display`, which is a menu's
+/// Every supported CLI, and under an offered structured entry its mode rows
+/// ([`start_mode_items`], #942), each CLI named by `display_name()` — through `Display`, which is a menu's
 /// register. An available one is pressable as ever (FR-006 of 026: an uninstalled CLI is never
 /// *selectable*). An unavailable one is a disabled item with a red icon whose tooltip is the
 /// reason (`State::start_menu_entries`, which reads the same answer `offered_providers` does,

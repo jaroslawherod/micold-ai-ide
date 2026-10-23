@@ -355,12 +355,6 @@ impl State {
             .copied()
     }
 
-    /// Whether request `id` of any session is pending here: a field of one that is not no longer
-    /// has a request to type into.
-    pub fn holds(&self, id: PromptId) -> bool {
-        self.sessions.values().any(|s| s.pending.contains_key(&id))
-    }
-
     /// Whether `session` waits for the user: a request of it is pending (FR-009).
     pub fn waiting(&self, session: SessionId) -> bool {
         self.sessions

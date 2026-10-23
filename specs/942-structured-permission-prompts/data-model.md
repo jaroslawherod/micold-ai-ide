@@ -22,7 +22,7 @@ everything else exists on `main`. Decisions behind them: [research.md](research.
   A `SessionCreate` with a non-default mode and `kind: Terminal` is refused (FR-018).
 - Every structured launch also carries `--allow-dangerously-skip-permissions` (R6), whatever the
   mode, and `--permission-prompt-tool mcp__micold__permission_prompt` while the tool server bound
-  the session and `DaemonState::set_permission_prompts` turned it on (R14, daemon-only, not persisted). Built by core
+  the session (R14's switch, `DaemonState::set_permission_prompts`, kept it off until M8). Built by core
   `structured::permission::launch_args(mode, prompt_tool: bool) -> Vec<String>`.
 
 ## PromptCall (core `structured::permission::request`) — NEW

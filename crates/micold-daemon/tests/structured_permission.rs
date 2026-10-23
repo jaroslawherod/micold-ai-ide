@@ -41,7 +41,7 @@ use structured::{
     stdin_lines, stream_script, structured_session,
 };
 
-/// A daemon with a bound tool server and prompts on, holding one structured session per project.
+/// A daemon with a bound tool server, holding one structured session per project.
 struct Daemon {
     state: Arc<DaemonState>,
     projects: Vec<tempfile::TempDir>,
@@ -80,8 +80,7 @@ impl Daemon {
         }
     }
 
-    /// A state holding `sessions`, one per project, over `store`, with its tool server bound and
-    /// prompts on.
+    /// A state holding `sessions`, one per project, over `store`, with its tool server bound.
     async fn serve(
         projects: &[tempfile::TempDir],
         sessions: &[Session],

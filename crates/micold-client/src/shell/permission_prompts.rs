@@ -69,7 +69,12 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             }
         }
         Msg::ModeRequested { session, mode } => {
-            if let Some(mode) = prompts.request_mode(session, mode) {
+            // Bypass: its confirmation opens as every dialog does, over nothing else and with no
+            // field holding the keyboard; cleared first, since clearing cancels open dialogs.
+            if mode == PermissionMode::Bypass {
+                app.core.clear_for_dialog();
+            }
+            if let Some(mode) = app.core.permission_prompts.request_mode(session, mode) {
                 send_mode(app, session, mode);
             }
         }
