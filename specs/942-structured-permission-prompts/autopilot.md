@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1231 | M5: mode change while running, following Claude, plan approval sets the mode | merged (rebase; CI's one red job `sandbox_real_provision_own_image_without_ssh_fails_in_reach`, a Docker Hub 502 pulling alpine:3, passed on one re-run) | 1403972ac7d6e4cc845004c89b558d8253ab33c7 |
 | #1263 | M6: client render-free prompt state and create-flow mode | merged (rebase; after CI went green main moved and the PR conflicted in `crates/micold-client/src/app.rs` `forget_structured` with #944 structured_insights; the orchestrator rebased keeping both forgets, the full gate passed again, then merged) | b7f1b704e184ad5b1e0c905f4fb3d6e35569839d |
 | #1266 | M7: requests, plans and questions in the transcript | merged (rebase) | b636391e9e89f14bd664f2f7a867048c1ad1b89d |
+| #1309 | M8: prompts on, create-flow mode rows, Bypass confirmation and label, user guide (draft) | open | — |
 
 ## Milestones
 
@@ -36,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | #1231 | merged |
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | #1263 | merged |
 | M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1, met: #1203, #1206) | #1266 | merged |
-| M8 | T064, T065, T067, T068, T069 | full | Create-flow mode rows, Bypass confirmation and session-bar label, prompts switched on, user guide, Part B without the composer (split, decision 18) | — | in progress |
+| M8 | T064, T065, T067, T068, T069 | full | Create-flow mode rows, Bypass confirmation and session-bar label, prompts switched on, user guide, Part B without the composer (split, decision 18) | #1309 | PR open |
 | M9 | T071, T072, T066, T073 | full | Composer side: mode Select and *Waiting for you* in #941's composer; needs #941 M6 on main (I-2) | — | pending (held on I-2) |
 
 ## Decisions
