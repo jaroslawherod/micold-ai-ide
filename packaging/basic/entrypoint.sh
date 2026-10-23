@@ -11,24 +11,33 @@
 #    daemon's orderly stop saves terminal history (feature 041, FR-002).
 set -eu
 
+# Overridable so scripts/tests/basic-entrypoint.test.sh can drive this against fixture files.
+passwd_file="${MICOLD_PASSWD_FILE:-/etc/passwd}"
+group_file="${MICOLD_GROUP_FILE:-/etc/group}"
+
 uid="$(id -u)"
 gid="$(id -g)"
 # A runtime sets HOME=/ for a uid with no passwd entry; `/` is not writable, so fall back to /tmp.
 home="${MICOLD_HOME:-${HOME:-/}}"
 [ "$home" = "/" ] && home=/tmp
 
-if ! grep -q "^[^:]*:[^:]*:${uid}:" /etc/passwd; then
-  if [ -w /etc/passwd ]; then
+if ! grep -q "^[^:]*:[^:]*:${uid}:" "$passwd_file"; then
+  if [ -w "$passwd_file" ]; then
     # The image's own `micold` entry is for the Kubernetes pod's uid 10001; the client logs in as
     # `micold`, so that name must resolve to this uid. Rewrite in place: /etc itself is not writable.
-    rest="$(grep -v '^micold:' /etc/passwd || true)"
-    printf '%s\nmicold:x:%s:%s:micold:%s:/bin/sh\n' "$rest" "$uid" "$gid" "$home" >/etc/passwd
+    rest="$(grep -v '^micold:' "$passwd_file" || true)"
+    printf '%s\nmicold:x:%s:%s:micold:%s:/bin/sh\n' "$rest" "$uid" "$gid" "$home" >"$passwd_file"
   else
-    echo "micold-entrypoint: /etc/passwd is not writable; sshd cannot resolve uid ${uid}" >&2
+    echo "micold-entrypoint: $passwd_file is not writable; sshd cannot resolve uid ${uid}" >&2
   fi
+elif [ -w "$passwd_file" ]; then
+  # The base image's own user (`node`, uid 1000, home /home/node) already owns this uid, and sshd sets
+  # a login's HOME from passwd: point its home at the provisioned one so every session sees it.
+  fixed="$(awk -F: -v OFS=: -v uid="$uid" -v home="$home" '$3 == uid && !done { $6 = home; done = 1 } 1' "$passwd_file")"
+  printf '%s\n' "$fixed" >"$passwd_file"
 fi
-if ! grep -q "^[^:]*:[^:]*:${gid}:" /etc/group && [ -w /etc/group ]; then
-  echo "micold:x:${gid}:" >>/etc/group
+if ! grep -q "^[^:]*:[^:]*:${gid}:" "$group_file" && [ -w "$group_file" ]; then
+  echo "micold:x:${gid}:" >>"$group_file"
 fi
 
 export HOME="$home"
