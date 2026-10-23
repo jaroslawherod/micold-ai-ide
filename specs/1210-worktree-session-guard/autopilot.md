@@ -39,9 +39,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | 1 | tasks | Prefetch worktree name (plan flag) | No repo convention (grep of scripts, .claude, docs finds none); keep `autopilot-prefetch` prefix constant; spec assumption corrected | agent | research.md R5, T001 |
-| 2 | close | tdd-verify finding 1 (no recorded red, T029) | Exempt: milestones were built without a TDD cycle log and a red cannot be reconstructed after squash-merge. Tests are strong (9 of 9 hand mutants caught, 9 of 9 criteria covered) | agent | tdd/verification.md |
 | 2 | tasks | JSON deny from HTTP hook unverified (plan flag) | T002 is the first task of M1; negative result escalates | agent | tasks.md T002 |
 | 3 | tasks | US4 allowlist placement | Folded into M1 so the live guard cannot block target-shared writes or prefetch worktrees on main | agent | milestones.md rule 6 |
+| 4 | close | tdd-verify finding 1 (no recorded red, T029) | Exempt: milestones were built without a TDD cycle log and a red cannot be reconstructed after squash-merge. Tests are strong (9 of 9 hand mutants caught, 9 of 9 criteria covered) | agent | tdd/verification.md |
+| 5 | close | T033 layout snapshot of 8c027103a | Inspected the diff: root height 1280.0 to 1336.8 (one toggle row) and the rows below it shift down; no row beyond the toggle changes size. Not verified row by row | agent | git show 8c027103a |
 
 ## Review rounds
 

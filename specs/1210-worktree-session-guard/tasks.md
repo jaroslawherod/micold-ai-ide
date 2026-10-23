@@ -142,9 +142,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 ## Phase 8: TDD remediation
 
 Verdict `FAIL` (specs/1210-worktree-session-guard/tdd/verification.md). The feature is not done until
-T029 is cleared; T030 to T035 are recommended.
+T029 is cleared (exempt, Decision #4); T030 to T035 are recommended.
 
-- [x] T029 [US1] Finding 1 (HIGH, blocking): no recorded red for any behavior. For each of M1 to M5, either record in `specs/1210-worktree-session-guard/tdd/cycle-log.md` the failing output of the milestone's key test against the pre-change code (revert the one guard line, run the test, restore), or record in `autopilot.md` Decisions an explicit exemption with the reason. Exempt: see autopilot.md Decisions #2 (no red reconstructable after squash-merge; 9 of 9 hand mutants caught).
+- [x] T029 [US1] Finding 1 (HIGH, blocking): no recorded red for any behavior. For each of M1 to M5, either record in `specs/1210-worktree-session-guard/tdd/cycle-log.md` the failing output of the milestone's key test against the pre-change code (revert the one guard line, run the test, restore), or record in `autopilot.md` Decisions an explicit exemption with the reason. Exempt: see autopilot.md Decisions #4 (no red reconstructable after squash-merge; 9 of 9 hand mutants caught).
 - [x] T030 [US2] Finding 2 (MED): add a daemon test that writes the `--settings` file next to a project `.claude/settings.json` with its own deny/allow rule and asserts both files' rules appear unchanged and none is removed (`crates/micold-daemon/src/hooks.rs:817`). Proof: `cargo test -p micold-daemon hooks`.
 - [x] T031 [US2] Finding 3 (MED): replace or cross-check `rule_matches` (`crates/micold-core/src/worktree_guard/mod.rs:386`) with an env-gated test that runs the installed `claude` CLI against `DENY_RULES`, or assert the exact rule strings only. Proof: `mise run test-core`.
 - [x] T032 [US1] Finding 4 (MED): assert the fail-open warn is logged with its reason and never the body (hooks.md rule 5) using a tracing capture in `crates/micold-daemon/tests/worktree_guard_sessions.rs`. Proof: `cargo test -p micold-daemon --test worktree_guard_sessions`.

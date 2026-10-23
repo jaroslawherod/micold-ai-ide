@@ -1,6 +1,6 @@
 ---
 feature: 1210-worktree-session-guard
-verdict: FAIL
+verdict: FAIL (remediated by T029-T035, see tasks.md Phase 8)
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # rubric graded against
 verified_at: f8d2257e9 # short SHA audited
 behaviors: 0 # no tdd/test-list.md: behaviors taken as the 28 tasks / 5 milestones of tasks.md
@@ -109,7 +109,7 @@ post-run tree was clean. The sample did not cover the daemon's frozen-after-togg
 | US5 / FR-008, SC-004 | `settings_roundtrip.rs`, `protocol_roundtrip.rs`, `worktree_guard_setting.rs`, `worktree_guard_sessions.rs`, client `features_settings.rs` | Yes |
 | FR-009 | `an_unknown_binding_or_an_empty_list_fails_open...` | Verdict yes, log no (finding 4) |
 | FR-012, FR-014, SC-006 | `paths.rs` tests, `the_same_logical_layout_gives_the_same_verdict...` | Yes (injected facts; Windows and macOS spellings run on Linux) |
-| SC-005 | `fifty_worktrees_are_decided_well_under_100_ms` | Yes (real clock) |
+| SC-005 | `fifty_worktrees_are_decided_well_under_a_second` | Yes (real clock) |
 
 Untested criteria: none. Tests tracing to nothing: none noted.
 
