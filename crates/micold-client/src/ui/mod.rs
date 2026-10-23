@@ -9,6 +9,7 @@ pub(crate) mod changes;
 pub mod compare;
 pub mod confirm_additional_session;
 pub(crate) mod confirm_agent_request;
+pub mod confirm_bypass;
 pub mod confirm_daemon_removal;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_dismiss_group;
@@ -1038,17 +1039,16 @@ pub(crate) fn session_start_menu_items(
     let Some(dir) = state.location_dir(location) else {
         return Vec::new();
     };
-    state
-        .session
-        .start_menu_entries(&dir)
-        .into_iter()
-        .map(
-            |StartMenuEntry {
-                 cli,
-                 kind,
-                 availability,
-             }| match availability {
-                CliEntryAvailability::Available => material::MenuItem::labeled(
+    let mut items = Vec::new();
+    for StartMenuEntry {
+        cli,
+        kind,
+        availability,
+    } in state.session.start_menu_entries(&dir)
+    {
+        match availability {
+            CliEntryAvailability::Available => {
+                items.push(material::MenuItem::labeled(
                     entry_label(cli, kind),
                     Message::Session(SessionMsg::StartRequested {
                         automatic: false,
@@ -1056,8 +1056,13 @@ pub(crate) fn session_start_menu_items(
                         provider: cli,
                         kind,
                     }),
-                ),
-                CliEntryAvailability::Unavailable { reason } => material::MenuItem {
+                ));
+                if kind == micold_core::session::SessionKind::Structured {
+                    items.extend(start_mode_items(state.session.start_mode, roles));
+                }
+            }
+            CliEntryAvailability::Unavailable { reason } => items.push(
+                material::MenuItem {
                     message: None,
                     trailing_icon: Some((
                         Icon::Unavailable,
@@ -1066,9 +1071,39 @@ pub(crate) fn session_start_menu_items(
                     ..material::MenuItem::labeled(entry_label(cli, kind), Message::NoOp)
                 }
                 .trailing_tooltip(reason),
-            },
-        )
-        .collect()
+            ),
+        }
+    }
+    items
+}
+
+/// The structured create flow's mode choice (#942 FR-014): under an offered structured entry, a
+/// row per mode, the one the next structured start uses (`chosen`) marked, each choosing its
+/// mode and leaving the list open. A row list rather than a `Select`: the start list is a menu,
+/// and a select's own dropdown would be a menu inside it. Bypass is confirmed when the start is
+/// pressed, not here.
+fn start_mode_items(
+    chosen: micold_core::session::PermissionMode,
+    roles: Roles,
+) -> impl Iterator<Item = material::MenuItem<Message>> {
+    micold_core::session::PermissionMode::ALL
+        .into_iter()
+        .map(move |mode| material::MenuItem {
+            icon: (mode == chosen).then_some(Icon::ActiveMarker),
+            // Held on every row, so the rows sit indented under their entry and the marker moves
+            // no label (008 FR-006a).
+            reserve_icon: true,
+            icon_tint: Some(icon_role(IconSurface::Badge, roles)),
+            ..material::MenuItem::labeled(
+                start_mode_label(mode),
+                Message::Session(SessionMsg::StartModeChosen(mode)),
+            )
+        })
+}
+
+/// The label of the start list's row for `mode` (#942 FR-014).
+pub(crate) fn start_mode_label(mode: micold_core::session::PermissionMode) -> String {
+    format!("Permissions: {}", mode.label())
 }
 
 /// The label of a start-list entry: the CLI's name, and for the structured kind the suffix that

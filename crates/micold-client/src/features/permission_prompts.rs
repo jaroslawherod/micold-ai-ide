@@ -16,6 +16,36 @@ use micold_core::structured::permission::request::RequestKind;
 use micold_core::structured::transcript::{EntryKey, Transcript};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use crate::app::Message;
+use crate::floating_surface;
+use crate::overlay::registry::Registered;
+use crate::overlay::SurfaceId;
+
+/// The Bypass confirmation of a session's mode change, as a floating surface (FR-017). Escape and
+/// a scrim click cancel it, which sends nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmBypassModeDialog;
+
+floating_surface!(ConfirmBypassModeDialog, id: SurfaceId::new("confirm_bypass_mode"), layer: Dialog, cancelled_by: Message::PermissionPrompts(Msg::ModeCancelled));
+
+impl Registered for ConfirmBypassModeDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .permission_prompts
+            .mode_confirmation()
+            .map(|_| ConfirmBypassModeDialog)
+    }
+}
+
+/// What a structured session's view says while its mode is Bypass (FR-014, US2 scenario 4).
+pub const BYPASS_LABEL: &str = "Bypass: Claude runs every tool without asking";
+
+/// The label a session's view shows for `mode`: [`BYPASS_LABEL`] while it is Bypass, none
+/// otherwise.
+pub fn mode_warning(mode: PermissionMode) -> Option<&'static str> {
+    matches!(mode, PermissionMode::Bypass).then_some(BYPASS_LABEL)
+}
+
 /// What the user answers a request with: the buttons of the three request views. The draft
 /// supplies the typed parts (the deny message, the note, the answers).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -323,6 +353,12 @@ impl State {
             .resolved
             .get(tool_use_id)
             .copied()
+    }
+
+    /// Whether request `id` of any session is pending here: a field of one that is not no longer
+    /// has a request to type into.
+    pub fn holds(&self, id: PromptId) -> bool {
+        self.sessions.values().any(|s| s.pending.contains_key(&id))
     }
 
     /// Whether `session` waits for the user: a request of it is pending (FR-009).

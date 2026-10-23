@@ -1191,6 +1191,23 @@ impl Registered for ConfirmAdditionalSessionDialog {
     }
 }
 
+/// The Bypass confirmation of a structured start, as a floating surface (#942 FR-014). Escape
+/// and a scrim click cancel it, which opens the start list again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmBypassStartDialog;
+
+floating_surface!(ConfirmBypassStartDialog, id: SurfaceId::new("confirm_bypass_start"), layer: Dialog, cancelled_by: Message::Session(Msg::BypassStartCancelled));
+
+impl Registered for ConfirmBypassStartDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .session
+            .bypass_start
+            .as_ref()
+            .map(|_| ConfirmBypassStartDialog)
+    }
+}
+
 /// A session was started (feature 005, FR-020).
 ///
 /// The started session's location joins the user's own open set, as it always has. Feature 024

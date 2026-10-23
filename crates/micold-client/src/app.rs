@@ -1004,6 +1004,21 @@ impl State {
         self.composers.forget(session);
         self.structured_insights.forget(session);
         self.permission_prompts.forget(session);
+        self.release_ended_prompt_focus();
+    }
+
+    /// #942: a request's deny-message or plan-note field gives up the keyboard once its request
+    /// is no longer pending here (answered, withdrawn, its connection or session gone), so the
+    /// terminals take keys again without a click.
+    pub fn release_ended_prompt_focus(&mut self) {
+        use crate::features::window::FieldId;
+        if let Some(FieldId::PromptDenyMessage(id) | FieldId::PromptNote(id)) =
+            self.window.focused_field
+        {
+            if !self.permission_prompts.holds(id) {
+                self.window.focused_field = None;
+            }
+        }
     }
 
     /// Apply a message of the insights shown with a structured session's transcript (feature

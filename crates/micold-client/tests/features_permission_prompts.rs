@@ -595,3 +595,53 @@ fn a_forgotten_session_takes_its_bypass_confirmation_with_it() {
     state.forget(session);
     assert_eq!(state.confirm_mode(), None);
 }
+
+// ---- M8: the Bypass label and the fields of ended requests ------------------------------------
+
+#[test]
+fn only_bypass_has_a_warning_label_and_it_names_its_effect() {
+    use micold_client::features::permission_prompts::{mode_warning, BYPASS_LABEL};
+    assert_eq!(
+        BYPASS_LABEL,
+        "Bypass: Claude runs every tool without asking"
+    );
+    for mode in PermissionMode::ALL {
+        let expected = (mode == PermissionMode::Bypass).then_some(BYPASS_LABEL);
+        assert_eq!(mode_warning(mode), expected, "{mode:?}");
+    }
+}
+
+/// M7 review A r2 F1: a request's note or deny field holds the keyboard only while the request is
+/// pending; once it ends, or the session is forgotten, the window lets go of it.
+#[test]
+fn a_field_of_an_ended_request_releases_the_keyboard() {
+    use micold_client::features::window::FieldId;
+    for field in [FieldId::PromptDenyMessage(ID), FieldId::PromptNote(ID)] {
+        let session = SessionId::new();
+        let mut app = micold_client::app::State::default();
+        app.permission_prompts.requested(tool(session));
+        assert!(app.permission_prompts.holds(ID));
+        app.window.focused_field = Some(field);
+        app.release_ended_prompt_focus();
+        assert_eq!(app.window.focused_field, Some(field), "still pending");
+
+        app.permission_prompts
+            .resolved(session, ID, None, Resolution::Denied);
+        assert!(!app.permission_prompts.holds(ID));
+        app.release_ended_prompt_focus();
+        assert_eq!(app.window.focused_field, None, "{field:?} let go");
+
+        app.permission_prompts.requested(tool(session));
+        app.window.focused_field = Some(field);
+        app.forget_structured(session);
+        assert_eq!(app.window.focused_field, None, "{field:?} with its session");
+    }
+    let mut app = micold_client::app::State::default();
+    app.window.focused_field = Some(FieldId::ConfirmDeleteAlsoBranch);
+    app.release_ended_prompt_focus();
+    assert_eq!(
+        app.window.focused_field,
+        Some(FieldId::ConfirmDeleteAlsoBranch),
+        "a field of no request keeps it"
+    );
+}

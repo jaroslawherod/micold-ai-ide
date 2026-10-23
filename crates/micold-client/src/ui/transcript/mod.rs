@@ -155,8 +155,14 @@ pub fn view_full<'a, M: Clone + 'a>(
     prompts: Option<PromptsView<'a, M>>,
 ) -> Element<'a, M> {
     let bar = container(
-        session_bar::view(insights.state, session, insights.cli_running, ctx.roles)
-            .map(on_transcript),
+        session_bar::view(
+            insights.state,
+            session,
+            insights.cli_running,
+            insights.mode,
+            ctx.roles,
+        )
+        .map(on_transcript),
     )
     .padding(iced::Padding {
         top: spacing::SM,

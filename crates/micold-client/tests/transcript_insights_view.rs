@@ -71,6 +71,7 @@ impl Window {
             InsightsCtx {
                 state: &self.insights,
                 cli_running,
+                mode: micold_core::session::PermissionMode::Default,
             },
             self.session,
             &BlockRenderers::PLAIN,

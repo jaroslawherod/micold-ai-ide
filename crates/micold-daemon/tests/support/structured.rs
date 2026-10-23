@@ -823,12 +823,6 @@ pub fn structured_session(
     session
 }
 
-/// Turn the permission prompts on for `state` (#942 R14): structured sessions it starts from now
-/// on name the prompt tool when bound, and their tool-server callers are offered it.
-pub fn prompts_on(state: &micold_daemon::state::DaemonState) {
-    state.set_permission_prompts(true);
-}
-
 /// The answers the stand-in in `dir` recorded for its prompt-tool calls, once there are `n`,
 /// within 15 s.
 pub fn prompt_answers(dir: &Path, n: usize) -> Vec<serde_json::Value> {

@@ -1,7 +1,8 @@
 //! The session bar at the top of a structured session's transcript (feature 944, X1): the context
 //! meter, the session totals and the running background-task count on one row that wraps when the
 //! pane is narrower than it, each with its details in the shared tooltip; under it the folded
-//! background-task list, while the session has background tasks (FR-001–FR-008, FR-020).
+//! background-task list, while the session has background tasks (FR-001–FR-008, FR-020). Above
+//! them, while the session's permission mode is Bypass, the label that says so (#942 FR-014).
 //!
 //! Everything it says comes from [`session_bar_view`] (E-1).
 
@@ -13,7 +14,7 @@ use crate::icons::Icon;
 use crate::ui::material::{AccordionSection, IconLabel, ProgressBar, Text, Tooltip, TypeRole};
 use iced::widget::{column, row, Space};
 use iced::{Alignment, Element, Length};
-use micold_core::session::SessionId;
+use micold_core::session::{PermissionMode, SessionId};
 use micold_core::structured::insights::SessionInsights;
 use micold_core::tokens::{spacing, Roles};
 
@@ -78,11 +79,26 @@ fn task_row(task: &TaskRow, roles: Roles) -> Element<'static, TranscriptMsg> {
     .into()
 }
 
-/// The bar as `view` says, its list unfolded while `tasks_open`.
+/// The label of a session in `mode` (#942 US2 scenario 4): [`mode_warning`]'s words with the
+/// warning icon in the error role, so the risk does not rest on colour alone; none outside Bypass.
+///
+/// [`mode_warning`]: crate::features::permission_prompts::mode_warning
+fn mode_label(mode: PermissionMode, roles: Roles) -> Option<Element<'static, TranscriptMsg>> {
+    let text = crate::features::permission_prompts::mode_warning(mode)?;
+    Some(
+        IconLabel::new(Icon::UsageWarning, text, TypeRole::Label, roles)
+            .tint(roles.error)
+            .label_tint(roles.error)
+            .into(),
+    )
+}
+
+/// The bar as `view` says, its list unfolded while `tasks_open`, for a session in `mode`.
 pub fn bar(
     view: &SessionBarView,
     session: SessionId,
     tasks_open: bool,
+    mode: PermissionMode,
     roles: Roles,
 ) -> Element<'static, TranscriptMsg> {
     let mut line = row![meter(&view.meter, roles)]
@@ -106,9 +122,11 @@ pub fn bar(
             .muted(),
         );
     }
-    let mut bar = column![line.wrap().vertical_spacing(spacing::XS)]
-        .spacing(spacing::SM)
-        .width(Length::Fill);
+    let mut bar = column![].spacing(spacing::SM).width(Length::Fill);
+    if let Some(label) = mode_label(mode, roles) {
+        bar = bar.push(label);
+    }
+    bar = bar.push(line.wrap().vertical_spacing(spacing::XS));
     if !view.tasks.is_empty() {
         let rows: Vec<Element<'static, TranscriptMsg>> =
             view.tasks.iter().map(|t| task_row(t, roles)).collect();
@@ -130,11 +148,12 @@ pub fn bar(
     bar.into()
 }
 
-/// The session bar of `session` as `state` holds it, with its CLI `cli_running` or not.
+/// The session bar of `session` as `state` holds it, with its CLI `cli_running` or not, in `mode`.
 pub fn view(
     state: &State,
     session: SessionId,
     cli_running: bool,
+    mode: PermissionMode,
     roles: Roles,
 ) -> Element<'static, TranscriptMsg> {
     let empty = SessionInsights::new();
@@ -143,6 +162,7 @@ pub fn view(
         &session_bar_view(insights, cli_running),
         session,
         state.tasks_open(session),
+        mode,
         roles,
     )
 }

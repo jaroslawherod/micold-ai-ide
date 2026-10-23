@@ -319,6 +319,9 @@ register! {
     crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,
     crate::features::session::ConfirmLinkOpenDialog => crate::ui::confirm_link_open::dialog,
     crate::features::session::ConfirmAdditionalSessionDialog => crate::ui::confirm_additional_session::dialog,
+    // #942: the Bypass confirmations, of a structured start and of a mode change (FR-014, FR-017).
+    crate::features::session::ConfirmBypassStartDialog => crate::ui::confirm_bypass::start_dialog,
+    crate::features::permission_prompts::ConfirmBypassModeDialog => crate::ui::confirm_bypass::mode_dialog,
     crate::features::session::ConfirmSessionRemoveDialog => crate::ui::confirm_session_remove::dialog,
     crate::features::session::SessionContextMenu {
         displaces: crate::features::overview::OverviewCardMenu,
