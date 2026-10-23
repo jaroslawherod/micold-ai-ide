@@ -243,3 +243,16 @@ Red runs recorded live, each before its implementation existed; commands with
 - **Exception (Constitution I)**: the components' own unit tests (`choice_list.rs`,
   `prompt_card.rs`, `permission.rs` `tests`) were written with the code they test, in the same
   file, and had no red of their own; the integration tests above drove the same behaviour red.
+
+### Cycle 12 — T064, T065, T067 the switch on, the create-flow mode rows, the Bypass confirmation and label (M8)
+
+- Red: written with the code in one pass, red by construction rather than run on its own. The
+  client tests named symbols that did not exist (`mode_warning`, `BYPASS_LABEL`,
+  `State::release_ended_prompt_focus`, `start_mode_label`, `ui::confirm_bypass`, the session in
+  `FieldId::PromptDenyMessage`/`PromptNote`), so they could not compile against `main`; the
+  daemon's unconditional `a_bound_structured_launch_names_the_prompt_tool` launches without the
+  removed `set_permission_prompts(true)`, which on `main` (switch off by default) names no prompt
+  tool and fails at its `.expect("names the prompt tool")`.
+- Green: the full gate (`split-gate.sh`, CI's order) at the commit the PR carries.
+- **Exception (Constitution I)**: no separate red run for this cycle; the cloud container's disk
+  holds one build at a time, and the gate was that build.

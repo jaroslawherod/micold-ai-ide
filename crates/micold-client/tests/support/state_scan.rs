@@ -44,6 +44,8 @@ pub use source_scan::code_only;
 pub const MUTATORS: &[&str] = &[
     // #943: the command palette, the model picker, the composer's draft, a kind change.
     "pick",
+    // #942: `permission_prompts.cancel_mode` closes the Bypass mode confirmation.
+    "cancel_mode",
     "picker_chose",
     "picker_typed",
     "step",
