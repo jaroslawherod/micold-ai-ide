@@ -829,6 +829,44 @@ mod tests {
         assert!(!json.contains("\"allow\""));
     }
 
+    /// FR-013, SC-007: the session file is passed with `--settings` and written beside, never
+    /// into, the project's own settings, so a project rule is neither read nor rewritten.
+    #[tokio::test]
+    async fn the_session_settings_file_leaves_the_projects_own_rules_untouched() {
+        let project = tempfile::tempdir().unwrap();
+        let claude = project.path().join(".claude");
+        std::fs::create_dir_all(&claude).unwrap();
+        let project_settings = claude.join("settings.json");
+        let original = r#"{"permissions":{"deny":["Bash(rm:*)"],"allow":["Bash(ls:*)"]}}"#;
+        std::fs::write(&project_settings, original).unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let (receiver, _listener) = HookReceiver::bind(store.path().join("hooks"))
+            .await
+            .unwrap();
+        let session = SessionId::from_uuid(Uuid::from_u128(7));
+        let path = receiver
+            .prepare_settings(
+                session,
+                StatusContext {
+                    cwd: project.path().to_path_buf(),
+                    locations: Default::default(),
+                    guarded: true,
+                },
+            )
+            .unwrap();
+        assert_ne!(path, project_settings);
+        assert!(!path.starts_with(project.path()));
+        assert_eq!(
+            std::fs::read_to_string(&project_settings).unwrap(),
+            original
+        );
+        let written: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(written["permissions"].get("allow").is_none());
+        let deny = written["permissions"]["deny"].as_array().unwrap();
+        assert!(!deny.iter().any(|rule| rule == "Bash(rm:*)"));
+    }
+
     #[test]
     fn an_unguarded_sessions_settings_carry_no_deny_rules() {
         let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, false);

@@ -4,34 +4,17 @@
 
 use crate::conn;
 
-use conn::{connect_with_settings, settings_set, Client, SettingsPatch};
+use conn::{connect_with_settings, service, settings_set, Client, SettingsPatch};
 use std::path::Path;
-use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{DaemonMsg, DaemonSettings, OperationResult};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
-use micold_core::store::{JsonFileStore, ProjectStore};
-use micold_core::workspace::Workspace;
-use micold_daemon::catalog::Catalog;
-use micold_daemon::state::DaemonState;
+use micold_core::store::ProjectStore;
 
 /// A service whose catalog and settings live in `store_dir`; called twice over one directory, the
 /// second service is the first one restarted.
-fn service(store_dir: &Path) -> Arc<DaemonState> {
-    let projects_path = store_dir.join("projects.json");
-    if !projects_path.exists() {
-        JsonFileStore::at(projects_path.clone())
-            .save(&Workspace::default())
-            .unwrap();
-    }
-    Arc::new(DaemonState::new(Catalog::load(
-        Box::new(JsonFileStore::at(projects_path)),
-        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
-    )))
-}
-
 /// Send `SettingsSet { github_issues_enabled }` and wait for the acknowledgement.
 async fn set(client: &mut Client, req: u64, on: Option<bool>) {
     client

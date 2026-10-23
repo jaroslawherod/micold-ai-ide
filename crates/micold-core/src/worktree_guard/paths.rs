@@ -254,9 +254,22 @@ mod tests {
         let f = FakeFacts::default();
         let root = resolve(&f, Path::new("/a"));
         let wt = resolve(&f, Path::new("/a/.claude/worktrees/x"));
-        assert!(root.contains(&wt) && wt.depth() > root.depth());
-        assert_eq!(wt.last(), Some("x"));
+        assert!(root.contains(&wt), "the root contains the worktree");
+        assert!(wt.depth() > root.depth(), "the worktree is deeper");
+    }
+
+    #[test]
+    fn last_is_the_final_component_and_none_for_the_root() {
+        let f = FakeFacts::default();
+        assert_eq!(
+            resolve(&f, Path::new("/a/.claude/worktrees/x")).last(),
+            Some("x")
+        );
         assert_eq!(resolve(&f, Path::new("/")).last(), None);
+    }
+
+    #[test]
+    fn has_root_recognises_drive_and_slash_roots_only() {
         assert!(has_root(Path::new("C:\\x")) && has_root(Path::new("/x")));
         assert!(!has_root(Path::new("src/x")));
         // A file name that merely looks like a drive is not a root.

@@ -1,0 +1,126 @@
+---
+feature: 1210-worktree-session-guard
+verdict: FAIL
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # rubric graded against
+verified_at: f8d2257e9 # short SHA audited
+behaviors: 0 # no tdd/test-list.md: behaviors taken as the 28 tasks / 5 milestones of tasks.md
+proven: 0
+likely: 0
+test_after: 5 # milestones M1-M5: tests and source land in the same commit, no red recorded
+no_test: 0
+high_smells: 0
+criteria_total: 9 # the nine traceability rows below: 5 user stories, FR-009, FR-012/014/SC-006, SC-005
+criteria_covered: 9
+mutation_score: unmeasured # no mutation tool in the profile; 9 deliberate mutants, 9 caught (sample)
+mutants_survived: 0
+suite: scoped run green (core worktree_guard 40 passed; daemon worktree_guard_sessions 8, worktree_guard_setting 1, mcp_create_worktree 43, hooks_receiver 15, hooks lib 15); full suite not run
+---
+
+# TDD Verification: Worktree session guard (#1210)
+
+**Verdict: FAIL.** The tests are good and every criterion is covered, but no test-first
+evidence exists for any behavior: there is no `tdd/test-list.md` and no `tdd/cycle-log.md`, so no
+red was ever recorded, and the history shows tests and code arriving in the same commit. Fail
+closed: every behavior is `TEST_AFTER`. This is an evidence failure, not a quality failure.
+
+The audit was not independent of the repository's autopilot flow in one respect only: the auditor
+did not write these tests and re-read every file cold.
+
+## Test-first evidence
+
+Stage 1 of the five questions fails; stages 2 to 5 are reported below because they are informative.
+
+| Unit | Class | Evidence |
+| ---- | ----- | -------- |
+| M1 T003-T010, T028 (paths, `decide`, receiver) | TEST_AFTER | no red recorded; `49d664c28` adds `worktree_guard/{mod,paths}.rs` (inline tests) and `hooks.rs`/`state.rs` in one commit; `worktree_guard_sessions.rs` arrived with it or in the squashed PR |
+| M2 T011-T014 (shell) | TEST_AFTER | `1d6303cd0` adds `shell.rs` and its tests together |
+| M3 T015-T017 (EnterWorktree, `git worktree add`) | TEST_AFTER | `7c901f12b` one commit for tests and code |
+| M4 T018-T020 (hand-off text) | TEST_AFTER | `8936f2f0a` changes `tools.rs` and `mcp_create_worktree.rs` together |
+| M5 T021-T027 (opt-out) | TEST_AFTER | `229c72ca8` (`wip`) carries code and tests together |
+
+Tasks claim "failing tests first" (tasks.md Tests line, T003/T005/T006/T008/T011/T015/T018/T021/T023/T025),
+but nothing recorded corroborates a red. The autopilot ledger itself notes "no tdd/ cycle-log"
+(M3 review B).
+
+Existing tests changed by the feature (checked, none weakened):
+
+- `protocol_roundtrip.rs:954` `the_protocol_version_is_67` renamed to `_68`, value 67 to 68; and
+  `schema_hash.rs:331` constant 67 to 68. Required by the real wire change (new field); not a
+  loosening.
+- `mcp_create_worktree.rs:150` `LITERAL_RESULT_KEYS` grows from 6 to 7 (`next_step`) and two
+  `assert_eq!` payloads gain `next_step`. Strengthening, mandated by FR-010.
+- `layout_snapshot.txt`: 64 lines regenerated for the new toggle row (`8c027103a`). Row
+  coordinates shift; reviewed only by the ledger's claim. See finding 5.
+- No skips, `#[ignore]`, exclusions, or threshold changes added.
+- `tasks.md`: every task is ticked and the ledger shows each milestone merged; no ticked task
+  lacks a test.
+
+## Findings
+
+| #  | Severity | Finding | Evidence |
+| -- | -------- | ------- | -------- |
+| 1  | HIGH | No test-first evidence for any behavior: no test list, no cycle log, no recorded red; history shows test and code together per milestone. Blocking under the rubric (`TEST_AFTER` = FAIL). Cannot be cured retroactively; either a red is reconstructed per behavior (revert the guard line, record the failing test) or the exemption is recorded explicitly in the ledger. | `specs/1210-worktree-session-guard/tdd/` absent; commits `49d664c28`, `1d6303cd0`, `7c901f12b`, `8936f2f0a`, `229c72ca8` |
+| 2  | MED | FR-013 / SC-007 (project rules and settings stay in effect) is tested only structurally: the emitted `--settings` has no `allow` key and only `deny`/`hooks`. No automated test that a project rule still applies; the evidence is the manual T002 spike in `research.md` R1. | `hooks.rs:817-854`; `research.md` R1 |
+| 3  | MED | `rule_matches` re-implements Claude Code's permission-rule matcher inside the test to check that `DENY_RULES` match `git -C . worktree add`. If it diverges from the real matcher, tests stay green while the real rule misses. Real behavior is verified only by the manual spike. | `worktree_guard/mod.rs:386-415`, used at `:488-508` |
+| 4  | MED | FR-009 fail-open "record why": the `tracing::warn!` paths in `guard_response` are not asserted (verdict is, the logging is not). Known MINOR in the ledger. | `hooks.rs:122-142`; `worktree_guard_sessions.rs` last test asserts only the 200/empty answer |
+| 5  | MED | SC-005 test uses the real clock with a 100 ms bound; the layout snapshot is regenerated by the same author in a follow-up commit with no independent oracle (homegrown snapshot gate, so the repo norm). | `worktree_guard/mod.rs:523-533`; `8c027103a` |
+| 6  | LOW | `a_deeper_match_has_a_larger_depth` asserts depth, `last()` and `has_root` in one test with no messages (eager test, assertion roulette). | `worktree_guard/paths.rs:252-264` |
+| 7  | LOW | `service(store_dir)` fixture copied into a fourth daemon test file; the repo already carries three copies (duplication is the repo's pattern, but worth a support helper). | `worktree_guard_setting.rs:19`, `pr_status_setting.rs`, `diff_layout_setting.rs`, `github_issues_setting.rs` |
+| 8  | LOW | The real `claude` CLI path (deny body honoured, `permissions.deny` blocks `git -C . worktree add`) has no automated test; quickstart B is manual. | `research.md` R1, `quickstart.md` |
+
+No HIGH smell was found in the tests themselves: no tautological assertions, no assertion-free tests,
+no conditional logic that skips assertions (the `for` loops over command tables assert in every
+iteration, with the case in the message), no skipped tests, no doubled subject.
+The pure core is tested with the repo's injection style (`FakeFacts`, in line with `Fake*` helpers); the
+daemon tests use a real git repo and the real hook receiver over TCP.
+
+## Mutation results
+
+No mutation tool (profile: `mutation: null`). Deliberate mutants on the highest-risk behaviors,
+one at a time, each restored with `git checkout` and the tree verified clean after. Sample of 9, not
+exhaustive.
+
+| Mutant | Behavior | Survived | Judgment |
+| ------ | -------- | -------- | -------- |
+| `mod.rs` `max_by_key(depth)` to `min_by_key` | longest worktree wins | No | caught by `a_chained_cd_...`, `a_default_session_is_denied_in_any_worktree`, others |
+| `mod.rs` prefetch exemption without `best != root` | checkout named like prefetch | No | caught by `a_checkout_named_like_the_prefetch_worktree_is_not_exempt` |
+| `mod.rs` disable `target-shared` carve-out | FR-007 | No | caught by `bash_calls_in_the_own_worktree_and_the_allowlist_are_allowed` |
+| `mod.rs` disable removed-worktree allowance | edge case | No | caught by `a_removed_worktree_is_allowed` |
+| `shell.rs` drop `-C` from option skip list | FR-005 | No | caught in `worktree_guard::shell::tests` |
+| `mod.rs` Bash `find` Deny to Allow | FR-002 Bash | No | caught by `a_bash_...` tests |
+| `hooks.rs` `permissions` always emitted | FR-008 | No | caught by `an_unguarded_sessions_settings_carry_no_deny_rules` |
+| `state.rs` ignore the opt-out in `guard_state_for` | FR-008, SC-004 | No | caught by `a_launch_with_the_opt_out_set_gets_no_guard_...` (worktree_guard_sessions.rs:292) |
+| `tools.rs` empty `next_step` | FR-010 | No | caught by 3 tests in `mcp_create_worktree` |
+
+Harness note: the first scripted pass mis-reported two daemon mutants as survived and one as
+caught on a compile error (grep on "0 failed"); they were rerun by hand and all caught, and the
+post-run tree was clean. The sample did not cover the daemon's frozen-after-toggle behavior (R7) or
+`paths.rs` case-folding.
+
+## Traceability
+
+| Criterion | Tests | End to end |
+| --------- | ----- | ---------- |
+| US1 / FR-002, FR-003, FR-011, SC-001 | `mod.rs` decide tests; `worktree_guard_sessions.rs` (`a_worktree_session_is_denied...`, `a_default_session...`) | Yes (real receiver over TCP, real git repo) |
+| US1 Bash / FR-004 | `shell.rs` tests; `a_bash_call_started_in_or_changing_into...` | Yes |
+| US2 / FR-005, FR-006, FR-013, SC-002, SC-007 | `shell::tests::a_git_worktree_add_...`, `hooks.rs:817-854`, `rule_matches` test | Partial: rules and settings JSON, not the real CLI (finding 2, 3, 8) |
+| US3 / FR-010 | `mcp_create_worktree.rs` `a_created_worktree_tells_the_agent_to_hand_off` | Yes (MCP call) |
+| US4 / FR-007, SC-003 | allowlist tests in `mod.rs`; sessions test allowed list | Yes |
+| US5 / FR-008, SC-004 | `settings_roundtrip.rs`, `protocol_roundtrip.rs`, `worktree_guard_setting.rs`, `worktree_guard_sessions.rs`, client `features_settings.rs` | Yes |
+| FR-009 | `an_unknown_binding_or_an_empty_list_fails_open...` | Verdict yes, log no (finding 4) |
+| FR-012, FR-014, SC-006 | `paths.rs` tests, `the_same_logical_layout_gives_the_same_verdict...` | Yes (injected facts; Windows and macOS spellings run on Linux) |
+| SC-005 | `fifty_worktrees_are_decided_well_under_100_ms` | Yes (real clock) |
+
+Untested criteria: none. Tests tracing to nothing: none noted.
+
+## What was not audited
+
+- Full workspace suite (5071 tests) was not run; only the feature's core, daemon and hook tests, all green.
+  Client tests (`features_settings.rs`, `main_tests.rs`) were read, not run.
+- No `test-list.md`, no `cycle-log.md`: per-behavior ids were not available, so behaviors are the tasks and milestones.
+- Squash-merged PR history was not inspected beyond the commits on `main`; per-PR intermediate commits may have
+  held an ordering the merged history does not show.
+- Mutation was a 9-mutant sample, not a tool run. Case-folding, symlink resolution, the shell tokeniser
+  beyond `-C`, and the R7 frozen state were not mutated.
+- Real `claude` CLI behavior and quickstart B (manual, visual) were not exercised.
+- Performance beyond the single SC-005 test, Windows and macOS execution, and coverage (no tool) were not assessed.

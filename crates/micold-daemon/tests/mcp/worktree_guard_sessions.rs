@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use micold_core::project::{Availability, Project};
 use micold_core::session::{
@@ -336,4 +336,54 @@ async fn an_unguarded_launchs_settings_file_has_no_deny_rules() {
         let doc: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
         assert_eq!(doc.get("permissions").is_some(), expected);
     }
+}
+
+/// A log sink the test can read back.
+#[derive(Clone, Default)]
+struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogBuffer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuffer {
+    type Writer = LogBuffer;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+/// FR-009 and hooks.md rule 5: failing open is logged with its reason, never with the payload.
+#[tokio::test]
+async fn failing_open_is_logged_with_its_reason_and_never_the_payload() {
+    let buffer = LogBuffer::default();
+    let _guard = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_writer(buffer.clone())
+            .with_ansi(false)
+            .finish(),
+    );
+    let f = fixture().await;
+    let unreadable = json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {"note": "PAYLOAD-SECRET"},
+    });
+    assert_eq!(
+        f.post(IN_A, &unreadable.to_string()).await,
+        (200, Value::Null)
+    );
+    let log = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+    let line = log
+        .lines()
+        .find(|l| l.contains("worktree guard allowed a call it could not read"))
+        .unwrap_or_else(|| panic!("no fail-open warning in:\n{log}"));
+    assert!(line.contains("WARN") && line.contains("reason="), "{line}");
+    assert!(!log.contains("PAYLOAD-SECRET"), "{log}");
 }
