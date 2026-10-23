@@ -120,8 +120,8 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ## Phase 8: Polish (no code; done by the close unit, not a milestone)
 
-- [ ] T063 Record quickstart Part B results in `specs/1150-diff-full-file-view/quickstart.md`
-- [ ] T064 Tick completed tasks and convergence in `specs/1150-diff-full-file-view/tasks.md`
+- [x] T063 Record quickstart Part B results in `specs/1150-diff-full-file-view/quickstart.md` (recorded honestly: not run in the client, see *Part B results*)
+- [x] T064 Tick completed tasks and convergence in `specs/1150-diff-full-file-view/tasks.md`
 
 ## Dependencies and order
 
@@ -197,3 +197,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot). 
 - **Verify**: `cargo test -p micold-core reference`; `cargo test -p micold-client --test features_changes reference`; quickstart Part B step 6
 - **Depends on**: M5
 - **Tier**: full
+
+## Phase 9: TDD remediation
+
+Source: `tdd/verification.md` (verdict FAIL at `93a720fbd`). The feature is not done until finding 1 is cleared or explicitly waived by the owner.
+
+- [x] T065 [F1] Owner decision: waive red-phase evidence for M1-M7 in writing (record in `specs/1150-diff-full-file-view/autopilot.md`), or write `tdd/test-list.md` mapping T002-T056 behaviors to tests and rerun `/speckit.tdd.verify`; waived by the autopilot owner, see the Close bullet under autopilot.md *Decisions* (done: waiver recorded)
+- [ ] T066 [F2] Record quickstart Part B results on a machine with a display (same as T063) covering gap/toggle/tree/picker/reference clicks and SC-004 timing; proves done: `specs/1150-diff-full-file-view/quickstart.md` has the recorded results

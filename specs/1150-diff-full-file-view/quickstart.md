@@ -21,3 +21,10 @@ Expect green. Key tests: `review::expand` (gaps; shape properties: whole-file co
 9. Worktree changes with the network off: expansion and browsing work. Offline PR with the head commit absent locally: message on that file, diff usable.
 10. Light and dark themes.
 11. A 5,000-line source file: expand a gap and toggle whole-file; lines show in under 1 s and scrolling stays smooth.
+
+## Part B results (recorded at close, 2026-10-23)
+
+Not run in the real client. The Changes view needs a daemon, a project and GitHub access, and the host has no Xvfb or xdotool (only headless sway). Steps 1-11 therefore stay for a person with a display (open task T066).
+
+What was seen: the `BrowseBar` in the showcase, light and dark (`visual-pass/m5.md`, `m5-browse-bar-light-dark.png`). `visual-pass/m6.md` records that M6 was not run in the client; no M7 pass was recorded. Steps 1-11 are covered at the reducer and real-git level by `features_changes`, `features_pr_changes`, `review_browse`, `review::expand` and `review::reference` tests; the SC-004 timing (step 11) has no measurement.
+
