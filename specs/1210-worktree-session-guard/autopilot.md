@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1214 | Design | merged | 46582900eb258d140dd971d45c5d5e39e35131d3 |
 | #1225 | M1 | merged | 575961879f7902b37fe9cbcfdd7f17be621bb12c |
 | #1248 | M2 | merged | b2239469a15c1a45c89ec03e545bcac6319d9b3a |
-| M3 | M3 | opening | - |
+| #1268 | M3 | open | - |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | #1225 | merged |
 | M2 | T011–T014 | full | Bash commands judged | #1248 | merged |
-| M3 | T015–T017 | full | EnterWorktree and git worktree add denied | M3 PR | in review |
+| M3 | T015–T017 | full | EnterWorktree and git worktree add denied | #1268 | in review |
 | M4 | T018–T020 | full | create_worktree hand-off text | - | pending |
 | M5 | T021–T027 | full | Opt-out setting and toggle | - | pending |
 
