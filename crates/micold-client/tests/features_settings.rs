@@ -457,6 +457,33 @@ fn turning_the_binding_toggle_off_reaches_what_save_writes() {
     );
 }
 
+/// Feature 1210 (FR-008, US5): the draft holds the guard switch, on by default; a user who turned
+/// it off sees it off when the page opens, and the off toggle is what Save writes.
+#[test]
+fn the_worktree_guard_row_reflects_and_edits_the_setting() {
+    assert!(
+        SettingsDraft::from_settings(&Settings::default())
+            .environment
+            .worktree_guard_enabled,
+        "the guard is on until the user turns it off"
+    );
+    let off = Settings {
+        worktree_guard_enabled: false,
+        ..Settings::default()
+    };
+    assert!(
+        !SettingsDraft::from_settings(&off)
+            .environment
+            .worktree_guard_enabled
+    );
+
+    let mut draft = valid();
+    draft.show(SettingsSection::Environment);
+    draft.environment.worktree_guard_enabled = false;
+    let saved = draft.validate().expect("valid").into_settings();
+    assert!(!saved.worktree_guard_enabled);
+}
+
 // ---------------------------------------------------------------------------------------
 // The Desktop notifications switch (feature 039, T105 — FR-026)
 // ---------------------------------------------------------------------------------------
@@ -1880,6 +1907,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
             pi_activity_component,
             save_terminal_history,
             tool_server_enabled,
+            worktree_guard_enabled,
             cross_session_access,
             pr_status_enabled,
             jira_enabled,
@@ -1904,6 +1932,7 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
                     && pi_activity_component.is_none()
                     && save_terminal_history.is_none()
                     && tool_server_enabled.is_none()
+                    && worktree_guard_enabled.is_none()
                     && cross_session_access.is_none()
                     && pr_status_enabled.is_none()
                     && jira_enabled.is_none()

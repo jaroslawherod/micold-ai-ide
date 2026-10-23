@@ -348,6 +348,9 @@ pub struct EnvironmentDraft {
     /// Application-wide and service-owned like the Pi switch above it; the default-on comes from
     /// `Settings`.
     pub tool_server_enabled: bool,
+    /// Whether new sessions are guarded to their own worktree (feature 1210, FR-008). Application-wide
+    /// and service-owned like the binding above; the default-on comes from `Settings`.
+    pub worktree_guard_enabled: bool,
     /// Whether a session that needs attention raises a desktop notification (feature 039,
     /// FR-026). One switch for every AI CLI, service-owned like the two above it; the default-on
     /// comes from `Settings`.
@@ -383,6 +386,7 @@ impl Default for EnvironmentDraft {
             default_prompt_editor: Default::default(),
             pi_activity_component: Default::default(),
             tool_server_enabled: Default::default(),
+            worktree_guard_enabled: Default::default(),
             desktop_notifications: Default::default(),
             notification_kinds: Default::default(),
             long_task_threshold_secs: Default::default(),
@@ -753,6 +757,8 @@ pub struct ValidSettings {
     pub save_terminal_history: bool,
     /// Environment.
     pub tool_server_enabled: bool,
+    /// Environment (feature 1210).
+    pub worktree_guard_enabled: bool,
     /// Environment.
     pub desktop_notifications: bool,
     /// Environment: the kind switches (feature 613).
@@ -797,6 +803,7 @@ impl ValidSettings {
             pi_activity_component: self.pi_activity_component,
             save_terminal_history: self.save_terminal_history,
             tool_server_enabled: self.tool_server_enabled,
+            worktree_guard_enabled: self.worktree_guard_enabled,
             desktop_notifications: self.desktop_notifications,
             cross_session_access: self.cross_session_access,
             daemon: self.daemon,
@@ -1173,6 +1180,7 @@ impl SettingsDraft {
             pi_activity_component: self.environment.pi_activity_component,
             save_terminal_history: self.terminal.save_terminal_history,
             tool_server_enabled: self.environment.tool_server_enabled,
+            worktree_guard_enabled: self.environment.worktree_guard_enabled,
             desktop_notifications: self.environment.desktop_notifications,
             notification_kinds: self.environment.notification_kinds,
             long_task_threshold_secs,
@@ -1525,6 +1533,7 @@ impl SettingsDraft {
                     default_prompt_editor: _,
                     pi_activity_component: _,
                     tool_server_enabled: _,
+                    worktree_guard_enabled: _,
                     desktop_notifications: _,
                     notification_kinds: _,
                     long_task_threshold_secs: _,
@@ -1595,6 +1604,7 @@ impl SettingsDraft {
             environment.default_ai_cli,
             environment.pi_activity_component,
             environment.tool_server_enabled,
+            environment.worktree_guard_enabled,
             environment.desktop_notifications,
             environment.notification_kinds,
             environment.long_task_threshold_secs,
@@ -1649,6 +1659,7 @@ impl SettingsDraft {
                 default_prompt_editor: Editor::new(&settings.default_prompt_template),
                 pi_activity_component: settings.pi_activity_component,
                 tool_server_enabled: settings.tool_server_enabled,
+                worktree_guard_enabled: settings.worktree_guard_enabled,
                 desktop_notifications: settings.desktop_notifications,
                 notification_kinds: settings.notification_kinds,
                 long_task_threshold_secs: settings.long_task_threshold_secs.to_string(),
@@ -1779,6 +1790,9 @@ pub enum Msg {
     /// The Settings **Let AI sessions manage worktrees and sessions** switch was toggled
     /// (feature 034, FR-004).
     ToolServerToggled(bool),
+    /// The Settings **Guard sessions to their own worktree** switch was toggled (feature 1210,
+    /// FR-008).
+    WorktreeGuardToggled(bool),
     /// The Settings **Desktop notifications** switch was toggled (feature 039, FR-026).
     DesktopNotificationsToggled(bool),
     /// A Settings notification kind switch was toggled (feature 613, S3).
@@ -1912,6 +1926,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
         Msg::SaveTerminalHistoryToggled(on) => save_terminal_history_toggled(state, on),
         Msg::ToolServerToggled(on) => tool_server_toggled(state, on),
+        Msg::WorktreeGuardToggled(on) => worktree_guard_toggled(state, on),
         Msg::DesktopNotificationsToggled(on) => desktop_notifications_toggled(state, on),
         Msg::NotificationKindToggled(kind, on) => notification_kind_toggled(state, kind, on),
         Msg::LongTaskThresholdChanged(text) => long_task_threshold_changed(state, text),
@@ -2150,6 +2165,11 @@ pub fn save_terminal_history_toggled(state: &mut crate::app::State, on: bool) {
 /// Environment: bind new sessions to the service's tool server (feature 034, FR-004).
 pub fn tool_server_toggled(state: &mut crate::app::State, on: bool) {
     edit(state, |draft| draft.environment.tool_server_enabled = on);
+}
+
+/// Environment: guard new sessions to their own worktree (feature 1210, FR-008).
+pub fn worktree_guard_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.environment.worktree_guard_enabled = on);
 }
 
 /// Environment: raise a desktop notification when a session needs attention (feature 039,
@@ -2590,6 +2610,7 @@ pub fn diff_layout_set(
         pi_activity_component: None,
         save_terminal_history: None,
         tool_server_enabled: None,
+        worktree_guard_enabled: None,
         cross_session_access: None,
         pr_status_enabled: None,
         jira_enabled: None,

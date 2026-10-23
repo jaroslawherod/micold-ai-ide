@@ -146,6 +146,7 @@ pub fn welcoming_bridge() -> SshStdio {
             diff_layout: Default::default(),
             cross_session_access: crate::mcp::policy::CrossSessionAccess::Auto,
             pr_status_enabled: false,
+            worktree_guard_enabled: true,
         };
         let welcome = DaemonMsg::Welcome {
             daemon_build: "test".into(),

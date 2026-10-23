@@ -952,3 +952,41 @@ fn a_jira_base_url_change_touches_only_its_project() {
     assert!(!map.contains_key(&a));
     assert_eq!(map[&b], base("https://b.atlassian.net"));
 }
+
+/// Feature 1210 (FR-008, US5): the guard is on until the user turns it off.
+#[test]
+fn the_worktree_guard_is_on_by_default() {
+    assert!(Settings::default().worktree_guard_enabled);
+}
+
+/// A file written before the opt-out never said no, so the guard stays on.
+#[test]
+fn a_settings_file_without_the_worktree_guard_key_reads_as_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+    std::fs::write(
+        dir.path().join("settings.json"),
+        r#"{ "settings_version": 4, "theme": "dark" }"#,
+    )
+    .unwrap();
+
+    let outcome = store.load();
+
+    assert_eq!(outcome.status, LoadStatus::Loaded);
+    assert!(outcome.settings.worktree_guard_enabled);
+}
+
+/// Off survives a save and a load.
+#[test]
+fn the_worktree_guard_off_survives_a_save_and_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+    store
+        .save(&Settings {
+            worktree_guard_enabled: false,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    assert!(!store.load().settings.worktree_guard_enabled);
+}

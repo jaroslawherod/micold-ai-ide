@@ -297,6 +297,12 @@ pub struct Settings {
     /// feature before then. Service-owned like the binding toggle, so every window follows it.
     #[serde(default)]
     pub pr_status_enabled: bool,
+    /// Whether new sessions are guarded to their own worktree (feature 1210, FR-008). On by
+    /// default; off, sessions launched afterwards get no `PreToolUse` guard and no
+    /// `permissions.deny` rules. Service-owned: the spawn reads it, and running sessions keep
+    /// the state they launched with.
+    #[serde(default = "default_worktree_guard_enabled")]
+    pub worktree_guard_enabled: bool,
     /// Whether the Jira integration is on (feature 533, FR-002). Off until the user turns it on:
     /// while off nothing is sent to Jira and no Jira control is shown (FR-001). Service-owned so
     /// every window follows one switch (FR-022).
@@ -370,6 +376,11 @@ fn default_tool_server_enabled() -> bool {
     true
 }
 
+/// The guard's default when a file predates it: on (feature 1210, FR-008).
+fn default_worktree_guard_enabled() -> bool {
+    true
+}
+
 /// The switch's default when a file predates it: on (FR-012e).
 fn default_pi_activity_component() -> bool {
     true
@@ -412,6 +423,7 @@ impl Default for Settings {
             cross_session_access: CrossSessionAccess::default(),
             issue_label_types: default_mapping(),
             pr_status_enabled: false,
+            worktree_guard_enabled: default_worktree_guard_enabled(),
             jira_enabled: false,
             jira_connections: BTreeMap::new(),
             jira_base_urls: BTreeMap::new(),
@@ -813,6 +825,10 @@ struct StoredSettings {
     /// defaulted, so `settings_version` does not move for it either.
     #[serde(default)]
     pr_status_enabled: bool,
+    /// Missing in files written before feature 1210 → on (FR-008). Additive and defaulted, so
+    /// `settings_version` does not move for it either.
+    #[serde(default = "default_worktree_guard_enabled")]
+    worktree_guard_enabled: bool,
     /// Missing in files written before feature 533 → off (FR-002). Additive and defaulted, so
     /// `settings_version` does not move for it either.
     #[serde(default)]
@@ -900,6 +916,7 @@ impl StoredSettings {
             cross_session_access: settings.cross_session_access,
             issue_label_types: settings.issue_label_types.clone(),
             pr_status_enabled: settings.pr_status_enabled,
+            worktree_guard_enabled: settings.worktree_guard_enabled,
             jira_enabled: settings.jira_enabled,
             jira_connections: settings.jira_connections.clone(),
             jira_base_urls: settings.jira_base_urls.clone(),
@@ -957,6 +974,7 @@ impl StoredSettings {
             cross_session_access: self.cross_session_access,
             issue_label_types: self.issue_label_types,
             pr_status_enabled: self.pr_status_enabled,
+            worktree_guard_enabled: self.worktree_guard_enabled,
             jira_enabled: self.jira_enabled,
             jira_connections: self.jira_connections,
             jira_base_urls: self.jira_base_urls,

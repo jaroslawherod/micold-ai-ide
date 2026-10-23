@@ -425,6 +425,7 @@ mod status_line_block {
                     home: Some(self.dir.path().join("home")),
                     ..ConfigLocations::default()
                 },
+                guarded: true,
             }
         }
 

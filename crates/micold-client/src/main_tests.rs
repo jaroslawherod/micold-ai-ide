@@ -540,6 +540,7 @@ pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSetting
         pi_activity_component: true,
         save_terminal_history: true,
         tool_server_enabled: true,
+        worktree_guard_enabled: true,
         desktop_notifications: true,
         notification_kinds: Default::default(),
         long_task_threshold_secs: 60,
@@ -2655,6 +2656,7 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
             default_prompt_editor: Default::default(),
             pi_activity_component: true,
             tool_server_enabled: true,
+            worktree_guard_enabled: true,
             desktop_notifications: true,
             notification_kinds: Default::default(),
             long_task_threshold_secs: "60".to_string(),
@@ -2736,6 +2738,7 @@ fn the_binding_toggle_opens_with_the_value_the_service_reported() {
                 github_issues_enabled: true,
                 jira_base_urls: Default::default(),
                 tool_server_enabled: false,
+                worktree_guard_enabled: true,
                 ..quiet_settings()
             },
         },
@@ -3082,6 +3085,7 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
                 jira_base_urls: Default::default(),
                 desktop_notifications: false,
                 tool_server_enabled: false,
+                worktree_guard_enabled: true,
                 ..quiet_settings()
             },
         },
@@ -3090,6 +3094,7 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
         .save(&micold_core::settings::Settings {
             desktop_notifications: false,
             tool_server_enabled: false,
+            worktree_guard_enabled: true,
             ..store.load().settings
         })
         .expect("the fake store saves");
@@ -3823,6 +3828,7 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
             default_prompt_editor: Default::default(),
             pi_activity_component: true,
             tool_server_enabled: true,
+            worktree_guard_enabled: true,
             desktop_notifications: true,
             notification_kinds: Default::default(),
             long_task_threshold_secs: "60".to_string(),
@@ -3884,6 +3890,7 @@ fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App
             default_prompt_editor: Default::default(),
             pi_activity_component: true,
             tool_server_enabled: true,
+            worktree_guard_enabled: true,
             desktop_notifications: true,
             notification_kinds: Default::default(),
             long_task_threshold_secs: "60".to_string(),
@@ -3956,6 +3963,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 pi_activity_component: true,
                 save_terminal_history: true,
                 tool_server_enabled: true,
+                worktree_guard_enabled: true,
                 desktop_notifications: true,
                 notification_kinds: Default::default(),
                 long_task_threshold_secs: 60,
@@ -4002,6 +4010,7 @@ fn settings_changed_event_syncs_env_include_fields() {
                 pi_activity_component: true,
                 save_terminal_history: true,
                 tool_server_enabled: true,
+                worktree_guard_enabled: true,
                 desktop_notifications: true,
                 notification_kinds: Default::default(),
                 long_task_threshold_secs: 60,
@@ -4512,6 +4521,7 @@ fn the_service_answers_with(
                 pi_activity_component: false,
                 save_terminal_history: true,
                 tool_server_enabled: true,
+                worktree_guard_enabled: true,
                 desktop_notifications: true,
                 notification_kinds: Default::default(),
                 long_task_threshold_secs: 60,
@@ -5708,6 +5718,7 @@ fn save_env_include_and_echo(app: &mut App, settings: DaemonSettings) {
             default_prompt_editor: Default::default(),
             pi_activity_component: settings.pi_activity_component,
             tool_server_enabled: settings.tool_server_enabled,
+            worktree_guard_enabled: settings.worktree_guard_enabled,
             desktop_notifications: settings.desktop_notifications,
             notification_kinds: settings.notification_kinds,
             long_task_threshold_secs: settings.long_task_threshold_secs.to_string(),
@@ -6036,6 +6047,7 @@ mod script_path_report {
         app.core.session.pi_activity_component = true;
         app.core.session.save_terminal_history = true;
         app.core.session.tool_server_enabled = true;
+        app.core.session.worktree_guard_enabled = true;
         app.core.session.desktop_notifications = true;
         (app, probe)
     }
@@ -6358,6 +6370,7 @@ mod script_path_report {
         pi_activity_component: Option<bool>,
         save_terminal_history: Option<bool>,
         tool_server_enabled: Option<bool>,
+        worktree_guard_enabled: Option<bool>,
         desktop_notifications: Option<bool>,
         cross_session_access: Option<micold_core::mcp::policy::CrossSessionAccess>,
         pr_status_enabled: Option<bool>,
@@ -6407,6 +6420,7 @@ mod script_path_report {
                 pi_activity_component,
                 save_terminal_history,
                 tool_server_enabled,
+                worktree_guard_enabled,
                 desktop_notifications,
                 cross_session_access,
                 pr_status_enabled,
@@ -6422,6 +6436,7 @@ mod script_path_report {
                 pi_activity_component,
                 save_terminal_history,
                 tool_server_enabled,
+                worktree_guard_enabled,
                 desktop_notifications,
                 cross_session_access,
                 pr_status_enabled,
@@ -6505,6 +6520,14 @@ mod script_path_report {
                 Box::new(|d| d.environment.tool_server_enabled = false),
                 Told {
                     tool_server_enabled: Some(false),
+                    ..Told::default()
+                },
+            ),
+            (
+                "worktree guard",
+                Box::new(|d| d.environment.worktree_guard_enabled = false),
+                Told {
+                    worktree_guard_enabled: Some(false),
                     ..Told::default()
                 },
             ),
@@ -6768,6 +6791,7 @@ mod script_path_report {
             pi_activity_component: false,
             save_terminal_history: true,
             tool_server_enabled: true,
+            worktree_guard_enabled: true,
             desktop_notifications: true,
             notification_kinds: Default::default(),
             long_task_threshold_secs: 60,

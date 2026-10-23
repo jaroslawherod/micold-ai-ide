@@ -207,6 +207,7 @@ fn other_writers_preserve_the_mapping() {
             "settings_version",
             "theme",
             "tool_server_enabled",
+            "worktree_guard_enabled",
         ],
         "settings.json holds these fields and nothing else: no issue content and no GitHub \
          credential is written to it (SC-006); a new field is added here on purpose"

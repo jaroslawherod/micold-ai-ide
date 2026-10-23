@@ -1561,14 +1561,17 @@ impl DaemonState {
 
     fn hook_settings_file(&self, id: SessionId, spec: &LaunchSpec) -> Option<PathBuf> {
         let receiver = self.hooks.get()?;
+        // Decided here, once per launch: the deny rules go into the file below and the hook guard
+        // is frozen with the same answer (feature 1210, FR-008, R7).
+        let guard = self.guard_state_for(id);
         // Where the session's own status line is looked up (feature 490, research R4).
         let status = crate::hooks::StatusContext {
             cwd: spec.cwd.clone(),
             locations: claude_locations(spec),
+            guarded: guard != crate::hooks::GuardState::Off,
         };
         match receiver.prepare_settings(id, status) {
             Ok(path) => {
-                let guard = self.guard_state_for(id);
                 self.set_session_guard(id, guard);
                 Some(path)
             }
@@ -1581,9 +1584,13 @@ impl DaemonState {
 
     /// The worktree guard a session launched now gets (feature 1210, FR-001, FR-011): bound to its
     /// own worktree, or to the project root for a Default session. A session the catalog does not
-    /// know is `Off`: the call is allowed (FR-009).
+    /// know is `Off`: the call is allowed (FR-009). So is every session while the opt-out is set
+    /// (FR-008).
     pub fn guard_state_for(&self, id: SessionId) -> crate::hooks::GuardState {
         let inner = self.lock();
+        if !inner.catalog.worktree_guard_enabled() {
+            return crate::hooks::GuardState::Off;
+        }
         let Some((project, record)) = inner.catalog.workspace().find_session(id) else {
             return crate::hooks::GuardState::Off;
         };
@@ -2681,6 +2688,13 @@ impl DaemonState {
     /// including from sessions already running. Pushes `SettingsChanged` to every client.
     pub fn set_cross_session_access(&self, access: CrossSessionAccess) -> std::io::Result<()> {
         self.change_settings(|catalog| catalog.set_cross_session_access(access))
+    }
+
+    /// Turn the worktree guard on or off for sessions launched afterwards (feature 1210, FR-008).
+    /// A running session keeps the guard it was launched with (R7). Pushes `SettingsChanged` to
+    /// every client.
+    pub fn set_worktree_guard_enabled(&self, on: bool) -> std::io::Result<()> {
+        self.change_settings(|catalog| catalog.set_worktree_guard_enabled(on))
     }
 
     /// Turn pull request status on or off (feature 040, FR-030). Pushes `SettingsChanged` to every

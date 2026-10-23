@@ -342,6 +342,7 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         pi_activity_component: app.core.session.pi_activity_component,
         save_terminal_history: app.core.session.save_terminal_history,
         tool_server_enabled: app.core.session.tool_server_enabled,
+        worktree_guard_enabled: app.core.session.worktree_guard_enabled,
         desktop_notifications: app.core.session.desktop_notifications,
         cross_session_access: app.core.session.cross_session_access,
         notification_kinds: app.core.session.notification_kinds,
@@ -439,6 +440,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         pi_activity_component: _,
         save_terminal_history: _,
         tool_server_enabled: _,
+        worktree_guard_enabled: _,
         cross_session_access: _,
         issue_label_types: _,
         pr_status_enabled: _,
@@ -493,6 +495,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(pi_activity_component);
     set!(save_terminal_history);
     set!(tool_server_enabled);
+    set!(worktree_guard_enabled);
     set!(cross_session_access);
     set!(issue_label_types);
     set!(desktop_notifications);
@@ -524,6 +527,7 @@ struct ServiceChanges {
     pi_activity_component: Option<bool>,
     save_terminal_history: Option<bool>,
     tool_server_enabled: Option<bool>,
+    worktree_guard_enabled: Option<bool>,
     desktop_notifications: Option<bool>,
     cross_session_access: Option<micold_core::mcp::policy::CrossSessionAccess>,
     notification_kinds: Option<micold_core::attention::NotificationKinds>,
@@ -550,6 +554,7 @@ impl ServiceChanges {
             pi_activity_component: self.pi_activity_component,
             save_terminal_history: self.save_terminal_history,
             tool_server_enabled: self.tool_server_enabled,
+            worktree_guard_enabled: self.worktree_guard_enabled,
             desktop_notifications: self.desktop_notifications,
             diff_layout: None,
             cross_session_access: self.cross_session_access,
@@ -584,6 +589,7 @@ fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<Serv
         pi_activity_component: changed!(pi_activity_component),
         save_terminal_history: changed!(save_terminal_history),
         tool_server_enabled: changed!(tool_server_enabled),
+        worktree_guard_enabled: changed!(worktree_guard_enabled),
         desktop_notifications: changed!(desktop_notifications),
         cross_session_access: changed!(cross_session_access),
         notification_kinds: changed!(notification_kinds),
@@ -702,6 +708,7 @@ pub(crate) fn save_and_prepare_check(
     app.core.session.pi_activity_component = window.pi_activity_component;
     app.core.session.save_terminal_history = window.save_terminal_history;
     app.core.session.tool_server_enabled = window.tool_server_enabled;
+    app.core.session.worktree_guard_enabled = window.worktree_guard_enabled;
     app.core.session.desktop_notifications = window.desktop_notifications;
     app.core.session.cross_session_access = window.cross_session_access;
     app.core.session.notification_kinds = window.notification_kinds;
@@ -1179,6 +1186,7 @@ mod tests {
             pi_activity_component: false,
             save_terminal_history: true,
             tool_server_enabled: true,
+            worktree_guard_enabled: true,
             desktop_notifications: true,
             diff_layout: Default::default(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::ConfirmEachSend,

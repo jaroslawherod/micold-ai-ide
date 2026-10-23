@@ -79,6 +79,9 @@ pub struct StatusContext {
     pub cwd: PathBuf,
     /// Home and `CLAUDE_CONFIG_DIR` as the session sees them.
     pub locations: ConfigLocations,
+    /// Whether the session is guarded to its worktree: the file then carries the static deny
+    /// rules, and omits `permissions` when not (feature 1210, FR-008).
+    pub guarded: bool,
 }
 
 /// A session's worktree guard (feature 1210, data-model): fixed when the session is launched, so a
@@ -313,7 +316,10 @@ impl HookReceiver {
             }
         };
         let path = self.settings_file(session);
-        std::fs::write(&path, settings_json(&url, &token, block.as_ref()))?;
+        std::fs::write(
+            &path,
+            settings_json(&url, &token, block.as_ref(), status.guarded),
+        )?;
         Ok(path)
     }
 }
@@ -643,7 +649,8 @@ struct PermissionsBlock {
 #[derive(serde::Serialize)]
 struct SettingsDoc<'a> {
     hooks: HooksMap<'a>,
-    permissions: PermissionsBlock,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    permissions: Option<PermissionsBlock>,
     #[serde(rename = "statusLine", skip_serializing_if = "Option::is_none")]
     status_line: Option<&'a StatusLineBlock>,
 }
@@ -653,7 +660,12 @@ struct SettingsDoc<'a> {
 /// in a header, so **user configuration is never modified**. Built from typed structs rather than
 /// untyped `serde_json::json!` so a key typo is a compile error, not a silent shape mismatch caught
 /// only against a live `claude` binary (BUG-001).
-pub fn settings_json(url: &str, token: &str, status_line: Option<&StatusLineBlock>) -> String {
+pub fn settings_json(
+    url: &str,
+    token: &str,
+    status_line: Option<&StatusLineBlock>,
+    guarded: bool,
+) -> String {
     let group = || MatcherGroup {
         matcher: "",
         hooks: [HttpHook {
@@ -675,9 +687,9 @@ pub fn settings_json(url: &str, token: &str, status_line: Option<&StatusLineBloc
             subagent_start: [group()],
             subagent_stop: [group()],
         },
-        permissions: PermissionsBlock {
+        permissions: guarded.then_some(PermissionsBlock {
             deny: &micold_core::worktree_guard::DENY_RULES,
-        },
+        }),
         status_line,
     };
     serde_json::to_string_pretty(&doc).expect("settings json is always serialisable")
@@ -803,7 +815,7 @@ mod tests {
 
     #[test]
     fn a_guarded_sessions_settings_keep_the_pre_tool_use_hook_and_override_nothing() {
-        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None);
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, true);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["hooks"]["PreToolUse"][0]["hooks"][0]["type"], "http");
         // FR-013: only the hooks the session already had; no `allow`, no override key.
@@ -818,8 +830,16 @@ mod tests {
     }
 
     #[test]
+    fn an_unguarded_sessions_settings_carry_no_deny_rules() {
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, false);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed.get("permissions").is_none(), "{json}");
+        assert_eq!(parsed["hooks"]["PreToolUse"][0]["hooks"][0]["type"], "http");
+    }
+
+    #[test]
     fn settings_json_denies_worktree_entry_and_creation_but_not_create_worktree() {
-        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None);
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, true);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(
             parsed["permissions"]["deny"],
@@ -848,7 +868,7 @@ mod tests {
 
     #[test]
     fn settings_json_embeds_the_url_and_bearer_token() {
-        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok-123", None);
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok-123", None, true);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         // The event's array entry is a matcher-group wrapper (BUG-001) — the `http` hook itself is
         // nested under `hooks`, not placed directly in the top-level array.

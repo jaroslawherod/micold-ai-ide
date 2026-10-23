@@ -328,7 +328,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 66 → 67 for #943's kind switch (M6): `ClientMsg::SessionSwitchKind`,
 /// `ErrorKind::NeedsConfirmation`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 67;
+///
+/// And 67 → 68 for feature 1210's `worktree_guard_enabled` on `DaemonSettings` and `SettingsSet`
+/// (FR-008).
+const FEATURE_026_PROTOCOL_VERSION: u32 = 68;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
