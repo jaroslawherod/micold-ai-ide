@@ -678,7 +678,14 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                     Some(DaemonState::VersionMismatch { .. })
                 )
                 && model.sessions.get(&entry.id).is_some_and(|s| !s.is_empty()),
-            explanation: crate::links::remote_mismatch_text(entry, model.links),
+            // A released-image container's daemon is not the bridge's, so Stop and Start would
+            // meet it again: its way out is the banner's Restart service (FR-017, BUG-1165).
+            explanation: if model.legacy_container == Some(entry.id) {
+                crate::links::remote_mismatch(entry, model.links)
+                    .map(|(e, _)| e.text_released_image(entry.name.as_str()))
+            } else {
+                crate::links::remote_mismatch_text(entry, model.links)
+            },
             replace_offered: replace_offered(model, entry.id)
                 && !state.replacing.contains(&entry.id),
             replacing: state.replacing.contains(&entry.id),

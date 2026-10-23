@@ -123,16 +123,23 @@ impl MismatchExplanation {
     /// The sentence shown for daemon `name` on `host`, a host the user owns: a daemon that must not
     /// be replaced by the app is ended there by the user.
     pub fn text(&self, name: &str, host: &str) -> String {
-        self.compose(name, Some(host))
+        self.compose(name, Holder::UserHost(host))
     }
 
     /// The sentence shown for daemon `name` in a container the app owns (spec 806 FR-007,
     /// BUG-1165): the user ends such a daemon with its row's Stop, and Start brings up this app's.
     pub fn text_app_owned(&self, name: &str) -> String {
-        self.compose(name, None)
+        self.compose(name, Holder::AppContainer)
     }
 
-    fn compose(&self, name: &str, host: Option<&str>) -> String {
+    /// The sentence shown for daemon `name` in an app-owned container still on the released image
+    /// (spec 806 FR-017): its daemon is not started by the bridge, so Stop and Start would meet it
+    /// again; the banner's Restart service replaces the container.
+    pub fn text_released_image(&self, name: &str) -> String {
+        self.compose(name, Holder::ReleasedContainer)
+    }
+
+    fn compose(&self, name: &str, holder: Holder<'_>) -> String {
         let head = format!(
             "daemon {name} version mismatch: client {}, daemon {}",
             self.client, self.daemon
@@ -142,29 +149,50 @@ impl MismatchExplanation {
             Side::Client => " (daemon is newer)",
             Side::Unknown => "",
         };
-        let advice = match (self.way_out, host) {
+        let advice = match (self.way_out, holder) {
             (WayOut::UpdateApp, _) => "Update this app.".to_string(),
             (WayOut::ReplaceDaemon, _) => {
                 "No sessions are running on it: replace it to continue.".to_string()
             }
-            (WayOut::EndSessionsThenReplace { running }, Some(host)) => format!(
+            (WayOut::EndSessionsThenReplace { running }, Holder::UserHost(host)) => format!(
                 "{running} session(s) are running; end them, or end the daemon on {host}, \
                  then reconnect."
             ),
-            (WayOut::EndDaemonByHand, Some(host)) => format!(
+            (WayOut::EndDaemonByHand, Holder::UserHost(host)) => format!(
                 "Its sessions could not be counted; end the daemon on {host} yourself, \
                  then reconnect."
             ),
-            (WayOut::EndSessionsThenReplace { running }, None) => {
+            (WayOut::EndSessionsThenReplace { running }, Holder::AppContainer) => {
                 format!("{running} session(s) are running; end them, or {APP_OWNED_WAY_OUT}")
             }
-            (WayOut::EndDaemonByHand, None) => {
+            (WayOut::EndDaemonByHand, Holder::AppContainer) => {
                 format!("Its sessions could not be counted; {APP_OWNED_WAY_OUT}")
+            }
+            (WayOut::EndSessionsThenReplace { running }, Holder::ReleasedContainer) => {
+                format!("{running} session(s) are running; end them, or {RELEASED_WAY_OUT}")
+            }
+            (WayOut::EndDaemonByHand, Holder::ReleasedContainer) => {
+                format!("Its sessions could not be counted; {RELEASED_WAY_OUT}")
             }
         };
         format!("{head}{age}. {advice}")
     }
 }
+
+/// Where a mismatched daemon runs, which decides how the user ends it.
+#[derive(Debug, Clone, Copy)]
+enum Holder<'a> {
+    /// A host the user owns, named for the sentence.
+    UserHost(&'a str),
+    /// A container the app owns, on the basic image.
+    AppContainer,
+    /// A container the app owns, still on the released image.
+    ReleasedContainer,
+}
+
+/// How the user moves a mismatched released-image container to this app's version.
+const RELEASED_WAY_OUT: &str =
+    "use Restart service in the banner to move it to this app's version.";
 
 /// How the user ends a mismatched daemon the app owns: its row's Stop ends the container, and Start
 /// brings up this app's version in it.
@@ -286,6 +314,13 @@ mod tests {
             "daemon Box version mismatch: client 0.5.3, daemon 0.5.2 (daemon is older). \
              Its sessions could not be counted; Stop this daemon, then Start it to run this \
              app's version."
+        );
+        assert_eq!(
+            MismatchExplanation::new("0.5.3", "0.5.2", ReplaceOffer::Unknown)
+                .text_released_image("Box"),
+            "daemon Box version mismatch: client 0.5.3, daemon 0.5.2 (daemon is older). \
+             Its sessions could not be counted; use Restart service in the banner to move it to \
+             this app's version."
         );
         // The other ways out read the same for both kinds of daemon.
         assert_eq!(

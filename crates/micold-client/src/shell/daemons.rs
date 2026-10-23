@@ -133,7 +133,22 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                     .flatten();
                 tasks.extend(match boot {
                     Some(plan) => Some(crate::shell::sandbox::stop(&plan)),
-                    None => stop_container_of(app, *daemon, |_| Message::NoOp),
+                    None => {
+                        let name = app
+                            .core
+                            .settings
+                            .daemons
+                            .get(*daemon)
+                            .map(|e| e.name.as_str().to_string())
+                            .unwrap_or_default();
+                        stop_container_of(app, *daemon, move |stopped| {
+                            if stopped {
+                                Message::NoOp
+                            } else {
+                                container_not_stopped(&name)
+                            }
+                        })
+                    }
                 });
             }
             Outcome::RemoteRepositoryRequested { path } => {
@@ -281,6 +296,17 @@ pub(crate) fn stop_container_of(
         c.profile.runtime,
         c.container_name.clone(),
         then,
+    ))
+}
+
+/// What the user is told when the container of daemon `name` could not be stopped: its next start
+/// would meet the old daemon again.
+pub(crate) fn container_not_stopped(name: &str) -> Message {
+    Message::Connection(micold_client::features::connection::Msg::ConnectFailed(
+        format!(
+            "could not stop the container of daemon {name}; stop it with your container runtime, \
+         then start the daemon again"
+        ),
     ))
 }
 

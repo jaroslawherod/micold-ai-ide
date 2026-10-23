@@ -57,7 +57,12 @@ fn the_row_names_both_versions_the_older_side_and_the_way_out() {
             .expect("a mismatched container daemon is explained");
         assert!(text.contains("client 0.5.3, daemon 0.5.2"), "{text}");
         assert!(text.contains("daemon is older"), "{text}");
-        assert!(text.contains("Stop this daemon"), "{text}");
+        let way_out = if legacy {
+            "Restart service"
+        } else {
+            "Stop this daemon"
+        };
+        assert!(text.contains(way_out), "{text}");
     }
 }
 
@@ -114,7 +119,12 @@ fn with_sessions_running_or_uncounted_the_way_out_is_the_rows_stop() {
         for legacy in [false, true] {
             let view = row(&mut w, &state, boxed, legacy);
             let text = view.explanation.unwrap();
-            assert!(text.contains("Stop this daemon"), "{text}");
+            let way_out = if legacy {
+                "Restart service"
+            } else {
+                "Stop this daemon"
+            };
+            assert!(text.contains(way_out), "{text}");
             assert!(!text.contains("yourself"), "{text}");
             assert!(
                 !view.stop_blocked,
