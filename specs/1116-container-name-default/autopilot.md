@@ -16,13 +16,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Design | open / merged | … |
+| #1297 | Design | open | … |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Empty container name defaults to the sanitized daemon name | #… | pending |
+| M1 | T001–T012 | full | Empty container name defaults to the sanitized daemon name | – | pending |
 
 ## Decisions
 
