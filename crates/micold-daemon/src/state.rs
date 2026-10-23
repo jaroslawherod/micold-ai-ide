@@ -8423,6 +8423,8 @@ mod offered_tests {
 #[cfg(test)]
 mod prompt_lookup_bound_tests {
     use super::*;
+    use micold_core::settings::JsonFileSettingsStore;
+    use micold_core::store::JsonFileStore;
 
     /// 1161 US4 s6, FR-012: a fresh daemon waits 5 seconds for an issue's title and body, no more.
     #[test]
