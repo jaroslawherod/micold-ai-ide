@@ -175,7 +175,7 @@ mod tests {
         assert!(out.contains("[filter \"lfs\"]"), "{out}");
         let containerfile = include_str!("../../../../packaging/basic/Containerfile");
         assert!(
-            containerfile.lines().any(|l| l.trim() == "git-lfs \\"),
+            containerfile.split_whitespace().any(|w| w == "git-lfs"),
             "packaging/basic/Containerfile must apt-get install git-lfs"
         );
     }

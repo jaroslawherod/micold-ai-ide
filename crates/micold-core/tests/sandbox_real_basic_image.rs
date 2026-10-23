@@ -30,8 +30,9 @@ const ABSENT: [&str; 7] = [
 ];
 
 /// What must be: the SSH server, the runtime the npm-distributed CLIs install with, the tool the
-/// daemon runs for worktrees, and the lock the install step serialises on.
-const PRESENT: [&str; 5] = ["sshd", "node", "npm", "git", "flock"];
+/// daemon runs for worktrees, the lock the install step serialises on, and `git-lfs`, which the
+/// shared host gitconfig's `filter.lfs` block requires (#1288).
+const PRESENT: [&str; 6] = ["sshd", "node", "npm", "git", "flock", "git-lfs"];
 
 /// The oldest glibc the image may carry: trixie's, which the daemon's glibc builds need.
 const MIN_GLIBC: (u32, u32) = (2, 41);
