@@ -255,6 +255,10 @@ check reads the command text, so a command built by a script or a shell wrapper 
 through can slip past it. The route is the one above: `create_worktree`, which stays available, then
 `create_session` for the new worktree.
 
+A successful `create_worktree` result carries a `next_step` field, repeated as the last line of the
+result text: do not work in the new worktree from this session, and hand the work to a dedicated
+session with `create_session` for that worktree.
+
 ## Reading and typing into other sessions
 
 An assistant can read what another session of the same project shows, and type into it. This is

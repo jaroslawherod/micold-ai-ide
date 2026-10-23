@@ -86,9 +86,14 @@ impl std::fmt::Display for OpError {
 
 impl std::error::Error for OpError {}
 
-/// The `CallToolResult` of a successful call whose output is `output`.
+/// The `CallToolResult` of a successful call whose output is `output`. An output with a string
+/// `next_step` field repeats it as the last line of the text, where an agent reads it.
 pub fn tool_success(output: &Value) -> Value {
-    let text = serde_json::to_string_pretty(output).expect("a JSON value always serialises");
+    let mut text = serde_json::to_string_pretty(output).expect("a JSON value always serialises");
+    if let Some(next) = output.get("next_step").and_then(Value::as_str) {
+        text.push_str("\n\n");
+        text.push_str(next);
+    }
     json!({
         "content": [{"type": "text", "text": text}],
         "structuredContent": output,

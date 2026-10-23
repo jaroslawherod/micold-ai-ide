@@ -689,9 +689,25 @@ fn live_sessions_conflict(
     )
 }
 
+/// What a successful `create_worktree` tells the agent to do next (FR-010).
+const WORKTREE_NEXT_STEP: &str = "Do not work in this worktree from this session. Hand the work to a dedicated session with create_session for this worktree.";
+
 /// `create_worktree` (contracts/mcp-tools.md, 550 contracts/create-worktree-tool.md): a literal
-/// branch, or the form's derived inputs.
+/// branch, or the form's derived inputs. A success carries the hand-off in `next_step`.
 async fn create_worktree(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    request: CreateWorktreeRequest,
+    asked: tokio::time::Instant,
+) -> Result<Value, OpError> {
+    let mut row = create_worktree_row(state, caller, request, asked).await?;
+    if let Some(row) = row.as_object_mut() {
+        row.insert("next_step".into(), WORKTREE_NEXT_STEP.into());
+    }
+    Ok(row)
+}
+
+async fn create_worktree_row(
     state: &Arc<DaemonState>,
     caller: SessionId,
     request: CreateWorktreeRequest,

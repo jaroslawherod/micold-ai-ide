@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1210
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
-- **Phase**: milestone M3 (PR open)
-- **Next step**: orchestrator waits on CI for the M3 PR, merges, then M4
+- **Phase**: milestone M4 (gate/PR)
+- **Next step**: implement M4 (T018–T020)
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1214 | Design | merged | 46582900eb258d140dd971d45c5d5e39e35131d3 |
 | #1225 | M1 | merged | 575961879f7902b37fe9cbcfdd7f17be621bb12c |
 | #1248 | M2 | merged | b2239469a15c1a45c89ec03e545bcac6319d9b3a |
-| #1268 | M3 | open | - |
+| #1268 | M3 | merged | 4a10e58536eeb026d8df0addfc79a81da440af81 |
 
 ## Milestones
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | #1225 | merged |
 | M2 | T011–T014 | full | Bash commands judged | #1248 | merged |
-| M3 | T015–T017 | full | EnterWorktree and git worktree add denied | #1268 | in review |
-| M4 | T018–T020 | full | create_worktree hand-off text | - | pending |
+| M3 | T015–T017 | full | EnterWorktree and git worktree add denied | #1268 | merged |
+| M4 | T018–T020 | full | create_worktree hand-off text | - | in review |
 | M5 | T021–T027 | full | Opt-out setting and toggle | - | pending |
 
 ## Decisions
@@ -80,3 +80,5 @@ None.
 None.
 
 - Red CI attempt 1 (run 39649966814): Windows "Report rust-cache hit" step exited 1 on a cache miss (`du target` under pipefail, no target dir); `|| true` added in ci.yml. Not caused by this flow. Full gate green locally (GIT_CONFIG_GLOBAL=/dev/null: host insteadOf breaks git_credential_grant test).
+
+M4 reviews: A (high) CLEAN, B (sonnet) CLEAN; only MINORs (generic next_step append in tool_success, accepted).
