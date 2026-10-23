@@ -6,7 +6,7 @@
 //! [`Msg::DiffRead`]. What the list pane says when it has no rows
 //! is chosen here ([`list_body`], [`base_line`]) so the glue in `ui/changes.rs` only renders it.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
 
 use micold_core::protocol::messages::{PrSend, ReviewEditOp};
@@ -26,6 +26,7 @@ use micold_core::review::diff::{
 };
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::pr_diff::PrDiff;
+use micold_core::review::reference::{self, Reference};
 use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::session::SessionLocation;
@@ -381,6 +382,9 @@ pub struct OpenView {
     pub stack: BrowseStack,
     /// The file tree and path picker.
     pub files: FilesPane,
+    /// A line saying a followed reference named no file of the repository (FR-012); cleared by
+    /// the next message.
+    pub notice: Option<&'static str>,
 }
 
 /// A repository file opened from the tree or the picker (feature 1150, data-model §8).
@@ -390,6 +394,8 @@ pub struct BrowsedFile {
     pub path: RelPath,
     /// Its text, once read.
     pub load: BrowseLoad,
+    /// The line a followed reference names: the file scrolls to it once read (FR-012).
+    pub line: Option<u32>,
 }
 
 /// How far reading a browsed file got.
@@ -453,6 +459,8 @@ pub struct FilesPane {
     pub shown: bool,
     /// The repository's files, as last read.
     pub tree: Load<Vec<RelPath>>,
+    /// The paths of the last tree read, for resolving references in diff lines (FR-012).
+    pub listed: HashSet<String>,
     /// GitHub cut the pull request's tree short: the list is partial (a typed path still opens).
     pub truncated: bool,
     /// What was typed in the path picker.
@@ -1220,6 +1228,9 @@ pub enum Msg {
     },
     /// A file of the repository was picked in the tree or the path picker (feature 1150, FR-011).
     BrowseOpen(RelPath),
+    /// A reference in a line of the diff, or of a browsed file, was activated (FR-012): the file it
+    /// names, and the line the text gives.
+    ReferenceActivated(RelPath, Option<u32>),
     /// Back from a browsed file (FR-013).
     BrowseBack,
     /// "Open diff" on a browsed file the change lists (FR-015).
@@ -1520,8 +1531,19 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             view.browse.as_ref().map(|b| b.path.clone()),
         )
     });
+    let wants_tree = matches!(msg, Msg::DiffRead { .. } | Msg::PullRequestDiffRead { .. });
+    if !scroll && !matches!(msg, Msg::ReferenceActivated(..)) {
+        if let Some(view) = state.open.as_mut() {
+            view.notice = None;
+        }
+    }
     let mut effect = apply(state, msg);
-    if let Some(extra) = reread_after_source_change(state, before) {
+    let mut extras = reread_after_source_change(state, before).unwrap_or_default();
+    if wants_tree {
+        extras.extend(tree_for_references(state));
+    }
+    if !extras.is_empty() {
+        let extra = extras;
         effect = match effect {
             Effect::None => Effect::Batch(extra),
             first => Effect::Batch(std::iter::once(first).chain(extra).collect()),
@@ -1572,6 +1594,7 @@ fn reread_after_source_change(
     }
     // The old source's files are not the new one's, shown or not.
     view.files.tree = Load::Idle;
+    view.files.listed.clear();
     view.files.truncated = false;
     if view.files.shown {
         effects.push(request_tree(view, &mut state.next_seq));
@@ -1627,6 +1650,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 browse: None,
                 stack: BrowseStack::default(),
                 files: FilesPane::default(),
+                notice: None,
             });
             request_read(state)
         }
@@ -1846,6 +1870,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             if let Some(BrowsedFile {
                 path,
                 load: BrowseLoad::Failed(FileReadFailure::TooLarge { .. }),
+                ..
             }) = view.browse.clone()
             {
                 view.shown_large.insert(path.clone());
@@ -1865,7 +1890,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             view.shown_large.insert(path);
             request_diff(state, false)
         }
-        Msg::BrowseOpen(path) => browse_open(state, path),
+        Msg::BrowseOpen(path) => browse_open(state, path, None),
+        Msg::ReferenceActivated(path, line) => reference_activated(state, path, line),
         Msg::BrowseBack => browse_back(state),
         Msg::OpenFileDiff => {
             let Some(view) = state.open.as_ref().filter(|v| file_diff_available(v)) else {
@@ -1906,7 +1932,14 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             if let Some(view) = state.open.as_mut() {
                 if matches!(view.files.tree, Load::Loading { seq: s, .. } if s == seq) {
                     (view.files.truncated, view.files.tree) = match result {
-                        Ok(listing) => (listing.truncated, Load::Ready(listing.paths)),
+                        Ok(listing) => {
+                            view.files.listed = listing
+                                .paths
+                                .iter()
+                                .map(|p| p.as_str().to_owned())
+                                .collect();
+                            (listing.truncated, Load::Ready(listing.paths))
+                        }
                         Err(why) => (false, Load::Failed(why.message())),
                     };
                 }
@@ -1946,6 +1979,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     .as_ref()
                     .is_some_and(|b| b.path == path && b.load == (BrowseLoad::Reading { seq }));
                 if waiting && source == read_target(view).0 {
+                    let failed_read = result.is_err();
                     let load = match result {
                         Ok(text) => BrowseLoad::Ready(LoadedDiff {
                             diff: plain_file(&text.lines),
@@ -1957,6 +1991,9 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     };
                     if let Some(browsed) = view.browse.as_mut() {
                         browsed.load = load;
+                        if let Some(line) = browsed.line.take().filter(|_| !failed_read) {
+                            view.diff_offset = offset_of_line(line);
+                        }
                     }
                     return Effect::ScrollDiff {
                         offset: view.diff_offset,
@@ -2900,6 +2937,7 @@ fn request_browse(
     view.browse = Some(BrowsedFile {
         path: path.clone(),
         load: BrowseLoad::Reading { seq },
+        line: None,
     });
     let (source, commit, address) = read_target(view);
     Effect::ReadFile {
@@ -2915,7 +2953,7 @@ fn request_browse(
 }
 
 /// Open `path` in the browser, remembering what was on screen as the place Back returns to.
-fn browse_open(state: &mut State, path: RelPath) -> Effect {
+fn browse_open(state: &mut State, path: RelPath, line: Option<u32>) -> Effect {
     let Some(view) = state.open.as_mut() else {
         return Effect::None;
     };
@@ -2924,7 +2962,17 @@ fn browse_open(state: &mut State, path: RelPath) -> Effect {
         .as_ref()
         .is_some_and(|b| b.path == path && !matches!(b.load, BrowseLoad::Failed(_)));
     if shown {
-        return Effect::None;
+        // Followed again to a line of the file already shown: scroll to it.
+        return match line {
+            Some(line) if matches!(&view.browse, Some(b) if matches!(b.load, BrowseLoad::Ready(_))) =>
+            {
+                view.diff_offset = offset_of_line(line);
+                Effect::ScrollDiff {
+                    offset: view.diff_offset,
+                }
+            }
+            _ => Effect::None,
+        };
     }
     let frame = match &view.browse {
         Some(b) => Frame::File {
@@ -2940,7 +2988,54 @@ fn browse_open(state: &mut State, path: RelPath) -> Effect {
     view.diff_offset = 0;
     view.files.picker.clear();
     let force = view.shown_large.contains(&path);
-    request_browse(view, &mut state.next_seq, path, force)
+    let effect = request_browse(view, &mut state.next_seq, path, force);
+    if let Some(browsed) = view.browse.as_mut() {
+        browsed.line = line;
+    }
+    effect
+}
+
+/// The scroll offset that puts line `line` of a browsed file near the top: the file is one hunk, so
+/// its header is row 0 and line `n` row `n` (as [`jump_offset`] leaves two rows above a line).
+fn offset_of_line(line: u32) -> u32 {
+    (line.saturating_sub(2) as f32 * crate::ui::material::DIFF_ROW_HEIGHT) as u32
+}
+
+/// Follow a reference: open the file it names at its line, when the repository lists it; else say
+/// so and change nothing (FR-012).
+fn reference_activated(state: &mut State, path: RelPath, line: Option<u32>) -> Effect {
+    let Some(view) = state.open.as_mut() else {
+        return Effect::None;
+    };
+    if !view.files.listed.contains(path.as_str()) {
+        view.notice = Some(NO_SUCH_FILE);
+        return Effect::None;
+    }
+    browse_open(state, path, line)
+}
+
+/// What a followed reference to an unlisted file says.
+pub const NO_SUCH_FILE: &str = "That file is not in the repository.";
+
+/// The references in `text`, a line of the file the pane shows: only strings that name a file the
+/// tree lists (FR-012). None until the tree is read.
+pub fn references_in(view: &OpenView, text: &str) -> Vec<Reference> {
+    if view.files.listed.is_empty() {
+        return Vec::new();
+    }
+    let from = view
+        .browse
+        .as_ref()
+        .map(|b| &b.path)
+        .or_else(|| selected_file(view))
+        .map_or("", RelPath::as_str);
+    reference::find(text, from, &|p| view.files.listed.contains(p))
+}
+
+/// Read the repository's files once a diff is shown, so its lines can link to them.
+fn tree_for_references(state: &mut State) -> Option<Effect> {
+    let view = state.open.as_mut()?;
+    matches!(view.files.tree, Load::Idle).then(|| request_tree(view, &mut state.next_seq))
 }
 
 /// Return to the place the browser was entered from: the diff with its file, scroll and

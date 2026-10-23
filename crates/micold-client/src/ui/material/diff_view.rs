@@ -24,7 +24,11 @@
 //! Builder form: `DiffView::new(&diff, layout, roles).spans(&scheme_spans).offset(o).viewport(v)
 //! .on_scroll(|o, v| Msg::Scrolled(o, v)).on_show_large(Msg::ShowLarge).pick(side, range)
 //! .on_gutter(|old, new, extend| ..).slot(side, line, card).slot_heights(&heights)
-//! .on_slot_measured(|side, line, h| ..).into()`.
+//! .on_slot_measured(|side, line, h| ..).references(|text| ..).on_reference(|path, line| ..).into()`.
+//!
+//! References (feature 1150, FR-012): `.references(f)` says which bytes of a line's text name a
+//! file of the repository; they are underlined in the link colour and a press on one sends
+//! `.on_reference(path, line)`. A line with none is drawn exactly as before.
 
 use iced::advanced::widget::{tree, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, renderer, Clipboard, Layout, Shell};
@@ -42,7 +46,8 @@ use micold_core::review::diff::{
     UnifiedIndex, UnifiedRow,
 };
 use micold_core::review::expand::{Gap, GapKey, Shaped, ShapedRef};
-use micold_core::review::{LineRange, Side};
+use micold_core::review::reference::Reference;
+use micold_core::review::{LineRange, RelPath, Side};
 /// The layout a diff is shown in, re-exported so callers need not reach into the settings module.
 pub use micold_core::settings::DiffLayout;
 use micold_core::tokens::{spacing, Rgb, Roles};
@@ -225,6 +230,7 @@ type OnGutter<'a, M> = Rc<dyn Fn(Option<u32>, Option<u32>, bool) -> M + 'a>;
 struct Gutters<'a, M> {
     pick: Option<(Side, LineRange)>,
     on: Option<OnGutter<'a, M>>,
+    links: Option<Links<'a, M>>,
 }
 
 impl<M> Clone for Gutters<'_, M> {
@@ -232,9 +238,32 @@ impl<M> Clone for Gutters<'_, M> {
         Self {
             pick: self.pick,
             on: self.on.clone(),
+            links: self.links.clone(),
         }
     }
 }
+
+/// How a line's text names files (feature 1150, FR-012): which parts do, and what a press on one
+/// sends.
+struct Links<'a, M> {
+    find: Find<'a>,
+    on: OnReference<'a, M>,
+}
+
+impl<M> Clone for Links<'_, M> {
+    fn clone(&self) -> Self {
+        Self {
+            find: self.find.clone(),
+            on: self.on.clone(),
+        }
+    }
+}
+
+/// The references in a line's text.
+type Find<'a> = Rc<dyn Fn(&str) -> Vec<Reference> + 'a>;
+
+/// What a press on a reference sends: the file and the line the text gives.
+type OnReference<'a, M> = Rc<dyn Fn(RelPath, Option<u32>) -> M + 'a>;
 
 impl<M> Gutters<'_, M> {
     /// No pick, and presses send nothing.
@@ -242,6 +271,7 @@ impl<M> Gutters<'_, M> {
         Self {
             pick: None,
             on: None,
+            links: None,
         }
     }
 }
@@ -263,6 +293,8 @@ pub struct DiffView<'a, M> {
     on_slot_measured: Option<OnMeasured<'a, M>>,
     shaped: Option<&'a Shaped>,
     on_gap: Option<OnGap<'a, M>>,
+    find: Option<Find<'a>>,
+    on_reference: Option<OnReference<'a, M>>,
 }
 
 /// What a press on a hidden-lines row sends: the run's key.
@@ -287,7 +319,22 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
             on_slot_measured: None,
             shaped: None,
             on_gap: None,
+            find: None,
+            on_reference: None,
         }
+    }
+
+    /// Which parts of a line's text name a file: `f` gives their byte ranges. They are underlined
+    /// once [`Self::on_reference`] says what a press on one sends (feature 1150, FR-012).
+    pub fn references(mut self, f: impl Fn(&str) -> Vec<Reference> + 'a) -> Self {
+        self.find = Some(Rc::new(f));
+        self
+    }
+
+    /// What a press on a reference sends: the file it names and the line the text gives.
+    pub fn on_reference(mut self, f: impl Fn(RelPath, Option<u32>) -> M + 'a) -> Self {
+        self.on_reference = Some(Rc::new(f));
+        self
     }
 
     /// Show `shaped` (the diff's hunks with the revealed lines, and a row for each hidden or
@@ -414,7 +461,7 @@ fn half<'a, M: 'a>(
     let cells = row![
         number(Some(cell.number), r, gutters, side, reports),
         marker(cell.kind, r),
-        container(line_text(cell.text, spans.line(cell.number), r)).width(Length::Fill),
+        container(code_text(cell.text, spans.line(cell.number), r, gutters)).width(Length::Fill),
     ]
     .height(Length::Fixed(ROW_HEIGHT))
     .align_y(Alignment::Center);
@@ -495,6 +542,101 @@ pub(super) fn line_text<'a, M: 'a>(
         .size(CODE_SIZE)
         .wrapping(Wrapping::None)
         .into()
+}
+
+/// A diff line's text: [`line_text`], with the parts that name files underlined and pressable when
+/// the view has links (feature 1150, FR-012).
+fn code_text<'a, M: 'a>(
+    content: &'a str,
+    spans: &[(std::ops::Range<usize>, Rgb)],
+    r: Roles,
+    gutters: &Gutters<'a, M>,
+) -> Element<'a, M> {
+    let Some(links) = &gutters.links else {
+        return line_text(content, spans, r);
+    };
+    let found = (links.find)(content);
+    if found.is_empty() {
+        return line_text(content, spans, r);
+    }
+    let ranges: Vec<_> = found.iter().map(|f| f.range.clone()).collect();
+    let pieces: Vec<text::Span<'a, usize, Font>> = pieces(content, spans, &ranges)
+        .into_iter()
+        .map(|piece| {
+            let text = span(&content[piece.range]);
+            match piece.link {
+                Some(i) => text
+                    .color(super::style::color(piece.colour.unwrap_or(r.primary)))
+                    .underline(true)
+                    .link(i),
+                None => text.color(super::style::color(piece.colour.unwrap_or(r.on_surface))),
+            }
+        })
+        .collect();
+    let on = links.on.clone();
+    let targets: Vec<(RelPath, Option<u32>)> =
+        found.into_iter().map(|f| (f.path, f.line)).collect();
+    rich_text(pieces)
+        .on_link_click(move |i| {
+            let (path, line) = targets[i].clone();
+            on(path, line)
+        })
+        .font(Font::MONOSPACE)
+        .size(CODE_SIZE)
+        .wrapping(Wrapping::None)
+        .into()
+}
+
+/// A run of a line's text: its bytes, its syntax colour, and the reference it is part of.
+#[derive(Debug, Clone, PartialEq)]
+struct Piece {
+    range: std::ops::Range<usize>,
+    colour: Option<Rgb>,
+    link: Option<usize>,
+}
+
+/// `text` cut where its syntax `spans` or any of the reference `links` start or end; `link` is the
+/// index of the reference a piece lies in. The references are in order and do not overlap.
+fn pieces(
+    text: &str,
+    spans: &[(std::ops::Range<usize>, Rgb)],
+    links: &[std::ops::Range<usize>],
+) -> Vec<Piece> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    for (piece, colour) in segments(text, spans) {
+        let end = start + piece.len();
+        let mut at = start;
+        for (i, link) in links.iter().enumerate() {
+            if link.end <= at || link.start >= end {
+                continue;
+            }
+            if at < link.start {
+                out.push(Piece {
+                    range: at..link.start,
+                    colour,
+                    link: None,
+                });
+                at = link.start;
+            }
+            let stop = link.end.min(end);
+            out.push(Piece {
+                range: at..stop,
+                colour,
+                link: Some(i),
+            });
+            at = stop;
+        }
+        if at < end || start == end {
+            out.push(Piece {
+                range: at..end,
+                colour,
+                link: None,
+            });
+        }
+        start = end;
+    }
+    out
 }
 
 /// The `+`/`−` marker cell of a `kind` line. Shared with [`InlineDiff`](super::InlineDiff).
@@ -609,7 +751,7 @@ fn line_row<'a, M: 'a>(
         number(line.old, r, gutters, Side::Old, reports),
         number(line.new, r, gutters, Side::New, reports),
         marker(line.kind, r),
-        container(line_text(&line.text, line_spans(line, spans), r)).width(Length::Fill),
+        container(code_text(&line.text, line_spans(line, spans), r, gutters)).width(Length::Fill),
     ]
     .height(Length::Fixed(ROW_HEIGHT))
     .align_y(Alignment::Center);
@@ -806,7 +948,11 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
             elements: RefCell::new(view.slots),
             on_measured: view.on_slot_measured,
         };
-        let gutters = view.gutters;
+        let mut gutters = view.gutters;
+        gutters.links = view
+            .find
+            .zip(view.on_reference)
+            .map(|(find, on)| Links { find, on });
         let list = |len, build: Box<dyn Fn(usize) -> Element<'a, M> + 'a>| {
             let mut list = VirtualRows::new(len, ROW_HEIGHT, build, r)
                 .offset(view.offset)
@@ -1426,5 +1572,84 @@ mod tests {
             .on_gap(|_| ())
             .viewport(600);
         assert!(built(view).is_some());
+    }
+
+    fn named(path: &str, range: std::ops::Range<usize>, line: Option<u32>) -> Reference {
+        Reference {
+            range,
+            path: RelPath::from_native(path).unwrap(),
+            line,
+        }
+    }
+
+    /// The size of the one line row of `layout`, whose text names a file when `linked`.
+    fn line_size(layout: DiffLayout, linked: bool) -> Size {
+        let diff = FileDiff::Text(vec![Hunk {
+            old_start: 1,
+            old_len: 1,
+            new_start: 1,
+            new_len: 1,
+            section: String::new(),
+            lines: vec![line(LineKind::Context, Some(1), Some(1), "use a/b.rs:3;")],
+            old_no_newline: false,
+            new_no_newline: false,
+        }]);
+        let mut view = DiffView::<()>::new(&diff, layout, LIGHT);
+        if linked {
+            view = view
+                .references(|_| vec![named("a/b.rs", 4..10, Some(3))])
+                .on_reference(|_, _| ());
+        }
+        let mut element: Element<'_, ()> = view.into();
+        let renderer = super::super::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        element
+            .as_widget_mut()
+            .layout(
+                &mut tree,
+                &renderer,
+                &layout::Limits::new(Size::ZERO, Size::new(800.0, 600.0)),
+            )
+            .size()
+    }
+
+    #[test]
+    fn a_line_with_a_reference_keeps_its_row_and_the_views_size_in_both_layouts() {
+        for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
+            assert_eq!(
+                line_size(layout, true),
+                line_size(layout, false),
+                "{layout:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn pieces_cut_the_text_at_syntax_spans_and_references_alike() {
+        let text = "use a/b.rs;";
+        let syntax = [(0..3, LIGHT.primary)];
+        let got = pieces(text, &syntax, &[4..10]);
+        let shown: Vec<(&str, bool, bool)> = got
+            .iter()
+            .map(|p| (&text[p.range.clone()], p.colour.is_some(), p.link.is_some()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("use", true, false),
+                (" ", false, false),
+                ("a/b.rs", false, true),
+                (";", false, false)
+            ]
+        );
+        // A reference across a colour boundary is cut there but both halves link.
+        let across = pieces("abcdef", &[(0..3, LIGHT.primary)], &[1..5]);
+        let links: Vec<_> = across.iter().map(|p| (p.range.clone(), p.link)).collect();
+        assert_eq!(
+            links,
+            [(0..1, None), (1..3, Some(0)), (3..5, Some(0)), (5..6, None)]
+        );
+        // Together the pieces cover the text exactly once.
+        assert_eq!(across.iter().map(|p| p.range.len()).sum::<usize>(), 6);
     }
 }

@@ -108,15 +108,15 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ### References in diff lines
 
-- [ ] T054 [P] [US5] Write failing unit tests for `reference::find` in `crates/micold-core/src/review/reference.rs`: resolves only listed files, relative then root, extension and `index`/`mod.rs` probing, `:LINE` `#LLINE` `(LINE)` suffixes, nothing returned for unknown names
-- [ ] T055 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `ReferenceActivated` opens the file at the line and pushes the diff frame, unresolved target shows a short notice only
-- [ ] T056 [P] [US5] Write failing geometry-gate tests for reference hit targets in `crates/micold-client/src/ui/material/diff_view.rs`
-- [ ] T057 [US5] Implement `Reference` and `find` in `crates/micold-core/src/review/reference.rs` (register in `review/mod.rs`) (T054 green)
-- [ ] T058 [US5] Add `Msg::ReferenceActivated` and per-line reference derivation in `crates/micold-client/src/features/changes.rs` (T055 green)
-- [ ] T059 [US5] Add `DiffView::references(..)` / `.on_reference(..)` (underline, click target) in `crates/micold-client/src/ui/material/diff_view.rs` (T056 green)
-- [ ] T060 [US5] Wire references in `crates/micold-client/src/ui/changes.rs`
-- [ ] T061 [P] [US5] Add a reference link to `crates/micold-client/src/showcase/sections/review.rs`
-- [ ] T062 [US5] Document following references in `docs/user-guide/reviewing-changes.md`
+- [x] T054 [P] [US5] Write failing unit tests for `reference::find` in `crates/micold-core/src/review/reference.rs`: resolves only listed files, relative then root, extension and `index`/`mod.rs` probing, `:LINE` `#LLINE` `(LINE)` suffixes, nothing returned for unknown names
+- [x] T055 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs`: `ReferenceActivated` opens the file at the line and pushes the diff frame, unresolved target shows a short notice only
+- [x] T056 [P] [US5] Write failing geometry-gate tests for reference hit targets in `crates/micold-client/src/ui/material/diff_view.rs`
+- [x] T057 [US5] Implement `Reference` and `find` in `crates/micold-core/src/review/reference.rs` (register in `review/mod.rs`) (T054 green)
+- [x] T058 [US5] Add `Msg::ReferenceActivated` and per-line reference derivation in `crates/micold-client/src/features/changes.rs` (T055 green)
+- [x] T059 [US5] Add `DiffView::references(..)` / `.on_reference(..)` (underline, click target) in `crates/micold-client/src/ui/material/diff_view.rs` (T056 green)
+- [x] T060 [US5] Wire references in `crates/micold-client/src/ui/changes.rs`
+- [x] T061 [P] [US5] Add a reference link to `crates/micold-client/src/showcase/sections/review.rs`
+- [x] T062 [US5] Document following references in `docs/user-guide/reviewing-changes.md`
 
 ## Phase 8: Polish (no code; done by the close unit, not a milestone)
 
