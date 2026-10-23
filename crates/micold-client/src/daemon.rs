@@ -103,6 +103,17 @@ pub fn install_time_zone(zone: Option<String>) {
     let _ = HOST_TIME_ZONE.set(zone);
 }
 
+/// The AI CLI packages a container daemon's provisioning installs, when a process replaced the
+/// pinned table: only the real-runtime end-to-end test does, with a stand-in package (#1281). The
+/// application installs none, so it installs [`AiCliTable::pinned`].
+static AI_CLI_TABLE: std::sync::OnceLock<AiCliTable> = std::sync::OnceLock::new();
+
+/// Install the AI CLI table container daemons are provisioned with in place of the pinned one. For
+/// tests only: no setting or user text reaches it. The first call wins.
+pub fn install_ai_cli_table(table: AiCliTable) {
+    let _ = AI_CLI_TABLE.set(table);
+}
+
 /// How many messages may queue in each direction before backpressure. Input is small and rare
 /// relative to grid frames; a few hundred slots is ample without unbounded growth.
 const CHANNEL_CAPACITY: usize = 256;
@@ -544,7 +555,10 @@ enum PumpEnd {
     Ended,
 }
 
-fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
+/// The connection of one daemon as the subscription runs it: bring-up, dial, handshake, then the
+/// pump, every message tagged with the daemon's id. `pub` for the real-runtime end-to-end test,
+/// which drives it the way [`connections`] does (#1281).
+pub fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
     let id = spec.key.id;
     // iced 0.14 takes an `AsyncFnOnce` here (0.13 took an `FnOnce` returning a future), so the
     // sender's type no longer falls out of inference and has to be named.
@@ -1219,7 +1233,10 @@ fn container_target(
     reach: &ContainerReach<'_>,
     keys: &DaemonKeys,
 ) -> ProvisionTarget {
-    let table = AiCliTable::pinned();
+    let table = AI_CLI_TABLE
+        .get()
+        .cloned()
+        .unwrap_or_else(AiCliTable::pinned);
     ProvisionTarget {
         reach: Reach::Pinned(PinnedReach {
             host: "127.0.0.1".to_string(),

@@ -250,6 +250,10 @@ dr_case "basic image entrypoint"         true  packaging/basic/entrypoint.sh
 dr_case "basic-image-hash.sh"            true  scripts/basic-image-hash.sh
 dr_case "icon read by build.rs"          true  assets/icon/icon.ico
 dr_case "ci.yml itself"                  true  .github/workflows/ci.yml
+dr_case "client container bring-up"      true  crates/micold-client/src/shell/sandbox.rs
+dr_case "client connection actor"        true  crates/micold-client/src/daemon.rs
+dr_case "client container e2e test"      true  crates/micold-client/src/shell/sandbox_real.rs
+dr_case "client shell source"            false crates/micold-client/src/shell/daemons.rs
 dr_case "client UI source"               false crates/micold-client/src/ui/a.rs
 dr_case "client feature source"          false crates/micold-client/src/features/a.rs
 dr_case "client Cargo.toml"              false crates/micold-client/Cargo.toml
