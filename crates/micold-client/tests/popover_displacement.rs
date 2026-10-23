@@ -242,7 +242,8 @@ fn every_popover_is_in_the_table() {
     // Twenty-two with `quick_switcher`, the palette that jumps to a location (feature 968).
     // Twenty-three with `daemon_form`, the add and edit dialog (feature 1092).
     // Twenty-four with `daemon_details`, the read-only details dialog (feature 1092).
-    const DIALOGS: usize = 24;
+    // Twenty-six with `confirm_bypass_start` and `confirm_bypass_mode` (#942).
+    const DIALOGS: usize = 26;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),
