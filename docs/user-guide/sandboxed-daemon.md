@@ -53,7 +53,7 @@ another daemon because its own is down.
 |---|---|
 | A worktree with no daemon | `no daemon` |
 | A worktree whose daemon is not connected | `daemon <name> unavailable` |
-| A daemon the app cannot talk to (version) | `daemon <name> version mismatch: client <c>, daemon <d>`, with how to fix it |
+| A daemon the app cannot talk to (version) | `daemon <name> version mismatch: client <c>, daemon <d>`, with how to fix it: for an older container daemon, **Replace** when no session runs on it, otherwise **Stop** then **Start** (see [A container daemon of another version](settings.md#a-container-daemon-of-another-version)) |
 | A session whose daemon dropped | `lost to daemon <name>` (it is not marked finished) |
 | No Docker or Podman installed | `container runtime not found` |
 | Windows, mapped paths | `paths are mapped` |

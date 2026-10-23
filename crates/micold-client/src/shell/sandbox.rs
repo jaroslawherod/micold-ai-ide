@@ -658,8 +658,21 @@ fn runtime_task<T: Send + 'static>(
     work: impl FnOnce(CliRuntime<SystemRunner>, &str) -> T + Send + 'static,
     then: impl FnOnce(Option<T>) -> micold_client::app::Message + Send + 'static,
 ) -> iced::Task<micold_client::app::Message> {
-    let runtime = plan.profile.runtime;
-    let container_name = plan.container_name.clone();
+    container_task(
+        plan.profile.runtime,
+        plan.container_name.clone(),
+        work,
+        then,
+    )
+}
+
+/// [`blocking_task`] over container `container_name` of `runtime`.
+fn container_task<T: Send + 'static>(
+    runtime: micold_core::sandbox::runtime::RuntimeKind,
+    container_name: String,
+    work: impl FnOnce(CliRuntime<SystemRunner>, &str) -> T + Send + 'static,
+    then: impl FnOnce(Option<T>) -> micold_client::app::Message + Send + 'static,
+) -> iced::Task<micold_client::app::Message> {
     blocking_task(
         move || work(CliRuntime::new(runtime, SystemRunner), &container_name),
         then,
@@ -1104,6 +1117,30 @@ pub fn stop(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
             }
         },
         |_| micold_client::app::Message::Sandbox(SandboxMsg::Lost),
+    )
+}
+
+/// Stop a container daemon's container, and keep it: its next start finds it stopped and starts it,
+/// and the bridge then runs this app's daemon in it (spec 806 FR-007, BUG-1165). `then` hears
+/// whether a container was found and stopped.
+pub fn stop_daemon_container(
+    runtime: micold_core::sandbox::runtime::RuntimeKind,
+    container_name: String,
+    then: impl FnOnce(bool) -> micold_client::app::Message + Send + 'static,
+) -> iced::Task<micold_client::app::Message> {
+    container_task(
+        runtime,
+        container_name,
+        |rt, name| {
+            use micold_core::sandbox::runtime::ContainerRuntime;
+            match rt.find(name) {
+                Ok(Some(facts)) => rt
+                    .stop(&micold_core::sandbox::runtime::ContainerId(facts.id))
+                    .is_ok(),
+                _ => false,
+            }
+        },
+        move |stopped| then(stopped.unwrap_or(false)),
     )
 }
 

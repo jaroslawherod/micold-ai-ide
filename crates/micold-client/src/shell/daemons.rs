@@ -112,12 +112,29 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 }
                 rest.push(outcome);
             }
-            Outcome::RemoteReplaceRequested { daemon, target } => {
-                let (daemon, target) = (*daemon, target.clone());
-                tasks.push(Task::perform(
-                    micold_client::daemon::replace_remote(target),
-                    move |result| Message::Daemons(Msg::Replaced(daemon, result)),
-                ));
+            Outcome::RemoteReplaceRequested { daemon } => {
+                let daemon = *daemon;
+                tasks.push(match remote_reach(app, daemon) {
+                    Some(reach) => Task::perform(
+                        micold_client::daemon::replace_remote(reach),
+                        move |result| Message::Daemons(Msg::Replaced(daemon, result)),
+                    ),
+                    None => Task::done(Message::Daemons(Msg::Replaced(
+                        daemon,
+                        Err(micold_core::ssh::ReplaceOffer::Unknown),
+                    ))),
+                });
+            }
+            Outcome::ContainerStopRequested { daemon } => {
+                // The container the sandbox boot owns is stopped the way the banner's restart
+                // stops it, so the boot's own bring-up replaces it.
+                let boot = (*daemon == app.sandbox_daemon())
+                    .then(|| app.sandbox_boot.clone())
+                    .flatten();
+                tasks.extend(match boot {
+                    Some(plan) => Some(crate::shell::sandbox::stop(&plan)),
+                    None => stop_container_of(app, *daemon, |_| Message::NoOp),
+                });
             }
             Outcome::RemoteRepositoryRequested { path } => {
                 // Judged by the daemon it names, then opened as a project bound to it.
@@ -211,10 +228,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
 /// mismatch: the answer decides whether the app offers to replace it (feature 489, FR-011). Until
 /// it arrives the offer is `Unknown`, which promises nothing.
 pub fn ask_offer(app: &mut App, id: DaemonId) -> Task<Message> {
-    use micold_core::daemons::DaemonRuntime;
-    let Some(DaemonRuntime::Ssh(ssh)) =
-        app.core.settings.daemons.get(id).map(|e| e.runtime.clone())
-    else {
+    let Some(reach) = remote_reach(app, id) else {
         return Task::none();
     };
     let links = &mut app.core.settings.links;
@@ -222,10 +236,52 @@ pub fn ask_offer(app: &mut App, id: DaemonId) -> Task<Message> {
         return Task::none();
     }
     links.set_offer(id, micold_core::ssh::ReplaceOffer::Unknown);
-    Task::perform(
-        micold_client::daemon::remote_offer(ssh.target),
-        move |offer| Message::Daemons(Msg::OfferReported(id, offer)),
-    )
+    Task::perform(micold_client::daemon::remote_offer(reach), move |offer| {
+        Message::Daemons(Msg::OfferReported(id, offer))
+    })
+}
+
+/// How the app reaches mismatched daemon `id` to ask what it runs and to replace it: its SSH host,
+/// or its container's pinned reach (spec 806 FR-007, BUG-1165). `None` for any other daemon,
+/// including a container still on the released image, which has no helper to ask (FR-017).
+pub(crate) fn remote_reach(app: &App, id: DaemonId) -> Option<micold_client::daemon::RemoteReach> {
+    use micold_client::daemon::RemoteReach;
+    use micold_core::daemons::DaemonRuntime;
+    let entry = app.core.settings.daemons.get(id)?;
+    match &entry.runtime {
+        DaemonRuntime::Ssh(ssh) => Some(RemoteReach::Ssh(ssh.target.clone())),
+        DaemonRuntime::Container(c) if app.core.settings.legacy_container != Some(id) => {
+            Some(RemoteReach::Container {
+                runtime: c.profile.runtime,
+                container_name: c.container_name.clone(),
+                port: c.port,
+                keys_dir: entry.keys_dir(
+                    &app.placement.state_dir,
+                    app.core.settings.legacy_default_daemon,
+                )?,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Stop the container of container daemon `id` and keep it, then report through `then` whether one
+/// was stopped (spec 806 FR-007, BUG-1165). `None` when `id` is not a container daemon.
+pub(crate) fn stop_container_of(
+    app: &App,
+    id: DaemonId,
+    then: impl FnOnce(bool) -> Message + Send + 'static,
+) -> Option<Task<Message>> {
+    let micold_core::daemons::DaemonRuntime::Container(c) =
+        &app.core.settings.daemons.get(id)?.runtime
+    else {
+        return None;
+    };
+    Some(crate::shell::sandbox::stop_daemon_container(
+        c.profile.runtime,
+        c.container_name.clone(),
+        then,
+    ))
 }
 
 /// Read the merged kubeconfig and list its contexts off the UI thread (feature 686, FR-002). Only

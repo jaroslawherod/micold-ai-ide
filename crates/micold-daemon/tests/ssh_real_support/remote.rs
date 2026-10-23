@@ -74,14 +74,19 @@ impl Dialer {
         }
     }
 
+    /// How the helper reaches the host: the user's own SSH configuration.
+    fn reach(&self) -> micold_core::ssh::argv::Reach {
+        micold_core::ssh::argv::Reach::UserConfig(self.target.clone())
+    }
+
     /// What this build's helper on the host says of the daemon's sessions (`remote status`).
     pub async fn offer(&self) -> micold_core::ssh::ReplaceOffer {
-        micold_core::ssh::status::fetch_offer(&self.runner, &self.target, &self.opts).await
+        micold_core::ssh::status::fetch_offer(&self.runner, &self.reach(), &self.opts).await
     }
 
     /// End the host's daemon through this build's helper, only if it has no running session.
     pub async fn replace(&self) -> Result<(), micold_core::ssh::ReplaceOffer> {
-        micold_core::ssh::status::stop_if_idle(&self.runner, &self.target, &self.opts).await
+        micold_core::ssh::status::stop_if_idle(&self.runner, &self.reach(), &self.opts).await
     }
 
     /// Provision (a no-op once copied) and open the bridge, as the client's own dial does.

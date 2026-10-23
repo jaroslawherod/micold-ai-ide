@@ -83,6 +83,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::DaemonBound { .. }
         | Outcome::IssueSourceChosen { .. }
         | Outcome::RemoteReplaceRequested { .. }
+        | Outcome::ContainerStopRequested { .. }
         | Outcome::RemoteRepositoryRequested { .. }
         | Outcome::SurfaceOpened(_) => Task::none(),
     }

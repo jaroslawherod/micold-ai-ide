@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use super::argv::{self, Reach};
 use super::mismatch::ReplaceOffer;
 use super::provision::{ProvisionOptions, SshRunner};
-use super::target::SshTarget;
 
 /// The shape version of [`RemoteStatus`]; a reader that meets another one believes nothing of it.
 pub const STATUS_VERSION: u32 = 1;
@@ -73,18 +72,14 @@ pub fn offer_of(stdout: &str) -> ReplaceOffer {
     RemoteStatus::parse(stdout.trim()).map_or(ReplaceOffer::Unknown, |s| s.offer())
 }
 
-/// Ask the host what its daemon has running (`remote status` of this build's helper).
+/// Ask the host (a user's SSH host, or an app-owned container over its pinned reach) what its
+/// daemon has running (`remote status` of this build's helper).
 pub async fn fetch_offer(
     runner: &dyn SshRunner,
-    target: &SshTarget,
+    reach: &Reach,
     opts: &ProvisionOptions,
 ) -> ReplaceOffer {
-    let cmd = argv::status(
-        &Reach::UserConfig(target.clone()),
-        opts.platform,
-        opts.timeout_secs,
-        &opts.build_id,
-    );
+    let cmd = argv::status(reach, opts.platform, opts.timeout_secs, &opts.build_id);
     let deadline = Some(Duration::from_secs(u64::from(opts.timeout_secs)));
     match runner.run(cmd, Vec::new(), deadline, None).await {
         Ok(out) if out.ok() => offer_of(&String::from_utf8_lossy(&out.stdout)),
@@ -96,24 +91,19 @@ pub async fn fetch_offer(
 /// reconnects afterwards, which starts this build's daemon in its place. `Err` carries why not.
 pub async fn stop_if_idle(
     runner: &dyn SshRunner,
-    target: &SshTarget,
+    reach: &Reach,
     opts: &ProvisionOptions,
 ) -> Result<(), ReplaceOffer> {
-    let offer = fetch_offer(runner, target, opts).await;
+    let offer = fetch_offer(runner, reach, opts).await;
     if offer != ReplaceOffer::Available {
         return Err(offer);
     }
-    let cmd = argv::stop(
-        &Reach::UserConfig(target.clone()),
-        opts.platform,
-        opts.timeout_secs,
-        &opts.build_id,
-    );
+    let cmd = argv::stop(reach, opts.platform, opts.timeout_secs, &opts.build_id);
     // The helper waits for the endpoint to stop accepting before it exits.
     let deadline = Some(Duration::from_secs(u64::from(opts.timeout_secs) + 10));
     match runner.run(cmd, Vec::new(), deadline, None).await {
         Ok(out) if out.ok() => Ok(()),
-        Ok(_) | Err(_) => match fetch_offer(runner, target, opts).await {
+        Ok(_) | Err(_) => match fetch_offer(runner, reach, opts).await {
             ReplaceOffer::Available => Err(ReplaceOffer::Unknown),
             other => Err(other),
         },
@@ -167,6 +157,7 @@ mod tests {
     struct Fake {
         runs: Mutex<VecDeque<SshOutput>>,
         seen: Mutex<Vec<String>>,
+        args: Mutex<Vec<Vec<String>>>,
     }
 
     impl Fake {
@@ -174,6 +165,7 @@ mod tests {
             Self {
                 runs: Mutex::new(runs.into()),
                 seen: Mutex::default(),
+                args: Mutex::default(),
             }
         }
     }
@@ -190,6 +182,7 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(cmd.args.last().cloned().unwrap_or_default());
+            self.args.lock().unwrap().push(cmd.args.clone());
             let next = self.runs.lock().unwrap().pop_front();
             Box::pin(async move { Ok(next.expect("unscripted run")) })
         }
@@ -223,8 +216,41 @@ mod tests {
         }
     }
 
-    fn target() -> SshTarget {
-        SshTarget::new("build-host", None, None, None).unwrap()
+    fn target() -> Reach {
+        Reach::UserConfig(crate::ssh::SshTarget::new("build-host", None, None, None).unwrap())
+    }
+
+    /// A container's reach: loopback, the app's own key and `known_hosts` (feature 806, BUG-1165).
+    fn pinned() -> Reach {
+        Reach::Pinned(crate::ssh::argv::PinnedReach {
+            host: "127.0.0.1".into(),
+            port: 7001,
+            user: "node".into(),
+            key: "/state/daemons/box/ssh/client_ed25519".into(),
+            known_hosts: "/state/daemons/box/ssh/known_hosts".into(),
+        })
+    }
+
+    #[tokio::test]
+    async fn a_container_is_asked_and_stopped_over_its_pinned_reach() {
+        let fake = Fake::new(vec![ok(json(0)), exit(0)]);
+        assert_eq!(stop_if_idle(&fake, &pinned(), &opts()).await, Ok(()));
+        let seen = fake.seen.lock().unwrap().clone();
+        assert!(seen[0].ends_with("remote status"), "{seen:?}");
+        assert!(seen[1].ends_with("remote stop"), "{seen:?}");
+        for args in fake.args.lock().unwrap().iter() {
+            let line = args.join(" ");
+            assert!(line.contains("-F none"), "{line}");
+            assert!(
+                line.contains("/state/daemons/box/ssh/client_ed25519"),
+                "{line}"
+            );
+            assert!(
+                line.contains("UserKnownHostsFile=/state/daemons/box/ssh/known_hosts"),
+                "{line}"
+            );
+            assert!(line.contains("-l node -p 7001"), "{line}");
+        }
     }
 
     #[tokio::test]

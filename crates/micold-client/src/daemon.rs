@@ -1132,24 +1132,86 @@ async fn ssh_options(host: &dyn SshHost, target: &SshTarget) -> ProvisionOptions
     }
 }
 
-/// What the mismatched daemon on `target` says of its sessions (feature 489, FR-011). Anything but
+/// How the app reaches a mismatched daemon to ask what it runs and to replace it (feature 489,
+/// FR-011; spec 806 FR-007): an SSH host through the user's own configuration, or a container over
+/// the pinned loopback reach its provisioning uses.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteReach {
+    /// A remote host the user owns.
+    Ssh(SshTarget),
+    /// A container daemon on the basic image.
+    Container {
+        /// The runtime its login name is asked of.
+        runtime: micold_core::sandbox::runtime::RuntimeKind,
+        /// The container's name.
+        container_name: String,
+        /// The port its SSH server is published on.
+        port: u16,
+        /// The daemon's key directory on the host.
+        keys_dir: PathBuf,
+    },
+}
+
+/// The reach and options for `reach`, `None` when it cannot be reached now: a container that does
+/// not answer for its login name, or whose keys were never made.
+async fn resolve_reach(
+    host: &dyn SshHost,
+    reach: RemoteReach,
+) -> Option<(Reach, ProvisionOptions)> {
+    match reach {
+        RemoteReach::Ssh(target) => {
+            let opts = ssh_options(host, &target).await;
+            Some((Reach::UserConfig(target), opts))
+        }
+        RemoteReach::Container {
+            runtime,
+            container_name,
+            port,
+            keys_dir,
+        } => {
+            let keys = DaemonKeys { dir: keys_dir };
+            if !keys.client_key().exists() || !keys.known_hosts().exists() {
+                return None;
+            }
+            let bound = std::time::Duration::from_secs(u64::from(DEFAULT_CONNECT_TIMEOUT_SECS));
+            let login = micold_core::provision::login::wait_for_login(
+                host,
+                runtime.program(),
+                &container_name,
+                bound,
+            )
+            .await
+            .ok()?;
+            Some((
+                Reach::Pinned(container_pinned_reach(login, port, &keys)),
+                container_options(),
+            ))
+        }
+    }
+}
+
+/// What the mismatched daemon at `reach` says of its sessions (feature 489, FR-011). Anything but
 /// a clear answer is `Unknown`.
-pub async fn remote_offer(target: SshTarget) -> micold_core::ssh::ReplaceOffer {
+pub async fn remote_offer(reach: RemoteReach) -> micold_core::ssh::ReplaceOffer {
     let Some(host) = ssh_host() else {
         return micold_core::ssh::ReplaceOffer::Unknown;
     };
-    let opts = ssh_options(&*host, &target).await;
-    micold_core::ssh::status::fetch_offer(&*host, &target, &opts).await
+    match resolve_reach(&*host, reach).await {
+        Some((reach, opts)) => micold_core::ssh::status::fetch_offer(&*host, &reach, &opts).await,
+        None => micold_core::ssh::ReplaceOffer::Unknown,
+    }
 }
 
-/// End the mismatched daemon on `target` when it has no running session; the caller reconnects,
+/// End the mismatched daemon at `reach` when it has no running session; the caller reconnects,
 /// which starts this build's daemon in its place. `Err` says why it was left running.
-pub async fn replace_remote(target: SshTarget) -> Result<(), micold_core::ssh::ReplaceOffer> {
+pub async fn replace_remote(reach: RemoteReach) -> Result<(), micold_core::ssh::ReplaceOffer> {
     let Some(host) = ssh_host() else {
         return Err(micold_core::ssh::ReplaceOffer::Unknown);
     };
-    let opts = ssh_options(&*host, &target).await;
-    micold_core::ssh::status::stop_if_idle(&*host, &target, &opts).await
+    let (reach, opts) = resolve_reach(&*host, reach)
+        .await
+        .ok_or(micold_core::ssh::ReplaceOffer::Unknown)?;
+    micold_core::ssh::status::stop_if_idle(&*host, &reach, &opts).await
 }
 
 async fn ssh_attempt(
@@ -1238,13 +1300,7 @@ fn container_target(
         .cloned()
         .unwrap_or_else(AiCliTable::pinned);
     ProvisionTarget {
-        reach: Reach::Pinned(PinnedReach {
-            host: "127.0.0.1".to_string(),
-            port: reach.port,
-            user: login,
-            key: keys.client_key(),
-            known_hosts: keys.known_hosts(),
-        }),
+        reach: Reach::Pinned(container_pinned_reach(login, reach.port, keys)),
         owned: Ownership::AppOwned {
             ai_clis: reach.ai_clis.clone(),
             // A container that may connect out installs directly; one that may not goes through a
@@ -1260,6 +1316,29 @@ fn container_target(
         },
         env: container_env(reach),
         bounds: StepBounds::container(),
+    }
+}
+
+/// A container's SSH server on loopback `port`, reached as `login` with the daemon's own keys.
+fn container_pinned_reach(login: String, port: u16, keys: &DaemonKeys) -> PinnedReach {
+    PinnedReach {
+        host: "127.0.0.1".to_string(),
+        port,
+        user: login,
+        key: keys.client_key(),
+        known_hosts: keys.known_hosts(),
+    }
+}
+
+/// The options of every step run in a container: its bounds are the app's, not a user's
+/// `ConnectTimeout`.
+fn container_options() -> ProvisionOptions {
+    ProvisionOptions {
+        platform: ClientPlatform::current(),
+        client_arch: std::env::consts::ARCH.to_string(),
+        timeout_secs: DEFAULT_CONNECT_TIMEOUT_SECS,
+        build_id: current_build_id(),
+        client_build: CLIENT_BUILD.to_string(),
     }
 }
 
@@ -1351,14 +1430,8 @@ async fn container_attempt(
         })?;
     keys.write_known_hosts(reach.port)
         .map_err(|e| format!("could not pin the container's host key: {e}"))?;
-    let timeout_secs = DEFAULT_CONNECT_TIMEOUT_SECS;
-    let opts = ProvisionOptions {
-        platform,
-        client_arch: std::env::consts::ARCH.to_string(),
-        timeout_secs,
-        build_id: current_build_id(),
-        client_build: CLIENT_BUILD.to_string(),
-    };
+    let opts = container_options();
+    let timeout_secs = opts.timeout_secs;
     // Dropping this future is the cancel (the actor is aborted); the token is for the steps' own
     // guards and is never shared.
     let cancel = CancelToken::new();
