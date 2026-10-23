@@ -850,6 +850,7 @@ mod tests {
             storage: LimitSupport::unsupported("overlay without quota"),
             identity_mapping: IdentityMapping::ExplicitUidGid,
             no_outbound: NoOutboundSupport::podman_rootless(),
+            selinux_enforcing: false,
         };
         for profile in both_choices() {
             let mut view = view_of(&profile, None);

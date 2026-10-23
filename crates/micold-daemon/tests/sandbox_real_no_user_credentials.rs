@@ -17,7 +17,7 @@
 mod sandbox_real_support;
 
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SecretMount};
-use sandbox_real_support::{cli_out, seed, start_sandbox, SandboxSpec};
+use sandbox_real_support::{bind_mount, cli_out, seed, start_sandbox, SandboxSpec};
 use std::path::PathBuf;
 
 const CONTAINER: &str = "micold-no-credentials-probe";
@@ -80,13 +80,7 @@ fn sandbox_real_no_user_credentials_reach_the_container() {
         .credentials
         .iter()
         .filter(|c| c.host.exists())
-        .flat_map(|c| {
-            let mode = if c.share.writable() { "rw" } else { "ro" };
-            [
-                "-v".to_string(),
-                format!("{}:{}:{mode}", c.host.display(), c.container.display()),
-            ]
-        })
+        .flat_map(|c| bind_mount(c.host.display(), c.container.display(), c.share.writable()))
         .collect();
 
     let home_str = home.display().to_string();

@@ -1768,18 +1768,18 @@ own log (FR-004h, FR-034a, US1 scenario 12, contracts C-3/K-13, data-model RC-5)
 Each test is written against a stub that compiles, so it fails on its assertion rather than on the
 build.
 
-- [ ] T242 [BUG-1296] [U59] *(test)* `crates/micold-core/src/sandbox/argv.rs` (`mod tests`, K-13).
+- [x] T242 [BUG-1296] [U59] *(test)* `crates/micold-core/src/sandbox/argv.rs` (`mod tests`, K-13).
       For both dialects, a spec with projects (one read-only), history, a credential share and the
       SSH key files: with `selinux_enforcing: true` every value after a `-v` in `argv::create` ends
       in `,z` (`:rw,z` / `:ro,z`); with `false` none contains `,z` and the argv equals the one
       `origin/main` builds for that spec. Neither contains `--security-opt` (K-11 still passes). Red
       on `origin/main`: no mount carries `,z` (`bugs/BUG-1296.md#reproduction`).
-- [ ] T243 [BUG-1296] [U60] *(test)* `crates/micold-core/src/sandbox/parse.rs` (`mod tests`). The
+- [x] T243 [BUG-1296] [U60] *(test)* `crates/micold-core/src/sandbox/parse.rs` (`mod tests`). The
       pure `parse::selinux_enforce(Option<&str>) -> bool`: `Some("1\n")` and `Some("1")` are true;
       `Some("0\n")`, `None` (absent or unreadable file), `Some("")` and `Some("garbage")` are false.
       And the reader `cli::selinux_enforcing_at(&Path)` over a temp file holding `1`, one holding
       `0`, and a path that does not exist.
-- [ ] T244 [BUG-1296] [U61] *(test)* `crates/micold-core/src/provision/login.rs` (`mod tests`, the
+- [x] T244 [BUG-1296] [U61] *(test)* `crates/micold-core/src/provision/login.rs` (`mod tests`, the
       `Script` runner). The first ask answers "can only create exec sessions on running containers:
       container state improper" (an exited container); the `<runtime> logs --tail 20 <container>`
       that follows answers `Unable to load host key: …` and `sshd: no hostkeys available -- exiting.`.
@@ -1789,7 +1789,7 @@ build.
 
 ### Implementation for BUG-1296
 
-- [ ] T245 [BUG-1296] [U59] [U60] `crates/micold-core/src/sandbox/runtime.rs`
+- [x] T245 [BUG-1296] [U59] [U60] `crates/micold-core/src/sandbox/runtime.rs`
       (`RuntimeCapabilities.selinux_enforcing`, doc citing RC-5), `parse.rs` (`selinux_enforce`),
       `cli.rs` (`selinux_enforcing_at`; `probe` sets the field from `/sys/fs/selinux/enforce` under
       `cfg(target_os = "linux")`, `false` elsewhere), `argv.rs` (`mount_args` takes the flag and
@@ -1797,12 +1797,12 @@ build.
       not a mount). Every `RuntimeCapabilities` constructor follows with `false`
       (`hostile_host::docker_caps`, the core and client tests that build one). No `--security-opt`
       anywhere; `ESCALATION_DENYLIST` unchanged.
-- [ ] T246 [BUG-1296] [U61] `crates/micold-core/src/provision/login.rs`: when the wait ends on a reason
+- [x] T246 [BUG-1296] [U61] `crates/micold-core/src/provision/login.rs`: when the wait ends on a reason
       `has_exited` matches (early or at the bound), run `<runtime> logs --tail 20 <container>` through the same runner and append its
       non-empty lines to the reason, so `container_attempt`'s "the container … is not ready" in
       `crates/micold-client/src/daemon.rs` carries the cause into the daemon row's Details. A
       failing `logs` is ignored.
-- [ ] T247 [BUG-1296] [U62] `crates/micold-core/tests/sandbox_real_handshake.rs`: `Sandbox::start`
+- [x] T247 [BUG-1296] [U62] `crates/micold-core/tests/sandbox_real_handshake.rs`: `Sandbox::start`
       builds a `SandboxSpec` (its project, state, sandbox home and key directory) and creates the
       container with `argv::create` against the probed capabilities of the runtime
       `MICOLD_TEST_RUNTIME` selects (the selector `sandbox_real_storage.rs` uses; share it), and its
@@ -1810,7 +1810,7 @@ build.
       `crates/micold-daemon/tests/sandbox_real_support/mod.rs` (`start_sandbox`) the mount options
       come from the same `argv` function with the probed flag, and the `--security-opt
       label=disable` there and in `sandbox_real_history.rs` (`start_container`) is removed.
-- [ ] T248 [BUG-1296] `docs/user-guide/sandboxed-daemon.md`: on an SELinux-enforcing host the
+- [x] T248 [BUG-1296] `docs/user-guide/sandboxed-daemon.md`: on an SELinux-enforcing host the
       application labels the paths it shares with the sandbox (`z`): the projects' files take the
       container label and stay readable and writable by the user; a project at the home directory
       itself or a system directory is refused by the runtime; confinement is never turned off.

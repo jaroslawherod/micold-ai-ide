@@ -9,6 +9,7 @@
 //! testing convenience bolted on afterwards; it is why the layering exists.
 
 use std::ffi::{OsStr, OsString};
+use std::path::Path;
 use std::time::Duration;
 
 use super::argv;
@@ -251,6 +252,20 @@ pub fn no_outbound_support(kind: RuntimeKind, info: &RuntimeInfo) -> NoOutboundS
     }
 }
 
+/// The kernel's SELinux mode file (data-model RC-5).
+pub const SELINUX_ENFORCE_FILE: &str = "/sys/fs/selinux/enforce";
+
+/// Whether the SELinux mode file at `path` says enforcing; an absent or unreadable file says not.
+pub fn selinux_enforcing_at(path: &Path) -> bool {
+    parse::selinux_enforce(std::fs::read_to_string(path).ok().as_deref())
+}
+
+/// Whether this host enforces SELinux. Read on Linux only: a runtime on macOS or Windows runs in a
+/// VM whose policy relabels nothing the client asks for, and their argv stays as it was.
+fn selinux_enforcing() -> bool {
+    cfg!(target_os = "linux") && selinux_enforcing_at(Path::new(SELINUX_ENFORCE_FILE))
+}
+
 /// Whether a netavark version line (`netavark 1.10.3`) is 1.7 or newer, where `no_default_route`
 /// takes effect. A line this cannot read is not 1.7.
 fn netavark_has_no_default_route(version_line: &str) -> bool {
@@ -292,6 +307,7 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
             storage: storage_support(&info.storage_driver),
             identity_mapping: self.dialect().identity,
             no_outbound: no_outbound_support(self.kind, &info),
+            selinux_enforcing: selinux_enforcing(),
         })
     }
 
@@ -664,5 +680,17 @@ mod tests {
             .stop(&ContainerId("c1".into()))
             .expect_err("the stop timed out");
         assert!(matches!(error, RuntimeError::Timeout { .. }), "{error:?}");
+    }
+
+    /// BUG-1296, U60: the reader behind the probe's `selinux_enforcing`.
+    #[test]
+    fn the_enforce_file_is_read_and_a_missing_one_is_not_enforcing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (on, off) = (dir.path().join("on"), dir.path().join("off"));
+        std::fs::write(&on, "1\n").unwrap();
+        std::fs::write(&off, "0\n").unwrap();
+        assert!(selinux_enforcing_at(&on));
+        assert!(!selinux_enforcing_at(&off));
+        assert!(!selinux_enforcing_at(&dir.path().join("absent")));
     }
 }

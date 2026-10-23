@@ -1054,6 +1054,7 @@ mod mounted_tests {
                 storage: LimitSupport::Supported,
                 identity_mapping: IdentityMapping::ExplicitUidGid,
                 no_outbound: NoOutboundSupport::docker(),
+                selinux_enforcing: false,
             }
         }
     }

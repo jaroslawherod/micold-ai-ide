@@ -166,6 +166,29 @@ often on Podman, since whether a size cap can be applied at all depends on the s
 underneath. The application asks, and shows the field disabled with the runtime's own reason rather
 than accepting a number it knows will be ignored — see **Resources** below.
 
+### On a host where SELinux enforces (Fedora, RHEL)
+
+With SELinux in **Enforcing** mode (`getenforce` prints `Enforcing`), a container may read only files
+labelled for containers, so a folder shared with it as it is stays unreadable inside. The
+application checks the mode each time it asks the runtime what it supports, and on such a host
+shares every path it gives the sandbox — your projects, the sandbox's own home and data folders, its
+SSH keys and any credential you share — with the runtime's **shared container label** (the `z`
+mount option, on Docker and Podman alike).
+
+- **Your projects' files take the container label.** You keep reading and writing them as before,
+  from your editor, your shell and any other container given the same project; only their SELinux
+  label changes (`ls -Z` shows `container_file_t`).
+- **A project registered at your home folder itself, or at a system folder** (`/`, `/usr`, `/etc`,
+  …), is refused when the sandbox is created: the runtime will not relabel those, and the failure
+  names the folder. Register the project's own folder instead.
+- **Confinement is never turned off.** The application does not pass `--security-opt label=disable`
+  or anything like it; the sandbox runs under the same SELinux policy as any other container.
+- In **Permissive** mode, or with SELinux off, nothing is relabelled. If you switch the mode while
+  the application is open, restart it so the next sandbox is created for the new mode.
+
+If a sandbox still stops at once, its row in **Settings > Daemons** shows the last lines of the
+container's own log after the runtime's message, which is where a denied file shows up.
+
 ### Adding a runtime
 
 A third runtime is a contained change, and deliberately so. In order:

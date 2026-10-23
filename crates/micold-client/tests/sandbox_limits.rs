@@ -35,6 +35,7 @@ fn caps(storage: LimitSupport) -> RuntimeCapabilities {
         storage,
         identity_mapping: IdentityMapping::ExplicitUidGid,
         no_outbound: NoOutboundSupport::docker(),
+        selinux_enforcing: false,
     }
 }
 

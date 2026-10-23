@@ -47,6 +47,7 @@ fn caps() -> RuntimeCapabilities {
         },
         identity_mapping: IdentityMapping::ExplicitUidGid,
         no_outbound: NoOutboundSupport::docker(),
+        selinux_enforcing: false,
     }
 }
 

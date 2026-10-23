@@ -156,10 +156,6 @@ impl World {
     }
 
     fn start_container(&self, extra: &[String]) -> Sandbox {
-        // Bind mounts are unreadable to the container under SELinux unless labelling is off for it.
-        let mut args = vec!["--security-opt".to_string(), "label=disable".to_string()];
-        args.extend(extra.iter().cloned());
-        let extra = &args[..];
         let sandbox = start_sandbox(&SandboxSpec {
             container: CONTAINER,
             network: NETWORK,

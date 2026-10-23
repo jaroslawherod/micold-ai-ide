@@ -123,6 +123,15 @@ pub fn info(stdout: &str) -> Result<RuntimeInfo, RuntimeError> {
     })
 }
 
+/// Whether the content of `/sys/fs/selinux/enforce` says SELinux enforces (data-model RC-5).
+///
+/// Only `1` does. `0` is permissive mode, which logs denials without enforcing them; `None` is a
+/// host without SELinux (or a file that could not be read); anything else is not a value the
+/// kernel writes, and relabelling the user's files on its account would be the wrong guess.
+pub fn selinux_enforce(content: Option<&str>) -> bool {
+    content.is_some_and(|c| c.trim() == "1")
+}
+
 /// What a container is doing now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainerFacts {
@@ -471,5 +480,16 @@ mod tests {
                 .unwrap()
                 .git_identity_free
         );
+    }
+
+    /// BUG-1296, U60: only a `1` is enforcing. Permissive (`0`), no SELinux (absent or unreadable)
+    /// and anything unexpected are not, so no mount is relabelled on their account.
+    #[test]
+    fn only_a_one_in_the_enforce_file_is_enforcing() {
+        assert!(selinux_enforce(Some("1\n")));
+        assert!(selinux_enforce(Some("1")));
+        for not in [Some("0\n"), None, Some(""), Some("garbage")] {
+            assert!(!selinux_enforce(not), "{not:?}");
+        }
     }
 }
