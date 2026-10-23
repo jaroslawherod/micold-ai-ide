@@ -188,6 +188,15 @@ Deferred at close (T046-T050): MED/LOW test hygiene, no behaviour at risk; the H
 
 **Bugfix**: 2026-10-16 — BUG-904 added Phase 9 (T051–T054). No task reopened. See `bugs/BUG-904.md`.
 
+### M6 — BUG-904: a `/clear` continuation is not a second session
+
+- **Tasks**: T051–T054
+- **Deliverable**: discovery does not adopt a `/clear` successor transcript next to an existing session of the same provider and location, and does not on a later pass.
+- **Satisfies**: FR-017; FR-007; US2 acceptance scenario 3
+- **Verify**: `cargo test -p micold-daemon --test session_discovery`; `cargo test -p micold-core`
+- **Depends on**: M2
+- **Tier**: light
+
 ## Phase 10: Bugfix BUG-1164 — The start-up offer offers only what "Resume all" can catalogue
 
 **Purpose**: The offer leaves out stored sessions of worktrees that have a session and sends the newest per free location, so "Resume all" is never refused with `LocationHasSession` (FR-018). See `bugs/BUG-1164.md`.
@@ -199,15 +208,6 @@ Deferred at close (T046-T050): MED/LOW test hygiene, no behaviour at risk; the H
 - [ ] T059 [P] Update `docs/user-guide/worktrees-and-sessions.md`, "The offer when you open a project": the banner counts only stored sessions of worktrees that have no session, "Resume all" adds the most recent of each, and sessions of worktrees that have one are resumed from **Attach existing…** with Replace or Keep both.
 
 **Bugfix**: 2026-10-23 — BUG-1164 added Phase 10 (T055–T059). No task reopened. See `bugs/BUG-1164.md`.
-
-### M6 — BUG-904: a `/clear` continuation is not a second session
-
-- **Tasks**: T051–T054
-- **Deliverable**: discovery does not adopt a `/clear` successor transcript next to an existing session of the same provider and location, and does not on a later pass.
-- **Satisfies**: FR-017; FR-007; US2 acceptance scenario 3
-- **Verify**: `cargo test -p micold-daemon --test session_discovery`; `cargo test -p micold-core`
-- **Depends on**: M2
-- **Tier**: light
 
 ### M7 — BUG-1164: the start-up offer offers only what "Resume all" can catalogue
 
