@@ -102,7 +102,7 @@ truncate to 63 (ASCII only by then, so byte truncation is safe); `trim_start_mat
 | Requirement | Layer |
 |---|---|
 | FR-002, FR-003, FR-011 (examples `Build Box!`, `_web.`, `  web  `, `日本語`, `!!!`, 100-char, collapse) | core unit, `micold-core` |
-| FR-001, FR-004, FR-005, FR-006, FR-010, edge cases (whitespace container name, empty daemon name, `a b` vs `a-b`, collision after truncation) | client, `tests/features_daemons.rs` (drives `Msg::Saved`) | New tests (none exist for `ContainerInUse` today): name clash lands on `container_name`, port-only clash lands on `port`. |
+| FR-001, FR-004, FR-005, FR-006, FR-010, edge cases (whitespace container name, empty daemon name, `a b` vs `a-b`, collision after truncation) | client, `tests/features_daemons.rs` (drives `Msg::Saved`) |
 | FR-007 not required | client: updated `a_container_daemon_requires_name_and_container_name...` and `...marks_name_and_container_name_together` tests |
 | FR-007 placeholder text | client: a pure helper `container_name_hint(&Draft) -> String` is unit-tested; view only passes it |
 | FR-008, FR-009 | client: edit-open shows stored value; host/ssh/kube drafts unchanged |

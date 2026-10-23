@@ -80,7 +80,8 @@ The defaulted name goes through the same check against other daemons' container 
 - Sanitized name very long: truncated to the runtime's length limit; if truncation collides, refused as a duplicate.
 - Concurrency (Principle II): two sessions saving daemons whose names sanitize to the same container name: the registry's uniqueness check applies at commit, so one save wins and the other is refused with the duplicate message.
 - Cross-platform (Principle VI): the same sanitization on every OS, so a daemon's container name does not depend on the platform that created it.
-- Daemon name empty while the container name is empty: the placeholder is hidden.
+- Daemon name empty or without a usable character while the container name is empty: the placeholder is hidden.
+- Clearing a stored container name while editing derives a fresh default from the current daemon name (explicit user action).
 - Runtimes other than container (host, SSH, Kubernetes) have no container name and are unchanged.
 - Existing saved daemons keep their stored container name unchanged.
 
