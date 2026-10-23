@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use micold_core::protocol::messages::{PrSend, ReviewEditOp};
 use micold_core::pull_request::{
-    BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure,
+    BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure, TreeListing,
 };
 use micold_core::review::anchor::{self, locate, Located};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
@@ -453,6 +453,8 @@ pub struct FilesPane {
     pub shown: bool,
     /// The repository's files, as last read.
     pub tree: Load<Vec<RelPath>>,
+    /// GitHub cut the pull request's tree short: the list is partial (a typed path still opens).
+    pub truncated: bool,
     /// What was typed in the path picker.
     pub picker: String,
     /// The folders the tree shows open, as `/`-separated paths.
@@ -1234,7 +1236,7 @@ pub enum Msg {
         /// The read it answers.
         seq: u64,
         /// The files, or why there are none.
-        result: Result<Vec<RelPath>, FileReadFailure>,
+        result: Result<TreeListing, FileReadFailure>,
     },
     /// The diff scrolled or was resized.
     DiffScrolled {
@@ -1459,8 +1461,17 @@ pub enum Effect {
     ReadTree {
         /// The read's sequence number.
         seq: u64,
+        /// The project.
+        project: PathBuf,
         /// The entry whose directory is listed.
         entry: SessionLocation,
+        /// Whose files: a pull request's head, or the worktree's own (`commit` and `address` are
+        /// then empty).
+        source: SourceKey,
+        /// The head commit.
+        commit: String,
+        /// The pull request's address, which names its repository.
+        address: String,
     },
     /// Scroll the diff to this offset, in pixels (a panel jump).
     ScrollDiff {
@@ -1501,7 +1512,21 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         msg,
         Msg::DiffScrolled { .. } | Msg::ListScrolled { .. } | Msg::PanelScrolled { .. }
     );
-    let effect = apply(state, msg);
+    let before = state.open.as_ref().filter(|_| !scroll).map(|view| {
+        (
+            view.project.clone(),
+            view.entry.clone(),
+            read_target(view),
+            view.browse.as_ref().map(|b| b.path.clone()),
+        )
+    });
+    let mut effect = apply(state, msg);
+    if let Some(extra) = reread_after_source_change(state, before) {
+        effect = match effect {
+            Effect::None => Effect::Batch(extra),
+            first => Effect::Batch(std::iter::once(first).chain(extra).collect()),
+        };
+    }
     if !scroll {
         if let Some(view) = state.open.as_mut() {
             reshape(view);
@@ -1517,6 +1542,41 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         }
     }
     effect
+}
+
+/// What `read_target` and the browsed path were before a message, for [`reread_after_source_change`].
+type SourceBefore = (
+    PathBuf,
+    SessionLocation,
+    (SourceKey, String, String),
+    Option<RelPath>,
+);
+
+/// The shown source changed under the same entry (another pull request, the worktree, or the
+/// pull request's head moved): the files tree and the browsed path were of the old version, so
+/// read them again at the new one. A path the new version lacks then says so (FR-009, FR-014);
+/// where Back led is forgotten with the old source ([`reset_diff_pane`]).
+fn reread_after_source_change(
+    state: &mut State,
+    before: Option<SourceBefore>,
+) -> Option<Vec<Effect>> {
+    let (project, entry, target, browsed) = before?;
+    let view = state.open.as_mut()?;
+    if view.project != project || view.entry != entry || read_target(view) == target {
+        return None;
+    }
+    let mut effects = Vec::new();
+    if let Some(path) = browsed {
+        let force = view.shown_large.contains(&path);
+        effects.push(request_browse(view, &mut state.next_seq, path, force));
+    }
+    // The old source's files are not the new one's, shown or not.
+    view.files.tree = Load::Idle;
+    view.files.truncated = false;
+    if view.files.shown {
+        effects.push(request_tree(view, &mut state.next_seq));
+    }
+    (!effects.is_empty()).then_some(effects)
 }
 
 fn apply(state: &mut State, msg: Msg) -> Effect {
@@ -1833,7 +1893,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::FilesPaneToggled => {
-            let Some(view) = state.open.as_mut().filter(|v| v.source == Source::Changes) else {
+            let Some(view) = state.open.as_mut() else {
                 return Effect::None;
             };
             view.files.shown = !view.files.shown;
@@ -1845,9 +1905,9 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         Msg::TreeRead { seq, result } => {
             if let Some(view) = state.open.as_mut() {
                 if matches!(view.files.tree, Load::Loading { seq: s, .. } if s == seq) {
-                    view.files.tree = match result {
-                        Ok(files) => Load::Ready(files),
-                        Err(why) => Load::Failed(why.message()),
+                    (view.files.truncated, view.files.tree) = match result {
+                        Ok(listing) => (listing.truncated, Load::Ready(listing.paths)),
+                        Err(why) => (false, Load::Failed(why.message())),
                     };
                 }
             }
@@ -1885,7 +1945,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     .browse
                     .as_ref()
                     .is_some_and(|b| b.path == path && b.load == (BrowseLoad::Reading { seq }));
-                if waiting && source == SourceKey::Worktree {
+                if waiting && source == read_target(view).0 {
                     let load = match result {
                         Ok(text) => BrowseLoad::Ready(LoadedDiff {
                             diff: plain_file(&text.lines),
@@ -2770,6 +2830,21 @@ fn follow_head(state: &mut State) -> Option<Effect> {
     })
 }
 
+/// Whose version of the repository's files is read: the pull request's head (its commit and the
+/// address that names its repository, empty when the list holds neither), or the worktree's own.
+fn read_target(view: &OpenView) -> (SourceKey, String, String) {
+    match &view.source {
+        Source::Changes => (SourceKey::Worktree, String::new(), String::new()),
+        Source::PullRequest(pr) => (
+            SourceKey::Pr(pr.number),
+            pr.head.clone(),
+            listed_pull_request(view, pr.number)
+                .map(|listed| listed.url.clone())
+                .unwrap_or_default(),
+        ),
+    }
+}
+
 /// Read the repository's files again, keeping the list on screen meanwhile.
 fn request_tree(view: &mut OpenView, next_seq: &mut u64) -> Effect {
     let seq = *next_seq;
@@ -2784,9 +2859,14 @@ fn request_tree(view: &mut OpenView, next_seq: &mut u64) -> Effect {
         again: false,
         last,
     };
+    let (source, commit, address) = read_target(view);
     Effect::ReadTree {
         seq,
+        project: view.project.clone(),
         entry: view.entry.clone(),
+        source,
+        commit,
+        address,
     }
 }
 
@@ -2807,7 +2887,8 @@ fn refresh_browsed(state: &mut State) -> Vec<Effect> {
     effects
 }
 
-/// Read `path` from the worktree to show it in place of the diff.
+/// Read `path` at the shown source's version (the worktree's, or the pull request's head) to show
+/// it in place of the diff.
 fn request_browse(
     view: &mut OpenView,
     next_seq: &mut u64,
@@ -2820,22 +2901,22 @@ fn request_browse(
         path: path.clone(),
         load: BrowseLoad::Reading { seq },
     });
+    let (source, commit, address) = read_target(view);
     Effect::ReadFile {
         seq,
         project: view.project.clone(),
         entry: view.entry.clone(),
-        source: SourceKey::Worktree,
-        commit: String::new(),
-        address: String::new(),
+        source,
+        commit,
+        address,
         path,
         force_large,
     }
 }
 
-/// Open `path` in the browser, remembering what was on screen as the place Back returns to. A
-/// pull request's files are browsed at M6; here only the entry's own changes browse.
+/// Open `path` in the browser, remembering what was on screen as the place Back returns to.
 fn browse_open(state: &mut State, path: RelPath) -> Effect {
-    let Some(view) = state.open.as_mut().filter(|v| v.source == Source::Changes) else {
+    let Some(view) = state.open.as_mut() else {
         return Effect::None;
     };
     let shown = view
@@ -2851,7 +2932,7 @@ fn browse_open(state: &mut State, path: RelPath) -> Effect {
             offset: view.diff_offset,
         },
         None => Frame::Diff {
-            file: view.selected.clone(),
+            file: selected_file(view).cloned(),
             offset: view.diff_offset,
         },
     };
@@ -2874,7 +2955,11 @@ fn browse_back(state: &mut State) -> Effect {
         Some(Frame::Diff { file, offset }) => {
             view.browse = None;
             // A file the change no longer lists leaves nothing to keep the place of.
-            let offset = if view.selected == file { offset } else { 0 };
+            let offset = if selected_file(view) == file.as_ref() {
+                offset
+            } else {
+                0
+            };
             view.diff_offset = offset;
             Effect::ScrollDiff { offset }
         }

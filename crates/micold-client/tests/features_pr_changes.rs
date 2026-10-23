@@ -4,13 +4,13 @@
 use std::path::PathBuf;
 
 use micold_client::features::changes::{
-    self, adjacent, base_line, check_mark, diff_body, head_note, list_body, pr_header, pr_mark,
-    section, whole_file, DiffBody, Effect, ListBody, Msg, PrDiffLoad, PrList, PrSection, Source,
-    SourceKey, State, Step, WholeFile, READING_FILE,
+    self, adjacent, base_line, browse_body, check_mark, diff_body, head_note, list_body, pr_header,
+    pr_mark, section, whole_file, BrowseBody, DiffBody, Effect, ListBody, Msg, PrDiffLoad, PrList,
+    PrSection, Source, SourceKey, State, Step, WholeFile, READING_FILE,
 };
 use micold_client::ui::PrMark;
 use micold_core::pull_request::{
-    BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure,
+    BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure, TreeListing,
 };
 use micold_core::review::diff::FileDiff;
 use micold_core::review::pr_diff::split_pr_diff;
@@ -1969,4 +1969,146 @@ mod head_version {
             .expansions
             .contains_key(&(SourceKey::Worktree, RelPath::from_native("a.rs").unwrap())));
     }
+}
+
+// Feature 1150, M6 (FR-011, FR-014, SC-007): browsing under a pull request reads the head.
+
+fn rel(text: &str) -> RelPath {
+    RelPath::from_native(text).unwrap()
+}
+
+/// A pull request 7 shown, with the Files pane open and its tree read.
+fn browsing_pr(truncated: bool) -> State {
+    let mut state = opened(true);
+    listed(
+        &mut state,
+        vec![pr(7, BranchPrState::Open), pr(8, BranchPrState::Open)],
+    );
+    chosen(&mut state, 7);
+    let Effect::ReadTree { seq, .. } = changes::update(&mut state, Msg::FilesPaneToggled) else {
+        panic!("the Files pane reads the tree");
+    };
+    changes::update(
+        &mut state,
+        Msg::TreeRead {
+            seq,
+            result: Ok(TreeListing {
+                paths: vec![rel("a.rs"), rel("untouched/z.rs")],
+                truncated,
+            }),
+        },
+    );
+    state
+}
+
+#[test]
+fn browse_under_a_pull_request_reads_the_tree_and_the_file_at_the_head() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    chosen(&mut state, 7);
+    match changes::update(&mut state, Msg::FilesPaneToggled) {
+        Effect::ReadTree {
+            source,
+            commit,
+            address,
+            ..
+        } => {
+            assert_eq!(source, SourceKey::Pr(7));
+            assert_eq!(commit, "abc");
+            assert_eq!(address, "https://github.com/acme/widgets/pull/7");
+        }
+        other => panic!("expected ReadTree, got {other:?}"),
+    }
+    match changes::update(&mut state, Msg::BrowseOpen(rel("untouched/z.rs"))) {
+        Effect::ReadFile {
+            source,
+            commit,
+            path,
+            ..
+        } => {
+            assert_eq!((source, commit.as_str()), (SourceKey::Pr(7), "abc"));
+            assert_eq!(path, rel("untouched/z.rs"));
+        }
+        other => panic!("expected ReadFile, got {other:?}"),
+    }
+}
+
+#[test]
+fn browse_a_truncated_tree_is_noted_and_a_typed_path_still_reads() {
+    let mut state = browsing_pr(true);
+    assert!(state.open.as_ref().unwrap().files.truncated);
+    changes::update(
+        &mut state,
+        Msg::PathPickerChanged("deep/not/listed.rs".into()),
+    );
+    let matches = changes::picker_matches(state.open.as_ref().unwrap());
+    assert_eq!(matches.last(), Some(&rel("deep/not/listed.rs")));
+    let effect = changes::update(&mut state, Msg::BrowseOpen(rel("deep/not/listed.rs")));
+    assert!(matches!(
+        effect,
+        Effect::ReadFile {
+            source: SourceKey::Pr(7),
+            ..
+        }
+    ));
+    let whole = browsing_pr(false);
+    assert!(!whole.open.as_ref().unwrap().files.truncated);
+}
+
+#[test]
+fn switching_pull_request_clears_back_and_reads_the_browsed_path_again() {
+    let mut state = browsing_pr(false);
+    changes::update(&mut state, Msg::BrowseOpen(rel("untouched/z.rs")));
+    assert!(!state.open.as_ref().unwrap().stack.is_empty());
+    let effect = changes::update(&mut state, Msg::SourceChosen(Some(8)));
+    let Effect::Batch(effects) = effect else {
+        panic!("diff, file and tree are read: {effect:?}");
+    };
+    let view = state.open.as_ref().unwrap();
+    assert!(view.stack.is_empty(), "Back led into the old source");
+    assert!(effects.iter().any(|e| matches!(
+        e,
+        Effect::ReadFile { source: SourceKey::Pr(8), path, .. } if *path == rel("untouched/z.rs")
+    )));
+    assert!(effects.iter().any(|e| matches!(
+        e,
+        Effect::ReadTree {
+            source: SourceKey::Pr(8),
+            ..
+        }
+    )));
+}
+
+#[test]
+fn a_browsed_path_missing_from_the_other_source_says_so() {
+    let mut state = browsing_pr(false);
+    changes::update(&mut state, Msg::BrowseOpen(rel("untouched/z.rs")));
+    let Effect::Batch(effects) = changes::update(&mut state, Msg::SourceChosen(None)) else {
+        panic!("the file and the tree are read again");
+    };
+    let seq = effects
+        .iter()
+        .find_map(|e| match e {
+            Effect::ReadFile {
+                seq,
+                source: SourceKey::Worktree,
+                ..
+            } => Some(*seq),
+            _ => None,
+        })
+        .expect("read from the worktree");
+    changes::update(
+        &mut state,
+        Msg::FileRead {
+            seq,
+            source: SourceKey::Worktree,
+            path: rel("untouched/z.rs"),
+            result: Err(micold_core::review::browse::FileReadFailure::Missing),
+            spans: Default::default(),
+        },
+    );
+    let Some(BrowseBody::Failed { message, .. }) = browse_body(state.open.as_ref().unwrap()) else {
+        panic!("a failure line");
+    };
+    assert_eq!(message, "This file does not exist in this version");
 }

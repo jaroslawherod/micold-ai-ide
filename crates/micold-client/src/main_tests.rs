@@ -10755,6 +10755,18 @@ mod pr_status {
             Ok(Vec::new())
         }
 
+        fn tree_at(
+            &self,
+            _: &micold_core::github::GithubRepo,
+            _: &str,
+            _: u64,
+        ) -> Result<
+            micold_core::pull_request::TreeListing,
+            micold_core::review::browse::FileReadFailure,
+        > {
+            Ok(Default::default())
+        }
+
         fn list_branches(
             &self,
             _: &micold_core::github::GithubRepo,

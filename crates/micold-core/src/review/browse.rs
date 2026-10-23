@@ -12,7 +12,7 @@ use super::git::{object_sizes, read_bytes, worktree_bytes};
 use super::limits;
 use super::RelPath;
 use crate::github::GithubRepo;
-use crate::pull_request::PullRequestSource;
+use crate::pull_request::{PullRequestSource, TreeListing};
 
 /// Where a file is read from (data-model §5).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -218,12 +218,7 @@ fn head_file(
     if !is_object_name(commit) {
         return Err(FileReadFailure::HeadUnavailable);
     }
-    let local = read_bytes(
-        dir,
-        &["cat-file", "-e", &format!("{commit}^{{commit}}")],
-        None,
-    )
-    .is_ok();
+    let local = commit_is_local(dir, commit);
     if !local {
         let rel = super::RelPath::from_native(path.as_str()).ok_or(FileReadFailure::Missing)?;
         return gh
@@ -243,13 +238,35 @@ fn head_file(
 }
 
 /// The files of the repository `source` shows, sorted (feature 1150, FR-011, research R4): for the
-/// worktree, tracked and untracked files git does not ignore that still exist on disk. A path git
-/// ignores is not listed; typing it reaches it through [`read_file`], which checks the disk.
-/// A pull request's tree is read at M6 (T047) and is not available yet.
-pub fn list_tree(source: &FileSource) -> Result<Vec<RelPath>, FileReadFailure> {
-    let FileSource::Worktree { dir } = source else {
-        return Err(FileReadFailure::HeadUnavailable);
-    };
+/// worktree, tracked and untracked files git does not ignore that still exist on disk; a path git
+/// ignores is not listed, and typing it reaches it through [`read_file`], which checks the disk.
+/// For a pull request, the head commit's tree and nothing else: from the local objects when the
+/// commit is there, else one `gh` request (`truncated` then says GitHub cut the list short).
+pub fn list_tree(
+    source: &FileSource,
+    gh: Option<&dyn PullRequestSource>,
+    now: u64,
+) -> Result<TreeListing, FileReadFailure> {
+    match source {
+        FileSource::Worktree { dir } => worktree_tree(dir),
+        FileSource::PrHead { dir, repo, commit } => {
+            if !is_object_name(commit) {
+                return Err(FileReadFailure::HeadUnavailable);
+            }
+            match head_tree(dir, commit) {
+                Some(paths) => Ok(TreeListing {
+                    paths,
+                    truncated: false,
+                }),
+                None => gh
+                    .ok_or(FileReadFailure::HeadUnavailable)?
+                    .tree_at(repo, commit, now),
+            }
+        }
+    }
+}
+
+fn worktree_tree(dir: &Path) -> Result<TreeListing, FileReadFailure> {
     let out = read_bytes(
         dir,
         &[
@@ -271,7 +288,40 @@ pub fn list_tree(source: &FileSource) -> Result<Vec<RelPath>, FileReadFailure> {
         .collect();
     paths.sort();
     paths.dedup();
-    Ok(paths)
+    Ok(TreeListing {
+        paths,
+        truncated: false,
+    })
+}
+
+/// The files of `commit` from the local objects, or none when the commit is not there. A submodule
+/// (mode 160000) is not a file and is left out, as GitHub's tree leaves it out.
+fn head_tree(dir: &Path, commit: &str) -> Option<Vec<RelPath>> {
+    if !commit_is_local(dir, commit) {
+        return None;
+    }
+    let out = read_bytes(dir, &["ls-tree", "-r", "-z", commit], None).ok()?;
+    let mut paths: Vec<RelPath> = out
+        .split(|b| *b == 0)
+        .filter(|entry| !entry.is_empty() && !entry.starts_with(b"160000 "))
+        .filter_map(|entry| {
+            let tab = entry.iter().position(|b| *b == b'\t')?;
+            std::str::from_utf8(&entry[tab + 1..]).ok()
+        })
+        .map(RelPath::from_git)
+        .collect();
+    paths.sort();
+    Some(paths)
+}
+
+/// Whether the repository in `dir` holds the commit object.
+fn commit_is_local(dir: &Path, commit: &str) -> bool {
+    read_bytes(
+        dir,
+        &["cat-file", "-e", &format!("{commit}^{{commit}}")],
+        None,
+    )
+    .is_ok()
 }
 
 /// One place the reviewer can return to (data-model §4). Expansion lives with the file, so a frame

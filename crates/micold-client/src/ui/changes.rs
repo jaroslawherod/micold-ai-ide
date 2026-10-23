@@ -248,6 +248,14 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
     let mut pane = column![].spacing(spacing::MD).height(Length::Fill);
     if view.source == Source::Changes {
         pane = pane.push(toggles);
+    } else {
+        // A shown pull request replaces the entry's list, but its files are browsed all the same.
+        pane = pane.push(row![ToggleChip::new(
+            "Files",
+            Message::Changes(Msg::FilesPaneToggled),
+            r
+        )
+        .active(view.files.shown)]);
     }
     if let Some(section) = pull_request_section(view, state.changes.pr_enabled, r) {
         pane = pane.push(section);
@@ -256,7 +264,7 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
         pane = pane.push(Text::new(DEFAULT_ENTRY_NOTE, TypeRole::Caption, r).muted());
     }
 
-    if view.source == Source::Changes && view.files.shown {
+    if view.files.shown {
         return pane.push(files_pane(view, r)).into();
     }
     let list: Element<'a, Message> = match list_body(view) {
@@ -358,7 +366,18 @@ fn files_pane<'a>(view: &'a OpenView, r: Roles) -> Element<'a, Message> {
             |p| Message::Changes(Msg::BrowseOpen(p)),
         )
     });
-    column![picker, tree]
+    let mut pane = column![picker];
+    if view.files.truncated {
+        pane = pane.push(
+            Text::new(
+                "GitHub listed only part of this tree; type a path to open any file.",
+                TypeRole::Caption,
+                r,
+            )
+            .muted(),
+        );
+    }
+    pane.push(tree)
         .spacing(spacing::SM)
         .height(Length::Fill)
         .into()

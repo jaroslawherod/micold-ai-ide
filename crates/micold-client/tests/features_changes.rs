@@ -2789,7 +2789,10 @@ fn with_tree(paths: &[&str]) -> State {
         &mut state,
         Msg::TreeRead {
             seq,
-            result: Ok(paths.iter().map(|p| path(p)).collect()),
+            result: Ok(micold_core::pull_request::TreeListing {
+                paths: paths.iter().map(|p| path(p)).collect(),
+                truncated: false,
+            }),
         },
     );
     state
@@ -2854,7 +2857,10 @@ fn a_file_opens_in_three_actions_and_back_in_one() {
         &mut state,
         Msg::TreeRead {
             seq: tree,
-            result: Ok(vec![path("docs/x.md")]),
+            result: Ok(micold_core::pull_request::TreeListing {
+                paths: vec![path("docs/x.md")],
+                truncated: false,
+            }),
         },
     );
     changes::update(&mut state, Msg::FolderToggled("docs".into()));
@@ -2967,7 +2973,10 @@ fn a_change_re_reads_the_browsed_file_and_the_tree() {
         &mut state,
         Msg::TreeRead {
             seq: tree,
-            result: Ok(vec![path("a.rs"), path("docs/x.md"), path("docs/y.md")]),
+            result: Ok(micold_core::pull_request::TreeListing {
+                paths: vec![path("a.rs"), path("docs/x.md"), path("docs/y.md")],
+                truncated: false,
+            }),
         },
     );
     changes::update(&mut state, Msg::FolderToggled("docs".into()));

@@ -1061,6 +1061,25 @@ pub trait PullRequestSource {
         path: &RelPath,
         now: u64,
     ) -> Result<Vec<u8>, FileReadFailure>;
+
+    /// Every file of the repository at `commit`, for a head commit that is not in the local
+    /// repository (feature 1150, FR-011, FR-014). One request, no retry, the same `gh` and
+    /// credentials as [`Self::diff`].
+    fn tree_at(
+        &self,
+        repo: &GithubRepo,
+        commit: &str,
+        now: u64,
+    ) -> Result<TreeListing, FileReadFailure>;
+}
+
+/// The files of a repository at one commit (feature 1150).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TreeListing {
+    /// The files, sorted; folders and submodules are not listed.
+    pub paths: Vec<RelPath>,
+    /// GitHub cut the list short: it is partial, and a typed path is still read on demand.
+    pub truncated: bool,
 }
 
 /// Why a pull request's diff was not read (feature 775).
@@ -1158,6 +1177,55 @@ pub fn file_outcome(outcome: &RunOutcome) -> Result<Vec<u8>, FileReadFailure> {
     }
 }
 
+/// The arguments after `gh` for the recursive tree of a commit (feature 1150, R3).
+pub fn tree_args(repo: &GithubRepo, commit: &str) -> Vec<String> {
+    ["api", "--hostname", "github.com"]
+        .into_iter()
+        .map(str::to_string)
+        .chain([format!(
+            "repos/{}/{}/git/trees/{}?recursive=1",
+            repo.owner(),
+            repo.name(),
+            percent_encoded(commit)
+        )])
+        .collect()
+}
+
+/// The files of the tree `gh` answered, else [`FileReadFailure::HeadUnavailable`].
+pub fn tree_outcome(outcome: &RunOutcome) -> Result<TreeListing, FileReadFailure> {
+    #[derive(serde::Deserialize)]
+    struct Entry {
+        path: String,
+        #[serde(rename = "type")]
+        kind: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Answer {
+        tree: Vec<Entry>,
+        #[serde(default)]
+        truncated: bool,
+    }
+    let RunOutcome::Exited {
+        code: 0, stdout, ..
+    } = outcome
+    else {
+        return Err(FileReadFailure::HeadUnavailable);
+    };
+    let answer: Answer =
+        serde_json::from_slice(stdout).map_err(|_| FileReadFailure::HeadUnavailable)?;
+    let mut paths: Vec<RelPath> = answer
+        .tree
+        .into_iter()
+        .filter(|entry| entry.kind == "blob")
+        .map(|entry| RelPath::from_git(&entry.path))
+        .collect();
+    paths.sort();
+    Ok(TreeListing {
+        paths,
+        truncated: answer.truncated,
+    })
+}
+
 /// The diff text when `gh` exited 0, else [`diff_failure`].
 pub fn diff_outcome(outcome: &RunOutcome, now: u64) -> Result<String, DiffReadFailure> {
     match outcome {
@@ -1200,6 +1268,8 @@ pub struct FakePullRequestSource {
     diff_calls: std::sync::Mutex<Vec<(String, u64)>>,
     file_script: std::sync::Mutex<std::collections::VecDeque<Result<Vec<u8>, FileReadFailure>>>,
     file_calls: std::sync::Mutex<Vec<(String, String, RelPath)>>,
+    tree_script: std::sync::Mutex<std::collections::VecDeque<Result<TreeListing, FileReadFailure>>>,
+    tree_calls: std::sync::Mutex<Vec<(String, String)>>,
 }
 
 /// One scripted answer of [`FakePullRequestSource::list_branches`].
@@ -1265,6 +1335,35 @@ impl FakePullRequestSource {
     pub fn with_file_failure(self, failure: FileReadFailure) -> Self {
         self.lock_file_script().push_back(Err(failure));
         self
+    }
+
+    /// Answer the next unanswered `tree_at` with `listing`.
+    pub fn with_tree_answer(self, listing: TreeListing) -> Self {
+        self.lock_tree_script().push_back(Ok(listing));
+        self
+    }
+
+    /// Answer the next unanswered `tree_at` with `failure`.
+    pub fn with_tree_failure(self, failure: FileReadFailure) -> Self {
+        self.lock_tree_script().push_back(Err(failure));
+        self
+    }
+
+    /// Every `tree_at` so far, as (`owner/name`, commit).
+    pub fn tree_calls(&self) -> Vec<(String, String)> {
+        self.tree_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn lock_tree_script(
+        &self,
+    ) -> std::sync::MutexGuard<'_, std::collections::VecDeque<Result<TreeListing, FileReadFailure>>>
+    {
+        self.tree_script
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Every `file_at` so far, as (`owner/name`, commit, path).
@@ -1393,6 +1492,22 @@ impl PullRequestSource for FakePullRequestSource {
             .pop_front()
             .unwrap_or(Err(FileReadFailure::HeadUnavailable))
     }
+
+    /// Nothing scripted answers [`FileReadFailure::HeadUnavailable`].
+    fn tree_at(
+        &self,
+        repo: &GithubRepo,
+        commit: &str,
+        _now: u64,
+    ) -> Result<TreeListing, FileReadFailure> {
+        self.tree_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), commit.to_string()));
+        self.lock_tree_script()
+            .pop_front()
+            .unwrap_or(Err(FileReadFailure::HeadUnavailable))
+    }
 }
 
 #[cfg(test)]
@@ -1470,6 +1585,70 @@ mod file_at_tests {
         );
         assert_eq!(fake.file_calls().len(), 3);
         assert_eq!(fake.file_calls()[0].1, "c1");
+    }
+
+    #[test]
+    fn the_tree_args_ask_for_the_recursive_tree_at_the_commit() {
+        let args = tree_args(&repo(), "abc123");
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("repos/acme/widgets/git/trees/abc123?recursive=1")
+        );
+    }
+
+    #[test]
+    fn a_tree_answer_lists_files_and_carries_the_truncated_flag() {
+        let body = br#"{"sha":"x","tree":[
+            {"path":"src","type":"tree"},
+            {"path":"src/a.rs","type":"blob"},
+            {"path":"b.md","type":"blob"},
+            {"path":"link","type":"blob"},
+            {"path":"vendor/sub","type":"commit"}],"truncated":true}"#;
+        let listing = tree_outcome(&exited(0, body, "")).expect("a tree");
+        assert!(listing.truncated);
+        let names: Vec<&str> = listing.paths.iter().map(RelPath::as_str).collect();
+        assert_eq!(names, ["b.md", "link", "src/a.rs"]);
+        let whole = tree_outcome(&exited(0, br#"{"tree":[],"truncated":false}"#, "")).unwrap();
+        assert!(!whole.truncated && whole.paths.is_empty());
+    }
+
+    #[test]
+    fn a_failed_or_unreadable_tree_run_is_head_unavailable() {
+        for outcome in [
+            exited(1, b"", "gh: Not Found (HTTP 404)"),
+            exited(0, b"not json", ""),
+            RunOutcome::TimedOut {
+                stderr: String::new(),
+            },
+        ] {
+            assert_eq!(
+                tree_outcome(&outcome),
+                Err(FileReadFailure::HeadUnavailable)
+            );
+        }
+    }
+
+    #[test]
+    fn the_fake_answers_trees_in_order_and_records_calls() {
+        let listing = TreeListing {
+            paths: vec![path("a.rs")],
+            truncated: false,
+        };
+        let fake = FakePullRequestSource::new()
+            .with_tree_answer(listing.clone())
+            .with_tree_failure(FileReadFailure::Unreadable);
+        assert_eq!(fake.tree_at(&repo(), "c1", 0), Ok(listing));
+        assert_eq!(
+            fake.tree_at(&repo(), "c2", 0),
+            Err(FileReadFailure::Unreadable)
+        );
+        assert_eq!(
+            fake.tree_at(&repo(), "c3", 0),
+            Err(FileReadFailure::HeadUnavailable)
+        );
+        let calls = fake.tree_calls();
+        assert_eq!(calls.len(), 3);
+        assert_eq!(calls[0], ("acme/widgets".to_string(), "c1".to_string()));
     }
 }
 
