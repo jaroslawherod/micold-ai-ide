@@ -983,8 +983,8 @@ impl ProvisionRun {
             bounds,
             // As the client's container target: the image's data home rides the bridge command.
             env: vec![(
-                "XDG_DATA_HOME".to_string(),
-                micold_core::ssh::argv::CONTAINER_DATA_HOME.to_string(),
+                micold_core::ssh::argv::CONTAINER_DATA_ENV.to_string(),
+                micold_core::ssh::argv::CONTAINER_DATA_DIR.to_string(),
             )],
         };
         let opts = ProvisionOptions {

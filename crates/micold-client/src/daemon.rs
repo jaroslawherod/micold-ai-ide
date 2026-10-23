@@ -1201,12 +1201,12 @@ struct ContainerReach<'a> {
 
 /// The environment of a daemon the bridge starts in a container. sshd builds a session's
 /// environment afresh, so the container's own `-e` values (set at `create`, which only the daemon
-/// the entrypoint starts inherits) ride the remote command: the image's data home, the image
+/// the entrypoint starts inherits) ride the remote command: the image's state directory, the image
 /// reference a refusal names, the host's time zone and the keep-running opt-in.
 fn container_env(reach: &ContainerReach<'_>) -> Vec<(String, String)> {
     let mut env = vec![(
-        "XDG_DATA_HOME".to_string(),
-        micold_core::ssh::argv::CONTAINER_DATA_HOME.to_string(),
+        micold_core::ssh::argv::CONTAINER_DATA_ENV.to_string(),
+        micold_core::ssh::argv::CONTAINER_DATA_DIR.to_string(),
     )];
     if !reach.image.is_empty() {
         env.push((
@@ -2018,7 +2018,9 @@ mod tests {
                 .find(|(n, _)| n == k)
                 .map(|(_, v)| v.as_str())
         };
-        assert_eq!(get("XDG_DATA_HOME"), Some("/var/lib"));
+        assert_eq!(get("MICOLD_DATA_DIR"), Some("/var/lib/micold-ai-ide"));
+        // 1286: sessions inherit the daemon's environment, so no XDG variable may ride along.
+        assert_eq!(get("XDG_DATA_HOME"), None);
         assert_eq!(get("MICOLD_IMAGE_REFERENCE"), Some("ghcr.io/o/img:1"));
         assert_eq!(get("MICOLD_IDLE_STOP"), Some("off"));
         assert_eq!(get("TZ"), Some("Europe/Berlin"));

@@ -10,7 +10,7 @@ published image serves every client, released or not.
 
 Carries: `sshd` (config `/etc/micold/sshd_config`, port 2222, key auth only, run as the container's
 uid), Node 24 and `npm` (the AI CLIs are npm packages), `git`, `openssh-client`, `flock`, `bash`,
-`procps`, `less`, `tzdata`, glibc 2.41 (trixie), and `XDG_DATA_HOME=/var/lib` for the daemon's state.
+`procps`, `less`, `tzdata`, glibc 2.41 (trixie), and `MICOLD_DATA_DIR=/var/lib/micold-ai-ide` for the daemon's state.
 
 Must not carry: `micold-daemon`, any AI CLI, or any key, token or credential. The SSH host key and
 authorized key are mounted read-only at `/run/micold/ssh` at run time, and AI CLI sign-ins reach the

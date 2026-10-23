@@ -482,8 +482,9 @@ pub const CONTAINER_NAME: &str = "micold-sandbox";
 /// Where the daemon's state directory appears inside the container.
 ///
 /// Not an arbitrary path. The daemon resolves its own state directory through the platform's data
-/// directory convention — `$XDG_DATA_HOME/micold-ai-ide` on Linux — and the image sets
-/// `XDG_DATA_HOME=/var/lib`, so this is the path the daemon will look in *without being told*.
+/// directory convention — `$XDG_DATA_HOME/micold-ai-ide` on Linux — unless `MICOLD_DATA_DIR` names it,
+/// and the image sets `MICOLD_DATA_DIR=/var/lib/micold-ai-ide` (not `XDG_DATA_HOME`, which sessions
+/// would inherit: 1286), so this is the path the daemon will look in.
 /// That matters because the host client looks in its own data directory for the same
 /// `projects.json`: if the two resolved to different files, the client would mount a project list
 /// the daemon never updates.
