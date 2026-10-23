@@ -20,7 +20,9 @@ use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandRunner, SystemRunner};
 use micold_core::sandbox::lifecycle::{bring_up_attempt, Failure, SandboxState, Started};
 use micold_core::sandbox::runtime::RuntimeCapabilities;
-use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
+use micold_core::sandbox::{
+    CredentialLayout, MountSet, NetworkPosture, SandboxProfile, SandboxSpec, SecretMount,
+};
 
 /// The container's name. Fixed, so a sandbox left over from a previous run of the app is
 /// recognisable as ours rather than accumulating beside itself (US6 scenario 5).
@@ -28,7 +30,17 @@ pub use micold_core::sandbox::CONTAINER_NAME;
 
 /// The user-defined network the sandbox joins. When the posture is `NoOutbound` it is created with
 /// the arguments the probed runtime setup blocks outbound connections with (research R4, C-5).
-pub const NETWORK_NAME: &str = "micold-sandbox-net";
+///
+/// Each posture has its own network. `network create` treats "already exists" as success, so one
+/// shared name would let a start under `NoOutbound` reuse a network an earlier `Outbound` start
+/// created open (#1290).
+pub fn network_name(posture: NetworkPosture) -> String {
+    match posture {
+        NetworkPosture::NoOutbound => "micold-sandbox-net-no-outbound",
+        NetworkPosture::Outbound => "micold-sandbox-net-outbound",
+    }
+    .to_string()
+}
 
 /// Everything the host has to tell the core before a sandbox can be built.
 ///
@@ -399,7 +411,7 @@ pub fn start_attempt<R: CommandRunner>(
         gid: facts.gid,
         control_port: port,
         published_ports: Vec::new(),
-        network_name: NETWORK_NAME.to_string(),
+        network_name: network_name(profile.network),
         time_zone: facts.time_zone.clone(),
         home: facts.home.clone(),
     };
@@ -1275,6 +1287,45 @@ fn apply(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
 mod tests {
     use super::*;
     use micold_core::protocol::auth::CONTAINER_TOKEN_PATH;
+
+    #[test]
+    fn each_network_posture_has_its_own_network() {
+        assert_ne!(
+            network_name(NetworkPosture::Outbound),
+            network_name(NetworkPosture::NoOutbound),
+            "a shared name lets NoOutbound reuse a network created open"
+        );
+    }
+
+    /// The network a start asks the runtime for follows the profile's posture (#1290).
+    #[test]
+    fn a_start_names_the_network_of_its_posture() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let facts = HostFacts::gather(dir.path().to_path_buf());
+        for posture in [NetworkPosture::Outbound, NetworkPosture::NoOutbound] {
+            let profile = SandboxProfile {
+                network: posture,
+                ..SandboxProfile::default()
+            };
+            let runner = a_runtime_that_creates_the_sandbox();
+            let _ = start(
+                &profile,
+                &[],
+                &facts,
+                CONTAINER_NAME,
+                DEFAULT_SANDBOX_PORT,
+                &runner,
+                &mut |_| {},
+            );
+            let created = runner
+                .calls()
+                .iter()
+                .map(|c| c.args_lossy())
+                .find(|a| a.starts_with(&["network".to_string(), "create".to_string()]))
+                .expect("the start made a network");
+            assert_eq!(created.last(), Some(&network_name(posture)), "{posture:?}");
+        }
+    }
 
     #[test]
     fn the_container_name_is_fixed() {
