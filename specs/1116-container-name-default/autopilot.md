@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1116
 - **Worktree branch**: feat/1116_container-daemon-default-the-container-name-to-the
 - **Started**: 2026-10-23
-- **Phase**: clarify
-- **Next step**: plan unit
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec review | 1 | 81c88859a3a10908cdd0fa870e9dd8a153b136a0:f8d2257e9c0f112ac40a6a3e85cb74b9d46eaa10 | CHANGES: 3 MAJOR (fixed) |
 | Spec review | 2 | d1dc2627e7c471c4fd0886ffdd06b8898735a213:f8d2257e9c0f112ac40a6a3e85cb74b9d46eaa10 | CLEAN (2 MINOR fixed) |
+| Plan review | 1 | 7eb8f0557e92900b6ded9f7b12df73a2977aca3a:1c6576b9833ac192a4518a3b5add680eca80ae58 | CLEAN (3 MINOR fixed, prose only) |
 
 ## Declined review findings
 
