@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M8 implement
-- **Next step**: M8 (split: T064, T065, T067, T068, T069): implement, gate, review, PR
+- **Phase**: M8 verify
+- **Next step**: M8: visual pass (T069), then push and open the draft PR (see *Handover*)
 
 ## Pull requests
 
@@ -75,6 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M8 (sonnet, scoped) | 2 | cycle-log fix diff inline | CLEAN: 1 MINOR (the red is asserted, not observed) |
 | Full gate M8 | 1 | 6448f48d | Red: `feature_write_isolation` `every_method_called_on_state_is_classified` — `permission_prompts.cancel_mode` (the new core arm) in neither MUTATORS nor READERS; classified as a mutator. B's F3 test (`choosing_a_mode_leaves_the_start_list_open`) added with it |
 | Full gate M8 | 2 | d9d497ae | Red: `popover_displacement` `every_popover_is_in_the_table` (37 vs 35): the two Bypass confirmations had no rows in `overlay_registry.rs`'s dialog list; added (22 dialogs, 46 states, `DIALOGS` 26), which also runs them through `one_dialog_at_a_time` and the Escape checks |
+| Full gate M8 | 3 | 3483245a | Green (`/mnt/project-files/scripts/split-gate.sh`, CI's order; records the tree for the push hook) |
 | Spec review | 1 | e384ed34098b974a962950905d077d5e736d9aec:9ad0504870e12886d671ea3f4124162315386f78 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec review | 2 | 004bb5b1f949c41b2cca2730ff420b7af0b6099f:f13d3e811a532c30a69e9475c01265080385e3f8 | CLEAN: 3 MINOR (fixed, prose only) |
 | Plan review | 1 | f2b7b32bfd45c20bf89137e325eab23124ae2413:bdd0ffab5e0b7317d1c13b816299b6c68b23a5bf | CLEAN: 1 MINOR (fixed, prose only) |
@@ -133,7 +134,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M8 unit 1 handed over at 250k context. **Done**: T064, T065, T067, T068 implemented and ticked
+(commits fe1c4070..3483245a on `claude/project-thread-tt60gq`, not pushed, no PR yet); Review A 3
+rounds (r3 clean of BLOCKER/MAJOR), Review B 2 rounds (r2 CLEAN), full gate green at 3483245a.
+**Next**:
+1. T069 visual pass through the `visual-pass` skill (an `autopilot-worker` if available): the
+   showcase pose *the session bar of a session in Bypass* (light, dark); the client's start list
+   with the four **Permissions:** rows under **Claude Code (structured)** (the chosen one marked,
+   a press leaves the list open), and the Bypass confirmation after pressing the structured entry
+   with **Permissions: Bypass** chosen (light, dark). Live requests (quickstart B 1–4, 6, 7, 9) need a
+   logged-in `claude`, which this cloud container lacks: record them as not run (the M7 pass
+   covered the views in the showcase). Save crops in `visual-pass/` as `m8-*.png`, tick T069.
+   Disk: ~24 GB free with target-shared wiped; a showcase/client build fits, a build beside the
+   gate does not.
+2. Push (`git push --force-with-lease -u origin HEAD`; only specs/ledger may change after the
+   gate) and open the PR as a **draft** with the GitHub MCP tools, title exactly
+   "#942: Structured session: permission prompts via permission-prompt-tool — M8", body per
+   `tasks/pr.md` ending `Refs #942`; record it in *Pull requests*. Do not merge.
 
 ## Open escalation
 
