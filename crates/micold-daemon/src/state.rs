@@ -8422,11 +8422,18 @@ mod offered_tests {
 
 #[cfg(test)]
 mod prompt_lookup_bound_tests {
-    /// 1161 US4 s6, FR-012: an issue's title and body are waited for 5 seconds, no more.
+    use super::*;
+
+    /// 1161 US4 s6, FR-012: a fresh daemon waits 5 seconds for an issue's title and body, no more.
     #[test]
-    fn the_prompt_lookup_bound_is_five_seconds() {
+    fn a_fresh_daemon_waits_five_seconds_for_an_issue() {
+        let store = tempfile::tempdir().unwrap();
+        let state = DaemonState::new(Catalog::load(
+            Box::new(JsonFileStore::at(store.path().join("p.json"))),
+            Box::new(JsonFileSettingsStore::at(store.path().join("s.json"))),
+        ));
         assert_eq!(
-            super::PROMPT_LOOKUP_BOUND,
+            state.prompt_lookup_bound(),
             std::time::Duration::from_secs(5)
         );
     }

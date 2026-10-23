@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | create_worktree with neither ai_cli nor prompt starts a session when a template exists? | No | agent-resolved | spec.md FR-009 |
 | D2 | close | /home 100% full blocked the gate: free disk or approve SWEEP_FORCE=1? | Disk freed (456G free); no force needed | user | `df -h /home` 454G free |
 | D3 | close | Build lock held 11h+ by a feat-1150 gate: kill it or bypass the lock? | No action; that run is not hung and the queue drained | user | coordinator relay 2026-10-23; ps shows queue moving |
+| D4 | close | tdd-verify FAIL: no recorded red for M1-M3 (finding 1, unrecoverable); waive? | Waived as a documented gap: tests exist and pass, two mutants caught; test-first order cannot be recovered | agent-resolved | tdd/verification.md finding 1; tdd/test-list.md |
 
 ## Review rounds
 
@@ -53,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 Review A (high) | 1 | ba211cda3dc12bd3d30cd91de2d6f81058dc21c2:b3829c225724e3d598cfabc541fe1660f5ce2ec0 | CHANGES: 1 MAJOR (body not in description pass; fixed), F2 fixed, F3 declined |
 | M1 Review A (high) | 2 (full, stale snapshot after rebase) | 02e4fc1536c51d3b8070bbceff63dbcbc0ced9c5:bdf034b4716832911ac413339ce3eefff4777286 | CLEAN (1 MINOR: validation is M2) |
 | M1 Review B (conformance) | 1 | same | CLEAN (MINOR: visual evidence lacks picked-issue shot; reducer tests cover US1 s1) |
+| Close diff review (sonnet) | 1 | 1bde3b936669bc536ad53078cf1cfc6b28805572:8fda5012e52c64e4b1dac7230edb806ea072d7ea | CHANGES: F1 MAJOR "tests never run" was stale (reviewer saw wip commit): ran since, features_worktree_form 36 ok, shell test ok, mcp_default_prompt 11 ok, lib ok; mutations caught (refresh_default_prompt at worktree_form.rs:1221, github_issues gate in ops.rs). F2 MINOR passes. Docs reworded; no new round (prose only) |
 
 ## Declined review findings
 
@@ -78,4 +80,4 @@ None.
 
 - `git_credential_grant` fails locally only, under the global `url.insteadOf` rewrite (seen in M3); not fixed, outside this flow.
 - Quickstart §B step 4 (MCP, live) not run by eye: covered by `mcp_default_prompt.rs` (real PTY, stand-in CLI); steps 1-3 have visual/c3,c5,c11.
-- tdd/verification.md (BLOCKED: no test list or cycle log; suite not run, disk full). Remediation T025-T029 in tasks.md; test-strength findings 2-5 (reducer-driven dialog tests, settings-to-form path, 5 s bound, github_issues_enabled off) still to do.
+- tdd/verification.md (second audit, FAIL on the unrecoverable test-first gap, waived as D4). Not done: T031 (run six unmeasured deliberate mutants: blank-prompt check, first_prompt_edited guard, name_words, settings-to-form path) and T032 (split the eager listing/pick/body test and use assert_eq!); both are test-strength polish, recorded unmeasured.
