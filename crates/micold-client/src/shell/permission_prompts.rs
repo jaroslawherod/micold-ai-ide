@@ -83,7 +83,10 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 send_mode(app, session, mode);
             }
         }
-        Msg::ModeCancelled => prompts.cancel_mode(),
+        // Through the core, as the registry's closes go, so its after-message work runs too.
+        Msg::ModeCancelled => app
+            .core
+            .update(Message::PermissionPrompts(Msg::ModeCancelled)),
     }
     Task::none()
 }

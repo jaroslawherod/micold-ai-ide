@@ -1027,8 +1027,8 @@ pub(crate) fn strip_tab_menu_labels(
 ///
 /// Every supported CLI, and under an offered structured entry its mode rows
 /// ([`start_mode_items`], #942), each CLI named by `display_name()` — through `Display`, which is
-/// a menu's register. An available one is pressable as ever (FR-006 of 026: an uninstalled CLI is never
-/// *selectable*). An unavailable one is a disabled item with a red icon whose tooltip is the
+/// a menu's register. An available one is pressable as ever (FR-006 of 026: an uninstalled CLI is
+/// never *selectable*). An unavailable one is a disabled item with a red icon whose tooltip is the
 /// reason (`State::start_menu_entries`, which reads the same answer `offered_providers` does,
 /// feature 033 FR-001, FR-008).
 pub(crate) fn session_start_menu_items(

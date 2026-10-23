@@ -70,6 +70,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review A M8 (code-review high) | 1 | ee0e359b8647849961a2f14424cf9c9eab0298f1:2ecf9e9eaa23625479047f65c2f6a7f2625b7c2b | CHANGES: 8 findings; F1 (a `PromptId` is unique per daemon only, so the focus release could miss) MAJOR fixed (`FieldId::Prompt*` carry the session); F2 mode confirmation opens without `clear_for_dialog` fixed (shell clears before it opens); F3 release lives in root `app.rs` moved to `features/window.rs` (manual call sites kept, declined part); F4 mode looked up in the active project only fixed (`workspace.find_session`); F5 stale R14 docs fixed; F6 a Bypass pick stuck for later starts fixed (reset to Default after a confirmed Bypass start); F7 doc comment fixed; F8 declined |
 | Review A M8 (code-review high, scoped) | 2 | fe1c4070..b6e7ffbd (fix diff) | CHANGES: 7 findings; F1 the core reducer dropped `PermissionPrompts(ModeCancelled)`, so the registry (Escape, scrim, another dialog) could not close the mode confirmation MAJOR fixed (core arm, test `escape_closes_the_bypass_mode_confirmation`); F2 no test for the clear before the confirmation fixed (shell test asserts menu and focus cleared); F3 `cli_running` still looked up in the active project only fixed (one `find_session`); F7 comment wrap fixed; F4, F5, F6 declined |
+| Review A M8 (code-review high, scoped) | 3 | b6e7ffbd..6448f48d (fix diff) | Clean of BLOCKER/MAJOR: the three r2 fixes hold; 5 MINOR: F2 the Verify line gave cargo two filters fixed (prose); F1 (cancel only), F3, F5 fixed with the gate fix below; F1 (confirm), F4 left for M9 (in *Follow-ups*) |
+| Review B M8 (conformance, sonnet, `claude -p` with the diff inline, 0 permission denials) | 1 | ee0e359b…:6448f48d (diff inline) | CHANGES: F1 MAJOR no red-before-green record for M8 fixed (cycle-log Cycle 12, red by construction, Constitution I exception); F2 MINOR no test that the bar draws the label, F3 MINOR no test that a mode row leaves the list open: left (visual pass checks F3 live) |
+| Review B M8 (sonnet, scoped) | 2 | cycle-log fix diff inline | CLEAN: 1 MINOR (the red is asserted, not observed) |
+| Full gate M8 | 1 | 6448f48d | Red: `feature_write_isolation` `every_method_called_on_state_is_classified` — `permission_prompts.cancel_mode` (the new core arm) in neither MUTATORS nor READERS; classified as a mutator. B's F3 test (`choosing_a_mode_leaves_the_start_list_open`) added with it |
 | Spec review | 1 | e384ed34098b974a962950905d077d5e736d9aec:9ad0504870e12886d671ea3f4124162315386f78 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec review | 2 | 004bb5b1f949c41b2cca2730ff420b7af0b6099f:f13d3e811a532c30a69e9475c01265080385e3f8 | CLEAN: 3 MINOR (fixed, prose only) |
 | Plan review | 1 | f2b7b32bfd45c20bf89137e325eab23124ae2413:bdd0ffab5e0b7317d1c13b816299b6c68b23a5bf | CLEAN: 1 MINOR (fixed, prose only) |
@@ -135,6 +139,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- For M9 (Review A M8 r3 MINORs left): the shell's `ModeConfirmed` changes `permission_prompts` directly, skipping `State::update`'s after-message work (`agent_confirm::release`); no test of `clear_for_dialog` closing the mode confirmation. (r3's cancel path, catch-all comment and 104-column line were fixed in M8 with the gate's `feature_write_isolation` fix.)
 
 - M6's first final gate failed once in `tests::pr_status::pr_list_read_a_second_ask_shares_the_read_under_way` (`the work an update returned has to finish: Elapsed`, the 10 s bound of `main_tests::messages`; untouched by #942). Isolated it passes 5 of 5 but takes 10.05 s each run, right at that bound: a load flake to watch.
 

@@ -353,24 +353,24 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 Split from #941's composer (ledger decision 18): what needs #941's composer row is Phase 10b (M9).
 
-- [ ] T064 [P] [US2] Tests: in `client/src/ui/material/menu_anatomy.rs` (`start_list_items`), the
+- [x] T064 [P] [US2] Tests: in `client/src/ui/material/menu_anatomy.rs` (`start_list_items`), the
   start list carries a row per mode under an offered **Claude Code (structured)** entry, the chosen
   one marked, each sending `StartModeChosen`; in `client/src/ui/confirm_bypass.rs`, the dialog names
   the effect and each confirmation (start, mode change) is drawn exactly while its state waits; in
   `client/tests/features_permission_prompts.rs`, only Bypass has the label *Bypass: Claude runs
   every tool without asking*, and a deny/note field of an ended request releases the keyboard (M7
   review A r2 F1), through the shell in `shell/daemon_sync.rs` `tests::permission_prompts`
-- [ ] T065 [US2] Draw the structured create flow's mode choice in the start list (rows, not a
+- [x] T065 [US2] Draw the structured create flow's mode choice in the start list (rows, not a
   `Select`: ledger decision 19), the Bypass confirmation dialog `client/src/ui/confirm_bypass.rs` (new,
   built like `ui/confirm_delete.rs`, naming the effect "Claude will run every tool without asking
   …") registered for a Bypass start and for a mode change, and the label *Bypass: Claude runs
   every tool without asking* in the session bar (`ui/transcript/session_bar.rs`) while the mode is
   Bypass; clear a request field's keyboard focus when its request ends
-- [ ] T067 [US1] Turn permission prompts on: remove `DaemonState::set_permission_prompts` and its
+- [x] T067 [US1] Turn permission prompts on: remove `DaemonState::set_permission_prompts` and its
   test helper, launch with `--permission-prompt-tool` whenever the session is bound
   (`daemon/src/state.rs`, `daemon/src/structured.rs`, `daemon/tests/support/structured.rs`), and
   make T028's argv assertion the unconditional one in `daemon/tests/structured_session.rs`
-- [ ] T068 [US1] User guide `docs/user-guide/worktrees-and-sessions.md`, *Structured sessions*:
+- [x] T068 [US1] User guide `docs/user-guide/worktrees-and-sessions.md`, *Structured sessions*:
   permission prompts, Always allow and its scope (this session only, never written to Claude's
   settings), plan approval, questions, the four modes and Bypass's risk; remove "permission
   prompts" from the not-yet list (FR-021)
@@ -532,7 +532,7 @@ window could answer; M8 turns it on, and M9 adds the composer side. T070 (Polish
 - **Verify**: quickstart Part B steps 1–4, 6, 7, 9–11 (without the composer parts) recorded in
   `visual-pass/`; `cargo test -p micold-daemon --test structured_session`;
   `cargo test -p micold-client --test features_permission_prompts`, `--bin micold-ai-ide
-  permission_prompts`, `--lib start_list_items confirm_bypass`; `scripts/check-user-guide-updated.sh`
+  permission_prompts`, `--lib start_list_items`, `--lib confirm_bypass`; `scripts/check-user-guide-updated.sh`
 - **Depends on**: M7
 - **Tier**: full
 

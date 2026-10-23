@@ -1122,7 +1122,8 @@ impl State {
                 self.permission_prompts.cancel_mode();
             }
             // Daemon connection messages are runtime, not pure state — the binary handles them in
-            // `update_inner` and never routes them here. Listed explicitly (not a catch-all) so the
+            // `update_inner` and never routes them here (of the permission prompts' messages, all
+            // but the `ModeCancelled` above, which closes a registered dialog). Listed explicitly (not a catch-all) so the
             // core reducer stays exhaustive over `Message` and a future variant is a compile error.
             //
             // Since T011 the whole connection vocabulary arrives under one wrapper, so declining it

@@ -154,6 +154,17 @@ fn a_structured_create_carries_the_chosen_mode_and_none_chosen_is_default() {
     }
 }
 
+/// #942 M8 (ledger decision 19): choosing a mode row leaves the start list open where it was, so
+/// the structured entry can be pressed next.
+#[test]
+fn choosing_a_mode_leaves_the_start_list_open() {
+    let mut state = State::default();
+    state.session.start_menu = bypass_start().menu;
+    state.update(Message::Session(Msg::StartModeChosen(PermissionMode::Plan)));
+    assert_eq!(state.session.start_menu, bypass_start().menu);
+    assert_eq!(state.session.start_mode, PermissionMode::Plan);
+}
+
 #[test]
 fn a_terminal_create_sends_default_whatever_was_chosen() {
     let mut state = State::default();
