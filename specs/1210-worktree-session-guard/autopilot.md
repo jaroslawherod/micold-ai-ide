@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T011–T014 | full | Bash commands judged | #1248 | merged |
 | M3 | T015–T017 | full | EnterWorktree and git worktree add denied | #1268 | merged |
 | M4 | T018–T020 | full | create_worktree hand-off text | #1294 | merged |
-| M5 | T021–T027 | full | Opt-out setting and toggle | PR | in review |
+| M5 | T021–T027 | full | Opt-out setting and toggle | #1295 | in review |
 
 ## Decisions
 
