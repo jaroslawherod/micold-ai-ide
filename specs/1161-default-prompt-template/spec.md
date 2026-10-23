@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: Closed 2026-10-23 — shipped in PRs #1163, #1245, #1247, #1251, #1284
 
 **Input**: Issue #1161 — a setting that defines a default prompt template, rendered into the initial prompt of the session started with a new worktree (create-worktree dialog, MCP `create_worktree` / `create_session`).
 
