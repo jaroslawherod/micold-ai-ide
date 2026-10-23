@@ -202,6 +202,16 @@ Press **Back** above the file to return to what you were reading, with the same 
 position and expanded lines. When the change modifies the browsed file, **Open diff** switches to
 its diff. Picking lines for a comment is not yet available in a file you browse.
 
+### Following a reference
+
+A path or import string in a line of a diff, or of a file you browse, that names a file of the
+repository is underlined. Press it to open that file in the right pane, at the line the text gives
+when it gives one: `src/main.rs:42`, `src/main.rs#L42` and `src/main.rs(42)` open at line 42, and
+an import such as `./util` opens `util.ts` or the folder's `index` file. Text that names no file of
+the repository is never underlined, and **Back** returns to where you pressed. The links need the
+repository's file list, which the view reads when it shows a diff; with a pull request shown they
+name the files of its head commit. Following a name to a definition inside a file is not available.
+
 With a pull request shown, **Files** stays available and lists the files of the pull request's head
 commit, including the ones it does not change; untracked and ignored files of the worktree are never
 listed. A file you open is the pull request's version, read from your repository when it has the

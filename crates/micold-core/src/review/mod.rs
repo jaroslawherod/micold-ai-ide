@@ -12,6 +12,7 @@ pub mod expand;
 pub mod git;
 pub mod pr_diff;
 pub mod prompt;
+pub mod reference;
 pub mod reply;
 pub mod store;
 pub mod target;

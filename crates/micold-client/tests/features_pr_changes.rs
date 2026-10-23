@@ -17,6 +17,25 @@ use micold_core::review::pr_diff::split_pr_diff;
 use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
 
+/// `effect` without the tree read a shown diff asks for so its lines can link to files (FR-012).
+fn sans_tree(effect: Effect) -> Effect {
+    match effect {
+        Effect::Batch(list) => {
+            let mut rest: Vec<Effect> = list
+                .into_iter()
+                .filter(|e| !matches!(e, Effect::ReadTree { .. }))
+                .collect();
+            match rest.len() {
+                0 => Effect::None,
+                1 => rest.remove(0),
+                _ => Effect::Batch(rest),
+            }
+        }
+        Effect::ReadTree { .. } => Effect::None,
+        other => other,
+    }
+}
+
 fn project() -> PathBuf {
     PathBuf::from("/projects/p")
 }
@@ -618,7 +637,7 @@ fn a_too_large_pull_request_and_a_failed_read_show_a_line_and_raise_nothing() {
                 result: Err(failure),
             },
         );
-        assert_eq!(effect, Effect::None);
+        assert_eq!(sans_tree(effect), Effect::None);
         let Source::PullRequest(p) = source(&state) else {
             panic!("still on the pull request");
         };
@@ -1155,6 +1174,7 @@ mod review_comments {
     }
 
     fn add_of(effect: Effect) -> ReviewEditOp {
+        let effect = sans_tree(effect);
         let Effect::ReviewEdit { edit, .. } = effect else {
             panic!("an edit, got {effect:?}");
         };
@@ -1638,7 +1658,7 @@ mod review_comments {
         push(&mut state, vec![comment.clone()]);
         let effect = head_moves(&mut state);
         let effect = answer_head(&mut state, effect, &patch_a(1, "new"));
-        assert_eq!(effect, Effect::None);
+        assert_eq!(sans_tree(effect), Effect::None);
         let view = state.open.as_ref().unwrap();
         assert!(!micold_client::features::changes::is_outdated(
             view, &comment
@@ -1678,7 +1698,7 @@ mod review_comments {
             push(&mut state, vec![comment.clone()]);
             let effect = head_moves(&mut state);
             let effect = answer_head(&mut state, effect, &patch_a(1, "newer"));
-            assert_eq!(effect, Effect::None, "no move for gone code");
+            assert_eq!(sans_tree(effect), Effect::None, "no move for gone code");
             let view = state.open.as_ref().unwrap();
             assert!(micold_client::features::changes::is_outdated(
                 view, &comment

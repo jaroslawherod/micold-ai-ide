@@ -424,10 +424,16 @@ fn browsed_pane<'a>(
                 .on_scroll(|offset, viewport| {
                     Message::Changes(Msg::DiffScrolled { offset, viewport })
                 })
+                .references(|text| changes::references_in(view, text))
+                .on_reference(|path, line| Message::Changes(Msg::ReferenceActivated(path, line)))
                 .into()
         }
     };
-    column![Element::from(bar), content]
+    let mut pane = column![Element::from(bar)].spacing(spacing::SM);
+    if let Some(notice) = view.notice {
+        pane = pane.push(Text::new(notice, TypeRole::Caption, r).tint(r.error));
+    }
+    pane.push(content)
         .spacing(spacing::SM)
         .height(Length::Fill)
         .into()
@@ -704,7 +710,9 @@ fn diff_pane_body<'a>(
                 });
             diff = diff
                 .shaped(&view.shaped)
-                .on_gap(|key| Message::Changes(Msg::GapToggled(key)));
+                .on_gap(|key| Message::Changes(Msg::GapToggled(key)))
+                .references(|text| changes::references_in(view, text))
+                .on_reference(|path, line| Message::Changes(Msg::ReferenceActivated(path, line)));
             if changes::pick_allowed(view) {
                 diff = diff.on_gutter(|old, new, extend| {
                     Message::Changes(Msg::GutterPressed { old, new, extend })
@@ -775,6 +783,9 @@ fn diff_pane_body<'a>(
                 } else {
                     text.tint(r.error)
                 });
+            }
+            if let Some(notice) = view.notice {
+                pane = pane.push(Text::new(notice, TypeRole::Caption, r).tint(r.error));
             }
             if let Some(unplaced) = unplaced {
                 pane = pane.push(unplaced);

@@ -394,6 +394,25 @@ fn loading_and_failure_have_their_own_bodies() {
 
 // ---- The diff half (M2, T029, contracts/changes-view.md D3, D4) ----
 
+/// `effect` without the tree read a shown diff asks for so its lines can link to files (FR-012).
+fn sans_tree(effect: Effect) -> Effect {
+    match effect {
+        Effect::Batch(list) => {
+            let mut rest: Vec<Effect> = list
+                .into_iter()
+                .filter(|e| !matches!(e, Effect::ReadTree { .. }))
+                .collect();
+            match rest.len() {
+                0 => Effect::None,
+                1 => rest.remove(0),
+                _ => Effect::Batch(rest),
+            }
+        }
+        Effect::ReadTree { .. } => Effect::None,
+        other => other,
+    }
+}
+
 fn loaded(diff: FileDiff) -> LoadedDiff {
     LoadedDiff {
         diff,
@@ -2139,7 +2158,7 @@ fn pressing_a_row_selects_the_file_scrolls_and_focuses() {
         },
     );
     // Unified rows: header, a, -b, +B, c, -x, +d: line 4 is row 6; two rows above it stay.
-    assert_eq!(effect, Effect::ScrollDiff { offset: 4 * 20 });
+    assert_eq!(sans_tree(effect), Effect::ScrollDiff { offset: 4 * 20 });
     assert_eq!(state.open.as_ref().unwrap().diff_offset, 80);
     assert!(!panel(&state).to_show);
     assert!(panel_rows(&state)[0].selected);
@@ -2269,7 +2288,7 @@ fn a_reason_clears_with_the_toggle_and_an_abandoned_jump_does_not_scroll() {
             result: Ok(commentable()),
         },
     );
-    assert_eq!(effect, Effect::None);
+    assert_eq!(sans_tree(effect), Effect::None);
 }
 
 /// US4 s1, FR-020. Lines added above move the card with its code, not outdated, and one `Reanchor`
@@ -3132,4 +3151,143 @@ fn selecting_a_listed_file_leaves_the_browser() {
     changes::update(&mut state, Msg::FileSelected(path("a.rs")));
     assert!(browse_body(view_of(&state)).is_none());
     assert!(!can_go_back(view_of(&state)));
+}
+
+// Feature 1150, M7: following references from the diff.
+
+fn forty_lines() -> FileText {
+    let lines: Vec<String> = (1..=40).map(|n| format!("line {n}")).collect();
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    file_text(&lines)
+}
+
+/// FR-012, US5 s2. Activating a reference opens its file, scrolled to the line the text gives, and
+/// Back returns to the diff.
+#[test]
+fn a_reference_opens_its_file_at_the_line_and_back_returns_to_the_diff() {
+    let mut state = with_tree(&["a.rs", "b.rs", "docs/x.md"]);
+    let Effect::ReadFile {
+        seq, path: asked, ..
+    } = changes::update(
+        &mut state,
+        Msg::ReferenceActivated(path("docs/x.md"), Some(30)),
+    )
+    else {
+        panic!("following a reference reads the file");
+    };
+    assert_eq!(asked, path("docs/x.md"));
+    assert!(
+        can_go_back(view_of(&state)),
+        "the diff is the place to go back to"
+    );
+    let effect = changes::update(
+        &mut state,
+        Msg::FileRead {
+            seq,
+            source: changes::SourceKey::Worktree,
+            path: path("docs/x.md"),
+            result: Ok(forty_lines()),
+            spans: Default::default(),
+        },
+    );
+    // Two rows above the line stay in view (the hunk header is row 0, line 30 row 30).
+    let offset = 28.0 * 20.0_f32; // DiffView::ROW_HEIGHT
+    assert_eq!(
+        effect,
+        Effect::ScrollDiff {
+            offset: offset as u32
+        }
+    );
+    assert_eq!(view_of(&state).diff_offset, offset as u32);
+
+    changes::update(&mut state, Msg::BrowseBack);
+    let view = view_of(&state);
+    assert!(browse_body(view).is_none(), "the diff is back");
+    assert_eq!(changes::selected_file(view), Some(&path("b.rs")));
+}
+
+/// A reference without a line opens the file from its top.
+#[test]
+fn a_reference_without_a_line_opens_from_the_top() {
+    let mut state = with_tree(&["docs/x.md"]);
+    let Effect::ReadFile { seq, .. } =
+        changes::update(&mut state, Msg::ReferenceActivated(path("docs/x.md"), None))
+    else {
+        panic!("reads the file");
+    };
+    answer_file(&mut state, seq, "docs/x.md", Ok(forty_lines()));
+    assert_eq!(view_of(&state).diff_offset, 0);
+}
+
+/// FR-012. A target the repository does not list changes nothing but a short notice, which the next
+/// message clears.
+#[test]
+fn an_unlisted_target_shows_a_notice_and_changes_nothing() {
+    let mut state = with_tree(&["a.rs", "b.rs"]);
+    let effect = changes::update(
+        &mut state,
+        Msg::ReferenceActivated(path("gone.rs"), Some(3)),
+    );
+    assert_eq!(effect, Effect::None);
+    let view = view_of(&state);
+    assert_eq!(view.notice, Some(changes::NO_SUCH_FILE));
+    assert!(browse_body(view).is_none() && !can_go_back(view));
+    changes::update(&mut state, Msg::PanelToggled);
+    assert_eq!(view_of(&state).notice, None);
+}
+
+/// FR-012. Only strings naming a listed file are references, resolved from the shown file's
+/// directory first; the files come from the tree, which is read once a diff is shown.
+#[test]
+fn lines_link_only_to_listed_files_once_the_tree_is_read() {
+    let mut state = ready(&["src/a.rs", "src/b.rs"]);
+    let (seq, _) = select(&mut state, "src/b.rs");
+    let effect = changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(text_diff()),
+        },
+    );
+    let Effect::Batch(asked) = effect else {
+        panic!("a shown diff reads the tree for its links, got {effect:?}");
+    };
+    let [Effect::ReadTree { seq, .. }] = asked[..] else {
+        panic!("one tree read, got {asked:?}");
+    };
+    let text = "mod a; // \"./a.rs:7\" and ./missing.rs";
+    assert!(changes::references_in(view_of(&state), text).is_empty());
+    changes::update(
+        &mut state,
+        Msg::TreeRead {
+            seq,
+            result: Ok(micold_core::pull_request::TreeListing {
+                paths: vec![path("src/a.rs"), path("src/b.rs")],
+                truncated: false,
+            }),
+        },
+    );
+    let found = changes::references_in(view_of(&state), text);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].path, path("src/a.rs"));
+    assert_eq!(found[0].line, Some(7));
+    assert_eq!(&text[found[0].range.clone()], "./a.rs");
+}
+
+/// Following a reference from a browsed file pushes that file, so Back returns to it.
+#[test]
+fn following_from_a_browsed_file_goes_back_to_that_file() {
+    let mut state = with_tree(&["x.md", "y.md"]);
+    let seq = browse(&mut state, "x.md");
+    answer_file(&mut state, seq, "x.md", Ok(file_text(&["see y.md"])));
+    let Effect::ReadFile { seq, .. } =
+        changes::update(&mut state, Msg::ReferenceActivated(path("y.md"), None))
+    else {
+        panic!("reads y.md");
+    };
+    answer_file(&mut state, seq, "y.md", Ok(file_text(&["y"])));
+    let Effect::ReadFile { .. } = changes::update(&mut state, Msg::BrowseBack) else {
+        panic!("back to x.md reads it again");
+    };
+    assert_eq!(view_of(&state).browse.as_ref().unwrap().path, path("x.md"));
 }

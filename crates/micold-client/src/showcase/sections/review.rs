@@ -260,6 +260,30 @@ pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
         )
         .height(Length::Fixed(DIFF_HEIGHT))
     };
+    // A word of each line stands for a file the repository lists.
+    let linked = |layout| {
+        container(
+            DiffView::new(&COLOURED.diff, layout, roles)
+                .spans(spans)
+                .references(|text| {
+                    let start = text.find(|c: char| c.is_alphabetic()).unwrap_or(0);
+                    let len = text[start..]
+                        .find(|c: char| !c.is_alphanumeric())
+                        .unwrap_or(text.len() - start);
+                    micold_core::review::RelPath::from_native("src/lib.rs")
+                        .filter(|_| len > 2)
+                        .map(|path| micold_core::review::reference::Reference {
+                            range: start..start + len,
+                            path,
+                            line: Some(1),
+                        })
+                        .into_iter()
+                        .collect()
+                })
+                .on_reference(|_, _| Message::NoOp),
+        )
+        .height(Length::Fixed(DIFF_HEIGHT))
+    };
     arrange(
         vec![
             posed("unified", pose(&UNIFIED), roles),
@@ -277,6 +301,16 @@ pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
             posed(
                 "side by side, syntax-coloured",
                 coloured(DiffLayout::SideBySide),
+                roles,
+            ),
+            posed(
+                "reference link, unified",
+                linked(DiffLayout::Unified),
+                roles,
+            ),
+            posed(
+                "reference link, side by side",
+                linked(DiffLayout::SideBySide),
                 roles,
             ),
             posed("hidden lines, unified", hidden(DiffLayout::Unified), roles),
