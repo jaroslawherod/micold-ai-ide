@@ -113,3 +113,12 @@ Source: `tdd/verification.md` (verdict BLOCKED). The feature is not done until T
 - [x] T027 (finding 4) Pin `PROMPT_LOOKUP_BOUND` to 5 s in a unit test in `crates/micold-daemon/src/state.rs` (US4 s6). Proof: `cargo test -p micold-daemon --lib state::`.
 - [x] T028 (finding 5) Add a case to `crates/micold-daemon/tests/mcp_default_prompt.rs` with `github_issues_enabled` off asserting no lookup and empty title/body. Proof: deleting the gate at `ops.rs:600` fails it; `cargo test -p micold-daemon --test mcp_default_prompt`.
 - [x] T029 (finding 7) Split the two-scenario tests at `mcp_default_prompt.rs:274` and `:315` into one scenario each. Proof: `cargo test -p micold-daemon --test mcp_default_prompt`.
+
+## Phase 7: TDD remediation (second audit)
+
+Source: `tdd/verification.md` (verdict FAIL). Finding 1 is waived (ledger D4). T031 and T032 are deferred follow-ups.
+
+- [x] T030 (finding 2) Replace the constant pin at `crates/micold-daemon/src/state.rs:8153` with a test that a fresh `DaemonState` reports a 5 s effective bound (not the constant). Proof: changing `state.rs:1001` to another duration fails it; `cargo test -p micold-daemon --lib prompt_lookup_bound_tests`.
+- [ ] T031 (finding 3) Run the unmeasured deliberate mutants (blank-prompt check in `mcp/tools.rs`, `first_prompt_edited` guard, `name_words` to empty, `DaemonSettings` to form path) one at a time, restore each, and record caught or survived in `tdd/verification.md`.
+- [ ] T032 (finding 5) Split `a_listing_then_its_bodies_then_a_pick_fill_the_field` at `crates/micold-client/tests/features_worktree_form.rs:657` into one test per step with `assert_eq!` on the full rendered string. Proof: `cargo test -p micold-client --test features_worktree_form`.
+- [x] T033 (finding 8) Correct the `traces` for I4, O5 and O6 in `tdd/test-list.md` to existing test names. Proof: each named test is found by `grep -rn "fn <name>" crates`.
