@@ -329,7 +329,6 @@ async fn a_terminal_sessions_launch_and_binding_carry_no_permission_setting() {
     let state = service(dir, vec![session]);
     let bindings = tempfile::tempdir().unwrap();
     mcp::serve_tool_server(&state, bindings.path().to_path_buf()).await;
-    state.set_permission_prompts(true);
     stream_script(dir, "");
     let starting = Arc::clone(&state);
     tokio::task::spawn_blocking(move || starting.start_session(id, LaunchMode::Fresh))

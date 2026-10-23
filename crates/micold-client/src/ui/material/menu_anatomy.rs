@@ -596,14 +596,28 @@ mod start_list_items {
             },
         );
 
-        let items = crate::ui::session_start_menu_items(
+        let mut items = crate::ui::session_start_menu_items(
             &state,
             &SessionLocation::Default,
             tokens::roles(micold_core::theme::ColorScheme::Light),
         );
 
+        // Claude Code's structured entry follows its terminal one (feature 938), and the mode rows
+        // follow the structured entry (#942); the CLIs' items are the rest.
+        let mode_rows = items.drain(2..6).collect::<Vec<_>>();
+        assert_eq!(
+            mode_rows
+                .iter()
+                .map(|i| i.label.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Permissions: Default",
+                "Permissions: Accept edits",
+                "Permissions: Plan",
+                "Permissions: Bypass"
+            ]
+        );
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        // Claude Code's structured entry follows its terminal one (feature 938).
         let mut clis = AiCli::ALL.to_vec();
         clis.insert(1, AiCli::ClaudeCode);
         let mut expected: Vec<String> = clis.iter().map(ToString::to_string).collect();
@@ -627,5 +641,62 @@ mod start_list_items {
                 "{cli}: reason iff not"
             );
         }
+    }
+
+    /// #942 T064 (FR-014): under an offered structured entry the start list has a row per mode,
+    /// the chosen one marked, each choosing its mode; an unavailable structured entry has none.
+    #[test]
+    fn the_structured_entry_carries_the_mode_rows_with_the_chosen_one_marked() {
+        use crate::app::Message;
+        use crate::features::session::Msg as SessionMsg;
+        use crate::icons::Icon;
+        use micold_core::session::PermissionMode;
+        let state_with = |available: Vec<AiCli>| {
+            let mut state = State::default();
+            let root = PathBuf::from("/repo");
+            state.workspace.active = Some(root.clone());
+            state
+                .session
+                .availability
+                .asked(1, AvailabilityKey::Dir(root.clone()));
+            state.session.availability.answered(
+                1,
+                CliAvailability {
+                    available,
+                    source: AvailabilitySource::ThisComputer,
+                    env: None,
+                    asked_for: AvailabilityKey::Dir(root),
+                },
+            );
+            state
+        };
+        let roles = tokens::roles(micold_core::theme::ColorScheme::Light);
+        let mut state = state_with(vec![AiCli::ClaudeCode]);
+        state.session.start_mode = PermissionMode::Plan;
+        let items = crate::ui::session_start_menu_items(&state, &SessionLocation::Default, roles);
+        assert_eq!(items[1].label, "Claude Code (structured)");
+        for (item, mode) in items[2..6].iter().zip(PermissionMode::ALL) {
+            assert_eq!(item.label, crate::ui::start_mode_label(mode));
+            assert!(item.reserve_icon);
+            assert_eq!(
+                item.icon,
+                (mode == PermissionMode::Plan).then_some(Icon::ActiveMarker),
+                "{mode:?}: marked iff chosen"
+            );
+            assert!(
+                matches!(
+                    item.message,
+                    Some(Message::Session(SessionMsg::StartModeChosen(m))) if m == mode
+                ),
+                "{mode:?} chooses itself"
+            );
+        }
+
+        let state = state_with(vec![AiCli::Copilot]);
+        let items = crate::ui::session_start_menu_items(&state, &SessionLocation::Default, roles);
+        assert!(
+            items.iter().all(|i| !i.label.starts_with("Permissions:")),
+            "no mode rows under an unavailable structured entry"
+        );
     }
 }

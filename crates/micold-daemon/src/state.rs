@@ -326,9 +326,6 @@ struct Inner {
     /// Structured sessions' pending permission requests and always-allow rules (#942, R4). Beside
     /// `clients` under one lock for the same reason as `confirmations` (FR-005).
     prompts: crate::permission::PromptRegistry,
-    /// Whether structured sessions ask through the prompt tool (#942 R14): off by default and
-    /// never persisted, until the window can answer; turned on by tests.
-    permission_prompts: bool,
     /// Each structured session's model picks while this daemon runs (#943 FR-015, FR-016).
     model_picks: HashMap<SessionId, ModelPicks>,
     /// The sessions switching kind, each with the kind it switches to (#943 R8, FR-025): set for
@@ -1051,7 +1048,6 @@ impl DaemonState {
                 carried: HashMap::new(),
                 confirmations: crate::mcp::confirm::Registry::default(),
                 prompts: crate::permission::PromptRegistry::default(),
-                permission_prompts: false,
                 model_picks: HashMap::new(),
                 switching: HashMap::new(),
                 views: Views::default(),
@@ -1327,13 +1323,6 @@ impl DaemonState {
             .expect("first-prompt bound poisoned") = bound;
     }
 
-    /// Turn structured sessions' permission prompts on or off (#942 R14). On, a bound structured
-    /// session started from now on names the prompt tool, and its tool-server calls are offered
-    /// it. Off (the default) it behaves as feature 938 ships it. Never persisted.
-    pub fn set_permission_prompts(&self, on: bool) {
-        self.lock().permission_prompts = on;
-    }
-
     /// Bound the event streams of structured sessions started from now on (feature 938), so a test
     /// need not write 5,000 events to see eviction or 1,024 to see a viewer lag.
     pub fn set_event_stream_bounds(&self, bounds: crate::structured::StreamBounds) {
@@ -1448,8 +1437,8 @@ impl DaemonState {
     /// Every argument an AI-CLI launch adds after its own: the activity wiring, then for a
     /// structured session its permission arguments (#942, contracts/claude-permission.md
     /// *Launch*), then, last of all so no positional argument can follow it, the tool-server
-    /// binding (contracts/binding.md §4). The prompt tool is named only when the session is bound
-    /// and prompts are on (R14).
+    /// binding (contracts/binding.md §4). The prompt tool is named whenever the session is bound
+    /// (T067).
     fn ai_cli_extra(
         &self,
         id: SessionId,
@@ -1468,7 +1457,8 @@ impl DaemonState {
                     .workspace()
                     .find_session(id)
                     .map_or(PermissionMode::Default, |(_, s)| s.permission_mode);
-                (!binding.is_empty() && inner.permission_prompts, mode)
+                // A bound session asks through the prompt tool (#942 FR-001).
+                (!binding.is_empty(), mode)
             };
             extra.extend(
                 micold_core::structured::permission::launch_args(mode, prompt_tool)
@@ -3598,13 +3588,11 @@ impl DaemonState {
     }
 
     /// The tools `caller` is offered (#942 FR-001): the prompt tool too when it is a structured
-    /// session and prompts are on.
+    /// session.
     pub fn prompt_scope(&self, caller: SessionId) -> micold_core::mcp::jsonrpc::ListScope {
         use micold_core::mcp::jsonrpc::ListScope;
         let inner = self.lock();
-        if inner.permission_prompts
-            && Self::kind_of(&inner, caller) == Some(SessionKind::Structured)
-        {
+        if Self::kind_of(&inner, caller) == Some(SessionKind::Structured) {
             ListScope::Structured
         } else {
             ListScope::Terminal

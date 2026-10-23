@@ -349,16 +349,23 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ---
 
-## Phase 10: Window — composer side, switch on, user guide (M8; needs #941 on `main`, I-2)
+## Phase 10: Window — create-flow mode, Bypass confirmation and label, switch on, user guide (M8)
 
-- [ ] T064 [P] [US2] Test in `client/tests/structured_start_menu.rs` (or the composer's test file
-  from #941): the mode `Select` beside the composer offers the four modes, shows the session's
-  summary mode, sends `SetPermissionMode`, and Bypass goes through the confirmation first
-- [ ] T065 [US2] Draw the mode `Select` in #941's composer row and in the structured create flow,
-  the Bypass confirmation dialog `client/src/ui/confirm_bypass.rs` (new, built like
-  `ui/confirm_delete.rs`, naming the effect "Claude will run every tool without asking …"), and the
-  label *Bypass: Claude runs every tool without asking* while the mode is Bypass
-- [ ] T066 [US5] Show *Waiting for you* in #941's composer status slot while `waiting(session)`
+Split from #941's composer (ledger decision 18): what needs #941's composer row is Phase 10b (M9).
+
+- [ ] T064 [P] [US2] Tests: in `client/src/ui/material/menu_anatomy.rs` (`start_list_items`), the
+  start list carries a row per mode under an offered **Claude Code (structured)** entry, the chosen
+  one marked, each sending `StartModeChosen`; in `client/src/ui/confirm_bypass.rs`, the dialog names
+  the effect and each confirmation (start, mode change) is drawn exactly while its state waits; in
+  `client/tests/features_permission_prompts.rs`, only Bypass has the label *Bypass: Claude runs
+  every tool without asking*, and a deny/note field of an ended request releases the keyboard (M7
+  review A r2 F1), through the shell in `shell/daemon_sync.rs` `tests::permission_prompts`
+- [ ] T065 [US2] Draw the structured create flow's mode choice in the start list (rows, not a
+  `Select`: ledger decision 19), the Bypass confirmation dialog `client/src/ui/confirm_bypass.rs` (new,
+  built like `ui/confirm_delete.rs`, naming the effect "Claude will run every tool without asking
+  …") registered for a Bypass start and for a mode change, and the label *Bypass: Claude runs
+  every tool without asking* in the session bar (`ui/transcript/session_bar.rs`) while the mode is
+  Bypass; clear a request field's keyboard focus when its request ends
 - [ ] T067 [US1] Turn permission prompts on: remove `DaemonState::set_permission_prompts` and its
   test helper, launch with `--permission-prompt-tool` whenever the session is bound
   (`daemon/src/state.rs`, `daemon/src/structured.rs`, `daemon/tests/support/structured.rs`), and
@@ -367,8 +374,20 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   permission prompts, Always allow and its scope (this session only, never written to Claude's
   settings), plan approval, questions, the four modes and Bypass's risk; remove "permission
   prompts" from the not-yet list (FR-021)
-- [ ] T069 Run quickstart Part B (steps 1–11) with the `visual-pass` skill and save the evidence in
-  `specs/942-structured-permission-prompts/visual-pass/`
+- [ ] T069 Run quickstart Part B steps 1–4, 6, 7, 9–11 without the composer parts (the start
+  list's mode rows, the Bypass confirmation and label, request, plan and question views) with the
+  `visual-pass` skill and save the evidence in `specs/942-structured-permission-prompts/visual-pass/`
+
+## Phase 10b: Window — composer side (M9; needs #941 M6 on `main`, I-2)
+
+- [ ] T071 [P] [US2] Test in the composer's test file from #941: the mode `Select` beside the
+  composer offers the four modes, shows the session's summary mode, sends `SetPermissionMode`, and
+  Bypass goes through the confirmation first (`ConfirmBypassModeDialog`, registered in M8)
+- [ ] T072 [US2] Draw the mode `Select` in #941's composer row, showing the session's mode (FR-015
+  in the view) and changing it (FR-017)
+- [ ] T066 [US5] Show *Waiting for you* in #941's composer status slot while `waiting(session)`
+- [ ] T073 Run quickstart Part B's composer parts (step 1's *Waiting for you*, step 5, step 6's
+  shown mode, step 8, step 11's mode control) with the `visual-pass` skill into `visual-pass/`
 
 ---
 
@@ -382,7 +401,8 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 ## Dependencies & Execution Order
 
 - Phase 1 → Phase 2 → Phase 3 (M1); then Phases 4 → 5 → 6 → 7 → 8 → 9 → 10, each a milestone on
-  `main` before the next starts. Phase 9 also waits for #939 M5–M6 (I-1), Phase 10 for #941 (I-2).
+  `main` before the next starts. Phase 9 also waits for #939 M5–M6 (I-1), Phase 10b for #941 M6
+  (I-2).
 - Within a phase, each test task precedes the implementation it names (Constitution I).
 - Stories: US1 and US2 (P1) carry the core and daemon paths; US3 and US4 reuse US1's registry and
   US2's mode change; US5 and US6 extend the registry; nothing depends on a later phase.
@@ -406,9 +426,9 @@ users in M8, with its user guide.
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). M1–M6 depend on
-nothing beyond `main`; **M7 needs #939 M5–M6 merged (I-1); M8 needs #941 merged (I-2)**. Until M8
-the daemon-only switch (R14) keeps `--permission-prompt-tool` off, so no user sees a request no
-window can answer. T070 (Polish, no code) is left to the close unit (milestones rule 4).
+nothing beyond `main`; **M7 needs #939 M5–M6 merged (I-1); M9 needs #941 M6 merged (I-2)**. Until
+M8 the daemon-only switch (R14) kept `--permission-prompt-tool` off, so no user saw a request no
+window could answer; M8 turns it on, and M9 adds the composer side. T070 (Polish, no code) is left to the close unit (milestones rule 4).
 
 ### M1 — Core: request kinds, answers, rules and modes against recorded fixtures 🎯 MVP
 
@@ -501,14 +521,29 @@ window can answer. T070 (Polish, no code) is left to the close unit (milestones 
 - **Depends on**: M6; #939 M5–M6 on `main` (I-1)
 - **Tier**: full
 
-### M8 — Window: mode control, waiting state, prompts on, user guide
+### M8 — Window: create-flow mode, Bypass confirmation and label, prompts on, user guide
 
-- **Tasks**: T064–T069
-- **Deliverable**: a user of a structured session is asked for permission in the window, sees and
-  changes the mode (Bypass after confirmation), sees *Waiting for you*, and the user guide
-  describes it; quickstart Part B passes
-- **Satisfies**: US1–US6 end to end; FR-009 (composer), FR-014, FR-017 (window), FR-021; SC-006
-- **Verify**: quickstart Part B (steps 1–11) recorded in `visual-pass/`;
-  `cargo test -p micold-daemon --test structured_session`; `scripts/check-user-guide-updated.sh`
-- **Depends on**: M7; #941 on `main` (I-2)
+- **Tasks**: T064, T065, T067, T068, T069
+- **Deliverable**: a user of a structured session is asked for permission in the window, starts a
+  session in any mode from the start list (Bypass after confirmation), sees the Bypass label in the
+  session bar, and the user guide describes it
+- **Satisfies**: US1, US3, US4, US6 end to end; US2 scenarios 1, 2, 4 in the window; FR-014,
+  FR-021; SC-006 for the three request kinds
+- **Verify**: quickstart Part B steps 1–4, 6, 7, 9–11 (without the composer parts) recorded in
+  `visual-pass/`; `cargo test -p micold-daemon --test structured_session`;
+  `cargo test -p micold-client --test features_permission_prompts`, `--bin micold-ai-ide
+  permission_prompts`, `--bin micold-ai-ide start_list_items confirm_bypass`; `scripts/check-user-guide-updated.sh`
+- **Depends on**: M7
+- **Tier**: full
+
+### M9 — Window: mode Select and *Waiting for you* in the composer
+
+- **Tasks**: T071, T072, T066, T073
+- **Deliverable**: a structured session's composer row shows its mode and changes it (Bypass after
+  confirmation), and its status slot says *Waiting for you* while a request waits
+- **Satisfies**: US2 scenario 5 and US5 in the window; FR-009 (composer), FR-015 (shown in the
+  view), FR-017 (window)
+- **Verify**: quickstart Part B's composer parts recorded in `visual-pass/`; the composer tests of
+  T071
+- **Depends on**: M8; #941 M6 on `main` (I-2)
 - **Tier**: full

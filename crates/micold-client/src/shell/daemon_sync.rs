@@ -537,6 +537,7 @@ pub fn on_disconnected(app: &mut App, daemon: DaemonId) -> Task<Message> {
             app.core.permission_prompts.connection_lost(session);
         }
     }
+    app.core.release_ended_prompt_focus();
     if !was_active {
         // A daemon the window is not looking at: its own pending requests are resolved below and
         // nothing about what is on screen changes.
@@ -2232,10 +2233,12 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             id,
             tool_use_id,
             resolution,
-        } => app
-            .core
-            .permission_prompts
-            .resolved(session, id, tool_use_id, resolution),
+        } => {
+            app.core
+                .permission_prompts
+                .resolved(session, id, tool_use_id, resolution);
+            app.core.release_ended_prompt_focus();
+        }
         DaemonMsg::PermissionInputText { req, text } => {
             if let Some(&PendingOp::PermissionInput { session, id }) = app.pending_ops.get(&req) {
                 app.pending_ops.remove(&req);
@@ -6170,6 +6173,36 @@ pub(crate) mod tests {
                 app.core.permission_prompts.resolution(session, "toolu_3"),
                 Some(Resolution::Denied)
             );
+        }
+
+        /// M7 review A r2 F1: a deny-message field that holds the keyboard gives it up when its
+        /// request ends, so the terminals take keys again; another field keeps it.
+        #[test]
+        fn a_request_that_ends_releases_its_focused_field() {
+            use micold_client::features::window::FieldId;
+            let (mut app, _rx, session) = app_with_session();
+            let _ = on_daemon_event(&mut app, DAEMON, requested(session));
+            app.core.window.focused_field = Some(FieldId::PromptDenyMessage(ID));
+            let resolved = DaemonMsg::PermissionResolved {
+                session,
+                id: PromptId(4),
+                tool_use_id: None,
+                resolution: Resolution::Allowed,
+            };
+            let _ = on_daemon_event(&mut app, DAEMON, resolved);
+            assert_eq!(
+                app.core.window.focused_field,
+                Some(FieldId::PromptDenyMessage(ID)),
+                "another request's end leaves it"
+            );
+            let resolved = DaemonMsg::PermissionResolved {
+                session,
+                id: ID,
+                tool_use_id: Some("toolu_3".into()),
+                resolution: Resolution::Allowed,
+            };
+            let _ = on_daemon_event(&mut app, DAEMON, resolved);
+            assert_eq!(app.core.window.focused_field, None);
         }
 
         #[test]

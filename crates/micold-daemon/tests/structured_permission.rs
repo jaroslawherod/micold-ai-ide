@@ -5,8 +5,7 @@
 //!
 //! The stand-in `claude` of `support/structured.rs` makes real prompt-tool calls to the daemon's
 //! tool server with its own credential (`prompt`, `prompt-async`, research R13), and test clients
-//! connected over the wire see each request and decide it. Prompts are switched on for every test
-//! (R14).
+//! connected over the wire see each request and decide it.
 // unix-only: the stand-in CLI of support/structured.rs is put on PATH as a POSIX executable.
 #![cfg(unix)]
 
@@ -39,7 +38,7 @@ mod structured;
 use conn::{connect, Client};
 use structured::{
     fake_stream_cli, fixture_lines, prompt_answer_count, prompt_answers, prompt_call_file,
-    prompts_on, stdin_lines, stream_script, structured_session,
+    stdin_lines, stream_script, structured_session,
 };
 
 /// A daemon with a bound tool server and prompts on, holding one structured session per project.
@@ -97,7 +96,6 @@ impl Daemon {
         let state = mcp::state_over(listed, store);
         mcp::serve_tool_server(&state, bindings.to_path_buf()).await;
         micold_daemon::server::spawn_mode_reports(Arc::clone(&state));
-        prompts_on(&state);
         state
     }
 
@@ -765,7 +763,6 @@ async fn a_terminal_sessions_credential_cannot_list_or_call_the_prompt_tool() {
         store.path(),
     );
     let addr = mcp::serve_tool_server(&state, bindings.path().to_path_buf()).await;
-    prompts_on(&state);
     let list = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).to_string();
     let lists_prompt = |body: String| {
         let response: Value = serde_json::from_str(&body).unwrap();
@@ -790,9 +787,6 @@ async fn a_terminal_sessions_credential_cannot_list_or_call_the_prompt_tool() {
     let structured_bearer = mcp::credential(&state, s);
     let (_, body) = mcp::post_mcp(addr, Some(&structured_bearer), &list).await;
     assert!(lists_prompt(body), "offered to a structured session");
-    state.set_permission_prompts(false);
-    let (_, body) = mcp::post_mcp(addr, Some(&structured_bearer), &list).await;
-    assert!(!lists_prompt(body), "not offered while prompts are off");
 }
 
 /// T030 (edge case *Several requests at once*): three requests of one session pending at once are

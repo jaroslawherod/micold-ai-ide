@@ -1198,11 +1198,52 @@ the background service keeps the events it reports. It is Claude Code only.
 - **Each window keeps its own view.** Tiled side by side, each structured session draws its own
   transcript; a second window showing the same session has its own folded cards, threads, task
   list and scroll position, and the same figures.
+- **It asks you before a tool runs.** When Claude wants to run a tool your Claude Code settings do
+  not already allow, the turn pauses and the request appears in the transcript, right under the
+  tool's card (or at the end, when that card is not shown): the tool's name and what it would do —
+  the command, the file and its change, the address. Long input shows its start, with **Show all**.
+  Answer it with:
+  - **Allow**: the tool runs and the turn goes on;
+  - **Deny**: the tool does not run. Type a message first, and Claude reads it as the reason, so it
+    can try another way; with none, it is told you declined;
+  - **Always allow**: the tool runs, and later requests of the same kind (the same command, a page
+    of the same site, the same tool) run without asking **for the rest of this session only**. The
+    rule is kept by the app for this session; it is never written to Claude Code's settings files,
+    and other sessions still ask.
+
+  The card then says how the request ended: **Allowed**, **Always allowed**, **Denied**, or
+  **Withdrawn** when the turn ended without an answer (you stopped the session, or Claude Code
+  exited). Every window showing the session shows the request, and the first answer counts; a
+  window opened later still shows one that waits. A request waits as long as you need.
+- **Plans wait for your approval.** In **Plan** mode Claude investigates and proposes before it
+  changes anything. Its plan appears in full, with **Approve and accept edits** (carry it out, and
+  change files without asking from then on), **Approve** (carry it out, asking as usual) and **Keep
+  planning** (with an optional note on what to change).
+- **Claude can ask you questions.** When Claude asks, each question shows its header, text and
+  options with their descriptions, as a single or a multiple choice, plus **Other** for your own
+  answer. **Submit** is available once every question is answered; **Decline** answers none.
+- **While a request waits**, the session's row shows **Blocked: needs permission**, as a terminal
+  session's does, and the needs-permission [notification](#being-told-when-a-session-needs-you)
+  fires under the same setting.
+- **The permission mode** decides how often Claude asks. Choose it in the start-session list: the
+  **Permissions:** rows under **Claude Code (structured)** — **Default** (marked until you pick
+  another), **Accept edits**, **Plan** and **Bypass** — set the mode the next structured session
+  starts in. The mode is kept with the session, across restarts.
+  - **Default** asks as your Claude Code settings say, as a terminal session in the same folder
+    would.
+  - **Accept edits** changes files without asking; other tools still ask.
+  - **Plan** has Claude only investigate and propose, until you approve its plan.
+  - **Bypass** never asks: **Claude runs every tool without asking**, including commands that
+    delete files or reach the network. Starting a session in Bypass first asks you to confirm.
+    While a session is in Bypass, its session bar says **Bypass: Claude runs every tool without
+    asking**, with a warning icon. Use it only for work you would let Claude do unattended.
+
+  Terminal sessions are unchanged: they ask in their own terminal screen, and have no mode here.
 - **It does not do yet** what the rest of this work adds: typing a prompt and
   interrupting a turn ([#941](https://github.com/jaroslawherod/micold-ai-ide/issues/941)),
-  permission prompts ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash
-  commands and switching a session between kinds
-  ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
+  changing a running session's mode from its view
+  ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash commands and switching
+  a session between kinds ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
 - **Across a restart.** While [Save terminal history](./settings.md#terminal) is on, the events are
   kept across a restart of the background service; with it off they live in the service's memory
   only.

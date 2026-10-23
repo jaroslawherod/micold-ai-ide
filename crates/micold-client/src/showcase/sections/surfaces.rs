@@ -421,6 +421,11 @@ pub fn disclosure_card<'a>(
                 session_bar_sample(BarPose::Running, roles),
                 roles,
             ),
+            posed(
+                "the session bar of a session in Bypass: its label, icon and words (#942)",
+                session_bar_sample(BarPose::Bypass, roles),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )
@@ -453,6 +458,7 @@ fn insights_sample<'a>(showcase: &'a Showcase, roles: Roles) -> Element<'a, Mess
         crate::ui::transcript::InsightsCtx {
             state: showcase.insights(),
             cli_running: true,
+            mode: micold_core::session::PermissionMode::Default,
         },
         samples::INSIGHTS_SESSION,
         &crate::ui::transcript::BlockRenderers::PLAIN,
@@ -474,6 +480,7 @@ enum BarPose {
     Warning,
     NoData,
     Running,
+    Bypass,
 }
 
 /// A structured session's bar (feature 944, X1) as `pose` says, its figures from the same view
@@ -493,7 +500,7 @@ fn session_bar_sample(pose: BarPose, roles: Roles) -> Element<'static, Message> 
         warning,
     };
     let context = match pose {
-        BarPose::Normal | BarPose::Running => measured(37_141, false),
+        BarPose::Normal | BarPose::Running | BarPose::Bypass => measured(37_141, false),
         BarPose::Warning => measured(812_400, true),
         BarPose::NoData => ContextState::NoData,
     };
@@ -523,7 +530,13 @@ fn session_bar_sample(pose: BarPose, roles: Roles) -> Element<'static, Message> 
             Vec::new()
         },
     };
-    session_bar::bar(&view, samples::TRANSCRIPT_SESSION, running, roles).map(Message::Transcript)
+    let mode = if pose == BarPose::Bypass {
+        micold_core::session::PermissionMode::Bypass
+    } else {
+        micold_core::session::PermissionMode::Default
+    };
+    session_bar::bar(&view, samples::TRANSCRIPT_SESSION, running, mode, roles)
+        .map(Message::Transcript)
 }
 
 /// The transcript sample's pane height: a few entries in view, the rest a scroll away.

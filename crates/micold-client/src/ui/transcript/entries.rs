@@ -255,11 +255,13 @@ fn first_line(text: &str) -> &str {
 }
 
 /// What feature 944 draws with a session's transcript (contracts/transcript-extensions.md): the
-/// window's insights of the session and whether its CLI runs (FR-018, FR-022).
+/// window's insights of the session and whether its CLI runs (FR-018, FR-022); and the session's
+/// permission mode, for the session bar's Bypass label (#942 FR-014).
 #[derive(Debug, Clone, Copy)]
 pub struct InsightsCtx<'a> {
     pub state: &'a structured_insights::State,
     pub cli_running: bool,
+    pub mode: micold_core::session::PermissionMode,
 }
 
 /// The session an entry belongs to and, when the window holds its insights, what #944 adds to the
