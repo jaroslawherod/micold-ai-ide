@@ -1797,8 +1797,8 @@ build.
       not a mount). Every `RuntimeCapabilities` constructor follows with `false`
       (`hostile_host::docker_caps`, the core and client tests that build one). No `--security-opt`
       anywhere; `ESCALATION_DENYLIST` unchanged.
-- [ ] T246 [BUG-1296] [U61] `crates/micold-core/src/provision/login.rs`: when `has_exited` ends the
-      wait, run `<runtime> logs --tail 20 <container>` through the same runner and append its
+- [ ] T246 [BUG-1296] [U61] `crates/micold-core/src/provision/login.rs`: when the wait ends on a reason
+      `has_exited` matches (early or at the bound), run `<runtime> logs --tail 20 <container>` through the same runner and append its
       non-empty lines to the reason, so `container_attempt`'s "the container … is not ready" in
       `crates/micold-client/src/daemon.rs` carries the cause into the daemon row's Details. A
       failing `logs` is ignored.
