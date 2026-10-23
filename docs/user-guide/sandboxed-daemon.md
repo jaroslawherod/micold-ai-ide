@@ -170,8 +170,7 @@ than accepting a number it knows will be ignored — see **Resources** below.
 
 With SELinux in **Enforcing** mode (`getenforce` prints `Enforcing`), a container may read only files
 labelled for containers, so a folder shared with it as it is stays unreadable inside. The
-application checks the mode each time it asks the runtime what it supports, and on such a host
-shares every path it gives the sandbox — your projects, the sandbox's own home and data folders, its
+application checks the mode each time it creates a sandbox, and on such a host shares every path it gives the sandbox — your projects, the sandbox's own home and data folders, its
 SSH keys and any credential you share — with the runtime's **shared container label** (the `z`
 mount option, on Docker and Podman alike).
 
@@ -183,8 +182,9 @@ mount option, on Docker and Podman alike).
   names the folder. Register the project's own folder instead.
 - **Confinement is never turned off.** The application does not pass `--security-opt label=disable`
   or anything like it; the sandbox runs under the same SELinux policy as any other container.
-- In **Permissive** mode, or with SELinux off, nothing is relabelled. If you switch the mode while
-  the application is open, restart it so the next sandbox is created for the new mode.
+- In **Permissive** mode, or with SELinux off, nothing is relabelled. A sandbox created before you
+  switch to Enforcing keeps the mounts it was created with: remove its container so the application
+  creates it again for the new mode.
 
 If a sandbox still stops at once, its row in **Settings > Daemons** shows the last lines of the
 container's own log after the runtime's message, which is where a denied file shows up.
