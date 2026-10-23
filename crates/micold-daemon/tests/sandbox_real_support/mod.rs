@@ -445,7 +445,7 @@ fn wait_until_absent(program: &str, list: &[&str], key: &str, name: &str) {
 /// first [`wait_for_accept`] provisions it over SSH, as the client does.
 ///
 /// Mounts the *state* directory, one level below the data home — the image sets
-/// `XDG_DATA_HOME=/var/lib`, so `/var/lib/micold-ai-ide` is where the daemon reads its catalogue.
+/// `MICOLD_DATA_DIR=/var/lib/micold-ai-ide`, so that is where the daemon reads its catalogue.
 /// Mounting the data home itself gives the daemon an empty catalogue, and every session start then
 /// fails with `no such session in the catalog` while the container looks perfectly healthy.
 pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
@@ -1389,6 +1389,8 @@ pub async fn start_host_daemon(
     std::env::set_var(micold_core::spawn::DAEMON_BIN_ENV, daemon_bin);
     std::env::set_var("XDG_RUNTIME_DIR", dir);
     std::env::set_var("XDG_DATA_HOME", &data);
+    // `MICOLD_DATA_DIR` beats `XDG_DATA_HOME` in `micold_core::paths`.
+    std::env::remove_var(micold_core::paths::DATA_DIR_ENV);
     std::env::set_var("MICOLD_LOG", "warn");
     std::env::set_var("SHELL", "/bin/sh");
     std::env::set_var("PATH", path);

@@ -114,6 +114,7 @@ impl Sandbox {
                 Some(home.path().join(".local/share").into()),
             ),
             ("CLAUDE_CONFIG_DIR", None),
+            (micold_core::paths::DATA_DIR_ENV, None),
             ("MICOLD_IMAGE_REFERENCE", None),
         ]);
         let workspace = Workspace {

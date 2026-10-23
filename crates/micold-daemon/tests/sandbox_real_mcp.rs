@@ -60,7 +60,7 @@ const PORT: u16 = 17752;
 /// The port the container's sshd listens on: the one `<runtime> port` names, whatever host port it is
 /// published on.
 const CONTROL_PORT: u16 = micold_core::sandbox::argv::CONTAINER_SSH_PORT;
-/// The service's data directory inside the container: the image sets `XDG_DATA_HOME=/var/lib`.
+/// The service's data directory inside the container: the image sets `MICOLD_DATA_DIR=/var/lib/micold-ai-ide`.
 const CONTAINER_DATA_DIR: &str = "/var/lib/micold-ai-ide";
 
 /// Pinned for the reason the other probes pin it.
