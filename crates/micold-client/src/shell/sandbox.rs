@@ -795,7 +795,8 @@ impl micold_client::daemon::ContainerStarter for DaemonContainers {
         match outcome {
             Ok(_) if cancel.is_cancelled() => Err("the start was cancelled".to_string()),
             Ok(_) => Ok(ledger),
-            Err(failure) => Err(failure.reason()),
+            // The runtime's own words under the reason, for the row and the details (#1280).
+            Err(failure) => Err(failure.report()),
         }
     }
 }

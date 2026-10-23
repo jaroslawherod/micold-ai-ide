@@ -349,7 +349,7 @@ impl RuntimeError {
                 format!("The image `{reference}` was not found.")
             }
             RuntimeError::ImagePullFailed { reference, detail } => {
-                format!("`{reference}` could not be fetched: {detail}")
+                format!("`{reference}` could not be fetched: {}", error_line(detail))
             }
             RuntimeError::PortUnavailable { port } => {
                 format!("Port {port} is already in use, so the sandbox has no control channel.")
@@ -357,13 +357,22 @@ impl RuntimeError {
             RuntimeError::MountRejected { path, detail } if path.is_empty() => {
                 // Only reachable when nothing the caller offered matched the runtime's text.
                 // Saying so beats printing an empty pair of backticks and calling it a path.
-                format!("A path the sandbox needs cannot be shared with it: {detail}")
+                format!(
+                    "A path the sandbox needs cannot be shared with it: {}",
+                    error_line(detail)
+                )
             }
             RuntimeError::MountRejected { path, detail } => {
-                format!("`{path}` cannot be shared with the sandbox: {detail}")
+                format!(
+                    "`{path}` cannot be shared with the sandbox: {}",
+                    error_line(detail)
+                )
             }
             RuntimeError::LimitRejected { field, detail } => {
-                format!("The runtime refused the {field} limit: {detail}")
+                format!(
+                    "The runtime refused the {field} limit: {}",
+                    error_line(detail)
+                )
             }
             RuntimeError::SandboxStopped { name } => {
                 format!("The sandbox container `{name}` is no longer running.")
@@ -373,9 +382,11 @@ impl RuntimeError {
             RuntimeError::NameInUse { name } => {
                 format!("A container named `{name}` already exists.")
             }
+            RuntimeError::Unknown { stderr } if stderr.trim().is_empty() => {
+                "The runtime reported: no detail".to_string()
+            }
             RuntimeError::Unknown { stderr } => {
-                let line = stderr.lines().next().unwrap_or("no detail").trim();
-                format!("The runtime reported: {line}")
+                format!("The runtime reported: {}", error_line(stderr))
             }
         }
     }
@@ -438,6 +449,25 @@ impl RuntimeError {
     }
 }
 
+impl RuntimeError {
+    /// Everything the runtime printed about this failure, when it printed anything (#1280).
+    ///
+    /// [`Self::reason`] carries one line of it, which is enough to name the failure and not always
+    /// enough to fix it: a podman warning before the error, or the context Docker prints after it,
+    /// is only here. A daemon's details show it in full.
+    pub fn runtime_output(&self) -> Option<&str> {
+        match self {
+            RuntimeError::ImagePullFailed { detail, .. }
+            | RuntimeError::MountRejected { detail, .. }
+            | RuntimeError::LimitRejected { detail, .. }
+            | RuntimeError::Unknown { stderr: detail } => {
+                Some(detail.trim()).filter(|d| !d.is_empty())
+            }
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.reason(), self.remedy())
@@ -489,7 +519,7 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
     {
         return RuntimeError::ImagePullFailed {
             reference: String::new(),
-            detail: first_line(&out.stderr),
+            detail: out.stderr.trim().to_string(),
         };
     }
     if has("pull access denied")
@@ -518,13 +548,13 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
     if dialect.mount_rejected_phrases.iter().any(|p| has(p)) {
         return RuntimeError::MountRejected {
             path: String::new(),
-            detail: first_line(&out.stderr),
+            detail: out.stderr.trim().to_string(),
         };
     }
     if has("--storage-opt") || has("pquota") {
         return RuntimeError::LimitRejected {
             field: "storage".to_string(),
-            detail: first_line(&out.stderr),
+            detail: out.stderr.trim().to_string(),
         };
     }
     RuntimeError::Unknown {
@@ -532,8 +562,15 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
     }
 }
 
-fn first_line(s: &str) -> String {
-    s.lines().next().unwrap_or("").trim().to_string()
+/// The line of a runtime's output that states its error: the first that starts `Error` (both
+/// runtimes prefix it so, and podman may print warnings before it), else the first that is not
+/// blank.
+fn error_line(output: &str) -> &str {
+    let mut lines = output.lines().map(str::trim).filter(|l| !l.is_empty());
+    let first = lines.clone().next().unwrap_or("");
+    lines
+        .find(|l| l.get(..5).is_some_and(|w| w.eq_ignore_ascii_case("error")))
+        .unwrap_or(first)
 }
 
 /// The first `:<port>` in a bind failure, if there is one.

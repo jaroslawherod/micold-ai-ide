@@ -128,6 +128,11 @@ result by being told your user and group explicitly; Podman by mapping your own 
 container (`--userns=keep-id`). The outcome is identical; the mechanism is not, and it is the
 mechanism that fails differently.
 
+**Podman 4.0 is the oldest version supported.** The in-memory directory that holds a sandbox's git
+credential is made yours in each runtime's own words: Docker takes `uid=` and `gid=` options, which
+Podman refuses as *unknown mount option*, so on Podman it is the `U` option instead (in Podman since
+3.1). Either way the directory is yours alone (`0700`).
+
 **Its characteristic first-run failure is a missing subuid range.** Rootless Podman needs a block of
 subordinate user and group ids allocated to you in `/etc/subuid` and `/etc/subgid`. Without them
 nothing starts, and Podman says so in its own words rather than saying "permission denied". The
@@ -490,6 +495,9 @@ Each message is prefixed with the stage it happened in — *"The sandbox failed 
 container runtime"*, *"…while getting the sandbox image"*, *"…while creating the sandbox"*,
 *"…while starting the sandbox"* — so you can tell a missing runtime from a missing image without
 reading the detail.
+
+Under that sentence, in the daemon's row and in its **Details**, is the runtime's own output (its
+last 40 lines): a warning Podman prints before its error, or the context Docker prints after it.
 
 ### How long each step may take
 
