@@ -46,13 +46,13 @@ use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::SystemRunner;
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::lifecycle::{self, SandboxState};
-use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime, RuntimeError, RuntimeKind};
+use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime, RuntimeError};
 use micold_core::sandbox::{
     CredentialLayout, MountSet, NetworkPosture, SandboxProfile, SandboxSpec,
 };
 
 mod sandbox_real_support;
-use sandbox_real_support::{image, make_keys, sshd_answers};
+use sandbox_real_support::{image, make_keys, program, runtime_kind, sshd_answers};
 
 /// A sandbox brought up through the real adapter, torn down whatever the test does.
 ///
@@ -90,7 +90,7 @@ impl Fixture {
         let (_keys, ssh_keys) = make_keys(&state, port);
 
         let profile = SandboxProfile {
-            runtime: RuntimeKind::Docker,
+            runtime: runtime_kind(),
             image: ImageChoice::Own(OwnImage::Reference(image())),
             network,
             ..SandboxProfile::default()
@@ -117,7 +117,7 @@ impl Fixture {
             home: host_home(),
         };
 
-        let runtime = CliRuntime::new(RuntimeKind::Docker, SystemRunner);
+        let runtime = CliRuntime::new(runtime_kind(), SystemRunner);
         let id = runtime
             .create(&spec)
             .unwrap_or_else(|e| panic!("create {name}: {}", e.reason()));
@@ -142,10 +142,10 @@ impl Fixture {
     /// `exec` rather than a replaced entrypoint, so what is probed is the container the application
     /// actually starts — same network, same identity, same mounts.
     fn probe(&self, script: &str) -> (bool, String) {
-        let out = Command::new("docker")
+        let out = Command::new(program())
             .args(["exec", &self.name, "bash", "-lc", script])
             .output()
-            .expect("docker exec");
+            .expect("the runtime's exec");
         (
             out.status.success(),
             format!(
@@ -164,8 +164,8 @@ impl Drop for Fixture {
 }
 
 fn purge(name: &str, network: &str) {
-    let _ = Command::new("docker").args(["rm", "-f", name]).output();
-    let _ = Command::new("docker")
+    let _ = Command::new(program()).args(["rm", "-f", name]).output();
+    let _ = Command::new(program())
         .args(["network", "rm", network])
         .output();
 }
@@ -213,9 +213,10 @@ fn sandbox_real_no_outbound_blocks_egress_while_the_control_port_still_answers()
          being applied: {out}"
     );
 
-    // The published port is host-side DNAT and is unaffected by the missing masquerade rule. If
-    // this fails the posture was implemented as `--internal` somewhere, and the control channel
-    // this feature runs on is gone with the egress.
+    // The published port is forwarded from the host side (Docker's DNAT, rootless Podman's
+    // `rootlessport`) and is unaffected by the network having no way out. If this fails the setup
+    // got another setup's network arguments — `--internal` on Docker or rootful Podman — and the
+    // control channel this feature runs on is gone with the egress (C-5, BUG-1285).
     assert!(
         sshd_answers(fx.port, std::time::Duration::from_secs(20)),
         "the container's published SSH port does not answer under NoOutbound — the posture severed \
@@ -287,11 +288,11 @@ fn sandbox_real_a_container_stopped_from_outside_is_reported_lost() {
     assert!(running.running, "the fixture did not actually come up");
 
     // Not through `runtime.stop` — the point is a stop the *application did not perform*.
-    let out = Command::new("docker")
+    let out = Command::new(program())
         .args(["stop", &fx.name])
         .output()
-        .expect("docker stop");
-    assert!(out.status.success(), "docker stop failed");
+        .expect("the runtime's stop");
+    assert!(out.status.success(), "the runtime's stop failed");
 
     let found = fx
         .runtime
@@ -429,7 +430,7 @@ impl Fixture {
         purge(&name, &net);
 
         let profile = SandboxProfile {
-            runtime: RuntimeKind::Docker,
+            runtime: runtime_kind(),
             image: ImageChoice::Own(OwnImage::Reference(image())),
             network: NetworkPosture::NoOutbound,
             ..SandboxProfile::default()
@@ -457,7 +458,7 @@ impl Fixture {
             home: host_home(),
         };
 
-        let runtime = CliRuntime::new(RuntimeKind::Docker, SystemRunner);
+        let runtime = CliRuntime::new(runtime_kind(), SystemRunner);
         let id = runtime
             .create(&spec)
             .unwrap_or_else(|e| panic!("recreate: {}", e.reason()));
@@ -525,7 +526,7 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
     let (_keys, ssh_keys) = make_keys(&state_dir, PORT);
 
     let profile = SandboxProfile {
-        runtime: RuntimeKind::Docker,
+        runtime: runtime_kind(),
         image: ImageChoice::Own(OwnImage::Reference(image())),
         network: NetworkPosture::NoOutbound,
         ..SandboxProfile::default()
@@ -551,7 +552,7 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
         time_zone: None,
         home: host_home(),
     };
-    let runtime = CliRuntime::new(RuntimeKind::Docker, SystemRunner);
+    let runtime = CliRuntime::new(runtime_kind(), SystemRunner);
 
     // What `shell::sandbox::start` does on every bring-up. The client dials the daemon over SSH
     // afterwards; what the container has to do for that, and what this checks, is have its sshd up.
@@ -575,11 +576,11 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
     });
 
     // Not through `runtime.stop`: the point is a stop the application did not perform.
-    let out = Command::new("docker")
+    let out = Command::new(program())
         .args(["stop", &name])
         .output()
-        .expect("docker stop");
-    assert!(out.status.success(), "docker stop failed");
+        .expect("the runtime's stop");
+    assert!(out.status.success(), "the runtime's stop failed");
 
     // The client's dial is refused and its liveness check finds the container stopped.
     let mut state = lifecycle::container_lost(&SandboxState::Running(started.id), &name)
@@ -609,7 +610,7 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
 /// What the container said, for a failure message: a dial that never succeeds is otherwise silent
 /// about why.
 fn container_logs(name: &str) -> String {
-    Command::new("docker")
+    Command::new(program())
         .args(["logs", "--tail", "40", name])
         .output()
         .map(|o| {
@@ -619,5 +620,5 @@ fn container_logs(name: &str) -> String {
                 String::from_utf8_lossy(&o.stderr)
             )
         })
-        .unwrap_or_else(|e| format!("docker logs: {e}"))
+        .unwrap_or_else(|e| format!("{} logs: {e}", program()))
 }

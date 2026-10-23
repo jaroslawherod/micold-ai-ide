@@ -9,7 +9,9 @@
 
 use std::path::{Path, PathBuf};
 
-use super::runtime::{IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind};
+use super::runtime::{
+    IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeCapabilities, RuntimeKind,
+};
 use super::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
 
 /// The content of the user's SSH private key.
@@ -175,5 +177,6 @@ pub fn docker_caps() -> RuntimeCapabilities {
         pids: LimitSupport::Supported,
         storage: LimitSupport::Supported,
         identity_mapping: IdentityMapping::ExplicitUidGid,
+        no_outbound: NoOutboundSupport::docker(),
     }
 }

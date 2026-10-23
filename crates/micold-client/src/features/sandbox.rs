@@ -593,7 +593,8 @@ mod tests {
     use super::*;
     use micold_core::link::SharedLocation;
     use micold_core::sandbox::runtime::{
-        ContainerId, IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+        ContainerId, IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeCapabilities,
+        RuntimeKind,
     };
 
     fn caps() -> RuntimeCapabilities {
@@ -605,6 +606,7 @@ mod tests {
             pids: LimitSupport::Supported,
             storage: LimitSupport::Supported,
             identity_mapping: IdentityMapping::ExplicitUidGid,
+            no_outbound: NoOutboundSupport::docker(),
         }
     }
 

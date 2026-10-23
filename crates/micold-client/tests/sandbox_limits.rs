@@ -21,7 +21,7 @@ use micold_client::features::window::FieldId;
 use micold_client::ui::{network_warning, sandbox_limits, ContainerView};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::{
-    IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+    IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeCapabilities, RuntimeKind,
 };
 use micold_core::sandbox::{NetworkPosture, SandboxProfile};
 
@@ -34,6 +34,7 @@ fn caps(storage: LimitSupport) -> RuntimeCapabilities {
         pids: LimitSupport::Supported,
         storage,
         identity_mapping: IdentityMapping::ExplicitUidGid,
+        no_outbound: NoOutboundSupport::docker(),
     }
 }
 

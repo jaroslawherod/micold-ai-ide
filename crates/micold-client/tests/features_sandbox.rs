@@ -15,8 +15,8 @@ use micold_core::protocol::messages::ExitStatus;
 use micold_core::sandbox::lifecycle::{Failure, SandboxState, Stage, Started};
 use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
 use micold_core::sandbox::runtime::{
-    ContainerId, IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeError, RuntimeKind,
-    UnsatisfiableLimit,
+    ContainerId, IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeCapabilities,
+    RuntimeError, RuntimeKind, UnsatisfiableLimit,
 };
 use micold_core::sandbox::{Bytes, ResourceBudget};
 
@@ -437,5 +437,6 @@ fn caps() -> RuntimeCapabilities {
         pids: LimitSupport::Supported,
         storage: LimitSupport::Supported,
         identity_mapping: IdentityMapping::ExplicitUidGid,
+        no_outbound: NoOutboundSupport::docker(),
     }
 }

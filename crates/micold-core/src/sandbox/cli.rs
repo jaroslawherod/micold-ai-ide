@@ -15,10 +15,10 @@ use super::argv;
 use super::dialect::Dialect;
 use super::exec::{CommandOutput, CommandRunner, RunLimits, StreamEvent};
 use super::image::{ImageChoice, OwnImage};
-use super::parse::{self, ContainerFacts, ImageFacts};
+use super::parse::{self, ContainerFacts, ImageFacts, RuntimeInfo};
 use super::runtime::{
-    classify, ContainerId, ContainerRuntime, IdentityMapping, LimitSupport, Progress,
-    RuntimeCapabilities, RuntimeError, RuntimeKind, RuntimeVersion,
+    classify, ContainerId, ContainerRuntime, IdentityMapping, LimitSupport, NoOutboundSupport,
+    Progress, RuntimeCapabilities, RuntimeError, RuntimeKind, RuntimeVersion,
 };
 use super::SandboxSpec;
 
@@ -210,6 +210,66 @@ fn storage_support(driver: &str) -> LimitSupport {
     }
 }
 
+/// How this runtime setup blocks outbound connections and keeps the published port (contracts
+/// C-5's table, research R4's amendment, BUG-1285).
+///
+/// Read from the same `info` as [`storage_support`], because the answer is a fact of the setup, not
+/// of the runtime: rootless Podman forwards published ports through `rootlessport`, so an
+/// `--internal` network keeps them; rootful Podman forwards them through netavark's DNAT, which an
+/// internal network does not get, and only netavark 1.7's `no_default_route` blocks outbound there.
+/// Before 1.7 netavark accepts that option and ignores it, which would leave outbound open without
+/// a word — so an older or unknown backend is `Unsupported`, never a guess.
+pub fn no_outbound_support(kind: RuntimeKind, info: &RuntimeInfo) -> NoOutboundSupport {
+    const WAYS: &str = "rootless Podman blocks them with an internal network, and rootful Podman \
+                        needs netavark 1.7 or newer";
+    match kind {
+        RuntimeKind::Docker => NoOutboundSupport::docker(),
+        RuntimeKind::Podman if info.rootless => NoOutboundSupport::podman_rootless(),
+        RuntimeKind::Podman => {
+            let reason = match (
+                info.network_backend.as_deref(),
+                info.network_backend_version.as_deref(),
+            ) {
+                (Some("netavark") | None, Some(v)) if netavark_has_no_default_route(v) => {
+                    return NoOutboundSupport::podman_no_default_route();
+                }
+                (Some("netavark") | None, Some(v)) => format!(
+                    "rootful Podman on {v} cannot block outbound connections without cutting off \
+                     the published port; {WAYS}"
+                ),
+                (Some("netavark") | None, None) => format!(
+                    "rootful Podman did not report its netavark version, so it is not known to \
+                     block outbound connections; {WAYS}"
+                ),
+                (Some(other), _) => format!(
+                    "rootful Podman with the `{other}` network backend cannot block outbound \
+                     connections without cutting off the published port; {WAYS}"
+                ),
+            };
+            NoOutboundSupport::Unsupported { reason }
+        }
+    }
+}
+
+/// Whether a netavark version line (`netavark 1.10.3`) is 1.7 or newer, where `no_default_route`
+/// takes effect. A line this cannot read is not 1.7.
+fn netavark_has_no_default_route(version_line: &str) -> bool {
+    let Some(version) = version_line
+        .split_whitespace()
+        .find(|t| t.starts_with(|c: char| c.is_ascii_digit()))
+    else {
+        return false;
+    };
+    let mut parts = version.split('.').map(|p| {
+        let digits: String = p.chars().take_while(char::is_ascii_digit).collect();
+        digits.parse::<u32>().ok()
+    });
+    match (parts.next().flatten(), parts.next().flatten()) {
+        (Some(major), Some(minor)) => (major, minor) >= (1, 7),
+        _ => false,
+    }
+}
+
 impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
     fn detect(&self) -> Result<RuntimeVersion, RuntimeError> {
         let out = self.run(&["version", "--format", "{{json .}}"])?;
@@ -231,6 +291,7 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
             pids: LimitSupport::Supported,
             storage: storage_support(&info.storage_driver),
             identity_mapping: self.dialect().identity,
+            no_outbound: no_outbound_support(self.kind, &info),
         })
     }
 
@@ -336,13 +397,14 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
     }
 
     fn create(&self, spec: &SandboxSpec) -> Result<ContainerId, RuntimeError> {
-        // The network first. "Already exists" is the normal case on every start after the first.
-        let dialect = self.dialect();
-        let net_args = argv::network_create(spec, &dialect);
+        // The probe first: it decides the network's arguments, and a setup that cannot block
+        // outbound is refused here, before any network exists (FR-017a).
+        let caps = self.probe()?;
+        // Then the network. "Already exists" is the normal case on every start after the first.
+        let net_args = argv::network_create(spec, &caps)?;
         let net: Vec<&str> = net_args.iter().filter_map(|a| a.to_str()).collect();
         self.run_idempotent(&net, &["already exists"])?;
 
-        let caps = self.probe()?;
         let args = argv::create(spec, &caps);
         let borrowed: Vec<&str> = args.iter().filter_map(|a| a.to_str()).collect();
         // The mount list is known here and nowhere below, so a rejected bind is named here or not
@@ -493,6 +555,74 @@ mod tests {
         .limiting_acquire(Duration::from_secs(15 * 60), CancelToken::new())
         .acquire_image(&ImageChoice::Basic, &mut |_| {})
         .expect_err("the pull ended early")
+    }
+
+    fn podman_info(rootless: bool, backend: Option<&str>, version: Option<&str>) -> RuntimeInfo {
+        RuntimeInfo {
+            storage_driver: "overlay".into(),
+            rootless,
+            network_backend: backend.map(str::to_string),
+            network_backend_version: version.map(str::to_string),
+        }
+    }
+
+    /// U57 (BUG-1285): contracts C-5's table, setup by setup.
+    #[test]
+    fn the_no_outbound_network_follows_the_probed_setup() {
+        let docker = RuntimeInfo {
+            storage_driver: "overlayfs".into(),
+            rootless: false,
+            network_backend: None,
+            network_backend_version: None,
+        };
+        assert_eq!(
+            no_outbound_support(RuntimeKind::Docker, &docker),
+            NoOutboundSupport::docker()
+        );
+        for (rootless, backend, version) in [
+            (true, Some("netavark"), Some("netavark 1.4.0")),
+            (true, Some("cni"), None),
+            (true, None, None),
+        ] {
+            assert_eq!(
+                no_outbound_support(
+                    RuntimeKind::Podman,
+                    &podman_info(rootless, backend, version)
+                ),
+                NoOutboundSupport::podman_rootless(),
+                "rootless {backend:?} {version:?}"
+            );
+        }
+        for version in ["netavark 1.7.0", "netavark 1.10.3", "netavark 2.0.0-dev"] {
+            assert_eq!(
+                no_outbound_support(
+                    RuntimeKind::Podman,
+                    &podman_info(false, Some("netavark"), Some(version))
+                ),
+                NoOutboundSupport::podman_no_default_route(),
+                "{version}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_rootful_podman_that_cannot_block_egress_is_unsupported_with_the_ways_forward() {
+        for (backend, version, names) in [
+            (Some("netavark"), Some("netavark 1.4.0"), "netavark 1.4.0"),
+            (Some("netavark"), Some("netavark 1.6.9"), "netavark 1.6.9"),
+            (Some("netavark"), Some("netavark"), "netavark"),
+            (Some("netavark"), None, "did not report"),
+            (Some("cni"), None, "`cni`"),
+        ] {
+            match no_outbound_support(RuntimeKind::Podman, &podman_info(false, backend, version)) {
+                NoOutboundSupport::Unsupported { reason } => {
+                    for needle in [names, "netavark 1.7", "rootless Podman"] {
+                        assert!(reason.contains(needle), "{version:?}: {needle} in {reason}");
+                    }
+                }
+                other => panic!("{backend:?} {version:?}: expected Unsupported, got {other:?}"),
+            }
+        }
     }
 
     #[test]

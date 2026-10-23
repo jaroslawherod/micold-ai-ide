@@ -429,3 +429,114 @@ fn both_runtimes_are_driven_by_the_same_adapter() {
         let _ = rt.detect();
     }
 }
+
+/// U58 (BUG-1285, FR-017a): a sandbox on a setup that cannot block outbound connections, from
+/// Podman 4.9.3 rootful on netavark 1.4.0's own `info`.
+fn create_on_rootful_netavark_1_4(
+    network: micold_core::sandbox::NetworkPosture,
+) -> (
+    Result<ContainerId, RuntimeError>,
+    Vec<micold_core::sandbox::exec::Invocation>,
+) {
+    use micold_core::sandbox::{
+        CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount,
+    };
+    use std::path::{Path, PathBuf};
+
+    let home = Path::new("/home/u");
+    let profile = SandboxProfile {
+        network,
+        ..SandboxProfile::default()
+    };
+    let spec = SandboxSpec {
+        name: "micold-sandbox".into(),
+        mounts: MountSet::build(
+            &[home.join("p")],
+            &profile,
+            &CredentialLayout::conventional(home, None),
+            home.join(".local/share/micold-ai-ide"),
+            home,
+            SecretMount {
+                host: home.join(".local/share/micold-ai-ide/ssh"),
+                container: PathBuf::from("/run/micold/ssh"),
+            },
+        ),
+        profile,
+        uid: 1000,
+        gid: 1000,
+        control_port: 7727,
+        published_ports: Vec::new(),
+        network_name: "micold-net".into(),
+        time_zone: None,
+        home: home.to_path_buf(),
+    };
+    let runner = RecordingRunner::new();
+    // `create` probes first (version, info); every later command gets an empty success.
+    runner.push_ok(fixture("podman_version.json"));
+    runner.push_ok(fixture("podman_info_4.9_rootful.json"));
+    let result = CliRuntime::new(RuntimeKind::Podman, &runner).create(&spec);
+    (result, runner.calls())
+}
+
+fn subcommand(call: &micold_core::sandbox::exec::Invocation) -> String {
+    call.args_lossy()
+        .into_iter()
+        .take(2)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[test]
+fn no_outbound_on_a_setup_that_cannot_block_egress_is_refused_before_any_network() {
+    let (result, calls) =
+        create_on_rootful_netavark_1_4(micold_core::sandbox::NetworkPosture::NoOutbound);
+    let error = result.expect_err("refused");
+    assert!(
+        matches!(
+            error,
+            RuntimeError::NoOutboundUnavailable {
+                kind: RuntimeKind::Podman,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    let ran: Vec<String> = calls.iter().map(subcommand).collect();
+    assert!(
+        !ran.iter()
+            .any(|c| c.starts_with("network") || c.starts_with("create")),
+        "nothing may be created on a setup that would run with outbound open: {ran:?}"
+    );
+
+    let reason = error.reason();
+    assert!(reason.contains("Network access is off"), "{reason}");
+    assert!(reason.contains("netavark 1.4.0"), "{reason}");
+    let remedy = error.remedy();
+    for needle in [
+        "rootless Podman",
+        "netavark to 1.7",
+        "turn network access on",
+    ] {
+        assert!(remedy.contains(needle), "{needle} in {remedy}");
+    }
+}
+
+#[test]
+fn outbound_on_the_same_setup_creates_a_plain_network_and_the_container() {
+    let (result, calls) =
+        create_on_rootful_netavark_1_4(micold_core::sandbox::NetworkPosture::Outbound);
+    result.expect("an open network is what the setting asks for");
+    let network = calls
+        .iter()
+        .find(|c| subcommand(c) == "network create")
+        .expect("the network is created")
+        .args_lossy();
+    assert_eq!(
+        network,
+        ["network", "create", "--driver", "bridge", "micold-net"],
+    );
+    assert!(
+        calls.iter().any(|c| subcommand(c).starts_with("create")),
+        "{calls:?}"
+    );
+}

@@ -230,7 +230,7 @@ happened rather than showing an unexplained dead session.
 
 - [X] T076 *(test)* [P] [US4] Add K-2 to `crates/micold-core/tests/sandbox_argv.rs` — each supported limit produces exactly its flag with the expected unit conversion
 - [X] T077 *(test)* [P] [US4] Add K-3 to `crates/micold-core/tests/sandbox_argv.rs` — an unsupported limit produces **no** flag and reconciliation reports it with a reason (C-2, R5 — checked as behaviour, not documented as a caveat)
-- [ ] T078 ⚠️ Reopened *(test)* [P] [US4] Add K-7 to `crates/micold-core/tests/sandbox_argv.rs` — `NoOutbound` emits the masquerade-disabled network **and** the published port, and asserts the measured failure mode (an `--internal` network making the port inert) is never generated (C-5, R4) (reopened — BUG-1285: both halves are wrong for rootless Podman, which refuses the masquerade option and needs `--internal`; closed by T236. The test lives inline in `crates/micold-core/src/sandbox/argv.rs`, see T090)
+- [x] T078 *(test)* [P] [US4] Add K-7 to `crates/micold-core/tests/sandbox_argv.rs` — `NoOutbound` emits the masquerade-disabled network **and** the published port, and asserts the measured failure mode (an `--internal` network making the port inert) is never generated (C-5, R4) (reopened — BUG-1285: both halves are wrong for rootless Podman, which refuses the masquerade option and needs `--internal`; closed by T236. The test lives inline in `crates/micold-core/src/sandbox/argv.rs`, see T090)
 - [X] T079 *(test)* [P] [US4] Write `crates/micold-core/tests/sandbox_capabilities.rs` — the probe is cached against the runtime version and re-runs when it changes, and `reconcile` is pure, total, and never mutates the profile (RC-1, RC-2, RC-3)
 - [X] T080 *(test)* [P] [US4] Add range cases to `crates/micold-core/tests/settings_roundtrip.rs` — a value below a documented workable minimum is refused on save with a message naming the accepted range (US4 scenario 5, FR-016)
 
@@ -266,7 +266,7 @@ worktree or settings behaviour.
 
 ### Implementation
 
-- [ ] T093 ⚠️ Reopened [US5] Implement podman's dialect in `crates/micold-core/src/sandbox/dialect/podman.rs` — rootless defaults and `--userns=keep-id` (R3, C-4) (reopened — BUG-1285: the dialect copied Docker's network driver option, which netavark refuses; closed by T238 and T239)
+- [x] T093 [US5] Implement podman's dialect in `crates/micold-core/src/sandbox/dialect/podman.rs` — rootless defaults and `--userns=keep-id` (R3, C-4) (reopened — BUG-1285: the dialect copied Docker's network driver option, which netavark refuses; closed by T238 and T239)
 - [X] T094 [US5] Implement `detect` for both dialects in `crates/micold-core/src/sandbox/runtime.rs`, distinguishing not-installed, not-running and not-permitted (US5 scenario 2)
 - [X] T095 [US5] Add runtime selection to `crates/micold-client/src/ui/settings/daemon.rs` using the existing `Select` component, defaulting to Docker (SP-2, FR-021)
 - [X] T096 [US5] Ensure a detect failure reports which of the three it is with a next step, and leaves the app with a working service path, in `crates/micold-client/src/features/sandbox.rs` (US5 scenario 2). Added `Sandbox::fallback_offer`, which is where "leaves a working service path" becomes a property something can assert rather than a hope. Also renamed four remedies from "Settings → Daemon" to "Settings → Session service": the section has never been called Daemon in the UI, so the next step named a place the user could not find
@@ -1687,7 +1687,7 @@ C-5/K-7, research R4's amendment).
 Each test is written against a stub that compiles, so it fails on its assertion rather than on the
 build.
 
-- [ ] T236 [BUG-1285] [U56] *(test)* `crates/micold-core/src/sandbox/argv.rs` (`mod tests`, the K-7
+- [x] T236 [BUG-1285] [U56] *(test)* `crates/micold-core/src/sandbox/argv.rs` (`mod tests`, the K-7
       test `no_outbound_disables_masquerade_and_keeps_the_published_port`, renamed for what it now
       asserts). Closes T078. Under `NoOutbound`, per probed setup: Docker emits
       `-o com.docker.network.bridge.enable_ip_masquerade=false` and no `--internal`; rootless Podman
@@ -1695,14 +1695,14 @@ build.
       `-o no_default_route=true`, no `--internal` and no `com.docker.*` option; every setup keeps the
       published port `127.0.0.1:7727:2222`. Under `Outbound` none of the three appears. Red on
       `origin/main`: Podman emits Docker's option there (`bugs/BUG-1285.md#reproduction`).
-- [ ] T237 [BUG-1285] [U57] *(test)* `crates/micold-core/src/sandbox/parse.rs` and `cli.rs`
+- [x] T237 [BUG-1285] [U57] *(test)* `crates/micold-core/src/sandbox/parse.rs` and `cli.rs`
       (`mod tests`), with `podman info` fixtures beside the existing ones. `parse::info` reads
       rootless, the network backend and its version from Podman 4.9.3 rootless and rootful
       (`netavark 1.4.0`), a netavark ≥ 1.7 document and one without `networkBackendInfo`; Docker's
       document yields none of them. The probe maps them to `NoOutboundSupport` per contracts C-5's
       table: rootful netavark 1.4, CNI and an unreported version are `Unsupported`, with a reason
       naming netavark 1.7 and rootless Podman.
-- [ ] T238 [BUG-1285] [U58] *(test)* `crates/micold-core/tests/sandbox_runtime.rs` (the fake
+- [x] T238 [BUG-1285] [U58] *(test)* `crates/micold-core/tests/sandbox_runtime.rs` (the fake
       runtime). `create` of a `NoOutbound` spec on an `Unsupported` setup returns the new classified
       `RuntimeError` and runs no `network create` and no `create`; its message names the posture and
       its remedy names rootless Podman, netavark 1.7 and turning network access on. Under
@@ -1711,7 +1711,7 @@ build.
 
 ### Implementation for BUG-1285
 
-- [ ] T239 [BUG-1285] [U56] [U57] [U58] `crates/micold-core/src/sandbox/parse.rs` (`RuntimeInfo`
+- [x] T239 [BUG-1285] [U56] [U57] [U58] `crates/micold-core/src/sandbox/parse.rs` (`RuntimeInfo`
       gains the network backend and version), `runtime.rs` (`NoOutboundSupport`,
       `RuntimeCapabilities.no_outbound`, the new `RuntimeError` variant with message and remedy),
       `cli.rs` (`probe` sets `no_outbound` beside `storage_support`; `create` probes first and
@@ -1721,7 +1721,7 @@ build.
       `network_create` caller in `crates/micold-core/tests/protocol_auth.rs` follow. Doc comments
       that name the masquerade mechanism for every runtime (`argv.rs`, `sandbox/mod.rs`
       `NetworkPosture`, `crates/micold-client/src/shell/sandbox.rs` `NETWORK_NAME`) say it per setup.
-- [ ] T240 [BUG-1285] `crates/micold-daemon/tests/sandbox_real_support/mod.rs`
+- [x] T240 [BUG-1285] `crates/micold-daemon/tests/sandbox_real_support/mod.rs`
       (`start_no_outbound_sandbox` creates its network from the probed capabilities through
       `argv::network_create`, not from a copy of the option) and
       `crates/micold-core/tests/sandbox_real_lifecycle.rs`, which hard-codes Docker today: its
@@ -1731,7 +1731,7 @@ build.
       answers. Measure whether names resolve inside the `--internal` network; if they do not, the
       DNS-still-resolves test states that it holds on Docker and asserts Podman's measured
       behaviour, and the result is recorded in research R4's amendment.
-- [ ] T241 [BUG-1285] `docs/user-guide/sandboxed-daemon.md`. **Network**: how outbound is blocked
+- [x] T241 [BUG-1285] `docs/user-guide/sandboxed-daemon.md`. **Network**: how outbound is blocked
       differs by runtime, the guarantee does not; the DNS caveat per runtime as measured in T240.
       **What is different about Podman**: rootless Podman is the supported path for network access
       off; rootful Podman needs netavark 1.7 or newer for it, and otherwise the start is refused with

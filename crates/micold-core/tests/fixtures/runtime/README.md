@@ -58,3 +58,12 @@ keys Docker uses, plus the `Driver`, `Options` and `Propagation` fields podman a
 to show that one parser reads both. Podman also defaults a container's hostname to its *name*
 rather than to its id prefix, which is why `container_host_names` accepts the name as well (C11).
 Replace this file with captured output when a podman rig is to hand.
+
+## Podman's network backend (BUG-1285)
+
+`podman_info_4.9_rootful.json` and `podman_info_4.9_rootless.json` are captured from Podman 4.9.3
+with netavark 1.4.0 (Ubuntu 24.04 packages, the CI runner's combination), rootful and as an
+unprivileged user, trimmed to the fields `parse::info` reads. `podman_info_netavark_1.10_rootful.json`
+is the rootful one with the backend version edited to 1.10.3: no netavark 1.7 or newer was
+available to capture from. The older `podman_info.json` carries no `networkBackendInfo` at all,
+which is the "version not reported" case.

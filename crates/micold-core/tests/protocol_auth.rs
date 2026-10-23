@@ -14,10 +14,9 @@ use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
 use micold_core::sandbox::argv;
-use micold_core::sandbox::dialect::Dialect;
 use micold_core::sandbox::image::{ImageChoice, ImageSource, ImageSourceKind, OwnImage};
 use micold_core::sandbox::runtime::{
-    IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+    IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeCapabilities, RuntimeKind,
 };
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
 use std::path::PathBuf;
@@ -282,6 +281,7 @@ fn the_token_is_in_no_generated_argument_vector() {
         pids: LimitSupport::Supported,
         storage: LimitSupport::Supported,
         identity_mapping: IdentityMapping::ExplicitUidGid,
+        no_outbound: NoOutboundSupport::docker(),
     };
 
     let rendered: Vec<String> = argv::create(&spec, &caps)
@@ -289,7 +289,8 @@ fn the_token_is_in_no_generated_argument_vector() {
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
     assert_no_trace_of(&token, "the create argv", &rendered.join(" "));
-    let network: Vec<String> = argv::network_create(&spec, &Dialect::for_kind(caps.kind))
+    let network: Vec<String> = argv::network_create(&spec, &caps)
+        .expect("Docker blocks outbound")
         .iter()
         .map(|a| a.to_string_lossy().into_owned())
         .collect();

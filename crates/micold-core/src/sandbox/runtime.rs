@@ -116,6 +116,60 @@ pub struct RuntimeCapabilities {
     /// driver/filesystem combinations and is rejected outright on others.
     pub storage: LimitSupport,
     pub identity_mapping: IdentityMapping,
+    /// How this setup blocks outbound connections under [`NetworkPosture::NoOutbound`]
+    /// (contracts C-5, FR-017a). Probed like `storage`, because the same runtime needs different
+    /// arguments rootless and rootful (BUG-1285).
+    ///
+    /// [`NetworkPosture::NoOutbound`]: super::NetworkPosture::NoOutbound
+    pub no_outbound: NoOutboundSupport,
+}
+
+/// Docker's bridge option that turns off outbound NAT while published ports keep their DNAT
+/// (research R4).
+pub const DOCKER_NO_MASQUERADE: &str = "com.docker.network.bridge.enable_ip_masquerade=false";
+
+/// Netavark's bridge option (1.7 and newer) that gives the network no default route.
+pub const NETAVARK_NO_DEFAULT_ROUTE: &str = "no_default_route=true";
+
+/// How a runtime setup blocks outbound connections while keeping the published port (research R4,
+/// contracts C-5).
+///
+/// "No outbound, port still reachable" is one property with a different mechanism per setup: Docker
+/// disables masquerade, rootless Podman forwards its ports through `rootlessport` and can use an
+/// `--internal` network, rootful Podman forwards through netavark's DNAT, which an internal network
+/// does not get, and needs `no_default_route` (netavark 1.7). A setup with none of these is
+/// `Unsupported`, and a `NoOutbound` start on it is refused rather than run with outbound open
+/// (FR-017a).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NoOutboundSupport {
+    /// The arguments `network create` adds under `NoOutbound`.
+    Supported { network_args: Vec<String> },
+    /// What is missing and the ways forward; a `NoOutbound` start fails with it.
+    Unsupported { reason: String },
+}
+
+impl NoOutboundSupport {
+    /// Docker: a bridge with IP masquerade disabled.
+    pub fn docker() -> Self {
+        Self::with_args(&["-o", DOCKER_NO_MASQUERADE])
+    }
+
+    /// Rootless Podman: an `--internal` network. Its ports go through `rootlessport`, which an
+    /// internal network does not cut off (measured, `bugs/BUG-1285.md`).
+    pub fn podman_rootless() -> Self {
+        Self::with_args(&["--internal"])
+    }
+
+    /// Rootful Podman on netavark 1.7 or newer: a bridge with no default route.
+    pub fn podman_no_default_route() -> Self {
+        Self::with_args(&["-o", NETAVARK_NO_DEFAULT_ROUTE])
+    }
+
+    fn with_args(args: &[&str]) -> Self {
+        NoOutboundSupport::Supported {
+            network_args: args.iter().map(|a| a.to_string()).collect(),
+        }
+    }
 }
 
 /// A limit the user asked for that the selected runtime cannot enforce.
@@ -329,6 +383,10 @@ pub enum RuntimeError {
     Cancelled,
     /// A container with this name exists already: another client's `create` won (FR-023).
     NameInUse { name: String },
+    /// Network access is off and this runtime setup cannot block outbound connections without
+    /// cutting the sandbox off from the host (FR-017a, BUG-1285). Raised before any network is
+    /// created: the sandbox never starts with outbound open while the setting says it is off.
+    NoOutboundUnavailable { kind: RuntimeKind, reason: String },
     /// Unclassified. Retains stderr so the log has the whole story.
     Unknown { stderr: String },
 }
@@ -381,6 +439,12 @@ impl RuntimeError {
             RuntimeError::Cancelled => "The start was stopped.".to_string(),
             RuntimeError::NameInUse { name } => {
                 format!("A container named `{name}` already exists.")
+            }
+            RuntimeError::NoOutboundUnavailable { kind, reason } => {
+                format!(
+                    "Network access is off, and this {kind} cannot block outbound connections \
+                     while keeping the sandbox reachable: {reason}"
+                )
             }
             RuntimeError::Unknown { stderr } if stderr.trim().is_empty() => {
                 "The runtime reported: no detail".to_string()
@@ -441,6 +505,11 @@ impl RuntimeError {
             RuntimeError::Cancelled => "Start it again when you are ready.".to_string(),
             RuntimeError::NameInUse { .. } => {
                 "Retry: the existing container is used as it is.".to_string()
+            }
+            RuntimeError::NoOutboundUnavailable { .. } => {
+                "Use rootless Podman, upgrade netavark to 1.7 or newer, or turn network access on \
+                 in Settings → Daemons."
+                    .to_string()
             }
             RuntimeError::Unknown { .. } => {
                 "Retry. The runtime's own output is in the diagnostics.".to_string()
@@ -646,6 +715,7 @@ mod tests {
             pids: LimitSupport::Supported,
             storage,
             identity_mapping: IdentityMapping::ExplicitUidGid,
+            no_outbound: NoOutboundSupport::docker(),
         }
     }
 
