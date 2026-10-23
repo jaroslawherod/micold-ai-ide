@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1161
 - **Worktree branch**: feat/1161_default-prompt-template-in-settings-for-a-new
 - **Started**: 2026-10-20
-- **Phase**: close
-- **Next step**: workers for T026-T029, rerun tdd-verify, diff review, full gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1245 | M1 | merged | d16d74c143b73ad6af5d341e32872e3711ce8dc6 |
 | #1247 | M2 | merged | 420b051e5b3be4610a19347b44f37099bed72ccb |
 | #1251 | M3 | merged | 169ef801b357b40a4284f785d500e25916e18afc |
+| #1284 | Close | open | |
 
 ## Milestones
 
