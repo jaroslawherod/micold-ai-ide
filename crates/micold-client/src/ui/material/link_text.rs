@@ -11,19 +11,24 @@
 //! A link that is not activatable (a relative path, a file address) is drawn underlined in the text
 //! colour, with no link: it offers no stop and sends nothing (FR-004).
 //!
+//! The focus indicator outlines the focused link only: its rectangles are measured from a
+//! paragraph laid out like the text, so a link that wraps is outlined per line fragment.
+//!
 //! Everything shown is owned, so the element is `'static` and can sit inside iced `lazy`.
 
+use std::ops::Range;
 use std::rc::Rc;
 
+use iced::advanced::text::{Paragraph as _, Shaping};
 use iced::font::{Style as Slant, Weight};
 use iced::keyboard::key::Named;
-use iced::widget::text::{Span as TextSpan, Wrapping};
+use iced::widget::text::{Alignment, Span as TextSpan, Wrapping};
 use iced::widget::{rich_text, span};
-use iced::{Element, Font, Length};
+use iced::{alignment, Element, Font, Length, Pixels, Rectangle, Size};
 use micold_core::markdown::Span;
 use micold_core::tokens::{state, Rgb, Roles};
 
-use super::keyboard_focus::{Indicator, TakesTheKeyboard};
+use super::keyboard_focus::{Indicator, Regions, TakesTheKeyboard};
 use super::{style, TypeRole};
 
 /// What a link press sends, from the link's address.
@@ -130,16 +135,58 @@ fn painted(
     }
 }
 
+/// Where spans `run` of `spans` fall when the text is laid out in `room`, relative to the text's
+/// top-left: one rectangle per line fragment. The text widget keeps its own paragraph out of reach,
+/// so this lays out an identical one (same spans, size, line height, font, wrapping and width).
+fn link_regions(
+    spans: &[TextSpan<'static, String, Font>],
+    run: Range<usize>,
+    room: Size,
+    size: f32,
+    line_height: iced::widget::text::LineHeight,
+    font: Font,
+) -> Vec<Rectangle> {
+    let paragraph = <iced::Renderer as iced::advanced::text::Renderer>::Paragraph::with_spans(
+        iced::advanced::text::Text {
+            content: spans,
+            bounds: room,
+            size: Pixels(size),
+            line_height,
+            font,
+            align_x: Alignment::Default,
+            align_y: alignment::Vertical::Top,
+            shaping: Shaping::Advanced,
+            wrapping: Wrapping::WordOrGlyph,
+        },
+    );
+    let mut out: Vec<Rectangle> = Vec::new();
+    for r in run.flat_map(|i| paragraph.span_bounds(i)) {
+        // A link of several styled spans is one outline: join fragments on the same line.
+        match out.last_mut() {
+            Some(last)
+                if (last.y - r.y).abs() < 0.5
+                    && (last.height - r.height).abs() < 0.5
+                    && r.x <= last.x + last.width + 0.5 =>
+            {
+                let right = (last.x + last.width).max(r.x + r.width);
+                last.width = right - last.x;
+            }
+            _ => out.push(r),
+        }
+    }
+    out
+}
+
 impl<'a, 'b, M: Clone + 'static> From<LinkText<'a, M>> for Element<'b, M> {
     fn from(t: LinkText<'a, M>) -> Self {
         let r = t.roles;
         let opens = t.on_link.is_some();
-        let spans: Vec<TextSpan<'static, String, Font>> = t
+        let shown: Vec<TextSpan<'static, String, Font>> = t
             .spans
             .iter()
             .map(|s| painted(s, t.role.font(), r, t.muted, t.strong, opens))
             .collect();
-        let mut text = rich_text(spans)
+        let mut text = rich_text(shown.clone())
             .size(t.role.size())
             .line_height(t.role.line_height())
             .font(t.role.font())
@@ -155,22 +202,33 @@ impl<'a, 'b, M: Clone + 'static> From<LinkText<'a, M>> for Element<'b, M> {
         // Innermost the last link, so the outermost stop, which traversal visits first, is the
         // first link. A link whose text changes style is several spans in a row with the same
         // link: one stop.
-        let mut targets: Vec<&str> = Vec::new();
+        let mut targets: Vec<(&str, Range<usize>)> = Vec::new();
         let mut previous = None;
-        for s in t.spans {
+        for (i, s) in t.spans.iter().enumerate() {
             let link = s.link.as_ref().filter(|l| l.activatable);
             if let Some(l) = link.filter(|_| previous != Some(link)) {
-                targets.push(l.target.as_str());
+                targets.push((l.target.as_str(), i..i + 1));
+            } else if link.is_some() {
+                if let Some((_, run)) = targets.last_mut() {
+                    run.end = i + 1;
+                }
             }
             previous = Some(link);
         }
-        for target in targets.into_iter().rev() {
+        let shown: Rc<Vec<TextSpan<'static, String, Font>>> = Rc::new(shown);
+        let (size, line_height, font) = (t.role.size(), t.role.line_height(), t.role.font());
+        for (target, run) in targets.into_iter().rev() {
+            let shown = Rc::clone(&shown);
+            let regions: Regions = Rc::new(move |room| {
+                link_regions(&shown, run.clone(), room, size, line_height, font)
+            });
             let message = on_link(target.to_owned());
             element = TakesTheKeyboard::new(element, true)
                 .key(Named::Enter, message.clone())
                 .key(Named::Space, message)
                 .press_takes_focus(false)
                 .bare_child()
+                .regions(regions)
                 .indicator(Indicator {
                     outline: r.secondary,
                     layer: link_ink(r),
@@ -280,6 +338,79 @@ mod tests {
         assert_eq!(click(&opens), vec!["open https://example.com".to_string()]);
         let inert = vec![link("docs", "docs/index.md", false)];
         assert!(click(&inert).is_empty());
+    }
+
+    /// The focus indicator outlines the focused link, not the paragraph around it.
+    #[test]
+    fn the_focus_ring_surrounds_the_focused_link_only() {
+        let spans = vec![
+            link("docs", "https://example.com", true),
+            plain(" and then a good deal of ordinary text that is not a link at all"),
+        ];
+        let backdrop = style::color(roles().surface);
+        let mut m = mounted(&spans);
+        let (rest, width) = m.drawn(backdrop);
+        m.focus_next();
+        let (focused, _) = m.drawn(backdrop);
+        let changed: Vec<usize> = (0..rest.len() / 4)
+            .filter(|p| rest[p * 4..p * 4 + 4] != focused[p * 4..p * 4 + 4])
+            .map(|p| p % width as usize)
+            .collect();
+        assert!(!changed.is_empty(), "no ring drawn for the focused link");
+        let right = changed.into_iter().max().unwrap_or(0);
+        assert!(
+            (right as f32) < m.node.bounds().width / 4.0,
+            "the ring reaches x={right}: it wraps more than the link"
+        );
+    }
+
+    /// A link of several styled spans on one line is one region, not one per span.
+    #[test]
+    fn a_link_of_several_spans_is_one_region_per_line() {
+        let r = roles();
+        let mut bold = link("bold", "https://x.test", true);
+        bold.style.bold = true;
+        let spans = [
+            link("foo ", "https://x.test", true),
+            bold,
+            link(" baz", "https://x.test", true),
+        ];
+        let shown: Vec<TextSpan<'static, String, Font>> = spans
+            .iter()
+            .map(|s| painted(s, TypeRole::Body.font(), r, false, false, true))
+            .collect();
+        let regions = link_regions(
+            &shown,
+            0..3,
+            Size::new(2000.0, 1000.0),
+            TypeRole::Body.size(),
+            TypeRole::Body.line_height(),
+            TypeRole::Body.font(),
+        );
+        assert_eq!(regions.len(), 1);
+    }
+
+    /// A link that wraps is outlined per line fragment.
+    #[test]
+    fn a_wrapped_link_has_a_region_per_line() {
+        let spans = [link("one two three four five six", "https://x.test", true)];
+        let r = roles();
+        let shown: Vec<TextSpan<'static, String, Font>> = spans
+            .iter()
+            .map(|s| painted(s, TypeRole::Body.font(), r, false, false, true))
+            .collect();
+        let regions = |w: f32| {
+            link_regions(
+                &shown,
+                0..1,
+                Size::new(w, 1000.0),
+                TypeRole::Body.size(),
+                TypeRole::Body.line_height(),
+                TypeRole::Body.font(),
+            )
+        };
+        assert_eq!(regions(2000.0).len(), 1);
+        assert!(regions(60.0).len() > 1);
     }
 
     /// An activatable link is drawn in `primary`; the rest of the text in `on_surface`, or

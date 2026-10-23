@@ -63,6 +63,10 @@ pub(super) struct Indicator {
     pub radius: f32,
 }
 
+/// The parts of a control's bounds the indicator outlines instead of the whole: given the control's
+/// size, rectangles relative to its top-left (a link's line fragments inside a paragraph).
+pub(super) type Regions = std::rc::Rc<dyn Fn(iced::Size) -> Vec<Rectangle>>;
+
 /// A child, plus the focus it cannot hold for itself.
 pub(super) struct TakesTheKeyboard<'a, M> {
     content: Element<'a, M>,
@@ -86,6 +90,8 @@ pub(super) struct TakesTheKeyboard<'a, M> {
     /// Whether the child draws its own hover and pressed layers, which the focus layer tops up;
     /// `false` for a bare child, so the focus layer is the whole of it (feature 1122, U1).
     child_layers: bool,
+    /// Outline these parts of the child rather than all of it; `None` outlines the whole.
+    regions: Option<Regions>,
 }
 
 impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
@@ -105,7 +111,15 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
             id: None,
             press_takes_focus: true,
             child_layers: true,
+            regions: None,
         }
+    }
+
+    /// Draw the indicator around each rectangle `regions` gives, not around the whole child: one
+    /// link in a paragraph, or each line fragment of a link that wraps.
+    pub fn regions(mut self, regions: Regions) -> Self {
+        self.regions = Some(regions);
+        self
     }
 
     /// Name this control for `focus(id)`.
@@ -328,6 +342,47 @@ pub(super) fn ring_bounds(bounds: Rectangle) -> Rectangle {
     }
 }
 
+/// The state layer and ring over one rectangle.
+fn draw_indicator(
+    renderer: &mut iced::Renderer,
+    indicator: Indicator,
+    opacity: f32,
+    bounds: Rectangle,
+) {
+    // §5's state layer: the content colour over the container, topped up to the focus opacity
+    // over whatever layer the child drew. Over rather than composited into, because a button's
+    // background belongs to the child.
+    renderer.fill_quad(
+        renderer::Quad {
+            bounds,
+            border: Border {
+                radius: indicator.radius.into(),
+                ..Border::default()
+            },
+            ..renderer::Quad::default()
+        },
+        Background::Color(Color {
+            a: opacity,
+            ..style::color(indicator.layer)
+        }),
+    );
+    // And FR-022's ring on top of it. A quad with a transparent fill is its border.
+    renderer.fill_quad(
+        renderer::Quad {
+            bounds: ring_bounds(bounds),
+            border: Border {
+                color: style::color(indicator.outline),
+                width: state::FOCUS_RING_WIDTH,
+                radius: (indicator.radius - state::FOCUS_RING_WIDTH / 2.0)
+                    .max(0.0)
+                    .into(),
+            },
+            ..renderer::Quad::default()
+        },
+        Background::Color(Color::TRANSPARENT),
+    );
+}
+
 impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeyboard<'a, M> {
     forward_to_child!(content, M, iced::Theme, iced::Renderer;
         children, size, layout, mouse_interaction, overlay);
@@ -408,38 +463,20 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         else {
             return;
         };
-        // §5's state layer: the content colour over the container, topped up to the focus opacity
-        // over whatever layer the child drew. Over rather than composited into, because a button's
-        // background belongs to the child.
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds,
-                border: Border {
-                    radius: indicator.radius.into(),
-                    ..Border::default()
-                },
-                ..renderer::Quad::default()
-            },
-            Background::Color(Color {
-                a: opacity,
-                ..style::color(indicator.layer)
-            }),
-        );
-        // And FR-022's ring on top of it. A quad with a transparent fill is its border.
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds: ring_bounds(bounds),
-                border: Border {
-                    color: style::color(indicator.outline),
-                    width: state::FOCUS_RING_WIDTH,
-                    radius: (indicator.radius - state::FOCUS_RING_WIDTH / 2.0)
-                        .max(0.0)
-                        .into(),
-                },
-                ..renderer::Quad::default()
-            },
-            Background::Color(Color::TRANSPARENT),
-        );
+        match &self.regions {
+            None => draw_indicator(renderer, indicator, opacity, bounds),
+            Some(regions) => {
+                let origin = bounds.position() - iced::Point::ORIGIN;
+                let parts = regions(bounds.size());
+                // No part measured: outline the whole rather than say nothing of the focus.
+                if parts.is_empty() {
+                    draw_indicator(renderer, indicator, opacity, bounds);
+                }
+                for region in parts {
+                    draw_indicator(renderer, indicator, opacity, region + origin);
+                }
+            }
+        }
     }
 
     fn operate(
