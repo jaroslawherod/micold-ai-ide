@@ -243,7 +243,7 @@ fn names_this_stream(value: &std::ffi::OsStr, fd: std::os::fd::RawFd) -> bool {
 /// mount is why the log is here and not under `state_dir()` as R2.3 first specified; R2.3 now
 /// records the implemented location.
 pub fn default_log_path() -> Option<PathBuf> {
-    micold_core::paths::project_dirs().map(|dirs| dirs.data_local_dir().join("micold-daemon.log"))
+    micold_core::paths::data_local_dir().map(|dir| dir.join("micold-daemon.log"))
 }
 
 fn base_filter() -> EnvFilter {

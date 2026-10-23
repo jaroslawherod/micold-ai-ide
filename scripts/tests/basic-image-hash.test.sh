@@ -156,5 +156,24 @@ else
   fi
 fi
 
+# --- no image sets XDG_DATA_HOME (1286) ---------------------------------------------------------
+# Every process in the container inherits an image-wide ENV, and `/var/lib` is not writable by the
+# session user, so XDG-aware tools (mise) fail. The daemon is pointed at its state directory through
+# MICOLD_DATA_DIR instead.
+
+for image in basic sandbox; do
+  cases=$((cases + 1))
+  file="$ROOT/packaging/$image/Containerfile"
+  instructions="$(grep -v '^[[:space:]]*#' "$file")"
+  if printf '%s\n' "$instructions" | grep -q 'XDG_DATA_HOME'; then
+    fail "the $image image does not set XDG_DATA_HOME" "$file sets it"
+  elif ! printf '%s\n' "$instructions" | grep -q '^ENV MICOLD_DATA_DIR=/var/lib/micold-ai-ide$'; then
+    fail "the $image image points the daemon at its state directory with MICOLD_DATA_DIR" \
+      "$file has no 'ENV MICOLD_DATA_DIR=/var/lib/micold-ai-ide'"
+  else
+    pass "the $image image sets MICOLD_DATA_DIR, not XDG_DATA_HOME"
+  fi
+done
+
 printf '\n%d case(s), %d failure(s)\n' "$cases" "$failures"
 [ "$failures" -eq 0 ]

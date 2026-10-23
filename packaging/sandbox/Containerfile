@@ -48,13 +48,11 @@ RUN apt-get update \
 # The daemon's state directory, bind-mounted from the host at run time so it survives container
 # recreation and stays readable outside (FR-011).
 #
-# `XDG_DATA_HOME=/var/lib` rather than a variable of our own, because the daemon resolves its state
-# directory through the platform's data-directory convention — it will look in
-# `$XDG_DATA_HOME/micold-ai-ide` without being told. Setting the convention is what makes the
-# container and the host agree on one `projects.json`; a bespoke variable would have to be read
-# somewhere, and the place it was not read would be the bug.
+# `MICOLD_DATA_DIR`, read by `micold_core::paths`, points the daemon at it. Not `XDG_DATA_HOME=/var/lib`:
+# every process in the container, sessions included, would inherit that, and `/var/lib` is not
+# writable by the session user, so XDG-aware tools such as mise fail (1286).
 RUN mkdir -p /var/lib/micold-ai-ide && chmod 0777 /var/lib/micold-ai-ide
-ENV XDG_DATA_HOME=/var/lib
+ENV MICOLD_DATA_DIR=/var/lib/micold-ai-ide
 
 # Where the client's authentication token is mounted, read-only (research R1). The daemon reads it
 # at startup. It is a mount point, never a file baked into the image.

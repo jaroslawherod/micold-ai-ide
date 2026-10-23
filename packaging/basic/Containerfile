@@ -31,9 +31,10 @@ RUN apt-get update \
  && rm -f /etc/ssh/ssh_host_*
 
 # The daemon's state directory, bind-mounted from the host at run time (feature 027, FR-011), and
-# found through `XDG_DATA_HOME` the way the daemon looks for it everywhere.
+# found through `MICOLD_DATA_DIR`. Not `XDG_DATA_HOME`: every process in the container inherits that,
+# and `/var/lib` is not writable by the session user, so XDG-aware tools such as mise fail (1286).
 RUN mkdir -p /var/lib/micold-ai-ide && chmod 0777 /var/lib/micold-ai-ide
-ENV XDG_DATA_HOME=/var/lib
+ENV MICOLD_DATA_DIR=/var/lib/micold-ai-ide
 
 # Pi and OpenCode keep the same offline posture when run by hand inside the container (Principle
 # IV); the session service sets these per launch too.

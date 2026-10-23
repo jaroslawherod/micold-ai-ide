@@ -20,7 +20,7 @@ pub const BASIC_IMAGE_REPOSITORY: &str = "ghcr.io/jaroslawherod/micold-basic";
 ///
 /// Change it in the same commit as any file under `packaging/basic/`;
 /// `scripts/tests/basic-image-hash.test.sh` fails while it disagrees with the tree.
-pub const BASIC_IMAGE_CONTENT_HASH: &str = "aa19c30814e895bb";
+pub const BASIC_IMAGE_CONTENT_HASH: &str = "146e876e244cf764";
 
 /// The basic image the client starts a new container daemon from: the tag the publish workflow
 /// pushed for [`BASIC_IMAGE_CONTENT_HASH`], pinned by the digest of its multi-architecture index
@@ -29,7 +29,7 @@ pub const BASIC_IMAGE_CONTENT_HASH: &str = "aa19c30814e895bb";
 ///
 /// `scripts/basic-image-hash.sh --check` and CI's pin check (`docker manifest inspect` of this
 /// reference) keep it honest.
-pub const BASIC_IMAGE: &str = "ghcr.io/jaroslawherod/micold-basic:24ee938484d5d6b8@sha256:7551365a388d436fe286d774f4831eb4fe53b1d5067818af1a2aefae0402cca4";
+pub const BASIC_IMAGE: &str = "ghcr.io/jaroslawherod/micold-basic:63ed9a2260f6abf4@sha256:7551365a388d436fe286d774f4831eb4fe53b1d5067818af1a2aefae0402cca4";
 
 /// The tag a local build of `packaging/basic/` carries (`docker build -t micold-basic:dev`), and the
 /// one the real-runtime suite starts from by default.

@@ -286,11 +286,14 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
     command(reach, platform, timeout, &remote, None)
 }
 
-/// The data home a container's daemon keeps its state under (`<this>/micold-ai-ide`): the basic
-/// image's `ENV XDG_DATA_HOME`, which an SSH session does not inherit (sshd builds the session's
-/// environment afresh), and the parent of the state directory provisioning installs the AI CLIs
-/// into.
-pub const CONTAINER_DATA_HOME: &str = "/var/lib";
+/// The state directory a container's daemon keeps its data in: the image's
+/// `ENV MICOLD_DATA_DIR`, which an SSH session does not inherit (sshd builds the session's
+/// environment afresh), so it rides the bridge command. Never `XDG_DATA_HOME` (1286): that would
+/// reach every session the daemon starts.
+pub const CONTAINER_DATA_DIR: &str = "/var/lib/micold-ai-ide";
+
+/// The variable that carries [`CONTAINER_DATA_DIR`] to the daemon.
+pub const CONTAINER_DATA_ENV: &str = "MICOLD_DATA_DIR";
 
 /// The helper's `status`: prints the remote daemon's `RemoteStatus` as one JSON line.
 pub fn status(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
