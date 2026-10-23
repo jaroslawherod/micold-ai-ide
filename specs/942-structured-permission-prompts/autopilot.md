@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
 - **Phase**: M8 verify
-- **Next step**: M8: visual pass (T069), then push and open the draft PR (see *Handover*)
+- **Next step**: M8: rebase onto origin/main, full gate, push, open the draft PR
 
 ## Pull requests
 
@@ -101,6 +101,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M7 (scoped, sonnet) | 2 | eb1bba267c813a3566418f65dec5286d903479a7:adcfbcfcf041461d22670f5dd38852b27019ac5a | CLEAN on the gate-fix diff: 1 MINOR (F1 a focused request field is not cleared when its request ends — declined, M8). Not counted (red gate's fixes) |
 | Review B M7 (conformance, sonnet) | 1 | eb1bba267c813a3566418f65dec5286d903479a7:adcfbcfcf041461d22670f5dd38852b27019ac5a | CLEAN: 2 MINOR (F1 tool input twice — same as A F1, declined; F2 cycle 11's unit-test exception — accepted as logged). Verify given inline: `showcase_completeness` 46, `material_builder_api` 13, `layout_snapshot` 86, `transcript_permission_view` 12 passed; 0 permission denials |
 | Visual pass M7 | 1 | adcfbcfc | PASS light and dark, offscreen (tiny-skia, after `layout::settle`; the worker's `claude -p` had every build refused, and Xvfb here has no xdotool): the three `PromptCard` poses keep their action rows inside the card (Allow/Deny/Always allow + rule note; Approve and accept edits/Approve/Keep planning; Submit disabled while a question is unanswered/Decline), `ChoiceList` rings with a dot when chosen, checkbox glyphs ticked when chosen, Other row with its field; no overlap. MINOR noted: the checkbox glyph reads smaller than the radio ring. Evidence `visual-pass/m7-*.png`. A first capture without a redraw drew every button disabled — a harness artefact |
+| Visual pass M8 | 1 | 0ee351dd | PASS light and dark, offscreen (tiny-skia after `layout::settle`, a throwaway test driving `State::update` the way the shell does; not committed): the showcase pose *the session bar of a session in Bypass* draws the warning icon and *Bypass: Claude runs every tool without asking* in the error role on the bar's first row, unclipped; the start list (every CLI available) shows **Permissions: Default / Accept edits / Plan / Bypass** indented under **Claude Code (structured)**, only Bypass carrying the active marker, labels aligned, and the list still open after the row press (asserted too); pressing the structured entry in Bypass (`StartGate::ConfirmBypass`, `BypassStartOpened`) shows *Run in Bypass?* with its effect sentence wrapped inside the dialog, **Use Bypass** and **Cancel** inside, over the scrim, the list closed. Live quickstart B 1–4, 6, 7, 9, 10 not run: this container has no logged-in `claude` (request, plan and question views covered by M7's showcase pass). Evidence `visual-pass/m8-*.png` |
 
 ## Declined review findings
 
@@ -134,23 +135,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M8 unit 1 handed over at 250k context. **Done**: T064, T065, T067, T068 implemented and ticked
-(commits fe1c4070..3483245a on `claude/project-thread-tt60gq`, not pushed, no PR yet); Review A 3
-rounds (r3 clean of BLOCKER/MAJOR), Review B 2 rounds (r2 CLEAN), full gate green at 3483245a.
-**Next**:
-1. T069 visual pass through the `visual-pass` skill (an `autopilot-worker` if available): the
-   showcase pose *the session bar of a session in Bypass* (light, dark); the client's start list
-   with the four **Permissions:** rows under **Claude Code (structured)** (the chosen one marked,
-   a press leaves the list open), and the Bypass confirmation after pressing the structured entry
-   with **Permissions: Bypass** chosen (light, dark). Live requests (quickstart B 1–4, 6, 7, 9) need a
-   logged-in `claude`, which this cloud container lacks: record them as not run (the M7 pass
-   covered the views in the showcase). Save crops in `visual-pass/` as `m8-*.png`, tick T069.
-   Disk: ~24 GB free with target-shared wiped; a showcase/client build fits, a build beside the
-   gate does not.
-2. Push (`git push --force-with-lease -u origin HEAD`; only specs/ledger may change after the
-   gate) and open the PR as a **draft** with the GitHub MCP tools, title exactly
-   "#942: Structured session: permission prompts via permission-prompt-tool — M8", body per
-   `tasks/pr.md` ending `Refs #942`; record it in *Pull requests*. Do not merge.
+None.
 
 ## Open escalation
 
