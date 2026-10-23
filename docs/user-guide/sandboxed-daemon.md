@@ -120,6 +120,11 @@ bolted on: both are driven through the same interface and both pass the same con
 a claim that survives on Docker and not on Podman is a bug in this application rather than a
 difference you are expected to work around.
 
+Both are tested end to end on every change to the container code: CI adds a container daemon the
+way Settings does, once on Docker and once on rootless Podman, starts a session in it, has it answer,
+stops it and removes the container. A mount option one runtime refuses fails that run with the
+runtime's own error.
+
 ### What is different about Podman
 
 **It runs as you, not as a service running as root.** That is why it needs no group membership, and

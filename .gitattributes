@@ -154,18 +154,18 @@ scripts/build-lock.sh                 micold-packaging
 
 # The daemon-runtime set (#954).
 #
-# `micold-daemon-runtime` marks paths that can change what the two real-runtime jobs of ci.yml build
+# `micold-daemon-runtime` marks paths that can change what the real-runtime jobs of ci.yml build
 # or test: `sandbox against a real runtime` (the `sandbox_real_*` targets of micold-core and
-# micold-daemon, against the :dev sandbox and basic images) and `remote daemon over a real sshd`
-# (the `ssh_real_*` targets of micold-daemon). One attribute serves both: their code paths are the
-# same two crates, the sandbox job only adds the two image directories, and the sshd job (about
-# five minutes) is never the critical path, so a second attribute would buy a minute-scale saving
-# at the price of a second output to keep in step. Pull requests run both jobs only when a change
+# micold-daemon, against the :dev sandbox and basic images), `container daemon end to end` (the
+# client's `sandbox_real_*` tests on docker and podman, #1281) and `remote daemon over a real sshd`
+# (the `ssh_real_*` targets of micold-daemon). One attribute serves all three: their code paths are
+# the same crates, the sandbox jobs only add the image directories, and the sshd job (about five
+# minutes) is never the critical path, so a second attribute would buy a minute-scale saving at
+# the price of a second output to keep in step. Pull requests run the jobs only when a change
 # touches the set -- or carries `full-ci` -- and main pushes and the nightly always run them. A path
-# is outside the set until declared; the failure direction is "run it". The client's own sources are
-# outside it on purpose: no `sandbox_real_*` or `ssh_real_*` test calls into micold-client (the
-# daemon only dev-depends on it for other tests, and the `test` job builds it). Read by
-# scripts/classify-change.sh (`daemon_runtime=` output), pinned by
+# is outside the set until declared; the failure direction is "run it". Of the client's sources only
+# the container bring-up and connection the end-to-end job drives are in it (below); the rest is
+# built by the `test` job. Read by scripts/classify-change.sh (`daemon_runtime=` output), pinned by
 # scripts/tests/classify-change.test.sh.
 crates/micold-core/**                 micold-daemon-runtime
 crates/micold-daemon/**               micold-daemon-runtime
@@ -179,7 +179,12 @@ packaging/basic/**                    micold-daemon-runtime
 scripts/basic-image-hash.sh           micold-daemon-runtime
 # micold-core's build.rs reads the icon.
 /assets/icon/icon.ico                 micold-daemon-runtime
-# The workflow itself: an edit to either job's steps is proven by the PR that makes it.
+# The container bring-up Settings uses, the connection actor that drives it, and their end-to-end
+# test (#1281).
+crates/micold-client/src/daemon.rs             micold-daemon-runtime
+crates/micold-client/src/shell/sandbox.rs      micold-daemon-runtime
+crates/micold-client/src/shell/sandbox_real.rs micold-daemon-runtime
+# The workflow itself: an edit to a job's steps is proven by the PR that makes it.
 /.github/workflows/ci.yml             micold-daemon-runtime
 
 # What a user can see, and what documents it (Constitution Principle VII).

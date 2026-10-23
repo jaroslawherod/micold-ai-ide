@@ -659,6 +659,77 @@ jobs:
       - name: Test (real runtime, daemon)
         run: cargo test --release -p micold-daemon --features sandbox-real-runtime --test 'sandbox_real_*' sandbox_real_ --no-fail-fast -- --test-threads=1
 
+  # #1281. The container daemon a user adds in Settings, end to end against a real runtime, on
+  # docker **and** on rootless podman. The job above starts its containers with the harness's own
+  # `create` argv, so a mount option podman rejects in the application's argv (#1279) passed it and
+  # reached users. This job creates the container the way Settings does (`DaemonContainers`, the
+  # credential tmpfs, the worktree bind and the uid/gid mapping included) from `micold-basic:dev`
+  # built from the branch, and drives the app's own connection actor: the daemon is provisioned
+  # over SSH with a stand-in AI CLI, a session starts, the stand-in answers, the session stops and
+  # the container is removed. A rejected option ends the start with the runtime's own output, which
+  # the test prints as its failure.
+  #
+  # `MICOLD_REAL_RUNTIME_REQUIRED` turns the tests' skip (no runtime, no image) into a failure, and
+  # the last step checks that both tests passed and that the end-to-end one reached its end, so a
+  # broken harness or a filter that matches nothing cannot pass with nothing run. Same gate as the
+  # job above. `micold-ai-ide` is the binary the tests are compiled into (`src/shell/sandbox_real.rs`);
+  # `--bin` keeps cargo from building the crate's other test targets.
+  container-daemon:
+    name: container daemon end to end (${{ matrix.runtime }}, linux)
+    # Waits on `lint` (#957), see the `test` job.
+    needs: [classify, lint]
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.lint.result != 'failure'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [docker, podman]
+    env:
+      MICOLD_TEST_RUNTIME: ${{ matrix.runtime }}
+      MICOLD_REAL_RUNTIME_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: ${{ matrix.runtime }}
+      # podman runs as the runner user, rootless: the setup a user without root has, and the one
+      # #1279 broke. A rootful podman here would prove something else.
+      - name: Runtime version
+        run: |
+          set -e
+          if [ "$MICOLD_TEST_RUNTIME" = podman ]; then
+            podman version --format '{{.Client.Version}}'
+            rootless="$(podman info --format '{{.Host.Security.Rootless}}')"
+            echo "rootless: $rootless"
+            [ "$rootless" = true ] || { echo "::error::podman is not rootless" >&2; exit 1; }
+          else
+            docker version --format '{{.Server.Version}}'
+          fi
+      - name: Build the :dev basic image
+        run: '"$MICOLD_TEST_RUNTIME" build -f packaging/basic/Containerfile -t micold-basic:dev packaging/basic'
+      # The build the provisioning copies into the container; the test finds it beside its own
+      # `deps/` directory.
+      - name: Build the daemon
+        run: cargo build -p micold-daemon
+      - name: Test (container daemon end to end)
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/container-daemon.log"
+          cargo test -p micold-client --bin micold-ai-ide --features sandbox-real-runtime sandbox_real_ \
+            --no-fail-fast -- --test-threads=1 --nocapture 2>&1 | tee "$log"
+          passed="$(sed -n 's/^test result: ok\. \([0-9]*\) passed.*/\1/p' "$log" | tail -1)"
+          echo "passed: ${passed:-0}"
+          [ "${passed:-0}" -ge 2 ] || { echo "::error::expected both container-daemon tests to pass, ${passed:-0} did" >&2; exit 1; }
+          grep -E "$MICOLD_TEST_RUNTIME: connected after" "$log" \
+            || { echo "::error::the end-to-end test did not reach its end" >&2; exit 1; }
+
   # Constitution Principle VII: documentation ships and is verified in CI.
   # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
   # specification, which only works while the assertions are frozen.
@@ -901,7 +972,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, linux-daemons, windows-arm64-package, sandbox-runtime, ssh-remote, kube-cluster, assertions, docs]
+    needs: [classify, lint, test, linux-daemons, windows-arm64-package, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, assertions, docs]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -924,6 +995,7 @@ jobs:
           LINUXDAEMONS: ${{ needs.linux-daemons.result }}
           WINARM: ${{ needs.windows-arm64-package.result }}
           SANDBOX: ${{ needs.sandbox-runtime.result }}
+          CONTAINERDAEMON: ${{ needs.container-daemon.result }}
           SSHREMOTE: ${{ needs.ssh-remote.result }}
           KUBECLUSTER: ${{ needs.kube-cluster.result }}
           DOCS: ${{ needs.docs.result }}
@@ -944,6 +1016,7 @@ jobs:
           check linux-daemons "$LINUXDAEMONS"
           check windows-arm64 "$WINARM"
           check sandbox "$SANDBOX"
+          check container-daemon "$CONTAINERDAEMON"
           check ssh-remote "$SSHREMOTE"
           check kube-cluster "$KUBECLUSTER"
           check docs "$DOCS"
@@ -959,6 +1032,7 @@ jobs:
             echo "| linux-daemons | \`$LINUXDAEMONS\` | yes |"
             echo "| windows-arm64-package | \`$WINARM\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
+            echo "| container-daemon | \`$CONTAINERDAEMON\` | yes |"
             echo "| ssh-remote | \`$SSHREMOTE\` | yes |"
             echo "| kube-cluster | \`$KUBECLUSTER\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
