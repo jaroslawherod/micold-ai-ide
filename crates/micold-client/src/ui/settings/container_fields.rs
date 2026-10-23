@@ -840,7 +840,7 @@ mod tests {
     #[test]
     fn the_limits_behave_the_same_for_both_image_choices() {
         use crate::features::settings::parse_budget;
-        use micold_core::sandbox::runtime::IdentityMapping;
+        use micold_core::sandbox::runtime::{IdentityMapping, NoOutboundSupport};
         let caps = RuntimeCapabilities {
             kind: RuntimeKind::Podman,
             version: "5".into(),
@@ -849,6 +849,7 @@ mod tests {
             pids: LimitSupport::Supported,
             storage: LimitSupport::unsupported("overlay without quota"),
             identity_mapping: IdentityMapping::ExplicitUidGid,
+            no_outbound: NoOutboundSupport::podman_rootless(),
         };
         for profile in both_choices() {
             let mut view = view_of(&profile, None);

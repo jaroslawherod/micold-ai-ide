@@ -150,6 +150,17 @@ Linux "not running" means its user-level service is down, and on macOS and Windo
 `podman machine` virtual machine has not been started. The failure message names the command that
 applies to your setup.
 
+**Rootless Podman is the supported way to run with network access off.** Blocking outbound
+connections while keeping the sandbox reachable from this application takes a different setting on
+each runtime, because each forwards the sandbox's port differently (see [Network](#network)).
+Rootless Podman has one that works on every version this application supports. Rootful Podman
+(run as root) has one only from **netavark 1.7** on — netavark is Podman's network component;
+`podman info` shows its version under `networkBackendInfo`. On an older netavark, or with the
+older CNI network backend, a rootful Podman with network access off does not start: the failure
+says so, and names the ways forward — run Podman rootless, upgrade netavark to 1.7 or newer, or
+turn network access on. It is never started with the network open while the setting says it is
+off.
+
 **The writable storage limit is the one most likely to be unavailable**, on either runtime but more
 often on Podman, since whether a size cap can be applied at all depends on the storage driver
 underneath. The application asks, and shows the field disabled with the runtime's own reason rather
@@ -398,12 +409,23 @@ that reaches the internet will fail inside a session, and — importantly — so
 connection to its provider. If you need either, turn network access on for the sandbox; the
 application warns you at the point you turn it off, for the same reason.
 
-One thing to know precisely: with outbound connections blocked, **DNS lookups still resolve**. Names
-resolve, connections to them do not. The block works by leaving the container's bridge without a
-route out to the internet, and the runtime answers DNS from your side of that boundary — so a lookup
-succeeds and the connection that follows it fails. Expect errors that say "connection refused",
-"network unreachable" or a timeout, rather than "host not found"; a program reporting that it
-resolved an address has not reached it.
+How the block is made differs by runtime; what it guarantees does not. On Docker the container's
+bridge gets no address translation to the internet. On rootless Podman it is an *internal* network,
+which has no route out; Podman still reaches the sandbox's port through its own forwarder. On rootful
+Podman it is a bridge without a default route (netavark 1.7 or newer — see
+[What is different about Podman](#what-is-different-about-podman)). Either way outbound connections
+fail and the control channel keeps working, and a setup that cannot do both is refused rather than
+started open.
+
+One thing to know precisely: on Docker, with outbound connections blocked, **DNS lookups still
+resolve**. Names resolve, connections to them do not: the runtime answers DNS from your side of the
+boundary, so a lookup succeeds and the connection that follows it fails. Expect errors that say
+"connection refused", "network unreachable" or a timeout, rather than "host not found"; a program
+reporting that it resolved an address has not reached it.
+Rootless Podman behaves the same way: its internal network still forwards lookups to your
+resolvers (measured on Podman 4.9.3 with aardvark-dns 1.4.0), so names resolve there too and
+connections to them fail. Rootful Podman's network without a default route was not measured; expect
+the same.
 
 That is a small channel — something inside could signal outward by choosing what to look up — and it
 is stated here rather than left for you to discover. The guarantee is "no outbound connections", not
@@ -519,6 +541,7 @@ and stops the daemon it started; your daemon's saved data stays.
 | The runtime is installed but its service is down | *Docker is installed but not running.* | Start it, then retry. For rootless Podman this is the user service or `podman machine`. |
 | The runtime refuses this user | *Docker is running, but this user is not permitted to use it.* | Docker: add your user to the `docker` group and log in again. Podman: initialise rootless Podman (`podman system migrate`) — this is also what a missing subuid/subgid range looks like. |
 | The runtime is too old | *This runtime is version 19.03; the sandbox needs 20.10 or newer.* | Upgrade the runtime. Docker needs 20.10, Podman 4.0. |
+| Network access is off and this Podman cannot block outbound connections | *Network access is off, and this Podman cannot block outbound connections while keeping the sandbox reachable: rootful Podman on netavark 1.4.0 …* | Use rootless Podman, upgrade netavark to 1.7 or newer, or turn network access on in **Settings → Daemons**. |
 | The image is not present and cannot be resolved | *The image `ghcr.io/…` was not found.* | Check the reference in **Settings → Daemons**, or import an image archive. |
 | The image is present remotely but the fetch failed | *`ghcr.io/…` could not be fetched: …* | Rate limit, sign-in, or a proxy. Import the image from a file instead — the sandbox does not need a registry. |
 | Something else holds the control port | *Port 7373 is already in use, so the sandbox has no control channel.* | Stop whatever holds it, or choose another port in **Settings → Daemons**. |

@@ -4427,7 +4427,8 @@ fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
 /// What a bring-up reports when it has started the container.
 fn a_started_sandbox() -> micold_core::sandbox::lifecycle::Started {
     use micold_core::sandbox::runtime::{
-        ContainerId, IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+        ContainerId, IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeCapabilities,
+        RuntimeKind,
     };
     micold_core::sandbox::lifecycle::Started {
         id: ContainerId("abc".into()),
@@ -4439,6 +4440,7 @@ fn a_started_sandbox() -> micold_core::sandbox::lifecycle::Started {
             pids: LimitSupport::Supported,
             storage: LimitSupport::Supported,
             identity_mapping: IdentityMapping::ExplicitUidGid,
+            no_outbound: NoOutboundSupport::docker(),
         },
         unsatisfiable: Vec::new(),
         mounted: None,

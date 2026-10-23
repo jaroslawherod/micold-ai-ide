@@ -1007,7 +1007,9 @@ mod tests {
 mod mounted_tests {
     use super::*;
     use crate::sandbox::parse::{ContainerFacts, ImageFacts};
-    use crate::sandbox::runtime::{IdentityMapping, LimitSupport, RuntimeKind, RuntimeVersion};
+    use crate::sandbox::runtime::{
+        IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeKind, RuntimeVersion,
+    };
     use crate::sandbox::{CredentialLayout, MountSet, SecretMount};
     use std::path::{Path, PathBuf};
 
@@ -1051,6 +1053,7 @@ mod mounted_tests {
                 pids: LimitSupport::Supported,
                 storage: LimitSupport::Supported,
                 identity_mapping: IdentityMapping::ExplicitUidGid,
+                no_outbound: NoOutboundSupport::docker(),
             }
         }
     }

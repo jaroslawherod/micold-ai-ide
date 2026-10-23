@@ -11,7 +11,7 @@ use micold_core::sandbox::argv;
 use micold_core::sandbox::dialect::Dialect;
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::{
-    IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+    IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeCapabilities, RuntimeKind,
 };
 use micold_core::sandbox::{
     CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount, STATE_CONTAINER_DIR,
@@ -58,6 +58,7 @@ fn caps() -> RuntimeCapabilities {
         pids: LimitSupport::Supported,
         storage: LimitSupport::Supported,
         identity_mapping: IdentityMapping::ExplicitUidGid,
+        no_outbound: NoOutboundSupport::docker(),
     }
 }
 

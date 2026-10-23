@@ -458,10 +458,81 @@ pub fn start_sandbox_from(spec: &SandboxSpec<'_>, image: &str, command: &[&str])
     start_sandbox_on(spec, image, command, &[])
 }
 
-/// [`start_sandbox`] on a `NoOutbound` network (the dialect's no-masquerade bridge option, as
-/// `argv::network_create` passes it): no outbound NAT, inbound publishing intact.
+/// [`start_sandbox`] on a `NoOutbound` network, made with the arguments the application makes it
+/// with on this runtime setup: probed, then rendered by `argv::network_create`. A copy of one
+/// setup's option here is how Docker's option on Podman went unseen (BUG-1285).
 pub fn start_no_outbound_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
-    start_sandbox_on(spec, &image(), &[], &["-o", dialect().no_masquerade_opt])
+    let network = no_outbound_network_args(spec.network);
+    let opts: Vec<&str> = network.iter().map(String::as_str).collect();
+    start_sandbox_on(spec, &image(), &[], &opts)
+}
+
+/// Runs the runtime CLI with the original XDG variables, so a probe sees the runtime the rest of
+/// the harness drives ([`runtime_cmd`]).
+struct OriginalXdgRunner;
+
+impl micold_core::sandbox::exec::CommandRunner for OriginalXdgRunner {
+    fn run(
+        &self,
+        program: &std::ffi::OsStr,
+        args: &[std::ffi::OsString],
+    ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
+        let out = runtime_cmd(&program.to_string_lossy())
+            .args(args)
+            .output()?;
+        Ok(micold_core::sandbox::exec::CommandOutput {
+            code: out.status.code(),
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        })
+    }
+}
+
+/// What `argv::network_create` adds for `NoOutbound` on the probed setup, between `--driver
+/// bridge` and the network's name. Panics, naming the reason, on a setup the application refuses.
+fn no_outbound_network_args(network: &str) -> Vec<String> {
+    use micold_core::sandbox::runtime::ContainerRuntime;
+    use micold_core::sandbox::{
+        CredentialLayout, MountSet, NetworkPosture, SandboxProfile, SecretMount,
+    };
+
+    let caps = micold_core::sandbox::cli::CliRuntime::new(runtime_kind(), OriginalXdgRunner)
+        .probe()
+        .unwrap_or_else(|e| panic!("probe {}: {}", runtime_kind(), e.reason()));
+    let profile = SandboxProfile {
+        network: NetworkPosture::NoOutbound,
+        ..SandboxProfile::default()
+    };
+    let home = Path::new("/nonexistent/home");
+    let core_spec = micold_core::sandbox::SandboxSpec {
+        name: "unused".into(),
+        mounts: MountSet::build(
+            &[],
+            &profile,
+            &CredentialLayout::default(),
+            home.join("state"),
+            home,
+            SecretMount {
+                host: home.join("ssh"),
+                container: PathBuf::from(micold_core::sandbox::argv::CONTAINER_SSH_DIR),
+            },
+        ),
+        profile,
+        uid: 0,
+        gid: 0,
+        control_port: 0,
+        published_ports: Vec::new(),
+        network_name: network.to_string(),
+        time_zone: None,
+        home: home.to_path_buf(),
+    };
+    let args: Vec<String> = micold_core::sandbox::argv::network_create(&core_spec, &caps)
+        .unwrap_or_else(|e| panic!("{}: {}", e.reason(), e.remedy()))
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    // `network create --driver bridge <these…> <name>`.
+    args[4..args.len() - 1].to_vec()
 }
 
 /// [`start_sandbox_from`] with `network_opts` added to the network's `create`.

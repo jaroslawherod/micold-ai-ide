@@ -269,8 +269,13 @@ forward. The rootful row with netavark ≥ 1.7 is reasoned, not run: netavark 1.
 available, and deleting the bridge's default route by hand (what the option does) gave a reachable
 port and blocked outbound. The setup is read from `podman info` (`host.security.rootless`,
 `host.networkBackend`, `host.networkBackendInfo.version`), which the capability probe already runs.
-Whether names resolve inside a Podman `--internal` network was not measurable here; the DNS caveat
-above is Docker's measurement.
+~~Whether names resolve inside a Podman `--internal` network was not measurable here; the DNS caveat
+above is Docker's measurement.~~ **Measured under T240:** names resolve inside a rootless Podman
+`--internal` network too (Podman 4.9.3, aardvark-dns 1.4.0): aardvark-dns forwards the lookup to the
+host's resolvers, here a stand-in upstream answering `example.com`, while the connection that follows
+fails. The DNS caveat therefore holds on Docker and on rootless Podman, and
+`sandbox_real_no_outbound_still_resolves_names` asserts it unchanged on both; rootful Podman's
+`no_default_route` network was not measured. Recorded in `bugs/BUG-1285.autopilot.md`.
 
 **Alternatives considered.** `--network none` (rejected: no control channel at all); attaching the
 container to two networks, one internal and one bridged (rejected: the bridged one restores egress,

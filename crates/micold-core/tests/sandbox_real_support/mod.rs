@@ -11,8 +11,31 @@ use std::time::{Duration, Instant};
 
 use micold_core::provision::keys::DaemonKeys;
 use micold_core::sandbox::basic_image::DEV_BASIC_IMAGE;
+use micold_core::sandbox::dialect::Dialect;
+use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::SecretMount;
 use micold_core::ssh::{ClientPlatform, SystemSsh};
+
+/// Which runtime to drive, from `MICOLD_TEST_RUNTIME`; Docker unless it says otherwise.
+///
+/// The questions these targets ask — does the runtime enforce what it claims to, does the posture
+/// hold — have a different answer per runtime, and only one of them was ever measured until a
+/// target asked the other. Selecting the kind here, and taking the program name from the dialect
+/// rather than spelling it, is what lets T098 and T240 ask them of podman.
+pub fn runtime_kind() -> RuntimeKind {
+    match std::env::var("MICOLD_TEST_RUNTIME").as_deref() {
+        Err(_) | Ok("") | Ok("docker") => RuntimeKind::Docker,
+        Ok("podman") => RuntimeKind::Podman,
+        // Loudly, rather than falling back to Docker: a typo that silently ran the Docker suite
+        // again would report a podman pass that never happened.
+        Ok(other) => panic!("MICOLD_TEST_RUNTIME={other:?}: expected `docker` or `podman`"),
+    }
+}
+
+/// The selected runtime's program, from the application's own dialect table.
+pub fn program() -> &'static str {
+    Dialect::for_kind(runtime_kind()).program
+}
 
 /// The image under test: `MICOLD_BASIC_IMAGE_TAG`, else the `:dev` tag `mise run image` builds.
 pub fn image() -> String {

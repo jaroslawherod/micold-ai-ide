@@ -18,7 +18,7 @@ use std::ffi::OsString;
 
 use super::dialect::Dialect;
 use super::parse::{GIT_IDENTITY_LABEL, GIT_IDENTITY_NONE};
-use super::runtime::{IdentityMapping, RuntimeCapabilities};
+use super::runtime::{IdentityMapping, NoOutboundSupport, RuntimeCapabilities, RuntimeError};
 use super::{MountSet, NetworkPosture, SandboxSpec};
 use crate::spawn::{IDLE_STOP_ENV, IDLE_STOP_OFF};
 
@@ -39,13 +39,22 @@ pub const ESCALATION_DENYLIST: &[&str] = &[
     "-v/var/run/docker.sock",
 ];
 
-/// The arguments that create the sandbox's network.
+/// The arguments that create the sandbox's network, or the refusal when this setup cannot block
+/// outbound connections (FR-017a).
 ///
-/// [`NetworkPosture::NoOutbound`] is a user-defined bridge with IP masquerade disabled: outbound
-/// connections have no NAT and fail, while inbound port publishing is host-side DNAT and keeps
-/// working (research R4). Expressing it as `--internal` instead was measured and rejected — it
-/// leaves the container unreachable from the host, severing the control channel this feature needs.
-pub fn network_create(spec: &SandboxSpec, dialect: &Dialect) -> Vec<OsString> {
+/// [`NetworkPosture::NoOutbound`] is a user-defined bridge on which outbound connections fail while
+/// the published control port keeps working (research R4, contracts C-5). The arguments that do it
+/// differ by runtime setup — Docker disables masquerade, rootless Podman uses `--internal`, rootful
+/// Podman `no_default_route` — so they come from the probed [`RuntimeCapabilities::no_outbound`],
+/// not from the dialect. An `--internal` network on Docker or rootful Podman leaves the container
+/// unreachable from the host; that was measured, and the probe never chooses it there.
+///
+/// A setup that cannot do it is an error here rather than a network without the arguments: the one
+/// thing this must never produce is an open network while the setting says outbound is off.
+pub fn network_create(
+    spec: &SandboxSpec,
+    caps: &RuntimeCapabilities,
+) -> Result<Vec<OsString>, RuntimeError> {
     let mut args: Vec<OsString> = vec![
         "network".into(),
         "create".into(),
@@ -53,11 +62,20 @@ pub fn network_create(spec: &SandboxSpec, dialect: &Dialect) -> Vec<OsString> {
         "bridge".into(),
     ];
     if spec.profile.network == NetworkPosture::NoOutbound {
-        args.push("-o".into());
-        args.push(dialect.no_masquerade_opt.into());
+        match &caps.no_outbound {
+            NoOutboundSupport::Supported { network_args } => {
+                args.extend(network_args.iter().map(OsString::from));
+            }
+            NoOutboundSupport::Unsupported { reason } => {
+                return Err(RuntimeError::NoOutboundUnavailable {
+                    kind: caps.kind,
+                    reason: reason.clone(),
+                });
+            }
+        }
     }
     args.push((&spec.network_name).into());
-    args
+    Ok(args)
 }
 
 /// The arguments that create the sandbox container.
@@ -135,7 +153,7 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     args.push((&spec.network_name).into());
 
     // The control channel is always published to loopback, whatever the network posture — that is
-    // the whole point of the masquerade-disabled bridge.
+    // the whole point of the no-outbound network each setup makes (contracts C-5).
     args.push("-p".into());
     // It is the container's SSH port: the client provisions and tunnels the daemon through it
     // (feature 806), so there is no daemon port and no `MICOLD_LISTEN_ADDR` here.
@@ -325,6 +343,10 @@ mod tests {
             identity_mapping: match kind {
                 RuntimeKind::Docker => IdentityMapping::ExplicitUidGid,
                 RuntimeKind::Podman => IdentityMapping::KeepId,
+            },
+            no_outbound: match kind {
+                RuntimeKind::Docker => NoOutboundSupport::docker(),
+                RuntimeKind::Podman => NoOutboundSupport::podman_rootless(),
             },
         }
     }
@@ -677,40 +699,102 @@ mod tests {
         }
     }
 
+    /// The setups contracts C-5's table names, each with the capabilities its probe yields and the
+    /// one network argument that is its own.
+    fn no_outbound_setups() -> Vec<(&'static str, RuntimeCapabilities, &'static str)> {
+        let mut rootful = caps(RuntimeKind::Podman, LimitSupport::Supported);
+        rootful.identity_mapping = IdentityMapping::ExplicitUidGid;
+        rootful.no_outbound = NoOutboundSupport::podman_no_default_route();
+        vec![
+            (
+                "Docker",
+                caps(RuntimeKind::Docker, LimitSupport::Supported),
+                "com.docker.network.bridge.enable_ip_masquerade=false",
+            ),
+            (
+                "rootless Podman",
+                caps(RuntimeKind::Podman, LimitSupport::Supported),
+                "--internal",
+            ),
+            (
+                "rootful Podman, netavark 1.7+",
+                rootful,
+                "no_default_route=true",
+            ),
+        ]
+    }
+
+    /// Every argument a `NoOutbound` network may carry on some setup.
+    const NO_OUTBOUND_ARGS: [&str; 3] = [
+        "com.docker.network.bridge.enable_ip_masquerade=false",
+        "--internal",
+        "no_default_route=true",
+    ];
+
     #[test]
-    fn no_outbound_disables_masquerade_and_keeps_the_published_port() {
-        // Conformance check K-7 — the measured answer to research R4, asserted in both directions.
+    fn no_outbound_blocks_egress_per_setup_and_keeps_the_published_port() {
+        // Conformance check K-7 (BUG-1285): C-5's network arguments for each probed setup, none of
+        // the other setups' arguments, and the published port on every one of them. Docker's
+        // masquerade option on Podman is what netavark refuses; `--internal` on Docker or rootful
+        // Podman is what makes the published port inert (research R4).
         let mut s = spec();
         s.profile.network = NetworkPosture::NoOutbound;
 
-        for kind in RuntimeKind::ALL {
-            let net = strings(&network_create(&s, &Dialect::for_kind(kind)));
-            assert!(
-                net.iter().any(|a| a.contains("enable_ip_masquerade=false")),
-                "{kind}: {net:?}"
-            );
+        for (setup, caps, own) in no_outbound_setups() {
+            let net = strings(&network_create(&s, &caps).expect(setup));
+            assert!(net.iter().any(|a| a == own), "{setup}: {net:?}");
+            for other in NO_OUTBOUND_ARGS.iter().filter(|a| **a != own) {
+                assert!(
+                    !net.iter().any(|a| a == other),
+                    "{setup}: `{other}` is another setup's argument: {net:?}"
+                );
+            }
+            if caps.kind == RuntimeKind::Podman {
+                assert!(
+                    !net.iter().any(|a| a.starts_with("com.docker.")),
+                    "{setup}: netavark refuses Docker's driver options: {net:?}"
+                );
+            }
 
-            // The configuration that was measured to break the control channel must never appear.
-            assert!(
-                !net.iter().any(|a| a == "--internal"),
-                "{kind}: an --internal network makes the published port inert (research R4): \
-                 {net:?}"
-            );
-
-            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
-            assert!(args.iter().any(|a| a == "127.0.0.1:7727:2222"), "{kind}");
+            let args = strings(&create(&s, &caps));
+            assert!(args.iter().any(|a| a == "127.0.0.1:7727:2222"), "{setup}");
         }
     }
 
     #[test]
-    fn outbound_leaves_masquerade_alone() {
+    fn no_outbound_on_a_setup_that_cannot_block_egress_is_refused_not_opened() {
+        // FR-017a: no arguments at all would be an open network under a setting that says closed.
+        let mut s = spec();
+        s.profile.network = NetworkPosture::NoOutbound;
+        let mut c = caps(RuntimeKind::Podman, LimitSupport::Supported);
+        c.no_outbound = NoOutboundSupport::Unsupported {
+            reason: "rootful Podman on netavark 1.4.0".into(),
+        };
+        assert_eq!(
+            network_create(&s, &c),
+            Err(RuntimeError::NoOutboundUnavailable {
+                kind: RuntimeKind::Podman,
+                reason: "rootful Podman on netavark 1.4.0".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn outbound_adds_no_setups_network_argument() {
         let mut s = spec();
         s.profile.network = NetworkPosture::Outbound;
-        for kind in RuntimeKind::ALL {
-            let net = strings(&network_create(&s, &Dialect::for_kind(kind)));
-            assert!(
-                !net.iter().any(|a| a.contains("masquerade")),
-                "{kind}: {net:?}"
+        let mut unsupported = caps(RuntimeKind::Podman, LimitSupport::Supported);
+        unsupported.no_outbound = NoOutboundSupport::Unsupported { reason: "x".into() };
+        let setups = no_outbound_setups()
+            .into_iter()
+            .map(|(setup, caps, _)| (setup, caps))
+            .chain([("unsupported Podman", unsupported)]);
+        for (setup, caps) in setups {
+            let net = strings(&network_create(&s, &caps).expect(setup));
+            assert_eq!(
+                net,
+                ["network", "create", "--driver", "bridge", "micold-net"],
+                "{setup}"
             );
         }
     }

@@ -72,11 +72,16 @@ fn runner_rejecting_the_mount(kind: RuntimeKind, refusal: &str) -> RecordingRunn
         1,
         "Error: No such container: micold-sandbox",
     )));
+    // `create` probes first, then makes the network (BUG-1285). The probe is the runtime's own:
+    // which no-outbound network it can make depends on it, and rootless is what Podman runs as.
+    let (version, info) = match kind {
+        RuntimeKind::Docker => ("docker_version.json", "docker_info.json"),
+        RuntimeKind::Podman => ("podman_version.json", "podman_info_4.9_rootless.json"),
+    };
+    r.push_ok(fixture(version));
+    r.push_ok(fixture(info));
     r.push_ok("micold-net");
-    r.push_ok(fixture("docker_version.json"));
-    r.push_ok(fixture("docker_info.json"));
     r.push(Ok(CommandOutput::err(125, refusal)));
-    let _ = kind;
     r
 }
 

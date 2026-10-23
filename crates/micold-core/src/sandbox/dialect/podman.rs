@@ -16,7 +16,6 @@ pub fn dialect() -> Dialect {
         // inside the container, which is what makes files written into a project come out owned by
         // the host user rather than by podman's subuid mapping.
         identity: IdentityMapping::KeepId,
-        no_masquerade_opt: "com.docker.network.bridge.enable_ip_masquerade=false",
         minimum_version: "4.0",
         // Rootless podman has no daemon to start, so "not running" means the user-level service or
         // the `podman machine` VM is not up. Its message says so by telling the user which command

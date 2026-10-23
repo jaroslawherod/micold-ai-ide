@@ -70,9 +70,10 @@ fn happy_runner() -> RecordingRunner {
         1,
         "Error: No such container: micold-sandbox",
     )));
-    r.push_ok("micold-net");
+    // `create` probes first, then makes the network (BUG-1285).
     r.push_ok(fixture("docker_version.json"));
     r.push_ok(fixture("docker_info.json"));
+    r.push_ok("micold-net");
     r.push_ok("9f2b1c4d7e8a");
     r.push_ok("");
     r
@@ -126,9 +127,10 @@ fn acquisition_progress_reaches_the_observer() {
         1,
         "Error: No such container: micold-sandbox",
     )));
-    r.push_ok("micold-net");
+    // `create` probes first, then makes the network (BUG-1285).
     r.push_ok(fixture("docker_version.json"));
     r.push_ok(fixture("docker_info.json"));
+    r.push_ok("micold-net");
     r.push_ok("9f2b");
     r.push_ok("");
     let rt = CliRuntime::new(RuntimeKind::Docker, r);
@@ -180,9 +182,10 @@ fn a_late_failure_is_attributed_to_its_own_stage() {
         1,
         "Error: No such container: micold-sandbox",
     )));
-    r.push_ok("micold-net");
+    // `create` probes first, then makes the network (BUG-1285).
     r.push_ok(fixture("docker_version.json"));
     r.push_ok(fixture("docker_info.json"));
+    r.push_ok("micold-net");
     // `create` fails: the port is taken.
     r.push(Ok(CommandOutput::err(
         125,
@@ -244,9 +247,10 @@ fn unenforceable_limits_are_reported_without_failing_the_bring_up() {
         1,
         "Error: No such container: micold-sandbox",
     )));
-    r.push_ok("micold-net");
+    // `create` probes first, then makes the network (BUG-1285).
     r.push_ok(fixture("docker_version.json"));
     r.push_ok(r#"{"Driver":"overlay2"}"#);
+    r.push_ok("micold-net");
     r.push_ok("9f2b");
     r.push_ok("");
     let rt = CliRuntime::new(RuntimeKind::Docker, r);

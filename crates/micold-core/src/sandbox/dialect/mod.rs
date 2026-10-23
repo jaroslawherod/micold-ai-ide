@@ -1,7 +1,9 @@
 //! Per-runtime argument dialects.
 //!
 //! A dialect is a table of one runtime's differences — flag names, defaults, identity mapping —
-//! not a second client. That is what makes FR-020's "replaceable runtime" cheap: podman's CLI is
+//! not a second client. What differs by runtime *setup* rather than by runtime — how a network
+//! blocks outbound connections, which is not the same rootless and rootful on Podman (BUG-1285) —
+//! is a probed capability instead ([`RuntimeCapabilities`](super::runtime::RuntimeCapabilities)). That is what makes FR-020's "replaceable runtime" cheap: podman's CLI is
 //! near-identical to Docker's, so supporting it is a table, not a rewrite.
 //!
 //! A new dialect claims support by passing the conformance suite in
@@ -25,9 +27,6 @@ pub struct Dialect {
     pub program: &'static str,
     /// How the host user's identity is carried in (research R3).
     pub identity: IdentityMapping,
-    /// The option that disables outbound NAT on a user-defined bridge (research R4). Both runtimes
-    /// take the same driver option, but a future one may not.
-    pub no_masquerade_opt: &'static str,
     /// The minimum version this feature has been exercised against.
     pub minimum_version: &'static str,
     /// What this runtime prints when it is installed but its service cannot be reached.

@@ -23,24 +23,12 @@
 use std::process::Command;
 
 use micold_core::sandbox::cli::CliRuntime;
-use micold_core::sandbox::dialect::Dialect;
 use micold_core::sandbox::exec::SystemRunner;
-use micold_core::sandbox::runtime::{ContainerRuntime, LimitSupport, RuntimeKind};
-
-/// Which runtime to ask, from `MICOLD_TEST_RUNTIME`; Docker unless it says otherwise.
-///
-/// The question this file asks — does the runtime enforce what it claims to? — has a different
-/// answer per runtime, and only one of them was ever measured. Selecting the kind here, and taking
-/// the program name from the dialect rather than spelling it, is what let T098 ask it of podman.
-fn kind() -> RuntimeKind {
-    match std::env::var("MICOLD_TEST_RUNTIME").as_deref() {
-        Err(_) | Ok("") | Ok("docker") => RuntimeKind::Docker,
-        Ok("podman") => RuntimeKind::Podman,
-        Ok(other) => panic!("MICOLD_TEST_RUNTIME={other:?}: expected `docker` or `podman`"),
-    }
-}
+use micold_core::sandbox::runtime::{ContainerRuntime, LimitSupport};
 
 mod sandbox_real_support;
+use sandbox_real_support::{program, runtime_kind};
+
 /// Comfortably above the image's own size — a cap below it makes the container unstartable, which
 /// would answer a different question — and low enough that exceeding it costs under a second.
 const CAP_MIB: u64 = 512;
@@ -59,7 +47,7 @@ enum Outcome {
 }
 
 fn exceed_the_cap() -> Outcome {
-    let program = Dialect::for_kind(kind()).program;
+    let program = program();
     let out = Command::new(program)
         .args([
             "run",
@@ -91,7 +79,7 @@ fn exceed_the_cap() -> Outcome {
 
 #[tokio::test]
 async fn sandbox_real_storage_capability_matches_what_the_runtime_enforces() {
-    let claimed = CliRuntime::new(kind(), SystemRunner)
+    let claimed = CliRuntime::new(runtime_kind(), SystemRunner)
         .probe()
         .expect("probe the real runtime")
         .storage;

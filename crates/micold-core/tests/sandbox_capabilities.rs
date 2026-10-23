@@ -17,7 +17,7 @@ use micold_core::sandbox::image::ImageChoice;
 use micold_core::sandbox::parse::{ContainerFacts, ImageFacts};
 use micold_core::sandbox::runtime::{
     reconcile, CapabilityCache, ContainerId, ContainerRuntime, IdentityMapping, LimitSupport,
-    Progress, RuntimeCapabilities, RuntimeError, RuntimeKind, RuntimeVersion,
+    NoOutboundSupport, Progress, RuntimeCapabilities, RuntimeError, RuntimeKind, RuntimeVersion,
 };
 use micold_core::sandbox::{Bytes, MilliCpus, ResourceBudget, SandboxProfile, SandboxSpec};
 
@@ -78,6 +78,7 @@ impl ContainerRuntime for Counting {
                 _ => LimitSupport::Supported,
             },
             identity_mapping: IdentityMapping::ExplicitUidGid,
+            no_outbound: NoOutboundSupport::docker(),
         })
     }
 
@@ -209,6 +210,7 @@ fn caps(storage: LimitSupport) -> RuntimeCapabilities {
         pids: LimitSupport::Supported,
         storage,
         identity_mapping: IdentityMapping::ExplicitUidGid,
+        no_outbound: NoOutboundSupport::docker(),
     }
 }
 

@@ -138,9 +138,9 @@ Added 2026-10-23. Traces are FR-017a, US4 scenario 4a and contracts C-5/K-7.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U56 | `NoOutbound` emits C-5's network arguments for each probed setup and none of the others, and keeps the published port; `Outbound` emits none | FR-017a, C-5, K-7 | example | TODO | `sandbox::argv::tests` (T236), red on `origin/main` |
-| U57 | `podman info` yields rootless, network backend and version; the probe maps them to `NoOutboundSupport`, unsupported setups with a reason naming netavark 1.7 and rootless Podman | FR-017a, R4 | example | TODO | `sandbox::parse::tests`, `sandbox::cli::tests` (T237) |
-| U58 | A `NoOutbound` create on an unsupported setup fails classified and runs no `network create`; `Outbound` on it starts | FR-017a, US4 sc. 4a | example | TODO | `sandbox_runtime` (T238) |
+| U56 | `NoOutbound` emits C-5's network arguments for each probed setup and none of the others, and keeps the published port; `Outbound` emits none | FR-017a, C-5, K-7 | example | DONE | `sandbox::argv::tests` (T236), red on `origin/main` |
+| U57 | `podman info` yields rootless, network backend and version; the probe maps them to `NoOutboundSupport`, unsupported setups with a reason naming netavark 1.7 and rootless Podman | FR-017a, R4 | example | DONE | `sandbox::parse::tests`, `sandbox::cli::tests` (T237) |
+| U58 | A `NoOutbound` create on an unsupported setup fails classified and runs no `network create`; `Outbound` on it starts | FR-017a, US4 sc. 4a | example | DONE | `sandbox_runtime` (T238) |
 
 ## Invariants and edge cases still to place
 

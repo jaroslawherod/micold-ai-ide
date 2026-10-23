@@ -15,7 +15,7 @@ use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::pathmap::{self, WINDOWS_MOUNT_ROOT};
 use micold_core::sandbox::placement::{GitRouting, Placement};
 use micold_core::sandbox::runtime::{
-    IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+    IdentityMapping, LimitSupport, NoOutboundSupport, RuntimeCapabilities, RuntimeKind,
 };
 use micold_core::sandbox::{
     CredentialLayout, CredentialShare, MountSet, SandboxProfile, SandboxSpec, SecretMount,
@@ -46,6 +46,7 @@ fn caps() -> RuntimeCapabilities {
             reason: "rootful overlay2 does not enforce a per-container size".into(),
         },
         identity_mapping: IdentityMapping::ExplicitUidGid,
+        no_outbound: NoOutboundSupport::docker(),
     }
 }
 

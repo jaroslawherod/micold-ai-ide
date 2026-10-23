@@ -248,8 +248,11 @@ impl ResourceBudget {
 /// Whether the sandbox may open outbound connections (FR-017, FR-018).
 ///
 /// Note what [`NetworkPosture::NoOutbound`] does **not** claim. It is implemented as a user-defined
-/// bridge with IP masquerade disabled (research R4), which blocks outbound connections while
-/// leaving the published control port working. DNS *lookups* still resolve, because the runtime's
+/// bridge on which outbound connections fail while the published control port keeps working
+/// (research R4). The mechanism is per runtime setup (contracts C-5, BUG-1285): Docker disables IP
+/// masquerade, rootless Podman makes an `--internal` network, rootful Podman one with
+/// `no_default_route` (netavark 1.7 or newer), and any other setup refuses the start
+/// ([`runtime::NoOutboundSupport`]). On Docker DNS *lookups* still resolve, because the runtime's
 /// embedded resolver forwards them from the host side — names resolve, connections to them do not.
 /// That is a small metadata channel, and it is documented rather than claimed away: the posture is
 /// "no outbound connections", not "no outbound traffic of any kind".
@@ -1079,8 +1082,8 @@ pub struct SandboxSpec {
     pub control_port: u16,
     /// Extra ports the user asked to expose (US2 scenario 8).
     pub published_ports: Vec<u16>,
-    /// The user-defined network the sandbox joins. With [`NetworkPosture::NoOutbound`] this network
-    /// is created with IP masquerade disabled (research R4).
+    /// The user-defined network the sandbox joins. With [`NetworkPosture::NoOutbound`] it is created
+    /// with the arguments the probed setup blocks outbound connections with (research R4, C-5).
     pub network_name: String,
     /// The host's IANA time zone, passed in as `TZ` so the separator of a saved history shows the
     /// user's local time (feature 041, research R11). `None` leaves the container in UTC.

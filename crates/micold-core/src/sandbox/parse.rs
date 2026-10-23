@@ -49,6 +49,11 @@ pub struct RuntimeInfo {
     pub storage_driver: String,
     /// Whether the runtime reports itself as rootless. Podman usually is; Docker usually is not.
     pub rootless: bool,
+    /// Podman's network backend, `netavark` or `cni` (`host.networkBackend`). `None` on Docker.
+    pub network_backend: Option<String>,
+    /// The backend's own version line, e.g. `netavark 1.4.0` (`host.networkBackendInfo.version`).
+    /// Which no-outbound network a rootful Podman can make depends on it (BUG-1285).
+    pub network_backend_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +75,15 @@ struct PodmanStore {
 #[derive(Debug, Deserialize)]
 struct PodmanHost {
     security: Option<PodmanSecurity>,
+    #[serde(alias = "networkBackend")]
+    network_backend: Option<String>,
+    #[serde(alias = "networkBackendInfo")]
+    network_backend_info: Option<PodmanNetworkBackend>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PodmanNetworkBackend {
+    version: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,14 +101,25 @@ pub fn info(stdout: &str) -> Result<RuntimeInfo, RuntimeError> {
         .driver
         .or_else(|| doc.store.and_then(|s| s.graph_driver_name))
         .unwrap_or_default();
-    let rootless = doc
-        .host
-        .and_then(|h| h.security)
+    let host = doc.host;
+    let rootless = host
+        .as_ref()
+        .and_then(|h| h.security.as_ref())
         .and_then(|s| s.rootless)
         .unwrap_or(false);
+    let network_backend = host
+        .as_ref()
+        .and_then(|h| h.network_backend.clone())
+        .filter(|b| !b.is_empty());
+    let network_backend_version = host
+        .and_then(|h| h.network_backend_info)
+        .and_then(|i| i.version)
+        .filter(|v| !v.is_empty());
     Ok(RuntimeInfo {
         storage_driver,
         rootless,
+        network_backend,
+        network_backend_version,
     })
 }
 
@@ -289,6 +314,46 @@ mod tests {
         let podman = info(&fixture("podman_info.json")).unwrap();
         assert_eq!(podman.storage_driver, "overlay");
         assert!(podman.rootless, "podman reports itself rootless");
+    }
+
+    /// U57 (BUG-1285): the facts that decide how a no-outbound network is made, from each shape.
+    #[test]
+    fn podmans_rootless_flag_and_network_backend_are_read_from_its_info() {
+        let cases = [
+            (
+                "podman_info_4.9_rootless.json",
+                true,
+                Some("netavark 1.4.0"),
+            ),
+            (
+                "podman_info_4.9_rootful.json",
+                false,
+                Some("netavark 1.4.0"),
+            ),
+            (
+                "podman_info_netavark_1.10_rootful.json",
+                false,
+                Some("netavark 1.10.3"),
+            ),
+        ];
+        for (f, rootless, version) in cases {
+            let i = info(&fixture(f)).unwrap();
+            assert_eq!(i.rootless, rootless, "{f}");
+            assert_eq!(i.network_backend.as_deref(), Some("netavark"), "{f}");
+            assert_eq!(i.network_backend_version.as_deref(), version, "{f}");
+        }
+
+        let unreported = info(&fixture("podman_info.json")).unwrap();
+        assert!(unreported.rootless);
+        assert_eq!(unreported.network_backend_version, None);
+
+        let docker = info(&fixture("docker_info.json")).unwrap();
+        assert!(!docker.rootless);
+        assert_eq!(
+            docker.network_backend, None,
+            "Docker reports no Podman backend"
+        );
+        assert_eq!(docker.network_backend_version, None);
     }
 
     #[test]

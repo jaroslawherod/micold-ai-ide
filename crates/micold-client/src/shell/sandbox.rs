@@ -26,8 +26,8 @@ use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSp
 /// recognisable as ours rather than accumulating beside itself (US6 scenario 5).
 pub use micold_core::sandbox::CONTAINER_NAME;
 
-/// The user-defined network the sandbox joins. Created with IP masquerade disabled when the posture
-/// is `NoOutbound` (research R4).
+/// The user-defined network the sandbox joins. When the posture is `NoOutbound` it is created with
+/// the arguments the probed runtime setup blocks outbound connections with (research R4, C-5).
 pub const NETWORK_NAME: &str = "micold-sandbox-net";
 
 /// Everything the host has to tell the core before a sandbox can be built.
@@ -2221,9 +2221,10 @@ mod tests {
             1,
             "Error: No such container: micold-sandbox",
         )));
-        runtime.push_ok("micold-sandbox-net");
+        // `create` probes first, then makes the network (BUG-1285), then the container.
         runtime.push_ok(fixture("docker_version.json"));
         runtime.push_ok(fixture("docker_info.json"));
+        runtime.push_ok("micold-sandbox-net");
         runtime.push_ok("9f2b1c4d7e8a");
         runtime.push(start);
         runtime
