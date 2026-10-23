@@ -79,7 +79,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M7 (T054-T062) implemented and ticked; WIP commit on the branch, plus uncommitted-then-committed fixes. Done: core `reference::find`, reducer (`ReferenceActivated`, `references_in`, eager tree read after DiffRead/PullRequestDiffRead, `notice`, `offset_of_line`), `DiffView::references/.on_reference`, ui wiring, showcase, docs. Existing tests that asserted `Effect::None` after DiffRead now use `sans_tree` helpers.
+Review A (code-review high, snapshot a8fdac7f:7a4ef5e7): CLEAN; F1 MINOR fixed (line kept while Reading); F2 MINOR (probe allocations) declined, not urgent.
+Review B (sonnet, background agent afeebf85709083344): dispatched, result NOT yet seen; if its notification is lost, re-dispatch once (review.md, rubrics/conformance.md).
+Full gate `GIT_CONFIG_GLOBAL=/dev/null mise run gate` started detached, log `<scratchpad>/gate3.log` (GATE_EXIT= line); an earlier red was only documentation_is_not_read (fixed by renaming README fixture to TOP.md). Visual pass (quickstart Part B step 6) not yet run.
+Next: read gate3.log result (rerun if red or tree changed), act on Review B, visual pass via autopilot-worker, rebase on origin/main, push, open PR titled `feat(1150): follow references from the diff (#1150)` per pr.md, set this section back to None.
 
 ## Open escalation
 
