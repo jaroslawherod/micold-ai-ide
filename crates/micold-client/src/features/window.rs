@@ -200,10 +200,17 @@ pub enum FieldId {
     DaemonCredential(micold_core::sandbox::CredentialShare),
     /// Settings → Daemons: one AI CLI's checkbox in the form (feature 806).
     DaemonAiCli(micold_core::session::AiCli),
-    /// A tool permission request's deny-message field (feature 942).
-    PromptDenyMessage(micold_core::protocol::messages::PromptId),
-    /// A plan request's note field (feature 942).
-    PromptNote(micold_core::protocol::messages::PromptId),
+    /// A tool permission request's deny-message field (feature 942), by its session: a request id
+    /// is unique within one daemon only.
+    PromptDenyMessage(
+        micold_core::session::SessionId,
+        micold_core::protocol::messages::PromptId,
+    ),
+    /// A plan request's note field (feature 942), by its session.
+    PromptNote(
+        micold_core::session::SessionId,
+        micold_core::protocol::messages::PromptId,
+    ),
     /// Settings → Daemons: the form's keep-running-after-sign-out checkbox (feature 804).
     DaemonSurviveLogout,
     /// Settings → Daemons: the form's processor limit (feature 804).
@@ -405,5 +412,19 @@ impl crate::app::State {
         // outlive them — and reopening the same dialog would draw its field focused over an input
         // that has not been clicked (BUG-003).
         self.window.focused_field = None;
+    }
+
+    /// #942: a request's deny-message or plan-note field gives up the keyboard once its request
+    /// is no longer pending here (answered, withdrawn, its connection or session gone), so the
+    /// terminals take keys again without a click (M7 review A r2 F1). A field that ends with its
+    /// request never reports losing focus, so this runs after every change that ends one.
+    pub fn release_ended_prompt_focus(&mut self) {
+        if let Some(FieldId::PromptDenyMessage(session, id) | FieldId::PromptNote(session, id)) =
+            self.window.focused_field
+        {
+            if self.permission_prompts.shown(session, id).is_none() {
+                self.window.focused_field = None;
+            }
+        }
     }
 }

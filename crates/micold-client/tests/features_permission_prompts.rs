@@ -612,29 +612,40 @@ fn only_bypass_has_a_warning_label_and_it_names_its_effect() {
 }
 
 /// M7 review A r2 F1: a request's note or deny field holds the keyboard only while the request is
-/// pending; once it ends, or the session is forgotten, the window lets go of it.
+/// pending; once it ends, or the session is forgotten, the window lets go of it. A request of
+/// another session with the same id (another daemon's) does not keep it.
 #[test]
 fn a_field_of_an_ended_request_releases_the_keyboard() {
     use micold_client::features::window::FieldId;
-    for field in [FieldId::PromptDenyMessage(ID), FieldId::PromptNote(ID)] {
-        let session = SessionId::new();
+    let fields: [fn(SessionId) -> FieldId; 2] = [
+        |s| FieldId::PromptDenyMessage(s, ID),
+        |s| FieldId::PromptNote(s, ID),
+    ];
+    for field in fields {
+        let (session, other) = (SessionId::new(), SessionId::new());
         let mut app = micold_client::app::State::default();
         app.permission_prompts.requested(tool(session));
-        assert!(app.permission_prompts.holds(ID));
-        app.window.focused_field = Some(field);
+        app.permission_prompts.requested(tool(other));
+        app.window.focused_field = Some(field(session));
         app.release_ended_prompt_focus();
-        assert_eq!(app.window.focused_field, Some(field), "still pending");
+        assert_eq!(
+            app.window.focused_field,
+            Some(field(session)),
+            "still pending"
+        );
 
         app.permission_prompts
             .resolved(session, ID, None, Resolution::Denied);
-        assert!(!app.permission_prompts.holds(ID));
         app.release_ended_prompt_focus();
-        assert_eq!(app.window.focused_field, None, "{field:?} let go");
+        assert_eq!(
+            app.window.focused_field, None,
+            "let go, the other id notwithstanding"
+        );
 
         app.permission_prompts.requested(tool(session));
-        app.window.focused_field = Some(field);
+        app.window.focused_field = Some(field(session));
         app.forget_structured(session);
-        assert_eq!(app.window.focused_field, None, "{field:?} with its session");
+        assert_eq!(app.window.focused_field, None, "with its session");
     }
     let mut app = micold_client::app::State::default();
     app.window.focused_field = Some(FieldId::ConfirmDeleteAlsoBranch);

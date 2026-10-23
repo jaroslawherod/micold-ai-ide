@@ -781,8 +781,13 @@ pub(crate) fn transcript_body<'a>(
     // whose CLI is not running shows as ended (FR-018, FR-022).
     let shown = state.active_sessions().iter().find(|s| s.id == id);
     let cli_running = shown.is_some_and(|s| s.lifecycle == SessionLifecycle::Running);
-    // #942: the session's permission mode, for the Bypass label (FR-014).
-    let mode = shown.map(|s| s.permission_mode).unwrap_or_default();
+    // #942: the session's permission mode, for the Bypass label (FR-014), from whichever project
+    // lists it.
+    let mode = state
+        .workspace
+        .find_session(id)
+        .map(|(_, s)| s.permission_mode)
+        .unwrap_or_default();
     crate::ui::transcript::view_full(
         &state.structured_transcript,
         crate::ui::transcript::InsightsCtx {

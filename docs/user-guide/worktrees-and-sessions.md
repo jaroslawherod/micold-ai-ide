@@ -1228,7 +1228,9 @@ the background service keeps the events it reports. It is Claude Code only.
 - **The permission mode** decides how often Claude asks. Choose it in the start-session list: the
   **Permissions:** rows under **Claude Code (structured)** — **Default** (marked until you pick
   another), **Accept edits**, **Plan** and **Bypass** — set the mode the next structured session
-  starts in. The mode is kept with the session, across restarts.
+  starts in; the list stays open so you can then pick **Claude Code (structured)**. A Bypass pick
+  counts for that one start: the next goes back to **Default**. The mode is kept with the session,
+  across restarts.
   - **Default** asks as your Claude Code settings say, as a terminal session in the same folder
     would.
   - **Accept edits** changes files without asking; other tools still ask.

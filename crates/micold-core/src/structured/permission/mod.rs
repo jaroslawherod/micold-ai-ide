@@ -24,7 +24,7 @@ pub const PROMPT_TOOL: &str = "mcp__micold__permission_prompt";
 /// The permission arguments of a structured launch (contracts/claude-permission.md *Launch*):
 /// `--allow-dangerously-skip-permissions` always, so a later switch to Bypass is reachable (R6);
 /// `--permission-mode <mode>` only when `mode` is not Default (feature 938 FR-006a); the prompt
-/// tool only when `prompt_tool` (the tool server bound the session and prompts are on, R14).
+/// tool only when `prompt_tool` (the tool server bound the session).
 pub fn launch_args(mode: PermissionMode, prompt_tool: bool) -> Vec<String> {
     let mut args = vec!["--allow-dangerously-skip-permissions".to_string()];
     if !mode.is_default() {

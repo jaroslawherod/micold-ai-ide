@@ -273,7 +273,11 @@ fn tool_view<'a, M: Clone + 'a>(
                 .on_input(move |text| {
                     on_prompt(PromptsMsg::DenyMessageEdited { session, id, text })
                 })
-                .track_focus(FieldId::PromptDenyMessage(id), d.focused, d.on_focus),
+                .track_focus(
+                    FieldId::PromptDenyMessage(session, id),
+                    d.focused,
+                    d.on_focus,
+                ),
         )
         .action(Button::filled(ALLOW, roles).on_press_maybe(send(Action::Allow)))
         .action(Button::outlined(DENY, roles).on_press_maybe(send(Action::Deny)));
@@ -300,7 +304,7 @@ fn plan_view<'a, M: Clone + 'a>(
         .body(
             TextField::new(NOTE_PLACEHOLDER, &shown.draft.note, roles)
                 .on_input(move |text| on_prompt(PromptsMsg::NoteEdited { session, id, text }))
-                .track_focus(FieldId::PromptNote(id), d.focused, d.on_focus),
+                .track_focus(FieldId::PromptNote(session, id), d.focused, d.on_focus),
         )
         .action(
             Button::filled(APPROVE_ACCEPT_EDITS, roles)
