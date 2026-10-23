@@ -255,6 +255,12 @@ reboot the host with session survival opted out and opted in and confirm each be
     in, **When** the first interactive `claude` session starts in a sandbox home that has never run
     one, **Then** it starts signed in, without walking through claude's first-run onboarding or
     asking for a login method (FR-004f). *(Added 2026-09-27 — BUG-007.)*
+12. **Given** sandboxed mode is on, on a Linux host whose SELinux policy is enforcing, with Podman or
+    Docker, **When** the sandbox starts and a session runs in a project, **Then** the service starts
+    and the session reads and writes the project as in scenario 1, without the container's
+    confinement being turned off; and **When** the container instead exits as it starts, **Then** the
+    failure's details carry the end of the container's own log (FR-004h, FR-034a).
+    *(Added 2026-10-23 — BUG-1296.)*
 
 ---
 
@@ -458,6 +464,11 @@ without the user having chosen that for the occasion.
 - The AI CLI sign-in share covers `claude` only. Copilot and Pi keep their state in the sandbox's
   own home and sign in there. A per-CLI sign-in share is a follow-on, not part of this feature.
   *(Added 2026-09-18 — BUG-006.)*
+- The host enforces SELinux (Fedora, RHEL). A bind mount is unreadable to a container unless it is
+  labelled for containers, so the paths the sandbox is given are labelled for it, and only on such
+  a host (FR-004h). A project registered at a path the runtime refuses to relabel — the user's home
+  directory itself, or a system directory — is refused with that mount named, like any mount the
+  runtime rejects. *(Added 2026-10-23 — BUG-1296.)*
 
 ## Requirements *(mandatory)*
 
@@ -535,6 +546,10 @@ without the user having chosen that for the occasion.
   sandbox starts or stops shows it the next time it is opened. The other credential opt-ins are out
   of scope here. *(Added 2026-09-28 — BUG-008.)*
 
+- **FR-004h**: The access FR-004 and FR-004d grant MUST hold on a Linux host whose SELinux policy
+  is enforcing: the application MUST mark the paths it gives the sandbox as shareable with
+  containers, only when the host enforces, and MUST NOT achieve it by turning off the container's
+  confinement (contracts C-9). On any other host the arguments MUST NOT change. *(BUG-1296)*
 - **FR-005**: The sandbox MUST NOT be granted access to the container runtime's own control
   interface, nor any capability that lets a session escape the sandbox or act on the host.
 - **FR-006**: Files a session creates under a shared project directory MUST appear on the host owned
@@ -723,6 +738,9 @@ asked, what declining costs, and that confirming acts now rather than at the nex
 
 - **FR-034**: Every sandbox failure MUST produce a message naming the cause and a next step; no
   failure may surface only as a raw runtime error, an exit code, or silence.
+- **FR-034a**: When the sandbox's container stops as it starts, the failure's details MUST include
+  the last lines of the container's own log, which name the cause; the runtime's complaint that the
+  container is not running is not the cause. *(BUG-1296)*
 - **FR-035**: On a sandbox that will not start, the application MUST NOT fall back to running the
   service unsandboxed on its own. It MUST report the cause and offer the user a choice between
   retrying, changing the setting that caused it, and running unsandboxed for this occurrence only.
@@ -780,6 +798,12 @@ projects marks the sandbox stale, and nothing said what staleness is measured ag
 ends. The client compared each project list with the previous one, as an ordered list, and never
 with the container, so a container sharing every project could be reported out of date for the
 rest of the run. See `bugs/BUG-574.md`.
+
+**Bugfix**: 2026-10-23 — BUG-1296 (GitHub #1296). FR-004h, FR-034a, US1 scenario 12 and an edge
+case added. FR-004 grants the sandbox its projects and state, and on an SELinux-enforcing host the
+bind mounts were unreadable to it: sshd could not read its host key and the container exited at
+once, reported only as "container state improper". FR-004h says how the access holds there without
+disabling confinement; FR-034a puts the container's own log in the failure. See `bugs/BUG-1296.md`.
 
 **Bugfix**: 2026-10-23 — BUG-1285 (GitHub #1285). FR-017a and US4 scenario 4a added. FR-017 asked
 for a disabled position and the design expressed it in Docker's terms for both runtimes: Podman's
