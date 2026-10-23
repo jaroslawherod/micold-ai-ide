@@ -82,12 +82,15 @@ bounded page for the tool).
 | FR-008 | resume = `start_session(LaunchMode::Resume)` after `attach_worktrees` for its worktree; [contracts/attach-protocol.md](contracts/attach-protocol.md) |
 | FR-009, FR-010 | `DiscoveryReport.notes`; the pass only calls read methods |
 | FR-011 | `list_resumable_sessions`; [contracts/list-resumable-sessions-tool.md](contracts/list-resumable-sessions-tool.md) |
-| FR-012 | offer banner state in `features/attach.rs`; dismissal R5 |
+| FR-012 | offer banner state in `features/attach.rs`; dismissal R5 (see FR-018) |
 | FR-013 | `classify_owner` untouched; test that an unattached provider worktree stays hidden |
 | FR-016 | daemon catalog lock (single writer) plus `begin_start` guard, R7 |
 | FR-017 | `AiCliProvider::starts_as_continuation` (Claude: leading `/clear` record); `DaemonState::discover_external_sessions` skips and `mark_archived`s it; BUG-904 |
+| FR-018 | `offerable` in client `features/attach.rs`, composing core's existing `occupancy::occupancy` and `attach::cap_per_location` (the pattern of `DaemonState::attach_apply`'s batch cap) over `State::active_sessions`: the report's sessions at a `Free` location (counted, and what decides `offer_visible`), and of those the resumable newest per location (`Offer::targets`); the banner in `ui/sidebar.rs` counts and sends those; BUG-1164 |
 
 **Bugfix**: 2026-10-16 — BUG-904: a transcript that continues a catalogued session (Claude `/clear`) is detected by `AiCliProvider::starts_as_continuation` (default false) and, when a non-archived same-provider session holds its location, skipped and marked archived instead of adopted; the session keeps its id.
+
+**Bugfix**: 2026-10-23 — BUG-1164: the start-up offer is filtered client-side against the catalog sessions the client holds (no protocol change): sessions at an occupied location are left out; "Resume all" sends the resumable newest per free location. The dialog and `AttachDiscover` are unchanged. The empty-session prune logs each archived session (diagnostics for the unreproduced second symptom).
 
 ## Project Structure
 

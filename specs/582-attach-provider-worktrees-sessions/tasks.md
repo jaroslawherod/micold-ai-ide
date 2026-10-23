@@ -188,6 +188,18 @@ Deferred at close (T046-T050): MED/LOW test hygiene, no behaviour at risk; the H
 
 **Bugfix**: 2026-10-16 — BUG-904 added Phase 9 (T051–T054). No task reopened. See `bugs/BUG-904.md`.
 
+## Phase 10: Bugfix BUG-1164 — The start-up offer offers only what "Resume all" can catalogue
+
+**Purpose**: The offer leaves out stored sessions of worktrees that have a session and sends the newest per free location, so "Resume all" is never refused with `LocationHasSession` (FR-018). See `bugs/BUG-1164.md`.
+
+- [ ] T055 [P] Failing regression tests (BUG-1164) in `crates/micold-client/tests/attach_offer.rs`, module `bug_1164`: with catalog sessions in `w1` and `w2` (`state.workspace.sessions`) and a report of stored sessions in `w1`, `w2`, `w1`, the offer is not visible and `OfferAttachAll` sends nothing; with `w1` occupied and stored sessions in `w1`, `w2` (older), `w2` (newer), `w3`, the offer is visible and `OfferAttachAll` sends exactly the newer `w2` and the `w3` item; the "Attach existing…" dialog still lists a session of an occupied worktree. Give `found()`'s two sessions distinct locations so the existing tests keep asserting two items. Must fail on `origin/main`.
+- [ ] T056 Add `offerable(report, catalog_sessions)` to `crates/micold-client/src/features/attach.rs`: the report's sessions whose `AttachTarget` maps to a location `micold_core::occupancy::occupancy` calls `Free`; reuse the `AttachTarget` → `SessionLocation` mapping if one exists (`grep -n "AttachTarget::Worktree" crates/`), else add it beside `offerable`. Make `Offer::targets` take the catalog sessions and return the resumable ones of `offerable`, capped with `micold_core::attach::cap_per_location` (newest per location); make `offer_visible` and `session_count` use `offerable` with `state.active_sessions()` (depends on T055).
+- [ ] T057 Update the banner in `crates/micold-client/src/ui/sidebar.rs` (`offer_banner`) and the `OfferAttachAll` arm of `update` to pass `state.active_sessions()`; the banner counts the `offerable` sessions (depends on T056).
+- [ ] T058 [P] Diagnostics for the unreproduced second symptom: in `DaemonState::prune_empty_sessions` (`crates/micold-daemon/src/state.rs`) log one `tracing::info!` per archived session with its id, provider, cwd and the reason (no recorded conversation at that cwd), keeping the count line in `prune_empty_off_runtime` (`crates/micold-daemon/src/server.rs`). Proof: `grep -n "no recorded conversation" crates/micold-daemon/src/state.rs`.
+- [ ] T059 [P] Update `docs/user-guide/worktrees-and-sessions.md`, "The offer when you open a project": the banner counts only stored sessions of worktrees that have no session, "Resume all" adds the most recent of each, and sessions of worktrees that have one are resumed from **Attach existing…** with Replace or Keep both.
+
+**Bugfix**: 2026-10-23 — BUG-1164 added Phase 10 (T055–T059). No task reopened. See `bugs/BUG-1164.md`.
+
 ### M6 — BUG-904: a `/clear` continuation is not a second session
 
 - **Tasks**: T051–T054
@@ -195,4 +207,13 @@ Deferred at close (T046-T050): MED/LOW test hygiene, no behaviour at risk; the H
 - **Satisfies**: FR-017; FR-007; US2 acceptance scenario 3
 - **Verify**: `cargo test -p micold-daemon --test session_discovery`; `cargo test -p micold-core`
 - **Depends on**: M2
+- **Tier**: light
+
+### M7 — BUG-1164: the start-up offer offers only what "Resume all" can catalogue
+
+- **Tasks**: T055–T059
+- **Deliverable**: after a restart, the offer leaves out stored sessions of worktrees that have a session; "Resume all" sends the newest per free worktree and is never refused with `LocationHasSession`; each prune-archived session is logged with its reason.
+- **Satisfies**: FR-018; FR-012; US4 acceptance scenario 1; 776 FR-012
+- **Verify**: `cargo test -p micold-client --test attach_offer --test attach_dialog`; `cargo test -p micold-daemon prune`
+- **Depends on**: M4, M6
 - **Tier**: light
