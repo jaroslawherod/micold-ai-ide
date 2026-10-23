@@ -67,10 +67,24 @@ the guarantee the whole feature rests on (FR-006, FR-007).
 **C-4 — Identity is mapped, not assumed (R3).** Docker emits `--user <uid>:<gid>`; podman emits
 `--userns=keep-id`. Files written into a mounted project are owned by the invoking host user.
 
-**C-5 — `NoOutbound` keeps the control channel (R4).** The network is a user-defined bridge created
-with IP masquerade disabled, and the daemon port is published to loopback. A dialect that expresses
-"network off" by making the container unreachable fails the suite — that configuration was measured
-and rejected.
+**C-5 — `NoOutbound` keeps the control channel (R4).** ~~The network is a user-defined bridge created
+with IP masquerade disabled, and the daemon port is published to loopback.~~ *(Superseded by
+BUG-1285: that is Docker's mechanism, and Podman's netavark refuses it.)* The network is a
+user-defined bridge on which outbound connections fail, created with the arguments for the probed
+runtime setup (R4's amendment), and the daemon port is published to loopback:
+
+| Setup (from the capability probe) | `network create` adds |
+|---|---|
+| Docker | `-o com.docker.network.bridge.enable_ip_masquerade=false` |
+| Podman, rootless | `--internal` |
+| Podman, rootful, netavark ≥ 1.7 | `-o no_default_route=true` |
+| Podman, any other setup | nothing is run: `create` fails with a classified error naming netavark 1.7 and rootless Podman |
+
+A dialect that expresses "network off" by making the container unreachable fails the suite — that
+configuration was measured and rejected (an `--internal` network on Docker or rootful Podman). A
+setup that would start with outbound open while the posture is `NoOutbound` fails the suite too
+(FR-017a). The choice is a probed capability, not a dialect constant: the same runtime needs
+different arguments rootless and rootful.
 
 **C-6 — Errors are classified, never raw text.** `RuntimeError` is a closed enumeration
 (`NotInstalled`, `NotRunning`, `VersionTooOld`, `PermissionDenied`, `ImageNotFound`,
@@ -115,7 +129,7 @@ job, plus `quickstart.md` Part B).
 | K-4 | argv mounts == `MountSet`, compared as sets | C-3 |
 | K-5 | on Linux/macOS specs, every `ProjectMount` has `container == host` | C-3, R2 |
 | K-6 | identity flag matches the dialect's `IdentityMapping` | C-4 |
-| K-7 | `NoOutbound` yields the masquerade-disabled network **and** the published port | C-5 |
+| K-7 | `NoOutbound` yields ~~the masquerade-disabled network~~ C-5's network arguments for each probed setup (and none of the others) **and** the published port; an unsupported setup runs no `network create` and fails classified *(BUG-1285)* | C-5 |
 | K-8 | each canned runtime failure maps to its `RuntimeError` variant | C-6 |
 | K-9 | stop/remove/start are idempotent against canned "already in that state" output | C-7 |
 | K-10 | `acquire_image` emits ≥2 progress callbacks for multi-layer canned output | C-8 |
