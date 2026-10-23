@@ -63,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A (code-review high) + B (autopilot-reviewer sonnet) | 1 | ba4b1ee6541e38c40fea2c613f9b159e0ef8dadb:6a15094430c1a28268aa59eb561f688cb798d3f8 | A: fixed size gate before local blob read, force_large on ShowLarge, stale head_text reset; B: MAJOR fixed (local head read no longer needs gh), MINOR no shell test for address parsing left |
 | M4 A+B (autopilot-reviewer sonnet, combined) | 1 | 63ac6f9f17622829cba16564ff524073c9b47aae:a608e0fcb7713377ed9abe3426b958462b91a9db | MAJOR fmt fixed (cargo fmt); MINOR duplicate selected check fixed via pick_allowed; own gate run caught PR-source selection regression, fixed via selected_key |
 | M6 A (code-review high) + B (autopilot-reviewer sonnet) | 1 | 964f9451e7ccc2c3b4b0b0c906a8e52392086d17:2dddbef617146c535dadbc0dd5687169836fa50a | A: fixed submodule entries in local head tree, Back frame uses selected_file for PRs, tree reset on source change, scroll messages skip snapshot, commit_is_local helper, PR tree on remote entry answers HeadUnavailable; B: CLEAN, MINOR fixed (test names contain `browse`). Visual pass not run in client (visual-pass/m6.md) |
+| M7 A (code-review high) + B (autopilot-reviewer sonnet) | 1 | a8fdac7f:7a4ef5e7 | A: CLEAN, MINOR fixed (line kept while Reading), probe allocations declined; B: CLEAN, 3 MINOR (no cycle-log: declined as for M5; visual pass not run in client: visual-pass/m7.md absent; uncommitted edits: committed) |
 
 ## Declined review findings
 
@@ -79,11 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M7 (T054-T062) implemented and ticked; WIP commit on the branch, plus uncommitted-then-committed fixes. Done: core `reference::find`, reducer (`ReferenceActivated`, `references_in`, eager tree read after DiffRead/PullRequestDiffRead, `notice`, `offset_of_line`), `DiffView::references/.on_reference`, ui wiring, showcase, docs. Existing tests that asserted `Effect::None` after DiffRead now use `sans_tree` helpers.
-Review A (code-review high, snapshot a8fdac7f:7a4ef5e7): CLEAN; F1 MINOR fixed (line kept while Reading); F2 MINOR (probe allocations) declined, not urgent.
-Review B (sonnet, background agent afeebf85709083344): dispatched, result NOT yet seen; if its notification is lost, re-dispatch once (review.md, rubrics/conformance.md).
-Full gate `GIT_CONFIG_GLOBAL=/dev/null mise run gate` started detached, log `<scratchpad>/gate3.log` (GATE_EXIT= line); an earlier red was only documentation_is_not_read (fixed by renaming README fixture to TOP.md). Visual pass (quickstart Part B step 6) not yet run.
-Next: read gate3.log result (rerun if red or tree changed), act on Review B, visual pass via autopilot-worker, rebase on origin/main, push, open PR titled `feat(1150): follow references from the diff (#1150)` per pr.md, set this section back to None.
+None.
 
 ## Open escalation
 
