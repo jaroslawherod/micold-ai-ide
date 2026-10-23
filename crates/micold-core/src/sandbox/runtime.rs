@@ -122,6 +122,11 @@ pub struct RuntimeCapabilities {
     ///
     /// [`NetworkPosture::NoOutbound`]: super::NetworkPosture::NoOutbound
     pub no_outbound: NoOutboundSupport,
+    /// Whether the host enforces SELinux, so every bind mount must ask the runtime for the shared
+    /// container label (`z`) or the container cannot read it (data-model RC-5, FR-004h, BUG-1296).
+    /// Probed from `/sys/fs/selinux/enforce` on Linux; `false` on every other host, in permissive
+    /// mode and when the file is absent.
+    pub selinux_enforcing: bool,
 }
 
 /// Docker's bridge option that turns off outbound NAT while published ports keep their DNAT
@@ -716,6 +721,7 @@ mod tests {
             storage,
             identity_mapping: IdentityMapping::ExplicitUidGid,
             no_outbound: NoOutboundSupport::docker(),
+            selinux_enforcing: false,
         }
     }
 

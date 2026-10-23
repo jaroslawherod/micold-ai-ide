@@ -63,7 +63,7 @@ use micold_core::store::ProjectStore;
 use micold_core::workspace::Workspace;
 
 use sandbox_real_support::{
-    input_serial, open_session, start_sandbox, wait_for_accept, SandboxSpec, Terminal,
+    bind_mount, input_serial, open_session, start_sandbox, wait_for_accept, SandboxSpec, Terminal,
 };
 
 /// Pinned for the reason the other probes pin it.
@@ -160,11 +160,7 @@ async fn probe(shared: bool, container: &str, port: u16) {
                     "{} is missing: the shared run needs a signed-in host `claude`",
                     c.host.display()
                 );
-                let mode = if c.share.writable() { "rw" } else { "ro" };
-                [
-                    "-v".to_string(),
-                    format!("{}:{}:{mode}", c.host.display(), c.container.display()),
-                ]
+                bind_mount(c.host.display(), c.container.display(), c.share.writable())
             })
             .collect()
     } else {

@@ -12,7 +12,9 @@
 //! - **C-3**: the mounts are exactly the [`MountSet`] and nothing else. No implicit mount of any
 //!   kind, no runtime control socket. A sandbox's guarantee is what it *cannot* reach. The
 //!   sandbox's own home is mounted, and is in the set for that reason (FR-004d): the rule is that
-//!   this function invents no mount, not that some particular mount is absent.
+//!   this function invents no mount, not that some particular mount is absent. On an
+//!   SELinux-enforcing host each mount carries the shared label option `z` (FR-004h, BUG-1296):
+//!   a label is an option on a [`MountSet`] mount, not a mount, and never `--security-opt`.
 
 use std::ffi::OsString;
 
@@ -207,7 +209,7 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     // owned by the uid the daemon runs as and closed to every other.
     args.push("--tmpfs".into());
     args.push(git_credential_tmpfs(dialect.identity, spec.uid, spec.gid).into());
-    args.extend(mount_args(&spec.mounts));
+    args.extend(mount_args(&spec.mounts, caps.selinux_enforcing));
 
     args.push(spec.profile.image.reference().into());
     args
@@ -257,65 +259,75 @@ fn budget_args(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> 
     args
 }
 
-/// The mount flags: exactly the [`MountSet`], and nothing else (obligation C-3).
-fn mount_args(mounts: &MountSet) -> Vec<OsString> {
+/// One `-v` value, `<host>:<container>:<mode>`, in the words [`create`] uses.
+///
+/// With `selinux_enforcing` the mode gains `,z`, the runtimes' shared relabel: on an enforcing host
+/// the container type may read only files labelled for containers, and without it sshd cannot read
+/// its host key and the daemon cannot write its state (FR-004h, BUG-1296). Shared, not private
+/// (`Z`), because a project may be mounted into more than one sandbox and is the user's own
+/// worktree (decision D1). The label is an option on the mount; confinement stays on (C-9). Public
+/// so the real-runtime harness mounts with the application's options rather than its own copy.
+pub fn mount_value(
+    host: impl std::fmt::Display,
+    container: impl std::fmt::Display,
+    writable: bool,
+    selinux_enforcing: bool,
+) -> String {
+    let mode = if writable { "rw" } else { "ro" };
+    let label = if selinux_enforcing { ",z" } else { "" };
+    format!("{host}:{container}:{mode}{label}")
+}
+
+/// The mount flags: exactly the [`MountSet`], and nothing else (obligation C-3), each labelled as
+/// [`mount_value`] says.
+fn mount_args(mounts: &MountSet, selinux_enforcing: bool) -> Vec<OsString> {
     let mut args: Vec<OsString> = Vec::new();
+    let mut mount = |host: &dyn std::fmt::Display, container: &dyn std::fmt::Display, writable| {
+        args.push("-v".into());
+        args.push(mount_value(host, container, writable, selinux_enforcing).into());
+    };
     // The sandbox's own home, first: every other mount whose path falls under it — a project in
     // the user's home, a shared `~/.gitconfig` — has to land *on top of* it rather than under it.
     // Both runtimes sort mounts by destination depth and so would order this correctly whatever
     // order they were given in, but the argv is the thing a reader debugs, and reading it
     // parent-first is how the nesting is obvious.
-    args.push("-v".into());
-    args.push(
-        format!(
-            "{}:{}:rw",
-            mounts.home.host.display(),
-            mounts.home.container.display()
-        )
-        .into(),
+    mount(
+        &mounts.home.host.display(),
+        &mounts.home.container.display(),
+        true,
     );
     // The saved terminal histories, on a host whose state mount does not carry them (feature 041).
     if let Some(h) = &mounts.history {
-        args.push("-v".into());
-        args.push(format!("{}:{}:rw", h.host.display(), h.container.display()).into());
+        mount(&h.host.display(), &h.container.display(), true);
     }
     for m in &mounts.projects {
-        let mode = if m.writable { "rw" } else { "ro" };
-        args.push("-v".into());
-        args.push(format!("{}:{}:{mode}", m.host.display(), m.container.display()).into());
+        mount(&m.host.display(), &m.container.display(), m.writable);
     }
-    args.push("-v".into());
-    args.push(
-        format!(
-            "{}:{}:rw",
-            mounts.state.host.display(),
-            mounts.state.container.display()
-        )
-        .into(),
+    mount(
+        &mounts.state.host.display(),
+        &mounts.state.container.display(),
+        true,
     );
     // The SSH material, as three single files so nothing else in the key directory (the client's
     // private key) reaches the container. `secret.host` is the daemon's key directory.
     for (host, container) in SSH_MOUNT_FILES {
-        args.push("-v".into());
-        args.push(
-            format!(
-                "{}:{}/{}:ro",
-                mounts.secret.host.join(host).display(),
-                // A container path is POSIX on every host: `Path::join` would put a `\` in it on
-                // Windows.
-                mounts.secret.container.display(),
-                container
-            )
-            .into(),
+        mount(
+            &mounts.secret.host.join(host).display(),
+            // A container path is POSIX on every host: `Path::join` would put a `\` in it on
+            // Windows.
+            &format_args!("{}/{container}", mounts.secret.container.display()),
+            false,
         );
     }
     // Credentials are read-only, with one exception (rule N-4): the AI CLI's sign-in token, which
     // the CLI replaces itself whenever it refreshes it. The sandbox may *use* the user's identity
     // when they opted in, and may keep that one token current, but never rewrite the rest.
     for c in &mounts.credentials {
-        let mode = if c.share.writable() { "rw" } else { "ro" };
-        args.push("-v".into());
-        args.push(format!("{}:{}:{mode}", c.host.display(), c.container.display()).into());
+        mount(
+            &c.host.display(),
+            &c.container.display(),
+            c.share.writable(),
+        );
     }
     args
 }
@@ -348,6 +360,7 @@ mod tests {
                 RuntimeKind::Docker => NoOutboundSupport::docker(),
                 RuntimeKind::Podman => NoOutboundSupport::podman_rootless(),
             },
+            selinux_enforcing: false,
         }
     }
 
@@ -560,6 +573,69 @@ mod tests {
             assert!(mounted
                 .iter()
                 .any(|m| m.contains(".gitconfig") && m.ends_with(":ro")));
+        }
+    }
+
+    /// The value after every `-v` in an argv.
+    fn mount_values(args: &[String]) -> Vec<String> {
+        args.windows(2)
+            .filter(|w| w[0] == "-v")
+            .map(|w| w[1].clone())
+            .collect()
+    }
+
+    /// BUG-1296, U59 (conformance check K-13): on an SELinux-enforcing host every bind mount asks
+    /// for the shared label (`,z`), so the container may read and write it; elsewhere the argv is
+    /// unchanged. A label is an option on a mount, never `--security-opt` (C-9).
+    #[test]
+    fn every_mount_is_labelled_shared_exactly_when_selinux_enforces() {
+        let mut s = spec();
+        s.mounts.projects.push(ProjectMount {
+            host: PathBuf::from("/home/u/ref"),
+            container: PathBuf::from("/home/u/ref"),
+            writable: false,
+        });
+        s.mounts.history = Some(crate::sandbox::HistoryMount {
+            host: PathBuf::from("/home/u/.local/share/micold-ai-ide-history"),
+            container: PathBuf::from("/var/lib/micold-ai-ide/terminal-history"),
+        });
+        s.mounts.credentials = vec![CredentialMount {
+            share: CredentialShare::GitConfig,
+            host: PathBuf::from("/home/u/.gitconfig"),
+            container: PathBuf::from("/home/u/.gitconfig"),
+        }];
+        for kind in RuntimeKind::ALL {
+            let plain = caps(kind, LimitSupport::Supported);
+            let enforcing = RuntimeCapabilities {
+                selinux_enforcing: true,
+                ..plain.clone()
+            };
+            let labelled = strings(&create(&s, &enforcing));
+            let unlabelled = strings(&create(&s, &plain));
+
+            let mounts = mount_values(&labelled);
+            // home, history, two projects, state, three SSH key files, one credential
+            assert_eq!(mounts.len(), 9, "{kind}: {mounts:?}");
+            for m in &mounts {
+                assert!(
+                    m.ends_with(":rw,z") || m.ends_with(":ro,z"),
+                    "{kind}: {m} is not labelled"
+                );
+            }
+            assert!(mounts.iter().any(|m| m == "/home/u/ref:/home/u/ref:ro,z"));
+            assert!(
+                mount_values(&unlabelled).iter().all(|m| !m.contains(",z")),
+                "{kind}: {unlabelled:?}"
+            );
+            // The label is the only difference: without SELinux the argv is the one it always was.
+            let stripped: Vec<String> = labelled.iter().map(|a| a.replace(",z", "")).collect();
+            assert_eq!(stripped, unlabelled, "{kind}");
+            for args in [&labelled, &unlabelled] {
+                assert!(
+                    !args.iter().any(|a| a == "--security-opt"),
+                    "{kind}: {args:?}"
+                );
+            }
         }
     }
 

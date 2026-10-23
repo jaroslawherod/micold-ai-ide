@@ -4450,6 +4450,7 @@ fn a_started_sandbox() -> micold_core::sandbox::lifecycle::Started {
             storage: LimitSupport::Supported,
             identity_mapping: IdentityMapping::ExplicitUidGid,
             no_outbound: NoOutboundSupport::docker(),
+            selinux_enforcing: false,
         },
         unsatisfiable: Vec::new(),
         mounted: None,

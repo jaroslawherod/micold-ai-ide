@@ -13,12 +13,22 @@
 
 #![cfg(feature = "sandbox-real-runtime")]
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use micold_core::sandbox::argv;
+use micold_core::sandbox::cli::CliRuntime;
+use micold_core::sandbox::exec::SystemRunner;
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
+use micold_core::sandbox::runtime::ContainerRuntime;
+use micold_core::sandbox::{
+    CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SANDBOX_HOME_DIR,
+};
+
 mod sandbox_real_support;
-use sandbox_real_support::{image, make_keys, wait_for_sshd};
+use sandbox_real_support::{image, make_keys, program, runtime_kind, wait_for_sshd};
 
 /// Each test takes its **own** container, network and published port.
 ///
@@ -35,6 +45,10 @@ struct Sandbox {
 }
 
 impl Sandbox {
+    /// Creates the container with the application's own argv (`argv::create`, `argv::network_create`)
+    /// against the probed capabilities of the runtime `MICOLD_TEST_RUNTIME` selects, so these tests
+    /// run the mounts a user's sandbox gets — labelled on an SELinux-enforcing host, as they are for
+    /// the user, and never with labelling turned off (BUG-1296, U62).
     fn start(label: &str, port: u16) -> Self {
         let container = format!("micold-sandbox-realtest-{label}");
         let network = format!("{container}-net");
@@ -43,64 +57,43 @@ impl Sandbox {
         let dir = tempfile::tempdir().expect("temp dir");
         let state = dir.path().join("state");
         let project = dir.path().join("project");
-        std::fs::create_dir_all(&state).unwrap();
         std::fs::create_dir_all(&project).unwrap();
-        let (keys, _) = make_keys(&state, port);
+        // Before the runtime sees them: it would create a missing bind source owned by root.
+        std::fs::create_dir_all(state.join(SANDBOX_HOME_DIR)).unwrap();
+        let (keys, secret) = make_keys(&state, port);
 
-        run(&["network", "create", "--driver", "bridge", &network]);
-
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        let uid_gid = format!("{}:{}", uid(), gid());
-        let publish = format!(
-            "127.0.0.1:{port}:{}",
-            micold_core::sandbox::argv::CONTAINER_SSH_PORT
-        );
-        let project_mount = format!("{0}:{0}:rw", project.display());
-        let state_mount = format!("{}:/var/lib/micold-ai-ide:rw", state.display());
-        let ssh_dir = micold_core::sandbox::argv::CONTAINER_SSH_DIR;
-        let key_mounts = [
-            ("host_ed25519", "host_ed25519_key"),
-            ("host_ed25519.pub", "host_ed25519_key.pub"),
-            ("authorized_keys", "authorized_keys"),
-        ]
-        .map(|(file, as_name)| format!("{}:{ssh_dir}/{as_name}:ro", keys.dir.join(file).display()));
-        let home_env = format!("HOME={home}");
-        let micold_home_env = format!("MICOLD_HOME={home}");
-
-        let mut args: Vec<String> = [
-            "create",
-            "--name",
-            &container,
-            "--user",
-            &uid_gid,
-            // As `argv::create` does for Docker: group 0 lets the entrypoint append the uid's
-            // passwd entry, without which `id -un` and sshd cannot resolve it.
-            "--group-add",
-            "0",
-            "--restart",
-            "no",
-            "--network",
-            &network,
-            "-p",
-            &publish,
-            "-e",
-            &home_env,
-            "-e",
-            &micold_home_env,
-            "-v",
-            &project_mount,
-            "-v",
-            &state_mount,
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-        for mount in key_mounts {
-            args.push("-v".to_string());
-            args.push(mount);
-        }
-        args.push(image());
-        run(&args.iter().map(String::as_str).collect::<Vec<_>>());
+        let home = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string()));
+        let profile = SandboxProfile {
+            image: ImageChoice::Own(OwnImage::Reference(image())),
+            ..SandboxProfile::default()
+        };
+        let (uid, gid) = micold_core::sandbox::host_identity();
+        let spec = SandboxSpec {
+            name: container.clone(),
+            mounts: MountSet::build(
+                std::slice::from_ref(&project),
+                &profile,
+                &CredentialLayout::default(),
+                &state,
+                &home,
+                secret,
+            ),
+            profile,
+            uid,
+            gid,
+            control_port: port,
+            published_ports: Vec::new(),
+            network_name: network.clone(),
+            time_zone: None,
+            home,
+        };
+        let caps = CliRuntime::new(runtime_kind(), SystemRunner)
+            .probe()
+            .unwrap_or_else(|e| panic!("probe {}: {}", runtime_kind(), e.reason()));
+        let network_args = argv::network_create(&spec, &caps)
+            .unwrap_or_else(|e| panic!("{}: {}", e.reason(), e.remedy()));
+        run(&network_args);
+        run(&argv::create(&spec, &caps));
         run(&["start", &container]);
         wait_for_sshd(port, Duration::from_secs(60), "the container's sshd");
 
@@ -115,10 +108,10 @@ impl Sandbox {
 
     /// The container's login user: the entrypoint gives the host uid a passwd entry.
     fn user(&self) -> String {
-        let out = Command::new("docker")
+        let out = Command::new(program())
             .args(["exec", &self.container, "id", "-un"])
             .output()
-            .expect("docker exec id");
+            .expect("exec id");
         assert!(out.status.success(), "id -un failed in the container");
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     }
@@ -149,31 +142,25 @@ impl Drop for Sandbox {
 }
 
 fn teardown(container: &str, network: &str) {
-    let _ = Command::new("docker")
+    let _ = Command::new(program())
         .args(["rm", "-f", container])
         .output();
-    let _ = Command::new("docker")
+    let _ = Command::new(program())
         .args(["network", "rm", network])
         .output();
 }
 
-fn run(args: &[&str]) {
-    let out = Command::new("docker")
+fn run<S: AsRef<OsStr> + std::fmt::Debug>(args: &[S]) {
+    let program = program();
+    let out = Command::new(program)
         .args(args)
         .output()
-        .unwrap_or_else(|e| panic!("docker {args:?}: {e}"));
+        .unwrap_or_else(|e| panic!("{program} {args:?}: {e}"));
     assert!(
         out.status.success(),
-        "docker {args:?} failed: {}",
+        "{program} {args:?} failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-}
-
-fn uid() -> u32 {
-    micold_core::sandbox::host_identity().0
-}
-fn gid() -> u32 {
-    micold_core::sandbox::host_identity().1
 }
 
 /// The client's own key is the one the container authorises, and the pinned host key matches what
@@ -221,7 +208,7 @@ fn sandbox_real_state_is_written_where_the_host_can_read_it() {
     assert!(state.is_dir(), "the state directory must exist on the host");
     // A file written by the container's own user at the image's state path is visible to the host:
     // the bind mount is the host's directory, not a runtime-managed volume.
-    let out = Command::new("docker")
+    let out = Command::new(program())
         .args([
             "exec",
             &sandbox.container,
@@ -230,7 +217,7 @@ fn sandbox_real_state_is_written_where_the_host_can_read_it() {
             "echo ok > /var/lib/micold-ai-ide/.host-readable",
         ])
         .output()
-        .expect("docker exec");
+        .expect("exec");
     assert!(
         out.status.success(),
         "the container cannot write its state directory: {}",

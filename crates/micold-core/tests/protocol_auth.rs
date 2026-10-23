@@ -282,6 +282,7 @@ fn the_token_is_in_no_generated_argument_vector() {
         storage: LimitSupport::Supported,
         identity_mapping: IdentityMapping::ExplicitUidGid,
         no_outbound: NoOutboundSupport::docker(),
+        selinux_enforcing: false,
     };
 
     let rendered: Vec<String> = argv::create(&spec, &caps)

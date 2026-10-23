@@ -488,17 +488,45 @@ impl micold_core::sandbox::exec::CommandRunner for OriginalXdgRunner {
     }
 }
 
+/// The selected runtime's capabilities, probed the way the application probes them, once.
+fn probed_caps() -> &'static micold_core::sandbox::runtime::RuntimeCapabilities {
+    static CAPS: std::sync::OnceLock<micold_core::sandbox::runtime::RuntimeCapabilities> =
+        std::sync::OnceLock::new();
+    CAPS.get_or_init(|| {
+        use micold_core::sandbox::runtime::ContainerRuntime;
+        micold_core::sandbox::cli::CliRuntime::new(runtime_kind(), OriginalXdgRunner)
+            .probe()
+            .unwrap_or_else(|e| panic!("probe {}: {}", runtime_kind(), e.reason()))
+    })
+}
+
+/// `-v <host>:<container>:<mode>` in the application's words (`argv::mount_value`), labelled for
+/// the container exactly when the probe says SELinux enforces (FR-004h, BUG-1296). The harness
+/// never turns labelling off: a mount this cannot make readable fails here as it would for a user.
+pub fn bind_mount(
+    host: impl std::fmt::Display,
+    container: impl std::fmt::Display,
+    writable: bool,
+) -> [String; 2] {
+    [
+        "-v".to_string(),
+        micold_core::sandbox::argv::mount_value(
+            host,
+            container,
+            writable,
+            probed_caps().selinux_enforcing,
+        ),
+    ]
+}
+
 /// What `argv::network_create` adds for `NoOutbound` on the probed setup, between `--driver
 /// bridge` and the network's name. Panics, naming the reason, on a setup the application refuses.
 fn no_outbound_network_args(network: &str) -> Vec<String> {
-    use micold_core::sandbox::runtime::ContainerRuntime;
     use micold_core::sandbox::{
         CredentialLayout, MountSet, NetworkPosture, SandboxProfile, SecretMount,
     };
 
-    let caps = micold_core::sandbox::cli::CliRuntime::new(runtime_kind(), OriginalXdgRunner)
-        .probe()
-        .unwrap_or_else(|e| panic!("probe {}: {}", runtime_kind(), e.reason()));
+    let caps = probed_caps();
     let profile = SandboxProfile {
         network: NetworkPosture::NoOutbound,
         ..SandboxProfile::default()
@@ -526,7 +554,7 @@ fn no_outbound_network_args(network: &str) -> Vec<String> {
         time_zone: None,
         home: home.to_path_buf(),
     };
-    let args: Vec<String> = micold_core::sandbox::argv::network_create(&core_spec, &caps)
+    let args: Vec<String> = micold_core::sandbox::argv::network_create(&core_spec, caps)
         .unwrap_or_else(|e| panic!("{}: {}", e.reason(), e.remedy()))
         .iter()
         .map(|a| a.to_string_lossy().into_owned())
@@ -577,15 +605,15 @@ fn start_sandbox_on(
     let home_env = format!("HOME={}", spec.home);
     let micold_home_env = format!("MICOLD_HOME={}", spec.home);
     let image_env = format!("MICOLD_IMAGE_REFERENCE={image}");
-    let project_mount = format!("{0}:{0}:rw", spec.project.display());
-    let state_mount = format!("{}:{CONTAINER_STATE}:rw", state.display());
+    let project_mount = bind_mount(spec.project.display(), spec.project.display(), true);
+    let state_mount = bind_mount(state.display(), CONTAINER_STATE, true);
     // The sandbox's own writable home, at the path `HOME` names (FR-004d). Created here rather than
     // left to the runtime, which would create a missing bind source owned by **root** — leaving the
     // uid the container runs as unable to write to its own home, which is the defect this mount
     // exists to fix arriving by another route.
     let home_dir = state.join(micold_core::sandbox::SANDBOX_HOME_DIR);
     std::fs::create_dir_all(&home_dir).unwrap();
-    let home_mount = format!("{}:{}:rw", home_dir.display(), spec.home);
+    let home_mount = bind_mount(home_dir.display(), spec.home, true);
     // The three server-side key files, as single read-only files at the names sshd is configured
     // with (`packaging/basic/sshd_config`) — what `argv::mount_args` mounts.
     let ssh_dir = micold_core::sandbox::argv::CONTAINER_SSH_DIR;
@@ -594,7 +622,13 @@ fn start_sandbox_on(
         ("host_ed25519.pub", "host_ed25519_key.pub"),
         ("authorized_keys", "authorized_keys"),
     ]
-    .map(|(file, as_name)| format!("{}:{ssh_dir}/{as_name}:ro", keys.dir.join(file).display()));
+    .map(|(file, as_name)| {
+        bind_mount(
+            keys.dir.join(file).display(),
+            format_args!("{ssh_dir}/{as_name}"),
+            false,
+        )
+    });
 
     let mut args: Vec<String> = [
         "create",
@@ -623,21 +657,17 @@ fn start_sandbox_on(
         // that it was never passed at all.
         "-e",
         &image_env,
-        // Home first, for the reason `argv::mount_args` gives: the project usually lives *under*
-        // the user's home, so it has to land on top of this mount rather than under it.
-        "-v",
-        &home_mount,
-        "-v",
-        &project_mount,
-        "-v",
-        &state_mount,
     ]
     .iter()
     .map(|s| s.to_string())
     .collect();
-    for mount in &key_mounts {
-        args.push("-v".to_string());
-        args.push(mount.clone());
+    // Home first, for the reason `argv::mount_args` gives: the project usually lives *under* the
+    // user's home, so it has to land on top of this mount rather than under it.
+    args.extend(home_mount);
+    args.extend(project_mount);
+    args.extend(state_mount);
+    for mount in key_mounts {
+        args.extend(mount);
     }
     // From the dialect, not spelled here: Docker's `--user uid:gid` and podman's `--userns=keep-id`
     // are the one place the two runtimes genuinely differ (R3), and it is the difference the last
@@ -645,12 +675,6 @@ fn start_sandbox_on(
     // — actually tests. A harness that hardcoded `--user` would pass that box on podman by not
     // using podman's answer to it.
     args.extend(dialect().identity_args(uid, gid));
-    // SELinux-enforcing hosts (Fedora) deny a container the bind mounts above, and the daemon
-    // inside dies on its first write to the state directory. Docker on the CI runner has no such
-    // label, so this changes nothing there.
-    if runtime_kind() == RuntimeKind::Podman {
-        args.extend(["--security-opt".to_string(), "label=disable".to_string()]);
-    }
     // The opt-in's other half (feature 028, FR-022). From `argv::idle_stop_value` rather than
     // spelled here, for the reason `restart_policy` is read above: a harness carrying its own copy
     // of the decision would go on passing after the application stopped making it.
