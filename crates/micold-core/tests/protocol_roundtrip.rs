@@ -373,6 +373,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             cross_session_access: Some(CrossSessionAccess::ConfirmEachSend),
             default_prompt_template: None,
             pr_status_enabled: Some(true),
+            // Feature 1210 (FR-008): turning the guard off must cross the wire as `false`.
+            worktree_guard_enabled: Some(false),
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: Some(false),
@@ -405,6 +407,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             cross_session_access: None,
             default_prompt_template: None,
             pr_status_enabled: None,
+            worktree_guard_enabled: None,
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
@@ -596,6 +599,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 cross_session_access: CrossSessionAccess::Auto,
                 default_prompt_template: String::new(),
                 pr_status_enabled: true,
+                worktree_guard_enabled: true,
                 desktop_notifications: true,
                 notification_kinds: NotificationKinds {
                     turn_finished: true,
@@ -672,6 +676,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 cross_session_access: CrossSessionAccess::Off,
                 default_prompt_template: String::new(),
                 pr_status_enabled: false,
+                worktree_guard_enabled: false,
                 desktop_notifications: true,
                 notification_kinds: NotificationKinds {
                     turn_finished: true,
@@ -946,8 +951,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_67() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 67);
+fn the_protocol_version_is_68() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 68);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -1426,6 +1431,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: access,
             default_prompt_template: String::new(),
             pr_status_enabled: false,
+            worktree_guard_enabled: false,
             desktop_notifications: true,
             notification_kinds: NotificationKinds {
                 turn_finished: true,
@@ -1452,6 +1458,7 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: Some(access),
             default_prompt_template: None,
             pr_status_enabled: None,
+            worktree_guard_enabled: None,
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
@@ -1510,6 +1517,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: CrossSessionAccess::Auto,
             default_prompt_template: String::new(),
             pr_status_enabled: on,
+            worktree_guard_enabled: true,
             desktop_notifications: true,
             notification_kinds: NotificationKinds {
                 turn_finished: true,
@@ -1544,6 +1552,7 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
             cross_session_access: None,
             default_prompt_template: None,
             pr_status_enabled: chosen,
+            worktree_guard_enabled: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1934,6 +1943,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             cross_session_access: CrossSessionAccess::Auto,
             default_prompt_template: String::new(),
             pr_status_enabled: false,
+            worktree_guard_enabled: false,
             desktop_notifications: true,
             notification_kinds: NotificationKinds::default(),
             long_task_threshold_secs: 60,
@@ -1963,6 +1973,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             cross_session_access: None,
             default_prompt_template: None,
             pr_status_enabled: None,
+            worktree_guard_enabled: None,
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
@@ -2128,6 +2139,7 @@ fn the_save_terminal_history_setting_round_trips_on_the_wire() {
             cross_session_access: None,
             default_prompt_template: None,
             pr_status_enabled: None,
+            worktree_guard_enabled: None,
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,
@@ -2177,6 +2189,7 @@ fn plan_usage_settings_set(
         cross_session_access: None,
         default_prompt_template: None,
         pr_status_enabled: None,
+        worktree_guard_enabled: None,
         jira_enabled: None,
         jira_connection: None,
         github_issues_enabled: None,
@@ -2657,6 +2670,7 @@ fn settings_with_base_urls(
         tool_server_enabled: true,
         cross_session_access: CrossSessionAccess::Auto,
         pr_status_enabled: false,
+        worktree_guard_enabled: false,
         desktop_notifications: true,
         notification_kinds: NotificationKinds::default(),
         long_task_threshold_secs: 120,
@@ -2726,6 +2740,7 @@ fn a_jira_base_url_change_round_trips_in_settings_set() {
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: None,
+            worktree_guard_enabled: None,
             jira_enabled: None,
             jira_connection: None,
             github_issues_enabled: None,

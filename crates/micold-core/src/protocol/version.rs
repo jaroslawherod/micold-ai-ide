@@ -236,7 +236,10 @@
 ///
 /// And 66 → 67 for #943's kind switch (M6): `ClientMsg::SessionSwitchKind` and
 /// `ErrorKind::NeedsConfirmation`.
-pub const PROTOCOL_VERSION: u32 = 67;
+///
+/// And 67 → 68 for feature 1210's opt-out (FR-008): `worktree_guard_enabled` on `DaemonSettings`
+/// and `ClientMsg::SettingsSet`. An older peer would fail to decode either.
+pub const PROTOCOL_VERSION: u32 = 68;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

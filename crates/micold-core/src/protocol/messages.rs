@@ -740,6 +740,9 @@ pub enum ClientMsg {
         /// Read and show pull request status, or `None` to leave unchanged (feature 040,
         /// FR-029).
         pr_status_enabled: Option<bool>,
+        /// Guard new sessions to their own worktree, or `None` to leave unchanged (feature 1210,
+        /// FR-008).
+        worktree_guard_enabled: Option<bool>,
         /// Turn the Jira integration on or off, or `None` to leave unchanged (feature 533,
         /// FR-002).
         jira_enabled: Option<bool>,
@@ -1981,6 +1984,9 @@ pub struct DaemonSettings {
     /// Whether pull request status is read from GitHub and shown on worktree rows (feature 040,
     /// FR-029, FR-030). Service-owned so that every window follows one switch.
     pub pr_status_enabled: bool,
+    /// Whether new sessions are guarded to their own worktree (feature 1210, FR-008).
+    /// Service-owned: the spawn reads it, and running sessions keep the state they launched with.
+    pub worktree_guard_enabled: bool,
     /// Whether the Jira integration is on (feature 533, FR-002). Service-owned so that every
     /// window follows one switch (FR-022); the service stores it and never reads it (FR-021).
     pub jira_enabled: bool,
@@ -2488,6 +2494,7 @@ mod desktop_notifications_wire_tests {
             tool_server_enabled: true,
             cross_session_access: CrossSessionAccess::Auto,
             pr_status_enabled: false,
+            worktree_guard_enabled: true,
             desktop_notifications,
             notification_kinds: NotificationKinds::default(),
             long_task_threshold_secs: 60,
@@ -2531,6 +2538,7 @@ mod desktop_notifications_wire_tests {
                 tool_server_enabled: None,
                 cross_session_access: None,
                 pr_status_enabled: None,
+                worktree_guard_enabled: None,
                 jira_enabled: None,
                 jira_connection: None,
                 github_issues_enabled: None,

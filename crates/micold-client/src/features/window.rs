@@ -237,6 +237,8 @@ pub enum FieldId {
     DaemonStorageLimit,
     /// Settings: the "let AI sessions manage worktrees and sessions" checkbox (feature 034, FR-004).
     SettingsToolServer,
+    /// Settings: the "Guard sessions to their own worktree" checkbox (feature 1210, FR-008).
+    SettingsWorktreeGuard,
     /// Settings: the "Desktop notifications" checkbox (feature 039, FR-026).
     SettingsDesktopNotifications,
     /// Settings → Appearance: the "Reduce motion" checkbox (feature 970, FR-008).

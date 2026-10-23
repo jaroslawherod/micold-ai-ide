@@ -183,6 +183,19 @@ with until they stop; restart one to drop it. Turning it back on connects the ne
 It is one setting for the whole app, kept by the session service beside the default AI CLI, so
 every open window shows the same value.
 
+### Guard sessions to their own worktree
+
+On by default. A Claude Code session is stopped from editing files in, or moving into, another
+worktree of its project, and is told to hand that work to a dedicated session instead
+([Worktrees & sessions](worktrees-and-sessions.md#a-session-stays-in-its-own-worktree)).
+
+Turn it off and sessions started after you save run without the guard and without its added deny
+rules, as they did before. Sessions already running keep the guard they started with until they
+stop; restart one to drop it. Turning it back on guards the next session you start.
+
+It is one setting for the whole app, kept by the session service beside the one above, so every
+open window shows the same value.
+
 ### Desktop notifications
 
 On by default. When a session you are not looking at needs you, the app shows one desktop

@@ -1090,6 +1090,7 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     app.core.session.pi_activity_component = settings.pi_activity_component;
     app.core.session.save_terminal_history = settings.save_terminal_history;
     app.core.session.tool_server_enabled = settings.tool_server_enabled;
+    app.core.session.worktree_guard_enabled = settings.worktree_guard_enabled;
     app.core.session.desktop_notifications = settings.desktop_notifications;
     app.core.session.notification_kinds = settings.notification_kinds;
     app.core.session.long_task_threshold_secs = settings.long_task_threshold_secs;

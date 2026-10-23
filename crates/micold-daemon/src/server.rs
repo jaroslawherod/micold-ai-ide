@@ -1580,6 +1580,7 @@ where
                 tool_server_enabled,
                 cross_session_access,
                 pr_status_enabled,
+                worktree_guard_enabled,
                 jira_enabled,
                 jira_connection,
                 github_issues_enabled,
@@ -1635,6 +1636,10 @@ where
                 })
                 .and_then(|()| match pr_status_enabled {
                     Some(on) => state.set_pr_status_enabled(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match worktree_guard_enabled {
+                    Some(on) => state.set_worktree_guard_enabled(on),
                     None => Ok(()),
                 })
                 .and_then(|()| match jira_enabled {

@@ -1502,6 +1502,10 @@ Reading files in another worktree is never blocked, and a worktree that has been
 protected. Only sessions of **Claude Code** are covered; other AI CLIs run unguarded, and a
 session whose worktree Micold cannot work out is let through rather than blocked.
 
+To turn the guard off, clear **Guard sessions to their own worktree** in
+[Settings → Environment](./settings.md#guard-sessions-to-their-own-worktree). It applies to
+sessions started afterwards; running sessions keep the guard they started with.
+
 ## Switching to a regular terminal
 
 Each session's terminal can also run a plain shell instead of the AI CLI — useful for running git

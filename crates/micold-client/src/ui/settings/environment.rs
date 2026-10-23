@@ -41,6 +41,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("default_ai_cli", "DefaultAiCliChanged"),
     ("pi_activity_component", "PiActivityComponentToggled"),
     ("tool_server_enabled", "ToolServerToggled"),
+    ("worktree_guard_enabled", "WorktreeGuardToggled"),
     ("desktop_notifications", "DesktopNotificationsToggled"),
     ("notification_kinds", "NotificationKindToggled"),
     ("long_task_threshold_secs", "LongTaskThresholdChanged"),
@@ -151,6 +152,21 @@ pub fn view<'a>(
     let tool_server = field_note(
         tool_server,
         Some("New AI sessions get this app's tools. Sessions already running keep what they started with."),
+        roles,
+    );
+
+    // Feature 1210, FR-008: the opt-out of the worktree guard, beside the tool-server row it
+    // belongs with. The same checkbox-and-note row; the note says it applies to later sessions.
+    let worktree_guard = Checkbox::new(
+        "Guard sessions to their own worktree",
+        draft.environment.worktree_guard_enabled,
+        roles,
+    )
+    .track_focus(FieldId::SettingsWorktreeGuard, focused)
+    .on_toggle(|v| Message::Settings(SettingsMsg::WorktreeGuardToggled(v)));
+    let worktree_guard = field_note(
+        worktree_guard,
+        Some("New AI sessions are stopped from editing files in another worktree. Sessions already running keep what they started with."),
         roles,
     );
 
@@ -294,6 +310,9 @@ pub fn view<'a>(
     controls.extend(kind_rows);
     controls.extend([plan_usage, plan_usage_warn.into()]);
     controls.push(cross_session);
+    // After the rows above it so the notification rows keep their place in the window (feature
+    // 1210); it sits with the other settings about what an AI session may do.
+    controls.push(worktree_guard);
     controls.push(default_prompt.into());
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 

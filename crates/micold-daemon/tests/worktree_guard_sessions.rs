@@ -282,3 +282,49 @@ async fn calls_the_guard_cannot_judge_or_does_not_judge_are_answered_as_before()
     let stop = json!({"hook_event_name":"Stop"});
     assert_eq!(f.post(IN_A, &stop.to_string()).await, (200, Value::Null));
 }
+
+/// FR-008, SC-004: with the opt-out set, a session launched now is `Off`; on again, guarded.
+#[tokio::test]
+async fn a_launch_with_the_opt_out_set_gets_no_guard_and_one_without_it_does() {
+    let f = fixture().await;
+    let a = SessionId::from_uuid(Uuid::from_u128(IN_A));
+    f.state.set_worktree_guard_enabled(false).unwrap();
+    assert_eq!(f.state.guard_state_for(a), GuardState::Off);
+    f.state.set_worktree_guard_enabled(true).unwrap();
+    assert_eq!(
+        f.state.guard_state_for(a),
+        GuardState::On {
+            binding: SessionBinding::Worktree(f.wt("a")),
+            project: f.root.clone()
+        }
+    );
+}
+
+/// R7: turning the opt-out on after a launch leaves the running session's guard as it was.
+#[tokio::test]
+async fn toggling_the_opt_out_leaves_a_running_sessions_guard_unchanged() {
+    let f = fixture().await;
+    let a = SessionId::from_uuid(Uuid::from_u128(IN_A));
+    let before = f.state.session_guard(a);
+    f.state.set_worktree_guard_enabled(false).unwrap();
+    assert_eq!(f.state.session_guard(a), before);
+    let (_, body) = f.judge(IN_A, "Write", &f.wt("b").join("x.rs")).await;
+    assert!(reason(&body).contains("create_session"), "{body}");
+}
+
+/// FR-008: the settings file of an unguarded launch has no `permissions.deny`.
+#[tokio::test]
+async fn an_unguarded_launchs_settings_file_has_no_deny_rules() {
+    let f = fixture().await;
+    let id = SessionId::from_uuid(Uuid::from_u128(IN_A));
+    let context = |guarded| micold_daemon::hooks::StatusContext {
+        cwd: f.wt("a"),
+        locations: Default::default(),
+        guarded,
+    };
+    for (guarded, expected) in [(true, true), (false, false)] {
+        let path = f.receiver.prepare_settings(id, context(guarded)).unwrap();
+        let doc: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(doc.get("permissions").is_some(), expected);
+    }
+}

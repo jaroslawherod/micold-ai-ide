@@ -301,6 +301,7 @@ impl Catalog {
             tool_server_enabled: self.settings.tool_server_enabled,
             cross_session_access: self.settings.cross_session_access,
             pr_status_enabled: self.settings.pr_status_enabled,
+            worktree_guard_enabled: self.settings.worktree_guard_enabled,
             jira_enabled: self.settings.jira_enabled,
             jira_connections: self.settings.jira_connections.clone(),
             github_issues_enabled: self.settings.github_issues_enabled,
@@ -462,6 +463,7 @@ impl Catalog {
                 on_disk.tool_server_enabled = self.settings.tool_server_enabled;
                 on_disk.cross_session_access = self.settings.cross_session_access;
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
+                on_disk.worktree_guard_enabled = self.settings.worktree_guard_enabled;
                 // `jira_enabled` is a service field; `jira_connections` and `jira_base_urls` are
                 // not copied from this daemon's snapshot, only merged from the one change that
                 // arrived (features 533 and 1122).
@@ -594,6 +596,19 @@ impl Catalog {
     /// Set the cross-session option, persisting atomically (feature 034, FR-016).
     pub fn set_cross_session_access(&mut self, access: CrossSessionAccess) -> io::Result<()> {
         self.settings.cross_session_access = access;
+        self.persist_service_settings()
+    }
+
+    /// Whether sessions launched now are guarded to their own worktree (feature 1210, FR-008).
+    /// Read at launch, so a running session keeps what it was started with (R7).
+    pub fn worktree_guard_enabled(&self) -> bool {
+        self.settings.worktree_guard_enabled
+    }
+
+    /// Turn the worktree guard on or off for later launches, persisting atomically (feature 1210,
+    /// FR-008).
+    pub fn set_worktree_guard_enabled(&mut self, on: bool) -> io::Result<()> {
+        self.settings.worktree_guard_enabled = on;
         self.persist_service_settings()
     }
 
