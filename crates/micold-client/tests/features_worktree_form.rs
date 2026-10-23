@@ -595,3 +595,140 @@ mod default_prompt_template {
         assert_eq!(form.first_prompt, "");
     }
 }
+
+// Feature 1161, T026: the same follow-the-template behaviour, but driven through the form's
+// reducer, so a reducer that stops calling `refresh_default_prompt` is caught.
+mod default_prompt_template_through_the_reducer {
+    use std::path::PathBuf;
+
+    use micold_client::app::{Message, State};
+    use micold_client::features::worktree_form::{Msg, WorktreeForm};
+    use micold_core::git::GitRemote;
+    use micold_core::github::{DescriptionPage, Issue, IssueListing};
+    use micold_core::naming::ConventionalType;
+
+    fn send(state: &mut State, msg: Msg) {
+        state.update(Message::WorktreeForm(msg));
+    }
+
+    fn form(state: &State) -> &WorktreeForm {
+        state.worktree_form.form.as_ref().expect("the form is open")
+    }
+
+    /// An open form (with a CLI chosen by default) under `template`, GitHub remote answered.
+    fn opened(template: &str) -> State {
+        let mut state = State::default();
+        state.workspace.active = Some(PathBuf::from("/work/acme"));
+        state.session.default_prompt_template = template.to_string();
+        send(&mut state, Msg::Opened);
+        send(
+            &mut state,
+            Msg::RemotesListed(Ok(vec![GitRemote {
+                name: "origin".into(),
+                url: "git@github.com:o/r.git".into(),
+            }])),
+        );
+        assert!(form(&state).session_cli.is_some(), "a CLI is chosen");
+        state
+    }
+
+    #[test]
+    fn type_ticket_and_name_changes_refresh_an_unedited_field() {
+        let mut state = opened("{type} {name} #{issue}");
+        send(&mut state, Msg::TypeSelected(ConventionalType::Fix));
+        assert_eq!(form(&state).first_prompt, "fix  #");
+        send(&mut state, Msg::NameChanged("crash".into()));
+        assert_eq!(form(&state).first_prompt, "fix crash #");
+        send(&mut state, Msg::TicketChanged("9".into()));
+        assert_eq!(form(&state).first_prompt, "fix crash #9");
+    }
+
+    #[test]
+    fn reducer_changes_leave_an_edited_field_alone() {
+        let mut state = opened("{type} {name} #{issue}");
+        send(&mut state, Msg::FirstPromptChanged("mine".into()));
+        send(&mut state, Msg::TypeSelected(ConventionalType::Feat));
+        send(&mut state, Msg::NameChanged("other".into()));
+        send(&mut state, Msg::TicketChanged("10".into()));
+        assert_eq!(form(&state).first_prompt, "mine");
+    }
+
+    #[test]
+    fn a_listing_then_its_bodies_then_a_pick_fill_the_field() {
+        let mut state = opened("{type}|{name}|#{issue}|{issue_title}|{issue_body}");
+        send(
+            &mut state,
+            Msg::SourceChanged(micold_client::features::worktree_form::BranchSource::Issue),
+        );
+        let seq = state.worktree_form.awaited_issue_load().expect("loading");
+        let issue = Issue::new(
+            42,
+            "Crash on save".to_string(),
+            vec![],
+            "2026-01-01T00:00:00Z".to_string(),
+        );
+        send(
+            &mut state,
+            Msg::IssuesLoaded {
+                seq,
+                result: Ok((
+                    IssueListing {
+                        total_open: 1,
+                        complete: true,
+                        issues: vec![issue],
+                    },
+                    PathBuf::from("/usr/bin/gh"),
+                )),
+                resolved_env: None,
+            },
+        );
+        send(
+            &mut state,
+            Msg::IssuePicked {
+                number: 42,
+                mapping: vec![],
+            },
+        );
+        let picked = form(&state).first_prompt.clone();
+        assert!(picked.contains("|Crash on save|"), "listing arrival and pick: {picked}");
+        assert!(picked.contains("#42|"), "{picked}");
+        assert!(picked.ends_with("|"), "no body has arrived yet: {picked}");
+
+        send(
+            &mut state,
+            Msg::IssueDescriptionsLoaded {
+                seq,
+                cursor: None,
+                result: Ok(DescriptionPage {
+                    descriptions: vec![(42, "It crashes.".to_string())],
+                    bodies: vec![(42, "It crashes. Badly.".to_string())],
+                    next_cursor: None,
+                }),
+            },
+        );
+        assert!(
+            form(&state).first_prompt.ends_with("|It crashes. Badly."),
+            "{}",
+            form(&state).first_prompt
+        );
+    }
+
+    #[test]
+    fn choosing_a_cli_after_none_refreshes_the_field() {
+        let mut state = opened("#{issue}");
+        send(&mut state, Msg::TicketChanged("5".into()));
+        send(&mut state, Msg::SessionCliChosen(None));
+        assert_eq!(form(&state).first_prompt, "");
+        send(
+            &mut state,
+            Msg::SessionCliChosen(Some(micold_core::session::AiCli::Copilot)),
+        );
+        assert_eq!(form(&state).first_prompt, "#5");
+    }
+
+    #[test]
+    fn opening_the_form_renders_the_stored_template() {
+        let state = opened("hello");
+        assert_eq!(form(&state).first_prompt, "hello");
+    }
+}

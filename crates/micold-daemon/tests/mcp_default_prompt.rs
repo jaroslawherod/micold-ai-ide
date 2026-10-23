@@ -268,10 +268,9 @@ async fn a_template_alone_starts_no_session() {
     assert_eq!(s.typed(), "");
 }
 
-/// US4 s6, FR-012: a failed lookup and one that outlasts the bound both render title and body
-/// empty.
+/// US4 s6, FR-012: a failed lookup renders title and body empty.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_failed_or_slow_lookup_renders_title_and_body_empty() {
+async fn a_failed_lookup_renders_title_and_body_empty() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
     s.worktree("fix-42_crash");
@@ -280,19 +279,40 @@ async fn a_failed_or_slow_lookup_renders_title_and_body_empty() {
     s.lookup(failing());
     s.session_in("fix-42_crash", json!({})).await;
     assert_eq!(s.settle("Fix  (#42)\n").await, "Fix  (#42)\n");
+}
 
-    let s2 = Sandbox::new().await;
-    s2.worktree("fix-42_crash");
-    s2.template(TITLED);
-    s2.state.set_prompt_lookup_bound(Duration::from_millis(200));
-    s2.lookup(Arc::new(Slow(Duration::from_secs(2))));
+/// US4 s6, FR-012: a lookup that outlasts the bound renders title and body empty.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_slow_lookup_renders_title_and_body_empty() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.worktree("fix-42_crash");
+    s.template(TITLED);
+    s.state.set_prompt_lookup_bound(Duration::from_millis(200));
+    s.lookup(Arc::new(Slow(Duration::from_secs(2))));
     let started = Instant::now();
-    s2.session_in("fix-42_crash", json!({})).await;
+    s.session_in("fix-42_crash", json!({})).await;
     assert!(
         started.elapsed() < Duration::from_secs(2),
         "the bound ended the wait"
     );
-    assert_eq!(s2.settle("Fix  (#42)\n").await, "Fix  (#42)\n");
+    assert_eq!(s.settle("Fix  (#42)\n").await, "Fix  (#42)\n");
+}
+
+/// US4, FR-014 (issues setting): with GitHub issues off, no issue is read and title and body
+/// render empty.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn github_issues_off_looks_nothing_up() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.worktree("fix-42_crash");
+    s.template(TITLED);
+    s.state.set_github_issues_enabled(false).unwrap();
+    let fake = answering(snapshot("Crash on save", "body"));
+    s.lookup(fake.clone());
+    s.session_in("fix-42_crash", json!({})).await;
+    assert_eq!(s.settle("Fix  (#42)\n").await, "Fix  (#42)\n");
+    assert!(fake.lookup_calls().is_empty(), "issues off reads nothing");
 }
 
 /// US4 s7, FR-014: a Jira key is `{issue}` and is never looked up.
@@ -309,19 +329,23 @@ async fn a_jira_key_renders_as_the_issue_with_no_lookup() {
     assert!(fake.lookup_calls().is_empty(), "a Jira key reads nothing");
 }
 
-/// Research R8: a blank explicit prompt falls through to the template; a template that does not
-/// parse leaves the call as it was.
+/// Research R8: a blank explicit prompt falls through to the template.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_blank_prompt_falls_through_and_a_bad_template_is_no_prompt() {
+async fn a_blank_prompt_falls_through_to_the_template() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
     s.template("on {branch}");
     s.session_in("b", json!({"prompt": "  "})).await;
     assert_eq!(s.settle("on b\n").await, "on b\n");
+}
 
-    let s2 = Sandbox::new().await;
-    s2.template("{nope}");
-    let out = s2.session_in("b", json!({})).await;
+/// Research R8: a template that does not parse leaves the call as it was.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_bad_template_is_no_prompt() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.template("{nope}");
+    let out = s.session_in("b", json!({})).await;
     assert_eq!(out["prompt_delivered"], Value::Null, "{out}");
-    assert_eq!(s2.typed(), "");
+    assert_eq!(s.typed(), "");
 }

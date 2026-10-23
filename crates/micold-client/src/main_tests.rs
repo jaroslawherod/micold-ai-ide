@@ -3585,6 +3585,27 @@ fn app_with_github_form() -> App {
     app
 }
 
+/// Feature 1161, T026: a template the daemon reports in `DaemonSettings` reaches the form opened
+/// afterwards, and fills its first-prompt field.
+#[test]
+fn a_stored_default_prompt_template_reaches_the_opened_form() {
+    let mut app = base_app();
+    app.core.workspace.active = Some(PathBuf::from("/work/acme"));
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                default_prompt_template: "/speckit-autopilot #{issue}".to_string(),
+                ..quiet_settings()
+            },
+        },
+    );
+    app.core.update(Message::WorktreeForm(FormMsg::Opened));
+    let form = app.core.worktree_form.form.as_ref().expect("the form is open");
+    assert_eq!(form.default_prompt_template, "/speckit-autopilot #{issue}");
+    assert_eq!(form.first_prompt, "/speckit-autopilot #");
+}
+
 fn form_offers_github(app: &App) -> bool {
     app.core
         .worktree_form

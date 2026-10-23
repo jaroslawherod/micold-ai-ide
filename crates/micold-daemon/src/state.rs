@@ -8419,3 +8419,15 @@ mod offered_tests {
         assert_eq!(state.ai_clis_available_in(cwd.path()), [AiCli::Pi]);
     }
 }
+
+#[cfg(test)]
+mod prompt_lookup_bound_tests {
+    /// 1161 US4 s6, FR-012: an issue's title and body are waited for 5 seconds, no more.
+    #[test]
+    fn the_prompt_lookup_bound_is_five_seconds() {
+        assert_eq!(
+            super::PROMPT_LOOKUP_BOUND,
+            std::time::Duration::from_secs(5)
+        );
+    }
+}
