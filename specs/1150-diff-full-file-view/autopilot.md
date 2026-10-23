@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1150
 - **Worktree branch**: feat/1150_show-the-full-file-while-reviewing-a-diff-in-the
 - **Started**: 2026-10-20
-- **Phase**: M7 implemented, gating and reviewing
-- **Next step**: scoped gate, review A, review B, full gate, PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -23,7 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1221 | M4 pick revealed lines | merged | df514cb373e4e93a20c4294b2518f2c689f03c89 |
 | #1253 | M5 browse repository files | merged | 2dddbef617146c535dadbc0dd5687169836fa50a |
 | #1282 | M6 browse at the PR head | merged | 47cfcc3c58d5f371ad5dfb0afa73e3a2ee83d5d6 |
-| #1291 | M7 follow references from the diff | open | |
+| #1291 | M7 follow references from the diff | merged | 93a720fbdd2f462287624d7bf4405eb19b810f85 |
+| (close) | Close the spec | open | |
 
 ## Milestones
 
@@ -35,12 +36,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T032–T035 | light | Pick revealed lines | #1221 | merged |
 | M5 | T036–T046 | full | Browse repository files | #1253 | merged |
 | M6 | T047–T053 | full | Browse at the PR head | #1282 | merged |
-| M7 | T054–T062 | full | Follow references from the diff | #1291 | open |
+| M7 | T054–T062 | full | Follow references from the diff | #1291 | merged |
 
 ## Decisions
 
 - M1 has 17 tasks (Setup + Foundational + US1): Foundational alone is no milestone, and no acceptance-scenario split exists below the gap marker. M5 has 11 tasks, kept whole: its tree, picker and back share one reducer state and no acceptance scenario splits them. Polish (T063-T064) changes no code: left to the close unit.
 - analyze C1/C2: browsed-file pick pin moved to M5 (T038); M4 mirrors the existing line-pick handling.
+
+- Close waiver (decided by the autopilot close unit, no human decision; recorded here and in tdd/verification.md): TDD verify verdict FAIL on red-phase ordering only (no tdd/test-list.md or cycle-log.md for any milestone; milestones used conformance reviews A and B instead). Waived by the autopilot owner: history cannot be rewritten, and 4 of 4 hand-made mutants were caught, `test-core` green. Open: client visual pass (T066). A shallow speckit-converge pass at close found T001-T062 ticked and the main symbols present, no unbuilt behaviour found.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -89,4 +92,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+Client visual pass of Part B (quickstart, T066): needs a display, daemon and GitHub; M5-M7 client flows never seen on screen (only the showcase BrowseBar in M5). Mutation testing was by 4 hand-made mutants only.
