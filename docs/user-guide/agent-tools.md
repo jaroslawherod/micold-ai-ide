@@ -247,6 +247,14 @@ The first session of a worktree is its **main session**; a session created with
 `list_sessions` rows do not mark which session is main, and the listing order does not indicate
 it. Only you change which session is main, from the app.
 
+### Sessions cannot enter or add worktrees
+
+A Claude Code session the app launches cannot call its `EnterWorktree` tool, and it cannot run
+`git worktree add`, including `git -C <dir> worktree add`. Both are denied with a message. The
+check reads the command text, so a command built by a script or a shell wrapper it cannot see
+through can slip past it. The route is the one above: `create_worktree`, which stays available, then
+`create_session` for the new worktree.
+
 ## Reading and typing into other sessions
 
 An assistant can read what another session of the same project shows, and type into it. This is

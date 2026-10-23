@@ -18,6 +18,19 @@ use self::paths::{has_root, resolve, PathFacts, ResolvedPath};
 pub const DENY_MESSAGE: &str =
     "Do not work here; hand the work to a dedicated session with create_session.";
 
+/// The static `permissions.deny` rules every launched session gets (FR-005): entering a worktree
+/// and every `git worktree add` form. `create_worktree` is not listed (FR-006).
+pub const DENY_RULES: [&str; 3] = [
+    "EnterWorktree",
+    "Bash(git worktree add:*)",
+    "Bash(git * worktree add*)",
+];
+
+/// The denial for a command that adds a worktree.
+const WORKTREE_ADD_MESSAGE: &str = "Blocked: git worktree add is not allowed in this session. \
+    Create the worktree with the create_worktree tool, then hand the work to a dedicated session \
+    with create_session.";
+
 /// A worktree whose directory name starts with this is autopilot's prefetch worktree and is
 /// reachable from any session (FR-007, research R5). Compared without regard to case.
 pub const AUTOPILOT_PREFETCH_PREFIX: &str = "autopilot-prefetch";
@@ -115,6 +128,13 @@ pub enum GuardVerdict {
 
 /// Decide one tool call (FR-002, FR-007, FR-009, FR-011).
 pub fn decide(input: &GuardInput, facts: &dyn PathFacts) -> GuardVerdict {
+    // Syntactic: needs neither the binding nor the worktree list, so it holds when they are unknown.
+    if matches!(&input.tool, ToolCall::Bash { command } if shell::adds_worktree(command)) {
+        return GuardVerdict::Deny {
+            message: WORKTREE_ADD_MESSAGE.to_owned(),
+            target: input.session_cwd.clone(),
+        };
+    }
     let own = match &input.binding {
         SessionBinding::Worktree(path) | SessionBinding::Default(path) => path,
         SessionBinding::Unknown => return unknown("the session's own worktree is not known"),
@@ -361,6 +381,39 @@ mod tests {
         assert!(denied(&verdict(&i)));
     }
 
+    /// Claude Code's rule syntax: `Tool`, `Tool(prefix:*)` (the command starts with the prefix as
+    /// whole words) and `Tool(pattern)` with `*` matching any text.
+    fn rule_matches(rule: &str, tool: &str, command: &str) -> bool {
+        let Some((name, spec)) = rule.split_once('(') else {
+            return rule == tool;
+        };
+        let spec = spec.trim_end_matches(')');
+        if name != tool {
+            return false;
+        }
+        if let Some(prefix) = spec.strip_suffix(":*") {
+            return command == prefix || command.starts_with(&format!("{prefix} "));
+        }
+        let mut rest = command;
+        let mut parts = spec.split('*');
+        let first = parts.next().unwrap_or("");
+        let Some(after) = rest.strip_prefix(first) else {
+            return false;
+        };
+        rest = after;
+        let parts: Vec<&str> = parts.collect();
+        for (i, part) in parts.iter().enumerate() {
+            if i + 1 == parts.len() && !part.is_empty() {
+                return rest.ends_with(part);
+            }
+            match rest.find(part) {
+                Some(at) => rest = &rest[at + part.len()..],
+                None => return false,
+            }
+        }
+        true
+    }
+
     fn bash(binding: SessionBinding, cwd: &str, command: &str) -> GuardVerdict {
         let mut i = input(binding, "");
         i.session_cwd = cwd.into();
@@ -411,6 +464,47 @@ mod tests {
             bash(default_session(), ROOT, "cd src && ls"),
             GuardVerdict::Allow
         );
+    }
+
+    #[test]
+    fn a_git_worktree_add_is_denied_even_in_the_own_worktree() {
+        for command in ["git worktree add ../x", "git -C . worktree add ../x"] {
+            let v = bash(in_a(), A, command);
+            let GuardVerdict::Deny { message, .. } = v else {
+                panic!("expected a deny for {command}, got {v:?}");
+            };
+            assert!(message.contains("worktree add") && message.contains("create_worktree"));
+        }
+        assert_eq!(bash(in_a(), A, "git worktree list"), GuardVerdict::Allow);
+        // Also when the session's own worktree is not known.
+        assert!(denied(&bash(
+            SessionBinding::Unknown,
+            A,
+            "git worktree add x"
+        )));
+    }
+
+    #[test]
+    fn the_static_deny_rules_match_the_plain_and_the_dash_c_forms() {
+        for command in ["git worktree add x", "git -C . worktree add x"] {
+            assert!(
+                DENY_RULES
+                    .iter()
+                    .any(|rule| rule_matches(rule, "Bash", command)),
+                "{command}"
+            );
+        }
+        assert!(DENY_RULES
+            .iter()
+            .any(|rule| rule_matches(rule, "EnterWorktree", "")));
+        assert!(!DENY_RULES.iter().any(|rule| rule_matches(
+            rule,
+            "mcp__micold__create_worktree",
+            ""
+        )));
+        assert!(!DENY_RULES
+            .iter()
+            .any(|rule| rule_matches(rule, "Bash", "git worktree list")));
     }
 
     #[test]

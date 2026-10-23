@@ -634,9 +634,16 @@ pub struct StatusLineBlock {
     refresh_interval: Option<u32>,
 }
 
+/// `permissions`: only `deny` rules, so the project's own rules stay in effect (FR-013).
+#[derive(serde::Serialize)]
+struct PermissionsBlock {
+    deny: &'static [&'static str],
+}
+
 #[derive(serde::Serialize)]
 struct SettingsDoc<'a> {
     hooks: HooksMap<'a>,
+    permissions: PermissionsBlock,
     #[serde(rename = "statusLine", skip_serializing_if = "Option::is_none")]
     status_line: Option<&'a StatusLineBlock>,
 }
@@ -667,6 +674,9 @@ pub fn settings_json(url: &str, token: &str, status_line: Option<&StatusLineBloc
             notification: [group()],
             subagent_start: [group()],
             subagent_stop: [group()],
+        },
+        permissions: PermissionsBlock {
+            deny: &micold_core::worktree_guard::DENY_RULES,
         },
         status_line,
     };
@@ -803,7 +813,23 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys, ["hooks"]);
+        assert_eq!(keys, ["hooks", "permissions"]);
+        assert!(!json.contains("\"allow\""));
+    }
+
+    #[test]
+    fn settings_json_denies_worktree_entry_and_creation_but_not_create_worktree() {
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed["permissions"]["deny"],
+            serde_json::json!([
+                "EnterWorktree",
+                "Bash(git worktree add:*)",
+                "Bash(git * worktree add*)"
+            ])
+        );
+        assert!(!json.contains("mcp__micold__create_worktree"));
         assert!(!json.contains("\"allow\""));
     }
 

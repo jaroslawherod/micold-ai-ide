@@ -43,6 +43,52 @@ pub fn targets(command: &str, start: &Path) -> Vec<PathBuf> {
     found
 }
 
+/// Whether any command in `command` is a git invocation that adds a worktree: `git`, then global
+/// options (`-C <dir>`, `-c k=v`, `--git-dir=…` and the like), then `worktree`, then `add` (R2).
+/// Leading `VAR=value` words, shell keywords and the wrappers in [`WRAPPERS`] are skipped. A mention
+/// inside `echo` or a quoted script does not count (best-effort, like the rest of this module).
+pub fn adds_worktree(command: &str) -> bool {
+    segments(command).iter().any(|words| {
+        let mut words = words.iter().map(String::as_str).skip_while(|word| {
+            WRAPPERS.contains(word)
+                || word
+                    .split_once('=')
+                    .is_some_and(|(name, _)| assignment(name))
+        });
+        let is_git = words.next().is_some_and(|word| {
+            let name = word.replace('\\', "/");
+            let name = name.rsplit('/').next().unwrap_or("").to_lowercase();
+            name == "git" || name == "git.exe"
+        });
+        if !is_git {
+            return false;
+        }
+        while let Some(word) = words.next() {
+            match word {
+                // Options that take their value as the next word.
+                "-C" | "-c" | "--git-dir" | "--work-tree" | "--namespace" | "--exec-path"
+                | "--super-prefix" | "--config-env" | "--attr-source" => {
+                    words.next();
+                }
+                _ if word.starts_with('-') => {}
+                _ => return word == "worktree" && words.next() == Some("add"),
+            }
+        }
+        false
+    })
+}
+
+/// Words that may stand before the command they run.
+const WRAPPERS: [&str; 14] = [
+    "env", "sudo", "command", "exec", "time", "nohup", "nice", "then", "do", "else", "if", "!",
+    "{", "builtin",
+];
+
+/// A `VAR` of a leading `VAR=value`.
+fn assignment(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
 /// A word with nothing the shell would expand that we cannot follow.
 fn literal(word: &str) -> bool {
     !word.is_empty() && !word.contains(['$', '`', '*', '?', '~'])
@@ -229,6 +275,48 @@ mod tests {
             let found = run(command);
             // `bash -c 'cd /x'` is one word: the script text is never read.
             assert_eq!(found, ["/p/a"], "{command}");
+        }
+    }
+
+    #[test]
+    fn a_git_worktree_add_is_found_after_global_options_chains_and_quotes() {
+        for command in [
+            "git worktree add ../x",
+            "git -C . worktree add ../x",
+            "git -C /some/dir worktree add -b n ../x",
+            "git -c core.a=b worktree add x",
+            "git --git-dir=/r/.git worktree add x",
+            "git --git-dir /r/.git --no-pager worktree add x",
+            "cd /r && git worktree add x",
+            "true; git -C '/a b' worktree add x",
+            "\"git\" 'worktree' \"add\" x",
+            "/usr/bin/git worktree add x",
+            "git.exe worktree add x",
+            "'C:\\Program Files\\Git\\cmd\\git.exe' worktree add x",
+            "GIT_DIR=/r/.git git worktree add x",
+            "env FOO=1 git worktree add x",
+            "sudo git worktree add x",
+            "if true; then git worktree add x; fi",
+            "git --attr-source HEAD worktree add x",
+        ] {
+            assert!(adds_worktree(command), "{command}");
+        }
+    }
+
+    #[test]
+    fn other_git_commands_and_mentions_of_a_worktree_add_are_not_found() {
+        for command in [
+            "git worktree list",
+            "git worktree prune",
+            "git add worktree",
+            "git -C worktree status",
+            "git status",
+            "echo git worktree add x",
+            "echo 'git worktree add x'",
+            "ls worktree add",
+            "",
+        ] {
+            assert!(!adds_worktree(command), "{command}");
         }
     }
 

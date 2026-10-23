@@ -518,7 +518,17 @@ mod status_line_block {
             "turning off deletes the relay file"
         );
         assert_eq!(on["hooks"], off["hooks"]);
-        assert_eq!(off.as_object().unwrap().len(), 1, "only `hooks`: {off}");
+        let keys: Vec<&str> = off
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(
+            keys,
+            ["hooks", "permissions"],
+            "no status line block: {off}"
+        );
     }
 
     #[tokio::test]

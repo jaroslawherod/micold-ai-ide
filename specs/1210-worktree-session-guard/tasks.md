@@ -51,9 +51,9 @@
 
 **Independent Test**: daemon test of the emitted `--settings` JSON; quickstart B step 2.
 
-- [ ] T015 [P] [US2] Write failing tests: (a) `crates/micold-core/src/worktree_guard/shell.rs` denies a command whose tokenised git invocation has `worktree` then `add` after skipping `-C <dir>`, `-c k=v`, `--git-dir=` (R2), including chained and quoted forms; (b) `crates/micold-daemon/src/hooks.rs` `settings_json` emits `permissions.deny` containing exactly `EnterWorktree`, `Bash(git worktree add:*)`, `Bash(git * worktree add*)`, does not list `mcp__micold__create_worktree`, and has no `allow` key (FR-006, FR-013); (c) a core test matching the deny rule strings against `git worktree add` and `git -C . worktree add` (plan test strategy).
-- [ ] T016 [US2] Implement the `git worktree add` analysis in `shell.rs` and the `permissions.deny` block in `settings_json` (after T015). Rules are static; nothing else in the file changes shape.
-- [ ] T017 [US2] Update `docs/user-guide/agent-tools.md`: launched sessions cannot enter or add worktrees; `create_worktree` then `create_session` is the route.
+- [x] T015 [P] [US2] Write failing tests: (a) `crates/micold-core/src/worktree_guard/shell.rs` denies a command whose tokenised git invocation has `worktree` then `add` after skipping `-C <dir>`, `-c k=v`, `--git-dir=` (R2), including chained and quoted forms; (b) `crates/micold-daemon/src/hooks.rs` `settings_json` emits `permissions.deny` containing exactly `EnterWorktree`, `Bash(git worktree add:*)`, `Bash(git * worktree add*)`, does not list `mcp__micold__create_worktree`, and has no `allow` key (FR-006, FR-013); (c) a core test matching the deny rule strings against `git worktree add` and `git -C . worktree add` (plan test strategy).
+- [x] T016 [US2] Implement the `git worktree add` analysis in `shell.rs` and the `permissions.deny` block in `settings_json` (after T015). Rules are static; nothing else in the file changes shape.
+- [x] T017 [US2] Update `docs/user-guide/agent-tools.md`: launched sessions cannot enter or add worktrees; `create_worktree` then `create_session` is the route.
 
 ## Phase 6: User Story 3 - `create_worktree` tells the agent to hand off (P2)
 

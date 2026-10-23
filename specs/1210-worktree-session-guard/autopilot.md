@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1210
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
-- **Phase**: milestone M2 (PR open)
-- **Next step**: open the M2 PR; orchestrator waits on CI, merges, then M3
+- **Phase**: milestone M3 (PR open)
+- **Next step**: orchestrator waits on CI for the M3 PR, merges, then M4
 
 ## Pull requests
 
@@ -18,15 +18,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1214 | Design | merged | 46582900eb258d140dd971d45c5d5e39e35131d3 |
 | #1225 | M1 | merged | 575961879f7902b37fe9cbcfdd7f17be621bb12c |
-| #1248 | M2 | open | - |
+| #1248 | M2 | merged | b2239469a15c1a45c89ec03e545bcac6319d9b3a |
+| M3 | M3 | opening | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010, T028 | full | Edit/write guard + allowlist, deny-body channel proven | #1225 | merged |
-| M2 | T011–T014 | full | Bash commands judged | #1248 | in review; red CI (windows path separators in shell.rs tests) fixed |
-| M3 | T015–T017 | full | EnterWorktree and git worktree add denied | - | pending |
+| M2 | T011–T014 | full | Bash commands judged | #1248 | merged |
+| M3 | T015–T017 | full | EnterWorktree and git worktree add denied | M3 PR | in review |
 | M4 | T018–T020 | full | create_worktree hand-off text | - | pending |
 | M5 | T021–T027 | full | Opt-out setting and toggle | - | pending |
 
@@ -59,6 +60,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M1 review A: activity noted before a denial (F6) — the turn continues after a denial, so Working is right.
 - M1 review A: stale binding after rename (F2), guard-map leak (F7), re-resolving the list per call (F10) — edge or negligible; rename-while-running noted as follow-up.
 - M2 review A (snapshot aecaf022...:df514cb3...): CLEAN, 5 MINOR declined (best-effort per FR-004): prefix of globbed words, fd-prefixed redirects and `--opt=path`, comments/heredocs, cd after keywords/subshells, per-target re-resolution.
+- M3 review A (code-review high): fixed wrappers/env-prefix/keywords, git.exe, `--attr-source`, deny before the unknown-binding return. Declined: static rule false positive on quoted mentions (rules mandated by R2/FR-005), `bash -c`/alias/xargs forms (best-effort FR-004; docs say so), `rule_matches` helper fidelity (quickstart B checks the real CLI), no opt-out yet (M5), deny target = session cwd (informational).
+- M3 review B (sonnet, snapshot d9f3fd74...:b2239469...): CLEAN (2 MINOR: its Verify timed out behind the build lock, covered by the green full gate; no tdd/ cycle-log).
 - M2 review B (sonnet, snapshot 12986681...:df514cb3...): CLEAN; Verify green (36 core, 5 daemon).
 
 | Milestone | Review | Finding | Why declined |
