@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1210
 - **Worktree branch**: feat/1210_guard-stop-sessions-from-working-inside-a-worktree
 - **Started**: 2026-10-21
-- **Phase**: milestone M5 (implemented, in review)
-- **Next step**: M5 gate, reviews A and B, PR
+- **Phase**: milestone M5 (PR open)
+- **Next step**: merge M5, then close
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T011–T014 | full | Bash commands judged | #1248 | merged |
 | M3 | T015–T017 | full | EnterWorktree and git worktree add denied | #1268 | merged |
 | M4 | T018–T020 | full | create_worktree hand-off text | #1294 | merged |
-| M5 | T021–T027 | full | Opt-out setting and toggle | - | in progress |
+| M5 | T021–T027 | full | Opt-out setting and toggle | PR | in review |
 
 ## Decisions
 
@@ -49,7 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review spec | 1 | 04953a8e0fcf81bad3b44bee76d980bf3a569b97:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CHANGES: 2 MAJOR (fixed) |
 | Review spec | 2 | 41605b740bcbaa3d9d2d22ecdcae8ba555dd538f:65cefbbe38d05d3054bce51ba4a2c4b3ab37a9e9 | CLEAN |
 | M1 review A (code-review high) | 1 | 86ee425da1e2cbbfebc38cb19d1b072940fe6fb6:c667802d37e322354801010490755f2daaeae0b1 | 4 fixed (cwd fallback, prefetch root, drive-like names, spawn_blocking), rest declined |
-| M5 review A (code-review high) | 1 | 4c3979e16da20f4ce0e899bf668e3d1e29ab731b:85d6478ef7628e280c72a1e30a2d6e868ee0da82 | pending |
+| M5 review A (code-review high) | 1 | 4c3979e16da20f4ce0e899bf668e3d1e29ab731b:85d6478ef7628e280c72a1e30a2d6e868ee0da82 | CLEAN |
 | M1 review B | 1 | cd5bfcf1f255e7ef932ace763cf9b56411e8122e:45a6426ca6d00e7f96b854a111ffe6810469f2fe | CLEAN (1 MINOR: no log-capture test for fail-open warn; behaviour covered by verdict tests) |
 
 - tasks r1 (c3782371...:847ac3b5...): analyze fixed D1 (T028), A1, B1, E1, T2; reviewer CLEAN (3 MINOR fixed, prose/labels only).
@@ -71,9 +71,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 (T021-T027, all ticked) is implemented in the working tree, committed as one wip commit, not pushed, no PR yet. Setting `worktree_guard_enabled` (protocol 67 -> 68) wired through core, daemon (guard_state_for Off + StatusContext.guarded omits permissions.deny) and client (Environment checkbox, placed AFTER cross_session so notification-row geometry gates keep their place); docs updated.
-Review A (high) CLEAN, snapshot 4c3979e1...:85d6478e. Review B (sonnet) CLEAN (1 MINOR: no end-to-end launch test of the opt-out, optional), snapshot 57898129...:85d6478e. Neither needs another round unless a BLOCKER/MAJOR fix is made.
-Next: run `mise run gate` detached (GIT_CONFIG_GLOBAL=/dev/null). Last full gate failed only on client geometry: `notification_kind_rows_sit_under_the_switch` (fixed by moving the row; unverified) and `the_layout_matches_the_committed_fixture` (likely needs `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` then review the fixture diff, plus visual-pass of the Settings Environment page via an autopilot-worker for the new row). Fix any remaining failures, re-run the full gate to green, then commit, push, open PR "feat(1210): opt-out setting and toggle for the worktree guard (#1210)" per tasks/pr.md, record PR in ledger.
+None.
 
 ## Open escalation
 
