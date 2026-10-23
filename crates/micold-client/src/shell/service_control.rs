@@ -22,56 +22,124 @@
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_core::daemons::{DaemonId, DaemonRuntime};
 use micold_core::sandbox::placement::Placement;
 
 use crate::App;
 use micold_client::features::connection::Msg as ConnectionMsg;
 
-/// "Restart service" (FR-022/022a): stop the mismatched daemon by its recorded pid.
+/// What "Restart service" acts on: the mismatched daemon of the worktree in view, and only that one
+/// (spec 491 FR-007; spec 806 FR-007, BUG-1165).
+#[derive(Debug, Clone)]
+enum RestartTarget {
+    /// The container the sandbox boot owns: stopped and removed, and the boot brings it up again.
+    Boot(crate::shell::sandbox::BootPlan),
+    /// Another container daemon: its container is stopped and kept, then the daemon started again.
+    Container(DaemonId),
+    /// The host daemon, stopped by its recorded pid over its endpoint.
+    Host,
+    /// A daemon on a host or cluster the app does not own: nothing is stopped from here.
+    Elsewhere(DaemonId),
+}
+
+fn restart_target(app: &App) -> RestartTarget {
+    let boot = app.sandbox_boot.clone();
+    let Some(id) = app.active_daemon() else {
+        return boot.map_or(RestartTarget::Host, RestartTarget::Boot);
+    };
+    if let Some(plan) = boot.filter(|_| id == app.sandbox_daemon()) {
+        return RestartTarget::Boot(plan);
+    }
+    match app.core.settings.daemons.get(id).map(|e| &e.runtime) {
+        Some(DaemonRuntime::Container(_)) => RestartTarget::Container(id),
+        Some(DaemonRuntime::Host) | None => RestartTarget::Host,
+        Some(_) => RestartTarget::Elsewhere(id),
+    }
+}
+
+/// "Restart service" (FR-022/022a): stop the mismatched daemon of the worktree in view.
 ///
 /// A mismatched client can't send it a control message, so termination is the version-agnostic
-/// stop — which is exactly why this cannot live in `daemon_sync`. Once it exits, the
-/// auto-reconnect loop finds nothing listening and spawns a matching daemon; previously-live
-/// sessions then reload as interrupted-resumable (FR-006a). Live processes are lost — we say so —
-/// but the durable sessions survive.
+/// stop — which is exactly why this cannot live in `daemon_sync`. Once it exits, a matching daemon
+/// takes its place; previously-live sessions then reload as interrupted-resumable (FR-006a). Live
+/// processes are lost — we say so — but the durable sessions survive. Only that daemon is acted on:
+/// never the host daemon for a container's mismatch, nor another container (spec 491 FR-007).
 pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
     // Only the daemon the window is working with is restarted, and only its mismatch is cleared.
     if let Some(id) = app.active_daemon() {
         app.version_mismatch.remove(&id);
         app.build_mismatch.remove(&id);
     }
-    // When the service lives in a container, stopping it over its endpoint would leave the
-    // container up with a dead process inside — the orphan US6 scenario 4 is about. Stop the
-    // container itself; the banner that results carries the action that brings a fresh one up
-    // (FR-036, T110).
-    if let Some(plan) = app.sandbox_boot.clone() {
-        app.core.notify_info(
-            "Stopping the sandbox — running processes are stopped, but your sessions are \
-             preserved and can be resumed.",
-        );
-        return crate::shell::sandbox::stop(&plan);
-    }
-    app.core.notify_info(
-        "Restarting the session service — running processes are stopped, but your \
-         sessions are preserved and can be resumed.",
-    );
-    Task::perform(
-        async {
-            tokio::task::spawn_blocking(|| {
-                let endpoint = micold_core::endpoint::resolve()?;
-                micold_core::spawn::stop_running_daemon(&endpoint)
+    match restart_target(app) {
+        // When the service lives in the boot's container, stopping it over its endpoint would leave
+        // the container up with a dead process inside — the orphan US6 scenario 4 is about. Stop
+        // the container itself; the banner that results carries the action that brings a fresh one
+        // up (FR-036, T110).
+        RestartTarget::Boot(plan) => {
+            app.core.notify_info(
+                "Stopping the sandbox — running processes are stopped, but your sessions are \
+                 preserved and can be resumed.",
+            );
+            crate::shell::sandbox::stop(&plan)
+        }
+        // The old daemon keeps listening in its container, so a re-dial meets it again: stop the
+        // container, then start the daemon, whose bring-up starts the container with this app's
+        // daemon.
+        RestartTarget::Container(id) => {
+            let name = app
+                .core
+                .settings
+                .daemons
+                .get(id)
+                .map(|e| e.name.as_str().to_string())
+                .unwrap_or_default();
+            app.core.notify_info(format!(
+                "Restarting the daemon {name} — running processes are stopped, but your sessions \
+                 are preserved and can be resumed."
+            ));
+            crate::shell::daemons::stop_container_of(app, id, move |_| {
+                Message::Daemons(micold_client::features::daemons::Msg::Started(id))
             })
-            .await
-            .map_err(|e| e.to_string())?
-            .map_err(|e: std::io::Error| e.to_string())
-        },
-        |r: Result<bool, String>| match r {
-            Ok(_) => Message::NoOp,
-            Err(e) => Message::Connection(ConnectionMsg::ConnectFailed(format!(
-                "could not stop the mismatched service: {e}"
-            ))),
-        },
-    )
+            .unwrap_or_else(Task::none)
+        }
+        RestartTarget::Elsewhere(id) => {
+            let name = app
+                .core
+                .settings
+                .daemons
+                .get(id)
+                .map(|e| e.name.as_str().to_string())
+                .unwrap_or_default();
+            app.core.notify_info(format!(
+                "The daemon {name} does not run on this machine; its row in Settings → Daemons \
+                 says how to bring it to this app's version."
+            ));
+            Task::none()
+        }
+        RestartTarget::Host => {
+            app.core.notify_info(
+                "Restarting the session service — running processes are stopped, but your \
+                 sessions are preserved and can be resumed.",
+            );
+            Task::perform(
+                async {
+                    tokio::task::spawn_blocking(|| {
+                        let endpoint = micold_core::endpoint::resolve()?;
+                        micold_core::spawn::stop_running_daemon(&endpoint)
+                    })
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e: std::io::Error| e.to_string())
+                },
+                |r: Result<bool, String>| match r {
+                    Ok(_) => Message::NoOp,
+                    Err(e) => Message::Connection(ConnectionMsg::ConnectFailed(format!(
+                        "could not stop the mismatched service: {e}"
+                    ))),
+                },
+            )
+        }
+    }
 }
 
 /// Apply the logout-survival opt-in for the configured placement (feature 027, FR-014a/b/d).
@@ -179,6 +247,123 @@ mod tests {
             app.core.notifications.queue.is_active(),
             "restarting the service must tell the user what it costs"
         );
+    }
+
+    /// Adds container daemons named `names` and returns their ids.
+    fn with_containers(app: &mut App, names: &[&str]) -> Vec<DaemonId> {
+        names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let runtime = DaemonRuntime::Container(micold_core::daemons::ContainerSettings {
+                    profile: micold_core::sandbox::SandboxProfile::default(),
+                    container_name: format!("{name}-ctr"),
+                    port: 7001 + i as u16,
+                    migration: None,
+                });
+                let id = app.core.settings.daemons.add(name, runtime, false).unwrap();
+                app.core.settings.links.insert(
+                    id,
+                    micold_core::daemons::DaemonState::VersionMismatch {
+                        client: "0.5.3".into(),
+                        daemon: "0.5.2".into(),
+                    },
+                );
+                id
+            })
+            .collect()
+    }
+
+    /// The worktree in view is bound to `id`.
+    fn view_worktree_on(app: &mut App, id: DaemonId) {
+        let project = std::path::PathBuf::from("/p/a");
+        app.core.workspace.active = Some(project.clone());
+        app.core
+            .workspace
+            .bindings
+            .insert(project, [(String::new(), id)].into_iter().collect());
+    }
+
+    fn told(app: &App) -> String {
+        app.core
+            .notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone())
+            .unwrap_or_default()
+    }
+
+    /// BUG-1165: with no boot sandbox, the restart for a mismatched container daemon stops that
+    /// container, never the host daemon's endpoint (spec 491 FR-007).
+    #[test]
+    fn a_mismatched_container_daemon_is_restarted_not_the_host_daemon() {
+        let mut app = base_app();
+        let [boxed] = with_containers(&mut app, &["Box"])[..] else {
+            unreachable!()
+        };
+        view_worktree_on(&mut app, boxed);
+
+        assert!(matches!(restart_target(&app), RestartTarget::Container(id) if id == boxed));
+        let _ = on_restart_service_requested(&mut app);
+
+        let said = told(&app);
+        assert!(said.contains("daemon Box"), "{said}");
+        assert!(!said.contains("session service"), "{said}");
+    }
+
+    /// BUG-1165: with a boot sandbox and a second container daemon in view, the second is restarted
+    /// and the boot's container is left alone.
+    #[test]
+    fn a_second_container_in_view_is_restarted_not_the_boot_one() {
+        let mut app = base_app();
+        let [first, second] = with_containers(&mut app, &["Box", "Other"])[..] else {
+            unreachable!()
+        };
+        app.sandbox_boot = Some(crate::shell::sandbox::BootPlan {
+            profile: micold_core::sandbox::SandboxProfile::default(),
+            state_dir: std::path::PathBuf::from("/tmp/micold-test"),
+            projects: Vec::new(),
+            container_name: "Box-ctr".to_string(),
+            port: 7001,
+        });
+        assert_eq!(
+            app.sandbox_daemon(),
+            first,
+            "the boot owns the first container"
+        );
+        view_worktree_on(&mut app, second);
+
+        assert!(matches!(restart_target(&app), RestartTarget::Container(id) if id == second));
+        let _ = on_restart_service_requested(&mut app);
+
+        let said = told(&app);
+        assert!(said.contains("daemon Other"), "{said}");
+        assert!(!said.contains("sandbox"), "{said}");
+
+        view_worktree_on(&mut app, first);
+        assert!(matches!(restart_target(&app), RestartTarget::Boot(_)));
+    }
+
+    /// A daemon on a host the app does not own is not stopped from here: its row says how.
+    #[test]
+    fn a_remote_daemon_in_view_is_pointed_to_its_row() {
+        let mut app = base_app();
+        let target = micold_core::ssh::SshTarget::new("devbox", None, None, None).unwrap();
+        let remote = app
+            .core
+            .settings
+            .daemons
+            .add(
+                "Dev",
+                DaemonRuntime::Ssh(micold_core::ssh::SshSettings { target }),
+                false,
+            )
+            .unwrap();
+        view_worktree_on(&mut app, remote);
+
+        assert!(matches!(restart_target(&app), RestartTarget::Elsewhere(id) if id == remote));
+        let _ = on_restart_service_requested(&mut app);
+        assert!(told(&app).contains("Settings → Daemons"), "{}", told(&app));
     }
 
     /// The survival outcome reaches the user whichever way it went.

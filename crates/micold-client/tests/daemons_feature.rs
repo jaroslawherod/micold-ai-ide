@@ -1493,6 +1493,24 @@ fn a_legacy_container_says_so_and_stops_only_with_no_session_running() {
     );
     assert!(busy.stop_blocked, "two sessions are running in it");
     assert!(!by(&rows(&mut w), host).stop_blocked);
+    // T105 (BUG-1165): a mismatched daemon cannot report its sessions, and the client's list of
+    // them is stale: Stop is not hidden, and it is hidden again once the daemon can report.
+    w.links
+        .apply(boxed, micold_core::daemons::DaemonEvent::Start);
+    w.links.apply(
+        boxed,
+        micold_core::daemons::DaemonEvent::Refused {
+            client: "0.5.3".into(),
+            daemon: "0.5.2".into(),
+        },
+    );
+    assert!(
+        !by(&rows(&mut w), boxed).stop_blocked,
+        "mismatched: the user may stop it"
+    );
+    w.links
+        .apply(boxed, micold_core::daemons::DaemonEvent::Connected);
+    assert!(by(&rows(&mut w), boxed).stop_blocked, "it reports again");
     w.sessions.insert(boxed, Vec::new());
     assert!(
         !by(&rows(&mut w), boxed).stop_blocked,

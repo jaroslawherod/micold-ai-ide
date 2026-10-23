@@ -492,6 +492,21 @@ it, the version it reported, a state badge (**Connected**, **Starting**, **Unrea
 | **Details** | Opens a dialog with the recent connection errors and the log tail, and why a container runtime cannot be used when that is the reason. It keeps updating while it is open; **Close**, Escape or a click outside closes it. A question about a daemon's changed settings waits until the dialog is closed |
 | **Remove** | Asks first, see below |
 
+### A container daemon of another version
+
+After you update Micold, a container daemon still running the previous version shows
+**Version mismatch**. Its row says both versions, which side is older and the way out:
+
+- **The daemon is older and has no running sessions:** the row offers **Replace**, which ends the old
+  daemon and starts this app's version in the same container.
+- **The daemon is older and sessions are running, or they cannot be counted:** Micold ends nothing on
+  its own. **Stop** stops the daemon's container, which stops its running processes, and **Start**
+  brings the container up again with this app's version.
+- **The daemon is newer than the app:** update the app.
+
+The banner's **Restart service** does the same as **Stop** then **Start**, for the daemon of the
+worktree you are looking at only: it never stops the host daemon or another container.
+
 **Add daemon** opens a dialog with a form for a name, what it runs in (container or host), the container name,
 port and image, and whether to connect when the application starts. A form that cannot be saved
 says why beside the field at fault: a blank or repeated name, a port outside 1-65535, a container

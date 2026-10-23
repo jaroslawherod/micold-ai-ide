@@ -605,14 +605,29 @@ pub fn sandbox_daemon(
         .map(|entry| entry.id)
 }
 
-/// Whether the mismatched remote daemon `id` is older and proved to have no running session: the
-/// one case in which the app offers to replace it (feature 489, FR-011). A newer daemon is never
-/// replaced, which would downgrade the host.
+/// Whether the mismatched remote or container daemon `id` is older and proved to have no running
+/// session: the one case in which the app offers to replace it (feature 489, FR-011; spec 806
+/// FR-007). A newer daemon is never replaced, which would downgrade the host. A container still on
+/// the released image has no helper to ask, so it is never offered one (FR-017).
 fn replace_offered(model: &Model<'_>, id: DaemonId) -> bool {
-    model.registry.get(id).is_some_and(|entry| {
-        crate::links::remote_mismatch(entry, model.links)
-            .is_some_and(|(explanation, _)| explanation.way_out == WayOut::ReplaceDaemon)
-    })
+    model.legacy_container != Some(id)
+        && model.registry.get(id).is_some_and(|entry| {
+            crate::links::remote_mismatch(entry, model.links)
+                .is_some_and(|(explanation, _)| explanation.way_out == WayOut::ReplaceDaemon)
+        })
+}
+
+/// Whether `id` is a container daemon on the basic image whose daemon refused this app's version.
+fn mismatched_container(model: &Model<'_>, id: DaemonId) -> bool {
+    model.legacy_container != Some(id)
+        && matches!(
+            model.registry.get(id).map(|e| &e.runtime),
+            Some(DaemonRuntime::Container(_))
+        )
+        && matches!(
+            model.links.state(id),
+            Some(DaemonState::VersionMismatch { .. })
+        )
 }
 
 /// The list, its empty state and the daemons a worktree can bind to.
@@ -655,7 +670,13 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 }
             },
             notice_dismissable: entry.notice.is_some(),
+            // A mismatched daemon cannot report its sessions, and the client's list of them is
+            // stale, so it never hides Stop: the user may end it (FR-017, 489 FR-011; BUG-1165).
             stop_blocked: model.legacy_container == Some(entry.id)
+                && !matches!(
+                    model.links.state(entry.id),
+                    Some(DaemonState::VersionMismatch { .. })
+                )
                 && model.sessions.get(&entry.id).is_some_and(|s| !s.is_empty()),
             explanation: crate::links::remote_mismatch_text(entry, model.links),
             replace_offered: replace_offered(model, entry.id)
@@ -2055,13 +2076,9 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::SshHostsLoaded(hosts) => state.ssh_hosts = hosts,
         Msg::OfferReported(id, offer) => model.links.set_offer(id, offer),
         Msg::ReplaceRequested(id) => {
+            // The shell resolves how to reach it: the SSH host, or the container's pinned reach.
             if replace_offered(model, id) && state.replacing.insert(id) {
-                if let Some(DaemonRuntime::Ssh(ssh)) = model.registry.get(id).map(|e| &e.runtime) {
-                    return vec![Outcome::RemoteReplaceRequested {
-                        daemon: id,
-                        target: ssh.target.clone(),
-                    }];
-                }
+                return vec![Outcome::RemoteReplaceRequested { daemon: id }];
             }
         }
         Msg::Replaced(id, result) => {
@@ -2139,7 +2156,14 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             if kube_of(model, id).is_some() {
                 return request_kube_stop(state, model, id);
             }
+            let ends_container = mismatched_container(model, id);
             stop(state, model, id);
+            // Its daemon cannot be spoken to, so ending the dial alone would leave the old daemon in
+            // the container and the next Start refused again: the container is stopped, and Start
+            // brings it up with this app's daemon (spec 806 FR-007, BUG-1165).
+            if ends_container {
+                return vec![Outcome::ContainerStopRequested { daemon: id }];
+            }
         }
         Msg::DismissNotice(id) => {
             if model.registry.dismiss_notice(id) {

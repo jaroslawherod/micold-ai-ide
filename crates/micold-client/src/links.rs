@@ -196,29 +196,35 @@ pub fn route(links: &DaemonLinks, registry: &DaemonRegistry, binding: Binding) -
     }
 }
 
-/// The explanation of a remote (SSH) daemon in `VersionMismatch`: both versions, which side is
-/// older and the way out (feature 489, FR-011). `None` for any other daemon or state. The way out
-/// follows what the daemon said of its sessions; until it was asked, nothing makes replacing it safe.
+/// The explanation of a remote (SSH) or container daemon in `VersionMismatch`: both versions,
+/// which side is older and the way out (feature 489, FR-011; spec 806 FR-007, BUG-1165). `None` for
+/// any other daemon or state. The way out follows what the daemon said of its sessions; until it was
+/// asked, nothing makes replacing it safe. A container is the app's own, so its way out is its row's
+/// Stop rather than the user ending the daemon on a host.
 pub fn remote_mismatch_text(entry: &DaemonEntry, links: &DaemonLinks) -> Option<String> {
     let (explanation, host) = remote_mismatch(entry, links)?;
-    Some(explanation.text(entry.name.as_str(), &host))
+    Some(match entry.runtime {
+        DaemonRuntime::Container(_) => explanation.text_app_owned(entry.name.as_str()),
+        _ => explanation.text(entry.name.as_str(), &host),
+    })
 }
 
-/// The structured explanation behind [`remote_mismatch_text`], with the host it names.
+/// The structured explanation behind [`remote_mismatch_text`], with the host it names: the SSH
+/// target, or the container's name.
 pub fn remote_mismatch(
     entry: &DaemonEntry,
     links: &DaemonLinks,
 ) -> Option<(MismatchExplanation, String)> {
-    let (DaemonRuntime::Ssh(ssh), Some(DaemonState::VersionMismatch { client, daemon })) =
-        (&entry.runtime, links.state(entry.id))
-    else {
+    let Some(DaemonState::VersionMismatch { client, daemon }) = links.state(entry.id) else {
         return None;
     };
+    let host = match &entry.runtime {
+        DaemonRuntime::Ssh(ssh) => ssh.target.describe(),
+        DaemonRuntime::Container(c) => c.container_name.clone(),
+        _ => return None,
+    };
     let offer = links.offer(entry.id).unwrap_or(ReplaceOffer::Unknown);
-    Some((
-        MismatchExplanation::new(client, daemon, offer),
-        ssh.target.describe(),
-    ))
+    Some((MismatchExplanation::new(client, daemon, offer), host))
 }
 
 fn no_daemon() -> Route {

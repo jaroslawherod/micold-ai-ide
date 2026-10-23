@@ -259,14 +259,18 @@ pub enum Outcome {
         /// The repository's identity (`micold-remote://<daemon><path>`).
         path: std::path::PathBuf,
     },
-    /// A mismatched remote daemon that proved it has no running session is to be ended so this
-    /// build's can take its place (feature 489, FR-011): the shell asks its host to stop it and
-    /// reports `Replaced`.
+    /// A mismatched remote or container daemon that proved it has no running session is to be
+    /// ended so this build's can take its place (feature 489, FR-011; spec 806 FR-007): the shell
+    /// asks it, over its SSH host or the container's pinned reach, to stop and reports `Replaced`.
     RemoteReplaceRequested {
         /// The daemon.
         daemon: micold_core::daemons::DaemonId,
-        /// Its host.
-        target: micold_core::ssh::SshTarget,
+    },
+    /// The user stopped a container daemon whose daemon refused this app's version: the shell stops
+    /// its container, so the next Start runs this app's daemon in it (spec 806 FR-007, BUG-1165).
+    ContainerStopRequested {
+        /// The daemon.
+        daemon: micold_core::daemons::DaemonId,
     },
 }
 
