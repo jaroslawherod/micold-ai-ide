@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1221 | M4 pick revealed lines | merged | df514cb373e4e93a20c4294b2518f2c689f03c89 |
 | #1253 | M5 browse repository files | merged | 2dddbef617146c535dadbc0dd5687169836fa50a |
 | #1282 | M6 browse at the PR head | merged | 47cfcc3c58d5f371ad5dfb0afa73e3a2ee83d5d6 |
+| #1291 | M7 follow references from the diff | open | |
 
 ## Milestones
 
@@ -34,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T032–T035 | light | Pick revealed lines | #1221 | merged |
 | M5 | T036–T046 | full | Browse repository files | #1253 | merged |
 | M6 | T047–T053 | full | Browse at the PR head | #1282 | merged |
-| M7 | T054–T062 | full | Follow references from the diff | | in progress |
+| M7 | T054–T062 | full | Follow references from the diff | #1291 | open |
 
 ## Decisions
 
