@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1116
 - **Worktree branch**: feat/1116_container-daemon-default-the-container-name-to-the
 - **Started**: 2026-10-23
-- **Phase**: spec
-- **Next step**: clarify unit: no open markers expected; confirm the sanitization decisions, then plan
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -28,7 +28,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+| D1 | clarify | Collision on defaulted name: refuse or suffix? | Refuse, no suffix | agent-resolved | spec.md#Clarifications |
+| D2 | clarify | Length limit | 63 chars, defaulted names only | agent-resolved | spec.md#Clarifications |
+| D3 | clarify | Typed names charset-checked? | No, today's validation | agent-resolved | spec.md#Clarifications |
 
 ## Review rounds
 
