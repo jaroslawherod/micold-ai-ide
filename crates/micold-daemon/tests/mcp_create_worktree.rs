@@ -147,14 +147,15 @@ fn assert_retry_hint(error: &Value, branch: &str) {
     }
 }
 
-/// The keys of a literal-branch result before feature 532 (FR-009).
-const LITERAL_RESULT_KEYS: [&str; 6] = [
+/// The keys of a literal-branch result before feature 532 (FR-009), and the hand-off (FR-010).
+const LITERAL_RESULT_KEYS: [&str; 7] = [
     "ref",
     "display_name",
     "branch",
     "path",
     "status",
     "session_count",
+    "next_step",
 ];
 
 /// A non-empty folder under the managed root, which the pre-flight reports as taken.
@@ -205,9 +206,33 @@ async fn create_worktree_makes_the_dialogs_worktree_and_every_window_sees_it() {
             "path": native(f.repo().join(".claude").join("worktrees").join("feat-x")),
             "status": "clean",
             "session_count": 0,
+            "next_step": HAND_OFF,
         })
     );
     assert!(f.repo().join(".claude/worktrees/feat-x/.git").exists());
+}
+
+const HAND_OFF: &str = "Do not work in this worktree from this session. Hand the work to a dedicated session with create_session for this worktree.";
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_created_worktree_tells_the_agent_to_hand_off() {
+    let f = Fixture::new().await;
+    let result = call_tool(
+        f.addr,
+        &credential(&f.state, sid(3)),
+        "create_worktree",
+        json!({"branch": "feat-handoff"}),
+    )
+    .await;
+    assert_eq!(result["isError"], json!(false), "{result}");
+    assert_eq!(result["structuredContent"]["next_step"], json!(HAND_OFF));
+    assert_eq!(result["structuredContent"]["branch"], json!("feat-handoff"));
+    let text = result["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.ends_with(HAND_OFF),
+        "text ends with the hand-off: {text}"
+    );
+    assert!(text.contains("\"branch\": \"feat-handoff\""), "{text}");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -377,6 +402,7 @@ async fn a_default_session_creates_a_worktree_as_any_session_does() {
             "path": native(f.repo().join(".claude").join("worktrees").join("feat-x")),
             "status": "clean",
             "session_count": 0,
+            "next_step": HAND_OFF,
         })
     );
     assert!(f.repo().join(".claude/worktrees/feat-x/.git").exists());

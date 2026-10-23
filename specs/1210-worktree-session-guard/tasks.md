@@ -61,9 +61,9 @@
 
 **Independent Test**: daemon test on the result text; quickstart B step 5.
 
-- [ ] T018 [P] [US3] Write a failing test in `crates/micold-daemon/src/mcp/tools.rs` (or its test module): a successful `create_worktree` result has the existing JSON plus a `next_step` string, and its text content ends with "Do not work in this worktree from this session. Hand the work to a dedicated session with create_session for this worktree."
-- [ ] T019 [US3] Implement the result change in `crates/micold-daemon/src/mcp/tools.rs` (after T018).
-- [ ] T020 [US3] Update `docs/user-guide/agent-tools.md`: the `create_worktree` result and the hand-off step.
+- [x] T018 [P] [US3] Write a failing test in `crates/micold-daemon/src/mcp/tools.rs` (or its test module): a successful `create_worktree` result has the existing JSON plus a `next_step` string, and its text content ends with "Do not work in this worktree from this session. Hand the work to a dedicated session with create_session for this worktree."
+- [x] T019 [US3] Implement the result change in `crates/micold-daemon/src/mcp/tools.rs` (after T018).
+- [x] T020 [US3] Update `docs/user-guide/agent-tools.md`: the `create_worktree` result and the hand-off step.
 
 ## Phase 7: User Story 5 - Opt out (P3)
 
