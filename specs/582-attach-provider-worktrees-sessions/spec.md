@@ -211,6 +211,13 @@ found worktrees and sessions at once.
   It is recorded as handled in the provider's own archived marker, so later passes skip it; the
   session keeps its id. Duplicates already in a catalog are left for the user to archive. Accepted trade-off: a later restart
   resumes the pre-clear conversation, because the session keeps its id.
+- **FR-018** (BUG-1164): The start-up offer of FR-012 MUST leave out every stored session whose
+  location already has a catalogued session: it does not count it, and "Resume all" does not send
+  it. Of several stored sessions for one free location, "Resume all" sends only the most recent
+  (feature 776's FR-012), so it is never refused for an occupied location. When nothing is left,
+  the offer is not shown. The "Attach existing…" dialog still lists every stored session, so a
+  session of an occupied worktree is resumed there one at a time, with the replace or keep-both
+  confirmation of 776 FR-008b/c. Dismissing the offer changes nothing in the catalog.
 
 ### Key Entities
 
@@ -236,6 +243,8 @@ found worktrees and sessions at once.
   session from being listed.
 
 **Bugfix**: 2026-10-16 — BUG-904 added FR-017 (a `/clear` continuation is not a second session).
+
+**Bugfix**: 2026-10-23 — BUG-1164 added FR-018 (the start-up offer leaves out stored sessions of worktrees that have a session, so "Resume all" is never refused for one).
 
 ## Out of Scope
 
