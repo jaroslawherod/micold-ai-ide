@@ -5,6 +5,8 @@ description: "Tasks for container daemons provisioned over SSH from a basic imag
 
 # Tasks: Container daemons provisioned over SSH from a basic image
 
+**Bugfix**: 2026-10-23 — [BUG-1165](./bugs/BUG-1165.md) Updated from bugfix patch: T062 reopened, Phase 14 (T100–T106) added
+
 **Input**: Design documents from `specs/806-container-daemon-ssh-provisioning/`
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
@@ -191,7 +193,7 @@ container with sessions is attached, not replaced (R9, R10).
 
 - [x] T060 [US4] Add `MigrationNotice` and `ContainerSettings.migration` (`#[serde(default)]`, omitted when `None`) in `crates/micold-core/src/daemons.rs`; apply `ImageSource::into_choice` in `migrated_entry` and the registry read
 - [x] T061 [US4] Call `ImageSource::into_choice` (from T050) in the read-repair of `crates/micold-core/src/settings.rs` right after `repair_retired_namespace()`
-- [x] T062 [US4] Show the migration and legacy notices and gate the legacy restart in `crates/micold-client/src/ui/settings/daemons.rs` and `crates/micold-client/src/features/daemons.rs`; clear `migration` and save on success in `crates/micold-client/src/shell/sandbox.rs`
+- [ ] T062 ⚠️ Reopened [US4] Show the migration and legacy notices and gate the legacy restart in `crates/micold-client/src/ui/settings/daemons.rs` and `crates/micold-client/src/features/daemons.rs`; clear `migration` and save on success in `crates/micold-client/src/shell/sandbox.rs`; corrected by T105 (reopened — BUG-1165)
 
 **Checkpoint**: US4 #1–#5 hold.
 
@@ -408,3 +410,18 @@ Phase 12 (T088–T089) changes no code and is left to the close unit.
 - [ ] T097 Finding 8: remove real waits from `provision::tests` (`mod.rs:996-1009,1041-1063,1083-1086`) and `attempt.rs:165` with `tokio::time::pause`/`advance`; `cargo test -p micold-core --lib provision::` stays green and its wall time drops
 - [ ] T098 Finding 9: split `mod.rs` tests at lines 971, 1011, 1065, 1092 into one behavior per test; `cargo test -p micold-core --lib provision::tests` shows the new names
 - [ ] T099 Findings 10-11: move the `SshRunner` fake used by `provision/mod.rs`, `keys.rs` and `login.rs` into one shared `Fake` type beside `ssh/provision.rs`, and list it under `helpers` in `.specify/memory/tdd-profile.md`; `mise run duplication` does not worsen
+
+---
+
+## Phase 14: Bugfix BUG-1165 — a version-mismatched container daemon has a way out
+
+From [bugs/BUG-1165.md](./bugs/BUG-1165.md). Satisfies FR-007 and FR-017 as clarified 2026-10-23;
+spec 491 FR-007, FR-008; spec 027 FR-023. Spec 489's rule for SSH daemons is unchanged.
+
+- [ ] T100 [US4] Regression tests, red on `origin/main` (`f8d2257e`): new `crates/micold-client/tests/container_mismatch_way_out.rs` on `tests/support/daemons_fixture.rs` (the fixture's container daemon `Box`, links `Start` then `Refused { client: "0.5.3", daemon: "0.5.2" }`): (a) the row's `explanation` names both versions, "daemon is older" and the way out; (b) `Msg::OfferReported(Box, Available)` makes `replace_offered` true and `Msg::ReplaceRequested` yields one replace outcome for `Box`, while `Blocked { running: 2 }`, `Unknown` or a newer daemon (`"0.5.2"` vs `"0.5.3"`) yield none; (c) with `Blocked`/`Unknown` the explanation names Stop, and with `legacy_container = Some(Box)` and live sessions in the fixture the mismatched row's `stop_blocked` is false; (d) the host daemon's row and link are unchanged by all of these. In `crates/micold-client/src/shell/service_control.rs` tests: with `sandbox_boot = None` and the active worktree bound to a registry container daemon in mismatch, `on_restart_service_requested` stops that container and never the host endpoint (make the stop observable, as the existing sandbox test observes its notification); with `sandbox_boot` set and a second container active, the second is stopped, not the boot one. `cargo test -p micold-client --test container_mismatch_way_out` and `cargo test -p micold-client --bin micold-ai-ide service_control` fail before T101–T105 and pass after
+- [ ] T101 [P] Make `micold_core::ssh::status::{fetch_offer, stop_if_idle}` (`crates/micold-core/src/ssh/status.rs:77,97`) take a `&Reach` instead of an `SshTarget` (callers in `crates/micold-client/src/daemon.rs:1136-1153` pass `Reach::UserConfig`); extend the module's fake-runner tests with a `Reach::Pinned` case whose `argv::status`/`argv::stop` use the pinned key and `known_hosts`. `cargo test -p micold-core --lib ssh::status`
+- [ ] T102 `crate::links::remote_mismatch` (`crates/micold-client/src/links.rs:208`) accepts `DaemonRuntime::Container` (host text: the container name), so `remote_mismatch_text` and `features::daemons::replace_offered` (`features/daemons.rs:611`) cover it. For an app-owned container, the advice of `EndSessionsThenReplace` and `EndDaemonByHand` (`crates/micold-core/src/ssh/mismatch.rs:134-147`) names the row's Stop ("stop this daemon, then start it again") instead of "end the daemon on <host> yourself"; SSH wording unchanged. Unit tests beside the existing ones. `cargo test -p micold-core --lib ssh::mismatch`
+- [ ] T103 Ask and replace over the container's pinned reach: `shell::daemons::ask_offer` (`crates/micold-client/src/shell/daemons.rs:213`) and `Msg::ReplaceRequested` (`features/daemons.rs:2057`) handle `DaemonRuntime::Container` by building the `PinnedReach` the daemon's provisioning uses (`container_target`, `crates/micold-client/src/daemon.rs:1231`, with its `DaemonKeys`); generalise `Outcome::RemoteReplaceRequested` (`features/mod.rs:265`) to carry the `Reach` (or the daemon id, resolved in the shell); a legacy container (no SSH, `Dial::Container`) keeps `ReplaceOffer::Unknown`. On `Replaced(Ok)` the existing `reconnect` provisions this build. `cargo test -p micold-client --test ssh_replace_offer --test container_mismatch_way_out`
+- [ ] T104 Retarget the banner's Restart service: `on_restart_service_requested` (`crates/micold-client/src/shell/service_control.rs:37`) dispatches on the active daemon's runtime: a container daemon → stop that container by its `ContainerSettings::container_name` through the configured runtime and start the daemon again through the existing `Started` path (the `sandbox_boot` path only when the active daemon is `app.sandbox_daemon()`); the host → the existing endpoint stop; SSH or Kubernetes → no stop, a notification pointing to the daemon's row. The banner's wording is unchanged. `cargo test -p micold-client --bin micold-ai-ide service_control`
+- [ ] T105 Correct T062's gate: `stop_blocked` (`crates/micold-client/src/features/daemons.rs:658`) is false while the legacy container's link is `VersionMismatch` (its daemon cannot report sessions; the user may stop it, 489 FR-011), and unchanged for a daemon that can report. Add the case to the T058 tests in `features/daemons.rs`. `cargo test -p micold-client --lib features::daemons`
+- [ ] T106 Docs: `docs/user-guide/sandboxed-daemon.md` (the version row of the table, line 56) and `docs/user-guide/settings.md` (Daemons section, line ~484) say what a version-mismatched container daemon's row shows, when Replace is offered, and that Stop then Start moves it to this app's version; `CHANGELOG.md` is release-please's, not edited. `scripts/tests/*.test.sh` docs checks pass
