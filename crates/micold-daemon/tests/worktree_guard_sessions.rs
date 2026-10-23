@@ -98,10 +98,19 @@ impl Fixture {
     }
 }
 
+/// `canonicalize` on Windows returns a `\\?\` verbatim path, which `git worktree add` cannot create
+/// leading directories for; drop the prefix there.
+fn plain_path(p: PathBuf) -> PathBuf {
+    match p.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+        Some(rest) => PathBuf::from(rest),
+        None => p,
+    }
+}
+
 async fn fixture() -> Fixture {
     let project_dir = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let root = std::fs::canonicalize(project_dir.path()).unwrap();
+    let root = plain_path(std::fs::canonicalize(project_dir.path()).unwrap());
     git(&root, &["init", "-q", "-b", "main"]);
     git(&root, &["commit", "-q", "--allow-empty", "-m", "init"]);
     for name in ["a", "b"] {
