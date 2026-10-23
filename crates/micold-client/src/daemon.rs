@@ -268,6 +268,8 @@ pub trait ContainerStarter: Send + Sync {
     /// Bring the container up, adopting one that already runs, blocking until it is up. `entered`
     /// is told the start step each stage belongs to. A cancelled or failed bring-up removes what it
     /// created; the ledger of a successful one is returned for the attempt's own rollback.
+    ///
+    /// A failure is its reason, then the runtime's own output on the lines after it (#1280).
     fn bring_up(
         &self,
         container_name: &str,

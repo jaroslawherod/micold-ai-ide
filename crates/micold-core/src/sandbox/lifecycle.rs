@@ -101,6 +101,21 @@ impl Failure {
     pub fn remedy(&self) -> String {
         self.error.remedy()
     }
+
+    /// [`Self::reason`], then the last [`OUTPUT_LINES`](crate::provision::failure::OUTPUT_LINES)
+    /// lines of what the runtime printed, the way a provisioning failure carries its tool's output
+    /// (#1280). The reason names the failure in one line; the runtime's own words are what fix it.
+    pub fn report(&self) -> String {
+        let reason = self.reason();
+        let Some(output) = self.error.runtime_output() else {
+            return reason;
+        };
+        let lines: Vec<&str> = output.lines().collect();
+        let tail = &lines[lines
+            .len()
+            .saturating_sub(crate::provision::failure::OUTPUT_LINES)..];
+        format!("{reason}\n{}", tail.join("\n"))
+    }
 }
 
 impl SandboxState {
@@ -909,6 +924,42 @@ mod tests {
                 "{s:?} offered a fallback it should not have"
             );
         }
+    }
+
+    #[test]
+    fn a_report_names_the_runtimes_error_and_carries_all_it_printed() {
+        // #1280: podman's refusal of the credential tmpfs, as `classify` receives it. The row's
+        // sentence names its error line, not the warning before it; the runtime's own words follow.
+        let stderr = "time=\"2026-10-23T10:00:00Z\" level=warning msg=\"cgroupv2 manager is set to systemd\"\n\
+                      Error: unknown mount option \"uid=1000\": invalid mount option\n";
+        let error = crate::sandbox::runtime::classify(
+            RuntimeKind::Podman,
+            &crate::sandbox::exec::CommandOutput {
+                code: Some(125),
+                stdout: String::new(),
+                stderr: stderr.into(),
+            },
+        );
+        let failure = Failure {
+            stage: Stage::Creating,
+            error,
+        };
+        assert_eq!(
+            failure.reason(),
+            "The sandbox failed while creating the sandbox. A path the sandbox needs cannot be \
+             shared with it: Error: unknown mount option \"uid=1000\": invalid mount option"
+        );
+        assert_eq!(
+            failure.report(),
+            format!("{}\n{}", failure.reason(), stderr.trim()),
+            "the runtime's output is not under the reason"
+        );
+        // Nothing printed, nothing added.
+        let quiet = Failure {
+            stage: Stage::Creating,
+            error: RuntimeError::Cancelled,
+        };
+        assert_eq!(quiet.report(), quiet.reason());
     }
 
     #[test]

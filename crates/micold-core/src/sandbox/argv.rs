@@ -18,7 +18,7 @@ use std::ffi::OsString;
 
 use super::dialect::Dialect;
 use super::parse::{GIT_IDENTITY_LABEL, GIT_IDENTITY_NONE};
-use super::runtime::RuntimeCapabilities;
+use super::runtime::{IdentityMapping, RuntimeCapabilities};
 use super::{MountSet, NetworkPosture, SandboxSpec};
 use crate::spawn::{IDLE_STOP_ENV, IDLE_STOP_OFF};
 
@@ -188,17 +188,28 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     // The scoped git credential lives here and nowhere else (FR-006): memory only, no host mount,
     // owned by the uid the daemon runs as and closed to every other.
     args.push("--tmpfs".into());
-    args.push(git_credential_tmpfs(spec.uid, spec.gid).into());
+    args.push(git_credential_tmpfs(dialect.identity, spec.uid, spec.gid).into());
     args.extend(mount_args(&spec.mounts));
 
     args.push(spec.profile.image.reference().into());
     args
 }
 
-/// The `--tmpfs` value for the credential directory: `<path>:<options>`, small, never executable.
-pub fn git_credential_tmpfs(uid: u32, gid: u32) -> String {
+/// The `--tmpfs` value for the credential directory: `<path>:<options>`, small, never executable,
+/// `0700` and owned by the uid the daemon runs as.
+///
+/// The owner is said in the runtime's own words (#1280). Docker hands the options to the kernel,
+/// so `uid=`/`gid=` work. Podman checks them against a fixed list that has never held `uid=` or
+/// `gid=` (`pkg/util/mount_opts.go`, 3.x to 5.x): it refuses the container outright. Its `U` asks
+/// for the same thing, the uid and gid of the container's user, which under `keep-id` is the host
+/// user (podman 3.1 and later; the dialect's minimum is 4.0).
+pub fn git_credential_tmpfs(identity: IdentityMapping, uid: u32, gid: u32) -> String {
+    let owner = match identity {
+        IdentityMapping::ExplicitUidGid => format!("uid={uid},gid={gid}"),
+        IdentityMapping::KeepId => "U".to_string(),
+    };
     format!(
-        "{}:rw,noexec,nosuid,size=64k,mode=0700,uid={uid},gid={gid}",
+        "{}:rw,noexec,nosuid,size=64k,mode=0700,{owner}",
         crate::scoped_credential::helper::GIT_CREDENTIAL_ROOT
     )
 }
@@ -774,6 +785,28 @@ mod tests {
                     "{kind}: {args:?}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn the_credential_tmpfs_is_owned_by_the_daemons_uid_in_each_runtimes_words() {
+        // #1280: podman refuses `uid=`/`gid=` in a tmpfs option ("unknown mount option
+        // \"uid=1000\": invalid mount option") and the container is never created. Its `U` is
+        // the same owner; Docker passes the options to the kernel, which takes `uid=`/`gid=`.
+        for (kind, owner) in [
+            (RuntimeKind::Docker, "uid=1000,gid=1000"),
+            (RuntimeKind::Podman, "U"),
+        ] {
+            let args = strings(&create(&spec(), &caps(kind, LimitSupport::Supported)));
+            let at = args
+                .iter()
+                .position(|a| a == "--tmpfs")
+                .unwrap_or_else(|| panic!("{kind} has no credential tmpfs: {args:?}"));
+            assert_eq!(
+                args[at + 1],
+                format!("/run/micold/git:rw,noexec,nosuid,size=64k,mode=0700,{owner}"),
+                "{kind}"
+            );
         }
     }
 
