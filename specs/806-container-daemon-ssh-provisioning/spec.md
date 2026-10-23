@@ -6,6 +6,8 @@
 
 **Status**: Closed 2026-10-18 — shipped in PRs #975, #979, #982, #988, #995, #998, #1018, #1027, #1043, #1053 and the close PR
 
+**Bugfix**: 2026-10-23 — [BUG-1165](./bugs/BUG-1165.md) FR-007 and FR-017 clarified: a version-mismatched container daemon gets 489 FR-011's explanation, offer and Replace, its row's Stop as the way out when sessions run, and the banner restart acts on that daemon only
+
 **Input**: User description: "Container daemon: configurable resources, Dockerfile or image source; build
 from current daemon binary by default (#806)", narrowed by the owner's decision of 2026-10-17: "daemon
 images are a basic image with sshd; the client copies the daemon binary in over SSH and installs the
@@ -300,6 +302,13 @@ copy refused) is reported with the same reason text on both.
 - **FR-007**: The daemon in the container MUST report the client's exact version after every successful
   start. A running daemon of another version MUST be handled by the version rule of spec 489 FR-011
   (explain; replace only when it has no running sessions).
+  *(Clarified 2026-10-23 — BUG-1165: the rule covers the whole of 489 FR-011 for a container daemon, as
+  for an SSH one: its Settings row explains the mismatch (both versions, which side is older, the way
+  out), the app asks the daemon over the container's pinned reach what it has running, and offers
+  Replace only when it proves none runs. When sessions run or cannot be counted, the app ends nothing on its own;
+  the way out it states is the user stopping that daemon from its row (Stop) and starting it again.
+  The banner's existing restart for a mismatched service (spec 027 FR-023), the user's explicit action, acts on the mismatched daemon
+  of the worktree in view only, never on the host daemon or another container (spec 491 FR-007).)*
 - **FR-008**: The provisioning step (reach, copy, start, version check, progress, failure reasons and time
   bounds, plus the AI CLI install of FR-011 where the target is app-owned) MUST be one shared behaviour,
   used by the container runtime and the remote SSH runtime of feature 489 with the same step names,
@@ -344,6 +353,10 @@ copy refused) is reported with the same reason text on both.
   sessions ended. Until it is restarted with no running sessions, its row MUST say the running container
   is still on the released image, and the restart that moves it MUST be offered only when no session
   runs (FR-007).
+  *(Clarified 2026-10-23 — BUG-1165: "no session runs" is what the daemon reports, never the client's
+  cached session list. A legacy container whose daemon is in version mismatch cannot report, so 489
+  FR-011's rule for uncounted sessions applies: the app does not restart it or end its sessions, and the
+  user can stop it from its row.)*
 
 **Failure reporting**
 

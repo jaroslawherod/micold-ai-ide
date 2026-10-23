@@ -4,6 +4,8 @@
 
 **Input**: Feature specification from `specs/806-container-daemon-ssh-provisioning/spec.md`
 
+**Bugfix**: 2026-10-23 — [BUG-1165](./bugs/BUG-1165.md) Updated from bugfix patch (FR-007 row, Phase 14)
+
 ## Summary
 
 A container daemon stops running the released `micold-daemon` image. It runs a **basic image**
@@ -82,7 +84,7 @@ No violation: Complexity Tracking is empty.
 | FR-004 | `OwnImage` pull/load through the existing `acquire_image`; form note; user guide |
 | FR-005 | `provision` sequence Reach→Probe→Copy→Start ([provisioning](./contracts/provisioning.md)), R2 |
 | FR-006 | `DaemonKeys`, `Reach::Pinned`, loopback publish (R2, R4) |
-| FR-007 | `VersionCheck` step = 489 FR-011 rule |
+| FR-007 | `VersionCheck` step = 489 FR-011 rule; client side (BUG-1165): `links::remote_mismatch`, `ask_offer`, `ReplaceRequested` and `ssh::status` over `Reach::Pinned` for containers; banner restart targets the active daemon (`shell/service_control.rs`); legacy Stop gate off the session cache |
 | FR-008 | `micold_core::provision` + `ProvisionTarget`; 489 moved onto it; contract written (R5) |
 | FR-009 | `scripts/remote-daemon-bundle.sh`, bundles in macOS/Windows/deb/rpm packages, `NoMatchingBuild` (R7) |
 | FR-010 | `AiCliSelection` (`new_daemon`/`all`), form checkboxes |

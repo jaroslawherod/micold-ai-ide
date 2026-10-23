@@ -251,6 +251,10 @@ Code paths are the workspace's own; `NEW` marks what this feature adds.
   any more: the daemon's version is checked at the handshake instead (FR-007).
 - **Rationale**: FR-017 and US4 #3–#4; today `adopt()` replaces any container whose image differs,
   which would end running sessions.
+- **Correction (2026-10-23, BUG-1165)**: the restart gate was implemented on the client's cached
+  session list, and provisioning does not replace a stale daemon in place: `remote bridge` reuses the
+  daemon already listening. The 489 rule (explanation, offer over the pinned reach, Replace, the
+  row's Stop as the way out) is added for containers by Phase 14 of tasks.md.
 - **Rejected**: attaching every differing running container (a user's own image change would never
   apply, US2 #2 expects the restart confirmation).
 
