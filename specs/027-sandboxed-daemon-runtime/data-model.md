@@ -142,6 +142,7 @@ pub struct RuntimeCapabilities {
     pub storage: LimitSupport,
     pub identity_mapping: IdentityMapping,   // --user vs --userns=keep-id (R3)
     pub no_outbound: NoOutboundSupport,      // C-5's network arguments for this setup (BUG-1285)
+    pub selinux_enforcing: bool,             // the host enforces SELinux: mounts carry `z` (BUG-1296)
 }
 
 /// How this runtime setup blocks outbound connections while keeping the published port (R4).
@@ -169,6 +170,10 @@ pub enum LimitSupport {
   its version), like `storage`. `NoOutboundSupport::Unsupported` under `NoOutbound` refuses the
   start before any `network create` runs; it never falls back to an open network. Under `Outbound`
   it is not consulted.
+- RC-5 (FR-004h, BUG-1296): `selinux_enforcing` is read by the probe from the host's
+  `/sys/fs/selinux/enforce`, on Linux only: `1` is true; `0`, an absent or unreadable file, or any
+  other content is false. It is a fact about the host, not the runtime, and it changes only the
+  mount options (contracts C-3); the `MountSet` is the same either way.
 - RC-3: reconciliation never mutates the profile. The user's stored intent survives a move to a
   runtime that cannot honour it and takes effect again on a runtime that can.
 
@@ -270,7 +275,7 @@ pub struct ProjectMount {
 | `SandboxProfile` | FR-004a–c, FR-005, FR-021 | [sandbox-settings-schema](./contracts/sandbox-settings-schema.md) |
 | `ResourceBudget` | FR-012 – FR-016 | [container-runtime](./contracts/container-runtime.md) |
 | `NetworkPosture` | FR-017, FR-018 | [container-runtime](./contracts/container-runtime.md) |
-| `RuntimeCapabilities` | FR-020, FR-022, SC-009 | [container-runtime](./contracts/container-runtime.md) |
+| `RuntimeCapabilities` | FR-004h, FR-017a, FR-020, FR-022, SC-009 | [container-runtime](./contracts/container-runtime.md) |
 | `MountSet` | FR-006 – FR-011 | [container-runtime](./contracts/container-runtime.md) |
 | `SandboxState` | FR-034 – FR-036, SC-004 | — (client-side; covered by quickstart Part B) |
 | Placement *change* | FR-032, FR-032a–b, FR-033, FR-033a | — (client-side; Phase 16) |

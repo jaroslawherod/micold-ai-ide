@@ -184,6 +184,12 @@ would believe a bound exists.
   control reads as a bug. Shown-and-disabled-with-a-reason is the accessible form and is what makes
   SC-009 measurable.
 
+**Note — SELinux (BUG-1296, 2026-10-23).** The mounts above were measured on hosts without SELinux.
+On an enforcing host (Fedora, podman 5.8.9) a bind mount without a label option is unreadable to the
+container; `--security-opt label=disable` or the shared relabel option `z` makes it readable. The
+feature uses `z`, only when the host enforces (FR-004h, contracts C-3), because `label=disable` turns
+off the container's confinement (C-9). See `bugs/BUG-1296.md`.
+
 ## R3 — How do files created in the container end up owned by the host user?
 
 **Decision.** Run the container process as the host user's uid/gid: `--user <uid>:<gid>` on Docker,

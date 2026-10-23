@@ -612,6 +612,31 @@ client's workspace, and a bring-up that adopts an existing container keeps that 
 **Bugfix**: 2026-10-23 — BUG-1285. Section added; the R4 row stands and research R4 carries the
 amendment. See `bugs/BUG-1285.md`.
 
+### Mounts on an SELinux-enforcing host (FR-004h, FR-034a)
+
+- **What broke.** `argv::mount_args` writes every bind mount without a label option. On a host
+  enforcing SELinux the container may not read them: sshd cannot load its host key and the
+  container exits at once, which the client reports only as "container state improper"
+  (`bugs/BUG-1296.md`).
+- **The host fact is a probed capability.** `RuntimeCapabilities` gains `selinux_enforcing: bool`
+  (data-model §5, RC-5), set by `CliRuntime::probe` beside `storage` and `no_outbound` from
+  `/sys/fs/selinux/enforce` (Linux only; the parse is a pure function over the file's content).
+  `mount_args` takes it and appends `,z` to every `-v` mode when it is true (contracts C-3, K-13).
+  No `--security-opt`; C-9 is unchanged.
+- **The immediate exit names its cause.** `provision::login::wait_for_login`, when the container
+  has exited, asks the runtime for the tail of the container's log and puts it in the reason the
+  daemon row's Details show (FR-034a).
+- **The real-runtime harness runs the application's mount argv.** `sandbox_real_handshake.rs`'s
+  `Sandbox::start` creates its container with `argv::create` from a `SandboxSpec` and the probed
+  capabilities; the daemon harness takes its mount options from the same `argv` function, and both
+  `--security-opt label=disable` workarounds go. On an enforcing host the real-runtime suite then
+  fails if the product's mounts are unreadable.
+- **Not in this increment.** An SELinux-enforcing CI job: hosted runners are Ubuntu (AppArmor), and
+  a Fedora container there does not enforce. It needs a Fedora VM or a self-hosted runner
+  (`bugs/BUG-1296.autopilot.md`, follow-ups).
+
+**Bugfix**: 2026-10-23 — BUG-1296. Section added; nothing above it changed. See `bugs/BUG-1296.md`.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |

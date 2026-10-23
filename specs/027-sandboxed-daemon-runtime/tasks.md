@@ -1756,6 +1756,83 @@ and T093 (Podman's dialect copied Docker's option). See `bugs/BUG-1285.md`.
 
 ---
 
+## Phase 31: Bugfix BUG-1296 — the container cannot read its mounts on an SELinux-enforcing host (GitHub #1296)
+
+**Goal**: On a Linux host enforcing SELinux, a container daemon starts and a session runs in it, on
+Podman and Docker, with every bind mount labelled shareable (`,z`) and the container's confinement
+left on; elsewhere the argv is unchanged. A container that exits as it starts shows the tail of its
+own log (FR-004h, FR-034a, US1 scenario 12, contracts C-3/K-13, data-model RC-5).
+
+### Tests for BUG-1296 (MANDATORY — Constitution Principle I) ⚠️
+
+Each test is written against a stub that compiles, so it fails on its assertion rather than on the
+build.
+
+- [ ] T242 [BUG-1296] [U59] *(test)* `crates/micold-core/src/sandbox/argv.rs` (`mod tests`, K-13).
+      For both dialects, a spec with projects (one read-only), history, a credential share and the
+      SSH key files: with `selinux_enforcing: true` every value after a `-v` in `argv::create` ends
+      in `,z` (`:rw,z` / `:ro,z`); with `false` none contains `,z` and the argv equals the one
+      `origin/main` builds for that spec. Neither contains `--security-opt` (K-11 still passes). Red
+      on `origin/main`: no mount carries `,z` (`bugs/BUG-1296.md#reproduction`).
+- [ ] T243 [BUG-1296] [U60] *(test)* `crates/micold-core/src/sandbox/parse.rs` (`mod tests`). The
+      pure `parse::selinux_enforce(Option<&str>) -> bool`: `Some("1\n")` and `Some("1")` are true;
+      `Some("0\n")`, `None` (absent or unreadable file), `Some("")` and `Some("garbage")` are false.
+      And the reader `cli::selinux_enforcing_at(&Path)` over a temp file holding `1`, one holding
+      `0`, and a path that does not exist.
+- [ ] T244 [BUG-1296] [U61] *(test)* `crates/micold-core/src/provision/login.rs` (`mod tests`, the
+      `Script` runner). The first ask answers "can only create exec sessions on running containers:
+      container state improper" (an exited container); the `<runtime> logs --tail 20 <container>`
+      that follows answers `Unable to load host key: …` and `sshd: no hostkeys available -- exiting.`.
+      `wait_for_login`'s error contains both log lines after the runtime's message, and the logs
+      command was run once. A failing or empty `logs` leaves the reason as today. Red on
+      `origin/main`: no `logs` is run.
+
+### Implementation for BUG-1296
+
+- [ ] T245 [BUG-1296] [U59] [U60] `crates/micold-core/src/sandbox/runtime.rs`
+      (`RuntimeCapabilities.selinux_enforcing`, doc citing RC-5), `parse.rs` (`selinux_enforce`),
+      `cli.rs` (`selinux_enforcing_at`; `probe` sets the field from `/sys/fs/selinux/enforce` under
+      `cfg(target_os = "linux")`, `false` elsewhere), `argv.rs` (`mount_args` takes the flag and
+      appends `,z` to every mode; its doc and the module doc's C-3 note say a label is an option,
+      not a mount). Every `RuntimeCapabilities` constructor follows with `false`
+      (`hostile_host::docker_caps`, the core and client tests that build one). No `--security-opt`
+      anywhere; `ESCALATION_DENYLIST` unchanged.
+- [ ] T246 [BUG-1296] [U61] `crates/micold-core/src/provision/login.rs`: when `has_exited` ends the
+      wait, run `<runtime> logs --tail 20 <container>` through the same runner and append its
+      non-empty lines to the reason, so `container_attempt`'s "the container … is not ready" in
+      `crates/micold-client/src/daemon.rs` carries the cause into the daemon row's Details. A
+      failing `logs` is ignored.
+- [ ] T247 [BUG-1296] [U62] `crates/micold-core/tests/sandbox_real_handshake.rs`: `Sandbox::start`
+      builds a `SandboxSpec` (its project, state, sandbox home and key directory) and creates the
+      container with `argv::create` against the probed capabilities of the runtime
+      `MICOLD_TEST_RUNTIME` selects (the selector `sandbox_real_storage.rs` uses; share it), and its
+      network with `argv::network_create`, instead of its own `-v` list. In
+      `crates/micold-daemon/tests/sandbox_real_support/mod.rs` (`start_sandbox`) the mount options
+      come from the same `argv` function with the probed flag, and the `--security-opt
+      label=disable` there and in `sandbox_real_history.rs` (`start_container`) is removed.
+- [ ] T248 [BUG-1296] `docs/user-guide/sandboxed-daemon.md`: on an SELinux-enforcing host the
+      application labels the paths it shares with the sandbox (`z`): the projects' files take the
+      container label and stay readable and writable by the user; a project at the home directory
+      itself or a system directory is refused by the runtime; confinement is never turned off.
+
+**Order**: T242–T244 first (different files; T242 before T245, which changes `mount_args`'
+signature), then T245, then T246, then T247, then T248. Then `mise run gate`.
+
+**Verify**: `mise run test-core` passes U59, U60 and U61. On Docker (CI's `sandbox-runtime` job) the
+handshake test passes on the application's argv. On an SELinux-enforcing host with rootless Podman
+(quickstart §B.2, by hand — no hosted runner enforces SELinux, `bugs/BUG-1296.md` D4): `cargo test
+-p micold-core --features sandbox-real-runtime sandbox_real_handshake` with
+`MICOLD_TEST_RUNTIME=podman` passes, and a Container daemon added in Settings > Daemons starts and
+runs a session; with `getenforce` `Permissive` or on Ubuntu the argv has no `,z`.
+
+**Bugfix**: 2026-10-23 — BUG-1296. **Requirements added**: FR-004h, FR-034a and US1 scenario 12 —
+see `spec.md`. `plan.md` gained the increment, `data-model.md` §5 `selinux_enforcing` and RC-5,
+`research.md` R2 a note, `contracts/container-runtime.md` a C-3 note and K-13. **No task reopened**:
+T036 did what it says, and T098's Podman pass was real on its host; the harness's own `label=disable`
+hid the gap and T247 removes it. See `bugs/BUG-1296.md`.
+
+---
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.

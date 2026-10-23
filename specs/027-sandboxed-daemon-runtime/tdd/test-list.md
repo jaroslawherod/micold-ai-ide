@@ -142,6 +142,17 @@ Added 2026-10-23. Traces are FR-017a, US4 scenario 4a and contracts C-5/K-7.
 | U57 | `podman info` yields rootless, network backend and version; the probe maps them to `NoOutboundSupport`, unsupported setups with a reason naming netavark 1.7 and rootless Podman | FR-017a, R4 | example | DONE | `sandbox::parse::tests`, `sandbox::cli::tests` (T237) |
 | U58 | A `NoOutbound` create on an unsupported setup fails classified and runs no `network create`; `Outbound` on it starts | FR-017a, US4 sc. 4a | example | DONE | `sandbox_runtime` (T238) |
 
+## BUG-1296 — mounts on an SELinux-enforcing host (`tasks.md` Phase 31)
+
+Added 2026-10-23. Traces are FR-004h, FR-034a, US1 scenario 12 and contracts C-3/K-13.
+
+| id  | behavior | traces | kind | state | test |
+| --- | -------- | ------ | ---- | ----- | ---- |
+| U59 | With `selinux_enforcing` every `-v` value of `argv::create` ends in `,z`, on both dialects; without it none does and the argv equals today's; neither emits `--security-opt` | FR-004h, C-3, K-13, C-9 | example | TODO | `sandbox::argv::tests` (T242), red on `origin/main` |
+| U60 | The SELinux probe reads `1` as enforcing and `0`, an absent file and other content as not | FR-004h, RC-5 | example | TODO | `sandbox::parse::tests` (T243) |
+| U61 | A container that exited as it started: the not-ready reason carries the tail of its log | FR-034a, US1 sc. 12 | example | TODO | `provision::login::tests` (T244), red on `origin/main` |
+| U62 | The handshake test's container is created from `argv::create` (on an enforcing host it passes only with U59's options) | FR-004h, US1 sc. 12 | example | TODO | `sandbox_real_handshake` (T247) |
+
 ## Invariants and edge cases still to place
 
 - none

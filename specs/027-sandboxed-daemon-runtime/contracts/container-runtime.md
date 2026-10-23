@@ -64,6 +64,12 @@ passed. Violating this is the "silent drift" R5 exists to prevent.
 socket, no `/var/run/docker.sock`. A dialect that adds a convenience mount fails the suite. This is
 the guarantee the whole feature rests on (FR-006, FR-007).
 
+*Labels are options, not mounts (BUG-1296, FR-004h).* When the probed capabilities say the host
+enforces SELinux, every `-v` the `MountSet` yields carries the shared relabel option: `<mode>,z`
+(`rw,z`, `ro,z`). Otherwise none does, and the argv is byte-identical to a host without SELinux.
+Never `Z` (a private label would shut every other container out of a shared project), and never
+`--security-opt label=disable`: that turns confinement off and stays on C-9's denylist.
+
 **C-4 — Identity is mapped, not assumed (R3).** Docker emits `--user <uid>:<gid>`; podman emits
 `--userns=keep-id`. Files written into a mounted project are owned by the invoking host user.
 
@@ -135,6 +141,7 @@ job, plus `quickstart.md` Part B).
 | K-10 | `acquire_image` emits ≥2 progress callbacks for multi-layer canned output | C-8 |
 | K-11 | generated argv contains none of the denylisted escalation flags | C-9 |
 | K-12 | malformed/truncated runtime JSON yields a classified error, never a panic | C-6 |
+| K-13 | with the capabilities' SELinux flag set every `-v` value ends in `,z`; unset, none does; neither emits `--security-opt` *(BUG-1296)* | C-3, C-9 |
 
 ## The fake runtime
 
@@ -166,7 +173,7 @@ spawn itself, covered by one real-spawn test against a command every platform sh
    configuration for a refused bind, podman names the syscall (`statfs`). A list borrowed from
    another runtime classifies nothing, and the user gets `Unknown` for a failure the application
    knows how to explain.
-4. Pass K-1 … K-12 against a fake binary speaking that runtime's output format.
+4. Pass K-1 … K-13 against a fake binary speaking that runtime's output format.
 5. Document its quirks in `docs/user-guide/sandboxed-daemon.md`.
 
 No change to `argv.rs`'s callers, the client, or the daemon. If a new runtime forces one, the
