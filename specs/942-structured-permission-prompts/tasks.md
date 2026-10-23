@@ -374,7 +374,7 @@ Split from #941's composer (ledger decision 18): what needs #941's composer row 
   permission prompts, Always allow and its scope (this session only, never written to Claude's
   settings), plan approval, questions, the four modes and Bypass's risk; remove "permission
   prompts" from the not-yet list (FR-021)
-- [ ] T069 Run quickstart Part B steps 1–4, 6, 7, 9–11 without the composer parts (the start
+- [x] T069 Run quickstart Part B steps 1–4, 6, 7, 9–11 without the composer parts (the start
   list's mode rows, the Bypass confirmation and label, request, plan and question views) with the
   `visual-pass` skill and save the evidence in `specs/942-structured-permission-prompts/visual-pass/`
 
