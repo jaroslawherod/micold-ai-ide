@@ -36,7 +36,12 @@ fn found() -> DiscoveryReport {
     DiscoveryReport {
         sessions: vec![
             session(1, ResumableStatus::Resumable),
-            session(2, ResumableStatus::Resumable),
+            ResumableSession {
+                target: AttachTarget::Worktree {
+                    dir_name: "w2".into(),
+                },
+                ..session(2, ResumableStatus::Resumable)
+            },
         ],
         ..Default::default()
     }
@@ -256,4 +261,87 @@ fn a_batch_that_all_failed_keeps_the_offer() {
     );
     assert!(offer_visible(&state));
     assert!(state.attach.offer.in_flight.is_empty());
+}
+
+/// BUG-1164: the start-up offer only offers what "Resume all" can catalogue (feature 776 FR-012).
+mod bug_1164 {
+    use super::*;
+    use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+    use std::time::Duration;
+
+    fn at(n: u128, dir: &str, secs: u64) -> ResumableSession {
+        ResumableSession {
+            target: AttachTarget::Worktree {
+                dir_name: dir.into(),
+            },
+            last_activity: SystemTime::UNIX_EPOCH + Duration::from_secs(secs),
+            ..session(n, ResumableStatus::Resumable)
+        }
+    }
+
+    /// The active project's catalog holds one session in each of `dirs`.
+    fn catalogued(state: &mut State, dirs: &[&str]) {
+        let sessions = dirs
+            .iter()
+            .enumerate()
+            .map(|(i, dir)| {
+                Session::restored(
+                    SessionId::from_uuid(Uuid::from_u128(1000 + i as u128)),
+                    SessionLocation::Worktree((*dir).into()),
+                    SessionLabel::Pending,
+                    TerminalMode::AiCli,
+                    AiCli::ClaudeCode,
+                )
+            })
+            .collect();
+        state.workspace.sessions.insert(project(), sessions);
+    }
+
+    fn report(sessions: Vec<ResumableSession>) -> DiscoveryReport {
+        DiscoveryReport {
+            sessions,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn stored_sessions_of_worktrees_that_have_a_session_are_not_offered() {
+        let mut state = state_with(report(vec![at(1, "w1", 5), at(2, "w2", 4), at(3, "w1", 3)]));
+        catalogued(&mut state, &["w1", "w2"]);
+        assert!(
+            !offer_visible(&state),
+            "every stored session's worktree already has a session: Resume all could only be refused"
+        );
+        attach::update(&mut state, Msg::OfferAttachAll);
+        assert!(state.attach.offer.in_flight.is_empty());
+    }
+
+    #[test]
+    fn resume_all_sends_only_the_newest_session_of_each_free_worktree() {
+        let mut state = state_with(report(vec![
+            at(1, "w1", 5),
+            at(2, "w2", 4),
+            at(3, "w2", 9),
+            at(4, "w3", 1),
+        ]));
+        catalogued(&mut state, &["w1"]);
+        assert!(offer_visible(&state));
+        attach::update(&mut state, Msg::OfferAttachAll);
+        assert_eq!(state.attach.offer.in_flight, vec![item(3), item(4)]);
+    }
+
+    #[test]
+    fn the_attach_dialog_still_lists_sessions_of_occupied_worktrees() {
+        let mut state = state_with(report(vec![at(1, "w1", 5)]));
+        catalogued(&mut state, &["w1"]);
+        attach::update(&mut state, Msg::Opened);
+        attach::update(
+            &mut state,
+            Msg::Listed {
+                project: project(),
+                report: report(vec![at(1, "w1", 5)]),
+            },
+        );
+        assert_eq!(state.attach.dialog.as_ref().unwrap().resumable().len(), 1);
+    }
 }
