@@ -19,8 +19,9 @@ pub use blocks::{
 pub use entries::{
     compacted_text, edit_meta, footer_view, model_changed_text, omitted_text, oversized_text, rows,
     subagent_count, subagent_notice_text, tool_header, tool_header_counted, tool_status,
-    CardHeader, FooterView, InsightsCtx, Row, Status, Tone, ATTACHED, CLEARED, ENDED_WITHOUT_RESULT,
-    INTERRUPTED, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL, TERMINAL_PERIOD, THINKING_TITLE, USER_LABEL,
+    CardHeader, FooterView, InsightsCtx, Row, Status, Tone, ATTACHED, CLEARED,
+    ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL, TERMINAL_PERIOD,
+    THINKING_TITLE, USER_LABEL,
 };
 pub use insights::{
     footer_view_with, kind_icon, meter_view, placeholder_title, running_text, session_bar_view,
