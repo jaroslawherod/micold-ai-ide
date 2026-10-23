@@ -585,6 +585,33 @@ client's workspace, and a bring-up that adopts an existing container keeps that 
 
 **Bugfix**: 2026-10-06 — BUG-574. Section added; nothing above it changed. See `bugs/BUG-574.md`.
 
+### No outbound on every runtime setup (FR-017a)
+
+- **What broke.** `argv::network_create` added the dialect's `no_masquerade_opt`, a constant that
+  was Docker's driver option for both runtimes. Podman's netavark refuses it, so under the default
+  `NoOutbound` no Podman sandbox started (`bugs/BUG-1285.md`).
+- **The arguments are a probed capability.** `RuntimeCapabilities` gains `no_outbound:
+  NoOutboundSupport` (data-model §5, RC-4), set by `CliRuntime::probe` from the same `info` call
+  that sets `storage`: `parse::info` additionally reads Podman's `host.networkBackend` and
+  `host.networkBackendInfo.version`. Docker → the masquerade option; Podman rootless → `--internal`;
+  Podman rootful with netavark ≥ 1.7 → `-o no_default_route=true`; anything else → `Unsupported`
+  with a reason naming netavark 1.7 and rootless Podman (contracts C-5, research R4's amendment).
+  The pattern is `storage_support` in `crates/micold-core/src/sandbox/cli.rs`.
+- **The dialect loses `no_masquerade_opt`.** The same runtime needs different arguments by setup,
+  so a dialect constant cannot express it. `network_create` takes the capabilities;
+  `CliRuntime::create` probes before it creates the network, and an `Unsupported` posture returns a
+  classified `RuntimeError` (a new variant whose message names the posture and whose remedy names
+  the ways forward) before any `network create` runs.
+- **The real-runtime harness uses the application's arguments.** `start_no_outbound_sandbox` in
+  `crates/micold-daemon/tests/sandbox_real_support/mod.rs` builds its network from the probed
+  capabilities, not from its own copy of the option: the copy is how this went unseen.
+- **Not in this increment.** The network keeps one name for both postures and is never removed, so
+  a posture change after the first start reuses the old network (`bugs/BUG-1285.autopilot.md`,
+  follow-ups). It is its own bug.
+
+**Bugfix**: 2026-10-23 — BUG-1285. Section added; the R4 row stands and research R4 carries the
+amendment. See `bugs/BUG-1285.md`.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |

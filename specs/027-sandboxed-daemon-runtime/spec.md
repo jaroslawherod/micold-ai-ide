@@ -331,6 +331,10 @@ the app explains what happened rather than showing an unexplained dead session.
 4. **Given** network access is turned off for the sandbox, **When** a session attempts a network
    connection, **Then** it fails inside the session, the app has warned at the time of the setting
    change that the AI agent will not be able to reach its provider, and no other behaviour changes.
+4a. **Given** network access is turned off and the runtime is Podman, **When** the sandbox starts,
+   **Then** it starts with outbound connections failing and the service reachable, as on Docker; or,
+   where this Podman cannot block outbound without cutting the service off, the start is refused
+   with that reason and nothing runs with the network open (FR-017a, BUG-1285).
 5. **Given** a limit value outside the supported range or below a documented workable minimum,
    **When** the user saves, **Then** the save is refused with a message naming the accepted range.
 
@@ -590,6 +594,11 @@ without the user having chosen that for the occasion.
   enabled and a fully disabled position. Network access MUST be enabled by default, because the AI
   agent reaches its provider over the network; disabling it MUST warn the user of that consequence
   at the moment they disable it.
+- **FR-017a**: The disabled position MUST hold on every supported runtime, in that runtime's own
+  terms: outbound connections from the sandbox fail and the service's published port stays
+  reachable from the host. Where the runtime as installed cannot provide both, the start MUST be
+  refused with a reason that names what is missing and the ways forward; the sandbox MUST NOT start
+  with outbound connections open while the setting says they are off. *(BUG-1285)*
 - **FR-018**: When a limit is reached and a process is stopped as a result, the application MUST
   report which limit was reached and which setting governs it.
 - **FR-019**: The application MUST refuse a limit value outside the supported range, naming the
@@ -771,6 +780,12 @@ projects marks the sandbox stale, and nothing said what staleness is measured ag
 ends. The client compared each project list with the previous one, as an ordered list, and never
 with the container, so a container sharing every project could be reported out of date for the
 rest of the run. See `bugs/BUG-574.md`.
+
+**Bugfix**: 2026-10-23 — BUG-1285 (GitHub #1285). FR-017a and US4 scenario 4a added. FR-017 asked
+for a disabled position and the design expressed it in Docker's terms for both runtimes: Podman's
+network backend refuses Docker's option, so with the default posture no Podman sandbox started.
+FR-017a states what the position means on every runtime, and that a setup which cannot provide it
+is refused, never run open. See `bugs/BUG-1285.md`.
 
 **Bugfix**: 2026-09-27 — BUG-007 (GitHub #403). FR-004f and US2 scenario 11 added. FR-004e said
 what the sign-in share mounts but not what the user gets from it: a sandboxed `claude` found a valid

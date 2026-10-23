@@ -247,6 +247,31 @@ discover. Closing it requires `--dns` pointed at a sink or a network with no DNS
 breaks any legitimate in-sandbox name resolution; the posture is therefore documented as "no outbound
 connections", not "no outbound traffic of any kind".
 
+**Amendment — Podman (BUG-1285, 2026-10-23).** The decision above is Docker's mechanism, and was
+measured on Docker only. Podman's network backend, netavark, refuses Docker's driver option
+(`unsupported bridge network option com.docker.network.bridge.enable_ip_masquerade`), so the
+property is kept and the mechanism is chosen per runtime setup. Measured on Podman 4.9.3 with
+netavark 1.4.0 (`bugs/BUG-1285.md#what-does-block-outbound-on-podman-measured`):
+
+| Setup | Network created with | Published port | Outbound |
+|---|---|---|---|
+| Docker | `-o com.docker.network.bridge.enable_ip_masquerade=false` | reachable | blocked |
+| Podman, rootless (netavark measured; CNI reasoned, same forwarder) | `--internal` | reachable (`rootlessport` forwards it, not bridge DNAT) | blocked |
+| Podman, rootful, netavark ≥ 1.7 | `-o no_default_route=true` | reachable (DNAT is untouched) | blocked |
+| Podman, rootful, netavark < 1.7, CNI, or not reported | — | — | **refused** |
+
+The rejection of `--internal` above stands for Docker and for rootful Podman, where the published
+port is bridge DNAT, which an internal network does not get. It does not hold for rootless Podman,
+whose port forwarder needs no route out. On rootful Podman, `no_default_route` arrived in netavark
+v1.7.0; older netavark accepts it and ignores it, which would leave outbound open without a word, so
+that setup refuses the start (FR-017a) and names netavark 1.7 and rootless Podman as the ways
+forward. The rootful row with netavark ≥ 1.7 is reasoned, not run: netavark 1.4 was the only one
+available, and deleting the bridge's default route by hand (what the option does) gave a reachable
+port and blocked outbound. The setup is read from `podman info` (`host.security.rootless`,
+`host.networkBackend`, `host.networkBackendInfo.version`), which the capability probe already runs.
+Whether names resolve inside a Podman `--internal` network was not measurable here; the DNS caveat
+above is Docker's measurement.
+
 **Alternatives considered.** `--network none` (rejected: no control channel at all); attaching the
 container to two networks, one internal and one bridged (rejected: the bridged one restores egress,
 so the isolation is nominal); host firewall rules (rejected: not portable, and needs privileges).

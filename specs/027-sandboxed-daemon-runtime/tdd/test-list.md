@@ -132,6 +132,16 @@ Added 2026-10-06. Traces are FR-036c and US6 scenario 7.
 | U54 | A keep-running staleness survives a matching catalog, and each reason has its own notice | FR-036c | example | TODO | `main_tests`, `features::sandbox` (T230) |
 | U55 | A re-read adopts a container another window replaced, and is read-only | FR-036c, R9 | example | TODO | `features::sandbox`, `shell::sandbox` (T231) |
 
+## BUG-1285 — no outbound on every runtime setup (`tasks.md` Phase 30)
+
+Added 2026-10-23. Traces are FR-017a, US4 scenario 4a and contracts C-5/K-7.
+
+| id  | behavior | traces | kind | state | test |
+| --- | -------- | ------ | ---- | ----- | ---- |
+| U56 | `NoOutbound` emits C-5's network arguments for each probed setup and none of the others, and keeps the published port; `Outbound` emits none | FR-017a, C-5, K-7 | example | TODO | `sandbox::argv::tests` (T236), red on `origin/main` |
+| U57 | `podman info` yields rootless, network backend and version; the probe maps them to `NoOutboundSupport`, unsupported setups with a reason naming netavark 1.7 and rootless Podman | FR-017a, R4 | example | TODO | `sandbox::parse::tests`, `sandbox::cli::tests` (T237) |
+| U58 | A `NoOutbound` create on an unsupported setup fails classified and runs no `network create`; `Outbound` on it starts | FR-017a, US4 sc. 4a | example | TODO | `sandbox_runtime` (T238) |
+
 ## Invariants and edge cases still to place
 
 - none

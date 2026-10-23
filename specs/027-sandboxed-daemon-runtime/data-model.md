@@ -98,8 +98,11 @@ millicpu is expected (Principle V: "a type-level fact, not a runtime string comp
 
 ```rust
 pub enum NetworkPosture {
-    /// R4's decision: user-defined bridge with IP masquerade disabled. Outbound connections
-    /// fail; the published control port still works. DNS lookups still resolve — documented.
+    /// R4's decision: a user-defined bridge on which outbound connections fail; the published
+    /// control port still works. ~~IP masquerade disabled~~ — the mechanism is per runtime setup
+    /// (contracts C-5, BUG-1285): Docker disables masquerade, rootless Podman uses `--internal`,
+    /// rootful Podman `no_default_route` (netavark ≥ 1.7); any other setup refuses the start.
+    /// DNS lookups still resolve on Docker — documented.
     NoOutbound,
     /// Full egress, for users whose sessions need to fetch dependencies.
     Outbound,
@@ -138,6 +141,15 @@ pub struct RuntimeCapabilities {
     pub pids: LimitSupport,
     pub storage: LimitSupport,
     pub identity_mapping: IdentityMapping,   // --user vs --userns=keep-id (R3)
+    pub no_outbound: NoOutboundSupport,      // C-5's network arguments for this setup (BUG-1285)
+}
+
+/// How this runtime setup blocks outbound connections while keeping the published port (R4).
+pub enum NoOutboundSupport {
+    /// The arguments `network create` adds under `NoOutbound`.
+    Supported { network_args: Vec<String> },
+    /// Names what is missing and the ways forward; a `NoOutbound` start fails with it.
+    Unsupported { reason: String },
 }
 
 pub enum LimitSupport {
@@ -153,6 +165,10 @@ pub enum LimitSupport {
 - RC-2 (FR-015): `reconcile(profile, caps) -> Vec<UnsatisfiableLimit>` is pure and total. The view
   renders an `Unsupported` limit disabled **with its reason**; the argv builder never emits a flag
   for it. These are the same fact consumed twice, so the UI cannot drift from the behaviour.
+- RC-4 (FR-017a, BUG-1285): `no_outbound` is probed from `info` (rootless, network backend and
+  its version), like `storage`. `NoOutboundSupport::Unsupported` under `NoOutbound` refuses the
+  start before any `network create` runs; it never falls back to an open network. Under `Outbound`
+  it is not consulted.
 - RC-3: reconciliation never mutates the profile. The user's stored intent survives a move to a
   runtime that cannot honour it and takes effect again on a runtime that can.
 
