@@ -84,6 +84,14 @@ The defaulted name goes through the same check against other daemons' container 
 - Runtimes other than container (host, SSH, Kubernetes) have no container name and are unchanged.
 - Existing saved daemons keep their stored container name unchanged.
 
+## Clarifications
+
+### Session 2026-10-23
+
+- Q: On a collision of the defaulted name, refuse or suffix? → A: Refuse with the existing duplicate message on the container name field; no suffix, so the name stays predictable. _(agent-resolved: specs/1116-container-name-default/spec.md#Assumptions, FR-005, FR-010; crates/micold-client/src/features/daemons.rs `ContainerInUse` already reports on `container_name`)_
+- Q: Length limit for the defaulted name? → A: 63 characters, a conservative cap below the runtimes' limits; it only bounds defaulted names. _(agent-resolved: specs/1116-container-name-default/spec.md#Assumptions, FR-002)_
+- Q: Are typed names charset-checked too? → A: No; typed names keep today's validation (non-empty only, `invalid_field("container_name")`), per the issue's scope. _(agent-resolved: specs/1116-container-name-default/spec.md#Out of Scope, FR-004, FR-011; crates/micold-client/src/features/daemons.rs `invalid_field`)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
