@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1150
 - **Worktree branch**: feat/1150_show-the-full-file-while-reviewing-a-diff-in-the
 - **Started**: 2026-10-20
-- **Phase**: M6 PR open
+- **Phase**: M6 PR #1282 open
 - **Next step**: orchestrator merges M6 PR, then M7
 
 ## Pull requests
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1215 | M3 pull request head version | merged | a608e0fcb7713377ed9abe3426b958462b91a9db |
 | #1221 | M4 pick revealed lines | merged | df514cb373e4e93a20c4294b2518f2c689f03c89 |
 | #1253 | M5 browse repository files | merged | 2dddbef617146c535dadbc0dd5687169836fa50a |
-| M6 | M6 browse at the PR head | pending | |
+| #1282 | M6 browse at the PR head | open | |
 
 ## Milestones
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T023–T031 | full | Pull request head version | #1215 | merged |
 | M4 | T032–T035 | light | Pick revealed lines | #1221 | merged |
 | M5 | T036–T046 | full | Browse repository files | #1253 | merged |
-| M6 | T047–T053 | full | Browse at the PR head | | pending |
+| M6 | T047–T053 | full | Browse at the PR head | #1282 | PR open |
 | M7 | T054–T062 | full | Follow references from the diff | | pending |
 
 ## Decisions
@@ -79,11 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M6 (T047-T053) is implemented, ticked, reviewed (A fixed, B CLEAN) and documented; visual pass recorded as not run in the client (visual-pass/m6.md). The code is committed locally as one WIP commit and NOT pushed. Left to do:
-1. A full gate was started detached (`mise run gate`, log `gate-*.log` in the previous unit's scratchpad) and was still waiting on the shared build lock held by other worktrees. Do not trust it: run `GIT_CONFIG_GLOBAL=/dev/null mise run gate` detached again on the committed tree, wait with hold.sh (use a Monitor on `GATE_EXIT=` if hold.sh says STOP).
-2. Fix anything it reports (the new client tests in features_pr_changes.rs, `browse_*` and `switching_pull_request_*`, were never run green: the first run did not include them; core tests and the older client tests were green before the review fixes).
-3. Set ledger Phase/Next step, `git fetch && git rebase origin/main`, push `--force-with-lease -u origin HEAD`, open PR `feat(1150): browse repository files at the pull request head (M6) (#1150)` with the pr.md body (Review A: 10 findings, 6 fixed, 4 declined/noted; Review B sonnet CLEAN, Verify: review_browse head and features_pr_changes browse), record PR number in the ledger, return DONE.
-
+None.
 ## Open escalation
 
 None.
