@@ -571,6 +571,21 @@ fn a_mode_change_to_bypass_waits_for_its_confirmation() {
     assert_eq!(state.confirm_mode(), None, "and only once");
 }
 
+/// M8: the mode confirmation is a registered dialog, so Escape (the registry's topmost close)
+/// closes it through the core reducer, sending nothing.
+#[test]
+fn escape_closes_the_bypass_mode_confirmation() {
+    let mut app = micold_client::app::State::default();
+    assert_eq!(
+        app.permission_prompts
+            .request_mode(SessionId::new(), PermissionMode::Bypass),
+        None
+    );
+    micold_client::overlay::registry::close_topmost(&mut app);
+    assert_eq!(app.permission_prompts.mode_confirmation(), None);
+    assert_eq!(app.permission_prompts.confirm_mode(), None);
+}
+
 #[test]
 fn a_cancelled_bypass_confirmation_sends_nothing() {
     let session = SessionId::new();

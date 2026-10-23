@@ -6329,6 +6329,14 @@ pub(crate) mod tests {
         #[test]
         fn a_mode_change_to_bypass_is_sent_only_by_its_confirmation() {
             let (mut app, mut rx, session) = app_with_session();
+            // M8 review A r1 F2: the confirmation opens as every dialog does, over no open menu
+            // and with no field holding the keyboard.
+            app.core.window.focused_field =
+                Some(micold_client::features::window::FieldId::ConfirmDeleteAlsoBranch);
+            app.core.session.start_menu = Some(micold_client::features::session::StartMenu {
+                location: micold_core::session::SessionLocation::Default,
+                anchor: (40, 80),
+            });
             let _ = crate::shell::permission_prompts::update(
                 &mut app,
                 PromptsMsg::ModeRequested {
@@ -6337,6 +6345,15 @@ pub(crate) mod tests {
                 },
             );
             assert!(drain_sent(&mut rx).is_empty(), "nothing before the confirm");
+            assert_eq!(
+                app.core.permission_prompts.mode_confirmation(),
+                Some(session)
+            );
+            assert_eq!(
+                app.core.window.focused_field, None,
+                "no field keeps the keyboard"
+            );
+            assert_eq!(app.core.session.start_menu, None, "the open menu closed");
             let _ = crate::shell::permission_prompts::update(&mut app, PromptsMsg::ModeConfirmed);
             let ClientMsg::SetPermissionMode {
                 mode, session: to, ..
