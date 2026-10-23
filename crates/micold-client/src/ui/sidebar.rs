@@ -278,8 +278,9 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
 }
 
 /// The start-up offer's banner, when the active project is offered one (feature 582, FR-012;
-/// 552 FR-009): it is shown when discovery found stored sessions the catalog lacks. "Resume all"
-/// resumes the ones that can be; with none resumable it opens the "Attach existing…" list.
+/// 552 FR-009): it is shown when discovery found stored sessions the catalog lacks in worktrees
+/// that have no session (BUG-1164). "Resume all" resumes the newest of each worktree; with none
+/// resumable it opens the "Attach existing…" list.
 fn offer_banner<'a>(
     state: &'a State,
     r: micold_core::tokens::Roles,
@@ -289,8 +290,9 @@ fn offer_banner<'a>(
         return None;
     }
     let offer = &state.attach.offer;
-    let resumable = offer.targets().len();
-    let sessions = offer.session_count();
+    let catalog = state.active_sessions();
+    let resumable = offer.targets(catalog).len();
+    let sessions = offer.session_count(catalog);
     let found = format!(
         "Found {sessions} stored {}",
         if sessions == 1 { "session" } else { "sessions" }

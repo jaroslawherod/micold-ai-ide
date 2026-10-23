@@ -5362,7 +5362,20 @@ impl DaemonState {
                 match config {
                     // The session's own id, not its resume handle: a session that followed a
                     // `/clear` recorded its own conversation before it, so it is never empty.
-                    Some(config) => !provider.has_recorded_conversation(config, cwd, id.0),
+                    Some(config) => {
+                        let empty = !provider.has_recorded_conversation(config, cwd, id.0);
+                        if empty {
+                            // BUG-1164: name each pruned session so a "missing session" report
+                            // can be traced.
+                            tracing::info!(
+                                session = %id.0,
+                                provider = ?which,
+                                cwd = %cwd.display(),
+                                "pruning empty session: no recorded conversation at that cwd"
+                            );
+                        }
+                        empty
+                    }
                     None => false,
                 }
             })

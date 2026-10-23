@@ -372,9 +372,11 @@ that has none, and leaves the others listed so you can resume them one at a time
 #### The offer when you open a project
 
 When you open a project and the app finds stored sessions it does not list, a banner at the top of
-the sidebar says how many. Press **Resume all** to resume every one of them that can be, or, when
-none can, **Review** to open the **Attach existing…** list. Nothing is resumed until you press a
-button.
+the sidebar says how many. It counts only stored sessions of worktrees that have no session yet.
+Press **Resume all** to resume the most recent of each of those worktrees, or, when none can be
+resumed, **Review** to open the **Attach existing…** list. Nothing is resumed until you press a
+button. Stored sessions of a worktree that already has a session are not in the banner: resume
+them from **Attach existing…**, which asks whether to replace the worktree's session or keep both.
 
 Press **Dismiss** to hide the banner for that project until the app is restarted. Dismissing loses
 nothing: **Attach existing…** still lists everything.
