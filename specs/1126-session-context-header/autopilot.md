@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
 - **Phase**: plan
-- **Next step**: plan review round 2 (sonnet, fix diff)
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | 0c554b9b6b3c47d8f964a5440a77a10f44444bf6:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CHANGES: 4 MAJOR, 3 MINOR; all fixed |
+| Plan | 2 | 29583b02c933d279616339822384ea215db890db:3616cce290dbc0e95358c640c3b0c58fabf0feaa | CLEAN (sonnet); 1 MINOR fixed (containment retarget detail) |
 | Spec | 2 | d6925d167b7f9c841828824458dcbad6a7efa800:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CLEAN (sonnet); 1 MINOR fixed, prose only |
 | Plan | 1 | 4d4fb75608f438dc27c9078b4aa4db62f62e68a1:938d94c5b529d63aa2ac171bcb132cfb2383899a | CHANGES: 3 MAJOR (tab menu not mapped, StripTab importers, containment gate), 3 MINOR; all fixed |
 
