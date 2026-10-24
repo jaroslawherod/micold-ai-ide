@@ -179,7 +179,7 @@ not merged yet (R8).
 
 - **Decision**:
   - **Row state**: a `Glyph` at the row's leading edge with three new `Icon` variants
-    (`ReviewUnseen` ○, `ReviewDrafts` ●, `ReviewDone` ✓) in `crates/micold-client/src/icons.rs`,
+    (`ReviewUnseen` ○, `ReviewDrafts` ●, `ReviewDone` ✓) in `crates/micold-material/src/icons.rs`,
     tinted through `icon_role` like the other state icons; the existing draft count `Tag` stays.
   - **Changed dot**: `UnreadMark::new(r)` (dot only) at the row's trailing edge inside a
     `Tooltip` ("Changed since you marked it reviewed"): it is the app's existing "new since you
