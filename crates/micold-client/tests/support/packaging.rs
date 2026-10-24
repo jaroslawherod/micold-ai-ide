@@ -70,14 +70,20 @@ fn list_after<'a>(
 }
 
 /// The font licence set every release bundle ships (feature 1260, FR-008, data-model.md): the
-/// licence of each bundled face and the provenance record that maps face to licence. Basenames
-/// under `assets/fonts/`.
+/// licence of each bundled face and the provenance record that maps face to licence. Paths from
+/// the repository root — never a bare `LICENSE`, which names the repository's own licence, a
+/// declared documentation file no test may read (`documentation_is_not_read.rs`).
 pub const FONT_LICENCES: &[&str] = &[
-    "LICENSE-FiraMono-OFL.txt",
-    "LICENSE-Roboto-OFL.txt",
-    "LICENSE",
-    "PROVENANCE.md",
+    "assets/fonts/LICENSE-FiraMono-OFL.txt",
+    "assets/fonts/LICENSE-Roboto-OFL.txt",
+    "assets/fonts/LICENSE",
+    "assets/fonts/PROVENANCE.md",
 ];
+
+/// The file name at the end of a path, with either separator (Inno Setup paths use `\`).
+pub fn basename(path: &str) -> &str {
+    path.rsplit(['\\', '/']).next().unwrap_or(path)
+}
 
 /// The `(Source, DestDir)` pairs of an Inno Setup script's `[Files]` section, quotes stripped and
 /// `;` comment lines skipped. A line without a `DestDir:` pairs its source with `""`.

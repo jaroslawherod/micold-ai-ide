@@ -12,7 +12,7 @@
 mod packaging;
 
 use packaging::{
-    deb_assets, iss_file_entries, manifest_path, repo_root, rpm_assets, FONT_LICENCES,
+    basename, deb_assets, iss_file_entries, manifest_path, repo_root, rpm_assets, FONT_LICENCES,
 };
 use std::fs;
 
@@ -42,8 +42,8 @@ fn missing(bundles: &Bundles, licences: &[&str]) -> Vec<String> {
     let iss = iss_file_entries(bundles.iss);
 
     let mut out = Vec::new();
-    for file in licences {
-        let source = format!("assets/fonts/{file}\"");
+    for path in licences {
+        let source = format!("{path}\"");
         // One asset per line in both lists: the entry naming the source must name the destination.
         let entry_ships = |list: &str, dest: &str| {
             list.lines()
@@ -51,29 +51,28 @@ fn missing(bundles: &Bundles, licences: &[&str]) -> Vec<String> {
         };
         if !entry_ships(deb, DEB_DEST) {
             out.push(format!(
-                "the deb (`[package.metadata.deb] assets`) does not ship assets/fonts/{file} to {DEB_DEST}"
+                "the deb (`[package.metadata.deb] assets`) does not ship {path} to {DEB_DEST}"
             ));
         }
         if !entry_ships(rpm, RPM_DEST) {
             out.push(format!(
-                "the rpm (`[package.metadata.generate-rpm] assets`) does not ship assets/fonts/{file} to {RPM_DEST}"
+                "the rpm (`[package.metadata.generate-rpm] assets`) does not ship {path} to {RPM_DEST}"
             ));
         }
-        let named = format!("assets/fonts/{file}");
-        if !macos_code.iter().any(|l| l.contains(&format!("{named}\"")))
+        if !macos_code.iter().any(|l| l.contains(&source))
             || !macos_code.iter().any(|l| l.contains(MACOS_DEST))
         {
             out.push(format!(
-                "the macOS .app (scripts/macos-bundle.sh) does not ship {named} to {MACOS_DEST}"
+                "the macOS .app (scripts/macos-bundle.sh) does not ship {path} to {MACOS_DEST}"
             ));
         }
         let iss_ships = iss.iter().any(|(src, dest)| {
-            src.rsplit(['\\', '/']).next() == Some(file) && dest.eq_ignore_ascii_case(WINDOWS_DEST)
+            basename(src) == basename(path) && dest.eq_ignore_ascii_case(WINDOWS_DEST)
         });
         if !iss_ships {
             out.push(format!(
                 "the Windows installer (packaging/windows/micold-ai-ide.iss) does not ship \
-                 assets/fonts/{file} to {WINDOWS_DEST}"
+                 {path} to {WINDOWS_DEST}"
             ));
         }
     }
@@ -87,8 +86,8 @@ fn read(relative: &str) -> String {
 
 #[test]
 fn the_licence_set_is_committed_beside_the_fonts() {
-    for file in FONT_LICENCES {
-        let path = repo_root().join("assets/fonts").join(file);
+    for licence in FONT_LICENCES {
+        let path = repo_root().join(licence);
         assert!(
             path.is_file(),
             "{} is not in the repository — every bundle ships it (FR-008)",
@@ -151,12 +150,15 @@ const HEALTHY: Bundles = Bundles {
 
 #[test]
 fn the_healthy_bundles_pass() {
-    assert_eq!(missing(&HEALTHY, &["LICENSE"]), Vec::<String>::new());
+    assert_eq!(
+        missing(&HEALTHY, &["assets/fonts/LICENSE"]),
+        Vec::<String>::new()
+    );
 }
 
 #[test]
 fn a_licence_missing_from_every_bundle_is_named_once_per_bundle() {
-    let found = missing(&HEALTHY, &["LICENSE-FiraMono-OFL.txt"]);
+    let found = missing(&HEALTHY, &["assets/fonts/LICENSE-FiraMono-OFL.txt"]);
 
     assert_eq!(found.len(), 4, "one failure per bundle: {found:?}");
     for bundle in ["deb", "rpm", "macOS", "Windows"] {
@@ -182,7 +184,7 @@ fn a_licence_shipped_to_the_wrong_place_fails() {
         ..HEALTHY
     };
 
-    let found = missing(&bundles, &["LICENSE"]);
+    let found = missing(&bundles, &["assets/fonts/LICENSE"]);
 
     assert_eq!(found.len(), 3, "deb, rpm and Windows: {found:?}");
 }
@@ -195,7 +197,7 @@ fn a_macos_script_that_names_the_licence_only_in_a_comment_fails() {
         ..HEALTHY
     };
 
-    let found = missing(&bundles, &["LICENSE"]);
+    let found = missing(&bundles, &["assets/fonts/LICENSE"]);
 
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("macOS"), "{}", found[0]);

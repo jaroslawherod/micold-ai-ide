@@ -57,6 +57,9 @@ Polish T028–T029 (quickstart §A/§C records, no code) is left to the close un
 | M2 review A (code-review, high) | 1 | abf0d23b | CHANGES (1 MAJOR: old resolve check asserted under the font-system lock and duplicated the new loop; 4 MINOR: messages not naming Fira Mono, weight mapped twice, symlink-following walk) - all fixed except unreadable-dir panic and extra extensions (taste). Headless `claude -p --model sonnet` |
 | M2 review B (conformance, sonnet) | 1 | 4bb0eba | CLEAN (2 MINOR: assert messages naming Fira Mono - fixed; Bold width check is vacuous since advances are weight-independent - the byte comparison carries it, no change). Headless `claude -p --model sonnet` |
 | M2 gate | 1 | final tree | green (`split-gate.sh`, ALL_GREEN) |
+| M3 review A (code-review, high) | 1 | 3fe6623490317997fd5d70e5958074345582bb68:c47743b9062f038d9015d2d4032bdc94bb316491 | CLEAN (1 MINOR: the Rust macOS check accepts the `FONT_LICENCES` array without tying it to the copy loop — left, `macos-bundle.test.sh` stages the bundle and checks the copied files). Headless `claude -p` |
+| M3 gate | 1 | c47743b9 | red: `documentation_is_not_read` — the bare `"LICENSE"` literal of the licence set resolves to the root `/LICENSE` (`micold-docs`). `FONT_LICENCES` now holds repo-relative paths (`assets/fonts/LICENSE`, ...); `basename` shared in `support/packaging.rs`. Not an M2/main interaction |
+| M3 review B (conformance, sonnet) | 1 | 3fe6623490317997fd5d70e5958074345582bb68:c47743b9062f038d9015d2d4032bdc94bb316491 | CLEAN (1 MINOR: T026 wording placed `iss_file_entries` beside `iss_file_sources` — tasks.md T026 amended, prose only). Headless `claude -p --model sonnet` |
 
 ## Implementation notes
 

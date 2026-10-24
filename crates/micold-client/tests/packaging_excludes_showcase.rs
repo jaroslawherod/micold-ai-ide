@@ -33,7 +33,7 @@
 mod packaging;
 
 use packaging::{
-    deb_assets, iss_file_entries, manifest_path, repo_root, rpm_assets, FONT_LICENCES,
+    basename, deb_assets, iss_file_entries, manifest_path, repo_root, rpm_assets, FONT_LICENCES,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -439,7 +439,7 @@ const WINDOWS_LICENCE_DIR: &str = r"{app}\licenses\";
 /// through a wildcard as easily as through its own name. Wildcards are therefore a violation on
 /// their own, whatever they happen to match on the build machine today.
 ///
-/// `licences` are the only other basenames the installer may ship, and only into a `DestDir` under
+/// `licences` (paths; their basenames) are the only other files the installer may ship, and only into a `DestDir` under
 /// `{app}\licenses\` (feature 1260, FR-008): a licence text is documentation, never something
 /// installed beside the executables.
 fn windows_violations(
@@ -459,8 +459,8 @@ fn windows_violations(
         }
     }
     for (source, dest_dir) in entries {
-        let is_licence =
-            licences.contains(&basename(source)) && dest_dir.starts_with(WINDOWS_LICENCE_DIR);
+        let is_licence = licences.iter().any(|l| basename(l) == basename(source))
+            && dest_dir.starts_with(WINDOWS_LICENCE_DIR);
         if names_showcase(source, bin) {
             out.push(Violation(format!(
                 "packaging/windows/micold-ai-ide.iss ships `{source}` — the showcase is a \
@@ -483,11 +483,6 @@ fn windows_violations(
         }
     }
     out
-}
-
-/// The file name at the end of an Inno Setup source path.
-fn basename(source: &str) -> &str {
-    source.rsplit(['\\', '/']).next().unwrap_or(source)
 }
 
 const HEALTHY_ISS: &str = r#"
