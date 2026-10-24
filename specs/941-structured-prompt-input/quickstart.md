@@ -13,6 +13,20 @@ Prerequisite: a checkout of this branch; `mise trust` once.
 | `cargo test -p micold-client --release --test composer_large_draft -- --ignored` | SC-007: 10,000-line draft edits each under 100 ms |
 | `mise run gate` (cloud container: `scripts/gate.sh`) | everything, including every terminal and drop-on-terminal test unchanged (SC-008) |
 
+### Results — close unit, 2026-10-24 (T062)
+
+On `main` at a669ad1d (M7 merged) plus the close's test-only commit c8b6ae2c, in the cloud container
+(`scripts/gate.sh`, as root; permission-refusal tests run unprivileged by the gate):
+
+| Command | Result |
+|---|---|
+| core (`micold-core` lib and tests) | lib 1547 passed, 1 ignored; `structured_input` 26, `structured_parse` 20 passed |
+| daemon `structured_input` | 20 passed (with the close's `a_late_exit_of_an_earlier_process_leaves_the_running_queue_alone`); `structured_input_saved` 6, `structured_session` 19 passed |
+| client `features_composer` | 29 passed |
+| client `layout_snapshot` | 98 passed; `composer_tab` 2 passed |
+| client `--release composer_large_draft -- --ignored` | 1 passed (SC-007) |
+| `scripts/gate.sh` | green (`GATE_EXIT=0`): fmt, clippy, `cargo test --workspace`, `scripts/tests/*.test.sh` |
+
 ## Part B — manual / visual pass (GUI exception)
 
 Prerequisites: `mise run app` (or the dev build) with a signed-in Claude Code; one structured
