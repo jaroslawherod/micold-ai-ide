@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1126
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
-- **Phase**: M3 implement
+- **Phase**: M3 review
 - **Next step**: implement M3 (T043–T055), gate, reviews, PR
 
 ## Pull requests
@@ -57,12 +57,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 A (code review, high) | 1 | ef68e24018cb80883fc8e3cd890be0482b2b0da6:a00127d3e3e8f40571f7c94f2a70aac16f049c7c | CHANGES: 2 MAJOR (new session tab not revealed; nothing-under-panes check could not fail), 1 MINOR; all fixed in 0e326613 |
 | M2 A (re-review, sonnet) | 2 | dd505d9a035d24e925094c0ceb5780578a4b3107:0e326613517ad725c43eaba23d8c3341db1b4ebe | CLEAN; F1–F3 resolved, lines cited |
 | M2 B (conformance, sonnet) | 1 | dd505d9a035d24e925094c0ceb5780578a4b3107:0e326613517ad725c43eaba23d8c3341db1b4ebe | CLEAN; 1 MINOR (T039 guard written after T033, already noted in the cycle log) |
+| M3 A (code review, high) | 1 | 971ff20c3c357d30d2f9710c6cbe9b1481b50dea:d2f82b178335efee2987c5707c1e18199b1d1463 | CHANGES: 1 MAJOR (counts stale after the Overview hid the header), 3 MINOR; F1–F3 fixed, F4 declined |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | tasks | speckit-analyze | C1 HIGH: `gates/session_bar_fits.rs` not retargeted though the bar is removed | that gate holds feature 944's transcript session bar (`session-transcript-insights`), not the bottom bar under the terminal (`layout_snapshot.rs:222`) |
+- M3 A F4 (derive the header's counts from the view's list when both are on one location): R5 reads both on purpose; the view's list carries the user's toggles, so a derived figure would change with a toggle (R5's rejected alternative). Two list reads per debounced burst, on the view's open location only.
 - M1 A F2 (`pr_chip_input` lacks a Default exclusion): the Default entry's `CardModel` has no branch (`ui/overview.rs::card`, R2), so `pr_chip_input` gets `None` and returns `None`; the header cannot show a pull request the sidebar does not.
 
 ## Handover

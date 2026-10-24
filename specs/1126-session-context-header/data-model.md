@@ -57,6 +57,7 @@ candidates, in the same order, as `StatusPhrase::of(&ListedPr)`, read from the s
 |---|---|---|
 | `entry` | `Option<(PathBuf, SessionLocation)>` | the project and location the counts are for; `None` while no location is shown |
 | `load` | `Load<ChangeSummary>` | the view's `Load` type: `Idle`, `Loading { seq, again, last }`, `Ready`, `Failed` |
+| `unwatched` | `bool` | set by the follow step while the Overview hides the header (no watch); cleared, with a `HeaderRecount`, when it shows again |
 
 Transitions:
 
@@ -66,11 +67,12 @@ Transitions:
 | `HeaderFollowed { .., None }` | any | `entry: None`, `Idle` | none |
 | `HeaderFollowed` with the same entry | any | unchanged | none |
 | `HeaderCountsRead { seq, Ok(s) }`, `seq` current | `Loading` | `Ready(s)`; a queued `again` reads once more | `ReadCounts` if `again` |
-| `HeaderCountsRead { seq, Err(_) }`, `seq` current | `Loading` | `Failed` | none |
+| `HeaderCountsRead { seq, Err(_) }`, `seq` current | `Loading` | `Failed`; a queued `again` reads once more | `ReadCounts` if `again` |
 | `HeaderCountsRead` with an old `seq` | any | unchanged (dropped) | none |
 | `Changed` | `Ready`/`Failed`/`Idle` with an entry | `Loading { last }` | `ReadCounts` (besides the view's own re-read) |
 | `Changed` | `Loading` | `again = true` | none |
 | `WorktreesListed(dirs)`, entry's dir gone | any | `entry: None`, `Idle` | none |
+| `HeaderRecount` (the root's follow step: the Overview, which turns the header's watch off, closed) | `Ready`/`Failed`/`Idle` with an entry | `Loading { last }` | `ReadCounts` |
 
 ## StripModel (new, `client::features::session_strip`)
 

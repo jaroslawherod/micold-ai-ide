@@ -1313,14 +1313,28 @@ impl State {
         let wanted = self
             .current_session_location()
             .and_then(|entry| Some((self.workspace.active.clone()?, entry)));
-        if wanted == self.changes.header.entry {
-            return;
+        let mut effect = Effect::None;
+        if wanted != self.changes.header.entry {
+            let (project, entry) = match wanted {
+                Some((project, entry)) => (project, Some(entry)),
+                None => (std::path::PathBuf::new(), None),
+            };
+            effect = update(&mut self.changes, Msg::HeaderFollowed { project, entry });
         }
-        let (project, entry) = match wanted {
-            Some((project, entry)) => (project, Some(entry)),
-            None => (std::path::PathBuf::new(), None),
-        };
-        let effect = update(&mut self.changes, Msg::HeaderFollowed { project, entry });
+        // While the Overview hides the header its watch is off (`header_watch_entry`), so the
+        // counts are read again when it shows once more.
+        if self.overview.open {
+            self.changes.header.unwatched = self.changes.header.entry.is_some();
+        } else if std::mem::take(&mut self.changes.header.unwatched) && effect == Effect::None {
+            effect = update(&mut self.changes, Msg::HeaderRecount);
+        }
+        self.queue_changes_effect(effect);
+    }
+
+    /// Leave `effect` for the shell beside one already waiting in `changes.pending`, so neither is
+    /// dropped (`take_changes_effect` runs both).
+    pub fn queue_changes_effect(&mut self, effect: crate::features::changes::Effect) {
+        use crate::features::changes::Effect;
         if effect != Effect::None {
             self.changes.pending = Some(match self.changes.pending.take() {
                 None => effect,
@@ -1536,7 +1550,7 @@ pub fn interpret(
                     entry,
                 },
             );
-            state.changes.pending = Some(effect);
+            state.queue_changes_effect(effect);
         }
         Outcome::ChangesClosedForCompare => {
             // Feature 813 (FR-023): Compare takes the main area from the Overview too.

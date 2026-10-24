@@ -3491,3 +3491,37 @@ fn the_header_watches_its_location_unless_the_view_does() {
     ));
     assert_eq!(app.header_watch_entry(), Some(&at("feat-a")));
 }
+
+/// Review A M3 F1: while the Overview hides the header no watch sees its files, so the counts are
+/// read again when the header shows once more; nothing is read while it stays hidden.
+#[test]
+fn the_counts_are_read_again_when_the_overview_closes() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_core::context_header::ChangeSummary;
+
+    let (mut app, [a1_id, _, _]) = two_worktrees_app();
+    app.update(Message::Session(SessionMsg::Selected(a1_id)));
+    let _ = counts_reads(&mut app);
+    let changes::Load::Loading { seq, .. } = app.changes.header.load else {
+        panic!("a's read is under way");
+    };
+    app.update_changes(Msg::HeaderCountsRead {
+        seq,
+        result: Ok(ChangeSummary::default()),
+    });
+    app.overview.open = true;
+    app.update(Message::NoOp);
+    assert_eq!(counts_reads(&mut app), vec![], "hidden: nothing read");
+    app.update(Message::NoOp);
+    assert_eq!(counts_reads(&mut app), vec![], "still hidden");
+    app.overview.open = false;
+    app.update(Message::NoOp);
+    assert_eq!(
+        counts_reads(&mut app),
+        vec![SessionLocation::Worktree("feat-a".into())],
+        "shown again: read once"
+    );
+    app.update(Message::NoOp);
+    assert_eq!(counts_reads(&mut app), vec![], "and only once");
+}

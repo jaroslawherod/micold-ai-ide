@@ -45,3 +45,26 @@ and the S5 unit tests, the menus by `a_members_menu_offers_restart_exactly_when_
 | B10 | 12 members, the marked one beyond the trailing edge | pass: the strip scrolls, the trailing fade takes the accent, status, New session and splits stay at the right | `visual-pass/m2-b10-twelve-light-1280.png` |
 | B11 | Every chord of `terminal-panes.md#keyboard-shortcuts` with the terminal focused | held by tests, not a live window (no daemon or display in the cloud container): `keyboard`, `navigation` and `ui::app_chord_tests` are unchanged and green (T041), and `terminal_focus`'s strip-press guard shows a strip press leaves focus where the bar's control left it. Linux only; CI runs those tests on Linux, macOS and Windows | — |
 | B12 | B1, B9 in dark | pass: tab labels, status and controls legible on the dark surface | `visual-pass/m2-b1-dark-1280.png`, `visual-pass/m2-b9-dark-640.png` |
+
+## M3 — the Changes button (T055)
+
+**How it was run.** As for M1 and M2: `ui::view` drawn through tiny-skia from fixture states
+(`strip_with(2, 1)`: the worktree `Short` on `feat/short`, pull request #1118 open with its checks
+failing, the main session and a helper, both running), at 1280×800 and at 640×480 beside a 300 px
+sidebar, light and dark. Presses and edits were applied as the state they leave: the header's
+counts read (3 files, +42 −7); the Changes view opened on the shown worktree (the press's message,
+H8, is held by `session_area::tests::the_changes_press_opens_the_shown_location_or_closes_its_view`);
+closed again; an edit's wake (`Msg::Changed`) with its read under way; the next answer (4 files,
++51 −7); no changes. The live chain (watch → `Changed` → read → answer) is held by
+`features_changes::the_header_reads_the_counts_of_the_location_it_follows` and the reducer's
+`HeaderCounts` tests, not by a live window (no daemon or display in the cloud container).
+
+| # | Check | Result | Screenshot |
+|---|---|---|---|
+| B6 | Press Changes; press it again | pass: closed, the outlined button at the header's right reads `Changes · 3 files · +42 −7` on the title line; pressed, the Changes view of *Short* stands under the header with no strip, the button filled as selected; pressed again, the terminal and the strip are back and the button is outlined | `visual-pass/m3-b6-closed-light-1280.png`, `visual-pass/m3-b6-open-light-1280.png`, `visual-pass/m3-b6-open-dark-1280.png`, `visual-pass/m3-b6-again-light-1280.png` |
+| B6 at 640×480 | Same at the smallest window | pass: nothing overlaps or leaves the window; the button whole, the chips row whole under it; the title gives way to `fe…` (FR-013 lets it), the pull request chip ends in `…` | `visual-pass/m3-b6-closed-dark-640.png`, `visual-pass/m3-b6-open-light-640.png` |
+| B7 | Edit a file in the worktree | pass: while the reread runs the button reads `Changes` alone (no stale figure, US3 scenario 4), then `Changes · 4 files · +51 −7`; with nothing changed, `Changes · no changes` | `visual-pass/m3-b7-reading-light-1280.png`, `visual-pass/m3-b7-after-light-1280.png`, `visual-pass/m3-b7-after-dark-1280.png`, `visual-pass/m3-nochanges-dark-1280.png` |
+
+In dark the selected button's fill is a low-contrast tonal layer, as on the Overview button whose
+pattern it follows; its label stays legible. At 640×480 the button leaves the title little room:
+noted in the ledger's follow-ups beside the wide-count case.

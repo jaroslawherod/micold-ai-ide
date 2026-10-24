@@ -349,7 +349,7 @@ pressing it opens the Changes view for it; pressing again returns (quickstart B6
 - [x] T054 [P] [US3] User guide: `docs/user-guide/reviewing-changes.md` *Opening the Changes view*:
   the header's Changes button, what its counts mean (no changes, no counts while reading), pressing
   it again to close; the right-click **Review changes** route still listed
-- [ ] T055 [US3] Visual pass B6, B7 (light and dark), appended to
+- [x] T055 [US3] Visual pass B6, B7 (light and dark), appended to
   `specs/1126-session-context-header/visual-pass.md`
 
 **Checkpoint**: all stories complete.
