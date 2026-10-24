@@ -73,6 +73,12 @@ pub enum Outcome {
     /// Compare opened (feature 483, C1): it takes the Changes view's place, so the root closes
     /// that view. `runs` owns Compare and `changes` owns the view.
     ChangesClosedForCompare,
+    /// A session was selected (feature 1269, U2): the terminal takes the main area back, so the
+    /// root hides the shown Review tab, kept. `session` owns the selection, `changes` the tabs.
+    ReviewHidden,
+    /// A project was forgotten (feature 1269, U9): the root drops its Review tabs, which are
+    /// `changes`'s; `project` owns the catalog.
+    ProjectForgotten(std::path::PathBuf),
     /// **Run in parallel** was chosen (feature 483): the root opens the dialog.
     RunInParallelRequested,
     /// The shell created this worktree; the list it joins is not the form's to write (T067a-4).

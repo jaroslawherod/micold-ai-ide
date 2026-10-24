@@ -172,7 +172,8 @@ pub fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
 pub fn open_discard_pending(state: &mut State) {
     use micold_client::features::changes::{self, Msg as ChangesMsg};
     use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
-    let project = PathBuf::from("/p");
+    // Feature 1269: a review is shown only under the active project.
+    let project = state.workspace.active.clone().unwrap_or_default();
     let _ = changes::update(
         &mut state.changes,
         ChangesMsg::Opened {
@@ -209,7 +210,8 @@ pub fn open_full_reply(state: &mut State) {
     use micold_core::review::comment::{
         CommentId, CommentState, EntryReview, Outcome, Reporter, ReviewComment,
     };
-    let project = PathBuf::from("/p");
+    // Feature 1269: a review is shown only under the active project.
+    let project = state.workspace.active.clone().unwrap_or_default();
     let _ = changes::update(
         &mut state.changes,
         ChangesMsg::Opened {

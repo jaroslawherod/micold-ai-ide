@@ -38,6 +38,13 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     if let Msg::ComposerAction(action) = msg {
         return composer_action(app, action.0);
     }
+    // Feature 1269 (U4): closing a Review tab can show a session and give it the keyboard, which
+    // is the root's to do; it reads nothing.
+    if let Msg::TabClosed { .. } = msg {
+        app.core.update(Message::Changes(msg));
+        sync_composer(app);
+        return Task::none();
+    }
     // The reducer drops an answer whose read is no longer the current one, silently: say so in the
     // log, or a diff that never lands cannot be told from one that was dropped (#771).
     let stale = match &msg {
