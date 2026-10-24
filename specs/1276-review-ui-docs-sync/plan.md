@@ -168,8 +168,11 @@ the Default entry) keep their text and heading ids, so inbound links still resol
 keeps its heading (and `#pull-requests`) but is rewritten for the source control's **Pull
 requests** entry: today it describes the left-column section FR-002 forbids. The headings that go
 (*The review panel*, *Committed and uncommitted* as a list toggle) are folded into their new
-sections, and every inbound link is re-pointed (FR-014); the link text at `settings.md:660` and
-`worktrees-and-sessions.md:240` drops "Changes view" for the Review tab's source control. Each slice's own guide edits are
+sections, and every inbound link is re-pointed (FR-014). Every *Changes view* mention on the five
+pages quickstart §A2 greps is reworded to the Review tab, so that grep returns nothing: the link text
+at `settings.md:660` and `worktrees-and-sessions.md:240`, and `settings.md:653`, `settings.md:659`,
+`worktrees-and-sessions.md:978` and `agent-tools.md:299` (list in
+[contracts/guide-outline.md](contracts/guide-outline.md) § *Inbound links*; re-grep after rebase). Each slice's own guide edits are
 the starting text; this feature reconciles them into one chapter and removes leftovers (FR-002).
 
 ### 4. Visual pass (FR-009, FR-010)
