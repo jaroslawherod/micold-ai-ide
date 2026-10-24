@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M1
-- **Next step**: M1 verify step 2: review B (conformance) and the visual pass, then the full gate, then push and the PR (verify.md, pr.md)
+- **Next step**: M1 PR open: the orchestrator waits on CI and merges
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | — | implemented; review A done; review B, visual pass, full gate, PR next |
+| M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | — | reviews A and B done, visual pass done, full gate green at a72f9964; PR next |
 | M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | — | todo |
 | M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | — | todo |
 | M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | todo |
@@ -45,6 +45,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | D9 | M1 | The Overview's reveal and the chord/current-session reveal: one target? | Two calls: `open_group_of_reveal_target()` (keyboard row, else current session) in `reveal_scroll` while armed, `open_group_of_revealed()` (`sidebar.revealed`) in `revealed_scroll` | agent-resolved | one chain would open the current session's group, not the revealed row's, when both exist |
 | D10 | M1 | `sidebar_fixture::session_at` sessions are `Starting`, which counts as Working | The fixture's sessions are Idle, so existing navigation/sidebar tests keep today's order inside one Idle group | agent-resolved | `location_state::session_state` maps Starting to Running |
 | D11 | M1 | Headers in the Tab order | A heading's keyboard wrapper is always enabled (rows only when focused), so Enter/Space reach it (US5.2) | agent-resolved | `TakesTheKeyboard::new(_, enabled)` skips a disabled wrapper |
+| D12 | M1 | Rebase onto origin/main 4910aeee (feature 943 M9) | Clean rebase; the layout snapshot regenerated unchanged | agent-resolved | `UPDATE_LAYOUT_SNAPSHOT=1 … --test layout_snapshot`: 105 passed, no diff |
 
 ## Review rounds
 
@@ -56,6 +57,8 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | Tasks | 1 | c3988cc2b123a2d2b824ce43111671dff99979ae:a53d7012cf8f7b5295432a203dac8857c4efd1dc | CLEAN (3 MINOR: test callers named in T014, M1 and M4 Verify widened, US5.1 moved to M4 Satisfies; fixed) |
 | M1 review A (code-review high) | 1 | aa345f554d65d9fd7a1b953deeb7a72508a0915f:9c2e4ba039aabe727a2b5933e8a90cf7a20669c7 | CHANGES: F1 header focus-loss sent KeyboardRowLeft (fixed); F2, F3 repeated sidebar derivations (fixed); F4 unreachable fallback (fixed); F6 unused From (fixed); F5 declined |
 | M1 review A (code-review high, sonnet) | 2 | c656359f69d7d2b23bfdc07e5431aa3337fb346f:e11c2f7e8bb8d6cadc64b82f86df2e9ed1ae9100 | CLEAN of BLOCKER/MAJOR: r1 fixes hold; MINORs fixed (reveal opens a group only while its row is not drawn, stale comments, a test for a toggle of a hidden group) |
+| M1 review B (conformance, sonnet) | 1 | e54c4f32191630712064a90d938fd3be236f14bf:f7ca36b5d89ba51b9d774db606ed4a96cc3124f5 | CHANGES: F1 a chord into a closed group did not open it while the current session's row was drawn (fixed: `State::reveal_ready`); F2 the test bypassed that gate (fixed: tests go through it, new case with a drawn current session) |
+| M1 review B (conformance, sonnet) | 2 | 801128dd52fac679a288a6e71919acc608b17553:a72f9964ab30605790f03aa05a0d81ed83d18b56 | CLEAN: F1, F2 fixes hold |
 
 ## Declined review findings
 
@@ -65,24 +68,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 
 ## Handover
 
-Milestone unit M1, handed over at the context cap after verify step 1.
-
-- **Done**: T001–T019 implemented and ticked (commits 9c2e4ba0..HEAD on this branch, not pushed).
-  Review A rounds 1 and 2 done (see *Review rounds*). The scoped gate on HEAD: fmt, clippy and every
-  micold-client test green; it stops on `micold-core --test settings_refuses_save_over_failed_read`
-  (`a_save_over_an_unreadable_file_is_refused_and_leaves_it_untouched`), which fails because this
-  container runs as root (uid 0 reads a chmod-000 file); not this diff. The full gate will hit it
-  too: run it with that cause in mind (or `/mnt/project-files/scripts/split-gate.sh`) and say so in
-  the PR body.
-- **Next**: verify.md step 2: review B (`rubrics/conformance.md`, sonnet, `claude -p --agent
-  autopilot-reviewer`; there is no `tdd/cycle-log.md`, the TDD hook did not run in this sandbox) and
-  the visual pass (showcase TreeView "group header, open/closed" in both themes; the app with a
-  project of several worktrees: the "Idle · n" header, a press collapses it; quickstart §B2, §B6);
-  then step 3 full gate (`scripts/gate.sh`), then pr.md (push with
-  `--force-with-lease=claude/project-thread-22fhnj:`, write the title and body to the scratchpad).
-- **Open findings**: none above MINOR. Review A r2 left MINOR: no unit test that a header's focus
-  change publishes `Message::NoOp`.
-- **PR**: none yet.
+None.
 
 ## Open escalation
 
