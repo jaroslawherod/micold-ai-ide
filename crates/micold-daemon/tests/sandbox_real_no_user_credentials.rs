@@ -14,7 +14,7 @@
 
 #![cfg(all(feature = "sandbox-real-runtime", unix))]
 
-use crate::sandbox_real_support;
+mod sandbox_real_support;
 
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SecretMount};
 use sandbox_real_support::{bind_mount, cli_out, seed, start_sandbox, SandboxSpec};

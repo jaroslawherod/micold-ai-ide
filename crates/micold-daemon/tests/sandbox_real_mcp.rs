@@ -28,8 +28,9 @@
 
 #![cfg(all(feature = "sandbox-real-runtime", unix))]
 
-use crate::mcp_support;
-use crate::sandbox_real_support;
+#[path = "support/mcp.rs"]
+mod mcp_support;
+mod sandbox_real_support;
 
 use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, SocketAddr};
