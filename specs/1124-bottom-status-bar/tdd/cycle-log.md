@@ -40,3 +40,19 @@ so the status bar's tooltip and the banner read one source (FR-006; review B M1 
 | Seven action conditions keep banner and button (T021) | `each_of_the_seven_action_conditions_keeps_its_banner_and_button` | a guard on unchanged code: passes on first run (the four action arms and `sandbox_banner` are untouched, R2/D3) | ok |
 | Banner height: none connected, none lost, some for an action condition (T023) | `overview::the_connection_banner_has_height_only_for_an_action_condition` | the old `strip(true) > 0.0` assertion was inverted with the code change; the new `strip(disconnected) == 0.0` fails on the previous `connection_banner` | ok |
 | Warning and lost-connection states fit (T022, T024) | `layout_snapshot`, `layout_text_overflow` | new covered states, recorded; `containment::CLIP_REVEALED` renumbered (the lost-connection state no longer shifts the body to child 2; the two-banner state shifts it to 3) | ok |
+
+### M4 (T026–T032)
+
+Tests and the implementation of this milestone landed in one commit; the red step below is stated
+only where it was observed, and the rest are marked as written beside the change.
+
+| Behaviour | Test | Red | Result |
+|---|---|---|---|
+| CLI item names the active session's CLI (T026, T030; US4 s1) | `status_bar::the_session_view_names_the_active_sessions_cli` | the placeholder `cli_usage_and_hints_are_empty_for_now` asserted `cli == None`; replaced with the change, not run red | ok |
+| Every other body omits it (T026, T029; US4 s3) | `status_bar::no_other_body_shows_the_cli` | written beside the change (`session_view_visible` extracted first); first runs failed on test set-up (Changes opened through the wrong reducer, a one-run Compare group), not on the code | ok |
+| Closing the Overview brings it back (US4 s5) | `status_bar::closing_the_overview_brings_the_cli_back` | written beside the change | ok |
+| A background session leaves the model unchanged (T026) | `status_bar::the_cli_is_the_active_sessions_and_background_sessions_do_not_move_it` | a guard: `model` reads `session.active` only | ok |
+| Hints read the platform's chords (T026, T030; US4 s4) | `status_bar::the_hints_name_the_overview_and_switcher_chords` | the placeholder asserted empty hints; replaced with the change | ok |
+| Focus between panes of different CLIs changes the item (T027; US4 s2) | `main_tests::panes::moving_pane_focus_changes_the_status_bars_cli` | written beside the change (`follow_focus` already writes `session.active`, so it passes by construction) | ok |
+| The CLI item and hints fit at 640 dp; hints go first (T028) | `status_bar_fits::*` | the 640 dp test fails if a hint is drawn there; checked by reading, not by a mutated build | ok |
+| CLI item in session-view states, hints in every state (T031) | `layout_snapshot` | the fixture differed (additions only: 13 CLI items, hints in every state) before re-recording | re-recorded |
