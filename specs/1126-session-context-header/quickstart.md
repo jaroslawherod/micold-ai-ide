@@ -37,3 +37,20 @@ two sessions in it (main and a helper), two shell instances in the main one; lig
 
 Record screenshots under `specs/1126-session-context-header/visual-pass/` and the results in
 `visual-pass.md`.
+
+## Results (close, T056)
+
+Run on the close branch at `ea09e143` (main `9c1f758f` plus the TDD remediation tests), inside the
+full merge gate (`split-gate.sh`: `scripts/gate.sh`'s steps split by package to fit the cloud
+container's disk). Every Part A command's targets ran there; all green:
+
+| Command | Result |
+|---|---|
+| `mise run test-core` | micold-core lib 1556 passed, its test binaries and doctests green |
+| `cargo test -p micold-client --lib -- session_strip changes::tests cdk::keyed session_area` | within the client lib: 1234 passed, 0 failed |
+| `features_changes`, `session_area_stability`, `terminal_tabs`, `tab_reveal`, `terminal_focus`, `keyboard`, `navigation` | 114, 12, 7, 1, 35, 2, 18 passed; 0 failed (`app_chord_tests` in the lib run above) |
+| `layout_snapshot`, `layout_text_overflow` | 112 (now with `strip_controls_share_a_midline`, T069) and 4 passed; the fixture unchanged by the close |
+| `scripts/gate.sh` | fmt, clippy (core, workspace, `-D warnings`), every test target of the three crates, the unprivileged runs and `scripts/tests/*.test.sh`: `ALL_GREEN` |
+
+The two daemon flakes seen at M3 (`mcp_audit_log::every_successful_mutating_call_writes_one_info_line`,
+`attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`) passed in this run.

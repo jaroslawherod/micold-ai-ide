@@ -358,7 +358,7 @@ pressing it opens the Changes view for it; pressing again returns (quickstart B6
 
 ## Phase 7: Polish & cross-cutting
 
-- [ ] T056 Run quickstart Part A end to end and record the results in
+- [x] T056 Run quickstart Part A end to end and record the results in
   `specs/1126-session-context-header/quickstart.md`
 - [x] T057 Run the whole quickstart Part B once more on the final tree, light and dark, and complete
   `specs/1126-session-context-header/visual-pass.md`
