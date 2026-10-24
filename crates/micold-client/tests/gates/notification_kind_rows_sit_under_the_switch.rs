@@ -169,6 +169,14 @@ fn environment(on: bool) -> lay::StateUnderTest {
     under
 }
 
+/// The window the clicks land in: the layout window plus the status bar's height (feature 1124),
+/// so the page's scroll viewport is as tall as it was before the bar took the window's bottom
+/// 28 dp and the last kind row still starts inside it.
+const ROOM: Size = Size::new(
+    lay::WINDOW.width,
+    lay::WINDOW.height + micold_core::tokens::anatomy::status_bar::HEIGHT,
+);
+
 /// Hand `events` to the page, one after another with the cursor at `at`, and return what it
 /// published.
 fn publish(under: &lay::StateUnderTest, at: Point, events: &[Event]) -> Vec<Message> {
@@ -178,9 +186,9 @@ fn publish(under: &lay::StateUnderTest, at: Point, events: &[Event]) -> Vec<Mess
     let node = element.as_widget_mut().layout(
         &mut tree,
         &renderer,
-        &layout::Limits::new(Size::ZERO, lay::WINDOW),
+        &layout::Limits::new(Size::ZERO, ROOM),
     );
-    let viewport = Rectangle::with_size(lay::WINDOW);
+    let viewport = Rectangle::with_size(ROOM);
     let mut messages = Vec::new();
     // The page mounts with an entrance and takes no input until it has run.
     let origin = std::time::Instant::now();
@@ -234,10 +242,10 @@ const CLICK: [Event; 2] = [
 /// their stored values (they are laid out as with it on) but take no input.
 #[test]
 fn the_kind_rows_and_the_threshold_take_input_only_while_the_master_switch_is_on() {
-    let renderer = lay::renderer();
     for on in [true, false] {
         let under = environment(on);
-        let records = lay::resolve(lay::view_of(&under), &renderer);
+        let (_, records) =
+            lay::painted_text_settled_at(lay::view_of(&under), &mut lay::renderer(), ROOM);
         let (column, _, run) = indented_run(&records);
         assert_eq!(
             run.len(),

@@ -1528,23 +1528,7 @@ pub fn covered_states() -> &'static [CoveredState] {
         // that a future copy change would silently move.
         CoveredState {
             name: "session-terminal-bottom-bar",
-            build: || {
-                let session = Session::restored(
-                    SessionId::new(),
-                    SessionLocation::Worktree("feat-short".to_string()),
-                    SessionLabel::Named("feat/short".to_string()),
-                    TerminalMode::Regular,
-                    AiCli::ClaudeCode,
-                );
-                let active = session.id;
-                let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
-                workspace.active = workspace.projects.first().map(|p| p.path.clone());
-
-                let mut state = with_project();
-                state.workspace = workspace;
-                state.session.active = Some(active);
-                StateUnderTest::new(state)
-            },
+            build: || StateUnderTest::new(with_active_session()),
             anchors: &[
                 Anchor {
                     name: "shell.root",
@@ -2393,7 +2377,209 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: &[],
         },
+        // --- Feature 1124: the bottom status bar (T008) -----------------------------------------
+        // The bar is the window column's last child, the body the one before it. With no banner
+        // drawn (connected, sandbox not failed) the column holds the app bar, the body and the bar.
+        CoveredState {
+            name: "status-bar-steady",
+            build: || StateUnderTest::new(with_active_session()).sandbox(running_sandbox()),
+            anchors: STATUS_BAR_ANCHORS,
+        },
+        CoveredState {
+            name: "status-bar-overview-full-screen",
+            build: || {
+                let mut state = with_project();
+                state.overview.open = true;
+                state.overview.full_screen = true;
+                StateUnderTest::new(state).sandbox(running_sandbox())
+            },
+            anchors: STATUS_BAR_ANCHORS,
+        },
+        CoveredState {
+            name: "status-bar-settings",
+            build: || {
+                let mut state = with_project();
+                state.settings.settings_draft = Some(SettingsDraft::default());
+                StateUnderTest::new(state).sandbox(running_sandbox())
+            },
+            anchors: STATUS_BAR_ANCHORS,
+        },
+        CoveredState {
+            name: "status-bar-changes",
+            build: || {
+                let mut state = with_active_session();
+                micold_client::features::changes::update(
+                    &mut state.changes,
+                    micold_client::features::changes::Msg::Opened {
+                        project: PathBuf::from(PROJECT),
+                        entry: SessionLocation::Worktree("feat-short".to_string()),
+                    },
+                );
+                StateUnderTest::new(state).sandbox(running_sandbox())
+            },
+            anchors: STATUS_BAR_ANCHORS,
+        },
+        CoveredState {
+            name: "status-bar-compare",
+            build: || {
+                let mut state = with_active_session();
+                let group = compare_group();
+                let id = group.id;
+                micold_client::features::runs::update(
+                    &mut state.runs,
+                    micold_client::features::runs::Msg::GroupsChanged(vec![group]),
+                );
+                micold_client::features::runs::update(
+                    &mut state.runs,
+                    micold_client::features::runs::Msg::CompareOpened {
+                        group: id,
+                        project: PathBuf::from(PROJECT),
+                    },
+                );
+                StateUnderTest::new(state).sandbox(running_sandbox())
+            },
+            anchors: STATUS_BAR_ANCHORS,
+        },
+        CoveredState {
+            name: "status-bar-split-panes",
+            build: || {
+                use micold_core::pane_layout::{Axis, PaneLayout};
+                let mut layout = PaneLayout::single();
+                let first = layout.focused();
+                layout
+                    .split(first, Axis::Vertical, (1000.0, 600.0), (80.0, 160.0), None)
+                    .expect("a 1000 px pane splits in two");
+                StateUnderTest::new(with_active_session())
+                    .sandbox(running_sandbox())
+                    .panes(layout)
+            },
+            anchors: STATUS_BAR_ANCHORS,
+        },
+        // A menu open over the bar. It stands in for every floating surface: all are pushed after
+        // `base`, through the same overlay stack, so all draw above the bar (FR-013).
+        CoveredState {
+            name: "status-bar-under-menu",
+            build: || {
+                let mut state = with_active_session();
+                state.help.help_menu_open = true;
+                StateUnderTest::new(state).sandbox(running_sandbox())
+            },
+            anchors: STATUS_BAR_ANCHORS,
+        },
     ]
+}
+
+/// The status bar and the body's top edge, in a window column holding the app bar, the body and
+/// the bar (feature 1124).
+const STATUS_BAR_ANCHORS: &[Anchor] = &[
+    Anchor {
+        name: "shell.root",
+        path: &[],
+    },
+    Anchor {
+        name: "shell.body",
+        path: &[0, 0, 1],
+    },
+    Anchor {
+        name: "status_bar",
+        path: &[0, 0, 2],
+    },
+];
+
+/// A project with one session at worktree `feat-short`, current.
+fn with_active_session() -> State {
+    let session = Session::restored(
+        SessionId::new(),
+        SessionLocation::Worktree("feat-short".to_string()),
+        SessionLabel::Named("feat/short".to_string()),
+        TerminalMode::Regular,
+        AiCli::ClaudeCode,
+    );
+    let active = session.id;
+    let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+    let mut state = with_project();
+    state.workspace = workspace;
+    state.session.active = Some(active);
+    state
+}
+
+/// The status bar's longest texts (feature 1124, T009): the session's worktree on a container
+/// daemon with a long name, and an image download with a long runtime line.
+pub fn status_bar_long_texts() -> StateUnderTest {
+    use micold_core::daemons::{ContainerSettings, DaemonRegistry, DaemonRuntime};
+    let mut state = with_active_session();
+    let mut registry = DaemonRegistry::new(Vec::new(), 1);
+    let remote = registry
+        .add(
+            "build-farm-eu-west-container-with-a-very-long-name",
+            DaemonRuntime::Container(ContainerSettings {
+                profile: micold_core::sandbox::SandboxProfile::default(),
+                container_name: "farm".into(),
+                port: 7001,
+                migration: None,
+            }),
+            true,
+        )
+        .expect("the daemon is added");
+    state.settings.daemons = registry;
+    state.workspace.bindings.insert(
+        PathBuf::from(PROJECT),
+        [("feat-short".to_string(), remote)].into_iter().collect(),
+    );
+    let sandbox = micold_client::features::sandbox::Sandbox {
+        state: micold_core::sandbox::lifecycle::SandboxState::Acquiring(
+            micold_core::sandbox::runtime::Progress {
+                stage: "Downloading".into(),
+                detail: Some("sha256:0123456789abcdef0123456789abcdef layer of the image".into()),
+                percent: Some(42),
+            },
+        ),
+        ..Default::default()
+    };
+    StateUnderTest::new(state).sandbox(sandbox)
+}
+
+/// A sandbox that is up: the bar reads "Sandbox ready".
+fn running_sandbox() -> micold_client::features::sandbox::Sandbox {
+    micold_client::features::sandbox::Sandbox {
+        state: micold_core::sandbox::lifecycle::SandboxState::Running(
+            micold_core::sandbox::runtime::ContainerId("fixture".to_string()),
+        ),
+        ..Default::default()
+    }
+}
+
+/// A parallel-run group of two prompted runs, for Compare.
+fn compare_group() -> micold_core::runs::RunGroup {
+    use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus};
+    RunGroup::new(NewGroup {
+        id: GroupId(uuid::Uuid::from_u128(1124)),
+        name: "bar".into(),
+        naming: micold_core::naming::WorktreeNaming {
+            type_: Some(micold_core::naming::ConventionalType::Feat),
+            ticket: None,
+            name: "bar".into(),
+        },
+        prompt: "Add a status bar".into(),
+        base_branch: "main".into(),
+        base_commit: "abc".into(),
+        created: std::time::SystemTime::UNIX_EPOCH,
+        runs: (1..=2u8)
+            .map(|number| Run {
+                number,
+                provider: AiCli::ClaudeCode,
+                names: micold_core::naming::DerivedNames {
+                    dir_name: format!("feat-bar-{number}"),
+                    branch: format!("feat/bar-{number}"),
+                },
+                session: None,
+                status: RunStatus::Prompted,
+            })
+            .collect(),
+    })
+    .expect("a valid group")
 }
 
 /// States pinned partway through a reveal. **A second list in this file, not a second site.**

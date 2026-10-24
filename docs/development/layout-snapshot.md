@@ -94,6 +94,15 @@ the Settings dialog, the add-worktree dialog with its type dropdown open, and th
 over the fixture project (`overview-open`, feature 1120): its cards, header row and title, the only
 state the text-overflow and containment gates reach the Overview's cards in.
 
+Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
+the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session
+active), `status-bar-overview-full-screen`, `status-bar-settings`, `status-bar-changes`,
+`status-bar-compare`, `status-bar-split-panes` and `status-bar-under-menu` (a menu open, standing in
+for every floating surface pushed above the bar). The empty screen and the project page carry the
+bar in `empty-no-project-open` and `empty-project-without-worktrees`. A state names its sandbox with
+`StateUnderTest::sandbox`; one that does not keeps it off, so no bring-up animation is recorded.
+`gates/status_bar_fits.rs` holds the bar's texts inside their boxes at the smallest window.
+
 Every state resolves at one canonical window size, 1280×800, from fixed invented data. Nothing reads
 your workspace, configuration or session store — a fixture recording the author's own machine would
 be unreproducible anywhere else, including on the same machine tomorrow.

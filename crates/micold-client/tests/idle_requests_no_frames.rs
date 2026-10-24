@@ -688,3 +688,44 @@ fn a_waiting_show_delay_asks_for_one_timed_wake_and_no_frame() {
         }
     }
 }
+
+/// Feature 1124 (T010): the status bar at rest — the sandbox running — asks for no frame; with the
+/// sandbox downloading its image, the busy ring turns, and only then does it ask.
+#[test]
+fn the_status_bar_asks_for_frames_only_while_the_sandbox_comes_up() {
+    use micold_client::app::State;
+    use micold_client::features::connection::ConnectionStatus;
+    use micold_client::features::sandbox::Sandbox;
+    use micold_client::ui::status_bar;
+    use micold_core::sandbox::lifecycle::SandboxState;
+    use micold_core::sandbox::runtime::{ContainerId, Progress};
+
+    let state = State::default();
+    let roles = micold_core::tokens::roles(state.color_scheme());
+    let bar = |sandbox: SandboxState| {
+        let sandbox = Sandbox {
+            state: sandbox,
+            ..Sandbox::default()
+        };
+        let model = status_bar::model(
+            &state,
+            &ConnectionStatus::Connected,
+            &sandbox,
+            0,
+            micold_core::local_time::UtcOffset::UTC,
+        );
+        status_bar::view(model, roles)
+    };
+    assert!(
+        !support::layout::asks_for_a_frame(bar(SandboxState::Running(ContainerId("c".into())))),
+        "a bar at rest holds the render loop awake"
+    );
+    assert!(
+        support::layout::asks_for_a_frame(bar(SandboxState::Acquiring(Progress {
+            stage: "Downloading".into(),
+            detail: None,
+            percent: Some(42),
+        }))),
+        "the busy ring never asks for its next frame"
+    );
+}

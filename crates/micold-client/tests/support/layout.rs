@@ -516,6 +516,11 @@ pub struct CoveredState {
 pub struct StateUnderTest {
     pub state: micold_client::app::State,
     pub connection: micold_client::features::connection::ConnectionStatus,
+    /// The sandbox the window shows; off unless [`StateUnderTest::sandbox`] says otherwise.
+    pub sandbox: micold_client::features::sandbox::Sandbox,
+    /// The active project's pane layout, which the binary holds rather than `State`; `None` draws
+    /// the single pane. See [`StateUnderTest::panes`].
+    pub panes: Option<micold_core::pane_layout::PaneLayout>,
     /// A node to press before recording. See [`StateUnderTest::pressing`].
     pub press_at: Option<&'static [usize]>,
 }
@@ -525,8 +530,23 @@ impl StateUnderTest {
         Self {
             state,
             connection: micold_client::features::connection::ConnectionStatus::Connected,
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
+            panes: None,
             press_at: None,
         }
+    }
+
+    /// The sandbox the status bar reads (feature 1124). A state that does not call this keeps
+    /// `Sandbox::default()` — off — so no bring-up row or busy ring enters its geometry.
+    pub fn sandbox(mut self, sandbox: micold_client::features::sandbox::Sandbox) -> Self {
+        self.sandbox = sandbox;
+        self
+    }
+
+    /// Draw the session view tiled by `layout` (feature 1124: the status bar under split panes).
+    pub fn panes(mut self, layout: micold_core::pane_layout::PaneLayout) -> Self {
+        self.panes = Some(layout);
+        self
     }
 
     pub fn connection(
@@ -567,21 +587,7 @@ pub fn records_for(
         micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
     };
 
-    let element = micold_client::ui::view(
-        &under.state,
-        None,
-        None,
-        0,
-        None,
-        &micold_core::env_include::EnvIncludeOutcome::Disabled,
-        &under.connection,
-        // Every covered state renders with the sandbox off, so the bring-up indicator is absent and
-        // no fixture's geometry moves. A state that showed it would be recording an animation, which
-        // this fixture deliberately does not do (T030).
-        &micold_client::features::sandbox::Sandbox::default(),
-    );
-
-    resolve_pressing(element, renderer, under.press_at)
+    resolve_pressing(view_of(&under), renderer, under.press_at)
 }
 
 // --- Mid-reveal resolution (BUG-001) -----------------------------------------------------------
@@ -721,8 +727,25 @@ pub fn resolve_revealed(
 }
 
 /// `ui::view` with the arguments every covered state passes.
+///
+/// The sandbox is off unless a state names one ([`StateUnderTest::sandbox`]), so the bring-up
+/// indicator is absent and no fixture records an animation (T030).
 pub fn view_of(under: &StateUnderTest) -> Element<'_, micold_client::app::Message> {
-    micold_client::ui::view(
+    static NO_GRIDS: std::sync::OnceLock<
+        std::collections::HashMap<
+            micold_core::pane_layout::TerminalRef,
+            micold_client::grid::GridCache,
+        >,
+    > = std::sync::OnceLock::new();
+    let area = under
+        .panes
+        .as_ref()
+        .map(|layout| micold_client::ui::panes::PaneArea {
+            layout,
+            grids: NO_GRIDS.get_or_init(Default::default),
+            refusal: None,
+        });
+    micold_client::ui::view_with(
         &under.state,
         None,
         None,
@@ -730,10 +753,9 @@ pub fn view_of(under: &StateUnderTest) -> Element<'_, micold_client::app::Messag
         None,
         &micold_core::env_include::EnvIncludeOutcome::Disabled,
         &under.connection,
-        // Every covered state renders with the sandbox off, so the bring-up indicator is absent and
-        // no fixture's geometry moves. A state that showed it would be recording an animation, which
-        // this fixture deliberately does not do (T030).
-        &micold_client::features::sandbox::Sandbox::default(),
+        &under.sandbox,
+        None,
+        area.as_ref(),
     )
 }
 
@@ -1657,4 +1679,65 @@ pub fn escapes(records: &[LayoutRecord], tolerance: f32) -> Vec<Escape> {
     }
 
     found
+}
+
+// --- Feature 1124: the status bar adds no focus and no idle frames (T010) -----------------------
+
+/// `element` laid out in [`WINDOW`], with its tree, for a probe that walks or updates it.
+fn mounted<'a, M: 'a>(
+    element: &mut Element<'a, M>,
+    renderer: &iced::Renderer,
+) -> (iced::advanced::widget::Tree, layout::Node) {
+    let mut tree = iced::advanced::widget::Tree::new(element.as_widget());
+    let node = element.as_widget_mut().layout(
+        &mut tree,
+        renderer,
+        &layout::Limits::new(Size::ZERO, WINDOW),
+    );
+    (tree, node)
+}
+
+/// How many focusable widgets `element` holds.
+pub fn focusable_count<'a, M: 'a>(mut element: Element<'a, M>) -> usize {
+    use iced::advanced::widget::operation::Focusable;
+    use iced::advanced::widget::{Id, Operation};
+
+    struct Count(usize);
+    impl Operation for Count {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn focusable(&mut self, _id: Option<&Id>, _bounds: iced::Rectangle, _: &mut dyn Focusable) {
+            self.0 += 1;
+        }
+    }
+
+    let renderer = renderer();
+    let (mut tree, node) = mounted(&mut element, &renderer);
+    let mut count = Count(0);
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut count);
+    count.0
+}
+
+/// Whether `element`, mounted in [`WINDOW`], asks for another frame when handed one.
+pub fn asks_for_a_frame<'a, M: 'a>(mut element: Element<'a, M>) -> bool {
+    let renderer = renderer();
+    let (mut tree, node) = mounted(&mut element, &renderer);
+    let mut messages = Vec::new();
+    let mut shell = iced::advanced::Shell::new(&mut messages);
+    element.as_widget_mut().update(
+        &mut tree,
+        &iced::Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        )),
+        Layout::new(&node),
+        iced::mouse::Cursor::Unavailable,
+        &renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut shell,
+        &iced::Rectangle::with_size(WINDOW),
+    );
+    shell.redraw_request() != iced::window::RedrawRequest::Wait
 }

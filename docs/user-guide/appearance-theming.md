@@ -13,11 +13,39 @@ The window is organised as a Material Design layout:
   (including the overflow menu).
 - The **main area** shows either the active project or, when nothing is open, a welcoming
   empty state inviting you to open a folder.
+- A thin **status bar** along the bottom edge says whether the window is connected and whether the
+  sandbox is ready — see [Status bar](#status-bar).
 - Content sits on distinct **surfaces** (cards) with consistent spacing and rounded corners.
 - Buttons follow Material emphasis levels: a **filled** button for the single primary
   action, **outlined** and **text** buttons for secondary and low-emphasis actions. Buttons
   visibly respond to hover, focus, and press, and appear dimmed when disabled. They are
   **fully rounded** (pill-shaped), as Material specifies.
+
+### Status bar
+
+A 28 px bar runs along the bottom of the window in every view: a session (one pane or split), the
+project page, the Overview (full screen too), Changes, Compare, Settings and the empty start screen.
+Menus, dialogs, the quick switcher and notifications open over it, and it never takes the keyboard
+from the terminal. Its items only inform: clicking one does nothing, and hovering shows a tooltip
+with the full detail.
+
+- **Connection** — a coloured dot and where the session service runs: a green dot and
+  "Daemon connected · local" (or the remote daemon's name); an amber dot with
+  "Read-only · another window" when another window holds the project, or with
+  "Daemon connected" when the service is a different version or build; a red dot when the
+  connection is lost.
+- **Sandbox** — "Sandbox ready" or "Sandbox off"; while it comes up, the stage ("Checking runtime…",
+  "Getting image… 42%", "Starting sandbox…") with a turning ring, and the runtime's last line and
+  any retry reason in the tooltip; in amber, "Sandbox failed", "Sandbox out of date" or
+  "No sandbox" when the session runs without it.
+
+When the window is too narrow for every item, the bar gives way in a fixed order: key hints go
+first, then the plan usage, then the texts are shortened with "…" — the connection item last. A
+shortened item's tooltip still holds its full text.
+
+Conditions that need you to act — another window holding the project, a service to restart, a
+sandbox that failed or is out of date — still appear as a banner under the app bar, with the button
+that ends them.
 
 ### Depth: how surfaces are separated
 
