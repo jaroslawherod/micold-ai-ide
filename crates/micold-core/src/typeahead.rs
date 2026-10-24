@@ -350,13 +350,14 @@ fn edit_distance_at_most_one(a: &[char], b: &[char]) -> bool {
     }
 }
 
-/// Joins ranges that touch, so a subsequence that happens to align consecutively is emphasised as
-/// one run rather than as several abutting ones. Purely so the rendered result has no seams in it.
-fn merge_adjacent(spans: Vec<Range<usize>>) -> Vec<Range<usize>> {
+/// Joins ranges that touch or overlap, so a subsequence that happens to align consecutively is
+/// emphasised as one run rather than as several abutting ones. Purely so the rendered result has no
+/// seams in it. `spans` must be in ascending order of `start`.
+pub(crate) fn merge_adjacent(spans: Vec<Range<usize>>) -> Vec<Range<usize>> {
     let mut out: Vec<Range<usize>> = Vec::with_capacity(spans.len());
     for span in spans {
         match out.last_mut() {
-            Some(last) if last.end == span.start => last.end = span.end,
+            Some(last) if span.start <= last.end => last.end = last.end.max(span.end),
             _ => out.push(span),
         }
     }

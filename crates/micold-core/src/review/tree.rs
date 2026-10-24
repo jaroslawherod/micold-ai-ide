@@ -159,8 +159,13 @@ pub fn layout(leaves: &[Leaf], options: &LayoutOptions) -> Vec<Row> {
                 at.added += u64::from(leaf.added);
                 at.removed += u64::from(leaf.removed);
                 at.unreviewed |= unreviewed;
-                // The name and its `/`, so a span across a chain's `/` stays whole.
-                at.spans.extend(clip(&spans, start..end + 1));
+                // The name and its `/`, so a span across a chain's `/` stays whole. Files below
+                // one folder mostly match it alike: keep each range once.
+                for span in clip(&spans, start..end + 1) {
+                    if !at.spans.contains(&span) {
+                        at.spans.push(span);
+                    }
+                }
             } else {
                 at.files.push((part, index));
             }
@@ -190,14 +195,7 @@ fn clip(spans: &[Range<usize>], range: Range<usize>) -> impl Iterator<Item = Ran
 /// `spans` sorted, with overlapping and touching ranges merged.
 fn merged(mut spans: Vec<Range<usize>>) -> Vec<Range<usize>> {
     spans.sort_by_key(|span| (span.start, span.end));
-    let mut out: Vec<Range<usize>> = Vec::with_capacity(spans.len());
-    for span in spans {
-        match out.last_mut() {
-            Some(last) if span.start <= last.end => last.end = last.end.max(span.end),
-            _ => out.push(span),
-        }
-    }
-    out
+    typeahead::merge_adjacent(spans)
 }
 
 /// What [`layout`] walks the tree with.
@@ -210,6 +208,7 @@ struct Walker<'a, 'o> {
 impl Walker<'_, '_> {
     fn walk(&self, node: &Node, prefix: &str, depth: u16, out: &mut Vec<Row>) {
         let options = self.options;
+        // `folders` comes in Path order (the map's); the stable sorts keep it for ties.
         let mut folders: Vec<(&str, &Node)> = node.folders.iter().map(|(n, f)| (*n, f)).collect();
         match options.sort {
             TreeSort::Path => {}
@@ -254,19 +253,23 @@ impl Walker<'_, '_> {
                 }),
             });
             if open {
-                self.walk(inner, &format!("{path}/"), depth + 1, out);
+                self.walk(inner, &format!("{path}/"), depth.saturating_add(1), out);
             }
         }
+        // One sort per level, ties in Path order (a level's names are distinct).
         let mut files = node.files.clone();
-        files.sort_by_key(|&(name, _)| name);
         match options.sort {
-            TreeSort::Path => {}
-            TreeSort::Size => files.sort_by_key(|&(_, leaf)| {
+            TreeSort::Path => files.sort_by_key(|&(name, _)| name),
+            TreeSort::Size => files.sort_by_key(|&(name, leaf)| {
                 let leaf = &self.leaves[leaf];
-                Reverse(u64::from(leaf.added) + u64::from(leaf.removed))
+                (
+                    Reverse(u64::from(leaf.added) + u64::from(leaf.removed)),
+                    name,
+                )
             }),
-            TreeSort::UnreviewedFirst => files.sort_by_key(|&(_, leaf)| {
-                !self.listed[leaf].as_ref().is_some_and(|l| l.unreviewed)
+            TreeSort::UnreviewedFirst => files.sort_by_key(|&(name, leaf)| {
+                let unreviewed = self.listed[leaf].as_ref().is_some_and(|l| l.unreviewed);
+                (!unreviewed, name)
             }),
         }
         for (name, leaf) in files {
@@ -316,11 +319,14 @@ pub fn bar(added: u32, removed: u32, scale: u64, max_width: f32) -> Option<BarPa
     if total == 0 || scale == 0 {
         return None;
     }
+    // A NaN or negative width (a pane with no room) draws nothing rather than negative px.
+    let max_width = max_width.max(0.0);
     let ratio = (total as f64 / scale as f64).min(1.0);
     let length = ((f64::from(max_width) * ratio) as f32)
         .max(MIN_BAR)
         .min(max_width);
-    let added = (f64::from(length) * f64::from(added) / total as f64) as f32;
+    let added = ((f64::from(length) * f64::from(added) / total as f64) as f32).min(length);
+    // `removed` is what `added` leaves, so the parts never sum past `length`.
     Some(BarParts {
         added,
         removed: (length - added).max(0.0),
@@ -350,9 +356,10 @@ pub fn hover_text(path: &str, renamed_from: Option<&str>) -> String {
     }
 }
 
-/// Whether `text` filters anything: [`Query::new`] trims it, so whitespace alone does not.
+/// Whether `text` filters anything, by the rule [`layout`] reads it with ([`Query::is_empty`]):
+/// whitespace alone does not.
 fn is_filter(text: &str) -> bool {
-    !text.trim().is_empty()
+    !Query::new(text).is_empty()
 }
 
 /// Whether the sort control offers a sort (data-model §4).
@@ -418,10 +425,9 @@ impl TreeChoices {
         }
     }
 
-    /// Store the filter text as typed; starting a filter (from no text) drops the folds of any
-    /// earlier filter.
+    /// Store the filter text as typed; starting or emptying a filter drops the filter-time folds.
     pub fn set_filter(&mut self, text: &str) {
-        if !self.filtering() && is_filter(text) {
+        if !self.filtering() || !is_filter(text) {
             self.filter_collapsed.clear();
         }
         text.clone_into(&mut self.filter);
@@ -544,6 +550,24 @@ mod tests {
         }
         let over = bar(500, 0, 100, 48.0).expect("a bar");
         assert!(over.added + over.removed <= 48.0 + 1e-4, "{over:?}");
+    }
+
+    /// A width under `MIN_BAR`, zero, negative or NaN never gives a part past the width or below 0.
+    #[test]
+    fn a_narrow_or_invalid_width_stays_within_bounds() {
+        for width in [1.0, 0.0, -5.0, f32::NAN] {
+            let parts = bar(3, 1, 4, width).expect("a bar");
+            let bound = if width > 0.0 { width } else { 0.0 };
+            assert!(
+                parts.added >= 0.0 && parts.removed >= 0.0,
+                "{width}: {parts:?}"
+            );
+            assert!(parts.added + parts.removed <= bound, "{width}: {parts:?}");
+        }
+        for (added, removed) in [(1, 2), (7, 3), (33, 67), (1, 999)] {
+            let parts = bar(added, removed, 1000, 47.3).expect("a bar");
+            assert!(parts.added + parts.removed <= 47.3, "{parts:?}");
+        }
     }
 
     /// Scenarios 2.3, 2.4 and a pure rename: no counted lines, no bar; nor with no scale.
