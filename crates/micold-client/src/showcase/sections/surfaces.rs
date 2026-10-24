@@ -1463,9 +1463,9 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
         .selection(material::Selection::Primary)
     };
     // The sidebar's Overview row (feature 1125, FR-021, R9), drawn by the sidebar's own builder,
-    // with no badge and with an action badge.
-    let overview_row = |badge: Option<crate::features::overview::Badge>| {
-        crate::ui::overview_row_view(badge, false, Some(Message::NoOp), Message::NoOp, roles)
+    // with no badge, with an action badge, and selected (the Overview open).
+    let overview_row = |badge: Option<crate::features::overview::Badge>, selected: bool| {
+        crate::ui::overview_row_view(badge, selected, Some(Message::NoOp), Message::NoOp, roles)
     };
     let action_badge = crate::features::overview::Badge {
         tone: crate::features::overview::Tone::Error,
@@ -1474,10 +1474,15 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
     };
     arrange(
         vec![
-            posed("Overview row", overview_row(None), roles),
+            posed("Overview row", overview_row(None, false), roles),
             posed(
                 "Overview row, with a badge",
-                overview_row(Some(action_badge)),
+                overview_row(Some(action_badge.clone()), false),
+                roles,
+            ),
+            posed(
+                "Overview row, selected",
+                overview_row(Some(action_badge), true),
                 roles,
             ),
             posed("group header, open", group_header(true), roles),

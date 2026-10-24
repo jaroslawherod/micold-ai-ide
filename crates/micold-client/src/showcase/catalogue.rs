@@ -882,6 +882,7 @@ pub const COMPONENTS: &[Entry] = &[
             "selected row",
             "Overview row",
             "Overview row, with a badge",
+            "Overview row, selected",
             "group header, open",
             "group header, closed",
             "two-line row",
