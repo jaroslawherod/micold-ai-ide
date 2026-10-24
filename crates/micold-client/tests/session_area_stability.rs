@@ -468,6 +468,10 @@ mod press_in_flight {
                     Message::Session(
                         SessionMsg::TabStripScrolled { .. }
                             | SessionMsg::TabStripViewportResized { .. }
+                            // The terminal re-measures when the header above it changes height
+                            // (a pull request chip's row is 16 dp, a text chip's 15.6 dp): a
+                            // resize, not a press, and not what these tests pin.
+                            | SessionMsg::TerminalResized { .. }
                     )
                 )
             })
