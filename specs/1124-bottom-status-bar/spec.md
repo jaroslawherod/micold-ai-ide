@@ -32,6 +32,23 @@ Other redesign issues reshape the title bar (#1127), the sidebar (#1125) and the
 and session tabs (#1126) in parallel. This feature covers only the status bar and the rows it
 replaces.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Does a lost connection to the session service (no action to take, the app reconnects on its
+  own, content may be stale) still raise the banner, or move to the bar only? → A: Bar only. The
+  bar's connection item shows the error dot with disconnected/reconnecting text and no banner is
+  raised; any connection condition that offers an action button keeps its banner. _(answered by
+  the issue text: issue #1124 body, "Failures that need action still raise a banner/notification;
+  the bar only carries steady state"; today's `Disconnected` banner has no action:
+  crates/micold-client/src/ui/mod.rs#connection_banner)_
+- Q: Is plan usage shown in the status bar or left in the title (app) bar? → A: In the status bar.
+  The indicator moves from the app bar's trailing actions (`ui/toolbar.rs`) into the status bar,
+  keeping its label, warning look, hover details and show/hide rules; the title-bar issue #1127
+  builds on the app bar without it. _(answered by the issue text: issue #1124 title, "bottom status
+  bar for connection, sandbox, CLI and plan usage", and the board's canvas note)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See the window's health at a glance without chrome rows (Priority: P1)
@@ -66,7 +83,7 @@ that it reads connected with a positive dot and "Sandbox ready".
    **Then** nothing is activated; at most the item's tooltip is shown.
 7. **Given** the window is at the application's minimum width, **When** the bar is drawn,
    **Then** no text in it is painted past its box: the key hints are dropped first, then the
-   plan-usage item if the bar carries it, then the remaining texts are shortened with an ellipsis,
+   plan-usage item, then the remaining texts are shortened with an ellipsis,
    the connection item last.
 
 ---
@@ -127,9 +144,8 @@ state at the same time.
 4. **Given** the condition ends, **When** the window updates, **Then** the banner goes away and
    the bar's item returns to its steady text.
 5. **Given** the connection to the session service is lost, **When** the window shows it,
-   **Then** the bar's connection item reads disconnected/reconnecting with an error dot, and
-   [NEEDS CLARIFICATION: does a lost connection — no action to take, the app reconnects on its
-   own, but the content may be stale — still raise the banner, or does it move to the bar only?]
+   **Then** the bar's connection item reads disconnected/reconnecting with an error dot, and no
+   banner is raised — there is no action to take; the app reconnects on its own.
 
 ---
 
@@ -167,7 +183,7 @@ check the bar names that pane's CLI; check the two key hints show the platform's
 A user on a Claude plan with limits wants the plan's usage where the other steady-state facts are.
 
 **Why this priority**: The issue title names it, but plan usage already has a working home in the
-app bar; moving it is a relocation, not new information.
+app bar; moving it into the status bar is a relocation, not new information.
 
 **Independent Test**: With a plan-usage reading present, check where the indicator is drawn, that
 it shows the same label, warning look and hover details as today, and that it is absent when no
@@ -176,10 +192,8 @@ reading is held or the setting is off.
 **Acceptance Scenarios**:
 
 1. **Given** a plan-usage reading is held and the setting is on, **When** the window is shown,
-   **Then** the plan usage is shown [NEEDS CLARIFICATION: in the status bar (issue title and the
-   canvas note) or left in the title bar (the "Proposal: session view" board draws "Plan usage
-   62%" in the title bar, and #1127 reshapes that bar)?], with the same label, warning look and
-   hover details it has today.
+   **Then** the plan usage is shown in the status bar, and no longer in the app bar, with the
+   same label, warning look and hover details it has today.
 2. **Given** no reading is held, or the setting is off, **When** the window is shown, **Then** no
    plan-usage item is drawn anywhere.
 
@@ -194,7 +208,7 @@ reading is held or the setting is off.
   choice, not a failure — and no banner is raised for it.
 - **Narrow window**: at the application's minimum window width, no text in the bar is painted
   past its box. Items give way in a fixed order: the key hints are dropped first, then the
-  plan-usage item if the bar carries it, then long texts are shortened with an ellipsis, the
+  plan-usage item, then long texts are shortened with an ellipsis, the
   connection item last.
 - **Long texts**: a remote service with a long name, or a long download detail, is shortened with
   an ellipsis in the bar and shown in full in the item's tooltip.
@@ -224,7 +238,8 @@ reading is held or the setting is off.
   block screen omits it.
 - **FR-003**: In the steady state (connected, sandbox running, off or coming up), the window MUST
   draw nothing between the app bar and the body: the connection banner's row, the sandbox banner's
-  row and the sandbox bring-up row are gone in those states.
+  row and the sandbox bring-up row are gone in those states. A lost connection also draws no row
+  there: it is shown in the bar only (FR-009).
 - **FR-004**: The bar's first item MUST show the connection to the session service as a coloured
   dot followed by text: connected (positive dot, text naming where the service runs, for example
   "local" or the remote's name), disconnected/reconnecting (error dot), and read-only because
@@ -245,16 +260,15 @@ reading is held or the setting is off.
   (1) another window took over the project, (2) another window holds the project, (3) the service
   speaks a different contract version, (4) the service is an older build, (5) the sandbox did not
   start, (6) the sandbox is out of date, (7) a session runs without the sandbox. The lost
-  connection, which offers no action, is decided by User Story 3 scenario 5's marker and is not
-  counted here.
+  connection offers no action, so it raises no banner: it is shown in the bar's connection item
+  only (FR-004).
 - **FR-010**: A banner, when one is raised, MUST appear in the same window position as today's
   banners and in every body branch, and MUST disappear when its condition ends.
 - **FR-011**: The plan-usage indicator MUST keep its label, warning look, hover details and
-  show/hide rules; [NEEDS CLARIFICATION: its position — status bar or title bar — see User Story
-  5].
+  show/hide rules, and MUST move from the app bar into the status bar, after the CLI item; the
+  app bar no longer draws it.
 - **FR-012**: No text in the bar MUST be painted past its box at any window width the application
-  allows; when space runs out, the key hints are dropped first, then the plan-usage item if the
-  bar carries it, then texts are shortened with an ellipsis, the connection item last.
+  allows; when space runs out, the key hints are dropped first, then the plan-usage item, then texts are shortened with an ellipsis, the connection item last.
 - **FR-013**: The bar MUST be drawn beneath every floating surface (menus, dialogs, the quick
   switcher, notifications) and MUST NOT take keyboard focus from the terminal.
 - **FR-014**: The bar's items MUST be informational: none of them is a button in this feature.
