@@ -1,8 +1,7 @@
 //! The daemon's `settings` integration tests, linked as one test binary (#1175): one module per former test file.
 #[path = "../support/attention.rs"]
 mod attention;
-#[path = "../support/conn.rs"]
-mod conn;
+use attention::conn; // attention.rs loads support/conn.rs once
 
 mod catalog_adoption;
 mod diff_layout_setting;
