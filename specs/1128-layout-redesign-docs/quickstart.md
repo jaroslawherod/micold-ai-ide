@@ -41,7 +41,7 @@ crates/micold-client/tests/fixtures/layout_snapshot.txt` clean.
 
 Mutation proof: apply each edit of [covered-states §Mutation proof](contracts/covered-states.md#mutation-proof-quickstart-a3)
 in turn, run the first command, confirm the failure names the state (and the W assertion listed),
-revert. Record the four outcomes in the PR description.
+revert. Record the five outcomes in the PR description.
 
 ### A4 — Whole gate
 

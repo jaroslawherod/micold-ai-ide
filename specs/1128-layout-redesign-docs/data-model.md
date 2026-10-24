@@ -45,10 +45,13 @@ removed. A banner inside a region that still ships is not a removed element.
 | anchors | `shell.root`, `title_bar`, `shell.body`, `sidebar`, `session.area`, `status_bar`; paths from the resolved fixture |
 | gates | fixture (`layout_snapshot`), text overflow, containment, `gates/window_regions_fit.rs` (R6); both schemes |
 
-Invariants (SC-004): `title_bar.y = 0`, `title_bar.h = ` title bar height constant (44 after
-#1127), `title_bar.y + title_bar.h = shell.body.y`, `shell.body.y + shell.body.h = status_bar.y`,
-`status_bar.h = 28`, `status_bar.y + status_bar.h = 800`, `sidebar.h = session.area.h =
-shell.body.h`, `sidebar.x + sidebar.w = session.area.x`.
+Invariants (SC-004): `title_bar` is the bar, not the container holding its hairline (R6);
+`title_bar.y = 0`, `title_bar.h = app_bar::HEIGHT` (44 after #1127), `title_bar.y +
+app_bar::BOTTOM_EDGE = shell.body.y` (the bar plus its 1 px hairline, `HEIGHT + DIVIDER`; just
+`HEIGHT` if #1127 drops the divider), `shell.body.y + shell.body.h = status_bar.y`, `status_bar.h =
+28`, `status_bar.y + status_bar.h = 800`, `sidebar.h = session.area.h = shell.body.h`, `sidebar.x +
+sidebar.w = session.area.x`. In `window-overview` (W5, on the `State`): the Overview is open and
+the sidebar's selected row is the Overview row.
 
 ## Visual-pass record
 
