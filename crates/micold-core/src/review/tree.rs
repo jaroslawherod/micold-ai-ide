@@ -103,13 +103,6 @@ pub struct FolderRow {
     pub removed: u64,
 }
 
-impl FolderRow {
-    /// The innermost real folder the row stands for.
-    fn deepest(&self) -> Option<&String> {
-        self.paths.last()
-    }
-}
-
 /// A folder's contents while the tree is laid out: sub-folders by name, files as (name, leaf).
 #[derive(Default)]
 struct Node<'a> {
@@ -119,6 +112,9 @@ struct Node<'a> {
 
 /// The visible rows of `leaves` laid out as a tree: folders before files at each level, each
 /// group in byte order of its name, a folder's contents only while it is open (contract §1).
+///
+/// Until the totals, filter and sort land (tasks T007–T018), every `sort` orders as
+/// [`TreeSort::Path`], `query` is not applied and folder totals are 0.
 pub fn layout(leaves: &[Leaf], options: &LayoutOptions) -> Vec<Row> {
     let mut root = Node::default();
     for (index, leaf) in leaves.iter().enumerate() {
@@ -202,9 +198,7 @@ impl TreeChoices {
     /// folder it stands for), so a chained row opens whichever of its folders was collapsed.
     pub fn toggle(&mut self, row: &FolderRow) {
         if row.open {
-            if let Some(deepest) = row.deepest() {
-                self.collapsed.insert(deepest.clone());
-            }
+            self.collapsed.extend(row.paths.last().cloned());
         } else {
             for path in &row.paths {
                 self.collapsed.remove(path);
