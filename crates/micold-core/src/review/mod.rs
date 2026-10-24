@@ -16,6 +16,7 @@ pub mod reference;
 pub mod reply;
 pub mod store;
 pub mod target;
+pub mod tree;
 pub mod watch;
 
 use std::num::NonZeroU32;
