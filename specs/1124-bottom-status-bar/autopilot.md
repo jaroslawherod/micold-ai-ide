@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M3 pr
-- **Next step**: the orchestrator opens the M3 PR from scratchpad pr-title.md / pr-body.md
+- **Phase**: M4 pr
+- **Next step**: the orchestrator rebases m4-local after M3 merges, runs the full gate, pushes and opens the M4 PR from scratchpad m4-pr-title.md / m4-pr-body.md
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1317 | design (spec, plan, tasks) | merged (rebase) | f55628dfd03663553ffeef46dc83c99bc6b56fed |
 | #1327 | M1 | merged (rebase) | afef53af8836a80b7a4ae575f0dbb2c75dee077e |
 | #1330 | M2 | merged (rebase) | a54f93313fec84e8501d455a4ae17ea40daca185 |
+| #1333 | M3 | open | (orchestrator fixes the merge SHA) |
 
 ## Milestones
 
@@ -27,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | (orchestrator opens) | done: rebased on 4910aeee, gate green at 2045d640, A CLEAN (r2 scoped CLEAN), B CLEAN r2, visual pass 5/5 |
 | M2 | T016–T020 | light | Bring-up shown in the bar; no row above the body | #1330 | done: merged |
 | M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | T021–T025 done; gate green at ba558456, A CLEAN, B CLEAN, visual pass not run (layout snapshot + text-overflow cover the states) |
-| M4 | T026–T032 | light | CLI item follows the focused pane; Overview/Jump key hints | — | planned |
+| M4 | T026–T032 | light | CLI item follows the focused pane; Overview/Jump key hints | — | T026–T032 done on local branch m4-local (not pushed); scoped checks green (fmt, clippy, Verify tests), A CLEAN, B CHANGES r1 (cycle-log M4 section missing, fixed, prose only); visual pass not run (snapshot + text-overflow cover it) |
 | M5 | T033–T038 | light | Plan usage moves from the app bar into the status bar | — | planned |
 
 ## Decisions
@@ -58,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | A M3 (code-review high) | 1 | 1a47b96016f1232a162280f363770e2d9277dcd1:ba5584566b52696ac012392be4583a271a73bbcf | CLEAN (2 MINOR: source-substring tests weak — declined, the overview height test measures the real banner) |
 | B M3 (conformance) | 1 | 1a47b96016f1232a162280f363770e2d9277dcd1:ba5584566b52696ac012392be4583a271a73bbcf | CLEAN (2 MINOR: same two tests; no test for the banner ending on Connected — declined) |
+| A M4 (code-review high, `claude -p` reviewer) | 1 | 7749633dda9668555742afd106cf354a3d225446:c6d03bc1ef8b3c15779ea453f9bc85b3e0392634 | CLEAN |
+| B M4 (conformance, `claude -p` reviewer) | 1 | 7749633dda9668555742afd106cf354a3d225446:c6d03bc1ef8b3c15779ea453f9bc85b3e0392634 | CHANGES: 1 MAJOR (no M4 section in tdd/cycle-log.md; added, prose only), 1 MINOR (`session_view_visible` repeats checks of earlier arms; kept on purpose, so view_with and the bar share one predicate) |
 
 ## Declined review findings
 
