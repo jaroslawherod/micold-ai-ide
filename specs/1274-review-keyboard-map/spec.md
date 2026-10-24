@@ -27,6 +27,10 @@ This is slice R5 of `docs/development/review-redesign.md` (Proposal item 6, *Nex
   crates/micold-client/src/features/changes.rs `Msg::SendPressed` counts saved pending comments only
   and leaves the composer untouched; spec.md#FR-009 and docs/development/review-redesign.md#proposal
   item 8: composer text is kept)_
+- Q: Are the single-letter review keys on by default, or behind a Settings switch (redesign open
+  question 5)? → A: On by default, no setting (FR-001). _(provisional — recommended option, awaiting
+  user; evidence: spec.md#terms and FR-002/SC-002 keep the keys away from text fields and terminals;
+  specs/803-keyboard-navigation/spec.md#assumptions: no key-binding settings today)_
 
 ## Dependencies
 
@@ -282,8 +286,7 @@ selected. Then type a word from a comment and choose it; its card is shown.
 - **FR-001**: While the review has the keyboard, the Review tab MUST act on these keys: `j` next
   file, `k` previous file, `n` next hunk, `p` previous hunk, `]` next comment, `[` previous comment,
   `v` toggle the selected file's reviewed mark, `g` next unreviewed file, `c` comment, `?` open the
-  shortcut sheet. [NEEDS CLARIFICATION: are the single-letter keys on by default, or behind a
-  Settings switch (redesign open question 5)? If behind a switch, which default?]
+  shortcut sheet. The keys are on by default, with no Settings switch to turn them off.
 - **FR-002**: When the review does not have the keyboard, none of the single keys of FR-001 MUST
   change the Review tab (the send chord's one exception, the composer, is FR-010's); the key MUST reach the field, dialog or surface that has the keyboard as it does today.
 - **FR-003**: `j` and `k` MUST select the next or previous file in file order, wrapping at both ends,
