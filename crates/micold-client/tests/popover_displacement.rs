@@ -243,7 +243,8 @@ fn every_popover_is_in_the_table() {
     // Twenty-three with `daemon_form`, the add and edit dialog (feature 1092).
     // Twenty-four with `daemon_details`, the read-only details dialog (feature 1092).
     // Twenty-six with `confirm_bypass_start` and `confirm_bypass_mode` (#942).
-    const DIALOGS: usize = 26;
+    // Twenty-seven with `confirm_switch_kind`, a switch of kind's confirmation (#943).
+    const DIALOGS: usize = 27;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

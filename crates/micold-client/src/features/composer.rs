@@ -968,3 +968,35 @@ impl crate::app::State {
         );
     }
 }
+
+/// The confirmation a switch asks for while work is in progress (#943 FR-021), as a floating
+/// surface: open while the switch offer of `0` is the service's confirmation step. Escape and a
+/// scrim click dismiss it, which changes nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmSwitchKindDialog(pub SessionId);
+
+impl crate::overlay::FloatingSurface for ConfirmSwitchKindDialog {
+    fn id(&self) -> crate::overlay::SurfaceId {
+        crate::overlay::SurfaceId::new("confirm_switch_kind")
+    }
+
+    fn layer(&self) -> micold_core::overlay::Layer {
+        micold_core::overlay::Layer::Dialog
+    }
+
+    fn dismissal(&self) -> crate::overlay::DismissalRules {
+        crate::overlay::DismissalRules::for_layer(micold_core::overlay::Layer::Dialog)
+            .cancelled_by(crate::app::Message::Composer(Msg::SwitchDismissed(self.0)))
+    }
+}
+
+impl crate::overlay::registry::Registered for ConfirmSwitchKindDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .composers
+            .switch_offer
+            .as_ref()
+            .filter(|offer| offer.confirm.is_some())
+            .map(|offer| ConfirmSwitchKindDialog(offer.session))
+    }
+}

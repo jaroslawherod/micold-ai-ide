@@ -323,6 +323,8 @@ register! {
     crate::features::session::ConfirmBypassStartDialog => crate::ui::confirm_bypass::start_dialog,
     crate::features::permission_prompts::ConfirmBypassModeDialog => crate::ui::confirm_bypass::mode_dialog,
     crate::features::session::ConfirmSessionRemoveDialog => crate::ui::confirm_session_remove::dialog,
+    // #943: the confirmation of a switch of kind while work is in progress (FR-021).
+    crate::features::composer::ConfirmSwitchKindDialog => crate::ui::confirm_switch_kind::dialog,
     crate::features::session::SessionContextMenu {
         displaces: crate::features::overview::OverviewCardMenu,
     },
