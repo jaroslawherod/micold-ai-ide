@@ -53,12 +53,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | fd089e07fa581ec092d2c314ae1f7f1a1ddc28a9:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CHANGES: 1 MAJOR (declined), 3 MINOR (fixed) |
 | Plan | 1 | 5f5fd06c9c015ce43b1c2b6043648cfdbcdfd036:eac77a56e214e2eccdb0fb472fca37e75f1274fa | CLEAN: 1 MINOR (fixed, prose only) |
 | Tasks | 1 | 42a7804ed6fa03cda55289e1422ccf12057a0998:41be4d60561ee8c3d899e38224a6e17ac52eafd3 | CLEAN: 3 MINOR (F2 fixed: focus/dialog cleanup named in T037; F1, F3 task size left, D10) |
+| Review A M1 (code-review high) | 1 | f9a89ea1e47eb2cbbd913fbc60a375822d8a5c1c:0150d727dfd87b94372093b4ab921f5a7101e7c8 | CLEAN: 7 MINOR (2 fixed: card_preview reuses `shortened`, `Drawer::apply` no longer clones per event; 5 declined) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | — | Spec r1 | F1 MAJOR: Clear sent / Discard drafts act on the whole entry today, not the shown diff | Wrong: today they act on what is shown (reviewing-changes.md "Commenting on a pull request": "act only on the comments of what is shown"; features/changes.rs discard_prompt and status_counts use in_scope(view_scope)). The older "Clearing and discarding" wording is stale; added Story 2 scenario 5 to make the rule explicit |
+| M1 | Review A r1 | MINOR: a report while the Review tab is not shown consumes the watch | Specified: T024 and data-model `Reported` ("`shown == false` consumes the watch"), FR-020 "only while this entry's Review tab is shown" |
+| M1 | Review A r1 | MINOR: `SEND_WIDTH = 176` is unmeasured | Provisional by design; T009 (M2) measures the widest label and sets it |
+| M1 | Review A r1 | MINOR: `SendButton::primary` duplicates `enabled` | Data model and contract B4 name the field; kept for the component's API |
+| M1 | Review A r1 | MINOR: Close/Escape on a closed drawer keep a pending watch | Intended: closing an already closed drawer is not a close; Esc must stay unused (returns false); pinned by `escape_on_a_closed_drawer_keeps_a_pending_watch` |
+| M1 | Review A r1 | MINOR: a reply ending in `\n` measures an extra line | A stored reply is trimmed (`Report::reply`), so it never ends in a newline |
 
 ## Handover
 

@@ -178,7 +178,7 @@ at 4 lines with Show all; quickstart §B step 6.
 ### Layer A — core rule
 
 - [x] T044 [P] [US4] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-core/src/review/reply.rs` test `card_preview(reply, lines_of)`: a reply of at most 4 lines is kept whole with `cut == false`; a single long line that wraps counts its drawn lines; over 4 lines is cut with `cut == true`; the 4,000-character `CARD_CHARS` cap still applies and sets `cut`; control characters are shown as `display()` shows them (FR-021, R7)
-- [x] T045 [US4] *Layer A* Implement `CARD_LINES: usize = 4`, `Preview { text: Cow<str>, cut: bool }` and `card_preview` (`display()`, then the `CARD_CHARS` cap, then `tooltip::clamp_to_lines(.., CARD_LINES, lines_of)`) in `crates/micold-core/src/review/reply.rs` until T044 passes
+- [x] T045 [US4] *Layer A* Implement `CARD_LINES: usize = 4`, `Preview { text: String, cut: bool }` and `card_preview` (`display()`, then the `CARD_CHARS` cap, then `tooltip::clamp_to_lines(.., CARD_LINES, lines_of)`) in `crates/micold-core/src/review/reply.rs` until T044 passes
 
 ### Layer A — components and docs
 

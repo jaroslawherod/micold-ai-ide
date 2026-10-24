@@ -17,60 +17,15 @@ pub const CARD_LINES: usize = 4;
 /// Pictures glyph (U+2400 + code, so ESC → `␛`, TAB → `␉`) and DEL as `␡`, so a reply can never
 /// act as a control code (Edge Cases "control characters").
 pub fn display(reply: &str) -> String {
-    reply.chars().map(shown_as).collect()
-}
-
-fn shown_as(c: char) -> char {
-    match c {
-        '\n' => c,
-        '\u{0}'..='\u{1f}' => char::from_u32(0x2400 + u32::from(c)).unwrap_or(c),
-        '\u{7f}' => '\u{2421}',
-        _ => c,
-    }
-}
-
-/// What a comment card shows of a reply.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Preview<'a> {
-    /// The reply as drawn, shortened when `cut`.
-    pub text: Cow<'a, str>,
-    /// Whether it was shortened, so the card offers "Show all".
-    pub cut: bool,
-}
-
-/// `reply` as a card shows it (FR-021, research R7): [`display`]ed, then cut to [`CARD_CHARS`]
-/// characters, then to [`CARD_LINES`] lines by `lines_of`, the card's measure of how many lines a
-/// text takes at its width (a long line that wraps counts the lines it takes).
-pub fn card_preview(reply: &str, lines_of: impl Fn(&str) -> usize) -> Preview<'_> {
-    let shown: Cow<'_, str> = if reply.chars().any(|c| shown_as(c) != c) {
-        Cow::Owned(display(reply))
-    } else {
-        Cow::Borrowed(reply)
-    };
-    let (capped, capped_cut) = match shown.char_indices().nth(CARD_CHARS).map(|(at, _)| at) {
-        Some(at) => match shown {
-            Cow::Borrowed(text) => (Cow::Borrowed(&text[..at]), true),
-            Cow::Owned(mut text) => {
-                text.truncate(at);
-                (Cow::Owned(text), true)
-            }
-        },
-        None => (shown, false),
-    };
-    let clamped = match tooltip::clamp_to_lines(&capped, CARD_LINES, lines_of) {
-        Cow::Borrowed(_) => None,
-        Cow::Owned(text) => Some(text),
-    };
-    match clamped {
-        Some(text) => Preview {
-            text: Cow::Owned(text),
-            cut: true,
-        },
-        None => Preview {
-            text: capped,
-            cut: capped_cut,
-        },
-    }
+    reply
+        .chars()
+        .map(|c| match c {
+            '\n' => c,
+            '\u{0}'..='\u{1f}' => char::from_u32(0x2400 + u32::from(c)).unwrap_or(c),
+            '\u{7f}' => '\u{2421}',
+            _ => c,
+        })
+        .collect()
 }
 
 /// The first `max_chars` characters of `reply` and `true`, or `reply` whole and `false` when it
@@ -79,6 +34,30 @@ pub fn shortened(reply: &str, max_chars: usize) -> (String, bool) {
     match reply.char_indices().nth(max_chars) {
         Some((cut, _)) => (reply[..cut].to_owned(), true),
         None => (reply.to_owned(), false),
+    }
+}
+
+/// What a comment card shows of a reply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Preview {
+    /// The reply as drawn, shortened when `cut`.
+    pub text: String,
+    /// Whether it was shortened, so the card offers "Show all".
+    pub cut: bool,
+}
+
+/// `reply` as a card shows it (FR-021, research R7): [`display`]ed, then [`shortened`] to
+/// [`CARD_CHARS`] characters, then cut to [`CARD_LINES`] lines by `lines_of`, the card's measure of
+/// how many lines a text takes at its width (a long line that wraps counts the lines it takes).
+pub fn card_preview(reply: &str, lines_of: impl Fn(&str) -> usize) -> Preview {
+    let (text, capped) = shortened(&display(reply), CARD_CHARS);
+    let clamped = match tooltip::clamp_to_lines(&text, CARD_LINES, lines_of) {
+        Cow::Owned(clamped) => Some(clamped),
+        Cow::Borrowed(_) => None,
+    };
+    match clamped {
+        Some(text) => Preview { text, cut: true },
+        None => Preview { text, cut: capped },
     }
 }
 
@@ -125,7 +104,7 @@ mod tests {
     fn a_long_line_counts_the_lines_it_wraps_to() {
         let four = "x".repeat(40);
         let preview = card_preview(&four, wrapped(10));
-        assert_eq!((preview.text.as_ref(), preview.cut), (four.as_str(), false));
+        assert_eq!((preview.text, preview.cut), (four, false));
 
         let five = "word ".repeat(10);
         let preview = card_preview(&five, wrapped(10));
