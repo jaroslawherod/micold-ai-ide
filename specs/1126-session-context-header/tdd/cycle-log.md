@@ -54,3 +54,7 @@ Append only.
   gate now subtracts the header's measured height (`session_area_fits::header_height`) from main's
   own bound. Green: `layout_snapshot` 107 passed, with the fixture regenerated on the new base and
   only the six session states differing from main.
+- Same rebase: `terminal_size_reporting::the_terminal_area_reports_its_size_before_any_output_arrives`
+  reported `129×30` (`rows > 30` failed). The header takes rows from the pane. The bound is now
+  `cols > 100 && rows >= 30`, because the columns alone tell the measurement from the daemon's
+  100×30 seed.
