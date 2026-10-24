@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M4
-- **Next step**: M4 scoped gate and review A (see Handover)
+- **Next step**: M4 scoped gate and review A
 
 ## Pull requests
 
@@ -96,19 +96,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 
 ## Handover
 
-M4 unit 1 handed over at the context cap (checkpoint 274k). **Done**: branch reset onto origin/main
-9c2e5b7b (M3 #1359 recorded); T042–T051 implemented and ticked in commit 1ff3de68 (chip bar, more
-menu, `Icon::MoreHorizontal`, registry `SidebarMoreMenu`, test migration, exemptions removed, three
-chip-bar covered states at 180/300/600, snapshot regenerated, docs). The M4 **Verify** suites (all 16
-`--test` targets, `--lib -- sidebar`) passed before the last edit; that edit (refresh item's label is
-its tooltip, D20; one added assert in `features_sidebar.rs` `each_item_keeps_the_header_buttons_tooltip`;
-user-guide wording) has not been run. Decisions D19–D21. Not pushed, no PR.
-**Next step**: verify.md step 1: scoped gate (`scripts/autopilot/scoped-gate.sh`) with review A
-(`high`) on `origin/main...HEAD`; then review B + visual pass (quickstart §B1 chip-bar half, §B5,
-§B8; light and dark; check the ⋯ menu opens under its trigger, and by keyboard at the sidebar edge);
-full gate (`scripts/gate.sh`, rebase first if origin/main moved); PR files in the scratchpad.
-**Open findings**: none yet. At 180px the chips take 94px beside the actions, so six chips stack
-one per line (212px tall chip bar) — within FR-016, but worth the visual pass's eye.
+None.
 
 ## Open escalation
 
