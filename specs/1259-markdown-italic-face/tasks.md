@@ -92,6 +92,8 @@ US2 alone is the showcase sample (see the ledger, milestone cut).
   `test_support::renderer()`, `test_support::resolves_to_bundled` (line 638) holds for `ROBOTO`
   with `Slant::Italic` at weights 400, 500, 600 → the three italic bytes, and at `Weight::Bold` →
   `ROBOTO_SEMIBOLD_ITALIC_BYTES` (FR-001, FR-002, FR-003, FR-005); messages name the face
+  (assumes no host Roboto italic: it resolves through the global font system, so on a machine
+  with `fonts-roboto` installed it can fail until the pin joins `install_roboto` in T020)
 - [ ] T008 [US1] `client/src/ui/material/test_support.rs::renderer`: replace the three
   `load_font(ROBOTO_*)` lines (73–75) with `super::install_roboto(&mut fonts)` inside the `Once`.
   T007 passes
@@ -220,7 +222,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   FR-010; SC-001, SC-002 (bundled faces), SC-004
 - **Verify**: `cargo test -p micold-client --lib -- roboto link_text`; `cargo test -p micold-client
   --test roboto_font --test layout_snapshot --test layout_apparatus`; `mise run test-core`;
-  quickstart §B B1–B4, B6, B7 (evidence in `visual-pass/`)
+  quickstart §B B1–B4, B6, B7 (evidence in `visual-pass/`); merge check: `mise run gate`
+  (`scripts/gate.sh` in a cloud session)
 - **Depends on**: —
 - **Tier**: full
 
@@ -232,7 +235,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   as on one without
 - **Satisfies**: US3 acceptance scenario 2; FR-006; FR-003 and FR-004's exception on every host;
   SC-002, SC-003
-- **Verify**: `cargo test -p micold-client --lib -- roboto`; quickstart §B B5
+- **Verify**: `cargo test -p micold-client --lib -- roboto`; quickstart §B B5; merge check:
+  `mise run gate` (`scripts/gate.sh` in a cloud session)
 - **Depends on**: M1
 - **Tier**: light (one function and its tests in `roboto.rs`, the pattern of `pin_monospace` and its
   host-copy test in `mono.rs`, named in plan D2 and contract C-2)
