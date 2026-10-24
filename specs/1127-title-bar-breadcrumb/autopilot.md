@@ -21,6 +21,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | — | todo |
+| M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | — | todo |
+| M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | todo |
+| M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | todo |
 
 ## Decisions
 
@@ -35,6 +39,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D7 | clarify | Bar elevation on sidebar scroll? | Kept unchanged (FR-019) | agent-resolved | app.rs State::app_bar_elevated |
 | D8 | clarify | Contrast rule for the disabled field? | FR-017 covers enabled controls; disabled uses 38% treatment | agent-resolved | specs/003-material-design-layout/contracts/design-tokens.md |
 | D9 | plan | Bar figures: 43 + 1 divider, 40 dp targets, keep `anatomy::app_bar` name; 3 new shared components; US3 waits for #1125 M3 (not on origin/main 2026-10-24) | as research R1, R2, R12 | agent-resolved | research.md R1–R12; git log origin/main |
+| D10 | tasks | Plan paths after #1262 moved the generic components into `crates/micold-material`? | New and reshaped generic components go in `crates/micold-material/src/`; the app icon bytes stay in the client (`shell/startup.rs` `pub(crate) APP_ICON_RGBA`), `AppMark` takes a handle and a name; plan.md and research.md (header, R9, R11) fixed | agent-resolved | git show a4f2edd2 (#1262); crates/micold-material/tests/no_domain_types.rs |
+| D11 | tasks | Split US1 (24 tasks with Setup/Foundational)? | Yes, along its scenarios: M1 the bar's shape (s1 part, s7, s8), M2 the breadcrumb (s1–s6) | agent-resolved | milestones.md rule 3; tasks.md *Milestones* note |
 
 ## Review rounds
 
