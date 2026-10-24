@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: implement M1
-- **Next step**: M1 (T001–T012) implement, review, gate, push
+- **Phase**: M1 PR
+- **Next step**: orchestrator opens the M1 PR from branch claude/project-thread-vf2ck6 (title/body in the M1 unit's scratchpad, label docs-not-needed), waits on CI and merges; then milestone M2 (T013–T017)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1346 | design (spec, plan, tasks) | merged | 527d91b36196fda8950f2d3e1d6a193fe3a0f1d9 |
+| (to open) | M1 core rules + advanced request | pushed, PR not opened (gh unauthenticated) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Core rules + advanced request (no UI) | — | in progress |
+| M1 | T001–T012 | full | Core rules + advanced request (no UI) | (to open) | gate green, pushed |
 | M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | — | planned |
 | M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | — | planned |
 | M4 | T024–T032 | full | Jira's error messages and Retry | — | planned |
