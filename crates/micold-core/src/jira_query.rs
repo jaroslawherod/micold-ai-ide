@@ -108,7 +108,9 @@ fn clean(raw: &str) -> String {
 }
 
 /// The one left-to-right pass of research R2: the byte offset of the first sort clause outside
-/// quoted strings, or why the query is refused. An unclosed quote outranks unbalanced parentheses.
+/// quoted strings and parentheses, or why the query is refused. An unclosed quote outranks
+/// unbalanced parentheses. An `ORDER BY` inside parentheses stays in the condition, so the split
+/// never cuts a group and both halves balance on their own.
 fn scan(text: &str) -> Result<Option<usize>, QueryRefusal> {
     let mut quote: Option<char> = None;
     let mut escaped = false;
@@ -133,7 +135,7 @@ fn scan(text: &str) -> Result<Option<usize>, QueryRefusal> {
                 depth -= 1;
                 went_below |= depth < 0;
             }
-            _ if sort_at.is_none() && sort_clause_at(text, at) => sort_at = Some(at),
+            _ if sort_at.is_none() && depth == 0 && sort_clause_at(text, at) => sort_at = Some(at),
             _ => {}
         }
     }

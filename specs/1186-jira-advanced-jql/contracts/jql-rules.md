@@ -22,7 +22,8 @@ Order: clean; refuse `TooLong` when the cleaned text has more than 2,000 `char`s
 Scanner state: `quote: Option<char>`, `escaped: bool`, `depth: i32`, `sort_at: Option<usize>`.
 
 - Outside a string: `"` or `'` opens one; `(` adds 1; `)` subtracts 1 and `UnbalancedParentheses`
-  when below 0; while `sort_at` is `None`, a sort clause starting here sets it.
+  when below 0; while `sort_at` is `None` and `depth` is 0, a sort clause starting here sets it (an
+  `ORDER BY` inside parentheses stays in the condition, so the split never cuts a group).
 - Inside a string: `\` sets `escaped` (the next char is text); the opening quote char, unescaped,
   closes it; anything else is text.
 - End: inside a string → `UnclosedQuote`; `depth != 0` → `UnbalancedParentheses`.
@@ -40,6 +41,7 @@ absent or not `[A-Za-z0-9_]`.
 | `type = Bug order  by created` / `type = Bug ORDER` ⏎ `BY created` (newline cleaned) | sort at `order` / `ORDER` |
 | `summary ~ "order by"` / `summary ~ 'order by'` | no sort |
 | `reorder by = 1` / `x ORDER BYTES` | no sort |
+| `(a ORDER BY b) OR (project = X)` | no sort: all condition, scoped inside `AND (…)` |
 | `summary ~ 'a)'` / `summary ~ "a\"b)"` | ok |
 | `summary ~ "abc` | `UnclosedQuote` |
 | `x = 1) OR project = OTHER OR (x = 1` | `UnbalancedParentheses` (depth −1) |
