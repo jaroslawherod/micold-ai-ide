@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use micold_client::app::State as Window;
 use micold_client::features::composer::{
     composer_key, shows_composer, transcript_key, DroppedFiles, InputState, KeyIntent, State,
-    CONNECTION_LOST,
+    CONNECTION_LOST, EDIT_GONE, NOT_CONNECTED, NOT_RUNNING, OVERDUE,
 };
 use micold_client::keymap::{Key, KeyInput, Mods, NamedKey, PhysicalKey};
 use micold_core::path_insert::{plan_insertion, InsertTarget, ShellKind};
@@ -376,8 +376,9 @@ fn can_send_needs_a_sendable_draft_a_running_session_a_connection_and_no_pending
     type_text(&mut state, s, "hello");
     assert!(state.can_send(s, true));
     assert!(!state.can_send(s, false), "no connection");
-    assert!(
-        state.unavailable(s, false).is_some(),
+    assert_eq!(
+        state.unavailable(s, false),
+        Some(NOT_CONNECTED),
         "the composer says so"
     );
 
@@ -385,7 +386,7 @@ fn can_send_needs_a_sendable_draft_a_running_session_a_connection_and_no_pending
     assert!(state.can_send(s, true), "a busy session queues it");
     state.input_reported(s, input(TurnPhase::NotRunning));
     assert!(!state.can_send(s, true), "not running");
-    assert!(state.unavailable(s, true).is_some());
+    assert_eq!(state.unavailable(s, true), Some(NOT_RUNNING));
     assert_eq!(text_of(&state, s), "hello", "the draft is kept");
 
     state.input_reported(s, input(TurnPhase::Idle));
@@ -487,7 +488,7 @@ fn stop_is_offered_only_while_busy_and_stop_session_only_while_overdue() {
     state.input_reported(s, input(overdue()));
     assert!(state.offers_stop(s), "the user may interrupt again");
     assert!(state.offers_stop_session(s));
-    assert!(state.overdue_notice(s).is_some());
+    assert_eq!(state.overdue_notice(s), Some(OVERDUE));
     state.input_reported(s, input(TurnPhase::Idle));
     assert!(!state.offers_stop(s));
     assert!(!state.offers_stop_session(s));
@@ -575,7 +576,10 @@ fn an_edit_of_an_entry_that_left_the_queue_ends_with_a_notice() {
     assert!(state.start_queue_edit(s, QueueEntryId(1)));
     state.input_reported(s, input(busy()));
     assert!(state.queue_edit_request(s).is_none());
-    assert!(state.composer(s).unwrap().notice.is_some());
+    assert_eq!(
+        state.composer(s).unwrap().notice.as_deref(),
+        Some(EDIT_GONE)
+    );
 }
 
 #[test]

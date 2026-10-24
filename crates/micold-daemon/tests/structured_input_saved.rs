@@ -248,12 +248,6 @@ async fn a_saved_queue_survives_a_restart_on_hold() {
     assert_eq!(texts(&queue), ["q1", "q2"], "in order");
     assert_eq!(queue[0].attachments[0].name, "shot.png");
     assert_ne!(queue[0].id, queue[1].id, "fresh ids, one each");
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(
-        delivered(case.project.path()),
-        0,
-        "nothing delivered on hold"
-    );
 
     let answer = request(
         &mut client,
@@ -275,7 +269,48 @@ async fn a_saved_queue_survives_a_restart_on_hold() {
         }
         other => panic!("not taken: {other:?}"),
     }
+    // The take's answer orders after the restart's pump: the hold seen above is what kept the
+    // head in, so no sleep is needed. The hold is also the state a release would clear.
+    assert_eq!(
+        delivered(case.project.path()),
+        0,
+        "nothing delivered on hold"
+    );
     restarted.stop_session(case.id());
+}
+
+/// FR-022, Q1: the hold is restored with the queue itself, not only by the process start that
+/// follows (`on_process_start` holds a non-empty queue too, so the restart test above cannot tell
+/// the two apart): a daemon whose session is not started shows the saved queue already held.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restored_queue_is_held_before_any_process_starts() {
+    let case = Case::new();
+    let state = case.daemon();
+    let _client = queued(&state, case.id(), &[("q1", vec![]), ("q2", vec![])]).await;
+    case.saved_is(Some(&["q1", "q2"])).await;
+    state.stop_session(case.id());
+    drop(state);
+
+    let restarted = service_saving(
+        case.project.path(),
+        vec![case.session.clone()],
+        case.history.path(),
+    );
+    // Loading the session's saved stream is what restores its queue; no process is started.
+    let loader = Arc::clone(&restarted);
+    let id = case.id();
+    tokio::task::spawn_blocking(move || loader.event_stream_loading(id, true))
+        .await
+        .unwrap()
+        .expect("a stream");
+    let mut client = conn::connect(&restarted).await;
+    let (phase, hold, queue) = input_until(&mut client, case.id(), "restored, held", |_, _, q| {
+        !q.is_empty()
+    })
+    .await;
+    assert_eq!(phase, TurnPhase::NotRunning, "no process has started");
+    assert_eq!(texts(&queue), ["q1", "q2"]);
+    assert!(hold, "restored on hold by the restore itself");
 }
 
 /// Q4: with saving off nothing is written, and after a restart the queue is empty.
@@ -284,6 +319,7 @@ async fn with_saving_off_the_queue_is_not_kept() {
     let case = Case::new();
     let state = case.daemon_not_saving();
     let _client = queued(&state, case.id(), &[("q1", vec![])]).await;
+    // A wait, kept: a negative (no write ever comes) has no event to order after.
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(!case.queue_file().exists(), "nothing written");
     state.stop_session(case.id());
@@ -331,6 +367,7 @@ async fn the_queue_file_goes_when_the_queue_empties_and_with_the_session() {
         let _ = pty.kill();
     }
     assert!(!case.queue_file().exists(), "deleted with the session");
+    // A wait, kept: a negative (no write ever comes) has no event to order after.
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(!case.queue_file().exists(), "and not written again");
 
@@ -405,6 +442,7 @@ async fn quick_edits_are_saved_in_order() {
     }
     conn::answer(&mut client, 119).await;
     case.saved_is(Some(&["edit 19"])).await;
+    // A wait, kept: a negative (no write ever comes) has no event to order after.
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(case.saved_texts(), Some(vec!["edit 19".to_string()]));
     state.stop_session(case.id());

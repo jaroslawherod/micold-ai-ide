@@ -251,3 +251,24 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
   the reducer sets the region only when no field holds the keyboard and clears only what it set.
 - green: `composer_tab` 2, `layout_snapshot` 98, `features_composer` 29, `field_focus_call_sites` 6,
   `focus_within` 1, `structured_input` 19.
+
+## Close — test-strength fixes
+
+### Cycle T065 — exact sentences in `features_composer` (finding 3)
+
+- tests: `features_composer.rs` now asserts `unavailable(s,false) == Some(NOT_CONNECTED)`,
+  `unavailable(s,true) == Some(NOT_RUNNING)`, `overdue_notice == Some(OVERDUE)` and the queue-edit
+  notice `== Some(EDIT_GONE)` in place of four `is_some()` checks.
+- red: mutant swapping `NOT_CONNECTED`/`NOT_RUNNING` at `composer.rs:492-494`;
+  `scripts/build-lock.sh cargo test -p micold-client --test features_composer` →
+  `left: Some("The session is not running: the draft is kept.")` / `right: Some("Not connected to the session service: ...")`
+  at `features_composer.rs:379`; 28 passed, 1 failed. Mutant restored, `git diff` on `src` empty.
+- green: `features_composer` 29 passed.
+
+### Cycle — daemon test strength (T064, T069, T070)
+
+- tests: `structured_input::a_late_exit_of_an_earlier_process_leaves_the_running_queue_alone` (T064: a `turn_closed` Exit naming process 0 while a later process runs a busy turn with a queue; a later send's ack orders after it; asserts `!hold` and, after the turn ends, q1 delivered). `structured_input_saved::a_restored_queue_is_held_before_any_process_starts` (T070: the daemon-level pin of `restored`'s hold; `a_saved_queue_survives_a_restart_on_hold` cannot pin it because `on_process_start` re-holds a non-empty queue, so the mutant is equivalent there; the new test loads the saved stream without starting a process).
+- red T064: mutant `state.rs:7699` `.is_none_or(|_child| true)`; `scripts/build-lock.sh cargo test -p micold-daemon --test structured_input` → `the earlier process's exit does not hold: Seen { phase: Busy {..}, hold: true, ...}`, 19 passed 1 failed.
+- red T070: mutant `input.rs:134` `input.hold = false`; `... --test structured_input_saved` → `restored on hold by the restore itself`, 5 passed 1 failed (before the new test the mutant left all 5 green).
+- T069: the 300 ms sleep in `structured_input_saved` "nothing delivered on hold" is gone (the observed hold plus the take's round trip is the condition). Kept, with the reason in a comment: `delivered_stays` and `an_interrupt_asked_before_its_message...` (a negative: nothing ever arrives, so no event orders after it) and the three saved-file negatives (not written / not written again / no later write after the last edit).
+- mutants restored; `git diff` on `src` empty. green: `structured_input` 20, `structured_input_saved` 6.
