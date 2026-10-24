@@ -6,6 +6,7 @@ use crate::features::session::Msg as SessionMsg;
 use crate::features::session::{PressTarget, StartIntent};
 use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::sidebar::TagFilter;
+use crate::features::sidebar::{row_selected, RowSelection, SelectableRow};
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
@@ -255,7 +256,13 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // room is kept.
     // Feature 582 (FR-012): the start-up offer, between the header and the list. The shared banner,
     // not a snackbar: the offer stands until the user answers it.
-    let mut content = column![header];
+    // Feature 1125 (S1, R9): the Overview row first, above the header and outside the scroll
+    // region, so it stays the first row however far the list is scrolled.
+    let mut content = column![];
+    if let Some(overview) = overview_row(state, r) {
+        content = content.push(overview);
+    }
+    let mut content = content.push(header);
     if let Some(offer) = offer_banner(state, r) {
         content = content.push(offer);
     }
@@ -275,6 +282,67 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     material::Surface::new(content, SurfaceKind::Sidebar, r)
         .width(Length::Fixed(width))
         .height(Length::Fill)
+        .into()
+}
+
+/// What the rows' selected look is read from (feature 1125, FR-009).
+fn row_selection(state: &State) -> RowSelection<'_> {
+    RowSelection {
+        overview_open: state.overview.open,
+        viewed: state.session.active,
+        revealed: state.sidebar.revealed.as_ref(),
+    }
+}
+
+/// The Overview row (feature 1125, S2, R9), or `None` with no project open: selected exactly while
+/// the Overview is open, pressable only while Settings is closed, and carrying the top bar button's
+/// badge and tooltip, read from the same cards.
+fn overview_row(state: &State, r: Roles) -> Option<Element<'static, Message>> {
+    use crate::features::overview::{self, Msg};
+    state.workspace.active.as_ref()?;
+    let settings_open = state.settings.settings_draft.is_some();
+    Some(overview_row_view(
+        overview::badge(&crate::ui::overview::cards(state)),
+        state.overview.open,
+        (!settings_open).then_some(Message::Overview(Msg::Opened { settings_open })),
+        Message::NoOp,
+        r,
+    ))
+}
+
+/// The Overview row as drawn (feature 1125, R9; the showcase poses it too): "Overview" with its
+/// icon in a one-item tree with the sidebar's density and primary selection, a Tab stop while it
+/// has `on_press`, the badge's words in a solid chip of its tone's container pair, and the
+/// Overview's tooltip. `idle` is what a change of the row's keyboard focus sends.
+pub fn overview_row_view<'a, M: Clone + 'a>(
+    badge: Option<crate::features::overview::Badge>,
+    selected: bool,
+    on_press: Option<M>,
+    idle: M,
+    r: Roles,
+) -> Element<'a, M> {
+    use crate::features::overview::{overview_tooltip, Tone};
+    let mut item = TreeItem::new(0, "Overview", r.on_surface)
+        .with_icon(Icon::Overview)
+        .selected(selected)
+        .row_tooltip(overview_tooltip(badge.as_ref()))
+        .tab_stop()
+        .keyboard_focus(false, move |_| idle.clone());
+    if let Some(on_press) = on_press {
+        item = item.on_press(on_press);
+    }
+    if let Some(badge) = badge {
+        let (fill, on_fill) = match badge.tone {
+            Tone::Error => (r.error_container, r.on_error_container),
+            Tone::Warning => (r.warning_container, r.on_warning_container),
+        };
+        item = item.trailing_element(material::Tag::new(badge.label, fill).solid(on_fill));
+    }
+    TreeView::new(vec![item], r)
+        .density(crate::features::sidebar::SIDEBAR_DENSITY)
+        .label_role(TypeRole::SidebarName)
+        .selected_label_role(TypeRole::SidebarSessionCurrent)
+        .selection(material::Selection::Primary)
         .into()
 }
 
@@ -737,20 +805,19 @@ fn build_items(
             );
         }
         if let Some(main) = node.main_session() {
-            // The row carries the highlight when it draws no sub-row for the viewed session.
-            let holds_viewed = state
-                .session
-                .active
-                .is_some_and(|a| node.sessions.iter().any(|s| s.id == a));
-            item = item
-                .selected(holds_viewed && !node.sessions_shown())
-                .on_press(Message::Session(SessionMsg::Selected(main)));
+            item = item.on_press(Message::Session(SessionMsg::Selected(main)));
         }
-        // The row the Overview sent the user to wears the selected look until the next selection
-        // (feature 813, R12).
-        if state.sidebar.revealed.as_ref() == Some(&node.location()) {
-            item = item.selected(true);
-        }
+        // The row holding the viewed session when it draws no sub-row for it, or the row the
+        // Overview sent the user to; none while the Overview is open (feature 1125, FR-009).
+        let location = node.location();
+        item = item.selected(row_selected(
+            &row_selection(state),
+            SelectableRow::Location {
+                location: &location,
+                sessions: &node.sessions,
+                sessions_shown: node.sessions_shown(),
+            },
+        ));
         // Row tooltip (feature 010 FR-010, extended by feature 029): the full name the row had to
         // shorten, plus the facts its prettified label leaves out. Attached unconditionally — an
         // unknown project root costs the tooltip its `Location` line, not its existence (029 R5),
@@ -844,7 +911,10 @@ fn build_items(
                         session_tree_item(
                             depth + 1 + row.depth.min(MAX_NESTING) as u16,
                             row.session,
-                            state.session.active,
+                            row_selected(
+                                &row_selection(state),
+                                SelectableRow::Session(row.session.id),
+                            ),
                             in_view,
                             Some(row.session.id) != main && !row.place.is_child(),
                             row.place,
@@ -993,7 +1063,7 @@ fn with_fold(
 fn session_tree_item(
     depth: u16,
     session: &micold_core::session::Session,
-    active_session: Option<micold_core::session::SessionId>,
+    selected: bool,
     in_view: Option<micold_core::session::SessionId>,
     helper: bool,
     place: micold_core::origin::TreePlace,
@@ -1009,7 +1079,6 @@ fn session_tree_item(
         SessionLifecycle::InterruptedResumable => r.primary,
         _ => r.on_surface,
     };
-    let selected = active_session == Some(session.id);
     // No leading icon: the activity dot below is the row's *sole* leading indicator (FR-016f).
     // A session row used to carry an unconditional `Icon::ActiveMarker` (`check_circle`) here — a
     // feature-005 leftover from that icon's real job, marking the *active known project*. It never
@@ -1140,17 +1209,16 @@ fn build_default_item(
         );
     }
     if let Some(main) = node.main_session() {
-        let holds_viewed = state
-            .session
-            .active
-            .is_some_and(|a| node.sessions.iter().any(|s| s.id == a));
-        item = item
-            .selected(holds_viewed && !node.sessions_shown())
-            .on_press(Message::Session(SessionMsg::Selected(main)));
+        item = item.on_press(Message::Session(SessionMsg::Selected(main)));
     }
-    if state.sidebar.revealed == Some(SessionLocation::Default) {
-        item = item.selected(true);
-    }
+    item = item.selected(row_selected(
+        &row_selection(state),
+        SelectableRow::Location {
+            location: &SessionLocation::Default,
+            sessions: &node.sessions,
+            sessions_shown: node.sessions_shown(),
+        },
+    ));
     let keyboard = state.sidebar.keyboard_row.as_ref();
     let focused = keyboard.is_some_and(|row| {
         row.is_location_row(
@@ -1170,7 +1238,10 @@ fn build_default_item(
                     session_tree_item(
                         1 + row.depth.min(MAX_NESTING) as u16,
                         row.session,
-                        state.session.active,
+                        row_selected(
+                            &row_selection(state),
+                            SelectableRow::Session(row.session.id),
+                        ),
                         in_view,
                         Some(row.session.id) != main && !row.place.is_child(),
                         row.place,
@@ -1233,7 +1304,7 @@ mod tests {
             let item: TreeItem<'_, Message> = session_tree_item(
                 1,
                 &s,
-                None,
+                false,
                 None,
                 false,
                 micold_core::origin::TreePlace::Root,
@@ -1260,7 +1331,7 @@ mod tests {
             session_tree_item(
                 1,
                 &session(ActivitySignal::Unknown, l),
-                None,
+                false,
                 None,
                 false,
                 micold_core::origin::TreePlace::Root,
@@ -1283,7 +1354,7 @@ mod tests {
         use micold_core::origin::{Orphan, TreePlace};
         let r = tokens::roles(ColorScheme::Dark);
         let s = session(ActivitySignal::Unknown, SessionLifecycle::Running);
-        let row = |place| session_tree_item(1, &s, None, None, false, place, None, r);
+        let row = |place| session_tree_item(1, &s, false, None, false, place, None, r);
         let top = row(TreePlace::Root);
         for place in [TreePlace::Child, TreePlace::Orphan(Orphan::Pending)] {
             let child = row(place);
@@ -1297,5 +1368,71 @@ mod tests {
                 format!("{:?}", top.trailing)
             );
         }
+    }
+
+    // --- Feature 1125 (T035, S2): the Overview row --------------------------------------------
+
+    /// A state with one project open and nothing else.
+    fn with_project() -> State {
+        use micold_core::project::{Availability, Project};
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state
+            .workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        state.workspace.active = Some(path);
+        state
+    }
+
+    /// What Enter on the sidebar's first Tab stop publishes.
+    fn enter_on_first_focusable(state: &State) -> Vec<String> {
+        use crate::ui::material::test_support::{named_key, Mounted};
+        let mut mounted = Mounted::new(view(state, ColorScheme::Dark).map(|m| format!("{m:?}")));
+        mounted.focus_next();
+        mounted.redraw();
+        mounted.send(
+            named_key(iced::keyboard::key::Named::Enter),
+            iced::mouse::Cursor::Unavailable,
+        )
+    }
+
+    /// The Overview row's message, as `Debug` prints it.
+    fn opened() -> String {
+        format!(
+            "{:?}",
+            Message::Overview(crate::features::overview::Msg::Opened {
+                settings_open: false
+            })
+        )
+    }
+
+    #[test]
+    fn the_first_focusable_is_the_overview_row_and_enter_opens_the_overview() {
+        assert_eq!(enter_on_first_focusable(&with_project()), [opened()]);
+    }
+
+    #[test]
+    fn with_settings_open_the_overview_row_publishes_nothing() {
+        let mut state = with_project();
+        state.settings.settings_draft = Some(Default::default());
+        let published = enter_on_first_focusable(&state);
+        assert!(
+            !published.iter().any(|m| m.contains("Opened")),
+            "{published:?}"
+        );
+    }
+
+    #[test]
+    fn with_no_project_open_there_is_no_overview_row() {
+        use crate::ui::material::test_support::Mounted;
+        let label = |state: &State| {
+            Mounted::new(view(state, ColorScheme::Dark).map(|m| format!("{m:?}")))
+                .painted_text()
+                .iter()
+                .any(|p| p.content == "Overview")
+        };
+        assert!(label(&with_project()), "drawn with a project open");
+        assert!(!label(&State::default()), "not drawn with none");
     }
 }

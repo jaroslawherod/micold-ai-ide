@@ -26,6 +26,14 @@ The shortcut **Ctrl+Shift+O** (**Cmd+Shift+O** on macOS) does the same, also whi
 keyboard; the app takes it and the terminal never receives it. The button's tooltip names it. The
 button looks pressed while the Overview is open.
 
+The sidebar's first row, **Overview**, opens it too: click it, or reach it with Tab and press Enter
+or Space. The row only opens the Overview, it never closes it: pressing it while the Overview is open
+changes nothing; close it with the top bar button, the shortcut or Escape. The row carries the same
+badge as the top bar button (below), with its words, for example "2 need action", and the same
+tooltip. While the Overview is open the row looks selected and no worktree row does. Like the
+button, the row does nothing while Settings is open, and with no project open the sidebar has no
+Overview row.
+
 ### The badge
 
 When some location needs you, the button carries a badge: an icon and a count, beside the label. A

@@ -119,7 +119,7 @@ fn overview_button<'a>(state: &State, r: tokens::Roles) -> Element<'a, Message> 
                 .tint(tint),
         );
     }
-    Tooltip::new(button, overview_tooltip(badge.as_ref()), r).into()
+    Tooltip::new(button, overview::overview_tooltip(badge.as_ref()), r).into()
 }
 
 /// The glyph and tint the Overview badge is drawn in: action is the `error` family, attention the
@@ -129,16 +129,6 @@ fn badge_look(tone: Tone, r: &tokens::Roles) -> (Icon, tokens::Rgb) {
         Tone::Error => (Icon::CardNeedsAction, r.error),
         Tone::Warning => (Icon::CardNeedsAttention, r.warning),
     }
-}
-
-/// The Overview button's tooltip: its name and chord, then the badge's words when there is one.
-fn overview_tooltip(badge: Option<&overview::Badge>) -> String {
-    let mut tooltip = format!("Overview ({})", crate::keymap::overview_chord_label());
-    if let Some(badge) = badge {
-        tooltip.push('\n');
-        tooltip.push_str(&badge.label);
-    }
-    tooltip
 }
 
 /// What the Overview button sends: nothing while Settings is open or no project is active, since
@@ -165,14 +155,14 @@ mod tests {
             badge_look(Tone::Warning, &r),
             (Icon::CardNeedsAttention, r.warning)
         );
-        let plain = overview_tooltip(None);
+        let plain = overview::overview_tooltip(None);
         assert!(plain.contains(crate::keymap::overview_chord_label()));
         let badge = overview::Badge {
             tone: Tone::Error,
             count: 2,
             label: "2 need action".into(),
         };
-        let with = overview_tooltip(Some(&badge));
+        let with = overview::overview_tooltip(Some(&badge));
         assert!(with.starts_with(&plain) && with.ends_with("2 need action"));
     }
 

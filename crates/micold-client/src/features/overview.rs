@@ -105,6 +105,14 @@ pub struct State {
 }
 
 impl State {
+    /// Open or close the Overview; it always opens in the normal layout (feature 970, FR-001).
+    fn set_open(&mut self, open: bool) {
+        self.open = open;
+        if open {
+            self.full_screen = false;
+        }
+    }
+
     /// The known issue title of a location (R8): its worktree directory's numeric ticket's title,
     /// once read. The Overview's card and the sidebar's row (feature 1125) both read it here.
     pub fn known_title(&self, location: &SessionLocation) -> Option<&str> {
@@ -200,6 +208,12 @@ pub enum Msg {
     /// The shortcut or the top-bar button. Does nothing while Settings is open, which cannot yield
     /// to another view without losing or saving its draft (research R2).
     Toggled {
+        /// Whether Settings is open.
+        settings_open: bool,
+    },
+    /// The sidebar's Overview row (feature 1125, R9): open the Overview, and leave an open one
+    /// open (the row never closes it). Does nothing while Settings is open, as [`Self::Toggled`].
+    Opened {
         /// Whether Settings is open.
         settings_open: bool,
     },
@@ -354,6 +368,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         match msg {
             Msg::Closed
             | Msg::Toggled { .. }
+            | Msg::Opened { .. }
             | Msg::FullScreenToggled { .. }
             | Msg::ActivationRequested(_)
             | Msg::CardMenuOpened { .. } => return Vec::new(),
@@ -455,14 +470,19 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         }
         Msg::Toggled {
             settings_open: true,
+        }
+        | Msg::Opened {
+            settings_open: true,
         } => {}
         Msg::Toggled {
             settings_open: false,
+        } => state.set_open(!state.open),
+        // The row opens and never closes: pressed while open, nothing changes (US2.3).
+        Msg::Opened {
+            settings_open: false,
         } => {
-            state.open = !state.open;
-            // The Overview always opens in the normal layout (FR-001).
-            if state.open {
-                state.full_screen = false;
+            if !state.open {
+                state.set_open(true);
             }
         }
         Msg::Closed | Msg::CardActivated(_) => state.open = false,
@@ -553,6 +573,17 @@ pub struct Badge {
     pub count: usize,
     /// The words for the tooltip: *N need action* or *N need attention*.
     pub label: String,
+}
+
+/// The Overview's tooltip, on the top bar's button and the sidebar's row alike (feature 1125, R9):
+/// its name and chord, then the badge's words when there is one.
+pub fn overview_tooltip(badge: Option<&Badge>) -> String {
+    let mut tooltip = format!("Overview ({})", crate::keymap::overview_chord_label());
+    if let Some(badge) = badge {
+        tooltip.push('\n');
+        tooltip.push_str(&badge.label);
+    }
+    tooltip
 }
 
 /// The badge over the cards, or `None` when no card needs the user.
@@ -689,5 +720,138 @@ mod tests {
         let outcomes = update(&mut state, Msg::CardActivated(a));
         assert!(!state.open);
         assert_eq!(outcomes.len(), 1, "an OfferStart still reveals its row");
+    }
+
+    /// T032 (US2.3, R9): the sidebar row's `Opened` opens a closed Overview, in the normal layout.
+    #[test]
+    fn opened_opens_a_closed_overview() {
+        let mut state = State {
+            full_screen: true,
+            ..State::default()
+        };
+        update(
+            &mut state,
+            Msg::Opened {
+                settings_open: false,
+            },
+        );
+        assert!(state.open);
+        assert!(!state.full_screen, "it opens in the normal layout");
+    }
+
+    /// T032 (US2.3): pressing the row while the Overview is open leaves it open, full screen kept.
+    #[test]
+    fn opened_leaves_an_open_overview_open() {
+        let mut state = State {
+            full_screen: true,
+            ..open()
+        };
+        update(
+            &mut state,
+            Msg::Opened {
+                settings_open: false,
+            },
+        );
+        assert!(state.open, "the row never closes the Overview");
+        assert!(state.full_screen, "nothing else changes");
+    }
+
+    /// T032 (US2.5): the row is inert while Settings is open.
+    #[test]
+    fn opened_does_nothing_while_settings_is_open() {
+        let mut state = State::default();
+        update(
+            &mut state,
+            Msg::Opened {
+                settings_open: true,
+            },
+        );
+        assert!(!state.open);
+    }
+
+    /// T032 (R9): while an activation is pending the first one stands; `Opened` changes nothing.
+    #[test]
+    fn opened_does_nothing_while_an_activation_is_pending() {
+        let mut state = open();
+        assert!(state.request(activation("a")));
+        state.open = false;
+        update(
+            &mut state,
+            Msg::Opened {
+                settings_open: false,
+            },
+        );
+        assert!(!state.open);
+        assert_eq!(state.activating, Some(activation("a")));
+    }
+
+    /// T032 (SC-002): the tooltip is the top bar's: name and chord, then the badge's words.
+    #[test]
+    fn the_tooltip_names_the_chord_then_the_badges_words() {
+        let chord = crate::keymap::overview_chord_label();
+        let plain = format!("Overview ({chord})");
+        assert_eq!(overview_tooltip(None), plain);
+        for (tone, label) in [
+            (Tone::Warning, "1 need attention"),
+            (Tone::Error, "2 need action"),
+        ] {
+            let badge = Badge {
+                tone,
+                count: 1,
+                label: label.into(),
+            };
+            assert_eq!(overview_tooltip(Some(&badge)), format!("{plain}\n{label}"));
+        }
+    }
+
+    /// T032 (US2.6, D7): under a tag filter the badge counts the listed locations only, the cards
+    /// the Overview shows, so the sidebar row's and the top bar's badges agree.
+    #[test]
+    fn under_a_tag_filter_the_badge_counts_the_listed_locations() {
+        use crate::features::sidebar::TagFilter;
+        use micold_core::naming::ConventionalType;
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::{AiCli, Session, SessionLifecycle};
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+        let mut app = crate::app::State::default();
+        let path = std::path::PathBuf::from("/repo");
+        app.workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        app.workspace.active = Some(path.clone());
+        for dir in ["feat-a", "fix-b"] {
+            app.worktree.worktrees.push(Worktree {
+                dir_name: dir.into(),
+                path: path.join(".claude/worktrees").join(dir),
+                branch: Some(dir.replacen('-', "/", 1)),
+                status: WorktreeStatus::Valid,
+                included: false,
+            });
+            let mut session =
+                Session::start_new(SessionLocation::Worktree(dir.into()), AiCli::ClaudeCode);
+            session.lifecycle = SessionLifecycle::Failed {
+                reason: "exit status 1".into(),
+                attempts: 3,
+            };
+            app.workspace
+                .sessions
+                .entry(path.clone())
+                .or_default()
+                .push(session);
+        }
+        let label = |app: &crate::app::State| {
+            badge(&crate::ui::overview::cards(app)).map(|b| (b.tone, b.label))
+        };
+        assert_eq!(
+            label(&app),
+            Some((Tone::Warning, "2 need attention".to_string()))
+        );
+        app.sidebar
+            .filters
+            .insert(TagFilter::Type(ConventionalType::Feat));
+        assert_eq!(
+            label(&app),
+            Some((Tone::Warning, "1 need attention".to_string()))
+        );
     }
 }

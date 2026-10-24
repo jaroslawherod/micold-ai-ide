@@ -818,6 +818,56 @@ pub fn row_heights(rows: &[ListRow]) -> Vec<f32> {
     heights
 }
 
+/// What decides which sidebar row wears the selected look (feature 1125, FR-009): read from the
+/// Overview, the session area and the sidebar, so the view asks one question per row.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RowSelection<'a> {
+    /// Whether the Overview is open: then its own row is the selected one and no other is.
+    pub overview_open: bool,
+    /// The session the main area shows.
+    pub viewed: Option<SessionId>,
+    /// The location the Overview sent the user to ([`State::revealed`]).
+    pub revealed: Option<&'a SessionLocation>,
+}
+
+/// A row [`row_selected`] is asked about.
+#[derive(Debug, Clone, Copy)]
+pub enum SelectableRow<'a> {
+    /// A location row: where it is, its sessions, and whether it draws them as rows beneath it.
+    Location {
+        /// The row's location.
+        location: &'a SessionLocation,
+        /// The sessions it holds.
+        sessions: &'a [Session],
+        /// Whether its sessions are drawn as their own rows.
+        sessions_shown: bool,
+    },
+    /// A session row.
+    Session(SessionId),
+}
+
+/// Whether `row` wears the selected look (feature 1125, FR-009, US2.4): none while the Overview is
+/// open; otherwise the row holding the viewed session (its own row when the sessions are drawn,
+/// else its location's), and the location row the Overview sent the user to (feature 813, R12).
+pub fn row_selected(selection: &RowSelection<'_>, row: SelectableRow<'_>) -> bool {
+    if selection.overview_open {
+        return false;
+    }
+    match row {
+        SelectableRow::Session(id) => selection.viewed == Some(id),
+        SelectableRow::Location {
+            location,
+            sessions,
+            sessions_shown,
+        } => {
+            let holds_viewed = selection
+                .viewed
+                .is_some_and(|viewed| sessions.iter().any(|s| s.id == viewed));
+            (holds_viewed && !sessions_shown) || selection.revealed == Some(location)
+        }
+    }
+}
+
 /// Which rendered row holds the current session, if any (feature 024).
 ///
 /// Counted the way the list is built — headers, locations, and the sessions of the open ones —
