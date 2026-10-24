@@ -8,11 +8,6 @@
 | `Roboto-Medium.ttf` | the type roles that resolve to weight 500 (`material/text.rs`) |
 | `Roboto-SemiBold.ttf` | the Overview card's roles at weight 600 (`material/text.rs`, BUG-1298) |
 | `MaterialSymbolsOutlined.ttf` | icons, which are glyphs and are shaped and measured like any other text |
-
-One more face is committed here, **for the tests only**, because the application ships none:
-
-| File | Role in the snapshot |
-|---|---|
 | `FiraMono-Regular.ttf` | `Font::MONOSPACE` (code blocks, inline code, diff and tool-result lines), set as the database's monospace family |
 
 See `assets/fonts/PROVENANCE.md` for the shipped faces' source, versions and licences. This file records why the
@@ -69,7 +64,7 @@ code in it, was recorded on a host that resolved Liberation Mono (0.600 em) and 
 Ubuntu runner, which resolved a 0.602 em face (DejaVu Sans Mono, by its widths): every code line
 0.3–1.1px wider, heights and positions unchanged. `tests/support/layout.rs` now loads
 `FiraMono-Regular.ttf` and sets it as the monospace family, so code measures the same everywhere.
-Its widths are Fira Mono's, not a promise about the face any one platform draws code with.
+Its widths were Fira Mono's then, not a promise about the face any one platform draws code with.
 `the_monospace_face_parses_and_is_the_face_that_measures` (`layout_apparatus.rs`) asserts that
 `Family::Monospace` resolves to these committed bytes, not to a host file, even one of the same name.
 
@@ -77,3 +72,7 @@ Its widths are Fira Mono's, not a promise about the face any one platform draws 
   2026-10-21 at `fd8c8c0a3d353cd99e8ca1662942d165e6961407`; Fira Mono Regular, version 3.206.
 - **SHA-256**: `8c86f2963208a353c3435e28ecb38a99ab68f14d7433ba00c1822cef9a9c1b44`
 - **Licence**: SIL Open Font License 1.1, verbatim upstream `LICENSE` in `LICENSE-FiraMono-OFL.txt`.
+
+Feature 1260 made that face the application's own: Fira Mono Regular and Bold now ship in
+`assets/fonts/`, the test-only copy here is gone, and the snapshot measures the shipped file like
+every other face. Its provenance is in `assets/fonts/PROVENANCE.md`.

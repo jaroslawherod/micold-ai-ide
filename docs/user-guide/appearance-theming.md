@@ -43,7 +43,8 @@ been deleted — now presented as Material list items.
 
 ## The typeface
 
-The application ships its own copy of **Roboto** and uses it everywhere except the terminal.
+The application ships its own copy of **Roboto** and uses it for the interface, and its own copy
+of **Fira Mono** for code.
 
 This means the interface looks the same on every machine. It no longer borrows whatever UI font
 your operating system happens to provide, so a window on Linux, macOS and Windows renders text at
@@ -53,12 +54,18 @@ Text is set at named sizes drawn from Material Design 3's type scale — a title
 caption differ in size, weight and line spacing together, so they are told apart by how they look
 rather than by where they sit on screen.
 
+**Code is drawn in Fira Mono.** Code blocks, inline code, diffs and tool output all use the bundled
+Fira Mono, so code and diff columns line up the same on Linux, macOS and Windows,
+whichever fixed-width fonts are installed. Bold code uses Fira Mono's Bold weight. A copy of Fira
+Mono installed on your machine is not used in its place.
+
 Two exceptions, both deliberate:
 
 - **The terminal keeps its monospaced font** and its own character grid. Column alignment in
   command output is unaffected.
-- **Text Roboto cannot draw falls back** to a font that can. A worktree named in Japanese, or any
-  text using characters outside Roboto's coverage, renders normally rather than as empty boxes.
+- **Text the bundled fonts cannot draw falls back** to a font that can. A worktree named in
+  Japanese, or any text or code using characters outside Roboto's or Fira Mono's coverage, renders
+  normally rather than as empty boxes.
 
 ## The accent colour
 

@@ -54,6 +54,13 @@ fn subscription(_showcase: &Showcase) -> Subscription<Message> {
 }
 
 pub fn main() -> iced::Result {
+    // The bundled monospace face, registered as the application registers it
+    // (`shell/startup.rs`): a gallery drawing code in a host face would misreport the library.
+    micold_client::ui::install_monospace(
+        &mut iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system lock was poisoned"),
+    );
     iced::application(boot, update, gallery::view)
         .title(gallery::TITLE)
         // The application's own theme function — the one part of the styling layer that reaches

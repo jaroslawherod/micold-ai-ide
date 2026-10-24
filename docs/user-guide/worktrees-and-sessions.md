@@ -1122,7 +1122,7 @@ the background service keeps the events it reports. It is Claude Code only.
   text, and an image is shown as its description and address and never fetched. A reply is
   formatted while it streams in: what is already shown above the part still arriving does not
   change or move.
-- **Code blocks** sit on their own surface in a monospace font. One whose fence names a language
+- **Code blocks** sit on their own surface in the monospace font the app ships, Fira Mono. One whose fence names a language
   the app knows is coloured for it, in colours that follow the light or dark theme; any other is
   plain, with its tag shown. Long lines are not wrapped: the block scrolls sideways on its own,
   while the mouse wheel still scrolls the transcript. Each block has a copy control (press it, or

@@ -55,18 +55,17 @@ pub const REFERENCE_ICON_FONT_BYTES: &[u8] =
 /// The family the icon face reports, as the application names it (`material/glyph.rs`).
 pub const REFERENCE_ICON_FONT_FAMILY: &str = "Material Symbols Outlined";
 
-/// The monospace face `Font::MONOSPACE` measures with. **Test-only**, unlike the faces above.
+/// The monospace face `Font::MONOSPACE` measures with: the Fira Mono Regular the application ships
+/// (feature 1260), in `assets/fonts/`, like the faces above.
 ///
-/// The application ships no monospace face: `Font::MONOSPACE` is `Family::Monospace`, which
-/// cosmic-text resolves to `Noto Sans Mono` when the host has it and otherwise to whatever
-/// monospaced host face its lookup lands on. So no committed file is "the face the application
-/// draws code with", and measuring the host's left every code line host-dependent: feature 940's
-/// `session-transcript-rich` was recorded on a host whose lookup landed on a 0.600 em face
-/// (Liberation Mono) and CI's Ubuntu runner on a 0.602 em one (DejaVu Sans Mono, by its widths),
-/// every code line 0.3–1.1px wider. Pinning a committed
-/// face here is what makes the geometry machine-independent; the widths are Fira Mono's, not a
-/// promise about any one platform's. Provenance: `tests/fixtures/FONT-PROVENANCE.md`.
-pub const REFERENCE_MONO_FONT_BYTES: &[u8] = include_bytes!("../fixtures/FiraMono-Regular.ttf");
+/// Before feature 1260 the application shipped no monospace face and `Family::Monospace` resolved
+/// on the host: feature 940's `session-transcript-rich` was recorded on a host whose lookup landed
+/// on a 0.600 em face (Liberation Mono) and CI's Ubuntu runner on a 0.602 em one (DejaVu Sans Mono,
+/// by its widths), every code line 0.3–1.1px wider. Measuring the shipped face is what makes the
+/// geometry machine-independent and true to what the application draws. Provenance:
+/// `assets/fonts/PROVENANCE.md`.
+pub const REFERENCE_MONO_FONT_BYTES: &[u8] =
+    include_bytes!("../../../../assets/fonts/FiraMono-Regular.ttf");
 
 /// The family the monospace face reports (name ID 1), set as the database's monospace family.
 pub const REFERENCE_MONO_FONT_FAMILY: &str = "Fira Mono";

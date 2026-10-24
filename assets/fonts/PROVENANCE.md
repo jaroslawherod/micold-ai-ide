@@ -1,12 +1,13 @@
 # Font Provenance
 
-This directory ships **two typefaces under two different licences**. They are recorded separately,
+This directory ships **three typefaces under two different licences**. They are recorded separately,
 and each names the licence file that covers it:
 
 | Font | Files | Licence | Licence text |
 |------|-------|---------|--------------|
 | Material Symbols Outlined | `MaterialSymbolsOutlined.ttf` | Apache-2.0 | `LICENSE` |
 | Roboto | `Roboto-Regular.ttf`, `Roboto-Medium.ttf`, `Roboto-SemiBold.ttf` | SIL Open Font License 1.1 | `LICENSE-Roboto-OFL.txt` |
+| Fira Mono | `FiraMono-Regular.ttf`, `FiraMono-Bold.ttf` | SIL Open Font License 1.1 | `LICENSE-FiraMono-OFL.txt` |
 
 **Why two licence files rather than one.** Feature 018's T014a required this to be decided
 explicitly rather than by default, and the answer is forced: the two works are under *different*
@@ -214,3 +215,32 @@ Roboto covers Latin, Latin-1 and the symbols the interface composes its own stri
 **not** cover CJK or arrows, and is not required to: text outside its coverage is *user data* — a
 worktree named in Japanese — and FR-013 requires that to fall back to a font that does cover it
 rather than render missing-glyph boxes.
+
+---
+
+## Fira Mono (Regular 400, Bold 700)
+
+**Files**: `FiraMono-Regular.ttf`, `FiraMono-Bold.ttf`
+
+The monospace face the application draws all code-like text with (feature 1260): code blocks,
+inline code, diffs, tool output and terminal cells. `Font::MONOSPACE` resolves to it ahead of any
+host font of the same name (`crates/micold-client/src/ui/material/mono.rs`).
+
+### Source
+
+- **Upstream**: [mozilla/Fira](https://github.com/mozilla/Fira), `ttf/FiraMono-Regular.ttf` and
+  `ttf/FiraMono-Bold.ttf` at commit `fd8c8c0a3d353cd99e8ca1662942d165e6961407`
+- **Version**: Fira Mono 3.206, shipped as upstream builds them (no instancing or subsetting)
+- **Licence**: SIL Open Font License 1.1. `LICENSE-FiraMono-OFL.txt` is upstream's `LICENSE` with
+  LF line endings where upstream uses CRLF; the text is otherwise identical. It is a separate file
+  from `LICENSE-Roboto-OFL.txt` because each OFL text names its own copyright holders and Reserved
+  Font Names.
+
+| File | Weight | sha256 |
+|------|-------:|--------|
+| `FiraMono-Regular.ttf` | 400 | `8c86f2963208a353c3435e28ecb38a99ab68f14d7433ba00c1822cef9a9c1b44` |
+| `FiraMono-Bold.ttf` | 700 | `2a28efd740e8da1da75d40ac79f0db4f60a0f1aead0b15ca16b4694a11b45fc6` |
+
+Both report family `Fira Mono` (name ID 1), are fixed-pitch, and advance 600 units per 1000-unit
+em for every printable ASCII character; the tests in `mono.rs` assert it. Characters the face lacks
+fall back to a system font, as for Roboto.

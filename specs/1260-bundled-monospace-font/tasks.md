@@ -31,36 +31,36 @@ Paths: `client` = `crates/micold-client`.
 
 ## Phase 1: Setup — the face and its provenance (plan D1; FR-001, FR-005, FR-008)
 
-- [ ] T001 Move the face into the shipped assets: `git mv crates/micold-client/tests/fixtures/FiraMono-Regular.ttf
+- [x] T001 Move the face into the shipped assets: `git mv crates/micold-client/tests/fixtures/FiraMono-Regular.ttf
   assets/fonts/FiraMono-Regular.ttf` and `git mv crates/micold-client/tests/fixtures/LICENSE-FiraMono-OFL.txt
   assets/fonts/LICENSE-FiraMono-OFL.txt`; add `assets/fonts/FiraMono-Bold.ttf` fetched from
   `mozilla/Fira` at commit `fd8c8c0a3d353cd99e8ca1662942d165e6961407` (Fira Mono 3.206). Verify with
   `sha256sum`: Regular `8c86f2963208a353c3435e28ecb38a99ab68f14d7433ba00c1822cef9a9c1b44`, Bold
   `2a28efd740e8da1da75d40ac79f0db4f60a0f1aead0b15ca16b4694a11b45fc6` (research R1); stop on a
   mismatch
-- [ ] T002 Keep the layout tests compiling after the move: in `client/tests/support/layout.rs`
+- [x] T002 Keep the layout tests compiling after the move: in `client/tests/support/layout.rs`
   `REFERENCE_MONO_FONT_BYTES` includes `../../../../assets/fonts/FiraMono-Regular.ttf` (the shipped
   file); its doc comment says it is the shipped face. (T018 replaces it with the shipped constant.)
-- [ ] T003 [P] `assets/fonts/PROVENANCE.md`: the typeface table gains Fira Mono (two files, SIL OFL
+- [x] T003 [P] `assets/fonts/PROVENANCE.md`: the typeface table gains Fira Mono (two files, SIL OFL
   1.1, `LICENSE-FiraMono-OFL.txt`); a *Fira Mono* section records upstream `mozilla/Fira`, the commit,
   version 3.206, the SHA-256 of each file (T001), and that the committed `LICENSE-FiraMono-OFL.txt`
   is the upstream `LICENSE` with LF line endings (contract C-5)
-- [ ] T004 [P] `client/tests/fixtures/FONT-PROVENANCE.md`: Fira Mono joins the "faces the
+- [x] T004 [P] `client/tests/fixtures/FONT-PROVENANCE.md`: Fira Mono joins the "faces the
   application ships" table (path `assets/fonts/`); the "for the tests only" table and its framing
   go; the feature-940 section stays as history and ends by pointing at feature 1260
-- [ ] T005 [P] `docs/development/layout-snapshot.md` (around line 183, "Code is the exception"):
+- [x] T005 [P] `docs/development/layout-snapshot.md` (around line 183, "Code is the exception"):
   the application ships Fira Mono and the snapshot measures that shipped face; no test-only copy
 
 ---
 
 ## Phase 2: Foundational — the registration module (plan D2; contract C-1–C-3)
 
-- [ ] T006 Bytes guard tests, red first (fail to compile until T008), in a `#[cfg(test)] mod tests`
+- [x] T006 Bytes guard tests, red first (fail to compile until T008), in a `#[cfg(test)] mod tests`
   of `client/src/ui/material/mono.rs`: `FIRA_MONO_REGULAR_BYTES` and `FIRA_MONO_BOLD_BYTES` each
   parse with `ttf_parser`, report family (name ID 1) `MONO_FAMILY` = `"Fira Mono"`, weight 400 and
   700, `is_monospaced()`, and advance 600 units per 1000-unit em for every printable ASCII character
   (C-1); each failure message names `Fira Mono`
-- [ ] T007 `pin_monospace` tests, red first, same module, on a bare `fontdb::Database`
+- [x] T007 `pin_monospace` tests, red first, same module, on a bare `fontdb::Database`
   (`iced::advanced::graphics::text::cosmic_text::fontdb`) holding a `Source::File` same-name face
   (a `tempfile` copy of the Regular bytes, loaded with `load_font_file`) loaded **before** the two
   bundled faces (`load_font_source(Source::Binary(..))`): the call returns 1 and the file face is
@@ -68,7 +68,7 @@ Paths: `client` = `crates/micold-client`.
   the Regular `Binary` face, weight 700 → the Bold face, `Style::Italic` → the upright face of the
   nearest weight; a face of another family (e.g. `ROBOTO_REGULAR_BYTES`) is kept (FR-004); a second
   call returns 0 and leaves the face count unchanged (C-2 table)
-- [ ] T008 Implement `client/src/ui/material/mono.rs` per contract C-1–C-3: `MONO_FAMILY`,
+- [x] T008 Implement `client/src/ui/material/mono.rs` per contract C-1–C-3: `MONO_FAMILY`,
   `FIRA_MONO_REGULAR_BYTES` / `FIRA_MONO_BOLD_BYTES` (`include_bytes!` of
   `assets/fonts/FiraMono-{Regular,Bold}.ttf`, the path style of `ROBOTO_*_BYTES` in `text.rs`),
   `pin_monospace(db: &mut fontdb::Database) -> usize` (remove every face whose `families` contains
@@ -87,26 +87,26 @@ terminal — draws the bundled Fira Mono on every host, ahead of a host font of 
 
 **Independent test**: T009 and T013 pass; quickstart §B B1–B8 on Linux.
 
-- [ ] T009 [US1] Test, red until T010: in `client/src/ui/material/mono.rs` tests, after
+- [x] T009 [US1] Test, red until T010: in `client/src/ui/material/mono.rs` tests, after
   `test_support::renderer()`, the global `font_system()` database resolves `Family::Monospace`
   (weight 400 and 700) to a `Source::Binary` face of family `Fira Mono` whose bytes are
   `FIRA_MONO_REGULAR_BYTES` / `FIRA_MONO_BOLD_BYTES` (compare the face's data through
   `with_face_data`); message names `Fira Mono`
-- [ ] T010 [US1] `client/src/ui/material/test_support.rs::renderer`: call
+- [x] T010 [US1] `client/src/ui/material/test_support.rs::renderer`: call
   `super::install_monospace(&mut fonts)` inside its `Once`, after the Roboto and icon loads. Write
   T013's tests (if FR-007 stands) and run them and T009 red before this change; both pass after
-- [ ] T011 [P] [US1] `client/src/shell/startup.rs`: call `micold_client::ui::install_monospace` on
+- [x] T011 [P] [US1] `client/src/shell/startup.rs`: call `micold_client::ui::install_monospace` on
   `iced::advanced::graphics::text::font_system().write()` once, before `iced::application(...)`;
   beside the Roboto `.font(..)` comment, say why the monospace face is registered this way instead
   (`.font` cannot remove a same-name host face or set the monospace family; research R2)
-- [ ] T012 [P] [US1] `client/src/showcase/main.rs`: the same call before its `iced::application(...)`
+- [x] T012 [P] [US1] `client/src/showcase/main.rs`: the same call before its `iced::application(...)`
 - [ ] T013 [US1] **Terminal (plan D4, FR-007 — droppable, see the header).** In-crate tests in
   `client/src/ui/terminal.rs` `mod tests` (line 1505), using `test_support::renderer()`:
   `cell_font(Flags::empty())` and `cell_font(Flags::BOLD)` resolve in the global database to the
   bundled Regular and Bold faces; `CellMetrics::new(s).width` equals Fira Mono's advance at `s`
   (600/1000 × s, from `FIRA_MONO_REGULAR_BYTES`' `hmtx`) for s = 12, 13, 14. No change to
   `cell_font` or `CellMetrics` (research R7). Red before T010, green after
-- [ ] T014 [US1] User guide (FR-010): `docs/user-guide/appearance-theming.md` *The typeface*: the
+- [x] T014 [US1] User guide (FR-010): `docs/user-guide/appearance-theming.md` *The typeface*: the
   application also ships **Fira Mono** for code blocks, inline code, diffs, tool output and the
   terminal; bold code uses its Bold weight; characters it lacks still fall back to a system font;
   the terminal keeps its own character grid and stays outside Roboto and the type scale but no

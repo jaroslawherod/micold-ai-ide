@@ -14,6 +14,7 @@ use std::pin::Pin;
 use std::sync::Once;
 use std::task::{Context, Poll, Waker};
 
+use iced::advanced::graphics::text::cosmic_text::fontdb;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer::Headless;
 use iced::advanced::widget::operation::{self, focusable, Outcome};
@@ -49,7 +50,8 @@ pub fn block_on<F: Future>(f: F) -> F::Output {
     }
 }
 
-/// The CPU rasteriser, with every shipped face loaded — both Roboto weights **and the icon face**.
+/// The CPU rasteriser, with every shipped face loaded — both Roboto weights, both Fira Mono weights
+/// **and the icon face**.
 ///
 /// The icon face is every bit as load-bearing as the text ones, and it was missing: an icon is a
 /// glyph from `Material Symbols Outlined`, shaped and measured like any other text. Without it a
@@ -72,6 +74,9 @@ pub fn renderer() -> iced::Renderer {
         fonts.load_font(Cow::Borrowed(super::ROBOTO_MEDIUM_BYTES));
         fonts.load_font(Cow::Borrowed(super::ROBOTO_SEMIBOLD_BYTES));
         fonts.load_font(Cow::Borrowed(super::glyph::MATERIAL_SYMBOLS_BYTES));
+        // The bundled Fira Mono, pinned as the monospace family the way the application pins it,
+        // so code-like text measures against the shipped face rather than a host one (feature 1260).
+        super::install_monospace(&mut fonts);
     });
 
     block_on(<iced::Renderer as Headless>::new(
@@ -540,4 +545,30 @@ impl iced::advanced::widget::Operation<usize> for Focusables {
     fn finish(&self) -> iced::advanced::widget::operation::Outcome<usize> {
         iced::advanced::widget::operation::Outcome::Some(self.0)
     }
+}
+
+/// Whether iced's global font system resolves `font` (converted the way iced shapes text) to a
+/// `Source::Binary` face whose bytes are exactly `bytes`. For the tests of every font user
+/// (`mono.rs`, the terminal).
+pub fn resolves_to_bundled(font: iced::Font, bytes: &[u8]) -> bool {
+    let attrs = iced::advanced::graphics::text::to_attributes(font);
+    let mut fonts = iced::advanced::graphics::text::font_system()
+        .write()
+        .expect("the global font system lock was poisoned");
+    let db = fonts.raw().db();
+    let query = fontdb::Query {
+        families: &[attrs.family],
+        weight: attrs.weight,
+        stretch: attrs.stretch,
+        style: attrs.style,
+    };
+    db.query(&query).is_some_and(|id| is_bundled(db, id, bytes))
+}
+
+/// Whether face `id` is a `Source::Binary` face whose bytes are exactly `bytes`.
+pub fn is_bundled(db: &fontdb::Database, id: fontdb::ID, bytes: &[u8]) -> bool {
+    matches!(
+        db.face(id).map(|f| &f.source),
+        Some(fontdb::Source::Binary(_))
+    ) && db.with_face_data(id, |data, _| data == bytes) == Some(true)
 }

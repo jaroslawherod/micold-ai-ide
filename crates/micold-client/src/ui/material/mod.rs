@@ -85,6 +85,7 @@ mod menu;
 #[cfg(test)]
 mod menu_anatomy;
 mod modal;
+mod mono;
 mod navigation_drawer;
 mod overview_card;
 mod picker;
@@ -226,6 +227,9 @@ pub use link_text::LinkText;
 pub use markdown_view::MarkdownView;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
+pub use mono::{
+    install_monospace, pin_monospace, FIRA_MONO_BOLD_BYTES, FIRA_MONO_REGULAR_BYTES, MONO_FAMILY,
+};
 pub use navigation_drawer::NavigationDrawer;
 pub use overview_card::{CardPrRow, OverviewCard, PrTone};
 pub use picker::Row as TypeaheadRow;
