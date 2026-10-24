@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: tasks
-- **Next step**: tasks review round 1 (orchestrator runs it; snapshot in *Review rounds*), then checklists, specs-only gate, design PR. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Next step**: tasks review round 2 (sonnet, fix diff; snapshot in *Review rounds*), then checklists, specs-only gate, design PR. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
@@ -49,7 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan | 1 | d4cee46d92e7567c10df1b1c2dd058d0e9665e4c:c9789f7dba0d05f1eaeb440c527c01daf3f56c20 | CHANGES: 1 MAJOR, 2 MINOR, all verified and fixed. F1 (MAJOR, held: `DIFF` in `review/git.rs:33` has no `--no-abbrev`, so `--raw` ids are abbreviated and never equal `hash-object`'s): R1, data-model §3–§4 now say `range_rows`/`range_paths` add `--no-abbrev`; I1 all-zero = 40 zeros; new I1a real-git check that ids are full length. F2 (MINOR, held: `StoredSettings` at `settings.rs:742`, conversions `:903`/`:950`): named in data-model §9 and K5. F3 (MINOR, held): `DiffRead.row` is now `DiffRow { NotRead, Unlisted, Row }` (data-model §12, R5, H10a; failed `change_list_of` → `NotRead`). Also per orchestrator: M3–M5 wait for #1269 and #1271 (plan, spec dependency note). |
 | plan | 2 | 94877b893db9017f02f0ab873e42ac7c5df470eb:00519bfa6217bd0107f1f710cc7d94ebdf4b596f | CHANGES (sonnet): round-1 fixes confirmed; 2 MAJOR, 1 MINOR, all on the gating wording, fixed prose only (no design change): F1 spec.md blocker table (hold, drag, chips rows → "no: after #1269 and #1271 (core part ships now)"), US1/US2 priority notes, Assumptions notice line; F2 research R11 rewritten (core now, M3–M5 after #1269+#1271, M6 after #1271; rejected: build M3–M5 now in today's view, rework cost); F3 plan #1269 bullet and summary line, contract H title. Was: Round-1 snapshot is STALE after branch-start rebased onto origin/main (review-snapshot.sh diff exits 2): run a full round on round 1's model, or review the fix commit 00519bfa (`git show 00519bfa -- specs/`). |
 | plan | 2 (fixes) | 1191f086 | ACCEPTED by the orchestrator: round-2 fixes are prose only (verified); no round 3. Branch rebased onto origin/main by the tasks unit (fix commit now 14fa6a7a). |
-| tasks | 1 | 9cdc8b1a33e061cb296192d30af2188a2d21c73c:ea63a5eb357c21ec233f68fc0af40d4216fdb0e8 | PENDING: orchestrator to run (unit has no Agent tool) |
+| tasks | 1 | 9cdc8b1a33e061cb296192d30af2188a2d21c73c:ea63a5eb357c21ec233f68fc0af40d4216fdb0e8 | CHANGES: 2 MAJOR, 2 MINOR, all verified and fixed. F1 (MAJOR, held: exhaustive `window_settings` `persist.rs:332`, `set_changed` destructure `:409`, pinned key list `settings_issue_mapping.rs:185-210`; persist test literals `:1171`/`:1238` end in `..`, so no change; workspace scan for `Settings {` without `..` finds only core `settings.rs:935/948`, client `features/settings.rs:795`, `persist.rs:333/409`): T013 adds the key to the pinned list, T014 lists each site (`window_settings` takes `stored.suggestion_chips`, `set_changed` has `suggestion_chips: _` and no `set!`, `ValidSettings::into_settings` sets false, never written because the save goes through `set_changed`), T038 replaces all three with a keep-every-other-setting test. F2 (MAJOR, held): Skill tool still says Unknown skill; ran `.claude/skills/speckit-analyze/SKILL.md` steps by hand (result under *Plan*/*Tasks* below). F3 (MINOR, held): T002 no longer names `review_git.rs`, names `changes.rs` test helpers; T014 says `ValidSettings::into_settings`. F4 (MINOR, held): `pub mod` lines moved to T008/T010/T012. |
 
 Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
 changes-view-hold.md, quick-comment.md, quickstart.md). Milestones proposed: M1 core stale tracking
@@ -66,9 +66,15 @@ hold shares the apply path. Each client milestone carries its own docs, snapshot
 two-theme visual pass (issue acceptance). Plan fixed: `ToggleChip` lives in
 `crates/micold-material/src/toggle_chip.rs` (plan named `ui/material/`), and `ChangedDot` goes in
 `micold-material` drawn with `unread_mark`'s `filled_circle`. M2 T014 adds a `Settings` field the
-client's `SettingsDraft::into_settings` literal must set (stopgap until M5). `speckit-analyze` is not
-available to this unit (Unknown skill): FR/SC coverage checked by grep only; the tasks review
-covers the rest.
+client's `SettingsDraft::into_settings` literal must set (stopgap until M5). `speckit-analyze`: the Skill
+tool says Unknown skill, so its SKILL.md steps were run by hand on the feature dir (tasks review
+round 1 F2): no analyze hooks in `.specify/extensions.yml`; no placeholders; 0 CRITICAL, 0 HIGH.
+Coverage: all 30 FRs and 6 SCs map to tasks (11 FRs only through milestone *Satisfies* ranges:
+FR-006/007/008/010/011 → T015–T022, FR-016/017/019/020 → T009/T010/T027/T029/T030, FR-023/025 →
+T036/T039/T040). One MEDIUM fixed (Constitution I, logic in tested core/pure code): T019's
+change-list-to-`DiffRow` mapping in the shell job had no test; now a pure `DiffRow::from_read` in
+`features/changes.rs` with a unit test in T016. LOW, left: T030's subscription and T022/T031/T040
+glue have no own test (glue, covered by the message tests).
 
 Clarify: round 1 asked FR-014 (escalated; applied provisionally as A, which made the whole-view
 items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.

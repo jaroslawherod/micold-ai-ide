@@ -53,9 +53,9 @@ No setup tasks: existing workspace, no new crate and no new dependency (plan *Te
   `Sides`, leaving a working-tree new side with no id for `git.rs` to fill. Add
   `identity: ChangeIdentity::Unknown` to every other `ChangedFile` literal:
   `crates/micold-core/src/context_header.rs`, `crates/micold-core/src/runs/summary.rs`,
-  `crates/micold-core/src/review/pr_diff.rs`, `crates/micold-core/tests/review_git.rs`,
-  `crates/micold-client/tests/features_changes.rs` (grep `ChangedFile {` first; LSP
-  `findReferences` on the struct).
+  `crates/micold-core/src/review/pr_diff.rs`, the test helpers in
+  `crates/micold-core/src/review/changes.rs` and `crates/micold-client/tests/features_changes.rs`
+  (grep `ChangedFile {` first; LSP `findReferences` on the struct).
 - [ ] T003 [P] Write failing real-git tests I1a, I3, I4, I5, I6 and I7 in
   `crates/micold-core/tests/review_git.rs`: full-length ids (length of `git rev-parse HEAD`);
   `BaseToHead` both sides `Object` with no `hash-object`; an equal-counts re-edit changes the
@@ -89,15 +89,16 @@ No setup tasks: existing workspace, no new crate and no new dependency (plan *Te
 **Goal**: `review::stale` decides which files changed since the shown list and holds the latest
 read. **Independent test**: `mise run test-core` runs S1–S10.
 
-- [ ] T007 [P] [US1] Create `crates/micold-core/src/review/stale.rs` (`pub mod stale;` in
-  `crates/micold-core/src/review/mod.rs`) with failing unit tests S1–S10 from
+- [ ] T007 [P] [US1] Create `crates/micold-core/src/review/stale.rs` (declared by T008, which
+  owns the `review/mod.rs` edit) with failing unit tests S1–S10 from
   contracts/core-api.md in its `mod tests`: equal lists → empty, `observe` → `Same`; kind, `added`,
   `removed`, identity differences count, `content`/`large`/`origin` do not; added and removed paths
   count; rename counted once under its new path; count = set size and stable over repeats;
   `Held::observe` drops a file whose row is equal again and returns `Same` at empty; `apply`;
   `adopt` with and without the path in `fresh` (AS10, AS11); `PrDiff`'s `put` copies the patch and
   keeps GitHub's order, `ChangeList`'s keeps path order.
-- [ ] T008 [US1] Implement `review::stale` (data-model §6): `changed_since(shown, latest) ->
+- [ ] T008 [US1] Add `pub mod stale;` to `crates/micold-core/src/review/mod.rs` and implement
+  `review::stale` (data-model §6): `changed_since(shown, latest) ->
   BTreeSet<RelPath>`; `trait Listing: Clone { rows, put }` with impls for `ChangeList` and `PrDiff`;
   `Held<L: Listing> { latest, changed }` with private fields, existing only with `changed`
   non-empty; `enum Observed<L> { Same(L), Held(Held<L>) }`; `observe(shown, latest)`;
@@ -112,9 +113,9 @@ read. **Independent test**: `mise run test-core` runs S1–S10.
 **Goal**: `review::drag` turns press, rows passed and release into a click or a range.
 **Independent test**: `mise run test-core` runs D1–D8.
 
-- [ ] T009 [P] [US2] Create `crates/micold-core/src/review/drag.rs` (`pub mod drag;` in
-  `review/mod.rs`) with failing unit tests D1–D8 from contracts/core-api.md in its `mod tests`.
-- [ ] T010 [US2] Implement `review::drag` (data-model §7) over the existing `review::Side` and
+- [ ] T009 [P] [US2] Create `crates/micold-core/src/review/drag.rs` (declared by T010) with failing unit tests D1–D8 from contracts/core-api.md in its `mod tests`.
+- [ ] T010 [US2] Add `pub mod drag;` to `crates/micold-core/src/review/mod.rs` and implement
+  `review::drag` (data-model §7) over the existing `review::Side` and
   `review::LineRange` (`crates/micold-core/src/review/mod.rs:67,77`): `gutter_line(old, new) ->
   Option<(Side, u32)>` (C1: new number first, else old, `None` for neither; the same rule as the
   client's `Msg::GutterPressed` arm, `crates/micold-client/src/features/changes.rs:2243`, which M4
@@ -129,23 +130,34 @@ read. **Independent test**: `mise run test-core` runs S1–S10.
 **Goal**: the three chips, their insertion rule and the off-by-default setting live in the core.
 **Independent test**: `mise run test-core` runs K1–K5.
 
-- [ ] T011 [P] [US3] Create `crates/micold-core/src/review/chips.rs` (`pub mod chips;` in
-  `review/mod.rs`) with failing unit tests K1–K4 in its `mod tests`.
-- [ ] T012 [US3] Implement `review::chips` (data-model §8): `SuggestionChip { label: &'static str,
+- [ ] T011 [P] [US3] Create `crates/micold-core/src/review/chips.rs` (declared by T012) with failing unit tests K1–K4 in its `mod tests`.
+- [ ] T012 [US3] Add `pub mod chips;` to `crates/micold-core/src/review/mod.rs` and implement
+  `review::chips` (data-model §8): `SuggestionChip { label: &'static str,
   text: &'static str }`, `CHIPS: [SuggestionChip; 3]` = *Rename* → "Rename this to ", *Add test* →
   "Add a test that covers this.", *Why?* → "Why is this needed?"; `insert(text, chip) -> String`
   (empty or whitespace-only → the chip's text; otherwise appended on a new line, no blank line when
   the text already ends with a newline).
 - [ ] T013 [P] [US3] Write failing test K5 in the tests of `crates/micold-core/src/settings.rs`,
   beside `reduce_motion_round_trips`: default false, a `settings.json` without the key reads false,
-  true round-trips through `StoredSettings` as `suggestion_chips`.
+  true round-trips through `StoredSettings` as `suggestion_chips`. Add `"suggestion_chips"` to the
+  pinned key list in `crates/micold-core/tests/settings_issue_mapping.rs` (`:185-210`, sorted) in
+  the same commit, so that test fails until T014 adds the key.
 - [ ] T014 [US3] Implement `Settings::suggestion_chips: bool` with `#[serde(default)]` in
   `crates/micold-core/src/settings.rs`, on `StoredSettings` (`settings.rs:742`) too, carried by
-  `StoredSettings::from_settings` and the conversion back, as `reduce_motion` is. Fix every other
-  `Settings` literal the new field breaks (`SettingsDraft::into_settings` and the test at
-  `crates/micold-client/src/features/settings.rs:795,2727`): until M5 puts the switch on the draft,
-  carry the value the draft was built from if it is at hand, else `false`; the client shows nothing
-  new.
+  `StoredSettings::from_settings` and the conversion back (`StoredSettings::into_settings`,
+  `settings.rs:935`), as `reduce_motion` is. Fix every exhaustive `Settings` literal or destructure
+  the field breaks (a grep of the workspace for `Settings {` without `..` finds only these):
+  - `ValidSettings::into_settings` (`crates/micold-client/src/features/settings.rs:795`): set
+    `suggestion_chips: false`; `ValidSettings` gets no field until M5, and the save path below
+    never writes this value;
+  - `window_settings` (`crates/micold-client/src/shell/persist.rs:332`): take
+    `suggestion_chips: stored.suggestion_chips` until M5, so a Settings save or a window write never
+    overwrites the stored value;
+  - `set_changed` (`persist.rs:409`, the deliberate exhaustive destructure): add
+    `suggestion_chips: _` with a line in its doc comment that a save does not set it until M5 (the
+    form does not hold it), and do not `set!` it.
+  The `Settings` literals in `persist.rs`'s tests (`:1171`, `:1238`) and in
+  `features/settings.rs:2727` end in `..`, so they need no change. The client shows nothing new.
 
 **Checkpoint**: M2 done. `mise run test-core` and `mise run gate` green; no visible change.
 
@@ -170,7 +182,8 @@ you looked* and a dot per changed row, and applies on a press. **Independent tes
   latest scope (`from` of a rename) and adopts `DiffRow::Row`; inside the set and no longer listed
   issues no read and `no_longer_changed` is true with the dot kept; with nothing held a
   working-tree `Row` writes into the shown list; `NotRead` adopts nothing; `Unlisted` under a hold
-  acts as H9, with nothing held leaves the list.
+  acts as H9, with nothing held leaves the list. Also a unit test of `DiffRow::from_read` (T019):
+  `Err` → `NotRead`, a list without the path → `Unlisted`, a list with it (or its rename) → `Row`.
 - [ ] T017 [P] [US1] Write failing tests H11–H14 in `crates/micold-client/tests/features_changes.rs`:
   a differing pull request head refresh sets `pr.held` and leaves `pr.diff`, `pr.selected`,
   `pr.file`; selecting a held PR file shows the latest patch and leaves the set; `StaleApplied`
@@ -190,8 +203,9 @@ you looked* and a dot per changed row, and applies on a press. **Independent tes
   Unlisted, Row(ChangedFile) }` on `Msg::DiffRead.row` and `FileSelected`/`DiffRead` adoption via
   `Held::adopt` in `crates/micold-client/src/features/changes.rs`; in
   `crates/micold-client/src/shell/changes.rs` the working-tree `ReadDiff` job also runs
-  `GitCli::change_list_of(dir, scope, toggles, &[path, from])` and maps it to `DiffRow`
-  (a failure → `NotRead`, error not shown).
+  `GitCli::change_list_of(dir, scope, toggles, &[path, from])` and maps the result with the pure
+  `DiffRow::from_read(io::Result<ChangeList>, path)` defined in `features/changes.rs` (a failure →
+  `NotRead`, error not shown), so the shell job holds no logic of its own.
 - [ ] T020 [US1] Implement the pull request hold (research R6, data-model §11) in
   `crates/micold-client/src/features/changes.rs`: `PullRequestView.held: Option<Held<PrDiff>>` set
   when a head refresh answers with differences; selection of a held file adopts row and patch from
@@ -279,7 +293,10 @@ composer. **Independent test**: Q10–Q12, the settings tests; quickstart §B st
 - [ ] T038 [US3] Put `suggestion_chips` on the Appearance draft and the applied state with
   `SuggestionChipsToggled(bool)` in `crates/micold-client/src/features/settings.rs`, following
   `reduce_motion` (including the field table at `features/settings.rs:34`), and replace T014's
-  stopgap; add the **Suggestion chips** `Checkbox` under **Reduce motion** in
+  stopgaps: `ValidSettings` carries it into `into_settings`, `window_settings` takes it from the
+  window's applied state instead of `stored`, and `set_changed` sets it (`set!(suggestion_chips)`),
+  with a test in `persist.rs` that saving it keeps every other setting, as
+  `saving_reduce_motion_keeps_every_other_setting` does; add the **Suggestion chips** `Checkbox` under **Reduce motion** in
   `crates/micold-client/src/ui/settings/appearance.rs` with a new `FieldId`.
 - [ ] T039 [US3] Implement in `crates/micold-client/src/features/changes.rs`:
   `State.suggestion_chips`, `Msg::SuggestionChipsInForce(bool)`, `Msg::ChipPressed(usize)` →
