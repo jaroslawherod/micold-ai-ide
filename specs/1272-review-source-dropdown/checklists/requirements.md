@@ -6,7 +6,7 @@
 
 ## Content Quality
 
-- [ ] No implementation details (languages, frameworks, APIs) (not met by design: FR-010's render-free tested logic and FR-012's docs, layout snapshot and visual pass are the issue's acceptance terms; the select-component assumption follows Principle VIII)
+- [x] No implementation details (languages, frameworks, APIs) (waived, tasks review 1: FR-010, FR-012, SC-005 and the clarification's code references are the issue's acceptance terms and its evidence trail; otherwise met. Not met by design: FR-010's render-free tested logic and FR-012's docs, layout snapshot and visual pass are the issue's acceptance terms; the select-component assumption follows Principle VIII)
 - [x] Focused on user value and business needs
 - [x] Written for non-technical stakeholders
 - [x] All mandatory sections completed
@@ -27,9 +27,8 @@
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
-- [ ] No implementation details leak into specification (see the Content Quality note: FR-010, FR-012 by the issue's acceptance)
+- [x] No implementation details leak into specification (waived with the Content Quality item: FR-010, FR-012, SC-005 by the issue's acceptance)
 
 ## Notes
 
 - FR-010 (render-free logic with unit tests) and FR-012 (docs, layout snapshot, visual pass) come from the issue's acceptance habit, not from implementation choice.
-- The open marker goes to `/speckit-clarify`.

@@ -86,7 +86,7 @@ the repository root.
   caller-built rows, composed with the existing `cdk::picker::Picker` (`Picker::new(field, menu,
   open, gap).keyboard(..).on_move(..).on_pick(..).on_dismiss(..)`) and `cdk::tooltip::Tooltip`.
   Rows are a small builder enum `MenuSelectRow` (`option(content, chosen, on_pick)`,
-  `option_with_chips(content, chosen, on_pick, chips)`, `heading(text)`, `note(text)`), reusing
+  `option_with_chips(content, chosen, on_pick, chips, note)`, `heading(text)`, `note(text)`), reusing
   `PullRequestRow` for pull requests, `ToggleChip` for the chips and the list surface and row style
   of `material::picker`. Openness and highlight are the caller's (the reducer's), as with the search
   picker, because the list must stay open on a chip press and across a pull-request refresh, and

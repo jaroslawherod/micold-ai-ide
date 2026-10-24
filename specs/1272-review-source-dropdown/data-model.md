@@ -59,7 +59,7 @@ pull request.
 `Stop::{WorkingTree, Kind(Kind), PullRequest(u64), Files}`, `Kind::{Committed, Uncommitted}`.
 `stops(&[Row]) -> Vec<(Stop, bool /* enabled */)>` lists what the keyboard reaches in row order:
 Working tree, Committed, Uncommitted, each pull request, Files. `Kind(Committed)` is disabled when
-unavailable. `Stop::keeps_open(self) -> bool` is true only for `Kind(_)`.
+unavailable. A disabled stop stays in the list: arrows can land on it and taking it does nothing (`intent_for`). `Stop::keeps_open(self) -> bool` is true only for `Kind(_)`.
 
 ### 6. `Label<'a>` (R5)
 
