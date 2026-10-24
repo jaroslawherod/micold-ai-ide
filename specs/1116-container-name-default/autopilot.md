@@ -52,11 +52,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+None beyond the open escalation: the next step is the PR (pr.md) once the gate question is answered. Gate fixes already made: daemons_section_geometry.rs line 873 label, features_daemon_sections.rs marker test.
 
 ## Open escalation
 
-None. <or: the banner as sent, and when>
+M1 is implemented, ticked (T001-T012 except a green gate), reviewed (A: MINORs only; B: CLEAN), pushed nowhere. `mise run gate` is red on `layout_snapshot::the_layout_matches_the_committed_fixture` (status-bar-warnings, element 0/0/0/2/0/0/0/1 width 775.2 vs recorded 778.1). It fails identically with `crates/` checked out from origin/main, so it is host-dependent (fonts) and not caused by this diff; origin/main CI is green. The push hook needs a green gate. Asked 2026-10-24: how to push.
 
 ## Follow-ups not done
 
