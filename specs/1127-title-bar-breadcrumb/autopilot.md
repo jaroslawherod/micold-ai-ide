@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
 - **Phase**: plan
-- **Next step**: plan unit: run speckit-plan on specs/1127-title-bar-breadcrumb/spec.md (clarify CLEAN after 3 rounds, all agent-resolved)
+- **Next step**: plan unit (continuing a handover): review round 1 of plan.md, research.md, data-model.md, contracts/title-bar-ui.md, quickstart.md with rubrics/plan.md
 
 ## Pull requests
 
@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D6 | clarify | Is the app mark a control? | No: tooltip only, not pressable, no Tab stop (FR-003, FR-013) | agent-resolved | mockup Main.dc.html (plain block) |
 | D7 | clarify | Bar elevation on sidebar scroll? | Kept unchanged (FR-019) | agent-resolved | app.rs State::app_bar_elevated |
 | D8 | clarify | Contrast rule for the disabled field? | FR-017 covers enabled controls; disabled uses 38% treatment | agent-resolved | specs/003-material-design-layout/contracts/design-tokens.md |
+| D9 | plan | Bar figures: 43 + 1 divider, 40 dp targets, keep `anatomy::app_bar` name; 3 new shared components; US3 waits for #1125 M3 (not on origin/main 2026-10-24) | as research R1, R2, R12 | agent-resolved | research.md R1–R12; git log origin/main |
 
 ## Review rounds
 
@@ -48,7 +49,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit, 2026-10-24, handed over at 189k context (checkpoint OVER). Done: branch rebased onto
+origin/main (REBASED 2); speckit-plan run; plan.md, research.md (R1–R13), data-model.md,
+contracts/title-bar-ui.md, quickstart.md written and committed. #1125 checked on origin/main after
+fetch: M1, M2 merged, M3 (Overview row) not — plan keeps US3 as last milestone (R12). Next: review
+round 1 (review.md with rubrics/plan.md; snapshot first), act on findings, set Next step to
+`tasks unit`, return DONE PR: none. No review run yet; no open findings.
 
 ## Open escalation
 
