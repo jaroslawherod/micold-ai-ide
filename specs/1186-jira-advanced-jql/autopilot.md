@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: M2
-- **Next step**: M2 implemented on local branch 1186-m2-wip (worktree /home/user/micold-1186-m2); reviews and full gate next; orchestrator rebases onto main after #1350 merges, pushes and opens the M2 PR
+- **Phase**: M2 PR
+- **Next step**: M2 done on local branch 1186-m2-wip (full gate green at e337333b, reviews A and B clean); orchestrator rebases onto main (M1 merged as 3a333f7f), pushes, opens the M2 PR (title/body in the unit's scratchpad, label docs-not-needed), waits on CI and merges; then milestone M3 (T018–T023)
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1346 | design (spec, plan, tasks) | merged | 527d91b36196fda8950f2d3e1d6a193fe3a0f1d9 |
 | #1350 | M1 core rules + advanced request | merged | 3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 |
+| (to open) | M2 render-free selector state and the run | gate green, local branch 1186-m2-wip, not pushed | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Core rules + advanced request (no UI) | #1350 | merged |
-| M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | — | implemented, in review |
+| M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | (to open) | gate green at e337333b, not pushed |
 | M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | — | planned |
 | M4 | T024–T032 | full | Jira's error messages and Retry | — | planned |
 | M5 | T033–T039 | full | Remember last query and mode per project | — | planned |
