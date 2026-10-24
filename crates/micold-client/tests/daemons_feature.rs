@@ -819,6 +819,11 @@ fn a_required_field_left_empty_keeps_connection_open() {
             daemons::Msg::SectionToggled(Section::Connection),
         );
         assert!(!state.section_open(Section::Connection), "{runtime:?}");
+        // The container name is not required (feature 1116): a daemon name with no usable
+        // character leaves it unresolved, and the refusal on that field holds the section open.
+        if runtime == DraftRuntime::Container {
+            send(&mut state, &mut w, daemons::Msg::NameEdited("!!!".into()));
+        }
         // A refused save marks every empty required field missing at once.
         send(&mut state, &mut w, daemons::Msg::Saved);
         assert!(
