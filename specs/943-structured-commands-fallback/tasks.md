@@ -365,7 +365,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [x] T059 [US2] [US3] User guide `docs/user-guide/worktrees-and-sessions.md` *Structured
   sessions*: the palette (keys, groups, "opens in terminal"), the model picker, `/model`, a model
   changed inside the terminal not being seen (FR-027)
-- [ ] T060 Quickstart Part B 1, 2, 4 and 5 in both themes, evidence in
+- [x] T060 Quickstart Part B 1, 2, 4 and 5 in both themes, evidence in
   `specs/943-structured-commands-fallback/visual-pass/` (`visual-pass` skill)
 
 ---
