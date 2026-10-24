@@ -38,8 +38,8 @@
 
 ## R3: Sort options and the Unreviewed-first switch
 - **Decision**: `TreeSort { Path, Size, UnreviewedFirst }`. Ordering within a level: folders before
-  files under every sort; Path by byte order of the row's label (today's list order, which is `RelPath`
-  order); Size by total `added + removed` (folders: sum over the files listed below), largest first,
+  files under every sort; Path by byte order of the row's name (a chained folder's first folder name, so
+  `a/b` before `a-x`, as the **Files** browser's per-component order); Size by total `added + removed` (folders: sum over the files listed below), largest first,
   ties by Path; Unreviewed first by "has an unreviewed file" (folders) / "is unreviewed" (files), ties
   by Path. Reviewed state is a caller-supplied predicate `Fn(&str) -> bool`, so #1271 can pass its set
   in whatever type it lands with. `sort_options(marks: bool) -> [(TreeSort, Offer); 3]` with
@@ -125,7 +125,7 @@
 - **Decision**: a core test lays out 5,000 synthetic files in 200 folders and asserts each of
   collapse, one filter keystroke and a sort change re-lays out in under 100 ms, in the style of
   `crates/micold-core/tests/command_palette.rs:255` (slowest of repeated runs). The client caches
-  `OpenView::tree_rows` and recomputes it only in `update`, so drawing a frame does no layout.
+  `OpenView::change_rows` and recomputes it only in `update`, so drawing a frame does no layout.
 - **Rationale**: SC-003 names "the core layout benchmark or a timed unit test"; the crate has no bench
   harness, and the existing timed tests are plain `#[test]`s.
 - **Rejected**: adding `criterion` (a new dependency for one measurement); laying out in `view`
