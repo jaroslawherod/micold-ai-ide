@@ -28,6 +28,22 @@ This feature takes the first option: emphasis must look like emphasis. Dropping 
 silently discard meaning the author of the text put there (for example "do *not* delete"), which
 plain upright text cannot carry.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Which weight does a bold-italic run request, and does an italic 600 face match it? → A: The
+  markdown view requests bold (700) for strong runs; the nearest shipped interface weight is 600, so
+  an italic 600 face is the one bold-italic resolves to (FR-002, FR-003; Assumptions). _(agent-resolved:
+  crates/micold-client/src/ui/material/link_text.rs#painted; assets/fonts)_
+- Q: Does a link inside emphasis keep both its link look and the slant? → A: Yes; the view applies
+  the slant and the link underline/colour independently per run, so an emphasised link is drawn
+  italic, underlined and in the link colour; this feature changes only which face the slant
+  resolves to. _(agent-resolved: crates/micold-client/src/ui/material/link_text.rs#painted)_
+- Q: Is SC-004's "about 0.5 MB" bound consistent with the added files? → A: Yes; each shipped
+  static upright Roboto instance is about 158 KB, so three italic instances cut the same way add
+  about 0.47 MB. _(agent-resolved: assets/fonts (Roboto-Regular/Medium/SemiBold.ttf sizes))_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Emphasis in an agent reply reads as italic (Priority: P1)
@@ -127,9 +143,9 @@ including when a host copy of the same family is present.
   is not italic.
 - **FR-004**: Text that is not italic MUST resolve to the same face as before this feature;
   adding the italic faces MUST NOT change any upright text's glyphs or widths.
-- **FR-005**: The italic faces MUST be embedded in the application and registered with the text
-  renderer at startup alongside the upright faces, in both the application and the component
-  showcase, and in the renderer the tests share.
+- **FR-005**: The italic faces MUST be embedded in the application, and emphasis MUST draw in them
+  wherever markdown is drawn: in the application, in the component showcase, and in test renders.
+  Where and how the faces are registered is left to the plan.
 - **FR-006**: Emphasis MUST resolve to the bundled italic faces even when the host has a font of
   the same family installed.
 - **FR-007**: Each new face MUST have a provenance entry in `assets/fonts/PROVENANCE.md` naming its
@@ -138,8 +154,9 @@ including when a host copy of the same family is present.
 - **FR-008**: Automated tests MUST assert, for each italic face: it parses; it reports the expected
   weight and an italic style; it belongs to the same family the interface pins; and it is a distinct
   file from every upright face.
-- **FR-009**: The component showcase's markdown sample MUST show italic and bold-italic runs, so the
-  visual review covers them.
+- **FR-009**: The component showcase's markdown sample MUST show a bold-italic run beside the italic
+  run it already has, so the visual review covers both. Whether the run is added to the shared
+  markdown fixture or to a showcase-only sample is left to the plan.
 - **FR-010**: The italic mapping in the markdown view MUST be kept (the issue's second option, drop
   the mapping, is rejected; see Context).
 
