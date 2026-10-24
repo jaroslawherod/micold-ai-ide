@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: clarify done
-- **Next step**: plan unit (stage 1 now: status bar and session area; stage 2 after #1125 and #1127 merge).
+- **Phase**: plan written, review pending
+- **Next step**: plan review round 1 (orchestrator dispatches the reviewer on the snapshot below; this unit had no Agent tool), then act on findings; then tasks unit. Milestones per plan.md: M1 (stage 1 docs) now; M2–M4 after #1125 and #1127 merge.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -40,6 +40,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | spec | 2 | `482d3e84…:e0a83183…` (Sonnet re-review of the diff from round 1) | CLEAN; one MINOR fixed, prose only (Terms "removed element" paragraph rewrapped). |
 | clarify | 1 | — | 3 questions, all agent-resolved (D1–D3); FR-011, FR-012, FR-020, SC-001, US4 scenario 4 changed. |
 | clarify | 2 | — | No critical ambiguity; unit ends. |
+| plan | 1 | `042e8e0058432d5b45e9377611122c12f1cce667:2fa8a2688c30d42e47a2ec0733539e77cba161bc` | pending: reviewer to be dispatched by the orchestrator (rubric `rubrics/plan.md`) |
 
 ## Declined review findings
 
@@ -57,3 +58,4 @@ None.
 ## Follow-ups not done
 
 - Cloud environment: `gh` not authenticated; `branch-start.sh` ran without a previous PR (none). Issue #1127's body was read through the GitHub MCP instead.
+- Plan unit: no Agent tool in this environment, so the plan review was not dispatched by the unit; snapshot recorded for the orchestrator. `lychee` not installed locally (links check runs in CI).
