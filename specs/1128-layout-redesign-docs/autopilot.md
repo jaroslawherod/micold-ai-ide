@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
 - **Phase**: spec
-- **Next step**: dispatch round 2 of the spec review (re-review of the fix diff, `model: "sonnet"`) on the snapshot recorded below after the round-1 fixes; then the clarify unit for the three `[NEEDS CLARIFICATION]` markers (US4 scenario 4, FR-011, FR-012).
+- **Next step**: dispatch round 2 of the spec review (re-review of the fix diff, `model: "sonnet"`) on snapshot `9b68594184610e77e6ce0baafee15f2b72aaea93:e50400c2af72d2333c02fc4f00db4f78c08dd287` (diff against round 1: `scripts/autopilot/review-snapshot.sh diff 8604b804860bddadd362930f075cce48e8c64032:a08a4b365389835342d3751fd4b69a9a9c05c8b6`); then the clarify unit for the three `[NEEDS CLARIFICATION]` markers (US4 scenario 4, FR-011, FR-012).
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
