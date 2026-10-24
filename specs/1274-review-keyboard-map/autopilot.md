@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1274
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: tasks unit: analyze, tasks review, design PR. Then M1 (no blocker). T058 (quickstart §C) left to the close unit.
+- **Phase**: design PR
+- **Next step**: design PR open; after its merge, unit M1 (T001–T011, T022–T023, T028–T032, T048–T051; no blocker). M2/M3 wait for #1269, #1270, #1271, #1273; M4 for #1127. T058 left to the close unit. D4 still provisional.
 
 ## Pull requests
 
@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review spec | 1 | 2f7c3dc307d7f818f4c2995e0ffd0af13213bfa9:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CLEAN: 3 MINOR, all fixed (FR-002 scope, FR-004 p/n with no current hunk, checklist note) |
 | Review plan | 1 | 209eba49689ebf46a4457c2a5dd880637479b3d2:5ca86ffe05655dc3708ecbaa3676d58bdfc4f439 | CLEAN: 3 MINOR, all fixed (R7 why not `.key_binding`; timing bound 50 ms; pending edge keyed to its path) |
+| Review tasks | 1 | 7aa12f7058288de6231b9f39a7ed2953013b393a:dbe223deca1c5b2b34bb6d6d28a4e81151b49cd2 | CLEAN: 2 MINOR, fixed, prose only (T019/T020 test coverage note; T018 wording) |
 
 ## Declined review findings
 
