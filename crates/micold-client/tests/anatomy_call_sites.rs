@@ -172,18 +172,8 @@ const RECORDED: &[(&str, &str, &str)] = &[
         "4dp — `Toolbar` has no leading-icon slot; its leading element is the title, which takes \
          `app_bar::PADDING`",
     ),
-    // Feature 1270 lands its core rules (M1) before the components that apply these (M2's
-    // `ReviewBar` and `SideSheet`, M4's Review tab layout); those milestones remove the entries.
-    (
-        "anatomy::review_bar::HEIGHT",
-        gap::NOT_BUILT,
-        "44dp — feature 1270's review bar; its `ReviewBar` component is not built yet",
-    ),
-    (
-        "anatomy::review_bar::SEND_WIDTH",
-        gap::NOT_BUILT,
-        "the review bar's fixed send-button width; its `ReviewBar` component is not built yet",
-    ),
+    // Feature 1270 lands its core rules (M1) before the Review tab lays the drawer out (M4), which
+    // removes this entry; M2's `ReviewBar` binds the review bar's two figures.
     (
         "anatomy::comments_drawer::WIDTH",
         gap::NOT_BUILT,

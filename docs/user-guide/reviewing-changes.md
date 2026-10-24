@@ -496,8 +496,9 @@ Each comment has one of four statuses, shown on its card:
 
 The session reports Applied or Answered by the comment's reference with the
 `report_review_comment` tool ([Reporting on review comments](agent-tools.md#reporting-on-review-comments)).
-Its reply is drawn under the comment's text; a reply longer than 4,000 characters shows its start
-and **Show all**. A later report replaces the status and the reply. Statuses and replies reach
+Its reply is drawn under the comment's text. A card shows at most the reply's first 4 lines, as
+drawn at the card's width (a long line that wraps counts as the lines it takes); a longer reply
+ends there with **…** and offers **Show all**. A later report replaces the status and the reply. Statuses and replies reach
 every window open on the project within two seconds and are kept with the comments across
 restarts.
 
@@ -519,9 +520,10 @@ comment has neither action. Cancel closes the note without marking anything.
 
 ### Reading a whole reply
 
-A reply longer than 4,000 characters shows its start with **Show all** under it. Press **Show all**
-to read the whole reply in a dialog, scrolling if it is long; **Close** (or Esc) returns to the
-diff. The dialog closes by itself when its comment is cleared or discarded.
+A card shows at most the first 4 lines of a reply, then **Show all** under it; a reply that fits
+in 4 lines has no **Show all**. A reply longer than 4,000 characters also offers it, whatever the
+card shows of its start. Press **Show all** to read the whole reply in a dialog, scrolling if it is
+long; **Close** (or Esc) returns to the diff. The dialog closes by itself when its comment is cleared or discarded.
 
 ### The review panel
 

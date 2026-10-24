@@ -6,6 +6,11 @@
 //! text with "Show all" when it was shortened (pressable when `.on_show_reply` is set), Edit /
 //! Delete for a draft comment that is not in a send, and Mark applied / Answer… for a Sent one.
 //!
+//! The reply takes at most `reply::CARD_LINES` (4) lines as drawn at the card's width, through
+//! `LineClamped`; a longer one ends in an ellipsis and "Show all" hangs under it via
+//! `LineClamped::when_cut`, so the card offers it only when the measure cut the reply (feature
+//! 1270, FR-021, contract D12). A reply already shortened past 4,000 characters always offers it.
+//!
 //! Builder form: `ReviewCommentCard::new(&text, CardState::Draft, roles).outdated(false)
 //! .reply(&reply, shortened).on_edit(Msg::Edit(id)).on_delete(Msg::Delete(id)).into()`.
 
@@ -13,8 +18,10 @@ use std::borrow::Cow;
 
 use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Border, Element, Length};
+use micold_core::review::reply::CARD_LINES;
 use micold_core::tokens::{spacing, Roles};
 
+use super::line_clamp::LineClamped;
 use super::{style, Button, Tag, Text, TypeRole};
 
 /// Where a comment is in its life.
@@ -49,6 +56,14 @@ pub const ANSWER: &str = "Answer…";
 /// The tag of a comment whose quoted lines changed.
 pub const OUTDATED: &str = "Outdated";
 
+/// "Show all" under a reply: a button sending `on_press`, or muted text without one.
+pub(super) fn show_all<'a, M: Clone + 'a>(on_press: Option<M>, r: Roles) -> Element<'a, M> {
+    match on_press {
+        Some(message) => Button::text(SHOW_ALL, r).on_press(message).into(),
+        None => Text::new(SHOW_ALL, TypeRole::Label, r).muted().into(),
+    }
+}
+
 /// What a card shows besides its text.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Parts {
@@ -58,7 +73,8 @@ pub struct Parts {
     pub tag: bool,
     /// A reply is drawn under the text.
     pub reply: bool,
-    /// "Show all" is drawn under the reply: it was shortened.
+    /// "Show all" is drawn under the reply whatever its length: it was shortened past 4,000
+    /// characters. Otherwise it is drawn only when the reply takes more than four lines.
     pub show_all: bool,
     /// "Show all" is a button: the card was given what it sends.
     pub show_all_pressable: bool,
@@ -211,13 +227,15 @@ impl<'a, M: Clone + 'a> From<ReviewCommentCard<'a, M>> for Element<'a, M> {
         }
         let mut body = column![head, Text::new(card.text, TypeRole::Body, r)].spacing(spacing::XS);
         if let Some((reply, shortened)) = card.reply {
-            body = body.push(Text::new(reply, TypeRole::Body, r).muted());
-            if shortened {
-                body = body.push(match card.on_show_reply {
-                    Some(message) => Element::from(Button::text(SHOW_ALL, r).on_press(message)),
-                    None => Text::new(SHOW_ALL, TypeRole::Label, r).muted().into(),
-                });
-            }
+            let lines = LineClamped::new(reply.into_owned(), TypeRole::Body, CARD_LINES)
+                .tint(r.on_surface_variant)
+                .width(Length::Fill);
+            let more = show_all(card.on_show_reply, r);
+            body = if shortened {
+                body.push(lines).push(more)
+            } else {
+                body.push(lines.when_cut(more))
+            };
         }
         container(body)
             .padding(spacing::SM)
@@ -403,6 +421,75 @@ mod tests {
             laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT).highlighted(false));
         assert_eq!(off, plain, "false matches the plain card");
         assert_eq!(marked, plain, "the outline takes no room");
+    }
+
+    /// The texts a card paints laid out 400 wide, with their bounds.
+    fn painted(card: ReviewCommentCard<'_, String>) -> Vec<super::super::test_support::Painted> {
+        super::super::test_support::Mounted::new_in(card, Size::new(400.0, 2_000.0)).painted_text()
+    }
+
+    fn answered(reply: &str, shortened: bool) -> ReviewCommentCard<'_, String> {
+        ReviewCommentCard::new("rename", CardState::Answered, LIGHT)
+            .reply(reply, shortened)
+            .on_show_reply("show".to_owned())
+    }
+
+    /// Feature 1270 T048 (US4 #2, contract D12): a reply longer than four drawn lines is cut there,
+    /// ending in an ellipsis, and the card offers Show all under it.
+    #[test]
+    fn a_reply_over_four_lines_is_cut_there_and_offers_show_all() {
+        let long = "Reading it twice keeps the cached layout in step. ".repeat(30);
+        let painted = painted(answered(&long, false));
+        let reply = painted
+            .iter()
+            .find(|p| p.content.starts_with("Reading it twice"))
+            .expect("the reply is painted");
+        assert!(reply.content.ends_with('\u{2026}'), "{:?}", reply.content);
+        assert_eq!(
+            reply.bounds.height,
+            micold_core::review::reply::CARD_LINES as f32 * TypeRole::Body.line_height_dp()
+        );
+        assert!(painted.iter().any(|p| p.content == SHOW_ALL));
+
+        let lines = "one\ntwo\nthree\nfour\nfive\nsix";
+        let painted = super::super::test_support::Mounted::new_in(
+            answered(lines, false),
+            Size::new(400.0, 2_000.0),
+        )
+        .painted_text();
+        assert!(
+            painted.iter().any(|p| p.content == SHOW_ALL),
+            "six short lines are cut too"
+        );
+    }
+
+    /// Feature 1270 T048 (US4 #1): a short reply is drawn whole, without Show all.
+    #[test]
+    fn a_short_reply_is_whole_without_show_all() {
+        let painted = painted(answered("not needed", false));
+        assert!(painted.iter().any(|p| p.content == "not needed"));
+        assert!(!painted.iter().any(|p| p.content == SHOW_ALL));
+        let four = painted_lines("one\ntwo\nthree\nfour");
+        assert!(
+            !four.iter().any(|p| p.content == SHOW_ALL),
+            "four lines fit"
+        );
+    }
+
+    fn painted_lines(reply: &str) -> Vec<super::super::test_support::Painted> {
+        super::super::test_support::Mounted::new_in(
+            answered(reply, false),
+            Size::new(400.0, 2_000.0),
+        )
+        .painted_text()
+    }
+
+    /// Feature 1270 T048: a reply shortened past 4,000 characters offers Show all even when its
+    /// start fits in four lines.
+    #[test]
+    fn a_shortened_reply_offers_show_all_even_when_it_fits() {
+        let painted = painted(answered("not needed", true));
+        assert!(painted.iter().any(|p| p.content == SHOW_ALL));
     }
 
     #[test]

@@ -222,9 +222,10 @@ pub mod status_bar {
 pub mod review_bar {
     /// The bar's height, fixed by the design like `status_bar::HEIGHT`, not by the density axis.
     pub const HEIGHT: f32 = 44.0;
-    /// The send button's fixed width, so its bounds never depend on its label (research R4).
-    /// Provisional until the `ReviewBar` component test measures the widest label (T009).
-    pub const SEND_WIDTH: f32 = 176.0;
+    /// The send button's fixed width, so its bounds never depend on its label (research R4): the
+    /// widest of "Send review (999+)", "Send review (999)" and "Sending…" as a filled button lays
+    /// it out, rounded up — measured by `ReviewBar`'s component test (T009).
+    pub const SEND_WIDTH: f32 = 169.0;
 }
 
 /// The comments drawer over the right of the diff (feature 1270, contract D2).

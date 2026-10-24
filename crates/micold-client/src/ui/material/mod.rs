@@ -87,6 +87,7 @@ mod prompt_card;
 mod pull_request_indicator;
 mod pull_request_row;
 mod queue_row;
+mod review_bar;
 mod review_comment;
 mod review_panel_row;
 /// The ripple's clipping, checked in rasterised pixels rather than in geometry. In-crate for the
@@ -102,6 +103,7 @@ mod select;
 /// reason as `form_field_anatomy` (feature 022, FR-013).
 #[cfg(test)]
 mod select_anatomy;
+mod side_sheet;
 mod split_view;
 mod state_icon;
 mod status_chip;
@@ -137,9 +139,11 @@ pub use prompt_card::PromptCard;
 pub use pull_request_indicator::{CheckMark, PrMark, PullRequestIndicator};
 pub use pull_request_row::PullRequestRow;
 pub use queue_row::QueueRow;
+pub use review_bar::ReviewBar;
 pub use review_comment::{CardState, ReviewCommentCard};
 pub use review_panel_row::{status_label, ReviewPanelRow, HEIGHT as PANEL_ROW_HEIGHT};
 pub use select::Select;
+pub use side_sheet::SideSheet;
 pub use split_view::{pane_focus_mark, pane_notice_fill, SplitView};
 pub use state_icon::StateIcon;
 pub use status_chip::StatusChip;
