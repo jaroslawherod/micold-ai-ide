@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-24 — shipped in PRs #1316, #1323, #1329, #1332 and this close PR. FR-007 (terminal in the bundled face) is built and awaits the user's confirmation; plan D4 says how to revert it if declined
 
 **Input**: User description: "Issue #1260 — Bundle a monospace font so code blocks and diffs look
 the same on every host. Follow-up from #940 (structured session view). Problem: no monospace face is

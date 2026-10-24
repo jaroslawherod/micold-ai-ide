@@ -59,3 +59,51 @@ dir "%ProgramFiles%\Micold AI IDE\licenses\fonts"
 
 Expected: `LICENSE-FiraMono-OFL.txt`, `LICENSE-Roboto-OFL.txt`, `LICENSE`, `PROVENANCE.md` in each
 (US3.2, SC-004).
+
+## Results
+
+Recorded by the close unit on 2026-10-24 against `main` at `12d38521` (M3 merged).
+
+### §A (T028)
+
+- **Hashes**: `sha256sum assets/fonts/FiraMono-*.ttf` printed
+  `8c86f2963208a353c3435e28ecb38a99ab68f14d7433ba00c1822cef9a9c1b44` (Regular) and
+  `2a28efd740e8da1da75d40ac79f0db4f60a0f1aead0b15ca16b4694a11b45fc6` (Bold), the two values in
+  `assets/fonts/PROVENANCE.md`'s Fira Mono table. PASS.
+- **One copy**: `git ls-files | grep -i firamono` lists `assets/fonts/FiraMono-Bold.ttf`,
+  `assets/fonts/FiraMono-Regular.ttf` and `assets/fonts/LICENSE-FiraMono-OFL.txt`, nothing under
+  `tests/fixtures/`. PASS (also guarded by `there_is_one_copy_of_fira_mono_in_the_repository`).
+- **Layout snapshot (SC-005)**: no commit of this feature touches
+  `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`git log 5d634ede..12d38521` on that
+  path lists only other features' re-records). PASS.
+- **Gate**: green for each milestone (M1 at `7e49d4ed`, M2 on its final tree, M3 at `a26592e9`; ledger *Review
+  rounds*) and again for the close PR's tree.
+
+### §B
+
+Recorded in M1's visual pass: [visual-pass/README.md](./visual-pass/README.md). B1, B2, B4, B7,
+B8 PASS in light and dark; B3 and B5 have no showcase pose (covered by the `mono.rs` weight-700
+and keep-other-families tests); B6 not applicable to the showcase.
+
+### §C (T029)
+
+What CI's macOS and Windows runners prove (`.github/workflows/ci.yml`, job *build + test*):
+
+| Check | Linux | macOS | Windows |
+|---|---|---|---|
+| `mono.rs` unit tests (bytes, weights, host-copy removal), terminal cell fonts | yes (full workspace) | no | no |
+| `layout_apparatus` Regular+Bold guard, `layout_snapshot` | yes | no | no |
+| `packaging_ships_font_licences` (deb, rpm, `.app` script, `.iss` each list the four files) | yes | no | no |
+| `packaging_excludes_showcase` (`.iss` allows the licence set only under `{app}\licenses\`) | yes | yes | yes |
+| `scripts/tests/macos-bundle.test.sh` (stages the `.app`, checks `Contents/Resources/licenses/fonts/`) | yes (shell suites) | no | no |
+| Bundle built by the release script and launched | — | `.app` via `macos-bundle.sh` | x64 and arm64 installer, installed and launched |
+
+The face is the same bytes on every host (`include_bytes!`, loaded into the font system by
+`install_monospace` before iced starts, host copies removed), so the Linux tests that resolve and
+measure it hold for macOS and Windows by construction; no macOS or Windows runner measures line
+widths. CI does not list the installed bundles' `licenses/fonts/` contents on macOS or Windows:
+it builds and launches them from the same scripts the Linux tests read.
+
+Needs a host, not run: the look on macOS and Windows (B1, B3, B7 there), and the `ls`/`dpkg -c`/
+`rpm -qlp`/`dir` listings of built bundles above. The first release build is the point to check
+them.
