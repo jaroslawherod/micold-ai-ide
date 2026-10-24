@@ -63,6 +63,10 @@ updated." Labels: enhancement, flow:feature. This is slice R4 (item 1) of
 - Q: Does the header read *n of m reviewed* (the issue) or *n/m reviewed* (the redesign mockup)? →
   A: *n of m reviewed*, the issue's wording; the mockup's *12/30* is a sketch. _(agent-resolved:
   issue #1271 body, quoted in this spec's Input; docs/development/review-redesign.md#Changes)_
+- Q: When a Committed or Uncommitted toggle hides part of a file's change, may the user still mark
+  that file reviewed? → A: No. Marking is unavailable for a file that has changes of a hidden kind,
+  with a tooltip saying to turn both on; unmarking stays available. Files with no hidden part are
+  marked as usual. _(provisional, pending user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -94,6 +98,9 @@ unmarking returns both to their previous look.
 5. **Given** `src/b.rs` has a Draft and I mark it reviewed, **Then** its row shows ✓, its draft
    count stays visible on the row, and the draft is unchanged.
 6. **Given** all 3 files are Reviewed, **Then** the header reads *3 of 3 reviewed* with a full bar.
+7. **Given** Uncommitted is off and `src/c.rs` has both committed and uncommitted changes, **When**
+   I select it, **Then** **Mark reviewed** is unavailable with a tooltip saying to turn on Committed
+   and Uncommitted; a file with only committed changes can be marked as usual.
 
 ---
 
@@ -189,8 +196,10 @@ the same path there is not marked; switch back and check it still is.
   figure and no bar; the view shows its existing empty-list message.
 - **Toggles**: turning Committed or Uncommitted off changes which files are listed (*m*) but not
   which are reviewed: the mark is judged on the file's change with both kinds included, so a file
-  stays Reviewed whichever toggles are on. The Default entry has only uncommitted changes; that is
-  its whole file's change.
+  stays Reviewed whichever toggles are on. A file that has changes of a hidden kind cannot be
+  marked until both kinds are shown, so a mark never covers lines the user did not see (FR-002);
+  a file whose changes are all of the shown kind can be marked. The Default entry has only
+  uncommitted changes; that is its whole file's change.
 - **Renamed file**: a rename is listed under its new path; a mark on the old path does not carry
   over, so the renamed file is Unseen. A file whose rename is undone gets its old mark back if its
   change is the same.
@@ -232,7 +241,11 @@ the same path there is not marked; switch back and check it still is.
   The row's existing draft count stays as it is.
 - **FR-002**: The selected file's diff header MUST have a mark control: **Mark reviewed** when the
   file is not Reviewed, **Reviewed** shown pressed when it is. Pressing it marks or unmarks the file.
-  It has a tooltip and is reachable by keyboard focus like the header's other controls.
+  It has a tooltip and is reachable by keyboard focus like the header's other controls. While a
+  Committed or Uncommitted toggle hides part of the file's change (the file has changes of the
+  hidden kind), **Mark reviewed** MUST be unavailable, with a tooltip saying to turn on Committed
+  and Uncommitted to see the file's whole change; **Reviewed** stays pressable, so unmarking always
+  works.
 - **FR-003**: A mark MUST record the file's change it was made on. A file MUST be Reviewed only
   while its current file's change is the same as the recorded one; otherwise it MUST be shown as
   Changed since reviewed: Unseen or Has drafts, with a *changed* dot on its row and a tooltip
@@ -241,7 +254,8 @@ the same path there is not marked; switch back and check it still is.
   diff (including the automatic re-read of feature 482's file watching and #1269's re-read when the
   tab is shown again), without any action by the user.
 - **FR-005**: Whether a file is Reviewed MUST NOT depend on the Committed / Uncommitted toggles; it
-  is judged on the file's change with both kinds included.
+  is judged on the file's change with both kinds included. A mark can therefore only be made while
+  the file's whole change is shown (FR-002).
 - **FR-006**: Marks MUST be kept per entry and per source: the working tree's marks and each pull
   request's marks are separate, and a mark in one never shows in another.
 - **FR-007**: Marking or unmarking MUST NOT change any comment, its status or the draft count, and
