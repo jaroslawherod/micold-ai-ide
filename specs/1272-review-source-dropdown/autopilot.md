@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 1 | clarify | How does the Files option combine with the shown source (Story 3 s2)? | As today: on/off mode over the shown source, stays on across source picks (tree and browsed file re-read, Back forgotten); label `Files · <source>`; Open diff leaves source and Files unchanged | agent | docs/user-guide/reviewing-changes.md#Browsing the repository; specs/1150-diff-full-file-view/spec.md#Edge Cases; features/changes.rs `reread_after_source_change`; spec FR-006/FR-007/SC-004 |
 | 2 | plan | How to sequence against unmerged #1270/#1269? | M1 core model, M2 reducer, M3 shared `MenuSelect` ship first; M4 view wiring (header, left column, 260 px two columns, snapshot, docs, visual pass) waits on #1270 merged | agent | plan.md#Milestones and sequencing; research.md R8 |
 | 3 | tasks | Milestones by story (milestones.md rules 1–2) or by layer? | By layer, per plan and decision 2: M1 ships the P1 stories' (US1, US2) core decisions and tests under milestones.md rule 6, M2 their reducer behaviour, both unreachable from the UI until M4; no story's UI can land before #1270, so a per-story cut would put every milestone behind it. T027 (Polish, no code) left to the close unit | agent | plan.md#Milestones and sequencing; tasks.md header note |
+| 4 | M3 | Where does the core `Row` → `MenuSelectRow` mapping live, given T018 needs it before T021? | `ui/source_menu.rs` (`menu_rows`, `control`), added in M3 for the showcase poses; T021 (M4) wires the header through it rather than writing its own | agent | review B M3 F1; Principle VIII (one mapping for header and showcase) |
 
 ## Review rounds
 
@@ -51,6 +52,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B (conformance, sonnet, headless) | 1 | 11db4a7af4275acae7dd7700532cd0d8a5a89e28:48cb9959b134050aa6cb38dd873c65410e7fb795 | CLEAN: 1 MINOR (Default-entry label row missing from data-model §6; fixed, prose only). Ran beside A, before the gate; reviewers could not run cargo, Verify output supplied by the implementer |
 | M2 A (code-review high, headless claude -p) | 1 | a5076ddfcb5a1f1d65c7ba6c1e637859be9fabe9:1eaf6de89bd3c1bf198ff6a5218cd2413a9c8ec4 | CLEAN: 2 MINOR, both declined (see *Declined review findings*) |
 | M2 B (conformance, sonnet, headless) | 1 | a5076ddfcb5a1f1d65c7ba6c1e637859be9fabe9:1eaf6de89bd3c1bf198ff6a5218cd2413a9c8ec4 | CLEAN, no findings; first run returned a bare CLEAN, re-run with a required evidence block (Checked: per rubric item, cited tests and lines). Ran beside A and the gate; reviewers could not run cargo, Verify output supplied by the implementer |
+| M3 A (code-review high, headless claude -p) | 1 | fc06ceaf2f00956c51b2455fb7cfea50ac9f1d93:b46fbc163a7abfa9e0a73c9ae182acb6d24f7182 | CLEAN: 2 MINOR (F1 redundant strut and extra gap before the option marker, fixed; F2 declined) |
+| M3 B (conformance, sonnet, headless) | 1 | fc06ceaf2f00956c51b2455fb7cfea50ac9f1d93:b46fbc163a7abfa9e0a73c9ae182acb6d24f7182 | CLEAN: 3 MINOR, all taken (F1 mapper scope recorded as decision 4; F2 visual pass run on the showcase under Xvfb, `visual-pass/m3.md`; F3 `OPEN_POSE_ROOM` named). Ran beside A; Verify output supplied by the implementer |
 
 ## Declined review findings
 
@@ -61,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | — | Analyze | U2 split T021 | T021 is one view function's wiring; M4 has 8 tasks. No change. |
 | M2 | A | F1 `menu_input` computes `stale` at `now = 0` then clears it | correct and commented (`None` never marks it); a refactor would re-run the full gate for no behaviour change |
 | M2 | A | F2 inline `Source` → `Stop` mapping in `SourceMenuToggled` | used once; the other mapping (`menu_input`) builds a `Shown`, not a `Stop` |
+| M3 | A | F2 keyboard ring drawn on the disabled Committed chip | intended: a disabled stop stays reachable so the highlight can land on it (research R7, `source_menu::stops`); `Enter` there does nothing |
 
 ## Handover
 
