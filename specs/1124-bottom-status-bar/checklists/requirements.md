@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — two open (lost-connection banner, plan-usage position), left for the clarify unit
+- [x] No [NEEDS CLARIFICATION] markers remain — both resolved in the clarify session (D3 lost-connection banner, D4 plan-usage position; spec §Clarifications)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -33,5 +33,5 @@
 
 - The 28 px height and the bar's position are product requirements from the issue and mockup, not
   implementation details.
-- Open markers: User Story 3 scenario 5 (lost connection: banner or bar only) and User Story 5 /
-  FR-011 (plan usage: status bar or title bar). Both go to `/speckit-clarify`.
+- Markers resolved in clarify: User Story 3 scenario 5 (lost connection: bar only, D3) and User
+  Story 5 / FR-011 (plan usage: status bar, D4).
