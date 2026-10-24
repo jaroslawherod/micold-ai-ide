@@ -146,11 +146,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 }
             }
         }
-        Msg::SwitchDismissed(session) => {
-            if app.core.switch_offer_is(session) {
-                app.core.switch_dismissed();
-            }
-        }
+        Msg::SwitchDismissed(session) => app.core.switch_dismissed_for(session),
         // The card beside the failure is the offer itself: taking it switches (FR-022a). Not
         // over another offer still open.
         Msg::LoginOffered(session) => {

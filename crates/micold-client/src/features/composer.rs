@@ -921,6 +921,14 @@ impl crate::app::State {
             .is_some_and(|offer| offer.session == session)
     }
 
+    /// `session`'s offer was dismissed ([`Self::switch_dismissed`]); a dismiss sent for another
+    /// session's offer leaves it ([`Self::switch_offer_is`]).
+    pub fn switch_dismissed_for(&mut self, session: SessionId) {
+        if self.switch_offer_is(session) {
+            self.switch_dismissed();
+        }
+    }
+
     /// The offer was dismissed: nothing changes, the draft stays (US4 scenario 1).
     pub fn switch_dismissed(&mut self) {
         self.composers.switch_offer = None;
