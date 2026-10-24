@@ -1102,9 +1102,16 @@ impl DaemonState {
 
     /// What a provisioning step recorded as installed, read afresh on each call (FR-012). Missing:
     /// `None`, today's behaviour. Malformed: ignored and logged.
+    ///
+    /// Also `None` for an offer naming a `bin` outside this daemon's `ai-clis` directory: provisioning
+    /// installs under the provisioned daemon's own `<state>/ai-clis`, so such a file is another
+    /// daemon's. A host daemon meets one because the host's state directory is the container's,
+    /// mounted (`sandbox::STATE_CONTAINER_DIR`); it must not take the container's CLIs or `PATH`
+    /// (1289 FR-008).
     fn offered_clis(&self) -> Option<micold_core::provision::ai_cli::Offered> {
         let dir = self.ai_clis_dir.get()?;
         match micold_core::provision::ai_cli::read_offered(dir) {
+            Ok(Some(offered)) if offered.clis.iter().any(|c| !c.bin.starts_with(dir)) => None,
             Ok(offered) => offered,
             Err(why) => {
                 tracing::warn!(dir = %dir.display(), %why, "offered.json ignored");
@@ -1117,8 +1124,8 @@ impl DaemonState {
     /// toolchain-path P2): the offered CLIs' `bin` directories, then the sandbox home's
     /// `.local/bin`, then mise's shims folder, then `resolved`'s own `PATH`. `HOME`,
     /// `MISE_DATA_DIR` and `XDG_DATA_HOME` are read from `resolved` first, else from this process
-    /// (FR-002). Without an `offered.json` (host and remote daemons, R2), `resolved` unchanged
-    /// (FR-008).
+    /// (FR-002). Without an `offered.json` of its own (host and remote daemons, R2), `resolved`
+    /// unchanged (FR-008).
     fn with_sandbox_path(&self, mut resolved: ResolvedEnv) -> ResolvedEnv {
         let Some(offered) = self.offered_clis() else {
             return resolved;
@@ -8372,7 +8379,8 @@ mod offered_tests {
         (state, dir)
     }
 
-    /// A `bin` directory holding a file per command of `clis`.
+    /// A `bin` directory holding a file per command of `clis`. One an offer names must be under
+    /// the daemon's `ai-clis` directory, as provisioning puts it, or the offer is another daemon's.
     fn bin_of(root: &Path, name: &str, clis: &[AiCli]) -> PathBuf {
         let bin = root.join(name);
         std::fs::create_dir_all(&bin).unwrap();
@@ -8402,7 +8410,7 @@ mod offered_tests {
     fn the_listed_cli_is_offered_and_its_bin_leads_the_spawn_path() {
         let store = tempfile::tempdir().unwrap();
         let (state, dir) = daemon(store.path());
-        let bin = bin_of(store.path(), "claude-bin", &[AiCli::ClaudeCode]);
+        let bin = bin_of(&dir, "claude-bin", &[AiCli::ClaudeCode]);
         offer(&dir, &[(AiCli::ClaudeCode, &bin)]);
         let cwd = tempfile::tempdir().unwrap();
         assert_eq!(path_of(&state, cwd.path())[0], bin);
@@ -8419,7 +8427,7 @@ mod offered_tests {
         let store = tempfile::tempdir().unwrap();
         let (state, dir) = daemon(store.path());
         // Both commands exist in the bin directory, only Pi is listed.
-        let bin = bin_of(store.path(), "bin", &[AiCli::ClaudeCode, AiCli::Pi]);
+        let bin = bin_of(&dir, "bin", &[AiCli::ClaudeCode, AiCli::Pi]);
         offer(&dir, &[(AiCli::Pi, &bin)]);
         let cwd = tempfile::tempdir().unwrap();
         assert_eq!(state.ai_clis_available_in(cwd.path()), [AiCli::Pi]);
@@ -8447,7 +8455,7 @@ mod offered_tests {
     fn the_file_is_read_on_each_query() {
         let store = tempfile::tempdir().unwrap();
         let (state, dir) = daemon(store.path());
-        let bin = bin_of(store.path(), "bin", &[AiCli::Pi]);
+        let bin = bin_of(&dir, "bin", &[AiCli::Pi]);
         let cwd = tempfile::tempdir().unwrap();
         offer(&dir, &[]);
         assert!(state.ai_clis_available_in(cwd.path()).is_empty());
@@ -8491,7 +8499,7 @@ mod offered_tests {
     fn a_sandbox_spawn_path_puts_the_home_folders_after_the_offered_bins() {
         let store = tempfile::tempdir().unwrap();
         let (state, dir) = daemon(store.path());
-        let bin = bin_of(store.path(), "claude-bin", &[AiCli::ClaudeCode]);
+        let bin = bin_of(&dir, "claude-bin", &[AiCli::ClaudeCode]);
         offer(&dir, &[(AiCli::ClaudeCode, &bin)]);
         resolve_with(
             &state,
@@ -8585,14 +8593,14 @@ mod offered_tests {
         );
         let cwd = tempfile::tempdir().unwrap();
 
-        let bin = bin_of(store.path(), "claude-bin", &[AiCli::ClaudeCode]);
+        let bin = bin_of(&dir, "claude-bin", &[AiCli::ClaudeCode]);
         offer(&dir, &[(AiCli::ClaudeCode, &bin)]);
         let path = state.spawn_path_for(cwd.path());
         assert_eq!(found_in(&path, "claude"), Some(bin.clone()));
         assert_eq!(state.availability_in(cwd.path()).0, [AiCli::ClaudeCode]);
         assert_eq!(found_in(&path, "probe-tool"), Some(shims));
 
-        let pi = bin_of(store.path(), "pi-bin", &[AiCli::Pi]);
+        let pi = bin_of(&dir, "pi-bin", &[AiCli::Pi]);
         offer(&dir, &[(AiCli::Pi, &pi)]);
         assert_eq!(
             found_in(&state.spawn_path_for(cwd.path()), "claude"),
@@ -8622,7 +8630,7 @@ mod offered_tests {
         );
         let cwd = tempfile::tempdir().unwrap();
 
-        let empty = bin_of(store.path(), "claude-bin", &[]);
+        let empty = bin_of(&dir, "claude-bin", &[]);
         offer(&dir, &[(AiCli::ClaudeCode, &empty)]);
         assert!(found_in(&state.spawn_path_for(cwd.path()), "claude").is_some());
         assert!(
@@ -8630,14 +8638,43 @@ mod offered_tests {
             "bin lacks it"
         );
 
-        offer(
-            &dir,
-            &[(AiCli::ClaudeCode, &store.path().join("no-such-bin"))],
-        );
+        offer(&dir, &[(AiCli::ClaudeCode, &dir.join("no-such-bin"))]);
         assert!(
             state.availability_in(cwd.path()).0.is_empty(),
             "bin missing"
         );
+    }
+
+    /// FR-008, CI `sandbox_real_history`: the host's state directory is the container's, mounted,
+    /// so a host daemon reads the `offered.json` the container's provisioning wrote. Its `bin`
+    /// folders are under the container's state directory, not this daemon's `ai-clis`: the offer
+    /// is another daemon's, and the host daemon offers and spawns as without one.
+    #[cfg(unix)]
+    #[test]
+    fn another_daemons_offer_in_a_shared_state_directory_changes_nothing() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        let host_bin = bin_of(store.path(), "host-bin", &[AiCli::ClaudeCode]);
+        let path = format!("{}:/usr/bin:/bin", host_bin.display());
+        resolve_with(
+            &state,
+            store.path(),
+            &[
+                "HOME=/home/u".into(),
+                "MISE_DATA_DIR=".into(),
+                format!("PATH={path}"),
+            ],
+        );
+        let cwd = tempfile::tempdir().unwrap();
+        offer(
+            &dir,
+            &[(
+                AiCli::ClaudeCode,
+                Path::new("/var/lib/micold-ai-ide/ai-clis/ClaudeCode@1/bin"),
+            )],
+        );
+        assert_eq!(path_var(&state.env_include_vars_for(cwd.path())), path);
+        assert_eq!(state.availability_in(cwd.path()).0, [AiCli::ClaudeCode]);
     }
 }
 

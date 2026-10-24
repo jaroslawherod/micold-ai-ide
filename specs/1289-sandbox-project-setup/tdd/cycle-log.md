@@ -82,3 +82,12 @@ output is copied from the session's logs.
   -> `state.rs:8555:9` `left: "/home/u/.local/bin:/home/u/.local/share/mise/shims:/a:/usr/bin:/bin"`,
   `right: "/a:/usr/bin:/a:/bin"` (1 failed). Restored from a copy; `git diff` unchanged
 - green: no production change
+
+### Red CI: another daemon's offer in a shared state directory (`sandbox_real_history`, FR-008)
+
+- test: `state.rs` `another_daemons_offer_in_a_shared_state_directory_changes_nothing`
+- red (fix line removed from `offered_clis`):
+  `cargo test -p micold-daemon --lib offered_tests` -> `left: "/var/lib/micold-ai-ide/ai-clis/ClaudeCode@1/bin:/home/u/.local/bin:/home/u/.local/share/mise/shims:<host-bin>:/usr/bin:/bin"`,
+  `right: "<host-bin>:/usr/bin:/bin"` (1 failed)
+- green: `offered_clis` returns `None` for an offer naming a `bin` outside its `ai-clis` dir; 10/10
+  `offered` tests pass, `scripts/gate.sh` exit 0
