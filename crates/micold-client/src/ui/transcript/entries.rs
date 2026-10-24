@@ -174,10 +174,6 @@ pub fn oversized_text(original_bytes: u64) -> String {
 /// What a `/clear` marker says (#943 FR-005).
 pub const CLEARED: &str = "Conversation cleared: the turns above are from before the clear";
 
-/// What a terminal period's marker says (#943 FR-023).
-pub const TERMINAL_PERIOD: &str = "The conversation continued in the terminal; those turns are \
-     not shown here, the terminal's scrollback holds them";
-
 /// What a compaction marker says (#943 FR-004).
 pub fn compacted_text(trigger: Option<&str>) -> String {
     match trigger {
@@ -468,7 +464,17 @@ pub(super) fn entry(
                 None => text.muted().into(),
             }
         }
-        EntryKind::TerminalPeriod => caption(TERMINAL_PERIOD, roles),
+        // The terminal period: where the conversation went, and where its turns are (#943 FR-023,
+        // US5 scenario 2).
+        EntryKind::TerminalPeriod => {
+            let marker = crate::features::session::terminal_period_marker();
+            column![
+                IconLabel::new(Icon::RegularTerminal, marker.title, TypeRole::Label, roles),
+                caption(marker.detail, roles),
+            ]
+            .spacing(spacing::XS)
+            .into()
+        }
         EntryKind::Thinking { text, streaming } => {
             let card = DisclosureCard::new(THINKING_TITLE, toggle(), roles)
                 .leading(Icon::Thinking)
@@ -951,9 +957,7 @@ mod tests {
     }
 
     #[test]
-    fn the_clear_and_terminal_markers_say_where_the_turns_are() {
+    fn the_clear_marker_says_where_the_turns_are() {
         assert!(CLEARED.contains("before the clear"));
-        assert!(TERMINAL_PERIOD.contains("not shown"));
-        assert!(TERMINAL_PERIOD.contains("scrollback"));
     }
 }

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M8 done (T055–T060): T055–T059 at 255c6a31, T060's live visual pass and its fix (the open model picker keeps the keyboard) at f3eb98e6, on origin/main e65993bc; full gate green on 46b3dc76 (split-gate.sh); pushed, PR to open
-- **Next step**: the orchestrator opens the M8 PR from `$SCRATCHPAD/943-M8/pr-title.txt` and `pr-body.md`, waits on CI and merges; then M9 (T061–T065)
+- **Phase**: M9 implementing (T061–T065), on origin/main 3c7db2eb (M8 merged as #1313)
+- **Next step**: implement T061–T065 under TDD, reviews, T065 live visual pass, full gate, push; the orchestrator opens the M9 PR
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1252 | M5 | merged (rebase) | e479ea8f |
 | #1257 | M6 | merged (rebase) | 319e8706 |
 | #1265 | M7 | merged (rebase) | f462ddf5 |
+| #1313 | M8 | merged (rebase) | 3c7db2eb |
 
 ## Milestones
 
@@ -36,8 +37,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation (decision 2: A, confirmed) | #1252 | merged |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | #1257 | merged |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | #1265 | merged |
-| M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** (met, e65993bc) | | T055–T060 done (f3eb98e6); PR to open |
-| M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | pending |
+| M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** (met, e65993bc) | #1313 | merged |
+| M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | in progress |
 
 ## Decisions
 
@@ -120,13 +121,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-**M8 done.** T055–T059 at `255c6a31`, T060 at `f3eb98e6` (branch `claude/project-thread-k392yq` on
-`origin/main` e65993bc). T060 ran quickstart Part B 1, 2, 4 and 5 against a live structured
-`claude` session on Xvfb in both themes (`visual-pass/m8-record.md`, 31 crops); its one failure —
-the model picker's typed-name field took no keys — is fixed (`State::terminal_focused` yields while
-the displayed session's picker is open; red/green in the cycle log) and was re-checked live. The
-PR title and body are in `$SCRATCHPAD/943-M8/`; the orchestrator opens the PR. No protocol change
-in M8. Next: M9 (T061–T065) after the M8 merge.
+None.
 
 ## Open escalation
 

@@ -1169,6 +1169,11 @@ impl State {
             Message::PermissionPrompts(crate::features::permission_prompts::Msg::ModeConfirmed) => {
                 let _ = self.permission_prompts.confirm_mode();
             }
+            // #943: the switch's confirmation is a registered dialog; dismissing it (Escape, the
+            // scrim, another dialog opening) changes nothing, so it is pure state here.
+            Message::Composer(crate::features::composer::Msg::SwitchDismissed(_)) => {
+                self.switch_dismissed();
+            }
             // Daemon connection messages are runtime, not pure state — the binary handles them in
             // `update_inner` and never routes them here (of the permission prompts' messages, all
             // but the `ModeCancelled` and `ModeConfirmed` above, which close a registered dialog). Listed explicitly (not a catch-all) so the

@@ -372,19 +372,19 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 11: Window — switching, offers, terminal-only table (M9; #942 M7 for `PromptCard`, M8 for SC-007, I-6)
 
-- [ ] T061 [P] [US4] Test `core/tests/terminal_only_doc.rs` (new): the table between the marker
+- [x] T061 [P] [US4] Test `core/tests/terminal_only_doc.rs` (new): the table between the marker
   comments in `docs/user-guide/worktrees-and-sessions.md` has exactly the names, reasons and
   version of `TERMINAL_ONLY` and `CHECKED_AGAINST` (FR-012)
-- [ ] T062 [US4] [US5] User guide: **Open in terminal** and **Open in structured view**, what a
+- [x] T062 [US4] [US5] User guide: **Open in terminal** and **Open in structured view**, what a
   switch keeps (conversation, queue on hold, drafts, model, permission mode), the terminal period
   marker, the terminal-only table with why and the checked version (T061 passes; FR-012, FR-027)
-- [ ] T063 [US4] Draw the switch offer and `client/src/ui/confirm_switch_kind.rs` (new, on `Dialog`
+- [x] T063 [US4] Draw the switch offer and `client/src/ui/confirm_switch_kind.rs` (new, on `Dialog`
   like `confirm_delete.rs`); the offer uses `PromptCard` if #942 M7 is on `main` when this task is
   implemented, else `Dialog` (one implementation, chosen then; no dead branch); **Open in
   terminal** in the transcript header and `session_menu_items` (`client/src/ui/mod.rs`) taken from
   T053's `switch_entries`; the auth-failure offer beside the error (GUI exception for the draw glue
   only)
-- [ ] T064 [US4] [US5] Unit-test then draw: the held-queue line text ("<n> queued messages wait for
+- [x] T064 [US4] [US5] Unit-test then draw: the held-queue line text ("<n> queued messages wait for
   the structured view") and the `TerminalPeriod` marker text (the conversation continued in the
   terminal; those turns are not shown here and are in the terminal's scrollback) as render-free
   functions with unit tests, replacing T024's plain `TerminalPeriod` caption; draw **Open in structured view** (from `switch_entries`) and the

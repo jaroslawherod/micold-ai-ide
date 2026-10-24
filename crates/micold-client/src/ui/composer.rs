@@ -28,9 +28,11 @@ use crate::ui::cdk::focus_within::FocusWithin;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
 use crate::ui::material::{
-    AttachmentChip, BusyIndicator, Button, CommandPalette, QueueRow, Scrollable, Text, TextArea,
-    TextField, TypeRole, Typeahead, TypeaheadRow,
+    AttachmentChip, BusyIndicator, Button, CommandPalette, PromptCard, QueueRow, Scrollable, Text,
+    TextArea, TextField, TypeRole, Typeahead, TypeaheadRow,
 };
+use iced::widget::text::Wrapping;
+use micold_core::session::SessionKind;
 
 /// The height the text area stops growing at, its lines then scrolling inside it (FR-008):
 /// about eight lines.
@@ -52,6 +54,9 @@ pub const WAITING: &str = "Waiting for you";
 pub const ON_HOLD: &str = "Queue on hold";
 /// What the empty text area shows.
 pub const PLACEHOLDER: &str = "Message Claude";
+
+/// The switch offer's dismissing button (#943 US4 scenario 1).
+pub const NOT_NOW: &str = "Not now";
 
 /// What the model picker's field says while empty (#943 FR-014).
 pub const MODEL_PLACEHOLDER: &str = "Model name";
@@ -299,6 +304,58 @@ fn row_with_details(
     match details {
         Some(details) => row.details(details, Vec::new()),
         None => row,
+    }
+}
+
+/// Over `session`'s composer, the offer to open it in the other kind (#943 FR-010, US4 scenario
+/// 1): why, **Open in terminal** and **Not now**; or, after an authentication failure, the offer of
+/// **Open in terminal** with `/login` beside the CLI's error (FR-022a). The confirmation the
+/// service may ask for is a dialog (`ui/confirm_switch_kind.rs`).
+pub fn switch_offer<'a>(
+    state: &'a State,
+    session: SessionId,
+    roles: Roles,
+) -> Option<Element<'a, Message>> {
+    use crate::features::session::{switch_label, LOGIN_REASON, LOGIN_TITLE};
+    match state.composers.switch_offer.as_ref() {
+        Some(offer) if offer.session == session => {
+            if offer.confirm.is_some() {
+                return None;
+            }
+            Some(
+                PromptCard::new(offer.title(), roles)
+                    .leading(crate::ui::switch_icon(offer.to))
+                    .body(
+                        Text::new(offer.reason.clone(), TypeRole::Body, roles)
+                            .wrapping(Wrapping::WordOrGlyph)
+                            .width(Length::Fill),
+                    )
+                    .action(
+                        Button::filled(switch_label(offer.to), roles)
+                            .on_press(send(Msg::SwitchConfirmed(session))),
+                    )
+                    .action(
+                        Button::text(NOT_NOW, roles).on_press(send(Msg::SwitchDismissed(session))),
+                    )
+                    .note(offer.note())
+                    .into(),
+            )
+        }
+        _ if state.offers_login(session) => Some(
+            PromptCard::new(LOGIN_TITLE, roles)
+                .leading(crate::ui::switch_icon(SessionKind::Terminal))
+                .body(
+                    Text::new(LOGIN_REASON, TypeRole::Body, roles)
+                        .wrapping(Wrapping::WordOrGlyph)
+                        .width(Length::Fill),
+                )
+                .action(
+                    Button::filled(switch_label(SessionKind::Terminal), roles)
+                        .on_press(send(Msg::LoginOffered(session))),
+                )
+                .into(),
+        ),
+        _ => None,
     }
 }
 

@@ -91,6 +91,23 @@ fn dialogs() -> Vec<Dialog> {
                 );
             },
         },
+        // The confirmation of a switch of kind while work is in progress (#943 FR-021).
+        Dialog {
+            id: "confirm_switch_kind",
+            cancel: Message::Composer(micold_client::features::composer::Msg::SwitchDismissed(
+                micold_core::session::SessionId::from_uuid(uuid::Uuid::nil()),
+            )),
+            open: |state| {
+                state.offer_switch(
+                    micold_core::session::SessionId::from_uuid(uuid::Uuid::nil()),
+                    micold_core::session::SessionKind::Terminal,
+                    None,
+                    String::new(),
+                );
+                let request = state.switch_confirmed().expect("offered");
+                state.switch_needs_confirmation(request, "A turn is running.".to_owned());
+            },
+        },
         // Attach existing worktrees (feature 582).
         Dialog {
             id: "attach_worktrees",
@@ -276,17 +293,17 @@ fn every_dialog_is_in_the_list() {
     //
     // Nine, then eight. Settings was the largest of the original nine and is no longer a dialog at
     // all — it is a view (FR-026), so it neither floats nor takes Escape. Feature 804 removed the
-    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946). Twenty with the quick switcher (feature 968). Twenty-two with the two Bypass confirmations (#942).
+    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946). Twenty with the quick switcher (feature 968). Twenty-two with the two Bypass confirmations (#942). Twenty-three with the switch of kind's confirmation (#943).
     assert_eq!(
         dialogs().len(),
-        22,
-        "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
-         is meant to cover are no longer twenty-two"
+        23,
+        "the dialog list has drifted. Add the new dialog here, or the twenty-three states this file \
+         is meant to cover are no longer twenty-three"
     );
     assert_eq!(
         every_state().len(),
-        46,
-        "twenty-two dialogs (the Bypass confirmations are the last two, #942) plus nothing open, each with the filter panel open and closed"
+        48,
+        "twenty-three dialogs (the Bypass confirmations, #942, and the switch confirmation, #943) plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()

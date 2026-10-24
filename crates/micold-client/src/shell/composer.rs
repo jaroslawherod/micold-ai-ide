@@ -145,7 +145,13 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             }
         }
         Msg::SwitchDismissed(_) => app.core.switch_dismissed(),
-        Msg::LoginOffered(session) => app.core.login_offered(session),
+        // The card beside the failure is the offer itself: taking it switches (FR-022a).
+        Msg::LoginOffered(session) => {
+            app.core.login_offered(session);
+            if let Some(request) = app.core.switch_confirmed() {
+                switch_kind(app, request);
+            }
+        }
     }
     // The palette follows the draft, whoever changed it (#943 FR-007).
     app.core.composer_edited(session);

@@ -276,9 +276,10 @@ const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/0/0/0/1/0";
 /// card inside that thread, each folded. Each body is a `material::Expand` at rest, the same
 /// mechanism as [`CLIP_REVEALED`]: it reports `0` high to its parent while its child keeps the
 /// body's padding (8px) and reveals it by clipping when it unfolds. Held only there and only by
-/// that padding, so a body that grew past it still fires.
+/// that padding, so a body that grew past it still fires. #943 put the session bar in a row with
+/// **Open in terminal** (`0/0` after the bar's container).
 const FOLDED_BODY_REVEAL: &[&str] = &[
-    "0/0/0/1/1/0/0/0/0/0/1/1/0",
+    "0/0/0/1/1/0/0/0/0/0/0/0/1/1/0",
     "0/0/0/1/1/0/0/0/1/0/0/4/0/0/1/0",
     "0/0/0/1/1/0/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
 ];

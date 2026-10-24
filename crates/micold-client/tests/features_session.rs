@@ -1744,4 +1744,111 @@ mod switching {
             );
         }
     }
+
+    // ---- M9: T063, T064 ----
+
+    fn queued(id: u64) -> micold_core::protocol::messages::QueuedSummary {
+        micold_core::protocol::messages::QueuedSummary {
+            id: micold_core::protocol::messages::QueueEntryId(id),
+            text: format!("message {id}"),
+            attachments: Vec::new(),
+        }
+    }
+
+    fn queue_of(w: &mut State, s: SessionId, n: u64) {
+        w.composers.input_reported(
+            s,
+            micold_client::features::composer::InputState {
+                phase: micold_core::protocol::messages::TurnPhase::NotRunning,
+                hold: true,
+                queue: (1..=n).map(queued).collect(),
+            },
+        );
+    }
+
+    #[test]
+    fn the_held_queue_line_counts_the_messages_that_wait() {
+        use micold_client::features::session::held_queue_text;
+        assert_eq!(held_queue_text(0), None, "nothing waits: no line");
+        assert_eq!(
+            held_queue_text(1).as_deref(),
+            Some("1 queued message waits for the structured view")
+        );
+        assert_eq!(
+            held_queue_text(3).as_deref(),
+            Some("3 queued messages wait for the structured view")
+        );
+    }
+
+    #[test]
+    fn a_claude_terminal_session_says_how_many_queued_messages_wait() {
+        let terminal = session(AiCli::ClaudeCode, SessionKind::Terminal);
+        let structured = session(AiCli::ClaudeCode, SessionKind::Structured);
+        let empty = session(AiCli::ClaudeCode, SessionKind::Terminal);
+        let (t, s, e) = (terminal.id, structured.id, empty.id);
+        let mut w = window(vec![terminal, structured, empty]);
+        queue_of(&mut w, t, 2);
+        queue_of(&mut w, s, 2);
+        queue_of(&mut w, e, 0);
+        assert_eq!(
+            w.held_queue_line(t).as_deref(),
+            Some("2 queued messages wait for the structured view")
+        );
+        assert_eq!(
+            w.held_queue_line(s),
+            None,
+            "the composer shows its own queue"
+        );
+        assert_eq!(w.held_queue_line(e), None, "nothing queued");
+        assert_eq!(w.held_queue_line(SessionId::new()), None, "unknown session");
+    }
+
+    #[test]
+    fn the_terminal_period_marker_says_where_the_turns_are() {
+        let marker = micold_client::features::session::terminal_period_marker();
+        assert_eq!(marker.title, "Continued in the terminal");
+        assert!(
+            marker.detail.contains("not shown here"),
+            "the turns are not in the transcript: {}",
+            marker.detail
+        );
+        assert!(
+            marker.detail.contains("terminal's scrollback"),
+            "and where they are: {}",
+            marker.detail
+        );
+    }
+
+    #[test]
+    fn the_session_menu_offers_the_other_kind_for_claude_only() {
+        use micold_client::app::Message;
+        use micold_client::features::composer::Msg as ComposerMsg;
+        use micold_client::ui::session_menu_items;
+        let structured = session(AiCli::ClaudeCode, SessionKind::Structured);
+        let terminal = session(AiCli::ClaudeCode, SessionKind::Terminal);
+        let copilot = session(AiCli::Copilot, SessionKind::Terminal);
+        let (s, t, c) = (structured.id, terminal.id, copilot.id);
+        let w = window(vec![structured, terminal, copilot]);
+        for (id, label, to) in [
+            (s, OPEN_IN_TERMINAL, SessionKind::Terminal),
+            (t, OPEN_IN_STRUCTURED, SessionKind::Structured),
+        ] {
+            let items = session_menu_items(&w, id);
+            let item = items
+                .iter()
+                .find(|i| i.label == label)
+                .unwrap_or_else(|| panic!("{label} in the menu"));
+            assert!(matches!(
+                item.message,
+                Some(Message::Composer(ComposerMsg::SwitchRequested { session, to: k }))
+                    if session == id && k == to
+            ));
+        }
+        assert!(
+            !session_menu_items(&w, c)
+                .iter()
+                .any(|i| i.label == OPEN_IN_TERMINAL || i.label == OPEN_IN_STRUCTURED),
+            "FR-019: no switching entry for another CLI"
+        );
+    }
 }

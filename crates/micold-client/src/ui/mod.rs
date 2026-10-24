@@ -19,6 +19,7 @@ pub(crate) mod confirm_forget;
 pub(crate) mod confirm_link_open;
 pub(crate) mod confirm_pick_run;
 pub(crate) mod confirm_session_remove;
+pub(crate) mod confirm_switch_kind;
 pub mod daemon_details_dialog;
 pub mod daemon_form_dialog;
 mod focus;
@@ -1177,6 +1178,12 @@ pub fn session_menu_items(state: &State, id: SessionId) -> Vec<material::MenuIte
             Message::Session(SessionMsg::MakeMainRequested(id)),
         ));
     }
+    // #943 FR-019: a Claude Code session switches kind from its menu; other CLIs' offer nothing.
+    items.extend(
+        crate::features::session::switch_entries(state, id)
+            .into_iter()
+            .map(|entry| switch_menu_item(id, entry)),
+    );
     items.extend([
         material::MenuItem::new(
             Icon::Close,
@@ -1190,6 +1197,29 @@ pub fn session_menu_items(state: &State, id: SessionId) -> Vec<material::MenuIte
         ),
     ]);
     items
+}
+
+/// A switching entry (#943 FR-019) as a menu item.
+fn switch_menu_item(
+    session: SessionId,
+    entry: crate::features::session::SwitchEntry,
+) -> material::MenuItem<Message> {
+    material::MenuItem::new(
+        switch_icon(entry.to),
+        entry.label,
+        Message::Composer(crate::features::composer::Msg::SwitchRequested {
+            session,
+            to: entry.to,
+        }),
+    )
+}
+
+/// The icon of a switch to `to`: the terminal's, or the AI CLI's for the structured view.
+pub(crate) fn switch_icon(to: micold_core::session::SessionKind) -> Icon {
+    match to {
+        micold_core::session::SessionKind::Terminal => Icon::RegularTerminal,
+        micold_core::session::SessionKind::Structured => Icon::AiCli,
+    }
 }
 
 /// The identity of the main content area, so the view fades when what it shows changes rather than

@@ -25,8 +25,8 @@ use crate::ui::material::{
 };
 use crate::ui::terminal::TERM_FONT_SIZE;
 use crate::ui::terminal::{
-    empty_terminal_message, is_structured_primary, session_title, transcript_body, CellMetrics,
-    TermPalette,
+    empty_terminal_message, is_structured_primary, session_title, terminal_switch_strip,
+    transcript_body, CellMetrics, TermPalette,
 };
 
 /// What the pane renderer reads besides `State`: the active project's layout and the grids.
@@ -278,6 +278,8 @@ pub fn view<'a>(
             let body = GridSizeReporter::new(body).pane(pane.id());
             let tile: Element<'a, Message> = column![
                 header(state, pane, is_focused, r),
+                // #943: a Claude terminal session's held-queue line and **Open in structured view**.
+                terminal_switch_strip(state, pane.terminal(), r),
                 container(Element::from(body))
                     .width(Length::Fill)
                     .height(Length::Fill)

@@ -20,8 +20,8 @@ pub use entries::{
     compacted_text, edit_meta, footer_view, model_changed_text, omitted_text, oversized_text, rows,
     subagent_count, subagent_notice_text, tool_header, tool_header_counted, tool_status,
     CardHeader, FooterView, InsightsCtx, Row, Status, Tone, ATTACHED, CLEARED,
-    ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL, TERMINAL_PERIOD,
-    THINKING_TITLE, USER_LABEL,
+    ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL, THINKING_TITLE,
+    USER_LABEL,
 };
 pub use insights::{
     footer_view_with, kind_icon, meter_view, placeholder_title, running_text, session_bar_view,
@@ -117,6 +117,7 @@ pub fn view_with_insights<'a>(
         ctx,
         std::convert::identity,
         None,
+        None,
     )
 }
 
@@ -145,7 +146,9 @@ pub fn view_with_prompts<'a, M: Clone + 'a>(
 }
 
 /// The window's transcript: [`view_with_insights`] with the permission requests of
-/// [`view_with_prompts`] drawn in it when `prompts` is given.
+/// [`view_with_prompts`] drawn in it when `prompts` is given, and `trailing` (#943: **Open in
+/// terminal**) at the end of the session bar's row.
+#[allow(clippy::too_many_arguments)]
 pub fn view_full<'a, M: Clone + 'a>(
     state: &'a State,
     insights: InsightsCtx<'a>,
@@ -154,8 +157,9 @@ pub fn view_full<'a, M: Clone + 'a>(
     ctx: RenderCtx<'a>,
     on_transcript: fn(TranscriptMsg) -> M,
     prompts: Option<PromptsView<'a, M>>,
+    trailing: Option<Element<'a, M>>,
 ) -> Element<'a, M> {
-    let bar = container(
+    let session_bar = container(
         session_bar::view(
             insights.state,
             session,
@@ -164,6 +168,13 @@ pub fn view_full<'a, M: Clone + 'a>(
             ctx.roles,
         )
         .map(on_transcript),
+    )
+    .width(Length::Fill);
+    let bar = container(
+        iced::widget::row![session_bar]
+            .push(trailing)
+            .spacing(spacing::SM)
+            .align_y(Alignment::Start),
     )
     .padding(iced::Padding {
         top: spacing::SM,

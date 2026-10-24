@@ -21,7 +21,7 @@ use crate::ui::transcript::{BlockRenderers, RenderCtx};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
-use iced::widget::{column, container, row};
+use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Color, Element, Font, Length, Padding};
 use micold_core::protocol::grid::{WireColor, WireStyle};
 use micold_core::protocol::messages::TerminalRef;
@@ -531,6 +531,17 @@ pub fn pane<'a>(
         None => body,
     };
 
+    // #943: above a Claude terminal session's own terminal, the held-queue line and **Open in
+    // structured view**; an empty element otherwise, so the terminal keeps its place in the tree.
+    // Outside the size reporter, so the terminal is sized to the room left under it. A transcript
+    // has its switch in its own header.
+    let body: Element<'a, Message> = if several.is_some() || shows_transcript(state, active) {
+        body
+    } else {
+        let shown = active_primary(state, active);
+        column![terminal_switch_strip(state, shown, r), body].into()
+    };
+
     // A refusal with a single pane (closing the last one) has no pane area to sit in: say it above
     // the terminal, as the multi-pane view does.
     let body: Element<'a, Message> =
@@ -811,6 +822,8 @@ pub(crate) fn transcript_body<'a>(
                 Message::Window(crate::features::window::Msg::FieldFocusChanged(id, focused))
             },
         }),
+        // #943 FR-019: **Open in terminal** in the transcript's header, from `switch_entries`.
+        switch_button(state, id, tokens::roles(scheme)),
     );
     iced::widget::column![
         transcript,
@@ -821,12 +834,85 @@ pub(crate) fn transcript_body<'a>(
             // #942: the mode control, and *Waiting for you* while a request waits (plan I-1);
             // #943: the command palette in the completion slot.
             crate::ui::composer::Seams {
-                completion: crate::ui::composer::palette(state, id, tokens::roles(scheme)),
+                // #943: the offer to open the session in the terminal, else the palette.
+                completion: crate::ui::composer::switch_offer(state, id, tokens::roles(scheme))
+                    .or_else(|| crate::ui::composer::palette(state, id, tokens::roles(scheme))),
                 ..crate::ui::mode_control::seams(state, id, mode, tokens::roles(scheme))
             },
         ),
     ]
     .into()
+}
+
+/// `id`'s switching entry as a button (#943 FR-019, US4 scenarios 3, 4): **Open in terminal** for a
+/// structured Claude session, **Open in structured view** for a terminal one, none for another CLI.
+pub(crate) fn switch_button<'a>(
+    state: &'a State,
+    id: SessionId,
+    r: tokens::Roles,
+) -> Option<Element<'a, Message>> {
+    let entry = crate::features::session::switch_entries(state, id)
+        .into_iter()
+        .next()?;
+    Some(
+        Button::outlined(entry.label, r)
+            .on_press(Message::Composer(
+                crate::features::composer::Msg::SwitchRequested {
+                    session: id,
+                    to: entry.to,
+                },
+            ))
+            .into(),
+    )
+}
+
+/// The primary terminal of `id` while the single pane shows its AI tab (#943).
+fn active_primary(state: &State, id: SessionId) -> Option<TerminalRef> {
+    state
+        .active_sessions()
+        .iter()
+        .any(|s| s.id == id && s.mode == TerminalMode::AiCli)
+        .then_some(TerminalRef {
+            session: id,
+            process: micold_core::protocol::messages::SessionProcess::Primary,
+        })
+}
+
+/// Above a Claude terminal session's terminal (#943 US4 scenario 4, US5 scenario 3): how many
+/// queued messages wait for the structured view, and **Open in structured view**. Anything else
+/// gets an empty element, so the terminal under it keeps its place in the widget tree.
+pub(crate) fn terminal_switch_strip<'a>(
+    state: &'a State,
+    terminal: Option<TerminalRef>,
+    r: tokens::Roles,
+) -> Element<'a, Message> {
+    let strip = terminal
+        .filter(|t| t.process == micold_core::protocol::messages::SessionProcess::Primary)
+        .filter(|t| session_kind(state, t.session) == micold_core::session::SessionKind::Terminal)
+        .and_then(|t| {
+            let button = switch_button(state, t.session, r)?;
+            let held = state
+                .held_queue_line(t.session)
+                .map(|line| Text::new(line, TypeRole::Caption, r).muted());
+            Some(
+                container(
+                    row![]
+                        .push(held)
+                        .push(Space::new().width(Length::Fill))
+                        .push(button)
+                        .spacing(spacing::SM)
+                        .align_y(Alignment::Center),
+                )
+                .width(Length::Fill)
+                .padding([spacing::XS, spacing::SM]),
+            )
+        });
+    // An empty container rather than a bare `Space`: a void child is dropped from the tree, which
+    // would move the terminal under it (see `right_aligned_tabs`).
+    match strip {
+        Some(strip) => strip.into(),
+        None => container(Space::new()).into(),
+    }
 }
 
 /// Whether the pane for `id` is the transcript: a structured session with its AI tab displayed.

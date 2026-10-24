@@ -1250,8 +1250,8 @@ the background service keeps the events it reports. It is Claude Code only.
   Terminal sessions are unchanged: they ask in their own terminal screen, and have no mode here.
 - **A turn you interrupted** ends with **You interrupted this turn** instead of a footer, and a
   message you sent with pictures names them under it (**Attached:** and the file names).
-- **It does not do yet** what the rest of this work adds: switching a session between a structured
-  view and a terminal ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
+- **It can become a terminal session and back**, keeping its conversation: see
+  [Open in terminal and back](#open-in-terminal-and-back).
 - **Across a restart.** While [Save terminal history](./settings.md#terminal) is on, the events are
   kept across a restart of the background service; with it off they live in the service's memory
   only.
@@ -1315,7 +1315,7 @@ instructions Claude Code expanded it into.
 - **Commands that open in the terminal.** A few Claude Code commands cannot run in a structured
   session (they draw their own terminal screen). They are listed all the same, with **opens in
   terminal** in words beside them, and sending one offers to open the session in a terminal
-  instead of sending it.
+  instead of sending it ([the list](#commands-that-need-the-terminal)).
 - **Before the session has started.** A session that has not run since the app opened lists the
   commands Claude Code always has, and says its own commands appear once it starts.
 - **The model.** The composer's status row shows the model the session reported and whether it is
@@ -1340,6 +1340,67 @@ instructions Claude Code expanded it into.
   conversation — which is also the one a later restart resumes. A command that answers with text
   and no reply from Claude (`/context` and the like) puts its answer behind a **Command output**
   card.
+
+#### Open in terminal and back
+
+A Claude Code session can switch between the structured view and Claude Code's own terminal screen
+at any time, in the same conversation. Sessions on the other CLIs (Copilot, Pi, Codex, OpenCode)
+have no such entry.
+
+- **Open in terminal.** In a structured session, press **Open in terminal** at the top of its
+  transcript, or pick it from the session's menu in the sidebar. The structured process ends and
+  the session starts again as a terminal session, resuming the same conversation: Claude Code's
+  screen continues where the transcript left off. The session's row and every window show it as a
+  terminal session.
+- **From a command.** Sending (or picking) a command that needs the terminal, such as `/mcp`, sends
+  nothing to Claude Code: a card over the composer says why the command needs the terminal and
+  offers **Open in terminal**. Confirm, and the session opens in the terminal with the command
+  typed in as its first input once Claude Code is ready; **Not now** leaves the session and your
+  draft as they were.
+- **When signing in is needed.** A turn that Claude Code answers with a sign-in failure (not signed
+  in, or the sign-in expired) shows its error in the transcript and a card offering **Open in
+  terminal** with `/login`, which switches the same way.
+- **Open in structured view.** A Claude Code terminal session, whether it started as one or was
+  switched, has **Open in structured view** above its terminal and in its menu. The terminal's
+  Claude Code process ends and the session starts again as a structured session, resuming the same
+  conversation.
+- **Work in progress is asked about.** Switching while a turn is running, a permission request
+  waits, or Claude Code's terminal says it is working first asks you to confirm, naming the work
+  that will end. Nothing changes until you confirm. A session that is not running switches kind
+  and starts in it.
+- **What a switch keeps.** The conversation (Claude remembers it), the transcript of the structured
+  periods, the queue, your draft in each window, the session's model choice and its permission
+  mode. While the session is a terminal session the queue is kept **on hold** and nothing in it is
+  typed into the terminal; the line above the terminal says how many queued messages wait for the
+  structured view, and back there they wait for **Send queued**. A terminal session runs with your
+  model choice and with no permission-mode override, as any terminal session does; back in the
+  structured view the mode applies again.
+- **The terminal period is marked.** Back in the structured view, the transcript holds everything
+  from before the switch, then a **Continued in the terminal** marker, then what follows. The turns
+  you had in the terminal are not shown in the transcript: they are in the terminal's own
+  scrollback, which the marker says.
+- **Across restarts.** The session comes back in the kind it last had, resuming the same
+  conversation. If Claude Code no longer has the conversation, the start fails as a failed resume
+  does, and the session keeps its new kind so you can switch back.
+- **In a sandbox.** A sandboxed session switches inside its sandbox: both kinds run there.
+
+##### Commands that need the terminal
+
+These Claude Code commands open the session in the terminal instead of being sent, each for the
+reason shown (the same words the app shows when you send one). Commands Claude Code itself marks
+as terminal-only are offered the same way.
+
+<!-- terminal-only-commands:start -->
+| Command | Why it needs the terminal |
+|---|---|
+| `/config` (also `/settings`) | Its settings screen is interactive and needs the terminal. |
+| `/mcp` | Managing MCP servers and signing in to them needs the terminal's interactive screens. |
+| `/agents` | Its subagent manager is an interactive screen of the terminal. |
+| `/login` | Signing in to Claude Code needs the terminal's sign-in flow. |
+| `/logout` | Signing out of Claude Code is done in the terminal. |
+
+Checked against Claude Code 2.1.307.
+<!-- terminal-only-commands:end -->
 
 ### Sessions on Codex and OpenCode
 

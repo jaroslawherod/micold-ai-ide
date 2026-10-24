@@ -337,6 +337,32 @@ pub const LOGIN_REASON: &str = "Signing in to Claude Code needs its terminal: /l
 /// The terminal-only command an authentication failure offers.
 pub const LOGIN_COMMAND: &str = "login";
 
+/// What a Claude terminal session's view says of the queue it holds for the structured view
+/// (#943 US5 scenario 3): `None` when nothing waits.
+pub fn held_queue_text(queued: usize) -> Option<String> {
+    match queued {
+        0 => None,
+        1 => Some("1 queued message waits for the structured view".to_owned()),
+        n => Some(format!("{n} queued messages wait for the structured view")),
+    }
+}
+
+/// The words of a transcript's terminal-period marker (#943 FR-023, US5 scenario 2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkerText {
+    pub title: &'static str,
+    pub detail: &'static str,
+}
+
+/// The terminal-period marker: the conversation continued in the terminal, those turns are not in
+/// the transcript, the terminal's scrollback holds them.
+pub fn terminal_period_marker() -> MarkerText {
+    MarkerText {
+        title: "Continued in the terminal",
+        detail: "Those turns are not shown here: they are in the terminal's scrollback.",
+    }
+}
+
 /// An offer to switch `session` to kind `to` (#943 FR-010, FR-022a): for `command` (entered as
 /// the terminal's first input), saying `reason`. `confirm` holds the service's reason once it
 /// asked for confirmation (FR-021).
@@ -347,6 +373,38 @@ pub struct SwitchOffer {
     pub command: Option<String>,
     pub reason: String,
     pub confirm: Option<String>,
+}
+
+impl SwitchOffer {
+    /// The offer's headline: the command that needs the terminal, else the switch it asks for.
+    pub fn title(&self) -> String {
+        match &self.command {
+            Some(command) => format!("/{command} opens in the terminal"),
+            None => format!("{}?", switch_label(self.to)),
+        }
+    }
+
+    /// What confirming does beyond the button's words (US4 scenario 2).
+    pub fn note(&self) -> String {
+        match &self.command {
+            Some(command) => format!(
+                "The session restarts in the terminal, in the same conversation, with /{command} \
+                 typed in."
+            ),
+            None => "The session restarts in the same conversation.".to_owned(),
+        }
+    }
+}
+
+/// The headline of the offer beside an authentication failure (FR-022a).
+pub const LOGIN_TITLE: &str = "Claude Code needs you to sign in";
+
+/// The words of a switch to `to`: [`OPEN_IN_TERMINAL`] or [`OPEN_IN_STRUCTURED`].
+pub fn switch_label(to: SessionKind) -> &'static str {
+    match to {
+        SessionKind::Terminal => OPEN_IN_TERMINAL,
+        SessionKind::Structured => OPEN_IN_STRUCTURED,
+    }
 }
 
 /// A `SessionSwitchKind` to send (#943 contracts/wire.md).
@@ -374,15 +432,13 @@ pub fn switch_entries(state: &crate::app::State, session: SessionId) -> Vec<Swit
     if s.provider != AiCli::ClaudeCode {
         return Vec::new();
     }
-    vec![match s.kind {
-        SessionKind::Structured => SwitchEntry {
-            label: OPEN_IN_TERMINAL,
-            to: SessionKind::Terminal,
-        },
-        SessionKind::Terminal => SwitchEntry {
-            label: OPEN_IN_STRUCTURED,
-            to: SessionKind::Structured,
-        },
+    let to = match s.kind {
+        SessionKind::Structured => SessionKind::Terminal,
+        SessionKind::Terminal => SessionKind::Structured,
+    };
+    vec![SwitchEntry {
+        label: switch_label(to),
+        to,
     }]
 }
 
@@ -399,6 +455,22 @@ impl crate::app::State {
                 command: None,
                 confirmed: false,
             })
+    }
+
+    /// The held-queue line of a Claude terminal session (#943 US5 scenario 3): how many of its
+    /// queued messages wait for the structured view; `None` for a structured session, whose
+    /// composer shows the queue itself, and when nothing waits.
+    pub fn held_queue_line(&self, session: SessionId) -> Option<String> {
+        let (_, s) = self.workspace.find_session(session)?;
+        if s.provider != AiCli::ClaudeCode || s.kind != SessionKind::Terminal {
+            return None;
+        }
+        let queued = self
+            .composers
+            .composer(session)
+            .and_then(|c| c.remote.as_ref())
+            .map_or(0, |r| r.queue.len());
+        held_queue_text(queued)
     }
 
     /// Whether `session`'s latest answer is an authentication failure, which offers **Open in
