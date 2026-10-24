@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: tasks review round 1 acted on, round 2 pending
-- **Next step**: tasks review round 2 (Sonnet re-review of the fix diff from round 1's snapshot; orchestrator dispatches), then the rest of the tasks unit: `speckit-analyze`, checklists (none unchecked), specs-only gate, design PR. M1 can be built after the design PR merges; M2–M4 wait for #1125 and #1127 to merge.
+- **Phase**: tasks unit done; design PR pending (orchestrator opens it)
+- **Next step**: orchestrator opens the design PR (title/body written by the tasks unit) and merges it; then milestone M1. M2–M4 wait for #1125 and #1127 to merge.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -47,7 +47,8 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | plan | 1 | `042e8e0058432d5b45e9377611122c12f1cce667:2fa8a2688c30d42e47a2ec0733539e77cba161bc` | CHANGES: F1 MAJOR fixed (`title_bar` anchors the 64 px bar, not its 65 px container; W1 `h == app_bar::HEIGHT`, W3 `title_bar.y + app_bar::BOTTOM_EDGE == shell.body.y`; hairline is the bar's bottom edge for SC-004's gap; follows #1127 if it drops the divider; R6, contract, data model, plan updated); F2 MINOR fixed (W5 in R6 and data model, asserted on `State` not records, selection accessor open until #1125 M3; mutation row: Overview closed → W5); F3 MINOR fixed, prose only (extended `strip_with` replaces `feat-working`'s session, keeping Working, in R5 and plan). Round 2 needed: F1 changes gate assertions. |
 | plan | 2 | `2d670a35839ea1afff7c10d0094098102cdaa020:7301669f92b15e41ef74c6fbb0abe48878927cef` (Sonnet re-review of the diff from `042e8e00…:2fa8a268…`) | CLEAN; one MINOR declined (see Declined review findings). |
 | tasks | 1 | `d43d91dcbdf609cfb6bd9034bc18cb89f689db50:fdcd26120f013b2724b34a84e104a307cb892afb` | CHANGES: F1 MAJOR fixed (M2 tier docs → full, since `site/media.toml` is not `micold-docs`; *Incremental delivery* says only all-`micold-docs` PRs skip CI and that M2 runs the pipeline; `media-references.test.sh` added to T020 and M2 Verify); F2 MINOR fixed (T007 loses `[P]`, sequenced with T003–T006); F3 MINOR fixed (T026 times the two states warm, with and without, for T028). Round 2 needed: F1 changes a tier and a verify step. |
-| tasks | 2 | `3e3714988e7394b14e7a1dcddb5b0f65e0b66e72:708ca247350fd73c1e8dd3852fd6197b4eb7f3be` (fix diff from round 1's snapshot) | pending: orchestrator dispatches a Sonnet re-review |
+| tasks | 2 | `3e3714988e7394b14e7a1dcddb5b0f65e0b66e72:708ca247350fd73c1e8dd3852fd6197b4eb7f3be` (fix diff from round 1's snapshot) (Sonnet re-review of the diff from `d43d91dc…:fdcd2612…`) | CLEAN; no findings. |
+| analyze | 1 | — | No CRITICAL/HIGH/MEDIUM: 27/27 FR and SC have tasks; no placeholders; T035 (Phase 7) belongs to the close unit, outside M1–M4 by design; checklist has no unchecked items. No change. |
 
 ## Declined review findings
 
@@ -64,6 +65,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- Design-PR unit: `speckit-analyze` run inline (no Agent tool to fork it to Sonnet). `gh` not authenticated, so the orchestrator opens the design PR via GitHub MCP.
 
 - Cloud environment: `gh` not authenticated; `branch-start.sh` ran without a previous PR (none). Issue #1127's body was read through the GitHub MCP instead.
 - Tasks unit: no Agent tool, so the tasks review was not dispatched; snapshot recorded for the orchestrator. Stopped before `speckit-analyze`, the gate and the design PR, as the orchestrator asked. `branch-start.sh` not run: origin/main is 2 unrelated commits ahead, and a rebase would rewrite the commits the plan-review snapshots name; the design-PR unit rebases. Optional hooks (`docguard.review` before tasks; `tdd.plan`, `docguard.score` after) skipped, non-interactive run. M3 will meet the mandatory `before_implement` `tdd.run` hook.
