@@ -21,7 +21,9 @@ use iced::Rectangle;
 use micold_client::app::{EditorAction, Message, State};
 use micold_client::features::composer::{DroppedFiles, InputState, OVERDUE};
 use micold_client::features::window::{FieldId, Msg as WindowMsg};
-use micold_client::ui::composer::{Seams, BUSY, MAX_HEIGHT, ON_HOLD, PLACEHOLDER, READY};
+use micold_client::ui::composer::{
+    Seams, BUSY, MAX_HEIGHT, ON_HOLD, PLACEHOLDER, QUEUE_MAX_HEIGHT, READY,
+};
 use micold_client::ui::transcript::transcript_scroll_id;
 use micold_core::path_insert::ShellKind;
 use micold_core::protocol::messages::{
@@ -191,18 +193,31 @@ fn a_long_draft_grows_the_composer_to_its_limit_and_the_transcript_stays() {
 
 #[test]
 fn a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view() {
-    let (mut state, id) = pane();
+    let (mut idle, id) = pane();
+    report(&mut idle, id, TurnPhase::Idle, false, 0);
+    let mut state = idle.clone();
     report(&mut state, id, busy(InterruptAsk::None), true, 12);
     let text: Vec<String> = (1..=400).map(|n| format!("line {n}")).collect();
     type_draft(&mut state, id, &text.join("\n"));
+    let (_, roomy) = paint(idle, id);
     let (painted, transcript) = paint(state, id);
-    // A quarter of the pane, less the status row's own height: #943 put the session's model
-    // there, and a control of the shared 40dp touch target is as short as that row can be. The
-    // pane is the window less the bottom status bar (feature 1124).
-    let pane = WINDOW.height - micold_core::tokens::anatomy::status_bar::HEIGHT;
-    let crowded = pane / 4.0 - micold_core::tokens::density::BUTTON_BASE;
+    // The crowded composer stops at its limits and takes no more from the transcript: the queue's
+    // room and the hold row (a control of the shared 40dp touch target), each with its gap, and
+    // the input row's growth from its idle height, at least that same 40dp **Send**, to the text
+    // area's limit (FR-008); the hold row's 40dp and the idle row's cancel out. Measured against the same pane with an idle, empty composer, so the
+    // bound holds whatever fixed chrome the window draws around the pane (#943's model control
+    // and Open in terminal, 1124's status bar); an absolute floor at one window size broke each
+    // time chrome was added, while a queue without its cap still fails here (941 T055 mutant).
+    let gap = micold_core::tokens::spacing::SM;
+    let limits = QUEUE_MAX_HEIGHT + gap + gap + MAX_HEIGHT;
+    let lost = roomy.height - transcript.height;
     assert!(
-        transcript.height >= crowded,
+        lost <= limits + TOLERANCE,
+        "a crowded composer takes at most its limits ({limits}) from the transcript: \
+         {roomy:?} → {transcript:?}"
+    );
+    assert!(
+        transcript.height > 0.0,
         "the transcript keeps room above a crowded composer: {transcript:?}"
     );
     under_the_transcript(&painted, transcript, "Send");

@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | clarify | Does a lost connection (no action) still raise a banner? | No: bar only (error dot, reconnecting text); conditions with an action keep their banner (FR-003, FR-009, US3 s5) | issue text | issue #1124 body "Failures that need action still raise a banner…"; ui/mod.rs connection_banner (Disconnected has no action) |
 | D5 | tasks | Milestone cut | One milestone per story (M1 US1+setup+foundational, M2 US2, M3 US3, M4 US4, M5 US5); the full connection/sandbox tables land in M1 because the model's match must be exhaustive; T039 (visual pass) left to close | agent-resolved | tasks.md §Milestones; milestones.md rules 1, 2, 4 |
 | D4 | clarify | Plan usage in status bar or title bar? | Status bar, after the CLI item; removed from the app bar; #1127 builds on that (FR-011, US5) | issue text | issue #1124 title; canvas note s1 |
+| D6 | implement (M1, after rebase on 4910aeee) | 941's crowded-composer gate failed (transcript 135 < (800−28)/4−40 = 153): change the composer's caps or the gate? | The gate. The composer's caps are fixed heights by design (FR-008: MAX_HEIGHT 220, QUEUE_MAX_HEIGHT 120), so every fixed chrome row — #943 M9's Open in terminal in the session-bar row (~18 px, leaving main 3 px of slack) and this bar's 28 dp — comes out of the transcript one for one; the absolute quarter-of-the-pane floor broke each time chrome was added (#943 M8 loosened it once already). The gate's purpose (941 T055 mutant: queue cap removed) is now asserted directly: the crowded composer takes at most QUEUE_MAX_HEIGHT + 2·SM + MAX_HEIGHT (356) from the same pane's idle transcript (measured 340); the mutant still fails (475 → 0). Making the caps follow the window is a #941 design change, left as a follow-up | agent-resolved | crates/micold-client/tests/gates/composer_fits.rs; specs/941-structured-prompt-input/tdd/cycle-log.md:182–190; review A r2 CLEAN |
 
 ## Review rounds
 
@@ -51,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M1 (conformance, sonnet) | 1 | 9bcb0c9d1fceee0a76897160ebb03fbe36ef3391:e4cc913076548077f3026bcb11c688c30388e4b1 | CHANGES: 1 MAJOR (F1 no red recorded for T003/T007/T009–T011 — fixed: red runs against a mutated build recorded in tdd/cycle-log.md), 1 MINOR (F2 banner-words refactor — noted in the log) |
 | B M1 (conformance, sonnet) | 2 | bc81fc61c3a72f35e00d9e3c432be7e7f6da6680:8dec2fd824c32932a342e929595d8405e244a948 | CLEAN (1 MINOR: wording in the log — fixed, prose only) |
 | A M1 (code-review high) | 1 | 1d17c59cc149d73c326b84b00dd8f37f9e20fae5:8a60fd0f91a8e9b92cd69538ff8e8903fe9ad44d | CLEAN (4 MINOR: F1 dot duplicated — fixed, shared `unread_mark::filled_circle`; F3 operate visits dropped items — fixed; F2, F4 declined) |
+| A M1 (scoped, sonnet; crowded-composer gate after rebase) | 2 | 399b94d98548a63965b1986cd30a1e0a8048087c:13ea198a2ddf30a6139418aa2f48b8f14f081636 | CLEAN (1 MINOR: bound slack 56 px — fixed, the idle input row's 40dp subtracted) |
 
 ## Declined review findings
 
@@ -72,6 +74,7 @@ None.
 
 ## Follow-ups not done
 
+- Pre-existing (#941): the composer's caps are fixed, so a crowded composer (~520 px at its limits) overflows the pane at the 640×480 minimum window. Caps that follow the window's height would fix it; out of 1124's scope (D6).
 - M1 visual §B7: at 640 px the M1 bar's texts fit whole, so the client never showed "…"; the shortening is covered by the showcase's too-narrow instance and `status_bar_fits`. Re-check at 640 px once M4/M5 add the CLI item, hints and usage.
 
 Notes: speckit-analyze (sonnet) 0 CRITICAL/HIGH; its MEDIUM/LOW findings fixed in tasks.md, plan.md (state count), quickstart.md, spec.md (US3 wording). Optional after_tasks hooks (tdd.plan, docguard.score) skipped. Checklist requirements.md: last item ticked (markers resolved in clarify).
