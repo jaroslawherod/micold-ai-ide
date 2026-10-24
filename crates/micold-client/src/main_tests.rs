@@ -13172,6 +13172,36 @@ mod panes {
         );
     }
 
+    /// Feature 1124, US4 s2: moving focus between two panes whose sessions run different CLIs
+    /// changes the status bar's CLI item.
+    #[test]
+    fn moving_pane_focus_changes_the_status_bars_cli() {
+        let (mut app, ids, _rx) = app_with_sessions(2);
+        let project = PathBuf::from("/repo/panes");
+        app.core.workspace.sessions.get_mut(&project).unwrap()[1].provider = AiCli::Copilot;
+        let bar_cli = |app: &App| {
+            micold_client::ui::status_bar::model(
+                &app.core,
+                &micold_client::features::connection::ConnectionStatus::Connected,
+                &app.sandbox,
+                0,
+                micold_core::local_time::UtcOffset::UTC,
+            )
+            .cli
+            .map(|c| c.text)
+        };
+        let first = layout_of(&app).focused();
+        assert_eq!(bar_cli(&app).as_deref(), Some("CLI: Claude Code"));
+        let second = split_focused(&mut app, Axis::Vertical);
+        assert_eq!(app.core.session.active, Some(ids[1]));
+        let copilot = format!("CLI: {}", AiCli::Copilot.provider().display_name());
+        assert_eq!(bar_cli(&app), Some(copilot));
+        pane_msg(&mut app, PaneMsg::FocusPane(first));
+        assert_eq!(bar_cli(&app).as_deref(), Some("CLI: Claude Code"));
+        pane_msg(&mut app, PaneMsg::FocusPane(second));
+        assert_ne!(bar_cli(&app).as_deref(), Some("CLI: Claude Code"));
+    }
+
     /// FR-001: a 7th pane is refused, with a reason the view shows.
     #[test]
     fn a_seventh_split_shows_the_refusal() {

@@ -81,10 +81,27 @@ pub fn model(
     StatusModel {
         connection: connection_item(state, connection),
         sandbox: sandbox_item(sandbox),
-        cli: None,
+        cli: cli_item(state),
         usage: None,
-        hints: [String::new(), String::new()],
+        hints: [
+            format!("{} Overview", crate::keymap::overview_chord_label()),
+            format!("{} Jump", crate::keymap::switcher_chord_label()),
+        ],
     }
+}
+
+/// The CLI of the focused pane's session, only while the session view is the visible body (FR-007).
+/// `session.active` follows the focused pane, so this follows focus (US4 s2).
+fn cli_item(state: &State) -> Option<ItemModel> {
+    if !crate::ui::session_view_visible(state) {
+        return None;
+    }
+    let id = state.session.active?;
+    let session = state.active_sessions().iter().find(|s| s.id == id)?;
+    Some(ItemModel::new(format!(
+        "CLI: {}",
+        session.provider.provider().display_name()
+    )))
 }
 
 /// Where the active session's daemon runs (research R6): "local" for the host daemon or with no
@@ -448,16 +465,154 @@ mod tests {
         assert_eq!(item.tooltip, notice);
     }
 
-    /// Until US4/US5, the bar carries only the connection and the sandbox.
+    fn cli_of(state: &State) -> Option<String> {
+        at(state, &ConnectionStatus::Connected, &Sandbox::default())
+            .cli
+            .map(|c| c.text)
+    }
+
+    /// A compare group open over `state`'s project.
+    fn open_compare(state: &mut State) {
+        use micold_core::naming::{ConventionalType, DerivedNames, WorktreeNaming};
+        use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus};
+        let id = GroupId(uuid::Uuid::from_u128(7));
+        let group = RunGroup::new(NewGroup {
+            id,
+            name: "g".into(),
+            naming: WorktreeNaming {
+                type_: Some(ConventionalType::Feat),
+                ticket: None,
+                name: "g".into(),
+            },
+            prompt: "p".into(),
+            base_branch: "main".into(),
+            base_commit: "abc".into(),
+            created: std::time::SystemTime::UNIX_EPOCH,
+            runs: (1..=2u8)
+                .map(|number| Run {
+                    number,
+                    provider: AiCli::ClaudeCode,
+                    names: DerivedNames {
+                        dir_name: format!("feat-g-{number}"),
+                        branch: format!("feat/g-{number}"),
+                    },
+                    session: None,
+                    status: RunStatus::Creating,
+                })
+                .collect(),
+        })
+        .expect("valid group");
+        state.runs.groups.push(group);
+        state.runs.compare = Some(crate::features::runs::CompareView {
+            group: id,
+            project: PathBuf::from(PROJECT),
+            reads: Default::default(),
+        });
+    }
+
+    /// US4 s1: the session view names the active session's CLI by its display name.
     #[test]
-    fn cli_usage_and_hints_are_empty_for_now() {
+    fn the_session_view_names_the_active_sessions_cli() {
+        let (state, _, _) = project(SessionLocation::Default);
+        assert_eq!(cli_of(&state).as_deref(), Some("CLI: Claude Code"));
+        let m = at(&state, &ConnectionStatus::Connected, &Sandbox::default());
+        let cli = m.cli.expect("a CLI item");
+        assert_eq!(
+            (cli.tone, cli.dot, cli.busy),
+            (ItemTone::Neutral, None, false)
+        );
+    }
+
+    /// US4 s3: every other body leaves the item out, even with a session active behind it.
+    #[test]
+    fn no_other_body_shows_the_cli() {
+        let (base, _, _) = project(SessionLocation::Default);
+
+        let mut s = base.clone();
+        s.settings.settings_draft = Some(Default::default());
+        assert_eq!(cli_of(&s), None, "Settings");
+
+        let mut s = base.clone();
+        s.workspace.active = None;
+        assert_eq!(cli_of(&s), None, "no active project");
+
+        let mut s = base.clone();
+        s.overview.open = true;
+        assert_eq!(cli_of(&s), None, "Overview");
+
+        let mut s = base.clone();
+        let _ = crate::features::changes::update(
+            &mut s.changes,
+            crate::features::changes::Msg::Opened {
+                project: PathBuf::from(PROJECT),
+                entry: SessionLocation::Default,
+            },
+        );
+        assert!(s.changes.open.is_some());
+        assert_eq!(cli_of(&s), None, "Changes");
+
+        let mut s = base.clone();
+        open_compare(&mut s);
+        assert_eq!(cli_of(&s), None, "Compare");
+
+        let mut s = base.clone();
+        s.session.active = None;
+        assert_eq!(cli_of(&s), None, "no active session");
+    }
+
+    /// US4 s5: closing the Overview brings the item back.
+    #[test]
+    fn closing_the_overview_brings_the_cli_back() {
+        let (mut state, _, _) = project(SessionLocation::Default);
+        state.overview.open = true;
+        assert_eq!(cli_of(&state), None);
+        state.overview.open = false;
+        assert_eq!(cli_of(&state).as_deref(), Some("CLI: Claude Code"));
+    }
+
+    /// US4 s2: the item is the focused (active) session's own CLI; a background session changing
+    /// does not move the bar.
+    #[test]
+    fn the_cli_is_the_active_sessions_and_background_sessions_do_not_move_it() {
+        let (mut state, _, _) = project(SessionLocation::Default);
+        let before = at(&state, &ConnectionStatus::Connected, &Sandbox::default());
+        let other = Session::start_new(SessionLocation::Default, AiCli::Copilot);
+        let other_id = other.id;
+        let path = PathBuf::from(PROJECT);
+        state.workspace.sessions.get_mut(&path).unwrap().push(other);
+        // Another project's session, too.
+        let elsewhere = PathBuf::from("/elsewhere");
+        state.workspace.sessions.insert(
+            elsewhere,
+            vec![Session::start_new(SessionLocation::Default, AiCli::Pi)],
+        );
+        assert_eq!(
+            at(&state, &ConnectionStatus::Connected, &Sandbox::default()),
+            before
+        );
+        state.session.active = Some(other_id);
+        assert_eq!(
+            cli_of(&state),
+            Some(format!("CLI: {}", AiCli::Copilot.provider().display_name()))
+        );
+    }
+
+    /// US4 s4, R9: the hints read the platform's chords, in both notations.
+    #[test]
+    fn the_hints_name_the_overview_and_switcher_chords() {
         let m = at(
             &State::default(),
             &ConnectionStatus::Connected,
             &Sandbox::default(),
         );
-        assert_eq!(m.cli, None);
+        let (other, mac) = crate::keymap::switcher_chord_labels();
+        let (overview, switcher) = if cfg!(target_os = "macos") {
+            ("Cmd+Shift+O", mac)
+        } else {
+            ("Ctrl+Shift+O", other)
+        };
+        assert_eq!(m.hints[0], format!("{overview} Overview"));
+        assert_eq!(m.hints[1], format!("{switcher} Jump"));
         assert_eq!(m.usage, None);
-        assert!(m.hints.iter().all(String::is_empty));
     }
 }

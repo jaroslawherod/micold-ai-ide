@@ -41,13 +41,20 @@ fn at_the_smallest_window_the_bars_texts_stay_in_their_boxes() {
         .iter()
         .filter(|p| p.origin.y >= bar.y - TOLERANCE)
         .collect();
-    for wanted in ["D", "G"] {
+    for wanted in ["D", "G", "CLI:"] {
         assert!(
             in_bar.iter().any(|p| p.content.starts_with(wanted)),
             "the bar draws its connection and sandbox items: {:?}",
             in_bar.iter().map(|p| &p.content).collect::<Vec<_>>()
         );
     }
+    assert!(
+        !in_bar
+            .iter()
+            .any(|p| p.content.contains("Overview") || p.content.contains("Jump")),
+        "the key hints give way first: {:?}",
+        in_bar.iter().map(|p| &p.content).collect::<Vec<_>>()
+    );
     for p in &in_bar {
         assert!(
             p.natural_width <= p.allowed_width + TOLERANCE,
@@ -63,6 +70,22 @@ fn at_the_smallest_window_the_bars_texts_stay_in_their_boxes() {
             p.origin.x,
             p.natural_width,
             window.width
+        );
+    }
+}
+
+/// With room to spare the bar carries the CLI item and both hints (T028, FR-007, FR-008).
+#[test]
+fn with_room_the_bar_carries_the_cli_and_both_hints() {
+    let window = iced::Size::new(1400.0, MIN_WINDOW_SIZE.height);
+    let under = crate::support::covered_states::status_bar_long_texts();
+    let (painted, _) =
+        lay::painted_text_settled_at(lay::view_of(&under), &mut lay::renderer(), window);
+    let contents: Vec<_> = painted.iter().map(|p| p.content.as_str()).collect();
+    for wanted in ["CLI: ", " Overview", " Jump"] {
+        assert!(
+            contents.iter().any(|c| c.contains(wanted)),
+            "{wanted:?} is drawn at {window:?}: {contents:?}"
         );
     }
 }

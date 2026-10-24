@@ -224,28 +224,28 @@ macOS).
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T026 [US4] Add failing `model()` tests in `client/src/ui/status_bar.rs`: `cli` is
+- [x] T026 [US4] Add failing `model()` tests in `client/src/ui/status_bar.rs`: `cli` is
   `Some("CLI: {display_name}")` from `AiCli::provider().display_name()` of the `session.active`
   session only when the session view is visible, `None` with a Settings draft, no active project,
   `overview.open`, `changes.open`, Compare or no active session (US4 s3, s5); a change to a
   background session (another worktree, another project) leaves the model unchanged; `hints` are
   `"{overview_chord_label()} Overview"` and `"{switcher chord} Jump"` from `client/src/keymap.rs`
   (both forms: "Ctrl+Shift+O" off macOS, "Cmd+Shift+O" on macOS, R9)
-- [ ] T027 [P] [US4] Add a test to `client/src/main_tests.rs` that moving focus between two panes
+- [x] T027 [P] [US4] Add a test to `client/src/main_tests.rs` that moving focus between two panes
   with different CLIs through `update` changes the bar model's `cli` text (US4 s2)
-- [ ] T028 [P] [US4] Extend `client/tests/gates/status_bar_fits.rs` with the CLI item and both hints
+- [x] T028 [P] [US4] Extend `client/tests/gates/status_bar_fits.rs` with the CLI item and both hints
   present at 640 dp: hints are dropped first, no text overflows
 
 ### Implementation for User Story 4
 
-- [ ] T029 [US4] Extract `fn session_view_visible(state) -> bool` from `view_with`'s branch order in
+- [x] T029 [US4] Extract `fn session_view_visible(state) -> bool` from `view_with`'s branch order in
   `client/src/ui/mod.rs` and use it in `view_with` (R8); `view_with`'s behaviour is unchanged,
   guarded by the layout snapshot and T026
-- [ ] T030 [US4] Fill `cli` (tone Neutral, no dot, `Shorten(0)`) and `hints` (each `Drop(0)`, via
+- [x] T030 [US4] Fill `cli` (tone Neutral, no dot, `Shorten(0)`) and `hints` (each `Drop(0)`, via
   `StatusBar::hint`) in `client/src/ui/status_bar.rs`
-- [ ] T031 [US4] Regenerate `client/tests/fixtures/layout_snapshot.txt` and review the diff (the CLI
+- [x] T031 [US4] Regenerate `client/tests/fixtures/layout_snapshot.txt` and review the diff (the CLI
   item in session-view states, hints in every state)
-- [ ] T032 [P] [US4] Add the CLI item and key hints to the "Status bar" section of
+- [x] T032 [P] [US4] Add the CLI item and key hints to the "Status bar" section of
   `docs/user-guide/appearance-theming.md`
 
 **Checkpoint**: the bar matches the mockup's items except plan usage.

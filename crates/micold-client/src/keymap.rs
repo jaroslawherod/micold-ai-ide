@@ -234,6 +234,16 @@ pub fn switcher_chord_labels() -> (String, String) {
     (format!("Ctrl+Shift+{key}"), format!("Cmd+Shift+{key}"))
 }
 
+/// The switcher chord as the running platform writes it, for the status bar's hint (feature 1124).
+pub fn switcher_chord_label() -> String {
+    let (other, mac) = switcher_chord_labels();
+    if cfg!(target_os = "macos") {
+        mac
+    } else {
+        other
+    }
+}
+
 /// The subset of terminal mode that affects key encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TermMode {
