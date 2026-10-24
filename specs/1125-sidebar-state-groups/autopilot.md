@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: milestone M2
-- **Next step**: M2 PR open (orchestrator opens it from the PR files), CI, merge; then M3
+- **Phase**: milestone M3
+- **Next step**: M3 implement T032–T041
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1320 | Design: spec, plan, tasks | merged | 663899346b1c6c44682895eb6d8f4e4402f714ed |
 | #1325 | M1: sidebar grouped by state | merged (rebase) | 0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 |
+| #1345 | M2: two-line rows, primary selection | merged (rebase) | b54fa75959d6535260875f8859776e458e3851aa |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | #1325 | done |
-| M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | pushed, PR pending | gate green at 14cff475 |
-| M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | — | todo |
+| M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | #1345 | done |
+| M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | — | in progress |
 | M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | todo |
 | M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | — | todo |
 
@@ -51,6 +52,9 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | D14 | M2 | Tooltip: where do the full title and `Branch` go? | `features::sidebar::with_title_line` prepends the bare title as the first line; today's tooltip follows unchanged, its `Branch: <full branch>` line included (composed like `with_state_line`) | agent-resolved | FR-012 "in addition to what it shows today"; 27 existing `worktree_tooltip` tests keep today's lines |
 | D15 | M2 | Where do T023's height tests and T029's showcase rows live? | Heights: `tests/features_sidebar.rs` and `tests/sidebar_state.rs` (where `row_heights` is tested; `sidebar_tree.rs` has none); showcase: `showcase/sections/surfaces.rs` TreeView entry (beside M1's group headers), catalogue lists "two-line row", "two-line row, selected" | agent-resolved | `grep -n row_heights crates/micold-client/tests/`; catalogue.rs TreeView entry's `posed` |
 | D16 | M2 | A selected row's tint under `Selection::Primary` | Twisty, icon, label and supporting text take `on_primary_container`; the state icon keeps its state tint; only a neutral tint (`on_surface`, `on_surface_variant`) is replaced: a failed session's `error`, an interrupted one's `primary` and a missing worktree's error-tinted name keep their tint, checked ≥ 4.5:1 on `primary_container` (amended after M2 review A r1 F2) | agent-resolved | research R7; FR-010 "on-primary-container text and icons"; the lifecycle tints carry meaning (FR-006a of the session feature) |
+| D17 | M3 | Where do T039's showcase rows live, and how does the Overview row take Tab and Enter? | The `TreeView` entry in `showcase/sections/surfaces.rs` (beside M1/M2's sidebar poses; catalogue lists "Overview row", "Overview row, with a badge"), drawn by the sidebar's own `ui::overview_row_view`; a new `TreeItem::tab_stop()` makes a row with a press a Tab stop answering Enter and Space, as a heading does | agent-resolved | D15 (the sidebar's poses are in surfaces.rs); contract S2 "Pressed (pointer, Enter, Space)", T035 "first focusable" |
+| D18 | M3 | The Overview row shifts the sidebar column's children by one | Layout paths into the sidebar re-pointed (+1 at the sidebar column: `containment.rs` CLIP_REVEALED/SCROLL_CONTENT, `context_menu_anchor.rs`, `covered_states.rs` SIDEBAR_SESSION_ROW, row anchors, filter reveal node); snapshot regenerated | agent-resolved | layout_snapshot's anchor and staleness assertions named each path |
+
 
 ## Review rounds
 

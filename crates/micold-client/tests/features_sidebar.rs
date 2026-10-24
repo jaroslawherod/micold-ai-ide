@@ -14,8 +14,9 @@
 
 use micold_client::features::sidebar::{
     current_session_row, effective_open, filters_from_env_value, matches_filters, row_heights,
-    row_pull_request, scroll_target, worktree_tooltip, DefaultNode, ListRow, RowPullRequest,
-    SidebarEntry, TagFilter, WorktreeNode, DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
+    row_pull_request, row_selected, scroll_target, worktree_tooltip, DefaultNode, ListRow,
+    RowPullRequest, RowSelection, SelectableRow, SidebarEntry, TagFilter, WorktreeNode,
+    DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
 };
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
@@ -2058,4 +2059,78 @@ mod two_line_rows {
         );
         assert_eq!(row_title(&node, Some(TITLE), Some("  ")), TITLE);
     }
+}
+
+// --- Feature 1125 (T033, FR-009, US2.4): which row wears the selected look -------------------
+
+/// A location row over `sessions`, drawing them as their own rows or not.
+fn location_row<'a>(
+    location: &'a SessionLocation,
+    sessions: &'a [Session],
+    sessions_shown: bool,
+) -> SelectableRow<'a> {
+    SelectableRow::Location {
+        location,
+        sessions,
+        sessions_shown,
+    }
+}
+
+#[test]
+fn while_the_overview_is_open_no_location_or_session_row_is_selected() {
+    let here = SessionLocation::Worktree("feat-a".into());
+    let sessions = vec![session(here.clone())];
+    let viewed = sessions[0].id;
+    let selection = RowSelection {
+        overview_open: true,
+        viewed: Some(viewed),
+        revealed: Some(&here),
+    };
+    assert!(!row_selected(
+        &selection,
+        location_row(&here, &sessions, false)
+    ));
+    assert!(!row_selected(
+        &selection,
+        location_row(&here, &sessions, true)
+    ));
+    assert!(!row_selected(&selection, SelectableRow::Session(viewed)));
+}
+
+#[test]
+fn with_the_overview_closed_only_the_row_holding_the_viewed_session_is_selected() {
+    let here = SessionLocation::Worktree("feat-a".into());
+    let there = SessionLocation::Worktree("feat-b".into());
+    let mine = vec![session(here.clone())];
+    let other = vec![session(there.clone())];
+    let selection = RowSelection {
+        overview_open: false,
+        viewed: Some(mine[0].id),
+        revealed: None,
+    };
+    assert!(row_selected(&selection, location_row(&here, &mine, false)));
+    assert!(!row_selected(
+        &selection,
+        location_row(&there, &other, false)
+    ));
+    // With its sessions drawn, the session's own row holds it, not the location row.
+    assert!(!row_selected(&selection, location_row(&here, &mine, true)));
+    assert!(row_selected(&selection, SelectableRow::Session(mine[0].id)));
+    assert!(!row_selected(
+        &selection,
+        SelectableRow::Session(other[0].id)
+    ));
+}
+
+#[test]
+fn with_no_session_viewed_the_row_the_overview_revealed_is_selected() {
+    let here = SessionLocation::Worktree("feat-a".into());
+    let there = SessionLocation::Worktree("feat-b".into());
+    let selection = RowSelection {
+        overview_open: false,
+        viewed: None,
+        revealed: Some(&here),
+    };
+    assert!(row_selected(&selection, location_row(&here, &[], false)));
+    assert!(!row_selected(&selection, location_row(&there, &[], false)));
 }

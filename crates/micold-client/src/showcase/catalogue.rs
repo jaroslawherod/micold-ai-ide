@@ -879,6 +879,8 @@ pub const COMPONENTS: &[Entry] = &[
         density: &[],
         posed: &[
             "selected row",
+            "Overview row",
+            "Overview row, with a badge",
             "group header, open",
             "group header, closed",
             "two-line row",

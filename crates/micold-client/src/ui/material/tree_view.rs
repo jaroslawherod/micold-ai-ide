@@ -141,6 +141,8 @@ pub struct TreeItem<'a, M> {
     keyboard_focus: Option<(bool, OnKeyboardFocus<'a, M>)>,
     /// Whether the row is a group heading (feature 1125, R8, [`TreeItem::heading`]).
     heading: bool,
+    /// Whether the row is a stop in the Tab order of its own (feature 1125, [`TreeItem::tab_stop`]).
+    tab_stop: bool,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -175,6 +177,7 @@ impl<'a, M> TreeItem<'a, M> {
             state_icon: None,
             keyboard_focus: None,
             heading: false,
+            tab_stop: false,
             _marker: std::marker::PhantomData,
         }
     }
@@ -201,6 +204,14 @@ impl<'a, M> TreeItem<'a, M> {
     /// ([`expandable`](Self::expandable)), Enter and Space included while it has the keyboard.
     pub fn heading(mut self) -> Self {
         self.heading = true;
+        self
+    }
+
+    /// Make the row a stop in the Tab order while it has a press (feature 1125, the sidebar's
+    /// Overview row): Tab reaches it whether or not the keyboard was on it, and Enter and Space
+    /// send its press, as a heading's do. A row with no press stays out of the Tab order.
+    pub fn tab_stop(mut self) -> Self {
+        self.tab_stop = true;
         self
     }
 
@@ -761,12 +772,15 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             };
 
             // The keyboard's focus ring, over the row's own shape (feature 803, FR-010).
+            // A heading, or a Tab stop with a press: Tab reaches it, Enter and Space press it.
+            let answers_keys = item.heading || (item.tab_stop && item.on_press.is_some());
             let row_el: Element<'a, M> = match item.keyboard_focus {
                 Some((focused, on_change)) => {
                     use super::keyboard_focus::{Indicator, TakesTheKeyboard};
-                    let mut wrapper = TakesTheKeyboard::new(row_el, focused || item.heading);
-                    // A heading answers Enter and Space with its press (feature 1125, FR-017).
-                    if let Some(msg) = item.on_press.clone().filter(|_| item.heading) {
+                    let mut wrapper = TakesTheKeyboard::new(row_el, focused || answers_keys);
+                    // A heading answers Enter and Space with its press (feature 1125, FR-017), and
+                    // so does a Tab stop (the Overview row).
+                    if let Some(msg) = item.on_press.clone().filter(|_| answers_keys) {
                         wrapper = wrapper
                             .key(iced::keyboard::key::Named::Enter, msg.clone())
                             .key(iced::keyboard::key::Named::Space, msg);

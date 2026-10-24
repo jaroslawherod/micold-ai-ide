@@ -402,7 +402,7 @@ fn expected_origin(point: (f32, f32), panel: &LayoutRecord) -> ((f32, f32), bool
 /// in them is Idle, so the tree's first child is the Idle group's header (feature 1125) and row
 /// `index` is the tree's child `index + 1`.
 pub(crate) fn sidebar_row(index: usize) -> Vec<usize> {
-    vec![0, 0, 1, 0, 0, 0, 2, 0, 0, index + 1]
+    vec![0, 0, 1, 0, 0, 0, 3, 0, 0, index + 1]
 }
 
 /// The last worktree row: past the Default row, past the other seven.

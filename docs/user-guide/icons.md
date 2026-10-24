@@ -38,7 +38,7 @@ status markers.
 | Triangle (play) | **Running**: a session in the worktree is working, starting or restarting | Sidebar worktree rows and the **Default** entry, after the toggle |
 | Octagon with a mark | **Blocked**: a session cannot go on without you (it failed, or waits to be resumed) | Sidebar worktree rows and the **Default** entry, after the toggle |
 | Two bars (pause) | **Idle / waiting**: nothing in progress, or waiting for your next prompt | Sidebar worktree rows and the **Default** entry, after the toggle |
-| Dashboard (grid) | Open or close the worktree Overview | Top bar, **Overview** button |
+| Dashboard (grid) | Open or close the worktree Overview | Top bar, **Overview** button; first row of the sidebar, **Overview** (opens only) |
 | Exclamation mark | **Needs action**: a session needs permission or an agent request is waiting | Overview cards |
 | Eye | **Needs attention**: a session failed or can be resumed, or the pull request has failing checks, requested changes or a conflict | Overview cards |
 | Check circle | **Done**: the pull request is merged and the worktree can be removed | Overview cards |

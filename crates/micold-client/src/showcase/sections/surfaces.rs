@@ -1462,8 +1462,24 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
         .selected_label_role(TypeRole::SidebarSessionCurrent)
         .selection(material::Selection::Primary)
     };
+    // The sidebar's Overview row (feature 1125, FR-021, R9), drawn by the sidebar's own builder,
+    // with no badge and with an action badge.
+    let overview_row = |badge: Option<crate::features::overview::Badge>| {
+        crate::ui::overview_row_view(badge, false, Some(Message::NoOp), Message::NoOp, roles)
+    };
+    let action_badge = crate::features::overview::Badge {
+        tone: crate::features::overview::Tone::Error,
+        count: 2,
+        label: "2 need action".into(),
+    };
     arrange(
         vec![
+            posed("Overview row", overview_row(None), roles),
+            posed(
+                "Overview row, with a badge",
+                overview_row(Some(action_badge)),
+                roles,
+            ),
             posed("group header, open", group_header(true), roles),
             posed("group header, closed", group_header(false), roles),
             posed("two-line row", two_line(false), roles),

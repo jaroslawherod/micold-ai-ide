@@ -236,6 +236,37 @@ fn a_two_line_rows_text_is_legible_on_the_sidebar_and_when_selected() {
     }
 }
 
+/// Feature 1125 (FR-019, T034): the Overview row's label on the sidebar's tone and, selected, on its
+/// `primary_container` fill, and its badge's words in each tone's container pair, are legible in
+/// both schemes.
+#[test]
+fn the_overview_row_and_its_badge_are_legible() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let sidebar = style::to_rgb(style::sidebar_fill(r));
+        for (what, text, fill) in [
+            ("label", r.on_surface, sidebar),
+            (
+                "selected label",
+                r.on_primary_container,
+                r.primary_container,
+            ),
+            ("action badge", r.on_error_container, r.error_container),
+            (
+                "attention badge",
+                r.on_warning_container,
+                r.warning_container,
+            ),
+        ] {
+            let ratio = contrast(text, fill);
+            assert!(
+                ratio >= AA_TEXT,
+                "{scheme:?}: the Overview row's {what} at {ratio:.2}:1 (needs {AA_TEXT})"
+            );
+        }
+    }
+}
+
 /// The fill behind a hovered sidebar row: the sidebar's surface with the hover state layer of the
 /// row's content colour over it (feature 575, FR-013).
 fn hovered_sidebar_row(r: tokens::Roles) -> Rgb {

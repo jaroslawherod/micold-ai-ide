@@ -374,7 +374,7 @@ pub const SESSION_HEADER_CHANGES: &[usize] = &[0, 0, 1, 1, 0, 0, 0, 1];
 ///
 /// Named because this is the node whose height differed from its siblings' for two days with no
 /// fixture able to say so — every other covered state stops at depth 0.
-const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3];
+const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 3, 0, 0, 3];
 
 /// Deliberately long, so the label/close-button relationship this gate was built to watch is under
 /// real pressure at the canonical window size (FR-008b, FR-018).
@@ -725,11 +725,11 @@ pub fn covered_states() -> &'static [CoveredState] {
                     // cluster from `…/0/2` to `…/0/3`.
                     // Re-pointed under feature 1125 (T018): the Idle group's header is the tree's
                     // first row, so the long-named worktree's row moved from index 2 to 3.
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 2],
+                    path: &[0, 0, 1, 0, 0, 0, 3, 0, 0, 3, 1, 0, 2],
                 },
                 Anchor {
                     name: "sidebar.row.delete_button",
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 3, 1],
+                    path: &[0, 0, 1, 0, 0, 0, 3, 0, 0, 3, 1, 0, 3, 1],
                 },
                 // `Toolbar`'s leading `text(title)` (`material/toolbar.rs:46`). Named on both shell
                 // states rather than on all eleven: the toolbar is behind every dialog too, and an
@@ -771,10 +771,15 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
-        // Feature 1125 (T018): every group header, Done collapsed as it starts.
+        // Feature 1125 (T018): every group header, Done collapsed as it starts; with the Overview
+        // open (T040, R15), so the selected Overview row is recorded too.
         CoveredState {
             name: "main-shell-sidebar-grouped",
-            build: || StateUnderTest::new(with_every_card_state()),
+            build: || {
+                let mut state = with_every_card_state();
+                state.overview.open = true;
+                StateUnderTest::new(state)
+            },
             anchors: &[Anchor {
                 name: "shell.root",
                 path: &[],
@@ -2747,7 +2752,7 @@ pub fn revealing_states() -> &'static [RevealingState] {
             build: || StateUnderTest::new(with_project()),
             toward: |state| state.sidebar.filter_open = true,
             frames: 2,
-            node: "0/0/0/1/0/0/0/1",
+            node: "0/0/0/1/0/0/0/2",
             // Widened when the reveal took §6.2's easing (T064). A *decelerating* curve covers
             // most of its distance early, so two frames of a 150ms transition now sit at 0.64 of
             // the open height where a linear ramp put them at 0.21. The window still fails at 0 and
