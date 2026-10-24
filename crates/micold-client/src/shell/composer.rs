@@ -139,14 +139,24 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 switch_kind(app, request);
             }
         }
-        Msg::SwitchConfirmed(_) => {
-            if let Some(request) = app.core.switch_confirmed() {
-                switch_kind(app, request);
+        Msg::SwitchConfirmed(session) => {
+            if app.core.switch_offer_is(session) {
+                if let Some(request) = app.core.switch_confirmed() {
+                    switch_kind(app, request);
+                }
             }
         }
-        Msg::SwitchDismissed(_) => app.core.switch_dismissed(),
-        // The card beside the failure is the offer itself: taking it switches (FR-022a).
+        Msg::SwitchDismissed(session) => {
+            if app.core.switch_offer_is(session) {
+                app.core.switch_dismissed();
+            }
+        }
+        // The card beside the failure is the offer itself: taking it switches (FR-022a). Not
+        // over another offer still open.
         Msg::LoginOffered(session) => {
+            if app.core.composers.switch_offer.is_some() {
+                return Task::none();
+            }
             app.core.login_offered(session);
             if let Some(request) = app.core.switch_confirmed() {
                 switch_kind(app, request);
@@ -340,7 +350,7 @@ fn switch_kind(app: &mut App, request: SwitchRequest) {
         req,
         session,
         to: request.to,
-        command: request.command,
+        command: request.wire_command(),
         confirmed: request.confirmed,
     });
     if sent.is_none() {

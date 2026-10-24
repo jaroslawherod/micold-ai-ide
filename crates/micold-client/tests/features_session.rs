@@ -1851,4 +1851,42 @@ mod switching {
             "FR-019: no switching entry for another CLI"
         );
     }
+
+    /// T065 visual pass: the daemon types a switch's command into the terminal as it is and takes
+    /// only a terminal-only command (`classify_draft`), so the name goes out with its `/`.
+    #[test]
+    fn a_switchs_command_goes_out_as_the_terminal_types_it() {
+        use micold_core::structured::commands::{classify_draft, CommandList, DraftCommand};
+        let (mut w, s) = structured();
+        typed(&mut w, s, "/mcp");
+        assert_eq!(w.send_intent(s), SendIntent::Nothing);
+        let request = w.switch_confirmed().expect("offered");
+        let wire = request.wire_command().expect("a command");
+        assert_eq!(wire, "/mcp");
+        assert!(
+            matches!(
+                classify_draft(&wire, &CommandList::fallback()),
+                DraftCommand::TerminalOnly(ref name) if name == "mcp"
+            ),
+            "the daemon's check takes it"
+        );
+        let none = w
+            .switch_requested(s, SessionKind::Terminal)
+            .expect("a Claude session");
+        assert_eq!(none.wire_command(), None, "no command, nothing typed");
+    }
+
+    /// Review A M9 F3: a confirm or a dismiss sent for another session's offer leaves it alone.
+    #[test]
+    fn the_offer_is_only_its_own_sessions() {
+        let (mut w, s) = structured();
+        typed(&mut w, s, "/mcp");
+        assert_eq!(w.send_intent(s), SendIntent::Nothing);
+        assert!(w.switch_offer_is(s));
+        assert!(!w.switch_offer_is(SessionId::new()), "another session's press");
+        w.update(micold_client::app::Message::Composer(
+            micold_client::features::composer::Msg::SwitchDismissed(SessionId::new()),
+        ));
+        assert!(w.switch_offer_is(s), "a stale dismiss leaves the offer");
+    }
 }

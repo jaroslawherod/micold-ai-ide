@@ -308,55 +308,59 @@ fn row_with_details(
 }
 
 /// Over `session`'s composer, the offer to open it in the other kind (#943 FR-010, US4 scenario
-/// 1): why, **Open in terminal** and **Not now**; or, after an authentication failure, the offer of
-/// **Open in terminal** with `/login` beside the CLI's error (FR-022a). The confirmation the
-/// service may ask for is a dialog (`ui/confirm_switch_kind.rs`).
+/// 1): why, **Open in terminal** and **Not now**. The confirmation the service may ask for is a
+/// dialog (`ui/confirm_switch_kind.rs`).
 pub fn switch_offer<'a>(
     state: &'a State,
     session: SessionId,
     roles: Roles,
 ) -> Option<Element<'a, Message>> {
-    use crate::features::session::{switch_label, LOGIN_REASON, LOGIN_TITLE};
-    match state.composers.switch_offer.as_ref() {
-        Some(offer) if offer.session == session => {
-            if offer.confirm.is_some() {
-                return None;
-            }
-            Some(
-                PromptCard::new(offer.title(), roles)
-                    .leading(crate::ui::switch_icon(offer.to))
-                    .body(
-                        Text::new(offer.reason.clone(), TypeRole::Body, roles)
-                            .wrapping(Wrapping::WordOrGlyph)
-                            .width(Length::Fill),
-                    )
-                    .action(
-                        Button::filled(switch_label(offer.to), roles)
-                            .on_press(send(Msg::SwitchConfirmed(session))),
-                    )
-                    .action(
-                        Button::text(NOT_NOW, roles).on_press(send(Msg::SwitchDismissed(session))),
-                    )
-                    .note(offer.note())
-                    .into(),
-            )
-        }
-        _ if state.offers_login(session) => Some(
-            PromptCard::new(LOGIN_TITLE, roles)
-                .leading(crate::ui::switch_icon(SessionKind::Terminal))
-                .body(
-                    Text::new(LOGIN_REASON, TypeRole::Body, roles)
-                        .wrapping(Wrapping::WordOrGlyph)
-                        .width(Length::Fill),
-                )
-                .action(
-                    Button::filled(switch_label(SessionKind::Terminal), roles)
-                        .on_press(send(Msg::LoginOffered(session))),
-                )
-                .into(),
-        ),
-        _ => None,
+    use crate::features::session::switch_label;
+    let offer = state.composers.switch_offer.as_ref()?;
+    if offer.session != session || offer.confirm.is_some() {
+        return None;
     }
+    Some(
+        PromptCard::new(offer.title(), roles)
+            .leading(crate::ui::switch_icon(offer.to))
+            .body(
+                Text::new(offer.reason.clone(), TypeRole::Body, roles)
+                    .wrapping(Wrapping::WordOrGlyph)
+                    .width(Length::Fill),
+            )
+            .action(
+                Button::filled(switch_label(offer.to), roles)
+                    .on_press(send(Msg::SwitchConfirmed(session))),
+            )
+            .action(Button::text(NOT_NOW, roles).on_press(send(Msg::SwitchDismissed(session))))
+            .note(offer.note())
+            .into(),
+    )
+}
+
+/// Over `session`'s composer after an authentication failure, the offer of **Open in terminal**
+/// with `/login` beside the CLI's error (FR-022a). It stays until a later answer, so it gives way
+/// to the switch offer and to the palette while one is open.
+pub fn login_offer<'a>(
+    state: &'a State,
+    session: SessionId,
+    roles: Roles,
+) -> Option<Element<'a, Message>> {
+    use crate::features::session::{switch_label, LOGIN_REASON, LOGIN_TITLE};
+    state.offers_login(session).then(|| {
+        PromptCard::new(LOGIN_TITLE, roles)
+            .leading(crate::ui::switch_icon(SessionKind::Terminal))
+            .body(
+                Text::new(LOGIN_REASON, TypeRole::Body, roles)
+                    .wrapping(Wrapping::WordOrGlyph)
+                    .width(Length::Fill),
+            )
+            .action(
+                Button::filled(switch_label(SessionKind::Terminal), roles)
+                    .on_press(send(Msg::LoginOffered(session))),
+            )
+            .into()
+    })
 }
 
 /// `session`'s command palette while a `/` is typed (#943 FR-007, FR-008): the composer's
