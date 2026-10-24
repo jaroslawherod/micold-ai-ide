@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [ ] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,8 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker remains (FR-007: does the terminal pane adopt the bundled
-  face?). It is left for the clarify unit, per the autopilot spec task.
+- The one `[NEEDS CLARIFICATION]` marker (FR-007: does the terminal pane adopt the bundled face?)
+  was resolved in clarify (2026-10-24): the terminal adopts the bundled face.
 - The typeface's name (Fira Mono) appears in Assumptions and the quoted issue input only: it is a
   product decision (which face ships, under which licence), not an implementation detail.
   `Font::MONOSPACE` and file paths appear only in the verbatim issue text and the Context section's

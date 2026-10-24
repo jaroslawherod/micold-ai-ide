@@ -18,6 +18,23 @@ already vetted under OFL; see `FONT-PROVENANCE.md`) and point `Font::MONOSPACE` 
 fixture can then load the same bundled font. Acceptance: code blocks and diffs use the bundled face
 on Linux, macOS and Windows, and the layout tests measure that same face."
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Should the terminal pane also switch to the bundled monospace face, or keep the host's
+  monospaced font as the user guide documents as a deliberate exception? → A: **The terminal
+  adopts the bundled face too** (option A). The user guide's "deliberate exception" comes from
+  feature 018, whose FR-012 exempts the terminal from *Roboto and the type scale* only — it requires
+  the terminal to stay monospaced with its own grid metrics, not to use the host's font. The terminal
+  draws its cells with `Font::MONOSPACE` (`ui/terminal.rs::cell_font`), the same family the issue
+  proposes to point at the bundled face, and its grid hard-codes a 0.6 em cell width
+  (`CellMetrics::new`), which Fira Mono's 0.600 em advance matches exactly while host faces only
+  approximate it. Keeping the host font would need a separate font path for the terminal and leave
+  it the one fixed-width surface that differs per OS, against Principle VI. _(agent-resolved:
+  specs/018-material-design-fidelity/spec.md#FR-012; crates/micold-client/src/ui/terminal.rs#cell_font,
+  #CellMetrics::new; .specify/memory/constitution.md#VI)_
+
 ## Context
 
 The application already ships its own interface typeface (Roboto) and icon font, so the interface
@@ -138,7 +155,10 @@ committed font's checksum.
 - **Cross-platform** (Principle VI): the same face, at the same advance width per character, on
   Linux, macOS and Windows; platform differences in rasterisation (hinting, subpixel rendering) are
   acceptable, differences in glyph shapes or advance widths are not.
-- **The terminal pane**: whether it switches to the bundled face is an open question (FR-007).
+- **The terminal pane**: it uses the bundled face (FR-007); bold cells use the bundled Bold weight,
+  italic cells a synthesised or upright form of the bundled face, and characters outside the face's
+  coverage (box drawing beyond its repertoire, CJK, emoji) the system fallback (FR-004). Its grid
+  keeps its own cell metrics.
 
 ## Requirements *(mandatory)*
 
@@ -164,25 +184,24 @@ committed font's checksum.
   measured with anything other than the shipped face.
 - **FR-011**: Bold code-like text (e.g. strong emphasis inside inline code) MUST be drawn in the
   shipped Bold weight of the monospace face, not in a host face.
-- **FR-007**: The terminal pane MUST [NEEDS CLARIFICATION: should the terminal also switch to the
-  bundled monospace face, or keep the host's monospaced font as the user guide currently documents
-  as a deliberate exception? Options: (A) terminal adopts the bundled face too, so all fixed-width
-  text matches; (B) terminal keeps the host font, and only code blocks, diffs and other transcript
-  code switch].
+- **FR-007**: The terminal pane MUST draw its cells in the shipped monospace face (Bold weight for
+  bold cells) on every platform, like other code-like text, while keeping its own character grid and
+  cell metrics and staying outside the interface typeface and type scale (feature 018, FR-012).
 - **FR-008**: The monospace face's licence text MUST ship with the font in the repository's font
   assets and in every platform's release bundle, and the font's upstream source, version and
   checksum MUST be recorded in the shipped fonts' provenance record.
 - **FR-009**: Interface (non-code) text MUST be unaffected: it keeps the existing interface
   typeface, sizes and weights.
 - **FR-010**: The user guide's description of the application's typefaces MUST be updated to state
-  which text uses the bundled monospace face (and, per FR-007, whether the terminal does).
+  which text uses the bundled monospace face, including the terminal (FR-007): the terminal's
+  exception from the interface typeface stays, but it no longer uses the host's monospaced font.
 
 ### Key Entities
 
 - **Bundled monospace face**: the fixed-width typeface the application ships — its file(s), family
   name, the weights/styles included, licence, upstream source, version and checksum.
 - **Code-like text**: every piece of text the application draws in the monospace family (code
-  blocks, inline code, diff lines, tool output; the terminal per FR-007).
+  blocks, inline code, diff lines, tool output, and the terminal's cells per FR-007).
 
 ## Success Criteria *(mandatory)*
 
@@ -216,7 +235,7 @@ committed font's checksum.
   committed (Regular) as a test fixture with its provenance recorded; reusing it avoids new
   licence review. The exact upstream version and checksum recorded for the fixture carry over.
 - The bundled set is Regular and Bold: code-like text already requests bold (strong emphasis in
-  inline code; terminal bold cells if FR-007 resolves to A). Italic is not bundled (Fira Mono has no
+  inline code; terminal bold cells, FR-007). Italic is not bundled (Fira Mono has no
   italic); italic requests resolve to a synthesised or upright form of the bundled face.
 - Fira Mono's character advance (0.600 em) is close to the host faces it replaces (0.600–0.602 em),
   so existing layouts shift by at most about a pixel per code line; the recorded layout snapshot is
