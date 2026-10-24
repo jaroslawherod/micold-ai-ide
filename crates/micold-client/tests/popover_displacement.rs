@@ -47,7 +47,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
         "help_menu",
         &[
             "project_switcher",
-            "sidebar_filter",
+            "sidebar_more",
             "project_menu",
             "run_group_menu",
         ],
@@ -56,13 +56,13 @@ const DISPLACES: &[(&str, &[&str])] = &[
         "project_switcher",
         &[
             "help_menu",
-            "sidebar_filter",
+            "sidebar_more",
             "project_menu",
             "run_group_menu",
         ],
     ),
     (
-        "sidebar_filter",
+        "sidebar_more",
         &[
             "help_menu",
             "project_switcher",
@@ -77,7 +77,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
         "project_menu",
         &[
             "help_menu",
-            "sidebar_filter",
+            "sidebar_more",
             "worktree_menu",
             "run_group_menu",
             "overview_card_menu",
@@ -126,7 +126,7 @@ fn opener(id: &str) -> Message {
     match id {
         "help_menu" => Message::Help(HelpMsg::MenuToggled),
         "project_switcher" => Message::Project(ProjectMsg::SwitcherToggled),
-        "sidebar_filter" => Message::Sidebar(SidebarMsg::FilterMenuToggled),
+        "sidebar_more" => Message::Sidebar(SidebarMsg::MoreMenuToggled),
         "project_menu" => Message::Project(ProjectMsg::MenuToggled(PathBuf::from("/a"), (10, 10))),
         "worktree_menu" => Message::Worktree(WorktreeMsg::MenuToggled("w1".into(), (20, 20))),
         "run_group_menu" => Message::Runs(RunsMsg::MenuToggled(

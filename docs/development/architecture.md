@@ -291,7 +291,7 @@ crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,  // 
 crate::features::help::HelpMenu {                                            // ...that displaces
     displaces:
         crate::features::project::ProjectSwitcher,
-        crate::features::sidebar::SidebarFilterPanel,
+        crate::features::sidebar::SidebarMoreMenu,
         crate::features::project::ProjectContextMenu,
 },
 ```

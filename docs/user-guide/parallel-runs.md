@@ -7,7 +7,7 @@ prompt once.
 
 ## Starting a parallel run
 
-Click **Run in parallel** in the sidebar header, right beside **Add a worktree**. A dialog opens
+Choose **Run in parallel…** from the **more** (⋯) menu at the end of the sidebar's chip bar. A dialog opens
 with these fields:
 
 - **Prompt** — what every run is asked to do.

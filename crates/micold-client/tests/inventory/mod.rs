@@ -458,7 +458,7 @@ fn struct_body(code: &str, name: &str) -> String {
     let (open, close) = match after.find(['{', '(', ';']) {
         Some(at) if after.as_bytes()[at] == b'{' => (at, ('{', '}')),
         Some(at) if after.as_bytes()[at] == b'(' => (at, ('(', ')')),
-        // A unit struct — `pub struct SidebarFilterPanel;` — has no fields to report.
+        // A unit struct — `pub struct SidebarMoreMenu;` — has no fields to report.
         _ => return String::new(),
     };
     let mut depth = 0usize;

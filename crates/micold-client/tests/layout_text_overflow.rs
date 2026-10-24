@@ -192,54 +192,6 @@ fn the_check_reports_an_overflow_when_one_exists() {
     );
 }
 
-/// An overlapping stranger cannot be blamed for text it never drew (BUG-005).
-///
-/// This replaces `the_recorded_overflow_is_the_collapsed_filter_panel`, which proved the *opposite*
-/// property — that closing the sidebar's filter panel produced an overflow and opening it removed
-/// one. It did, and the overflow was not real: the collapsed panel is a zero-height `Expand` whose
-/// children keep their own boxes, so a 24.65dp chip node came to rest on top of the sidebar's
-/// `"Short"` row label, and the label's text was measured against the chip. Closing the panel moved
-/// a stranger into place; it did not squeeze anything.
-///
-/// So the property worth holding is the one that was actually violated: the panel's collapsed state
-/// must make **no difference** to what this gate reports, because it changes no text and no clip.
-/// Driving the same single input proves it, and would fail again the moment attribution went back
-/// to picking a node by geometry alone.
-#[test]
-fn a_collapsed_panel_overlapping_the_sidebar_is_not_reported_as_an_overflow() {
-    let mut renderer = lay::renderer();
-
-    let mut overflows = |filter_open: bool| -> Vec<lay::Overflow> {
-        let mut state = (covered_states()[0].build)().state;
-        state.sidebar.filter_open = filter_open;
-        let element = micold_client::ui::view(
-            &state,
-            None,
-            None,
-            0,
-            None,
-            &micold_core::env_include::EnvIncludeOutcome::Disabled,
-            &micold_client::features::connection::ConnectionStatus::Connected,
-            &micold_client::features::sandbox::Sandbox::default(),
-        );
-        lay::text_overflows(element, &mut renderer)
-    };
-
-    let closed = overflows(false);
-    assert!(
-        closed.is_empty(),
-        "collapsing the sidebar's filter panel reports {} overflow(s), but it changes no text and \
-         no clip — it only slides a zero-height container's children over the rows beneath. Text \
-         is being attributed to a node that did not draw it, which is what BUG-005 was: {closed:?}",
-        closed.len(),
-    );
-    assert!(
-        overflows(true).is_empty(),
-        "the sidebar reports an overflow with its filter panel open, which is a real finding rather \
-         than an attribution accident — report it as a bug"
-    );
-}
-
 /// A narrow session row degrades in the declared order (feature 026, FR-016, T058d).
 ///
 /// `TreeItem::annotation` states the intended ordering — the CLI label takes its natural width and

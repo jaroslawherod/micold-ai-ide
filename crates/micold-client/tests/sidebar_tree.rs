@@ -264,8 +264,8 @@ fn type_filter_selects_only_that_type() {
 }
 
 #[test]
-fn filtered_tree_is_unaffected_by_the_filter_panels_open_state() {
-    // Feature 009 FR-007/FR-008: showing/hiding the filter panel is purely a display change and
+fn filtered_tree_is_unaffected_by_the_more_menus_open_state() {
+    // Feature 009 FR-007/FR-008: showing/hiding the more menu is purely a display change and
     // must never affect which worktrees are considered filtered.
     let mut state = filtered_state();
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(
@@ -273,9 +273,9 @@ fn filtered_tree_is_unaffected_by_the_filter_panels_open_state() {
     )));
     let expected = dirs(&state.filtered_worktree_tree());
 
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // open
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled)); // open
     assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // close
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled)); // close
     assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
 }
 

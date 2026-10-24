@@ -90,7 +90,7 @@ fn opening_any_other_popover_closes_the_project_menu() {
     for opener in [
         Message::Help(HelpMsg::MenuToggled),
         Message::Project(ProjectMsg::SwitcherToggled),
-        Message::Sidebar(SidebarMsg::FilterMenuToggled),
+        Message::Sidebar(SidebarMsg::MoreMenuToggled),
         Message::Worktree(WorktreeMsg::MenuToggled("w1".into(), (100, 100))),
     ] {
         let mut st = State::default();

@@ -1417,9 +1417,7 @@ fn a_row_that_is_not_removable_has_no_cleanup_line() {
 
 mod parallel_runs {
     use super::*;
-    use micold_client::features::sidebar::{
-        arrange_groups, run_in_parallel, GroupNode, HeaderAction, RunRow, HEADER_ACTIONS,
-    };
+    use micold_client::features::sidebar::{arrange_groups, run_in_parallel, GroupNode, RunRow};
     use micold_client::features::Outcome;
     use micold_core::naming::{DerivedNames, WorktreeNaming};
     use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus, RunStep};
@@ -1506,11 +1504,7 @@ mod parallel_runs {
     }
 
     #[test]
-    fn the_header_offers_run_in_parallel_right_after_new_worktree() {
-        assert_eq!(
-            HEADER_ACTIONS,
-            [HeaderAction::NewWorktree, HeaderAction::RunInParallel]
-        );
+    fn choosing_run_in_parallel_opens_the_dialog() {
         assert_eq!(
             run_in_parallel(),
             vec![Outcome::RunInParallelRequested],
@@ -2133,4 +2127,135 @@ fn with_no_session_viewed_the_row_the_overview_revealed_is_selected() {
     };
     assert!(row_selected(&selection, location_row(&here, &[], false)));
     assert!(!row_selected(&selection, location_row(&there, &[], false)));
+}
+
+// ---- Feature 1125 (T042, US4, FR-014, FR-015): the chip bar and its more menu ----
+
+mod chip_bar {
+    use super::*;
+    use micold_client::features::sidebar::{
+        chip_bar_chips, more_menu_items, ChipBarChip, MoreAction, MoreMenuItem, MORE_MENU,
+    };
+
+    fn on_offer() -> Vec<TagFilter> {
+        vec![
+            TagFilter::Type(ConventionalType::Feat),
+            TagFilter::Type(ConventionalType::Fix),
+            TagFilter::HasIssue,
+            TagFilter::Untyped,
+        ]
+    }
+
+    #[test]
+    fn the_chip_bar_is_all_then_every_filter_on_offer_in_order() {
+        let chips: Vec<ChipBarChip> = chip_bar_chips(&on_offer(), &BTreeSet::new())
+            .into_iter()
+            .map(|(chip, _)| chip)
+            .collect();
+        let mut expected = vec![ChipBarChip::All];
+        expected.extend(on_offer().into_iter().map(ChipBarChip::Filter));
+        assert_eq!(chips, expected, "US4.1");
+    }
+
+    #[test]
+    fn with_no_tags_on_offer_the_chip_bar_is_all_alone() {
+        assert_eq!(
+            chip_bar_chips(&[], &BTreeSet::new()),
+            vec![(ChipBarChip::All, true)]
+        );
+    }
+
+    #[test]
+    fn all_is_active_exactly_when_no_filter_is() {
+        let none = chip_bar_chips(&on_offer(), &BTreeSet::new());
+        assert!(
+            none.iter()
+                .all(|&(chip, active)| active == (chip == ChipBarChip::All)),
+            "no filter: All alone looks selected (US4.2): {none:?}"
+        );
+        let fix = TagFilter::Type(ConventionalType::Fix);
+        let one = chip_bar_chips(&on_offer(), &filters([fix]));
+        assert!(
+            one.iter()
+                .all(|&(chip, active)| active == (chip == ChipBarChip::Filter(fix))),
+            "a filter on: its chip alone looks selected, All no longer does: {one:?}"
+        );
+    }
+
+    #[test]
+    fn the_more_menu_holds_refresh_attach_existing_and_run_in_parallel_in_that_order() {
+        assert_eq!(
+            MORE_MENU,
+            [
+                MoreAction::Refresh,
+                MoreAction::AttachExisting,
+                MoreAction::RunInParallel
+            ]
+        );
+        let actions: Vec<MoreAction> = more_menu_items(true, false)
+            .iter()
+            .map(|item| item.action)
+            .collect();
+        assert_eq!(actions, MORE_MENU, "US4.6");
+    }
+
+    /// Today's header buttons' tooltips, which the menu's items keep (FR-015).
+    #[test]
+    fn each_item_keeps_the_header_buttons_tooltip() {
+        let tooltips = |refreshing| -> Vec<&'static str> {
+            more_menu_items(true, refreshing)
+                .iter()
+                .map(|item| item.tooltip)
+                .collect()
+        };
+        assert_eq!(
+            tooltips(false),
+            [
+                "Refresh the worktree list",
+                "Attach existing…",
+                "Run in parallel…"
+            ]
+        );
+        assert_eq!(
+            tooltips(true),
+            [
+                "Refreshing worktrees…",
+                "Attach existing…",
+                "Run in parallel…"
+            ],
+            "a running refresh says so, as the header button did"
+        );
+        assert_eq!(
+            more_menu_items(true, true)[0].label,
+            "Refreshing worktrees…",
+            "and says it on the item, where a menu shows it"
+        );
+        let labels: Vec<&str> = more_menu_items(true, false)
+            .iter()
+            .map(|item| item.label)
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "Refresh the worktree list",
+                "Attach existing…",
+                "Run in parallel…"
+            ]
+        );
+    }
+
+    /// Each item is disabled exactly when today's header button was: refresh while no project is
+    /// open or a refresh is running (`can_refresh_worktrees`), the other two while no project is.
+    #[test]
+    fn each_item_is_enabled_by_the_header_buttons_rule() {
+        let enabled = |project, refreshing| -> Vec<bool> {
+            more_menu_items(project, refreshing)
+                .iter()
+                .map(|item: &MoreMenuItem| item.enabled)
+                .collect()
+        };
+        assert_eq!(enabled(true, false), [true, true, true]);
+        assert_eq!(enabled(true, true), [false, true, true]);
+        assert_eq!(enabled(false, false), [false, false, false]);
+    }
 }

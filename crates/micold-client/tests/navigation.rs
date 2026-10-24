@@ -204,7 +204,7 @@ fn nothing_happens_while_settings_or_a_surface_is_open() {
     state.session.active = Some(ids[1]);
     let open: [fn(&mut State); 4] = [
         |s| s.settings.settings_draft = Some(Default::default()),
-        |s| s.sidebar.filter_open = true,
+        |s| s.sidebar.more_menu_open = true,
         |s| s.project.switcher_open = true,
         |s| s.help.help_menu_open = true,
     ];

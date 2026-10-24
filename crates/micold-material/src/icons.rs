@@ -209,6 +209,9 @@ pub enum Icon {
     TaskDone,
     /// An open item of a markdown task list (feature 940) — `check_box_outline_blank`.
     TaskOpen,
+    /// The sidebar chip bar's more action (feature 1125, research R11) — `more_horiz`, the
+    /// horizontal ⋯; the vertical `more_vert` is [`Icon::Menu`]'s, the app bar's overflow menu.
+    MoreHorizontal,
 }
 
 impl Icon {
@@ -295,6 +298,7 @@ impl Icon {
         Icon::BackgroundTask,
         Icon::TaskDone,
         Icon::TaskOpen,
+        Icon::MoreHorizontal,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -404,6 +408,8 @@ impl Icon {
             // Feature 940 (research R9): `check_box`, `check_box_outline_blank`.
             Icon::TaskDone => '\u{e834}',
             Icon::TaskOpen => '\u{e835}',
+            // Feature 1125 (research R11): `more_horiz`.
+            Icon::MoreHorizontal => '\u{e5d3}',
         }
     }
 }

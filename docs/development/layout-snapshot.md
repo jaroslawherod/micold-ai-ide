@@ -73,7 +73,8 @@ comparison against a file.
 wrong: a widget may lay the child out at full size and clip it when drawing, and the layout tree
 looks identical either way. Whether the overhang reaches the screen is decided in `draw`, which this
 check does not read. So it catches an escape from a parent that does *not* clip, and is blind to the
-distinction otherwise — which is why `CLIP_REVEALED` exists and why it does not expire.
+distinction otherwise — which is why `CLIP_REVEALED` exists and why it does not expire (empty since
+feature 1125 removed the one clip-revealing wrapper a covered state held at rest).
 
 That limit was found the hard way. The check was built against BUG-001, on the belief that
 `Expand`'s oversized child *was* the defect. It was not: `Expand::layout` is unchanged by the fix,
@@ -166,18 +167,13 @@ Records are taken at rest. A transition's intermediate frames are not recorded, 
 a fixture holding a frame partway through a reveal would churn on any change to a duration or an
 easing curve, which is motion's business rather than layout's.
 
-**One exception, and it is narrow.** `revealing_states()` pins the sidebar's filter panel two frames
-into its 90ms reveal, and the containment invariant — *only* that invariant — is asserted against it.
-It is not recorded in the fixture and nothing checks its geometry. An invariant can be asked at a
-moment no fixture would want to hold, and this one asks whether the reveal pushes any *neighbour*
-out of the box that owns it — a defect visible only while the animation runs.
+`revealing_states()` exists for the narrow exception: a state pinned partway through a reveal,
+against which the containment invariant — *only* that invariant — is asserted, asking whether the
+reveal pushes any *neighbour* out of the box that owns it. It is empty since feature 1125 removed the
+sidebar's filter accordion, the one reveal it pinned; pumping frames for the next one requires each
+redraw to carry a distinct `Instant` (a track ignores a repeat of the frame it last advanced on).
 
-Pumping frames requires each redraw to carry a distinct `Instant`: a track ignores a repeat of the
-frame it last advanced on, so N identical events advance it once. The pinned fraction is asserted
-for exactly this reason, and it caught the apparatus reading 0.178 where it meant 0.356.
-
-So: a change visible only mid-animation is not caught, unless it makes a node escape its parent
-during that one pinned reveal.
+So: a change visible only mid-animation is not caught.
 
 ### Scrolling
 
@@ -253,12 +249,11 @@ exist to prevent. Note what that does and does not mean: a firing exemption prov
 still there, not that it is still a defect. The first one below stayed green straight through the
 fix for the bug it was written against.
 
-- **`CLIP_REVEALED` — seven entries, one widget.** The sidebar's collapsed filter accordion, in
-  every state that renders a sidebar. `material::Expand` reports a shrunken height to its parent
-  while its child keeps full height, so at rest a 42px child sits inside a 0px parent — then reveals
-  it top-down by clipping to its own bounds. The overhang is the mechanism, not a defect. Unlike the
-  other two this one **does not expire**; what the assertion buys is that the list cannot grow
-  quietly, since a new entry is either a new clip-revealing wrapper or a real escape.
+- **`CLIP_REVEALED` — empty.** It held the sidebar's collapsed filter accordion (`material::Expand`
+  reports a shrunken height to its parent while its child keeps full height, then reveals it by
+  clipping). Feature 1125 replaced the accordion with the always-visible chip bar, so the list is
+  empty; a new entry is either a new clip-revealing wrapper, named with its reason and an
+  attribution test that drives it open, or a real escape.
 - **`SCROLL_CONTENT` — one entry, one list.** The sidebar's scroll content in
   `main-shell-sidebar-scrolled-to-top`, 686.8px taller than the viewport showing it. A `Scrollable`
   overhangs because its content does not fit and the user moves it; that is what scrolling *is*.
@@ -273,12 +268,6 @@ fix for the bug it was written against.
   list and child list stay index-aligned without it occupying space. The exemption follows from the
   invariant's own premise — a node that is nowhere paints on nothing — but it does buy silence about
   content pushed off-screen *accidentally*, which is a real defect class and a different one.
-- **`KNOWN_OVERFLOWS` — one chip, two paths.** The tag chip labelled `"Short"` inside the sidebar's
-  collapsed filter panel wants 28.9px in the 19.2px the collapsed layout allows. Nothing paints
-  there — the same collapsed `Expand` the entry above describes — and opening the panel makes it fit
-  exactly. Proven rather than argued: `the_recorded_overflow_is_the_collapsed_filter_panel` reports
-  one overflow closed and none open. Surfaced by feature 018's typography change, which widened the
-  label past what the collapsed chip allows.
 - **Two geometric differences between the schemes.** Structure is identical everywhere; two boxes
   differ in size because a string differs in length between schemes. Each carries its reason and
   each must keep firing.
@@ -318,12 +307,10 @@ depends on the host's installed faces rather than on this repository. So treat b
 observations rather than as a model: measure your own state, and if it comes out near 2s rather than
 near nothing, that is informative and worth recording here.
 
-One caveat the tenth state exposed. If the screen renders a sidebar, its collapsed filter accordion
-is a clip-revealing wrapper, and the containment check used to need a second entry naming that
-state. It is now keyed by node path alone, since being a clip-reveal is a property of the widget and
-not of the screen — so registering really is one edit. Had that not been fixed, FR-016 would have
-been false in exactly the way nobody notices: the claim held for the first nine states because they
-were all added at once.
+One caveat the tenth state exposed. A clip-revealing wrapper on a screen many states render (the
+sidebar's filter accordion, until feature 1125) used to need a containment entry per state. The
+list is keyed by node path alone, since being a clip-reveal is a property of the widget and not of
+the screen — so registering a covered state really is one edit.
 
 A second caveat, this one from the twelfth. **A control that renders only above a threshold is not
 covered by a state that sits below it**, and nothing says so. The terminal's instance tab strip

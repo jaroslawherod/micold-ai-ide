@@ -268,7 +268,7 @@ register! {
     crate::features::help::HelpMenu {
         displaces:
             crate::features::project::ProjectSwitcher,
-            crate::features::sidebar::SidebarFilterPanel,
+            crate::features::sidebar::SidebarMoreMenu,
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
     },
@@ -303,7 +303,7 @@ register! {
     crate::features::project::ProjectContextMenu {
         displaces:
             crate::features::help::HelpMenu,
-            crate::features::sidebar::SidebarFilterPanel,
+            crate::features::sidebar::SidebarMoreMenu,
             crate::features::worktree::WorktreeContextMenu,
             crate::features::runs::GroupContextMenu,
             crate::features::overview::OverviewCardMenu,
@@ -312,7 +312,7 @@ register! {
     crate::features::project::ProjectSwitcher {
         displaces:
             crate::features::help::HelpMenu,
-            crate::features::sidebar::SidebarFilterPanel,
+            crate::features::sidebar::SidebarMoreMenu,
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
     },
@@ -344,7 +344,7 @@ register! {
     crate::features::daemons::DaemonFormDialog => crate::ui::daemon_form_dialog::dialog,
     // A daemon's details, read-only (feature 1092).
     crate::features::daemons::DaemonDetailsDialog => crate::ui::daemon_details_dialog::dialog,
-    crate::features::sidebar::SidebarFilterPanel {
+    crate::features::sidebar::SidebarMoreMenu {
         displaces:
             crate::features::help::HelpMenu,
             crate::features::project::ProjectSwitcher,

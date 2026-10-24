@@ -84,7 +84,7 @@ pub use settings::container_fields::{
 pub mod session_area;
 pub(crate) mod settings_view;
 mod shell;
-mod sidebar;
+pub mod sidebar;
 pub mod status_bar;
 // The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
 // reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the
@@ -586,6 +586,29 @@ pub fn view_with<'a>(
     .on_scroll(Message::Project(ProjectMsg::MenuDismissed))
     .into();
 
+    // The sidebar chip bar's more (⋯) menu (feature 1125, FR-015, contract S3): the same
+    // `MenuOverlay` again, hung from the trigger that opened it and clamped into the window as the
+    // switcher is. A keyboard press reports no corner, so it hangs from the sidebar's edge instead.
+    let more_menu: cdk::overlay::Surface<'a, Message> = material::MenuOverlay::new(
+        sidebar::more_menu_items(state),
+        Message::Sidebar(crate::features::sidebar::Msg::MoreMenuToggled),
+        roles,
+    )
+    .open(state.sidebar.more_menu_open)
+    .hung_from(Some({
+        let anchor = state
+            .sidebar
+            .more_anchor
+            .unwrap_or_else(|| sidebar::more_menu_fallback_anchor(state));
+        let (x, y) = crate::features::project::clamp_menu_anchor(
+            anchor,
+            material::menu_panel_size(crate::features::sidebar::MORE_MENU.len()),
+            state.window.window_size,
+        );
+        iced::Point::new(x as f32, y as f32)
+    }))
+    .into();
+
     // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop
     // context menu: the panel's top-left corner sits at the click point. The anchor is clamped at
     // render time (not when the menu opened) so a window resize while it is showing can never leave
@@ -844,6 +867,7 @@ pub fn view_with<'a>(
     cdk::overlay::Overlay::new(base)
         .push(overflow_menu)
         .push(switcher)
+        .push(more_menu)
         .push_maybe(project_menu)
         .push_maybe(worktree_menu)
         .push_maybe(group_menu)

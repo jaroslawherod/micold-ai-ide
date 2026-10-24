@@ -271,16 +271,16 @@ fn sidebar_filter_toggles_and_clears() {
     assert!(state.sidebar.filters.is_empty());
 }
 
-// --- Feature 009: sidebar filter panel toggle ---
+// --- Feature 1125 (US4.6, FR-015): the chip bar's more menu, where the filter panel was ---
 
 #[test]
-fn sidebar_filter_panel_starts_closed() {
+fn the_more_menu_starts_closed() {
     let state = State::default();
-    assert!(!state.sidebar.filter_open);
+    assert!(!state.sidebar.more_menu_open);
 }
 
 #[test]
-fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
+fn the_more_menu_toggle_opens_and_closes_and_excludes_siblings() {
     let mut state = State {
         help: help::State {
             help_menu_open: true,
@@ -289,72 +289,72 @@ fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
         ..Default::default()
     };
 
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar.filter_open);
-    // Opening the filter panel closes the sibling popovers (mutual exclusion, symmetric with
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+    assert!(state.sidebar.more_menu_open);
+    // Opening the more menu closes the sibling popovers (mutual exclusion, symmetric with
     // the existing help::Msg::MenuToggled/project::Msg::SwitcherToggled pair).
     assert!(!state.help.help_menu_open);
     assert!(!state.project.switcher_open);
 
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(!state.sidebar.filter_open);
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+    assert!(!state.sidebar.more_menu_open);
 }
 
 #[test]
-fn opening_help_menu_or_project_switcher_closes_the_filter_panel() {
+fn opening_help_menu_or_project_switcher_closes_the_more_menu() {
     let mut state = State::default();
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar.filter_open);
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+    assert!(state.sidebar.more_menu_open);
 
     state.update(Message::Help(HelpMsg::MenuToggled));
-    assert!(!state.sidebar.filter_open);
+    assert!(!state.sidebar.more_menu_open);
 
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar.filter_open);
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+    assert!(state.sidebar.more_menu_open);
 
     state.update(Message::Project(ProjectMsg::SwitcherToggled));
-    assert!(!state.sidebar.filter_open);
+    assert!(!state.sidebar.more_menu_open);
 }
 
 #[test]
-fn closing_the_filter_panel_never_changes_active_filters() {
+fn closing_the_more_menu_never_changes_active_filters() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
     assert!(state.sidebar.filters.contains(&feat));
 
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // open
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled)); // open
     assert!(state.sidebar.filters.contains(&feat));
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // close
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled)); // close
     assert!(
         state.sidebar.filters.contains(&feat),
-        "toggling panel visibility must not alter the active filter set (FR-007/FR-008)"
+        "toggling the menu must not alter the active filter set (FR-007/FR-008)"
     );
 }
 
 #[test]
-fn escape_dismisses_the_open_filter_panel_when_no_overlay_is_open() {
+fn escape_dismisses_the_open_more_menu_when_no_overlay_is_open() {
     let mut state = State::default();
     assert_eq!(on_escape(&state), None);
 
-    state.sidebar.filter_open = true;
+    state.sidebar.more_menu_open = true;
     assert_eq!(
         on_escape(&state),
-        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
-        "Escape must dismiss the filter panel while it's open"
+        Some(Message::Sidebar(SidebarMsg::MoreMenuToggled)),
+        "Escape must dismiss the more menu while it's open"
     );
 }
 
 #[test]
-fn escape_prefers_an_open_overlay_over_the_filter_panel() {
+fn escape_prefers_an_open_overlay_over_the_more_menu() {
     // Mirrors the keyboard subscription's guard exactly (`ui::subscription()`): if a modal
-    // overlay is somehow open at the same time as the filter panel, the overlay's own Escape
-    // handling takes priority, not the filter panel's. In practice `State::open_overlay()`
+    // overlay is somehow open at the same time as the more menu, the overlay's own Escape
+    // handling takes priority, not the menu's. In practice `State::open_overlay()`
     // keeps this combination from ever occurring (see the next test), but `on_escape` must not
     // silently disagree with the live subscription if that invariant is ever violated.
     let state = State {
         sidebar: sidebar::State {
-            filter_open: true,
+            more_menu_open: true,
             ..Default::default()
         },
 
@@ -373,23 +373,99 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
 }
 
 #[test]
-fn opening_an_overlay_closes_the_filter_panel() {
+fn opening_an_overlay_closes_the_more_menu() {
     // Regression test: previously, opening a modal overlay (e.g. the Add Worktree form) while
-    // the filter accordion was open left `filter_open` untouched, so `on_escape` and
+    // the filter accordion was open left its flag untouched, so `on_escape` and
     // the live keyboard subscription disagreed about what Escape should dismiss. Every
     // overlay-open now routes through `State::open_overlay`, which resets it unconditionally.
     let mut state = State::default();
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar.filter_open);
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+    assert!(state.sidebar.more_menu_open);
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Opened,
     ));
     assert!(
-        !state.sidebar.filter_open,
-        "opening an overlay must close the filter panel"
+        !state.sidebar.more_menu_open,
+        "opening an overlay must close the more menu"
     );
     assert_eq!(open_dialog(&state), Some("add_worktree"));
+}
+
+#[test]
+fn the_more_menu_hangs_from_the_corner_its_press_reported() {
+    let mut state = state_with_active();
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuAnchored((240, 120))));
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+    assert!(state.sidebar.more_menu_open);
+    assert_eq!(state.sidebar.more_anchor, Some((240, 120)));
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+    assert!(!state.sidebar.more_menu_open);
+    assert_eq!(
+        state.sidebar.more_anchor, None,
+        "the corner belongs to the press that opened it"
+    );
+}
+
+#[test]
+fn choosing_a_more_menu_item_closes_the_menu() {
+    for action in sidebar::MORE_MENU {
+        let mut state = state_with_active();
+        state.update(Message::Sidebar(SidebarMsg::MoreMenuAnchored((240, 120))));
+        state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+        state.update(Message::Sidebar(SidebarMsg::MoreMenuChosen(action)));
+        assert!(!state.sidebar.more_menu_open, "{action:?}");
+        assert_eq!(state.sidebar.more_anchor, None, "{action:?}");
+    }
+}
+
+/// Each item does what today's header button did: the shell sends the button's own message once
+/// the menu has closed (US4.6, FR-015).
+#[test]
+fn each_more_menu_item_sends_the_header_buttons_message() {
+    use micold_client::ui::sidebar::more_action_message;
+    assert_eq!(
+        sidebar::MORE_MENU.map(more_action_message),
+        [
+            Message::Worktree(WorktreeMsg::RefreshRequested),
+            Message::Attach(micold_client::features::attach::Msg::Opened),
+            Message::Sidebar(SidebarMsg::RunInParallelRequested),
+        ]
+    );
+}
+
+/// The items' rule is the header buttons' rule, read from the same state (FR-015).
+#[test]
+fn the_more_menus_refresh_is_enabled_exactly_when_a_refresh_can_start() {
+    let enabled = |state: &State| -> Vec<bool> {
+        sidebar::more_menu_items(state.workspace.active.is_some(), state.worktree.refreshing)
+            .iter()
+            .map(|item| item.enabled)
+            .collect()
+    };
+    let mut state = state_with_active();
+    assert!(state.can_refresh_worktrees());
+    assert_eq!(enabled(&state), [true, true, true]);
+    state.update(Message::Worktree(WorktreeMsg::RefreshRequested));
+    assert!(!state.can_refresh_worktrees());
+    assert_eq!(enabled(&state), [false, true, true]);
+    assert_eq!(enabled(&State::default()), [false, false, false]);
+}
+
+/// **All** clears every active filter in one press, as **Clear filters** did (US4.3).
+#[test]
+fn all_clears_every_filter_in_one_message() {
+    let mut state = State::default();
+    for filter in [
+        TagFilter::Type(ConventionalType::Feat),
+        TagFilter::Type(ConventionalType::Fix),
+        TagFilter::Untyped,
+    ] {
+        state.update(Message::Sidebar(SidebarMsg::FilterToggled(filter)));
+    }
+    assert_eq!(state.sidebar.filters.len(), 3);
+    state.update(Message::Sidebar(SidebarMsg::FiltersCleared));
+    assert!(state.sidebar.filters.is_empty());
 }
 
 // T020 (010-root-dir-session, FR-011, research.md R4): the Default entry is exempt from the

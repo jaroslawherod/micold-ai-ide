@@ -132,7 +132,7 @@ fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
 fn every_non_modal_surface_closes_on_a_scroll_beneath() {
     let mut state = State {
         sidebar: sidebar::State {
-            filter_open: true,
+            more_menu_open: true,
             ..Default::default()
         },
 
@@ -152,7 +152,7 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
 
     assert!(!state.help.help_menu_open, "overflow menu");
     assert!(!state.project.switcher_open, "project switcher");
-    assert!(!state.sidebar.filter_open, "sidebar filter panel");
+    assert!(!state.sidebar.more_menu_open, "sidebar more menu");
     assert!(state.project.menu_open.is_none(), "project context menu");
     assert!(state.worktree.menu_open.is_none(), "worktree context menu");
     assert!(state.session.menu_open.is_none(), "session context menu");

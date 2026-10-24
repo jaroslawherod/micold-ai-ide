@@ -141,6 +141,12 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          later, so it outlives the button that reported it (BUG-1023)",
     ),
     (
+        "sidebar.more_anchor",
+        "tests/sidebar_state.rs::the_more_menu_hangs_from_the_corner_its_press_reported — the \
+         chip bar's more trigger reports its corner on the press and the menu reads it back a \
+         message later, as the switcher's does (feature 1125, BUG-1023)",
+    ),
+    (
         "session.additional_target",
         "tests/features_session.rs::the_confirmation_survives_a_refusal_arriving_first — the \
          location being confirmed outlives the dialog widget and a refusal arriving first must \
@@ -191,8 +197,8 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          survives a worktree re-discovery, which rebuilds the tree widget",
     ),
     (
-        "sidebar.filter_open",
-        "tests/sidebar_state.rs::escape_dismisses_the_open_filter_panel_when_no_overlay_is_open — \
+        "sidebar.more_menu_open",
+        "tests/sidebar_state.rs::escape_dismisses_the_open_more_menu_when_no_overlay_is_open — \
          Escape reaches the panel only because the application knows it is open",
     ),
     (
@@ -374,7 +380,7 @@ fn readers(path: &str) -> BTreeSet<String> {
 /// feature's module and a single view.
 ///
 /// "Its view" is resolved as *at most one file under `src/ui/`* rather than by name, because the
-/// views are not named after features — the sidebar's filter panel is drawn by `ui/sidebar.rs`,
+/// views are not named after features — the sidebar's more menu is drawn by `ui/sidebar.rs`,
 /// the About dialog by `ui/about.rs`, and neither mapping is derivable from the feature's name. A
 /// path read by two views is by definition not component-local: no one component could hold it.
 fn qualifies(path: &str, writers: &BTreeMap<String, BTreeSet<String>>) -> Option<String> {
