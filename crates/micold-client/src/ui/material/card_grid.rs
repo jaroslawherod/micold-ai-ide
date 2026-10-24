@@ -472,8 +472,6 @@ struct Grid<'a, M> {
     instant: bool,
 }
 
-/// The expanded card's layout where it is drawn: its slot's node moved up by `place` (K3) to lie
-/// inside `view`; a slot below the view stays where it is.
 /// The region a card's shadow at `strength` can paint: the card's `bounds` grown by the blur and
 /// the offset. It differs per strength, so each frame of an ease damages the last frame's reach
 /// and the next one's (issue 1336).
@@ -482,6 +480,8 @@ fn lift_damage(roles: Roles, bounds: Rectangle, strength: f32) -> Rectangle {
     bounds.expand(shadow.blur_radius + shadow.offset.x.abs().max(shadow.offset.y.abs()))
 }
 
+/// The expanded card's layout where it is drawn: its slot's node moved up by `place` (K3) to lie
+/// inside `view`; a slot below the view stays where it is.
 fn placed<'n>(node: &'n layout::Node, origin: Point, view: Rectangle) -> Layout<'n> {
     let slot = node.bounds() + Vector::new(origin.x, origin.y);
     let dy = if slot.y < view.y + view.height {
