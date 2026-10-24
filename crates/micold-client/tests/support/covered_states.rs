@@ -396,20 +396,24 @@ const PROJECT: &str = "/fixture/project";
 /// an *unmarked* row exist to be aligned against a marked one.
 const OTHER: &str = "/fixture/other-project";
 
-/// The toolbar's title, at the same path in every state: shell column → toolbar column → bar
-/// container → bar row → leading child.
-const TOOLBAR_TITLE: &[usize] = &[0, 0, 0, 0, 0, 0];
+/// The title bar's app mark, at the same path in every state: shell column → toolbar column → bar
+/// container → bar lane → its first child. It was the toolbar's title until feature 1127 dropped
+/// the title text (R13).
+const TOOLBAR_MARK: &[usize] = &[0, 0, 0, 0, 0, 0];
 
-/// The app bar itself — §7.1's 64dp box, one level above the row that holds the title and the
-/// actions, and one below the column that adds its divider. It is the band BUG-003's panels were
+/// The app bar itself — the 43dp box (feature 1127; §7.1's 64dp before it), one level above the
+/// lane that holds the mark, the switcher and the actions, and one below the column that adds its divider. It is the band BUG-003's panels were
 /// drawn across, so `gates/panel_placement.rs` is about this node and the states that open a panel
 /// name it (T100).
 const APP_BAR: &[usize] = &[0, 0, 0, 0];
-/// The overflow (⋮) trigger, trailing action of the bar. The panel that clipped it opens from here.
-const APP_BAR_OVERFLOW_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 3];
-/// The project-switcher trigger, immediately left of it (feature 008, FR-004) — the same
-/// `IconButton` since BUG-007, which is why the two paths now differ only in their last index.
-const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
+/// The overflow (⋮) trigger, the bar's last child. The panel that clipped it opens from here.
+/// Re-pointed under feature 1127 (T014): the lane holds the mark, the switcher, the Overview
+/// button, Settings, then this.
+const APP_BAR_OVERFLOW_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 4];
+/// The Settings button, immediately before the overflow trigger (feature 1127, FR-011).
+const APP_BAR_SETTINGS: &[usize] = &[0, 0, 0, 0, 0, 3];
+/// The project-switcher trigger, the child after the app mark (feature 1127, FR-002).
+const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 1];
 
 // A layer index is **two per open-able surface**, and the paths below that begin at one were
 // re-pointed twice on the way here. First 018's BUG-007 made the switcher a `MenuOverlay`, which is
@@ -850,12 +854,12 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "sidebar.row.delete_button",
                     path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 3, 1],
                 },
-                // `Toolbar`'s leading `text(title)` (`material/toolbar.rs:46`). Named on both shell
-                // states rather than on all eleven: the toolbar is behind every dialog too, and an
+                // `Toolbar`'s leading child, the app mark (feature 1127; its title text before).
+                // Named on both shell states rather than on all eleven: the toolbar is behind every dialog too, and an
                 // anchor repeated on a state whose failures are never about it is noise.
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
             ],
         },
@@ -885,8 +889,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
             ],
         },
@@ -1843,8 +1847,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
                 Anchor {
                     name: "session.header",
@@ -1889,8 +1893,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
                 Anchor {
                     name: "session.header",
@@ -2018,8 +2022,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
                 // Feature 1126: the header above the panes.
                 Anchor {
@@ -2048,8 +2052,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
                 // Feature 1126: the header above the panes.
                 Anchor {
@@ -2078,8 +2082,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
                 // Feature 1126: the header above the panes.
                 Anchor {
@@ -2112,8 +2116,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
                 Anchor {
                     name: "session.header",
@@ -2222,8 +2226,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
+                    name: "toolbar.mark",
+                    path: TOOLBAR_MARK,
                 },
                 // The nested row itself. Named rather than left as a bare path because a failure
                 // here should say "the session row" — it is the node this whole state exists for,
@@ -2858,6 +2862,77 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: STATUS_BAR_ANCHORS,
         },
+        // --- Feature 1127: the 44 px title bar in every body branch (T014, R13) -------------------
+        //
+        // Each names the bar's children, so a failure says which control moved: the mark, the
+        // project switcher, Settings and the overflow trigger.
+        CoveredState {
+            name: "title-bar-session",
+            build: || {
+                let mut state = with_active_session();
+                with_unread_elsewhere(&mut state);
+                StateUnderTest::new(state)
+            },
+            anchors: TITLE_BAR_ANCHORS,
+        },
+        CoveredState {
+            name: "title-bar-overview",
+            build: || {
+                let mut state = with_every_card_state();
+                state.overview.open = true;
+                StateUnderTest::new(state)
+            },
+            anchors: TITLE_BAR_ANCHORS,
+        },
+        CoveredState {
+            name: "title-bar-overview-full-screen",
+            build: || {
+                let mut state = with_every_card_state();
+                state.overview.open = true;
+                state.overview.full_screen = true;
+                StateUnderTest::new(state)
+            },
+            anchors: TITLE_BAR_ANCHORS,
+        },
+        CoveredState {
+            name: "title-bar-changes",
+            build: || {
+                let mut state = changes_open_under_header();
+                with_unread_elsewhere(&mut state);
+                StateUnderTest::new(state)
+            },
+            anchors: TITLE_BAR_ANCHORS,
+        },
+        // Settings open: the Settings button drawn selected and inert, the Overview button inert.
+        CoveredState {
+            name: "title-bar-settings",
+            build: || {
+                let mut state = with_every_card_state();
+                state.settings.settings_draft = Some(SettingsDraft::default());
+                StateUnderTest::new(state)
+            },
+            anchors: TITLE_BAR_ANCHORS,
+        },
+        // Projects known, none open: the switcher reads "Select project".
+        CoveredState {
+            name: "title-bar-no-project",
+            build: || {
+                let mut state = with_project();
+                state.workspace.active = None;
+                StateUnderTest::new(state)
+            },
+            anchors: TITLE_BAR_ANCHORS,
+        },
+        // The overflow menu open under its trigger, below the bar (FR-012).
+        CoveredState {
+            name: "title-bar-menu-open",
+            build: || {
+                let mut state = with_active_session();
+                state.help.help_menu_open = true;
+                StateUnderTest::new(state)
+            },
+            anchors: TITLE_BAR_ANCHORS,
+        },
     ]
 }
 
@@ -2886,6 +2961,50 @@ fn warnings_state(state: State) -> StateUnderTest {
 
 /// The status bar and the body's top edge, in a window column holding the app bar, the body and
 /// the bar (feature 1124).
+/// The title bar's children, named (feature 1127, T014).
+const TITLE_BAR_ANCHORS: &[Anchor] = &[
+    Anchor {
+        name: "app_bar",
+        path: APP_BAR,
+    },
+    Anchor {
+        name: "toolbar.mark",
+        path: TOOLBAR_MARK,
+    },
+    Anchor {
+        name: "app_bar.switcher_trigger",
+        path: APP_BAR_SWITCHER_TRIGGER,
+    },
+    Anchor {
+        name: "app_bar.settings",
+        path: APP_BAR_SETTINGS,
+    },
+    Anchor {
+        name: "app_bar.overflow_trigger",
+        path: APP_BAR_OVERFLOW_TRIGGER,
+    },
+];
+
+/// Three unread sessions in a second, inactive project: the switcher's unread mark (feature 039).
+fn with_unread_elsewhere(state: &mut State) {
+    use micold_core::project::Project;
+    state.workspace.projects.push(Project {
+        path: PathBuf::from(OTHER),
+        display_name: "other-project".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    let unread = || {
+        let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        session.unread = true;
+        session
+    };
+    state
+        .workspace
+        .sessions
+        .insert(PathBuf::from(OTHER), vec![unread(), unread(), unread()]);
+}
+
 const STATUS_BAR_ANCHORS: &[Anchor] = &[
     Anchor {
         name: "shell.root",
@@ -3218,3 +3337,19 @@ const STATUS_BAR_ANCHORS_WITH_BANNERS: &[Anchor] = &[
         path: &[0, 0, 4],
     },
 ];
+
+/// The project name in [`title_bar_crowded`]: sixty characters (feature 1127, contract B5).
+pub const SIXTY_CHARACTER_PROJECT: &str =
+    "a-project-with-a-name-sixty-characters-long-for-the-title-ba";
+
+/// The title bar at its fullest (feature 1127, T013 — contract B5, SC-003): a 60-character project
+/// name, three unread sessions in another project (the switcher's unread mark), and the Overview
+/// button carrying its badge.
+pub fn title_bar_crowded() -> State {
+    assert_eq!(SIXTY_CHARACTER_PROJECT.chars().count(), 60);
+    let mut state = with_every_card_state();
+    state.workspace.projects[0].display_name = SIXTY_CHARACTER_PROJECT.to_string();
+    with_unread_elsewhere(&mut state);
+    assert_eq!(state.other_projects_unread(), 3);
+    state
+}

@@ -567,26 +567,70 @@ pub fn field_group<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
     )
 }
 
-/// `Toolbar` — a title alone, and a title with actions.
+/// The application's mark, made once (feature 1127): one handle keeps one texture across frames.
+static APP_MARK: std::sync::LazyLock<iced::widget::image::Handle> =
+    std::sync::LazyLock::new(|| {
+        iced::widget::image::Handle::from_rgba(
+            crate::ui::APP_ICON_SIDE,
+            crate::ui::APP_ICON_SIDE,
+            crate::ui::APP_ICON_RGBA.to_vec(),
+        )
+    });
+
+/// `Toolbar` — the title bar's shape (feature 1127): the mark and a leading label alone, then with a
+/// fixed leading item and trailing actions.
 pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let mark = || material::AppMark::new(APP_MARK.clone(), micold_core::metadata::APP_NAME, roles);
+    let leading = || {
+        material::Button::text("micold-ai-ide", roles)
+            .leading(Icon::OpenProject)
+            .on_press(Message::NoOp)
+    };
     arrange(
         vec![
             posed(
-                "title only",
-                material::Toolbar::<Message>::new("Micold AI IDE", roles),
+                "mark and leading",
+                material::Toolbar::<Message>::new(roles)
+                    .mark(mark())
+                    .leading(leading()),
                 roles,
             ),
             posed(
                 "with actions",
-                material::Toolbar::new("Micold AI IDE", roles)
-                    .action(
-                        material::IconButton::new(Icon::Settings, roles).on_press(Message::NoOp),
+                material::Toolbar::new(roles)
+                    .mark(mark())
+                    .leading(leading())
+                    .leading_fixed(
+                        material::Button::text("Overview", roles)
+                            .leading(Icon::Overview)
+                            .on_press(Message::NoOp),
                     )
-                    .action(material::IconButton::new(Icon::Menu, roles).on_press(Message::NoOp)),
+                    .action(
+                        material::IconButton::new(Icon::Settings, roles)
+                            .target(micold_core::tokens::anatomy::app_bar::ICON_TARGET)
+                            .keyboard(true)
+                            .on_press(Message::NoOp),
+                    )
+                    .action(
+                        material::MenuTrigger::new(Icon::Menu, Message::NoOp, roles)
+                            .tooltip("More"),
+                    ),
                 roles,
             ),
         ],
         Layout::FullWidth,
+    )
+}
+
+/// `AppMark` — the application's icon as the title bar's leading mark (feature 1127, FR-003).
+pub fn app_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "the application's mark",
+            material::AppMark::new(APP_MARK.clone(), micold_core::metadata::APP_NAME, roles),
+            roles,
+        )],
+        Layout::Inline,
     )
 }
 

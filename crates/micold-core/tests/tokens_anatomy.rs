@@ -27,24 +27,36 @@ use micold_core::tokens::{anatomy, density};
 // -------------------------------------------------------------------------------------------
 
 /// The small variant, and only the small variant — the contract adopts neither medium nor large.
+///
+/// Feature 1127's figures (its contract T1): one 44 px title bar, divider included, whose controls
+/// are all one 40 dp height. They supersede 018 §7.1's height, padding, target and bottom edge.
 #[test]
 fn the_app_bar_is_the_small_variant() {
-    assert_eq!(anatomy::app_bar::HEIGHT, 64.0);
-    assert_eq!(anatomy::app_bar::PADDING, 16.0);
+    assert_eq!(anatomy::app_bar::HEIGHT, 43.0);
+    assert_eq!(anatomy::app_bar::PADDING, 12.0);
     assert_eq!(
         anatomy::app_bar::LEADING_ICON_PADDING,
         4.0,
         "a leading icon button sits closer to the edge than text does, because its own padding \
          supplies the rest of the gap"
     );
-    assert_eq!(anatomy::app_bar::ICON_TARGET, 48.0);
+    assert_eq!(anatomy::app_bar::ICON_TARGET, 40.0);
     assert_eq!(anatomy::app_bar::DIVIDER, 1.0);
     assert_eq!(
         anatomy::app_bar::BOTTOM_EDGE,
-        65.0,
+        44.0,
         "the bar plus its divider — what a panel anchored below the bar has to clear (FR-029a). \
          Stated as a constant so no component has to add the two up by eye, which is what BUG-003 \
          was: two components that each guessed 52"
+    );
+    assert_eq!(anatomy::app_bar::GAP, 12.0, "between the bar's children");
+    assert_eq!(anatomy::app_bar::MARK, 24.0, "the app mark's side");
+    assert_eq!(anatomy::app_bar::FIELD_HEIGHT, 32.0);
+    assert_eq!(anatomy::app_bar::FIELD_MAX_WIDTH, 360.0);
+    assert_eq!(
+        anatomy::ALL.len(),
+        52,
+        "the four new app-bar figures are listed"
     );
 }
 

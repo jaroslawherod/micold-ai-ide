@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1127
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR from the scratchpad title/body; after merge, milestone M1
+- **Phase**: milestone M1
+- **Next step**: M1 reviews and gate, then the M1 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1357 | design (spec, plan, tasks) | merged | 1076eede8a911518582fcfcbeb95fc08c4949d58 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | — | todo |
+| M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | — | in progress |
 | M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | — | todo |
 | M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | todo |
 | M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | todo |
@@ -42,6 +43,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | tasks | Plan paths after #1262 moved the generic components into `crates/micold-material`? | New and reshaped generic components go in `crates/micold-material/src/`; the app icon bytes stay in the client (`shell/startup.rs` `pub(crate) APP_ICON_RGBA`), `AppMark` takes a handle and a name; plan.md and research.md (header, R9, R11) fixed | agent-resolved | git show a4f2edd2 (#1262); crates/micold-material/tests/no_domain_types.rs |
 | D11 | tasks | Split US1 (24 tasks with Setup/Foundational)? | Yes, along its scenarios: M1 the bar's shape (s1 part, s7, s8), M2 the breadcrumb (s1–s6) | agent-resolved | milestones.md rule 3; tasks.md *Milestones* note |
 | D12 | tasks | M1 has 21 tasks: split further (analyze C2)? | No: Setup/Foundational alone has nothing to observe; sizing reason recorded under M1 in tasks.md | agent-resolved | milestones.md rule 1; constitution Task-size gate |
+| D13 | M1 | T016 makes `shell/startup.rs` own `pub(crate) APP_ICON_RGBA`, but `shell` is binary-only (`mod shell` in `main.rs`) and the bar is in the lib | The bytes move to the lib: `ui/toolbar.rs` `pub const APP_ICON_RGBA` / `APP_ICON_SIDE`, re-exported from `ui`; startup reads `micold_client::ui::APP_ICON_RGBA` (one embedding) | agent-resolved | crates/micold-client/src/main.rs `mod shell;`; src/lib.rs has no `shell` |
+| D14 | M1 | A 48 dp `IconButton` target cannot stand in the 43 dp bar; how do the bar's icon actions reach `ICON_TARGET` 40? | NEW `IconButton::target(side)`; `MenuTrigger` and the Settings button pass `app_bar::ICON_TARGET` (now bound, so its "carried elsewhere" waiver in `anatomy_call_sites` is gone); an inert button keeps a named target so Settings stays 40 dp while selected | agent-resolved | research R1; tests/anatomy_call_sites.rs; icon_button.rs tests |
+| D15 | M1 | The switcher must shorten (B4), but a `Button`'s glyph/label/mark `row!` gives the label the whole room and drops the unread mark (T013 failed at 640 dp) | The shared planner's `Lane` (give_way.rs) gains a hugging mode; `Button` lays its glyph, label and mark on it (label `Shorten`), `StatusBar` and `Toolbar` use the bar mode; the switcher label is an `Ellipsized`. Fixture with and without the Button change is byte-identical at default widths | agent-resolved | gates/title_bar_fits.rs; fixture diff check in the M1 unit |
 | D13 | tasks | FR-013 needs a tooltip on the project segment; the contract gave it one only when shortened (analyze C1) | `Switch project`, full name on a second line when shortened; contract C2, T024, T025; FR-013 (C2) moved to M2 | agent-resolved | spec FR-013; contracts/title-bar-ui.md C2 |
 
 ## Review rounds

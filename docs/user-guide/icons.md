@@ -9,9 +9,10 @@ status markers.
 
 | Icon | Meaning | Where you see it |
 |------|---------|------------------|
-| Menu (three lines) | Open the overflow menu | Top app bar |
+| App mark (the application's icon) | Names the application on hover; not a button | Title bar, left end |
+| Menu (three dots) | Open the overflow menu | Title bar, right end |
 | Info | Open the About dialog | Overflow menu |
-| Settings (gear) | Open the Settings dialog | Overflow menu |
+| Settings (gear) | Open Settings; drawn selected while Settings is open | Title bar, before the overflow menu, and the overflow menu |
 | Light mode (sun) | The theme is following light mode | Theme toggle in the overflow menu |
 | Dark mode (moon) | The theme is following dark mode | Theme toggle in the overflow menu |
 | Auto mode | The theme is following your operating system | Theme toggle in the overflow menu |

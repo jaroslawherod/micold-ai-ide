@@ -135,13 +135,10 @@ const RECORDED: &[(&str, &str, &str)] = &[
     // thing in a field's trailing slot was an `IconButton` carrying `button::ICON_BUTTON_GLYPH` —
     // but the select's chevron is a `Glyph` rather than a button, so it has to name §7.7's figure
     // itself. The figure is bound now, and the gate is what noticed.
-    (
-        "anatomy::app_bar::ICON_TARGET",
-        gap::CARRIED_ELSEWHERE,
-        "48dp — §7.1 restates §7.3's target for the bar. The bar's actions are `IconButton`s and \
-         `button::MIN_TOUCH_TARGET` is the constant they apply, so the figure is honoured and this \
-         is its second spelling. BUG-002 is what it looks like when the honouring stops",
-    ),
+    //
+    // `app_bar::ICON_TARGET` sat here as `button::MIN_TOUCH_TARGET`'s second spelling until
+    // feature 1127 made the bar 43dp: its figure became 40dp, a number of its own, and the bar's
+    // icon-only actions (`MenuTrigger`, the Settings button) apply it through `IconButton::target`.
     // -- Describes something not built ------------------------------------------------------
     (
         "anatomy::chip::PADDING_WITH_ICON",
@@ -167,10 +164,22 @@ const RECORDED: &[(&str, &str, &str)] = &[
         "1dp — no menu in the application groups its items, so none draws a divider",
     ),
     (
+        "anatomy::app_bar::FIELD_HEIGHT",
+        gap::NOT_BUILT,
+        "32dp — feature 1127's jump-to field, which its milestone M3 builds; M1 draws the bar \
+         without it",
+    ),
+    (
+        "anatomy::app_bar::FIELD_MAX_WIDTH",
+        gap::NOT_BUILT,
+        "360dp — the same jump-to field as `app_bar::FIELD_HEIGHT`, not built before feature \
+         1127's M3",
+    ),
+    (
         "anatomy::app_bar::LEADING_ICON_PADDING",
         gap::NOT_BUILT,
-        "4dp — `Toolbar` has no leading-icon slot; its leading element is the title, which takes \
-         `app_bar::PADDING`",
+        "4dp — `Toolbar` has no leading-icon slot; its leading element is the app mark, which \
+         takes `app_bar::PADDING`",
     ),
     // Feature 1270 lands its core rules (M1) before the Review tab lays the drawer out (M4), which
     // removes this entry; M2's `ReviewBar` binds the review bar's two figures.

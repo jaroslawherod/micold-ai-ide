@@ -36,27 +36,28 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 /// Half a pixel, matching `containment`, `panel_placement` and the text-overflow gate.
 const TOLERANCE: f32 = 0.5;
 
-/// The app bar's action row: shell → bar → row. Its children are the title, a filling spacer, then
-/// one node per action added by `Toolbar::action`.
+/// The title bar's lane: shell → column → bar → lane. Its children are the app mark, then one
+/// node per control the bar holds — the project switcher, the Overview button, Settings and the
+/// overflow trigger (feature 1127, B2).
 ///
 /// Five indices, not the six the fixture prints: a record's path is relative to the root, and
 /// `path_token` prepends the root's own `0` for display.
-const APP_BAR_ACTION_ROW: &[usize] = &[0, 0, 0, 0, 0];
+const APP_BAR_LANE: &[usize] = &[0, 0, 0, 0, 0];
 
-/// The action controls on the app bar's trailing edge, in order.
+/// The bar's controls, in order: every child of the lane after the app mark.
 ///
-/// Structural rather than a list of paths: anything the toolbar is given past its title and spacer
-/// is an action, so an action added later is covered without anyone remembering to add it here.
+/// Structural rather than a list of paths: anything the bar is given past its mark is a control
+/// (the mark is a picture, not a button, FR-003), so a control added later is covered without
+/// anyone remembering to add it here. Feature 1127 removed the title and the `Length::Fill` spacer
+/// this used to skip.
 fn app_bar_actions(records: &[LayoutRecord]) -> Vec<&LayoutRecord> {
     records
         .iter()
         .filter(|r| {
             r.layer == lay::Layer::Base
-                && r.path.len() == APP_BAR_ACTION_ROW.len() + 1
-                && r.path.starts_with(APP_BAR_ACTION_ROW)
-                // Index 0 is the title, index 1 the `Length::Fill` spacer that pushes the rest to
-                // the trailing edge. Everything after them was pushed by `Toolbar::action`.
-                && r.path[APP_BAR_ACTION_ROW.len()] >= 2
+                && r.path.len() == APP_BAR_LANE.len() + 1
+                && r.path.starts_with(APP_BAR_LANE)
+                && r.path[APP_BAR_LANE.len()] >= 1
         })
         .collect()
 }
@@ -115,7 +116,8 @@ fn same(a: f32, b: f32) -> bool {
 /// What both shapes share is that a **component** decides them. So the rule is conformance to the
 /// closed set:
 ///
-/// - an icon-only action is §7.1's [`anatomy::app_bar::ICON_TARGET`] square, drawing §7.3's
+/// - an icon-only action is the bar's [`anatomy::app_bar::ICON_TARGET`] square (40dp since
+///   feature 1127), drawing §7.3's
 ///   [`anatomy::button::ICON_BUTTON_GLYPH`] — what `IconButton` builds; and
 /// - a labelled action stands at §7.3's button height and leads with
 ///   [`anatomy::button::LEADING_ICON`] — what `Button::leading` builds.

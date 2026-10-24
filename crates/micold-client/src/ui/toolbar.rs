@@ -1,6 +1,7 @@
-//! The Material top app bar, composed from reusable primitives (Principle VIII): the shared
-//! [`toolbar`] with the application title and, on the right, a single overflow-menu trigger
-//! (three dots). The menu's items float as an overlay (see
+//! The title bar, composed from reusable primitives (Principle VIII; feature 1127): the shared
+//! `Toolbar` with, from the leading end, the app mark, the project switcher and the Overview
+//! button, and at the trailing end a Settings button and the overflow-menu trigger (three dots).
+//! No title text and no usage (FR-002). The menu's items float as an overlay (see
 //! [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 //!
 //! # The menu offers actions, not settings (feature 027, FR-026e)
@@ -25,12 +26,29 @@ use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{
-    unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar, Tooltip, TypeRole, UnreadMark,
+    unread_total_tooltip, AppMark, Button, ButtonVariant, Ellipsized, IconButton, MenuItem,
+    MenuTrigger, Toolbar, Tooltip, TypeRole, UnreadMark,
 };
+use iced::widget::image;
 use iced::Element;
 use micold_core::metadata::APP_NAME;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens;
+use micold_core::tokens::{self, anatomy};
+use std::sync::LazyLock;
+
+/// The application's icon as raw RGBA, [`APP_ICON_SIDE`] square (generated from
+/// `assets/icon/icon.svg` by `assets/icon/generate.py`). Embedded directly so no runtime image
+/// decoder is needed. The window's icon (`shell/startup.rs`) and the app mark both read it.
+pub const APP_ICON_RGBA: &[u8] = include_bytes!("../../../../assets/icon/icon-64.rgba");
+
+/// The side of [`APP_ICON_RGBA`], in pixels.
+pub const APP_ICON_SIDE: u32 = 64;
+
+/// The app mark's picture, made once: one handle keeps one texture across frames, so the mark costs
+/// no upload per frame (R9, `tests/idle_requests_no_frames.rs`).
+static APP_MARK: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_rgba(APP_ICON_SIDE, APP_ICON_SIDE, APP_ICON_RGBA.to_vec())
+});
 
 /// The overflow menu's items — actions only (FR-026e). Rendered as a floating overlay by
 /// `ui::view` via `menu_overlay`.
@@ -58,25 +76,28 @@ pub fn overflow_items(_state: &State) -> Vec<MenuItem<Message>> {
     ]
 }
 
-/// Render the top app bar: title (left), then on the trailing edge the project switcher
-/// trigger immediately left of the overflow-menu trigger (feature 008, FR-004). Both panels
-/// are floated as overlays by `ui::view`, so opening either never reflows the bar.
+/// Render the title bar (feature 1127, contract B2): the app mark, the project switcher, the
+/// Overview button, then Settings and the overflow trigger at the trailing end. Every panel floats
+/// as an overlay from `ui::view`, so opening one never reflows the bar.
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     // The switcher names the project it will switch away from, so it is a **labelled** button, and
-    // it is the shared one: `Button::text` with §7.3's leading-icon slot (018 FR-029c). It used to
-    // assemble that shape itself — its own `button`, its own style, its own ripple, and
-    // `row![icon(.., Action.size()), Text]` for the content — which is how it drew a 14dp glyph in
-    // a 28dp box beside the overflow trigger's 24dp glyph in 48dp (BUG-007). Every figure it now
-    // draws is §7.3's, because the component owns them: the 40dp height, the 12dp ends, the 18dp
-    // glyph the leading slot applies whatever the label's role, and the press ripple.
+    // it is the shared one: §7.3's 40dp height, 12dp ends, 18dp leading glyph and press ripple are
+    // the component's (BUG-007). Its label is ellipsized, since it is the bar's child that gives
+    // way when the window is narrow (contract B4): a wrapped name would spill out of the bar.
     let switcher_label = state
         .workspace
         .active_project()
         .map(|p| p.display_name.clone())
         .unwrap_or_else(|| "Select project".to_string());
-    let mut switcher = Button::text(switcher_label, r)
+    let label = Ellipsized::at_role(
+        switcher_label,
+        TypeRole::Action,
+        ButtonVariant::Text.content(r, None),
+    )
+    .shrink();
+    let mut switcher = Button::with_content(label, ButtonVariant::Text, r)
         .leading(Icon::OpenProject)
         .on_press(Message::Project(ProjectMsg::SwitcherToggled));
     // The unread sessions of the *other* projects, shown whether the panel is closed or open: the
@@ -86,19 +107,41 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     if unread > 0 {
         switcher = switcher.trailing_mark(unread, unread_total_tooltip(unread));
     }
-    let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r);
-    let bar = Toolbar::new(APP_NAME, r)
-        // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
-        // the sidebar's offset rather than stored, so nothing else can set it.
-        .elevated(state.app_bar_elevated());
     // Where the panel hangs from: the trigger's own bottom-left corner, reported on the press
-    // ahead of the toggle (BUG-1023).
+    // ahead of the toggle (BUG-1023). Only its `x` is kept: the panel's top is the bar's bottom
+    // edge (R8).
     let switcher = ContextArea::new(switcher)
         .on_primary_bounds(|corner| Message::Project(ProjectMsg::SwitcherAnchored(corner)));
-    bar.action(switcher)
-        .action(overview_button(state, r))
+
+    let settings_open = state.settings.settings_draft.is_some();
+    let settings = IconButton::new(Icon::Settings, r)
+        .target(anatomy::app_bar::ICON_TARGET)
+        .selected(settings_open)
+        .keyboard(true)
+        .on_press_maybe(settings_press(state));
+    let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r).tooltip("More");
+
+    Toolbar::new(r)
+        .mark(AppMark::new(APP_MARK.clone(), APP_NAME, r))
+        .leading(switcher)
+        .leading_fixed(overview_button(state, r))
+        .action(Tooltip::new(settings, "Settings", r))
         .action(menu)
+        // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
+        // the sidebar's offset rather than stored, so nothing else can set it.
+        .elevated(state.app_bar_elevated())
         .into()
+}
+
+/// What the Settings button sends (FR-011, R10): `Opened` while Settings is closed, nothing while
+/// it is open — re-sending `Opened` is not a no-op, since it clears the dialogs and reports
+/// `SettingsOpened` again. The button stays drawn selected while open.
+pub(crate) fn settings_press(state: &State) -> Option<Message> {
+    state
+        .settings
+        .settings_draft
+        .is_none()
+        .then_some(Message::Settings(SettingsMsg::Opened))
 }
 
 /// The Overview button (feature 813, contract U2): after the project switcher, shown whether or not
@@ -142,6 +185,19 @@ fn overview_press(state: &State) -> Option<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// T010 (FR-011, R10): Settings closed → the button opens it; open → it sends nothing.
+    #[test]
+    fn the_settings_button_opens_settings_only_while_it_is_closed() {
+        let mut state = State::default();
+        assert!(matches!(
+            settings_press(&state),
+            Some(Message::Settings(SettingsMsg::Opened))
+        ));
+        state.settings.settings_draft = Some(Default::default());
+        assert!(settings_press(&state).is_none(), "settings open");
+    }
+
     /// The badge is red with the action glyph for an error, yellow with the attention glyph for a
     /// warning, and the tooltip carries the chord and the badge's words.
     #[test]

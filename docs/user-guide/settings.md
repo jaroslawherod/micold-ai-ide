@@ -1,6 +1,8 @@
 # Settings
 
-Open **Settings** from the overflow menu (the three-dots button) in the top toolbar. It fills the
+Open **Settings** with the gear button at the right of the title bar, or from the overflow menu
+(the three-dots button) beside it. While Settings is open the gear is drawn selected, and pressing
+it again does nothing. Settings fills the
 main area, with a rail down the left listing seven sections. The app bar and the status bar
 stay where they are, so the way back out is always in view.
 

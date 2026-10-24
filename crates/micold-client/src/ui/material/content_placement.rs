@@ -340,17 +340,23 @@ fn a_top_aligned_label_is_reported_as_off_centre() {
 /// is unchanged by the fix for the same reason. A bar with only a title sat 18dp high of centre.
 /// That is why the class this module gates is "content whose placement is unstated" rather than
 /// "content that visibly moved".
+///
+/// Feature 1127 dropped the title text and made the bar a 43dp give-way lane that centres each child
+/// itself; the measurement now reads a label posed as the bar's leading child, which is where the
+/// project switcher's name stands.
 #[test]
-fn the_app_bars_title_is_centred_within_the_bar() {
+fn the_app_bars_leading_label_is_centred_within_the_bar() {
     let r = roles();
-    // The bar's own surface as the backdrop, so only the title is ink. The resting bar is used
+    // The bar's own surface as the backdrop, so only the label is ink. The resting bar is used
     // rather than the elevated one: an elevated bar draws a shadow into the rows the measurement
-    // reads, while the resting bar's only extra ink is the hairline separator *below* its 64dp,
+    // reads, while the resting bar's only extra ink is the hairline separator *below* its 43dp,
     // which is what `box_height` excludes.
     let backdrop = style::color(r.surface);
     let on = style::color(r.on_surface);
 
-    let bar: Element<'_, Message> = super::Toolbar::new(LABEL, r).into();
+    let bar: Element<'_, Message> = super::Toolbar::new(r)
+        .leading(Text::new(Cow::Borrowed(LABEL), TypeRole::Title, r))
+        .into();
     let ink = ink_of(
         bar,
         Size::new(800.0, 400.0),
@@ -363,7 +369,7 @@ fn the_app_bars_title_is_centred_within_the_bar() {
 
     assert!(
         (top_shift - expected).abs() < TOLERANCE && (bottom_shift - expected).abs() < TOLERANCE,
-        "the app bar's title is not centred in its {height}dp: its ink sits {top_shift:.1}dp below \
+        "the app bar's leading label is not centred in its {height}dp: its ink sits {top_shift:.1}dp below \
          where the same title sits at the top of its line box, and centring would be \
          {expected:.1}dp (§7.1, FR-030a)",
         height = anatomy::app_bar::HEIGHT,

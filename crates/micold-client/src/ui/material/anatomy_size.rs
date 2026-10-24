@@ -287,21 +287,17 @@ fn a_chip_is_32dp_tall_and_sized_by_its_label() {
     );
 }
 
-/// §7.1: the small app bar is a fixed 64dp that spans its window. The one component here with a
+/// §7.1: the small app bar is a fixed height (43dp since feature 1127) that spans its window. The one component here with a
 /// deliberately elastic axis — which is the point of declaring the axes separately rather than
 /// asserting "nothing fills".
 ///
-/// Raised, because at rest the `Toolbar` element is the bar *and* its 1dp separator, and the 64dp
+/// Raised, because at rest the `Toolbar` element is the bar *and* its 1dp separator, and the 43dp
 /// under test is the bar's.
 #[test]
-fn an_app_bar_is_64dp_tall_and_spans_its_window() {
+fn an_app_bar_is_its_height_and_spans_its_window() {
     assert_anatomy_size(
         "the app bar",
-        || {
-            Toolbar::<Message>::new("Micold AI IDE", roles())
-                .elevated(true)
-                .into()
-        },
+        || Toolbar::<Message>::new(roles()).elevated(true).into(),
         Extent::Fill,
         Extent::Fixed(anatomy::app_bar::HEIGHT),
     );

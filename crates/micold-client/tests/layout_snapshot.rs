@@ -246,6 +246,12 @@ mod transcript_jump_control_fits;
 #[path = "gates/status_bar_fits.rs"]
 mod status_bar_fits;
 
+// --- The title bar holds its controls at 640 and 1280 dp (feature 1127, T013) ---------------------
+
+// Builds its own state and reads no cache; it shares this binary for the `support::layout` passes.
+#[path = "gates/title_bar_fits.rs"]
+mod title_bar_fits;
+
 // --- The session bar's figures stay whole inside the pane (feature 944, T037) -------------------
 
 // A structured session's pane with the meter warning, the totals, a running background task and an
@@ -417,80 +423,57 @@ fn an_anchor_whose_path_does_not_resolve_fails_naming_it() {
 // worse than a bare path — it is a bare path that lies. So each name added here is held to a
 // property only the element it names satisfies.
 
-/// The node called `toolbar.title` measures the application name.
+/// The node called `toolbar.mark` is the app mark (feature 1127, R13; `toolbar.title` before it).
 ///
-/// Two independent halves, because either alone is weak. The width proves it is *that* string
-/// rather than some other leaf: the toolbar's other text lives in its trailing actions and is a
-/// different length. The sibling shape proves the parent is a `Toolbar` and not some other row that
-/// happens to lead with a label — `material/toolbar.rs` builds `row![text(title), Space::Fill]` and
-/// nothing else in the shell has a zero-height full-width spacer as its second child.
+/// Two halves, because either alone is weak. The size proves it is the mark rather than some other
+/// leaf: an `app_bar::MARK` square, which no other control in the bar is. The position proves the
+/// parent is the title bar: the mark is its first child, `app_bar::PADDING` from the window's
+/// leading edge and centred in the bar's height.
 #[test]
-fn the_toolbar_title_anchor_measures_the_application_name() {
+fn the_toolbar_mark_anchor_is_the_app_mark() {
+    use micold_core::tokens::anatomy::app_bar;
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
 
-    // The role the toolbar sets its title in, measured at that role's own size *and weight*.
-    // Feature 018's T017–T021 moved the title from the body role to `title_medium`, which is both
-    // larger and heavier; measuring it against the Regular face at 14dp would report a width the
-    // application never draws.
-    let role = micold_core::tokens::typography::TITLE_LARGE;
-    let expected = lay::measure(
-        micold_core::metadata::APP_NAME,
-        lay::reference_font_at(role.weight),
-        role.size,
-    );
-
     let mut checked = 0;
     for (covered, records) in covered_states().iter().zip(all.iter()) {
-        for anchor in covered.anchors.iter().filter(|a| a.name == "toolbar.title") {
-            let title = records
+        for anchor in covered.anchors.iter().filter(|a| a.name == "toolbar.mark") {
+            let mark = records
                 .iter()
                 .find(|r| r.path == anchor.path)
                 .expect("resolution is asserted separately");
-
             assert!(
-                (title.width - expected).abs() <= 0.5,
-                "in {:?}, toolbar.title is {:.1}px wide but {:?} measures {expected:.1}px. The \
-                 anchor is pointing at some other element, and every failure it names is mislabelled",
+                (mark.width - app_bar::MARK).abs() <= 0.5
+                    && (mark.height - app_bar::MARK).abs() <= 0.5,
+                "in {:?}, toolbar.mark is {:.1}x{:.1}, not the {}dp app mark. The anchor is \
+                 pointing at some other element, and every failure it names is mislabelled",
                 covered.name,
-                title.width,
-                micold_core::metadata::APP_NAME
+                mark.width,
+                mark.height,
+                app_bar::MARK
             );
-
             assert_eq!(
                 anchor.path.last(),
                 Some(&0),
-                "in {:?}, toolbar.title is not the leading child of its row",
+                "in {:?}, toolbar.mark is not the bar's first child",
                 covered.name
             );
-            let mut spacer_path = anchor.path.to_vec();
-            *spacer_path.last_mut().expect("checked above") = 1;
-            let spacer = records
-                .iter()
-                .find(|r| r.path == spacer_path)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "in {:?}, toolbar.title has no sibling at index 1 — its parent is not a \
-                         Toolbar row",
-                        covered.name
-                    )
-                });
             assert!(
-                spacer.height == 0.0 && spacer.width > title.width,
-                "in {:?}, the sibling after toolbar.title is {:.1}x{:.1}, not the full-width \
-                 zero-height spacer a Toolbar puts there",
+                (mark.x - app_bar::PADDING).abs() <= 0.5
+                    && (mark.y + mark.height / 2.0 - app_bar::HEIGHT / 2.0).abs() <= 0.5,
+                "in {:?}, toolbar.mark is at ({:.1}, {:.1}), not {}dp in and centred in the bar",
                 covered.name,
-                spacer.width,
-                spacer.height
+                mark.x,
+                mark.y,
+                app_bar::PADDING
             );
-
             checked += 1;
         }
     }
 
     assert!(
         checked >= 2,
-        "expected the toolbar title to be anchored on both shell states, found {checked}"
+        "expected the app mark to be anchored on both shell states, found {checked}"
     );
 }
 
