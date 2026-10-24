@@ -1206,6 +1206,40 @@ mod tests {
         );
     }
 
+    /// Feature 1299 FR-007, SC-002: the Overview hands Reduce motion as saved to its grid. Tab onto
+    /// a card: with it on, no focus indicator is part-way ~75 ms on; with it off, the card's is.
+    #[test]
+    fn the_overview_grid_follows_reduce_motion() {
+        use crate::ui::material::test_support::{strengths, FRAME_MS, MIDWAY};
+        let midway = |reduce_motion: bool| {
+            let mut state = overview_of(1);
+            state.settings.reduce_motion = reduce_motion;
+            let mut mounted = mount(&state);
+            let origin = mounted.origin;
+            let at = |ms: u64| origin + std::time::Duration::from_millis(ms);
+            let mut ms = 0;
+            // Tab until a card reports its focus, one frame per move.
+            let gained = (0..8).any(|_| {
+                mounted.focus_next();
+                ms += FRAME_MS;
+                let (published, _) = mounted.tick(at(ms), iced::mouse::Cursor::Unavailable);
+                published.iter().any(|m| m.contains("FocusGained"))
+            });
+            assert!(gained, "no card took the focus");
+            let ticks = mounted.frames(ms + FRAME_MS, ms + MIDWAY, strengths);
+            ticks.last().expect("ticks").1.clone()
+        };
+        let part_way = |s: &[f32]| s.iter().any(|s| 0.0 < *s && *s < 1.0);
+        let on = midway(true);
+        assert!(!part_way(&on), "Reduce motion on: {on:?}");
+        assert!(
+            on.contains(&1.0),
+            "Reduce motion on, no card focused: {on:?}"
+        );
+        let off = midway(false);
+        assert!(part_way(&off), "Reduce motion off: {off:?}");
+    }
+
     /// T038, FR-002: a press on a card takes the keyboard but reports no focus: nothing expands.
     #[test]
     fn a_press_on_a_card_reports_no_focus() {

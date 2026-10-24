@@ -1062,9 +1062,7 @@ mod tests {
         assert!(next[0] < reached, "the first control did not turn back");
         for pair in after.windows(2) {
             let (was, now) = (&pair[0].1, &pair[1].1);
-            if now[0] != was[0] || now[1] != was[1] {
-                assert!(now[0] <= was[0] && now[1] >= was[1], "{was:?} -> {now:?}");
-            }
+            assert!(now[0] <= was[0] && now[1] >= was[1], "{was:?} -> {now:?}");
         }
         let midway = at(&after, start + MIDWAY);
         assert!(

@@ -3583,19 +3583,23 @@ mod tests {
         let mut m = mounted(lift_grid(&models, None, GAP), 900.0, 4000.0);
         m.focus_next();
         m.rebuild(lift_grid(&models, Some(0), GAP).unscrolled());
-        let mut ms = 0;
-        while ms <= DONE {
+        let mut read: Vec<(u64, (f32, f32))> = Vec::new();
+        for ms in (0..=DONE).step_by(FRAME_MS as usize) {
             tick_at(&mut m, ms);
-            let (ring, lift) = (strengths(&m.tree)[0], strength_of(&m, &models, 0, true));
-            if ms == MIDWAY {
-                assert!(0.0 < ring && ring < 1.0, "ring {ring}");
-                assert!(0.0 < lift && lift < 1.0, "lift {lift}");
-            }
-            if ms == DONE {
-                assert_eq!((ring, lift), (1.0, 1.0));
-            }
-            ms += FRAME_MS;
+            read.push((
+                ms,
+                (strengths(&m.tree)[0], strength_of(&m, &models, 0, true)),
+            ));
         }
+        let at_ms = |ms: u64| read.iter().find(|(t, _)| *t == ms).expect("a tick").1;
+        let (ring, lift) = at_ms(MIDWAY);
+        assert!(0.0 < ring && ring < 1.0, "ring {ring} at ~75 ms");
+        assert!(0.0 < lift && lift < 1.0, "lift {lift} at ~75 ms");
+        assert_eq!(
+            at_ms(DONE),
+            (1.0, 1.0),
+            "ring and lift by 150 ms and a frame"
+        );
     }
 
     /// **The Reduce motion test** (FR-012, SC-002, US3-1, US3-2): in an `instant` grid, on the
