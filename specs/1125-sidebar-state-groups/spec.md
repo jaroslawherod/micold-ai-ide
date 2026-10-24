@@ -49,6 +49,18 @@ and are out of scope here.
   four. _(agent-resolved: issue #1125 body lists four groups; mockup board Main.dc.html#sidebar puts
   fix/1117, "PR #1118 open · checks failing" — Needs attention per
   crates/micold-core/src/overview.rs card_state — under "Needs action · 2")_
+- Q: Where do refresh, attach existing and run in parallel go, now that only add and hide sit beside
+  the chips? → A: In a more (⋯) menu at the chip bar's end, beside add and hide. _(decided by user)_
+- Q: Which sidebar groups are collapsible? → A: Every group; Done starts collapsed, the others start
+  expanded. _(decided by user)_
+
+### Session 2026-10-24 (round 2)
+
+- Q: How does the chip bar's more menu look, open and close (keyboard, Escape, click outside)? →
+  A: It is the shared `Menu` primitive with its `MenuTrigger`, so it looks, places and dismisses
+  like the app bar's overflow menu; no new menu rules. _(agent-resolved:
+  crates/micold-client/src/ui/material/menu.rs#module-doc ("any future dropdown should reuse it");
+  crates/micold-core/src/overlay.rs#module-doc (feature 017 dismissal rules))_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -200,10 +212,9 @@ show, that All clears the filters, and that the add and hide actions work.
    header's buttons do today.
 6. **Given** the sidebar's other header actions today (refresh the worktree list, attach existing
    sessions, run in parallel), **When** the chip bar is shown, **Then** each is still reachable
-   from the sidebar [NEEDS CLARIFICATION: the issue names only add and hide beside the chips, and
-   the mockup draws only those two; do refresh, attach existing and run in parallel move into an
-   overflow (more) menu at the chip bar's end, stay as icons beside add and hide, or leave the
-   sidebar for #1127's title-bar overflow menu?].
+   from the sidebar: a more (⋯) action at the chip bar's end, beside add and hide, opens a menu
+   holding refresh, attach existing and run in parallel, each with today's enabled rule and
+   tooltip; choosing an item does what today's header button does and closes the menu.
 7. **Given** more chips than fit one line, **When** the chip bar is shown, **Then** the chips wrap
    onto further lines and the actions stay on the first line; no chip is cut off or hidden.
 8. **Given** the worktree holding the current session is excluded by a filter, **When** the sidebar
@@ -231,9 +242,8 @@ chords to reach a location in a collapsed group.
    top to bottom, in the order they are shown.
 2. **Given** the keyboard on a collapsible group header, **When** the user presses Enter or Space,
    **Then** the group collapses or expands; **When** they press the header with the pointer,
-   **Then** the same happens. Which groups are collapsible: [NEEDS CLARIFICATION: the mockup's
-   open question "keep the sidebar groups collapsible?"; only Done (collapsed at start, the
-   issue's "Done collapsed") or every group (Done collapsed at start, the others expanded)?].
+   **Then** the same happens. Every group is collapsible: Done starts collapsed, Needs action,
+   Working and Idle start expanded.
 3. **Given** a group the user collapsed or expanded, **When** rows move between groups, the user
    switches project and back, or the worktree list is re-read, **Then** that group stays as the
    user left it for the rest of the run.
@@ -301,8 +311,8 @@ chords to reach a location in a collapsed group.
 - **FR-004**: A location whose card state changes MUST move to its new group in the same update that
   changes its state anywhere else in the window; counts MUST follow.
 - **FR-005**: The Done group MUST be collapsed when a project is first shown in a run, unless it
-  holds the current session's row (then FR-006 expands it); groups MUST be
-  collapsible as US5 scenario 2 resolves; a group's collapsed state MUST hold for the rest of the run
+  holds the current session's row (then FR-006 expands it); Needs action, Working and Idle MUST
+  start expanded; every group MUST be collapsible; a group's collapsed state MUST hold for the rest of the run
   per project.
 - **FR-006**: A reveal or navigation chord targeting a location in a collapsed group MUST expand that
   group before selecting and scrolling to the row; navigation chords MUST step through locations in
@@ -332,9 +342,11 @@ chords to reach a location in a collapsed group.
   and MUST clear every filter when pressed; the filters' meaning (OR across chips, the
   current-session exception, the no-match message) MUST be unchanged. The filter button and its
   accordion are removed.
-- **FR-015**: The chip bar MUST end with the add-worktree and hide-sidebar actions, which do what the
-  header's buttons do today; the refresh, attach-existing and run-in-parallel actions MUST stay
-  reachable from the sidebar as US4 scenario 6 resolves, with today's enabled rules and tooltips.
+- **FR-015**: The chip bar MUST end with the add-worktree, hide-sidebar and more (⋯) actions; add and
+  hide do what the header's buttons do today; more MUST open a menu holding the refresh,
+  attach-existing and run-in-parallel actions, each with today's enabled rule and tooltip, doing
+  what today's header button does and closing the menu when chosen. The menu MUST be the shared
+  `Menu` primitive, so its placing and dismissal follow feature 017.
 - **FR-016**: Chips that do not fit one line MUST wrap to further lines; no chip or action may be cut
   off or overlap another.
 - **FR-017**: The Overview row, every chip, every group header and every row MUST be reachable by
