@@ -137,15 +137,12 @@ const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0/0"];
 /// apart from each other: each has its own attribution, and one list would leave "which scrollable
 /// is this?" answerable only by reading the path.
 ///
-/// It arrived with feature 026's overflowing bar (T014), and `session-area-twelve-tabs` holds it
-/// now (with `session-area-six-tabs`, whose session tabs overflow the layout window too). That is the whole
-/// point of the state: past about five instances the tabs want more width than the bar can give,
-/// and until T016 the bar answered by **shrinking its own trailing controls** — the mode toggle was
-/// laid out at 0.0dp, which is nothing a user can press, and iced reported it as a successful
-/// layout. Bounding the strip moved the same shortfall one level in and crushed a tab to 55.5dp
-/// instead. Neither is a fix; the fix is that the tabs keep their one fixed width and the ones that
-/// do not fit are reached by scrolling (FR-002a), which is a node outside a node exactly as the
-/// sidebar's list is.
+/// `session-area-twelve-tabs` holds it (with `session-area-six-tabs`, whose members overflow the
+/// layout window too). That is the whole point of the state: the members want more width than the
+/// strip's viewport gives, and they keep their fixed widths (`Member::width`) rather than shrink
+/// the trailing controls or one another; the ones that do not fit are reached by scrolling the
+/// horizontal `Scrollable` (FR-002a), which is a node outside a node exactly as the sidebar's list
+/// is.
 ///
 /// Since feature 1126 the strip sits **above** the panes and the path names its keyed row of
 /// members itself (`EdgeFade` → stack → layer → viewport → row, contract S7): feature 027's padding

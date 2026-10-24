@@ -1322,6 +1322,9 @@ pub fn started(state: &mut crate::app::State, session: Session) -> Vec<crate::fe
         crate::features::Outcome::MainAreaTaken,
     ];
     outcomes.extend(state.set_current_session(Some(id)));
+    // Feature 1126 (S5): the strip appends the new session's tab after the location's others and
+    // marks it, so it has to be scrolled into view (026 FR-002d).
+    arm_tab_reveal(state);
     outcomes.extend(state.focus_terminal());
     outcomes
 }
