@@ -621,6 +621,12 @@ impl State {
             && !self.session.terminal_released
             && self.window.focused_field.is_none()
             && !self.any_surface_takes_keyboard()
+            // #943: the model picker's field takes the keyboard from the composer, whose text
+            // area then reports no focus; while it is open the keys are the picker's.
+            && !self
+                .session
+                .active
+                .is_some_and(|id| self.composers.palette.picker(id).is_some())
             // Settings is not a floating surface any more, so the registry cannot answer for it
             // (feature 027, FR-026). Without this the terminal it replaced on screen would still
             // be taking every key the user typed into a form.

@@ -381,6 +381,30 @@ fn a_press_on_the_composer_takes_the_keyboard_from_the_pane() {
     );
 }
 
+/// The open model picker keeps the keyboard from the pane: its field takes the focus from the
+/// composer, whose text area then reports none, and without this `KeyboardElsewhere` took the
+/// picker's focus back on the first key, so a typed model name never reached it (#943 T060 visual
+/// pass, Part B step 5).
+#[test]
+fn the_open_model_picker_keeps_the_keyboard_from_the_pane() {
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    let composer =
+        |focused| Message::Window(WindowMsg::FieldFocusChanged(FieldId::Composer(id), focused));
+    state.update(composer(true));
+    state.open_model_picker(id);
+    state.update(composer(false));
+    assert!(
+        !state.terminal_focused(),
+        "the picker's field holds the keys while it is open"
+    );
+    state.composers.palette.close_picker(id);
+    assert!(
+        state.terminal_focused(),
+        "closed, and nothing else focused, the pane has them back"
+    );
+}
+
 /// The queued message edited in place reports its field's focus the same way (FR-020).
 #[test]
 fn a_press_on_a_queued_message_being_edited_reports_its_field() {
