@@ -287,7 +287,7 @@ files in your own home directory.
 
 ### Tools installed in the sandbox's home
 
-On a container daemon, every session, terminal and the tool servers the AI CLI starts get this
+On a container or Kubernetes daemon, every session, terminal and the tool servers the AI CLI starts get this
 `PATH`, in this order:
 
 1. the folders of the AI CLIs the application installed and offers, so the CLI a session starts
