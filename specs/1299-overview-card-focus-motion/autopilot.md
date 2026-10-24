@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | #1324 | PR open, gate green |
+| M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | #1324 | PR open, rebased onto main 763a59dc, gate green |
 | M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | — | pending |
 
 ## Decisions
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 3 | clarify | Focus fade when the card's context menu opens/closes? | Yes, out on open (FR-002), in on return (FR-001) | agent | 972 US3-1, FR-011 |
 | 4 | plan | FR-006: is the expanded card's growth animated? | No: height changes in one step; focus indication and shadow ease. Eased layout height reflows the grid every frame and the inner scrollable overflows (scrollbar shows, K4 Page Up/Down retarget mid-growth); a clipped reveal cuts corners and the ring's bottom edge; no collapse counterpart (card rebuilt collapsed). Post research R1's comment text on #1299 | agent | research.md R1; card_grid.rs layout, overview_card.rs expanded_body |
 | 5 | implement M1 | Two existing ring tests in overview_card.rs (pixel comparisons at full strength) gain a `frames(0, DONE, …)` line: may they change? | Yes: with the fade on, the ring reaches full only after 150 ms of frames; the line runs the fade to its end so the unchanged assertions still compare today's full ring (FR-010). The assertions themselves are untouched | agent | review B M1 F1; overview_card.rs ring tests |
+| 6 | implement M1 (rebase) | BUG-1298 (#1298, b561c81d..763a59dc) merged to main and conflicted with M1 in overview_card.rs: how to resolve? | Rebased onto origin/main 763a59dc keeping both sides: #1298's frame/header/body consts beside M1's `CARD_MOTION`, #1298's T050 design tests beside M1's fade tests. Mechanical only, no M1 logic changed; full gate green on the rebased tree | agent | overview_card.rs; scratchpad gate log GATE_EXIT=0 |
 
 ## Review rounds
 
