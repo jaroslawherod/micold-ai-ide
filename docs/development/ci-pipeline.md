@@ -527,7 +527,7 @@ with one `mod <former file name>;` per file:
 | `connection` | wire protocol, framing, viewers, terminal and scrollback tests |
 | `sessions` | session start, supervision, activity and attention, mutation semantics |
 | `settings` | the `*_setting` and `settings_*` files, the catalog and pane layout |
-| `mcp` | the `mcp_*`, `worktree_*`, `env_include_*` and review files |
+| `mcp` | the `mcp_*`, `worktree_*`, `env_include_*` and review files (not `hooks_receiver`, which installs a global `tracing` subscriber) |
 | `ssh_real` | the `ssh_real_*` suite (`--features ssh-real-runtime`) |
 
 - **Test names keep their file name**: `mutation_semantics::<test>` where it was `<test>` in the
