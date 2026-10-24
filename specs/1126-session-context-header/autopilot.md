@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
 - **Phase**: M3 PR
-- **Next step**: orchestrator opens the M3 PR (title/body in the scratchpad), waits on CI and merges; then the close unit (Polish T056–T057)
+- **Next step**: orchestrator waits on #1337's CI and merges; then the close unit (Polish T056–T057)
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1318 | design (spec, plan, tasks) | merged | f8eeaa43e5f151a08a2c20b055c5c9ce64bf9584 |
 | #1328 | M1 context header | merged | 127a817868d7b463ad78ea588b43a0339d483991 |
 | #1334 | M2 tab strip | merged | 25de2370813389d6ae82fcfb49ebce6cf15da226 |
+| #1337 | M3 Changes button | open; CI red once (layout snapshot), rebased and re-recorded | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | #1328 | merged |
 | M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | #1334 | merged |
-| M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | (to open) | gate green, pushed |
+| M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | #1337 | rebased onto main after red CI, gate green at c8c3d32b, pushed |
 
 ## Decisions
 
@@ -44,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+
+- M3 red CI (2026-10-24, PR #1337): `build + test (ubuntu-latest)` failed `layout_snapshot::the_layout_matches_the_committed_fixture` in `status-bar-warnings` (header 12 px taller). CI tests the merge with main, which had gained #1124 M3 (7b6639cb, re-recorded 706d1d52) with the new states `status-bar-disconnected` and `status-bar-warnings`, recorded without M3's Changes button; git merged the fixture text cleanly but stale. Rebased onto origin/main (no conflicts) and re-recorded. Diff vs main: only the states M3 already changed (session-area-*, session-transcript-*, status-bar-*) plus #1124's two new states, each the header's title row gaining the Changes button (+12 px, rows below shifted); #1124's own changes (error-daemon-disconnected, settings-view-rail-collapsed, status-bar-settings, status-bar-warnings-overview) are byte-identical to main. Not a layout regression.
 
 ## Review rounds
 
