@@ -7582,6 +7582,55 @@ mod issue_source {
         );
     }
 
+    // --- 1126: the session area's header reads its worktree's issue title (R3) -----------------
+
+    /// Show a new session at `location` of the rig's project, through the shell's own `update`.
+    fn show_session_at(rig: &mut IssueRig, location: SessionLocation) {
+        let session = micold_core::session::Session::start_new(
+            location,
+            micold_core::session::AiCli::ClaudeCode,
+        );
+        let id = session.id;
+        rig.app
+            .core
+            .workspace
+            .sessions
+            .entry(PathBuf::from(PROJECT))
+            .or_default()
+            .push(session);
+        rig.app.core.session.active = Some(id);
+        let work = crate::update(&mut rig.app, Message::NoOp);
+        settle(&mut rig.app, work);
+    }
+
+    /// R3, H7: following a worktree whose issue title is not held asks for that one title once;
+    /// following it again, or another session of the same location, asks nothing; the Default
+    /// entry asks nothing. No Overview is opened.
+    #[test]
+    fn the_header_reads_its_worktrees_issue_title_once() {
+        let mut rig = titles_rig(true);
+        assert!(!rig.app.core.overview.open);
+        show_session_at(&mut rig, SessionLocation::Worktree("feat-42_crash".into()));
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(sent.len(), 1, "the title's remotes are asked for once");
+        answer_remotes(&mut rig.app, sent[0].0, github_remote());
+        assert_eq!(rig.source.lookup_calls(), vec![("o/r".to_string(), 42)]);
+        assert!(
+            micold_client::features::overview::TitleLookup::Known(
+                "Crash when opening empty project".into()
+            ) == rig.app.core.overview.titles[&42]
+        );
+        let work = crate::update(&mut rig.app, Message::NoOp);
+        settle(&mut rig.app, work);
+        show_session_at(&mut rig, SessionLocation::Worktree("feat-42_crash".into()));
+        show_session_at(&mut rig, SessionLocation::Default);
+        assert!(
+            remote_lists_sent(&mut rig.rx).is_empty(),
+            "the same location again, and the Default entry, ask nothing"
+        );
+        assert_eq!(rig.source.lookup_calls().len(), 1, "one title read");
+    }
+
     // --- 1122: the issue links' repository (R2) and opening a link (R10) -------------------------
 
     fn repo_named(url: &str) -> micold_client::features::overview::RepoLookup {

@@ -10,7 +10,9 @@ use std::cmp::Ordering;
 use std::fmt;
 
 use crate::overview::PrCounts;
-use crate::pull_request::{newest_first, BranchPrState, CheckStatus, ReviewState};
+use crate::pull_request::{
+    newest_first, BranchPrState, CheckStatus, PrState, PullRequestStatus, ReviewState,
+};
 
 /// How many rows a collapsed card shows (FR-002).
 const COLLAPSED_ROWS: usize = 2;
@@ -161,16 +163,38 @@ impl StatusPhrase {
         if matches!(pr.state, BranchPrState::Merged | BranchPrState::Closed) {
             return None;
         }
+        Self::first(pr.checks, pr.review, pr.conflict)
+    }
+
+    /// The first phrase that applies to a status reading's pull request (feature 1126, R4): the
+    /// same candidates as [`Self::of`], read from its state, review and conflict.
+    pub fn of_status(status: &PullRequestStatus) -> Option<Self> {
+        Self::of_state(status.state, status.review, status.conflict)
+    }
+
+    /// The first phrase for a pull request in `state` with `review` and `conflict`; `None` for a
+    /// merged or closed one (the checks are inside an open or draft state).
+    pub fn of_state(state: PrState, review: ReviewState, conflict: bool) -> Option<Self> {
+        match state {
+            PrState::Open { checks } | PrState::Draft { checks } => {
+                Self::first(checks, review, conflict)
+            }
+            PrState::Merged | PrState::Closed => None,
+        }
+    }
+
+    /// The candidates in precedence order; the first that applies.
+    fn first(checks: CheckStatus, review: ReviewState, conflict: bool) -> Option<Self> {
         let candidates = [
-            (pr.checks == CheckStatus::Failing, Self::ChecksFailing),
+            (checks == CheckStatus::Failing, Self::ChecksFailing),
             (
-                pr.review == ReviewState::ChangesRequested,
+                review == ReviewState::ChangesRequested,
                 Self::ChangesRequested,
             ),
-            (pr.conflict, Self::MergeConflict),
-            (pr.checks == CheckStatus::Pending, Self::ChecksPending),
-            (pr.review == ReviewState::Approved, Self::Approved),
-            (pr.checks == CheckStatus::Passing, Self::ChecksPassing),
+            (conflict, Self::MergeConflict),
+            (checks == CheckStatus::Pending, Self::ChecksPending),
+            (review == ReviewState::Approved, Self::Approved),
+            (checks == CheckStatus::Passing, Self::ChecksPassing),
         ];
         candidates
             .into_iter()
@@ -311,6 +335,60 @@ mod tests {
         assert_eq!(StatusPhrase::of(&required), None);
         let nothing = open_with(CheckStatus::None, ReviewState::None, false);
         assert_eq!(StatusPhrase::of(&nothing), None);
+    }
+
+    /// Feature 1126 R4: `of_status` and `of` agree on every (checks, review, conflict, state)
+    /// combination; merged and closed carry none.
+    #[test]
+    fn a_status_reading_and_a_listed_pull_request_read_alike() {
+        let checks = [
+            CheckStatus::None,
+            CheckStatus::Pending,
+            CheckStatus::Passing,
+            CheckStatus::Failing,
+        ];
+        let reviews = [
+            ReviewState::None,
+            ReviewState::Approved,
+            ReviewState::ChangesRequested,
+            ReviewState::ReviewRequired,
+        ];
+        let states = [
+            BranchPrState::Open,
+            BranchPrState::Draft,
+            BranchPrState::Merged,
+            BranchPrState::Closed,
+        ];
+        for c in checks {
+            for r in reviews {
+                for x in [false, true] {
+                    for st in states {
+                        let mut listed = open_with(c, r, x);
+                        listed.state = st;
+                        let state = match st {
+                            BranchPrState::Open => PrState::Open { checks: c },
+                            BranchPrState::Draft => PrState::Draft { checks: c },
+                            BranchPrState::Merged => PrState::Merged,
+                            BranchPrState::Closed => PrState::Closed,
+                        };
+                        let status = PullRequestStatus {
+                            number: 1,
+                            title: String::new(),
+                            url: String::new(),
+                            state,
+                            review: r,
+                            head: String::new(),
+                            conflict: x,
+                        };
+                        let phrase = StatusPhrase::of_status(&status);
+                        assert_eq!(phrase, StatusPhrase::of(&listed), "{c:?} {r:?} {x} {st:?}");
+                        if matches!(st, BranchPrState::Merged | BranchPrState::Closed) {
+                            assert_eq!(phrase, None, "merged and closed carry none");
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// K2: the words.

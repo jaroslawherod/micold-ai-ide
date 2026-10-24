@@ -341,6 +341,7 @@ pub mod quick_switch;
 pub mod runs;
 pub mod sandbox;
 pub mod session;
+pub mod session_strip;
 pub mod settings;
 pub mod sidebar;
 pub mod structured_insights;

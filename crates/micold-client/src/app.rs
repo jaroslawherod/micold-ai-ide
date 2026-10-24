@@ -1299,6 +1299,33 @@ impl State {
         if self.agent_confirm.update_depth == 0 {
             crate::ui::overview::settle_card_menu(self);
             crate::features::agent_confirm::release(self);
+            self.follow_header();
+        }
+    }
+
+    /// The session area's header follows the shown location (feature 1126, R6): derived from
+    /// `current_session_location` once the outermost message is done, so every way the shown
+    /// session changes (sidebar, tab, chord, quick switcher, a session closing, a worktree removed)
+    /// is covered without a call at each site. The shell also calls it after a message it applies
+    /// itself, and asks for a newly followed worktree's issue title.
+    pub fn follow_header(&mut self) {
+        use crate::features::changes::{update, Effect, Msg};
+        let wanted = self
+            .current_session_location()
+            .and_then(|entry| Some((self.workspace.active.clone()?, entry)));
+        if wanted == self.changes.header.entry {
+            return;
+        }
+        let (project, entry) = match wanted {
+            Some((project, entry)) => (project, Some(entry)),
+            None => (std::path::PathBuf::new(), None),
+        };
+        let effect = update(&mut self.changes, Msg::HeaderFollowed { project, entry });
+        if effect != Effect::None {
+            self.changes.pending = Some(match self.changes.pending.take() {
+                None => effect,
+                Some(first) => Effect::Batch(vec![first, effect]),
+            });
         }
     }
 

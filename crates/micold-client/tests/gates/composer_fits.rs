@@ -199,6 +199,8 @@ fn a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view() {
     report(&mut state, id, busy(InterruptAsk::None), true, 12);
     let text: Vec<String> = (1..=400).map(|n| format!("line {n}")).collect();
     type_draft(&mut state, id, &text.join("\n"));
+    let header = crate::session_area_fits::header_height(state.clone());
+    assert!(header > 0.0, "the session area draws its header");
     let (_, roomy) = paint(idle, id);
     let (painted, transcript) = paint(state, id);
     // The crowded composer stops at its limits and takes no more from the transcript: the queue's
@@ -206,7 +208,7 @@ fn a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view() {
     // the input row's growth from its idle height, at least that same 40dp **Send**, to the text
     // area's limit (FR-008); the hold row's 40dp and the idle row's cancel out. Measured against the same pane with an idle, empty composer, so the
     // bound holds whatever fixed chrome the window draws around the pane (#943's model control
-    // and Open in terminal, 1124's status bar); an absolute floor at one window size broke each
+    // and Open in terminal, 1124's status bar, 1126's header); an absolute floor at one window size broke each
     // time chrome was added, while a queue without its cap still fails here (941 T055 mutant).
     let gap = micold_core::tokens::spacing::SM;
     let limits = QUEUE_MAX_HEIGHT + gap + gap + MAX_HEIGHT;

@@ -275,7 +275,7 @@ pub struct State {
     /// Window pixels rather than the pane-local point [`Self::terminal_context_menu`] holds — that
     /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
     /// and this one is drawn on the window's, where the anchor is already in the right space.
-    pub shell_instance_menu: Option<(crate::ui::terminal::StripTab, u16, u16)>,
+    pub shell_instance_menu: Option<(crate::features::session_strip::StripTab, u16, u16)>,
     /// The tab strip's scroll offset, in whole pixels from its leading edge (feature 026 FR-002e).
     ///
     /// Presentation, not state to persist: FR-002d scrolls the marked tab into view on selection,
@@ -1680,7 +1680,7 @@ pub fn context_menu_closed(state: &mut crate::app::State) {
 /// routing call here for the same reason every other arm is (FR-002).
 pub fn strip_tab_menu_requested(
     state: &mut crate::app::State,
-    tab: crate::ui::terminal::StripTab,
+    tab: crate::features::session_strip::StripTab,
     x: u16,
     y: u16,
 ) {
@@ -2033,7 +2033,7 @@ pub enum Msg {
     /// message, one surface, one registration: two would be the shape that lets the two menus drift
     /// into offering different actions for the same reason, which is the thing FR-006a is worded to
     /// prevent.
-    StripTabMenuRequested(crate::ui::terminal::StripTab, u16, u16),
+    StripTabMenuRequested(crate::features::session_strip::StripTab, u16, u16),
     /// Dismiss the terminal-tab context menu.
     ShellInstanceMenuClosed,
     /// Show the session's AI CLI process in the pane (feature 026 FR-006, FR-007).

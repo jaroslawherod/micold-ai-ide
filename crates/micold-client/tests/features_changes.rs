@@ -3291,3 +3291,62 @@ fn following_from_a_browsed_file_goes_back_to_that_file() {
     };
     assert_eq!(view_of(&state).browse.as_ref().unwrap().path, path("x.md"));
 }
+
+/// Feature 1126 H7 (FR-014), through the root's `State::update`: selecting a session of another
+/// location points the header at it; another session of the same location changes nothing; with
+/// the session's worktree gone, the header follows nothing.
+#[test]
+fn the_header_follows_the_shown_location_through_the_root() {
+    use micold_client::app::{Message, State as App};
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::{AiCli, Session};
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+
+    let mut app = App::default();
+    let root = project();
+    app.workspace
+        .projects
+        .push(Project::new(root.clone(), true, Availability::Available));
+    app.workspace.active = Some(root.clone());
+    app.worktree.worktrees = ["feat-a", "feat-b"]
+        .map(|dir| Worktree {
+            dir_name: dir.into(),
+            path: root.join(".claude/worktrees").join(dir),
+            branch: Some(format!("feat/{dir}")),
+            status: WorktreeStatus::Valid,
+            included: false,
+        })
+        .to_vec();
+    let at =
+        |dir: &str| Session::start_new(SessionLocation::Worktree(dir.into()), AiCli::ClaudeCode);
+    let (a1, a2, b) = (at("feat-a"), at("feat-a"), at("feat-b"));
+    let (a1_id, a2_id, b_id) = (a1.id, a2.id, b.id);
+    app.workspace.sessions.insert(root.clone(), vec![a1, a2, b]);
+    let entry = |app: &App| app.changes.header.entry.clone();
+    let follows = |dir: &str| Some((root.clone(), SessionLocation::Worktree(dir.into())));
+
+    app.update(Message::Session(SessionMsg::Selected(a1_id)));
+    assert_eq!(
+        entry(&app),
+        follows("feat-a"),
+        "the shown location is followed"
+    );
+    app.update(Message::Session(SessionMsg::Selected(b_id)));
+    assert_eq!(
+        entry(&app),
+        follows("feat-b"),
+        "another location's session moves it"
+    );
+    app.update(Message::Session(SessionMsg::Selected(a1_id)));
+    let before = app.changes.clone();
+    app.update(Message::Session(SessionMsg::Selected(a2_id)));
+    assert_eq!(
+        app.changes, before,
+        "a session of the same location changes nothing"
+    );
+
+    app.worktree.worktrees.retain(|w| w.dir_name != "feat-a");
+    app.update(Message::NoOp);
+    assert_eq!(entry(&app), None, "its worktree removed: no entry");
+}

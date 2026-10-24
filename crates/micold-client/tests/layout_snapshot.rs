@@ -240,6 +240,14 @@ mod session_bar_fits;
 #[path = "gates/transcript_rich_table_wraps.rs"]
 mod transcript_rich_table_wraps;
 
+// --- The session area's header fits (feature 1126, T011) ----------------------------------------
+
+// In every covered state that shows a session, at the smallest window beside a 300 px sidebar and
+// at the layout window, light and dark: the header's title and chips lie inside the session area
+// and overlap nothing (contract H10, FR-013).
+#[path = "gates/session_area_fits.rs"]
+mod session_area_fits;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

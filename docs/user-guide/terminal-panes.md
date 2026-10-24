@@ -2,6 +2,23 @@
 
 Split the terminal area to watch several terminals at once.
 
+## The header above the terminal
+
+While a session is shown, a header above its terminal names the worktree it runs in:
+
+- **Title**: the worktree's issue title, else its branch, else its name; the same title its
+  Overview card shows. The **Default** entry's title is *Default*.
+- **State**: the worktree's Overview state (*Needs action*, *Needs attention*, *Working*, *Done* or
+  *Idle*), with its icon and colour. Point at it to read why.
+- **Branch**: the short form of the branch, such as `fix/1117` for `fix/1117_ci-red-on-main`. Point
+  at it for the full branch. No branch, no chip.
+- **Pull request**: the branch's current pull request, its state and its checks, such as
+  `PR #1118 · Open · checks failing`, the same reading the sidebar shows. No chip when the branch has
+  no pull request or pull request status is off in Settings; an old reading says so in its tooltip.
+
+The header follows the session you show, and changes when the sidebar does. Text that does not fit
+ends in `…`; point at it to read it in full. The bar under the terminal is unchanged.
+
 ## Split and pick a terminal
 
 Every pane has a header with two buttons: **split side by side** and **split stacked**. The same

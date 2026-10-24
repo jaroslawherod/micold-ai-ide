@@ -1178,6 +1178,16 @@ pub struct State {
     /// The pull request chosen per entry, kept while another entry's view is open (FR-013). In
     /// memory only: nothing about pull requests is stored (feature 040 FR-032).
     pub remembered: BTreeMap<(PathBuf, SessionLocation), u64>,
+    /// What the session area's context header follows (feature 1126, data-model *HeaderCounts*).
+    pub header: HeaderCounts,
+}
+
+/// The location the session area's header is for (feature 1126, R6): the follow rows of
+/// data-model *HeaderCounts*; the counts read joins them with the Changes button (T048).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HeaderCounts {
+    /// The project and location the header shows; `None` while no location is shown.
+    pub entry: Option<(PathBuf, SessionLocation)>,
 }
 
 /// What this feature is told.
@@ -1192,6 +1202,14 @@ pub enum Msg {
     },
     /// The view's close action (V2).
     Closed,
+    /// The shown location changed: the header follows `entry` of `project`, or nothing (feature
+    /// 1126, R6). Sent by the root's follow step, never by a control.
+    HeaderFollowed {
+        /// The entry's project.
+        project: PathBuf,
+        /// The shown location; `None` while no location is shown.
+        entry: Option<SessionLocation>,
+    },
     /// The Committed toggle was pressed.
     CommittedToggled,
     /// The Uncommitted toggle was pressed.
@@ -1519,6 +1537,10 @@ pub enum Effect {
 
 /// Apply `msg` (contracts/changes-view.md V1–V3, L1).
 pub fn update(state: &mut State, msg: Msg) -> Effect {
+    // The header's follow touches nothing of the open view: not its notice, not its reads.
+    if let Msg::HeaderFollowed { project, entry } = msg {
+        return header_followed(&mut state.header, project, entry);
+    }
     let scroll = matches!(
         msg,
         Msg::DiffScrolled { .. } | Msg::ListScrolled { .. } | Msg::PanelScrolled { .. }
@@ -1602,8 +1624,20 @@ fn reread_after_source_change(
     (!effects.is_empty()).then_some(effects)
 }
 
+/// The header follows `entry` of `project` (data-model *HeaderCounts* transitions).
+fn header_followed(
+    header: &mut HeaderCounts,
+    project: PathBuf,
+    entry: Option<SessionLocation>,
+) -> Effect {
+    header.entry = entry.map(|entry| (project, entry));
+    Effect::None
+}
+
 fn apply(state: &mut State, msg: Msg) -> Effect {
     match msg {
+        // Handled in `update` before the view's bookkeeping.
+        Msg::HeaderFollowed { .. } => Effect::None,
         Msg::LayoutChosen(layout) => {
             if state.layout != layout {
                 if let Some(view) = state.open.as_mut() {
@@ -3716,4 +3750,50 @@ pub fn cap_spans(
             (!range.is_empty()).then_some((range, colour))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn project() -> PathBuf {
+        PathBuf::from("/repo")
+    }
+
+    fn follow(state: &mut State, entry: Option<SessionLocation>) -> Effect {
+        update(
+            state,
+            Msg::HeaderFollowed {
+                project: project(),
+                entry,
+            },
+        )
+    }
+
+    /// Feature 1126 T005: a new entry is followed; the same entry twice changes nothing; `None`
+    /// clears it.
+    #[test]
+    fn the_header_follows_the_shown_location() {
+        let mut state = State::default();
+        let worktree = SessionLocation::Worktree("feat-1_x".into());
+        assert_eq!(follow(&mut state, Some(worktree.clone())), Effect::None);
+        assert_eq!(
+            state.header.entry,
+            Some((project(), worktree.clone())),
+            "a new entry is followed"
+        );
+        let before = state.clone();
+        follow(&mut state, Some(worktree));
+        assert_eq!(
+            state, before,
+            "the same entry twice leaves the state unchanged"
+        );
+        follow(&mut state, Some(SessionLocation::Default));
+        assert_eq!(
+            state.header.entry,
+            Some((project(), SessionLocation::Default))
+        );
+        follow(&mut state, None);
+        assert_eq!(state.header.entry, None, "no location shown: no entry");
+    }
 }

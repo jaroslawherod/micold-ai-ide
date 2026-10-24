@@ -7,7 +7,6 @@
 mod blocks;
 mod entries;
 mod insights;
-mod keyed;
 pub mod permission;
 mod rich;
 pub mod session_bar;
@@ -34,10 +33,10 @@ pub use rich::EDIT_TOOLS;
 use crate::features::permission_prompts::Placement;
 use crate::features::structured_transcript::{Follow, State, TranscriptMsg};
 use crate::icons::Icon;
+use crate::ui::cdk::Keyed;
 use crate::ui::material::{Button, Scrollable};
 use iced::widget::{column, container, lazy, stack, Space};
 use iced::{Alignment, Element, Length};
-use keyed::KeyedColumn;
 use micold_core::protocol::messages::PromptId;
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::{EntryId, EntryKey, Transcript};
@@ -306,7 +305,7 @@ fn build<'a, M: Clone + 'a>(
             .filter(|(placement, _)| *placement == Placement::AtEnd)
             .filter_map(|(_, id)| Some((RowKey::Prompt(*id), block(*id, None)?))),
     );
-    let list = KeyedColumn::new(keyed)
+    let list = Keyed::column(keyed)
         .spacing(spacing::MD)
         .padding(spacing::MD)
         .width(Length::Fill);

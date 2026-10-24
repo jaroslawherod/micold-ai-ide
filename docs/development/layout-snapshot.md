@@ -92,7 +92,10 @@ The states are listed in one place: `crates/micold-client/tests/support/covered_
 017's reduced parity set, plus the empty and error layouts no manual walkthrough reliably reached,
 the Settings dialog, the add-worktree dialog with its type dropdown open, and the Overview open
 over the fixture project (`overview-open`, feature 1120): its cards, header row and title, the only
-state the text-overflow and containment gates reach the Overview's cards in.
+state the text-overflow and containment gates reach the Overview's cards in. The six session
+states (`session-terminal-*`, `session-transcript-*`) draw the session area's context header above
+the panes (feature 1126), anchored as `session.header`; `gates/session_area_fits.rs` holds its title
+and chips inside the session area at the smallest window and at 1280×800.
 
 Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
 the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session
