@@ -19,6 +19,16 @@
 - **Scoped query**: what is sent to Jira: `project = "<KEY>" AND (<user query without its ORDER BY>)` followed by the user's `ORDER BY` clause, or `ORDER BY updated DESC` when the user query has none.
 - **Connected project**: the Jira project key of the open project's Jira connection (feature 533 FR-006, FR-007).
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: When the form opens in advanced mode with no (or an empty) last run query, what shows, and is the basic list loaded in the background? → A: Nothing is sent; an empty input with a prompt to type and run a query; the basic list loads only on the first switch to basic (FR-003, FR-004a). _(agent-resolved: specs/533-jira-issue-worktrees/spec.md#FR-020; spec.md#FR-004)_
+- Q: What happens to the mode and draft when the source is switched to GitHub and back within an open form? → A: The mode is kept; the draft resets to the last run query, as the search text and filters reset; in advanced mode that query runs again (FR-003a). _(agent-resolved: specs/533-jira-issue-worktrees/spec.md#FR-017; specs/1185-jira-selector-filters/spec.md#FR-016 on origin/claude/project-thread-xwkotj)_
+- Q: When is the mode remembered: at each switch, or only when a query runs or an issue is picked? → A: At each switch between basic and advanced; the query at each run; last write wins across windows (FR-013). _(agent-resolved: spec.md#FR-013 "mode last used"; spec.md#Edge Cases "Two windows")_
+- Q: Is the 2,000-character limit counted before or after control characters are cleaned? → A: After cleaning (newlines and tabs as spaces, other control characters removed), as the basic search text is cleaned before its cap (FR-007). _(agent-resolved: crates/micold-core/src/jira.rs#search_jql)_
+- Q: How long may a shown Jira error message be ("cut to a readable length", FR-010)? → A: Deferred to the plan: a per-message character cap long enough to keep Jira's usual JQL messages whole (FR-010). _(agent-resolved: deferral to plan; crates/micold-core/src/jira.rs#REASON_MAX_CHARS is the precedent for a fixed cap)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - List issues with a JQL query (Priority: P1)
@@ -103,15 +113,16 @@ A developer runs the same sprint query every time they start work. When they nex
 
 - **FR-001**: With the Jira source showing, the selector MUST offer a switch between basic mode and advanced mode. The GitHub source MUST be unchanged and show no such switch.
 - **FR-002**: In advanced mode the selector MUST show one query input in place of the search text and the basic field filters, and MUST NOT apply the search text or any basic filter to the query or to the listed issues.
-- **FR-003**: Switching from advanced back to basic MUST restore the basic list, search text and basic filters as they were when the user left basic mode; switching to advanced MUST show the draft, which starts as the project's last run query when the form opens and keeps any unrun edits for as long as the form stays open.
+- **FR-003**: Switching from advanced back to basic MUST restore the basic list, search text and basic filters as they were when the user left basic mode (when the form opened in advanced mode, the basic list loads on this first switch to basic, as it does when basic mode opens); switching to advanced MUST show the draft, which starts as the project's last run query when the form opens and keeps any unrun edits for as long as the form stays open.
+- **FR-003a**: Switching the form's source to GitHub and back to Jira MUST keep the current mode; it MUST reset the draft to the project's last run query, as it clears the search text (533 FR-017) and the basic filters (#1185 FR-016), and in advanced mode MUST run that query under FR-004a.
 
 ### Running a query
 
 - **FR-004**: A query MUST run when the user presses Enter in the query input or activates the selector's run control, and MUST NOT run on each keystroke.
-- **FR-004a**: When the form opens in advanced mode (FR-013) with a non-empty last run query, the selector MUST run that query once as soon as the Jira source is showing, as if the user had run it; switching to advanced mode within an open form MUST NOT run anything by itself.
+- **FR-004a**: When the form opens in advanced mode (FR-013) with a non-empty last run query, the selector MUST run that query once as soon as the Jira source is showing (on opening, or on showing the Jira source again per FR-003a), as if the user had run it; switching to advanced mode within an open form MUST NOT run anything by itself. With no or an empty last run query, nothing is sent: the selector MUST show an empty input with a prompt to type a query and run it. While advanced mode shows, the basic list MUST NOT be loaded.
 - **FR-005**: The app MUST send Jira the scoped query: `project = "<KEY>" AND (<condition>)` where `<condition>` is the user query up to its first `ORDER BY` outside a quoted string, followed by the user query's `ORDER BY` clause when it has one, else by `ORDER BY updated DESC`. With an empty condition (an empty user query, or one that is only a sort clause) the scoped query MUST be `project = "<KEY>"` followed by the sort clause. Quoted strings and the sort clause are as defined in Terms.
 - **FR-006**: The selector MUST list the issues Jira returns in Jira's order, up to 1,000, in the same row form as basic mode (key, status, summary, labels, reporter and description tooltip), and MUST say when more issues match than were loaded.
-- **FR-007**: Before sending, the app MUST refuse a user query that has an unclosed quoted string, parentheses that do not balance outside quoted strings, or more than 2,000 characters, and MUST show the reason in the selector instead of a list. A refused query MUST NOT be sent.
+- **FR-007**: Before sending, the app MUST refuse a user query that has an unclosed quoted string, parentheses that do not balance outside quoted strings, or more than 2,000 characters (counted after the cleaning of control characters, see Edge Cases), and MUST show the reason in the selector instead of a list. A refused query MUST NOT be sent.
 - **FR-008**: The selector MUST NOT list an issue whose key is not of the connected project, whatever the query or Jira's answer.
 - **FR-009**: Picking an issue from an advanced-mode list MUST fill the form exactly as picking the same issue in basic mode does (533 FR-013, FR-015).
 
@@ -123,8 +134,8 @@ A developer runs the same sprint query every time they start work. When they nex
 
 ### Remembering
 
-- **FR-013**: The app MUST remember, per project, the last run query and the mode last used, in the user's local per-user data (not in a project file or `settings.json`), and MUST restore both when the form next opens on that project, in this or a later app run. An unrun draft MUST NOT be remembered.
-- **FR-014**: A remembered query MUST be kept when the integration is turned off or the source is switched to GitHub, and MUST be removed when the project's Jira connection is removed.
+- **FR-013**: The app MUST remember, per project, the last run query and the mode last used, in the user's local per-user data (not in a project file or `settings.json`), and MUST restore both when the form next opens on that project, in this or a later app run. The mode MUST be remembered at each switch between basic and advanced, and the query at each run; with two windows the latest write wins. An unrun draft MUST NOT be remembered.
+- **FR-014**: A remembered query and mode MUST be kept when the integration is turned off or the source is switched to GitHub, and MUST both be removed when the project's Jira connection is removed.
 
 ### Privacy and scope of requests
 
