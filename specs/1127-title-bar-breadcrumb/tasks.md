@@ -150,9 +150,6 @@ Test*.
 
 #### Tests for Part B ⚠️
 
-- [ ] T022 [P] [US1] Make `context_header::branch_chip` `pub` in `crates/micold-core/src/context_header.rs`
-  with a doc comment naming its second reader (the title bar's place segment); its existing tests
-  stay green (R7)
 - [ ] T023 [P] [US1] Write failing unit tests in `lib/button.rs` for `Button::trailing(Icon)`: the
   glyph is drawn after the label at the leading slot's size, in both orders with `.trailing_mark`
   (R4)
@@ -182,6 +179,9 @@ Test*.
 
 #### Implementation for Part B
 
+- [ ] T022 [P] [US1] Make `context_header::branch_chip` `pub` in `crates/micold-core/src/context_header.rs`
+  with a doc comment naming its second reader (the title bar's place segment); its existing tests
+  stay green (R7)
 - [ ] T028 [US1] Implement `Button::trailing(Icon)` in `lib/button.rs` (R4)
 - [ ] T029 [US1] Implement `Breadcrumb` in `lib/breadcrumb.rs` over `Button` (`.trailing`,
   `.trailing_mark`, `.selected`) and `Ellipsized`, reporting its two segments to the toolbar's
@@ -195,7 +195,8 @@ Test*.
 - [ ] T032 [US1] Extend `client/tests/gates/title_bar_fits.rs` with a 60-character branch (place
   shortens before project, both keep `…`), add the `title-bar-*` states to
   `client/tests/layout_text_overflow.rs` if it lists states, add a `Breadcrumb` showcase entry in
-  `client/src/showcase/sections/surfaces.rs`, and regenerate `client/tests/fixtures/layout_snapshot.txt`
+  `client/src/showcase/sections/surfaces.rs`, update the `app_bar.*` component paths in
+  `client/tests/support/covered_states.rs` for the breadcrumb's children, and regenerate `client/tests/fixtures/layout_snapshot.txt`
 - [ ] T033 [US1] Update the user guide for Part B: `docs/user-guide/project-selection.md`
   (§Switching projects from the top bar: the breadcrumb's project segment, where the panel opens,
   the place segment), `docs/user-guide/worktrees-and-sessions.md` (the "Open another project (app
@@ -256,7 +257,8 @@ Test*.
 - [ ] T044 [US2] Extend `client/tests/gates/title_bar_fits.rs` (at 640 dp the field shows at least its
   glyph; at 1280 dp it is centred in the free space), add covered state `title-bar-settings-field`
   if `title-bar-settings` does not already show the disabled field, add a `FieldButton` showcase
-  entry in `client/src/showcase/sections/surfaces.rs`, and regenerate
+  entry in `client/src/showcase/sections/surfaces.rs`, update the `app_bar.*` component paths in
+  `client/tests/support/covered_states.rs` behind the new centre child, and regenerate
   `client/tests/fixtures/layout_snapshot.txt`
 - [ ] T045 [US2] Update the user guide: `docs/user-guide/worktrees-and-sessions.md` (the quick
   switcher opens from the title bar's field too), `docs/user-guide/appearance-theming.md` (the field
@@ -351,7 +353,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   `cargo test -p micold-client --lib -- toolbar`; `cargo test -p micold-client --test layout_snapshot
   --test switcher_anchor --test title_bar_keyboard --test toolbar --test app_bar_scroll --test
   showcase_completeness --test material_builder_api --test anatomy_call_sites --test
-  idle_requests_no_frames --test keymap`; quickstart §B 1, 5, 7
+  idle_requests_no_frames --test keymap`; quickstart §B 1, 5, 7 for their M1 parts only (mark,
+  project switcher, Overview button, Settings, overflow trigger; 44 px height; dark scheme), since the
+  place segment and the field arrive in M2 and M3
 - **Depends on**: —
 - **Tier**: full
 
