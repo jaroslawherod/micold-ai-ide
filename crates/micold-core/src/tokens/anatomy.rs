@@ -217,6 +217,22 @@ pub mod status_bar {
     pub const HEIGHT: f32 = 28.0;
 }
 
+/// The Review tab's bottom bar: counts, **Send review (n)**, overflow and **Comments** (feature
+/// 1270, contract B1/B3).
+pub mod review_bar {
+    /// The bar's height, fixed by the design like `status_bar::HEIGHT`, not by the density axis.
+    pub const HEIGHT: f32 = 44.0;
+    /// The send button's fixed width, so its bounds never depend on its label (research R4).
+    /// Provisional until the `ReviewBar` component test measures the widest label (T009).
+    pub const SEND_WIDTH: f32 = 176.0;
+}
+
+/// The comments drawer over the right of the diff (feature 1270, contract D2).
+pub mod comments_drawer {
+    /// The drawer's width; it is at most half the diff area (`review::drawer::width`).
+    pub const WIDTH: f32 = 360.0;
+}
+
 /// Every anatomy value, for the tests that hold properties across the whole set rather than
 /// checking one number at a time.
 ///
@@ -231,7 +247,7 @@ pub mod status_bar {
 /// it, which is the same shape as a figure nothing applies, one level further out.
 /// `tokens_anatomy::the_listed_table_holds_every_constant` now holds this against the module's own
 /// source, which is the only thing that can notice.
-pub const ALL: [(&str, f32); 48] = [
+pub const ALL: [(&str, f32); 51] = [
     ("app_bar::HEIGHT", app_bar::HEIGHT),
     ("app_bar::PADDING", app_bar::PADDING),
     (
@@ -283,4 +299,7 @@ pub const ALL: [(&str, f32); 48] = [
     ("progress::THICKNESS", progress::THICKNESS),
     ("progress::LABEL_GAP", progress::LABEL_GAP),
     ("status_bar::HEIGHT", status_bar::HEIGHT),
+    ("review_bar::HEIGHT", review_bar::HEIGHT),
+    ("review_bar::SEND_WIDTH", review_bar::SEND_WIDTH),
+    ("comments_drawer::WIDTH", comments_drawer::WIDTH),
 ];

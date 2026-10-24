@@ -269,6 +269,27 @@ fn the_status_bar_anatomy_matches_the_contract() {
 }
 
 // -------------------------------------------------------------------------------------------
+// Review bar and comments drawer (feature 1270)
+// -------------------------------------------------------------------------------------------
+
+#[test]
+fn the_review_bar_and_comments_drawer_anatomy_matches_the_contract() {
+    assert_eq!(anatomy::review_bar::HEIGHT, 44.0);
+    assert_eq!(anatomy::comments_drawer::WIDTH, 360.0);
+    assert!(anatomy::review_bar::SEND_WIDTH > 0.0);
+    for (name, value) in [
+        ("review_bar::HEIGHT", anatomy::review_bar::HEIGHT),
+        ("review_bar::SEND_WIDTH", anatomy::review_bar::SEND_WIDTH),
+        ("comments_drawer::WIDTH", anatomy::comments_drawer::WIDTH),
+    ] {
+        assert!(
+            anatomy::ALL.contains(&(name, value)),
+            "{name} is not in the anatomy table"
+        );
+    }
+}
+
+// -------------------------------------------------------------------------------------------
 // Properties that hold across the whole anatomy
 // -------------------------------------------------------------------------------------------
 
