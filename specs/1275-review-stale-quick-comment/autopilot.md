@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: tasks
-- **Next step**: tasks review round 2 (sonnet, fix diff; snapshot in *Review rounds*), then checklists, specs-only gate, design PR. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Next step**: orchestrator opens the design PR (body prepared by the tasks unit) and records its number; after merge, milestone M1. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
@@ -76,6 +76,10 @@ T036/T039/T040). One MEDIUM fixed (Constitution I, logic in tested core/pure cod
 change-list-to-`DiffRow` mapping in the shell job had no test; now a pure `DiffRow::from_read` in
 `features/changes.rs` with a unit test in T016. LOW, left: T030's subscription and T022/T031/T040
 glue have no own test (glue, covered by the message tests).
+
+Checklists: `checklists/requirements.md` has no unchecked items (16/16 ticked). Specs-only gate
+(`check-criteria-observables.sh`) passed. A full `scripts/gate.sh` was also tried and failed on disk space (container has ~30 GB
+free; the workspace build filled it); not needed for a specs-only diff (gate.md), target wiped.
 
 Clarify: round 1 asked FR-014 (escalated; applied provisionally as A, which made the whole-view
 items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.
