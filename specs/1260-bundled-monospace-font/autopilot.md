@@ -66,6 +66,8 @@ Polish T028–T029 (quickstart §A/§C records, no code): done by the close unit
 | Close: speckit-converge | 1 | 12d38521 + T028–T029 records | CONVERGED: all 11 FR and 5 SC built, each cited to code/test (e.g. FR-003 `mono.rs:128`, SC-004 `packaging_ships_font_licences.rs:88,100`). Run because M1 review B was CHANGES (declined). Headless `claude -p --model sonnet` (a first run returned a bare CONVERGED with no citations; re-run with a per-requirement evidence table) |
 | Close: speckit-tdd-verify | 1 | 12d38521 | FAIL (finding 1 HIGH test-after T006/T007/T022 — declined, below; 2 MED, 3 LOW). Remediation T030–T034 appended: T032, T034 done (T034 by a sonnet worker: `a_character_fira_mono_lacks_falls_back_to_another_face_not_a_box`, mono 8 passed), T030/T031/T033 and finding 6 declined. Report `tdd/verification.md`. Headless `claude -p --model sonnet` |
 | Close review (tests + docs) | 1 | fb7d8473b968335f6676f488d81d965ea3014020:fdf6d7dc23bd80870d18261693ddd460bec7cace | CHANGES (1 MAJOR: order note wrongly put T016 after T018 — fixed, T016 and T018 share `56efcebc`; 2 MINOR: Phase 7 intro contradicted the declines, quickstart claimed the close gate before it ran — both fixed). New test judged sound. Headless `claude -p` |
+| Close review (re-review, sonnet) | 2 | fix diff after fdf6d7dc | CLEAN (1 MINOR: quickstart points at the close gate row before it exists — the row is added with the gate result). Headless `claude -p --model sonnet` |
+| Close gate | 1 | fdf6d7dc | red: `ui_glyph_literals::no_ui_surface_hardcodes_an_icon_glyph` — T034's test spelled U+E5CD as a literal; now `crate::icons::Icon::Close.glyph()` (same codepoint). `-- mono` 8 passed, `ui_glyph_literals` 2 passed |
 
 ## Implementation notes
 

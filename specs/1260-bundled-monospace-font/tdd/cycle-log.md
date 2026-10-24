@@ -37,4 +37,4 @@ neither shows nor contradicts its red-before-green order.
 
 | Task | Behaviour | Red evidence | Green |
 |---|---|---|---|
-| T034 | `Font::MONOSPACE` shapes `a` with the bundled Fira Mono and U+E5CD (a Material Symbols icon Fira Mono lacks, per both cmaps) with another face and a non-zero glyph (FR-004) | written after FR-004's code (characterization); mutation: the fallback assertion flipped to require Fira Mono failed with "'\u{e5cd}' stayed on Fira Mono, which lacks it: no fallback face (FR-004)" | `cargo test -p micold-client --lib -- mono`: 8 passed |
+| T034 | `Font::MONOSPACE` shapes `a` with the bundled Fira Mono and U+E5CD (`Icon::Close`, a Material Symbols icon Fira Mono lacks, per both cmaps) with another face and a non-zero glyph (FR-004) | written after FR-004's code (characterization); mutation: the fallback assertion flipped to require Fira Mono failed with "'\u{e5cd}' stayed on Fira Mono, which lacks it: no fallback face (FR-004)" | `cargo test -p micold-client --lib -- mono`: 8 passed |
