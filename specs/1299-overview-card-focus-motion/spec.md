@@ -20,6 +20,27 @@ out; hover expansion eases the same way; with Settings → Appearance → Reduce
 instant; ripple, context menu, link focus and keyboard navigation unchanged; a test covers the
 reduce-motion path. Separate from the design-match fix #1298." Labels: enhancement, flow:feature.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: When the window loses or regains focus, does a focused card's focus indication change (and so
+  fade)? → A: No. Window blur collapses the expanded card (feature 1121, FR-005) but leaves the
+  keyboard focus on the card, so its focus indication stays as it is on blur and on refocus and no
+  focus fade runs; only the collapsing card's shadow eases out. _(agent-resolved:
+  crates/micold-client/src/ui/material/card_grid.rs#on_window_blur, which publishes only the
+  expansion blur; specs/1121-overview-card-full-text/spec.md#Edge Cases, "Window regains focus")_
+- Q: Does the hover state layer of a card (the tint drawn under the pointer) fade too? → A: No. The
+  issue names only the focus outline and layer and the expanded card's shadow, and the design
+  transitions only `box-shadow`; the hover layer keeps changing in one step. _(agent-resolved:
+  specs/1299-overview-card-focus-motion/spec.md#Input)_
+- Q: When a focused card's context menu opens from the keyboard, and closes again, does the card's
+  focus indication fade? → A: Yes. Opening moves the keyboard focus to the menu's first entry
+  (feature 972, US3-1), so the card's focus indication fades out (FR-002) while the target mark
+  appears in one step as today; closing the menu without a choice returns the focus to the card
+  (feature 972, FR-011), and its focus indication fades in (FR-001). _(agent-resolved:
+  specs/972-overview-card-context-menu/spec.md#FR-011)_
+
 ## Terms
 
 - **Card**: an entry of the project Overview, one per location (feature 813).
@@ -177,8 +198,12 @@ not new value.
   shows in another.
 - **Empty Overview**: with no cards, there is nothing to animate and nothing runs.
 - **Window loses and regains focus**: on window blur an expanded card collapses (feature 1121,
-  FR-005) and its shadow eases out over 150 ms (FR-003); the focus indication does on blur and on
-  refocus what feature 1121 specifies, easing (FR-001, FR-002) wherever that changes it.
+  FR-005) and its shadow eases out over 150 ms (FR-003); the keyboard focus stays on the card, so
+  its focus indication does not change on blur or on refocus and no focus fade runs.
+- **Context menu on a focused card** (feature 972): opening the menu from the keyboard moves the
+  focus to the menu, so the card's focus indication fades out (FR-002) while the target mark appears
+  in one step; closing the menu without a choice hands the focus back and the indication fades in
+  (FR-001).
 - **Frames missed**: when the app draws fewer frames than usual (a busy machine), the transition
   still ends at 150 ms, on time, rather than stretching.
 - **Cross-platform** (Principle VI): durations, easing and the Reduce motion behaviour are the same
@@ -262,6 +287,7 @@ not new value.
 
 - Animating the targeted (*selected*) outline and layer of feature 972.
 - Animating the focus indicators of a card's links.
+- Animating the hover state layer of a card; it changes in one step as today.
 - Animating the ripple differently, or making it obey Reduce motion.
 - Reading the operating system's reduced-motion preference.
 - Any change to the cards' appearance in their end states (issue #1298).
