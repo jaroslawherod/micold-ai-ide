@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1185
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: plan unit
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -31,6 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | clarify | Which people does the reporter filter offer? | Own user first, then project users with browse permission, searched by typed name | agent-resolved | issue #1185 body ("its … users"); spec.md#FR-014 |
 | D4 | clarify | Where do label choices come from? | Labels on the not-Done issues of the unfiltered listing (≤1,000), alphabetical, no extra request; notice when the listing is capped | agent-resolved | issue #1185 body ("from the connected Jira project"); Jira `GET /rest/api/3/label` is site-wide only |
 | D5 | clarify | Label choices once a filter is chosen? | Taken at the unfiltered load, kept for the dialog | agent-resolved | spec.md#FR-005, #FR-007 |
+| D6 | plan | How do the filter clauses compose with #1186's JQL work? | Separate `micold_core::jira_filter` (`clauses`, `narrowed`); `list_jql`/`search_jql`/`list_open`/`search_open` unchanged; additive `JiraSource` methods with defaults | agent-resolved | research.md#R1, #R10 |
+| D7 | plan | Filter controls in the 520 px, tallest dialog? | One row of four `Typeahead`s (Any row clears), one "Filtered by … / Clear filters" line while active; no new widget | agent-resolved | research.md#R8; SC-001 |
 
 ## Review rounds
 
@@ -38,6 +40,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec review | 1 | faf2dbc7e88487e7ed788cc777e08ac3a01f4774:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CHANGES: 1 MAJOR (FR-010 trim/cut vs exact match), 2 MINOR (SC-003 wording, Debug redaction + me-lookup failure); all fixed |
 | Spec review | 2 | 2450b706dff7ee9368b016e9a03188feaffe296b:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CLEAN (2 MINOR: FR-006 Debug wording, SC-003 control-char clause; fixed, prose only) |
+| Plan review | 1 | 82673589e84328975ec6437b6506b889ef2b6dcd:93883c9e001cea6910868956ff2d695bd1be1984 | CHANGES: 1 MAJOR (search_jql edited or not: contradiction); fixed, search_jql untouched |
+| Plan review | 2 | 8caad6fb6b5b539a182b4c5d336b8e96b8a4debe:93883c9e001cea6910868956ff2d695bd1be1984 | CLEAN (sonnet) |
 
 ## Declined review findings
 
