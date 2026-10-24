@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M9 implementing (T061–T065), on origin/main 3c7db2eb (M8 merged as #1313)
-- **Next step**: implement T061–T065 under TDD, reviews, T065 live visual pass, full gate, push; the orchestrator opens the M9 PR
+- **Phase**: M9 done (T061–T065): full gate green on f38301f3 (split-gate.sh); pushed, PR to open
+- **Next step**: the orchestrator opens the M9 PR from `$SCRATCHPAD/943-M9/pr-title.txt` and `pr-body.md`, waits on CI and merges; then the close unit (Phase 12 polish)
 
 ## Pull requests
 
@@ -38,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | #1257 | merged |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | #1265 | merged |
 | M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** (met, e65993bc) | #1313 | merged |
-| M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | in progress |
+| M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** (met) | | T061–T065 done (f38301f3); PR to open |
 
 ## Decisions
 
@@ -103,6 +103,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M9 (conformance, sonnet, claude -p) | 1 | 93ada85ac8d9e844fa3deb61df00368047c27a1d:98efa87d6743299fed0e836d90632d74e9954087 | CLEAN (1 MINOR: T063/T064 red by mutation, disclosed); Verify: `terminal_only_doc` 2 passed; `check-user-guide-updated.sh` ok (9 user-facing paths, 1 page) with `CHANGE_TITLE` set |
 | T065 visual pass (live claude 2.1.310, Xvfb + tiny-skia) | — | 9e21bda4 | PASS B3 (both commands to their first permission request, SC-007), B6 (offer, terminal with the held-queue line, back with the marker and the queue on hold, draft kept, same conversation), B7 (confirmation names the work; two windows follow); FAIL → fixed: a switch's command went out without its `/` and the daemon refused it (9e21bda4); after the fix `/mcp` was not typed because Claude Code asked to trust the scratch folder (938's first-prompt rule) — not seen typed. NOT RUN: B8 Copilot (no CLI; unit tests), B8 sandbox (no container runtime), B9 (Linux only), the `/login` card (needs a signed-out CLI). `visual-pass/m9-record.md`, 16 crops |
 | Review A M9 (scoped, sonnet, claude -p) | 2 | b135d83a39982b5f3ad479473826238fdfb3b04c:751150ca9977f7708fea767b9fd1c09919e52359 | CLEAN (F1–F3, F5 fixes hold; F4, F6–F8 declines stand; the `wire_command` fix checked) |
+| Full gate M9 run 1 | — | 751150ca + fmt | `split-gate.sh` (disk): fmt, clippy, core and daemon green; client chunk 160 red: `root_is_routing_only` (the root reducer's new `SwitchDismissed` arm decided) — moved into the feature (f38301f3) |
+| Full gate M9 run 2 | — | f38301f3 | `split-gate.sh`: green (ALL_GREEN) |
 
 ## Declined review findings
 
@@ -129,7 +131,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+**M9 done.** T061–T064 at `98efa87d`, the live pass's fix (a switch's command with its `/`) and
+review A's fixes at `9e21bda4`, the root-reducer fix at `f38301f3`. The full gate is green on
+`f38301f3` (`split-gate.sh`). Review A ran two rounds and ended clean; review B was clean. T065
+covered B3, B6 and B7 live in both themes (`visual-pass/m9-record.md`); its gaps are listed under
+*Follow-ups*. The PR title and body are in `$SCRATCHPAD/943-M9/`; the orchestrator opens the PR. Next: the close
+unit.
 
 ## Open escalation
 
