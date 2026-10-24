@@ -362,7 +362,7 @@ focus animation) works on the same file in parallel, so stay out of the focus-ri
   - `docs/user-guide/overview.md` describes the meta line ("Issue #1117 fix/1117 · 1 session running"), the NOW label and the progress caption, and drops the counts line under rows.
 
   Done when `scripts/gate.sh` is green.
-- [ ] T058 Visual pass (SC-006): re-run `bugs/BUG-1298/render_probe.rs`, `shot.js` and `side.py` at `PROBE_WIDTH` 235 and 280 (design at the same widths: set the viewport so `.card` is that wide), in light and dark. Save the images as `bugs/BUG-1298/fixed-vs-design-*.png` and record, per D1–D19, matched or the reason it differs in `bugs/BUG-1298/visual-pass.md`. Done when D1–D19 all read matched, or are accepted as FR-027 exceptions.
+- [x] T058 Visual pass (SC-006): re-run `bugs/BUG-1298/render_probe.rs`, `shot.js` and `side.py` at `PROBE_WIDTH` 235 and 280 (design at the same widths: set the viewport so `.card` is that wide), in light and dark. Save the images as `bugs/BUG-1298/fixed-vs-design-*.png` and record, per D1–D19, matched or the reason it differs in `bugs/BUG-1298/visual-pass.md`. Done when D1–D19 all read matched, or are accepted as FR-027 exceptions.
 
 ### M5 — Cards match the Overview Card Redesign mockup (BUG-1298)
 
