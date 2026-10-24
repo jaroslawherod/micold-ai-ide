@@ -733,6 +733,12 @@ fn request_titles(app: &mut App, dirs: &[String]) -> bool {
     true
 }
 
+/// Whether an issue title can be read now: the GitHub issues switch is on and the window has a
+/// route to a daemon (feature 1126: the header asks again when this becomes true).
+pub fn titles_readable(app: &App) -> bool {
+    app.core.settings.github_issues_enabled && has_route(app)
+}
+
 /// Whether the window has a route to a daemon with an outbox, which [`send_op`] needs.
 fn has_route(app: &App) -> bool {
     let binding = app.active_binding();

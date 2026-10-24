@@ -477,11 +477,14 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 
     let link_before = LinkFocus::of(app);
     let header_before = app.core.changes.header.entry.clone();
+    let titles_were_readable = shell::issues::titles_readable(app);
     let task = update_inner(app, message);
     // Feature 1126, R3/R6: the header follows the shown location after any message, including one
-    // the shell applied itself, and a newly followed worktree's issue title is read.
+    // the shell applied itself, and a newly followed worktree's issue title is read — or read once
+    // titles become readable (the switch arrives, a daemon route opens) while it is shown.
     app.core.follow_header();
-    if app.core.changes.header.entry != header_before {
+    let became_readable = !titles_were_readable && shell::issues::titles_readable(app);
+    if app.core.changes.header.entry != header_before || became_readable {
         if let Some((_, SessionLocation::Worktree(dir))) = app.core.changes.header.entry.clone() {
             shell::issues::on_header_followed(app, &dir);
         }

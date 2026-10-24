@@ -25,3 +25,11 @@ Append only.
 | T016 (showcase) | the atoms section poses a glyph-led chip and one cut under a ceiling | structural | `showcase_completeness` (gate) |
 | T019 | user guide *The header above the terminal* | docs | — |
 | T020 | visual pass B1 (header), B8, B9 (header), B12 | — | `visual-pass.md` |
+
+## M1 review A round 1 fix (F1)
+
+- Red: `the_header_reads_its_title_once_titles_become_readable` with the "became readable" trigger
+  left out: `cargo test -p micold-client --bin micold-ai-ide -- the_header_reads_its`: `the shown
+  worktree's title is asked for once left: 0 right: 1`.
+- Green: the shell asks again when titles become readable while a worktree is shown;
+  `-- issue_source`: 63 passed.

@@ -1409,6 +1409,14 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  by its own unit tests.",
     },
     Exemption {
+        module: "cdk/keyed.rs",
+        component: "Keyed",
+        reason: "a behaviour-layer row or column with no appearance: it lays its children out as \
+                 iced's own row or column does and only keeps each child's widget state with its \
+                 key when the list changes (feature 1126, R10). The transcript's entries are drawn \
+                 through it, and its rules are held by its own unit tests.",
+    },
+    Exemption {
         module: "cdk/reflow.rs",
         component: "Reflow",
         reason: "a layout-only wrapper with no appearance: it measures a trailing cluster and \
