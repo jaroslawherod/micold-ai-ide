@@ -143,6 +143,7 @@ fn an_empty_query_lists_everything_grouped_by_kind_then_by_name() {
 /// so does its full name.
 fn assert_sc_002(list: &CommandList, what: &str) {
     let all: Vec<&str> = list.commands().iter().map(|c| c.name.as_str()).collect();
+    let mut checked = 0;
     for name in &all {
         let first = |query: &str| names(list, query).into_iter().next();
         assert_eq!(
@@ -166,8 +167,14 @@ fn assert_sc_002(list: &CommandList, what: &str) {
                 "{what}: unique prefix {:?} of {name}",
                 &name[..n]
             );
+            checked += 1;
         }
     }
+    assert!(
+        checked > 0,
+        "{what}: no name had a unique prefix to check ({} names)",
+        all.len()
+    );
 }
 
 #[test]

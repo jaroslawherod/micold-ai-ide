@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Draft
+**Status**: Closed 2026-10-24 — shipped in PRs #1237 (design), #1239 (M1), #1241 (M2), #1244 (M3), #1250 (M4), #1252 (M5), #1257 (M6), #1265 (M7), #1313 (M8), #1321 (M9)
 
 **Input**: GitHub issue #943 "Structured session: slash commands, model switching and PTY
 fallback". "Part of the structured-session (stream-json) UI epic. Keeps the PTY/TUI session mode as
