@@ -2133,3 +2133,253 @@ fn a_browsed_path_missing_from_the_other_source_says_so() {
     };
     assert_eq!(message, "This file does not exist in this version");
 }
+
+// Feature 1272, M2: the source control in the reducer (data-model §8, §9; contract §2).
+
+#[path = "support/source_menu.rs"]
+mod drive;
+
+mod source_menu {
+    use super::*;
+    use micold_client::features::changes::SourceMenu;
+    use micold_core::review::source_menu::{Kind, Stop};
+    use micold_core::typeahead::Direction;
+
+    use super::drive::{highlight, highlighted, menu, menu_label, pick, stops, view};
+
+    fn two_listed() -> State {
+        let mut state = opened(true);
+        listed(
+            &mut state,
+            vec![pr(7, BranchPrState::Open), pr(8, BranchPrState::Open)],
+        );
+        state
+    }
+
+    /// FR-002, data-model §9. Opening highlights the shown source's stop; toggling again closes.
+    #[test]
+    fn toggling_opens_on_the_shown_source_and_closes_again() {
+        let mut state = two_listed();
+        assert_eq!(menu(&state), SourceMenu::default(), "closed at open");
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        assert!(menu(&state).open);
+        assert_eq!(highlighted(&state), Some(Stop::WorkingTree));
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        assert_eq!(menu(&state), SourceMenu::default());
+
+        chosen(&mut state, 8);
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        assert_eq!(highlighted(&state), Some(Stop::PullRequest(8)));
+    }
+
+    /// FR-011, US1 s6. `Esc` or a click outside closes the list and leaves the source.
+    #[test]
+    fn dismissing_closes_the_list_and_keeps_the_source() {
+        let mut state = two_listed();
+        chosen(&mut state, 7);
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        changes::update(&mut state, Msg::SourceMenuMoved(Direction::Prev));
+        let before = source(&state).clone();
+        let effect = changes::update(&mut state, Msg::SourceMenuDismissed);
+        assert_eq!(effect, Effect::None);
+        assert_eq!(menu(&state), SourceMenu::default());
+        assert_eq!(source(&state), &before);
+    }
+
+    /// FR-011, R7. The arrows walk the stops in row order and stop at either end.
+    #[test]
+    fn moving_walks_the_stops_in_order_and_stops_at_the_ends() {
+        let mut state = two_listed();
+        changes::update(&mut state, Msg::SourceMenuMoved(Direction::Next));
+        assert_eq!(
+            menu(&state),
+            SourceMenu::default(),
+            "a closed list does not move"
+        );
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        changes::update(&mut state, Msg::SourceMenuMoved(Direction::Prev));
+        assert_eq!(highlighted(&state), Some(Stop::WorkingTree));
+        let mut walked = vec![];
+        for _ in 0..7 {
+            changes::update(&mut state, Msg::SourceMenuMoved(Direction::Next));
+            walked.extend(highlighted(&state));
+        }
+        assert_eq!(
+            walked,
+            [
+                Stop::Kind(Kind::Committed),
+                Stop::Kind(Kind::Uncommitted),
+                Stop::PullRequest(7),
+                Stop::PullRequest(8),
+                Stop::Files,
+                Stop::Files,
+                Stop::Files,
+            ]
+        );
+    }
+
+    /// R7, contract §2. On the Default entry the arrows land on the disabled Committed chip like any
+    /// other stop, and taking it does nothing; neither does a pick with the list closed.
+    #[test]
+    fn a_disabled_stop_or_no_highlight_takes_nothing() {
+        let mut state = opened(true);
+        changes::update(
+            &mut state,
+            Msg::Opened {
+                project: project(),
+                entry: SessionLocation::Default,
+            },
+        );
+        let closed = state.clone();
+        assert_eq!(
+            changes::update(&mut state, Msg::SourceMenuPicked),
+            Effect::None
+        );
+        assert_eq!(state, closed, "no highlight: nothing happens");
+
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        changes::update(&mut state, Msg::SourceMenuMoved(Direction::Next));
+        assert_eq!(highlighted(&state), Some(Stop::Kind(Kind::Committed)));
+        assert_eq!(stops(&state)[1], (Stop::Kind(Kind::Committed), false));
+        let before = state.clone();
+        assert_eq!(
+            changes::update(&mut state, Msg::SourceMenuPicked),
+            Effect::None
+        );
+        assert_eq!(state, before, "a disabled stop changes nothing");
+    }
+
+    /// FR-006, US1 s3–s4. A pick through the control is the same as `SourceChosen`: the same read,
+    /// PR header and per-entry memory, and the list closes.
+    #[test]
+    fn picking_a_source_is_choosing_it() {
+        let mut through_menu = two_listed();
+        let mut direct = two_listed();
+        let effect = pick(&mut through_menu, Stop::PullRequest(8));
+        assert_eq!(
+            effect,
+            changes::update(&mut direct, Msg::SourceChosen(Some(8)))
+        );
+        assert_eq!(through_menu, direct, "list closed, everything else alike");
+        assert!(matches!(source(&through_menu), Source::PullRequest(p) if p.number == 8));
+        assert_eq!(menu_label(&through_menu), "#8 · title 8");
+        assert!(through_menu.remembered.values().any(|n| *n == 8));
+
+        let effect = pick(&mut through_menu, Stop::WorkingTree);
+        assert_eq!(
+            effect,
+            changes::update(&mut direct, Msg::SourceChosen(None))
+        );
+        assert_eq!(through_menu, direct);
+        assert_eq!(source(&through_menu), &Source::Changes);
+        assert_eq!(pr_header(view(&through_menu)), None);
+        assert_eq!(menu_label(&through_menu), "Working tree");
+    }
+
+    /// Data-model §9. `SourceChosen` from anywhere else (a row, the PR header) closes an open list.
+    #[test]
+    fn choosing_a_source_directly_closes_an_open_list() {
+        let mut state = two_listed();
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        changes::update(&mut state, Msg::SourceChosen(Some(7)));
+        assert_eq!(menu(&state), SourceMenu::default());
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        changes::update(&mut state, Msg::SourceChosen(Some(7)));
+        assert_eq!(
+            menu(&state),
+            SourceMenu::default(),
+            "even when nothing changes"
+        );
+    }
+
+    /// FR-006. A refresh keeps the list open and the highlight on its pull request; a shown pull
+    /// request that left the list falls back to the working tree and the label says so.
+    #[test]
+    fn a_refresh_keeps_the_list_open_and_re_seats_the_highlight() {
+        let mut state = two_listed();
+        chosen(&mut state, 8);
+        highlight(&mut state, Stop::PullRequest(8));
+        let refreshed = |state: &mut State, prs| {
+            let seq = seq_of(wanted(state, Some("feat/a")));
+            changes::update(
+                state,
+                Msg::PullRequestsRead {
+                    seq,
+                    read_at: 3,
+                    result: Ok(prs),
+                },
+            );
+        };
+        refreshed(
+            &mut state,
+            vec![
+                pr(9, BranchPrState::Open),
+                pr(7, BranchPrState::Open),
+                pr(8, BranchPrState::Open),
+            ],
+        );
+        assert!(menu(&state).open);
+        assert_eq!(highlighted(&state), Some(Stop::PullRequest(8)));
+        assert_eq!(menu_label(&state), "#8 · title 8");
+
+        refreshed(&mut state, vec![pr(7, BranchPrState::Open)]);
+        assert!(menu(&state).open);
+        let at = menu(&state).highlight.expect("still highlighted");
+        assert!(at < stops(&state).len(), "re-seated onto the shorter list");
+        assert_eq!(source(&state), &Source::Changes);
+        assert_eq!(menu_label(&state), "Working tree");
+    }
+
+    /// US1 s5. Previous/next in the PR header changes the shown pull request and the label together.
+    #[test]
+    fn stepping_changes_the_label() {
+        let mut state = two_listed();
+        chosen(&mut state, 7);
+        assert_eq!(menu_label(&state), "#7 · title 7");
+        let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Next));
+        diff_seq(effect, 8);
+        assert_eq!(menu_label(&state), "#8 · title 8");
+    }
+
+    /// FR-006. Two picks in a row: the last wins, and the first one's answer is dropped.
+    #[test]
+    fn two_picks_in_a_row_the_last_wins() {
+        let mut state = two_listed();
+        let first = diff_seq(pick(&mut state, Stop::PullRequest(7)), 7);
+        diff_seq(pick(&mut state, Stop::PullRequest(8)), 8);
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq: first,
+                number: 7,
+                result: Ok(split_pr_diff(DIFF)),
+            },
+        );
+        assert!(matches!(source(&state), Source::PullRequest(p) if p.number == 8));
+        assert_eq!(menu_label(&state), "#8 · title 8");
+    }
+
+    /// Data-model §8. Opening a view, of this entry or another, starts with the list closed.
+    #[test]
+    fn opening_a_view_resets_the_control() {
+        let mut state = two_listed();
+        highlight(&mut state, Stop::PullRequest(7));
+        changes::update(
+            &mut state,
+            Msg::Opened {
+                project: project(),
+                entry: SessionLocation::Worktree("feat-b".into()),
+            },
+        );
+        assert_eq!(menu(&state), SourceMenu::default());
+        highlight(&mut state, Stop::Files);
+        changes::update(
+            &mut state,
+            Msg::Opened {
+                project: project(),
+                entry: worktree(),
+            },
+        );
+        assert_eq!(menu(&state), SourceMenu::default());
+    }
+}

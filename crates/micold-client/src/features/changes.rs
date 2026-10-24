@@ -29,12 +29,13 @@ use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, Shaped
 use micold_core::review::pr_diff::PrDiff;
 use micold_core::review::reference::{self, Reference};
 use micold_core::review::reply::{self, CARD_CHARS};
+use micold_core::review::source_menu::{self, MenuInput, Shown, Stop};
 use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::review_tabs::{EntryKey, Opened, ReviewTabs};
 use micold_core::session::{SessionId, SessionLocation};
 use micold_core::settings::DiffLayout;
 use micold_core::tokens::Rgb;
-use micold_core::typeahead::{rank, Query};
+use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Query};
 
 /// The note beside the Default entry's unavailable Committed toggle (L1, US1 s9), worded in core.
 pub use micold_core::review::source_menu::DEFAULT_ENTRY_NOTE;
@@ -133,6 +134,49 @@ pub fn section(view: &OpenView, enabled: bool, now: u64) -> PrSection<'_> {
         (None, PrList::Loading { .. }) => PrSection::Loading,
         (None, PrList::Unavailable { .. }) => PrSection::Unavailable,
         (None, _) => PrSection::Absent,
+    }
+}
+
+/// The review source control's open state (feature 1272, data-model §8): closed when a view
+/// opens. `highlight` indexes [`source_menu_stops`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SourceMenu {
+    /// The list is open.
+    pub open: bool,
+    /// The keyboard's stop, while open.
+    pub highlight: Option<usize>,
+}
+
+/// What the source control is decided from, for the view at `now` (Unix seconds); `enabled` is
+/// the PR status setting (data-model §3, contract §2).
+pub fn source_menu_input(view: &OpenView, enabled: bool, now: u64) -> MenuInput<'_> {
+    menu_input(view, enabled, Some(now))
+}
+
+/// Where the source control's keyboard stops, for the reducer, which has no clock: the stale mark
+/// is no stop, so the stops are the same at every `now` (data-model §3).
+pub fn source_menu_stops(view: &OpenView, enabled: bool) -> Vec<(Stop, bool)> {
+    source_menu::stops(&source_menu::rows(&menu_input(view, enabled, None)))
+}
+
+/// The one builder of [`MenuInput`]: `now` decides the stale mark, and `None` never marks it.
+fn menu_input(view: &OpenView, enabled: bool, now: Option<u64>) -> MenuInput<'_> {
+    let mut prs = section(view, enabled, now.unwrap_or_default());
+    if let (PrSection::List { stale, .. }, None) = (&mut prs, now) {
+        *stale = false;
+    }
+    MenuInput {
+        shown: match &view.source {
+            Source::Changes => Shown::WorkingTree,
+            Source::PullRequest(pr) => Shown::PullRequest {
+                number: pr.number,
+                title: listed_pull_request(view, pr.number).map(|listed| listed.title.as_str()),
+            },
+        },
+        files_on: view.files.shown,
+        toggles: view.toggles,
+        committed_available: committed_available(view),
+        prs,
     }
 }
 
@@ -367,6 +411,8 @@ pub struct OpenView {
     pub stack: BrowseStack,
     /// The file tree and path picker.
     pub files: FilesPane,
+    /// The review source control (feature 1272, data-model §8).
+    pub source_menu: SourceMenu,
     /// A line saying a followed reference named no file of the repository (FR-012); cleared by
     /// the next message.
     pub notice: Option<&'static str>,
@@ -1406,6 +1452,15 @@ pub enum Msg {
     /// A row of the pull request section was pressed: `Some(number)` for a pull request, `None`
     /// for "Working tree" (FR-004, FR-005).
     SourceChosen(Option<u64>),
+    /// The source control's trigger was pressed (or `Enter`/`Space` on it): its list opens on the
+    /// shown source, or closes (feature 1272, data-model §9).
+    SourceMenuToggled,
+    /// `Esc`, `Tab` or a press outside the open list: it closes and the source stays (FR-011).
+    SourceMenuDismissed,
+    /// An arrow key in the open list moved its highlight.
+    SourceMenuMoved(Direction),
+    /// `Enter` in the open list, or a press on a row: the highlighted stop is taken.
+    SourceMenuPicked,
     /// Previous or next was pressed: the adjacent listed pull request is chosen as if its row were
     /// pressed; nothing at an end, or while the working tree is shown (feature 1003, FR-006).
     PullRequestStepped(Step),
@@ -1801,6 +1856,7 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         browse: None,
         stack: BrowseStack::default(),
         files: FilesPane::default(),
+        source_menu: SourceMenu::default(),
         notice: None,
     }
 }
@@ -1947,6 +2003,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
+            // Taken before the list changes under it.
+            let highlighted = highlighted_stop(view, state.pr_enabled);
             let (again, last) = match &mut view.pull_requests {
                 PrList::Loading {
                     seq: s,
@@ -1972,27 +2030,79 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 }
             };
             let restored = numbers.and_then(|numbers| reconcile_source(state, &numbers, again));
+            reseat_highlight(state, highlighted);
             if again {
                 request_pull_requests(state)
             } else {
                 restored.unwrap_or(Effect::None)
             }
         }
-        Msg::SourceChosen(None) => {
-            let Some(view) = state.tabs.shown_view_mut() else {
+        Msg::SourceMenuToggled => {
+            let enabled = state.pr_enabled;
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.source_menu = if view.source_menu.open {
+                    SourceMenu::default()
+                } else {
+                    let chosen = match &view.source {
+                        Source::Changes => Stop::WorkingTree,
+                        Source::PullRequest(pr) => Stop::PullRequest(pr.number),
+                    };
+                    let at = source_menu_stops(view, enabled)
+                        .iter()
+                        .position(|(stop, _)| *stop == chosen);
+                    SourceMenu {
+                        open: true,
+                        highlight: at.or(Some(0)),
+                    }
+                };
+            }
+            Effect::None
+        }
+        Msg::SourceMenuDismissed => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.source_menu = SourceMenu::default();
+            }
+            Effect::None
+        }
+        Msg::SourceMenuMoved(direction) => {
+            let enabled = state.pr_enabled;
+            if let Some(view) = state.tabs.shown_view_mut().filter(|v| v.source_menu.open) {
+                let stops = source_menu_stops(view, enabled).len();
+                view.source_menu.highlight =
+                    move_highlight(view.source_menu.highlight, direction, stops);
+            }
+            Effect::None
+        }
+        Msg::SourceMenuPicked => {
+            let Some(view) = state.tabs.shown_view_mut().filter(|v| v.source_menu.open) else {
                 return Effect::None;
             };
-            if view.source == Source::Changes {
+            let Some((stop, true)) = highlighted_stop(view, state.pr_enabled) else {
                 return Effect::None;
+            };
+            if !stop.keeps_open() {
+                view.source_menu = SourceMenu::default();
             }
-            view.source = Source::Changes;
-            state
-                .remembered
-                .remove(&(view.project.clone(), view.entry.clone()));
-            reset_diff_pane(view);
+            // Every pick goes through the message it stands for, so 1003 and 1150 behaviour has
+            // one implementation (contract §2).
+            apply(
+                state,
+                match stop {
+                    Stop::WorkingTree => Msg::SourceChosen(None),
+                    Stop::Kind(source_menu::Kind::Committed) => Msg::CommittedToggled,
+                    Stop::Kind(source_menu::Kind::Uncommitted) => Msg::UncommittedToggled,
+                    Stop::PullRequest(number) => Msg::SourceChosen(Some(number)),
+                    Stop::Files => Msg::FilesPaneToggled,
+                },
+            )
+        }
+        Msg::SourceChosen(None) => {
+            close_source_menu(state);
+            show_working_tree(state);
             Effect::None
         }
         Msg::SourceChosen(Some(number)) => {
+            close_source_menu(state);
             let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
@@ -2096,17 +2206,21 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::CommittedToggled => {
+            if !state.tabs.shown_view().is_some_and(committed_available) {
+                return Effect::None;
+            }
+            // The chips belong to the working tree: one changed while a pull request is shown
+            // shows the working tree with the new kinds (R4).
+            show_working_tree(state);
             let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
-            if !committed_available(view) {
-                return Effect::None;
-            }
             view.toggles.committed = !view.toggles.committed;
             view.panel.hidden = None;
             request_read(state)
         }
         Msg::UncommittedToggled => {
+            show_working_tree(state);
             let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
@@ -2201,6 +2315,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::FilesPaneToggled => {
+            close_source_menu(state);
             let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
@@ -3443,6 +3558,50 @@ fn reset_diff_pane(view: &mut OpenView) {
     view.stack.clear();
     view.diff_offset = 0;
     view.slot_heights.clear();
+}
+
+/// Show the entry's own changes in place of a pull request, forgetting the entry's remembered
+/// pull request; nothing when they are shown already (1003, R4).
+fn show_working_tree(state: &mut State) {
+    let Some(view) = state.tabs.shown_view_mut() else {
+        return;
+    };
+    if view.source == Source::Changes {
+        return;
+    }
+    view.source = Source::Changes;
+    state
+        .remembered
+        .remove(&(view.project.clone(), view.entry.clone()));
+    reset_diff_pane(view);
+}
+
+/// Close the source control's list, if a view is open (data-model §9).
+fn close_source_menu(state: &mut State) {
+    if let Some(view) = state.tabs.shown_view_mut() {
+        view.source_menu = SourceMenu::default();
+    }
+}
+
+/// The source control's highlighted stop and whether taking it does something; `None` while
+/// nothing is highlighted.
+fn highlighted_stop(view: &OpenView, enabled: bool) -> Option<(Stop, bool)> {
+    let at = view.source_menu.highlight?;
+    source_menu_stops(view, enabled).get(at).copied()
+}
+
+/// Re-seat an open list's highlight after its pull requests were read again: on the stop it was
+/// on when that is still listed (a newer pull request shifts the rows), else with
+/// [`clamp_highlight`].
+fn reseat_highlight(state: &mut State, was: Option<(Stop, bool)>) {
+    let enabled = state.pr_enabled;
+    let Some(view) = state.tabs.shown_view_mut().filter(|v| v.source_menu.open) else {
+        return;
+    };
+    let stops = source_menu_stops(view, enabled);
+    let kept = was.and_then(|(stop, _)| stops.iter().position(|(s, _)| *s == stop));
+    view.source_menu.highlight =
+        kept.or_else(|| clamp_highlight(view.source_menu.highlight, stops.len()));
 }
 
 /// The listed pull request `number`, from the list the view shows.
