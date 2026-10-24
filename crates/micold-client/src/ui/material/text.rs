@@ -86,19 +86,31 @@ pub enum TypeRole {
     /// slot holds the activity dot and only that (BUG-005), and its name is already tinted by
     /// lifecycle.
     SidebarSessionCurrent,
-    /// An Overview card's title (feature 1120, FR-004): 17/24 at weight 500, a card-scoped role
-    /// declared off the Material scale in `typography::SCOPED` (R10).
+    /// An Overview card's title (feature 1120, FR-004): 17/22 at weight 600, a card-scoped role
+    /// declared off the Material scale in `typography::SCOPED` (R10, BUG-1298 FR-022).
     CardTitle,
+    /// An Overview card's 13 px semibold words: the state word, the issue link, the status words
+    /// that say something is wrong (BUG-1298).
+    CardStrong,
+    /// An Overview card's type word in its header: 13 px at weight 500 (BUG-1298 FR-022).
+    CardType,
+    /// An Overview card's 13 px small text: branch, numbers, caption, status words (BUG-1298).
+    CardSmall,
+    /// An Overview card's 12 px semibold labels: "NOW" and the pull request pills (BUG-1298).
+    CardTag,
 }
 
 /// The embedded Roboto faces. Registered once at startup in `main` so the application looks the
 /// same on every platform rather than inheriting the OS UI font (FR-008); see
 /// `assets/fonts/PROVENANCE.md`. Weight 400 and 500 are the only weights the Material 3 type scale
-/// specifies, which is why exactly two static instances ship.
+/// specifies; the Overview card's scoped roles add weight 600 (BUG-1298), the third static instance.
 pub const ROBOTO_REGULAR_BYTES: &[u8] =
     include_bytes!("../../../../../assets/fonts/Roboto-Regular.ttf");
 pub const ROBOTO_MEDIUM_BYTES: &[u8] =
     include_bytes!("../../../../../assets/fonts/Roboto-Medium.ttf");
+/// Roboto at weight 600, for the Overview card's semibold words (BUG-1298 FR-022, FR-024–FR-026).
+pub const ROBOTO_SEMIBOLD_BYTES: &[u8] =
+    include_bytes!("../../../../../assets/fonts/Roboto-SemiBold.ttf");
 
 /// The family both shipped faces belong to (asserted by `tests/roboto_font.rs`). The Medium face
 /// advertises `Roboto Medium` in its legacy family name and `Roboto` as its typographic family, so
@@ -136,12 +148,16 @@ impl TypeRole {
             // that enumerate it, to say something the scale already says.
             TypeRole::SidebarSessionCurrent => typography::LABEL_MEDIUM,
             TypeRole::CardTitle => typography::OVERVIEW_CARD_TITLE,
+            TypeRole::CardStrong => typography::OVERVIEW_CARD_STRONG,
+            TypeRole::CardType => typography::OVERVIEW_CARD_TYPE,
+            TypeRole::CardSmall => typography::OVERVIEW_CARD_SMALL,
+            TypeRole::CardTag => typography::OVERVIEW_CARD_TAG,
         }
     }
 
     /// Every role a call site can name, so a test or the showcase can enumerate them without
     /// restating the list (and drifting from it).
-    pub const ALL: [TypeRole; 13] = [
+    pub const ALL: [TypeRole; 17] = [
         TypeRole::Display,
         TypeRole::Headline,
         TypeRole::Title,
@@ -155,6 +171,10 @@ impl TypeRole {
         TypeRole::SidebarSession,
         TypeRole::SidebarSessionCurrent,
         TypeRole::CardTitle,
+        TypeRole::CardStrong,
+        TypeRole::CardType,
+        TypeRole::CardSmall,
+        TypeRole::CardTag,
     ];
 
     /// The role's name as the enum spells it — for the showcase's per-role labels and for test
@@ -174,6 +194,10 @@ impl TypeRole {
             TypeRole::SidebarSession => "SidebarSession",
             TypeRole::SidebarSessionCurrent => "SidebarSessionCurrent",
             TypeRole::CardTitle => "CardTitle",
+            TypeRole::CardStrong => "CardStrong",
+            TypeRole::CardType => "CardType",
+            TypeRole::CardSmall => "CardSmall",
+            TypeRole::CardTag => "CardTag",
         }
     }
 
@@ -184,11 +208,12 @@ impl TypeRole {
 
     /// The font this role is set in — Roboto at the role's weight.
     ///
-    /// Only 400 and 500 occur, and they are the two faces that ship. Anything else would silently
+    /// Only 400, 500 and 600 occur, and they are the three faces that ship. Anything else would silently
     /// resolve to whichever face the matcher considered closest.
     pub fn font(self) -> Font {
         Font {
             weight: match self.resolved().weight {
+                w if w >= 600 => iced::font::Weight::Semibold,
                 w if w >= 500 => iced::font::Weight::Medium,
                 _ => iced::font::Weight::Normal,
             },

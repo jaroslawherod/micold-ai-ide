@@ -22,8 +22,8 @@ pub struct TypeRole {
     /// Line height in dp. Always at least [`size`](Self::size) — multi-line text uses this rather
     /// than the renderer's default spacing (FR-007).
     pub line_height: f32,
-    /// CSS numeric weight. Only 400 and 500 occur: they are the only weights the Material 3 scale
-    /// specifies, and the only two Roboto instances that ship (contract §2.1).
+    /// CSS numeric weight. The Material 3 scale uses only 400 and 500; the Overview card's scoped
+    /// roles add 600 (BUG-1298). Each has its own static Roboto instance (contract §2.1).
     pub weight: u16,
     /// Material's tracking, in dp. **Recorded, never applied** — see the module docs (FR-042).
     pub tracking: f32,
@@ -106,9 +106,32 @@ pub const SIDEBAR: [TypeRole; 3] = [SIDEBAR_NAME, SIDEBAR_SESSION, SIDEBAR_TAG];
 // Unlike the sidebar's aliases, these sit *off* the Material scale on purpose, so they are kept out
 // of [`ALL`] and declared here, in one list the client's mapping test admits by name.
 
-/// The Overview card's title: 17/24 at weight 500. 17 px is between `title_medium` (16) and
-/// `title_large` (22): large enough to lead the card, small enough for two cards a row at 280 px.
-pub const OVERVIEW_CARD_TITLE: TypeRole = role("overview_card_title", 17.0, 24.0, 500, 0.0);
+/// The Overview card's title: 17/22 at weight 600 (BUG-1298 FR-022: the mockup's 17 px, line
+/// height 1.3, semibold). 17 px is between `title_medium` (16) and `title_large` (22): large enough
+/// to lead the card, small enough for two cards a row at 280 px.
+pub const OVERVIEW_CARD_TITLE: TypeRole = role("overview_card_title", 17.0, 22.0, 600, 0.0);
+
+/// The card's 13 px semibold words (BUG-1298 FR-022, FR-024, FR-026): the header's state word, the
+/// issue link and the status words that say something is wrong. The mockup's 0.02 em tracking is
+/// recorded, not applied (FR-042).
+pub const OVERVIEW_CARD_STRONG: TypeRole = role("overview_card_strong", 13.0, 18.0, 600, 0.26);
+
+/// The header's type word: 13 px at weight 500 (BUG-1298 FR-022).
+pub const OVERVIEW_CARD_TYPE: TypeRole = role("overview_card_type", 13.0, 18.0, 500, 0.26);
+
+/// The card's 13 px small text (BUG-1298 FR-023, FR-025, FR-026): the short branch and the pull
+/// request numbers (in the monospace face), the progress caption, the status words, "+N more".
+pub const OVERVIEW_CARD_SMALL: TypeRole = role("overview_card_small", 13.0, 18.0, 400, 0.0);
+
+/// The card's 12 px semibold labels (BUG-1298 FR-025, FR-026): "NOW" and the pull request pills.
+/// The mockup's 0.04 em tracking is recorded, not applied (FR-042).
+pub const OVERVIEW_CARD_TAG: TypeRole = role("overview_card_tag", 12.0, 16.0, 600, 0.48);
 
 /// Every role deliberately outside the scale, for the tests that admit them by name.
-pub const SCOPED: [TypeRole; 1] = [OVERVIEW_CARD_TITLE];
+pub const SCOPED: [TypeRole; 5] = [
+    OVERVIEW_CARD_TITLE,
+    OVERVIEW_CARD_STRONG,
+    OVERVIEW_CARD_TYPE,
+    OVERVIEW_CARD_SMALL,
+    OVERVIEW_CARD_TAG,
+];

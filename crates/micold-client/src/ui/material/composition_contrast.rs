@@ -323,8 +323,9 @@ fn warning_and_success_roles_are_legible_on_their_fills() {
     );
 }
 
-/// Overview cards (feature 1120, T031 — FR-002, FR-003, FR-005, SC-001): in both schemes and the
-/// five states, the header's words and icons read at 4.5:1 on the header, and the title and the
+/// Overview cards (feature 1120, T031 — FR-002, FR-003, FR-005, SC-001; BUG-1298 FR-022): in both
+/// schemes and the five states, the header's words and icons, the type word at 85 % included, read
+/// at 4.5:1 on the header, and the title and the
 /// other body lines at 4.5:1 on the body; the body is one fill for every state, and Idle's grey
 /// header differs from the body and from every coloured header, so Idle stays de-emphasised by its
 /// header alone. The roles come from the card's `palette`, the function the card is drawn with.
@@ -339,6 +340,7 @@ fn an_overview_cards_header_and_body_text_is_legible_on_their_fills() {
             let p = super::overview_card::palette(state, &r);
             for (what, ink, ground) in [
                 ("header text", p.on_header, p.header),
+                ("type word at 85 %", p.type_word, p.header),
                 ("title", p.on_body, p.body),
                 ("body line", p.on_body_variant, p.body),
             ] {
@@ -362,7 +364,10 @@ fn an_overview_cards_header_and_body_text_is_legible_on_their_fills() {
         }
         assert_eq!(idle.header, r.surface_variant, "{scheme:?}: Idle's header");
         assert_eq!(idle.on_header, r.on_surface_variant, "{scheme:?}");
-        assert_eq!(idle.body, r.surface_container_low, "{scheme:?}: the body");
+        assert_eq!(
+            idle.body, r.surface,
+            "{scheme:?}: the body (BUG-1298 FR-021)"
+        );
         assert_ne!(
             idle.header, idle.body,
             "{scheme:?}: Idle's header is a band"
@@ -405,11 +410,12 @@ fn an_overview_cards_issue_link_is_legible_on_its_body() {
     );
 }
 
-/// Overview card pull request rows (feature 1123, T011 — FR-015, research R9): each state's pill
-/// word in `PrMark::on_role` on the solid `Tag` fill in `PrMark::role` (`style::chip_solid`; the
-/// tonal `style::chip` measured 4.41:1 for Open and Merged in the light scheme), the *checks failing* words in `error`, the other words in the body role and the
-/// "+N more" line in the muted body role, on the body bare and under the selected layer, in every
-/// card state and both schemes, at feature 1120 FR-003's 4.5:1.
+/// Overview card pull request rows (feature 1123, T011 — FR-015, research R9; BUG-1298 FR-026):
+/// each state's pill word in its container's on-colour on the tonal pill (`overview_card::pill`,
+/// drawn by `style::chip_solid`), the status words in their tone (*bad* in `error`, *waiting* in
+/// `warning`, *good* in `success`, *plain* muted) and the "+N more" line in the muted body role,
+/// on the body bare and under the selected layer, in every card state and both schemes, at
+/// feature 1120 FR-003's 4.5:1.
 #[test]
 fn an_overview_cards_pull_request_rows_are_legible_on_its_body() {
     use super::PrMark;
@@ -422,13 +428,15 @@ fn an_overview_cards_pull_request_rows_are_legible_on_its_body() {
             let selected = tokens::over(p.on_body, f64::from(tokens::state::SELECTED), p.body);
             for (ground_name, ground) in [("body", p.body), ("body + selected layer", selected)] {
                 let mut pairs: Vec<(String, Rgb, Rgb)> = vec![
-                    ("failing words".into(), r.error, ground),
-                    ("status words".into(), p.on_body, ground),
+                    ("bad words".into(), r.error, ground),
+                    ("waiting words".into(), r.warning, ground),
+                    ("good words".into(), r.success, ground),
+                    ("plain words".into(), p.on_body_variant, ground),
                     ("+N more".into(), p.on_body_variant, ground),
                 ];
                 for mark in [PrMark::Open, PrMark::Draft, PrMark::Merged, PrMark::Closed] {
-                    let chip =
-                        style::chip_solid(mark.role(&r), mark.on_role(&r))(&iced::Theme::Light);
+                    let (fill, on_fill) = super::overview_card::pill(mark, &r);
+                    let chip = style::chip_solid(fill, on_fill)(&iced::Theme::Light);
                     let Some(Background::Color(fill)) = chip.background else {
                         panic!("a pill paints a colour");
                     };

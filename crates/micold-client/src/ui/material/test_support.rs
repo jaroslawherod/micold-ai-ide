@@ -70,6 +70,7 @@ pub fn renderer() -> iced::Renderer {
             .expect("the global font system lock was poisoned");
         fonts.load_font(Cow::Borrowed(super::ROBOTO_REGULAR_BYTES));
         fonts.load_font(Cow::Borrowed(super::ROBOTO_MEDIUM_BYTES));
+        fonts.load_font(Cow::Borrowed(super::ROBOTO_SEMIBOLD_BYTES));
         fonts.load_font(Cow::Borrowed(super::glyph::MATERIAL_SYMBOLS_BYTES));
     });
 

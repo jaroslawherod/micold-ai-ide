@@ -100,7 +100,8 @@ fn the_sidebar_roles_resolve_to_roles_in_the_scale() {
     assert_eq!(typography::SIDEBAR_TAG.name, "label_small");
 }
 
-/// The Overview card's title is a card-scoped role at 17 px (feature 1120, FR-004, R10): off the
+/// The Overview card's title is a card-scoped role at 17 px, weight 600 (feature 1120, FR-004, R10,
+/// BUG-1298 FR-022), as are the card's other off-scale roles: off the
 /// Material scale on purpose, so it is declared in `SCOPED` and kept out of `ALL`, which stays the
 /// fifteen Material roles.
 #[test]
@@ -108,9 +109,20 @@ fn the_overview_card_title_is_a_scoped_role_outside_the_scale() {
     let title = typography::OVERVIEW_CARD_TITLE;
     assert_eq!(
         (title.size, title.line_height, title.weight),
-        (17.0, 24.0, 500)
+        (17.0, 22.0, 600)
     );
-    assert!(typography::SCOPED.contains(&title));
+    for role in typography::SCOPED {
+        assert!(
+            role.line_height >= role.size && [400, 500, 600].contains(&role.weight),
+            "{}: a scoped role keeps a line height and a shipped weight",
+            role.name
+        );
+        assert!(
+            !typography::ALL.iter().any(|r| r.name == role.name),
+            "{} is scoped, not a Material role",
+            role.name
+        );
+    }
     assert!(
         !typography::ALL.iter().any(|r| r.name == title.name),
         "the card title is scoped, not a Material role: `ALL` keeps its fifteen"

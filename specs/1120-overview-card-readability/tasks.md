@@ -329,25 +329,25 @@ focus animation) works on the same file in parallel, so stay out of the focus-ri
   - in `crates/micold-core/src/issue_link.rs` a Jira label is the bare key (FR-024), with that file's tests updated.
 
   Done when `mise run test-core` is green.
-- [ ] T052 [US1] Frame and header in `overview_card.rs` (FR-021, FR-022, FR-027):
+- [X] T052 [US1] Frame and header in `overview_card.rs` (FR-021, FR-022, FR-027):
   - `palette` body is `surface`; the `fill` container gets a 1 px `outline_variant` border;
   - header padding is `[8, 14]`, the state word 13 px / 600, the type word 13 px / 500 at 85 % alpha with no type glyph;
   - the title is weight 600 (`OVERVIEW_CARD_TITLE` token, or a card-scoped role), with `type_role_mapping` updated;
   - the body padding is 12/14/14 with 8 px row gaps.
 
   Add any 13 px role the card needs as a card-scoped role in `crates/micold-core/src/tokens/typography.rs` (`SCOPED`), as R10 did for 17 px. Extend `composition_contrast.rs` to the 85 % type word in all five states and both schemes. Done when T050 (a), (b) and (g) pass and `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card composition_contrast type_role_mapping card_grid` is green.
-- [ ] T053 [US2] Meta line in `collapsed_body` (FR-023, FR-024):
+- [X] T053 [US2] Meta line in `collapsed_body` (FR-023, FR-024):
   - one wrapping line of the issue link (13 px / 600, underlined: extend `TextLink` with an underline and role option if it lacks them), the short branch in the monospace face in `on_body`, and "· " plus the sessions phrase muted;
   - the branch row and the separate sessions line are removed;
   - the link keeps its id, Tab stop, hit area and messages (1122 tests stay green unchanged, apart from geometry asserts about the link's place, which are updated to the new place).
 
   Done when T050 (c) passes and the 1122 link tests are green.
-- [ ] T054 [US2] Activity and progress in `collapsed_body` (FR-025):
+- [X] T054 [US2] Activity and progress in `collapsed_body` (FR-025):
   - "NOW" (12 px, 600, muted) before the activity, which is tinted `on_body` and still clamped to two lines (1121 FR-001);
   - the bar first (6 px, rounded: a thickness option on `ProgressBar`, so other users keep 4 px), then the caption at 13 px, muted.
 
   Done when T050 (d) and (e) pass and `the_progress_row_has_a_bar_only_with_a_ratio` is updated and green.
-- [ ] T055 [US2] Pull request rows in `pull_request_rows` (FR-026):
+- [X] T055 [US2] Pull request rows in `pull_request_rows` (FR-026):
   - the number in the monospace face at 13 px, underlined, in the link colour;
   - a tonal pill mapped in the card (`Open` → `primary_container`/`on_primary_container`, `Merged` → `success_container`/`on_success_container`, `Draft`/`Closed` → `surface_variant`/`on_surface_variant`), leaving `PrMark::role` alone for the sidebar;
   - `CardPrRow.failing` becomes a tone (bad / waiting / good / plain), set in `crates/micold-client/src/ui/overview.rs::pr_rows` from `StatusPhrase`, and the words are drawn at 13 px in error-600 / warning / success / muted;
@@ -355,7 +355,7 @@ focus animation) works on the same file in parallel, so stay out of the focus-ri
   - no counts line when rows are drawn (from T051).
 
   Contrast of each pill and word: 4.5:1 in `composition_contrast.rs`. Done when T050 (f) passes and the 1123 row tests are green with their colour and text expectations updated.
-- [ ] T056 [US1] Expanded body (FR-028): `expanded_body` uses T053's meta line, T054's NOW label and progress block, and T055's rows. It has no separate sessions line and no counts line with rows, and keeps the display name, full branch and directory lines. Done when every `expanded` test in `overview_card.rs` and `card_grid.rs` is green, with geometry asserts updated only where the meta line moved a line.
+- [X] T056 [US1] Expanded body (FR-028): `expanded_body` uses T053's meta line, T054's NOW label and progress block, and T055's rows. It has no separate sessions line and no counts line with rows, and keeps the display name, full branch and directory lines. Done when every `expanded` test in `overview_card.rs` and `card_grid.rs` is green, with geometry asserts updated only where the meta line moved a line.
 - [ ] T057 Showcase, snapshot and guide (FR-027):
   - the showcase's five-state grid (`crates/micold-client/src/showcase/sections/surfaces.rs`) follows the new card, and `showcase_completeness` is green;
   - regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1 … --test layout_snapshot`) and check that the diff moves only Overview rectangles;

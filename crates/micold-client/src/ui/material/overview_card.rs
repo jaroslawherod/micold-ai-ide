@@ -24,7 +24,7 @@ use crate::ui::material::{
 use iced::widget::text::Wrapping;
 use iced::widget::{button, column, container, row, stack, Space};
 use iced::{keyboard, Alignment, Element, Length};
-use micold_core::overview::{CardModel, CardState, LocationType};
+use micold_core::overview::{CardModel, CardState};
 use micold_core::overview_text::{CardText, ExpandedText};
 use micold_core::tokens::{elevation, spacing, state, Rgb, Roles};
 use std::marker::PhantomData;
@@ -42,8 +42,12 @@ pub struct Palette {
     pub header: Rgb,
     /// The header's icons and words.
     pub on_header: Rgb,
-    /// The body's fill, the same in every state.
+    /// The type word: `on_header` at 85 % over the header (BUG-1298 FR-022), see [`type_word`].
+    pub type_word: Rgb,
+    /// The body's fill, the same in every state: the theme's `surface` (BUG-1298 FR-021).
     pub body: Rgb,
+    /// The 1 px frame around the whole card, header included: `outline_variant` (FR-021).
+    pub edge: Rgb,
     /// The title, and the card's ripple, focus and *selected* layers.
     pub on_body: Rgb,
     /// Every body line but the title.
@@ -63,10 +67,23 @@ pub fn palette(state: CardState, r: &Roles) -> Palette {
     Palette {
         header,
         on_header,
-        body: r.surface_container_low,
+        type_word: type_word(on_header, header),
+        body: r.surface,
+        edge: r.outline_variant,
         on_body: r.on_surface,
         on_body_variant: r.on_surface_variant,
     }
+}
+
+/// The header's type word: `on_header` at 85 % over the header (BUG-1298 FR-022), or as little
+/// more opaque as keeps it at FR-003's 4.5:1 where 85 % would not (dark Idle).
+fn type_word(on_header: Rgb, header: Rgb) -> Rgb {
+    use micold_core::tokens::{contrast, over, AA_TEXT};
+    [TYPE_WORD_ALPHA, 0.9, 0.95]
+        .into_iter()
+        .map(|alpha| over(on_header, alpha, header))
+        .find(|ink| contrast(*ink, header) >= AA_TEXT)
+        .unwrap_or(on_header)
 }
 
 /// The icon of a card state.
@@ -80,24 +97,9 @@ pub fn state_icon(state: CardState) -> Icon {
     }
 }
 
-/// The icon of a location type.
-pub fn type_icon(kind: LocationType) -> Icon {
-    match kind {
-        LocationType::Feature => Icon::TypeFeature,
-        LocationType::Bugfix => Icon::TypeBugfix,
-        LocationType::Chore => Icon::TypeChore,
-        LocationType::Other => Icon::TypeOther,
-        LocationType::Included => Icon::TypeIncluded,
-        LocationType::OrphanInvalid => Icon::TypeOrphan,
-        LocationType::ProjectRoot => Icon::ProjectRoot,
-    }
-}
-
 /// The icons and words of the type and state, apart from the layout that places them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Words {
-    /// The type icon.
-    pub type_icon: Icon,
     /// The type's word: the end of the header row, and its tooltip.
     pub type_label: &'static str,
     /// The state icon.
@@ -111,7 +113,6 @@ pub struct Words {
 /// The words of `model`.
 pub fn words(model: &CardModel) -> Words {
     Words {
-        type_icon: type_icon(model.kind),
         type_label: model.kind.label(),
         state_icon: state_icon(model.state),
         state_label: model.state.label(),
@@ -131,8 +132,22 @@ pub struct CardPrRow {
     pub mark: PrMark,
     /// The status words, when one applies.
     pub phrase: Option<String>,
-    /// The words say the checks fail: drawn in the `error` role.
-    pub failing: bool,
+    /// How the words read: their colour and weight (BUG-1298 FR-026).
+    pub tone: PrTone,
+}
+
+/// How a pull request row's status words read (BUG-1298 FR-026), set from the row's
+/// `StatusPhrase` ([`PrTone::of`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrTone {
+    /// Something is wrong: `error`, weight 600.
+    Bad,
+    /// Waiting on checks: `warning`.
+    Waiting,
+    /// The checks pass: `success`.
+    Good,
+    /// Any other words: muted.
+    Plain,
 }
 
 /// What a secondary press becomes, built from the press point in window pixels.
@@ -191,6 +206,22 @@ pub struct OverviewCard<'a, M> {
 
 /// The card's corner radius, shared by its fill and its focus ring.
 const RADIUS: f32 = 12.0;
+
+/// The opacity of the header's type word (BUG-1298 FR-022).
+const TYPE_WORD_ALPHA: f64 = 0.85;
+
+/// The frame's width: 1 px of `outline_variant` around the whole card (BUG-1298 FR-021).
+const EDGE: f32 = 1.0;
+
+/// The header's padding, above and below its words and at its sides (BUG-1298 FR-022).
+const HEADER_PADDING: [f32; 2] = [8.0, 14.0];
+
+/// The body's padding: 12 px above, 14 px at the sides and below (BUG-1298 FR-027).
+const BODY_TOP: f32 = 12.0;
+/// The body's side and bottom padding (FR-027).
+const BODY_SIDE: f32 = 14.0;
+/// The room between the body's rows (FR-027).
+const ROW_GAP: f32 = 8.0;
 
 /// The target outline's width (feature 972, R7).
 pub const TARGET_WIDTH: f32 = 2.0;
@@ -469,38 +500,39 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         let roles = card.roles;
         let p = palette(card.model.state, &roles);
         let w = words(&card.model);
-        // A glyph and its word, in the header's colour, carrying `tooltip`. The word shortens with
-        // an ellipsis when a narrow card leaves it too little room; the state's, laid out first,
-        // keeps its width before the type's gives way.
-        let cluster = |icon: Icon, word: &'static str, tooltip: &'static str| {
-            Tooltip::new(
-                row![
-                    Glyph::<M>::new(icon, TypeRole::Label, roles).tint(p.on_header),
-                    Ellipsized::<M>::at_role_spaced(word, TypeRole::Label, p.on_header).shrink()
-                ]
-                .spacing(spacing::XS)
-                .align_y(Alignment::Center),
-                tooltip,
-                roles,
-            )
-        };
-        let header = container(
+        // The state's glyph and word, semibold in the header's colour, the reason as tooltip; then
+        // the type's word alone, at 85 % (BUG-1298 FR-022). A word shortens with an ellipsis when
+        // a narrow card leaves it too little room; the state's, laid out first, keeps its width
+        // before the type's gives way.
+        let state_cluster = Tooltip::new(
             row![
-                cluster(w.state_icon, w.state_label, w.reason_tooltip),
-                Space::new().width(Length::Fill),
-                cluster(w.type_icon, w.type_label, w.type_label),
+                Glyph::<M>::new(w.state_icon, TypeRole::CardStrong, roles).tint(p.on_header),
+                Ellipsized::<M>::at_role_spaced(w.state_label, TypeRole::CardStrong, p.on_header)
+                    .shrink()
             ]
-            .spacing(spacing::SM)
+            .spacing(spacing::XS)
             .align_y(Alignment::Center),
+            w.reason_tooltip,
+            roles,
+        );
+        let type_word = Tooltip::new(
+            Ellipsized::<M>::at_role_spaced(w.type_label, TypeRole::CardType, p.type_word).shrink(),
+            w.type_label,
+            roles,
+        );
+        let header = container(
+            row![state_cluster, Space::new().width(Length::Fill), type_word]
+                .spacing(spacing::SM)
+                .align_y(Alignment::Center),
         )
         .width(Length::Fill)
-        .padding([spacing::SM, spacing::MD])
+        .padding(HEADER_PADDING)
         .style(move |_| container::Style {
             background: Some(iced::Background::Color(style::color(p.header))),
             border: iced::Border {
                 radius: iced::border::Radius {
-                    top_left: RADIUS,
-                    top_right: RADIUS,
+                    top_left: RADIUS - EDGE,
+                    top_right: RADIUS - EDGE,
                     bottom_right: 0.0,
                     bottom_left: 0.0,
                 },
@@ -519,14 +551,18 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         } else {
             iced::Shadow::default()
         };
+        // The frame (BUG-1298 FR-021): the 1 px edge is the fill's border, and the header and the
+        // body sit inside it, so it runs around the header too.
         let fill = container(column![header, content])
             .width(Length::Fill)
+            .padding(EDGE)
             .style(move |_| container::Style {
                 shadow,
                 background: Some(iced::Background::Color(style::color(p.body))),
                 border: iced::Border {
                     radius: RADIUS.into(),
-                    ..iced::Border::default()
+                    color: style::color(p.edge),
+                    width: EDGE,
                 },
                 ..container::Style::default()
             });
@@ -613,7 +649,8 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
 }
 
 /// The card's issue link (feature 1122, contract U3): `model.issue_link` drawn as a card link
-/// ([`card_link`]), only when [`OverviewCard::on_issue_link`] is set.
+/// ([`card_link`]) at 13 px, semibold and underlined (BUG-1298 FR-024), only when
+/// [`OverviewCard::on_issue_link`] is set.
 fn issue_link<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>) -> Option<Element<'a, M>> {
     let (Some(link), Some(message)) = (&card.model.issue_link, &card.on_issue_link) else {
         return None;
@@ -622,6 +659,10 @@ fn issue_link<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>) -> Option<Element<'
         card,
         link.label.clone(),
         message.clone(),
+        LinkLook {
+            role: TypeRole::CardStrong,
+            monospace: false,
+        },
         card.link_id.clone(),
         card.on_link_keyboard_focus.clone(),
         card.on_link_menu_key.clone(),
@@ -629,15 +670,23 @@ fn issue_link<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>) -> Option<Element<'
     ))
 }
 
-/// One link on the card (feature 1122 U3, feature 1123 U2): `label` as a [`TextLink`] at the body
-/// role publishing `message`, named `id`, taking the pointer on its label only when
-/// `hit_on_label`. A click on it leaves the keyboard where it was (1122 R7); it is a Tab stop only
-/// once its focus reports (`focus`) are wired, and only then does it answer keys: its Menu key
-/// publishes `menu` and its Page keys page the card.
+/// How a card link is set: its role, and whether in the monospace face.
+struct LinkLook {
+    role: TypeRole,
+    monospace: bool,
+}
+
+/// One link on the card (feature 1122 U3, feature 1123 U2): `label` as a [`TextLink`] set as
+/// `look` says, underlined at rest (BUG-1298), publishing `message`, named `id`, taking the
+/// pointer on its label only when `hit_on_label`. A click on it leaves the keyboard where it was
+/// (1122 R7); it is a Tab stop only once its focus reports (`focus`) are wired, and only then does
+/// it answer keys: its Menu key publishes `menu` and its Page keys page the card.
+#[allow(clippy::too_many_arguments)]
 fn card_link<'a, M: Clone + 'a>(
     card: &OverviewCard<'a, M>,
     label: String,
     message: M,
+    look: LinkLook,
     id: Option<iced::advanced::widget::Id>,
     focus: Option<Rc<dyn Fn(bool) -> M + 'a>>,
     menu: Option<M>,
@@ -645,7 +694,9 @@ fn card_link<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let answers_keys = focus.is_some();
     let mut link = TextLink::new(label, message, card.roles)
-        .role(TypeRole::Body)
+        .role(look.role)
+        .monospace(look.monospace)
+        .underlined(true)
         .inline(true)
         .hit_on_label(hit_on_label)
         .focus_on_press(false)
@@ -668,22 +719,23 @@ fn card_link<'a, M: Clone + 'a>(
     link.into()
 }
 
-/// A row's number: a card link publishing [`OverviewCard::on_pr_link`] for it, named by
-/// [`OverviewCard::pr_link_id`], a Tab stop once [`OverviewCard::on_pr_link_keyboard_focus`] is
-/// set (feature 1123, R7), its Menu key [`OverviewCard::on_pr_link_menu`]; plain text without
-/// `on_pr_link`. Its gutter reaches past the 4 px between rows and into the line above, so it
+/// A row's number: a card link in the monospace face at 13 px (BUG-1298 FR-026) publishing
+/// [`OverviewCard::on_pr_link`] for it, named by [`OverviewCard::pr_link_id`], a Tab stop once
+/// [`OverviewCard::on_pr_link_keyboard_focus`] is set (feature 1123, R7), its Menu key
+/// [`OverviewCard::on_pr_link_menu`]; plain monospace text in the link colour without
+/// `on_pr_link`. Its gutter reaches past the room between rows and into the line above, so it
 /// takes the pointer on its label only (review A M2 r1 F2).
-fn pr_number<'a, M: Clone + 'a>(
-    card: &OverviewCard<'a, M>,
-    pr: &CardPrRow,
-    p: Palette,
-) -> Element<'a, M> {
+fn pr_number<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, pr: &CardPrRow) -> Element<'a, M> {
     let number = pr.number;
     match &card.on_pr_link {
         Some(f) => card_link(
             card,
             pr.label.clone(),
             f(number),
+            LinkLook {
+                role: TypeRole::CardSmall,
+                monospace: true,
+            },
             card.pr_link_id.as_ref().map(|id| id(number)),
             card.on_pr_link_keyboard_focus
                 .clone()
@@ -691,70 +743,145 @@ fn pr_number<'a, M: Clone + 'a>(
             card.on_pr_link_menu.as_ref().map(|menu| menu(number)),
             true,
         ),
-        None => Text::new(pr.label.clone(), TypeRole::Body, card.roles)
-            .tint(p.on_body)
+        None => Text::new(pr.label.clone(), TypeRole::CardSmall, card.roles)
+            .monospace()
+            .tint(card.roles.primary)
             .into(),
     }
 }
 
-/// The collapsed card's body, under its header (feature 1120, feature 1121 FR-001).
+/// The room between the meta line's pieces and words: about a space at 14 px.
+const WORD_GAP: f32 = 4.0;
+
+/// The meta line (BUG-1298 FR-023, FR-024): the issue link, the short branch in the monospace
+/// face in the body text colour, then "· " and the sessions phrase, muted. It wraps as running
+/// text does, word by word, and is never cut. With nothing before it the phrase stands alone.
+fn meta_line<'a, M: Clone + 'a>(
+    card: &OverviewCard<'a, M>,
+    text: &CardText,
+    p: Palette,
+) -> Element<'a, M> {
+    let roles = card.roles;
+    let mut pieces: Vec<Element<'a, M>> = Vec::new();
+    if let Some(link) = issue_link(card) {
+        // The mockup's link keeps 4 px more than a space from the branch.
+        pieces.push(
+            container(link)
+                .padding(iced::Padding {
+                    right: WORD_GAP,
+                    ..iced::Padding::ZERO
+                })
+                .into(),
+        );
+    }
+    if let Some(branch) = &text.branch {
+        pieces.push(
+            Text::new(branch.clone(), TypeRole::CardSmall, roles)
+                .monospace()
+                .tint(p.on_body)
+                .wrapping(Wrapping::WordOrGlyph)
+                .into(),
+        );
+    }
+    let sessions = if pieces.is_empty() {
+        micold_core::overview_text::meta_sessions(card.model.sessions, true)
+    } else {
+        text.sessions.clone()
+    };
+    for word in sessions.split(' ') {
+        pieces.push(
+            Text::new(word.to_string(), TypeRole::Body, roles)
+                .tint(p.on_body_variant)
+                .into(),
+        );
+    }
+    iced::widget::Row::with_children(pieces)
+        .spacing(WORD_GAP)
+        .align_y(Alignment::Center)
+        .width(Length::Fill)
+        .wrap()
+        .into()
+}
+
+/// The activity (BUG-1298 FR-025): "NOW" (12 px, semibold, muted) leading its first line, the
+/// activity after it in the body text colour, on at most `lines` lines.
+fn activity_line<'a, M: 'a>(words: String, lines: usize, p: Palette) -> Element<'a, M> {
+    LineClamped::<M>::new(words, TypeRole::Body, lines)
+        .lead("NOW", TypeRole::CardTag, p.on_body_variant)
+        .tint(p.on_body)
+        .width(Length::Fill)
+        .into()
+}
+
+/// The bar's thickness on a card (BUG-1298 FR-025).
+const BAR: f32 = 6.0;
+
+/// The progress block (BUG-1298 FR-025): the 6 px bar when there is a ratio, then 4 px under it
+/// the caption at 13 px, muted.
+fn progress_block<'a, M: 'a>(
+    row: micold_core::overview_text::ProgressRow,
+    roles: Roles,
+    p: Palette,
+) -> Element<'a, M> {
+    let caption = Text::new(row.text, TypeRole::CardSmall, roles).tint(p.on_body_variant);
+    match row.bar {
+        Some(ratio) => column![ProgressBar::new(ratio, roles).thickness(BAR), caption]
+            .spacing(spacing::XS)
+            .into(),
+        None => caption.into(),
+    }
+}
+
+/// The collapsed card's body, under its header (feature 1120, feature 1121 FR-001, BUG-1298):
+/// the title, the meta line, the activity, the progress block, the pull request rows, and the
+/// counts line only without rows.
 fn collapsed_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
     let roles = card.roles;
     let text = CardText::of(&card.model);
     // The title wraps onto three lines and the activity onto two before an ellipsis (feature
-    // 1121, FR-001); the branch stays one line. None of them has a tooltip: the expanded card
-    // shows their full text (feature 1121, FR-004).
-    let mut body = column![LineClamped::<M>::new(text.title, TypeRole::CardTitle, 3)
-        .tint(p.on_body)
-        .width(Length::Fill)]
-    .spacing(spacing::XS);
-    // The branch line (R11): the link at its natural width at the line's end, the short branch
-    // ellipsized into what it leaves; alone in the line's place when there is no branch line.
-    let link = issue_link(card);
-    match (text.branch, link) {
-        (Some(branch), link) => {
-            let branch = Ellipsized::<M>::at_role_spaced(branch, TypeRole::Body, p.on_body_variant);
-            body = match link {
-                Some(link) => body.push(
-                    row![branch, link]
-                        .spacing(spacing::SM)
-                        .align_y(Alignment::Center),
-                ),
-                None => body.push(branch),
-            };
-        }
-        (None, Some(link)) => body = body.push(link),
-        (None, None) => {}
-    }
+    // 1121, FR-001). Neither has a tooltip: the expanded card shows their full text (feature
+    // 1121, FR-004).
+    let mut body = column![
+        LineClamped::<M>::new(text.title.clone(), TypeRole::CardTitle, 3)
+            .tint(p.on_body)
+            .width(Length::Fill)
+    ]
+    .spacing(ROW_GAP);
+    body = body.push(meta_line(card, &text, p));
     if let Some(chip) = status_chip(card) {
         body = body.push(chip);
     }
-    body = body.push(Text::new(text.sessions, TypeRole::Body, roles).tint(p.on_body_variant));
     if let Some(activity) = text.activity {
-        body = body.push(
-            LineClamped::<M>::new(activity, TypeRole::Body, 2)
-                .tint(p.on_body_variant)
-                .width(Length::Fill),
-        );
+        body = body.push(activity_line(activity, 2, p));
     }
     if let Some(row) = text.progress {
-        body = body.push(Text::new(row.text, TypeRole::Body, roles).tint(p.on_body_variant));
-        if let Some(ratio) = row.bar {
-            body = body.push(ProgressBar::new(ratio, roles));
+        body = body.push(progress_block(row, roles, p));
+    }
+    match pull_request_rows(card, p) {
+        Some(rows) => body = body.push(rows),
+        None => {
+            if let Some((words, reason)) = text.prs {
+                let line = Text::new(words, TypeRole::Body, roles).tint(p.on_body_variant);
+                body = body.push(counts_line(line, reason, roles));
+            }
         }
     }
-    if let Some(rows) = pull_request_rows(card, p) {
-        body = body.push(rows);
+    container(body).padding(body_padding()).into()
+}
+
+/// The body's padding: 12 px above, 14 px at the sides and below (BUG-1298 FR-027).
+fn body_padding() -> iced::Padding {
+    iced::Padding {
+        top: BODY_TOP,
+        right: BODY_SIDE,
+        bottom: BODY_SIDE,
+        left: BODY_SIDE,
     }
-    if let Some((words, reason)) = text.prs {
-        let line = Text::new(words, TypeRole::Body, roles).tint(p.on_body_variant);
-        body = body.push(counts_line(line, reason, roles));
-    }
-    container(body).padding(spacing::MD).into()
 }
 
 /// The counts `line`, or the dash with its `reason` as the tooltip (feature 813 FR-004), on the
-/// collapsed and the expanded card alike (feature 1123 FR-007).
+/// collapsed and the expanded card alike (feature 1123 FR-007), only while no rows are drawn
+/// (BUG-1298 FR-026).
 fn counts_line<'a, M: 'a>(
     line: impl Into<Element<'a, M>>,
     reason: Option<String>,
@@ -767,11 +894,50 @@ fn counts_line<'a, M: 'a>(
     }
 }
 
-/// The card's pull request rows and its "+N more" line (feature 1123, research R9), or `None`
-/// without rows. A row is the number at its natural width, the pill (solid, in the state's
-/// `PrMark` role with its on-colour as the word) at its natural width, and the
-/// words in what is left, ellipsized; *checks failing* in `error`, other words in the body role,
-/// "+N more" in the muted body role.
+/// The room between pull request rows (BUG-1298 FR-026).
+const PR_ROW_GAP: f32 = 6.0;
+
+/// A pull request state's tonal pill (BUG-1298 FR-026): its container fill and the word's
+/// on-colour. The sidebar's [`PrMark::role`] is left alone.
+pub(super) fn pill(mark: PrMark, r: &Roles) -> (Rgb, Rgb) {
+    match mark {
+        PrMark::Open => (r.primary_container, r.on_primary_container),
+        PrMark::Merged => (r.success_container, r.on_success_container),
+        // `on_surface`, not `on_surface_variant`: the variant reads at 4.08:1 under a targeted
+        // card's selected layer in the dark scheme.
+        PrMark::Draft | PrMark::Closed => (r.surface_variant, r.on_surface),
+    }
+}
+
+impl PrTone {
+    /// The tone of a row's status phrase: *checks failing*, *changes requested* and *merge
+    /// conflict* are bad, *checks pending* waits, *checks passing* is good, any other is plain.
+    pub fn of(phrase: Option<micold_core::pr_list::StatusPhrase>) -> Self {
+        use micold_core::pr_list::StatusPhrase as S;
+        match phrase {
+            Some(S::ChecksFailing | S::ChangesRequested | S::MergeConflict) => Self::Bad,
+            Some(S::ChecksPending) => Self::Waiting,
+            Some(S::ChecksPassing) => Self::Good,
+            Some(S::Approved) | None => Self::Plain,
+        }
+    }
+
+    /// The words' colour and role: bad in `error` at weight 600, waiting in `warning`, good in
+    /// `success`, plain muted, all at 13 px.
+    fn look(self, r: &Roles, p: Palette) -> (Rgb, TypeRole) {
+        match self {
+            Self::Bad => (r.error, TypeRole::CardStrong),
+            Self::Waiting => (r.warning, TypeRole::CardSmall),
+            Self::Good => (r.success, TypeRole::CardSmall),
+            Self::Plain => (p.on_body_variant, TypeRole::CardSmall),
+        }
+    }
+}
+
+/// The card's pull request rows and its "+N more" line (feature 1123, research R9, BUG-1298
+/// FR-026), or `None` without rows. A row is the number (monospace, underlined, in the link
+/// colour) at its natural width, the tonal pill at its natural width, and the words in what is
+/// left, ellipsized, toned by meaning; "+N more, hover to see" in the muted small role.
 fn pull_request_rows<'a, M: Clone + 'a>(
     card: &OverviewCard<'a, M>,
     p: Palette,
@@ -780,30 +946,31 @@ fn pull_request_rows<'a, M: Clone + 'a>(
         return None;
     }
     let roles = card.roles;
-    let mut lines = column![].spacing(spacing::XS);
+    let mut lines = column![].spacing(PR_ROW_GAP);
     for pr in &card.pr_rows {
+        let (fill, on_fill) = pill(pr.mark, &roles);
         let mut line = row![
-            pr_number(card, pr, p),
-            Tag::<M>::new(pr.mark.word(), pr.mark.role(&roles))
-                .solid(pr.mark.on_role(&roles))
-                .role(TypeRole::Label),
+            pr_number(card, pr),
+            Tag::<M>::new(pr.mark.word(), fill)
+                .solid(on_fill)
+                .role(TypeRole::CardTag),
         ]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);
         if let Some(words) = &pr.phrase {
-            let tint = if pr.failing { roles.error } else { p.on_body };
-            line = line.push(Ellipsized::<M>::at_role_spaced(
-                words.clone(),
-                TypeRole::Body,
-                tint,
-            ));
+            let (tint, role) = pr.tone.look(&roles, p);
+            line = line.push(Ellipsized::<M>::at_role_spaced(words.clone(), role, tint));
         }
         lines = lines.push(line);
     }
     if card.pr_more > 0 {
         lines = lines.push(
-            Text::new(format!("+{} more", card.pr_more), TypeRole::Body, roles)
-                .tint(p.on_body_variant),
+            Text::new(
+                format!("+{} more, hover to see", card.pr_more),
+                TypeRole::CardSmall,
+                roles,
+            )
+            .tint(p.on_body_variant),
         );
     }
     Some(lines.into())
@@ -846,50 +1013,47 @@ fn home() -> Option<&'static std::path::Path> {
 }
 
 /// The expanded card's body, under its header (feature 1121, research R3): the title outside the
-/// inner scrollable, so it stays in view (FR-008), and every other line inside it.
+/// inner scrollable, so it stays in view (FR-008), and every other line inside it. The inner lines
+/// are the collapsed card's, whole (BUG-1298 FR-028): the meta line, the activity after "NOW", the
+/// progress block and the rows, then its own lines, wrapped: the display name when it differs
+/// from the title, the full branch when the title is not the branch, and the directory.
 fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
     let roles = card.roles;
     let full = ExpandedText::of(&card.model, home());
     let text = CardText::of(&card.model);
     let body_line = |words: String| wrapped::<M>(words, TypeRole::Body, p.on_body_variant, roles);
-    let mut rest = column![].spacing(spacing::XS);
-    let link = issue_link(card);
-    // A link that is the body's first row has the room its focus gutter spills into above it, so
-    // the inner scrollable does not clip its ring (feature 1122, review A M2 F4).
-    let link_first = link.is_some() && full.display_name.is_none() && full.branch.is_none();
-    if let Some(name) = full.display_name {
-        rest = rest.push(body_line(name));
-    }
-    // The branch line wraps in full with the link at its end, on its first line (R11); alone in
-    // the line's place when there is no branch line.
-    match (full.branch, link) {
-        (Some(branch), Some(link)) => {
-            rest = rest.push(row![body_line(branch), link].spacing(spacing::SM));
-        }
-        (Some(branch), None) => rest = rest.push(body_line(branch)),
-        (None, Some(link)) => rest = rest.push(link),
-        (None, None) => {}
-    }
-    rest = rest.push(body_line(full.dir));
+    // A link leads the meta line, the body's first row: it has the room its focus gutter spills
+    // into above it, so the inner scrollable does not clip its ring (feature 1122, review A M2 F4).
+    let link_first = card.on_issue_link.is_some() && card.model.issue_link.is_some();
+    let mut rest = column![meta_line(card, &text, p)].spacing(ROW_GAP);
     if let Some(chip) = status_chip(card) {
         rest = rest.push(chip);
     }
-    rest = rest.push(body_line(text.sessions));
     if let Some(activity) = full.activity {
-        rest = rest.push(body_line(activity));
+        rest = rest.push(activity_line(activity, usize::MAX, p));
     }
     if let Some(row) = text.progress {
-        rest = rest.push(body_line(row.text));
-        if let Some(ratio) = row.bar {
-            rest = rest.push(ProgressBar::new(ratio, roles));
+        rest = rest.push(progress_block(row, roles, p));
+    }
+    match pull_request_rows(card, p) {
+        Some(rows) => rest = rest.push(rows),
+        None => {
+            if let Some((words, reason)) = text.prs {
+                rest = rest.push(counts_line(body_line(words), reason, roles));
+            }
         }
     }
-    if let Some(rows) = pull_request_rows(card, p) {
-        rest = rest.push(rows);
+    if let Some(name) = full.display_name {
+        rest = rest.push(body_line(name));
     }
-    if let Some((words, reason)) = text.prs {
-        rest = rest.push(counts_line(body_line(words), reason, roles));
+    // The full branch, unless the meta line already shows it whole (a branch with no short form).
+    if let Some(branch) = full
+        .branch
+        .filter(|branch| text.branch.as_ref() != Some(branch))
+    {
+        rest = rest.push(body_line(branch));
     }
+    rest = rest.push(body_line(full.dir));
     // The card's right edge is the grid's, where the grid's own bar floats when it scrolls (one
     // column, or the last): the inner bar keeps clear of it, taking that strip from the text's
     // right padding, so the text keeps its room (M4 visual re-look r2).
@@ -897,13 +1061,13 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
     let mut scroll = Scrollable::new(
         container(rest).padding(iced::Padding {
             top: if link_first {
-                spacing::XS.max(super::text_link::GUTTER)
+                ROW_GAP.max(super::text_link::GUTTER)
             } else {
-                spacing::XS
+                ROW_GAP
             },
-            right: spacing::MD - clear,
-            bottom: spacing::MD,
-            left: spacing::MD,
+            right: BODY_SIDE - clear,
+            bottom: BODY_SIDE,
+            left: BODY_SIDE,
         }),
         roles,
     );
@@ -924,10 +1088,10 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
             roles
         ))
         .padding(iced::Padding {
-            top: spacing::MD,
-            right: spacing::MD,
+            top: BODY_TOP,
+            right: BODY_SIDE,
             bottom: 0.0,
-            left: spacing::MD,
+            left: BODY_SIDE,
         }),
         container(Element::from(scroll)).padding(iced::Padding {
             right: clear,
@@ -945,7 +1109,7 @@ mod tests {
     use super::*;
     use iced::keyboard::key::Named;
     use iced::{Rectangle, Size};
-    use micold_core::overview::{Activation, CardReason, PrDisplay};
+    use micold_core::overview::{Activation, CardReason, LocationType, PrDisplay};
     use micold_core::session::{SessionId, SessionLocation};
     use micold_core::task_progress::{Phase, Progress, Ratio};
     use micold_core::theme::ColorScheme;
@@ -981,12 +1145,12 @@ mod tests {
         m
     }
 
-    /// How many bars (4 px leaves) the card draws.
+    /// How many bars (6 px leaves, BUG-1298 FR-025) the card draws.
     fn bars(model: &CardModel, width: f32) -> usize {
         let node = super::super::test_support::laid_out(card(model), Size::new(width, 400.0));
         leaves(&node)
             .iter()
-            .filter(|l| (l.height - micold_core::tokens::anatomy::progress::THICKNESS).abs() < 0.01)
+            .filter(|l| (l.height - BAR).abs() < 0.01)
             .count()
     }
 
@@ -996,10 +1160,10 @@ mod tests {
     fn the_progress_row_has_a_bar_only_with_a_ratio() {
         let with = with_progress(Some((6, 10)), Some(Phase::Implement));
         assert_eq!(bars(&with, 280.0), 1);
-        assert!(painted(&with).contains(&"Implement \u{b7} 6/10".to_string()));
+        assert!(painted(&with).contains(&"Implement \u{b7} 6/10 tasks".to_string()));
         let phase_only = with_progress(None, Some(Phase::Pr));
         assert_eq!(bars(&phase_only, 280.0), 0);
-        assert!(painted(&phase_only).contains(&"PR".to_string()));
+        assert!(painted(&phase_only).contains(&"PR phase".to_string()));
         let none = with_progress(None, None);
         assert_eq!(bars(&none, 280.0), 0);
         assert_eq!(
@@ -1064,8 +1228,9 @@ mod tests {
             "neither the full branch nor the display name is shown: {text:?}"
         );
         assert!(
-            text.contains(&"1 session \u{b7} 1 running".to_string()),
-            "{text:?}"
+            text.join(" ")
+                .contains("feat/1120 \u{b7} 1 session running"),
+            "the meta line (BUG-1298 FR-023): {text:?}"
         );
     }
 
@@ -1138,7 +1303,7 @@ mod tests {
                         a.x >= -0.01
                             && a.y >= -0.01
                             && a.x + a.width <= width + 0.01
-                            && a.y + a.height <= node.size().height - spacing::MD + 0.01,
+                            && a.y + a.height <= node.size().height - BODY_SIDE - EDGE + 0.01,
                         "{width}: {a:?} leaves the card's padded box {:?}",
                         node.size()
                     );
@@ -1150,13 +1315,14 @@ mod tests {
         }
     }
 
-    /// FR-015: at every card width a long title, branch and activity end in an ellipsis.
+    /// FR-015: at every card width a long title and activity end in an ellipsis; the meta line's
+    /// branch wraps whole instead (BUG-1298 FR-023, [`the_meta_line_wraps_a_long_branch_whole`]).
     #[test]
-    fn a_long_title_branch_and_activity_end_in_an_ellipsis_at_every_width() {
+    fn a_long_title_and_activity_end_in_an_ellipsis_at_every_width() {
         let m = full(true);
         for width in WIDTHS {
             let text = painted_at(&m, width);
-            for start in ["Adds", "topic-", "Editing"] {
+            for start in ["Adds", "NOW  Editing"] {
                 let line = text
                     .iter()
                     .find(|p| p.content.starts_with(start))
@@ -1175,7 +1341,21 @@ mod tests {
     /// Words that need exactly `lines` lines at `role` in a card `width` wide: the shortest run of
     /// them that wraps onto that many.
     fn needing(lines: usize, role: TypeRole, width: f32) -> String {
-        let room = width - 2.0 * spacing::MD;
+        needing_by(lines, width, |text, room| lines_needed(text, role, room))
+    }
+
+    /// How many lines the activity `text` needs after "NOW", `room` wide (BUG-1298 FR-025).
+    fn activity_lines_needed(text: &str, room: f32) -> usize {
+        let size = super::super::test_support::size_of(
+            activity_line::<()>(text.to_string(), 50, palette(CardState::Working, &roles())),
+            Size::new(room, 1000.0),
+        );
+        (size.height / TypeRole::Body.line_height_dp()).round() as usize
+    }
+
+    /// Words that need exactly `lines` lines by `measure` in a card `width` wide.
+    fn needing_by(lines: usize, width: f32, measure: impl Fn(&str, f32) -> usize) -> String {
+        let room = width - 2.0 * (BODY_SIDE + EDGE);
         let mut text = String::new();
         for word in "Overview cards wrap the title onto three lines and the activity onto two"
             .split(' ')
@@ -1186,7 +1366,7 @@ mod tests {
                 text.push(' ');
             }
             text.push_str(word);
-            if lines_needed(&text, role, room) == lines {
+            if measure(&text, room) == lines {
                 return text;
             }
         }
@@ -1256,15 +1436,15 @@ mod tests {
     fn the_activity_wraps_onto_up_to_two_lines_then_ends_in_an_ellipsis() {
         for width in WIDTHS {
             for (needs, takes) in [(1, 1), (2, 2), (4, 2)] {
-                let activity = needing(needs, TypeRole::Body, width);
+                let activity = needing_by(needs, width, activity_lines_needed);
                 let (painted, _) = card_with("Adds a card", &activity, width);
-                let (shown, lines) = lines_of(&painted, "Overview", TypeRole::Body);
+                let (shown, lines) = lines_of(&painted, "NOW  Overview", TypeRole::Body);
                 assert_eq!(
                     lines, takes,
                     "{width}: an activity needing {needs}: {shown:?}"
                 );
                 if needs <= 2 {
-                    assert_eq!(shown, activity, "{width}: shown in full");
+                    assert_eq!(shown, format!("NOW  {activity}"), "{width}: shown in full");
                 } else {
                     assert!(shown.ends_with('\u{2026}'), "{width}: {shown:?}");
                 }
@@ -1272,14 +1452,21 @@ mod tests {
         }
     }
 
-    /// Feature 1121 FR-001: the short branch stays one line, ellipsized, however long it is.
+    /// BUG-1298 FR-023 (replacing feature 1121 FR-001's one ellipsized branch line): the meta
+    /// line wraps and is never cut, so a branch longer than the card wraps whole inside it.
     #[test]
-    fn the_branch_stays_one_line_ellipsized() {
+    fn the_meta_line_wraps_a_long_branch_whole() {
         let m = full(true);
+        let branch = m.branch.clone().expect("a branch");
         for width in WIDTHS {
-            let (shown, lines) = lines_of(&painted_at(&m, width), "topic-", TypeRole::Body);
-            assert_eq!(lines, 1, "{width}: {shown:?}");
-            assert!(shown.ends_with('\u{2026}'), "{width}: {shown:?}");
+            let text = painted_at(&m, width);
+            let shown = word(&text, &branch);
+            assert!(shown.bounds.height > 18.0, "{width}: wraps: {shown:?}");
+            assert!(
+                shown.bounds.x >= BODY_SIDE + EDGE - 0.01
+                    && shown.bounds.x + shown.bounds.width <= width - BODY_SIDE - EDGE + 0.01,
+                "{width}: inside the card: {shown:?}"
+            );
         }
     }
 
@@ -1344,17 +1531,21 @@ mod tests {
         for width in WIDTHS {
             let (painted, card) = expanded_at(&m, width, roles());
             let shown: Vec<&str> = painted.iter().map(|p| p.content.as_str()).collect();
+            let activity = format!("NOW  {}", words.activity.as_deref().expect("an activity"));
             for want in [
                 words.title.as_str(),
                 words.display_name.as_deref().expect("a display name"),
                 words.branch.as_deref().expect("a branch"),
                 words.dir.as_str(),
-                words.activity.as_deref().expect("an activity"),
-                "3 sessions \u{b7} 2 running",
-                "Implement \u{b7} 6/10",
+                activity.as_str(),
+                "Implement \u{b7} 6/10 tasks",
             ] {
                 assert!(shown.contains(&want), "{width}: {want:?} not in {shown:?}");
             }
+            assert!(
+                shown.join(" ").contains("\u{b7} 3 sessions, 2 running"),
+                "{width}: the meta line's sessions: {shown:?}"
+            );
             for p in &painted {
                 assert!(!p.content.ends_with('\u{2026}'), "{width}: {p:?}");
                 let b = p.bounds;
@@ -1377,23 +1568,24 @@ mod tests {
                 let m = model(state, "feat-a");
                 let collapsed = mounted_at(&m, 380.0, r).painted_text();
                 let (expanded, _) = expanded_at(&m, 380.0, r);
-                // The short branch is the one text the expanded card replaces (by the full one).
-                let mut same = 0;
-                for p in collapsed.iter().filter(|p| p.content != "feat/813") {
+                // The expanded card keeps the collapsed card's meta line (BUG-1298 FR-028), so
+                // every collapsed text has its twin, and adds the full branch as a muted line.
+                for p in &collapsed {
                     let twin = expanded
                         .iter()
                         .find(|e| e.content == p.content)
                         .unwrap_or_else(|| panic!("{state:?}: no {:?} expanded", p.content));
                     assert_eq!(twin.color, p.color, "{state:?}: {:?}", p.content);
-                    same += 1;
                 }
-                assert_eq!(same, collapsed.len() - 1, "{state:?}: {collapsed:?}");
                 let full = expanded
                     .iter()
                     .find(|e| e.content == "feat/813-overview")
                     .expect("the full branch");
-                let short = collapsed.iter().find(|p| p.content == "feat/813");
-                assert_eq!(Some(full.color), short.map(|p| p.color), "{state:?}");
+                assert_eq!(
+                    full.color,
+                    style::color(palette(state, &r).on_body_variant),
+                    "{state:?}"
+                );
             }
         }
     }
@@ -1469,7 +1661,8 @@ mod tests {
         let full = micold_core::overview_text::ExpandedText::of(&m, None);
         let mut card = expanded_in(&m, 280.0, 260.0);
         let stays = [full.title.as_str(), words(&m).state_label];
-        let first = full.display_name.expect("a display name");
+        // The meta line leads the body (BUG-1298 FR-028); a branch with no short form is whole.
+        let first = m.branch.clone().expect("a branch");
         let before = stays.map(|c| top_of(&mut card, c));
         assert!(card.painted_text().iter().any(|p| p.content == first));
         wheel(&mut card, Point::new(140.0, 250.0), -10_000.0);
@@ -1501,18 +1694,18 @@ mod tests {
         // The text stays within the card's margins.
         for line in card.painted_text() {
             let b = line.bounds;
-            assert!(b.x >= spacing::MD - 0.01, "{line:?}");
-            assert!(b.x + b.width <= width - spacing::MD + 0.01, "{line:?}");
+            assert!(b.x >= BODY_SIDE + EDGE - 0.01, "{line:?}");
+            assert!(b.x + b.width <= width - BODY_SIDE - EDGE + 0.01, "{line:?}");
         }
-        // The bar took its strip from the body's padding, not from its text: the activity wraps
+        // The bar took its strip from the body's padding, not from its text: a body line wraps
         // exactly as body text does in the full room between the card's margins. An unbroken run
         // of a glyph narrower than the strip breaks at the last glyph that fits, so any lost
         // width shows.
         let mut m = overlong();
         let line = "i".repeat(300);
-        let activity = m.activity.as_mut().expect("an activity");
-        (activity.line, activity.ratio) = (line.clone(), None);
-        let room = width - 2.0 * spacing::MD;
+        // The display name, a plain wrapped body line (the activity is led by "NOW").
+        m.display_name = line.clone();
+        let room = width - 2.0 * (BODY_SIDE + EDGE);
         let mut free = Mounted::new_in(
             container(wrapped::<String>(
                 line.clone(),
@@ -1682,7 +1875,7 @@ mod tests {
         for hovered in [
             m.title.as_str(),
             "feat/1120",
-            "Editing card_grid.rs \u{b7} 3/7",
+            "NOW  Editing card_grid.rs \u{b7} 3/7",
         ] {
             let at = word(&text, hovered).bounds.center();
             let floated = mounted_at(&m, 380.0, roles()).floated_text(at);
@@ -1712,9 +1905,16 @@ mod tests {
                 .size
         };
         assert_eq!(size_of("Adds"), 17.0);
-        assert_eq!(size_of("Feature"), 12.0, "the header's words are Label");
-        for body in ["feat/1120", "3 sessions", "Editing card_grid", "Implement"] {
-            assert_eq!(size_of(body), 14.0, "{body}");
+        // The mockup's sizes (BUG-1298 FR-022–FR-025): 13 px header words, branch and caption;
+        // 14 px sessions and activity (the paragraph's size; its "NOW" span is 12 px).
+        assert_eq!(size_of("Feature"), 13.0, "the header's words");
+        for (body, size) in [
+            ("feat/1120", 13.0),
+            ("sessions,", 14.0),
+            ("NOW  Editing card_grid", 14.0),
+            ("Implement", 13.0),
+        ] {
+            assert_eq!(size_of(body), size, "{body}");
         }
     }
 
@@ -1782,15 +1982,14 @@ mod tests {
         }
     }
 
-    /// SC-005: each card carries its type icon with the type's word, and its state icon with the
-    /// state's word and the reason; the five states and the types are told apart by icon.
+    /// SC-005: each card carries its type's word (alone, BUG-1298 FR-022), and its state icon
+    /// with the state's word and the reason; the five states are told apart by icon.
     #[test]
     fn a_card_shows_its_type_and_state_with_their_words() {
         let mut state_icons = Vec::new();
         for state in CardState::ALL {
             let w = words(&model(state, "n"));
             assert_eq!(w.reason_tooltip, CardReason::Working.label());
-            assert_eq!(w.type_icon, Icon::TypeFeature);
             let text = painted(&model(state, "n"));
             for word in [state.label(), LocationType::Feature.label()] {
                 assert!(
@@ -1803,27 +2002,15 @@ mod tests {
         let distinct: std::collections::BTreeSet<String> =
             state_icons.iter().map(|i| format!("{i:?}")).collect();
         assert_eq!(distinct.len(), 5, "{state_icons:?}");
-        let types = [
-            LocationType::Feature,
-            LocationType::Bugfix,
-            LocationType::Chore,
-            LocationType::Other,
-            LocationType::Included,
-            LocationType::OrphanInvalid,
-            LocationType::ProjectRoot,
-        ];
-        let icons: Vec<Icon> = types.iter().map(|t| type_icon(*t)).collect();
-        for (i, a) in icons.iter().enumerate() {
-            assert!(!icons[i + 1..].contains(a), "{a:?} stands for two types");
-        }
         let text = painted(&model(CardState::Idle, "n"));
         assert!(
             text.contains(&"Feature".to_string()) && text.contains(&"Idle".to_string()),
             "FR-001: the type's and the state's words are visible text on the card: {text:?}"
         );
         assert!(
-            text.contains(&"3 sessions \u{b7} 2 running".to_string()),
-            "the type word left the sessions line: {text:?}"
+            text.join(" ")
+                .contains("feat/813 \u{b7} 3 sessions, 2 running"),
+            "the type word left the meta line: {text:?}"
         );
     }
 
@@ -1875,10 +2062,10 @@ mod tests {
                         .iter()
                         .find(|t| t.content.starts_with("Adds"))
                         .expect("a title");
-                    let sessions = word(&text, "3 sessions \u{b7} 2 running");
-                    // The header's icons are glyphs painted as text (T042, F2: tinted `on_header`).
+                    // The meta line's sessions phrase, word by word (BUG-1298 FR-023).
+                    let sessions = word(&text, "sessions,");
+                    // The header's icon is a glyph painted as text (T042, F2: tinted `on_header`).
                     let state_glyph = word(&text, &state_icon(state).glyph().to_string());
-                    let type_glyph = word(&text, &type_icon(m.kind).glyph().to_string());
                     let at = format!("{state:?} at {width}");
                     assert!(
                         state_word.bounds.x + state_word.bounds.width < type_word.bounds.x,
@@ -1897,11 +2084,10 @@ mod tests {
                     );
                     for (what, painted, want) in [
                         ("state word", state_word, p.on_header),
-                        ("type word", type_word, p.on_header),
+                        ("type word", type_word, p.type_word),
                         ("state icon", state_glyph, p.on_header),
-                        ("type icon", type_glyph, p.on_header),
                         ("title", title, p.on_body),
-                        ("sessions line", sessions, p.on_body_variant),
+                        ("sessions phrase", sessions, p.on_body_variant),
                     ] {
                         assert_eq!(painted.color, style::color(want), "{at}: the {what}");
                     }
@@ -2926,13 +3112,15 @@ mod tests {
     }
 
     /// FR-008, Story 3 sc.6: a link in the scrolled part of an expanded card's body is scrolled
-    /// into the inner body's viewport when it takes the keyboard.
+    /// into the inner body's viewport when it takes the keyboard. The link leads the body's meta
+    /// line (BUG-1298 FR-028), so it is the body scrolled to its end that hides it.
     #[test]
-    fn a_focused_link_below_the_fold_scrolls_into_the_body() {
+    fn a_focused_link_scrolled_out_of_the_body_scrolls_back_into_it() {
         let mut model = with_link(Some("feat/1122_x"));
         model.display_name = "a long display name ".repeat(40);
         let mut m = on_the_link(linked(&model, true), Size::new(380.0, 220.0));
         let viewport = m.scrollables()[0].0;
+        wheel(&mut m, viewport.center(), -10_000.0);
         // Where the focused link is on screen, the inner body's scroll taken off.
         let on_screen = |m: &mut Mounted<'_>| {
             m.drive(crate::ui::focus::focused_bounds())
@@ -2941,8 +3129,8 @@ mod tests {
         };
         let before = on_screen(&mut m);
         assert!(
-            before.y > viewport.y + viewport.height,
-            "the link starts below the fold: {before:?} in {viewport:?}"
+            before.y + before.height < viewport.y,
+            "the link is scrolled above the fold: {before:?} in {viewport:?}"
         );
         m.drive(crate::ui::focus::into_view::<()>());
         let after = on_screen(&mut m);
@@ -2970,13 +3158,15 @@ mod tests {
 
     /// The width `LINK` is painted at with nothing in its way.
     fn link_alone_width() -> f32 {
-        let mut alone = Mounted::new(super::super::TextLink::new(LINK, String::new(), roles()));
+        let mut alone = Mounted::new(
+            super::super::TextLink::new(LINK, String::new(), roles()).role(TypeRole::CardStrong),
+        );
         painted_where(&mut alone, LINK).expect("painted").width
     }
 
     /// FR-003, SC-004: at 280, 380 and 480 px, with a 120-character branch, the link is painted
-    /// whole inside the card, at the branch line's role (FR-015), and the collapsed card's short
-    /// branch ends in an ellipsis.
+    /// whole inside the card, at the meta line's link role (BUG-1298 FR-024), and the branch
+    /// after it wraps whole (FR-023).
     #[test]
     fn the_link_is_whole_inside_the_card_at_every_width() {
         // Not a conventional branch, which shows as `type/number` (FR-007): 120 characters.
@@ -3001,22 +3191,21 @@ mod tests {
                         && link.bounds.y + link.bounds.height <= card.y + card.height,
                     "{width} expanded {expanded}: {link:?} leaves {card:?}"
                 );
-                assert_eq!(link.size, TypeRole::Body.size(), "FR-015");
-                if !expanded {
-                    let short = text
-                        .iter()
-                        .find(|p| p.content.contains("xxxx"))
-                        .unwrap_or_else(|| panic!("{width}: no branch {text:?}"));
-                    assert!(short.content.ends_with('\u{2026}'), "{width}: {short:?}");
-                }
+                assert_eq!(link.size, TypeRole::CardStrong.size(), "FR-024");
+                let shown = word(&text, &branch);
+                assert!(
+                    shown.bounds.x + shown.bounds.width <= card.x + card.width,
+                    "{width}: {shown:?}"
+                );
             }
         }
     }
 
-    /// FR-003: the link sits on the branch line, centred on it, and keeps its height: the card is
-    /// as tall with the link as without it (the link's focus gutter spills over its neighbours).
+    /// FR-003, BUG-1298 FR-023: the link leads the meta line, centred on it, before the branch,
+    /// and keeps its height: the card is as tall with the link as without it (the link's focus
+    /// gutter spills over its neighbours).
     #[test]
-    fn the_link_sits_on_the_branch_line_and_keeps_its_height() {
+    fn the_link_leads_the_meta_line_and_keeps_its_height() {
         let linked_model = with_link(Some("feat/1122_x"));
         let mut plain_model = linked_model.clone();
         plain_model.issue_link = None;
@@ -3030,8 +3219,8 @@ mod tests {
             "{branch:?} vs {link:?}"
         );
         assert!(
-            link.x > branch.x + branch.width,
-            "the link follows the branch"
+            link.x + link.width < branch.x,
+            "the branch follows the link"
         );
     }
 
@@ -3054,10 +3243,10 @@ mod tests {
         );
     }
 
-    /// FR-003: with no branch line (the title is the branch, or there is no branch) the link sits
-    /// alone in its place, flush with the lines around it.
+    /// FR-003, BUG-1298 FR-023: with no branch (the title is the branch, or there is none) the
+    /// link leads the meta line, flush with the lines around it, and the sessions follow it.
     #[test]
-    fn with_no_branch_line_the_link_sits_alone_in_its_place() {
+    fn with_no_branch_the_link_leads_the_meta_line() {
         let mut titled_by_branch = with_link(Some("feat/1122_x"));
         titled_by_branch.title = "feat/1122_x".into();
         for model in [titled_by_branch, with_link(None)] {
@@ -3065,17 +3254,15 @@ mod tests {
                 let mut m = in_room(linked(&model, expanded), 380.0);
                 let text = m.painted_text();
                 let link = text.iter().find(|p| p.content == LINK).expect("link");
-                let sessions = text
-                    .iter()
-                    .find(|p| p.content.contains("session"))
-                    .expect("sessions line");
+                let sessions = word(&text, "\u{b7}");
                 assert!(
-                    (link.bounds.x - sessions.bounds.x).abs() <= 0.5,
-                    "expanded {expanded}: {link:?} vs {sessions:?}"
+                    (link.bounds.x - BODY_SIDE - EDGE).abs() <= 0.5,
+                    "expanded {expanded}: {link:?} is flush with the body"
                 );
                 assert!(
-                    link.bounds.y < sessions.bounds.y,
-                    "expanded {expanded}: the link sits above the sessions line"
+                    link.bounds.x + link.bounds.width < sessions.bounds.x
+                        && (link.bounds.center_y() - sessions.bounds.center_y()).abs() <= 1.5,
+                    "expanded {expanded}: the sessions follow the link: {link:?} vs {sessions:?}"
                 );
             }
         }
@@ -3117,7 +3304,12 @@ mod tests {
             label: format!("#{number}"),
             mark,
             phrase: phrase.map(str::to_string),
-            failing: phrase == Some("checks failing"),
+            tone: match phrase {
+                Some("checks failing" | "changes requested" | "merge conflict") => PrTone::Bad,
+                Some("checks pending") => PrTone::Waiting,
+                Some("checks passing" | "checks passed") => PrTone::Good,
+                _ => PrTone::Plain,
+            },
         }
     }
 
@@ -3165,25 +3357,29 @@ mod tests {
             .y
     }
 
-    /// U1, FR-002, FR-004, FR-005: one line per row with "#N", the pill word and the words, between
-    /// the activity line and the counts line; "+N more" below the rows only when there are more.
+    /// U1, FR-002, FR-004, FR-005: one line per row with "#N", the pill word and the words, under
+    /// the activity line; "+N more, hover to see" below the rows only when there are more; no
+    /// counts line under rows (BUG-1298 FR-026).
     #[test]
-    fn the_rows_show_number_pill_and_words_between_the_activity_and_the_counts() {
+    fn the_rows_show_number_pill_and_words_under_the_activity() {
         for expanded in [false, true] {
             let (painted, _) = with_rows(two_rows(), 1, expanded, 380.0);
             let activity = painted
                 .iter()
-                .find(|p| p.content.starts_with("Editing card_grid.rs"))
+                .find(|p| p.content.starts_with("NOW  Editing card_grid.rs"))
                 .unwrap_or_else(|| panic!("no activity in {painted:?}"))
                 .bounds
                 .y;
-            let counts = top(&painted, "2 open \u{b7} 1 merged");
+            assert!(
+                painted.iter().all(|p| !p.content.contains(" open")),
+                "{expanded}: no counts line under rows: {painted:?}"
+            );
             for (number, pill, words) in [
                 ("#12", "Open", "checks failing"),
                 ("#11", "Draft", "checks pending"),
             ] {
                 let y = top(&painted, number);
-                assert!(activity < y && y < counts, "{expanded}: {number} at {y}");
+                assert!(activity < y, "{expanded}: {number} at {y}");
                 assert!(
                     (top(&painted, pill) - y).abs() < 8.0,
                     "{expanded}: {pill} on its row"
@@ -3193,8 +3389,8 @@ mod tests {
                     "{expanded}: {words} on its row"
                 );
             }
-            let more = top(&painted, "+1 more");
-            assert!(top(&painted, "#11") < more && more < counts, "{expanded}");
+            let more = top(&painted, "+1 more, hover to see");
+            assert!(top(&painted, "#11") < more, "{expanded}");
             let (painted, _) = with_rows(two_rows(), 0, expanded, 380.0);
             assert!(
                 painted.iter().all(|p| !p.content.contains("more")),
@@ -3245,22 +3441,57 @@ mod tests {
         }
     }
 
-    /// R9: *checks failing* in `error`, other words in the body role, "+N more" muted.
+    /// R9, BUG-1298 FR-026: the words are toned by meaning at 13 px (*bad* in `error` at weight
+    /// 600, *waiting* in `warning`, *good* in `success`, *plain* muted), "+N more, hover to see"
+    /// muted; the number is monospace and underlined in the link colour; the pill is tonal.
     #[test]
-    fn failing_words_are_drawn_in_the_error_role() {
+    fn row_words_are_toned_by_meaning() {
         let r = roles();
         let p = palette(CardState::Working, &r);
-        let (painted, _) = with_rows(two_rows(), 3, false, 380.0);
-        let colour = |content: &str| {
+        let rows = vec![
+            pr_row(12, PrMark::Open, Some("checks failing")),
+            pr_row(11, PrMark::Draft, Some("checks pending")),
+            pr_row(10, PrMark::Merged, Some("checks passing")),
+            pr_row(9, PrMark::Closed, Some("approved")),
+        ];
+        let (painted, _) = with_rows(rows, 3, false, 380.0);
+        let find = |content: &str| {
             painted
                 .iter()
                 .find(|p| p.content == content)
                 .unwrap_or_else(|| panic!("{content:?}"))
-                .color
         };
-        assert_eq!(colour("checks failing"), style::color(r.error));
-        assert_eq!(colour("checks pending"), style::color(p.on_body));
-        assert_eq!(colour("+3 more"), style::color(p.on_body_variant));
+        for (words, tint, weight) in [
+            ("checks failing", r.error, iced::font::Weight::Semibold),
+            ("checks pending", r.warning, iced::font::Weight::Normal),
+            ("checks passing", r.success, iced::font::Weight::Normal),
+            ("approved", p.on_body_variant, iced::font::Weight::Normal),
+        ] {
+            let painted = find(words);
+            assert_eq!(painted.color, style::color(tint), "{words}");
+            assert_eq!(
+                (painted.size, painted.font.weight),
+                (13.0, weight),
+                "{words}"
+            );
+        }
+        assert_eq!(
+            find("+3 more, hover to see").color,
+            style::color(p.on_body_variant)
+        );
+        let number = find("#12");
+        assert_eq!(number.font, iced::Font::MONOSPACE);
+        assert_eq!(number.color, style::color(r.primary));
+        for (pill, (_, on_fill)) in [
+            ("Open", super::pill(PrMark::Open, &r)),
+            ("Merged", super::pill(PrMark::Merged, &r)),
+            ("Draft", super::pill(PrMark::Draft, &r)),
+        ] {
+            assert_eq!(find(pill).color, style::color(on_fill), "{pill}");
+        }
+        assert_eq!(super::pill(PrMark::Open, &r).0, r.primary_container);
+        assert_eq!(super::pill(PrMark::Merged, &r).0, r.success_container);
+        assert_eq!(super::pill(PrMark::Draft, &r).0, r.surface_variant);
     }
 
     /// U1: without rows the card lays out exactly as before: no extra node.
@@ -3656,7 +3887,11 @@ mod tests {
     #[test]
     fn a_focused_number_below_the_fold_scrolls_into_the_body() {
         let mut model = with_link(Some("feat/1122_x"));
-        model.display_name = "a long display name ".repeat(40);
+        // The activity comes before the rows (BUG-1298 FR-028): a long one pushes them down.
+        model.activity = Some(micold_core::hook_activity::CurrentActivity {
+            line: "a long activity ".repeat(40),
+            ratio: None,
+        });
         let mut m = on_number(&model, true, 10, Size::new(380.0, 220.0));
         let viewport = m.scrollables()[0].0;
         let on_screen = |m: &mut Mounted<'_>| {
@@ -3809,10 +4044,12 @@ mod tests {
             assert_eq!(type_word.size, 13.0, "the type word");
             assert_eq!(state_word.font.weight, iced::font::Weight::Semibold);
             assert_eq!(type_word.font.weight, iced::font::Weight::Medium);
-            let mut faded = style::color(p.on_header);
-            faded.a = 0.85;
-            assert_eq!(type_word.color, faded, "the type word is at 85 %");
-            let glyph = type_icon(m.kind).glyph().to_string();
+            assert_eq!(
+                type_word.color,
+                style::color(tokens::over(p.on_header, 0.85, p.header)),
+                "the type word is at 85 %"
+            );
+            let glyph = Icon::TypeBugfix.glyph().to_string();
             assert!(
                 !text.iter().any(|t| t.content == glyph),
                 "no type glyph: {text:?}"
@@ -3843,7 +4080,11 @@ mod tests {
         let link = word(&text, "Issue #1117");
         let branch = word(&text, "fix/1117");
         let dot = starting(&text, "\u{b7}");
-        assert_eq!(branch.font, iced::Font::MONOSPACE, "the branch is monospace");
+        assert_eq!(
+            branch.font,
+            iced::Font::MONOSPACE,
+            "the branch is monospace"
+        );
         assert_eq!(branch.size, 13.0, "the branch is 13 px");
         assert_eq!(link.size, 13.0, "the link is 13 px");
         assert_eq!(link.font.weight, iced::font::Weight::Semibold);
@@ -3914,7 +4155,9 @@ mod tests {
         ];
         let text = design_mounted(&m, rows, 1, roles()).painted_text();
         assert!(
-            !text.iter().any(|t| t.content.contains(" open") || t.content.contains(" merged")),
+            !text
+                .iter()
+                .any(|t| t.content.contains(" open") || t.content.contains(" merged")),
             "no counts line under rows: {text:?}"
         );
         let more = word(&text, "+1 more, hover to see");

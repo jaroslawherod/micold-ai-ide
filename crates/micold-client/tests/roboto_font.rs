@@ -1,4 +1,4 @@
-//! The shipped typeface is real, and it is the two weights the type scale needs
+//! The shipped typeface is real, and it is the weights the type scale and the Overview card need
 //! (feature 018, T013 — FR-008a, FR-009, SC-012).
 //!
 //! Feature 018 ships Roboto so the application looks the same on every platform rather than
@@ -17,6 +17,8 @@
 /// font — the smallest binary that expresses every role faithfully.
 const REGULAR: &[u8] = include_bytes!("../../../assets/fonts/Roboto-Regular.ttf");
 const MEDIUM: &[u8] = include_bytes!("../../../assets/fonts/Roboto-Medium.ttf");
+/// The Overview card's semibold face (BUG-1298): its scoped roles ask for weight 600.
+const SEMIBOLD: &[u8] = include_bytes!("../../../assets/fonts/Roboto-SemiBold.ttf");
 
 /// The family name the GUI selects the font with. Must match `src/main.rs`.
 const EXPECTED_FAMILY: &str = "Roboto";
@@ -48,6 +50,7 @@ fn family_of(face: &ttf_parser::Face<'_>) -> Option<String> {
 fn both_faces_parse() {
     face(REGULAR, "Roboto-Regular.ttf");
     face(MEDIUM, "Roboto-Medium.ttf");
+    face(SEMIBOLD, "Roboto-SemiBold.ttf");
 }
 
 /// The weights the roles resolve to. A `Medium` file carrying 400 is the failure this catches, and
@@ -65,6 +68,11 @@ fn the_two_faces_report_the_weights_the_type_scale_asks_for() {
         "Roboto-Medium must report weight 500 — it backs the title and label roles, and a file that \
          reports 400 renders every one of them a shade too light with nothing to point at"
     );
+    assert_eq!(
+        face(SEMIBOLD, "SemiBold").weight().to_number(),
+        600,
+        "Roboto-SemiBold must report weight 600 — it backs the Overview card's semibold words"
+    );
 }
 
 /// Both advertise the family the GUI pins, or `.default_font(Font::with_name(\"Roboto\"))` silently
@@ -72,7 +80,11 @@ fn the_two_faces_report_the_weights_the_type_scale_asks_for() {
 /// perfectly reasonable on the machine that built it.
 #[test]
 fn both_faces_advertise_the_family_the_gui_pins() {
-    for (bytes, what) in [(REGULAR, "Regular"), (MEDIUM, "Medium")] {
+    for (bytes, what) in [
+        (REGULAR, "Regular"),
+        (MEDIUM, "Medium"),
+        (SEMIBOLD, "SemiBold"),
+    ] {
         let f = face(bytes, what);
         assert_eq!(
             family_of(&f).as_deref(),
@@ -87,7 +99,11 @@ fn both_faces_advertise_the_family_the_gui_pins() {
 /// for every role — so the 400/500 distinction the scale is built on silently disappears.
 #[test]
 fn both_faces_are_static_instances() {
-    for (bytes, what) in [(REGULAR, "Regular"), (MEDIUM, "Medium")] {
+    for (bytes, what) in [
+        (REGULAR, "Regular"),
+        (MEDIUM, "Medium"),
+        (SEMIBOLD, "SemiBold"),
+    ] {
         let f = face(bytes, what);
         assert!(
             !f.is_variable(),
@@ -111,7 +127,11 @@ fn the_faces_cover_the_interfaces_own_text() {
     // symbols that appear in its own strings (an em dash, a copyright sign, the comparison and
     // status marks). Every one verified present in the shipped file.
     const REQUIRED: &str = "AZaz09 .,:;/-_()[]{}'\"!?@#%&*+=<>|~`^$É—©×≈≥○●";
-    for (bytes, what) in [(REGULAR, "Regular"), (MEDIUM, "Medium")] {
+    for (bytes, what) in [
+        (REGULAR, "Regular"),
+        (MEDIUM, "Medium"),
+        (SEMIBOLD, "SemiBold"),
+    ] {
         let f = face(bytes, what);
         for ch in REQUIRED.chars() {
             assert!(
@@ -128,8 +148,10 @@ fn the_faces_cover_the_interfaces_own_text() {
 /// vendoring, and every other assertion here would still pass on the copy that was *not* checked.
 #[test]
 fn the_two_faces_are_not_the_same_file() {
-    assert_ne!(
-        REGULAR, MEDIUM,
-        "the two shipped faces are byte-identical — one was copied over the other during vendoring"
-    );
+    for (a, b) in [(REGULAR, MEDIUM), (MEDIUM, SEMIBOLD), (REGULAR, SEMIBOLD)] {
+        assert_ne!(
+            a, b,
+            "two shipped faces are byte-identical — one was copied over another during vendoring"
+        );
+    }
 }

@@ -63,22 +63,24 @@ nor across restarts.
 
 ## One card per location
 
-Each card has a **header row** across its top, tinted in its state's colour (see [The five states, worst first](#the-five-states-worst-first)), over a body that is the same neutral colour on every card.
+Each card is framed by a thin outline. It has a **header row** across its top, tinted in its state's colour (see [The five states, worst first](#the-five-states-worst-first)), over a body that is the same neutral colour on every card.
 
 The header row shows:
 
 - at its start, the card's **state**, as an icon and a word. Hover it for the reason;
-- at its end, the location's **type**, as an icon and a word (see the table below). Hover it for the type's word.
+- at its end, the location's **type**, as a word (see the table below). Hover it for the type's word.
 
 The body below it shows:
 
 - its **title**, which says what the location is for (see [Title](#title)), on up to three lines;
-- below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. A card whose title already is the branch does not repeat it. A worktree named after a GitHub issue, or a Jira key, shows a link to it at the end of this line (see [Opening a worktree's issue](#opening-a-worktrees-issue));
+- below it, one **meta line**, such as *Issue #1117* `fix/1117` *· 1 session running*. It wraps onto more lines when it needs them and is never cut. It reads, in order:
+  - the link to the worktree's GitHub issue or Jira key, when it has one (see [Opening a worktree's issue](#opening-a-worktrees-issue));
+  - the **branch** in short, in a fixed-width face: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. A card whose title already is the branch does not repeat it;
+  - the **sessions**: *no sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session running*, *2 sessions, 1 running*). With nothing before them on the line they start it (*No sessions*);
 - for a worktree linked to a Jira ticket whose status is known, the ticket's **status chip** (for example *In Review*), the same chip and the same status as in the sidebar (see [A ticket's status](worktrees-and-sessions.md#a-tickets-status)); a card without a status has no chip and no gap;
-- its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
-- when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
-- a **progress row**, when there is progress to show (see [Feature progress](#feature-progress));
-- for a card with a branch, its **pull requests**, one row each, and their **counts** (see [Pull requests](#pull-requests)).
+- when the agent reports it, an **activity line** after the label **NOW** (see [What the agent is doing now](#what-the-agent-is-doing-now));
+- a **progress bar** with its caption under it, when there is progress to show (see [Feature progress](#feature-progress));
+- for a card with a branch, its **pull requests**, one row each (see [Pull requests](#pull-requests)).
 
 A row with nothing to say is not shown.
 
@@ -90,11 +92,11 @@ Titles come from the issues the New-worktree form already loaded, or from one re
 
 ## Opening a worktree's issue
 
-A worktree named after a GitHub issue number, such as `feat-1122_overview-issue-link`, shows the link **Issue #1122** at the end of its card's branch line, collapsed and expanded. On a card with no branch line (its title is the branch) the link has a line of its own in the branch line's place. The link is always shown whole: a long branch is shortened first.
+A worktree named after a GitHub issue number, such as `feat-1122_overview-issue-link`, shows the link **Issue #1122** at the start of its card's meta line, collapsed and expanded, underlined. The link is always shown whole: the meta line wraps after it instead.
 
 The link is shown while the project has a GitHub repository (its `origin`, or else its first remote on github.com) and the **GitHub issues** switch in Settings is on. Turn the switch off and the links go; turn it on and they come back, without a restart. Default, a worktree whose name carries no issue number, and a project with no GitHub repository show no link. Showing the links asks GitHub for nothing: the repository comes from the project's own git remotes.
 
-A worktree named after a Jira key, such as `feat-mic-87_add-login`, shows **Issue MIC-87** in the same place, while the project's **Jira base URL** is set and the **Enable Jira integration** switch is on (Settings → [Jira base URL](settings.md#jira-base-url)). It opens `<Jira base URL>/browse/MIC-87`, for example `https://example.atlassian.net/browse/MIC-87`. Each project uses its own base URL; a project with none shows no Jira links. Setting or clearing the value, or turning the switch off or on, changes the links in every open window without a restart. Showing them asks Jira for nothing.
+A worktree named after a Jira key, such as `feat-mic-87_add-login`, shows the link **MIC-87** in the same place, while the project's **Jira base URL** is set and the **Enable Jira integration** switch is on (Settings → [Jira base URL](settings.md#jira-base-url)). It opens `<Jira base URL>/browse/MIC-87`, for example `https://example.atlassian.net/browse/MIC-87`. Each project uses its own base URL; a project with none shows no Jira links. Setting or clearing the value, or turning the switch off or on, changes the links in every open window without a restart. Showing them asks Jira for nothing.
 
 - **Click** the link to open the issue's page (`https://github.com/<owner>/<repo>/issues/1122`, or the Jira issue's) in your browser. The card is not activated: there is no ripple, nothing is selected, and the Overview stays open. If the browser cannot be opened, a notification names the address and the reason.
 - A press that starts on the link and ends off it, or the reverse, opens nothing and activates nothing.
@@ -125,11 +127,11 @@ The title, branch and activity have no tooltip of their own: the expanded card s
 
 The progress row reads the worktree's own files, so it needs no session. It shows the feature's **phase** and, when there is a task list, the **ratio of ticked tasks** with a bar.
 
-- **Ratio**: the ticked checkboxes over all checkboxes in the feature's `tasks.md`, such as *Implement · 6/10*. The feature folder is the one named in `.specify/feature.json`, else the one `specs/<number>-*` folder matching the issue number.
-- **Phase**: *Spec*, *Plan*, *Tasks*, *Implement*, *PR* or *Done*. The first of these that applies wins:
+- **Ratio**: the ticked checkboxes over all checkboxes in the feature's `tasks.md`, drawn as a bar with a caption under it such as *Implement · 6/10 tasks*. The feature folder is the one named in `.specify/feature.json`, else the one `specs/<number>-*` folder matching the issue number.
+- **Phase**: *Spec*, *Plan*, *Tasks*, *Implement*, *PR phase* or *Done*. The first of these that applies wins:
   1. the autopilot ledger's `Phase` line (`autopilot.md` in the feature folder) wins over everything else;
   2. *Done* when the card is **Done**;
-  3. *PR* when the branch has an open pull request;
+  3. *PR phase* when the branch has an open pull request;
   4. otherwise what the files imply: `tasks.md` with a ticked task is *Implement*, `tasks.md` alone is *Tasks*, then `plan.md` is *Plan*, then `spec.md` is *Spec*.
 - **No bar without a ratio**: a phase without a task list shows the phase alone.
 - **Nothing to show**: with neither a phase nor a task list, the card has no progress row.
@@ -138,7 +140,7 @@ The files are watched only while the Overview is open: each worktree is read onc
 
 ## What the agent is doing now
 
-When the location's main session runs an agent CLI with **hooks configured** (Claude Code with the app's hooks installed), the card shows an **activity line** above the progress row: the agent's in-progress todo, else the latest prompt you submitted, with the todo list's done / total after it (*Writing tests · 2/5*). The task-list ratio of the progress row stays below it as the feature's progress.
+When the location's main session runs an agent CLI with **hooks configured** (Claude Code with the app's hooks installed), the card shows an **activity line** above the progress bar, after the label **NOW**: the agent's in-progress todo, else the latest prompt you submitted, with the todo list's done / total after it (*Writing tests · 2/5*). The task-list ratio of the progress row stays below it as the feature's progress.
 
 The line shows the words only, wrapped onto up to **two lines**, and a longer one ends in an ellipsis (…) on the second. A prompt over several lines is joined, and agent markup is removed, so a prompt another agent sent as `<agent-message from="orchestrator">Continue M2</agent-message>` reads *Continue M2*. A slash command reads as a sentence: `/speckit-autopilot #1117` reads *Running autopilot on #1117* and `/clear` reads *Running clear*; every command reads the same way, built-in ones included. When nothing readable is left, such as a prompt that is only markup, the card shows no activity line, and no done / total on its own. The line only ever shows the main session's activity, never another session's.
 
@@ -150,11 +152,11 @@ The todo text and prompt stay on your machine: the hooks report them to the app'
 
 A card lists its branch's pull requests, one row each:
 
-- the **number**, such as *#12*;
+- the **number**, such as *#12*, underlined in a fixed-width face;
 - a **pill** with the state: *Open*, *Draft*, *Merged* or *Closed*;
-- for an open or draft pull request, one **status phrase**, the first that applies of *checks failing*, *changes requested*, *merge conflict*, *checks pending*, *approved* and *checks passing*. *checks failing* is drawn in the error colour. A pull request with no checks and no review decision shows no phrase, and a merged or closed one never shows one.
+- for an open or draft pull request, one **status phrase**, the first that applies of *checks failing*, *changes requested*, *merge conflict*, *checks pending*, *approved* and *checks passing*. *checks failing*, *changes requested* and *merge conflict* are drawn in bold in the error colour, *checks pending* in the warning colour, *checks passing* in the success colour, and *approved* muted. A pull request with no checks and no review decision shows no phrase, and a merged or closed one never shows one.
 
-Open and draft pull requests come first, then merged and closed ones, each group newest first. A collapsed card shows the first **two** rows and, when there are more, a line such as *+2 more*; the expanded card (see [Reading a card in full](#reading-a-card-in-full)) shows all of them. A narrow card shortens the phrase with an ellipsis (…) and keeps the number and the pill whole.
+Open and draft pull requests come first, then merged and closed ones, each group newest first. A collapsed card shows the first **two** rows and, when there are more, a line such as *+2 more, hover to see*; the expanded card (see [Reading a card in full](#reading-a-card-in-full)) shows all of them. A narrow card shortens the phrase with an ellipsis (…) and keeps the number and the pill whole.
 
 The number is a link, drawn like the issue link:
 
@@ -165,26 +167,26 @@ The number is a link, drawn like the issue link:
 - By keyboard, **Tab** reaches each shown number after the card's issue link, in row order, and **Enter** or **Space** opens it; **Shift+Tab** goes back the same way. The focused number shows a ring and its card stays expanded. The **arrow keys** skip numbers: from a number they move to the next or previous card, as from its card.
 - **Escape** on a number collapses its card. The collapsed card shows only its first two rows, so the numbers of the other rows are no Tab stops until the card expands again; Escape on one of those numbers moves the keyboard to its card. The same happens when a newer reading drops the focused pull request. **Menu** or **Shift+F10** on a number opens the card's menu, and closing it without choosing an entry returns the keyboard to that number. **Page Down** and **Page Up** on a number scroll a long expanded card, and a number in the scrolled part is scrolled into view when it takes the keyboard.
 
-Below the rows, the counts line shows the branch's open and merged pull requests, such as *1 open · 2 merged*; drafts count as open. The counts come from the pull requests the reading lists: the newest ten open and the newest ten merged ones. A count of 10 or more reads *10+*, and when the newest ten include a fork's pull request the count reads the branch's own ones with *+* (*9+*). A count of 0 is left out (*1 open*, *2 merged*), and with both at 0 the card has no counts line. A branch with no pull request shows no row.
+The rows are the card's whole account of its pull requests: there is no separate counts line under them. The rows come from the pull requests the reading lists: the newest ten open and the newest ten merged ones. A branch with no pull request shows no row.
 
-The rows and counts come from the pull request status the app already reads; the Overview starts no reading of its own, and showing them asks GitHub for nothing. A new reading changes the rows without a restart. Rows and counts stay through a rate-limit pause and a reading that fails for a passing reason, such as a moment offline. When they cannot be read, the card shows a dash (*—*) instead, with no rows, and its tooltip says why:
+The rows come from the pull request status the app already reads; the Overview starts no reading of its own, and showing them asks GitHub for nothing. A new reading changes the rows without a restart. The rows stay through a rate-limit pause and a reading that fails for a passing reason, such as a moment offline. When they cannot be read, the card shows a dash (*—*) instead, with no rows, and its tooltip says why:
 
 - *pull request status is off*: the pull request status setting is off;
 - *GitHub is not reachable*: the last reading could not reach GitHub;
 - *rate-limited until HH:MM*: GitHub asked the app to wait, and readings resume then;
 - *not read yet*: no reading has covered the branch yet.
 
-Default, a detached HEAD and an orphan have no branch, so they show no pull requests and no counts. An open pull request that cannot merge because of a conflict makes its card **Needs attention** with the reason *merge conflict*.
+Default, a detached HEAD and an orphan have no branch, so they show no pull requests. An open pull request that cannot merge because of a conflict makes its card **Needs attention** with the reason *merge conflict*.
 
-| Icon | Type | Meaning |
-|------|------|---------|
-| Folder | Project root | The Default entry |
-| Light bulb | Feature | A worktree whose branch is a `feat` branch |
-| Bug | Bugfix | A `fix` branch |
-| Wrench | Chore | Any other conventional type, such as `chore` or `docs` |
-| Folder | Other | A branch with no conventional type |
-| Link | Included | A worktree included from elsewhere |
-| Crossed-out folder | Orphan | A worktree that is missing or invalid |
+| Type | Meaning |
+|------|---------|
+| Project root | The Default entry |
+| Feature | A worktree whose branch is a `feat` branch |
+| Bugfix | A `fix` branch |
+| Chore | Any other conventional type, such as `chore` or `docs` |
+| Other | A branch with no conventional type |
+| Included | A worktree included from elsewhere |
+| Orphan | A worktree that is missing or invalid |
 
 ## Activating a card
 

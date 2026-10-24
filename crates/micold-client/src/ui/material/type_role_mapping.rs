@@ -1,7 +1,8 @@
 //! What each named role actually resolves to (feature 018, T017–T021 — FR-007, FR-010).
 //!
 //! `TypeRole` is the application's whole typographic vocabulary: twelve names, each standing for one
-//! of Material's fifteen roles, and one declared off the scale (`CardTitle`, feature 1120). The names are what call sites say, so the *mapping* is the thing
+//! of Material's fifteen roles, and the Overview card's five declared off the scale (`CardTitle`, feature 1120; `CardStrong`,
+//! `CardType`, `CardSmall`, `CardTag`, BUG-1298). The names are what call sites say, so the *mapping* is the thing
 //! that decides how the application reads — and it is one `match` arm away from being changed by
 //! accident while renaming something nearby.
 //!
@@ -39,6 +40,11 @@ const MAPPING: &[(TypeRole, &str)] = &[
     (TypeRole::SidebarSessionCurrent, "label_medium"),
     // The Overview card's title: a scoped role off the scale (feature 1120, FR-004, R10).
     (TypeRole::CardTitle, "overview_card_title"),
+    // The card's other scoped roles, from the Overview Card Redesign mockup (BUG-1298).
+    (TypeRole::CardStrong, "overview_card_strong"),
+    (TypeRole::CardType, "overview_card_type"),
+    (TypeRole::CardSmall, "overview_card_small"),
+    (TypeRole::CardTag, "overview_card_tag"),
 ];
 
 #[test]
@@ -165,19 +171,20 @@ fn the_current_session_row_differs_from_its_siblings_only_in_weight() {
     );
 }
 
-/// Only the two weights that ship are reachable (contract §2.1).
+/// Only the weights that ship are reachable (contract §2.1).
 ///
-/// Roboto ships as exactly two static instances. A role at any other weight would be resolved by
-/// the font matcher to whichever face it considered closest — silently, and differently depending
-/// on the platform's matcher.
+/// Roboto ships as three static instances: 400 and 500 for the scale, 600 for the Overview card's
+/// scoped roles (BUG-1298). A role at any other weight would be resolved by the font matcher to
+/// whichever face it considered closest — silently, and differently depending on the platform's
+/// matcher.
 #[test]
 fn every_role_is_a_weight_that_ships() {
     for role in TypeRole::ALL {
         let weight = role.resolved().weight;
         assert!(
-            weight == 400 || weight == 500,
-            "`TypeRole::{}` is weight {weight}, but only Roboto Regular (400) and Medium (500) \
-             ship. The matcher would substitute a face rather than fail.",
+            [400, 500, 600].contains(&weight),
+            "`TypeRole::{}` is weight {weight}, but only Roboto Regular (400), Medium (500) and \
+             SemiBold (600) ship. The matcher would substitute a face rather than fail.",
             role.name()
         );
     }

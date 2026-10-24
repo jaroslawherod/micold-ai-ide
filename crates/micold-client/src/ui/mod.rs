@@ -149,7 +149,7 @@ pub type DialogView = for<'a> fn(
 // everything else that decides an appearance (FR-001). Re-exported here for `main`, which
 // registers the font at startup, and for the tests that assert what the font file advertises.
 pub use material::glyph::{icon, icon_colored, MATERIAL_SYMBOLS, MATERIAL_SYMBOLS_BYTES};
-pub use material::{ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
+pub use material::{ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES};
 
 use crate::features::connection::ConnectionStatus;
 
