@@ -24,7 +24,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | — | implemented; awaiting review B |
+| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | — | reviews done; full gate, PR |
 | M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | blocked: #1125 and #1127 must merge |
 | M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | blocked: #1125 and #1127 must merge; after M2 |
 | M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
@@ -53,13 +53,14 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M1 review A (code-review, high) | 1 | — (working tree on f955fbea) | 10 findings: fixed — `### The tab strip` vs the shortcut-from-AI-tab bullet (stale: the chord opens a shell from the AI tab since 027 FR-004), settings.md restart placement, give-up sentence placing restart in the pane, chord focus condition, E6 rewrite dropping the session group, terminal-panes.md:94 macOS forms, status-bar sentence missing key hints; recorded as follow-up — in-app "Choose restart below"; declined — reflow (MINOR), dup of the first paragraph (MINOR: SC-007 needs the answer there). |
 | M1 review A (code-review, high) | 2 | — (fix diff) | 8 findings, all wording precision in round-1 fixes: Cmd+C/Cmd+V (no Shift) on macOS, tab order when a helper is shown, restart only while stopped, "Both restart controls" ambiguity, "+" shown with no instance, layout bullet in appearance-theming.md, '+' bullet focus condition; all fixed; reflow declined again. |
 | M1 review A (code-review, high) | 3 | — (fix diff) | 9 findings, wording precision in round-2 fixes (tab placed after itself, other sessions' order main-then-helpers, focus qualifier scope, '+' anchor with no instances, "new terminal"/"unchanged" release-note wording at terminal-panes.md:94, conditional status-bar items, "a single tab" on a new session, how to get a stopped process for the restart); all fixed, prose only. Rated MINOR (no wrong placement of an element remains); not escalated; review B covers the final text. |
-| M1 review B (conformance) | 1 | `3740dabadc2d0749a908e15d2ceee93b291d0c05:67674781225eb24388b605834d6641c1e8e6794b` | pending: orchestrator dispatches |
+| M1 review B (conformance) | 1 | `3740dabadc2d0749a908e15d2ceee93b291d0c05:67674781225eb24388b605834d6641c1e8e6794b` (Sonnet) | CLEAN; 3 MINORs: F1 fixed, prose only (appearance-theming.md notifications "a small bar" → "a small notification"); F2 declined (see Declined review findings); F3 fixed, prose only (settings.md recovery parenthesis dropped: the client has no general stop-session control, only **Stop session** while an interrupt is overdue). |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A rounds 1–3 | MINOR: reflow the paragraphs whose added links pushed lines past 100 columns | The pages are not wrapped consistently (hundreds of lines over 100 columns in each touched file); reflowing would widen the diff past FR-011's "that sentence only". |
+| M1 | B round 1 | F2 MINOR: worktrees-and-sessions.md "+" bullet restates the tab strip's "+" | Optional (FR-004 judgement call): the bullet is where that page explains opening instances, and it links to the tab-strip section rather than redescribing its layout. |
 | — (design) | plan round 2 | MINOR: `contracts/covered-states.md:40` says each anchor is "held by W1–W4" under a W1–W5 table | W5 is a state-level assertion on the `State`, not on an anchor, so W1–W4 are the anchors' properties; the sentence is correct. |
 
 ## Handover

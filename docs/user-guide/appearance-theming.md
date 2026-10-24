@@ -220,7 +220,7 @@ when the interface is at rest. There is currently no reduced-motion setting.
 ## Notifications
 
 Messages the app needs to tell you about — a worktree that could not be created, a background
-session that restarted — appear as a small bar near the bottom of the window.
+session that restarted — appear as a small notification near the bottom of the window.
 
 - **One at a time.** If several things happen at once, they are shown in turn rather than stacking
   up and crowding the interface. This is a change: previously up to three could be on screen
