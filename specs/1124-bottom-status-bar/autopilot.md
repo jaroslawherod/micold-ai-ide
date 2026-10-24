@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: plan unit — spec clarified (2 markers resolved from the issue text; round 2 found no critical ambiguities)
+- **Phase**: tasks
+- **Next step**: tasks unit — plan, research, data model, contract and quickstart committed (plan review CLEAN in round 2)
 
 ## Pull requests
 
@@ -37,6 +37,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | dc7a76326c7ffef720f23d0c9ebe55080ecfac9a:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CHANGES: 3 MAJOR, 3 MINOR — all fixed |
 | Spec | 2 | dfed0a366bf36453ce50a47b075d694ef9d0d313:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CLEAN (1 MINOR: US4 scenario order — fixed, prose only) |
+| Plan | 1 | 2e9c5ba755a6058d8286f9f7db0235b26e5fb28b:fe7a79742614d045774446cb51b847fe9564bb1e | CHANGES: 1 MAJOR (anatomy figure shape/ALL/tests), 1 MINOR (R6 location key) — both fixed |
+| Plan | 2 | a336c6f1ebfd5e1598c453a4535ea5aeff6790b2:fe7a79742614d045774446cb51b847fe9564bb1e | CLEAN (2 MINOR: R11 typo, R6 None fallback — fixed, prose only) |
 
 ## Declined review findings
 
