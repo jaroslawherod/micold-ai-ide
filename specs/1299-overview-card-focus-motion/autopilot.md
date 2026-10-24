@@ -59,7 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 T012–T023 implemented and pushed (71d8083b), scoped gate green, snapshot 7c125b3e…:92fe861c recorded. Next: orchestrator runs reviews A (code-review high) and B (conformance) on `origin/main...HEAD`; a fresh M2 unit fixes findings, runs the full gate (`scripts/gate.sh`; disk was 6.9 GB free, wipe target-shared/ first if short) and opens the M2 PR via REST. No PR open yet; no open findings.
 
 ## Open escalation
 
