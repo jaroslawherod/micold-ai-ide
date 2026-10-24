@@ -629,7 +629,7 @@ impl WorktreeForm {
         }
         let picked = self
             .picked_issue
-            .and_then(|n| self.shown_issues().into_iter().find(|i| i.number() == n));
+            .and_then(|n| self.held_issues().find(|i| i.number() == n));
         let facts = micold_core::prompt_template::WorktreeFacts {
             issue: self.ticket.trim().to_string(),
             issue_title: picked.map(|i| i.title().to_string()).unwrap_or_default(),
@@ -1566,7 +1566,8 @@ pub fn issue_retry(state: &mut crate::app::State) {
     let next_seq = state.worktree_form.issue_request_seq + 1;
     let mut started = false;
     while_editing_unprompted(state, |form| {
-        if form.source != BranchSource::Issue {
+        // While advanced mode shows, the basic list is never loaded (feature 1186, FR-004a).
+        if form.source != BranchSource::Issue || form.shows_advanced() {
             return;
         }
         match &mut form.issues {
