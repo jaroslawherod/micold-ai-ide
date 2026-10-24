@@ -187,25 +187,25 @@ draws no banner and the bar reads "Daemon disconnected · reconnecting…" with 
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T021 [US3] Extend `client/tests/banner_is_not_a_snackbar.rs` with failing cases: each of the
+- [x] T021 [US3] Extend `client/tests/banner_is_not_a_snackbar.rs` with failing cases: each of the
   seven FR-009 conditions yields a banner with its action label — Displaced → "Take over",
   ProjectBusy → "Take over", VersionMismatch → "Restart service", BuildMismatch → "Restart
   service", Failed sandbox → "Run without it for now", Stale sandbox → "Restart the sandbox",
   fallback taken → "Try the sandbox again" — and `Disconnected` yields none; when the condition
   ends (back to `Connected` / `Running`) the banner is gone (US3 s4)
-- [ ] T022 [P] [US3] Append covered states `status-bar-warnings` (ProjectBusy + Failed sandbox: both
+- [x] T022 [P] [US3] Append covered states `status-bar-warnings` (ProjectBusy + Failed sandbox: both
   banners and both warning items, session view), `status-bar-warnings-overview` (the same over the
   Overview: the banners sit in the same slot under the toolbar, FR-010) and `status-bar-disconnected` (no banner row, error dot) to
   `client/tests/support/covered_states.rs`
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Make `connection_banner` in `client/src/ui/mod.rs` return its zero-size `Space` for
+- [x] T023 [US3] Make `connection_banner` in `client/src/ui/mod.rs` return its zero-size `Space` for
   `ConnectionStatus::Disconnected` as for `Connected`; the four action arms and `sandbox_banner`
   stay unchanged (R2, D3)
-- [ ] T024 [US3] Regenerate `client/tests/fixtures/layout_snapshot.txt` and review the diff (the new
+- [x] T024 [US3] Regenerate `client/tests/fixtures/layout_snapshot.txt` and review the diff (the new
   states, and any existing `Disconnected` state loses its banner row)
-- [ ] T025 [P] [US3] Update the connection-drop sentence in `docs/user-guide/overview.md` and the
+- [x] T025 [P] [US3] Update the connection-drop sentence in `docs/user-guide/overview.md` and the
   "Status bar" section of `docs/user-guide/appearance-theming.md`: a lost connection is shown in the
   bar (red dot, reconnecting) with no banner; conditions needing an action keep their banner
 

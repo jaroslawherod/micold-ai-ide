@@ -999,26 +999,39 @@ mod tests {
         );
     }
 
-    /// Edge case: after a disconnect the window says the cards may be stale. The strip that says
-    /// so is the connection banner, empty while connected and present once the link is lost. This
-    /// pins the banner only; that the root view places it above the Overview is not asserted.
+    /// Edge case: after a disconnect the cards may be stale, and the status bar's connection item
+    /// says so (feature 1124, FR-009). The banner row is for conditions with an action: it stays
+    /// empty for a lost connection, and a restart-service condition still has height. This pins the
+    /// banner only; that the root view places it above the Overview is not asserted.
     #[test]
-    fn the_connection_banner_has_height_only_when_disconnected() {
-        use crate::features::connection::connection_status;
+    fn the_connection_banner_has_height_only_for_an_action_condition() {
+        use crate::features::connection::{connection_status, ConnectionStatus};
         let room = Size::new(900.0, 300.0);
         let roles = crate::ui::material::test_support::roles();
-        let strip = |disconnected: bool| {
-            let status = connection_status(None, None, None, disconnected);
+        let strip = |status: ConnectionStatus| {
             crate::ui::material::test_support::size_of(
                 crate::ui::connection_banner(&status, roles),
                 room,
             )
             .height
         };
-        assert_eq!(strip(false), 0.0, "no strip while connected");
+        assert_eq!(
+            strip(connection_status(None, None, None, false)),
+            0.0,
+            "no strip while connected"
+        );
+        assert_eq!(
+            strip(connection_status(None, None, None, true)),
+            0.0,
+            "a lost connection is shown in the status bar only"
+        );
+        let mismatch = ConnectionStatus::BuildMismatch {
+            client_build: "b2".into(),
+            daemon_build: "b1".into(),
+        };
         assert!(
-            strip(true) > 0.0,
-            "a disconnect must show the stale-data strip"
+            strip(mismatch) > 0.0,
+            "an action condition keeps its banner"
         );
     }
 

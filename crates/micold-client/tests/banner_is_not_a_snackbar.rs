@@ -206,3 +206,64 @@ fn a_failed_sandbox_is_not_announced_through_the_notification_queue() {
          while the sandbox is still broken (FR-035b, S-3)"
     );
 }
+
+// -------------------------------------------------------------------------------------------
+// T021 — the seven action banners stay, a lost connection is the bar's alone (feature 1124, US3)
+// -------------------------------------------------------------------------------------------
+
+/// The text of the function `name` in `ui/mod.rs`, up to its closing brace.
+fn ui_function(name: &str) -> String {
+    let ui = source("ui/mod.rs");
+    let start = ui
+        .find(&format!("fn {name}"))
+        .unwrap_or_else(|| panic!("`{name}` is gone from ui/mod.rs"));
+    let end = ui[start..]
+        .find("\n}\n")
+        .map(|o| start + o)
+        .unwrap_or(ui.len());
+    ui[start..end].to_string()
+}
+
+/// FR-009: each of the seven conditions that offers an action keeps its banner and its button.
+///
+/// A source check, as above: the banners are private `Element`s of the window column, so what a
+/// test can pin is the arm that pairs a condition with its label. Four conditions come from the
+/// connection, three from the sandbox.
+#[test]
+fn each_of_the_seven_action_conditions_keeps_its_banner_and_button() {
+    let connection = ui_function("connection_action");
+    for (condition, label) in [
+        ("Displaced", "Take over"),
+        ("ProjectBusy", "Take over"),
+        ("VersionMismatch", "Restart service"),
+        ("BuildMismatch", "Restart service"),
+    ] {
+        assert!(
+            connection.contains(condition) && connection.contains(label),
+            "{condition} no longer offers \"{label}\" (FR-009)"
+        );
+    }
+    let sandbox = ui_function("sandbox_banner");
+    for label in [
+        "Run without it for now",
+        "Restart the sandbox",
+        "Try the sandbox again",
+    ] {
+        assert!(
+            sandbox.contains(label),
+            "the sandbox banner lost its \"{label}\" button (FR-009)"
+        );
+    }
+}
+
+/// FR-003, FR-009: a lost connection has no action, so it raises no banner — the bar says it.
+/// The banner function returns its zero-size row for `Disconnected` as it does for `Connected`.
+#[test]
+fn a_lost_connection_raises_no_banner() {
+    let banner = ui_function("connection_banner");
+    assert!(
+        banner.contains("ConnectionStatus::Disconnected"),
+        "`connection_banner` still draws a row for a lost connection; the bar's connection item \
+         is the only place it is shown (FR-003, FR-009)"
+    );
+}

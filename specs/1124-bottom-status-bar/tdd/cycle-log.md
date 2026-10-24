@@ -31,3 +31,12 @@ words neutral with no notice, bring-up not busy, and the host daemon named inste
 
 T012 also factored the connection banner's words into `ui::connection_words` / `connection_action`,
 so the status bar's tooltip and the banner read one source (FR-006; review B M1 F2).
+
+### M3 (T021–T025)
+
+| Behaviour | Test | Red | Result |
+|---|---|---|---|
+| A lost connection raises no banner (T021, T023) | `banner_is_not_a_snackbar::a_lost_connection_raises_no_banner` | FAILED (`connection_banner` had no `Disconnected` arm) | ok |
+| Seven action conditions keep banner and button (T021) | `each_of_the_seven_action_conditions_keeps_its_banner_and_button` | a guard on unchanged code: passes on first run (the four action arms and `sandbox_banner` are untouched, R2/D3) | ok |
+| Banner height: none connected, none lost, some for an action condition (T023) | `overview::the_connection_banner_has_height_only_for_an_action_condition` | the old `strip(true) > 0.0` assertion was inverted with the code change; the new `strip(disconnected) == 0.0` fails on the previous `connection_banner` | ok |
+| Warning and lost-connection states fit (T022, T024) | `layout_snapshot`, `layout_text_overflow` | new covered states, recorded; `containment::CLIP_REVEALED` renumbered (the lost-connection state no longer shifts the body to child 2; the two-banner state shifts it to 3) | ok |

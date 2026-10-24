@@ -88,7 +88,7 @@ const TOLERANCE: f32 = 0.5;
 /// So, unlike a defect exemption, this list **does not expire**. What the assertion below still
 /// buys is that it cannot quietly grow: a new entry means either a new clip-revealing wrapper, to
 /// be named here with its reason, or a child escaping a parent that does not clip, which is a bug.
-const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/1/0", "0/0/0/2/0/0/0/1/0"];
+const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/1/0", "0/0/0/3/0/0/0/1/0"];
 
 /// The sidebar list's scroll content, which is taller than its viewport by design.
 ///
