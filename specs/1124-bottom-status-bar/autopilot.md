@@ -9,14 +9,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M1 pr
-- **Next step**: orchestrator opens the M1 PR from scratchpad pr-title.md / pr-body.md; after merge, milestone M2
+- **Phase**: M2 gate
+- **Next step**: gate, reviews A and B, then the orchestrator opens the M2 PR from scratchpad pr-title.md / pr-body.md
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1317 | design (spec, plan, tasks) | merged (rebase) | f55628dfd03663553ffeef46dc83c99bc6b56fed |
+| #1327 | M1 | merged (rebase) | afef53af8836a80b7a4ae575f0dbb2c75dee077e |
 
 ## Milestones
 

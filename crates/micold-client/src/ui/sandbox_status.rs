@@ -6,28 +6,11 @@
 //! user's remedy for a hang is to kill the application. The container contract makes the runtime's
 //! progress callbacks an obligation (C-8) for exactly this reason, and this is where they surface.
 //!
-//! # Why the bar claims nothing
-//!
-//! [`StageProgress`](crate::ui::material::StageProgress) is indeterminate by construction — see its
-//! own header. A pull *does* report a percentage, and it is shown, but as text on the detail line
-//! rather than as a fill: the percentage a runtime reports is per-layer and restarts, so a bar
-//! driven from it would run forwards and then jump back, which reads as a fault rather than as
-//! progress.
-//!
-//! # Why it is absent rather than empty at rest
-//!
-//! The bar animates for as long as it exists, so one rendered while nothing is happening would
-//! request a frame every tick for the life of the process (SC-017). The states that are not a
-//! bring-up in flight therefore render *nothing*, and `tests/sandbox_progress.rs` lays the view out
-//! to check it.
+//! The wording lives here; the status bar's sandbox item draws it (feature 1124, US2) — a busy
+//! mark, the stage and the download's percentage, with the runtime's line in the tooltip. There is
+//! no row of its own above the body: SC-003 holds the body's top edge still through a bring-up.
 
-use iced::widget::Space;
-use iced::{Element, Length};
 use micold_core::sandbox::lifecycle::SandboxState;
-use micold_core::tokens::{spacing, Roles};
-
-use crate::app::Message;
-use crate::ui::material;
 
 /// What to say about a bring-up in flight.
 ///
@@ -98,27 +81,4 @@ fn acquisition_detail(progress: &micold_core::sandbox::runtime::Progress) -> Str
         line.push_str(&format!(" — {item}"));
     }
     line
-}
-
-/// The indicator itself, or nothing at all.
-pub fn view<'a>(state: &SandboxState, roles: Roles) -> Element<'a, Message> {
-    indicator(stage_line(state), roles)
-}
-
-/// The indicator for `line`, or nothing at all.
-pub(crate) fn indicator<'a>(line: Option<StageLine>, roles: Roles) -> Element<'a, Message> {
-    match line {
-        Some(line) => material::Surface::new(
-            material::StageProgress::new(line.label, roles).detail(line.detail),
-            material::SurfaceKind::Window,
-            roles,
-        )
-        .padding(spacing::MD)
-        .width(Length::Fill)
-        .into(),
-        None => Space::new()
-            .width(Length::Fixed(0.0))
-            .height(Length::Fixed(0.0))
-            .into(),
-    }
 }

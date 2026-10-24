@@ -155,22 +155,22 @@ tooltip, and the body's top edge never moves.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T016 [US2] Replace `the_indicator_occupies_nothing_unless_the_sandbox_is_coming_up` in
+- [x] T016 [US2] Replace `the_indicator_occupies_nothing_unless_the_sandbox_is_coming_up` in
   `client/tests/sandbox_progress.rs` with a failing test that the window column has no row between
   the toolbar and the body during Probing, Acquiring and Starting, and that the body's top edge is
   the same as with the sandbox running (SC-003); keep the `stage_line`/`attempt_line` wording tests
-- [ ] T017 [P] [US2] Append covered state `status-bar-bring-up` (Acquiring, 42 %, with a runtime
+- [x] T017 [P] [US2] Append covered state `status-bar-bring-up` (Acquiring, 42 %, with a runtime
   detail line) to `client/tests/support/covered_states.rs`
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Remove the bring-up row (`sandbox_status::indicator(attempt_line(..))`) from the
+- [x] T018 [US2] Remove the bring-up row (`sandbox_status::indicator(attempt_line(..))`) from the
   window column in `client/src/ui/mod.rs`; delete `indicator()`/`view()` from
   `client/src/ui/sandbox_status.rs` and the `view as sandbox_indicator` re-export from
   `client/src/ui/mod.rs`, keeping `stage_line`, `attempt_line` and `StageLine`
-- [ ] T019 [US2] Regenerate `client/tests/fixtures/layout_snapshot.txt` and review the diff (only the
+- [x] T019 [US2] Regenerate `client/tests/fixtures/layout_snapshot.txt` and review the diff (only the
   new state and the removed row change)
-- [ ] T020 [P] [US2] Update `docs/user-guide/sandboxed-daemon.md`: bring-up progress is shown in the
+- [x] T020 [P] [US2] Update `docs/user-guide/sandboxed-daemon.md`: bring-up progress is shown in the
   status bar's sandbox item (stage, percent, hover for the runtime line), no longer as a row under
   the app bar
 
