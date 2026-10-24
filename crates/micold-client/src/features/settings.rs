@@ -122,8 +122,8 @@ pub struct State {
     pub system_scheme: SystemScheme,
     /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
     pub theme_pref: ThemePreference,
-    /// Whether the Overview's full-screen zoom switches in one step (persisted; feature 970,
-    /// FR-008). Set by a save, like `theme_pref`; the draft's copy is the unsaved edit.
+    /// Whether the Overview's full-screen zoom (feature 970, FR-008) and Overview card focus and
+    /// expansion (feature 1299) switch in one step (persisted). Set by a save, like `theme_pref`; the draft's copy is the unsaved edit.
     pub reduce_motion: bool,
     /// Where sessions are running **now** (FR-035b; BUG-003).
     ///
@@ -294,7 +294,8 @@ impl SettingsSection {
 pub struct AppearanceDraft {
     /// Light, dark, or follow the system.
     pub theme: ThemePreference,
-    /// Switch the Overview's full-screen zoom in one step (feature 970, FR-008).
+    /// Switch the Overview's full-screen zoom (feature 970, FR-008) and Overview card focus and
+    /// expansion (feature 1299) in one step.
     pub reduce_motion: bool,
 }
 
