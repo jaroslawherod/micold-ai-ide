@@ -1601,6 +1601,46 @@ mod tests {
     use micold_core::project::{Availability, Project};
     use micold_core::session::{Session, SessionLifecycle, SessionLocation};
 
+    /// FR-007: a plain cell and a bold cell resolve to the bundled Fira Mono Regular and Bold faces
+    /// in the global font system, not to a host monospace face.
+    #[test]
+    fn cell_fonts_resolve_to_the_bundled_fira_mono_faces() {
+        let _ = crate::ui::material::test_support::renderer();
+        assert!(
+            crate::ui::material::test_support::resolves_to_bundled(
+                cell_font(Flags::empty()),
+                crate::ui::FIRA_MONO_REGULAR_BYTES
+            ),
+            "a plain terminal cell does not resolve to the bundled Fira Mono Regular"
+        );
+        assert!(
+            crate::ui::material::test_support::resolves_to_bundled(
+                cell_font(Flags::BOLD),
+                crate::ui::FIRA_MONO_BOLD_BYTES
+            ),
+            "a bold terminal cell does not resolve to the bundled Fira Mono Bold"
+        );
+    }
+
+    /// FR-007: the grid's cell width is the width the bundled face's glyphs actually advance, read
+    /// from its `hmtx`, at the sizes the terminal is drawn at.
+    #[test]
+    fn cell_width_equals_the_bundled_face_advance() {
+        let face = ttf_parser::Face::parse(crate::ui::FIRA_MONO_REGULAR_BYTES, 0)
+            .expect("bundled Fira Mono Regular parses");
+        let glyph = face.glyph_index('M').expect("Fira Mono has 'M'");
+        let advance = f32::from(face.glyph_hor_advance(glyph).expect("'M' has an advance"))
+            / f32::from(face.units_per_em());
+        for size in [12.0_f32, 13.0, 14.0] {
+            let width = CellMetrics::new(size).width;
+            assert!(
+                (width - advance * size).abs() < 1e-4,
+                "cell width {width} at size {size} is not Fira Mono's advance {}",
+                advance * size
+            );
+        }
+    }
+
     /// A `Failed` in the shape supervision produces one. These cases are about the *variant* — the
     /// tint, the status word, whether restart is offered — not about the sentence, but the variant
     /// has carried one since `010` BUG-017 and something has to fill it.
