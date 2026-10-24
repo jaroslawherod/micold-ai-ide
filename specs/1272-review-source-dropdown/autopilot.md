@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
 - **Phase**: milestone M2
-- **Next step**: M2 scoped gate + review A, then review B, full gate (worktree /home/user/wt-1272-m1, branch m1272-m2 on M1 head 6934a02f; orchestrator moves the commits onto the run branch after #1368 merges)
+- **Next step**: orchestrator merges #1368, moves the M2 commits (branch m1272-m2 in /home/user/wt-1272-m1) onto the run branch, pushes and opens the M2 PR (title/body in scratchpad m2/; full gate green at 1eaf6de8)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | #1368 | done, gate green at 703c8ff5; PR open |
-| M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | | in progress |
+| M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | | done, gate green at 1eaf6de8; PR to open |
 | M3 | T016–T018 | full | shared `MenuSelect` + geometry gate + showcase | | pending |
 | M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | | blocked on #1270 |
 
@@ -49,6 +49,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 2 | 0f7ff1a9986747a18ac55db014ecf7046638b679:454bb4718cbe9cf836b80ff8eae4a20e85a5b483 | CLEAN: 2 MINOR (ledger wording; fixed, prose only) |
 | M1 A (code-review high, headless claude -p) | 1 | 11db4a7af4275acae7dd7700532cd0d8a5a89e28:48cb9959b134050aa6cb38dd873c65410e7fb795 | CLEAN: 3 MINOR, all fixed (F1 `List` with no pull request read as `Empty`, tested; F2 `files` prefix built only where used; F3 duplicate assert removed) |
 | M1 B (conformance, sonnet, headless) | 1 | 11db4a7af4275acae7dd7700532cd0d8a5a89e28:48cb9959b134050aa6cb38dd873c65410e7fb795 | CLEAN: 1 MINOR (Default-entry label row missing from data-model §6; fixed, prose only). Ran beside A, before the gate; reviewers could not run cargo, Verify output supplied by the implementer |
+| M2 A (code-review high, headless claude -p) | 1 | a5076ddfcb5a1f1d65c7ba6c1e637859be9fabe9:1eaf6de89bd3c1bf198ff6a5218cd2413a9c8ec4 | CLEAN: 2 MINOR, both declined (see *Declined review findings*) |
+| M2 B (conformance, sonnet, headless) | 1 | a5076ddfcb5a1f1d65c7ba6c1e637859be9fabe9:1eaf6de89bd3c1bf198ff6a5218cd2413a9c8ec4 | CLEAN, no findings; first run returned a bare CLEAN, re-run with a required evidence block (Checked: per rubric item, cited tests and lines). Ran beside A and the gate; reviewers could not run cargo, Verify output supplied by the implementer |
 
 ## Declined review findings
 
@@ -57,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | — | Tasks 1 | F1 re-cut (core + reducer as M1, view wiring before #1270) | View wiring before #1270 contradicts R8 (both rewrite the same header/body rows of `ui/changes.rs`). Taken: Phase 2 relabelled as the P1 stories' core (rule 6), deviation note under *Milestones* citing decision 3 and rules 1, 2, 6, 3; "decision 2" reference fixed. Core + reducer kept apart: 15 tasks (rule 3). |
 | — | Analyze | I3 FR-008 "about 260 px" vs exact 260 | the plan fixes the constant at 260.0; the spec's "about" is user-level wording. No change. |
 | — | Analyze | U2 split T021 | T021 is one view function's wiring; M4 has 8 tasks. No change. |
+| M2 | A | F1 `menu_input` computes `stale` at `now = 0` then clears it | correct and commented (`None` never marks it); a refactor would re-run the full gate for no behaviour change |
+| M2 | A | F2 inline `Source` → `Stop` mapping in `SourceMenuToggled` | used once; the other mapping (`menu_input`) builds a `Shown`, not a `Stop` |
 
 ## Handover
 
