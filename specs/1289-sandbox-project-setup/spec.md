@@ -139,28 +139,6 @@ succeeded. With a long-running command, choose **Stop setup**; the row shows set
 
 ---
 
-### User Story 4 - A project chooses its own sandbox image (Priority: P3)
-
-A user whose project needs tools that are slow or impractical to install at setup time chooses, for
-that one project, an image built `FROM` the basic image with those tools baked in. Other projects on
-the same daemon keep the daemon's image.
-
-**Why this priority**: The issue marks it optional. Stories 1–3 already cover installing a
-toolchain per project without a custom image; this one only saves install time for heavy toolchains.
-
-**Independent Test**: [NEEDS CLARIFICATION: is a per-project image in scope for this feature, given
-that one container daemon today runs one image for every project it serves? Options: (A) defer it
-to a follow-up issue and ship Stories 1–3 only; (B) a project's image starts a separate container
-for that project's worktrees, with its own home; (C) a project's image is offered only as a
-per-project choice of which daemon (with its own image) new worktrees default to, using the
-existing daemon select.]
-
-**Acceptance Scenarios**:
-
-1. To be written once the clarification above is answered.
-
----
-
 ### Edge Cases
 
 - **Worktree created outside the app** (for example `git worktree add` from a terminal on the
@@ -203,6 +181,18 @@ existing daemon select.]
   first on `PATH` (FR-001), so the session runs the CLI the app installed; other tools in the home
   folders win over the image's.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Where is a project's setup command defined? → A: A per-project app setting stored in the app's
+  settings file, entered in the app; no repository file is read. _(provisional — recommended option,
+  awaiting user answer; precedent: docs/user-guide/settings.md#jira per-project base URL)_
+- Q: Is a per-project sandbox image (Story 4) in scope? → A: No; deferred to a follow-up issue. A
+  second container daemon with its own image, chosen in the per-project remembered Daemon select,
+  is documented as today's way. _(provisional — recommended option, awaiting user answer; evidence:
+  docs/user-guide/worktrees-and-sessions.md Daemon select)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -237,11 +227,9 @@ existing daemon select.]
 
 - **FR-009**: Each project MUST have an optional setup command, empty by default, that the user can
   view, set, change and clear from the app. It MUST be kept with the project and survive restarts.
-  [NEEDS CLARIFICATION: where is the setup command defined? Options: (A) a per-project setting
-  stored by the app, entered in the app; (B) a file checked into the repository (for example
-  `.micold/setup`), so it travels with the code and every user of the repository gets it, which
-  means a cloned repository can run commands on worktree creation; (C) both, with the app setting
-  winning when set.]
+  It is an app setting of that project, entered in the app and stored in the app's settings file
+  with the project's other settings; the app MUST NOT read a setup command from a file in the
+  repository, so a cloned repository never runs a command the user did not enter.
 - **FR-010**: When a worktree is created for a project with a setup command — from the New worktree
   form or through the `create_worktree` tool — the daemon the worktree runs on MUST start the
   command once the worktree exists, with the new worktree as the working directory.
@@ -290,11 +278,14 @@ existing daemon select.]
 
 - **FR-025**: The user guide MUST describe the setup command (where it is set, when it runs, how to
   read its output, re-run and stop it) and the `PATH` folders of FR-001, and the sandbox page MUST
-  point to them from "Which image it runs on".
+  point to them from "Which image it runs on". That page MUST also say how a project gets its own
+  image today: add another container daemon with **My own image** built `FROM` the basic image, and
+  choose it in the New worktree form's **Daemon** select, which the project remembers.
 
 ### Key Entities
 
-- **Project setup command**: an optional shell command line belonging to one project.
+- **Project setup command**: an optional shell command line belonging to one project, stored in the
+  app's settings file.
 - **Setup run**: one execution of a project's setup command in one worktree (or the project
   folder): its state (running, succeeded, failed, stopped, interrupted), exit status or start
   failure reason, start and end time, and its captured output.
@@ -324,6 +315,10 @@ existing daemon select.]
 ## Out of scope
 
 - Baking a project's toolchain into the daemon-wide image (the alternative the issue rejected).
+- A per-project sandbox image (the issue's optional part): deferred to a follow-up issue. A project
+  can already run on its own image through a second container daemon chosen in the remembered
+  **Daemon** select (FR-025 documents it).
+- A setup command read from a file checked into the repository.
 - A setup step that runs before every session, rather than once per worktree.
 - Changing `PATH` on host or remote (SSH) daemons, which already take the user's own environment.
 - Caching or sharing toolchain downloads between different sandboxes.
@@ -344,6 +339,7 @@ existing daemon select.]
   caches.
 - Setup output is kept on the daemon for the life of the worktree and is not part of the app's
   settings file; it may contain secrets printed by the command, so it is never written to the
-  settings file.
+  settings file. The command itself is in the settings file, like other per-project settings (the
+  Jira base URL).
 - A worktree created on a Kubernetes daemon follows the same rules as a container daemon; its home
   is the pod's home volume.
