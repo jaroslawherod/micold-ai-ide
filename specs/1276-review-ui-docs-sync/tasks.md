@@ -86,7 +86,9 @@ passes and fails on a changed `Does` cell; the §A2 grep returns nothing from th
 - [ ] T005 [US1] Only if T002 found the table *thinner* (contract § *If the table is thinner*): with no
   sheet text, narrow T004's row comparison to the `Key` cells and write
   `crates/micold-client/tests/review_sheet_doc.rs` comparing each `Does` cell with the `?` sheet's text
-  for that key, with the same marker helpers (shared, not copied); with no primary flag, derive the
+  for that key, with the same marker helpers (shared, not copied: the client test includes the core
+  file with `#[path = "../../micold-core/tests/support/marked_table.rs"] mod marked_table;`, since an
+  integration test cannot `use` another crate's `tests/` module); with no primary flag, derive the
   suffix from the modifier set as the contract says. Seen failing before T007. Otherwise mark it
   "not needed" with the reason.
 - [ ] T006 [US1] Add the commented `/docs/user-guide/reviewing-changes.md -micold-docs` block of the
@@ -332,7 +334,8 @@ implemented now**: every one waits on unmerged blockers, listed under **Depends 
 - **Satisfies**: US1 acceptance scenarios 1–7; FR-001, FR-002, FR-003, FR-004, FR-014; SC-001, SC-005;
   edge cases empty review, failure states, multi-session, cross-platform keys (guide side)
 - **Verify**: `cargo test -p micold-core --test review_keys_doc --test terminal_only_doc --test
-  documentation_is_not_read`; `scripts/tests/documentation-set.test.sh`;
+  documentation_is_not_read`; `cargo test -p micold-client --test review_sheet_doc` (when T005
+  applies); `scripts/tests/documentation-set.test.sh`;
   `site/checks/links.sh --sources`; quickstart §A1–§A3, §A6; `scripts/gate.sh`
 - **Depends on**: blockers #1269, #1270, #1271, #1272, #1273, #1274, #1275 merged (#1128 not needed);
   #1274 must ship the `micold-core` key table, else the T002 blocker issue

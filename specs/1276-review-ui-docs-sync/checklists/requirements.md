@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous (three open markers; tick after clarify)
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -31,8 +31,7 @@
 
 ## Notes
 
-- Three [NEEDS CLARIFICATION] markers are left for the clarify unit: FR-004 (does a guide-equals-bound-keys
-  check satisfy "pure logic in micold-core"), FR-009 (visual-pass widths: 1280 only or also 900 / 1920),
-  FR-012 (mockup elements not built: remove or label as follow-up).
+- Clarify answered all three markers (FR-004, FR-009, FR-012): spec § Clarifications, Session
+  2026-10-24.
 - The spec names repository files (user-guide pages, the fixture, the redesign doc) because they are
   the deliverables of this docs slice, not implementation choices.
