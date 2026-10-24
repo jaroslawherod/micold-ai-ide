@@ -16,6 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| (to open) | Design: spec, plan, tasks (branch pushed at the tasks unit's last commit; orchestrator opens via GitHub MCP) | pending | — |
 
 ## Milestones
 
