@@ -1795,8 +1795,8 @@ fn hide_shown(state: &mut State) {
     let Some(key) = state.tabs.shown_key().cloned() else {
         return;
     };
-    let unwatched = state.tabs.shown_view().is_some_and(reading)
-        || state.header.entry.as_ref() != Some(&key);
+    let unwatched =
+        state.tabs.shown_view().is_some_and(reading) || state.header.entry.as_ref() != Some(&key);
     state.tabs.hide();
     if unwatched {
         state.tabs.location_left(&key);
@@ -2254,7 +2254,9 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     };
                 }
             }
-            if let Some(Source::PullRequest(pr)) = state.tabs.shown_view_mut().map(|v| &mut v.source) {
+            if let Some(Source::PullRequest(pr)) =
+                state.tabs.shown_view_mut().map(|v| &mut v.source)
+            {
                 let current = source == SourceKey::Pr(pr.number)
                     && pr.selected.as_ref() == Some(&path)
                     && pr.head_text == (HeadText::Reading { seq });
@@ -2394,7 +2396,11 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::ComposerAction(_) => Effect::None,
         Msg::ComposerEdited(text) => {
-            if let Some(composer) = state.tabs.shown_view_mut().and_then(|v| v.composer.as_mut()) {
+            if let Some(composer) = state
+                .tabs
+                .shown_view_mut()
+                .and_then(|v| v.composer.as_mut())
+            {
                 composer.text = text;
             }
             Effect::None
@@ -2943,7 +2949,10 @@ pub fn tidy_actions(state: &State) -> Option<TidyActions> {
 /// The discard confirmation's question while it is open (S3): "Discard n draft comments? This
 /// cannot be undone."
 pub fn discard_prompt(state: &State) -> Option<String> {
-    let view = state.tabs.shown_view().filter(|view| view.confirm_discard)?;
+    let view = state
+        .tabs
+        .shown_view()
+        .filter(|view| view.confirm_discard)?;
     let scope = view_scope(view);
     let count =
         review_of(state, view).map_or(0, |r| in_scope(r, scope).filter(|c| is_pending(c)).count());
@@ -3187,7 +3196,11 @@ fn request_tree(view: &mut OpenView, next_seq: &mut u64) -> Effect {
 /// After a change, the worktree's files may differ: read the browsed file and the shown tree again
 /// (FR-014: the worktree's current version).
 fn refresh_browsed(state: &mut State) -> Vec<Effect> {
-    let Some(view) = state.tabs.shown_view_mut().filter(|v| v.source == Source::Changes) else {
+    let Some(view) = state
+        .tabs
+        .shown_view_mut()
+        .filter(|v| v.source == Source::Changes)
+    else {
         return Vec::new();
     };
     let mut effects = Vec::new();
@@ -4247,10 +4260,13 @@ mod tests {
         assert_eq!(state.header.load, Load::Idle);
         // The Default entry is never a listed worktree.
         let mut root = read_once(SessionLocation::Default, Ok(summary(2)));
-        update(&mut root, Msg::WorktreesListed {
+        update(
+            &mut root,
+            Msg::WorktreesListed {
                 project: project(),
                 names: BTreeSet::new(),
-            });
+            },
+        );
         assert!(root.header.entry.is_some());
     }
 
@@ -4491,7 +4507,11 @@ mod tests {
         assert_eq!(state.tabs.len(), 1);
         let view = state.tabs.shown_view().unwrap();
         assert!(!view.toggles.uncommitted, "toggles kept");
-        assert_eq!(view.list, Load::Failed("git failed".into()), "the error as today");
+        assert_eq!(
+            view.list,
+            Load::Failed("git failed".into()),
+            "the error as today"
+        );
         assert_eq!(state.reviews, reviews, "comments kept");
     }
 
@@ -4503,7 +4523,10 @@ mod tests {
         update(&mut state, Msg::SessionSelected);
         let effect = update(&mut state, Msg::Changed);
         assert_eq!(view_reads(&effect), Vec::<Effect>::new());
-        assert!(matches!(effect, Effect::ReadCounts { .. }), "the header's counts, as today");
+        assert!(
+            matches!(effect, Effect::ReadCounts { .. }),
+            "the header's counts, as today"
+        );
         assert_eq!(
             state.tabs.get(&key_w()).map(|tab| tab.freshness()),
             Some(Freshness::Changed)
@@ -4542,8 +4565,14 @@ mod tests {
             },
         );
         let tab = state.tabs.get(&key_w()).unwrap();
-        assert_eq!(tab.view.composer, None, "the edit of a comment that is gone closes");
+        assert_eq!(
+            tab.view.composer, None,
+            "the edit of a comment that is gone closes"
+        );
         assert_eq!(tab.freshness(), Freshness::Unwatched);
-        assert!(state.reviews[&(project(), "w".to_string())].sending, "reviews updated");
+        assert!(
+            state.reviews[&(project(), "w".to_string())].sending,
+            "reviews updated"
+        );
     }
 }

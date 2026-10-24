@@ -602,10 +602,11 @@ mod rendered_presses {
             state.changes.tabs.shown().is_some(),
             "the premise: the review is shown"
         );
-        let pressed: Vec<Message> = click(StateUnderTest::new(state.clone()), SESSION_HEADER_CHANGES)
-            .into_iter()
-            .filter(|m| matches!(m, Message::Sidebar(_) | Message::Changes(_)))
-            .collect();
+        let pressed: Vec<Message> =
+            click(StateUnderTest::new(state.clone()), SESSION_HEADER_CHANGES)
+                .into_iter()
+                .filter(|m| matches!(m, Message::Sidebar(_) | Message::Changes(_)))
+                .collect();
         assert_eq!(
             pressed,
             vec![Message::Sidebar(SidebarMsg::ReviewChangesRequested(
@@ -617,7 +618,10 @@ mod rendered_presses {
         for message in pressed {
             state.update(message);
         }
-        assert_eq!(state.changes.tabs, before, "the tabs and the shown tab are unchanged");
+        assert_eq!(
+            state.changes.tabs, before,
+            "the tabs and the shown tab are unchanged"
+        );
         assert!(state.changes.pending.is_none(), "nothing is read");
     }
 

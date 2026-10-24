@@ -139,10 +139,7 @@ fn reopening_resets_the_toggles() {
     );
     assert!(state.tabs.is_empty(), "the close action drops the tab");
     open(&mut state, worktree());
-    assert_eq!(
-        state.tabs.shown_view().unwrap().toggles,
-        Toggles::default()
-    );
+    assert_eq!(state.tabs.shown_view().unwrap().toggles, Toggles::default());
 }
 
 /// US1 s2. A toggle change re-reads the list under the new toggles.
@@ -259,7 +256,10 @@ fn the_selection_is_kept_across_a_reread_while_still_listed() {
             result: Ok(list(&["b.rs", "c.rs"])),
         },
     );
-    assert_eq!(state.tabs.shown_view().unwrap().selected, Some(path("b.rs")));
+    assert_eq!(
+        state.tabs.shown_view().unwrap().selected,
+        Some(path("b.rs"))
+    );
 
     let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::CommittedToggled) else {
         panic!("re-read");
@@ -283,7 +283,10 @@ fn selecting_a_session_closes_the_view() {
     assert!(state.tabs.shown().is_none(), "hidden");
     assert_eq!(state.tabs.len(), 1, "kept");
     assert_eq!(
-        state.tabs.get(&(project(), worktree())).map(|tab| &tab.view),
+        state
+            .tabs
+            .get(&(project(), worktree()))
+            .map(|tab| &tab.view),
         before.as_ref(),
         "its view as it was"
     );
@@ -403,7 +406,10 @@ fn a_worktree_without_a_base_says_why() {
 fn loading_and_failure_have_their_own_bodies() {
     let mut state = State::default();
     let seq = open(&mut state, worktree());
-    assert_eq!(list_body(state.tabs.shown_view().unwrap()), ListBody::Loading);
+    assert_eq!(
+        list_body(state.tabs.shown_view().unwrap()),
+        ListBody::Loading
+    );
     changes::update(
         &mut state,
         Msg::ListRead {
@@ -544,7 +550,10 @@ fn a_stale_diff_answer_is_dropped() {
             result: Ok(text_diff()),
         },
     );
-    assert_eq!(diff_body(state.tabs.shown_view().unwrap()), DiffBody::Loading);
+    assert_eq!(
+        diff_body(state.tabs.shown_view().unwrap()),
+        DiffBody::Loading
+    );
     changes::update(
         &mut state,
         Msg::DiffRead {
@@ -1784,7 +1793,10 @@ fn a_selection_the_list_does_not_have_is_not_left_loading() {
     let effect = changes::update(&mut state, Msg::FileSelected(path("ghost.rs")));
     assert!(matches!(effect, Effect::None), "{effect:?}");
     assert!(
-        matches!(diff_body(state.tabs.shown_view().unwrap()), DiffBody::Failed(_)),
+        matches!(
+            diff_body(state.tabs.shown_view().unwrap()),
+            DiffBody::Failed(_)
+        ),
         "{:?}",
         diff_body(state.tabs.shown_view().unwrap())
     );
@@ -3743,7 +3755,10 @@ fn two_reviews_keep_their_own_views() {
     assert_eq!(first.selected, Some(path("b.rs")));
     assert_eq!(first.composer.as_ref().unwrap().text, "about feat-a");
     let hidden = &state.tabs.get(&(project(), other)).unwrap().view;
-    assert_eq!(hidden.selected, second.selected, "feat-b's kept view holds its own file");
+    assert_eq!(
+        hidden.selected, second.selected,
+        "feat-b's kept view holds its own file"
+    );
     assert_eq!(hidden.composer, second.composer);
     assert_eq!(hidden.pick, second.pick);
 }
@@ -3776,7 +3791,12 @@ fn repeated_opens_keep_one_tab_per_location() {
 /// Take the read the root left for the shell, and answer it.
 fn answer_pending(app: &mut micold_client::app::State) -> Option<Effect> {
     let effect = app.take_changes_effect()?;
-    answer_reads(&mut app.changes, effect.clone(), &["a.rs", "b.rs"], &text_diff());
+    answer_reads(
+        &mut app.changes,
+        effect.clone(),
+        &["a.rs", "b.rs"],
+        &text_diff(),
+    );
     Some(effect)
 }
 
@@ -3807,7 +3827,9 @@ fn reviewing_feat_a() -> (
     let (mut app, ids) = two_worktrees_app();
     app.update(Message::Session(SessionMsg::Selected(ids[0])));
     answer_pending(&mut app);
-    app.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(worktree())));
+    app.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+        worktree(),
+    )));
     answer_pending(&mut app);
     app.update_changes(Msg::ListScrolled {
         offset: 40,
@@ -3840,7 +3862,11 @@ fn switching_location_and_back_keeps_the_review_and_rereads_it_when_shown() {
         "a change read for no hidden view"
     );
     app.update(Message::Session(SessionMsg::Selected(ids[0])));
-    assert_eq!(list_reads(answer_pending(&mut app)), vec![], "nothing read while hidden");
+    assert_eq!(
+        list_reads(answer_pending(&mut app)),
+        vec![],
+        "nothing read while hidden"
+    );
     assert!(app.changes.tabs.has(&key), "kept");
     assert_eq!(app.review_shown(), None, "still hidden on feat-a's session");
     review_again(&mut app, worktree());
@@ -3867,14 +3893,21 @@ fn covering_the_review_keeps_it_and_rereads_it_once() {
     assert_eq!(list_reads(app.take_changes_effect()), vec![]);
     app.overview.open = false;
     app.update(Message::NoOp);
-    assert_eq!(list_reads(answer_pending(&mut app)), vec![worktree()], "read once");
+    assert_eq!(
+        list_reads(answer_pending(&mut app)),
+        vec![worktree()],
+        "read once"
+    );
     app.update(Message::NoOp);
-    assert_eq!(list_reads(app.take_changes_effect()), vec![], "and only once");
+    assert_eq!(
+        list_reads(app.take_changes_effect()),
+        vec![],
+        "and only once"
+    );
     assert_eq!(app.changes.tabs, before, "the tabs and views as they were");
 
-    app.settings.settings_draft = Some(
-        micold_client::features::settings::SettingsDraft::from_settings(&Default::default()),
-    );
+    app.settings.settings_draft =
+        Some(micold_client::features::settings::SettingsDraft::from_settings(&Default::default()));
     app.update(Message::NoOp);
     app.settings.settings_draft = None;
     app.update(Message::NoOp);
@@ -3893,7 +3926,11 @@ fn switching_project_and_back_keeps_its_reviews_hidden() {
     app.workspace.active = Some("/projects/q".into());
     app.session.active = None;
     app.update(Message::NoOp);
-    assert_eq!(app.changes.tabs.shown_key(), None, "hidden with its project");
+    assert_eq!(
+        app.changes.tabs.shown_key(),
+        None,
+        "hidden with its project"
+    );
     app.workspace.active = Some(project());
     app.session.active = Some(ids[0]);
     app.update(Message::NoOp);
@@ -3940,7 +3977,11 @@ fn closing_the_review_tab_shows_the_session_and_starts_fresh_next_time() {
     review_again(&mut app, worktree());
     let view = view_of(&app.changes);
     assert_eq!(view.toggles, Toggles::default());
-    assert_eq!((view.selected.clone(), view.list_offset), (None, 0), "fresh");
+    assert_eq!(
+        (view.selected.clone(), view.list_offset),
+        (None, 0),
+        "fresh"
+    );
 }
 
 /// Feature 1269 T015 (U9, FR-008, US3.3): a removed worktree drops its tab only; forgetting a

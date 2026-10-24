@@ -451,7 +451,10 @@ fn a_session_chord_with_the_review_shown_shows_the_session_and_keeps_the_review(
         state.update(Message::Sidebar(
             micold_client::features::sidebar::Msg::ReviewChangesRequested(worktree("feat-a")),
         ));
-        assert!(state.review_shown().is_some(), "precondition: the review is shown");
+        assert!(
+            state.review_shown().is_some(),
+            "precondition: the review is shown"
+        );
         let step = update(&state, chord);
         let Step::Session(target) = step else {
             panic!("{chord:?} steps onto a session, got {step:?}");
@@ -460,8 +463,16 @@ fn a_session_chord_with_the_review_shown_shows_the_session_and_keeps_the_review(
             state.update(message);
         }
         state.finish_navigation(&step, true);
-        assert_eq!(state.session.active, Some(target), "{chord:?}: that session is shown");
-        assert_eq!(state.review_shown(), None, "{chord:?}: the review is hidden");
+        assert_eq!(
+            state.session.active,
+            Some(target),
+            "{chord:?}: that session is shown"
+        );
+        assert_eq!(
+            state.review_shown(),
+            None,
+            "{chord:?}: the review is hidden"
+        );
         assert_eq!(state.changes.tabs.len(), 1, "{chord:?}: and kept");
     }
 }

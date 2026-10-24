@@ -144,7 +144,10 @@ fn the_changes_view_takes_the_keyboard_from_the_terminal_it_replaces() {
             entry: SessionLocation::Worktree("feat-x".to_string()),
         },
     );
-    assert!(s.review_shown().is_some(), "precondition: the review is shown");
+    assert!(
+        s.review_shown().is_some(),
+        "precondition: the review is shown"
+    );
     assert!(
         !s.terminal_focused(),
         "the terminal is not on screen while the Changes view is"
@@ -176,7 +179,10 @@ fn a_hidden_review_gives_the_keyboard_back_to_the_shown_terminal() {
     s.update(Message::Session(SessionMsg::Selected(id)));
     assert_eq!(s.review_shown(), None, "hidden");
     assert_eq!(s.changes.tabs.len(), 1, "kept");
-    assert!(s.terminal_focused(), "the shown terminal holds the keyboard");
+    assert!(
+        s.terminal_focused(),
+        "the shown terminal holds the keyboard"
+    );
     assert!(
         !s.view_facts(true).main_area_taken,
         "the main area is the session's"

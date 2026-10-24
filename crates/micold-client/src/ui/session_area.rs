@@ -693,7 +693,10 @@ mod tests {
             (open.clone(), ChangesButton::of(true, true)),
             "shown: selected, a press changes nothing"
         );
-        assert_eq!(changes_press(&state, &location).1.tooltip, "The review is shown");
+        assert_eq!(
+            changes_press(&state, &location).1.tooltip,
+            "The review is shown"
+        );
         state.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(
             SessionLocation::Default,
         )));
