@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous (apart from the two marked items below)
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,9 @@
 
 ## Notes
 
-- Two `[NEEDS CLARIFICATION]` markers remain for the clarify unit: FR-001 (single-letter keys on by
-  default or behind a Settings switch) and User Story 4 scenario 4 / FR-010 (send chord with unsaved
-  composer text).
+- Both `[NEEDS CLARIFICATION]` markers were resolved in clarify round 1 (spec.md#clarifications):
+  FR-001 on by default with no setting (provisional, awaiting the user), and US4 scenario 4 sending
+  saved drafts only.
 - The only crate name (`micold-core`) is in Assumptions, quoting the issue's acceptance line
   (Principle I), not in a requirement.
 - Behaviour that depends on unmerged work (#1269, #1270, #1271, #1273, #1127) is stated under
