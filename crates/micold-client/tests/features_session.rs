@@ -1883,7 +1883,10 @@ mod switching {
         typed(&mut w, s, "/mcp");
         assert_eq!(w.send_intent(s), SendIntent::Nothing);
         assert!(w.switch_offer_is(s));
-        assert!(!w.switch_offer_is(SessionId::new()), "another session's press");
+        assert!(
+            !w.switch_offer_is(SessionId::new()),
+            "another session's press"
+        );
         w.update(micold_client::app::Message::Composer(
             micold_client::features::composer::Msg::SwitchDismissed(SessionId::new()),
         ));
