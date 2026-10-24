@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
 - **Phase**: M7
-- **Next step**: M7 reviews, gate and PR files (T063 and the T061 F5 fix committed)
+- **Next step**: M7 PR (title/body in the scratchpad; branch pushed); then the close unit (T062)
 
 ## Pull requests
 
@@ -111,6 +111,8 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | T061 visual pass (worker, run 2) | — | a66f4504 | Step 1 fix holds (typing, Enter, Shift+Enter, Up/Down, Escape reach the composer). PASS 2, 3, 5 (Escape); PARTIAL 4, 7, 8, 11; NOT CHECKABLE 9 (no XDND source, no 10 MB image); FAIL 1, 6, 10, 12 on: F1 single-pane transcript stays *No output yet* (daemon: `SetViewedSession` streams a PTY via `restart_view`, a structured primary's events only via `sync_terminal_streams` for a pane set; feature 938's code, follow-up); F2 focus lost after a queue-send (fixed 4f041f8d, Cycle 12); F3 queue edit's Save/Cancel cut off by the queue's room (fixed 4f041f8d, Cycle 12); F4 service down reads *not running* (declined, Decision 21); F5 Tab never visibly reached Send / Send queued / queue actions (open, follow-up). Evidence: `visual-pass/` (22 crops, light and dark) |
 | Review A M7 (code-review high) | 1 | e28ab2d496f96c6d08e6da5e5141aab1ba81507d:dfd9d87a6413469708c01477adf1e12c5f85f4d5 | CLEAN: 1 MINOR (`FocusWithin` walks the composer on every event; kept and documented: a focus move is an operation any later event is first to see) |
 | Review B M7 (conformance, sonnet) | 1 | 9ab4c700cd2044d42c3733b5989758de087e67cf:dfd9d87a6413469708c01477adf1e12c5f85f4d5 | CLEAN: 1 MINOR (traversal index in `FocusWithin`, declined) |
+| T061 F5 visual re-check (worker, M7) | — | 9714dc00 | PASS (light): Tab from the text area rings **Send** and it holds 12 s later, Enter sends (`b-tab-1-*.png`); Shift+Tab visits **Send queued**, then each queued row's Move to composer, Remove, Edit, row 1 last (`b-tab-2-*.png`). Dark not run; Space on Send not tried |
+| Full gate M7 | — | — | green at a0ca454d (`scripts/gate.sh`; origin/main unchanged since e65993bc, no rebase, no wire change, no pin moved). Scoped gate before it: 1st red clippy `clone_on_copy` in the T063 test (fixed), 2nd red `showcase_completeness` (FocusWithin needs a gallery exemption; added) |
 
 ## Declined review findings
 
