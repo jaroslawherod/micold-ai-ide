@@ -10,20 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
 - **Phase**: milestone M2
-- **Next step**: M2 (T010–T025) implemented on branch `1269-m2` (stacked on M1 PR #1371); scoped gate and review A, then review B, full gate, PR files `pr-title-m2.md`/`pr-body-m2.md`
+- **Next step**: orchestrator opens the M2 PR from branch `1269-m2` (title/body in the scratchpad as `pr-title-m2.md`/`pr-body-m2.md`) once M1 (#1371) merges and `1269-m2` is rebased on main; then milestone M3 (T026–T031)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1361 | design | merged | 75292027eb695dbe44b01869f8f56c47046429b8 |
+| #1371 | M1 | in CI | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | #1371 | in CI |
-| M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | — | implementing |
+| M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | (M2 PR, opened by orchestrator) | review-ready |
 | M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | — | todo |
 | M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | — | todo |
 
@@ -52,6 +53,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 501c0f33fe1293434c6134b8cfeeb6673a1ec891:6a7e4285a0140f2655e8c1c3f4db8d6f7ac9dc72 | CHANGES: 1 MAJOR ([P] on T032/T035 same file), 3 MINOR (T012 stopgap readers, M1 rule-1 note, Failure edge case test); all fixed |
 | Tasks | 2 | 7db6eeab3ffaf9740641fff36e24e6d87b7390ff:5ee8f094664b699079681e5e7772ee08435c3259 | CLEAN (sonnet re-review of the fix diff) |
 | Review A M1 (code-review high) | 1 | 9a59b6ccbd7b16a78b0ea5d619d858cc877bd7e3:86598e23f914c53382f8f6b0cd448245a7953faa | 8 findings: F1 `uncovered` on a hidden tab, F2 `show_if_present` on the shown tab (both fixed, tests added), F5 shared show path (fixed), F8 tooltip alloc (fixed); F3, F4, F6, F7 declined |
+| Review A M2 (code review high, opus) | 1 | 817a7bf19477df5e1f2f0a7433b2bc9cb97b4add:4010e84b31e015e5b605acf3e9e02c505506090d | CHANGES: F1 MAJOR `TabClosed` never reached the root in the real app (fixed: the shell forwards it; main_tests case through the shell), F2 MAJOR header counts stale after a cover (fixed: `uncovered` also reads the counts; test asserts it), F3 MINOR fmt (fixed) |
+| Review A M2 | 2 | 9fcd12f259a2d1543d3e8d3c4c08eefd16ad2220:aa591b75a63a4587df1f51ffc567f309b179ab29 | CLEAN (sonnet, fix diff; also covered `Outcome::ReviewHidden`/`ProjectForgotten` added for the architecture guards) |
+| Review B M2 (conformance, sonnet) | 1 | 9fcd12f259a2d1543d3e8d3c4c08eefd16ad2220:aa591b75a63a4587df1f51ffc567f309b179ab29 | CLEAN |
 
 ## Declined review findings
 
@@ -72,4 +76,6 @@ None.
 
 ## Follow-ups not done
 
-None.
+- M2: quickstart B0 (M2 subset: B1 without the strip, B2–B4, B9) was not run by hand in this container (no display, disk at its limit); the M4 visual pass covers B1–B4 and B9.
+- M2: T020's failed re-read on show keeps the tab, toggles and comments and shows the error as today; as today, a failed list read also drops the selection and the pick (`list_read` → `close_new`), so "picks kept" holds only for a re-read that succeeds.
+- M2: the root-level stray file `/reviewB-m2-r1.out` (an empty-variable redirect while launching review B) could not be removed by the unit; delete it by hand.
