@@ -25,6 +25,13 @@ PrRows<'a> }`. `Toggles` is `review::base::Toggles` (both on by default). Built 
 `features/changes.rs`) from `view.source`, `view.files.shown`, `view.toggles`,
 `committed_available(view)` and `section(view, enabled, now)`.
 
+The reducer has no clock, so it never calls `source_menu_input`. For `SourceMenuToggled`,
+`SourceMenuMoved`, `SourceMenuPicked` and the `PullRequestsRead` re-seat it calls
+`source_menu_stops(view: &OpenView, enabled: bool) -> Vec<(Stop, bool)>` (NEW, with `enabled` =
+`state.pr_enabled`), which builds the same `MenuInput` with a `PrRows::List` forced to
+`stale: false`: `stale` only adds `Row::Stale`, which is no stop, so the stops are the same at
+every `now`. Both functions share one private builder that takes the stale flag.
+
 ### 4. `Row<'a>`: one line of the open list, in order
 
 `rows(&MenuInput) -> Vec<Row>`:
@@ -94,9 +101,9 @@ whenever the view's entry changes.
 | `SourceMenuDismissed` | NEW | closed, highlight cleared | source unchanged (FR-011) |
 | `SourceMenuMoved(Direction)` | NEW | `move_highlight` over `stops` | none |
 | `SourceMenuPicked` | NEW | per the highlighted stop: closes unless `keeps_open` | dispatches `SourceChosen(None)`, `CommittedToggled`, `UncommittedToggled`, `SourceChosen(Some(n))` or `FilesPaneToggled` |
-| `SourceChosen(_)` | changed | closed | as today (1003) |
+| `SourceChosen(_)` | changed | closed | as today (1003); `SourceChosen(None)`'s body becomes `show_working_tree(state)` |
 | `FilesPaneToggled` | changed | closed | as today (1150) |
-| `CommittedToggled`, `UncommittedToggled` | changed | unchanged (stays open) | with a pull request shown: back to the working tree first, then flip (R4) |
+| `CommittedToggled`, `UncommittedToggled` | changed | unchanged (stays open) | with a pull request shown: `show_working_tree(state)` first, then flip (R4) |
 | `PullRequestsRead` | changed | unchanged; `highlight` re-seated with `clamp_highlight` | as today; a shown PR that disappeared falls back to the working tree (1003) |
 
 ## State transitions

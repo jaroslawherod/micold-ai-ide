@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1272
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: plan review round 1 (fresh reviewer, rubrics/plan.md, snapshot below; the plan unit had no Agent tool to dispatch it), then tasks unit
+- **Phase**: tasks
+- **Next step**: tasks unit: speckit-tasks, milestones, analyze, tasks review, checklists, design PR
 
 ## Pull requests
 
@@ -37,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | 5cb0e7aeb46f21b103a07c493f87bb563ef37b13:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CLEAN: 3 MINOR (fixed, prose only) |
 | Clarify | 1 | 1 question, agent-resolved (Story 3 s2) | requirements changed: FR-001, FR-002, FR-007, Story 3 s1–s5 |
 | Clarify | 2 | rescan of the clarified spec | no critical ambiguities |
-| Plan | 1 | 6f35131b36e2a60c6aab6421cd8d93d2789984e8:1ce7434bb25151d52292a1c7868132c7a0ef2313 | pending: not run by the plan unit (no Agent tool); orchestrator to dispatch |
+| Plan | 1 | 6f35131b36e2a60c6aab6421cd8d93d2789984e8:1ce7434bb25151d52292a1c7868132c7a0ef2313 | CLEAN: 3 MINOR (fixed, prose only: F1 `source_menu_stops` without a clock, F2 shared `show_working_tree`, F3 *The Default entry* in the M4 docs); dispatched by the orchestrator |
 
 ## Declined review findings
 
