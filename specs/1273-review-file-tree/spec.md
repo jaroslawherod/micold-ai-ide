@@ -22,6 +22,15 @@ tree with collapsible folders and name-first rows, draws each file's change size
 adds a filter box and a sort control. The repository browser of feature 1150 (**Files**) already lays
 out a tree; this feature shares that tree layout rather than adding a second one.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Under **Size** and **Unreviewed first**, does the list keep its folders or flatten into a list of
+  files? → A: It keeps the tree; each sort orders the rows within each level (scenarios 4.2, 4.3,
+  SC-004). _(agent-resolved: docs/development/review-redesign.md#Layout, item 2 "File tree, not flat
+  list" names the sorts as options of the tree, and the mockup there shows folders only)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Read the changed files as a tree (Priority: P1)
@@ -134,9 +143,8 @@ level for each sort.
    the order the list uses today.
 2. **Given** sort **Size**, **Then** at each level folders come before files, folders are ordered by the
    total changed lines (added + removed) of the files below them, largest first, files by their own
-   added + removed, largest first, and ties keep path order. [NEEDS CLARIFICATION: under Size and
-   Unreviewed first, does the tree keep its folders (sort within each level, as written here), or
-   flatten into a single list of files with their folder shown dimmed beside the name?]
+   added + removed, largest first, and ties keep path order. Every sort keeps the tree: it orders the
+   rows within each level and never flattens the list.
 3. **Given** sort **Unreviewed first**, **Then** at each level unreviewed files come before reviewed
    ones and folders holding any unreviewed file before folders holding none, ties in path order.
    [NEEDS CLARIFICATION: reviewed marks come from #1271, which is not built yet. Until it lands, is
