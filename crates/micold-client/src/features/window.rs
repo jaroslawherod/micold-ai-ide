@@ -297,6 +297,11 @@ pub enum Msg {
     /// which asks the input rather than guessing from the pointer — see
     /// `material::FormField::on_focus_change`. Sole mutation: [`State::focused_field`].
     FieldFocusChanged(FieldId, bool),
+    /// The keyboard moved among a region's controls (`cdk::focus_within`): `true` while one of
+    /// them holds it, `false` once none does (feature 941, T061 F5). The region stands as the
+    /// focused field while no field inside it holds the keyboard itself, so a button there keeps
+    /// the keyboard from the pane. Sole mutation: [`State::focused_field`].
+    FocusWithinChanged(FieldId, bool),
     /// The window was resized (or reported its initial size). Feeds context-menu clamping.
     Resized {
         /// The window's new width, in logical pixels.
@@ -321,6 +326,10 @@ pub enum Msg {
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::FieldFocusChanged(field, focused) => field_focus_changed(state, field, focused),
+        Msg::FocusWithinChanged(region, within) => {
+            focus_within_changed(state, region, within);
+            Vec::new()
+        }
         Msg::Resized { width, height } => {
             resized(state, width, height);
             Vec::new()
@@ -356,6 +365,18 @@ pub fn field_focus_changed(
         state.window.focused_field = None;
     }
     vec![Outcome::FieldBlurred(field)]
+}
+
+/// A control in `region` took the keyboard (`within`), or none there holds it. A field's own
+/// report, which its region's comes after in the same event, wins: the region only fills the
+/// gap a button leaves, and only clears what it set.
+pub fn focus_within_changed(state: &mut crate::app::State, region: FieldId, within: bool) {
+    let focused = &mut state.window.focused_field;
+    if within && focused.is_none() {
+        *focused = Some(region);
+    } else if !within && *focused == Some(region) {
+        *focused = None;
+    }
 }
 
 /// A terminal took the keyboard (FR-018; T067a-9).

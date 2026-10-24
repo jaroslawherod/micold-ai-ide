@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: M6
-- **Next step**: M6 PR (files written); decide T061's open F1 (feature 938 daemon) and F5 (see Handover)
+- **Phase**: M7
+- **Next step**: M7 reviews, gate and PR files (T063 and the T061 F5 fix committed)
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1243 | M3: daemon interrupt, overdue, hold on interrupt, saved queue | merged (rebase) | 203ef720ba85b7e70a163cb969402b452c0d4b41 |
 | #1246 | M4: client composer state, sends, drops | merged (rebase) | f114ea2ee0eb7e97c7e0ada228b26af6a870a383 |
 | #1249 | M5: shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator | merged (rebase) | 74907e8f7c158ee992f119e223772f52628c09a8 |
+| #1255 | M6: composer under the structured transcript, user guide | merged (rebase; the orchestrator rebased it twice onto #942/#943/#944 — commit "fix(941): rebase M6 onto #942, #943 and #944": the composer's editor lives in `features::composer` and #943's `sync_editor` calls went; the transcript sits in a column over the composer under #944's session bar; fixture re-recorded) | e65993bcb7a42336104ddcc38a1d48d772591d86 |
 
 ## Milestones
 
@@ -32,8 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T034–T038 | full | Daemon interrupt, overdue, hold on interrupt; queue saved/restored under Save terminal history | #1243 | merged |
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | #1246 | merged |
 | M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | #1249 | merged |
-| M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | — | in progress |
-| M7 | T063 | light | Interrupt withdraws a pending #942 request (daemon test); waits on #942 M3 | — | pending |
+| M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | #1255 | merged |
+| M7 | T063 | light | Interrupt withdraws a pending #942 request (daemon test); with it the T061 F5 fix (Tab reach) | — | in progress |
 
 T062 (Polish, no code) is left to the close unit; T063 is M7, waiting on #942 M3 (I-3).
 M1 has 22 tasks (over rule 3's ~10) and is kept whole: it is no user story but the foundation every
@@ -156,14 +157,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 
 ## Handover
 
-M6 unit 3. Fixed and committed: the composer reports its focus (T061 run 1, 9e25d574→rebased a66f4504,
-Cycle 11; review B r2 F1's test); the text area keeps its focus as the queue grows and a queue edit
-draws whole (T061 run 2 F2, F3; 4f041f8d, Cycle 12). Rebased onto origin/main 0b432628 (no wire
-change, no pin moved). Full gate green at a66f4504 and again on 4f041f8d (one red before it: the client
-binary's `pr_status::pr_list_read_a_second_ask_shares_the_read_under_way` timed out under load,
-4 of 4 green alone, not M6's code). PR title/body written to the scratchpad. T061 left unticked: run 2 still has F1
-(feature 938's daemon, single pane shows no transcript) and F5 (Tab reach) open; see *Follow-ups*.
-Orchestrator decides: open M6 with F1/F5 as follow-ups, or hold for them.
+None.
 
 ## Open escalation
 
@@ -171,8 +165,8 @@ None.
 
 ## Follow-ups not done
 
-- M6 visual F1 (not 941's code, blocks Part B in one pane): a structured session's transcript stays *No output yet* in a single-pane layout. The daemon streams a structured primary's events only from `sync_terminal_streams` (a `SetViewedTerminals` pane set, sent only for 2+ panes); `SetViewedSession` → `restart_view` streams a PTY, which a structured session lacks (`crates/micold-daemon/src/server.rs` ~1286, ~3022). Feature 938; needs a BUG and its own fix.
-- M6 visual F5: Tab never visibly reached Send, Send queued or the queue-row actions (8 presses, either layout; in two panes Tab went to the focused pane). Not diagnosed: whether the composer's area passes Tab on, and whether the structured pane should take Tab like a terminal.
+- M6 visual F1 — handed off to feature 938 (its own thread; not #941's code, so T061 is ticked without it): a structured session's transcript stays *No output yet* in a single-pane layout. The daemon streams a structured primary's events only from `sync_terminal_streams` (a `SetViewedTerminals` pane set, sent only for 2+ panes); `SetViewedSession` → `restart_view` streams a PTY, which a structured session lacks (`crates/micold-daemon/src/server.rs` ~1286, ~3022). Feature 938; needs a BUG and its own fix.
+- M6 visual F5 — fixed in M7 (Cycle 13): Tab from the text area reached **Send** in iced's traversal, but the area's blur left no focused field, so `terminal_focused()` turned true, `KeyboardElsewhere` cleared Send's focus on the next event and the Tab listener closed. `cdk::FocusWithin` around the composer reports `FocusWithinChanged(Composer(id), …)`. **Send queued** and the queue actions sit above the area: Shift+Tab reaches them.
 - M6 visual: editing a queued message needs a click on its field first (the edit form replaces the row; nothing focuses it).
 
 - Flaky under a full gate's load (not M4's): daemon `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` saw no `SessionErrorNotice` once; 5/5 green alone.

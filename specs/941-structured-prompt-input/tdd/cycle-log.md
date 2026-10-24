@@ -229,3 +229,25 @@ implementation (or, for a behaviour of existing code, against a deliberate mutan
 - fix: `ui::composer::view` holds the parts above the input row in a column of their own; the edited
   queued message is drawn under the queue's room. Layout fixture re-recorded (one level deeper).
 - green: `layout_snapshot` 95, `features_composer` 29, `field_focus_call_sites` 6, `terminal_focus` 33.
+
+### Cycle 13 — an interrupt withdraws the pending request (T063); Tab leaves the text area (T061 F5)
+
+- T063 (US3 AS6, I-3): `structured_input` `an_interrupt_withdraws_the_turns_pending_permission_request`
+  — a turn whose stand-in holds a #942 prompt-tool call is interrupted; both windows see the
+  request `Withdrawn { TurnEnded }` once, the call is answered deny, a late decision is refused,
+  the turn closes `Interrupted`, same pid, idle. A coverage test of #942 M3's withdrawal: red
+  shown by a mutant (the `result`'s `turn_ends.end(.., TurnEnded)` skipped → "the request
+  withdrawn: never happened"), green restored.
+- T061 F5, found by the visual pass run 2. Cause: Tab from the text area moved iced's focus to
+  **Send**, the area reported its blur, no field held the keyboard, `terminal_focused()` turned
+  true, and `KeyboardElsewhere` cleared Send's focus on the next event (and the Tab listener
+  closed). Test (red first): `tests/composer_tab.rs`
+  `tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard` (the window's view: a
+  press on the area, Tab, the next event's messages applied; red: "focused field None"); with it
+  `shift_tab_from_the_text_area_reaches_send_queued_and_the_queue_actions` (green before: those
+  sit above the area in tree order) and `cdk::focus_within` unit test.
+- fix: `ui::cdk::focus_within::FocusWithin` wraps the composer and reports each change of which
+  focusable inside holds the keyboard as `window::Msg::FocusWithinChanged(Composer(id), within)`;
+  the reducer sets the region only when no field holds the keyboard and clears only what it set.
+- green: `composer_tab` 2, `layout_snapshot` 98, `features_composer` 29, `field_focus_call_sites` 6,
+  `focus_within` 1, `structured_input` 19.

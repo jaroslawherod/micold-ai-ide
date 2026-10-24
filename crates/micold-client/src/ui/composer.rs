@@ -17,8 +17,9 @@ use micold_core::tokens::{spacing, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::composer::{composer_key, KeyIntent, Msg, QueueEditDraft};
-use crate::features::window::FieldId;
+use crate::features::window::{FieldId, Msg as WindowMsg};
 use crate::keymap::KeyInput;
+use crate::ui::cdk::focus_within::FocusWithin;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
 use crate::ui::material::{
@@ -171,10 +172,20 @@ pub fn view<'a>(
     // input row at the same place in the tree, so the text area keeps its state (focus, caret)
     // when a queue row, a notice or a chip appears (T061 run 2, step 6).
     let input = input_row(state, session, phase, roles);
-    container(column![column(parts).spacing(spacing::SM), input].spacing(spacing::SM))
-        .padding([spacing::SM, spacing::MD])
-        .width(Length::Fill)
-        .into()
+    let composer =
+        container(column![column(parts).spacing(spacing::SM), input].spacing(spacing::SM))
+            .padding([spacing::SM, spacing::MD])
+            .width(Length::Fill);
+    // Tab from the text area to **Send** (or among the queue's actions) keeps the keyboard in the
+    // window: without the region's report the area's blur handed it back to the pane, which took
+    // the button's focus on the next event (T061 visual pass F5).
+    FocusWithin::new(composer, move |within| {
+        Message::Window(WindowMsg::FocusWithinChanged(
+            FieldId::Composer(session),
+            within,
+        ))
+    })
+    .into()
 }
 
 /// Busy or ready in words and the indicator (FR-010), **Stop session** while an interrupt is

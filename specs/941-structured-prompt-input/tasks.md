@@ -392,7 +392,7 @@ file reads (Constitution I: `shell/` holds no decision).
 - [x] T060 [US1] [US2] [US3] [US4] [US5] User guide `docs/user-guide/worktrees-and-sessions.md`
   *Structured sessions*: the composer, its keys, history, attachments, busy/idle, interrupt,
   queue, hold and **Send queued**; #941 out of the not-yet list (FR-033)
-- [ ] T061 Quickstart Part B (steps 1–12, light and dark) through the `visual-pass` skill; evidence
+- [X] T061 Quickstart Part B (steps 1–12, light and dark) through the `visual-pass` skill; evidence
   in `specs/941-structured-prompt-input/visual-pass/`; results in the ledger
 
 ---
@@ -400,7 +400,7 @@ file reads (Constitution I: `shell/` holds no decision).
 ## Phase 8: Polish and the #942 seam (close unit, M7)
 
 - [ ] T062 Run quickstart Part A on the merged `main` and record the results
-- [ ] T063 [US3] Once #942 M3 (withdrawal) and this feature are both on `main` (I-3): a daemon test
+- [X] T063 [US3] Once #942 M3 (withdrawal) and this feature are both on `main` (I-3): a daemon test
   that interrupting a turn with a pending permission request withdraws it (US3 AS6), in
   `daemon/tests/structured_input.rs`
 
