@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: implement M2 (implemented, scoped gate green, awaiting reviews A and B)
-- **Next step**: reviews A and B of M2 (orchestrator-run); then full gate and the M2 PR. Visual pass deferred to the close unit
+- **Phase**: M2 PR open (reviews A and B clean, minors fixed in c1590fd9, full gate green)
+- **Next step**: orchestrator waits on the M2 PR's CI and merges it; then the close unit (visual pass deferred there)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | #1324 | merged |
-| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | — | implemented, T012–T023 ticked, scoped gate green |
+| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | M2PR | PR open |
 
 ## Decisions
 
@@ -50,7 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 (code-review high) | 1 | 5ccdd3607cb7cb51889bd26cda53d6820e01f56e:b0b8c38f3d52bb1dee3ecaf67845ca0937dab3e8 | CHANGES (1 MAJOR, 3 MINOR, all fixed: F1 press snaps any fade > 0, not only a shown one, + test pressing mid fade-out; F2 grid's instant ORs with a card's own; F3 `Focus::hold` puts the fade at the handed-over shown state, + test; F4 FRAME_MS/DONE derived from cdk FRAME and CARD_MOTION) |
 | B M1 (conformance) | 1 | 5ccdd3607cb7cb51889bd26cda53d6820e01f56e:b0b8c38f3d52bb1dee3ecaf67845ca0937dab3e8 | CLEAN (3 MINOR, all fixed: F1 edited ring tests recorded as Decision 5; F2 dangling ledger line removed; F3 settings.md rewrapped, prose only) |
 | A M1 (code-review high) | 2 | 6555ce6bd5178312ab9515a006c8667c52aeeb67:97e8d0b62832fa53a3487bd777827b06d7ce1f8d | CLEAN (scoped, sonnet, orchestrator-run: all four round-1 findings fixed, no new bugs) |
-| A+B M2 | 1 | 7c125b3e7a5ca6506cf90291d6d64ee42db9855d:92fe861ca11843a9f43ad66386360a75c31f0cf4 | pending (orchestrator-run) |
+| A M2 (code-review high) | 1 | 7c125b3e7a5ca6506cf90291d6d64ee42db9855d:92fe861ca11843a9f43ad66386360a75c31f0cf4 | CLEAN, 3 MINOR all fixed in c1590fd9: F1 project switch kept the old set's lifts → `update` reseeds `lifts` with `resting` on a rest_scope change (test `a_new_rest_scope_drops_the_old_sets_lifts`, fails without the fix); F2 catalogue OverviewCard `live: ["expand and collapse"]`, interactive (showcase_completeness `the_overview_card_and_grid_are_posed` now expects both interactive); F3 settling pass culls cards whose shadow-expanded bounds miss the viewport. No re-review (minors) |
+| B M2 (conformance) | 1 | 7c125b3e7a5ca6506cf90291d6d64ee42db9855d:92fe861ca11843a9f43ad66386360a75c31f0cf4 | CLEAN (Verify: style/card_lift/card_grid/overview_card 206 passed; idle_requests_no_frames 14, layout_snapshot 105 passed); 1 MINOR fixed, prose only: settings.md Reduce motion paragraph rewrapped |
 
 ## Declined review findings
 
@@ -59,7 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 T012–T023 implemented and pushed (71d8083b), scoped gate green, snapshot 7c125b3e…:92fe861c recorded. Next: orchestrator runs reviews A (code-review high) and B (conformance) on `origin/main...HEAD`; a fresh M2 unit fixes findings, runs the full gate (`scripts/gate.sh`; disk was 6.9 GB free, wipe target-shared/ first if short) and opens the M2 PR via REST. No PR open yet; no open findings.
+M2 reviews A and B clean; their minors fixed in c1590fd9; full gate (`scripts/gate.sh`) green at c1590fd9; M2 PR M2PR opened (branch not rebased onto the newer main: rebase was refused by the session's permission classifier; GitHub merges it). Next: orchestrator merges M2PR, then the close unit (visual pass, quickstart §B).
 
 ## Open escalation
 
