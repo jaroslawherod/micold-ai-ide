@@ -46,7 +46,7 @@ None: no new crate, dependency or fixture.
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [ ] T001 In `crates/micold-client/src/ui/material/test_support.rs`, add `Mounted::tick(&mut self, at: Instant, cursor: mouse::Cursor) -> (Vec<String>, RedrawRequest)` (one `RedrawRequested(at)` through `update`, returning what was published and `shell.redraw_request()`) and `Mounted::rebuild(&mut self, element)` (replace the element and `diff` the existing tree, keeping widget state); replace the two hand-written copies of the tick in `crates/micold-client/src/ui/material/card_grid.rs` `mod tests` (the `asked` closures near lines 2940 and 3207) with `tick`, their assertions unchanged
+- [ ] T001 In `crates/micold-client/src/ui/material/test_support.rs`, add `Mounted::tick(&mut self, at: Instant, cursor: mouse::Cursor) -> (Vec<String>, RedrawRequest)` (one `RedrawRequested(at)` through `update`, returning what was published and `shell.redraw_request()`) and `Mounted::rebuild(&mut self, element)` (replace the element and `diff` the existing tree, keeping widget state); replace the two hand-written copies of the tick in `crates/micold-client/src/ui/material/card_grid.rs` `mod tests` (the `asked` closures in `a_rest_on_a_link_asks_for_no_frame_once_it_is_over` and `a_rest_on_a_number_asks_for_no_frame_once_it_is_over`) with `tick`, their assertions unchanged
 
 **Checkpoint**: timed widget tests can step frames at chosen instants and read whether a next frame
 was asked.
@@ -64,7 +64,7 @@ was asked.
 ### Tests for User Story 1 (MANDATORY — Constitution Principle I) ⚠️
 
 - [ ] T002 [P] [US1] In `crates/micold-client/src/ui/material/keyboard_focus.rs` `mod tests`, add failing tests for a control built `.fade(Some(Duration::from_millis(150)))`, stepping `Mounted::tick` 16 ms apart from an origin: after `focus_next`, the drawn strength (the `Focus` state's `fade.value()`) is `0 < s < 1` at the tick nearest 75 ms and `1.0` by 150 ms + 16 ms; after focus moves away it falls to `0.0` the same way (FR-001, FR-002, SC-001); a reversal at ~75 ms changes the strength by at most one step on the next tick and reaches its end within 150 ms + 16 ms of the reversal (FR-004); two faded controls, Tab from one to the other: one falling and one rising on the same ticks (FR-005); the tick after the end returns `RedrawRequest::Wait` (FR-009, SC-003)
-- [ ] T003 [P] [US1] In `crates/micold-client/src/ui/material/keyboard_focus.rs` `mod tests`, add failing tests: a pointer press on a faded control whose focus is shown gives strength `0.0` on the next tick (D1, FR-011); a faded control at strength 1 draws the same pixels (`drawn`) as the same control without `fade` (FR-010); a faded wrapper with `on_focus_change` built already focused and shown starts at `1.0` and asks no frame (R8); the existing ring and state-layer tests stay unmodified (a control without `fade` is unchanged, C1)
+- [ ] T003 [US1] In `crates/micold-client/src/ui/material/keyboard_focus.rs` `mod tests`, add failing tests: a pointer press on a faded control whose focus is shown gives strength `0.0` on the next tick (D1, FR-011); a faded control at strength 1 draws the same pixels (`drawn`) as the same control without `fade` (FR-010); a faded wrapper with `on_focus_change` built already focused and shown starts at `1.0` and asks no frame (R8); the existing ring and state-layer tests stay unmodified (a control without `fade` is unchanged, C1)
 - [ ] T004 [P] [US1] In `crates/micold-client/src/ui/material/overview_card.rs` `mod tests`, add failing tests: `CARD_MOTION == Duration::from_millis(duration::SHORT_3)`; an activatable card's focus, after `focus_next`, is part-way at the tick nearest 75 ms (it is built with `.fade(Some(CARD_MOTION))`); an `.instant(true)` card is fully indicated on the first tick after `focus_next` and that tick returns `RedrawRequest::Wait` (FR-007); the issue and pull-request links' focus rings are not faded (US4-3, FR-011)
 - [ ] T005 [P] [US3] In `crates/micold-client/src/ui/material/card_grid.rs` `mod tests`, add failing tests: a `CardGrid` built `.instant(true)` shows a card's focus at full on the first tick after Tab onto it and at none on the first tick after Tab away, with `RedrawRequest::Wait` each time (US3-1, FR-007); a default grid's card is part-way at ~75 ms (the flag reaches the cards); a grid mid-fade `Mounted::rebuild` with `.instant(true)` is at its end state on the next tick (FR-008)
 
@@ -95,8 +95,8 @@ the showcase shows both motions (FR-013). The growth is not animated (FR-006, D7
 
 - [ ] T012 [P] [US2] In `crates/micold-client/src/ui/material/style.rs` `mod tests`, add failing tests (C4): `eased_shadow(r, elevation::MENU, 1.0) == elevation_shadow(r, elevation::MENU)`; `eased_shadow(.., 0.0) == Shadow::default()`; at `0.5` the colour alpha, `offset.y` and `blur_radius` are half the level's; strength outside `0..=1` is clamped
 - [ ] T013 [P] [US2] Create `crates/micold-client/src/ui/material/card_lift.rs` with a failing `mod tests` (D3): `Lifts::step` with location A expanded, ticks 16 ms apart: `strength(A)` is `0 < s < 1` at the tick nearest 75 ms and `1.0` by 150 ms + 16 ms; A collapsed: back to `0.0` the same way and its entry dropped at rest (SC-001, both directions, FR-003); a reversal at ~75 ms continues from its value and ends within 150 ms + 16 ms (FR-004); A collapsing while B expands: A falls and B rises on the same ticks, `settling()` yields A only (FR-005, US2-3); `Lifts::seeded(Some(&A))` gives `strength(A) == 1.0` with no frame asked (R8); a location missing from `present` is dropped (Edge Cases); `instant` sets every strength to its target on the first step with `RedrawRequest::Wait` (FR-007); the tick after every entry rests returns `RedrawRequest::Wait` (FR-009); expanded but not yet stepped gives `0.0`
-- [ ] T014 [P] [US2] In `crates/micold-client/src/ui/material/card_grid.rs` `mod tests`, add failing tests: an expanded card at rest paints the same pixels (`drawn`) below and beside it as feature 1121's card-drawn menu shadow did (FR-010); collapsing a card in the middle of a 3×3 grid, mid-transition its shadow shows over the card below and to its right (not cut by them) and the card is drawn after its neighbours (FR-003 draw order); the slot rectangles of every card are equal on every tick of an expand and a collapse (SC-005, US2-5); a grid whose state is created with a card expanded draws it at full shadow on its first frame (R8); while a zoom runs the lifts end at once (C3)
-- [ ] T015 [P] [US3] In `crates/micold-client/src/ui/material/card_grid.rs` `mod tests`, add **the Reduce motion test** (FR-012, SC-002): with `.instant(true)`, on the first tick after gaining and after losing the keyboard focus the card's ring is at full / none, and after expanding and collapsing (hover, focus, Escape) its shadow is full / none, each tick returning `RedrawRequest::Wait`; and a grid mid-lift `Mounted::rebuild` with `.instant(true)` draws the end shadow on the next tick (FR-008, US3-3)
+- [ ] T014 [P] [US2] In `crates/micold-client/src/ui/material/card_grid.rs` `mod tests`, add failing tests: an expanded card at rest paints the same pixels (`drawn`) below and beside it as feature 1121's card-drawn menu shadow did (FR-010); collapsing a card in the middle of a 3×3 grid, mid-transition its shadow shows over the card below and to its right (not cut by them) and the card is drawn after its neighbours (FR-003 draw order); the slot rectangles of every card are equal on every tick of an expand and a collapse (SC-005, US2-5); a grid whose state is created with a card expanded draws it at full shadow on its first frame (R8); while a zoom runs the lifts end at once (C3); `focus_next` onto a card in a default grid, which expands it: at the tick nearest 75 ms both the ring strength and the lift strength are `0 < s < 1`, and both reach `1.0` by 150 ms + 16 ms (US2-4)
+- [ ] T015 [US3] In `crates/micold-client/src/ui/material/card_grid.rs` `mod tests`, add **the Reduce motion test** (FR-012, SC-002): with `.instant(true)`, on the first tick after gaining and after losing the keyboard focus the card's ring is at full / none, and after expanding and collapsing (hover, focus, Escape) its shadow is full / none, each tick returning `RedrawRequest::Wait`; and a grid mid-lift `Mounted::rebuild` with `.instant(true)` draws the end shadow on the next tick (FR-008, US3-3)
 - [ ] T016 [P] [US2] In `crates/micold-client/src/ui/material/overview_card.rs` `mod tests`, add a failing test: an expanded card built `.shadow_by_owner()` paints nothing outside its bounds; `an_expanded_card_casts_the_menu_shadow` stays unmodified (C2)
 
 ### Implementation for User Story 2
@@ -147,15 +147,15 @@ and user guide last.
 
 ### Parallel Opportunities
 
-- Phase 3: T002–T005 together (T002 and T003 share a file: write them in one go); T007 after T006.
-- Phase 4: T012, T013, T014–T015, T016 together; T017 beside T018; T019 before T020; T021 and T022
+- Phase 3: T002, T004, T005 together; T003 after T002 (same file, `keyboard_focus.rs`); T007 after T006.
+- Phase 4: T012, T013, T014, T016 together; T015 after T014 (same file, `card_grid.rs`); T017 beside T018; T019 before T020; T021 and T022
   after T020.
 
 ## Parallel Example: User Story 2
 
 ```text
 T012 eased_shadow tests (style.rs)     T013 Lifts tests (card_lift.rs)
-T014 + T015 grid tests (card_grid.rs)  T016 shadow_by_owner test (overview_card.rs)
+T014 → T015 grid tests (card_grid.rs)  T016 shadow_by_owner test (overview_card.rs)
 then T017 ‖ T018, T019 → T020
 ```
 
@@ -184,7 +184,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T001–T011
 - **Deliverable**: on `main`, Tab and the arrow keys fade an Overview card's focus outline and tint in and out over 150 ms, each card on its own; with Settings → Appearance → Reduce motion on it is instant; every other control's focus is unchanged.
 - **Satisfies**: US1 acceptance scenarios 1, 2, 4, 5, 6; US3 sc.1 (focus); US4 sc.1–sc.4; FR-001, FR-002, FR-004, FR-005, FR-007 (focus), FR-008 (focus), FR-009, FR-010 (focus), FR-011, FR-013 (user guide, focus); SC-001 (focus), SC-002 (focus), SC-003, SC-004
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib -- keyboard_focus overview_card card_grid`; `scripts/build-lock.sh cargo test -p micold-client --test idle_requests_no_frames --test motion_tokens`; quickstart §B.1 (first half), §B.4 (arrow keys), §B.6–§B.8 in the client
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib -- keyboard_focus overview_card card_grid`; `scripts/build-lock.sh cargo test -p micold-client --test idle_requests_no_frames --test motion_tokens`; in the client, Overview open: Tab onto a card and away from it (the outline and tint fade in, then out, over ~150 ms), quickstart §B.4 (arrow keys half), §B.6–§B.8 (the showcase's live pose arrives in M2)
 - **Depends on**: —
 - **Tier**: full
 
