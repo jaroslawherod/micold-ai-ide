@@ -1224,6 +1224,62 @@ mod tests {
         assert!(part_way(&off), "Reduce motion off: {off:?}");
     }
 
+    /// Issue #1341, 813 FR-023: opening the Overview crossfades the main area like any other
+    /// change of what it shows. One frame in, the window must not already be what it settles to.
+    #[test]
+    fn opening_the_overview_fades_it_in() {
+        use crate::features::connection::ConnectionStatus;
+        use crate::features::sandbox::Sandbox;
+        use micold_core::env_include::EnvIncludeOutcome;
+        let outcome = EnvIncludeOutcome::Disabled;
+        let connection = ConnectionStatus::Connected;
+        let sandbox = Sandbox::default();
+        fn window<'a>(
+            state: &'a State,
+            outcome: &'a EnvIncludeOutcome,
+            connection: &ConnectionStatus,
+            sandbox: &Sandbox,
+        ) -> iced::Element<'a, String> {
+            crate::ui::view(state, None, None, 0, None, outcome, connection, sandbox)
+                .map(|m| format!("{m:?}"))
+        }
+        let mut closed = overview_of(2);
+        closed.overview.open = false;
+        let open = overview_of(2);
+        let room = Size::new(1280.0, 800.0);
+        let mut mounted = Mounted::new_in(window(&closed, &outcome, &connection, &sandbox), room);
+        let origin = mounted.origin;
+        let at = |ms: u64| origin + std::time::Duration::from_millis(ms);
+        mounted.tick(at(16), iced::mouse::Cursor::Unavailable);
+        mounted.rebuild(window(&open, &outcome, &connection, &sandbox));
+        mounted.tick(at(32), iced::mouse::Cursor::Unavailable);
+        let early = mounted.drawn(iced::Color::WHITE).0;
+        for ms in (48..=800).step_by(16) {
+            mounted.tick(at(ms), iced::mouse::Cursor::Unavailable);
+        }
+        let settled = mounted.drawn(iced::Color::WHITE).0;
+        // The card titles and labels: dark ink on the main area, right of the sidebar. Under the
+        // entrance's veil they are drawn nearly in the backdrop's colour.
+        let ink = |pixels: &[u8]| {
+            pixels
+                .chunks(4)
+                .enumerate()
+                .filter(|(i, _)| i % 1280 > 320)
+                .filter(|(_, p)| u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]) < 300)
+                .count()
+        };
+        let (early, settled) = (ink(&early), ink(&settled));
+        assert!(
+            settled > 500,
+            "the settled Overview shows its cards ({settled} ink pixels)"
+        );
+        assert!(
+            early * 2 < settled,
+            "one frame after opening, the cards already show at full strength ({early} of \
+             {settled} ink pixels): the Overview appeared without its entrance"
+        );
+    }
+
     /// T038, FR-002: a press on a card takes the keyboard but reports no focus: nothing expands.
     #[test]
     fn a_press_on_a_card_reports_no_focus() {

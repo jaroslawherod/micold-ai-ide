@@ -535,20 +535,27 @@ where
         );
         let alpha = 1.0 - progress;
         if alpha > HIDDEN {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: layout.bounds(),
-                    border: iced::Border {
-                        radius: self.radius.into(),
+            // In a layer of its own, started after the content's: content that draws in layers
+            // (the Overview's cards, anything scrolled) is drawn after this layer's quads, so a
+            // veil drawn here would sit under it and the content would show at full strength
+            // (issue #1341).
+            let bounds = layout.bounds();
+            renderer.with_layer(bounds, |renderer| {
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds,
+                        border: iced::Border {
+                            radius: self.radius.into(),
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
-                    ..Default::default()
-                },
-                iced::Background::Color(Color {
-                    a: alpha,
-                    ..self.backdrop
-                }),
-            );
+                    iced::Background::Color(Color {
+                        a: alpha,
+                        ..self.backdrop
+                    }),
+                );
+            });
         }
     }
 
