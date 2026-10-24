@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: tasks review round 2 (orchestrator, scoped, sonnet) on the snapshot below; if CLEAN: close checklists (requirements.md: 0 unchecked), specs-only gate, design PR
+- **Phase**: tasks (design PR open)
+- **Next step**: orchestrator waits on CI for #1319 and merges; then milestone M1. Checklists closed (requirements.md: 0 unchecked). Specs-only gate green; full scripts/gate.sh ran out of disk (30 GB free not enough) and was stopped, target dirs wiped
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1319 | design (spec, plan, tasks) | open | — |
 
 ## Milestones
 
