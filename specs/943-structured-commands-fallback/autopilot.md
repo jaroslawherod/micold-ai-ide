@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M7 reviewed (A 2 rounds, B 2), full gate green at 32b8657f (split-gate.sh) after rebase onto origin/main 79db5768; pushed; PR files written; orchestrator opens the PR
-- **Next step**: orchestrator opens the M7 PR from `943-M7/pr-title.txt`/`pr-body.md`, waits on CI, merges; then M8 (holds: M8 ← #941 M6, M9 ← #942 M7/M8)
+- **Phase**: M8 implemented (T055–T059) and committed at 255c6a31 on origin/main e65993bc; review A 1 round (7 findings, 6 fixed, 1 fixed-with-reason), review B 1 counted round (3 findings: T060 open, cycle log, guide check — the last two closed); full gate running; **T060 open** (the live-session visual pass)
+- **Next step**: a fresh unit runs quickstart Part B 1, 2, 4 and 5 against a real structured session (the palette's component evidence is already in `visual-pass/`), ticks T060, re-runs the full gate, pushes and writes the PR files
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1250 | M4 | merged (rebase) | 0b432628 |
 | #1252 | M5 | merged (rebase) | e479ea8f |
 | #1257 | M6 | merged (rebase) | 319e8706 |
+| #1265 | M7 | merged (rebase) | f462ddf5 |
 
 ## Milestones
 
@@ -34,8 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T032–T038 | full | Daemon: model choice persisted, `--model`, live `set_model` | #1250 | merged |
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation (decision 2: A, confirmed) | #1252 | merged |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | #1257 | merged |
-| M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | | pushed, PR to open |
-| M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** | | pending |
+| M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | #1265 | merged |
+| M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** (met, e65993bc) | | T055–T059 done at 255c6a31; T060 open |
 | M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | pending |
 
 ## Decisions
@@ -116,7 +117,29 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+**M8, after T059.** Done: T055–T059, committed as `255c6a31` on `origin/main` e65993bc (branch
+reset to origin/main and not yet pushed). The shared `CommandPalette` (`client/src/ui/material/
+command_palette.rs`, showcase entry, `gates/command_palette_fits.rs`), the palette in the
+composer's completion slot and the model control/`Typeahead` picker in its status row
+(`ui/composer.rs`, `shell/composer.rs`), the transcript's `DisclosureCard` markers and the
+"Before the clear" era tag (`ui/transcript/entries.rs`, `mod.rs`), and the user guide's *Commands
+and the model*. Reviews: A 1 round (7 findings — the `lazy` era key, the picker's typed row, the
+keyboard back to the composer, `row_match`'s tiers, the showcase's words, one row builder, all
+fixed; the chip card's body kept, it shows the untruncated description); B 1 counted round (its
+cycle-log and guide-check findings closed; `check-user-guide-updated.sh origin/main HEAD` → `user
+guide: ok — 6 user-facing path(s), documented in 1 user-guide page(s)`). Scoped gate green; the
+full gate was started on this tree (its result is in the unit's return).
+
+Next step: **T060**, quickstart Part B 1, 2, 4 and 5 against a real structured session in both
+themes (a logged-in `claude`, a scratch project, the client and daemon from one build — the
+`visual-pass` skill's recipe, and in this cloud container `apt-get install -y libxkbcommon-x11-0
+xdotool`, `ICED_BACKEND=tiny-skia` on Xvfb, ~12 s after a click before judging a frame). The
+palette's own component evidence is already committed: `visual-pass/m8-command-palette-light.png`
+and `-dark.png` (both themes, the grouped list with the emphasised match, the "opens in terminal"
+words, the fallback note and the no-match line). Then tick T060, re-run the full gate, push
+`--force-with-lease`, and write `$SCRATCHPAD/943-M8/pr-title.txt` / `pr-body.md` (title: `#943:
+Structured session: slash commands, model switching and PTY fallback — M8 of 9: … (#943)`, body
+ending `Refs #943`); the orchestrator opens the PR. No protocol change in M8.
 
 ## Open escalation
 
