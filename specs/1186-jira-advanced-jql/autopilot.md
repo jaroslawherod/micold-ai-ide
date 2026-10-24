@@ -51,6 +51,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 1–2 | — | CLEAN: round 1 five questions agent-resolved (1 deferred to plan); round 2 no critical ambiguity |
 | Plan review | 1 | 840893a6b7c27c77bf984af45f25a08d59317ea2:57116fa3b1d2a80ddd0ef5798f90e39ed94bd94b | CLEAN (3 MINOR, fixed, prose only: awaited_jira_query accessor named; data-model §3 ref; FR-016 source scan added) |
 | Spec review | 2 | 50939e7590e958b50053133db00b8fe7f26e966b:5510e0471524f4d4a847f1d9f80dc643b9b99499 | CLEAN (1 MINOR kept: HTTP 400 in FR-010 is the observable rule round 1 asked for) |
+| M1 review A (high) | 1 | 9f945fcd9f9ecead6d6fc3aed002bbdf583fd556:d74375825a41dbcd2302e960f7693f17d1438490 | CLEAN (1 MINOR fixed: an `ORDER BY` inside parentheses split a group; sort clause now only at depth 0, contract §2 updated, test added) |
+| M1 review B (sonnet) | 1 | 9f945fcd9f9ecead6d6fc3aed002bbdf583fd556:d74375825a41dbcd2302e960f7693f17d1438490 | CLEAN (same MINOR as A, fixed); Verify: jira_query 25, jira_load 8, jira_http_adapter 18 passed |
 
 ## Declined review findings
 

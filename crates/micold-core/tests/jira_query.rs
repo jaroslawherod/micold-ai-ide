@@ -106,7 +106,7 @@ fn the_sort_clause_starts_at_the_first_order_by_outside_quoted_strings() {
 }
 
 #[test]
-fn order_by_inside_a_string_or_inside_a_word_is_not_a_sort_clause() {
+fn order_by_inside_a_string_a_word_or_parentheses_is_not_a_sort_clause() {
     for raw in [
         "summary ~ \"order by\"",
         "summary ~ 'order by'",
@@ -115,6 +115,7 @@ fn order_by_inside_a_string_or_inside_a_word_is_not_a_sort_clause() {
         "x ORDER_BY y",
         "x ORDERBY y",
         "order",
+        "(a ORDER BY b) OR (project = X)",
     ] {
         let query = parsed(raw);
         assert_eq!(query.sort_clause(), None, "{raw:?} has no sort clause");
