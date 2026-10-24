@@ -33,7 +33,8 @@ with the full detail.
   "Daemon connected · local" (or the remote daemon's name); an amber dot with
   "Read-only · another window" when another window holds the project, or with
   "Daemon connected" when the service is a different version or build; a red dot when the
-  connection is lost.
+  connection is lost ("Daemon disconnected · reconnecting…"). A lost connection shows here and
+  nowhere else: no banner is raised, because there is nothing to do and the app reconnects by itself.
 - **Sandbox** — "Sandbox ready" or "Sandbox off"; while it comes up, the stage ("Checking runtime…",
   "Getting image… 42%", "Starting sandbox…") with a turning ring, and the runtime's last line and
   any retry reason in the tooltip; in amber, "Sandbox failed", "Sandbox out of date" or
@@ -43,9 +44,12 @@ When the window is too narrow for every item, the bar gives way in a fixed order
 first, then the plan usage, then the texts are shortened with "…" — the connection item last. A
 shortened item's tooltip still holds its full text.
 
-Conditions that need you to act — another window holding the project, a service to restart, a
-sandbox that failed or is out of date — still appear as a banner under the app bar, with the button
-that ends them.
+Conditions that need you to act — another window holding the project or taking it over, a service
+of a different version or an older build to restart, a sandbox that failed or is out of date, a
+session running without the sandbox — still appear as a banner under the app bar, in every view,
+with the button that ends them ("Take over", "Restart service", "Run without it for now", "Restart
+the sandbox", "Try the sandbox again"). The bar shows the same condition in amber at the same time,
+and both go away when the condition ends.
 
 ### Depth: how surfaces are separated
 
@@ -215,6 +219,6 @@ session that restarted — appear as a small bar near the bottom of the window.
   immediately and shows the next straight away.
 - **Repeats are not queued.** Retrying something that keeps failing shows the message once, not
   once per attempt.
-- **The connection banner is not one of these.** The strip that appears when the app cannot reach
-  its session service reports a condition that is still true, so it stays put until it is not —
-  it does not time out and cannot be dismissed.
+- **The action banners are not one of these.** The strips for a project held by another window, a
+  service to restart or a sandbox to fix report a condition that is still true, so they stay put
+  until it is not — they do not time out and cannot be dismissed.

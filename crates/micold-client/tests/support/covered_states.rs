@@ -2336,7 +2336,57 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: STATUS_BAR_ANCHORS,
         },
+        // --- Feature 1124, US3: banners stay for conditions with an action ----------------------
+        // Another window holds the project and the sandbox did not start: both banners are drawn
+        // under the app bar with their buttons, and both bar items show a warning (FR-009).
+        CoveredState {
+            name: "status-bar-warnings",
+            build: || warnings_state(with_active_session()),
+            anchors: STATUS_BAR_ANCHORS_WITH_BANNERS,
+        },
+        // The same over the Overview: the banners sit in the same slot under the toolbar (FR-010).
+        CoveredState {
+            name: "status-bar-warnings-overview",
+            build: || {
+                let mut state = with_project();
+                state.overview.open = true;
+                state.overview.full_screen = true;
+                warnings_state(state)
+            },
+            anchors: STATUS_BAR_ANCHORS_WITH_BANNERS,
+        },
+        // A lost connection draws no banner row: the bar's connection item carries the error dot.
+        CoveredState {
+            name: "status-bar-disconnected",
+            build: || {
+                StateUnderTest::new(with_active_session())
+                    .sandbox(running_sandbox())
+                    .connection(ConnectionStatus::Disconnected)
+            },
+            anchors: STATUS_BAR_ANCHORS,
+        },
     ]
+}
+
+/// Both banners and both warning items: the project is held by another window and the sandbox
+/// failed to start (feature 1124, US3).
+fn warnings_state(state: State) -> StateUnderTest {
+    use micold_core::sandbox::lifecycle::{Failure, Stage};
+    use micold_core::sandbox::placement::PlacementKind;
+    use micold_core::sandbox::runtime::{RuntimeError, RuntimeKind};
+    let mut sandbox =
+        micold_client::features::sandbox::Sandbox::for_placement(PlacementKind::LocalSandbox);
+    sandbox.failed(Failure {
+        stage: Stage::Probing,
+        error: RuntimeError::NotInstalled {
+            kind: RuntimeKind::Docker,
+        },
+    });
+    StateUnderTest::new(state)
+        .sandbox(sandbox)
+        .connection(ConnectionStatus::ProjectBusy {
+            holder: "window 2".into(),
+        })
 }
 
 /// The status bar and the body's top edge, in a window column holding the app bar, the body and
@@ -2562,3 +2612,20 @@ fn jira_form_state(shape: impl FnOnce(&mut SettingsDraft)) -> State {
     state.settings.settings_draft = Some(draft);
     state
 }
+
+/// [`STATUS_BAR_ANCHORS`] with the connection and sandbox banners drawn: the column then holds the
+/// app bar, the two banners, the body and the bar.
+const STATUS_BAR_ANCHORS_WITH_BANNERS: &[Anchor] = &[
+    Anchor {
+        name: "shell.root",
+        path: &[],
+    },
+    Anchor {
+        name: "shell.body",
+        path: &[0, 0, 3],
+    },
+    Anchor {
+        name: "status_bar",
+        path: &[0, 0, 4],
+    },
+];

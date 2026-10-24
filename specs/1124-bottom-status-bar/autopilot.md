@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M2 pr
-- **Next step**: the orchestrator opens the M2 PR from scratchpad pr-title.md / pr-body.md
+- **Phase**: M3 implemented
+- **Next step**: M3 gate, reviews A and B, then the PR
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1317 | design (spec, plan, tasks) | merged (rebase) | f55628dfd03663553ffeef46dc83c99bc6b56fed |
 | #1327 | M1 | merged (rebase) | afef53af8836a80b7a4ae575f0dbb2c75dee077e |
+| #1330 | M2 | merged (rebase) | a54f93313fec84e8501d455a4ae17ea40daca185 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | (orchestrator opens) | done: rebased on 4910aeee, gate green at 2045d640, A CLEAN (r2 scoped CLEAN), B CLEAN r2, visual pass 5/5 |
-| M2 | T016–T020 | light | Bring-up shown in the bar; no row above the body | — | planned |
-| M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | planned |
+| M2 | T016–T020 | light | Bring-up shown in the bar; no row above the body | #1330 | done: merged |
+| M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | T021–T025 done; gate and reviews pending |
 | M4 | T026–T032 | light | CLI item follows the focused pane; Overview/Jump key hints | — | planned |
 | M5 | T033–T038 | light | Plan usage moves from the app bar into the status bar | — | planned |
 

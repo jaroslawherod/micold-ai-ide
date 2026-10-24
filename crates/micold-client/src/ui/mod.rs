@@ -160,9 +160,15 @@ pub use material::{ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEM
 use crate::features::connection::ConnectionStatus;
 
 /// The persistent connection-status strip, shown between the toolbar and the notification stack.
-/// Empty (zero-height) when connected, so it never crowds a healthy session.
+/// Empty (zero-height) when connected, and when the link is lost: a lost connection offers no
+/// action and the app reconnects on its own, so the status bar's connection item says it alone
+/// (feature 1124, FR-003, FR-009). Only the four conditions with a button raise this row.
 fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a, Message> {
-    let Some((title, body)) = connection_words(status) else {
+    let words = match status {
+        ConnectionStatus::Disconnected => None,
+        _ => connection_words(status),
+    };
+    let Some((title, body)) = words else {
         return Space::new()
             .width(Length::Fixed(0.0))
             .height(Length::Fixed(0.0))
