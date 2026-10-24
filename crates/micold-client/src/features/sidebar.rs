@@ -1527,6 +1527,18 @@ impl crate::app::State {
         self.reveal_row(&self.sidebar_list()).is_some()
     }
 
+    /// Whether an armed reveal can drain now: armed, the viewport laid out (a height of `0` means
+    /// unknown, contract §6.3) and a row to reach (research R7). First opens the closed state group
+    /// of the reveal's target (feature 1125, FR-006, R5), so a chord into a closed group reaches
+    /// its row rather than falling back to the current session's drawn one.
+    pub fn reveal_ready(&mut self) -> bool {
+        if !self.sidebar.pending_reveal_scroll || self.sidebar.viewport_height == 0 {
+            return false;
+        }
+        self.open_group_of_reveal_target();
+        self.current_session_is_listed()
+    }
+
     /// The row the reveal scroll reaches (feature 803, contracts/ui.md U3): the row a navigation
     /// chord gave the keyboard while the list draws it, else the current session's row.
     fn reveal_row(&self, rows: &[ListRow]) -> Option<usize> {
@@ -1539,8 +1551,8 @@ impl crate::app::State {
 
     /// Open the closed state group holding the reveal's target (feature 1125, FR-006, research
     /// R5): the row a navigation chord gave the keyboard, else the current session's location.
-    /// Recorded as the user's choice, so the group stays open after the reveal. Called when an
-    /// armed reveal is about to drain, before asking whether its row is drawn.
+    /// Recorded as the user's choice, so the group stays open after the reveal. Called by
+    /// [`State::reveal_ready`], before asking whether its row is drawn.
     pub fn open_group_of_reveal_target(&mut self) {
         let groups = self.sidebar_groups();
         let listed = |location: &SessionLocation| {
