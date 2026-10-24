@@ -128,6 +128,20 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          thing twice (feature 483, T044)",
     ),
     (
+        "session",
+        "session_strip",
+        "StripTab — the shell tab menu names the strip tab it was opened on; the strip's pure tab \
+         identity moved out of `ui/terminal.rs` into its own module so the strip's rules are \
+         testable without iced (feature 1126, T003, plan review 1)",
+    ),
+    (
+        "session_strip",
+        "session",
+        "Msg — `restart_message` answers which session message a restart press sends; it builds \
+         the message and changes nothing of the session feature's (feature 1126, T003; the same \
+         code read it from `ui/terminal.rs` before the move)",
+    ),
+    (
         "sidebar",
         "worktree",
         "worktree_tags — the sidebar renders a worktree row's tags and does not get to decide what \

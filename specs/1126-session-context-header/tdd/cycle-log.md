@@ -33,3 +33,18 @@ Append only.
   worktree's title is asked for once left: 0 right: 1`.
 - Green: the shell asks again when titles become readable while a worktree is shown;
   `-- issue_source`: 63 passed.
+
+## M1 review B round 1 and full gate notes
+
+- T004 (`cdk::Keyed`) green: the full gate's client lib run, `ui::cdk::keyed::tests` passed (both
+  axes).
+- T003 also moved `natural_strip_width`, `leading_slack` and `tab_pitch` into
+  `features::session_strip`: `strip_overflow` needs them; behaviour unchanged, their tests moved
+  with them.
+- T016 showcase: red was the gate's `showcase_completeness` (`44 passed; 2 failed`: `cdk::Keyed` has
+  no gallery entry or exemption); green after the `Keyed` exemption in `showcase/catalogue.rs`:
+  46 passed.
+- Full gate red: `feature_registration_cost` failed 2 (`session_strip` had no
+  `tests/features_session_strip.rs`; `session` ↔ `session_strip` not in
+  `ALLOWED_CROSS_FEATURE_NAMES`). Green after adding the isolation test file and the two allowlist
+  lines: `--test feature_registration_cost --test features_session_strip` 7 + 3 passed.
