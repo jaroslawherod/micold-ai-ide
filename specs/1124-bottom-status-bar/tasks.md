@@ -46,7 +46,7 @@ Paths are relative to the repository root. `client/` below means `crates/micold-
 
 **⚠️ CRITICAL**: no story can mount the bar before this phase is complete.
 
-- [ ] T003 Write failing unit tests in `client/src/ui/material/status_bar.rs` (`#[cfg(test)]`, using
+- [x] T003 Write failing unit tests in `client/src/ui/material/status_bar.rs` (`#[cfg(test)]`, using
   `material::test_support`): B1 the bar's layout node is exactly `anatomy::status_bar::HEIGHT` high
   and `Fill` wide; B2 the leading group starts and the trailing group ends `spacing::MD` from the
   edges, items separated by `spacing::MD`; B4 at a too-narrow width `Drop(0)` items vanish before
@@ -54,7 +54,7 @@ Paths are relative to the repository root. `client/` below means `crates/micold-
   and a shortened item keeps a floor of dot + one character + "…"; B5 a dropped item has a zero-area
   node; B3 a press on any item publishes no message; `ItemTone` maps `Neutral`/`Positive`/`Warning`/
   `Error` to `on_surface_variant`/`success`/`warning`/`error`; a non-busy bar requests no redraw
-- [ ] T004 Implement the types and builder in `client/src/ui/material/status_bar.rs`:
+- [x] T004 Implement the types and builder in `client/src/ui/material/status_bar.rs`:
   `ItemTone { Neutral, Positive, Warning, Error }`, `GiveWay { Keep, Drop(u8), Shorten(u8) }`,
   `StatusItem::new(text).dot(ItemTone).tone(ItemTone).busy(bool).tooltip(String)
   .give_way(GiveWay)` (default `Keep`, tone `Neutral`) and `StatusBar::new(roles).item(..)
@@ -62,7 +62,7 @@ Paths are relative to the repository root. `client/` below means `crates/micold-
   and `Tooltip`; surface `surface_container`, 1 dp `outline_variant` top divider, text
   `TypeRole::Label` small, height `anatomy::status_bar::HEIGHT`; re-export from
   `client/src/ui/material/mod.rs` (makes T003's B1, B2, B3, tone and idle cases pass)
-- [ ] T004b Implement the give-way pass in `StatusBar`'s own `Widget::layout` in
+- [x] T004b Implement the give-way pass in `StatusBar`'s own `Widget::layout` in
   `client/src/ui/material/status_bar.rs` (R4): measure natural widths, drop `Drop` items by rank,
   then ellipsize `Shorten` items by rank to the floor; a dropped item gets a zero-area node and no
   tooltip hit area (makes T003's B4, B5 cases pass)

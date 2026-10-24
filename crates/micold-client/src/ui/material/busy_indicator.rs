@@ -94,6 +94,12 @@ pub(super) fn dot_alpha(index: usize, phase: f32) -> f32 {
     1.0 - (1.0 - FAINTEST) * behind as f32 / (DOTS - 1) as f32
 }
 
+/// The turning ring alone, for a component that sets its own words beside it (feature 1124: a
+/// status bar item draws the ring before its shortened text).
+pub(super) fn ring<'a, M: 'a>(roles: Roles) -> Element<'a, M> {
+    Ring { roles }.into()
+}
+
 /// The turning ring.
 struct Ring {
     roles: Roles,
