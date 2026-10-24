@@ -1255,19 +1255,30 @@ pub fn with_unread_line(tooltip: String, n: usize) -> String {
 }
 
 /// `tooltip` with the row's full title as its first line (feature 1125, FR-012): the first line of
-/// the row is the one a narrow sidebar shortens, so the tooltip leads with it in full.
-pub fn with_title_line(title: &str, tooltip: String) -> String {
-    format!("{title}\n{tooltip}")
+/// the row is the one a narrow sidebar shortens, so the tooltip leads with it in full. A title that
+/// is the row's name or its branch is already on the tooltip's `Name` or `Branch` line, so it is not
+/// added a second time.
+pub fn with_title_line(node: &WorktreeNode, title: &str, tooltip: String) -> String {
+    if title == node.display_name || node.worktree.branch.as_deref() == Some(title) {
+        tooltip
+    } else {
+        format!("{title}\n{tooltip}")
+    }
 }
 
-/// A worktree row's first line (feature 1125, data-model *Row text*): the known issue title, else
-/// the branch, else the display name, as the Overview's card reads it (feature 1120, FR-006).
-pub fn row_title(node: &WorktreeNode, issue_title: Option<&str>) -> String {
-    micold_core::overview_text::card_title(
-        issue_title,
-        node.worktree.branch.as_deref(),
-        &node.display_name,
-    )
+/// A worktree row's first line (feature 1125, data-model *Row text*): the user's rename of the
+/// worktree when there is one (it wins over everything the app derives), else the known issue
+/// title, else the branch, else the display name, as the Overview's card reads it (feature 1120,
+/// FR-006).
+pub fn row_title(node: &WorktreeNode, issue_title: Option<&str>, renamed: Option<&str>) -> String {
+    match renamed.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(name) => name.to_string(),
+        None => micold_core::overview_text::card_title(
+            issue_title,
+            node.worktree.branch.as_deref(),
+            &node.display_name,
+        ),
+    }
 }
 
 /// A worktree row's second line (feature 1125, FR-011): the short branch, unless `title` is the

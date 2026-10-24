@@ -662,18 +662,40 @@ fn start_issue_details(app: &mut App, request: DetailsRequest) -> Task<Message> 
 
 /// The Overview opened: read the title of every worktree's issue ([`request_titles`]).
 pub fn on_overview_opened(app: &mut App) -> Task<Message> {
-    let dirs: Vec<String> = app
-        .core
-        .worktree
-        .worktrees
-        .iter()
-        .map(|worktree| worktree.dir_name.clone())
-        .collect();
+    let dirs = worktree_dirs(app);
     // The issue links need the repository even when no title is read (feature 1122, R2).
     if !request_titles(app, &dirs) {
         read_repo(app);
     }
     Task::none()
+}
+
+/// The worktree list changed, or titles became readable (feature 1125, FR-011): a sidebar row's
+/// first line is its issue's title, so every worktree's title is read as the Overview would read
+/// it, without the Overview having opened. Each title is read once ([`request_titles`]).
+pub fn on_worktrees_changed(app: &mut App) {
+    let dirs = worktree_dirs(app);
+    request_titles(app, &dirs);
+}
+
+/// A fingerprint of the active project's worktree list, by directory name, so the shell can tell
+/// that a message changed it without keeping a copy.
+pub fn worktrees_fingerprint(app: &App) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for worktree in &app.core.worktree.worktrees {
+        worktree.dir_name.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+fn worktree_dirs(app: &App) -> Vec<String> {
+    app.core
+        .worktree
+        .worktrees
+        .iter()
+        .map(|worktree| worktree.dir_name.clone())
+        .collect()
 }
 
 /// The session area's header followed the worktree `dir` (feature 1126, R3): read its issue's

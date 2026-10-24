@@ -7668,6 +7668,36 @@ mod issue_source {
         assert!(remote_lists_sent(&mut rig.rx).is_empty(), "and not again");
     }
 
+    /// Feature 1125, FR-011 (review A F3): a sidebar row leads with its issue title, so the
+    /// worktree list arriving reads the titles not yet held, once, with no Overview open and no
+    /// session shown.
+    #[test]
+    fn the_worktree_list_arriving_reads_its_issue_titles_once() {
+        let mut rig = titles_rig(true);
+        let listed = std::mem::take(&mut rig.app.core.worktree.worktrees);
+        let work = crate::update(
+            &mut rig.app,
+            Message::Worktree(micold_client::features::worktree::Msg::Loaded(
+                listed.clone(),
+            )),
+        );
+        settle(&mut rig.app, work);
+        assert!(!rig.app.core.overview.open);
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(sent.len(), 1, "the titles' remotes are asked for once");
+        answer_remotes(&mut rig.app, sent[0].0, github_remote());
+        assert_eq!(rig.source.lookup_calls(), vec![("o/r".to_string(), 42)]);
+        let work = crate::update(
+            &mut rig.app,
+            Message::Worktree(micold_client::features::worktree::Msg::Loaded(listed)),
+        );
+        settle(&mut rig.app, work);
+        assert!(
+            remote_lists_sent(&mut rig.rx).is_empty(),
+            "the same list again asks nothing"
+        );
+    }
+
     // --- 1122: the issue links' repository (R2) and opening a link (R10) -------------------------
 
     fn repo_named(url: &str) -> micold_client::features::overview::RepoLookup {

@@ -707,6 +707,7 @@ fn build_items(
         let title = crate::features::sidebar::row_title(
             &node,
             state.overview.known_title(&node.location()),
+            state.workspace.worktree_name(&dir),
         );
         let second_line = crate::features::sidebar::row_second_line(&node, &title);
 
@@ -770,6 +771,7 @@ fn build_items(
             .row_tooltip(crate::features::sidebar::with_unread_line(
                 crate::features::sidebar::with_state_line(
                     crate::features::sidebar::with_title_line(
+                        &node,
                         &title,
                         crate::features::sidebar::worktree_tooltip(
                             project_root,

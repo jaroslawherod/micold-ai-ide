@@ -1931,7 +1931,7 @@ mod two_line_rows {
     #[test]
     fn a_worktree_with_a_known_issue_title_reads_title_then_short_branch_and_sessions() {
         let node = node(vec![], vec![session(here())]);
-        let title = row_title(&node, Some(TITLE));
+        let title = row_title(&node, Some(TITLE), None);
         assert_eq!(title, TITLE);
         assert_eq!(
             row_second_line(&node, &title),
@@ -1943,7 +1943,7 @@ mod two_line_rows {
     #[test]
     fn a_branch_only_worktree_reads_the_branch_then_the_sessions_alone() {
         let node = node(vec![], vec![idle(here())]);
-        let title = row_title(&node, None);
+        let title = row_title(&node, None, None);
         assert_eq!(title, BRANCH);
         assert_eq!(row_second_line(&node, &title), "1 session");
     }
@@ -1970,10 +1970,11 @@ mod two_line_rows {
             "project root \u{b7} 2 sessions, 1 running"
         );
         let empty_worktree = node(vec![], vec![]);
-        assert!(
-            row_second_line(&empty_worktree, &row_title(&empty_worktree, Some(TITLE)))
-                .ends_with("no sessions")
-        );
+        assert!(row_second_line(
+            &empty_worktree,
+            &row_title(&empty_worktree, Some(TITLE), None)
+        )
+        .ends_with("no sessions"));
     }
 
     /// US3.7, FR-013: the label chips stay, in today's order, and no type or issue tag is a chip.
@@ -2028,10 +2029,33 @@ mod two_line_rows {
             &node.display_name,
             None,
         );
-        let tip = with_title_line(TITLE, today.clone());
+        let tip = with_title_line(&node, TITLE, today.clone());
         let mut lines = tip.lines();
         assert_eq!(lines.next(), Some(TITLE));
         assert_eq!(line(&tip, "Branch").as_deref(), Some(BRANCH));
         assert_eq!(lines.collect::<Vec<_>>().join("\n"), today);
+    }
+
+    /// A title the tooltip already names (the row's name or its branch) is not repeated above it.
+    #[test]
+    fn the_tooltip_does_not_repeat_a_title_that_is_the_name_or_the_branch() {
+        let node = node(vec![], vec![]);
+        let today = worktree_tooltip(None, &node.worktree, &node.display_name, None);
+        assert_eq!(with_title_line(&node, BRANCH, today.clone()), today);
+        assert_eq!(with_title_line(&node, "ci-red", today.clone()), today);
+    }
+
+    /// A user's rename of the worktree (feature 008, FR-014) wins the first line over the issue
+    /// title and the branch; a blank rename does not count.
+    #[test]
+    fn a_users_rename_wins_the_first_line_over_the_issue_title_and_the_branch() {
+        let node = node(vec![], vec![session(here())]);
+        let title = row_title(&node, Some(TITLE), Some("my pet name"));
+        assert_eq!(title, "my pet name");
+        assert_eq!(
+            row_second_line(&node, &title),
+            "fix/1117 \u{b7} 1 session running"
+        );
+        assert_eq!(row_title(&node, Some(TITLE), Some("  ")), TITLE);
     }
 }

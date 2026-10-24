@@ -130,6 +130,8 @@ fn the_unread_mark_is_legible_on_every_fill_a_host_draws_it_on() {
             // often as it is read.
             ("a hovered sidebar row", hovered_sidebar_row(r)),
             ("a selected row", r.secondary_container),
+            // The sidebar's selected row (feature 1125, R7).
+            ("a primary-selected row", r.primary_container),
             ("a menu panel", r.surface_container),
             ("the app bar", r.surface),
         ] {
@@ -169,6 +171,8 @@ fn every_state_icon_is_legible_on_every_fill_of_a_sidebar_row() {
                 ("the sidebar", style::to_rgb(style::sidebar_fill(r))),
                 ("a hovered sidebar row", hovered_sidebar_row(r)),
                 ("a selected row", r.secondary_container),
+                // The sidebar's selected row (feature 1125, R7).
+                ("a primary-selected row", r.primary_container),
             ] {
                 let ratio = contrast(glyph, fill);
                 if ratio < AA_NON_TEXT {
@@ -204,7 +208,9 @@ fn a_sidebar_group_header_is_legible_on_the_sidebar() {
 }
 
 /// Feature 1125 (FR-019, SC-004, R12, T024): a location row's two lines on the sidebar's tone, and
-/// both lines of the selected row on its `primary_container` fill, are legible in both schemes.
+/// the selected row's text on its `primary_container` fill, are legible in both schemes: the
+/// `on_primary_container` both its lines take, and the tints a selected row keeps (a failed
+/// session's `error`, an interrupted one's `primary`; `tree_view`'s Primary selection).
 #[test]
 fn a_two_line_rows_text_is_legible_on_the_sidebar_and_when_selected() {
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
@@ -214,15 +220,12 @@ fn a_two_line_rows_text_is_legible_on_the_sidebar_and_when_selected() {
             ("first line", r.on_surface, sidebar),
             ("second line", r.on_surface_variant, sidebar),
             (
-                "selected first line",
+                "selected lines",
                 r.on_primary_container,
                 r.primary_container,
             ),
-            (
-                "selected second line",
-                r.on_primary_container,
-                r.primary_container,
-            ),
+            ("selected error tint", r.error, r.primary_container),
+            ("selected primary tint", r.primary, r.primary_container),
         ] {
             let ratio = contrast(text, fill);
             assert!(
@@ -258,6 +261,8 @@ fn a_location_rows_unread_count_is_legible_in_every_row_state() {
                 ("at rest", style::to_rgb(style::sidebar_fill(r))),
                 ("hovered", hovered_sidebar_row(r)),
                 ("selected", r.secondary_container),
+                // The sidebar's selected row (feature 1125, R7).
+                ("primary-selected", r.primary_container),
             ] {
                 let ratio = contrast(count, fill);
                 if ratio < AA_TEXT {

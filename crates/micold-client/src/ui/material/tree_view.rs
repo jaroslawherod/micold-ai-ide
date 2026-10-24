@@ -467,10 +467,13 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // Minimal base indent (feature 008, FR-009): depth-0 rows sit flush with the
             // sidebar's small left padding; each level nests by one step.
             let indent = f32::from(item.depth) * spacing::MD;
-            // A Primary selection draws the row's text and icons in `on_primary_container` (R7);
-            // the state icon keeps its own tint, which carries the state.
+            // A Primary selection draws the row's text and icons in `on_primary_container` (R7).
+            // Only a neutral tint is replaced: a tint that carries meaning (a session's failure in
+            // `error`, an interrupted one in `primary`, a missing worktree's name) is kept, and is
+            // checked legible on the fill in `composition_contrast`. The state icon keeps its own
+            // tint, which carries the state.
             let primary = item.selected && selection == Selection::Primary;
-            if primary {
+            if primary && (item.tint == r.on_surface || item.tint == r.on_surface_variant) {
                 item.tint = r.on_primary_container;
             }
             let has_second_line = item.supporting_text.is_some() || !item.tags.is_empty();
@@ -626,9 +629,8 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
 
             // The row body: the name line, plus an optional second line — supporting text, then
             // chips — aligned beneath the label (feature 008 FR-001, feature 1125 R6). Such a row is
-            // two lines —
-            // and is, for §7.2's purposes, Material's *two-line* list item rather than a one-line
-            // row that happens to be taller.
+            // two lines, and is, for §7.2's purposes, Material's *two-line* list item rather than a
+            // one-line row that happens to be taller.
             let (content, base): (Element<'a, M>, f32) = if !has_second_line {
                 (line.into(), density::LIST_ROW_BASE)
             } else {
@@ -1637,6 +1639,23 @@ mod tests {
                 "{line:?}"
             );
         }
+    }
+
+    /// A tint that carries meaning (a failed session's `error`) survives the Primary selection;
+    /// only a neutral tint gives way to `on_primary_container`.
+    #[test]
+    fn primary_selection_keeps_a_rows_meaningful_tint() {
+        let item = TreeItem::new(0, TITLE, roles().error)
+            .selected(true)
+            .on_press("open".to_string());
+        let view = TreeView::new(vec![item], roles()).selection(Selection::Primary);
+        let mut mounted = super::super::test_support::Mounted::new(view);
+        let painted = mounted.painted_text();
+        let drawn = painted
+            .iter()
+            .find(|p| p.content == TITLE)
+            .unwrap_or_else(|| panic!("the title is drawn: {painted:?}"));
+        assert_eq!(drawn.color, style::color(roles().error));
     }
 
     #[test]

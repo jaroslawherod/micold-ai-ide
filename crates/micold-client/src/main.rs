@@ -478,6 +478,7 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let link_before = LinkFocus::of(app);
     let header_before = app.core.changes.header.entry.clone();
     let titles_were_readable = shell::issues::titles_readable(app);
+    let worktrees_before = shell::issues::worktrees_fingerprint(app);
     let task = update_inner(app, message);
     // Feature 1126, R3/R6: the header follows the shown location after any message, including one
     // the shell applied itself, and a newly followed worktree's issue title is read — or read once
@@ -485,6 +486,11 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     app.core.follow_header();
     let task = Task::batch([task, shell::changes::run_followed(app)]);
     let became_readable = !titles_were_readable && shell::issues::titles_readable(app);
+    // Feature 1125, FR-011: the sidebar's rows lead with their issue titles, so a changed worktree
+    // list (or titles becoming readable) reads the titles not yet held, for every worktree.
+    if shell::issues::worktrees_fingerprint(app) != worktrees_before || became_readable {
+        shell::issues::on_worktrees_changed(app);
+    }
     if app.core.changes.header.entry != header_before || became_readable {
         if let Some((_, SessionLocation::Worktree(dir))) = app.core.changes.header.entry.clone() {
             shell::issues::on_header_followed(app, &dir);
