@@ -556,19 +556,11 @@ mod tests {
         })
     }
 
-    /// T010, US1 scenario 5 (FR-014): a change of the location's state and pull request, applied
-    /// before one `State::update`, shows in the sidebar row and in the header text of that same
-    /// state; the two never disagree.
-    #[test]
-    fn the_header_shows_a_change_on_the_refresh_the_sidebar_shows_it() {
+    /// The shown worktree's session starts running and a reading finds the branch's pull request,
+    /// applied before one `State::update`.
+    fn running_with_a_pull_request() -> (State, SessionLocation) {
         let (mut state, location) = shown_worktree();
         state.update(Message::NoOp);
-        let (before, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
-        assert_eq!(before.state, micold_core::overview::CardState::Idle);
-        assert_eq!(before.pull_request, None);
-        assert_eq!(sidebar_pr(&state, NOW), None);
-
-        // The session starts running and a reading finds the branch's pull request.
         for session in state.workspace.sessions.values_mut().flatten() {
             session.lifecycle = micold_core::session::SessionLifecycle::Running;
         }
@@ -584,23 +576,108 @@ mod tests {
             ),
         );
         state.update(Message::NoOp);
+        (state, location)
+    }
+
+    /// T010, US1 scenario 5 (FR-014): a change of the location's state and pull request, applied
+    /// before one `State::update`, shows in the header text of that same state.
+    #[test]
+    fn the_header_shows_a_change_on_the_refresh() {
+        let (mut state, location) = shown_worktree();
+        state.update(Message::NoOp);
+        let (before, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
+        assert_eq!(before.state, micold_core::overview::CardState::Idle);
+        assert_eq!(before.pull_request, None);
+
+        let (state, location) = running_with_a_pull_request();
         let (after, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
-        let card = crate::ui::overview::location_card(&state, &location).unwrap();
-        assert_eq!(after.state, card.state, "the header's state is the card's");
-        assert_ne!(after.state, before.state, "the change shows");
-        assert_eq!(sidebar_pr(&state, NOW), Some(1118));
+        assert_eq!(
+            after.state,
+            micold_core::overview::CardState::NeedsAttention,
+            "a running session whose pull request has failing checks and requested changes calls \
+             for attention"
+        );
         assert!(
             after
                 .pull_request
                 .as_ref()
                 .is_some_and(|chip| chip.text.starts_with("PR #1118")),
-            "the header names the sidebar's pull request: {:?}",
+            "the header names the pull request: {:?}",
             after.pull_request
         );
+    }
+
+    /// T010, US1 scenario 5 (FR-014): the header and the sidebar's row for the location agree on
+    /// the pull request, before and after the change.
+    #[test]
+    fn the_header_and_the_sidebar_agree_on_the_pull_request() {
+        let (mut state, location) = shown_worktree();
+        state.update(Message::NoOp);
+        assert_eq!(sidebar_pr(&state, NOW), None);
+        let (before, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
+        assert_eq!(before.pull_request, None, "neither shows one yet");
+
+        let (state, location) = running_with_a_pull_request();
+        let (after, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
+        assert_eq!(sidebar_pr(&state, NOW), Some(1118));
+        assert!(
+            after
+                .pull_request
+                .is_some_and(|chip| chip.text.starts_with("PR #1118")),
+            "the header names the sidebar's pull request"
+        );
+    }
+
+    /// FR-014: the header's state is the card's own, which the Overview draws.
+    #[test]
+    fn the_header_state_is_the_cards_state() {
+        let (state, location) = running_with_a_pull_request();
+        let (after, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
+        let card = crate::ui::overview::location_card(&state, &location).expect("a card");
+        assert_eq!(after.state, card.state, "the header's state is the card's");
+    }
+
+    /// R6: the follow step points the header at the shown location.
+    #[test]
+    fn the_follow_step_points_the_header_at_the_shown_location() {
+        let (state, location) = running_with_a_pull_request();
         assert_eq!(
             state.changes.header.entry,
             Some((std::path::PathBuf::from("/repo"), location)),
             "the follow step points the header at the shown location"
+        );
+    }
+
+    /// US3 scenario 4 (T062): `counts_of` shows the header's reading only for the location the
+    /// header follows under the active project, never another location's figure.
+    #[test]
+    fn counts_of_reads_only_the_followed_location_under_the_active_project() {
+        use crate::features::changes::Load;
+        use micold_core::context_header::ChangeSummary;
+        let (mut state, location) = shown_worktree();
+        let summary = ChangeSummary {
+            files: 3,
+            added: 42,
+            removed: 7,
+        };
+        state.changes.header.entry = Some((std::path::PathBuf::from("/repo"), location.clone()));
+        state.changes.header.load = Load::Ready(summary);
+
+        assert_eq!(
+            counts_of(&state, &location),
+            CountsReading::Known(summary),
+            "the followed location under the active project, read"
+        );
+        assert_eq!(
+            counts_of(&state, &SessionLocation::Default),
+            CountsReading::Unknown,
+            "another location"
+        );
+        state.workspace.active = Some(std::path::PathBuf::from("/other"));
+        assert_eq!(
+            counts_of(&state, &location),
+            CountsReading::Unknown,
+            "the same location under another active project"
         );
     }
 

@@ -100,6 +100,12 @@ mod strip_controls_hold_their_size;
 #[path = "gates/strip_controls_anchor_the_trailing_edge.rs"]
 mod strip_controls_anchor_the_trailing_edge;
 
+/// Feature 1126's FR-008, the third of the strip gates: the tabs, New session and the split buttons
+/// share one midline. It restores the alignment half of feature 027's midline gate, which retired
+/// with the bar.
+#[path = "gates/strip_controls_share_a_midline.rs"]
+mod strip_controls_share_a_midline;
+
 /// Feature 029's FR-006, and the only gate here that asserts geometry did **not** change. The
 /// refresh control's busy form withholds a press and swaps a tooltip, neither of which is layout —
 /// so it earns no fixture block, and this is the check that keeps that true.

@@ -23,6 +23,7 @@ use iced::advanced::{clipboard, layout, mouse, Shell};
 use iced::{Element, Rectangle, Size};
 use micold_client::features::session;
 use micold_client::features::sidebar;
+use micold_client::ui::terminal::{CellMetrics, TERM_FONT_SIZE};
 
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
@@ -87,6 +88,34 @@ fn reported_grid(messages: &[Message]) -> Option<(u16, u16)> {
 /// grid frame has arrived for it yet, so the terminal area holds the "Starting…" placeholder. This
 /// is the exact frame at which a cold start must learn its size — the start request has gone out and
 /// the service has not finished spawning.
+/// The session area, in the laid-out tree: header, strip, pane area (feature 1126, A1).
+const SESSION_AREA: &[usize] = &[0, 0, 1, 1];
+
+/// Rows the pane's focus-ring gutter may cost the character area against the pane area's height.
+const ROWS_LOST_TO_THE_GUTTER: u16 = 1;
+
+/// The session area's header, strip and pane area heights in `state` at the layout window,
+/// measured as `composer_fits` measures its header, and the height of the terminal body the pane
+/// area holds beside its own control row.
+fn session_area_heights(state: &State) -> [f32; 4] {
+    let renderer = lay::renderer();
+    let mut element = view(state);
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+    let records = lay::walk(layout::Layout::new(&node), lay::Layer::Base);
+    [&[0][..], &[1], &[2], &[2, 0, 1]].map(|child| {
+        let path = [SESSION_AREA, child].concat();
+        records
+            .iter()
+            .find(|r| r.path == path)
+            .unwrap_or_else(|| panic!("the session area draws child {child:?}"))
+            .height
+    })
+}
+
 fn session_displayed_before_its_first_frame() -> State {
     let session = support::running_default_session();
     let id = session.id;
@@ -128,10 +157,28 @@ fn the_terminal_area_reports_its_size_before_any_output_arrives() {
     // metrics and are pinned by `grid_size_fits_cells_and_floors`; what matters here is that a
     // measurement exists and describes that rectangle. Feature 1126's context header above the
     // pane and 1124's status bar below it take rows, so the rows fall under the seed's 30 here;
-    // the columns alone tell it from the seed, and the rows only from a degenerate 1.
+    // the rows are therefore bound by what the area gives under the header, the strip and the
+    // status bar, each measured from the laid-out tree, not by the seed.
     assert!(
-        cols > 100 && rows > 1,
+        cols > 100,
         "reported {cols}×{rows}, which is no larger than the seed it exists to replace"
+    );
+    let [header, strip, pane_area, room] =
+        session_area_heights(&session_displayed_before_its_first_frame());
+    assert!(
+        header > 0.0 && strip > 0.0,
+        "the header ({header}) and the strip ({strip}) take room above the panes"
+    );
+    assert!(
+        header + strip + pane_area + micold_core::tokens::anatomy::status_bar::HEIGHT
+            <= WINDOW.height,
+        "the header {header}, strip {strip}, pane area {pane_area} and status bar leave the window"
+    );
+    let fit = (room / CellMetrics::new(TERM_FONT_SIZE).height).floor() as u16;
+    assert!(
+        rows <= fit && rows + ROWS_LOST_TO_THE_GUTTER >= fit,
+        "reported {rows} rows where the {room}dp terminal body under the header and the strip \
+         holds {fit} (less at most {ROWS_LOST_TO_THE_GUTTER} to the focus-ring gutter)"
     );
     assert!(
         (cols as f32) < WINDOW.width && (rows as f32) < WINDOW.height,

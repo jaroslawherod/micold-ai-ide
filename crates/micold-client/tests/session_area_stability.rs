@@ -47,31 +47,82 @@ fn source(rel: &str) -> String {
     strip_comments(&fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel}: {e}")))
 }
 
-/// A top-level item's text, from `marker` to the closing brace at column 0.
-fn body_from(src: &str, marker: &str) -> String {
+/// The fewest bytes an extracted item may have: shorter means the extraction stopped early, and
+/// every `!contains` guard over it would pass without having looked at the item.
+const MIN_BODY: usize = 150;
+
+/// A top-level item's text, from `marker` to the brace that closes the item's own block, which
+/// must hold every one of `expected` and be at least [`MIN_BODY`] bytes.
+fn body_from(src: &str, marker: &str, expected: &[&str]) -> String {
     let start = src
         .find(marker)
         .unwrap_or_else(|| panic!("the source must contain `{marker}`"));
     let rest = &src[start..];
-    let end = rest.find("\n}").map(|i| i + 2).unwrap_or(rest.len());
-    rest[..end].to_string()
+    let open = rest
+        .find('{')
+        .unwrap_or_else(|| panic!("`{marker}` must open a block"));
+    let mut depth = 0usize;
+    let mut end = None;
+    for (i, c) in rest[open..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(open + i + 1);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let body = rest[..end.unwrap_or_else(|| panic!("`{marker}`'s block must close"))].to_string();
+    assert!(
+        body.len() >= MIN_BODY,
+        "`{marker}` extracted only {} bytes, so a guard over it would pass vacuously: {body}",
+        body.len()
+    );
+    for token in expected {
+        assert!(
+            body.contains(token),
+            "`{marker}`'s extracted body lacks `{token}`, so it is not the item the guard means"
+        );
+    }
+    body
 }
 
 /// The strip's and the header's builders, and the area's own view (S8).
 fn builders() -> Vec<(&'static str, String)> {
     let area = source("ui/session_area.rs");
     vec![
-        ("session_area::view", body_from(&area, "pub fn view<'a>(")),
+        (
+            "session_area::view",
+            body_from(&area, "pub fn view<'a>(", &["column![", "terminal::pane("]),
+        ),
         (
             "session_area::strip",
-            body_from(&area, "pub(crate) fn strip<'a>("),
+            body_from(
+                &area,
+                "pub(crate) fn strip<'a>(",
+                &["let strip = row![", "Keyed::row("],
+            ),
         ),
         (
             "session_area::status_cluster",
-            body_from(&area, "fn status_cluster<'a>("),
+            body_from(
+                &area,
+                "fn status_cluster<'a>(",
+                &["model.restart", ".on_press(restart)"],
+            ),
         ),
-        ("session_area::member", body_from(&area, "fn member<'a>(")),
-        ("session_area::header", body_from(&area, "fn header<'a>(")),
+        (
+            "session_area::member",
+            body_from(&area, "fn member<'a>(", &["Member::Plus", "Member::Shell"]),
+        ),
+        (
+            "session_area::header",
+            body_from(&area, "fn header<'a>(", &["changes_button(", "chips"]),
+        ),
     ]
 }
 
@@ -144,11 +195,18 @@ fn no_child_is_pushed_under_an_if_on_session_shape() {
 
 /// A1, SC-005: nothing is drawn under the terminal. The geometry gate cannot see a bar that comes
 /// back *inside* `terminal::pane` (the pane area fills the session area either way), so the pane's
-/// builder is held to drawing no bar: no row of controls, no toolbar surface, no split buttons.
+/// builder is held to drawing no bar: no row of controls, no toolbar surface, no split buttons, and
+/// its last act is to wrap the body it built, not to stack anything under it. (`column!` and
+/// `container(` themselves stay allowed: the pane stacks the switch strip and a refusal *above* the
+/// body and centres the empty state.)
 #[test]
 fn the_pane_area_draws_no_bar_under_the_terminal() {
     let src = source("ui/terminal.rs");
-    let pane = body_from(&src, "pub fn pane<'a>(");
+    let pane = body_from(
+        &src,
+        "pub fn pane<'a>(",
+        &["GridSizeReporter", "terminal_switch_strip("],
+    );
     for bar_part in [
         "row![",
         "Row::",
@@ -163,6 +221,12 @@ fn the_pane_area_draws_no_bar_under_the_terminal() {
              SC-005); its controls belong to the strip above the panes"
         );
     }
+    let tail = pane.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        tail.ends_with("container(body) .height(Length::Fill) .width(Length::Fill) .into() }"),
+        "`terminal::pane` must end by wrapping the body it built and nothing else, so nothing is \
+         laid out under the terminal (A1): {tail}"
+    );
 }
 
 /// Feature 023 FR-021b, carried to the strip: no release-focus control. The reserved
@@ -215,38 +279,16 @@ fn no_scattered_release_writes() {
     );
 }
 
-/// `012` BUG-004 / FR-010 — the wiring half, carried to the strip: the restart control presses
-/// what the model's `restart` holds, and that comes from `restart_message`, which splits on the
-/// attached process the way `attached_process_restartable` does. A bare session-level restart is
-/// a no-op in Regular mode, where the session's AI CLI primary is still running.
-#[test]
-fn the_strips_restart_control_asks_which_process_it_is_restarting() {
-    let rules = source("features/session_strip.rs");
-    let of = body_from(&rules, "impl StripModel {");
-    assert!(
-        of.contains("restart_message(state, shown)")
-            && of.contains("attached_process_restartable(state, shown)"),
-        "the strip's restart must be `restart_message` of the shown session, offered while \
-         `attached_process_restartable` says so"
-    );
-    let cluster = &builders()[2].1;
-    assert!(
-        cluster.contains(".on_press(restart)") && cluster.contains("model.restart"),
-        "the restart control must press the model's restart"
-    );
-    let code = source("ui/session_area.rs");
-    assert!(
-        !code.contains("on_press(Message::Session(SessionMsg::TerminalRestartRequested))"),
-        "a bare session-level restart in the strip is BUG-004"
-    );
-}
-
 /// Feature 026-multi-provider-sessions FR-016a, carried to the session tab (R8): its label names the
 /// session's CLI by its **command** name (`command_caption`), never `display_name()`.
 #[test]
 fn a_session_tab_names_the_sessions_cli_by_command() {
     let rules = source("features/session_strip.rs");
-    let tab = body_from(&rules, "fn session_member(");
+    let tab = body_from(
+        &rules,
+        "fn session_member(",
+        &["command_caption(", "Member::Session"],
+    );
     assert!(
         tab.contains("command_caption("),
         "a session tab must label itself from the session's provider, by `command()` (FR-016a)"
@@ -404,6 +446,27 @@ mod press_in_flight {
         (sessions[0].id, sessions[1].id)
     }
 
+    /// How many chips the laid-out header's chips row holds in `state`.
+    fn header_chips(state: &State) -> usize {
+        let renderer = lay::renderer();
+        let under = under(state.clone());
+        let mut element = lay::view_of(&under);
+        let mut tree = Tree::new(element.as_widget());
+        let limits = layout::Limits::new(Size::ZERO, WINDOW);
+        let node = element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &limits);
+        let row = [
+            &super::support::covered_states::SESSION_HEADER_CHANGES[..5],
+            &[0, 1],
+        ]
+        .concat();
+        lay::walk(Layout::new(&node), lay::Layer::Base)
+            .into_iter()
+            .filter(|r| r.path.len() == row.len() + 1 && r.path.starts_with(&row))
+            .count()
+    }
+
     /// A shell instance opens before the pressed member: the helper's tab still gets the press.
     #[test]
     fn a_press_survives_a_shell_instance_opening_before_it() {
@@ -441,6 +504,8 @@ mod press_in_flight {
     }
 
     /// A chip appears in the header above (the pull request): the press on the session tab lands.
+    /// The header is not a sibling of the strip's keyed row, so this is a no-regression pin; the
+    /// assertion that the header gained a chip is what keeps the scenario from being a no-op.
     #[test]
     fn a_press_survives_a_header_chip_appearing() {
         use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
@@ -463,8 +528,120 @@ mod press_in_flight {
             },
         );
         assert_eq!(
+            header_chips(&after),
+            header_chips(&before) + 1,
+            "the pull request chip appeared in the header"
+        );
+        assert_eq!(
             press_across(before, after, MemberKey::Session(main)),
             vec![Message::Session(SessionMsg::TerminalAiCliSelected(main))]
+        );
+    }
+}
+
+// ---- T063, T065: pressing the rendered controls (US3 scenario 2, US2 scenario 5, FR-007) ----
+
+mod rendered_presses {
+    use super::support::covered_states::{
+        changes_open_under_header, strip_with, SESSION_HEADER_CHANGES, SESSION_STRIP_ROW,
+    };
+    use super::support::layout::{self as lay, StateUnderTest};
+    use iced::advanced::widget::Tree;
+    use iced::advanced::{layout, Layout};
+    use iced::{Point, Size};
+    use micold_client::app::Message;
+    use micold_client::features::changes::Msg as ChangesMsg;
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_client::features::sidebar::Msg as SidebarMsg;
+    use micold_core::session::SessionLocation;
+
+    /// What a click on the centre of the laid-out element at `path` publishes.
+    fn click(under: StateUnderTest, path: &[usize]) -> Vec<Message> {
+        let renderer = lay::renderer();
+        let mut element = lay::view_of(&under);
+        let mut tree = Tree::new(element.as_widget());
+        let limits = layout::Limits::new(Size::ZERO, lay::WINDOW);
+        let node = element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &limits);
+        let target = lay::walk(Layout::new(&node), lay::Layer::Base)
+            .into_iter()
+            .find(|r| r.path == path)
+            .unwrap_or_else(|| panic!("{path:?} is laid out"));
+        assert!(
+            target.width > 0.0 && target.height > 0.0,
+            "the control has an area to press: {target:?}"
+        );
+        let centre = Point::new(
+            target.x + target.width / 2.0,
+            target.y + target.height / 2.0,
+        );
+        drop(element);
+        lay::clicks_at(lay::view_of(&under), &renderer, [centre])
+    }
+
+    #[test]
+    fn pressing_changes_with_the_view_closed_opens_the_shown_location() {
+        let pressed: Vec<Message> = click(strip_with(1, 1), SESSION_HEADER_CHANGES)
+            .into_iter()
+            .filter(|m| matches!(m, Message::Sidebar(_) | Message::Changes(_)))
+            .collect();
+        assert_eq!(
+            pressed,
+            vec![Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+                SessionLocation::Worktree("feat-short".to_string())
+            ))]
+        );
+    }
+
+    #[test]
+    fn pressing_changes_with_the_view_open_on_the_shown_location_closes_it() {
+        let state = changes_open_under_header();
+        assert!(
+            state.changes.open.is_some(),
+            "the premise: the view is open"
+        );
+        let pressed: Vec<Message> = click(StateUnderTest::new(state), SESSION_HEADER_CHANGES)
+            .into_iter()
+            .filter(|m| matches!(m, Message::Sidebar(_) | Message::Changes(_)))
+            .collect();
+        assert_eq!(pressed, vec![Message::Changes(ChangesMsg::Closed)]);
+    }
+
+    /// `012` BUG-004 / FR-010, carried to the strip: with a shell instance shown and its process
+    /// stopped, the restart control restarts **that instance**; a bare session-level restart is a
+    /// no-op in Regular mode, where the session's AI CLI primary is still running.
+    #[test]
+    fn pressing_restart_restarts_the_shown_instance_not_the_session() {
+        let mut under = strip_with(2, 0);
+        let main = under.state.active_sessions()[0].id;
+        let shell = under.state.active_sessions()[0].shells[1].id;
+        under
+            .state
+            .workspace
+            .find_session_mut(main)
+            .expect("the shown session")
+            .1
+            .mark_shell_exited(shell);
+        // The status cluster is the strip row's second child, the restart control its last.
+        let path = [SESSION_STRIP_ROW, &[1, 1]].concat();
+        let pressed: Vec<Message> = click(under, &path)
+            .into_iter()
+            .filter(|m| {
+                matches!(
+                    m,
+                    Message::Session(
+                        SessionMsg::TerminalRestartRequested
+                            | SessionMsg::ShellInstanceRestartRequested(..)
+                    )
+                )
+            })
+            .collect();
+        assert_eq!(
+            pressed,
+            vec![Message::Session(SessionMsg::ShellInstanceRestartRequested(
+                main, shell
+            ))]
         );
     }
 }

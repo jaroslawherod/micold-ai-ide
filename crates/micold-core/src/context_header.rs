@@ -278,7 +278,6 @@ mod tests {
             };
             let text = HeaderText::of(&m, None, CountsReading::Unknown);
             assert_eq!(text.state, state, "H2 state");
-            assert_eq!(text.state.label(), state.label());
             assert_eq!(
                 text.state_tooltip,
                 reason.label(),

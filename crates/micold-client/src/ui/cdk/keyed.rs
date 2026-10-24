@@ -270,15 +270,27 @@ mod tests {
     #[test]
     fn one_in_at_the_end_and_one_out_at_the_front_builds_only_the_new_row() {
         for axis in AXES {
-            assert_eq!(built_by_diff(axis, &[1, 2, 3, 4], &[2, 3, 4, 5]), 1);
+            assert_eq!(
+                built_by_diff(axis, &[1, 2, 3, 4], &[2, 3, 4, 5]),
+                1,
+                "{axis:?}: only the row that came in is built"
+            );
         }
     }
 
     #[test]
     fn an_unchanged_list_builds_nothing_and_a_removal_builds_nothing() {
         for axis in AXES {
-            assert_eq!(built_by_diff(axis, &[1, 2, 3], &[1, 2, 3]), 0);
-            assert_eq!(built_by_diff(axis, &[1, 2, 3], &[2, 3]), 0);
+            assert_eq!(
+                built_by_diff(axis, &[1, 2, 3], &[1, 2, 3]),
+                0,
+                "{axis:?}: an unchanged list builds nothing"
+            );
+            assert_eq!(
+                built_by_diff(axis, &[1, 2, 3], &[2, 3]),
+                0,
+                "{axis:?}: a removal builds nothing"
+            );
         }
     }
 
