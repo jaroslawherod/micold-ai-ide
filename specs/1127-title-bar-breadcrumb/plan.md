@@ -85,41 +85,45 @@ specs/1127-title-bar-breadcrumb/
 crates/micold-core/src/tokens/anatomy.rs         # app_bar: HEIGHT 43, PADDING 12, ICON_TARGET 40; + GAP, MARK, FIELD_HEIGHT, FIELD_MAX_WIDTH; ALL
 crates/micold-core/tests/tokens_anatomy.rs       # new expected figures
 crates/micold-core/src/context_header.rs         # branch_chip → pub
-crates/micold-client/src/icons.rs                # + APP_ICON_RGBA (startup.rs private ICON_RGBA, renamed, pub)
-crates/micold-client/src/shell/startup.rs        # reads icons::APP_ICON_RGBA
-crates/micold-client/src/ui/material/
+crates/micold-material/src/                      # the generic library since #1262 (re-exported whole as ui::material)
 ├── toolbar.rs                                   # reshaped: mark/leading/leading_fixed/centre/action, measuring layout
-├── give_way.rs                                  # NEW: plan(), Widths, GiveWay (moved from status_bar.rs)
+├── give_way.rs                                  # NEW: plan(), Widths (moved from status_bar.rs), pub(crate)
 ├── status_bar.rs                                # uses give_way.rs
 ├── breadcrumb.rs                                # NEW Breadcrumb
 ├── field_button.rs                              # NEW FieldButton
-├── app_mark.rs                                  # NEW AppMark
+├── app_mark.rs                                  # NEW AppMark (takes an image::Handle and a name; no Micold asset)
 ├── button.rs                                    # + .trailing(Icon)
 ├── icon_button.rs                               # + .selected(bool), .keyboard(bool)
 ├── menu.rs                                      # MenuTrigger: keyboard on, tooltip
+└── lib.rs                                       # + pub mod / pub use
+crates/micold-client/src/shell/startup.rs        # private ICON_RGBA → pub(crate) APP_ICON_RGBA
+crates/micold-client/src/ui/material/
 ├── composition_contrast.rs                      # + field and breadcrumb pairs
-├── content_placement.rs                         # Toolbar::new(roles) in its test
-└── mod.rs                                       # + pub use
+└── content_placement.rs                         # Toolbar::new(roles) in its test
 crates/micold-client/src/ui/
-├── toolbar.rs                                   # model(), jump_press(), settings_press(), view(); overview_button kept until US3
+├── toolbar.rs                                   # model(), jump_press(), settings_press(), view(); the app mark's one LazyLock<image::Handle>; overview_button kept until US3
 └── mod.rs                                       # switcher hung_from (x, BOTTOM_EDGE) with keyboard fallback
 crates/micold-client/src/showcase/sections/surfaces.rs  # Toolbar entry reshaped; + Breadcrumb, FieldButton, AppMark
 crates/micold-client/tests/
-├── support/covered_states.rs                    # + title-bar-* states; toolbar.title anchor → toolbar.mark
+├── support/covered_states.rs                    # + title-bar-* states; app_bar.* component paths follow the new children
 ├── fixtures/layout_snapshot.txt                 # regenerated
 ├── gates/title_bar_fits.rs                      # NEW geometry gate (640 and 1280 dp)
 ├── layout_snapshot.rs                           # + #[path] mod for the new gate
 ├── title_bar_keyboard.rs                        # NEW Tab order and Enter
 ├── switcher_anchor.rs                           # y = BOTTOM_EDGE; keyboard fallback
-├── gates/sibling_parity.rs                      # reads the new ICON_TARGET (code unchanged unless the gate's own figures were restated)
+├── gates/sibling_parity.rs                      # app_bar_actions' structural filter follows the new children; reads the new ICON_TARGET
 └── toolbar.rs                                   # overflow items and order
 docs/user-guide/{appearance-theming,project-selection,overview,icons,settings,worktrees-and-sessions}.md
 docs/development/layout-snapshot.md
 ```
 
-**Structure Decision**: Client-only UI change inside the existing `micold-client` layout (shared
-components under `ui/material/`, composition and render-free model in `ui/toolbar.rs`), plus the
-anatomy figures and one visibility change in `micold-core`.
+**Structure Decision**: UI change in the existing layout: the shared components in the generic
+`micold-material` crate (split out of `micold-client/src/ui/material/` by #1262 after this plan was
+first written; the client re-exports it whole as `ui::material`, so `material::X` names are
+unchanged), composition and render-free model in `micold-client/src/ui/toolbar.rs`, plus the anatomy
+figures and one visibility change in `micold-core`. `micold-material` names no Micold domain type
+(`crates/micold-material/tests/no_domain_types.rs`), so the app icon's bytes stay in the client and
+`AppMark` takes the image handle and the name it shows (R9).
 
 ## Requirement map
 

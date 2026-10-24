@@ -3,7 +3,11 @@
 **Feature**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 Each decision names what was chosen, why, and what was rejected. Paths are relative to
-`crates/micold-client/src/` unless they start with `crates/`, `docs/` or `specs/`.
+`crates/micold-client/src/` unless they start with `crates/`, `docs/` or `specs/`. Since #1262
+(merged after this research), `material/<file>` for a generic component (`toolbar`, `status_bar`,
+`button`, `icon_button`, `menu`, `keyboard_focus`, `ellipsized`, and this feature's NEW
+`give_way`, `breadcrumb`, `field_button`, `app_mark`) means `crates/micold-material/src/<file>`;
+`material/composition_contrast.rs` and `material/content_placement.rs` stay in the client.
 
 ## R1. The bar's figures: change `anatomy::app_bar`, keep its name
 
@@ -152,12 +156,14 @@ Each decision names what was chosen, why, and what was rejected. Paths are relat
 
 ## R9. The app mark
 
-- **Decision**: The 64 × 64 RGBA icon `shell/startup.rs` embeds as private `ICON_RGBA` (`assets/icon/icon-64.rgba`) moves
-  to the library renamed `pub icons::APP_ICON_RGBA` (startup reads it from there) and is drawn by NEW
-  `ui/material/app_mark.rs` `AppMark::new(roles)` → an `iced::widget::image` of `app_bar::MARK`
-  side from one `LazyLock<image::Handle>`, wrapped in `Tooltip` with `metadata::APP_NAME` (FR-003,
-  US1 s8). It has no press handler and no `TakesTheKeyboard`, so it is neither a control nor a Tab
-  stop.
+- **Decision**: The 64 × 64 RGBA icon `shell/startup.rs` embeds as private `ICON_RGBA`
+  (`assets/icon/icon-64.rgba`) becomes `pub(crate) APP_ICON_RGBA` there (startup keeps reading it),
+  and `ui/toolbar.rs` builds one `LazyLock<image::Handle>` from it. NEW generic
+  `crates/micold-material/src/app_mark.rs` `AppMark::new(handle, name, roles)` draws an
+  `iced::widget::image` of `app_bar::MARK` side wrapped in `Tooltip` with the name; the bar passes
+  `metadata::APP_NAME` (FR-003, US1 s8). The library holds no Micold asset (#1262's
+  `no_domain_types` rule). It has no press handler and no `TakesTheKeyboard`, so it is neither a
+  control nor a Tab stop.
 - **Rationale**: spec Assumptions "the existing application icon"; the raw RGBA needs no decoder
   (the reason startup embeds it raw); one `Handle` keeps one texture id across frames, so the mark
   costs no upload per frame (idle budget, `tests/idle_requests_no_frames.rs`).
@@ -189,7 +195,7 @@ Each decision names what was chosen, why, and what was rejected. Paths are relat
   `KeyboardElsewhere` still strips the bar's focus while the terminal holds the keyboard
   (018 BUG-016).
 - **Rationale**: rendering-stack buttons hold no focus (`material/keyboard_focus.rs` module
-  comment); the wrapper lives inside `material` (`mod keyboard_focus` is private), so reach is a
+  comment); the wrapper is the library's one implementation (`micold-material`), so reach is a
   component option, not something `ui/toolbar.rs` assembles.
 - **Rejected**: (a) making every `IconButton` a Tab stop by default — it changes the sidebar's and
   every dialog's Tab order, outside this feature; (b) a bar-specific focus ring — a second
