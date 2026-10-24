@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1260
 - **Worktree branch**: claude/project-thread-c0bgc0
 - **Started**: 2026-10-24
-- **Phase**: M1 implementing
-- **Next step**: M1 gate, reviews, visual pass, PR. FR-007 (terminal adopts the face) still awaits the user's confirmation: T013 is implemented as the default in its own commit, revertible per plan D4's decline list
+- **Phase**: M1 PR pending
+- **Next step**: orchestrator opens the M1 PR from the pushed branch, waits on CI and merges; then M2. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | App and showcase draw all code (incl. terminal) in bundled Fira Mono; user guide says so | — | pending |
+| M1 | T001–T015 | full | App and showcase draw all code (incl. terminal) in bundled Fira Mono; user guide says so | pending (branch pushed) | done |
 | M2 | T016–T019 | light | Layout tests guard Regular+Bold through the shipped installer; one-copy test | — | pending |
 | M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | — | pending |
 
@@ -50,6 +50,8 @@ Polish T028–T029 (quickstart §A/§C records, no code) is left to the close un
 | M1 review A (code-review, high) | 1 | 6277037163e0bbcd861a37d435b1356720e4bb8c:70e7a73c96d09bcd9fef5a4a8efdbd3b81a804d2 | CLEAN (1 MINOR: host-copy assertion matched only `Source::File` — fixed, now asserts every `Fira Mono` face is `Source::Binary`). Headless `claude -p` |
 | M1 gate | 1 | 70e7a73c | red: `anatomy_call_sites::the_test_module_convention_this_relies_on_holds` (two `#[cfg(test)]` items in mono.rs) — test helpers moved to `test_support.rs` |
 | M1 review B (conformance, sonnet) | 1 | 50ccc692ca798e03d24794557a4da0a64a4f706c:7e49d4ed6e9b6f2490c2d49d16a17e95aaa1db81 | CHANGES (1 MAJOR declined, below; 2 MINOR: guide bullet rewrapped — fixed; terminal test paths verbose — left). Headless `claude -p --model sonnet` |
+| M1 gate | 2 | 7e49d4ed | green (`scripts/gate.sh`) |
+| M1 visual pass (§B) | 1 | 84374a64 | B1, B2, B4, B7, B8 PASS light+dark (B4: host font renamed `Fira Mono` installed, code block 0 differing pixels); B3, B5 NOT SHOWN by any showcase pose (covered by `mono.rs` weight-700 and keep-other-families tests); B6 N/A. Evidence `visual-pass/`. Headless `claude -p` on Xvfb + tiny-skia |
 
 ## Declined review findings
 
@@ -69,4 +71,5 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- M1 review B F3 (MINOR): terminal tests spell `crate::ui::material::test_support::` in full; a `use` would shorten them.
+- Visual pass B3 (bold code) and B5 (CJK/emoji in code) have no showcase pose; re-check in the app during the close unit's §C pass.
