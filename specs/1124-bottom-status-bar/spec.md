@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Closed 2026-10-24 — shipped in PRs #1317, #1327, #1330, #1333, #TBD-M4, #TBD-M5, #TBD-close
+**Status**: Closed 2026-10-24 — shipped in PRs #1317, #1327, #1330, #1333 and the combined M4 + M5 + close PR (the last PR titled "#1124: … — M4, M5 and close")
 
 **Input**: User description: "Issue #1124 — Layout: bottom status bar for connection, sandbox, CLI
 and plan usage. Blocked by: none. Replace the connection banner, sandbox banner and sandbox
