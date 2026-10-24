@@ -14,7 +14,8 @@ use std::time::Duration;
 
 use jira_http::JiraCloud;
 use micold_core::github::IssueLoadError;
-use micold_core::jira::{ApiToken, JiraConnection, JiraSource};
+use micold_core::jira::{ApiToken, JiraConnection, JiraSource, ProjectKey};
+use micold_core::jira_query::{QueryFailure, ScopedQuery, UserQuery};
 
 const SENTINEL: &str = "sentinel-token-value-9f3a";
 const PAGE: &str = include_str!("../../micold-core/tests/fixtures/jira/last_page.json");
@@ -90,19 +91,9 @@ fn token() -> ApiToken {
     ApiToken::parse(SENTINEL).unwrap()
 }
 
-#[test]
-fn the_request_is_the_documented_post_with_four_headers_and_a_jql_only_body() {
-    let (origin, rx) = serve(Some(ok(PAGE)));
-    let page = JiraCloud::new()
-        .list_open(&connection(&origin), &token(), Some("cursor-1"))
-        .expect("a page");
-    assert_eq!(page.issues.len(), 1);
-    let raw = rx.recv().unwrap();
-    let (head, body) = raw.split_once("\r\n\r\n").unwrap();
-    assert!(
-        head.starts_with("POST /rest/api/3/search/jql HTTP/1.1"),
-        "{head}"
-    );
+/// The request carries `Authorization`, `Accept`, `Content-Type` and `User-Agent`, and no other
+/// header of ours (FR-020).
+fn assert_only_the_four_headers(head: &str) {
     use base64::Engine;
     let basic = base64::engine::general_purpose::STANDARD.encode(format!("me@acme.com:{SENTINEL}"));
     let headers: Vec<(String, String)> = head
@@ -139,6 +130,22 @@ fn the_request_is_the_documented_post_with_four_headers_and_a_jql_only_body() {
             "unexpected header {name}"
         );
     }
+}
+
+#[test]
+fn the_request_is_the_documented_post_with_four_headers_and_a_jql_only_body() {
+    let (origin, rx) = serve(Some(ok(PAGE)));
+    let page = JiraCloud::new()
+        .list_open(&connection(&origin), &token(), Some("cursor-1"))
+        .expect("a page");
+    assert_eq!(page.issues.len(), 1);
+    let raw = rx.recv().unwrap();
+    let (head, body) = raw.split_once("\r\n\r\n").unwrap();
+    assert!(
+        head.starts_with("POST /rest/api/3/search/jql HTTP/1.1"),
+        "{head}"
+    );
+    assert_only_the_four_headers(head);
     let json: serde_json::Value = serde_json::from_str(body).unwrap();
     let keys: std::collections::BTreeSet<_> = json.as_object().unwrap().keys().cloned().collect();
     let expected: std::collections::BTreeSet<_> = ["jql", "fields", "maxResults", "nextPageToken"]
@@ -386,4 +393,116 @@ fn any_other_error_aborts_the_read_and_names_neither_token_nor_site() {
         "{text}"
     );
     assert!(matches!(error, IssueLoadError::Other(_)), "{text}");
+}
+
+// Feature 1186: the advanced request (contracts/selector-source-and-storage.md §2).
+
+fn scoped(raw: &str) -> ScopedQuery {
+    ScopedQuery::new(
+        &ProjectKey::parse("ABC").unwrap(),
+        &UserQuery::parse(raw).unwrap(),
+    )
+}
+
+/// The body of the one request `serve` read.
+fn body_of(rx: &mpsc::Receiver<String>) -> serde_json::Value {
+    let raw = rx.recv().unwrap();
+    let (_, body) = raw.split_once("\r\n\r\n").unwrap();
+    serde_json::from_str(body).unwrap()
+}
+
+#[test]
+fn a_query_page_is_the_basic_post_with_the_scoped_jql() {
+    let query = scoped("assignee = currentUser() ORDER BY priority DESC");
+    let (origin, rx) = serve(Some(ok(PAGE)));
+    JiraCloud::new()
+        .query_page(&connection(&origin), &token(), &query, Some("cursor-1"))
+        .expect("a page");
+    let raw = rx.recv().unwrap();
+    let (head, body) = raw.split_once("\r\n\r\n").unwrap();
+    assert!(
+        head.starts_with("POST /rest/api/3/search/jql HTTP/1.1"),
+        "{head}"
+    );
+    assert_only_the_four_headers(head);
+    assert!(!body.contains(SENTINEL));
+    let json: serde_json::Value = serde_json::from_str(body).unwrap();
+    let keys: std::collections::BTreeSet<_> = json.as_object().unwrap().keys().cloned().collect();
+    let expected: std::collections::BTreeSet<_> = ["jql", "fields", "maxResults", "nextPageToken"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(keys, expected, "the basic body's fields and nothing more");
+    assert_eq!(
+        json["jql"].as_str(),
+        Some("project = \"ABC\" AND (assignee = currentUser()) ORDER BY priority DESC"),
+        "the scoped query is the JQL sent, as is (FR-005)"
+    );
+    assert_eq!(json["maxResults"], 100);
+    assert_eq!(json["nextPageToken"], "cursor-1");
+
+    let (origin, rx) = serve(Some(ok(PAGE)));
+    JiraCloud::new()
+        .list_open(&connection(&origin), &token(), None)
+        .expect("a page");
+    assert_eq!(
+        json["fields"],
+        body_of(&rx)["fields"],
+        "a query reads the fields a basic listing reads"
+    );
+}
+
+#[test]
+fn a_first_query_page_sends_no_page_token() {
+    let (origin, rx) = serve(Some(ok(PAGE)));
+    JiraCloud::new()
+        .query_page(&connection(&origin), &token(), &scoped("type = Bug"), None)
+        .expect("a page");
+    assert!(body_of(&rx).get("nextPageToken").is_none());
+}
+
+#[test]
+fn a_query_page_parses_as_the_basic_listing_does() {
+    let (origin, _rx) = serve(Some(ok(PAGE)));
+    let page = JiraCloud::new()
+        .query_page(&connection(&origin), &token(), &scoped("type = Bug"), None)
+        .expect("a page");
+    let (origin, _rx) = serve(Some(ok(PAGE)));
+    let basic = JiraCloud::new()
+        .list_open(&connection(&origin), &token(), None)
+        .expect("a page");
+    assert_eq!(page, basic);
+}
+
+#[test]
+fn a_failed_query_is_the_load_failure_basic_mode_gives() {
+    for (status, error) in [
+        ("401 Unauthorized", IssueLoadError::CredentialsRefused),
+        ("429 Too Many Requests", IssueLoadError::RateLimited),
+    ] {
+        let (origin, _rx) = serve(Some(format!(
+            "HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )));
+        assert_eq!(
+            JiraCloud::new().query_page(&connection(&origin), &token(), &scoped("x = 1"), None),
+            Err(QueryFailure::Load(error)),
+            "{status}"
+        );
+    }
+    let (origin, _rx) = serve(Some(ok("<html>log in</html>")));
+    assert_eq!(
+        JiraCloud::new().query_page(&connection(&origin), &token(), &scoped("x = 1"), None),
+        Err(QueryFailure::Load(IssueLoadError::NotJiraCloud))
+    );
+}
+
+#[test]
+fn a_stalled_query_times_out_at_the_budget() {
+    let (origin, _rx) = serve(None);
+    let started = std::time::Instant::now();
+    let failure = JiraCloud::with_timeout(Duration::from_millis(300))
+        .query_page(&connection(&origin), &token(), &scoped("x = 1"), None)
+        .unwrap_err();
+    assert_eq!(failure, QueryFailure::Load(IssueLoadError::TimedOut));
+    assert!(started.elapsed() < Duration::from_secs(3));
 }
