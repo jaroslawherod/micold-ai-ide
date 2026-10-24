@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
 - **Phase**: M3 review
-- **Next step**: implement M3 (T043–T055), gate, reviews, PR
+- **Next step**: M3 review A round 2 and review B round 2 on the fix diff, then the full gate, push, PR title/body
 
 ## Pull requests
 
@@ -40,6 +40,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 (2026-10-24): the Changes button sits on the header's title line (`column![row![title, button], chips]`), not beside both lines as H9 first said: at 640×480 beside a 300 px sidebar the button beside the column left the chips 0 px (`session_area_fits` red). Contract H9 and R11 updated; mockup look kept at wide windows (button at the header's right).
 - M3: the counts read is drained by `shell::changes::run_followed` after every message's follow step (main.rs `update`); `Msg::Changed` returns the view's `ReadList` and the header's `ReadCounts` batched; one watcher per location (`State::header_watch_entry` skips the view's own entry).
 
+- M3 review B F2: the Changes label is one `Ellipsized` line with the full label in its tooltip, and contract H10 states its bound: whole at 640×480 for counts up to three digits, cut with an ellipsis beyond (FR-013's rule for header text), whole at 1280×800 for any realistic count (gate `the_widest_counts_fit_at_the_layout_window`). Spec unchanged.
+
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
@@ -58,6 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 A (re-review, sonnet) | 2 | dd505d9a035d24e925094c0ceb5780578a4b3107:0e326613517ad725c43eaba23d8c3341db1b4ebe | CLEAN; F1–F3 resolved, lines cited |
 | M2 B (conformance, sonnet) | 1 | dd505d9a035d24e925094c0ceb5780578a4b3107:0e326613517ad725c43eaba23d8c3341db1b4ebe | CLEAN; 1 MINOR (T039 guard written after T033, already noted in the cycle log) |
 | M3 A (code review, high) | 1 | 971ff20c3c357d30d2f9710c6cbe9b1481b50dea:d2f82b178335efee2987c5707c1e18199b1d1463 | CHANGES: 1 MAJOR (counts stale after the Overview hid the header), 3 MINOR; F1–F3 fixed, F4 declined |
+| M3 B (conformance, sonnet) | 1 | ad49afbb772c22a42e02e75f8f1cb4a1b944597a:52632d457a59d561d87d7f30750d5367df16e913 | CHANGES: 1 BLOCKER (Verify file unreadable: prompt path lost its scratchpad prefix, not a code finding), 1 MAJOR (Changes label wraps at 640×480 with four-digit counts), 2 MINOR (ledger next step; late reds); F2–F4 fixed |
 
 ## Declined review findings
 
@@ -77,6 +80,6 @@ None.
 
 ## Follow-ups not done
 
-- M3: at the smallest window (640×480, 300 px sidebar) the title line holds about 286 px; a Changes label with counts in the thousands (e.g. `Changes · 128 files · +2048 −1024`, 283 px) is wider than the room beside the title and wraps inside the 40 dp button. A compact label below a width, or counts in the tooltip, would fix it; not specified, left for the close unit or a follow-up issue.
+- M3: at 640×480 beside a 300 px sidebar the Changes button leaves the title little room (`fe…` with `Changes · 3 files · +42 −7`, visual pass B6); FR-013 allows it. A compact label for the narrowest window would give the title room back; not specified.
 
 - Clarification 1 (strip contents, New session) is still the orchestrator's provisional pick; confirm with the user before M2 starts. If it changes, T021–T023, T032, T033, T037 change with it.

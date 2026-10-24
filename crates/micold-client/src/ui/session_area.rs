@@ -149,7 +149,9 @@ pub fn over_changes<'a>(
 }
 
 /// The header's Changes button labelled `label` (H8, H9): outlined, the git glyph leading, shown
-/// selected while the view is open on `location`, its tooltip saying what a press does.
+/// selected while the view is open on `location`, its tooltip saying what a press does. The label
+/// is one line: where the title line cannot hold it (four-digit counts at the smallest window) it
+/// is cut with an ellipsis and the tooltip holds it whole (FR-013, H10's bound).
 pub fn changes_button<'a>(
     state: &State,
     location: &SessionLocation,
@@ -157,13 +159,16 @@ pub fn changes_button<'a>(
     r: Roles,
 ) -> Element<'a, Message> {
     let (press, open) = changes_press(state, location);
-    let tooltip = if open {
+    let action = if open {
         "Close the Changes view"
     } else {
         "Open the Changes view"
     };
+    let tooltip = format!("{action}\n{label}");
+    let tint = material::ButtonVariant::Outlined.content(r, None);
+    let text = Ellipsized::<Message>::at_role_spaced(label, TypeRole::Action, tint).shrink();
     Tooltip::new(
-        material::Button::outlined(label, r)
+        material::Button::with_content(text, material::ButtonVariant::Outlined, r)
             .leading(Icon::Git)
             .selected(open)
             .on_press(press),
