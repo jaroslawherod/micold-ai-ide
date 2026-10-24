@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: milestone M3
-- **Next step**: M3 PR: the orchestrator opens it from the scratchpad's pr-title.md/pr-body.md (branch pushed), waits on CI and merges; then M4
+- **Phase**: milestone M4
+- **Next step**: M4 implement T042–T051
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1320 | Design: spec, plan, tasks | merged | 663899346b1c6c44682895eb6d8f4e4402f714ed |
 | #1325 | M1: sidebar grouped by state | merged (rebase) | 0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 |
 | #1345 | M2: two-line rows, primary selection | merged (rebase) | b54fa75959d6535260875f8859776e458e3851aa |
+| #1359 | M3: Overview row, top-bar badge | merged (rebase) | 9c2e5b7b70c182522eeb41eeaac4df0aea9e26bb |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | #1325 | done |
 | M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | #1345 | done |
-| M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | (to open) | gate green, pushed |
-| M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | todo |
+| M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | #1359 | done |
+| M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | in progress |
 | M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | — | todo |
 
 Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (grouping, collapse and reveal-into-collapsed only work together; tasks.md M1 *Size*). M2 kept whole at 12 (two lines and dropped chips are one row change). US3 before US2 (both P1): US2's selected look uses US3's `Selection::Primary`.
