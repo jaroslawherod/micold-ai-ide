@@ -51,7 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | f5e4485bc71dd9eaf5ff5dfa2d7a3c0444768d51:cfc387029e91b351cae9a77b2329e2e5b12d471a | CHANGES: 2 MAJOR, 3 MINOR — all fixed (F1 daemon-wide persisted RunId counter + A12/A16 recreate test; F2 delete awaits run end via stop_and_wait bounded by RUN_OVERRUN, stale finish dropped, A12 asserts no record/log; F3 C4 three values + Started(RunId); F4 M4 split into M4a/M4b; F5 ProjectSetupSet carries daemon-catalog path, A16 mapped case) |
 | Plan | 2 (sonnet, scoped) | c6904f37533cfa3183cad458c3e458eb852b92f7:71a9120e6a1fca096755b00c0c38b356273d79f9 | CLEAN, 1 MINOR — fixed, prose only (data-model §RunId: id allocated in memory under the lock, counter file persisted just after release, before the record write) |
 | Tasks | 1 | afa51c1f5757e7d989ae7915d46182fa1e6dc0f7:0b28553c5169f0e4d6cc8ce59e6cff80cbff1039 | CHANGES: 3 MAJOR, 2 MINOR — all fixed (F1 A4 tests split into setup_model/setup_output/setup_shell.rs, Parallel line and M2 Verify updated; F2 G2 test now T052 before impl T053, deps updated; F3 "T020–T022 pass" moved to T027, deps T020–T022 → T025–T027, T021 red until T025–T027; F4 T022 gains a WorktreeCreate positive control so it is red until T025–T027; F5 `delete_warns_setup` predicate case in T050/T051, T054 uses it) |
-| Tasks | 2 (sonnet, scoped) | SNAP2 | pending — reviewer to dispatch |
+| Tasks | 2 (sonnet, scoped) | e8a60871840097dcc1874c2b1084ebd6e30eb98e:62160ffc5876e446a80f7dcd6f1b623f4b490ab3 | pending — reviewer to dispatch |
 
 ## Declined review findings
 
