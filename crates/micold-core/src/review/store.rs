@@ -116,7 +116,10 @@ impl ReviewFile {
                 StoredLocation::Default => String::new(),
                 StoredLocation::Worktree(dir) => dir,
             };
-            if !entry.marks.is_empty() {
+            // A location listed twice: the last entry wins for its marks as for its comments.
+            if entry.marks.is_empty() {
+                file.marks.remove(&dir);
+            } else {
                 file.marks.insert(dir.clone(), entry.marks);
             }
             file.entries
@@ -506,6 +509,30 @@ mod tests {
             vec![mark(Scope::WorkingTree, "b.rs", 3)],
         );
         file
+    }
+
+    #[test]
+    fn a_location_listed_twice_loads_its_last_entry_for_marks_and_comments() {
+        // Review A M1 F3: the first entry's marks must not outlive its comments.
+        let written: serde_json::Value =
+            serde_json::from_str(&with_marks().to_json()).expect("JSON");
+        let entry = written["entries"]
+            .as_array()
+            .expect("entries")
+            .iter()
+            .find(|e| e["location"] == json!({ "worktree": "feature-x" }))
+            .expect("feature-x is written")
+            .clone();
+        let mut later = entry.clone();
+        later["marks"] = json!([]);
+        later["comments"] = json!([]);
+        let text = json!({ "version": 4, "entries": [entry, later] }).to_string();
+        let file = ReviewFile::from_json(&text).expect("loads");
+        assert!(
+            !file.marks.contains_key("feature-x"),
+            "the last entry has no marks"
+        );
+        assert!(file.entries["feature-x"].is_empty(), "and no comments");
     }
 
     #[test]
