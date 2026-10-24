@@ -97,20 +97,20 @@ press **Changes**: every part is as left (U1).
 
 ### Tests for User Story 1 (write first, see them fail)
 
-- [ ] T010 [US1] Integration test U1 in `client/tests/features_changes.rs`: open `(P, W)`; select a
+- [x] T010 [US1] Integration test U1 in `client/tests/features_changes.rs`: open `(P, W)`; select a
   file, scroll list and diff, reveal a gap, toggle whole file, toggle Committed, open the composer
   and type, pick lines, hide the panel, choose a pull request source, browse a file;
   `SessionSelected`; `Opened (P, W)` again; `OpenView` compared whole (minus `notice`) equals its
   value before. Same with `(P, X)` opened and edited in between: neither view holds the other's
   file, comments or picks (US1.6).
-- [ ] T011 [US1] Integration tests U2 in `client/tests/features_changes.rs`: flip
+- [x] T011 [US1] Integration tests U2 in `client/tests/features_changes.rs`: flip
   `selecting_a_session_closes_the_view` (line 259) to assert the view is kept and hidden;
   `Outcome::ChangesClosedForCompare` hides; opening and closing the Overview and Settings leave
   `tabs` equal; switching project `P → Q → P` keeps `P`'s tabs and views, none shown (U7, FR-005).
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Replace `State.open: Option<OpenView>` with `tabs: ReviewTabs<OpenView>` in
+- [x] T012 [US1] Replace `State.open: Option<OpenView>` with `tabs: ReviewTabs<OpenView>` in
   `client/src/features/changes.rs` (R6): every arm that read `state.open` reads
   `state.tabs.shown_mut()`/`shown()` and does nothing with nothing shown; `Msg::Opened` calls
   `open_or_show`, building today's fresh `OpenView` only on `Created`; `Msg::SessionSelected` calls
@@ -122,7 +122,7 @@ press **Changes**: every part is as left (U1).
   `src/app.rs` (`terminal_focused`, `view_facts`, `header_watch_entry`), `src/ui/mod.rs`,
   `src/ui/session_area.rs` and `src/shell/subscriptions.rs` read `tabs.shown()` as a stopgap so the
   crate compiles; T013, T019, T022 and T024 replace those stopgaps.
-- [ ] T013 [US1] Add the render-free readers `review_shown()` (the shown key when its project is the
+- [x] T013 [US1] Add the render-free readers `review_shown()` (the shown key when its project is the
   active one) and `review_covered()` (Overview open, a Settings draft, or Compare open) to
   `client/src/app.rs`; replace T012's stopgap with `review_shown()` in `ui/mod.rs`'s `session_view_visible`,
   `main_content_key` and the main-area branch; `follow_header` hides a shown review whose project is
@@ -136,17 +136,17 @@ press **Changes**: every part is as left (U1).
 
 ### Tests for User Story 3 (write first, see them fail)
 
-- [ ] T014 [US3] Integration test U4 in `client/tests/features_changes.rs`: `Msg::TabClosed { project,
+- [x] T014 [US3] Integration test U4 in `client/tests/features_changes.rs`: `Msg::TabClosed { project,
   entry }` for the shown tab removes it; the current session becomes `Closed.show` and the terminal
   is focused; `Opened` again starts a fresh `OpenView` (toggles default, nothing selected) while
   `reviews` and `remembered` for the location are unchanged.
-- [ ] T015 [US3] Integration tests U9 in `client/tests/features_changes.rs`: `WorktreesListed`
+- [x] T015 [US3] Integration tests U9 in `client/tests/features_changes.rs`: `WorktreesListed`
   (through `Outcome::WorktreesReplaced`) without `W` drops `(P, W)` and keeps `(P, X)` and `(Q, Y)`;
   `ProjectMsg::ForgetConfirmed` for `P` drops every `P` tab and keeps `Q`'s.
 
 ### Implementation for User Story 3
 
-- [ ] T016 [US3] Replace `Msg::Closed` with `Msg::TabClosed { project, entry }` →
+- [x] T016 [US3] Replace `Msg::Closed` with `Msg::TabClosed { project, entry }` →
   `ReviewTabs::close` in `client/src/features/changes.rs`; the view's **Close** in
   `client/src/ui/changes.rs` sends `TabClosed` for the shown key; the root's × follow-up in
   `client/src/app.rs` (`set_current_session(show)`, `focus_terminal`, as a session press);
@@ -162,11 +162,11 @@ button is selected while it is shown and a press then changes nothing (US2.1–U
 
 ### Tests for User Story 2 (write first, see them fail)
 
-- [ ] T017 [US2] Integration tests U3 (same location) in `client/tests/features_changes.rs`:
+- [x] T017 [US2] Integration tests U3 (same location) in `client/tests/features_changes.rs`:
   repeated `ChangesRequested` from the Changes button and from **Review changes** leave
   `tabs.len() == 1` for the location (SC-005); `Created` issues today's first read;
   `Shown { reread: false }` and `AlreadyShown` return `Effect::None`.
-- [ ] T018 [P] [US2] Client unit test U12 in `client/src/ui/session_area.rs` tests: rename
+- [x] T018 [P] [US2] Client unit test U12 in `client/src/ui/session_area.rs` tests: rename
   `the_changes_press_opens_the_shown_location_or_closes_its_view` to assert never `Msg::Closed`,
   `selected` exactly while the location's tab is shown, tooltip from `ChangesButton::of`; and in
   `client/tests/session_area_stability.rs` the Changes-press case asserts a press while shown leaves
@@ -174,7 +174,7 @@ button is selected while it is shown and a press then changes nothing (US2.1–U
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] `changes_press` and `changes_button` in `client/src/ui/session_area.rs` from
+- [x] T019 [US2] `changes_press` and `changes_button` in `client/src/ui/session_area.rs` from
   `ChangesButton::of(has_tab, shown)` (same message for `Create`, `Show` and `None`, R9);
   `Outcome::ChangesRequested` in `client/src/app.rs` keeps today's Overview close and sends `Opened`
   (`open_or_show`). T017, T018 green.
@@ -189,14 +189,14 @@ kept view without it would present an older read as current (US4.5).
 
 ### Tests for User Story 4 (write first, see them fail)
 
-- [ ] T020 [US4] Client unit tests U5 in `client/src/features/changes.rs` tests, counting effects: a
+- [x] T020 [US4] Client unit tests U5 in `client/src/features/changes.rs` tests, counting effects: a
   `ListRead`/`DiffRead`/`PullRequestsRead`/`PullRequestDiffRead`/`FileRead`/`TreeRead` whose `seq`
   belongs to a hidden view changes no view; hiding with a load in flight sets `Unwatched`; showing
   settles every `Loading` (to its `last`, else `Idle`) then issues exactly one `ReadList`; zero read
   effects between hide and show whatever `Changed` messages arrive (SC-003); a re-read on show
   that answers an error keeps `tabs.len()` and the view's comments, picks and toggles, and shows the
   error as today (spec edge case *Failure*).
-- [ ] T021 [US4] Tests U6, U7 (freshness) and U11: in `client/src/features/changes.rs` tests,
+- [x] T021 [US4] Tests U6, U7 (freshness) and U11: in `client/src/features/changes.rs` tests,
   `Msg::Changed` marks a hidden tab of the header's location with no read, and `ReviewChanged` for a
   hidden tab's entry calls `comments_changed` and still updates `reviews` (a send in progress when
   the developer switches away reaches the kept view and the badge, spec edge case); in `client/tests/features_changes.rs`, switching to a
@@ -208,7 +208,7 @@ kept view without it would present an older read as current (US4.5).
 
 ### Implementation for User Story 4
 
-- [ ] T022 [US4] In `client/src/features/changes.rs`: `Opened` on `Shown { reread: true }` settles
+- [x] T022 [US4] In `client/src/features/changes.rs`: `Opened` on `Shown { reread: true }` settles
   in-flight loads and re-reads once; `Changed` → `files_changed` for a hidden tab of the header's
   location; `ReviewChanged` → `comments_changed`. In `client/src/app.rs`: `follow_header` calls
   `location_left` for the location it stops following, `location_left` on the shown key while
@@ -223,7 +223,7 @@ kept view without it would present an older read as current (US4.5).
 
 ### Tests for User Story 5 (write first, see them fail)
 
-- [ ] T023 [US5] Tests U10: `client/tests/terminal_focus.rs` and `client/tests/attention_view_report.rs`
+- [x] T023 [US5] Tests U10: `client/tests/terminal_focus.rs` and `client/tests/attention_view_report.rs`
   cases that open the Changes view keep their expectations with the review shown, plus: with the
   review hidden (a session shown) the terminal is focused and the main area is not taken;
   `client/tests/keyboard.rs` and `client/tests/navigation.rs` gain one case per session chord with
@@ -232,12 +232,12 @@ kept view without it would present an older read as current (US4.5).
 
 ### Implementation for User Story 5
 
-- [ ] T024 [US5] `terminal_focused` and `view_facts` in `client/src/app.rs` replace T012's
+- [x] T024 [US5] `terminal_focused` and `view_facts` in `client/src/app.rs` replace T012's
   stopgap (`tabs.shown()`) with `review_shown()` (R12). T023 green.
 
 ### Documentation (M2)
 
-- [ ] T025 [P] [US1] `docs/user-guide/reviewing-changes.md`: *Opening the Changes view* (the review
+- [x] T025 [P] [US1] `docs/user-guide/reviewing-changes.md`: *Opening the Changes view* (the review
   is kept until **Close** or the worktree's removal; **Changes** shows it again as left, and is
   drawn selected while it is shown) and *Keeping up with changes* (a hidden review is read again
   when shown).

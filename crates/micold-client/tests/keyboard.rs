@@ -18,6 +18,21 @@ fn escape_closes_when_about_open() {
     assert_eq!(on_escape(&state), Some(Message::Help(HelpMsg::AboutClosed)));
 }
 
+/// Feature 1269 T023 (U10, FR-013): with the review shown and no dialog open, Escape goes nowhere,
+/// as with the Changes view open: it never closes the review.
+#[test]
+fn escape_with_the_review_shown_keeps_it() {
+    let mut state = State::default();
+    let _ = micold_client::features::changes::opened(
+        &mut state.changes,
+        Default::default(),
+        micold_core::session::SessionLocation::Default,
+        None,
+    );
+    assert!(state.review_shown().is_some());
+    assert_eq!(on_escape(&state), None);
+}
+
 #[test]
 fn escape_is_noop_when_no_overlay() {
     let state = State::default();

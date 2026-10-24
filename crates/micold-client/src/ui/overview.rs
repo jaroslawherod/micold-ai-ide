@@ -915,7 +915,7 @@ mod tests {
             crate::ui::main_content_key(&state)
         };
         assert_ne!(overview, changes, "Overview outranks Changes");
-        state.changes.open = None;
+        state.changes.tabs = Default::default();
         state.runs.compare = Some(crate::features::runs::CompareView {
             group: micold_core::runs::GroupId(uuid::Uuid::nil()),
             project: "/p".into(),

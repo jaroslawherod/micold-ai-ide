@@ -1969,7 +1969,13 @@ fn the_layout_in_force_comes_from_the_service_and_outlives_the_view() {
             entry,
         },
     );
-    let _ = changes::update(&mut state, ChangesMsg::Closed);
+    let _ = changes::update(
+        &mut state,
+        ChangesMsg::TabClosed {
+            project: std::path::PathBuf::from("/p"),
+            entry: SessionLocation::Worktree("wt".into()),
+        },
+    );
     assert_eq!(
         state.layout,
         DiffLayout::SideBySide,

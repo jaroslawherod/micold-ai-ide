@@ -121,6 +121,33 @@ fn view_facts_has_the_main_area_taken_while_the_changes_view_is_open() {
     );
 }
 
+/// Feature 1269 T023 (U10, FR-014): a hidden review, kept, leaves the selected session in view.
+#[test]
+fn view_facts_has_the_session_in_view_while_its_review_is_hidden() {
+    use micold_client::features::changes;
+    let (mut state, session) = state_with_selected_session();
+    changes::update(
+        &mut state.changes,
+        changes::Msg::Opened {
+            project: "/repo".into(),
+            entry: SessionLocation::Worktree("feat-x".to_string()),
+        },
+    );
+    state.update(Message::Session(
+        micold_client::features::session::Msg::Selected(session),
+    ));
+    assert_eq!(state.changes.tabs.len(), 1, "kept");
+    assert_eq!(
+        state.view_facts(true),
+        ViewFacts {
+            window_focused: true,
+            main_area_taken: false,
+            selected: Some(session),
+        },
+        "the session is in view again"
+    );
+}
+
 #[test]
 fn view_facts_has_the_main_area_taken_while_the_window_does_not_hold_its_project() {
     // 039 BUG-568: displaced from the project, or refused it, the window shows the takeover banner

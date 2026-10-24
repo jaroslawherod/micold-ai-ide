@@ -18,6 +18,7 @@ use crate::ui::terminal;
 use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Element, Length, Padding};
 use micold_core::context_header::{Chip, CountsReading, HeaderText, PrChipInput};
+use micold_core::review_tabs::ChangesButton;
 use micold_core::session::SessionLocation;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
@@ -112,26 +113,23 @@ pub fn counts_of(state: &State, location: &SessionLocation) -> CountsReading {
     }
 }
 
-/// What pressing the header's Changes button sends, and whether it shows the view open (H8): the
-/// view open on `location` closes as its **Close** does; closed, or open on another location, it
-/// opens on `location` as the sidebar's **Review changes** does.
-pub fn changes_press(state: &State, location: &SessionLocation) -> (Message, bool) {
-    let open_here = state.changes.open.as_ref().is_some_and(|view| {
-        &view.entry == location && state.workspace.active.as_ref() == Some(&view.project)
-    });
-    if open_here {
-        (
-            Message::Changes(crate::features::changes::Msg::Closed),
-            true,
-        )
-    } else {
-        (
-            Message::Sidebar(crate::features::sidebar::Msg::ReviewChangesRequested(
-                location.clone(),
-            )),
-            false,
-        )
-    }
+/// What pressing the header's Changes button sends, and how it looks (H8; feature 1269, U12, R9):
+/// always the sidebar's **Review changes** of `location`, which makes its Review tab or shows the
+/// kept one; while that tab is shown the press changes nothing, and the button is drawn selected.
+pub fn changes_press(state: &State, location: &SessionLocation) -> (Message, ChangesButton) {
+    let key = state
+        .workspace
+        .active
+        .clone()
+        .map(|project| (project, location.clone()));
+    let has_tab = key.as_ref().is_some_and(|key| state.changes.tabs.has(key));
+    let shown = key.is_some() && state.review_shown() == key.as_ref();
+    (
+        Message::Sidebar(crate::features::sidebar::Msg::ReviewChangesRequested(
+            location.clone(),
+        )),
+        ChangesButton::of(has_tab, shown),
+    )
 }
 
 /// The open Changes view under the header when a session is shown (R12, A1): the header stays,
@@ -149,7 +147,7 @@ pub fn over_changes<'a>(
 }
 
 /// The header's Changes button labelled `label` (H8, H9): outlined, the git glyph leading, shown
-/// selected while the view is open on `location`, its tooltip saying what a press does. The label
+/// selected while `location`'s Review tab is shown, its tooltip saying what a press does. The label
 /// is one line: where the title line cannot hold it (four-digit counts at the smallest window) it
 /// is cut with an ellipsis and the tooltip holds it whole (FR-013, H10's bound).
 pub fn changes_button<'a>(
@@ -158,19 +156,14 @@ pub fn changes_button<'a>(
     label: String,
     r: Roles,
 ) -> Element<'a, Message> {
-    let (press, open) = changes_press(state, location);
-    let action = if open {
-        "Close the Changes view"
-    } else {
-        "Open the Changes view"
-    };
-    let tooltip = format!("{action}\n{label}");
+    let (press, button) = changes_press(state, location);
+    let tooltip = format!("{}\n{label}", button.tooltip);
     let tint = material::ButtonVariant::Outlined.content(r, None);
     let text = Ellipsized::<Message>::at_role_spaced(label, TypeRole::Action, tint).shrink();
     Tooltip::new(
         material::Button::with_content(text, material::ButtonVariant::Outlined, r)
             .leading(Icon::Git)
-            .selected(open)
+            .selected(button.selected)
             .on_press(press),
         tooltip,
         r,
@@ -681,31 +674,42 @@ mod tests {
         );
     }
 
-    /// T046 (H8): the three rows of the Changes button's press.
+    /// T046 (H8), feature 1269 T018 (U12, FR-012): the Changes button always asks for the
+    /// location's review, never closes it; it is drawn selected exactly while that location's
+    /// Review tab is shown, and its tooltip comes from `ChangesButton::of`.
     #[test]
-    fn the_changes_press_opens_the_shown_location_or_closes_its_view() {
-        use crate::features::changes::Msg as ChangesMsg;
+    fn the_changes_press_opens_the_shown_location_or_shows_its_review() {
         use crate::features::sidebar::Msg as SidebarMsg;
         let (mut state, location) = shown_worktree();
         let open = Message::Sidebar(SidebarMsg::ReviewChangesRequested(location.clone()));
         assert_eq!(
             changes_press(&state, &location),
-            (open.clone(), false),
-            "closed: opens on the shown location"
+            (open.clone(), ChangesButton::of(false, false)),
+            "no tab: opens one"
         );
         state.update(open.clone());
         assert_eq!(
             changes_press(&state, &location),
-            (Message::Changes(ChangesMsg::Closed), true),
-            "open on it: closes, shown open"
+            (open.clone(), ChangesButton::of(true, true)),
+            "shown: selected, a press changes nothing"
         );
+        assert_eq!(changes_press(&state, &location).1.tooltip, "The review is shown");
         state.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(
             SessionLocation::Default,
         )));
         assert_eq!(
             changes_press(&state, &location),
-            (open, false),
-            "open on another location: opens on the shown one"
+            (open.clone(), ChangesButton::of(true, false)),
+            "another location's review shown: shows this one's kept tab, not selected"
+        );
+        let _ = crate::features::changes::update(
+            &mut state.changes,
+            crate::features::changes::Msg::SessionSelected,
+        );
+        assert_eq!(
+            changes_press(&state, &location),
+            (open, ChangesButton::of(true, false)),
+            "a session shown: not selected"
         );
     }
 }

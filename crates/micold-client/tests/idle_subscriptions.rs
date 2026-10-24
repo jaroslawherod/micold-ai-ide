@@ -122,7 +122,8 @@ fn the_frame_clock_agrees_with_the_gate_frame_probe_glue_checks_it_by() {
     );
 }
 
-/// The Changes view's file watch runs only while the view is open (feature 482, research R9).
+/// The Changes view's file watch runs only while the review is shown (feature 482, research R9;
+/// feature 1269, R13: never for a hidden or covered Review tab).
 ///
 /// A recursive watch of a worktree held for the life of the process would wake the window on
 /// every build and every agent edit in an entry nobody is looking at.
@@ -132,7 +133,7 @@ fn the_changes_watch_runs_only_while_the_view_is_open() {
     let guard = enclosing_block(&src, "changes_watch::")
         .expect("the Changes view's watch is subscribed unconditionally");
     assert!(
-        guard.contains("changes.open"),
+        guard.contains("review_watch_entry"),
         "the Changes view's watch is inside `{guard}`, which does not test whether the view is \
          open (482 R9)"
     );

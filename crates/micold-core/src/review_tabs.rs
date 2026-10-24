@@ -301,6 +301,16 @@ impl<V> ReviewTabs<V> {
         self.tabs.get_mut(self.shown.as_ref()?)
     }
 
+    /// The shown tab's view.
+    pub fn shown_view(&self) -> Option<&V> {
+        self.shown().map(|tab| &tab.view)
+    }
+
+    /// The shown tab's view, to update it.
+    pub fn shown_view_mut(&mut self) -> Option<&mut V> {
+        self.shown_mut().map(|tab| &mut tab.view)
+    }
+
     /// `key`'s tab.
     pub fn get(&self, key: &EntryKey) -> Option<&ReviewTab<V>> {
         self.tabs.get(key)

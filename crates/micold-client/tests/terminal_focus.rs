@@ -140,14 +140,46 @@ fn the_changes_view_takes_the_keyboard_from_the_terminal_it_replaces() {
     changes::update(
         &mut s.changes,
         changes::Msg::Opened {
-            project: "/projects/p".into(),
+            project: s.workspace.active.clone().unwrap_or_default(),
             entry: SessionLocation::Worktree("feat-x".to_string()),
         },
     );
-    assert!(s.changes.open.is_some(), "precondition: the view is open");
+    assert!(s.review_shown().is_some(), "precondition: the review is shown");
     assert!(
         !s.terminal_focused(),
         "the terminal is not on screen while the Changes view is"
+    );
+}
+
+/// Feature 1269 T023 (U10, FR-013): with the review hidden, kept, the session's terminal is shown
+/// and holds the keyboard again, and the main area is the session's.
+#[test]
+fn a_hidden_review_gives_the_keyboard_back_to_the_shown_terminal() {
+    use micold_client::app::Message;
+    use micold_client::features::changes;
+    use micold_core::session::Session;
+    let mut s = State::default();
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let id = session.id;
+    s.update(Message::Session(SessionMsg::Started(session)));
+    changes::update(
+        &mut s.changes,
+        changes::Msg::Opened {
+            project: s.workspace.active.clone().unwrap_or_default(),
+            entry: SessionLocation::Worktree("feat-x".to_string()),
+        },
+    );
+    assert!(!s.terminal_focused(), "precondition: the review is shown");
+    s.update(Message::Session(SessionMsg::Selected(id)));
+    assert_eq!(s.review_shown(), None, "hidden");
+    assert_eq!(s.changes.tabs.len(), 1, "kept");
+    assert!(s.terminal_focused(), "the shown terminal holds the keyboard");
+    assert!(
+        !s.view_facts(true).main_area_taken,
+        "the main area is the session's"
     );
 }
 
