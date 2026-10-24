@@ -240,7 +240,7 @@ the cards of a row share one height.
 - **FR-001**: Each card MUST have a header row across its full width, filled with its card state's
   container colour (Needs action: error, Needs attention: warning, Working: primary, Done: success,
   Idle: the de-emphasised surface variant), showing the state icon and word at its start and the location
-  type's icon and word at its end.
+  type's ~~icon and~~ word at its end. _(type icon dropped: FR-022, BUG-1298)_
 - **FR-002**: The body below the header row MUST use one neutral surface colour, the same in every
   card state; the whole-card state fill is removed.
 - **FR-003**: Text and icons in the header row MUST use the matching on-container role of the state's
@@ -254,18 +254,22 @@ the cards of a row share one height.
 - **FR-006**: The card's title MUST be the linked issue's title when the app knows it, else the
   branch, else the display name; its tooltip MUST show the full title followed by the location's
   display name (the display name alone when the title is the display name).
-- **FR-007**: A card with a branch MUST show the short branch on its own line, unless the title
+- **FR-007**: A card with a branch MUST show the short branch ~~on its own line~~ _(on the meta line:
+  FR-023, BUG-1298)_, unless the title
   already is the branch: `type/number` when the branch is `<type>/<number>`, or `<type>/<number>` or
   `<type>-<number>` followed by `_` or `-` and a slug (so `fix/1115-foo` and `fix/1115_foo` both
   read `fix/1115`), with a conventional branch type (the type list feature
   813 derives the location type from) and a decimal number, else the branch unchanged; the line's tooltip MUST show the full
   branch name.
-- **FR-008**: The card MUST show one sessions line: "No sessions" for none; "*n* session" or "*n*
-  sessions" (singular for exactly 1); followed by " · *k* running" when *k* > 0 sessions run.
+- **FR-008**: The card MUST show ~~one sessions line: "No sessions" for none; "*n* session" or "*n*
+  sessions" (singular for exactly 1); followed by " · *k* running" when *k* > 0 sessions run~~ how
+  many sessions it has and how many run, worded and placed as FR-023 defines. _(BUG-1298: the
+  mockup's meta line)_
 - **FR-009**: The card MUST NOT show a progress row when the location has neither a phase nor a task
-  ratio; it MUST NOT draw a progress bar without a ratio. Otherwise the progress row is as feature 813
-  FR-016 defines. This replaces feature 813 FR-017's explicit empty state.
-- **FR-010**: The card MUST NOT show a pull request row when both counts are 0; when one count is 0
+  ratio; it MUST NOT draw a progress bar without a ratio. Otherwise the progress row is as ~~feature 813
+  FR-016 defines~~ FR-025 defines _(BUG-1298)_. This replaces feature 813 FR-017's explicit empty state.
+- **FR-010**: The card MUST NOT show a pull request row when both counts are 0 (and, while it draws
+  pull request rows, no counts line at all: FR-026, BUG-1298); when one count is 0
   it MUST show only the other ("1 open", "2 merged"); the unknown mark with its tooltip stays.
 - **FR-011**: The activity line MUST remove every angle-bracket tag (such as `<agent-message
   from="…">` and its closing tag) from the prompt or todo item and show the remaining words on one
@@ -300,6 +304,78 @@ the cards of a row share one height.
 - **FR-020**: Prompts, todo items and issue titles MUST stay on this machine (feature 813 FR-020);
   sanitising MUST NOT log them.
 
+**Bugfix**: 2026-10-24 — BUG-1298. The assembled card drifted from the mockup issue #1120 named
+(`bugs/BUG-1298/design.html`, rows "Proposed" and "The other states"). FR-021–FR-028 state the
+mockup's layout. Where they differ from 1120 FR-001, FR-007–FR-010, 1122 FR-002 and FR-003, or
+1123 FR-004–FR-006, they replace those clauses for the card's drawing only. Behaviour, keys, focus
+order, the ripple, the context menu and the expansion rules stay as specified.
+
+- **FR-021**: The card MUST be drawn as a frame: the body on the theme's `surface` role (not a
+  surface container), and a 1 px outline in `outline_variant` around the whole card, header
+  included, inside its 12 px corner radius. The target outline and the focus ring stay as feature
+  972 and FR-016 define, drawn over it.
+- **FR-022**: The header row MUST have 8 px top and bottom and 14 px side padding. It MUST show
+  the state icon and the state word at 13 px, weight 600, then the type word alone (no type
+  icon) at 13 px, weight 500, in the header's text colour at 85 % opacity. Its contrast against
+  the header fill MUST still meet FR-003. The title MUST be weight 600 (17 px, as FR-004).
+- **FR-023**: Below the title, the card MUST show one **meta line** that wraps (it is not cut)
+  and reads, in order:
+  - the issue link (1122) when there is one;
+  - the short branch (FR-007) in the monospace face at 13 px, in the body text colour;
+  - "· " and the sessions phrase, at 14 px, muted.
+
+  The sessions phrase is:
+  - "*n* session(s) running" when every session runs;
+  - "*n* session(s)" when none runs;
+  - "*n* sessions, *k* running" otherwise;
+  - "no sessions" for none.
+
+  It is capitalised when it starts the line. This replaces the separate branch and sessions lines
+  of FR-007 and FR-008, and 1122 FR-003's place for the link (first on the line, not after the
+  branch).
+- **FR-024**: The issue link MUST be drawn at 13 px, weight 600, underlined, in the link colour.
+  A Jira link MUST read the bare key ("MIC-87"); a GitHub link stays "Issue #N". This replaces
+  1122 FR-002's "Issue KEY".
+- **FR-025**: The activity line MUST start with the label "NOW" (12 px, weight 600, muted),
+  followed by the activity in the body text colour. The progress MUST be one block: a 6 px bar
+  with rounded ends (only with a ratio, FR-009), then the caption 4 px under it at 13 px, muted. The
+  caption reads:
+  - "*Phase* · *done*/*total* tasks" with a phase and a ratio, the PR phase reading "PR phase";
+  - "*done*/*total* tasks" with a ratio alone;
+  - the phase alone without a ratio.
+- **FR-026**: The pull request rows (1123) MUST be drawn as follows:
+  - **Number**: in the monospace face at 13 px, underlined, in the link colour.
+  - **Pill**: a tonal pill at 12 px, weight 600, each word in the container pair's on-colour:
+    - *Open* on `primary_container`;
+    - *Merged* on `success_container`;
+    - *Draft* and *Closed* on `surface_variant`.
+  - **Status words**: at 13 px, toned by meaning:
+    - *checks failing*, *changes requested* and *merge conflict* in `error` at weight 600;
+    - *checks pending* in `warning`;
+    - *checks passing* in `success`;
+    - any other words muted.
+  - **Spacing**: 6 px between rows.
+  - **More**: the "+N more" line reads "+*N* more, hover to see" (13 px, muted).
+  - **Counts**: a card that draws rows MUST NOT draw the counts line. The unknown dash with its
+    reason (1123 FR-007) stays when there are no rows.
+
+  This replaces 1123 FR-005's wording and FR-006's counts line on the card. The sidebar's
+  indicator keeps its own colours.
+- **FR-027**: The body MUST have 12 px top, 14 px side and 14 px bottom padding, with 8 px between
+  its rows. At card widths of 235 to 280 px, a side-by-side render of the mockup's cards (its five
+  locations, all five states, a long title and a card with three or more pull requests) MUST match
+  the mockup in both themes, except for:
+  - the theme's role colours (FR-017);
+  - the equal row heights of FR-014;
+  - letter spacing, which the renderer cannot draw.
+
+  The layout snapshot MUST be regenerated, and the user guide MUST describe the meta line and the
+  "Now" label.
+- **FR-028**: The expanded card (1121) MUST use the same frame, header, meta line, "Now" label,
+  progress block and rows as FR-021–FR-026. Its own extra lines (display name, full branch,
+  directory, 1121 FR-004) stay, wrapped. Its sessions are on the meta line, with no separate
+  sessions line, and it has no counts line while it draws rows.
+
 ### Key Entities
 
 - **Card text**: what a card says, derived from the card model and not stored: title, title tooltip,
@@ -322,6 +398,8 @@ the cards of a row share one height.
 - **SC-004**: The card title is at least 17 px and no card text is under 12 px.
 - **SC-005**: The five card states are each shown in the component showcase with a header row whose
   state word and type word are both visible.
+- **SC-006**: _(BUG-1298)_ For the mockup's data at card widths 235 and 280 px, in light and dark,
+  a side-by-side render shows none of the differences D1–D19 of `bugs/BUG-1298.md`.
 
 ## Out of scope
 

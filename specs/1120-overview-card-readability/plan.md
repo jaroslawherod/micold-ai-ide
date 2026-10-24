@@ -130,6 +130,20 @@ the Overview state if it lists states.
 | FR-018 rules in core | R1 | `mise run test-core` |
 | FR-019 user guide, layout snapshot | R14, R15 | `layout_snapshot`; docs gate (`check-user-guide-updated.sh`) |
 | FR-020 no logging | `markup`, `overview_text` are pure (no `tracing`) | mechanical: the quickstart §A grep finds no `tracing`/`log`/`println` call in `markup.rs`, `overview_text.rs`, `hook_activity.rs`; no unit test (absence of logging is not observable from a test) |
+| FR-021 frame: `surface` body, 1 px `outline_variant` outline | `palette`, `fill` container (BUG-1298) | client pixel probe: outline and body colour in both schemes |
+| FR-022 header 8/14 padding, 13 px words, no type icon, 85 % type word; title 600 | header cluster, `OVERVIEW_CARD_TITLE` weight (BUG-1298) | client painted-text sizes/weights; `composition_contrast` for the 85 % type word |
+| FR-023 one wrapping meta line, sessions phrase | `overview_text::meta_sessions` (core), `collapsed_body` (BUG-1298) | core unit (phrase table); client: link, branch, sessions on one baseline, wraps at 235 px |
+| FR-024 link 13/600 underlined; Jira bare key | `issue_link.rs` label, `card_link` (BUG-1298) | core unit; client painted text |
+| FR-025 "NOW" label; progress block bar-first 6 px, caption "… tasks" | `overview_text::progress_caption`, `collapsed_body` (BUG-1298) | core unit; client order and bar height |
+| FR-026 rows: mono underlined number, tonal pill, toned words, "+N more, hover to see", no counts with rows | `pull_request_rows`, `CardPrRow` tone (BUG-1298) | client painted text colours; `CardText` counts rule in core |
+| FR-027 body 12/14/14, 8 px gaps; side-by-side 235–280 px; snapshot, guide | `collapsed_body`, `covered_states.rs`, `docs/user-guide/overview.md` (BUG-1298) | `layout_snapshot`; visual pass `bugs/BUG-1298/` |
+| FR-028 expanded body takes FR-021–FR-026 | `expanded_body` (BUG-1298) | existing expanded tests, updated for the meta line |
+
+**Bugfix**: 2026-10-24 — BUG-1298 Updated from bugfix patch. The card's drawing follows the
+mockup issue #1120 named (`bugs/BUG-1298/design.html`). The core gains the meta-line sessions phrase,
+the progress caption, the bare Jira key and the no-counts-with-rows rule. `PrMark::role` stays as
+it is for the sidebar: the card maps its tonal pills itself. `Phase::label` is not changed: "PR
+phase" is the caption's word only.
 
 ## Delivery order
 
