@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: spec
-- **Next step**: dispatch round 2 of the spec review (re-review of the fix diff, `model: "sonnet"`) on snapshot `9b68594184610e77e6ce0baafee15f2b72aaea93:e50400c2af72d2333c02fc4f00db4f78c08dd287` (diff against round 1: `scripts/autopilot/review-snapshot.sh diff 8604b804860bddadd362930f075cce48e8c64032:a08a4b365389835342d3751fd4b69a9a9c05c8b6`); then the clarify unit for the three `[NEEDS CLARIFICATION]` markers (US4 scenario 4, FR-011, FR-012).
+- **Phase**: clarify done
+- **Next step**: plan unit (stage 1 now: status bar and session area; stage 2 after #1125 and #1127 merge).
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -28,12 +28,18 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D1 | clarify | Visual-pass defect in a shipped region: fix here or record? | Record as *differs by defect* + ledger follow-up; no code change | agent | spec#Context; 1124 ledger follow-ups; 1126 visual-pass.md |
+| D2 | clarify | Sweep removed-element mentions in user-guide pages outside the four? | Yes, only those sentences/rows, staged by region | agent | constitution VII; spec#Context (closing pass) |
+| D3 | clarify | Add two whole-window covered states or only regenerate? | Add both, then regenerate | agent | layout-snapshot.md#Adding a covered state, #What is covered |
 
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | spec | 1 | `8604b804860bddadd362930f075cce48e8c64032:a08a4b365389835342d3751fd4b69a9a9c05c8b6` | CHANGES: F1 MAJOR fixed (plan usage dropped from FR-010 and the #1127 Context row; edge case added for #1127 shipping it in the title bar); F2 MINOR fixed, prose only (FR-019 now covers every link, as SC-003); F3 MINOR fixed, prose only (in-region banners such as the stored-sessions offer are not removed elements, in Terms and FR-001). Round 2 needed: F1 changes a requirement. |
+| spec | 2 | `482d3e84…:e0a83183…` (Sonnet re-review of the diff from round 1) | CLEAN; one MINOR fixed, prose only (Terms "removed element" paragraph rewrapped). |
+| clarify | 1 | — | 3 questions, all agent-resolved (D1–D3); FR-011, FR-012, FR-020, SC-001, US4 scenario 4 changed. |
+| clarify | 2 | — | No critical ambiguity; unit ends. |
 
 ## Declined review findings
 
@@ -42,7 +48,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 ## Handover
 
-Round 1 of the spec review ran (orchestrator-dispatched); its fixes are committed. Earlier: spec unit wrote spec.md, checklists/requirements.md and this ledger, committed and pushed. The spec review did not run: this unit had no Agent tool to dispatch a fresh reviewer, and rules forbid self-review. Next: the orchestrator (or a spec unit with Agent) dispatches round 1 of the spec review on the snapshot in *Next step*, acts on it per tasks/review-rounds.md, then clarify.
+None.
 
 ## Open escalation
 
