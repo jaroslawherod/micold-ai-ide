@@ -56,7 +56,8 @@ pub const REFERENCE_ICON_FONT_BYTES: &[u8] =
 pub const REFERENCE_ICON_FONT_FAMILY: &str = "Material Symbols Outlined";
 
 /// The monospace face `Font::MONOSPACE` measures with: the Fira Mono Regular the application ships
-/// (feature 1260), in `assets/fonts/`, like the faces above.
+/// (feature 1260), in `assets/fonts/`, like the faces above. The renderer registers it (and Bold)
+/// through the application's own `install_monospace`, not a copy of its steps.
 ///
 /// Before feature 1260 the application shipped no monospace face and `Family::Monospace` resolved
 /// on the host: feature 940's `session-transcript-rich` was recorded on a host whose lookup landed
@@ -64,11 +65,11 @@ pub const REFERENCE_ICON_FONT_FAMILY: &str = "Material Symbols Outlined";
 /// by its widths), every code line 0.3–1.1px wider. Measuring the shipped face is what makes the
 /// geometry machine-independent and true to what the application draws. Provenance:
 /// `assets/fonts/PROVENANCE.md`.
-pub const REFERENCE_MONO_FONT_BYTES: &[u8] =
-    include_bytes!("../../../../assets/fonts/FiraMono-Regular.ttf");
+pub const REFERENCE_MONO_FONT_BYTES: &[u8] = micold_client::ui::FIRA_MONO_REGULAR_BYTES;
 
-/// The family the monospace face reports (name ID 1), set as the database's monospace family.
-pub const REFERENCE_MONO_FONT_FAMILY: &str = "Fira Mono";
+/// The family the monospace face reports (name ID 1), which `install_monospace` pins as the
+/// database's monospace family.
+pub const REFERENCE_MONO_FONT_FAMILY: &str = micold_client::ui::MONO_FAMILY;
 
 /// The family name the pinned face reports (name ID 1).
 pub const REFERENCE_FONT_FAMILY: &str = "Roboto";
@@ -202,14 +203,11 @@ pub fn renderer() -> iced::Renderer {
             .write()
             .expect("the global font system lock was poisoned")
             .load_font(Cow::Borrowed(REFERENCE_ICON_FONT_BYTES));
-        let mut fonts = iced::advanced::graphics::text::font_system()
-            .write()
-            .expect("the global font system lock was poisoned");
-        fonts.load_font(Cow::Borrowed(REFERENCE_MONO_FONT_BYTES));
-        fonts
-            .raw()
-            .db_mut()
-            .set_monospace_family(REFERENCE_MONO_FONT_FAMILY);
+        micold_client::ui::install_monospace(
+            &mut iced::advanced::graphics::text::font_system()
+                .write()
+                .expect("the global font system lock was poisoned"),
+        );
     });
 
     block_on(<iced::Renderer as Headless>::new(

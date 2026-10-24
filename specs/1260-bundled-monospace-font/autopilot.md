@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1260
 - **Worktree branch**: claude/project-thread-c0bgc0
 - **Started**: 2026-10-24
-- **Phase**: M1 PR pending
-- **Next step**: orchestrator opens the M1 PR from the pushed branch, waits on CI and merges; then M2. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
+- **Phase**: M2 gate
+- **Next step**: M2 gate, reviews, push; orchestrator opens the M2 PR and merges; then M3. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1316 | design (spec, plan, tasks) | merged (rebase) | 5d634edeb2db3f2be6f85e07df320623911e2c36 |
+| #1323 | M1 | merged (rebase, rebased onto main by orchestrator; gate re-run green) | 7afe5d296498e81f004074655ec19ee67a9e72ff |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | App and showcase draw all code (incl. terminal) in bundled Fira Mono; user guide says so | pending (branch pushed) | done |
-| M2 | T016–T019 | light | Layout tests guard Regular+Bold through the shipped installer; one-copy test | — | pending |
+| M1 | T001–T015 | full | App and showcase draw all code (incl. terminal) in bundled Fira Mono; user guide says so | #1323 | done |
+| M2 | T016–T019 | light | Layout tests guard Regular+Bold through the shipped installer; one-copy test | pending | implemented, gating |
 | M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | — | pending |
 
 Polish T028–T029 (quickstart §A/§C records, no code) is left to the close unit.
