@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1260
 - **Worktree branch**: claude/project-thread-c0bgc0
 - **Started**: 2026-10-24
-- **Phase**: plan done
-- **Next step**: tasks unit (plan CLEAN after 2 rounds; FR-007 terminal adoption awaits the user's confirmation — plan D4 lists the swap if they decline)
+- **Phase**: tasks done
+- **Next step**: design PR merge (orchestrator), then milestone M1. FR-007 (terminal adopts the face) still awaits the user's confirmation: if declined, replace T013 per plan D4's decline list before M1 ends
 
 ## Pull requests
 
@@ -21,6 +21,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T015 | full | App and showcase draw all code (incl. terminal) in bundled Fira Mono; user guide says so | — | pending |
+| M2 | T016–T019 | light | Layout tests guard Regular+Bold through the shipped installer; one-copy test | — | pending |
+| M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | — | pending |
+
+Polish T028–T029 (quickstart §A/§C records, no code) is left to the close unit.
 
 ## Decisions
 
@@ -39,11 +44,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 1 | 2a0f5efa62e0546cb87daef04623b4c3b3b572ad:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CLEAN (3 MINOR, all fixed: Regular+Bold decided as FR-001/FR-011; SC-002 reworded; checklist tick corrected, FR-001/FR-006 reworded as outcomes). Reviewer ran as headless `claude -p` (no Agent tool in this unit) |
 | Plan review | 1 | 4b3fe7335ab982bd2656ab335f9a7da631006aee:5f36be6f05b0fd5cb520da88bf1c3c6f00ef576b | CHANGES (2 MAJOR: Windows .iss allow-list in packaging_excludes_showcase.rs; FR-007 decline path understated) — both fixed. Headless `claude -p` |
 | Plan review | 2 | 3b69b243e65412cceb69de7ab247213b1a4f1a6f:5f36be6f05b0fd5cb520da88bf1c3c6f00ef576b | CLEAN (1 MINOR: DestDir parser helper unnamed — fixed, prose only). Headless `claude -p --model sonnet` |
+| speckit-analyze | 1 | ccc7a9c9bc87b622321fd307fa4ff85b1a14fa2f:e95ade0538e2e07e26e282c7175002d0efd09666 | 0 CRITICAL/HIGH; 5 MEDIUM: C1 (startup.rs is `main`'s body — recorded in plan Constitution Check), I2/I3 (spec assumptions on bundle licences and snapshot — fixed, FR-008 now names the other faces' licences), G1 (C-3 error path — contract), I1 declined (below); LOW A1, F1, F2, G2 fixed. Headless `claude -p --model sonnet` |
+| Tasks review | 1 | 88521610e9b631345d58ac2c2dda25746ac7c51f:e95ade0538e2e07e26e282c7175002d0efd09666 | CLEAN (3 MINOR, all fixed: T013 red-before-T010 note, T001 full paths, SC-001 in M2). Checklist item "Requirements are testable and unambiguous" confirmed and ticked. Headless `claude -p` |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| design | speckit-analyze I1 | FR-007 is agent-resolved in spec but "pending" in plan/tasks; drop the decline branch | The orchestrator keeps FR-007 open for the user's confirmation; the decline branch (plan D4, T013) must stay droppable until they answer |
+| design | speckit-analyze D1, F3 (LOW) | terminal rule restated four times; T026 large | Taste; each restatement serves its section, and T026's parts share one file and one red test |
 
 ## Handover
 
