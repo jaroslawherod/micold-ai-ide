@@ -17,9 +17,9 @@ The client then replaces `features::changes::State.open: Option<OpenView>` with
 `ReviewTabs<OpenView>`, routes every view message to the shown view, turns session selection into a
 hide, adds × (`Msg::TabClosed`), makes the follow step follow a derived `shown_location()` (so a
 sessionless worktree's review has its own header), and swaps every `changes.open.is_some()` focus and
-attention predicate for `review_shown()` (M2). Last, the strip gains a `Member::Review` with a draft
+attention predicate for `review_shown()` (M2; another and sessionless locations in M3). Last, the strip gains a `Member::Review` with a draft
 badge (new shared `CountBadge`), the changed dot (`UnreadMark`) and ×, replacing the view's **Close**
-(M3). Nothing depends on #1125 (sidebar) or #1127 (title bar). Decisions: [research.md](research.md).
+(M4). Nothing depends on #1125 (sidebar) or #1127 (title bar). Decisions: [research.md](research.md).
 
 ## Technical Context
 
@@ -71,7 +71,7 @@ user-guide pages and the layout-snapshot page
 | IV. Local-First | PASS | No new network call or storage; tabs are in memory; the pull request source keeps today's reads. |
 | V. Rust + iced | PASS | iced only. `shown: Option<EntryKey>` naming a key of the map makes "one shown Review tab per window" structural; `badge: Option<NonZeroUsize>` makes a `0` badge unrepresentable; `Freshness` is a closed enum, so the mark is a total function (T8); `MemberKey::Review` keeps the keyed row's key `Copy`. |
 | VI. Cross-Platform | PASS | No platform code; tooltips naming a chord take it from `keymap` per platform; fonts bundled, so gates measure what each platform draws; CI on three platforms. |
-| VII. Documentation | PASS | `docs/user-guide/reviewing-changes.md` in M2 and M3, `terminal-panes.md` and `worktrees-and-sessions.md` in M3, `docs/development/layout-snapshot.md` *What is covered* in M3 (FR-017, R14). |
+| VII. Documentation | PASS | `docs/user-guide/reviewing-changes.md` in M2, M3 and M4, `terminal-panes.md` and `worktrees-and-sessions.md` in M4, `docs/development/layout-snapshot.md` *What is covered* in M4 (FR-017, R14). |
 | VIII. Components | PASS | The Review member is the shared `material::Tab` with `.trailing`; the changed mark is the shared `UnreadMark`; the draft count is a new shared builder `material::CountBadge` (promoted, the section list's badge chip moves onto it) shown in the showcase; all builders end in `.into()`, colours from `Roles`. |
 
 Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
@@ -98,25 +98,26 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
   `drop_gone_worktrees` (U9). Every other arm reads `state.tabs.shown_mut()`.
 - **`src/app.rs`**: readers `review_shown`, `shown_location`, `review_watch_entry`,
   `review_covered`; `follow_header` follows `shown_location()` and feeds `remember`,
-  `location_left`, `hide` (other project), covered → `location_left`, `uncovered` (U7, R5);
+  `location_left`, `hide` (other project), covered → `location_left`, `uncovered` (U7, R5; M2 on
+  the current session's location, M3 on `shown_location()` with `remember`);
   `Outcome::ChangesRequested` switches location through `session_for` + `set_current_session`
-  before `Opened` (U3, R9); `Outcome::ChangesClosedForCompare` hides; the × follow-up
+  before `Opened` (U3, R9; M3); `Outcome::ChangesClosedForCompare` hides; the × follow-up
   (`set_current_session(show)`, `focus_terminal`) (U4); `terminal_focused`, `view_facts`,
   `header_watch_entry` use the shown review (U10, U11, R12).
 - **`src/features/session.rs`**: `closed` shows the location's Review tab when its last session
-  closed (U8, R8).
+  closed (U8, R8; M3).
 - **`src/features/project.rs`**: `ForgetConfirmed` → `drop_project` (U9).
 - **`src/shell/changes.rs`, `src/shell/pr_status.rs`**: read `tabs.shown()` where they read `open`.
 - **`src/shell/subscriptions.rs`**: the view watch from `review_watch_entry()` (U11, R13).
 - **`src/ui/mod.rs`**: `session_view_visible`, `main_content_key` and the main-area branch use
   `review_shown()`; the Review branch draws `session_area::over_review` (U10, U16).
 - **`src/ui/session_area.rs`**: `changes_press` and `changes_button` from `ChangesButton::of`
-  (U12); `over_changes` → `over_review`: the header of `shown_location()` above the view in M2,
-  plus the strip in M3 (U16).
-- **`src/ui/changes.rs`**: the toolbar's **Close** sends `TabClosed` (M2), then is removed (M3, U13).
-- **`src/features/session_strip.rs`** (M3): `Member::Review`, `MemberKey::Review`, `StripModel::of`
+  (U12); `over_changes` → `over_review`: the header of `shown_location()` above the view in M3,
+  plus the strip in M4 (U16).
+- **`src/ui/changes.rs`**: the toolbar's **Close** sends `TabClosed` (M2), then is removed (M4, U13).
+- **`src/features/session_strip.rs`** (M4): `Member::Review`, `MemberKey::Review`, `StripModel::of`
   from `shown_location()` incl. sessionless, marked rule extended, presses, `width` (U13–U15, R10).
-- **`src/ui/material/count_badge.rs`** (new, M3), **`tab.rs`** (`REVIEW_WIDTH`), **`section_list.rs`**
+- **`src/ui/material/count_badge.rs`** (new, M4), **`tab.rs`** (`REVIEW_WIDTH`), **`section_list.rs`**
   (badge chip on `CountBadge`), **`mod.rs`** (export); **`src/showcase/`** (the Review tab hidden with
   badge and dot, `CountBadge`) (R11).
 - **`src/ui/overview.rs`, `src/ui/status_bar.rs`** tests: `state.changes.open` → `tabs`.
@@ -134,12 +135,12 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 - Gates `session_area_fits.rs`, `tab_children_fit.rs`, `strip_controls_hold_their_size.rs` with the
   Review member (U15); `support/covered_states.rs`: `session-area-review-shown`,
   `session-area-review-hidden`, `session-area-review-sessionless` replace
-  `session-area-changes-open`; `fixtures/layout_snapshot.txt` regenerated in M3 only.
+  `session-area-changes-open`; `fixtures/layout_snapshot.txt` regenerated in M4 only.
 
 ### Docs
 
 `docs/user-guide/reviewing-changes.md` (*Opening the Changes view*, *Keeping up with changes*: M2
-kept view and re-read on show; M3 the tab, badge, changed mark, ×), `docs/user-guide/terminal-panes.md`
+kept view and re-read on show; M4 the tab, badge, changed mark, ×), `docs/user-guide/terminal-panes.md`
 (the strip's Review tab; chords with it shown), `docs/user-guide/worktrees-and-sessions.md` (where it
 describes the strip), `docs/development/layout-snapshot.md` (*What is covered*).
 
@@ -167,19 +168,26 @@ describes the strip), `docs/development/layout-snapshot.md` (*What is covered*).
 
 ## Delivery order
 
-Each milestone is one PR, shippable alone; M1 and M2 touch nothing of #1125's sidebar rows or
-#1127's title bar (the sidebar's existing **Review changes** message is reused as is).
+Each milestone is one PR, shippable alone; M1–M3 touch nothing of #1125's sidebar rows or
+#1127's title bar (the sidebar's existing **Review changes** message is reused as is). The tasks
+unit split the client state into M2 and M3 along US2.5/US2.6 (milestone size rule: more than 10
+tasks).
 
 1. **M1 — Core rules** (no client change): `micold_core::review_tabs` with T1–T8 tests. Merges
    while #1125 and #1127 are open; nothing calls it yet (public API of the core crate, so no
    dead-code lint).
 2. **M2 — Kept views** (client state, no new widget): `ReviewTabs<OpenView>` in `features::changes`,
    routing and hidden reads, `SessionSelected` hides, `TabClosed` behind the existing **Close**,
-   `shown_location()` and the follow step, entry points incl. another and sessionless locations
-   (drawn under their own header), last session closed, removal, focus/attention/watch predicates,
-   the Changes button's selected state and tooltip; `reviewing-changes.md` for the kept view. The
-   user-visible change: switching away and pressing **Changes** brings the review back as left.
-3. **M3 — The tab**: `CountBadge`, `tab::REVIEW_WIDTH`, `Member::Review` (incl. the sessionless
+   the follow step's freshness and cover rules (still following the current session's location),
+   open-or-show from both entry points, removal, focus/attention/watch predicates, the Changes
+   button's selected state and tooltip; `reviewing-changes.md` for the kept view. The user-visible
+   change: switching away and pressing **Changes** brings the review back as left. **Review
+   changes** on another location still opens it under the current header, as today.
+3. **M3 — Another and sessionless locations**: `shown_location()` and the follow step on it,
+   `remember`/`session_for` in `ChangesRequested`, a sessionless worktree's review under its own
+   header (`over_review`, header only), the last session of a location closed (R8);
+   `reviewing-changes.md` for **Review changes** on another location.
+4. **M4 — The tab**: `CountBadge`, `tab::REVIEW_WIDTH`, `Member::Review` (incl. the sessionless
    strip), × replaces **Close**, gates, covered states and fixture, showcase, the rest of the docs,
    visual pass.
 
@@ -213,19 +221,19 @@ crates/micold-core/src/
 └── review_tabs.rs                  # new (M1)
 
 crates/micold-client/src/
-├── app.rs                          # readers, follow step, ChangesRequested, × follow-up, predicates (M2)
+├── app.rs                          # readers, follow step, ChangesRequested, × follow-up, predicates (M2, M3)
 ├── features/
 │   ├── changes.rs                  # State.tabs, Msg changes, routing (M2)
-│   ├── session.rs                  # closed: last session of a location (M2)
+│   ├── session.rs                  # closed: last session of a location (M3)
 │   ├── project.rs                  # ForgetConfirmed drops tabs (M2)
-│   └── session_strip.rs            # Member::Review, StripModel from shown_location (M3)
+│   └── session_strip.rs            # Member::Review, StripModel from shown_location (M4)
 ├── shell/{changes,pr_status,subscriptions}.rs   # readers of the shown view, watch (M2)
 ├── ui/
 │   ├── mod.rs                      # review_shown in branches and keys (M2)
-│   ├── session_area.rs             # changes_press, over_review, strip member (M2, M3)
-│   ├── changes.rs                  # Close → TabClosed (M2), removed (M3)
-│   └── material/{count_badge.rs (new), tab.rs, section_list.rs, mod.rs}   # (M3)
-└── showcase/                       # Review tab, CountBadge (M3)
+│   ├── session_area.rs             # changes_press (M2), over_review (M3), strip member (M4)
+│   ├── changes.rs                  # Close → TabClosed (M2), removed (M4)
+│   └── material/{count_badge.rs (new), tab.rs, section_list.rs, mod.rs}   # (M4)
+└── showcase/                       # Review tab, CountBadge (M4)
 
 crates/micold-client/tests/         # see Tests and gates
 docs/user-guide/{reviewing-changes,terminal-panes,worktrees-and-sessions}.md

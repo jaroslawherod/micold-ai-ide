@@ -10,19 +10,19 @@
 | `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot --test layout_text_overflow` | covered states `session-area-review-shown`, `-hidden`, `-sessionless` match the fixture; `session_area_fits`, `tab_children_fit`, `strip_controls_hold_their_size` with the Review member (FR-015, FR-017, SC-006) |
 | `scripts/gate.sh` | the whole merge gate |
 
-Regenerate the fixture only once the strip is done (M3), after rebasing on `origin/main`:
+Regenerate the fixture only once the strip is done (M4), after rebasing on `origin/main`:
 `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`; only the
 session-area states may change.
 
-## Part B0: M2 check (no covered state changes in M2)
+## Part B0: M2 and M3 checks (no covered state changes before M4)
 
-M2 adds no widget and changes no geometry the layout snapshot records (the Changes button keeps its
-size; selected is a state layer). Its glue in `ui/session_area.rs` and `ui/mod.rs` is checked by
-hand, light theme, 1280×800, with the M2 subset of Part B: B1 (without the tab: the review under the
-header, Changes selected, tooltip *The review is shown*), B2–B4 (the way back is **Changes**), B7,
-B8 (header only, no strip), B9. Record the result in the M2 PR body.
+M2 and M3 add no widget and change no geometry the layout snapshot records (the Changes button keeps
+its size; selected is a state layer). Their glue in `ui/session_area.rs` and `ui/mod.rs` is checked
+by hand, light theme, 1280×800, with a subset of Part B. M2: B1 (without the tab: the review under
+the header, Changes selected, tooltip *The review is shown*), B2–B4 (the way back is **Changes**),
+B9. M3: B7, B8 (header only, no strip). Record the result in that milestone's PR body.
 
-## Part B: visual pass (the `visual-pass` skill, M3)
+## Part B: visual pass (the `visual-pass` skill, M4)
 
 Prerequisite: the client on a private display (`ICED_BACKEND=tiny-skia` on Xvfb in the cloud); a
 project with worktree `W` (two sessions, main and a helper, one shell instance in main), worktree
