@@ -364,7 +364,12 @@ const COMMENT_WIDTH: f32 = 480.0;
 
 /// A reply of more than four lines at [`COMMENT_WIDTH`], not shortened: the card cuts it at four
 /// drawn lines and offers Show all (feature 1270, FR-021).
-const CUT_REPLY: &str = "Not changed: reading it twice is what keeps the cached layout in step with     the resize the window manager sends after the first frame. Passing it through would let the two     drift apart for one frame on every resize, which is the flicker issue 812 was about. The second     read is cheap: the value is cached by the layout pass, so it costs a lookup and no shaping. If     the cost ever shows in a profile, the fix is to cache the size in the view state, not to pass it.";
+const CUT_REPLY: &str = "Not changed: reading it twice is what keeps the cached layout in step \
+    with the resize the window manager sends after the first frame. Passing it through would let \
+    the two drift apart for one frame on every resize, which is the flicker issue 812 was about. \
+    The second read is cheap: the value is cached by the layout pass, so it costs a lookup and no \
+    shaping. If the cost ever shows in a profile, the fix is to cache the size in the view state, \
+    not to pass it.";
 
 /// The comments drawer's width over a laptop window's diff (`anatomy::comments_drawer::WIDTH`
 /// less the sheet's edge), what a Replies row is posed at.
@@ -628,7 +633,7 @@ const BAR_WIDTH: f32 = 960.0;
 /// A bar with room for the draft count but not the whole counts.
 const NARROW_BAR_WIDTH: f32 = 520.0;
 /// A bar with room for its trailing group alone.
-const NARROWEST_BAR_WIDTH: f32 = 440.0;
+const NARROWEST_BAR_WIDTH: f32 = 360.0;
 
 /// `SideSheet` — the comments drawer over a diff, 360 wide, and over a narrow area, half of it
 /// (feature 1270, T031). The text under it stands in for the diff the sheet covers.
@@ -671,7 +676,8 @@ pub fn side_sheet<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Eleme
 }
 
 /// What stands in for the diff under the sheet.
-const DIFF_STAND_IN: &str = "The diff under the drawer keeps its width and its lines: the sheet     covers its right side without moving it.";
+const DIFF_STAND_IN: &str = "The diff under the drawer keeps its width and its lines: the sheet \
+    covers its right side without moving it.";
 
 /// The posed area's height: a few rows of the drawer.
 const SHEET_AREA_HEIGHT: f32 = 320.0;

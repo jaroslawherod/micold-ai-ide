@@ -60,6 +60,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 42a7804ed6fa03cda55289e1422ccf12057a0998:41be4d60561ee8c3d899e38224a6e17ac52eafd3 | CLEAN: 3 MINOR (F2 fixed: focus/dialog cleanup named in T037; F1, F3 task size left, D10) |
 | Review A M1 (code-review high) | 1 | f9a89ea1e47eb2cbbd913fbc60a375822d8a5c1c:0150d727dfd87b94372093b4ab921f5a7101e7c8 | CLEAN: 7 MINOR (2 fixed: card_preview reuses `shortened`, `Drawer::apply` no longer clones per event; 5 declined) |
 | Review B M1 (conformance, sonnet) | 1 | b6012172e220e4d9d93f952787685df926024fff:e0c0e82856af85e3d012a459d4ebc13200983d46 | CLEAN |
+| Review A M2 (code review high, headless reviewer) | 1 | 8c92d360526b5d06c0d85ae3cfa2941ce96b91ea:68c5b3fe6ec8cee326941591b531e4f411b34580 | CLEAN: 3 MINOR, all fixed (drafts-only test asserts `DraftsOnly` is `None`; card test helpers deduplicated; catalogue pose names match the render labels). A first run returned a bare CLEAN; re-run with JSON output (12 turns) to confirm it read the diff |
+| Review B M2 (conformance, headless reviewer) | 1 | 8c92d360526b5d06c0d85ae3cfa2941ce96b91ea:68c5b3fe6ec8cee326941591b531e4f411b34580 | CLEAN |
+| Visual pass M2 (in-process tiny-skia, 1280 wide, both schemes) | 1 | — | 1 real finding fixed: Answer… overflowed a 340 px whole-reply row; Mark applied / Answer… moved to their own line. Record: `visual-pass-m2.md` |
 
 ## Declined review findings
 

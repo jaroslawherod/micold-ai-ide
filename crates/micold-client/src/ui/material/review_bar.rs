@@ -322,6 +322,7 @@ mod tests {
             "{none:?}"
         );
         let sent_only = counts(0, 4, 0, 0);
+        assert_eq!(counts_text(&sent_only, CountsForm::DraftsOnly), None);
         let width = taken(WIDE) + width_of("4 sent", ROLE) - 1.0;
         let at = painted(bar(sent_only), width);
         assert!(!at.iter().any(|t| t.contains("sent")), "{at:?}");

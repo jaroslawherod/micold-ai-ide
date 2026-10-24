@@ -217,14 +217,6 @@ impl<'a, M: Clone + 'a> From<ReviewPanelRow<'a, M>> for Element<'a, M> {
                 head = head.push(Button::text("Delete", r).on_press(message));
             }
         }
-        if parts.mark_actions {
-            if let Some(message) = row_.on_mark_applied {
-                head = head.push(Button::text(MARK_APPLIED, r).on_press(message));
-            }
-            if let Some(message) = row_.on_answer {
-                head = head.push(Button::text(ANSWER, r).on_press(message));
-            }
-        }
         let mut body = column![
             head,
             LineClamped::<M>::new(row_.text.into_owned(), TypeRole::Body, 1)
@@ -247,6 +239,20 @@ impl<'a, M: Clone + 'a> From<ReviewPanelRow<'a, M>> for Element<'a, M> {
                 ));
             }
             (None, _) => {}
+        }
+        // On a row of their own, under the reply: beside the lines and the tag they would not fit
+        // the drawer's 360 px (half of a narrow window's diff area).
+        if parts.mark_actions {
+            let mut actions = row![Space::new().width(Length::Fill)]
+                .spacing(spacing::SM)
+                .align_y(Alignment::Center);
+            if let Some(message) = row_.on_mark_applied {
+                actions = actions.push(Button::text(MARK_APPLIED, r).on_press(message));
+            }
+            if let Some(message) = row_.on_answer {
+                actions = actions.push(Button::text(ANSWER, r).on_press(message));
+            }
+            body = body.push(actions);
         }
         let selected = parts.selected;
         let height = if parts.whole_reply {
@@ -411,6 +417,22 @@ mod tests {
             let shown = painted(marked(status), 480.0);
             assert!(!shown.iter().any(|t| t == "Mark applied"), "{status:?}");
             assert!(!marked(status).parts().mark_actions, "{status:?}");
+        }
+        let narrow = super::super::test_support::Mounted::new_in(
+            marked(Status::Sent).whole_reply("done", false),
+            Size::new(240.0, 2_000.0),
+        )
+        .painted_text();
+        for label in ["Mark applied", "Answer\u{2026}"] {
+            let at = narrow
+                .iter()
+                .find(|p| p.content == label)
+                .unwrap_or_else(|| panic!("{label} painted"));
+            assert!(
+                at.bounds.x + at.bounds.width <= 240.0,
+                "{label} inside a 240 px row: {:?}",
+                at.bounds
+            );
         }
         let bare = painted(
             ReviewPanelRow::<String>::new("Lines 1", "rename this", Status::Sent, LIGHT),
