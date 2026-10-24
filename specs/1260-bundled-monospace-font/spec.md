@@ -144,7 +144,7 @@ committed font's checksum.
   characters the face does cover keep the bundled face.
 - **Bold or italic code-like text**: bold uses the bundled Bold weight (FR-011); a weight or style
   the bundled set does not contain (italic, or weights other than Regular and Bold) resolves to the
-  nearest bundled weight or a synthesised form of the bundled face, not to a different host family.
+  upright bundled face of the nearest bundled weight, not to a different host family.
 - **A host font with the same family name** as the bundled face (a different build or version) must
   not displace the bundled copy, either in the running application or in the layout tests.
 - **Font registration failure** (the bundled bytes cannot be parsed, which would be a build defect):
@@ -156,7 +156,7 @@ committed font's checksum.
   Linux, macOS and Windows; platform differences in rasterisation (hinting, subpixel rendering) are
   acceptable, differences in glyph shapes or advance widths are not.
 - **The terminal pane**: it uses the bundled face (FR-007); bold cells use the bundled Bold weight,
-  italic cells a synthesised or upright form of the bundled face, and characters outside the face's
+  italic cells the upright bundled face, and characters outside the face's
   coverage (box drawing beyond its repertoire, CJK, emoji) the system fallback (FR-004). Its grid
   keeps its own cell metrics.
 
@@ -188,7 +188,7 @@ committed font's checksum.
   bold cells) on every platform, like other code-like text, while keeping its own character grid and
   cell metrics and staying outside the interface typeface and type scale (feature 018, FR-012).
 - **FR-008**: The monospace face's licence text MUST ship with the font in the repository's font
-  assets and in every platform's release bundle, and the font's upstream source, version and
+  assets and in every platform's release bundle (alongside the other bundled faces' licence texts), and the font's upstream source, version and
   checksum MUST be recorded in the shipped fonts' provenance record.
 - **FR-009**: Interface (non-code) text MUST be unaffected: it keeps the existing interface
   typeface, sizes and weights.
@@ -236,12 +236,14 @@ committed font's checksum.
   licence review. The exact upstream version and checksum recorded for the fixture carry over.
 - The bundled set is Regular and Bold: code-like text already requests bold (strong emphasis in
   inline code; terminal bold cells, FR-007). Italic is not bundled (Fira Mono has no
-  italic); italic requests resolve to a synthesised or upright form of the bundled face.
+  italic); italic requests resolve to the upright bundled face of the requested weight.
 - Fira Mono's character advance (0.600 em) is close to the host faces it replaces (0.600–0.602 em),
-  so existing layouts shift by at most about a pixel per code line; the recorded layout snapshot is
-  regenerated once and reviewed as part of this feature.
-- Release bundling already carries the interface fonts' licence files; the monospace face's licence
-  follows the same path.
+  so code lines users see shift by at most about a pixel. The recorded layout snapshot already
+  measures Fira Mono (#1234) and is expected not to change; if it does, it is regenerated once and
+  reviewed as part of this feature.
+- Release bundles carry no font licence file today (the fonts are compiled into the binary; plan
+  research R5). The monospace face's licence ships in a font licence directory of each bundle,
+  together with the other bundled faces' licence files, which have the same obligation.
 - Depends on the font-registration mechanism introduced for Roboto (feature 018) and the layout
   apparatus pinning added in #1234 / feature 940. Issue #1276 (review UI docs/sync, redesign epic
   #1277) depends on this feature.

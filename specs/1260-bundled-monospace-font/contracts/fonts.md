@@ -45,7 +45,9 @@ pub fn install_monospace(fonts: &mut iced::advanced::graphics::text::FontSystem)
 ```
 
 Loads `FIRA_MONO_REGULAR_BYTES` and `FIRA_MONO_BOLD_BYTES` with `FontSystem::load_font`, then calls
-`pin_monospace(fonts.raw().db_mut())`. Glue: no branch of its own.
+`pin_monospace(fonts.raw().db_mut())`. Glue: no branch of its own, and no error path:
+`load_font` logs and skips bytes it cannot parse, so the application still starts and code falls back
+to a host face, while the bytes guard and the layout guard fail the suite (research R8).
 
 **Callers** (each exactly once, before any text is shaped):
 
