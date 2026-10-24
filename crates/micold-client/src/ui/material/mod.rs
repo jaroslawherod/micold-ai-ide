@@ -148,6 +148,7 @@ mod ripple_layers;
 /// The reference scene's ripple, and the rule it presses by. In-crate for the same reason.
 #[cfg(test)]
 mod ripple_pulse;
+mod status_bar;
 mod status_chip;
 /// The style layer's parity snapshot. Lives inside the crate rather than in `tests/` because the
 /// layer it asserts is no longer reachable from outside it — which is the point.
@@ -249,6 +250,7 @@ pub use snackbar::Snackbar;
 pub use split_action::SplitAction;
 pub use split_view::{pane_focus_mark, pane_notice_fill, SplitView};
 pub use state_icon::StateIcon;
+pub use status_bar::{GiveWay, ItemTone, StatusBar, StatusItem};
 pub use status_chip::StatusChip;
 pub use surface::{Kind as SurfaceKind, Surface};
 pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
