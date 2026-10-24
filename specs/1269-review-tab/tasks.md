@@ -28,7 +28,7 @@ and after.
 
 ## Phase 1: Setup
 
-- [ ] T001 Declare `pub mod review_tabs;` in `core/src/lib.rs` and create `core/src/review_tabs.rs`
+- [x] T001 Declare `pub mod review_tabs;` in `core/src/lib.rs` and create `core/src/review_tabs.rs`
   with the types of data-model.md §Core and stub bodies (each method answers a default: `Created`,
   `false`, `None`, empty `Vec`, `Change::Nothing`), so the tests below compile and fail:
   `pub type EntryKey = (PathBuf, SessionLocation)`; `Freshness { Fresh, Changed, Unwatched }`;
@@ -49,16 +49,16 @@ and after.
 Every user story's behaviour is decided here, render-free (R1). Tests live in `#[cfg(test)] mod
 tests` of `core/src/review_tabs.rs`, with `V = u32` and keys from `PathBuf` and `SessionLocation`.
 
-- [ ] T002 Core unit tests T1 (open or show: every row of the T1 table, `make` called once only on
+- [x] T002 Core unit tests T1 (open or show: every row of the T1 table, `make` called once only on
   `Created`, repeated opens leave `len() == 1`, opening `(P, X)` while `(P, W)` is shown keeps
   `(P, W)`'s tab and view), T2 (hide answers whether a tab was shown and changes no tab), T3 (close:
   no tab → `None`; `was_shown`; `show` = `return_to` if live, else `main`, else `None`; a later open
   answers `Created`; another tab untouched) and T7 (`show_if_present`) in `core/src/review_tabs.rs`.
   Red against the T001 stubs.
-- [ ] T003 Implement `open_or_show`, `hide`, `close`, `show_if_present` and the readers
+- [x] T003 Implement `open_or_show`, `hide`, `close`, `show_if_present` and the readers
   `shown_key`, `shown`, `shown_mut`, `get`, `has`, `len`, `iter` in `core/src/review_tabs.rs`; T002
   green.
-- [ ] T004 Core unit tests T4 in `core/src/review_tabs.rs`: `drop_gone_worktrees` removes only
+- [x] T004 Core unit tests T4 in `core/src/review_tabs.rs`: `drop_gone_worktrees` removes only
   `(project, Worktree(dir))` with `dir` not in `names`, never `(project, Default)`, never another
   project's key, clears `shown` and `last_session` of what it removes and answers the removed keys;
   `drop_project` likewise for every key of the project; the property test "nothing else removes a
@@ -66,20 +66,20 @@ tests` of `core/src/review_tabs.rs`, with `V = u32` and keys from `PathBuf` and 
   `hide`, `files_changed`, `location_left`, `comments_changed`, `remember`, `show_if_present` never
   lowers `len()` — driven by a small seeded generator in the test module (no new dependency;
   `grep -rn xorshift crates/` first and reuse one if it exists), several seeds. Red.
-- [ ] T005 Implement `drop_gone_worktrees` and `drop_project` in `core/src/review_tabs.rs`; T004
+- [x] T005 Implement `drop_gone_worktrees` and `drop_project` in `core/src/review_tabs.rs`; T004
   green.
-- [ ] T006 Core unit tests T5 (every row of the freshness table, `uncovered` answers `true` exactly
+- [x] T006 Core unit tests T5 (every row of the freshness table, `uncovered` answers `true` exactly
   once after `location_left` on the shown key, a second show with no change between answers
   `reread: false`) and T6 (the `session_for` table, `remember` overwrites) in
   `core/src/review_tabs.rs`. Red.
-- [ ] T007 Implement `files_changed`, `location_left`, `comments_changed`, `uncovered`, `remember`
+- [x] T007 Implement `files_changed`, `location_left`, `comments_changed`, `uncovered`, `remember`
   and `session_for` in `core/src/review_tabs.rs`, and the freshness answer of `open_or_show` and
   `show_if_present`; T006 green.
-- [ ] T008 Core unit tests T8 in `core/src/review_tabs.rs`: every row of the `ReviewTabFace::of`
+- [x] T008 Core unit tests T8 in `core/src/review_tabs.rs`: every row of the `ReviewTabFace::of`
   table (badge never `0`; a shown tab never `changed`; tooltip `Review · 1 draft`, `Review · 3
   drafts\nChanged since you looked`; `badge_text()` `1`…`99`, `99+` with the count kept) and of the
   `ChangesButton::of` table (`Open the review`, `Show the review`, `The review is shown`). Red.
-- [ ] T009 Implement `ReviewTabFace::of`, `ReviewTabFace::badge_text` and `ChangesButton::of` in
+- [x] T009 Implement `ReviewTabFace::of`, `ReviewTabFace::badge_text` and `ChangesButton::of` in
   `core/src/review_tabs.rs`; T008 green; `cargo test -p micold-core --all-targets` and clippy
   `-D warnings` clean.
 

@@ -74,6 +74,7 @@ pub mod pull_request;
 pub mod quick_switch;
 pub mod required;
 pub mod review;
+pub mod review_tabs;
 pub mod runs;
 pub mod sandbox;
 pub mod scoped_credential;
