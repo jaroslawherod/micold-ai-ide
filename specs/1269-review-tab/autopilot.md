@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
 - **Phase**: milestone M1
-- **Next step**: M1 review B and full gate, then push branch for the M1 PR (title/body in the scratchpad)
+- **Next step**: orchestrator opens the M1 PR from branch `claude/project-thread-6rh2yo` (title/body in the scratchpad), waits on CI and merges; then milestone M2 (T010–T025)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | — | in progress |
+| M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | (M1 PR, opened by orchestrator) | review-ready |
 | M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | — | todo |
 | M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | — | todo |
 | M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | — | todo |
@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | tasks | Milestones | M1 core rules (T001–T009), M2 kept views on the shown location (T010–T025), M3 another and sessionless locations (T026–T031), M4 the strip tab (T032–T041); Polish T042–T043 to the close unit. M1 is a deliberate departure from milestones.md rule 1 and the rubric's "M1 includes the P1 story" (Foundational alone): its deliverable is FR-016 itself, observable by `test-core`, and folding it into M2 would put M2 far over 800 lines; it also lets the core merge while #1125/#1127 contend for the client. M2 kept at 16 tasks: the hidden-read and re-read-on-show behaviour (US4.3–4.6) cannot ship apart from kept views without presenting old reads as current (US4.5), and the `open` → `tabs` migration touches every focus/attention reader at once. M4 at 10 tasks: no half-wired strip member (rule 6). Plan, quickstart B0, research R14 and contract U-headers renumbered (strip M3 → M4) | agent | tasks.md Milestones; plan.md Delivery order |
 
 ## Review rounds
+| Review B M1 (conformance, sonnet) | 1 | 7af53d7e1cf9774a18a7cdd5370c904fecd487ff:0d1d402da3e396995202522d497bf0ad491ba1c8 | CLEAN: 1 MINOR (declines written above the table), fixed, prose only |
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
@@ -54,13 +55,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
-- Review A M1 F3 (`files_changed` on a shown, covered tab answers `Reread`): contract T5 row 1 says a shown tab answers `Reread` and stays unchanged; whether a covered view reads is the client's watch (R13, U11, M2).
-- Review A M1 F4 (`close` answers `show` for a hidden tab): contract T3 defines `show` without regard to `was_shown`; the client switches only when `was_shown` (U4).
-- Review A M1 F6 (`Press::None` shadows `Option::None`): the name is the contract's (T8, data-model, M4 tasks); always written qualified. MINOR.
-- Review A M1 F7 (`Bytes` xorshift in `tests/terminal_history_format.rs`): pre-existing, outside M1. MINOR.
-
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | F3 `files_changed` on a shown, covered tab answers `Reread` | contract T5 row 1: a shown tab answers `Reread`, unchanged; whether a covered view reads is the client's watch (R13, U11, M2) |
+| M1 | A | F4 `close` answers `show` for a hidden tab | contract T3 defines `show` regardless of `was_shown`; the client switches only when `was_shown` (U4) |
+| M1 | A | F6 `Press::None` shadows `Option::None` (MINOR) | the contract's name (T8, data-model, M4 tasks); always written qualified |
+| M1 | A | F7 `Bytes` xorshift in `tests/terminal_history_format.rs` (MINOR) | pre-existing, outside M1 |
 
 ## Handover
 
