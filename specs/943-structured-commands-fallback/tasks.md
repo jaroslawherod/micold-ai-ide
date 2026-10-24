@@ -346,23 +346,23 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 10: Window — palette, model picker, markers, guide (M8; needs #941 M6, I-3)
 
-- [ ] T055 [P] [US2] Tests: `client/tests/gates/command_palette_fits.rs` (new, registered in
+- [x] T055 [P] [US2] Tests: `client/tests/gates/command_palette_fits.rs` (new, registered in
   `client/tests/layout_snapshot.rs`) — rows, group headers and the "opens in terminal" tag fit at
   the composer's narrowest width in both themes; the showcase completeness and builder-API tests
   list `CommandPalette`
-- [ ] T056 [US2] Create the shared `CommandPalette` in `client/src/ui/material/command_palette.rs`
+- [x] T056 [US2] Create the shared `CommandPalette` in `client/src/ui/material/command_palette.rs`
   from `material::picker`'s row and panel, with a builder API, register it in
   `client/src/ui/material/mod.rs`, add its showcase entry under `client/src/showcase/` and its theme
   snapshot (T055 passes)
-- [ ] T057 [US2] [US3] Draw the palette in #941's composer completion slot and the model (with
+- [x] T057 [US2] [US3] Draw the palette in #941's composer completion slot and the model (with
   "your choice"/Default, the text from T051's tested function) and the `Typeahead` model picker in
   the composer's status row (`client/src/ui/composer.rs`) (GUI exception for the draw glue only)
-- [ ] T058 [US1] [US3] Replace M2's plain markers in `client/src/ui/transcript/entries.rs` with
+- [x] T058 [US1] [US3] Replace M2's plain markers in `client/src/ui/transcript/entries.rs` with
   #939's `DisclosureCard`: the command chip with its description behind it, `CommandOutput`,
   `Compacted` with the summary collapsed, `Cleared` and earlier eras drawn as "before the clear",
   `ModelChanged`/refused; every caption and label comes from a render-free function with a unit
   test, as in T024 (GUI exception for the draw glue only)
-- [ ] T059 [US2] [US3] User guide `docs/user-guide/worktrees-and-sessions.md` *Structured
+- [x] T059 [US2] [US3] User guide `docs/user-guide/worktrees-and-sessions.md` *Structured
   sessions*: the palette (keys, groups, "opens in terminal"), the model picker, `/model`, a model
   changed inside the terminal not being seen (FR-027)
 - [ ] T060 Quickstart Part B 1, 2, 4 and 5 in both themes, evidence in

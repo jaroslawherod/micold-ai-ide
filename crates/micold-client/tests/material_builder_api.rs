@@ -150,9 +150,9 @@ fn the_tooltips_wait_modes_and_options_are_four_chainable_steps() {
     }
 }
 
-/// Feature 941 (T048): the composer's parts are components built like every other — a
-/// constructor, chainable steps and `.into()`, no public fields — and `TextArea`'s new options are
-/// two more chainable steps.
+/// Feature 941 (T048) and #943 (T055): the composer's parts are components built like every
+/// other — a constructor, chainable steps and `.into()`, no public fields — and `TextArea`'s new
+/// options are two more chainable steps.
 #[test]
 fn the_composer_parts_are_built_and_chained() {
     let declared = declarations();
@@ -173,6 +173,18 @@ fn the_composer_parts_are_built_and_chained() {
             &["pictures", "on_edit", "on_remove", "on_move_to_composer"][..],
         ),
         ("material/busy_indicator.rs", "BusyIndicator", &["busy"][..]),
+        (
+            "material/command_palette.rs",
+            "CommandPalette",
+            &[
+                "group",
+                "command",
+                "highlighted",
+                "note",
+                "empty_message",
+                "on_pick",
+            ][..],
+        ),
     ] {
         let d = declared
             .iter()

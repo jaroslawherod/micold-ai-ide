@@ -560,8 +560,10 @@ fn lines_naming(needle: &str) -> Vec<(String, String)> {
 }
 
 /// U43 (FR-007, FR-029): the shell chains the operation after `FormMsg::IssueHighlightMoved`, and
-/// after no other message. The branch picker and `Select` have rows of one height and are not
-/// wired, so a second caller would be a change of scope this feature did not make.
+/// after no other message of the issue form. The branch picker and `Select` have rows of one
+/// height and are not wired, so a caller there would be a change of scope this feature did not
+/// make. The lists that do move a highlight over rows of their own heights chain it too: the
+/// quick-switcher (feature 968) and #943's command palette and model picker.
 ///
 /// A source check, because the shell's `update` returns an opaque `Task`: nothing can ask one
 /// whether it holds this operation.
@@ -572,16 +574,25 @@ fn only_the_issue_highlight_move_chains_the_operation() {
         .into_iter()
         .filter(|(_, line)| !line.starts_with("pub fn "))
         .collect();
-    // The quick-switcher's list (feature 968) is the second caller: its rows can overflow the
-    // dialog, and Up and Down must keep the highlighted one in view.
+    // The quick-switcher's list (feature 968) and the composer's command palette and model picker
+    // (#943) are the other callers: their rows can overflow their lists, and Up and Down must keep
+    // the highlighted one in view.
     let call = "micold_client::ui::picker_highlight_into_view()".to_string();
+    let files: Vec<&str> = calls.iter().map(|(file, _)| file.as_str()).collect();
     assert_eq!(
-        calls,
-        vec![
-            ("src/shell/issues.rs".to_string(), call.clone()),
-            ("src/shell/quick_switch.rs".to_string(), call),
+        files,
+        [
+            "src/shell/composer.rs",
+            "src/shell/composer.rs",
+            "src/shell/issues.rs",
+            "src/shell/quick_switch.rs",
         ],
-        "the operation has two callers: the issue shell's handler and the quick-switcher's"
+        "the operation's callers: the composer's palette and picker, the issue shell's handler \
+         and the quick-switcher's"
+    );
+    assert!(
+        calls.iter().all(|(_, line)| line.contains(&call)),
+        "each caller chains the operation itself: {calls:?}"
     );
 
     // That call is in the handler of the highlight move, and nowhere else in the file.

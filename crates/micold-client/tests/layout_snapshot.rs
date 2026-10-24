@@ -190,6 +190,13 @@ mod inline_diff_marker_fits;
 #[path = "gates/composer_parts_fit.rs"]
 mod composer_parts_fit;
 
+// --- The command palette fits the composer's narrowest width (#943, T055) ----------------------
+
+// The showcase's palette at the narrowest pane: every group header, command and second line inside
+// the panel, and a terminal-only row's "opens in terminal" whole (FR-007, FR-008, FR-010).
+#[path = "gates/command_palette_fits.rs"]
+mod command_palette_fits;
+
 // --- A permission prompt's actions stay inside its card (feature 942, T057) -------------------
 
 // The tool request, plan approval and question views, as the showcase poses them, at the narrowest

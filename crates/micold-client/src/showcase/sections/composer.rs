@@ -1,6 +1,6 @@
-//! The structured session composer's shared parts (feature 941, T054): `AttachmentChip`,
-//! `QueueRow` and `BusyIndicator`, and `TextArea`'s height limit (posed in `review::text_area`
-//! beside the area's other states, from [`text_area_sample`]).
+//! The structured session composer's shared parts (feature 941, T054; #943 T056):
+//! `AttachmentChip`, `QueueRow`, `BusyIndicator` and `CommandPalette`, and `TextArea`'s height
+//! limit (posed in `review::text_area` beside the area's other states, from [`text_area_sample`]).
 //!
 //! The samples are public so `tests/gates/composer_parts_fit.rs` lays out exactly what the gallery
 //! poses.
@@ -14,7 +14,9 @@ use std::sync::LazyLock;
 use crate::showcase::catalogue::Layout;
 use crate::showcase::gallery::{arrange, posed};
 use crate::showcase::state::{Message, Showcase};
-use crate::ui::material::{AttachmentChip, BusyIndicator, QueueRow, TextArea};
+use crate::ui::material::{
+    AttachmentChip, BusyIndicator, CommandPalette, QueueRow, TextArea, TypeaheadRow,
+};
 
 /// The height the posed text area stops growing at: about eight lines.
 pub const TEXT_AREA_LIMIT: f32 = crate::ui::composer::MAX_HEIGHT;
@@ -144,5 +146,96 @@ pub fn busy_indicator<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
             posed("idle", busy_indicator_sample(false, roles), roles),
         ],
         Layout::Inline,
+    )
+}
+
+/// The palette's note over the fallback list, as the window says it.
+pub const PALETTE_NOTE: &str = crate::features::command_palette::FALLBACK_NOTE;
+
+/// What a terminal-only row's second line leads with, as the window says it.
+pub const PALETTE_TERMINAL_TAG: &str = crate::features::command_palette::OPENS_IN_TERMINAL;
+
+/// What the palette says when nothing matches, as the window says it.
+pub const PALETTE_NO_MATCH: &str = crate::features::command_palette::NO_MATCH;
+
+/// A command row: `/name`, the typed name's place in it, and its second line.
+fn palette_row(
+    label: &str,
+    matched: Option<std::ops::Range<usize>>,
+    details: &str,
+) -> TypeaheadRow {
+    TypeaheadRow::new(label, matched.into_iter().collect()).details(details, vec![])
+}
+
+/// The palette over a `/sp`, its groups listed and its first row highlighted, at the posed width.
+pub fn command_palette_sample<'a>(roles: Roles) -> Element<'a, Message> {
+    container(
+        CommandPalette::new(roles)
+            .group("Skills")
+            .command(palette_row(
+                "/speckit-plan",
+                Some(1..3),
+                "Plan the feature from its spec",
+            ))
+            .command(palette_row(
+                "/speckit-specify",
+                Some(1..3),
+                "Write the feature's spec",
+            ))
+            .group("Built-in commands")
+            .command(palette_row(
+                "/mcp",
+                None,
+                &format!("{PALETTE_TERMINAL_TAG} · Manage MCP servers"),
+            ))
+            .group("In this app")
+            .command(palette_row(
+                "/model",
+                None,
+                "Choose the model for this session",
+            ))
+            .highlighted(Some(0))
+            .on_pick(|_| Message::NoOp),
+    )
+    .width(Length::Fixed(WIDTH))
+    .into()
+}
+
+/// `CommandPalette` — the session's commands grouped under their headers with the first selected;
+/// the fallback list with its note; and a typed name matching nothing.
+pub fn command_palette<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let sized =
+        |palette: CommandPalette<'a, Message>| container(palette).width(Length::Fixed(WIDTH));
+    arrange(
+        vec![
+            posed(
+                "the session's commands, grouped",
+                command_palette_sample(roles),
+                roles,
+            ),
+            posed(
+                "the fallback list, with its note",
+                sized(
+                    CommandPalette::new(roles)
+                        .note(PALETTE_NOTE)
+                        .group("Built-in commands")
+                        .command(palette_row("/compact", None, "Compact the conversation"))
+                        .command(palette_row("/clear", None, "Clear the conversation"))
+                        .highlighted(Some(0))
+                        .on_pick(|_| Message::NoOp),
+                ),
+                roles,
+            ),
+            posed(
+                "nothing matches",
+                sized(
+                    CommandPalette::new(roles)
+                        .empty_message(PALETTE_NO_MATCH)
+                        .on_pick(|_| Message::NoOp),
+                ),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
     )
 }

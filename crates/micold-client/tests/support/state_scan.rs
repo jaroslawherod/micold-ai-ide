@@ -49,6 +49,7 @@ pub const MUTATORS: &[&str] = &[
     // #942 M9: `permission_prompts.confirm_mode` closes it on its confirm.
     "confirm_mode",
     "picker_chose",
+    "picker_step",
     "picker_typed",
     "step",
     "replace_text",

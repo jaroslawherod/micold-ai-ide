@@ -11,11 +11,12 @@
 //! terminal-only command is offered the terminal, anything else is a message.
 
 use std::collections::HashMap;
+use std::ops::Range;
 
 use micold_core::session::SessionId;
 use micold_core::structured::commands::palette::{accept, filter, palette_query, PaletteSelection};
 use micold_core::structured::commands::{
-    classify_draft, Command, CommandList, DraftCommand, ListSource, CLI_MARKED_WHY,
+    classify_draft, Command, CommandKind, CommandList, DraftCommand, ListSource, CLI_MARKED_WHY,
 };
 use micold_core::structured::model::{ModelChoice, ModelName, ModelRefusal, MODEL_SHORTCUTS};
 use micold_core::structured::ReportedModel;
@@ -95,6 +96,92 @@ impl PaletteState {
     pub fn source_note(&self) -> Option<&'static str> {
         (self.list.source() == ListSource::Fallback).then_some(FALLBACK_NOTE)
     }
+
+    /// What the window draws, in order: with no name typed, each group under its header
+    /// (FR-007); with a name, its matches in FR-008's order, which mixes the groups, under none.
+    pub fn lines(&self) -> Vec<PaletteLine> {
+        let mut lines = Vec::with_capacity(self.rows.len() + 4);
+        let mut group = None;
+        for command in self.rows() {
+            if self.query.is_empty() && group != Some(command.kind) {
+                group = Some(command.kind);
+                lines.push(PaletteLine::Group(group_title(command.kind)));
+            }
+            lines.push(PaletteLine::Command {
+                label: format!("/{}", command.name),
+                matched: row_match(&command.name, &self.query).map(|m| m.start + 1..m.end + 1),
+                details: row_details(command),
+            });
+        }
+        lines
+    }
+}
+
+/// One line of the drawn palette.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PaletteLine {
+    /// A group's header.
+    Group(&'static str),
+    /// A command: `/name`, the typed name's place in it, and what [`row_details`] says.
+    Command {
+        label: String,
+        matched: Option<Range<usize>>,
+        details: Option<String>,
+    },
+}
+
+/// A group's header (FR-007).
+pub fn group_title(kind: CommandKind) -> &'static str {
+    match kind {
+        CommandKind::Skill => "Skills",
+        CommandKind::Custom => "Custom commands",
+        CommandKind::BuiltIn => "Built-in commands",
+        CommandKind::App => "In this app",
+    }
+}
+
+/// Where `query` lies in `name`, ignoring case and in `name`'s own bytes, as the palette matched
+/// it: the name's start, else a word's start (after `-`, `_` or `:`), else the first occurrence —
+/// core `filter`'s tiers, so the emphasis falls where the row was ranked.
+pub fn row_match(name: &str, query: &str) -> Option<Range<usize>> {
+    if query.is_empty() {
+        return None;
+    }
+    let at = |start: usize| {
+        let rest = name.get(start..)?;
+        let mut taken = 0;
+        let mut wanted = query.chars().flat_map(char::to_lowercase);
+        for c in rest.chars() {
+            let mut lowered = c.to_lowercase();
+            if !lowered.all(|l| wanted.next() == Some(l)) {
+                return None;
+            }
+            taken += c.len_utf8();
+            if wanted.clone().next().is_none() {
+                return Some(start..start + taken);
+            }
+        }
+        wanted.next().is_none().then_some(start..start + taken)
+    };
+    let starts = || name.char_indices().map(|(at, _)| at);
+    let word_starts = || {
+        name.char_indices()
+            .filter(|(_, c)| matches!(c, '-' | '_' | ':'))
+            .map(|(at, c)| at + c.len_utf8())
+    };
+    at(0)
+        .or_else(|| word_starts().find_map(at))
+        .or_else(|| starts().find_map(at))
+}
+
+/// What a row says under its name: [`row_tag`] first, so a description cut to the row's width
+/// never takes it (FR-010), then the description.
+pub fn row_details(command: &Command) -> Option<String> {
+    let parts: Vec<&str> = row_tag(command)
+        .into_iter()
+        .chain(command.description.as_deref())
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 /// The words a row carries beside its name: [`OPENS_IN_TERMINAL`] for a terminal-only command.
@@ -219,13 +306,53 @@ impl ModelPickerState {
         self.highlight
     }
 
-    /// The highlighted item's choice, else the typed name (FR-014).
+    /// What the window lists: each item, then the typed name when one is typed (FR-014).
+    pub fn rows(&self) -> Vec<ModelRow> {
+        let items = self.items.iter().enumerate().map(|(at, item)| ModelRow {
+            label: item.label.clone(),
+            details: item.description.clone(),
+            item: Some(at),
+        });
+        let typed = (!self.typed.trim().is_empty()).then(|| ModelRow {
+            label: use_typed(self.typed.trim()),
+            details: None,
+            item: None,
+        });
+        items.chain(typed).collect()
+    }
+
+    /// The row of the current choice.
+    pub fn current_row(&self) -> Option<usize> {
+        self.items.iter().position(|item| self.is_current(item))
+    }
+
+    /// The row Enter takes: the highlighted item, else the typed name's.
+    pub fn enter_row(&self) -> Option<usize> {
+        self.highlight
+            .or_else(|| (!self.typed.trim().is_empty()).then_some(self.items.len()))
+    }
+
+    /// Item `item`'s choice; `None`, the typed name (FR-014). A row the window drew names one or
+    /// the other ([`Self::rows`]): the typed row's `item` is `None`.
     fn chosen(&self, item: Option<usize>) -> Result<ModelChoice, ModelRefusal> {
-        match item.or(self.highlight).and_then(|i| self.items.get(i)) {
+        match item.and_then(|i| self.items.get(i)) {
             Some(item) => Ok(item.choice.clone()),
             None => model_choice(&self.typed),
         }
     }
+}
+
+/// One row of the drawn model picker: an item, or the typed name (`item` `None`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelRow {
+    pub label: String,
+    pub details: Option<String>,
+    pub item: Option<usize>,
+}
+
+/// The picker's row for a typed model name.
+pub fn use_typed(name: &str) -> String {
+    format!("Use {name}")
 }
 
 /// `name` as a choice: `default` is [`ModelChoice::Default`].
@@ -361,12 +488,15 @@ impl State {
 
     pub fn picker_step(&mut self, session: SessionId, direction: Direction) {
         if let Some(picker) = self.pickers.get_mut(&session) {
-            picker.highlight = move_highlight(picker.highlight, direction, picker.items.len());
+            // Over every row the window draws, so the typed name is reachable with the arrows
+            // as the items are.
+            let rows = picker.rows().len();
+            picker.highlight = move_highlight(picker.highlight, direction, rows);
         }
     }
 
-    /// Choose item `item` (the highlighted one, else the typed name, when `None`), closing the
-    /// picker. `None` when no picker is open.
+    /// Choose item `item` (the typed name when `None`), closing the picker. `None` when no picker
+    /// is open.
     pub fn picker_chose(
         &mut self,
         session: SessionId,

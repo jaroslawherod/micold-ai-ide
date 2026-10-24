@@ -201,9 +201,13 @@ fn build<'a, M: Clone + 'a>(
     let roles = ctx.roles;
     let dark = ctx.scheme == ColorScheme::Dark;
     let transcript = state.transcript(session);
+    let main = transcript.unwrap_or(empty_transcript());
     let scope = entries::Scope {
         session,
-        main: transcript.unwrap_or(empty_transcript()),
+        main,
+        // The conversation the latest entry belongs to; everything of an earlier one is from
+        // before a `/clear` (#943 FR-005).
+        latest_era: main.entries().next_back().map_or(0, |e| e.era()),
         insights,
     };
     let placed = prompts
@@ -258,7 +262,18 @@ fn build<'a, M: Clone + 'a>(
                 let open = state.is_open(session, entry.key());
                 let stamp = ctx.cache.get(session, entry.key()).map_or(0, |d| d.stamp);
                 let extras = entries::insights_stamp(entry, &ctx, scope);
-                let key = (entry.key(), entry.revision(), open, dark, stamp, extras);
+                // The era tag is part of what the entry draws, and a `/clear` changes it without
+                // touching the entry, so it belongs in the key (#943 FR-005).
+                let era = entries::era_tag(entry.era(), scope.latest_era).is_some();
+                let key = (
+                    entry.key(),
+                    entry.revision(),
+                    open,
+                    dark,
+                    stamp,
+                    extras,
+                    era,
+                );
                 let drawn = lazy(key, move |_| {
                     let toggle = TranscriptMsg::Toggle {
                         session,

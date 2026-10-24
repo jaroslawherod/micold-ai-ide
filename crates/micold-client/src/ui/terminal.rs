@@ -818,8 +818,12 @@ pub(crate) fn transcript_body<'a>(
             state,
             id,
             tokens::roles(scheme),
-            // #942: the mode control, and *Waiting for you* while a request waits (plan I-1).
-            crate::ui::mode_control::seams(state, id, mode, tokens::roles(scheme)),
+            // #942: the mode control, and *Waiting for you* while a request waits (plan I-1);
+            // #943: the command palette in the completion slot.
+            crate::ui::composer::Seams {
+                completion: crate::ui::composer::palette(state, id, tokens::roles(scheme)),
+                ..crate::ui::mode_control::seams(state, id, mode, tokens::roles(scheme))
+            },
         ),
     ]
     .into()

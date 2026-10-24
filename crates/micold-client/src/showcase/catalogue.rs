@@ -1033,6 +1033,22 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::composer::queue_row,
     },
     Entry {
+        module: "material/command_palette.rs",
+        component: "CommandPalette",
+        variants: &[],
+        density: &[],
+        posed: &[
+            "the session's commands, grouped",
+            "the fallback list, with its note",
+            "nothing matches",
+        ],
+        live: &["hover a row, and click one"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::composer::command_palette,
+    },
+    Entry {
         module: "material/busy_indicator.rs",
         component: "BusyIndicator",
         variants: &[],
