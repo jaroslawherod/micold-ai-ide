@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1271
 - **Worktree branch**: claude/project-thread-umhor9
 - **Started**: 2026-10-24
-- **Phase**: implement M1
+- **Phase**: M1 PR ready
 - **Next step**: orchestrator opens the M1 PR from scratchpad pr-m1.md, waits on CI, merges
 
 ## Pull requests
@@ -61,7 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 done: reviews A (2 rounds) and B clean, full gate run, PR text written for the orchestrator (gh unauthenticated). Next: M2 (T018–T024). Note for M2: the daemon already carries marks through `Reviews` (loaded with the file, written back, dropped with a forgotten/pruned worktree); M2 adds SetReviewed, the pushes and the client side. Deviations from the plan: D6.
+M1 done: reviews A (2 rounds) and B clean, full gate (`scripts/gate.sh`) green at 680b20b9, PR text written for the orchestrator (gh unauthenticated). Next: M2 (T018–T024). Note for M2: the daemon already carries marks through `Reviews` (loaded with the file, written back, dropped with a forgotten/pruned worktree); M2 adds SetReviewed, the pushes and the client side. Deviations from the plan: D6.
 
 ## Open escalation
 
