@@ -77,7 +77,7 @@ Recorded by the close unit on 2026-10-24 against `main` at `12d38521` (M3 merged
   `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`git log 5d634ede..12d38521` on that
   path lists only other features' re-records). PASS.
 - **Gate**: green for each milestone (M1 at `7e49d4ed`, M2 on its final tree, M3 at `a26592e9`; ledger *Review
-  rounds*) and again for the close PR's tree.
+  rounds*). The close PR's gate is in the ledger.
 
 ### §B
 

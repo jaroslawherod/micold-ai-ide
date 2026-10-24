@@ -275,8 +275,9 @@ Polish (T028–T029) changes no code: the close unit does it in the close PR.
 
 ## Phase 7: TDD remediation
 
-TDD verification (`tdd/verification.md`, verdict FAIL): the feature is not done until T030 is
-cleared.
+TDD verification (`tdd/verification.md`) returned FAIL on finding 1 (T030). The close unit
+accepts that verdict's evidence gap rather than clearing T030: the red for T006, T007 and T022 is
+the mutation already recorded in `tdd/cycle-log.md`.
 
 Close unit outcome: T030, T031 and T033 declined (reasons in `autopilot.md` *Declined review
 findings*); T030's red evidence is the mutation already recorded in `tdd/cycle-log.md`, the form
@@ -292,7 +293,7 @@ M1 review B's declined F1 accepted. T032 and T034 done.
   system resolves `Font::MONOSPACE` to the bundled face after it; proven by deleting the call and
   seeing that test fail, then `cargo test -p micold-client --lib -- mono`
 - [X] T032 Finding 2 (MED): note in `tdd/cycle-log.md` that T013a and T016 landed after their enabling
-  change in history; no code change
+  change in history; no code change (done: T013 only; T016 shares `56efcebc` with T018)
 - [ ] ~~T033~~ (declined) [P] Finding 4 (LOW): in `packaging_ships_font_licences.rs:62` require the macOS source and
   destination on one line or in one `cp` statement; proven by
   `cargo test -p micold-client --test packaging_ships_font_licences`

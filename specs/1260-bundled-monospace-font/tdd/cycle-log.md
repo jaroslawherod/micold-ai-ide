@@ -16,11 +16,12 @@ task pair it covers.
 | T017 | one `FiraMono*.ttf/.otf` in the repository, under `assets/fonts/` | passes after T001; with a temporary `tests/fixtures/FiraMono-Regular.ttf` it FAILED naming that path (copy deleted) | `there_is_one_copy_of_fira_mono_in_the_repository` ok |
 | T019 | `layout_snapshot` unchanged (research R4) | — | 105 passed, fixture untouched |
 
-**Order note (tdd-verify finding 2, T032).** The red runs of T013 and T016 were made in the working
-tree before their enabling source (T010, T018) was written, but each milestone was committed after
-the fact: in history `e5048827` (T013's test) and `56efcebc` (T016's test) come after `3f7edb28`,
-which already holds the enabling change. The history therefore does not corroborate the order; the
-red output quoted above is the only evidence of it.
+**Order note (tdd-verify finding 2, T032).** T013's red run was made in the working tree before
+T010 was written, but the milestone was committed after the fact: in history `e5048827` (T013's
+test) comes after `3f7edb28`, which already holds T010. The history does not corroborate that
+order; the red output quoted above is the only evidence of it. T016 is not affected: its test and
+T018 (`install_monospace` in `tests/support/layout.rs`) land together in `56efcebc`, so the history
+neither shows nor contradicts its red-before-green order.
 
 ## M3
 
