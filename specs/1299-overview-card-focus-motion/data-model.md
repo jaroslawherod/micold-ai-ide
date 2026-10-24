@@ -10,7 +10,11 @@ dropped with their widget.
 | `fade` | `cdk::motion::Progress` (curve `STANDARD`) | how far the focus indication is drawn, `0.0` none to `1.0` full |
 
 - Target: `1.0` while `focused && visible` (focus held and shown), else `0.0`.
-- Created at `0.0`, or `1.0` when the control is built already focused and shown.
+- Created at `0.0`, or `1.0` when a wrapper with `on_focus_change` is built already focused and
+  shown. Overview cards wire only `on_shown_change`, so theirs start at `0.0` and focus given back
+  by traversal after reopening fades in (FR-001).
+- Reversal (FR-004): `on_frame` retargets inside the call when the target changes (`from = value`,
+  `t = 0`).
 - Stepped in `update` with `on_frame` over the control's `fade` duration; with no duration it
   `restart_at(target)` (instant).
 - A pointer press on the control that hides its shown focus: `restart_at(0.0)`.
