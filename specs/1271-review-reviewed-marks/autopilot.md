@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-umhor9
 - **Started**: 2026-10-24
 - **Phase**: plan
-- **Next step**: plan unit (clarify done; D4 provisional, pending user on Open escalation Q1)
+- **Next step**: plan review round 1 (orchestrator dispatches; snapshot in Review rounds), then tasks unit. D4 still provisional: plan isolates it in `review::marks::mark_block` (research R7); option C would change the data model and must be settled before M1
 
 ## Pull requests
 
@@ -39,6 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | ebf5c8ada3cf70b15771dbcb49161fbc5e7fd27f:029348b9eeae8148929f5bcf846f762b40db03b6 | CLEAN (model sonnet, scoped re-review of F1, F3, F4) |
 | Clarify | 1 | b4b18fc6 | 2 questions: D3 agent-resolved, Q1 escalated, applied provisionally as A (D4) |
 | Clarify | 2 | after D4 applied | No critical ambiguities (US1 s7 added to test D4) |
+| Plan | 1 | 94d6338cedb4a1484792ddd227b4525777910dda:eff5ce1c9241292547074d7c78439557f5f162c8 | pending (unit has no Agent tool; orchestrator runs it) |
 
 ## Declined review findings
 
