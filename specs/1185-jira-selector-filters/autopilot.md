@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1185
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers in spec.md (reporter choices, label choices)
+- **Phase**: plan
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -28,6 +28,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | D1 | spec | Overlap with #1186 (advanced JQL in the same selector, worked by another thread in parallel)? | This spec covers only the four basic filters (reporter, label, component, fix version); free-form/advanced JQL is listed out of scope and left to #1186. Both touch `search_jql`/`list_jql` in crates/micold-core/src/jira.rs and the Jira picker in worktree_form.rs: expect a merge-order rebase. | agent-resolved | spec.md#Out of Scope; orchestrator prompt |
 | D2 | spec | Cloud environment: `gh` unauthenticated, `mise` missing | Skipped scripts/autopilot/branch-start.sh (needs gh); branch already at origin/main 0e5a1e9b. Gate is scripts/gate.sh. | agent-resolved | orchestrator prompt |
+| D3 | clarify | Which people does the reporter filter offer? | Own user first, then project users with browse permission, searched by typed name | agent-resolved | issue #1185 body ("its … users"); spec.md#FR-014 |
+| D4 | clarify | Where do label choices come from? | Labels on the not-Done issues of the unfiltered listing (≤1,000), alphabetical, no extra request; notice when the listing is capped | agent-resolved | issue #1185 body ("from the connected Jira project"); Jira `GET /rest/api/3/label` is site-wide only |
+| D5 | clarify | Label choices once a filter is chosen? | Taken at the unfiltered load, kept for the dialog | agent-resolved | spec.md#FR-005, #FR-007 |
 
 ## Review rounds
 

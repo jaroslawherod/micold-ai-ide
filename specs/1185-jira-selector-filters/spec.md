@@ -12,6 +12,14 @@
 
 Feature 533 (`specs/533-jira-issue-worktrees`) added a Jira source to the create-worktree dialog's issue picker: it loads up to 1,000 of the connected project's not-Done issues, most recently updated first, searches them locally by key, summary and label (533 FR-012, the GitHub picker's rule of 034 FR-005), and asks Jira for matches beyond the loaded issues only when the loaded list is incomplete. Feature 1101 added each ticket's status. This feature adds four filters to that Jira picker. Issue #1186 (advanced JQL in the same selector) is a separate feature specified in parallel; free-form JQL is out of scope here.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Which people does the reporter filter offer — users who can browse the project, only the reporters of the loaded issues, or only "me"? → A: The connected account's own user first (Jira's current-user lookup), then the users who can browse the connected project, found by searching Jira with the name the user types (Jira's "users with browse permission for a project" search); the issue names the project's users as the reporter choices. _(agent-resolved: issue #1185 body "choices … come from the connected Jira project (its components, versions, labels, users)"; spec.md#FR-014 already allows a people search with typed text)_
+- Q: Where do label choices come from — Jira's site-wide label list or the labels on the project's issues? → A: The labels carried by the project's not-Done issues the picker has loaded in its unfiltered listing (up to 1,000), offered alphabetically with no extra request; Jira has no per-project label list and its site-wide list holds other projects' labels, which would match nothing here. When that listing is incomplete, the label filter says it offers only the labels of the most recently updated issues. _(agent-resolved: issue #1185 body "choices … come from the connected Jira project"; Jira REST `GET /rest/api/3/label` is site-wide only; specs/533-jira-issue-worktrees/spec.md#FR-011 loads labels with each issue)_
+- Q: Once a filter replaces the unfiltered listing, where do the label choices come from? → A: From the unfiltered listing as it loaded when the Jira source was shown; the choices are kept for the open dialog and do not shrink to the filtered list. _(agent-resolved: spec.md#FR-005, #FR-007 — the filtered listing replaces the unfiltered one, so label choices are taken at the unfiltered load)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Narrow the Jira list by component or fix version (Priority: P1)
@@ -42,7 +50,7 @@ A developer wants to start work on one of the tickets they filed. They choose th
 
 **Acceptance Scenarios**:
 
-1. **Given** the Jira source is showing, **When** the user opens the reporter filter, **Then** the connected account's own user is offered first, labelled as the user themselves, followed by other people [NEEDS CLARIFICATION: which people does the reporter filter offer — users who can browse the project (from Jira, searchable by name), only the reporters of the loaded issues, or only "me"?].
+1. **Given** the Jira source is showing, **When** the user opens the reporter filter, **Then** the connected account's own user is offered first, labelled as the user themselves, followed by the users who can browse the project whose name matches the text the user types into the filter.
 2. **Given** the user chose a reporter, **When** the list reloads, **Then** every listed issue was reported by that person.
 3. **Given** two people in the project share a display name, **When** the user chooses one of them, **Then** only that person's issues are listed (the filter identifies the person, not the name).
 
@@ -58,7 +66,7 @@ A developer chooses the label `backend` from the label filter rather than typing
 
 **Acceptance Scenarios**:
 
-1. **Given** the Jira source is showing, **When** the user opens the label filter, **Then** it offers labels to choose from [NEEDS CLARIFICATION: where do label choices come from — Jira's site-wide label list (labels are not per project in Jira), or the labels on the project's loaded issues?].
+1. **Given** the Jira source is showing, **When** the user opens the label filter, **Then** it offers, alphabetically, the labels carried by the project's not-Done issues loaded in the unfiltered listing.
 2. **Given** label `backend` is chosen, **When** the user types "login", **Then** the results are issues carrying `backend` whose key, summary or a label matches "login".
 
 ---
@@ -67,6 +75,8 @@ A developer chooses the label `backend` from the label filter rather than typing
 
 - **Empty choices**: a project with no components (or no versions, no labels) shows that filter as unavailable with a short reason ("This project has no components"); the other filters and the list keep working.
 - **Choices fail to load**: offline, timeout (10 seconds), refused credentials or no access for one filter's choices shows the cause in plain words and a **Retry** on that filter only; the list, the search and the other filters keep working, and the ticket, name and type inputs keep working (as 533 FR-018).
+- **No user matches the typed name** in the reporter filter: it says no project user matches and keeps the own user offered.
+- **Labels beyond the load cap**: a label carried only by not-Done issues older than the 1,000 loaded is not offered; the label filter says only the most recent issues' labels are offered, and typing the label into the search still reaches it (533 FR-012).
 - **The connected account's own user cannot be looked up**: the reporter filter shows the cause and a **Retry**, as for any failed choice load; the other filters and the list keep working.
 - **No matching issues**: when the chosen filters (with or without search text) match nothing, the list says no not-Done issue matches the filters and offers to clear them; it never shows the unfiltered list as if it were filtered.
 - **A chosen value disappears in Jira** (a component deleted, a version archived) while the dialog is open: the next request returns what Jira returns (possibly nothing, or an error Jira reports for an unknown value); the picker shows the empty state or the error with the filter still visible so the user can clear it.
@@ -87,9 +97,9 @@ A developer chooses the label `backend` from the label filter rather than typing
 - **FR-001**: While the Jira source is showing, the picker MUST offer four filters — reporter, label, component and fix version — each with no value chosen when the source is first shown.
 - **FR-002**: Each filter MUST allow choosing at most one value, and MUST allow clearing its value; a single control MUST clear all chosen filters at once.
 - **FR-003**: The component filter MUST offer the connected project's components by name; the fix-version filter MUST offer the project's versions that are not archived, unreleased versions before released ones.
-- **FR-004**: The reporter filter MUST offer the connected account's own user first, shown as the user themselves, and then other people per the clarified source (User Story 2, scenario 1); it MUST identify the chosen person by their Jira account, never by display name alone.
-- **FR-005**: The label filter MUST offer labels per the clarified source (User Story 3, scenario 1).
-- **FR-006**: A filter's choices MUST be requested only when the user first opens that filter in a dialog showing the Jira source, MUST be held only in the open dialog, and MUST NOT be serialised or persisted (as 533 FR-019); diagnostic and log output MUST NOT contain a reporter choice's name or account (as 533 FR-019 redacts a reporter).
+- **FR-004**: The reporter filter MUST offer the connected account's own user first, shown as the user themselves, and then the users with permission to browse the connected project whose name matches the text typed into the filter, as Jira's project user search returns them; it MUST identify the chosen person by their Jira account, never by display name alone.
+- **FR-005**: The label filter MUST offer, alphabetically and without duplicates, the labels carried by the project's not-Done issues loaded in the unfiltered listing, taken when that listing loads and kept for the open dialog (choosing filters does not shrink them), without a further request to Jira; when that listing is incomplete (the 1,000-issue cap), the filter MUST say it offers only the labels of the most recently updated issues; while the unfiltered listing is loading or has failed, the filter shows that state instead of choices.
+- **FR-006**: A filter's choices that need a request (reporter, component, fix version) MUST be requested only when the user first opens that filter in a dialog showing the Jira source, MUST be held only in the open dialog, and MUST NOT be serialised or persisted (as 533 FR-019); diagnostic and log output MUST NOT contain a reporter choice's name or account (as 533 FR-019 redacts a reporter).
 - **FR-007**: With one or more filters chosen, the listing MUST hold only the project's not-Done issues that satisfy every chosen filter (AND), most recently updated first, under the same 1,000-issue load cap and "only the most recent are shown" notice as the unfiltered listing.
 - **FR-008**: Choosing, changing or clearing a filter MUST reload the listing from Jira with the current filters and MUST discard the result of any earlier request for other filters or search text.
 - **FR-009**: Search text MUST combine with the filters: the shown results MUST be issues that satisfy every chosen filter and match the text by the picker's existing rule (533 FR-012). Search beyond the loaded issues MUST carry the same filters.
