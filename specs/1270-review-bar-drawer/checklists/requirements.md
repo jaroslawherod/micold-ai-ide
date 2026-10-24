@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,8 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers are left for the clarify unit: how much of a reply a comment
-  card shows (User Story 4, scenario 2) and whether the drawer opens itself when replies arrive
-  (Edge Cases, "Auto-opening the drawer"; FR-020).
+- The two [NEEDS CLARIFICATION] markers left for the clarify unit (card reply lines, drawer
+  auto-open) were resolved in Clarifications, session 2026-10-24 (FR-020, FR-021); none remain.
 - Pixel values (44 px bar, 360 px drawer) and the 1280×800 visual pass come from the design source
   and the issue's acceptance; they describe layout outcomes, not implementation.
 - FR-024 (user guide, layout snapshot, showcase, visual pass) is the issue's stated acceptance and

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1270
 - **Worktree branch**: claude/project-thread-ttad83
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: tasks review, specs-only gate, design PR
 
 ## Pull requests
 
@@ -21,6 +21,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | — | pending |
+| M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | — | pending |
+| M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B, **blocked by #1269**) | — | blocked |
+| M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B, **blocked by #1269**) | — | blocked |
 
 ## Decisions
 
@@ -35,6 +39,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D7 | clarify | Does the drawer open by itself? | Yes, on Replies at the first report of a send started in this window, once per send, only while the entry's Review tab is shown and not closed since the send; open drawer keeps its tab (FR-020) | agent-resolved | review-redesign.md#layout item 5; FR-019; Edge Cases "Two windows" |
 | D8 | clarify | Is the auto-open rule tested without drawing? | Yes, added to FR-023 | agent-resolved | constitution I; FR-023 |
 | D9 | plan | How is the work split around #1269 (not merged)? | Layer A (M1 core rules in review::{bar,drawer,reply}, M2 shared components) independent of #1269; Layer B (M3 reducer/shell/Esc wiring, M4 layout, snapshot re-record, docs, visual pass) after #1269 merges; building B on today's State.open is a fallback needing a ledger decision | agent-resolved | prompt; plan.md Delivery order; research R11 |
+
+| D10 | tasks | Milestone sizes: M1, M2 have 15 tasks, M3 16, over rule 3's ~10 | Kept per plan D9 (orchestrator: keep the layer split); M1/M2 are pure core / self-contained components, M3 is one reducer change in features/changes.rs that cannot ship half (Panel → ReviewDrawer) | agent-resolved | prompt; plan.md Delivery order |
+| D11 | tasks | speckit-analyze HIGH F1 (T015 gate needs drawer), C1 (T034/T042 too large), MEDIUM I1, A1, U1–U3, T1 | Fixed: drawer case moved to T041; reducer and layout tasks split; spec edge "Drawer opens over the line" and SC-004 reworded (plan test-strategy row follows); files-browser, 2 s and line-start checks added; T013/T014 split | agent-resolved | scratchpad analyze.md |
 
 ## Review rounds
 
