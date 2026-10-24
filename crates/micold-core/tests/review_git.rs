@@ -957,3 +957,306 @@ fn a_fake_git_answers_its_scripted_whole_change() {
         WholeChange::default()
     );
 }
+
+// Feature 1275 (T003, contracts/core-api.md I1a, I3–I7): each row's change identity (FR-001a).
+
+use micold_core::review::changes::{ChangeIdentity, ChangedFile, VersionId};
+
+fn sides(file: &ChangedFile) -> (&VersionId, &VersionId) {
+    match &file.identity {
+        ChangeIdentity::Sides { old, new, .. } => (old, new),
+        other => panic!("{}: sides expected, got {other:?}", file.path),
+    }
+}
+
+#[test]
+fn listed_ids_are_full_length() {
+    let f = fixture();
+    write(&f.wt, "b.rs", "fn b() { uncommitted(); }\n");
+    write(&f.wt, "new.rs", "fn new() {}\n");
+    let full = git(&f.wt, &["rev-parse", "HEAD"]).len();
+    for list in [worktree_list(&f.wt, on()), worktree_list(&f.wt, COMMITTED)] {
+        for file in &list.files {
+            let (old, new) = sides(file);
+            for id in [old, new] {
+                if let VersionId::Object(id) = id {
+                    assert_eq!(id.len(), full, "{}: {id} is abbreviated", file.path);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_committed_range_takes_both_ids_from_git() {
+    let f = fixture();
+    let list = worktree_list(&f.wt, COMMITTED);
+    let a = row(&list, "a.rs");
+    let blob = |rev: &str| git(&f.wt, &["rev-parse", &format!("{rev}:a.rs")]);
+    assert_eq!(
+        a.identity,
+        ChangeIdentity::Sides {
+            old: VersionId::Object(blob("main")),
+            new: VersionId::Object(blob("HEAD")),
+            modes: [0o100644, 0o100644],
+        }
+    );
+}
+
+#[test]
+fn an_edit_that_keeps_the_counts_changes_the_identity_and_editing_back_restores_it() {
+    let f = fixture();
+    let read = || row(&worktree_list(&f.wt, UNCOMMITTED), "b.rs").clone();
+    write(&f.wt, "b.rs", "fn b() { x(); }\n");
+    let first = read();
+    let (_, new) = sides(&first);
+    assert!(matches!(new, VersionId::Object(_)), "hashed: {new:?}");
+
+    write(&f.wt, "b.rs", "fn b() { y(); }\n");
+    let again = read();
+    assert_eq!((again.added, again.removed), (first.added, first.removed));
+    assert_ne!(
+        again.identity, first.identity,
+        "same counts, new content (US1 AS12)"
+    );
+
+    write(&f.wt, "b.rs", "fn b() { x(); }\n");
+    assert_eq!(read().identity, first.identity, "edited back (US1 AS4)");
+
+    git(&f.wt, &["add", "b.rs"]);
+    assert_eq!(
+        read().identity,
+        first.identity,
+        "a stat-clean file's listed id equals the same content hashed"
+    );
+}
+
+#[test]
+fn an_untracked_file_is_hashed_and_one_over_the_limit_is_known_by_size_and_time() {
+    let f = fixture();
+    write(&f.wt, "new.rs", "fn new() {}\n");
+    let huge =
+        "x".repeat(usize::try_from(micold_core::review::limits::MAX_VERSION_BYTES).unwrap() + 1);
+    write(&f.wt, "huge.txt", &huge);
+    let list = worktree_list(&f.wt, UNCOMMITTED);
+    let hashed = git(&f.wt, &["hash-object", "new.rs"]);
+    assert_eq!(
+        row(&list, "new.rs").identity,
+        ChangeIdentity::Sides {
+            old: VersionId::Absent,
+            new: VersionId::Object(hashed),
+            modes: [0, 0],
+        }
+    );
+    let before = row(&list, "huge.txt").clone();
+    assert!(
+        matches!(sides(&before).1, VersionId::Stat { bytes, .. } if *bytes == huge.len() as u64),
+        "{before:?}"
+    );
+
+    let file = fs::File::options()
+        .write(true)
+        .open(f.wt.join("huge.txt"))
+        .unwrap();
+    file.set_modified(
+        std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000),
+    )
+    .unwrap();
+    let after = worktree_list(&f.wt, UNCOMMITTED);
+    assert_ne!(
+        row(&after, "huge.txt").identity,
+        before.identity,
+        "a touch changes an over-limit file's identity (Edge: Large files)"
+    );
+}
+
+/// I6: run in a child process of this test binary with `GIT_TRACE` set, so no other test's git
+/// writes to the trace.
+#[test]
+fn one_list_read_runs_at_most_one_hash_object() {
+    const CHILD: &str = "MICOLD_TEST_HASH_OBJECT_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        let f = fixture();
+        write(&f.wt, "a.rs", "fn a() { edited(); }\n");
+        write(&f.wt, "b.rs", "fn b() { edited(); }\n");
+        write(&f.wt, "new.rs", "fn new() {}\n");
+        write(&f.wt, "new2.rs", "fn new2() {}\n");
+        let list = worktree_list(&f.wt, on());
+        assert_eq!(list.files.len(), 4);
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let trace = dir.path().join("trace");
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args(["one_list_read_runs_at_most_one_hash_object", "--exact"])
+        .env(CHILD, "1")
+        .env("GIT_TRACE", &trace)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "child failed: {out:?}");
+    let trace = fs::read_to_string(&trace).unwrap();
+    assert!(
+        trace.contains("rev-parse"),
+        "the child ran git under the trace"
+    );
+    let runs = trace
+        .lines()
+        .filter(|line| line.contains("built-in: git hash-object"))
+        .count();
+    assert_eq!(
+        runs, 1,
+        "four unhashed new sides, one hash-object:\n{trace}"
+    );
+}
+
+#[test]
+fn a_list_read_of_some_paths_gives_exactly_their_rows() {
+    let f = fixture();
+    write(&f.wt, "b.rs", "fn b() { edited(); }\n");
+    write(&f.wt, "new.rs", "fn new() {}\n");
+    git(&f.wt, &["mv", "old.rs", "renamed.rs"]);
+    let cli = GitCli::new();
+    for toggles in [on(), UNCOMMITTED, COMMITTED] {
+        let scope = ReviewScope::Worktree {
+            base: cli.review_base(&f.wt),
+        };
+        let all = list(&f.wt, scope.clone(), toggles);
+        let of = |paths: &[&str]| {
+            let paths: Vec<RelPath> = paths.iter().map(|p| rel(p)).collect();
+            cli.change_list_of(&f.wt, scope.clone(), toggles, &paths)
+                .expect("the list reads")
+                .files
+        };
+        for path in ["a.rs", "b.rs", "new.rs"] {
+            let expected: Vec<ChangedFile> = all
+                .files
+                .iter()
+                .filter(|file| file.path.as_str() == path)
+                .cloned()
+                .collect();
+            assert_eq!(of(&[path]), expected, "{path} under {toggles:?}");
+        }
+        let renamed: Vec<ChangedFile> = all
+            .files
+            .iter()
+            .filter(|file| file.path.as_str() == "renamed.rs")
+            .cloned()
+            .collect();
+        assert_eq!(
+            of(&["renamed.rs", "old.rs"]),
+            renamed,
+            "rename under {toggles:?}"
+        );
+        assert!(of(&["c.rs"]).is_empty(), "no change, no row");
+    }
+}
+
+// Feature 1275 M1 review A round 1 (F3–F6): rows the hash cannot cover get their own identity.
+
+/// F3: one path git cannot hash (a required clean filter that fails) leaves the others hashed.
+#[test]
+fn a_file_git_fails_to_hash_falls_back_alone() {
+    let f = fixture();
+    git(&f.wt, &["config", "filter.boom.clean", "false"]);
+    git(&f.wt, &["config", "filter.boom.required", "true"]);
+    write(&f.wt, ".gitattributes", "bad.txt filter=boom\n");
+    write(&f.wt, "bad.txt", "bad\n");
+    write(&f.wt, "new.rs", "fn new() {}\n");
+    let list = worktree_list(&f.wt, UNCOMMITTED);
+    let hashed = git(&f.wt, &["hash-object", "new.rs"]);
+    assert_eq!(
+        sides(row(&list, "new.rs")).1,
+        &VersionId::Object(hashed),
+        "the hashable file keeps its id"
+    );
+    assert!(
+        matches!(sides(row(&list, "bad.txt")).1, VersionId::Stat { .. }),
+        "{:?}",
+        row(&list, "bad.txt")
+    );
+}
+
+/// F4: `hash-object --stdin-paths` C-unquotes a line that starts with `"` and drops a trailing
+/// CR; such a path goes C-quoted (#1271's quoting), so it gets its own id, never another file's.
+#[cfg(unix)]
+#[test]
+fn a_path_git_would_unquote_or_trim_gets_its_own_id() {
+    let f = fixture();
+    write(&f.wt, "q", "plain\n");
+    write(&f.wt, "\"q\"", "quoted\n");
+    write(&f.wt, "cr\r", "carriage\n");
+    write(&f.wt, "new\nline", "newline\n");
+    let list = worktree_list(&f.wt, UNCOMMITTED);
+    for path in ["q", "\"q\"", "cr\r", "new\nline"] {
+        let hashed = git(&f.wt, &["hash-object", "--", path]);
+        assert_eq!(
+            sides(row(&list, path)).1,
+            &VersionId::Object(hashed),
+            "{path:?}"
+        );
+    }
+    assert_ne!(sides(row(&list, "q")).1, sides(row(&list, "\"q\"")).1);
+}
+
+/// F5: a submodule's working-tree side is its checked-out commit, so moving it is a new identity
+/// even when the counts stay the same.
+#[test]
+fn a_submodules_new_side_is_its_checked_out_commit() {
+    let (dir, root) = init("main");
+    let sub = dir.path().join("sub");
+    fs::create_dir(&sub).unwrap();
+    git(&sub, &["init", "-q", "-b", "main"]);
+    git(&sub, &["config", "user.email", "t@t.test"]);
+    git(&sub, &["config", "user.name", "t"]);
+    git(&sub, &["config", "commit.gpgsign", "false"]);
+    write(&sub, "f", "1\n");
+    commit_all(&sub, "one");
+    write(&root, "x", "x\n");
+    commit_all(&root, "x");
+    git(
+        &root,
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            sub.to_str().unwrap(),
+            "sub",
+        ],
+    );
+    commit_all(&root, "sub");
+    let checkout = root.join("sub");
+    git(&checkout, &["config", "user.email", "t@t.test"]);
+    git(&checkout, &["config", "user.name", "t"]);
+    git(&checkout, &["config", "commit.gpgsign", "false"]);
+    let mut seen = Vec::new();
+    for text in ["2\n", "3\n"] {
+        write(&checkout, "f", text);
+        commit_all(&checkout, text.trim());
+        let head = git(&checkout, &["rev-parse", "HEAD"]);
+        let list = worktree_list(&root, UNCOMMITTED);
+        let moved = row(&list, "sub").clone();
+        assert_eq!(sides(&moved).1, &VersionId::Object(head), "{moved:?}");
+        seen.push(moved);
+    }
+    assert_eq!(
+        (seen[0].added, seen[0].removed),
+        (seen[1].added, seen[1].removed)
+    );
+    assert_ne!(seen[0].identity, seen[1].identity);
+}
+
+/// F6: a mode change alone (same content, same counts) is a new identity.
+#[cfg(unix)]
+#[test]
+fn a_mode_change_alone_changes_the_identity() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = fixture();
+    write(&f.wt, "b.rs", "fn b() { edited(); }\n");
+    let before = row(&worktree_list(&f.wt, UNCOMMITTED), "b.rs").clone();
+    fs::set_permissions(f.wt.join("b.rs"), fs::Permissions::from_mode(0o755)).unwrap();
+    let after = row(&worktree_list(&f.wt, UNCOMMITTED), "b.rs").clone();
+    assert_eq!((before.added, before.removed), (after.added, after.removed));
+    assert_ne!(before.identity, after.identity, "{before:?} {after:?}");
+}

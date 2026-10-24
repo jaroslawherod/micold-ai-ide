@@ -13,7 +13,9 @@ use micold_client::features::changes::{
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::browse::{FileReadFailure, FileText};
-use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
+use micold_core::review::changes::{
+    ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, Origin,
+};
 use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, SideLines};
 use micold_core::review::expand::{GapKey, Position};
 use micold_core::review::RelPath;
@@ -32,6 +34,7 @@ fn file(p: &str) -> ChangedFile {
         removed: 0,
         large: false,
         origin: Origin::Uncommitted,
+        identity: ChangeIdentity::Unknown,
     }
 }
 

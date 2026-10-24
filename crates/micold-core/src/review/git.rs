@@ -9,8 +9,9 @@ use std::time::Duration;
 
 use super::base::{default_branch_from, Base, BaseUnavailable, DiffRange, ReviewScope, Toggles};
 use super::changes::{
-    assemble, classify, content_of, merge_untracked, parse_name_status, parse_numstat, ChangeKind,
-    ChangeList, ChangedFile, Content, NameStatus, Origin, Untracked, VersionSizes,
+    assemble, classify, content_of, merge_untracked, parse_name_status, parse_numstat,
+    ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, NameStatus, Origin, Untracked,
+    VersionId, VersionSizes,
 };
 use super::diff::{added_file, parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
 use super::marks::WholeChange;
@@ -118,29 +119,46 @@ fn diff(dir: &Path, format: &str, revs: &[&str]) -> io::Result<String> {
     read(dir, &args, None)
 }
 
+/// `revs`, then `paths` as a pathspec after `--` when there are any.
+fn limited<'a>(revs: &[&'a str], paths: &'a [RelPath]) -> Vec<&'a str> {
+    let mut args = revs.to_vec();
+    if !paths.is_empty() {
+        args.push("--");
+        args.extend(paths.iter().map(RelPath::as_str));
+    }
+    args
+}
+
+/// `git diff --raw` over `revs` with full-length ids (`--no-abbrev`, feature 1275 R1), so a
+/// listed id compares equal to one `git hash-object` prints.
+fn raw(dir: &Path, revs: &[&str]) -> io::Result<Vec<NameStatus>> {
+    let mut args = vec!["diff"];
+    args.extend(DIFF);
+    args.extend(["--raw", "--no-abbrev"]);
+    args.extend(revs);
+    Ok(parse_name_status(&read(dir, &args, None)?))
+}
+
 /// The kinds and the counts of one range.
 fn range_rows(
     dir: &Path,
     revs: &[&str],
 ) -> io::Result<(Vec<NameStatus>, Vec<super::changes::NumStat>)> {
-    let names = parse_name_status(&diff(dir, "--raw", revs)?);
+    let names = raw(dir, revs)?;
     let stats = parse_numstat(&diff(dir, "--numstat", revs)?);
     Ok((names, stats))
 }
 
 /// The paths one range changes.
 fn range_paths(dir: &Path, revs: &[&str]) -> io::Result<BTreeSet<RelPath>> {
-    Ok(parse_name_status(&diff(dir, "--raw", revs)?)
-        .into_iter()
-        .map(|name| name.path)
-        .collect())
+    Ok(raw(dir, revs)?.into_iter().map(|name| name.path).collect())
 }
 
-/// Untracked, not-ignored files, read from disk (FR-005). A nested repository or worktree that
-/// git lists as `dir/` is not a file and is skipped.
-fn untracked(dir: &Path) -> io::Result<Vec<Untracked>> {
+/// Untracked, not-ignored files among `paths` (all when empty), read from disk (FR-005). A nested
+/// repository or worktree that git lists as `dir/` is not a file and is skipped.
+fn untracked(dir: &Path, paths: &[RelPath]) -> io::Result<Vec<Untracked>> {
     let mut files = Vec::new();
-    for path in untracked_paths(dir)? {
+    for path in untracked_paths(dir, paths)? {
         let full = dir.join(path.as_str());
         let Ok(meta) = std::fs::symlink_metadata(&full) else {
             continue;
@@ -161,12 +179,12 @@ fn untracked(dir: &Path) -> io::Result<Vec<Untracked>> {
     Ok(files)
 }
 
-/// The paths of the untracked, not-ignored files; a nested repository or worktree (`dir/`) is
-/// left out.
-fn untracked_paths(dir: &Path) -> io::Result<Vec<RelPath>> {
+/// The paths of the untracked, not-ignored files among `paths` (all when empty); a nested
+/// repository or worktree (`dir/`) is left out.
+fn untracked_paths(dir: &Path, paths: &[RelPath]) -> io::Result<Vec<RelPath>> {
     let raw = read(
         dir,
-        &["ls-files", "-z", "--others", "--exclude-standard"],
+        &limited(&["ls-files", "-z", "--others", "--exclude-standard"], paths),
         None,
     )?;
     Ok(raw
@@ -253,20 +271,24 @@ fn blob_ids(dir: &Path, paths: &[RelPath]) -> BTreeMap<RelPath, String> {
     if files.is_empty() {
         return ids;
     }
-    let input: String = files
-        .iter()
-        .map(|path| stdin_path(path.as_str()) + "\n")
-        .collect();
-    let Ok(out) = read(dir, &["hash-object", "--stdin-paths"], Some(&input)) else {
+    let names: Vec<&str> = files.iter().map(|path| path.as_str()).collect();
+    let Ok(hashed) = hash_paths(dir, &names) else {
         return ids;
     };
-    let hashed: Vec<&str> = out.lines().map(str::trim).collect();
     if hashed.len() == files.len() {
         for (path, id) in files.into_iter().zip(hashed) {
-            ids.insert(path.clone(), id.to_owned());
+            ids.insert(path.clone(), id);
         }
     }
     ids
+}
+
+/// `git hash-object --stdin-paths` over `paths`, with git's clean filters: one id per line of its
+/// output, each path C-quoted where git would misread it ([`stdin_path`]).
+fn hash_paths(dir: &Path, paths: &[&str]) -> io::Result<Vec<String>> {
+    let input: String = paths.iter().map(|path| stdin_path(path) + "\n").collect();
+    let out = read(dir, &["hash-object", "--stdin-paths"], Some(&input))?;
+    Ok(out.lines().map(|id| id.trim().to_owned()).collect())
 }
 
 /// Git's SHA-1 blob id of `bytes`.
@@ -341,6 +363,82 @@ fn classify_all(dir: &Path, files: &mut [ChangedFile], old_rev: &str, new_rev: O
         if file.kind != ChangeKind::Untracked {
             classify(file, VersionSizes { old, new });
         }
+    }
+}
+
+/// Fill each working-tree new side the list read gave no id (feature 1275, FR-001a, R1): one
+/// `git hash-object --stdin-paths` over the hashable files (regular, at most
+/// [`limits::MAX_VERSION_BYTES`]; paths C-quoted where git would misread them), with git's filters so
+/// a file edited back to its indexed content gets the index's id; a submodule's checked-out commit;
+/// `Stat` for the others, `Absent` for a missing file.
+fn identify(dir: &Path, files: &mut [ChangedFile]) {
+    let mut hash: Vec<(usize, std::fs::Metadata)> = Vec::new();
+    for (index, file) in files.iter_mut().enumerate() {
+        let ChangeIdentity::Sides { new, .. } = &mut file.identity else {
+            continue;
+        };
+        if *new != VersionId::Unknown {
+            continue;
+        }
+        let at = dir.join(file.path.as_str());
+        match std::fs::symlink_metadata(&at) {
+            Err(_) => *new = VersionId::Absent,
+            Ok(meta) if meta.is_file() && meta.len() <= limits::MAX_VERSION_BYTES => {
+                hash.push((index, meta));
+            }
+            Ok(meta) => *new = submodule_head(&at, &meta).unwrap_or_else(|| stat_of(&meta)),
+        }
+    }
+    if hash.is_empty() {
+        return;
+    }
+    let paths: Vec<&str> = hash
+        .iter()
+        .map(|(index, _)| files[*index].path.as_str())
+        .collect();
+    // One path git cannot hash (gone or changed since the stat, a failing clean filter) fails the
+    // whole call: then hash each path alone, so only that one falls back to its stat. A call that
+    // timed out is not retried path by path.
+    let ids: Vec<Option<String>> = match hash_paths(dir, &paths) {
+        Ok(ids) if ids.len() == paths.len() => ids.into_iter().map(Some).collect(),
+        Err(error) if error.kind() == io::ErrorKind::TimedOut => vec![None; paths.len()],
+        _ => paths
+            .iter()
+            .map(|path| {
+                hash_paths(dir, std::slice::from_ref(path))
+                    .ok()
+                    .and_then(|ids| ids.into_iter().next())
+            })
+            .collect(),
+    };
+    for ((index, meta), id) in hash.into_iter().zip(ids) {
+        if let ChangeIdentity::Sides { new, .. } = &mut files[index].identity {
+            *new = id.map_or_else(|| stat_of(&meta), VersionId::Object);
+        }
+    }
+}
+
+/// A submodule's checked-out commit: the version a gitlink's diff shows. `None` for a directory
+/// that is not a checked-out repository of its own.
+fn submodule_head(at: &Path, meta: &std::fs::Metadata) -> Option<VersionId> {
+    if !meta.is_dir() || !at.join(".git").exists() {
+        return None;
+    }
+    let head = read(at, &["rev-parse", "--verify", "-q", "HEAD"], None).ok()?;
+    let head = head.trim();
+    (!head.is_empty()).then(|| VersionId::Object(head.to_owned()))
+}
+
+/// A working-tree version known by its size and modification time.
+fn stat_of(meta: &std::fs::Metadata) -> VersionId {
+    let modified_ns = meta
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |since| since.as_nanos());
+    VersionId::Stat {
+        bytes: meta.len(),
+        modified_ns,
     }
 }
 
@@ -472,12 +570,24 @@ impl GitCli {
     }
 
     /// The files changed in `dir` under `toggles` (R1, FR-002, FR-004, FR-005): one row per path,
-    /// sorted, each classified against the R8 limits.
+    /// sorted, each classified against the R8 limits and carrying its change identity (FR-001a).
     pub fn change_list(
         &self,
         dir: &Path,
         scope: ReviewScope,
         toggles: Toggles,
+    ) -> io::Result<ChangeList> {
+        self.change_list_of(dir, scope, toggles, &[])
+    }
+
+    /// [`Self::change_list`] limited to `paths` (all when empty): exactly the full list's rows for
+    /// them (feature 1275). A rename is found only when both its paths are given.
+    pub fn change_list_of(
+        &self,
+        dir: &Path,
+        scope: ReviewScope,
+        toggles: Toggles,
+        paths: &[RelPath],
     ) -> io::Result<ChangeList> {
         let base = match &scope {
             ReviewScope::Worktree {
@@ -488,7 +598,7 @@ impl GitCli {
         let files = match (DiffRange::for_view(&scope, toggles), base.as_deref()) {
             (None, _) => Vec::new(),
             (Some(DiffRange::BaseToHead), Some(base)) => {
-                let (names, stats) = range_rows(dir, &[base, "HEAD"])?;
+                let (names, stats) = range_rows(dir, &limited(&[base, "HEAD"], paths))?;
                 let mut files = assemble(
                     names,
                     stats,
@@ -500,15 +610,17 @@ impl GitCli {
                 files
             }
             (Some(DiffRange::BaseToWorktree), Some(base)) => {
-                let (names, stats) = range_rows(dir, &[base])?;
-                let committed = range_paths(dir, &[base, "HEAD"])?;
-                let uncommitted = range_paths(dir, &["HEAD"])?;
+                let (names, stats) = range_rows(dir, &limited(&[base], paths))?;
+                let committed = range_paths(dir, &limited(&[base, "HEAD"], paths))?;
+                let uncommitted = range_paths(dir, &limited(&["HEAD"], paths))?;
                 let mut files = assemble(names, stats, &committed, &uncommitted, Origin::Both);
                 classify_all(dir, &mut files, base, None);
-                merge_untracked(files, untracked(dir)?)
+                let mut files = merge_untracked(files, untracked(dir, paths)?);
+                identify(dir, &mut files);
+                files
             }
             _ => {
-                let (names, stats) = range_rows(dir, &["HEAD"])?;
+                let (names, stats) = range_rows(dir, &limited(&["HEAD"], paths))?;
                 let mut files = assemble(
                     names,
                     stats,
@@ -517,7 +629,9 @@ impl GitCli {
                     Origin::Uncommitted,
                 );
                 classify_all(dir, &mut files, "HEAD", None);
-                merge_untracked(files, untracked(dir)?)
+                let mut files = merge_untracked(files, untracked(dir, paths)?);
+                identify(dir, &mut files);
+                files
             }
         };
         Ok(ChangeList { files, scope })
@@ -549,7 +663,7 @@ impl GitCli {
             None => (None, BTreeSet::new()),
         };
         let file_mode = trusts_file_mode(dir);
-        let untracked: Vec<(RelPath, String)> = untracked_paths(dir)?
+        let untracked: Vec<(RelPath, String)> = untracked_paths(dir, &[])?
             .into_iter()
             .filter_map(|path| {
                 let mode = disk_mode(&dir.join(path.as_str()), file_mode)?;

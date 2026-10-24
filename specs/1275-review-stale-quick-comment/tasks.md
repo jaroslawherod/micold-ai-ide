@@ -39,13 +39,13 @@ No setup tasks: existing workspace, no new crate and no new dependency (plan *Te
 
 **Purpose**: every change-list row carries a `ChangeIdentity`; US1's stale set compares it.
 
-- [ ] T001 [P] Write failing unit tests I1 and I2 in the `mod tests` of
+- [x] T001 [P] Write failing unit tests I1 and I2 in the `mod tests` of
   `crates/micold-core/src/review/changes.rs`: `parse_name_status` reads the old and new ids from a
   `--raw` record, an id of all zeros (40 `0`s, as `--no-abbrev` prints it) is `None`; `assemble`
   sets `ChangeIdentity::Sides { old, new }` with `VersionId::Object(id)` for a present id and
   `VersionId::Absent` for an added file's old side or a deleted file's new side; a rename keeps both
   ids.
-- [ ] T002 Implement in `crates/micold-core/src/review/changes.rs` (data-model §1–§3):
+- [x] T002 Implement in `crates/micold-core/src/review/changes.rs` (data-model §1–§3):
   `VersionId { Unknown (default), Absent, Object(String), Stat { bytes: u64, modified_ns: u128 } }`
   and `ChangeIdentity { Unknown (default), Sides { old: VersionId, new: VersionId }, Patch(u64) }`,
   structural `PartialEq`, serde; `ChangedFile.identity: ChangeIdentity` with `#[serde(default)]`;
@@ -56,7 +56,7 @@ No setup tasks: existing workspace, no new crate and no new dependency (plan *Te
   `crates/micold-core/src/review/pr_diff.rs`, the test helpers in
   `crates/micold-core/src/review/changes.rs` and `crates/micold-client/tests/features_changes.rs`
   (grep `ChangedFile {` first; LSP `findReferences` on the struct).
-- [ ] T003 [P] Write failing real-git tests I1a, I3, I4, I5, I6 and I7 in
+- [x] T003 [P] Write failing real-git tests I1a, I3, I4, I5, I6 and I7 in
   `crates/micold-core/tests/review_git.rs`: full-length ids (length of `git rev-parse HEAD`);
   `BaseToHead` both sides `Object` with no `hash-object`; an equal-counts re-edit changes the
   identity (US1 AS12) and editing back restores it (AS4), a stat-clean file equals the same content
@@ -64,7 +64,7 @@ No setup tasks: existing workspace, no new crate and no new dependency (plan *Te
   changes it; at most one `hash-object` process per `change_list` read (count it through the
   existing git-runner seam, or by a `GIT_TRACE` log); `change_list_of(.., &[p])` returns exactly
   `change_list`'s row for `p` (for a rename given `[new, from]`, the renamed row) or no row.
-- [ ] T004 Implement in `crates/micold-core/src/review/git.rs` (data-model §4, research R1):
+- [x] T004 Implement in `crates/micold-core/src/review/git.rs` (data-model §4, research R1):
   `range_rows` and `range_paths` add `--no-abbrev` to the `--raw` read (name-only reads unchanged);
   private `identify(dir, files: &mut [ChangedFile])` runs one `git hash-object --stdin-paths` (no
   `-w`) over the working-tree new sides with no id that are hashable ("regular file, ≤
@@ -73,10 +73,10 @@ No setup tasks: existing workspace, no new crate and no new dependency (plan *Te
   uncommitted range after `merge_untracked`; add `GitCli::change_list_of(dir, scope, toggles,
   paths: &[RelPath]) -> io::Result<ChangeList>` (git pathspec, `ls-files` limited the same way) and
   make `change_list` call it with no paths.
-- [ ] T005 [P] Write failing test I8 in `crates/micold-core/tests/pr_diff_split.rs`: two file
+- [x] T005 [P] Write failing test I8 in `crates/micold-core/tests/pr_diff_split.rs`: two file
   sections differing in any byte get different `ChangeIdentity::Patch` values; equal sections, equal
   values.
-- [ ] T006 Implement in `crates/micold-core/src/review/pr_diff.rs`: `split_pr_diff` sets
+- [x] T006 Implement in `crates/micold-core/src/review/pr_diff.rs`: `split_pr_diff` sets
   `PrFile.file.identity = ChangeIdentity::Patch(hash)` of the file's section bytes with
   `std::collections::hash_map::DefaultHasher` (in memory only, as `core::store`).
 
@@ -89,7 +89,7 @@ No setup tasks: existing workspace, no new crate and no new dependency (plan *Te
 **Goal**: `review::stale` decides which files changed since the shown list and holds the latest
 read. **Independent test**: `mise run test-core` runs S1–S10.
 
-- [ ] T007 [P] [US1] Create `crates/micold-core/src/review/stale.rs` (declared by T008, which
+- [x] T007 [P] [US1] Create `crates/micold-core/src/review/stale.rs` (declared by T008, which
   owns the `review/mod.rs` edit) with failing unit tests S1–S10 from
   contracts/core-api.md in its `mod tests`: equal lists → empty, `observe` → `Same`; kind, `added`,
   `removed`, identity differences count, `content`/`large`/`origin` do not; added and removed paths
@@ -97,7 +97,7 @@ read. **Independent test**: `mise run test-core` runs S1–S10.
   `Held::observe` drops a file whose row is equal again and returns `Same` at empty; `apply`;
   `adopt` with and without the path in `fresh` (AS10, AS11); `PrDiff`'s `put` copies the patch and
   keeps GitHub's order, `ChangeList`'s keeps path order.
-- [ ] T008 [US1] Add `pub mod stale;` to `crates/micold-core/src/review/mod.rs` and implement
+- [x] T008 [US1] Add `pub mod stale;` to `crates/micold-core/src/review/mod.rs` and implement
   `review::stale` (data-model §6): `changed_since(shown, latest) ->
   BTreeSet<RelPath>`; `trait Listing: Clone { rows, put }` with impls for `ChangeList` and `PrDiff`;
   `Held<L: Listing> { latest, changed }` with private fields, existing only with `changed`

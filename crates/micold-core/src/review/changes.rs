@@ -54,6 +54,49 @@ pub enum Origin {
     Both,
 }
 
+/// One side of a row's diff (FR-001a, research R1).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum VersionId {
+    /// Not known: a row built before identities, or a working-tree side not yet hashed.
+    #[default]
+    Unknown,
+    /// No version on this side: an added file's old side, a deleted file's new side.
+    Absent,
+    /// A git object id (full-length hex), from `--raw --no-abbrev`, `git hash-object` or a
+    /// submodule's checked-out commit.
+    Object(String),
+    /// Size and modification time of a working-tree file git does not hash for us: over
+    /// [`limits::MAX_VERSION_BYTES`], not a regular file, or one git failed to hash.
+    Stat {
+        /// Its size in bytes.
+        bytes: u64,
+        /// Its modification time, in nanoseconds since the Unix epoch.
+        modified_ns: u128,
+    },
+}
+
+/// What a row's change is, cheap to read with the list (FR-001a): two rows with the same identity
+/// show the same diff. Two `Unknown`s compare equal, so such rows compare by kind and counts.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ChangeIdentity {
+    /// No identity known.
+    #[default]
+    Unknown,
+    /// The versions on either side of a working-tree or committed range.
+    Sides {
+        /// The base (or `HEAD`) version.
+        old: VersionId,
+        /// The new version.
+        new: VersionId,
+        /// The old and the new git mode, as [`NameStatus::modes`]: a mode change alone is a new
+        /// identity. 0 where absent or not read (an untracked file).
+        #[serde(default)]
+        modes: [u32; 2],
+    },
+    /// A pull request file: a hash of its section of the request's diff (in memory only).
+    Patch(u64),
+}
+
 /// One row of the list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangedFile {
@@ -71,6 +114,9 @@ pub struct ChangedFile {
     pub large: bool,
     /// Committed, uncommitted or both.
     pub origin: Origin,
+    /// What the change is, to tell an edit that keeps the counts (FR-001a).
+    #[serde(default)]
+    pub identity: ChangeIdentity,
 }
 
 /// An entry's changed files under the current toggles, sorted by path, one per path.
@@ -109,6 +155,15 @@ pub struct NameStatus {
     /// The new side's object id, as git printed it: all zeros for a deleted file, and for a
     /// working-tree file git has not hashed (research R2 step 3 hashes it).
     pub new_id: String,
+}
+
+impl NameStatus {
+    /// The old and the new side's git mode (`0o100644`, `0o160000`…), 0 where absent (feature
+    /// 1275).
+    pub fn modes(&self) -> [u32; 2] {
+        let mode = |mode: &str| u32::from_str_radix(mode, 8).unwrap_or(0);
+        [mode(&self.old_mode), mode(&self.new_mode)]
+    }
 }
 
 /// An untracked, not-ignored file as read from disk.
@@ -247,6 +302,8 @@ pub fn assemble(
         .collect();
     let mut rows: BTreeMap<RelPath, ChangedFile> = BTreeMap::new();
     for name in names {
+        let added_file = name.kind == ChangeKind::Added;
+        let modes = name.modes();
         let lines = stats.remove(&name.path).unwrap_or(Some((0, 0)));
         let (content, (added, removed)) = match lines {
             Some(counts) => (Content::Text, counts),
@@ -267,6 +324,11 @@ pub fn assemble(
             (false, true) => Origin::Uncommitted,
             (false, false) => fallback,
         };
+        let identity = ChangeIdentity::Sides {
+            old: side_id(&name.old_id, added_file),
+            new: side_id(&name.new_id, kind == ChangeKind::Deleted),
+            modes,
+        };
         rows.insert(
             name.path.clone(),
             ChangedFile {
@@ -277,10 +339,24 @@ pub fn assemble(
                 removed,
                 large: false,
                 origin,
+                identity,
             },
         );
     }
     rows.into_values().collect()
+}
+
+/// One side's version from its `--raw` id: the object, or for an id of all zeros `Absent` when
+/// the kind has no version on this side, else `Unknown` (a working-tree version for the git read
+/// to hash).
+fn side_id(id: &str, absent: bool) -> VersionId {
+    if !id.bytes().all(|b| b == b'0') {
+        VersionId::Object(id.to_owned())
+    } else if absent {
+        VersionId::Absent
+    } else {
+        VersionId::Unknown
+    }
 }
 
 /// Add the untracked files as `Untracked`, uncommitted rows; a path already listed keeps its row.
@@ -300,6 +376,11 @@ pub fn merge_untracked(files: Vec<ChangedFile>, untracked: Vec<Untracked>) -> Ve
                 removed: 0,
                 large: false,
                 origin: Origin::Uncommitted,
+                identity: ChangeIdentity::Sides {
+                    old: VersionId::Absent,
+                    new: VersionId::Unknown,
+                    modes: [0, 0],
+                },
             };
             classify(
                 &mut row,
@@ -635,6 +716,97 @@ mod tests {
         );
     }
 
+    /// `--raw --no-abbrev`: full-length ids; zeros on an added file's old side, a deleted file's
+    /// new side and a working-tree side git has not hashed.
+    const RAW_FULL: &str = concat!(
+        ":100644 100644 422c2b7aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0000000000000000000000000000000000000000 M\x00a.txt\x00",
+        ":000000 100644 0000000000000000000000000000000000000000 8ba3a16bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb A\x00added.txt\x00",
+        ":100644 100644 74c047bccccccccccccccccccccccccccccccccc 74c047bccccccccccccccccccccccccccccccccc R100\x00old.txt\x00new.txt\x00",
+        ":100644 000000 1111111ddddddddddddddddddddddddddddddddd 0000000000000000000000000000000000000000 D\x00gone.rs\x00",
+    );
+
+    fn id(prefix: &str, fill: char) -> String {
+        let mut id = prefix.to_owned();
+        while id.len() < 40 {
+            id.push(fill);
+        }
+        id
+    }
+
+    #[test]
+    fn assembling_sets_both_sides_absent_where_the_kind_has_no_version() {
+        let rows = assemble(
+            parse_name_status(RAW_FULL),
+            Vec::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            Origin::Committed,
+        );
+        let identity = |path: &str| {
+            rows.iter()
+                .find(|row| row.path.as_str() == path)
+                .unwrap()
+                .identity
+                .clone()
+        };
+        let object = |prefix: &str, fill: char| VersionId::Object(id(prefix, fill));
+        assert_eq!(
+            identity("a.txt"),
+            ChangeIdentity::Sides {
+                old: object("422c2b7", 'a'),
+                new: VersionId::Unknown,
+                modes: [0o100644, 0o100644],
+            },
+            "a working-tree side with no id is left for the git read to fill"
+        );
+        assert_eq!(
+            identity("added.txt"),
+            ChangeIdentity::Sides {
+                old: VersionId::Absent,
+                new: object("8ba3a16", 'b'),
+                modes: [0, 0o100644],
+            }
+        );
+        assert_eq!(
+            identity("new.txt"),
+            ChangeIdentity::Sides {
+                old: object("74c047b", 'c'),
+                new: object("74c047b", 'c'),
+                modes: [0o100644, 0o100644],
+            },
+            "a rename keeps both ids"
+        );
+        assert_eq!(
+            identity("gone.rs"),
+            ChangeIdentity::Sides {
+                old: object("1111111", 'd'),
+                new: VersionId::Absent,
+                modes: [0o100644, 0],
+            }
+        );
+    }
+
+    #[test]
+    fn an_untracked_row_has_no_old_version_and_a_new_side_to_fill() {
+        let rows = merge_untracked(
+            Vec::new(),
+            vec![Untracked {
+                path: p("n.md"),
+                lines: 1,
+                content: Content::Text,
+                bytes: 2,
+            }],
+        );
+        assert_eq!(
+            rows[0].identity,
+            ChangeIdentity::Sides {
+                old: VersionId::Absent,
+                new: VersionId::Unknown,
+                modes: [0, 0],
+            }
+        );
+    }
+
     fn text_row(added: u32, removed: u32) -> ChangedFile {
         ChangedFile {
             path: p("f.rs"),
@@ -644,6 +816,7 @@ mod tests {
             removed,
             large: false,
             origin: Origin::Uncommitted,
+            identity: ChangeIdentity::Unknown,
         }
     }
 
