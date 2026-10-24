@@ -9,6 +9,32 @@ use serde::{Deserialize, Serialize};
 
 use crate::sandbox::SandboxProfile;
 
+/// The longest container name [`default_container_name`] returns.
+pub const DEFAULT_CONTAINER_NAME_MAX: usize = 63;
+
+/// The container name a daemon named `name` gets when none is typed (feature 1116): the name
+/// trimmed, each run of characters outside `[A-Za-z0-9_.-]` replaced by one `-`, cut to
+/// [`DEFAULT_CONTAINER_NAME_MAX`], then stripped of leading non-alphanumerics and trailing
+/// `-`, `_` and `.`. `None` when nothing usable is left.
+pub fn default_container_name(name: &str) -> Option<String> {
+    let mut mapped = String::new();
+    let mut replaced = false;
+    for c in name.trim().chars() {
+        if c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-') {
+            mapped.push(c);
+            replaced = false;
+        } else if !replaced {
+            mapped.push('-');
+            replaced = true;
+        }
+    }
+    mapped.truncate(DEFAULT_CONTAINER_NAME_MAX);
+    let kept = mapped
+        .trim_start_matches(|c: char| !c.is_ascii_alphanumeric())
+        .trim_end_matches(['-', '_', '.']);
+    (!kept.is_empty()).then(|| kept.to_string())
+}
+
 /// What a remote-over-SSH daemon's runtime is called wherever a row shows it.
 pub const SSH_RUNTIME_LABEL: &str = "Remote over SSH";
 

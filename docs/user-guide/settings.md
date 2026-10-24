@@ -25,7 +25,7 @@ Terminal; **Long-task threshold**, **Warn at** and the script timeout in Environ
 in GitHub; and in Jira the Site URL, Project key, Account email and API token, once you start
 filling the connection in (the token only while none is stored). Appearance has nothing to fill. In
 the Daemons form, **Name** is always marked; the **Host** appears marked when you choose SSH and
-goes away when you switch back; a container daemon marks **Container name** and **Image reference**,
+goes away when you switch back; a container daemon marks **Image reference** when you bring your own image,
 and **Image file** when the image comes from a file; a remote daemon's **Repository on the host** is
 marked too. Port, User and Key file are optional and carry no mark.
 
@@ -511,7 +511,9 @@ The banner's **Restart service** does the same as **Stop** then **Start**, for t
 worktree you are looking at only: it never stops the host daemon or another container.
 
 **Add daemon** opens a dialog with a form for a name, what it runs in (container or host), the container name,
-port and image, and whether to connect when the application starts. A form that cannot be saved
+port and image, and whether to connect when the application starts. Leave **Container name**
+empty to use the daemon's name with anything other than letters, digits, `_`, `.` and `-` turned into
+`-` (the field shows it); it is stored when you save, so renaming the daemon later keeps it. A form that cannot be saved
 says why beside the field at fault: a blank or repeated name, a port outside 1-65535, a container
 already used by another daemon, a second host daemon. The form groups its settings in titled
 sections; a closed section shows a one-line summary of its settings, and a `*` after its title when

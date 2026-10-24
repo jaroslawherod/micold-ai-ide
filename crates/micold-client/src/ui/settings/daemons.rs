@@ -13,8 +13,8 @@
 
 use crate::app::{EditorAction, Message};
 use crate::features::daemons::{
-    runtime_choices, DaemonDetails, Draft, DraftRuntime, FormError, Msg as DaemonsMsg, Opener,
-    RowAction, Section, State, ViewModel,
+    container_name_hint, runtime_choices, DaemonDetails, Draft, DraftRuntime, FormError,
+    Msg as DaemonsMsg, Opener, RowAction, Section, State, ViewModel,
 };
 use crate::features::daemons_kube::{AllowedKind, ContextList};
 use crate::features::settings::DaemonDraft;
@@ -408,9 +408,8 @@ pub(crate) fn form<'a>(
     let sections: Vec<Element<'a, Message>> = match draft.runtime {
         DraftRuntime::Container => {
             let connection = vec![
-                TextField::new("", &draft.container_name, roles)
+                TextField::new(container_name_hint(draft), &draft.container_name, roles)
                     .label("Container name")
-                    .required(marker(FieldId::DaemonContainerName))
                     .track_focus(FieldId::DaemonContainerName, focused)
                     .error(error_of(state, "container_name"))
                     .on_input(|v| Message::Daemons(DaemonsMsg::ContainerNameEdited(v)))

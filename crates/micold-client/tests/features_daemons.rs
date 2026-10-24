@@ -55,27 +55,21 @@ mod required {
     }
 
     #[test]
-    fn a_container_daemon_requires_name_and_container_name_and_its_own_image_only_when_chosen() {
+    fn a_container_daemon_requires_its_name_and_its_own_image_only_when_chosen_not_a_container_name(
+    ) {
         let mut state = open();
         let draft = state.draft.as_mut().unwrap();
         draft.runtime = DraftRuntime::Container;
         // The basic image names nothing to fill in.
-        assert_eq!(
-            listed(&state),
-            vec![FieldId::DaemonName, FieldId::DaemonContainerName]
-        );
+        assert_eq!(listed(&state), vec![FieldId::DaemonName]);
         let draft = state.draft.as_mut().unwrap();
         draft.profile.image = ImageChoice::Own(OwnImage::Reference(String::new()));
         assert_eq!(
             listed(&state),
-            vec![
-                FieldId::DaemonName,
-                FieldId::DaemonContainerName,
-                FieldId::DaemonImage
-            ]
+            vec![FieldId::DaemonName, FieldId::DaemonImage]
         );
-        // All three are empty at once, and each reads empty (none hides behind the first).
-        assert_eq!(empty(&state).len(), 3);
+        // Both are empty at once, and each reads empty (none hides behind the first).
+        assert_eq!(empty(&state).len(), 2);
         let draft = state.draft.as_mut().unwrap();
         draft.name = "  ".into();
         assert!(empty(&state).contains(&FieldId::DaemonName));
@@ -1118,7 +1112,7 @@ mod save_required {
     }
 
     #[test]
-    fn a_container_daemon_marks_name_and_container_name_together() {
+    fn a_container_daemon_marks_its_name_but_not_the_container_name() {
         let mut w = World::new();
         let mut state = open(&mut w);
         send(
@@ -1133,7 +1127,7 @@ mod save_required {
         );
         assert_eq!(
             reads(&state, FieldId::DaemonContainerName),
-            FieldRequirement::Missing
+            FieldRequirement::Optional
         );
     }
 
@@ -1351,5 +1345,213 @@ mod drift_behind_the_form {
         dial(&mut w, id);
         send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
         assert!(state.prompt().is_some(), "no dialog is open to wait for");
+    }
+}
+
+mod default_container_name {
+    use super::daemons_fixture::World;
+    use micold_client::features::daemons::{
+        self, container_name_hint, Draft, DraftRuntime, Msg, State,
+    };
+    use micold_core::daemons::DaemonRuntime;
+
+    fn open(w: &mut World) -> State {
+        let mut state = State::default();
+        daemons::update(&mut state, &mut w.model(), Msg::AddOpened);
+        daemons::update(
+            &mut state,
+            &mut w.model(),
+            Msg::RuntimeChosen(DraftRuntime::Container),
+        );
+        state
+    }
+
+    fn send(state: &mut State, w: &mut World, msg: Msg) {
+        daemons::update(state, &mut w.model(), msg);
+    }
+
+    fn stored(w: &World, name: &str) -> Option<String> {
+        w.registry
+            .entries()
+            .iter()
+            .find(|e| e.name.as_str() == name)
+            .and_then(|e| e.container_name().map(str::to_string))
+    }
+
+    fn save(w: &mut World, name: &str, typed: &str) -> State {
+        let mut state = open(w);
+        send(&mut state, w, Msg::NameEdited(name.into()));
+        send(&mut state, w, Msg::ContainerNameEdited(typed.into()));
+        send(&mut state, w, Msg::Saved);
+        state
+    }
+
+    fn draft_of(name: &str, typed: &str) -> Draft {
+        let mut w = World::new();
+        let mut state = open(&mut w);
+        let draft = state.draft.as_mut().unwrap();
+        draft.name = name.into();
+        draft.container_name = typed.into();
+        draft.clone()
+    }
+
+    #[test]
+    fn an_empty_container_name_stores_the_sanitized_daemon_name() {
+        let mut w = World::new();
+        let state = save(&mut w, "build box", "");
+        assert!(state.form_error.is_none() && state.draft.is_none());
+        assert_eq!(stored(&w, "build box").as_deref(), Some("build-box"));
+    }
+
+    #[test]
+    fn a_whitespace_only_container_name_defaults() {
+        let mut w = World::new();
+        save(&mut w, "devbox", "   ");
+        assert_eq!(stored(&w, "devbox").as_deref(), Some("devbox"));
+    }
+
+    #[test]
+    fn a_typed_container_name_is_kept() {
+        let mut w = World::new();
+        save(&mut w, "devbox", " my-ctr ");
+        assert_eq!(stored(&w, "devbox").as_deref(), Some("my-ctr"));
+    }
+
+    #[test]
+    fn the_hint_is_the_sanitized_name_or_nothing() {
+        assert_eq!(
+            container_name_hint(&draft_of("Build Box!", "")),
+            "Build-Box"
+        );
+        assert_eq!(container_name_hint(&draft_of("", "")), "");
+        assert_eq!(container_name_hint(&draft_of("日本語", "")), "");
+    }
+
+    #[test]
+    fn a_defaulted_clash_lands_on_the_container_name_and_creates_nothing() {
+        let mut w = World::new();
+        save(&mut w, "devbox", "");
+        let before = w.registry.entries().len();
+        let state = save(&mut w, "Dev Box", "devbox");
+        let err = state.form_error.as_ref().unwrap();
+        assert_eq!(err.field, "container_name");
+        assert!(err
+            .message
+            .starts_with("That container is already used by daemon"));
+        assert_eq!(w.registry.entries().len(), before);
+        let state = save(&mut w, "devbox!", "");
+        assert_eq!(state.form_error.as_ref().unwrap().field, "container_name");
+        assert_eq!(w.registry.entries().len(), before);
+    }
+
+    #[test]
+    fn a_port_only_clash_lands_on_the_port() {
+        let mut w = World::new();
+        let mut state = open(&mut w);
+        send(&mut state, &mut w, Msg::NameEdited("other".into()));
+        send(&mut state, &mut w, Msg::PortEdited("7001".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert_eq!(state.form_error.as_ref().unwrap().field, "port");
+    }
+
+    #[test]
+    fn names_that_sanitize_alike_are_refused_and_a_different_typed_name_saves() {
+        let mut w = World::new();
+        save(&mut w, "a b", "");
+        let state = save(&mut w, "a-b", "");
+        assert_eq!(state.form_error.as_ref().unwrap().field, "container_name");
+        let mut state = state;
+        send(&mut state, &mut w, Msg::ContainerNameEdited("a-b-2".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert_eq!(stored(&w, "a-b").as_deref(), Some("a-b-2"));
+    }
+
+    #[test]
+    fn a_truncation_collision_is_refused() {
+        let mut w = World::new();
+        let long = "x".repeat(70);
+        save(&mut w, &long, "");
+        let state = save(&mut w, &format!("{long}y"), "");
+        assert_eq!(state.form_error.as_ref().unwrap().field, "container_name");
+    }
+
+    #[test]
+    fn the_registry_still_refuses_a_duplicate_resolved_name() {
+        let mut w = World::new();
+        let err = w
+            .registry
+            .add(
+                "Other",
+                super::daemons_fixture::container("box-ctr", 7999),
+                false,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            micold_core::daemons::RegistryError::ContainerInUse { .. }
+        ));
+    }
+
+    #[test]
+    fn a_rename_keeps_the_container_name_and_edit_shows_it_as_a_value() {
+        let mut w = World::new();
+        save(&mut w, "devbox", "");
+        let id = w.registry.entries().last().unwrap().id;
+        let mut state = State::default();
+        daemons::begin_edit(&mut state, &w.model(), id).unwrap();
+        assert_eq!(state.draft.as_ref().unwrap().container_name, "devbox");
+        send(&mut state, &mut w, Msg::NameEdited("devbox2".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert_eq!(stored(&w, "devbox2").as_deref(), Some("devbox"));
+    }
+
+    #[test]
+    fn clearing_the_stored_name_while_editing_derives_from_the_current_name() {
+        let mut w = World::new();
+        save(&mut w, "devbox", "");
+        let id = w.registry.entries().last().unwrap().id;
+        let mut state = State::default();
+        daemons::begin_edit(&mut state, &w.model(), id).unwrap();
+        send(&mut state, &mut w, Msg::NameEdited("renamed".into()));
+        send(&mut state, &mut w, Msg::ContainerNameEdited(String::new()));
+        send(&mut state, &mut w, Msg::Saved);
+        // Moving a bound daemon to another container asks first.
+        assert!(state.prompt().is_some());
+        send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert_eq!(stored(&w, "renamed").as_deref(), Some("renamed"));
+    }
+
+    #[test]
+    fn an_unusable_daemon_name_with_an_empty_field_asks_for_a_container_name() {
+        let mut w = World::new();
+        let before = w.registry.entries().len();
+        let state = save(&mut w, "日本語", "");
+        let err = state.form_error.as_ref().unwrap();
+        assert_eq!(err.field, "container_name");
+        assert_eq!(err.message, "Enter a container name.");
+        assert_eq!(w.registry.entries().len(), before);
+    }
+
+    #[test]
+    fn an_empty_daemon_name_keeps_its_own_message() {
+        let mut w = World::new();
+        let mut state = open(&mut w);
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_error.is_none());
+        assert!(state.draft.is_some());
+    }
+
+    #[test]
+    fn other_runtimes_do_not_resolve_a_container_name() {
+        let mut w = World::new();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::AddOpened);
+        send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Ssh));
+        send(&mut state, &mut w, Msg::NameEdited("remote".into()));
+        send(&mut state, &mut w, Msg::SshHostEdited("example.org".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        let entry = w.registry.entries().last().unwrap();
+        assert!(matches!(entry.runtime, DaemonRuntime::Ssh(_)));
+        assert_eq!(entry.container_name(), None);
     }
 }
