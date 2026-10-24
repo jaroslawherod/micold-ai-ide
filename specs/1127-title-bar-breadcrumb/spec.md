@@ -30,7 +30,7 @@ Part of the layout redesign: #1125 (sidebar), #1126 (context header and session 
 - **Breadcrumb**: the bar's `project / location` path. Its first segment, the **project segment**,
   is the project switcher's trigger (feature 008). Its second segment, the **place segment**, names
   what the main area shows.
-- **Jump-to field**: a field-shaped control centred in the bar that opens the quick switcher
+- **Jump-to field**: a field-shaped control centred in the bar's free space that opens the quick switcher
   (feature 968). It is pressed, not typed into: typing happens in the quick switcher once it is
   open.
 - **Location**, **Overview**, **attention badge**: as defined by feature 813. **Short branch**: as
@@ -55,6 +55,28 @@ Part of the layout redesign: #1125 (sidebar), #1126 (context header and session 
   the breadcrumb. _(agent-resolved: issue #1127 "Blocked by: #1125 (Overview moves into the sidebar
   first)"; specs/1125-sidebar-state-groups/autopilot.md lists the Overview row as its milestone M3,
   not yet merged)_
+- Q: Where is the jump-to field centred: on the window's centre line, or in the free space between
+  the breadcrumb and the trailing controls? → A: In the free space between the leading group (app
+  mark, breadcrumb and, while FR-015 applies, the Overview button) and the trailing group (Settings,
+  overflow trigger), so a long breadcrumb never pushes it into the breadcrumb. _(agent-resolved:
+  mockup `Main.dc.html` title bar, equal `flex:1` spacers either side of the field)_
+- Q: What does the jump-to field do while Settings is open, where the quick switcher's shortcut does
+  nothing? → A: It is inert and drawn disabled, as the Overview button is while Settings is open;
+  with the Overview open or no project it opens the switcher as the shortcut does; while the
+  switcher is open, pressing it closes the switcher, as a press outside it does.
+  _(agent-resolved: `specs/968-quick-switcher/spec.md` FR-012, Edge Cases "Settings … open", User
+  Story 1 scenario 6; `crates/micold-client/src/ui/toolbar.rs` `overview_press`)_
+- Q: Is the app mark a control (pressable, a Tab stop)? → A: No. It is a decorative mark with a
+  hover tooltip; it does nothing when pressed and is not in the Tab order. _(agent-resolved: mockup
+  `Main.dc.html` draws it as a plain block, not a button; the overflow menu already holds About)_
+- Q: Does the new bar keep today's raised look when sidebar content is scrolled under it? → A: Yes,
+  unchanged: it is raised while the sidebar is scrolled and flat at rest. _(agent-resolved:
+  `crates/micold-client/src/app.rs` `State::app_bar_elevated`, contract §7.1)_
+- Q: Does the 4.5:1 / 3:1 contrast rule apply to the jump-to field while it is drawn disabled? → A:
+  No. FR-017 applies to the enabled bar; the disabled field uses the shared Material disabled
+  treatment (content at 38%), like every other disabled control. _(agent-resolved:
+  `specs/003-material-design-layout/contracts/design-tokens.md` "Disabled";
+  `docs/development/component-library.md` disabled treatment)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -122,11 +144,13 @@ or Windows and on macOS.
    macOS).
 2. **Given** the field, **When** it is drawn, **Then** it shows a search glyph, the text "Jump to
    location, session or project" and the shortcut `Ctrl+Shift+P` (`Cmd+Shift+P` on macOS), and it
-   is centred in the bar.
+   is centred in the space between the breadcrumb and the trailing controls.
 3. **Given** the quick switcher is already open, **When** the user presses the field, **Then** no
-   second switcher opens, and the field does what the shortcut does in that state.
-4. **Given** any state (Settings open, Overview open, no project), **When** the user presses the
-   field, **Then** the result is the same as pressing the shortcut in that state.
+   second switcher opens; the open one closes, as it does on a press outside it.
+4. **Given** the Overview is open or no project is open, **When** the user presses the field,
+   **Then** the quick switcher opens, as the shortcut opens it in that state; **given** Settings is
+   open, **then** the field is drawn disabled and pressing it does nothing, as the shortcut does
+   nothing (feature 968 FR-012).
 5. **Given** keyboard focus is in the bar, **When** the user tabs to the field and presses Enter or
    Space, **Then** the quick switcher opens.
 
@@ -206,7 +230,8 @@ in full-screen Overview.
 - **FR-002**: The bar MUST show, from the leading end: the app mark, the breadcrumb; in its centre
   the jump-to field; at its trailing end a Settings button and the overflow-menu trigger; and, until
   FR-016 applies, the Overview button after the breadcrumb (FR-015). It MUST NOT show the application name as text, nor plan usage.
-- **FR-003**: The app mark MUST carry a tooltip naming the application.
+- **FR-003**: The app mark MUST carry a tooltip naming the application. It is not a control: it
+  MUST do nothing when pressed and MUST NOT be a Tab stop.
 - **FR-004**: The project segment MUST read the active project's name (or `Select project` with
   none), carry a drop-down glyph and today's unread mark for other projects (feature 039), and open
   and close the project switcher panel when pressed, as the switcher button does today.
@@ -219,12 +244,16 @@ in full-screen Overview.
   location selected. It MUST NOT be interactive.
 - **FR-007**: A segment whose text does not fit MUST be shortened with an ellipsis and show its full
   text in a tooltip; the place segment MUST shorten before the project segment.
-- **FR-008**: The jump-to field MUST be centred in the bar and show a search glyph, the text "Jump
+- **FR-008**: The jump-to field MUST be centred in the free space between the bar's leading group
+  (app mark, breadcrumb, and the Overview button while FR-015 applies) and its trailing group
+  (Settings, overflow trigger), and show a search glyph, the text "Jump
   to location, session or project" and the quick switcher's shortcut as the running platform writes
   it.
 - **FR-009**: Pressing the jump-to field, by pointer or by Enter/Space with keyboard focus, MUST
   have the same effect as the quick switcher's shortcut in the same state, including opening the
-  switcher with its query input focused.
+  switcher with its query input focused. While Settings is open (where the shortcut does nothing,
+  feature 968 FR-012) the field MUST be drawn disabled and ignore presses; while the quick switcher
+  is open, a press on the field closes it as any press outside it does.
 - **FR-010**: As the window narrows, the jump-to field MUST give up width first, dropping its text
   and then its shortcut hint while keeping a pressable search glyph; at the minimum window size
   (640 × 480) every bar control MUST stay visible, unclipped and not overlapping another.
@@ -232,7 +261,7 @@ in full-screen Overview.
   and do nothing when pressed while Settings is open.
 - **FR-012**: The overflow menu MUST keep its items and their order (Settings, Session service
   diagnostics, About) and open under its trigger, below the bar.
-- **FR-013**: Every bar control MUST be reachable by Tab in bar order and activated by Enter or
+- **FR-013**: Every bar control (the app mark is not one, FR-003) MUST be reachable by Tab in bar order and activated by Enter or
   Space, and MUST show a tooltip with its name, and its shortcut where it has one.
 - **FR-014**: Every keyboard shortcut MUST keep its key and its effect; this feature adds and
   removes none.
@@ -242,10 +271,13 @@ in full-screen Overview.
   or badge, and the Overview MUST stay reachable from the sidebar's Overview row and from
   Ctrl+Shift+O (Cmd+Shift+O on macOS), in normal and full-screen Overview.
 - **FR-017**: The bar's text MUST have a contrast of at least 4.5:1, and its icons and the field's
-  outline at least 3:1, against the bar in both themes.
+  outline at least 3:1, against the bar in both themes, for every enabled control; a disabled control (the jump-to field
+  while Settings is open, FR-009) uses the shared disabled treatment.
 - **FR-018**: The user guide (top bar, project switcher, Overview, icons, and appearance pages), the
   layout snapshot and this feature's visual pass MUST be updated in the same change as the bar they
   describe, and MUST NOT describe an Overview button in the bar after Story 3 lands.
+- **FR-019**: The bar MUST keep today's elevation rule: raised while the sidebar's content is
+  scrolled under it, flat at rest.
 
 ### Key Entities
 
