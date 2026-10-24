@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
 - **Phase**: milestone M1
-- **Next step**: M1 reviews and gate, then the M1 PR
+- **Next step**: orchestrator opens the M1 PR (title and body in the unit's scratchpad), then M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | — | in progress |
+| M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | — | gated, PR to open |
 | M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | — | todo |
 | M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | todo |
 | M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | todo |
@@ -58,6 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A (code-review, high) | 1 | 0f05699fb840f8b46965b4b2bbd40170d47bdf41:bb8a87948c85d1b1a7644e73d13adab2b78c7c74 | 10 findings (no BLOCKER): fixed 5 — Lane lays each child out once when all fit; status bar measures floors only for `Shorten` items; one shared app-mark handle and a size assert on the icon bytes; exact-match asserts in `title_bar_fits`; stale 64dp comments. Declined 5 (below) |
 | M1 review B (conformance, sonnet) | 1 | 254ff9de728dd865e67ccf71634150d9b430d1ef:9fe196e8363b6caaf6e70da6fb77ddc9b8ec8227 | CLEAN (1 MINOR: duplicate decision ID D13; fixed, prose only) |
 | M1 visual pass | — | — | pass: 44 px bar, order, tooltips, Settings selected, menu and switcher at y 44, dark, 640 px (specs/1127-title-bar-breadcrumb/visual-pass/m1/) |
+| M1 gate (`scripts/gate.sh`) | — | d483f4ac49cd33cdf002a50560be52f66772b7b4 | pass after rebase on origin/main c4ca0754 and snapshot re-record; on the way: clippy `manual_contains` in `title_bar_fits`, AppMark showcase entry marked interactive (its tooltip is live), `session_area_stability` press-in-flight helper ignores `TerminalResized` |
 
 ## Declined review findings
 
@@ -80,6 +81,7 @@ None.
 
 ## Follow-ups not done
 
+- The session header's chips row is 15.6 dp with text chips and 16 dp once the pull request chip (an icon chip) appears, so the terminal below re-measures by 0.4 dp; at the 1127 body height that crosses a row boundary (`session_area_stability` now ignores the resize). Give the chips row one height.
 - `ui/mod.rs` shell-instance menu `.rising_above(anatomy::app_bar::HEIGHT)` (and the showcase's twin) reads the title bar's height for a bottom bar; it should read the bar it rises from (M1 review A).
 - T051 (visual pass of quickstart Part B) is in no milestone: the close unit runs it (analyze G5).
 - Analyze LOWs left as is: G2 (icon contrast pairs; icons use existing app-bar roles), G4 (tooltip placement test), F3, F5. (T1 fixed with tasks review F2.)
