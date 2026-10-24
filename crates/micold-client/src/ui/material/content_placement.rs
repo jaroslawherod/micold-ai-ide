@@ -69,8 +69,8 @@ const INK: u8 = 24;
 /// The rows of `pixels` that carry ink, as `(first, last)`, or `None` if nothing was drawn.
 ///
 /// `rows` bounds the search to the component's own box. It is the whole buffer for a chip; the app
-/// bar draws a hairline separator beneath itself, which is ink, and is not part of the 64dp the
-/// title is placed within.
+/// bar draws a hairline separator beneath itself, which is ink, and is not part of the 43dp the
+/// leading label is placed within.
 fn ink_rows(
     pixels: &[u8],
     size: (u32, u32),

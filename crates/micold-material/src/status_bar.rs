@@ -224,11 +224,16 @@ impl<'a, M: 'a> From<StatusBar<'a, M>> for Element<'a, M> {
         for (entry, trailing) in groups {
             let (element, give_way, floor) = match entry {
                 Entry::Item(item) => {
-                    // What shortening to the floor text saves, measured once: the item's own width
-                    // less this is its floor (its dot, one character and "…").
-                    let saved = measure(&item.text) - measure(&item.floor_text());
+                    // What shortening to the floor text saves, its dot, one character and "…":
+                    // measured only for an item that can shorten.
+                    let floor = match item.give_way {
+                        GiveWay::Shorten(_) => {
+                            Floor::Saving(measure(&item.text) - measure(&item.floor_text()))
+                        }
+                        _ => Floor::Natural,
+                    };
                     let give_way = item.give_way;
-                    (item.element(r), give_way, Floor::Saving(saved))
+                    (item.element(r), give_way, floor)
                 }
                 // No text of its own to shorten, so a `Shorten` element keeps its width.
                 Entry::Element(element, give_way) => (element, give_way, Floor::Natural),

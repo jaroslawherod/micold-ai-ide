@@ -2,9 +2,9 @@
 //! (feature 018, T042 — FR-025 – FR-032; contract §7).
 //!
 //! A component "matching Material" turns out to be mostly a list of numbers. Individually each is
-//! unremarkable: an app bar is 64dp, a dialog pads 24dp, a chip's ends are 12dp. Collectively they
-//! are what separates a toolbar from a Material top app bar, and every one of them was a different
-//! number before this feature.
+//! unremarkable: an app bar is 43dp (feature 1127; 64dp before it), a dialog pads 24dp, a chip's
+//! ends are 12dp. Collectively they are what separates a toolbar from a Material top app bar, and
+//! every one of them was a different number before this feature.
 //!
 //! # Heights are not here
 //!

@@ -217,48 +217,65 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Lane<'_, M> {
         let available = (limits.max().width - 2.0 * self.padding).max(0.0);
         let within = |width: f32| layout::Limits::new(Size::ZERO, Size::new(width, room));
 
-        let widths: Vec<Widths> = self
+        // Each child at its natural width first. When they all fit, those are the nodes: no floor
+        // to measure and nothing to lay out again, so an ordinary button or bar lays each child
+        // out once, as a row would.
+        let naturals: Vec<layout::Node> = self
             .children
             .iter_mut()
             .zip(tree.children.iter_mut())
-            .zip(&self.slots)
-            .map(|((child, state), slot)| {
-                let natural = child
+            .map(|(child, state)| {
+                child
                     .as_widget_mut()
                     .layout(state, renderer, &within(f32::INFINITY))
-                    .size()
-                    .width;
-                let floor = match (&slot.floor, slot.give_way) {
-                    (Floor::Saving(saved), GiveWay::Shorten(_)) => {
-                        (natural - saved.max(0.0)).ceil()
+            })
+            .collect();
+        let total = naturals.iter().map(|n| n.size().width).sum::<f32>()
+            + self.gap * naturals.len().saturating_sub(1) as f32;
+        let (planned, mut nodes) = if total <= available {
+            let planned = naturals.iter().map(|n| Some(n.size().width)).collect();
+            (planned, naturals)
+        } else {
+            let widths: Vec<Widths> = self
+                .children
+                .iter_mut()
+                .zip(tree.children.iter_mut())
+                .zip(&self.slots)
+                .zip(&naturals)
+                .map(|(((child, state), slot), node)| {
+                    let natural = node.size().width;
+                    let floor = match (&slot.floor, slot.give_way) {
+                        (Floor::Saving(saved), GiveWay::Shorten(_)) => {
+                            (natural - saved.max(0.0)).ceil()
+                        }
+                        (Floor::Squeezed, GiveWay::Shorten(_)) => child
+                            .as_widget_mut()
+                            .layout(state, renderer, &within(0.0))
+                            .size()
+                            .width
+                            .min(natural),
+                        _ => natural,
+                    };
+                    Widths {
+                        give_way: slot.give_way,
+                        natural,
+                        floor,
                     }
-                    (Floor::Squeezed, GiveWay::Shorten(_)) => child
-                        .as_widget_mut()
-                        .layout(state, renderer, &within(0.0))
-                        .size()
-                        .width
-                        .min(natural),
-                    _ => natural,
-                };
-                Widths {
-                    give_way: slot.give_way,
-                    natural,
-                    floor,
-                }
-            })
-            .collect();
-        let planned = plan(&widths, self.gap, available);
-
-        let mut nodes: Vec<layout::Node> = self
-            .children
-            .iter_mut()
-            .zip(tree.children.iter_mut())
-            .zip(&planned)
-            .map(|((child, state), width)| match width {
-                Some(w) => child.as_widget_mut().layout(state, renderer, &within(*w)),
-                None => layout::Node::new(Size::ZERO),
-            })
-            .collect();
+                })
+                .collect();
+            let planned = plan(&widths, self.gap, available);
+            let nodes = self
+                .children
+                .iter_mut()
+                .zip(tree.children.iter_mut())
+                .zip(&planned)
+                .map(|((child, state), width)| match width {
+                    Some(w) => child.as_widget_mut().layout(state, renderer, &within(*w)),
+                    None => layout::Node::new(Size::ZERO),
+                })
+                .collect();
+            (planned, nodes)
+        };
 
         // A dropped child takes no place; an empty one in a hugging lane still does, as in a row.
         let placed = |node: &layout::Node, width: &Option<f32>| {
