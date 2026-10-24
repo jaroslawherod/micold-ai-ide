@@ -32,9 +32,9 @@ Paths are relative to the repository root. `client/` below means `crates/micold-
 
 **Purpose**: the one design figure the bar is sized by.
 
-- [ ] T001 Add the expected value `status_bar::HEIGHT == 28.0` and the `anatomy::ALL` count 48 to
+- [x] T001 Add the expected value `status_bar::HEIGHT == 28.0` and the `anatomy::ALL` count 48 to
   `crates/micold-core/tests/tokens_anatomy.rs` (fails: no such module)
-- [ ] T002 Add `pub mod status_bar { pub const HEIGHT: f32 = 28.0; }` with a doc comment (fixed by
+- [x] T002 Add `pub mod status_bar { pub const HEIGHT: f32 = 28.0; }` with a doc comment (fixed by
   the design, not density; R11) to `crates/micold-core/src/tokens/anatomy.rs` and register it in
   `anatomy::ALL` (47 → 48 entries)
 

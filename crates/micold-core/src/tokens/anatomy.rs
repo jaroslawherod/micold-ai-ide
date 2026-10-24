@@ -210,6 +210,13 @@ pub mod progress {
     pub const LABEL_GAP: f32 = 4.0;
 }
 
+/// The window's bottom status bar (feature 1124).
+pub mod status_bar {
+    /// The bar's height. Fixed by the design (the mockup's 28 px), not by the density axis — the
+    /// same reason `app_bar::HEIGHT` lives here rather than in `density`.
+    pub const HEIGHT: f32 = 28.0;
+}
+
 /// Every anatomy value, for the tests that hold properties across the whole set rather than
 /// checking one number at a time.
 ///
@@ -224,7 +231,7 @@ pub mod progress {
 /// it, which is the same shape as a figure nothing applies, one level further out.
 /// `tokens_anatomy::the_listed_table_holds_every_constant` now holds this against the module's own
 /// source, which is the only thing that can notice.
-pub const ALL: [(&str, f32); 47] = [
+pub const ALL: [(&str, f32); 48] = [
     ("app_bar::HEIGHT", app_bar::HEIGHT),
     ("app_bar::PADDING", app_bar::PADDING),
     (
@@ -275,4 +282,5 @@ pub const ALL: [(&str, f32); 47] = [
     ("snackbar::MAX_WIDTH", snackbar::MAX_WIDTH),
     ("progress::THICKNESS", progress::THICKNESS),
     ("progress::LABEL_GAP", progress::LABEL_GAP),
+    ("status_bar::HEIGHT", status_bar::HEIGHT),
 ];

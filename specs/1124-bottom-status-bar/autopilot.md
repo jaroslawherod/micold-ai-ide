@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: design-pr
-- **Next step**: orchestrator opens the design PR from scratchpad pr-title.md / pr-body.md; after merge, milestone M1
+- **Phase**: M1 implement
+- **Next step**: M1 tasks T005–T015, then verify (gate, review A/B, visual pass) and the M1 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1317 | design (spec, plan, tasks) | merged (rebase) | f55628dfd03663553ffeef46dc83c99bc6b56fed |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | — | planned |
+| M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | — | in progress |
 | M2 | T016–T020 | light | Bring-up shown in the bar; no row above the body | — | planned |
 | M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | planned |
 | M4 | T026–T032 | light | CLI item follows the focused pane; Overview/Jump key hints | — | planned |
