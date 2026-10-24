@@ -10,6 +10,10 @@ use micold_core::structured::transcript::{EntryKind, Transcript};
 mod stream_json;
 pub use stream_json::{events_of, lines_of, without_stream_events};
 
+#[path = "rng.rs"]
+mod rng;
+pub use rng::Rng;
+
 /// The synthetic subset fixture, as written (it holds one CRLF section on purpose).
 pub fn subset() -> String {
     let path = format!(
@@ -227,25 +231,5 @@ pub fn assert_nothing_hidden(source: &str, document: &Document, what: &str) {
                     .collect::<String>(),
             ),
         }
-    }
-}
-
-/// A fixed-seed xorshift64 (no new dependency).
-pub struct Rng(u64);
-
-impl Rng {
-    pub fn new(seed: u64) -> Self {
-        Self(seed.max(1))
-    }
-
-    pub fn next(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
-    }
-
-    pub fn below(&mut self, n: usize) -> usize {
-        (self.next() % n.max(1) as u64) as usize
     }
 }
