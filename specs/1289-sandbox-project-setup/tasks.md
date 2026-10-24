@@ -39,14 +39,14 @@ offered CLI bins, then `$HOME/.local/bin`, then the mise shims folder, then the 
 **Independent test**: T001, T003, T004 pass; `sandbox_real_toolchain_path` passes under
 `mise run test-sandbox`; quickstart B1, B2, B8.
 
-- [ ] T001 [P] [US1] Test A1, red until T002 (fails to compile: no `sandbox::toolchain_path`): new
+- [x] T001 [P] [US1] Test A1, red until T002 (fails to compile: no `sandbox::toolchain_path`): new
   `core/tests/toolchain_path.rs`. One test per row of contract P3's table, asserting the joined
   `OsString` exactly; plus: a folder already in `rest` keeps only its first position (FR-004); an
   offered bin repeated in `rest` is dropped from `rest`; `home: None` leaves both home folders out;
   `mise_data_dir: Some("")` and `xdg_data_home: Some("")` count as unset (data-model "An empty
   value counts as unset"); `MISE_DATA_DIR` wins over `XDG_DATA_HOME` (R3); no folder is checked for
   existence (FR-003: inputs name folders that do not exist and still appear)
-- [ ] T002 [US1] Implement `core/src/sandbox/toolchain_path.rs` per data-model §toolchain_path:
+- [x] T002 [US1] Implement `core/src/sandbox/toolchain_path.rs` per data-model §toolchain_path:
   `pub struct ToolchainPathInput { offered_bins: Vec<PathBuf>, home: Option<PathBuf>,
   mise_data_dir: Option<PathBuf>, xdg_data_home: Option<PathBuf>, rest: OsString }` and
   `pub fn toolchain_path(input: ToolchainPathInput) -> OsString`: order offered bins →
@@ -54,17 +54,17 @@ offered CLI bins, then `$HOME/.local/bin`, then the mise shims folder, then the 
   `home/.local/share/mise/shims`) → `split_paths(rest)`; drop later duplicates; join with
   `std::env::join_paths` (on a join error, return `rest` unchanged). No I/O. Declare
   `pub mod toolchain_path;` in `core/src/sandbox/mod.rs`. T001 passes
-- [ ] T003 [US1] Test A2, red until T005: in `daemon/src/state.rs`'s `offered.json` tests (the
+- [x] T003 [US1] Test A2, red until T005: in `daemon/src/state.rs`'s `offered.json` tests (the
   module at line ~8335, beside `the_listed_cli_is_offered_and_its_bin_leads_the_spawn_path`):
   (a) a daemon with `offered.json` listing one CLI and `HOME=/home/u` in its resolved env gives
   `env_include_vars_for(cwd)` and `ai_cli_env_for(cwd, cli)` the P2 order; (b) `offered.json`
   listing no CLIs still adds the two home folders (today's early return on an empty list is the
   red); (c) a daemon without `offered.json` returns `PATH` byte-for-byte as resolved (FR-008)
-- [ ] T004 [US1] Test A3, red until T005, same module: a stub `claude` placed only in
+- [x] T004 [US1] Test A3, red until T005, same module: a stub `claude` placed only in
   `$HOME/.local/bin` of a sandbox daemon is not offered ahead of the offered one (`availability_in`
   still reports the offered bin's CLI and `only_offered` still filters; US1 scenario 5); a stub tool
   placed in `$HOME/.local/share/mise/shims` resolves on `spawn_path_for(cwd)` (FR-007)
-- [ ] T005 [US1] `daemon/src/state.rs`: replace `with_offered_path` (line 1118) by
+- [x] T005 [US1] `daemon/src/state.rs`: replace `with_offered_path` (line 1118) by
   `with_sandbox_path(&self, resolved: ResolvedEnv) -> ResolvedEnv`. Without `offered_clis()`
   return `resolved` unchanged (R2). Otherwise build `ToolchainPathInput` from the offered bins (in
   `offered.json` order), `HOME`, `MISE_DATA_DIR` and `XDG_DATA_HOME` read from `resolved.vars`
@@ -74,14 +74,14 @@ offered CLI bins, then `$HOME/.local/bin`, then the mise shims folder, then the 
   `spawn_env_for` already (check with LSP `incomingCalls` on `spawn_env_for`; no consumer computes
   `PATH` itself; MCP servers inherit the AI CLI's env, FR-005; the folders go in front of the
   environment-include result, FR-006). T003 and T004 pass
-- [ ] T006 [US1] Real sandbox test, new `daemon/tests/sandbox_real_toolchain_path.rs`, gated like
+- [x] T006 [US1] Real sandbox test, new `daemon/tests/sandbox_real_toolchain_path.rs`, gated like
   `daemon/tests/sandbox_real_ai_cli_sessions.rs` (feature `sandbox-real-runtime`, harness from that
   file): a container daemon on `micold-basic:dev` starts a terminal running `echo "$PATH"`; the
   output starts with the offered CLI bin(s), then `/home/<user>/.local/bin`, then
   `<home>/.local/share/mise/shims` (or the image's `MISE_DATA_DIR/shims`), then the image's own
   `PATH`. Test name `sandbox_real_toolchain_path_puts_the_home_folders_after_the_offered_bins` (the
   `sandbox_real_` prefix is what `mise run test-sandbox` selects)
-- [ ] T007 [P] [US1] `guide/sandboxed-daemon.md`: a section naming the folders on a sandbox's
+- [x] T007 [P] [US1] `guide/sandboxed-daemon.md`: a section naming the folders on a sandbox's
   `PATH` and their order (`~/.local/bin`, the mise shims folder after the offered CLIs), that tools
   installed there later are found without a restart, and that host and remote daemons are
   unchanged; from "Which image it runs on", a pointer to it; a project that needs its own image
