@@ -184,7 +184,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T001–T011
 - **Deliverable**: on `main`, Tab and the arrow keys fade an Overview card's focus outline and tint in and out over 150 ms, each card on its own; with Settings → Appearance → Reduce motion on it is instant; every other control's focus is unchanged.
 - **Satisfies**: US1 acceptance scenarios 1, 2, 4, 5, 6; US3 sc.1 (focus); US4 sc.1–sc.4; FR-001, FR-002, FR-004, FR-005, FR-007 (focus), FR-008 (focus), FR-009, FR-010 (focus), FR-011, FR-013 (user guide, focus); SC-001 (focus), SC-002 (focus), SC-003, SC-004
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib -- keyboard_focus overview_card card_grid`; `scripts/build-lock.sh cargo test -p micold-client --test idle_requests_no_frames --test motion_tokens`; in the client, Overview open: Tab onto a card and away from it (the outline and tint fade in, then out, over ~150 ms), quickstart §B.4 (arrow keys half), §B.6–§B.8 (the showcase's live pose arrives in M2)
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib -- keyboard_focus overview_card card_grid`; `scripts/build-lock.sh cargo test -p micold-client --test idle_requests_no_frames --test motion_tokens`; in the client, Overview open: Tab onto a card and away from it (the outline and tint fade in, then out, over ~150 ms), quickstart §B.4 (arrow keys half), §B.6, §B.7, §B.8 (focus half) (the showcase's live pose arrives in M2)
 - **Depends on**: —
 - **Tier**: full
 
