@@ -33,7 +33,7 @@ A run belongs to the daemon:
 Clients see the state as a `SetupChanged` push. A row `Tag` shows it. The menu gains **Setup
 output**, **Run setup** and **Stop setup**. A `ScrollingDialog` streams the output through a
 per-connection watch. Each client sends one error notification per failed run. MCP
-`create_worktree` reports `"setup": "started" | "none"`.
+`create_worktree` reports `"setup": "started" | "none" | "already running"` (C4).
 
 The per-project image is out of scope (clarify Q2). Decisions and rejected alternatives:
 [research.md](research.md).
@@ -133,7 +133,7 @@ crates/micold-core/src/
 crates/micold-daemon/src/
 ├── setup.rs                      # NEW SetupRuns: commands, runs, start/stop/finish/on_attach/forget/interrupt_all; run task
 ├── state.rs                      # with_offered_path → with_sandbox_path (toolchain_path, no early return on empty list); SetupRuns field + accessors; load records at start
-├── ops.rs                        # create_worktree → Result<SetupStart, _> and start_setup; delete_worktree stops + forgets setup
+├── ops.rs                        # create_worktree → Result<SetupStart, _> and start_setup; delete_worktree stop_and_wait → git remove → forget setup
 ├── server.rs                     # handlers for the five client messages; SetupChanged on attach; unwatch on disconnect; unwind → interrupt_all
 ├── runs.rs                       # follows create_worktree's new return type
 └── mcp/tools.rs                  # "setup" field on the create_worktree result (C4)
@@ -183,7 +183,7 @@ has a render-free reducer plus thin views built from shared components.
 | FR-022 | `SetupRun` message, **Run setup** predicate, Default row included |
 | FR-023 | `SetupStop`, `Terminator::terminate`, `stop_requested` → Stopped |
 | FR-023a | `SetupRuns::start` under the lock → `Busy` |
-| FR-024 | `ops::delete_worktree` stops, then forgets. Confirmation line (U6) |
+| FR-024 | `ops::delete_worktree` calls `stop_and_wait` (bounded by `RUN_OVERRUN`) before `git worktree remove`, then forgets; a late `finish` for a forgotten entry is dropped. Confirmation line (U6) |
 | FR-025 | The three user-guide pages above |
 
 ## Test strategy
@@ -219,9 +219,10 @@ Each fits one session (task-size gate). They go in dependency order:
    protocol messages with the version bump (A4, A5, A14, A15).
 3. **M3 Setup daemon**: `setup.rs`, the `ops` and `server` wiring, the MCP field, persistence,
    restart and unwind (A6–A13), and the `agent-tools.md` field.
-4. **M4 Setup client**: the reducer, the Settings section, `ProjectSetupSet` sync, the row tag,
-   the menu, the output dialog, the notification, and the delete line (A16, A17, G1, G2); the
-   `settings.md` and `worktrees-and-sessions.md` docs; the visual pass.
+4. **M4a Setup client state**: the reducer, `ProjectSetupSet` sync (A16), the Settings › Project
+   section (A17, U1), and the `settings.md` doc.
+5. **M4b Setup client UI**: the row tag, the menu, the output dialog, the notification, and the
+   delete line (G1, G2); the `worktrees-and-sessions.md` doc; the visual pass (U2–U6).
 
 ## Complexity Tracking
 

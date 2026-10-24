@@ -201,12 +201,14 @@ run are tested in core and impossible states cannot be represented (Principle V)
 ## R9. Persistence on the daemon (FR-016, FR-018, FR-019)
 
 **Decision**: `JsonFileStore` (`crates/micold-core/src/store.rs`) gains `setup_dir()` (`setup/`
-beside `runs/`) with `setup_record_path(project, location)` and `setup_log_path(project, location)`
-(NEW). The record is JSON: `run_id`, `state`, `command`, `started_at`, `ended_at`. It is written
+beside `runs/`) with `setup_record_path(project, location)`, `setup_log_path(project, location)` and
+`setup_counter_path()` (NEW, the daemon-wide `RunId` counter, data-model §RunId). The record is JSON: `run_id`, `state`, `command`, `started_at`, `ended_at`. It is written
 atomically (`write_atomic`) on every state change. At daemon start, `DaemonState` loads every
 record and turns each `Running` one into `Interrupted`. The `unwind` path in `server.rs` (stop
 request or idle stop) first terminates live runs and records them `Interrupted`. A worktree delete
-stops the worktree's run and removes its record and log (FR-024), next to `forget_review_worktree`
+stops the worktree's run and awaits its end (`SetupRuns::stop_and_wait`, bounded by `RUN_OVERRUN`)
+before `git worktree remove`, so no process in the run's group or job still holds a handle in the
+folder (Windows), then removes its record and log (FR-024), next to `forget_review_worktree`
 and `forget_run_worktree` in `ops::delete_worktree`. A project's removal removes its whole
 `setup/<project_id>/` folder. The ephemeral catalog (tests) keeps records in memory only.
 
@@ -229,8 +231,8 @@ app create goes through:
 
 On `Ok`, after `refresh_worktrees_and_broadcast`, it calls `state.start_setup(project, location)`
 (NEW), which returns at once. The return type grows from `Result<(), CreateFailure>` to
-`Result<SetupStart, CreateFailure>`, where `SetupStart` is `NotConfigured | Started | Busy` (NEW).
-That lets MCP `create_worktree` add `"setup": "started" | "none"` to its result (FR-013,
+`Result<SetupStart, CreateFailure>`, where `SetupStart` is `NotConfigured | Started(RunId) | Busy` (NEW).
+That lets MCP `create_worktree` add `"setup": "started" | "none" | "already running"` to its result (FR-013,
 contract C4). `WorktreeInclude` and worktrees found by `WorktreeRefresh` never call it (FR-020).
 
 **Rationale**: One call site cannot be missed by a future create path. Run-group worktrees are

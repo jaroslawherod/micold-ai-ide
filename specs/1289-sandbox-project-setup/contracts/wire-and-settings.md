@@ -45,6 +45,11 @@ Order guarantee: a connection's frames are handled in order. A `ProjectSetupSet`
 - After a save that changes a project's command, the client sends `ProjectSetupSet` to every
   connected daemon whose catalog holds that project. On every connect it sends one per project
   registered there. Commands are never sent to a daemon that does not hold the project.
+- `ProjectSetupSet.project` is the project's path **in that daemon's catalog**, the same path the
+  client sends that daemon in `ProjectAdd` and session messages, not the `settings.json` key. For
+  a container daemon on a Windows host (`links.rs` `PATHS_MAPPED`) that is the mapped path; the
+  client looks it up through its catalog entry for that daemon, never by re-deriving it. A16
+  covers a mapped daemon receiving the mapped path.
 
 ## C4. MCP `create_worktree` result (`crates/micold-daemon/src/mcp/tools.rs`)
 
