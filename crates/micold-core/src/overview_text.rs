@@ -98,6 +98,34 @@ pub fn meta_sessions((total, running): (u32, u32), first: bool) -> String {
         .unwrap_or_default()
 }
 
+/// Which kind of location a sidebar row lists (feature 1125 contract T1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowKind {
+    /// The *Default* entry: the project's own checkout.
+    ProjectRoot,
+    /// A worktree of the project.
+    Worktree,
+}
+
+/// A sidebar row's second line (feature 1125 T1, FR-011): "project root" for the *Default* row,
+/// else [`branch_line`], then the [`meta_sessions`] phrase after " · ", or the phrase alone when
+/// nothing precedes it.
+pub fn sidebar_second_line(
+    row: RowKind,
+    title: &str,
+    branch: Option<&str>,
+    sessions: (u32, u32),
+) -> String {
+    let lead = match row {
+        RowKind::ProjectRoot => Some("project root".to_string()),
+        RowKind::Worktree => branch_line(title, branch),
+    };
+    match lead {
+        Some(lead) => format!("{lead} {}", meta_sessions(sessions, false)),
+        None => meta_sessions(sessions, true),
+    }
+}
+
 /// The progress caption, `None` with neither a phase nor a ratio; a bar only with a ratio (C8,
 /// FR-009, BUG-1298 FR-025): *Phase · done/total tasks*, *done/total tasks* or the phase alone, the
 /// PR phase reading *PR phase*.
@@ -366,6 +394,51 @@ mod tests {
         }
         assert_eq!(meta_sessions((0, 0), true), "No sessions");
         assert_eq!(meta_sessions((1, 1), true), "1 session running");
+    }
+
+    /// Feature 1125 T1, US3.1–US3.4, SC-003: a sidebar row's second line is the short branch (or
+    /// "project root") and the sessions phrase, the branch left out when the title is the branch.
+    #[test]
+    fn the_sidebar_second_line_reads_the_short_branch_then_the_sessions() {
+        const BRANCH: &str = "fix/1117_ci-red";
+        for (row, title, branch, counts, line) in [
+            (
+                RowKind::ProjectRoot,
+                "Default",
+                None,
+                (0, 0),
+                "project root \u{b7} no sessions",
+            ),
+            (
+                RowKind::ProjectRoot,
+                "Default",
+                Some("main"),
+                (2, 1),
+                "project root \u{b7} 2 sessions, 1 running",
+            ),
+            (
+                RowKind::Worktree,
+                "CI red on main",
+                Some(BRANCH),
+                (1, 1),
+                "fix/1117 \u{b7} 1 session running",
+            ),
+            (RowKind::Worktree, BRANCH, Some(BRANCH), (1, 0), "1 session"),
+            (
+                RowKind::Worktree,
+                "x",
+                Some("main"),
+                (0, 0),
+                "main \u{b7} no sessions",
+            ),
+            (RowKind::Worktree, "x", None, (0, 0), "No sessions"),
+        ] {
+            assert_eq!(
+                sidebar_second_line(row, title, branch, counts),
+                line,
+                "{row:?} {title:?} {branch:?} {counts:?}"
+            );
+        }
     }
 
     /// C8, US2.6: no row with neither a phase nor a ratio; a bar only with a ratio.

@@ -150,7 +150,7 @@ looks selected while the Overview is open.
 Today a worktree row shows its folder name (such as `feat-813_worktree-overview`) and a row of tag
 chips. With this change each location row has two lines: first the title (the issue's title when the
 app knows it, else the branch, else the name), and below it the short branch and the sessions line
-(`fix/1117 · 1 session · 1 running`). The row the user is on is filled with the primary container
+(`fix/1117 · 1 session running`). The row the user is on is filled with the primary container
 colour.
 
 **Why this priority**: Grouping helps only if each row says which piece of work it is.
@@ -163,14 +163,14 @@ lines of each row and the selected fill.
 
 1. **Given** a worktree whose linked issue's title the app knows, **When** its row is shown,
    **Then** the first line is the issue's title and the second line starts with the short branch
-   (`fix/1117`), followed by " · " and the sessions line ("fix/1117 · 1 session · 1 running").
+   (`fix/1117`), followed by " · " and the sessions line ("fix/1117 · 1 session running").
 2. **Given** a worktree with a branch and no known issue title, **When** its row is shown, **Then**
    the first line is the branch and the second line is only the sessions line (the branch is not
    repeated, feature 1120 FR-007).
 3. **Given** the *Default* entry, **When** its row is shown, **Then** the first line is "Default"
    and the second line reads "project root · " followed by the sessions line.
 4. **Given** a location with no session, **When** its row is shown, **Then** the second line ends in
-   "No sessions" and the row's start action is offered as today.
+   "no sessions" and the row's start action is offered as today.
 5. **Given** a first or second line that does not fit the sidebar's width, **When** the row is
    shown, **Then** it ends in an ellipsis, and the row's tooltip shows the full title, the full
    branch name and the facts the tooltip shows today (path, state, unread line, pull request).
@@ -418,7 +418,7 @@ chords to reach a location in a collapsed group.
   sidebar and the Overview agree; feature 905's state icon stays on the row.
 - Done is listed last, after Idle, as the issue and the mockup order it, although the card state
   order puts Done before Idle: a merged worktree is the least likely to need the user.
-- "Session state" on the second line is feature 1120's sessions line ("1 session · 1 running"), the
+- "Session state" on the second line is feature 1120's sessions phrase as BUG-1298 FR-023 reworded it (`meta_sessions`: "1 session running", "2 sessions, 1 running"), the
   "counts text" the issue says comes from #1120's core logic; the state's reason stays in the
   tooltip.
 - The *Default* row keeps "Default" as its title, as the mockup shows, rather than taking its branch

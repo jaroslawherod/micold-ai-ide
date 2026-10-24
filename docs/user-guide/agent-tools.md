@@ -69,14 +69,14 @@ for it after this one is refused with a conflict that names the existing session
 
 - `type`: one of `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`, `style`.
 - `ticket`: optional; a reference such as `#123` or `ABC-123`. Blank means none. It is what puts
-  the issue tag on the worktree's sidebar row and makes the issue filter find it.
+  the issue into the worktree's short branch on its sidebar row and makes the issue filter find it.
 - `github_issue`: optional; the number of an open issue in the project's GitHub repository (see
   below).
 - `name`: the description. Without a `branch` it is the description, not the folder name.
 
 The branch and folder are built exactly as the form builds them: type `fix`, ticket `#123` and name
 `login crash` give the branch `fix/123_login-crash` in the folder `fix-123_login-crash`, with the
-type and issue tags in the sidebar. Without a ticket there is no ticket part. The result lists the
+short branch `fix/123` on its sidebar row. Without a ticket there is no ticket part. The result lists the
 worktree and also its `branch`, `directory`, `type` and (when there is one) `ticket`. A derived
 branch that already exists is refused, and nothing is created: use `branch` with `mode` to reuse
 it.

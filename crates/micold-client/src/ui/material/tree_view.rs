@@ -72,12 +72,16 @@ pub struct TreeItem<'a, M> {
     /// An optional tooltip describing the trailing action.
     pub trailing_tooltip: Option<String>,
     /// Color-coded tag chips rendered on a second line beneath the label as `(label, accent)`
-    /// (feature 008, FR-001). Empty ⇒ single-line row.
+    /// (feature 008, FR-001), after any supporting text and leading chip. With neither tags nor
+    /// supporting text the row is one line.
     pub tags: Vec<(String, Rgb)>,
-    /// A pre-built chip drawn right of the tag at the given index (feature 1101: the Jira status
-    /// beside the issue tag). It sits in the tag line, so it changes neither the row's height nor
-    /// where the tags start. Ignored when `tags` has no such index.
-    pub chip_after_tag: Option<(usize, Element<'a, M>)>,
+    /// The second line's text and tint (feature 1125, R6): under the label at its indent, one
+    /// line ending in an ellipsis, before any chip. A row with it is two-line.
+    pub supporting_text: Option<(String, Rgb)>,
+    /// A pre-built chip drawn first after the supporting text, before the tags (feature 1125 R6;
+    /// feature 1101's Jira status chip). It sits on the second line, so it changes neither the
+    /// row's height nor where that line starts.
+    pub leading_chip: Option<Element<'a, M>>,
     /// What a right-click of the row becomes, built from the **press point** in window
     /// coordinates (feature 008 context menu, FR-013; the point since BUG-008, FR-029d).
     ///
@@ -156,7 +160,8 @@ impl<'a, M> TreeItem<'a, M> {
             trailing: None,
             trailing_tooltip: None,
             tags: Vec::new(),
-            chip_after_tag: None,
+            supporting_text: None,
+            leading_chip: None,
             on_right_press: None,
             on_hover: None,
             on_unhover: None,
@@ -275,9 +280,15 @@ impl<'a, M> TreeItem<'a, M> {
         self
     }
 
-    /// Draw `chip` right of the tag at `index` (see [`TreeItem::chip_after_tag`]).
-    pub fn chip_after_tag(mut self, index: usize, chip: Element<'a, M>) -> Self {
-        self.chip_after_tag = Some((index, chip));
+    /// A second line under the label (see [`TreeItem::supporting_text`]).
+    pub fn supporting_text(mut self, text: impl Into<String>, tint: Rgb) -> Self {
+        self.supporting_text = Some((text.into(), tint));
+        self
+    }
+
+    /// Draw `chip` first after the supporting text (see [`TreeItem::leading_chip`]).
+    pub fn leading_chip(mut self, chip: impl Into<Element<'a, M>>) -> Self {
+        self.leading_chip = Some(chip.into());
         self
     }
 
@@ -330,6 +341,16 @@ impl<'a, M> TreeItem<'a, M> {
     }
 }
 
+/// How the selected row is filled (feature 1125, R7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Selection {
+    /// `primary_container` with `on_primary_container` text and icons (the sidebar, FR-010).
+    Primary,
+    /// The `secondary_container` pill (contract §7.2), every other tree.
+    #[default]
+    Secondary,
+}
+
 /// A tree rendered from a flat, pre-ordered list of [`TreeItem`]s (Principle VIII reusable
 /// primitive, builder form): `TreeView::new(items, roles).into()`.
 pub struct TreeView<'a, M> {
@@ -338,6 +359,7 @@ pub struct TreeView<'a, M> {
     label_role: TypeRole,
     selected_label_role: Option<TypeRole>,
     density: i8,
+    selection: Selection,
 }
 
 impl<'a, M: Clone + 'a> TreeView<'a, M> {
@@ -349,7 +371,14 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
             label_role: TypeRole::Body,
             selected_label_role: None,
             density: density::STANDARD,
+            selection: Selection::Secondary,
         }
+    }
+
+    /// How the selected row is filled (feature 1125, R7); [`Selection::Secondary`] unless set.
+    pub fn selection(mut self, selection: Selection) -> Self {
+        self.selection = selection;
+        self
     }
 
     /// The row density: `density::STANDARD` (48dp) or `density::DENSE` (36dp) — §7.2's two named
@@ -410,6 +439,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             label_role,
             selected_label_role,
             density: step,
+            selection,
         } = tv;
         // The row's own height and horizontal padding both follow the density (§7.2): a dense row
         // is shorter *and* tighter, which is what keeps the sidebar's worktree count on screen.
@@ -437,7 +467,13 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // Minimal base indent (feature 008, FR-009): depth-0 rows sit flush with the
             // sidebar's small left padding; each level nests by one step.
             let indent = f32::from(item.depth) * spacing::MD;
-            let has_tags = !item.tags.is_empty();
+            // A Primary selection draws the row's text and icons in `on_primary_container` (R7);
+            // the state icon keeps its own tint, which carries the state.
+            let primary = item.selected && selection == Selection::Primary;
+            if primary {
+                item.tint = r.on_primary_container;
+            }
+            let has_second_line = item.supporting_text.is_some() || !item.tags.is_empty();
             // Read before any field is moved out of `item`; see where the label is pushed below.
             let row_label_role = item.label_role(label_role, selected_label_role);
             // The indent spacer indents, and nothing else. It used to carry §7.2's height floor as
@@ -500,7 +536,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // row and tags mark a *worktree* row, and no row is both. Stated rather than assumed,
             // because the day one is both the chips would drift and nothing would say why.
             debug_assert!(
-                !(item.badge.is_some() && has_tags),
+                !(item.badge.is_some() && has_second_line),
                 "a row carrying both a badge and tags cannot align its second line: the badge's \
                  width is not a token this component knows"
             );
@@ -588,11 +624,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 line = line.push(trailing);
             }
 
-            // The row body: the name line, plus an optional second line of tag chips aligned
-            // beneath the label (feature 008, FR-001). A worktree with tags becomes two lines —
+            // The row body: the name line, plus an optional second line — supporting text, then
+            // chips — aligned beneath the label (feature 008 FR-001, feature 1125 R6). Such a row is
+            // two lines —
             // and is, for §7.2's purposes, Material's *two-line* list item rather than a one-line
             // row that happens to be taller.
-            let (content, base): (Element<'a, M>, f32) = if item.tags.is_empty() {
+            let (content, base): (Element<'a, M>, f32) = if !has_second_line {
                 (line.into(), density::LIST_ROW_BASE)
             } else {
                 // Where the label starts, derived from the same leading run the line above is
@@ -644,14 +681,21 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                         bottom: 0.0,
                         left: tag_indent,
                     });
-                let mut chip = item.chip_after_tag;
-                for (index, (label, accent)) in item.tags.into_iter().enumerate() {
+                // The supporting text takes what the chips leave it and ends in an ellipsis.
+                if let Some((text, tint)) = item.supporting_text {
+                    let tint = if primary {
+                        r.on_primary_container
+                    } else {
+                        tint
+                    };
+                    tag_row =
+                        tag_row.push(super::Ellipsized::at_role(text, TypeRole::SidebarTag, tint));
+                }
+                if let Some(chip) = item.leading_chip {
+                    tag_row = tag_row.push(chip);
+                }
+                for (label, accent) in item.tags {
                     tag_row = tag_row.push(super::Tag::new(label, accent));
-                    if chip.as_ref().is_some_and(|(at, _)| *at == index) {
-                        if let Some((_, chip)) = chip.take() {
-                            tag_row = tag_row.push(chip);
-                        }
-                    }
                 }
                 (
                     column![line, tag_row].spacing(2).width(Length::Fill).into(),
@@ -748,14 +792,16 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // enough to the hover layer that a hovered row and a selected one were hard to tell
             // apart — which is the distinction FR-020 exists to make, since selection persists and
             // hover does not.
+            let (fill, on_fill) = match selection {
+                Selection::Primary => (r.primary_container, r.on_primary_container),
+                Selection::Secondary => (r.secondary_container, r.on_secondary_container),
+            };
             let styled: Element<'a, M> = if item.selected {
                 container(row_el)
                     .width(Length::Fill)
                     .style(move |_t: &iced::Theme| iced::widget::container::Style {
-                        background: Some(iced::Background::Color(style::color(
-                            r.secondary_container,
-                        ))),
-                        text_color: Some(style::color(r.on_secondary_container)),
+                        background: Some(iced::Background::Color(style::color(fill))),
+                        text_color: Some(style::color(on_fill)),
                         border: iced::Border {
                             radius: shape::FULL.into(),
                             ..Default::default()
@@ -1444,5 +1490,194 @@ mod tests {
                 "{key:?}"
             );
         }
+    }
+
+    // --- Feature 1125 (R6, R7, T021): the two-line row and the primary-container selection ----
+
+    const TITLE: &str = "CI red on main";
+    const SECOND: &str = "fix/1117 \u{b7} 1 session running";
+
+    /// A location row with a second line, as the sidebar builds it.
+    fn supported(second: &str) -> TreeItem<'static, ()> {
+        TreeItem::new(0, TITLE, roles().on_surface)
+            .expandable(false, ())
+            .supporting_text(second, roles().on_surface_variant)
+    }
+
+    /// The label on the first line and the second line's first child: `twisty, label` and
+    /// `text, chips…` of a depth-0 expandable row.
+    const FIRST_LINE_LABEL: [usize; 4] = [0, 1, 0, 1];
+    const SECOND_LINE: [usize; 3] = [0, 1, 1];
+    const SECOND_LINE_TEXT: [usize; 4] = [0, 1, 1, 0];
+
+    #[test]
+    fn supporting_text_is_a_second_line_under_the_label_at_its_indent() {
+        for width in [NARROW, ROOMY] {
+            let label = at(supported(SECOND), width, &FIRST_LINE_LABEL);
+            let text = at(supported(SECOND), width, &SECOND_LINE_TEXT);
+            assert!(
+                (label.x - text.x).abs() < TOLERANCE,
+                "the second line starts at {}dp, the label at {}dp ({width}dp)",
+                text.x,
+                label.x
+            );
+            assert!(
+                text.y >= label.y + label.height - TOLERANCE,
+                "it is below the label"
+            );
+            let row = at(supported(SECOND), width, &[0]);
+            let expected = density::height(density::LIST_ROW_TWO_LINE_BASE, density::DENSE);
+            assert!(
+                (row.height - expected).abs() < TOLERANCE,
+                "the row is {}dp tall, not the two-line {expected}dp ({width}dp)",
+                row.height
+            );
+        }
+    }
+
+    #[test]
+    fn a_long_second_line_ends_inside_the_row() {
+        let row = at(supported(LONG_NAME), NARROW, &[0]);
+        let text = at(supported(LONG_NAME), NARROW, &SECOND_LINE_TEXT);
+        assert!(
+            text.x + text.width <= row.x + row.width + TOLERANCE,
+            "the second line ends at {} and the row at {}",
+            text.x + text.width,
+            row.x + row.width
+        );
+        let line = at(supported(LONG_NAME), NARROW, &SECOND_LINE);
+        assert!(
+            line.height < 2.0 * TypeRole::SidebarTag.size(),
+            "one line: {line:?}"
+        );
+    }
+
+    #[test]
+    fn the_leading_chip_comes_first_after_the_supporting_text() {
+        let chip = || -> Element<'static, ()> {
+            Space::new()
+                .width(Length::Fixed(ACTION))
+                .height(Length::Fixed(ACTION / 2.0))
+                .into()
+        };
+        let row = || {
+            supported(SECOND)
+                .leading_chip(chip())
+                .tags(vec![("daemon".to_string(), roles().primary)])
+        };
+        let text = at(row(), ROOMY, &SECOND_LINE_TEXT);
+        let lead = at(row(), ROOMY, &[0, 1, 1, 1]);
+        let tag = at(row(), ROOMY, &[0, 1, 1, 2]);
+        assert!(
+            (lead.width - ACTION).abs() < TOLERANCE,
+            "the chip is the second line's second child: {lead:?}"
+        );
+        assert!(lead.x >= text.x + text.width - TOLERANCE, "after the text");
+        assert!(tag.x >= lead.x + lead.width - TOLERANCE, "before the tags");
+    }
+
+    /// The row the pointer and colour tests mount: pressable, right-pressable, selected or not.
+    fn mounted_row(selected: bool, selection: Option<Selection>) -> Element<'static, String> {
+        let item = TreeItem::new(0, TITLE, roles().on_surface)
+            .expandable(false, "toggle".to_string())
+            .supporting_text(SECOND, roles().on_surface_variant)
+            .selected(selected)
+            .on_press("open".to_string())
+            .on_right_press(|_| "menu".to_string());
+        let view = TreeView::new(vec![item], roles())
+            .density(density::DENSE)
+            .label_role(TypeRole::SidebarName)
+            .selected_label_role(TypeRole::SidebarSessionCurrent);
+        match selection {
+            Some(selection) => view.selection(selection).into(),
+            None => view.into(),
+        }
+    }
+
+    fn rgb_bytes(c: Rgb) -> [u8; 3] {
+        [c.r, c.g, c.b]
+    }
+
+    /// The colour drawn near the row's trailing end, clear of its text and its rounded corner.
+    fn fill_of(element: Element<'static, String>) -> [u8; 3] {
+        let mut mounted = super::super::test_support::Mounted::new(element);
+        let bounds = mounted.node.bounds();
+        let (pixels, width) = mounted.drawn(iced::Color::BLACK);
+        let (x, y) = (
+            (bounds.x + bounds.width - bounds.height) as u32,
+            bounds.center_y() as u32,
+        );
+        let i = ((y * width + x) * 4) as usize;
+        [pixels[i], pixels[i + 1], pixels[i + 2]]
+    }
+
+    fn near(a: [u8; 3], b: [u8; 3]) -> bool {
+        (0..3).all(|c| a[c].abs_diff(b[c]) <= 2)
+    }
+
+    #[test]
+    fn primary_selection_fills_the_row_with_the_primary_container() {
+        let fill = fill_of(mounted_row(true, Some(Selection::Primary)));
+        assert!(
+            near(fill, rgb_bytes(roles().primary_container)),
+            "{fill:?} is not primary_container {:?}",
+            rgb_bytes(roles().primary_container)
+        );
+        let mut mounted =
+            super::super::test_support::Mounted::new(mounted_row(true, Some(Selection::Primary)));
+        let painted = mounted.painted_text();
+        for line in [TITLE, SECOND] {
+            let drawn = painted
+                .iter()
+                .find(|p| p.content == line)
+                .unwrap_or_else(|| panic!("{line:?} is drawn: {painted:?}"));
+            assert_eq!(
+                drawn.color,
+                style::color(roles().on_primary_container),
+                "{line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_default_selection_is_still_the_secondary_container_pill() {
+        for selection in [None, Some(Selection::Secondary)] {
+            let fill = fill_of(mounted_row(true, selection));
+            assert!(
+                near(fill, rgb_bytes(roles().secondary_container)),
+                "{selection:?}: {fill:?} is not secondary_container"
+            );
+        }
+        let unselected = fill_of(mounted_row(false, Some(Selection::Primary)));
+        assert!(
+            !near(unselected, rgb_bytes(roles().primary_container)),
+            "an unselected row is not filled"
+        );
+    }
+
+    #[test]
+    fn a_press_and_a_right_press_on_the_second_line_reach_the_row() {
+        let mut mounted =
+            super::super::test_support::Mounted::new(mounted_row(false, Some(Selection::Primary)));
+        let bounds = mounted.node.bounds();
+        let at = iced::Point::new(
+            bounds.x + bounds.width * 0.6,
+            bounds.y + bounds.height - 4.0,
+        );
+        mounted.press(at);
+        let released = mounted.send(
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )),
+            iced::mouse::Cursor::Available(at),
+        );
+        assert!(released.contains(&"open".to_string()), "{released:?}");
+        let right = mounted.send(
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                iced::mouse::Button::Right,
+            )),
+            iced::mouse::Cursor::Available(at),
+        );
+        assert!(right.contains(&"menu".to_string()), "{right:?}");
     }
 }

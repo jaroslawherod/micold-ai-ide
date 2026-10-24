@@ -501,17 +501,33 @@ fn two_line() -> f32 {
     )
 }
 
+/// Feature 1125 (R6, S7): every location row is two-line, *Default* and untagged rows included.
 #[test]
-fn a_tagged_worktree_row_is_a_two_line_row_and_a_session_row_is_not() {
+fn every_location_row_is_a_two_line_row_and_a_session_row_is_not() {
     let entries = vec![
         default_entry(vec![]),
         worktree_entry("feat-a", vec![Tag::Type(ConventionalType::Feat)], vec![]),
         worktree_entry("plain", vec![], vec![]),
+        worktree_entry(
+            "busy",
+            vec![],
+            vec![
+                session(SessionLocation::Worktree("busy".into())),
+                session(SessionLocation::Worktree("busy".into())),
+            ],
+        ),
     ];
 
     assert_eq!(
         row_heights(&rows(&entries)),
-        vec![one_line(), two_line(), one_line()],
+        vec![
+            two_line(),
+            two_line(),
+            two_line(),
+            two_line(),
+            one_line(),
+            one_line()
+        ],
         "a row's height follows its line count and the sidebar's density, and nothing else — the \
          same rule `TreeView` renders by. A metric that disagreed with the rendered height would \
          scroll to the wrong place and say nothing about it"
@@ -826,9 +842,10 @@ fn a_session_row_stays_one_line_when_it_gains_a_cli_label() {
         "two sessions on different CLIs are the same height as each other"
     );
     assert_eq!(
-        heights[1], heights[0],
-        "and the same height as the untagged location row above them — one line, as \
-         `row_heights` says and the scroll arithmetic believes"
+        heights[1],
+        one_line(),
+        "and one line, as `row_heights` says and the scroll arithmetic believes (the location row \
+         above them is two-line since feature 1125)"
     );
 }
 
@@ -950,10 +967,14 @@ fn a_location_holding_a_long_history_costs_no_more_per_row() {
         251,
         "every session is a row — nothing is capped, paged or dropped by age"
     );
-    let one_line = heights[0];
+    assert_eq!(
+        heights[0],
+        two_line(),
+        "the Default row is two-line (feature 1125)"
+    );
     assert!(
-        heights.iter().all(|h| *h == one_line),
-        "and every one of them is the same single line, so the scroll target stays exact at any \
+        heights[1..].iter().all(|h| *h == one_line()),
+        "and every session is the same single line, so the scroll target stays exact at any \
          length"
     );
 
@@ -1871,5 +1892,146 @@ mod m5_menus {
         assert!(!session_menu_items(&st, main_id)
             .iter()
             .any(|i| i.label == "Make main session"));
+    }
+}
+
+// --- Feature 1125 (US3, T022): a location row's two lines and its label chips ---
+
+mod two_line_rows {
+    use super::*;
+    use micold_client::features::sidebar::{
+        default_second_line, row_chips, row_second_line, row_title, with_title_line, RowChip,
+    };
+    use micold_core::session::SessionLifecycle;
+
+    const TITLE: &str = "CI red on main";
+    const BRANCH: &str = "fix/1117_ci-red";
+
+    fn node(tags: Vec<Tag>, sessions: Vec<Session>) -> WorktreeNode {
+        let SidebarEntry::Worktree(mut node) = worktree_entry("fix-1117_ci-red", tags, sessions)
+        else {
+            unreachable!()
+        };
+        node.worktree.branch = Some(BRANCH.into());
+        node.display_name = "ci-red".into();
+        node
+    }
+
+    fn idle(location: SessionLocation) -> Session {
+        let mut session = session(location);
+        session.lifecycle = SessionLifecycle::Idle;
+        session
+    }
+
+    fn here() -> SessionLocation {
+        SessionLocation::Worktree("fix-1117_ci-red".into())
+    }
+
+    /// US3.1: the issue's title, then the short branch and the sessions.
+    #[test]
+    fn a_worktree_with_a_known_issue_title_reads_title_then_short_branch_and_sessions() {
+        let node = node(vec![], vec![session(here())]);
+        let title = row_title(&node, Some(TITLE));
+        assert_eq!(title, TITLE);
+        assert_eq!(
+            row_second_line(&node, &title),
+            "fix/1117 \u{b7} 1 session running"
+        );
+    }
+
+    /// US3.2: without a title the branch is the first line and is not repeated on the second.
+    #[test]
+    fn a_branch_only_worktree_reads_the_branch_then_the_sessions_alone() {
+        let node = node(vec![], vec![idle(here())]);
+        let title = row_title(&node, None);
+        assert_eq!(title, BRANCH);
+        assert_eq!(row_second_line(&node, &title), "1 session");
+    }
+
+    /// US3.3, US3.4: *Default* reads "project root"; no session ends in "no sessions".
+    #[test]
+    fn default_reads_project_root_and_an_empty_location_no_sessions() {
+        let SidebarEntry::Default(empty) = default_entry(vec![]) else {
+            unreachable!()
+        };
+        assert_eq!(empty.display_name, "Default");
+        assert_eq!(
+            default_second_line(&empty),
+            "project root \u{b7} no sessions"
+        );
+        let SidebarEntry::Default(busy) = default_entry(vec![
+            session(SessionLocation::Default),
+            idle(SessionLocation::Default),
+        ]) else {
+            unreachable!()
+        };
+        assert_eq!(
+            default_second_line(&busy),
+            "project root \u{b7} 2 sessions, 1 running"
+        );
+        let empty_worktree = node(vec![], vec![]);
+        assert!(
+            row_second_line(&empty_worktree, &row_title(&empty_worktree, Some(TITLE)))
+                .ends_with("no sessions")
+        );
+    }
+
+    /// US3.7, FR-013: the label chips stay, in today's order, and no type or issue tag is a chip.
+    #[test]
+    fn the_label_chips_keep_todays_and_drop_the_type_and_issue_tags() {
+        let mut node = node(
+            vec![
+                Tag::Type(ConventionalType::Fix),
+                Tag::Issue("ABC-1".into()),
+                Tag::Status(WorktreeStatus::Missing),
+            ],
+            vec![],
+        );
+        node.shown_for_current_session = true;
+        node.daemon = "laptop".into();
+        node.worktree.included = true;
+        let chips = row_chips(&node, true);
+        assert_eq!(
+            chips,
+            vec![
+                RowChip::Status(Tag::Status(WorktreeStatus::Missing).label()),
+                RowChip::CurrentSession,
+                RowChip::Daemon("laptop".into()),
+                RowChip::OutsideThisApp,
+                RowChip::CanBeRemoved,
+            ]
+        );
+        let labels: Vec<String> = chips.iter().map(RowChip::label).collect();
+        assert!(
+            !labels.iter().any(|l| l == "fix" || l == "ABC-1"),
+            "{labels:?}"
+        );
+        assert_eq!(
+            row_chips(&node, false).last(),
+            Some(&RowChip::OutsideThisApp)
+        );
+        assert_eq!(
+            node.tags.len(),
+            3,
+            "the tags still drive the filters; only the row stops drawing two of them"
+        );
+    }
+
+    /// US3.5, FR-012: the tooltip begins with the full title and names the full branch, and the
+    /// rest is today's tooltip unchanged.
+    #[test]
+    fn the_tooltip_begins_with_the_full_title_and_names_the_full_branch() {
+        let node = node(vec![], vec![]);
+        let today = worktree_tooltip(
+            Some(Path::new("/p")),
+            &node.worktree,
+            &node.display_name,
+            None,
+        );
+        let tip = with_title_line(TITLE, today.clone());
+        let mut lines = tip.lines();
+        assert_eq!(lines.next(), Some(TITLE));
+        assert_eq!(line(&tip, "Branch").as_deref(), Some(BRANCH));
+        assert_eq!(lines.collect::<Vec<_>>().join("\n"), today);
     }
 }

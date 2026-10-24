@@ -1432,10 +1432,42 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
             .density(micold_core::tokens::density::DENSE)
             .label_role(TypeRole::SidebarName)
     };
+    // A sidebar location row on two lines (feature 1125, FR-021, R6, R7): the title, then the short
+    // branch and sessions with a label chip, unselected and in the primary-container selection.
+    let two_line = |selected: bool| {
+        material::TreeView::new(
+            vec![
+                material::TreeItem::new(0, "CI red on main", roles.on_surface)
+                    .state_icon(material::StateIcon::new(
+                        micold_core::location_state::LocationState::Running,
+                        roles,
+                    ))
+                    .supporting_text(
+                        micold_core::overview_text::sidebar_second_line(
+                            micold_core::overview_text::RowKind::Worktree,
+                            "CI red on main",
+                            Some("fix/1117_ci-red"),
+                            (1, 1),
+                        ),
+                        roles.on_surface_variant,
+                    )
+                    .tags(vec![("local".to_string(), roles.secondary)])
+                    .selected(selected)
+                    .on_press(Message::NoOp),
+            ],
+            roles,
+        )
+        .density(micold_core::tokens::density::DENSE)
+        .label_role(TypeRole::SidebarName)
+        .selected_label_role(TypeRole::SidebarSessionCurrent)
+        .selection(material::Selection::Primary)
+    };
     arrange(
         vec![
             posed("group header, open", group_header(true), roles),
             posed("group header, closed", group_header(false), roles),
+            posed("two-line row", two_line(false), roles),
+            posed("two-line row, selected", two_line(true), roles),
             posed("keyboard-focused worktree row", keyboard_focused, roles),
             posed("sessions started by an agent", spawned, roles),
             posed("run group, expanded", group(true), roles),

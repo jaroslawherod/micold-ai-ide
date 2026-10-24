@@ -1143,9 +1143,12 @@ mod state_groups {
             "no location here draws session rows"
         );
         let one_line = density::height(density::LIST_ROW_BASE, density::DENSE);
+        let two_line = density::height(density::LIST_ROW_TWO_LINE_BASE, density::DENSE);
         for (row, height) in list.iter().zip(&heights) {
-            if matches!(row, ListRow::Header(_)) {
-                assert_eq!(*height, one_line);
+            // Feature 1125 T023 (R6): a header is one line, every location row two.
+            match row {
+                ListRow::Header(_) => assert_eq!(*height, one_line),
+                ListRow::Entry(_) => assert_eq!(*height, two_line),
             }
         }
         assert_eq!(location_row(&list, &worktree("act")).map(|_| ()), Some(()));
