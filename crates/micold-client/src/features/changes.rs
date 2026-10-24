@@ -1191,6 +1191,9 @@ pub struct HeaderCounts {
     pub entry: Option<(PathBuf, SessionLocation)>,
     /// The counts of `entry`, read with the Changes view's own list reader.
     pub load: Load<ChangeSummary>,
+    /// The Overview hid the header, so no watch saw its files change: the counts are read again
+    /// when the header shows once more (the root's follow step sets and clears it).
+    pub unwatched: bool,
 }
 
 impl HeaderCounts {
@@ -1224,6 +1227,9 @@ pub enum Msg {
         /// The shown location; `None` while no location is shown.
         entry: Option<SessionLocation>,
     },
+    /// The header shows again after the Overview hid it: read its counts once more (feature 1126,
+    /// R6). Sent by the root's follow step.
+    HeaderRecount,
     /// Header counts read `seq` ended (feature 1126, R5).
     HeaderCountsRead {
         /// The read it answers.
@@ -1570,6 +1576,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
     match msg {
         Msg::HeaderFollowed { project, entry } => return header_followed(state, project, entry),
         Msg::HeaderCountsRead { seq, result } => return header_counts_read(state, seq, result),
+        Msg::HeaderRecount => return request_counts(state),
         _ => {}
     }
     let scroll = matches!(
@@ -1668,7 +1675,7 @@ fn header_followed(state: &mut State, project: PathBuf, entry: Option<SessionLoc
 }
 
 /// Header counts read `seq` ended: kept only while it is the current read; a read asked for
-/// meanwhile runs once more after a success.
+/// meanwhile runs once more after it, as the view's list read does.
 fn header_counts_read(
     state: &mut State,
     seq: u64,
@@ -1685,19 +1692,14 @@ fn header_counts_read(
     if current != seq {
         return Effect::None;
     }
-    match result {
-        Ok(summary) => {
-            state.header.load = Load::Ready(summary);
-            if again {
-                request_counts(state)
-            } else {
-                Effect::None
-            }
-        }
-        Err(why) => {
-            state.header.load = Load::Failed(why);
-            Effect::None
-        }
+    state.header.load = match result {
+        Ok(summary) => Load::Ready(summary),
+        Err(why) => Load::Failed(why),
+    };
+    if again {
+        request_counts(state)
+    } else {
+        Effect::None
     }
 }
 
@@ -1731,7 +1733,9 @@ fn request_counts(state: &mut State) -> Effect {
 fn apply(state: &mut State, msg: Msg) -> Effect {
     match msg {
         // Handled in `update` before the view's bookkeeping.
-        Msg::HeaderFollowed { .. } | Msg::HeaderCountsRead { .. } => Effect::None,
+        Msg::HeaderFollowed { .. } | Msg::HeaderCountsRead { .. } | Msg::HeaderRecount => {
+            Effect::None
+        }
         Msg::LayoutChosen(layout) => {
             if state.layout != layout {
                 if let Some(view) = state.open.as_mut() {
@@ -4044,6 +4048,39 @@ mod tests {
         let Effect::ReadCounts { seq: next, .. } = effect else {
             panic!("the queued read runs, got {effect:?}");
         };
+        // A read queued behind one that fails runs too (review A M3 F2).
+        assert_eq!(update(&mut state, Msg::Changed), Effect::None, "queued");
+        let effect = update(
+            &mut state,
+            Msg::HeaderCountsRead {
+                seq: next,
+                result: Err("index.lock exists".into()),
+            },
+        );
+        let Effect::ReadCounts { seq: next, .. } = effect else {
+            panic!("the read queued behind a failure runs, got {effect:?}");
+        };
+        assert_eq!(
+            state.header.load,
+            Load::Loading {
+                seq: next,
+                again: false,
+                last: None,
+            },
+            "a failure leaves no figure behind"
+        );
+        // Back to the success path's state for the assertion below.
+        update(
+            &mut state,
+            Msg::HeaderCountsRead {
+                seq: next,
+                result: Ok(summary(1)),
+            },
+        );
+        update(&mut state, Msg::Changed);
+        let Load::Loading { seq: next, .. } = state.header.load else {
+            panic!("reading");
+        };
         assert_ne!(next, seq);
         assert_eq!(
             state.header.load,
@@ -4080,7 +4117,10 @@ mod tests {
     /// T044, US3 scenario 4: only a finished read's figure is shown.
     #[test]
     fn the_counts_are_unknown_unless_a_read_finished() {
-        let header = |load| HeaderCounts { entry: None, load };
+        let header = |load| HeaderCounts {
+            load,
+            ..HeaderCounts::default()
+        };
         for load in [
             Load::Idle,
             Load::Loading {
