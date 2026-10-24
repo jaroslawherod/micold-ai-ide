@@ -393,7 +393,7 @@ Split from #941's composer (ledger decision 18): what needs #941's composer row 
 
 ## Phase 11: Polish (close unit)
 
-- [ ] T070 Run quickstart Part A and record the results in
+- [x] T070 Run quickstart Part A and record the results in
   `specs/942-structured-permission-prompts/quickstart.md`
 
 ---

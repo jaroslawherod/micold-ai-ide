@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M9 PR open
-- **Next step**: orchestrator: wait on CI for the M9 PR, merge it, then the close phase
+- **Phase**: close
+- **Next step**: close unit: tdd-verify, quickstart record, spec status, review, gate, close PR
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1263 | M6: client render-free prompt state and create-flow mode | merged (rebase; after CI went green main moved and the PR conflicted in `crates/micold-client/src/app.rs` `forget_structured` with #944 structured_insights; the orchestrator rebased keeping both forgets, the full gate passed again, then merged) | b7f1b704e184ad5b1e0c905f4fb3d6e35569839d |
 | #1266 | M7: requests, plans and questions in the transcript | merged (rebase) | b636391e9e89f14bd664f2f7a867048c1ad1b89d |
 | #1309 | M8: prompts on, create-flow mode rows, Bypass confirmation and label, user guide | merged (rebase) | 9e643d698af63cd79632eff27560db8423730b58 |
-| #1312 | M9: the composer's mode control and *Waiting for you* | draft, open (CI) | — |
+| #1312 | M9: the composer's mode control and *Waiting for you* | merged (rebase; the orchestrator rebased it onto #941 M7 a669ad1d first, resolving one conflict in `ui/composer.rs` by keeping #941's `FocusWithin` wrapper and passing `seams.control` to `input_row`; full gate and CI green at 27572a3f) | ae23a467276dc2960e327ea1c9d489c859d23652 |
 
 ## Milestones
 
@@ -39,7 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | #1263 | merged |
 | M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1, met: #1203, #1206) | #1266 | merged |
 | M8 | T064, T065, T067, T068, T069 | full | Create-flow mode rows, Bypass confirmation and session-bar label, prompts switched on, user guide, Part B without the composer (split, decision 18) | #1309 | merged |
-| M9 | T071, T072, T066, T073 | full | Composer side: mode Select and *Waiting for you* in #941's composer; needs #941 M6 on main (I-2, met: #1255, e65993bc) | #1312 | PR open (draft) |
+| M9 | T071, T072, T066, T073 | full | Composer side: mode Select and *Waiting for you* in #941's composer; needs #941 M6 on main (I-2, met: #1255, e65993bc) | #1312 | merged |
 
 ## Decisions
 
@@ -109,6 +109,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M7 (conformance, sonnet) | 1 | eb1bba267c813a3566418f65dec5286d903479a7:adcfbcfcf041461d22670f5dd38852b27019ac5a | CLEAN: 2 MINOR (F1 tool input twice — same as A F1, declined; F2 cycle 11's unit-test exception — accepted as logged). Verify given inline: `showcase_completeness` 46, `material_builder_api` 13, `layout_snapshot` 86, `transcript_permission_view` 12 passed; 0 permission denials |
 | Visual pass M7 | 1 | adcfbcfc | PASS light and dark, offscreen (tiny-skia, after `layout::settle`; the worker's `claude -p` had every build refused, and Xvfb here has no xdotool): the three `PromptCard` poses keep their action rows inside the card (Allow/Deny/Always allow + rule note; Approve and accept edits/Approve/Keep planning; Submit disabled while a question is unanswered/Decline), `ChoiceList` rings with a dot when chosen, checkbox glyphs ticked when chosen, Other row with its field; no overlap. MINOR noted: the checkbox glyph reads smaller than the radio ring. Evidence `visual-pass/m7-*.png`. A first capture without a redraw drew every button disabled — a harness artefact |
 | Visual pass M8 | 1 | 0ee351dd | PASS light and dark, offscreen (tiny-skia after `layout::settle`, a throwaway test driving `State::update` the way the shell does; not committed): the showcase pose *the session bar of a session in Bypass* draws the warning icon and *Bypass: Claude runs every tool without asking* in the error role on the bar's first row, unclipped; the start list (every CLI available) shows **Permissions: Default / Accept edits / Plan / Bypass** indented under **Claude Code (structured)**, only Bypass carrying the active marker, labels aligned, and the list still open after the row press (asserted too); pressing the structured entry in Bypass (`StartGate::ConfirmBypass`, `BypassStartOpened`) shows *Run in Bypass?* with its effect sentence wrapped inside the dialog, **Use Bypass** and **Cancel** inside, over the scrim, the list closed. Live quickstart B 1–4, 6, 7, 9, 10 not run: this container has no logged-in `claude` (request, plan and question views covered by M7's showcase pass). Evidence `visual-pass/m8-*.png` |
+| Full gate close (baseline) | 1 | ae23a467 | Green (`split-gate.sh`, CI's order): 10,129 passed, 0 failed, 18 ignored, 639 binaries; read for quickstart Part A |
+| TDD verify close (`speckit-tdd-verify` steps, run by the close unit: no `Agent` tool here, and a headless worker cannot run Bash) | 1 | ae23a467 | PASS_WITH_GAPS (`tdd/verification.md`): 16 behaviours (the cycles; no test list), 11 PROVEN, 5 LIKELY, no HIGH smell; deliberate mutants D1–D12 all caught; SC-006 live only, FR-021 docs. `speckit-converge` skipped: every milestone has a CLEAN review B |
+| Smell pass close (`claude -p` sonnet, 2 reviewers, paths only, Bash denied) | 1 | ae23a467 | CLEAN both (no HIGH); 7 MED: 3 fixed (confirm dialog paints `EFFECT`, prompt card's plate pinned to its style, composer restating loop dropped), 4 declined (below); 5 LOW left |
+| Traceability close (`claude -p` sonnet) | 1 | ae23a467 | 7 findings: SC-006 and FR-021 untested (recorded in `verification.md`), SC-007 recorded by the gate, F6 plan/question views untested declined (below), rest LOW |
+| Review close (`claude -p`, session model, diff inline, 6 Bash denials) | 1 | 16ff625a48cf56f60df5c44a78ec1da23a4ea4c9:ae23a467276dc2960e327ea1c9d489c859d23652 | CLEAN, `Checked:` cites every test name, file:line and count; 1 MINOR (Part B step 8 named no test) fixed, prose only |
 
 ## Declined review findings
 
@@ -140,10 +145,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | Review A r1 | F3 MINOR: question rows stay pressable while an answer is sending | The reducer keeps the draft and `send` refuses while `sending`; edits made then are not sent. M8's live pass decides whether rows should grey out |
 | M7 | Review A r2 | F1 MINOR: a focused deny/note field keeps `focused_field` after its request ends, so terminals do not take keys until a click | Unreachable while the switch is off; M8 turns prompts on and owns the keyboard side (composer, T064–T066) — listed in *Follow-ups* for it |
 | M9 | Review B r1 | F3 MINOR: `mode_confirmed_change` and `confirm_mode` both hold the "which mode is confirmed" rule, and the core discards `confirm_mode`'s value | The opposite of review A r1 F3, which asked for exactly this: `mode_confirmed_change` is now the single place that names the confirmed mode and `confirm_mode` is built on it, so the two cannot disagree. The core arm discards the pair deliberately — it only closes the dialog; sending the change is the shell's, which reads the pair before handing the message to the core |
+| Close | Smell pass 1 | F3 MED fixed sleeps in daemon `structured_permission.rs` hold tests | Each shows that nothing happens while a request is held; an absence has no event to wait on |
+| Close | Smell pass 2 | F1 MED `an_unknown_reported_mode_is_ignored_and_logged_once` misses a transient mode | An unknown name has no `PermissionMode` (`session.rs:897` pins `dontAsk` to `None`), so there is no mode to set |
+| Close | Smell pass 2 | F2 MED two protocol round-trip tests share JSON variants | The newer one also covers postcard and edge ids; deleting either loses a wire |
+| Close | Smell pass 2 | F4 MED `args.len() - 4` brittle | The binding's flags are last by contract (`claude_is_bound_by_mcp_config_and_allowed_tools_as_the_last_arguments`) |
+| Close | Traceability | F6 plan and question views have no automated check | Wrong: `transcript_permission_view.rs:324,358,384,412` |
 
 ## Handover
 
-None.
+Close unit over 150k context after the review. Done: branch reset to origin/main ae23a467 (#1312 merged, recorded); the full gate green at ae23a467; tdd-verify steps → `tdd/verification.md` (PASS_WITH_GAPS); three test-strength fixes (`ui/confirm_bypass.rs`, `ui/material/prompt_card.rs`, `tests/gates/composer_fits.rs`, cycle 15); quickstart *Results* (Part A recorded, Part B not run live); T070 ticked; spec **Status** Closed; close review CLEAN. All committed locally, not pushed, no PR yet.
+
+Next step: the full gate on the fixed tree was started detached at 03:41 (`split-gate.sh`, log `/tmp/claude-0/-home-user-micold-ai-ide/5dc50992-3b07-5e40-93d0-678a5e52d35f/scratchpad/gate-2.log`; snapshot tree 16ff625a… before the ledger and quickstart prose edits). Hold on it with `scripts/autopilot/hold.sh <log>`; if it is gone or red, run it again. Once it is green, set **Phase** `done`, **Next step** `handoff`, the close PR row in *Pull requests*, add the close PR to the spec's **Status**, and set this section back to `None.` Then push (`--force-with-lease`; prune a stale remote ref first) and open the draft PR through the GitHub MCP tools: title "#942: Structured session: permission prompts via permission-prompt-tool — close", body ending `Refs #942`. Do not merge, do not close the issue. Open findings: none.
 
 ## Open escalation
 
@@ -153,7 +165,7 @@ None.
 
 - ~~For M9 (Review A M8 r3 MINORs left): the shell's `ModeConfirmed` changes `permission_prompts` directly, skipping `State::update`'s after-message work (`agent_confirm::release`); no test of `clear_for_dialog` closing the mode confirmation.~~ Done in M9 (`ModeConfirmed` goes through `core.update`; `confirming_bypass_releases_an_agent_prompt_held_behind_it`, `another_dialog_opening_closes_the_bypass_mode_confirmation`) — review B M9 r1 F2 notes that these M8 corrections ride in M9's diff; the PR body says so. (r3's cancel path, catch-all comment and 104-column line were fixed in M8 with the gate's `feature_write_isolation` fix.)
 
-- For the close phase (review B M9 r1 F1): the quickstart's **live** steps — Part A 1, 5, 6, 8 and Part B 11 — have never been run against a real logged-in `claude`; this container has none. Everything they check was covered offscreen (`visual-pass/`) or by a test, the `Select`'s open list included (`pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it`). Run them, or record the gap, before closing the spec.
+- **For jaro, by hand** (close: recorded as not run in `quickstart.md` *Results*): run quickstart Part B 1–11 with a logged-in `claude` and the dev client, counting SC-006's presses. Earlier note (review B M9 r1 F1): the quickstart's **live** steps — Part A 1, 5, 6, 8 and Part B 11 — have never been run against a real logged-in `claude`; this container has none. Everything they check was covered offscreen (`visual-pass/`) or by a test, the `Select`'s open list included (`pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it`). Run them, or record the gap, before closing the spec.
 
 - M6's first final gate failed once in `tests::pr_status::pr_list_read_a_second_ask_shares_the_read_under_way` (`the work an update returned has to finish: Elapsed`, the 10 s bound of `main_tests::messages`; untouched by #942). Isolated it passes 5 of 5 but takes 10.05 s each run, right at that bound: a load flake to watch.
 

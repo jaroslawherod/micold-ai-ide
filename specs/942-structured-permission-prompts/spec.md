@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Closed 2026-10-24 — shipped in PRs #1197, #1201, #1204, #1208, #1224, #1231, #1263, #1266, #1309, #1312
 
 **Input**: GitHub issue #942 "Structured session: permission prompts via permission-prompt-tool".
 "Part of the structured-session (stream-json) UI epic. Keeps the PTY/TUI session mode as the

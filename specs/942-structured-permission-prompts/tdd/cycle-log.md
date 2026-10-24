@@ -290,3 +290,17 @@ Red runs recorded live, each before its implementation existed; commands with
 - The press needs the overlay's own event dispatch, which neither `messages_after` nor `clicks_at`
   does (the base tree never contains a `Select`'s list): `support/layout.rs`
   `messages_from_open_list`.
+
+## Close — test-strength fixes from `tdd/verification.md` (findings 1–3)
+
+### Cycle 15 — the Bypass confirmation's painted text, the prompt card's plate, the composer's restating loop
+
+- `ui::confirm_bypass` `the_dialog_names_the_effect` now mounts both confirmations and requires
+  `TITLE` and `EFFECT` painted. Red: with the body drawn as `TITLE` instead of `EFFECT`
+  (a deliberate mutant, restored), it failed: `1 passed; 1 failed`. Green: 2 passed.
+- `ui::material::prompt_card` `its_words_are_legible_on_its_plate` now asserts the plate it grades
+  is the background `style::prompt_card` paints. Green at once: it pins the existing code.
+- `gates/composer_fits.rs`: `choosing_a_mode_asks_for_it_and_bypass_is_confirmed_first` lost the
+  loop that compared `chosen()` with what `chosen()` builds (the press test pins each pick through
+  the painted list), and is now `choosing_bypass_sends_nothing_before_its_confirmation`.
+  `layout_snapshot -- composer_fits` 17 passed.
