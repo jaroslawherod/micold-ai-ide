@@ -501,15 +501,13 @@ async fn us4_s4_comments_and_their_states_are_back_after_a_restart_and_pushed_on
     );
 }
 
-#[tokio::test]
-async fn a_comment_edit_keeps_the_files_reviewed_marks() {
-    // Feature 1271, review A M1 F4: the service writes a version 4 file's marks back unchanged.
+/// Seed the review file with one reviewed mark on entry `dir` (feature 1271) and return the file.
+fn seed_mark(f: &Fixture, dir: &str) -> ReviewFile {
     use micold_core::review::marks::{ChangeId, ReviewMark};
     use micold_core::review::RelPath;
-    let f = Fixture::new();
     let mut seed = ReviewFile::default();
     seed.marks.insert(
-        "feat".into(),
+        dir.into(),
         vec![ReviewMark {
             scope: micold_core::review::comment::Scope::WorkingTree,
             path: RelPath::from_native("src/lib.rs").unwrap(),
@@ -517,6 +515,14 @@ async fn a_comment_edit_keeps_the_files_reviewed_marks() {
         }],
     );
     f.files().save_reviews(&f.project(), &seed).unwrap();
+    seed
+}
+
+#[tokio::test]
+async fn a_comment_edit_keeps_the_files_reviewed_marks() {
+    // Feature 1271, review A M1 F4: the service writes a version 4 file's marks back unchanged.
+    let f = Fixture::new();
+    let seed = seed_mark(&f, "feat");
 
     let service = f.service();
     let mut client = connect(&service).await;
@@ -981,6 +987,30 @@ async fn a_worktree_removed_outside_the_app_loses_its_comments_on_the_next_refre
         Some(&[other][..]),
         "the Default entry is never pruned"
     );
+}
+
+#[tokio::test]
+async fn a_forgotten_or_removed_worktree_takes_its_marks_with_it() {
+    // Feature 1271, review A M1 round 2: a marks-only entry is forgotten and pruned too.
+    let f = Fixture::new();
+    seed_mark(&f, "feat");
+    let state = f.service();
+    state.forget_review_worktree(&f.project(), "feat");
+    assert!(f.on_disk().marks.is_empty(), "forgetting drops its marks");
+
+    seed_mark(&f, "feat");
+    let state = f.service();
+    let status = std::process::Command::new("git")
+        .current_dir(f.project())
+        .args(["worktree", "remove", "--force", ".claude/worktrees/feat"])
+        .status()
+        .unwrap();
+    assert!(status.success(), "git removed the worktree");
+    let project = f.project();
+    tokio::task::spawn_blocking(move || state.refresh_worktrees(&project))
+        .await
+        .unwrap();
+    assert!(f.on_disk().marks.is_empty(), "pruning drops its marks");
 }
 
 #[tokio::test]
