@@ -17,7 +17,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1354 | design (spec, plan, tasks) | merged (rebase) | 9c8473afbb8e49aaa8853892a6df818df3fdd138 |
-| — | M1 core tree layout | gated, to open | — |
+| — | M1 core tree layout | gated (scripts/gate.sh green at ddc64264), pushed; orchestrator opens it | — |
 
 ## Milestones
 
