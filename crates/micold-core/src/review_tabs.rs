@@ -13,6 +13,7 @@
 
 use crate::session::{SessionId, SessionLocation};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
@@ -130,30 +131,25 @@ impl<V> ReviewTabs<V> {
         current: Option<SessionId>,
         make: impl FnOnce() -> V,
     ) -> Opened {
-        if self.shown.as_ref() == Some(&key) && self.tabs.contains_key(&key) {
+        if self.is_shown(&key) {
             return Opened::AlreadyShown;
         }
-        let opened = match self.tabs.get_mut(&key) {
-            Some(tab) => {
-                tab.return_to = current;
-                Opened::Shown {
-                    reread: tab.take_reread(),
-                }
-            }
-            None => {
-                self.tabs.insert(
-                    key.clone(),
-                    ReviewTab {
-                        view: make(),
-                        freshness: Freshness::Fresh,
-                        return_to: current,
-                    },
-                );
-                Opened::Created
-            }
-        };
+        if let Some(tab) = self.tabs.get_mut(&key) {
+            tab.return_to = current;
+            return Opened::Shown {
+                reread: self.show_hidden(&key),
+            };
+        }
+        self.tabs.insert(
+            key.clone(),
+            ReviewTab {
+                view: make(),
+                freshness: Freshness::Fresh,
+                return_to: current,
+            },
+        );
         self.shown = Some(key);
-        opened
+        Opened::Created
     }
 
     /// T2: hide the shown tab, if any; answers whether one was shown.
@@ -169,7 +165,7 @@ impl<V> ReviewTabs<V> {
         main: Option<SessionId>,
     ) -> Option<Closed<V>> {
         let tab = self.tabs.remove(key)?;
-        let was_shown = self.shown.as_ref() == Some(key);
+        let was_shown = self.is_shown(key);
         if was_shown {
             self.shown = None;
         }
@@ -181,11 +177,25 @@ impl<V> ReviewTabs<V> {
         })
     }
 
-    /// T7: show `key`'s tab when it exists; `Some(reread)` as in T1, `None` with no tab.
+    /// T7: show `key`'s tab when it exists; `Some(reread)` as in T1 (`Some(false)` and no change
+    /// when it is already shown), `None` with no tab.
     pub fn show_if_present(&mut self, key: &EntryKey) -> Option<bool> {
-        let reread = self.tabs.get_mut(key)?.take_reread();
+        if !self.tabs.contains_key(key) {
+            return None;
+        }
+        Some(!self.is_shown(key) && self.show_hidden(key))
+    }
+
+    /// Whether `key`'s tab is the shown tab.
+    fn is_shown(&self, key: &EntryKey) -> bool {
+        self.shown.as_ref() == Some(key)
+    }
+
+    /// Shows `key`'s existing, hidden tab; answers whether its view must be read again.
+    fn show_hidden(&mut self, key: &EntryKey) -> bool {
+        let reread = self.tabs.get_mut(key).is_some_and(ReviewTab::take_reread);
         self.shown = Some(key.clone());
-        Some(reread)
+        reread
     }
 
     /// T4: remove every worktree tab of `project` whose `dir_name` is not in `names` (never its
@@ -222,7 +232,7 @@ impl<V> ReviewTabs<V> {
 
     /// T5: the location's files changed.
     pub fn files_changed(&mut self, key: &EntryKey) -> Change {
-        if self.shown.as_ref() == Some(key) {
+        if self.is_shown(key) {
             return Change::Reread;
         }
         match self.tabs.get_mut(key) {
@@ -243,7 +253,7 @@ impl<V> ReviewTabs<V> {
 
     /// T5: the location's comments changed.
     pub fn comments_changed(&mut self, key: &EntryKey) {
-        if self.shown.as_ref() == Some(key) {
+        if self.is_shown(key) {
             return;
         }
         if let Some(tab) = self.tabs.get_mut(key) {
@@ -251,9 +261,10 @@ impl<V> ReviewTabs<V> {
         }
     }
 
-    /// T5: the shown tab is no longer covered; answers whether it must be read again.
+    /// T5: the shown tab is no longer covered; answers whether it must be read again. A hidden
+    /// tab is left as it is: its mark and pending read wait for its next show.
     pub fn uncovered(&mut self, key: &EntryKey) -> bool {
-        self.tabs.get_mut(key).is_some_and(ReviewTab::take_reread)
+        self.is_shown(key) && self.tabs.get_mut(key).is_some_and(ReviewTab::take_reread)
     }
 
     /// T6: `session` is the location's last-shown session in this window.
@@ -347,7 +358,7 @@ impl ReviewTabFace {
         let mut tooltip = String::from(REVIEW);
         if let Some(n) = badge {
             let plural = if n.get() == 1 { "" } else { "s" };
-            tooltip.push_str(&format!(" · {n} draft{plural}"));
+            let _ = write!(tooltip, " · {n} draft{plural}");
         }
         if changed {
             tooltip.push('\n');
@@ -488,7 +499,7 @@ mod tests {
     #[test]
     fn t1_opening_a_hidden_changed_or_unwatched_tab_rereads_it_and_makes_it_fresh() {
         let key = worktree("p", "w");
-        let mut changed = with_hidden(&[key.clone()]);
+        let mut changed = with_hidden(std::slice::from_ref(&key));
         changed.files_changed(&key);
         assert_eq!(changed.get(&key).unwrap().freshness(), Freshness::Changed);
         assert_eq!(
@@ -497,7 +508,7 @@ mod tests {
         );
         assert_eq!(changed.get(&key).unwrap().freshness(), Freshness::Fresh);
 
-        let mut unwatched = with_hidden(&[key.clone()]);
+        let mut unwatched = with_hidden(std::slice::from_ref(&key));
         unwatched.location_left(&key);
         assert_eq!(
             unwatched.get(&key).unwrap().freshness(),
@@ -650,7 +661,7 @@ mod tests {
     #[test]
     fn t7_show_if_present_shows_an_existing_tab_and_answers_reread_as_t1() {
         let (w, x) = (worktree("p", "w"), worktree("p", "x"));
-        let mut tabs = with_hidden(&[w.clone()]);
+        let mut tabs = with_hidden(std::slice::from_ref(&w));
         let before = tabs.clone();
         assert_eq!(tabs.show_if_present(&x), None);
         assert_eq!(tabs, before);
@@ -663,6 +674,25 @@ mod tests {
         assert_eq!(tabs.show_if_present(&w), Some(true));
         assert_eq!(tabs.get(&w).unwrap().freshness(), Freshness::Fresh);
         assert_eq!(tabs.len(), 1);
+    }
+
+    #[test]
+    fn t7_show_if_present_on_the_shown_tab_changes_nothing() {
+        let key = worktree("p", "w");
+        let mut tabs = ReviewTabs::default();
+        tabs.open_or_show(key.clone(), Some(session(1)), || 1);
+        tabs.location_left(&key);
+        let before = tabs.clone();
+        assert_eq!(
+            tabs.show_if_present(&key),
+            Some(false),
+            "as T1's AlreadyShown"
+        );
+        assert_eq!(tabs, before);
+        assert!(
+            tabs.uncovered(&key),
+            "the covered tab still reads on uncover"
+        );
     }
 
     // ---- T4. Drop rules ---------------------------------------------------------------
@@ -712,7 +742,7 @@ mod tests {
     #[test]
     fn t4_drop_gone_worktrees_keeps_a_shown_tab_it_does_not_remove() {
         let (pw, px) = (worktree("p", "w"), worktree("p", "x"));
-        let mut tabs = with_hidden(&[pw.clone()]);
+        let mut tabs = with_hidden(std::slice::from_ref(&pw));
         tabs.open_or_show(px.clone(), None, || 1);
         assert_eq!(
             tabs.drop_gone_worktrees(&project("p"), &names(&["x"])),
@@ -790,7 +820,7 @@ mod tests {
 
     /// A map with a hidden tab for `key` in `state`, and a shown tab for another location.
     fn hidden_in(key: &EntryKey, state: Freshness) -> ReviewTabs<u32> {
-        let mut tabs = with_hidden(&[key.clone()]);
+        let mut tabs = with_hidden(std::slice::from_ref(key));
         match state {
             Freshness::Fresh => {}
             Freshness::Changed => {
@@ -817,7 +847,7 @@ mod tests {
             assert_eq!(freshness(&tabs, &key), Freshness::Changed, "{state:?}");
         }
 
-        let mut tabs = with_hidden(&[key.clone()]);
+        let mut tabs = with_hidden(std::slice::from_ref(&key));
         let before = tabs.clone();
         assert_eq!(tabs.files_changed(&worktree("p", "x")), Change::Nothing);
         assert_eq!(tabs, before);
@@ -844,7 +874,7 @@ mod tests {
         changed.location_left(&key);
         assert_eq!(freshness(&changed, &key), Freshness::Changed);
 
-        let mut none = with_hidden(&[key.clone()]);
+        let mut none = with_hidden(std::slice::from_ref(&key));
         let before = none.clone();
         none.location_left(&worktree("p", "x"));
         assert_eq!(none, before);
@@ -905,6 +935,20 @@ mod tests {
         assert!(!tabs.uncovered(&worktree("p", "x")), "no tab");
     }
 
+    #[test]
+    fn t5_uncovered_on_a_hidden_tab_changes_nothing() {
+        let key = worktree("p", "w");
+        for state in [Freshness::Changed, Freshness::Unwatched] {
+            let mut tabs = hidden_in(&key, state);
+            let before = tabs.clone();
+            assert!(!tabs.uncovered(&key), "{state:?}");
+            assert_eq!(
+                tabs, before,
+                "{state:?}: the mark and the pending reread stay"
+            );
+        }
+    }
+
     // ---- T6. Last-shown session ---------------------------------------------------------
 
     #[test]
@@ -950,17 +994,20 @@ mod tests {
         NonZeroUsize::new(n)
     }
 
+    /// drafts, freshness, shown → badge, changed, tooltip.
+    type FaceRow = (
+        Option<usize>,
+        Freshness,
+        bool,
+        Option<NonZeroUsize>,
+        bool,
+        &'static str,
+    );
+
     #[test]
     fn t8_the_review_tab_face_follows_the_table() {
         use Freshness::*;
-        let rows: [(
-            Option<usize>,
-            Freshness,
-            bool,
-            Option<NonZeroUsize>,
-            bool,
-            &str,
-        ); 9] = [
+        let rows: [FaceRow; 9] = [
             (None, Fresh, false, None, false, "Review"),
             (None, Fresh, true, None, false, "Review"),
             (Some(0), Fresh, false, None, false, "Review"),

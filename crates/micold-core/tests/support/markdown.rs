@@ -12,6 +12,7 @@ pub use stream_json::{events_of, lines_of, without_stream_events};
 
 #[path = "rng.rs"]
 mod rng;
+#[allow(unused_imports)]
 pub use rng::Rng;
 
 /// The synthetic subset fixture, as written (it holds one CRLF section on purpose).
