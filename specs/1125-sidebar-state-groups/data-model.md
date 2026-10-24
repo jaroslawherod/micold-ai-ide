@@ -93,10 +93,11 @@ one row of one-line height; every location row is two-line; session rows are one
 | Row | First line | Second line (`sidebar_second_line`) |
 |---|---|---|
 | *Default* | "Default" | "project root · " + sessions line |
-| worktree, title is not the branch | the card title (issue title, else branch, else name) | `branch_line(title, branch)` + " · " + sessions line |
-| worktree, title is the branch, or no branch | the card title | sessions line only |
+| worktree, title is not the branch | the user's rename (feature 008, FR-014), else the card title (issue title, else branch, else name) | `branch_line(title, branch)` + " · " + sessions line |
+| worktree, title is the branch, or no branch | the rename, else the card title | sessions line only |
 
-The row tooltip (`features::sidebar::worktree_tooltip`) gains a first line with the full title and a
+The row tooltip (`features::sidebar::worktree_tooltip`) gains a first line with the full title (unless the title is
+the row's name or its branch, which it already names) and a
 `Branch` line with the full branch when the row shortened either (FR-012); the rest is unchanged.
 
 ## Overview row (derived, client view)

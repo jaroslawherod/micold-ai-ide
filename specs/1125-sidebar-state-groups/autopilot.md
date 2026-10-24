@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M2
-- **Next step**: M2 fix review A round 1 findings, then scoped gate + review A round 2
+- **Next step**: M2 review B + visual pass, full gate, PR
 
 ## Pull requests
 
@@ -50,7 +50,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | D13 | M2 | The second line's sessions phrase: the spec's "1 session · 1 running" or today's Overview phrase? | Today's: `sidebar_second_line` composes `branch_line` + `meta_sessions` ("fix/1117 · 1 session running", "project root · 2 sessions, 1 running", "No sessions" alone); spec US3, Assumptions, contract T1, quickstart B3, tasks amended | agent-resolved | `sessions_line` became `meta_sessions` in BUG-1298 FR-023 (e55ff583) after the design; FR-011 and T1 say "no copy" of 1120's phrase |
 | D14 | M2 | Tooltip: where do the full title and `Branch` go? | `features::sidebar::with_title_line` prepends the bare title as the first line; today's tooltip follows unchanged, its `Branch: <full branch>` line included (composed like `with_state_line`) | agent-resolved | FR-012 "in addition to what it shows today"; 27 existing `worktree_tooltip` tests keep today's lines |
 | D15 | M2 | Where do T023's height tests and T029's showcase rows live? | Heights: `tests/features_sidebar.rs` and `tests/sidebar_state.rs` (where `row_heights` is tested; `sidebar_tree.rs` has none); showcase: `showcase/sections/surfaces.rs` TreeView entry (beside M1's group headers), catalogue lists "two-line row", "two-line row, selected" | agent-resolved | `grep -n row_heights crates/micold-client/tests/`; catalogue.rs TreeView entry's `posed` |
-| D16 | M2 | A selected row's tint under `Selection::Primary` | Twisty, icon, label and supporting text take `on_primary_container`; the state icon keeps its state tint; a missing worktree's error-tinted title takes it too while selected (its `missing` chip stays) | agent-resolved | research R7; FR-010 "on-primary-container text and icons" |
+| D16 | M2 | A selected row's tint under `Selection::Primary` | Twisty, icon, label and supporting text take `on_primary_container`; the state icon keeps its state tint; only a neutral tint (`on_surface`, `on_surface_variant`) is replaced: a failed session's `error`, an interrupted one's `primary` and a missing worktree's error-tinted name keep their tint, checked ≥ 4.5:1 on `primary_container` (amended after M2 review A r1 F2) | agent-resolved | research R7; FR-010 "on-primary-container text and icons"; the lifecycle tints carry meaning (FR-006a of the session feature) |
 
 ## Review rounds
 
@@ -64,44 +64,19 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M1 review A (code-review high, sonnet) | 2 | c656359f69d7d2b23bfdc07e5431aa3337fb346f:e11c2f7e8bb8d6cadc64b82f86df2e9ed1ae9100 | CLEAN of BLOCKER/MAJOR: r1 fixes hold; MINORs fixed (reveal opens a group only while its row is not drawn, stale comments, a test for a toggle of a hidden group) |
 | M1 review B (conformance, sonnet) | 1 | e54c4f32191630712064a90d938fd3be236f14bf:f7ca36b5d89ba51b9d774db606ed4a96cc3124f5 | CHANGES: F1 a chord into a closed group did not open it while the current session's row was drawn (fixed: `State::reveal_ready`); F2 the test bypassed that gate (fixed: tests go through it, new case with a drawn current session) |
 | M1 review B (conformance, sonnet) | 2 | 801128dd52fac679a288a6e71919acc608b17553:a72f9964ab30605790f03aa05a0d81ed83d18b56 | CLEAN: F1, F2 fixes hold |
-| M2 review A (code-review high) | 1 | 66f5278f77aeaf3c85facc0d72387b01d8bdcc1a:34bf5238bde08351387c0396b0c75cf531aa8eb8 | CHANGES: F1–F3 MAJOR, F4–F6 MINOR open (see Handover) |
+| M2 review A (code-review high) | 1 | 66f5278f77aeaf3c85facc0d72387b01d8bdcc1a:34bf5238bde08351387c0396b0c75cf531aa8eb8 | CHANGES: F1 a rename lost the first line (fixed: `row_title` takes the rename, it wins); F2 Primary selection replaced lifecycle tints (fixed: neutral tints only, contrast pairs); F3 titles read only on Overview open (fixed: read when the worktree list changes); F5, F6 MINOR fixed; F4 declined |
+| M2 review A (code-review high, sonnet) | 2 | ec2c9336949b1368872b8dbf32b907159948d404:a7213fdae80ddd2f0dd6cfd1409445afbd0b3c29 | CLEAN: F1–F3, F5, F6 fixes hold; F4 decline stands |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A r1 F5 | `card()` and `location_card_state` each filter the location's sessions | a constant factor per card; one function owning the card state (R2) is what makes the sidebar and the Overview agree |
+| M2 | A r1 F4 | the second line's supporting text is `Length::Fill`; use `.shrink()` | iced lays out Shrink children before Fill ones, so a shrinking long second line would take the row's width first and squeeze the chips out in a narrow sidebar; Fill keeps the chips whole and ellipsizes the text |
 
 ## Handover
 
-Unit 1 of M2 handed over at 216k context (cap 150k). **Done**: T020–T031 implemented and ticked in
-commit 34bf5238 (two-line rows via `TreeItem::supporting_text`/`leading_chip`, `Selection::Primary`,
-`overview_text::sidebar_second_line`, `features::sidebar::{row_title, row_second_line,
-default_second_line, row_chips, RowChip, with_title_line}`, `overview::State::known_title`, snapshot
-re-recorded, user guide, spec wording per D13). Before the commit `cargo test -p micold-client
---no-fail-fast` was green except `showcase_completeness` (fixed: the TreeView catalogue entry lists
-the `Selection` variants; re-run green with layout_snapshot and jira_status_sidebar); micold-core
-`overview_text` green. The scoped gate was started and killed unfinished at handover (`cargo fmt
---all` ran before the commit). No PR, nothing pushed. Branch = origin/main 0e5a1e9b + 34bf5238 + this
-ledger commit.
-
-**Next**: fix review A round 1 (each looked real on a quick read; verify):
-- F1 MAJOR `ui/sidebar.rs` `build_items`: a user's rename (`workspace.worktree_name(dir)`) must win
-  the first line over the issue title and branch; carry it into `row_title`, add a features_sidebar test.
-- F2 MAJOR `tree_view.rs` (~473): the Primary override replaces session rows' lifecycle tint (Failed
-  = error, InterruptedResumable = primary; `ui/sidebar.rs` ~1003); keep it for session rows (e.g.
-  override only a row whose tint is `on_surface`/opt-in) and check contrast.
-- F3 MAJOR: titles are requested only on Overview open / header follow (`shell/issues.rs`
-  `request_titles`); request them when the worktree list loads, or record it as a follow-up.
-- F4 MINOR: supporting text is `Length::Fill`, so it gives way first to chips; consider `.shrink()`.
-- F5 MINOR: drop the duplicate contrast pair; add chip/state-icon pairs on `primary_container`.
-- F6 MINOR: skip `with_title_line` when the title equals the display name or the branch; fix the
-  comment wrap at `tree_view.rs` ~627–631 ("Such a row is two lines —").
-Then scoped gate, review A round 2 (sonnet, fix diff against the snapshot above), review B
-(conformance, sonnet), visual pass (quickstart B3, B4 row half, B8; showcase "two-line row" and
-"two-line row, selected" in `showcase/sections/surfaces.rs`), full gate (`scripts/gate.sh`), PR files.
-T022/T023 tests were written before T027's code, but their red was not run on its own (the tree_view
-and overview_text reds were observed as compile failures).
+None.
 
 ## Open escalation
 
@@ -109,4 +84,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- M2 A r1 F1: a renamed worktree's sidebar row now leads with the rename, while its Overview card (feature 1120 FR-006, `ui/overview.rs` `card_title`) still leads with the issue title or branch. Whether the card should honour the rename too is 1120's call; not changed here.
