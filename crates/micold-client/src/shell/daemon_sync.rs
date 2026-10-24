@@ -6369,7 +6369,14 @@ pub(crate) mod tests {
                     mode: PermissionMode::Bypass,
                 },
             );
-            app.core.agent_confirm.held = true;
+            // An agent's request arriving while the confirmation is open waits behind it rather
+            // than closing it (feature 034, FR-014) — held through its own feature, not by poking
+            // the flag, so `root_state_is_shared`'s component-local rule still reaches it.
+            let _ = on_daemon_event(&mut app, DAEMON, confirmation_requested(41));
+            assert!(
+                app.core.agent_confirm.shown().is_none(),
+                "the agent prompt waits behind the mode confirmation"
+            );
             let _ = crate::shell::permission_prompts::update(&mut app, PromptsMsg::ModeConfirmed);
             let ClientMsg::SetPermissionMode { mode, .. } = sent_one(&mut rx) else {
                 panic!("a SetPermissionMode")
@@ -6377,7 +6384,7 @@ pub(crate) mod tests {
             assert_eq!(mode, PermissionMode::Bypass);
             assert_eq!(app.core.permission_prompts.mode_confirmation(), None);
             assert!(
-                !app.core.agent_confirm.held,
+                app.core.agent_confirm.shown().is_some(),
                 "the held agent prompt shows once the dialog is gone"
             );
         }

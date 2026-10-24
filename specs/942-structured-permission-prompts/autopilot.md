@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M9 verify
-- **Next step**: M9: verify.md step 1 (scoped gate + Review A high on `origin/main...HEAD`)
+- **Phase**: M9 PR open
+- **Next step**: orchestrator: wait on CI for the M9 PR, merge it, then the close phase
 
 ## Pull requests
 
@@ -73,6 +73,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M8 (code-review high) | 1 | ee0e359b8647849961a2f14424cf9c9eab0298f1:2ecf9e9eaa23625479047f65c2f6a7f2625b7c2b | CHANGES: 8 findings; F1 (a `PromptId` is unique per daemon only, so the focus release could miss) MAJOR fixed (`FieldId::Prompt*` carry the session); F2 mode confirmation opens without `clear_for_dialog` fixed (shell clears before it opens); F3 release lives in root `app.rs` moved to `features/window.rs` (manual call sites kept, declined part); F4 mode looked up in the active project only fixed (`workspace.find_session`); F5 stale R14 docs fixed; F6 a Bypass pick stuck for later starts fixed (reset to Default after a confirmed Bypass start); F7 doc comment fixed; F8 declined |
 | Review A M8 (code-review high, scoped) | 2 | fe1c4070..b6e7ffbd (fix diff) | CHANGES: 7 findings; F1 the core reducer dropped `PermissionPrompts(ModeCancelled)`, so the registry (Escape, scrim, another dialog) could not close the mode confirmation MAJOR fixed (core arm, test `escape_closes_the_bypass_mode_confirmation`); F2 no test for the clear before the confirmation fixed (shell test asserts menu and focus cleared); F3 `cli_running` still looked up in the active project only fixed (one `find_session`); F7 comment wrap fixed; F4, F5, F6 declined |
 | Review A M8 (code-review high, scoped) | 3 | b6e7ffbd..6448f48d (fix diff) | Clean of BLOCKER/MAJOR: the three r2 fixes hold; 5 MINOR: F2 the Verify line gave cargo two filters fixed (prose); F1 (cancel only), F3, F5 fixed with the gate fix below; F1 (confirm), F4 left for M9 (in *Follow-ups*) |
+| Review A M9 (code-review high) | 1 | 3b7540adf0dd6138efcf4ae256125b5c75016be1:020f7fd38e12a1a8575ef75ca69bb9cae123368e | CHANGES: 3 findings, all fixed. F1 MAJOR the user guide put the **Permissions** control "at the end of its state row" while the code puts it in the input row (decision 21) — guide now says "beside the message box and before **Send** (and **Stop**, while Claude works)". F2 MINOR `choosing_a_mode_asks_for_it_and_bypass_is_confirmed_first` cannot fail (it compares `chosen` with what `chosen` builds) — new `pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it` drives the painted `Select`: red with the control unwired, green wired. F3 MINOR the shell hardcoded `PermissionMode::Bypass` on `ModeConfirmed` — `mode_confirmed_change()` is now the one place that knows the confirmed mode, and `confirm_mode` is built on it |
+| Review A M9 (code-review high, scoped) | 2 | d5b8d0fbd25cf9b3af5f2a7f41fee8a70b08332b:020f7fd38e12a1a8575ef75ca69bb9cae123368e (fix diff since r1) | CLEAN, no findings: the three r1 fixes hold. Run twice — the first answer was a bare `CLEAN` with nothing cited, which counts as no review, so it was dispatched again asking for the `Checked:` line |
+| Review B M9 (conformance, sonnet) | 1 | d5b8d0fbd25cf9b3af5f2a7f41fee8a70b08332b:020f7fd38e12a1a8575ef75ca69bb9cae123368e | CLEAN; 3 MINOR: F1 T073's live quickstart steps not run (recorded in *Follow-ups*, no logged-in `claude` here); F2 the M8 r3 follow-ups ride in M9's diff (recorded here and in the PR body); F3 `mode_confirmed_change` beside `confirm_mode` declined (it is review A r1 F3's own fix) |
 | Review B M8 (conformance, sonnet, `claude -p` with the diff inline, 0 permission denials) | 1 | ee0e359b…:6448f48d (diff inline) | CHANGES: F1 MAJOR no red-before-green record for M8 fixed (cycle-log Cycle 12, red by construction, Constitution I exception); F2 MINOR no test that the bar draws the label, F3 MINOR no test that a mode row leaves the list open: left (visual pass checks F3 live) |
 | Review B M8 (sonnet, scoped) | 2 | cycle-log fix diff inline | CLEAN: 1 MINOR (the red is asserted, not observed) |
 | Full gate M8 | 1 | 6448f48d | Red: `feature_write_isolation` `every_method_called_on_state_is_classified` — `permission_prompts.cancel_mode` (the new core arm) in neither MUTATORS nor READERS; classified as a mutator. B's F3 test (`choosing_a_mode_leaves_the_start_list_open`) added with it |
@@ -135,33 +138,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | Review A r1 | F2 MINOR: the entry row changes shape when a request appears under its card | Unconfirmed by the reviewer; the card's fold state lives in `State::is_open`, not in the widget tree, so at most transient widget state (a text selection) could reset; revisit if M8's live pass shows it |
 | M7 | Review A r1 | F3 MINOR: question rows stay pressable while an answer is sending | The reducer keeps the draft and `send` refuses while `sending`; edits made then are not sent. M8's live pass decides whether rows should grey out |
 | M7 | Review A r2 | F1 MINOR: a focused deny/note field keeps `focused_field` after its request ends, so terminals do not take keys until a click | Unreachable while the switch is off; M8 turns prompts on and owns the keyboard side (composer, T064–T066) — listed in *Follow-ups* for it |
+| M9 | Review B r1 | F3 MINOR: `mode_confirmed_change` and `confirm_mode` both hold the "which mode is confirmed" rule, and the core discards `confirm_mode`'s value | The opposite of review A r1 F3, which asked for exactly this: `mode_confirmed_change` is now the single place that names the confirmed mode and `confirm_mode` is built on it, so the two cannot disagree. The core arm discards the pair deliberately — it only closes the dialog; sending the change is the shell's, which reads the pair before handing the message to the core |
 
 ## Handover
 
-- **Done** (M9 unit 1, context over 150k at the post-implement checkpoint): branch restarted from
-  origin/main e65993bc (#941 M6 in); PR #1309's merge SHA recorded. T071, T072, T066, T073 and both
-  M8 r3 follow-ups implemented and ticked, committed as 87804860 (not pushed; no PR yet). New
-  `ui/mode_control.rs`; `Seams::control` added to #941's `ui/composer.rs` (decision 21); core
-  `ModeConfirmed` arm; `confirm_mode` in `state_scan` MUTATORS; layout fixture accepted; user
-  guide updated (mode control, *Waiting for you*, the *does not do yet* line). Targeted tests green
-  (`layout_snapshot` 102, `--bin micold-ai-ide permission_prompts` 11,
-  `features_permission_prompts` 26, `feature_write_isolation` 8). No gate run yet.
-- **Visual pass (T073)**: done offscreen by the unit itself (tiny-skia after `layout::settle`, a
-  throwaway test, not committed; the visual-pass skill was not used): PASS light and dark —
-  *Waiting for you* replaces *Working* with a request pending, gone after withdrawal; the
-  **Permissions** `Select` beside the text area shows Default / Accept edits / Bypass as the
-  summary says, unclipped, before **Stop**/**Send**; the session bar's Bypass label with it;
-  *Run in Bypass?* over the composer after a Bypass pick; the refusal reason in the status row
-  after **Ready**. Not captured: the `Select`'s open list (the harness drew no list after a press;
-  the shared component's list has its own picker tests). Live steps 1, 5, 6, 8, 11 not run: no
-  logged-in `claude` here. Evidence `visual-pass/m9-*.png`.
-- **Next**: verify.md: step 1 scoped gate (`scripts/autopilot/scoped-gate.sh`) with Review A (high,
-  `claude -p`, diff inline) in its shadow; step 2 Review B (sonnet); visual pass counts as done
-  unless review fixes change what is drawn; step 3 full gate (`scripts/gate.sh` or
-  `bash /mnt/project-files/scripts/split-gate.sh`); then pr.md: push (prune the stale remote ref
-  first if needed), open the draft PR "#942: Structured session: permission prompts via
-  permission-prompt-tool — M9" via the GitHub MCP tools; do not merge.
-- **Open findings**: none.
+None.
 
 ## Open escalation
 
@@ -169,7 +150,9 @@ None.
 
 ## Follow-ups not done
 
-- For M9 (Review A M8 r3 MINORs left): the shell's `ModeConfirmed` changes `permission_prompts` directly, skipping `State::update`'s after-message work (`agent_confirm::release`); no test of `clear_for_dialog` closing the mode confirmation. (r3's cancel path, catch-all comment and 104-column line were fixed in M8 with the gate's `feature_write_isolation` fix.)
+- ~~For M9 (Review A M8 r3 MINORs left): the shell's `ModeConfirmed` changes `permission_prompts` directly, skipping `State::update`'s after-message work (`agent_confirm::release`); no test of `clear_for_dialog` closing the mode confirmation.~~ Done in M9 (`ModeConfirmed` goes through `core.update`; `confirming_bypass_releases_an_agent_prompt_held_behind_it`, `another_dialog_opening_closes_the_bypass_mode_confirmation`) — review B M9 r1 F2 notes that these M8 corrections ride in M9's diff; the PR body says so. (r3's cancel path, catch-all comment and 104-column line were fixed in M8 with the gate's `feature_write_isolation` fix.)
+
+- For the close phase (review B M9 r1 F1): the quickstart's **live** steps — Part A 1, 5, 6, 8 and Part B 11 — have never been run against a real logged-in `claude`; this container has none. Everything they check was covered offscreen (`visual-pass/`) or by a test, the `Select`'s open list included (`pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it`). Run them, or record the gap, before closing the spec.
 
 - M6's first final gate failed once in `tests::pr_status::pr_list_read_a_second_ask_shares_the_read_under_way` (`the work an update returned has to finish: Elapsed`, the 10 s bound of `main_tests::messages`; untouched by #942). Isolated it passes 5 of 5 but takes 10.05 s each run, right at that bound: a load flake to watch.
 

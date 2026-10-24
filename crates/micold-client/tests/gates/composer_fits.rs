@@ -616,6 +616,94 @@ fn the_mode_control_offers_the_four_modes_and_shows_the_sessions_mode() {
     }
 }
 
+/// The path of the deepest node that contains what drew `content` — where a press lands on the
+/// control a test found by its glyph (`Overflow::origin`'s own advice).
+fn press_path(painted: &[Overflow], boxes: &[lay::LayoutRecord], content: &str) -> Vec<usize> {
+    let at = find(painted, content).origin;
+    boxes
+        .iter()
+        .filter(|b| {
+            b.layer == lay::Layer::Base
+                && b.width > 0.0
+                && b.height > 0.0
+                && at.x >= b.x
+                && at.x <= b.x + b.width
+                && at.y >= b.y
+                && at.y <= b.y + b.height
+        })
+        .max_by_key(|b| b.path.len())
+        .unwrap_or_else(|| panic!("a node contains the `{content}` it drew"))
+        .path
+        .clone()
+}
+
+/// The open list is the one part of the mode control a still window never shows: at rest the
+/// control paints its own mode and nothing else, so this is what says the four modes are actually
+/// *offered* there, and that picking one asks the shell for it (T071; the visual pass could not
+/// capture the open list).
+#[test]
+fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() {
+    use micold_client::features::permission_prompts::Msg as PromptsMsg;
+    use micold_client::ui::mode_control::MODE_LABEL;
+    use micold_core::session::PermissionMode;
+
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    in_mode(&mut state, id, PermissionMode::Default);
+    let under = StateUnderTest::new(state);
+
+    let mut renderer = lay::renderer();
+    let (resting, boxes) =
+        lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW);
+    let control = press_path(&resting, &boxes, MODE_LABEL);
+
+    let mut renderer = lay::renderer();
+    let opened = lay::painted_text_pressing(lay::view_of(&under), &mut renderer, &control);
+    let rows: Vec<&Overflow> = PermissionMode::ALL
+        .iter()
+        .map(|mode| {
+            opened
+                .iter()
+                .find(|p| p.content == mode.label() && p.layer == lay::Layer::Overlay)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "pressing `{MODE_LABEL}` opens a list offering `{}`: the overlay painted {:?}",
+                        mode.label(),
+                        opened
+                            .iter()
+                            .filter(|p| p.layer == lay::Layer::Overlay)
+                            .map(|p| &p.content)
+                            .collect::<Vec<_>>()
+                    )
+                })
+        })
+        .collect();
+    for (mode, row) in PermissionMode::ALL.iter().zip(&rows) {
+        assert!(
+            row.excess() <= TOLERANCE
+                && row.on_screen.x >= -TOLERANCE
+                && row.on_screen.y + row.natural_height <= WINDOW.height + TOLERANCE,
+            "`{}` is offered whole and inside the window: {row:?}",
+            mode.label()
+        );
+    }
+
+    for (mode, row) in PermissionMode::ALL.iter().zip(&rows) {
+        let renderer = lay::renderer();
+        let published =
+            lay::messages_from_open_list(lay::view_of(&under), &renderer, &control, row.on_screen);
+        assert!(
+            published.contains(&Message::PermissionPrompts(PromptsMsg::ModeRequested {
+                session: id,
+                mode: *mode,
+            })),
+            "picking `{}` in the open list asks the shell for it, which sends \
+             `SetPermissionMode` (Bypass after its confirmation): {published:?}",
+            mode.label()
+        );
+    }
+}
+
 #[test]
 fn choosing_a_mode_asks_for_it_and_bypass_is_confirmed_first() {
     use micold_client::features::permission_prompts::Msg as PromptsMsg;

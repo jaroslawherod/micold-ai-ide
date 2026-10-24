@@ -81,11 +81,11 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         // Closed through the core, as `ModeCancelled` is, so its after-message work runs too: an
         // agent prompt held behind the dialog shows (M8 review A r3).
         Msg::ModeConfirmed => {
-            let confirmed = prompts.mode_confirmation();
+            let confirmed = prompts.mode_confirmed_change();
             app.core
                 .update(Message::PermissionPrompts(Msg::ModeConfirmed));
-            if let Some(session) = confirmed {
-                send_mode(app, session, PermissionMode::Bypass);
+            if let Some((session, mode)) = confirmed {
+                send_mode(app, session, mode);
             }
         }
         // Through the core, as the registry's closes go, so its after-message work runs too.
