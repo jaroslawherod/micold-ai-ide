@@ -127,24 +127,24 @@ both weights; the repository holds one copy of each face.
 
 **Independent test**: `cargo test -p micold-client --test layout_apparatus --test layout_snapshot`.
 
-- [ ] T016 [US2] `client/tests/layout_apparatus.rs`
+- [x] T016 [US2] `client/tests/layout_apparatus.rs`
   `the_monospace_face_parses_and_is_the_face_that_measures` (line 169): keep its checks, and add the
   Bold face — `Family::Monospace` with `Weight::Bold` resolves to a `Source::Binary` face whose data
   is `micold_client::ui::FIRA_MONO_BOLD_BYTES`, and `measure(PROBE, Font { weight: Bold,
   ..Font::MONOSPACE })` equals the Bold face's own advances; every failure message names
   `Fira Mono` (FR-006). The Regular and Bold probe widths equal to the face's own advances are the
   SC-001 check, run on all three CI runners. Red until T018 (the test renderer loads no Bold face)
-- [ ] T017 [US2] One-copy test in `client/tests/layout_apparatus.rs`, beside the guard: walk the
+- [x] T017 [US2] One-copy test in `client/tests/layout_apparatus.rs`, beside the guard: walk the
   repository from `CARGO_MANIFEST_DIR/../..`, skipping `target*`, `.git` and `.claude/worktrees`,
   and fail naming each file whose name starts `FiraMono` and ends `.ttf`/`.otf` outside
   `assets/fonts/` (FR-005, SC-003). It passes after T001; prove it can fail by running it once with
   a temporary copy in `client/tests/fixtures/` (delete the copy after)
-- [ ] T018 [US2] `client/tests/support/layout.rs::renderer`: replace its monospace `load_font` and
+- [x] T018 [US2] `client/tests/support/layout.rs::renderer`: replace its monospace `load_font` and
   `set_monospace_family` with `micold_client::ui::install_monospace(&mut fonts)` inside the `Once`;
   `REFERENCE_MONO_FONT_BYTES` = `micold_client::ui::FIRA_MONO_REGULAR_BYTES` and
   `REFERENCE_MONO_FONT_FAMILY` = `micold_client::ui::MONO_FAMILY`; doc comment: the shipped face,
   registered by the application's installer (T016 passes)
-- [ ] T019 [US2] Run `client/tests/layout_snapshot.rs`. Expected unchanged (research R4); if it
+- [x] T019 [US2] Run `client/tests/layout_snapshot.rs`. Expected unchanged (research R4); if it
   differs, regenerate once with `UPDATE_LAYOUT_SNAPSHOT=1` and confirm the diff of
   `client/tests/fixtures/layout_snapshot.txt` touches monospace text nodes only (SC-005), saying so
   in the commit message

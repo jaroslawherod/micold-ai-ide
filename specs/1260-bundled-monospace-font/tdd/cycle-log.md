@@ -12,3 +12,6 @@ task pair it covers.
 | mutation (T006–T008) | — | `FIRA_MONO_BOLD_BYTES` pointed at the Regular file and `remove_face` skipped: `the_bold_bytes_are_fira_mono_bold ... FAILED` ("bundled Fira Mono Bold: weight"), `pin_monospace_drops_a_host_copy_... FAILED` ("a Fira Mono face not loaded from memory survived") | restored source: all `mono` tests ok |
 | T011, T012 | application and showcase call `install_monospace` before `iced::application` | glue | full gate green; visual pass §B |
 | T014 | user guide | docs | — |
+| T016, T018 | `Family::Monospace` at Regular and Bold resolves to the shipped bytes and `Font::MONOSPACE` measures with each face's own advances | before T018: `the_monospace_face_parses_and_is_the_face_that_measures ... FAILED` ("Fira Mono Bold: Family::Monospace resolved to ... at weight 400") | after `install_monospace` in `renderer`: 12 `layout_apparatus` tests ok |
+| T017 | one `FiraMono*.ttf/.otf` in the repository, under `assets/fonts/` | passes after T001; with a temporary `tests/fixtures/FiraMono-Regular.ttf` it FAILED naming that path (copy deleted) | `there_is_one_copy_of_fira_mono_in_the_repository` ok |
+| T019 | `layout_snapshot` unchanged (research R4) | — | 105 passed, fixture untouched |

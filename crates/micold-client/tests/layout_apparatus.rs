@@ -207,27 +207,132 @@ fn the_monospace_face_parses_and_is_the_face_that_measures() {
         );
     }
 
+    // Regular and Bold: each weight must resolve to the shipped bytes, and measure with that
+    // face's own advances (SC-001). Every message names `Fira Mono` (FR-006).
     const PROBE: &str = "cargo test -- --nocapture";
-    let measured = measure(PROBE, iced::Font::MONOSPACE);
-    let expected: f32 = PROBE
-        .chars()
-        .map(|ch| {
-            let id = face
-                .glyph_index(ch)
-                .expect("the monospace face maps the probe");
-            f32::from(
-                face.glyph_hor_advance(id)
-                    .expect("the face must carry advances"),
-            ) * lay::DEFAULT_TEXT_SIZE
-                / f32::from(face.units_per_em())
-        })
-        .sum();
+    for (weight, bytes, what) in [
+        (
+            iced::font::Weight::Normal,
+            ui::FIRA_MONO_REGULAR_BYTES,
+            "Regular",
+        ),
+        (iced::font::Weight::Bold, ui::FIRA_MONO_BOLD_BYTES, "Bold"),
+    ] {
+        use iced::advanced::graphics::text::cosmic_text::fontdb;
+        let weight_font = iced::Font {
+            weight,
+            ..iced::Font::MONOSPACE
+        };
+        // Resolve under the lock, assert after releasing it: a panic while holding it would poison
+        // the global font system for every other test in this binary.
+        let resolved = {
+            let mut fonts = iced::advanced::graphics::text::font_system()
+                .write()
+                .expect("the global font system lock was poisoned");
+            let db = fonts.raw().db();
+            db.query(&fontdb::Query {
+                families: &[fontdb::Family::Monospace],
+                weight: if weight == iced::font::Weight::Bold {
+                    fontdb::Weight::BOLD
+                } else {
+                    fontdb::Weight::NORMAL
+                },
+                ..fontdb::Query::default()
+            })
+            .map(|id| {
+                let shipped = db.with_face_data(id, |data, _| data == bytes) == Some(true);
+                let described = db.face(id).map_or_else(String::new, |info| {
+                    format!("{:?} at weight {}", info.families, info.weight.0)
+                });
+                (shipped, described)
+            })
+        };
+        let (is_shipped, described) =
+            resolved.unwrap_or_else(|| panic!("Fira Mono {what}: Family::Monospace must resolve"));
+        assert!(
+            is_shipped,
+            "Fira Mono {what}: Family::Monospace resolved to {described}, not the shipped face the \
+             installer registers"
+        );
 
+        let face = ttf_parser::Face::parse(bytes, 0)
+            .unwrap_or_else(|e| panic!("shipped Fira Mono {what} does not parse: {e}"));
+        let measured = measure(PROBE, weight_font);
+        let expected: f32 = PROBE
+            .chars()
+            .map(|ch| {
+                let id = face
+                    .glyph_index(ch)
+                    .expect("the monospace face maps the probe");
+                f32::from(
+                    face.glyph_hor_advance(id)
+                        .expect("the face must carry advances"),
+                ) * lay::DEFAULT_TEXT_SIZE
+                    / f32::from(face.units_per_em())
+            })
+            .sum();
+
+        assert!(
+            (measured - expected).abs() <= 0.05,
+            "Fira Mono {what}: Font::MONOSPACE measured {measured:.2}px but the face advances \
+             {expected:.2}px. The renderer is shaping code with some other font — the face is not \
+             loaded, the monospace family is not set, or a host font of the same name has won the \
+             lookup."
+        );
+    }
+}
+
+/// There is exactly one copy of Fira Mono in the repository, in `assets/fonts/` (FR-005, SC-003).
+///
+/// A second copy (a test fixture, a showcase asset) is a second thing to keep in step with the
+/// licence and provenance record, and the one the renderer loads could silently stop being the one
+/// that ships.
+#[test]
+fn there_is_one_copy_of_fira_mono_in_the_repository() {
+    use std::path::{Path, PathBuf};
+
+    fn walk(dir: &Path, root: &Path, found: &mut Vec<PathBuf>) {
+        for entry in
+            std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
+        {
+            let path = entry.expect("read a directory entry").path();
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_owned();
+            if path.is_dir() {
+                let rel = path.strip_prefix(root).unwrap_or(&path);
+                if name.starts_with("target")
+                    || name == ".git"
+                    || rel == Path::new(".claude/worktrees")
+                {
+                    continue;
+                }
+                walk(&path, root, found);
+            } else if name.starts_with("FiraMono")
+                && (name.ends_with(".ttf") || name.ends_with(".otf"))
+            {
+                found.push(path.strip_prefix(root).unwrap_or(&path).to_path_buf());
+            }
+        }
+    }
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut found = Vec::new();
+    walk(&root, &root, &mut found);
+    let strays: Vec<_> = found
+        .iter()
+        .filter(|p| !p.starts_with("assets/fonts"))
+        .collect();
     assert!(
-        (measured - expected).abs() <= 0.05,
-        "Font::MONOSPACE measured {measured:.2}px but the committed face advances {expected:.2}px. \
-         The renderer is shaping code with some other font — the monospace face is not loaded, \
-         the monospace family is not set, or a host font of the same name has won the lookup."
+        strays.is_empty(),
+        "Fira Mono must exist once, in assets/fonts/; also found: {strays:?}"
+    );
+    assert!(
+        found.iter().any(|p| p.starts_with("assets/fonts")),
+        "the shipped Fira Mono was not found in assets/fonts/ (walked {})",
+        root.display()
     );
 }
 
