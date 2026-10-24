@@ -30,7 +30,7 @@ This is slice R6 of the review UI redesign (`docs/development/review-redesign.md
 
 | Part | Needs | Can ship before its blocker |
 |---|---|---|
-| Stale tracking: which files differ between what is shown and what was last read, and the count (FR-001–FR-004) | nothing; pure logic over two change lists | yes |
+| Stale tracking: which files differ between what is shown and what was last read, and the count (FR-001–FR-004) | a per-file change identity added to the list read (FR-001a); the comparison is then pure logic over two change lists | yes |
 | Holding the shown snapshot and the *n files changed since you looked* notice in the view (FR-005–FR-012, FR-014) | the view that exists when it is built: today's Changes view, or the Review tab of #1269 | yes, in today's Changes view; it moves with the view when #1269 lands |
 | Visible-tab only: while the Review tab is hidden, #1269 already marks it changed and re-reads when shown | #1269 | the hidden-tab part is #1269's, not this feature's |
 | A held change to a file marked reviewed returns it to unseen with the changed dot (FR-013) | #1271 (reviewed marks) | no: this requirement is built with or after #1271 |
@@ -69,7 +69,7 @@ Press the notice: the diff shows the edits, the dots and the notice go.
    disappear, and the count starts again from zero.
 3. **Given** a held change, **When** the same file changes again, **Then** the count does not grow
    for it (each file counts once).
-4. **Given** a held change to a file, **When** the file changes back so its diff matches what is
+4. **Given** a held change to a file, **When** the file's content changes back to what it was when
    shown, **Then** that file loses its dot and leaves the count; at zero the notice disappears.
 5. **Given** a new file appears in the entry or a listed file's changes are reverted, **When** the
    view notices it, **Then** it counts in *n files changed* like an edited file.
@@ -82,6 +82,22 @@ Press the notice: the diff shows the edits, the dots and the notice go.
 8. **Given** the view is showing a pull request, **When** the pull request list refreshes with a new
    head for it, **Then** the files whose diff differs are counted and held the same way as edits in
    the working tree.
+9. **Given** changes are held (whole-view hold, FR-014), **When** the user selects a file that is not
+   in the changed-since set, **Then** its diff is read and shown, as today; it matches the shown
+   snapshot because the file has not changed since.
+10. **Given** changes are held (whole-view hold, FR-014), **When** the user selects a file in the
+   set that the latest read still lists, **Then** the view reads and shows that file's latest diff,
+   its row takes the latest counts and loses its dot, it leaves the count, and every other held file
+   stays held.
+11. **Given** changes are held (whole-view hold, FR-014), **When** the user selects a file in the
+   set that the latest read no longer lists (its changes were reverted or it was removed), **Then**
+   the diff area says the file has no changes any more, the row keeps its dot and stays in the list
+   until the user applies.
+12. **Given** a file already shown as modified, **When** an already-changed line of it is edited
+   again so its added and removed counts stay the same, **Then** it counts and carries a dot.
+
+Scenarios 1 (the two other files), 5, 9, 10 and 11 assume the whole-view hold proposed in FR-014;
+under the open-diff-only answer only the open file is held and the list updates live as today.
 
 ---
 
@@ -157,6 +173,12 @@ holds that chip's text and the focus stays in the box.
 - **Open file removed by the agent**: it counts and carries its dot; the user keeps reading it until
   they apply. On apply it leaves the list as today, and an unsaved new comment on it is closed as
   today (*Writing a comment*).
+- **Selected between reads**: a file changed after the last background read but before the user
+  selects it shows the diff read on selection; its row takes that read's counts and identity, and
+  the next background read compares against them, so it does not count for that change.
+- **Large files**: a working-tree file over the size limits is identified by its size and
+  modification time instead of its content (FR-001a); touching it without changing its bytes counts
+  it once, which is accepted.
 - **Comment written while stale**: saving a comment on the held diff quotes the lines shown. On
   apply, the comment follows its code by today's anchoring (stays, moves or is marked outdated).
 - **Changes keep arriving**: during a long agent run the count keeps up within about two seconds of
@@ -187,27 +209,45 @@ holds that chip's text and the focus stays in the box.
 **Stale tracking (pure, ships first)**
 
 - **FR-001**: Given the change list the view shows and the latest change list read, the system MUST
-  report the set of files whose change differs between them: a file listed in only one of them, or
-  listed in both with a different change (kind, path, counts or diff content).
+  report the set of files whose change differs between them, matching rows by path: a file listed in
+  only one of them, or listed in both with a different kind, added or removed count, or change
+  identity (FR-001a). A rename counts as one file under its new path: a latest row renamed from a
+  path the shown list has does not count that old path separately.
+- **FR-001a**: Each row of the change list MUST carry a change identity that differs whenever the
+  file's content on either side of its diff differs, including an edit that keeps the counts the
+  same. The identity is what the list read can give cheaply, with no per-file diff read: for a
+  version in git (a commit or the index) its object id, which the list read's `git diff --raw`
+  already reports; for a working-tree version, which `--raw` reports without an id, the file's
+  content hash from one `git hash-object` call over those paths per read (untracked files too); for a
+  file over the size limits, its size and modification time instead of its hash; for a pull request,
+  a hash of the file's patch in the request's diff, which is already read whole.
 - **FR-002**: The count shown MUST equal the size of that set; a file counts once however many
   times it changed.
-- **FR-003**: A file whose latest change is again equal to what is shown MUST leave the set.
+- **FR-003**: A file whose latest kind, counts and change identity are again equal to what is shown
+  MUST leave the set.
 - **FR-004**: Applying MUST make the latest read the shown one and empty the set.
 
 **Holding and the notice**
 
 - **FR-005**: While the review view is shown and has a list on screen, a change found by the file
-  watch (or a new pull request head for the shown pull request) MUST NOT change the shown list, the
-  shown diff or its scroll position until the user applies it.
+  watch (or a new pull request head for the shown pull request) MUST NOT change the shown diff or
+  its scroll position until the user applies it; under the whole-view hold (FR-014) it MUST NOT
+  change the shown list either.
 - **FR-006**: The view MUST still read the latest changes in the background, within about two
   seconds of a settled burst as today, and update the set and the count.
 - **FR-007**: While the set is not empty the view's header MUST show *n file(s) changed since you
   looked* (singular for one), and that notice MUST apply the changes when pressed.
-- **FR-008**: Each listed file in the set MUST carry a *changed since you looked* dot on its row; a
-  file in the set that the shown list does not yet have MUST still count in *n*.
+- **FR-008**: Each listed file in the set MUST carry a *changed since you looked* dot on its row.
+  Under the whole-view hold (FR-014), a file in the set that the shown list does not yet have MUST
+  still count in *n*.
 - **FR-009**: Changes the user makes to what the view shows (source, toggles, pull request, base)
-  MUST take effect at once and leave nothing held. Selecting another file MUST NOT apply held
-  changes; it shows that file as the shown snapshot has it.
+  MUST take effect at once and leave nothing held. Selecting another file MUST NOT apply the other
+  held changes. Under the whole-view hold (FR-014): selecting a file not in the set reads and shows
+  its diff as today; selecting a file in the set that the latest read lists MUST read and show its
+  latest diff, update its row and drop it from the set; selecting one the latest read no longer
+  lists MUST say it has no changes any more and keep it in the set (US1 scenarios 9–11). For a pull
+  request every file's diff is already in memory and selection shows the held snapshot's patch,
+  except for a file in the set, which shows the latest patch and leaves the set.
 - **FR-010**: Applying MUST keep the selected file while it is listed, and MUST keep picked lines
   and comment-box text by the rules a refresh follows today.
 - **FR-011**: The comment-box text MUST be kept while changes are held.
@@ -218,7 +258,9 @@ holds that chip's text and the focus stays in the box.
 - **FR-014**: Whether the hold covers the whole view or only the open file's diff:
   [NEEDS CLARIFICATION: Does the hold cover the whole view — the file list and every file stay one
   snapshot until the notice is pressed (proposed, nothing on screen moves) — or only the open diff,
-  with the file list and other files updating live as today?]
+  with the file list and other files updating live as today?] Requirements and scenarios marked
+  *whole-view hold* apply only under the first answer; under the second, the set holds at most the
+  open file and the list, its counts and other files update live as today.
 
 **Quick comment**
 
@@ -260,7 +302,10 @@ holds that chip's text and the focus stays in the box.
 
 ### Key Entities
 
-- **Shown snapshot**: the change list (and the diffs read from it) the view is displaying.
+- **Shown snapshot**: the change list the view is displaying, each row with its change identity,
+  and the open file's diff. For a working tree only the open file's diff is in memory; another file's
+  diff is read when it is selected (FR-009). For a pull request the whole request's diff is.
+- **Change identity**: per row, what tells whether its content changed (FR-001a).
 - **Latest read**: the most recent change list read in the background for the same entry and
   source.
 - **Changed-since set**: the files that differ between the two; its size is *n*.
@@ -293,7 +338,9 @@ holds that chip's text and the focus stays in the box.
   #1273).
 - "Since you looked" is per window and in memory: it is not persisted and not shared across
   windows. It restarts when the view is reopened.
-- The background read and its two-second budget reuse today's file watch and refresh; no new watch.
+- The background read and its two-second budget reuse today's file watch and list read, which adds
+  the change identity of FR-001a (one extra `git hash-object` call per read); no new watch and no
+  per-file diff read.
 - The setting's place in the Settings sections is the plan's choice.
 
 ## Out of Scope
@@ -303,7 +350,7 @@ holds that chip's text and the focus stays in the box.
   only adds FR-013's interaction with them.
 - A key to apply the held changes, and the rest of the keyboard map (#1274).
 - Auto-scrolling the diff while dragging past its edge.
-- Per-file "show latest for this file only" without applying the whole view.
+- A control to show the latest of one file without selecting it (selecting a held file does, FR-009).
 - User-defined or editable suggestion chips.
 - The repository browser (**Files**) refresh behaviour.
 - Final placement in the redesigned layout and the mockup sync (#1270, #1272, #1273, #1276).

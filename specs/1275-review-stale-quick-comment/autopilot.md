@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: spec
-- **Next step**: spec review round 1 (fresh reviewer, rubric `rubrics/spec.md`) on snapshot 9e154017e95adc6a613e45c3f02e6da155dc11ba:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 (working tree before the spec commit; spec content unchanged since)
+- **Next step**: spec review round 2 (re-review of the fix diff, sonnet) from snapshot 9e154017e95adc6a613e45c3f02e6da155dc11ba:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2; then clarify (FR-014)
 
 ## Pull requests
 
@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| spec | 1 | 9e154017e95adc6a613e45c3f02e6da155dc11ba:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | 3 MAJOR, 2 MINOR. F1 fixed: FR-001a per-row change identity (git object ids from `diff --raw`, `hash-object` for working-tree files, size+mtime over limits, PR patch hash), AS12, FR-003, Context/Assumptions. F2 fixed: FR-009 + US1 AS9–11 (select non-held reads as today; held reads latest and leaves set; no-longer-listed says no changes), Key Entities. F3 fixed: whole-view-only MUSTs marked conditional on FR-014. F4 fixed: match by path, rename counts once under new path. F5 fixed: checklist item unticked. |
 
 ## Declined review findings
 
@@ -45,10 +46,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec, checklist and ledger written and committed. Spec review NOT run: the spec unit had no
-Agent tool to dispatch a fresh reviewer, and self-review is not allowed. Next: dispatch spec review
-round 1 per `tasks/review.md` with `rubrics/spec.md`, act on it per `tasks/review-rounds.md`, then
-clarify. Open marker for clarify: FR-014 (hold the whole view vs only the open diff).
+Spec review round 1 (orchestrator) acted on; all five findings fixed, none declined. Next: spec
+review round 2 (re-review of the fix diff), then clarify. Open marker for clarify: FR-014 (hold the
+whole view vs only the open diff).
 
 ## Open escalation
 
