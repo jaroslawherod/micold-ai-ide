@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1319 | design (spec, plan, tasks) | merged | 1f66380fd3092861e818531f9c3a308d08abd5c5 |
 | #1324 | M1 (T001–T011) | merged | 92fe861ca11843a9f43ad66386360a75c31f0cf4 |
+| #1331 | M2 (T012–T023) | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | #1324 | merged |
-| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | M2PR | PR open |
+| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | #1331 | PR open |
 
 ## Decisions
 
@@ -60,7 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 reviews A and B clean; their minors fixed in c1590fd9; full gate (`scripts/gate.sh`) green at c1590fd9; M2 PR M2PR opened (branch not rebased onto the newer main: rebase was refused by the session's permission classifier; GitHub merges it). Next: orchestrator merges M2PR, then the close unit (visual pass, quickstart §B).
+M2 reviews A and B clean; their minors fixed in c1590fd9; full gate (`scripts/gate.sh`) green at c1590fd9; M2 PR #1331 opened (branch not rebased onto the newer main: rebase was refused by the session's permission classifier; GitHub merges it). Next: orchestrator merges #1331, then the close unit (visual pass, quickstart §B).
 
 ## Open escalation
 
