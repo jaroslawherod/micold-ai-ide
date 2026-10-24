@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-24 — shipped in PRs #1319, #1324, #1331 and the close PR
 
 **Input**: User description: "Implement GitHub issue #1299: Overview cards: animate keyboard focus
 and expansion. Keyboard focus and hover on an Overview card change it at once: the focus outline

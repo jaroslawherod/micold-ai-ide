@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: M2 PR open (reviews A and B clean, minors fixed in c1590fd9, full gate green)
-- **Next step**: orchestrator waits on the M2 PR's CI and merges it; then the close unit (visual pass deferred there)
+- **Phase**: close (checks, polish, visual pass done; close review pending)
+- **Next step**: close review (fresh reviewer on the close diff); then gate, finish the ledger, open the close PR
 
 ## Pull requests
 
@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1319 | design (spec, plan, tasks) | merged | 1f66380fd3092861e818531f9c3a308d08abd5c5 |
 | #1324 | M1 (T001–T011) | merged | 92fe861ca11843a9f43ad66386360a75c31f0cf4 |
-| #1331 | M2 (T012–T023) | open | — |
+| #1331 | M2 (T012–T023) | merged | 2ff3ceef8806fffb3ce20d83fad2c77c71be8f66 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | #1324 | merged |
-| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | #1331 | PR open |
+| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | #1331 | merged |
 
 ## Decisions
 
@@ -39,6 +39,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 6 | implement M1 (rebase) | BUG-1298 (#1298, b561c81d..763a59dc) merged to main and conflicted with M1 in overview_card.rs: how to resolve? | Rebased onto origin/main 763a59dc keeping both sides: #1298's frame/header/body consts beside M1's `CARD_MOTION`, #1298's T050 design tests beside M1's fade tests. Mechanical only, no M1 logic changed; full gate green on the rebased tree | agent | overview_card.rs; scratchpad gate log GATE_EXIT=0 |
 | 7 | implement M2 | `Lifts::settling()` (data-model) cannot tell the expanded entry from a settling one without the expanded location: what signature? | `settling(expanded: Option<&SessionLocation>)`; `draw` passes the grid's expanded location, and skips settling when `instant` or zooming | agent | card_lift.rs, card_grid.rs `draw` |
 | 8 | implement M2 | A menu shadow (offset 2, blur 7) never reaches a card 16 px away: how does the draw-order test show it is not cut? | The 3×3 test grid uses spacing 0 and reads two frames into the collapse (strength ~0.9); confirmed it fails with the settling pass disabled | agent | card_grid.rs `a_settling_card_is_drawn_over_its_neighbours_and_nothing_moves` |
+| 9 | close | tdd-verify: FAIL (O1 mutant survived; all behaviors test-after, no cycle log). What now? | Fixed O1 with `the_overview_grid_follows_reduce_motion` and the two conditional-logic tests (T027, T028); test-after accepted, as for 971/972 (a red cannot be recorded after the fact; review B checked each milestone's tests) | agent | tdd/verification.md Resolution |
+| 10 | close | Visual pass saw a stale shadow outline on tiny-skia after a hover move (Reduce motion off). Fix here? | No: cause unconfirmed (renderer damage suspected), not checked on wgpu; recorded as a follow-up, not a milestone | agent | visual-pass.md Observation |
 
 ## Review rounds
 
@@ -61,7 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 reviews A and B clean; their minors fixed in c1590fd9; full gate (`scripts/gate.sh`) green at c1590fd9; M2 PR #1331 opened (branch not rebased onto the newer main: rebase was refused by the session's permission classifier; GitHub merges it). Next: orchestrator merges #1331, then the close unit (visual pass, quickstart §B).
+None.
 
 ## Open escalation
 
@@ -69,5 +71,7 @@ None.
 
 ## Follow-ups not done
 
-- M2 visual pass (quickstart §B.1–§B.5, §B.8–§B.9: showcase *expand and collapse* pose, client hover/focus/Escape lift, Reduce motion): deferred to the close unit, no visual-pass skill or Agent tool in this unit.
-- M1 visual pass (quickstart §B.4 arrow half, §B.6, §B.7, §B.8 focus half; client Tab onto/away fade): deferred to the close unit, no visual-pass skill reachable in this session.
+- Visual pass (close unit, `visual-pass.md`): end states only; mid-transition frames not capturable under tiny-skia on Xvfb; B1, B7 and the issue-link half of B5 not run (reasons recorded there).
+- tiny-skia stale shadow outline after a hover move with Reduce motion off (`visual-pass.md`, Observation): cleared by a forced redraw, absent with Reduce motion on; suspected `iced_tiny_skia` quad damage not covering shadows. Not checked on wgpu (no GPU). Needs a decision: an issue, or a damage fix in the grid.
+- Settings → Appearance, Reduce motion supporting text still names only the full-screen zoom (`ui/settings/appearance.rs`); the user guide (FR-013) names the cards. Small UI-text follow-up.
+- No speckit converge run: *Review rounds* holds a CLEAN review B for M1 and M2 (close.md step 1).
