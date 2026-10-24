@@ -209,6 +209,8 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         // the row beside it can be hovered — a state layer is also a fill change, and the two must
         // stay tellable apart without relying on hue.
         .selected_label_role(TypeRole::SidebarSessionCurrent)
+        // The row the user is on is filled with the primary container (feature 1125, FR-010).
+        .selection(material::Selection::Primary)
         .into();
     let list: Element<'_, Message> = match hint {
         Some(hint) => column![tree, hint].spacing(spacing::SM).into(),
@@ -410,20 +412,6 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
         );
     }
     col.into()
-}
-
-/// Resolve a [`Tag`] into a chip's `(label, accent)` for the active scheme (FR-005, FR-011).
-/// Rendered as a dimmed tonal chip (see [`style::chip`]); status tags use the `error` accent.
-fn tag_chip(tag: &Tag, r: Roles) -> (String, Rgb) {
-    match tag {
-        Tag::Type(t) => (tag.label(), r.tag_fill(*t)),
-        Tag::Issue(_) => (tag.label(), r.issue_tag().0),
-        // `unwrap_or_default` covers `Valid`, which `label()` answers with `None` rather than the
-        // `""` this arm used to spell out (feature 029, §4.2). A `Tag::Status(Valid)` is not
-        // constructed — `worktree_tags` only emits the tag for an unhealthy worktree — so this is
-        // a total match on a case that does not arise, not a blank chip anyone can see.
-        Tag::Status(_) => (tag.label(), r.error),
-    }
 }
 
 /// One action icon in a worktree row's hover cluster. When `active` (the hovered row) it is
@@ -693,50 +681,38 @@ fn build_items(
             WorktreeStatus::Missing | WorktreeStatus::Invalid => r.error,
         };
 
-        let mut tags: Vec<(String, Rgb)> = node.tags.iter().map(|tag| tag_chip(tag, r)).collect();
-        // Feature 024 (FR-012a): a row listed only because it holds the current session says so.
-        // It survived a filter it does not match, and the user is the one who set that filter — an
-        // unexplained row is worse than a hidden one, because it reads as the filter being broken.
-        //
-        // In the row's existing chip slot rather than a new badge. It is a fact about this run's
-        // session state, not about a branch name, which is why it is not a `Tag` in the core.
-        if node.shown_for_current_session {
-            tags.push(("current session".to_string(), r.secondary));
-        }
-        // Feature 491 (FR-005): the daemon the worktree runs on, or "no daemon" after its daemon
-        // was removed. A label-only chip in the same slot, like the two around it.
-        tags.push((node.daemon.clone(), r.secondary));
-        // 016 BUG-002 (FR-029): a worktree shown because the user asked for it does not live where
-        // the others do, and its folder name says nothing about where it does live. The chip is the
-        // always-visible half of that; the row tooltip below carries the full path, which for these
-        // rows is absolute rather than project-relative.
-        if wt.included {
-            tags.push(("outside this app".to_string(), r.secondary));
-        }
-        // Feature 040 (FR-015, FR-016): a merged pull request that holds all of the branch's work
-        // says so, as a label-only chip in the same slot. It has no press action: removing the
-        // worktree is the row menu's **Delete** and its confirmation, unchanged.
-        if row_pr.is_some_and(|row| row.removable) {
-            tags.push(("can be removed".to_string(), r.secondary));
-        }
+        // The label chips (feature 1125, FR-013): today's, in today's order, without the type and
+        // issue tags the second line's short branch now carries. Why each is there is on
+        // `features::sidebar::RowChip`; the status chip keeps its error accent (FR-011).
+        let tags: Vec<(String, Rgb)> =
+            crate::features::sidebar::row_chips(&node, row_pr.is_some_and(|row| row.removable))
+                .into_iter()
+                .map(|chip| {
+                    let accent = match chip {
+                        crate::features::sidebar::RowChip::Status(_) => r.error,
+                        _ => r.secondary,
+                    };
+                    (chip.label(), accent)
+                })
+                .collect();
         let dir = wt.dir_name.clone();
-        // Feature 1101 (FR-003): the ticket's status right of its key tag, from the one board
-        // every surface reads (FR-010). A ticket without a status has no chip and no gap.
-        let status_chip = node
-            .tags
-            .iter()
-            .enumerate()
-            .find_map(|(index, tag)| match tag {
-                Tag::Issue(key) => state
-                    .jira_status
-                    .board
-                    .status_of(key)
-                    .map(|entry| (index, entry)),
-                _ => None,
-            });
+        // Feature 1101 (FR-003): the ticket's status, first after the second line's text (feature
+        // 1125, R6), from the one board every surface reads (FR-010). A ticket without a status has
+        // no chip and no gap.
+        let status_chip = node.tags.iter().find_map(|tag| match tag {
+            Tag::Issue(key) => state.jira_status.board.status_of(key),
+            _ => None,
+        });
+        // The two lines (feature 1125, FR-011): the title, then the short branch and sessions.
+        let title = crate::features::sidebar::row_title(
+            &node,
+            state.overview.known_title(&node.location()),
+        );
+        let second_line = crate::features::sidebar::row_second_line(&node, &title);
 
         let keyboard = state.sidebar.keyboard_row.as_ref();
-        let mut item = TreeItem::new(depth, node.display_name.clone(), tint)
+        let mut item = TreeItem::new(depth, title.clone(), tint)
+            .supporting_text(second_line, r.on_surface_variant)
             .tags(tags)
             .on_right_press({
                 let dir = dir.clone();
@@ -746,12 +722,9 @@ fn build_items(
                 Message::Worktree(WorktreeMsg::Hovered(dir.clone())),
                 Message::Worktree(WorktreeMsg::Unhovered(dir.clone())),
             );
-        if let Some((index, entry)) = status_chip {
-            item = item.chip_after_tag(
-                index,
-                crate::ui::material::StatusChip::new(&entry.status, r)
-                    .stale(entry.stale)
-                    .into(),
+        if let Some(entry) = status_chip {
+            item = item.leading_chip(
+                crate::ui::material::StatusChip::new(&entry.status, r).stale(entry.stale),
             );
         }
         // FR-017: an expander only for several sessions. FR-018: a press selects the main
@@ -796,11 +769,14 @@ fn build_items(
             .unread_count(unread)
             .row_tooltip(crate::features::sidebar::with_unread_line(
                 crate::features::sidebar::with_state_line(
-                    crate::features::sidebar::worktree_tooltip(
-                        project_root,
-                        wt,
-                        &node.display_name,
-                        row_pr,
+                    crate::features::sidebar::with_title_line(
+                        &title,
+                        crate::features::sidebar::worktree_tooltip(
+                            project_root,
+                            wt,
+                            &node.display_name,
+                            row_pr,
+                        ),
                     ),
                     location_state,
                 ),
@@ -1130,6 +1106,11 @@ fn build_default_item(
     let mut item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
         // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
         .with_icon(Icon::ProjectRoot)
+        // "project root · " and its sessions (feature 1125, FR-011).
+        .supporting_text(
+            crate::features::sidebar::default_second_line(node),
+            r.on_surface_variant,
+        )
         // Feature 482, V1: the Default row's menu, which is the worktree menu under the wire's
         // name for the project root (`""`).
         .on_right_press(|point| Message::Worktree(WorktreeMsg::MenuToggled(String::new(), point)))

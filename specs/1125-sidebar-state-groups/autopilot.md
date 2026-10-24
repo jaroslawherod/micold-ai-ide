@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: milestone M1
-- **Next step**: M1 PR open: the orchestrator waits on CI and merges
+- **Phase**: milestone M2
+- **Next step**: M2 gate + review A
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1320 | Design: spec, plan, tasks | merged | 663899346b1c6c44682895eb6d8f4e4402f714ed |
+| #1325 | M1: sidebar grouped by state | merged (rebase) | 0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | — | reviews A and B done, visual pass done, full gate green at a72f9964; PR next |
-| M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | — | todo |
+| M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | #1325 | done |
+| M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | — | in progress |
 | M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | — | todo |
 | M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | todo |
 | M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | — | todo |
@@ -46,6 +47,10 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | D10 | M1 | `sidebar_fixture::session_at` sessions are `Starting`, which counts as Working | The fixture's sessions are Idle, so existing navigation/sidebar tests keep today's order inside one Idle group | agent-resolved | `location_state::session_state` maps Starting to Running |
 | D11 | M1 | Headers in the Tab order | A heading's keyboard wrapper is always enabled (rows only when focused), so Enter/Space reach it (US5.2) | agent-resolved | `TakesTheKeyboard::new(_, enabled)` skips a disabled wrapper |
 | D12 | M1 | Rebase onto origin/main 4910aeee (feature 943 M9) | Clean rebase; the layout snapshot regenerated unchanged | agent-resolved | `UPDATE_LAYOUT_SNAPSHOT=1 … --test layout_snapshot`: 105 passed, no diff |
+| D13 | M2 | The second line's sessions phrase: the spec's "1 session · 1 running" or today's Overview phrase? | Today's: `sidebar_second_line` composes `branch_line` + `meta_sessions` ("fix/1117 · 1 session running", "project root · 2 sessions, 1 running", "No sessions" alone); spec US3, Assumptions, contract T1, quickstart B3, tasks amended | agent-resolved | `sessions_line` became `meta_sessions` in BUG-1298 FR-023 (e55ff583) after the design; FR-011 and T1 say "no copy" of 1120's phrase |
+| D14 | M2 | Tooltip: where do the full title and `Branch` go? | `features::sidebar::with_title_line` prepends the bare title as the first line; today's tooltip follows unchanged, its `Branch: <full branch>` line included (composed like `with_state_line`) | agent-resolved | FR-012 "in addition to what it shows today"; 27 existing `worktree_tooltip` tests keep today's lines |
+| D15 | M2 | Where do T023's height tests and T029's showcase rows live? | Heights: `tests/features_sidebar.rs` and `tests/sidebar_state.rs` (where `row_heights` is tested; `sidebar_tree.rs` has none); showcase: `showcase/sections/surfaces.rs` TreeView entry (beside M1's group headers), catalogue lists "two-line row", "two-line row, selected" | agent-resolved | `grep -n row_heights crates/micold-client/tests/`; catalogue.rs TreeView entry's `posed` |
+| D16 | M2 | A selected row's tint under `Selection::Primary` | Twisty, icon, label and supporting text take `on_primary_container`; the state icon keeps its state tint; a missing worktree's error-tinted title takes it too while selected (its `missing` chip stays) | agent-resolved | research R7; FR-010 "on-primary-container text and icons" |
 
 ## Review rounds
 

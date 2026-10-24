@@ -874,12 +874,16 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/tree_view.rs",
         component: "TreeView",
-        variants: &[],
+        // `Selection` (feature 1125, R7): "selected row" poses Secondary, "two-line row, selected"
+        // poses Primary.
+        variants: &["Primary", "Secondary"],
         density: &[],
         posed: &[
             "selected row",
             "group header, open",
             "group header, closed",
+            "two-line row",
+            "two-line row, selected",
             "keyboard-focused worktree row",
             "tags",
             "expandable parent",

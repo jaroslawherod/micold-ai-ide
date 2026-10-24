@@ -751,14 +751,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         .collect();
     let (state, reason) =
         crate::features::overview::location_card_state(app, &location, branch.as_deref());
-    let ticket = match &location {
-        SessionLocation::Worktree(dir) => crate::features::overview::numeric_ticket(dir),
-        SessionLocation::Default => None,
-    };
-    let issue_title = match ticket.and_then(|number| app.overview.titles.get(&number)) {
-        Some(crate::features::overview::TitleLookup::Known(text)) => Some(text.as_str()),
-        _ => None,
-    };
+    let issue_title = app.overview.known_title(&location);
     let title =
         micold_core::overview_text::card_title(issue_title, branch.as_deref(), &display_name);
     let pr_open = matches!(

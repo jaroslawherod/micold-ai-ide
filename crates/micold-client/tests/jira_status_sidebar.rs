@@ -84,8 +84,10 @@ fn shows(state: &State, text: &str) -> bool {
     painted(state).iter().any(|t| t == text)
 }
 
+/// Feature 1125 (FR-013, R6): the status chip stands on the row's second line, and the key is no
+/// longer a chip of its own.
 #[test]
-fn the_chip_stands_beside_the_key_tag() {
+fn the_chip_stands_on_the_rows_second_line() {
     let mut state = state_with(&["fix-ABC-1_login"]);
     let source = FakeJiraSource::new().with_statuses(Ok(vec![read(
         "ABC-1",
@@ -94,7 +96,10 @@ fn the_chip_stands_beside_the_key_tag() {
     )]));
     assert!(refresh(&mut state, &source, Trigger::Open, secs(0)));
     assert!(shows(&state, "In Progress"));
-    assert!(shows(&state, "ABC-1"));
+    assert!(
+        !shows(&state, "ABC-1"),
+        "the issue tag is not drawn as a chip"
+    );
 }
 
 #[test]
@@ -105,9 +110,8 @@ fn a_worktree_without_a_ticket_or_a_status_has_no_chip() {
     refresh(&mut state, &source, Trigger::Open, secs(0));
     assert!(state.jira_status.board.status_of("ABC-1").is_none());
     assert_eq!(source.status_calls(), vec![vec!["ABC-1".to_string()]]);
-    // Nothing was added to the sidebar: the key tag stays and no chip joins it.
+    // Nothing was added to the sidebar: no chip joins the row.
     assert_eq!(painted(&state), before);
-    assert!(shows(&state, "ABC-1"));
 }
 
 #[test]

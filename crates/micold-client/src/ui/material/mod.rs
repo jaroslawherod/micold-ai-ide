@@ -276,7 +276,7 @@ pub use text_link::TextLink;
 pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
 pub use toleration_list::TolerationList;
 pub use toolbar::Toolbar;
-pub use tree_view::{TreeItem, TreeView};
+pub use tree_view::{Selection, TreeItem, TreeView};
 pub use typeahead::Typeahead;
 pub use unread_mark::UnreadMark;
 pub use usage_indicator::UsageIndicator;

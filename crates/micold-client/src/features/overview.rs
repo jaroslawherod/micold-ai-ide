@@ -105,6 +105,18 @@ pub struct State {
 }
 
 impl State {
+    /// The known issue title of a location (R8): its worktree directory's numeric ticket's title,
+    /// once read. The Overview's card and the sidebar's row (feature 1125) both read it here.
+    pub fn known_title(&self, location: &SessionLocation) -> Option<&str> {
+        let SessionLocation::Worktree(dir) = location else {
+            return None;
+        };
+        match self.titles.get(&numeric_ticket(dir)?) {
+            Some(TitleLookup::Known(text)) => Some(text.as_str()),
+            _ => None,
+        }
+    }
+
     /// Whether full-screen mode is on: the Overview is open and the mode was entered since it
     /// opened. The only reader of the field (data-model).
     pub fn full_screen(&self) -> bool {

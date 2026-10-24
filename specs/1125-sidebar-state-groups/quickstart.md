@@ -31,7 +31,7 @@ failing checks), light then dark. Compare with the mockup board's sidebar
 |---|---|---|
 | B1 | Look at the sidebar top | Overview row first with its icon and "2 need action"-style badge in the error (or warning) container colours; the chip bar under it: **All**, the type chips, then add, hide, ⋯ (US2.1, US2.2, US4.1) |
 | B2 | Read the groups | headers "Needs action · n", "Working · n", "Idle · n", "Done · n" in that order; Done collapsed; the failing-checks worktree under Needs action (US1.1–US1.3) |
-| B3 | Read the rows | first line the issue title (or branch); second line `fix/1117 · 1 session · 1 running`; *Default* reads "Default" / "project root · …"; no type or issue chip (US3.1–US3.4, US3.7) |
+| B3 | Read the rows | first line the issue title (or branch); second line `fix/1117 · 1 session running`; *Default* reads "Default" / "project root · …"; no type or issue chip (US3.1–US3.4, US3.7) |
 | B4 | Select a session; open the Overview from the row | selected row in the primary container colour, legible; while the Overview is open only the Overview row looks selected (US2.4, US3.6) |
 | B5 | Press **All** and type chips; open ⋯ and choose each item; press Escape on the open menu | filters as before; each item does what the old header button did; the menu closes (US4.2–US4.6) |
 | B6 | Tab through the sidebar; Enter on a header; a location chord into collapsed Done | ring visits every control in order; the header toggles; Done opens and the row is selected (US5.1–US5.4) |

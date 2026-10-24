@@ -86,7 +86,7 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
   `RunCard`, `run_group_state`. Contract: [contracts/sidebar-groups.md](contracts/sidebar-groups.md)
   G1–G6.
 - **`src/overview_text.rs`**: `RowKind`, `sidebar_second_line` (T1), composed from `branch_line` and
-  `sessions_line`.
+  `meta_sessions` (BUG-1298's name for `sessions_line`).
 
 ### Client render-free (`crates/micold-client/src/features`)
 

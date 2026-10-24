@@ -203,6 +203,36 @@ fn a_sidebar_group_header_is_legible_on_the_sidebar() {
     }
 }
 
+/// Feature 1125 (FR-019, SC-004, R12, T024): a location row's two lines on the sidebar's tone, and
+/// both lines of the selected row on its `primary_container` fill, are legible in both schemes.
+#[test]
+fn a_two_line_rows_text_is_legible_on_the_sidebar_and_when_selected() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let sidebar = style::to_rgb(style::sidebar_fill(r));
+        for (what, text, fill) in [
+            ("first line", r.on_surface, sidebar),
+            ("second line", r.on_surface_variant, sidebar),
+            (
+                "selected first line",
+                r.on_primary_container,
+                r.primary_container,
+            ),
+            (
+                "selected second line",
+                r.on_primary_container,
+                r.primary_container,
+            ),
+        ] {
+            let ratio = contrast(text, fill);
+            assert!(
+                ratio >= AA_TEXT,
+                "{scheme:?}: the {what} at {ratio:.2}:1 (needs {AA_TEXT})"
+            );
+        }
+    }
+}
+
 /// The fill behind a hovered sidebar row: the sidebar's surface with the hover state layer of the
 /// row's content colour over it (feature 575, FR-013).
 fn hovered_sidebar_row(r: tokens::Roles) -> Rgb {

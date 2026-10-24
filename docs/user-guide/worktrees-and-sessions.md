@@ -151,26 +151,45 @@ changed, press it.
 
 ### Reading a worktree: name & tags
 
-Each worktree is shown as a clean, human-friendly **name** on the first line, with small
-color-coded **tags** beneath it:
+Each location in the sidebar is a row of **two lines**:
 
-- A **type tag** — the Conventional-Commits type from the worktree's branch (`feat`, `fix`,
-  `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`, `style`). Each type has its own
-  fixed color, so you can recognize what a worktree is for at a glance.
-- An **issue tag** — the ticket you entered when you created the worktree. A Jira-style key is
-  shown upper-cased (`ABC-123`); a GitHub or GitLab issue number is shown as `#123`.
-- A **status tag** — `missing` or `invalid` for a worktree that is not usable (see above).
-- A **ticket status** chip, right of the issue tag, when the worktree's ticket belongs to the
-  project's Jira connection (see [A ticket's status](#a-tickets-status)).
+- The **first line** is the worktree's **title**: the title of its GitHub issue when the app knows
+  it (the same title its [Overview](overview.md) card shows), else its branch, else its name. The
+  *Default* entry reads **Default**.
+- The **second line** is the **short branch** and the **sessions**, such as
+  `fix/1117 · 1 session running` or `main · no sessions`. A Conventional-Commits branch like
+  `fix/1117_ci-red` is shortened to its type and issue number, `fix/1117`, so the type and the issue
+  you used to see as separate tags are read here. When the first line already is the branch, the
+  second line is the sessions alone (`1 session`). The *Default* entry reads
+  `project root · ` and its sessions.
 
-The name is derived from the descriptive part of the worktree's folder: `feat-abc-123_login-page`
-shows as **Login page** with `feat` and `ABC-123` tags. The tags are display-only — the underlying
-branch and directory names are unchanged, and a worktree that does not follow the naming convention
-simply shows no type tag.
+A line that does not fit the sidebar's width ends in an ellipsis. Hover the row for its tooltip,
+which begins with the full title and holds the full branch on its `Branch` line, then the name, the
+folder, the location and the rest it always showed.
+
+Small **chips** follow the second line's text:
+
+- A **ticket status** chip, first, when the worktree's ticket belongs to the project's Jira
+  connection (see [A ticket's status](#a-tickets-status)).
+- A **status** chip — `missing` or `invalid` for a worktree that is not usable (see above); its
+  title is drawn in the error colour too.
+- **current session**, when the row is listed only because it holds the session you are in; the
+  name of the **daemon** the worktree runs on; **outside this app** for an included worktree; and
+  **can be removed** when its merged pull request holds all its work.
+
+The type and the issue are no longer chips on the row, but they still drive the
+[tag filters](#filtering-worktrees-by-tag). The *name* of a worktree is derived from the
+descriptive part of its folder: `feat-abc-123_login-page` is named **Login page**, with the type
+`feat` and the issue `ABC-123`. The branch and directory names are unchanged, and a worktree that
+does not follow the naming convention simply has no type.
+
+The row you are on — the one holding the session in view, or the one the Overview sent you to — is
+filled with the theme's **primary container** colour, its text in the matching colour, legible in
+both themes.
 
 Worktrees that an AI agent creates through the [agent tools](agent-tools.md) follow the same
 convention: given a `ticket` (or a `github_issue`), the agent's worktree is named
-`${type}/${ticket}_${name}` and gets the same issue tag and issue-filter match as one made in the
+`${type}/${ticket}_${name}` and gets the same issue and issue-filter match as one made in the
 dialog.
 
 The `_` is what separates the ticket from the description, so the app never has to guess where one
@@ -178,14 +197,14 @@ ends. A name without one has no ticket, which is exactly right for something lik
 `feat-reporting-2` — the trailing `2` is part of the name, not an issue number. Two consequences
 worth knowing:
 
-- Worktrees created before this rule existed have no `_`, so their issue tag is gone. Their names
+- Worktrees created before this rule existed have no `_`, so they have no issue. Their names
   read correctly, and you can always [rename](#managing-a-worktree-right-click) one.
 - A branch from elsewhere that uses `snake_case` is read as having a ticket: `fix/some_bug` shows
-  as **Bug** with a `SOME` tag. The separator means one thing everywhere, and nothing can tell a
+  as **Bug** with the issue `SOME`. The separator means one thing everywhere, and nothing can tell a
   stray underscore from a deliberate one. Rename the worktree if it bothers you.
 
 The sidebar is intentionally compact — tight left/right padding and a slightly smaller font — so
-long names and their tags get as much width as possible. It stays legible in both light and dark
+long titles and their chips get as much width as possible. It stays legible in both light and dark
 themes.
 
 ### Pull request status
@@ -707,8 +726,8 @@ retry.
 ### A ticket's status
 
 With the Jira integration on and the project connected, a worktree named for one of its tickets
-shows the ticket's current status (for example **In Review**) as a chip right of the ticket's key
-tag in the sidebar, and on the worktree's card in the [Overview](overview.md). A finished ticket
+shows the ticket's current status (for example **In Review**) as a chip on the second line of its
+row in the sidebar, and on the worktree's card in the [Overview](overview.md). A finished ticket
 keeps showing its status. A worktree whose ticket is not in the connected project, or whose ticket Jira does not know or cannot show you, has no chip.
 
 The status is read when a project opens, and again when the window regains focus after the last
@@ -762,7 +781,8 @@ wins. With the defaults, a `Bug` issue selects fix. When nothing matches, the ty
 to choose.
 
 **The branch and the tag.** The branch is `${type}/${KEY-123}_${name}`, for example
-`fix/ABC-123_login-fails`, and the sidebar shows the key as the worktree's issue tag.
+`fix/ABC-123_login-fails`, and the sidebar's row reads that branch, key included, on its second
+line; the issue filter finds it by the key.
 
 **When the issues can't be read.** The list shows what went wrong and a **Retry** button. Creating a
 worktree by hand keeps working whatever the notice says.

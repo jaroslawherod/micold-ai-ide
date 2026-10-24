@@ -772,8 +772,8 @@ pub fn list_rows(groups: Vec<SidebarGroup>) -> Vec<ListRow> {
 
 /// The rendered height of every sidebar row, top to bottom (feature 024, research R6).
 ///
-/// A location row is Material's two-line list item when it carries tags and its one-line item
-/// otherwise; a session row is always one line. Both figures come from the same `density::height`
+/// A location row is Material's two-line list item, *Default* included (feature 1125, R6); a
+/// session row is always one line. Both figures come from the same `density::height`
 /// the renderer uses, at [`SIDEBAR_DENSITY`]. A group header (feature 1125) is one line.
 ///
 /// Only *open* locations contribute session rows, because only those are drawn, and only the
@@ -782,8 +782,8 @@ pub fn row_heights(rows: &[ListRow]) -> Vec<f32> {
     let one_line = density::height(density::LIST_ROW_BASE, SIDEBAR_DENSITY);
     let two_line = density::height(density::LIST_ROW_TWO_LINE_BASE, SIDEBAR_DENSITY);
     let mut heights = Vec::new();
-    let location = |heights: &mut Vec<f32>, tagged: bool, shown: bool, sessions: usize| {
-        heights.push(if tagged { two_line } else { one_line });
+    let location = |heights: &mut Vec<f32>, shown: bool, sessions: usize| {
+        heights.push(two_line);
         if shown {
             heights.extend(std::iter::repeat_n(one_line, sessions));
         }
@@ -795,30 +795,19 @@ pub fn row_heights(rows: &[ListRow]) -> Vec<f32> {
         };
         match entry {
             SidebarEntry::Default(node) => {
-                location(
-                    &mut heights,
-                    false,
-                    node.sessions_shown(),
-                    node.sessions.len(),
-                );
+                location(&mut heights, node.sessions_shown(), node.sessions.len());
             }
-            SidebarEntry::Worktree(node) => location(
-                &mut heights,
-                !node.tags.is_empty(),
-                node.sessions_shown(),
-                node.sessions.len(),
-            ),
+            SidebarEntry::Worktree(node) => {
+                location(&mut heights, node.sessions_shown(), node.sessions.len())
+            }
             SidebarEntry::Group(group) => {
                 heights.push(one_line);
                 if group.expanded {
                     for run in &group.runs {
                         match &run.row {
-                            RunRow::Worktree(node) => location(
-                                &mut heights,
-                                !node.tags.is_empty(),
-                                node.sessions_shown(),
-                                node.sessions.len(),
-                            ),
+                            RunRow::Worktree(node) => {
+                                location(&mut heights, node.sessions_shown(), node.sessions.len())
+                            }
                             RunRow::NoWorktree => heights.push(one_line),
                         }
                     }
@@ -1263,6 +1252,93 @@ pub fn with_unread_line(tooltip: String, n: usize) -> String {
         Some(line) => format!("{tooltip}\n{line}"),
         None => tooltip,
     }
+}
+
+/// `tooltip` with the row's full title as its first line (feature 1125, FR-012): the first line of
+/// the row is the one a narrow sidebar shortens, so the tooltip leads with it in full.
+pub fn with_title_line(title: &str, tooltip: String) -> String {
+    format!("{title}\n{tooltip}")
+}
+
+/// A worktree row's first line (feature 1125, data-model *Row text*): the known issue title, else
+/// the branch, else the display name, as the Overview's card reads it (feature 1120, FR-006).
+pub fn row_title(node: &WorktreeNode, issue_title: Option<&str>) -> String {
+    micold_core::overview_text::card_title(
+        issue_title,
+        node.worktree.branch.as_deref(),
+        &node.display_name,
+    )
+}
+
+/// A worktree row's second line (feature 1125, FR-011): the short branch, unless `title` is the
+/// branch, then its sessions.
+pub fn row_second_line(node: &WorktreeNode, title: &str) -> String {
+    micold_core::overview_text::sidebar_second_line(
+        micold_core::overview_text::RowKind::Worktree,
+        title,
+        node.worktree.branch.as_deref(),
+        micold_core::overview::session_counts(&node.sessions),
+    )
+}
+
+/// The *Default* row's second line (feature 1125, FR-011): "project root", then its sessions.
+pub fn default_second_line(node: &DefaultNode) -> String {
+    micold_core::overview_text::sidebar_second_line(
+        micold_core::overview_text::RowKind::ProjectRoot,
+        node.display_name,
+        None,
+        micold_core::overview::session_counts(&node.sessions),
+    )
+}
+
+/// A label chip on a worktree row's second line (feature 1125, FR-013).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowChip {
+    /// A missing or invalid worktree's status, in its tag's word (feature 008, FR-011).
+    Status(String),
+    /// Listed only because it holds the current session (feature 024, FR-012a).
+    CurrentSession,
+    /// The daemon it runs on, or "no daemon" (feature 491, FR-005).
+    Daemon(String),
+    /// A worktree the user included from elsewhere (016 BUG-002, FR-029).
+    OutsideThisApp,
+    /// A merged pull request holds all its work (feature 040, FR-015).
+    CanBeRemoved,
+}
+
+impl RowChip {
+    /// The words the chip shows.
+    pub fn label(&self) -> String {
+        match self {
+            Self::Status(label) | Self::Daemon(label) => label.clone(),
+            Self::CurrentSession => "current session".into(),
+            Self::OutsideThisApp => "outside this app".into(),
+            Self::CanBeRemoved => "can be removed".into(),
+        }
+    }
+}
+
+/// A worktree row's label chips in the order the row draws them (feature 1125, FR-013): today's
+/// chips without the type and issue tags, which the second line's short branch carries.
+/// `node.tags` still drives the filters. `removable` is the row's pull request's say.
+pub fn row_chips(node: &WorktreeNode, removable: bool) -> Vec<RowChip> {
+    let mut chips: Vec<RowChip> = node
+        .tags
+        .iter()
+        .filter(|tag| matches!(tag, Tag::Status(_)))
+        .map(|tag| RowChip::Status(tag.label()))
+        .collect();
+    if node.shown_for_current_session {
+        chips.push(RowChip::CurrentSession);
+    }
+    chips.push(RowChip::Daemon(node.daemon.clone()));
+    if node.worktree.included {
+        chips.push(RowChip::OutsideThisApp);
+    }
+    if removable {
+        chips.push(RowChip::CanBeRemoved);
+    }
+    chips
 }
 
 impl crate::app::State {

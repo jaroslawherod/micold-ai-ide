@@ -58,11 +58,11 @@ String`, `RowKind = ProjectRoot | Worktree`:
 
 | Case | Output |
 |---|---|
-| `ProjectRoot`, (0, 0) | "project root · No sessions" |
-| `ProjectRoot`, (2, 1) | "project root · 2 sessions · 1 running" |
-| `Worktree`, title "CI red on main", branch "fix/1117_ci-red", (1, 1) | "fix/1117 · 1 session · 1 running" (US3.1) |
+| `ProjectRoot`, (0, 0) | "project root · no sessions" |
+| `ProjectRoot`, (2, 1) | "project root · 2 sessions, 1 running" |
+| `Worktree`, title "CI red on main", branch "fix/1117_ci-red", (1, 1) | "fix/1117 · 1 session running" (US3.1) |
 | `Worktree`, title = branch "fix/1117_ci-red", (1, 0) | "1 session" (US3.2, 1120 FR-007) |
-| `Worktree`, title "x", branch "main", (0, 0) | "main · No sessions" (Edge Cases: branch as it is) |
+| `Worktree`, title "x", branch "main", (0, 0) | "main · no sessions" (Edge Cases: branch as it is) |
 | `Worktree`, no branch, (0, 0) | "No sessions" |
 
-Built from `branch_line` and `sessions_line` (feature 1120 contracts C6, C7); no copy of either.
+Built from `branch_line` and `meta_sessions` (feature 1120 contracts C6, C7; `sessions_line` became `meta_sessions` in BUG-1298 FR-023, so the phrase is the Overview meta line's, lower-case after " · " and capitalised alone); no copy of either.
