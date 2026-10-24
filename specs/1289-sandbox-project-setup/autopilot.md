@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M1
-- **Next step**: M1 PR #1353 open; orchestrator waits on CI and merges, then M2
+- **Next step**: M1 PR #1353: red CI (`sandbox_real_history`) fixed; M1 review A scoped round on the fix, then CI and merge, then M2
 
 ## Pull requests
 
@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 6 | tasks | How does the daemon look up `bash` (resolve_on_path is pub(crate) in core)? | New core `setup::shell::bash_on_path(&OsStr)` wraps it; data-model §shell_line updated | unit | provider.rs:575 private fn |
 | 7 | M1 | FR-006 "a script that sets PATH MAY put entries ahead": does it? | No: the order is computed after environment-include, so the script's PATH is `rest`; the guide says its folders keep their order after the home folders. FR-006 is permissive (MAY), and the MUST half (folders survive env-include) holds | unit | state.rs `with_sandbox_path`; test `a_sandbox_spawn_path_puts_the_home_folders_after_the_offered_bins` |
 | 8 | M1 | Empty `PATH` entries in `rest` | Dropped (an empty entry means the cwd); also `HOME=""` counts as unset | unit | data-model "An empty value counts as unset"; test `an_empty_rest_adds_no_empty_entry` |
+| 9 | M1 (red CI) | `sandbox_real_history` host phase found no `claude`: the host daemon read the container's `offered.json` through the shared state directory, and `only_offered` now needs the CLI in the (container-path) offered `bin` | `offered_clis` ignores an offer naming a `bin` outside the daemon's own `ai-clis` dir (another daemon's); research R2 amended. An empty offer still counts as own | unit (systematic-debugging) | CI job 121003684367; test `another_daemons_offer_in_a_shared_state_directory_changes_nothing` (red without the guard) |
 
 ## Review rounds
 

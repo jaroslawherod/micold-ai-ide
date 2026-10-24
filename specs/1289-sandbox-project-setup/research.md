@@ -41,6 +41,12 @@ Kubernetes pods). A host daemon never has one, and neither does a remote SSH dae
 "nothing is installed on it"). `with_offered_path` loses its early return on an empty CLI list:
 with no CLIs offered, the home folders still go first.
 
+**Amended (M1, CI `sandbox_real_history`)**: a host daemon *can* read an `offered.json`: the host's
+state directory is the container's, mounted (`sandbox::STATE_CONTAINER_DIR`), so it sees the file
+the container's provisioning wrote. `offered_clis` therefore ignores an offer naming a `bin` outside
+the daemon's own `ai-clis` directory (provisioning installs under `<state>/ai-clis`); such an offer
+is another daemon's. An offer listing no CLI cannot be told apart and still counts as the daemon's.
+
 **Rationale**: This is the signal the code already treats as "app-owned sandbox", and it covers
 container and pod alike. `MICOLD_IMAGE_REFERENCE` is set only for containers
 (`sandbox/argv.rs`), not for pods (`kube/credentials.rs::daemon_env`).
