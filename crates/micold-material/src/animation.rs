@@ -538,9 +538,13 @@ where
             // In a layer of its own, started after the content's: content that draws in layers
             // (the Overview's cards, anything scrolled) is drawn after this layer's quads, so a
             // veil drawn here would sit under it and the content would show at full strength
-            // (issue #1341).
+            // (issue #1341). A layer does not inherit its parent's clip, so it is cut to the
+            // viewport, or a fade inside a scrollable veils what lies outside it.
             let bounds = layout.bounds();
-            renderer.with_layer(bounds, |renderer| {
+            let Some(clip) = bounds.intersection(viewport) else {
+                return;
+            };
+            renderer.with_layer(clip, |renderer| {
                 renderer.fill_quad(
                     renderer::Quad {
                         bounds,
