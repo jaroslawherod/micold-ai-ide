@@ -89,7 +89,7 @@ which bar. A1 passes.
 - [ ] T006 [US1] E7 in `docs/user-guide/worktrees-and-sessions.md` (~1494, ~1698, ~1748, ~1778,
   ~1788): the first tab-strip mention in each section links to the owning section; wording
   otherwise unchanged (FR-004)
-- [ ] T007 [P] [US1] E2 and E8 in `docs/user-guide/worktrees-and-sessions.md` (~1228, ~2052): the
+- [ ] T007 [US1] E2 and E8 in `docs/user-guide/worktrees-and-sessions.md` (~1228, ~2052): the
   status-bar mentions link to `./appearance-theming.md#status-bar` (FR-004)
 - [ ] T008 [P] [US1] E9 in `docs/user-guide/overview.md` (~263): "the status bar at the bottom"
   links to `./appearance-theming.md#status-bar` (FR-004)
@@ -162,7 +162,8 @@ paragraph of its owning section.
 - [ ] T020 [US2] Verify stage 2: all patterns (stage 1 and 2, plus T012's) return only owning
   sections, linked mentions and historical hits (SC-001, SC-002); the five SC-007 answers are each in
   the first paragraph of their owning section; every chord has its macOS form (FR-018); A1 passes;
-  `git diff --stat origin/main -- 'crates/*/src'` is empty (FR-020)
+  `scripts/tests/media-references.test.sh` and `site/checks/media-references.sh` pass after T019's
+  `site/media.toml` edit; `git diff --stat origin/main -- 'crates/*/src'` is empty (FR-020)
 
 ---
 
@@ -210,7 +211,10 @@ unchanged, and the five mutations fail as listed.
   shipped). Each failure message names the state, the anchor and both numbers
 - [ ] T026 [US3] Run `mise exec -- cargo test -p micold-client --test layout_snapshot` and `--test
   layout_text_overflow`: both pass for the two new states in both colour schemes, containment
-  included (US3 scenario 4, FR-013)
+  included (US3 scenario 4, FR-013). Measure the two states' cost per
+  `docs/development/layout-snapshot.md#adding-a-covered-state`: time a warm `layout_snapshot` run
+  (a second run after the build) with the two entries and with them removed, and note the
+  difference for T028
 - [ ] T027 [US3] Mutation proof: apply each of the five edits of
   [covered-states §Mutation proof](contracts/covered-states.md#mutation-proof-quickstart-a3) in
   turn, run `layout_snapshot`, confirm the failure names the state and the listed W assertion,
@@ -272,15 +276,15 @@ Changes no code; left to the close unit's PR (milestones rule 4).
   disjoint files and may run side by side, but merge in order M2, M3.
 - Phase 6 (M4): after M3.
 - Phase 7: the close unit.
-- Within US1: T003–T006 edit the same file in order; T007 is in the same file but other lines;
-  T008, T009 are other files. T010 after T001; T011 last.
+- Within US1: T003–T007 edit `worktrees-and-sessions.md` in order; T008, T009 are other files
+  and may run beside them. T010 after T001; T011 last.
 - Within US2: T012 first; T014, T018, T019 are other files; T013, T015–T017 follow T012; T020 last.
 - Within US3: T021 → T022 → T023 → T024 → T025 → T026 → T027; T028 after T024; T029 last.
 
 ## Parallel example: User Story 1
 
 ```text
-T007 worktrees-and-sessions.md status-bar links   (after T003–T006 if one editor)
+T003–T007 worktrees-and-sessions.md, in order
 T008 overview.md:263
 T009 settings.md, sandboxed-daemon.md
 ```
@@ -294,8 +298,11 @@ M1 alone corrects the two shipped regions' mentions on main now; nothing in it w
 
 ### Incremental delivery
 
-Each milestone merges on its own and leaves main green; the docs milestones (M1, M2, M4) skip the
-test suite in CI (`.gitattributes` `micold-docs`), M3 runs it.
+Each milestone merges on its own and leaves main green. CI skips the test suite only for a PR whose
+every path is marked `micold-docs` in `.gitattributes`: M1 and M4 do so unless they touch another
+path (M1's T010 may edit `site/media.toml`, which is not `micold-docs`); M2 edits `site/media.toml`
+(T019), which `site/checks/media-references.sh`, `site/build.sh` and `site/stage.sh` read, so its
+PR runs the pipeline; M3 runs it.
 
 ## Milestones
 
@@ -322,9 +329,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   element named as present on any page or in `site/media.toml`.
 - **Satisfies**: US2 acceptance scenarios 1–5; FR-005–FR-011, FR-017–FR-020; SC-001, SC-002,
   SC-003, SC-007; spec Edge cases (no project, no worktrees, multi-session, cross-platform)
-- **Verify**: quickstart A1 and A2 (all patterns); SC-007 first-paragraph check
+- **Verify**: quickstart A1 and A2 (all patterns); SC-007 first-paragraph check;
+  `scripts/tests/media-references.test.sh`
 - **Depends on**: M1; **external: #1125 and #1127 merged on main** (do not start before)
-- **Tier**: docs
+- **Tier**: full (T019 edits `site/media.toml`, not a docs path; 9 tasks)
 
 ### M3 — Whole-window covered states and gate W
 
