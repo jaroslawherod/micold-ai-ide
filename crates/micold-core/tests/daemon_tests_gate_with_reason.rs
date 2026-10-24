@@ -36,14 +36,24 @@ fn has_unreasoned_gate(source: &str) -> bool {
     })
 }
 
+/// Every `.rs` file under `dir`, at any depth: the daemon's tests are grouped into one binary per
+/// area (#1175), a `tests/<area>/main.rs` with one module file per former test file.
+fn collect_rust_files(dir: &Path, into: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
+        let path = entry.expect("dir entry").path();
+        if path.is_dir() {
+            collect_rust_files(&path, into);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            into.push(path);
+        }
+    }
+}
+
 #[test]
 fn unix_gated_daemon_test_files_state_a_reason() {
     let dir = daemon_tests_dir();
-    let mut entries: Vec<PathBuf> = fs::read_dir(&dir)
-        .unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
-        .map(|entry| entry.expect("dir entry").path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-        .collect();
+    let mut entries = Vec::new();
+    collect_rust_files(&dir, &mut entries);
     entries.sort();
     assert!(
         !entries.is_empty(),

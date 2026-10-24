@@ -516,6 +516,37 @@ spread. The remaining lever is compile work: the daemon's ~150 integration-test 
 their own test binary, recompiled on every run. Combining them into a few binaries is tracked in
 issue 1175.
 
+## The daemon's integration tests are grouped into six binaries (issue 1175)
+
+Each file in `crates/micold-daemon/tests/` used to be its own test binary, compiled and linked on
+every run. 85 of them touch no environment variable and 21 are the feature-gated `sandbox_real_*`
+and `ssh_real_*` suites; those 106 files are now modules of six binaries, `tests/<group>/main.rs`
+with one `mod <former file name>;` per file:
+
+| Binary | Holds |
+|---|---|
+| `connection` | wire protocol, framing, viewers, terminal and scrollback tests |
+| `sessions` | session start, supervision, activity and attention, mutation semantics |
+| `settings` | the `*_setting` and `settings_*` files, the catalog and pane layout |
+| `mcp` | the `mcp_*`, `worktree_*`, `env_include_*` and review files |
+| `sandbox_real` | the `sandbox_real_*` suite (`--features sandbox-real-runtime`) |
+| `ssh_real` | the `ssh_real_*` suite (`--features ssh-real-runtime`) |
+
+- **Test names keep their file name**: `mutation_semantics::<test>` where it was `<test>` in the
+  `mutation_semantics` binary, so the `sandbox_real_` and `ssh_real_` name filters of `mise.toml`
+  and `ci.yml` still match, and `cargo test -p micold-daemon -- --list` lists the same tests.
+  `ci.yml` passes `--test sandbox_real` where it passed `--test 'sandbox_real_*'`.
+- **Support files** (`tests/support/*.rs`) are declared once per binary in its `main.rs`; the
+  modules take them with `use crate::conn;`. File-level `#![cfg(...)]` attributes stay at the top
+  of the module file, where they gate that module alone.
+- **What stays a binary of its own**: every file that sets or removes an environment variable (or
+  uses a support module that does), because tests of one binary share a process and an
+  environment; the five files that install a global `tracing` subscriber or re-run the test
+  binary by test name (`osc8_passthrough`); and `windows_pipe_acl` and `windows_process_tree`,
+  which CI runs by target name. A new test that touches neither belongs in a group.
+- **Acceptance** is a timing one and runs after merge: the `Test (daemon, Windows)` step's median
+  over ten `main` runs against the 2026-10-20 figures above.
+
 ## Real-runtime daemon tests build only their own targets
 
 The `sandbox against a real runtime (linux)` job's `Test (real runtime, daemon)` step used to run

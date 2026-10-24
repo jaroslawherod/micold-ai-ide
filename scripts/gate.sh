@@ -29,8 +29,8 @@ root_only=(
 	"micold-core settings_write_is_logged a_refused_write_is_logged_as_a_failure_with_the_reason"
 	"micold-core worktree_leftovers a_directory_that_cannot_be_emptied_names_what_survived"
 	"micold-core worktree_leftovers the_leftover_report_is_capped"
-	"micold-daemon mutation_semantics worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports"
-	"micold-daemon settings_service_write_refuses_failed_read a_service_write_over_an_unreadable_settings_file_is_refused"
+	"micold-daemon sessions mutation_semantics::worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports"
+	"micold-daemon settings settings_service_write_refuses_failed_read::a_service_write_over_an_unreadable_settings_file_is_refused"
 )
 
 skip=()
