@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
 - **Phase**: tasks
-- **Next step**: tasks unit
+- **Next step**: design PR open/merge, then M1 (T001–T022)
 
 ## Pull requests
 
@@ -47,6 +47,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | 2450b706dff7ee9368b016e9a03188feaffe296b:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CLEAN (2 MINOR: FR-006 Debug wording, SC-003 control-char clause; fixed, prose only) |
 | Plan review | 1 | 82673589e84328975ec6437b6506b889ef2b6dcd:93883c9e001cea6910868956ff2d695bd1be1984 | CHANGES: 1 MAJOR (search_jql edited or not: contradiction); fixed, search_jql untouched |
 | Plan review | 2 | 8caad6fb6b5b539a182b4c5d336b8e96b8a4debe:93883c9e001cea6910868956ff2d695bd1be1984 | CLEAN (sonnet) |
+| speckit-analyze | 1 | 6f737a62 (pre-commit) | 0 CRITICAL/HIGH; MEDIUM E1–E3, I1, C1 + LOW F1, F2, U3: fixed E1–E3, I1 (FR-005 + data-model: superseded unfiltered load still fills labels), F1, F2 (plan risk note), U3; C1 kept (D8) |
+| Tasks review | 1 | e22fd7f4b0f6066b28246a739c039a36bd4e1947:6f737a6239967d54bf0130d88162883a91b9b26e | CLEAN (3 MINOR: checklist tick, gate extensions and statement test moved into test tasks; fixed, prose only) |
 
 ## Declined review findings
 

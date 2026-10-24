@@ -223,7 +223,8 @@ unfiltered list.
   archived `1.0`; component `Payments` plus fix version `2.4` loads with both clauses ANDed (AS3)
   and the line reads "Filtered by component Payments, fix version 2.4"; clearing one keeps the
   other (AS5); a versions failure shows cause and **Retry** on that filter only; no versions shows
-  "This project has no versions"; SC-001: from the dialog opened on Jira, exactly four messages
+  "This project has no versions"; `crates/micold-client/tests/gates/jira_filters_fit.rs` expects
+  the second field (fails until it exists); SC-001: from the dialog opened on Jira, exactly four messages
   (focus Component, pick, focus Fix version, pick) reach the two-clause listing.
 
 #### Implementation
@@ -236,8 +237,7 @@ unfiltered list.
 - [ ] T028 [US1] Add the FixVersion filter: `versions: ChoiceLoad<VersionChoice>` and
   `VersionsLoaded { seq, result }` in `crates/micold-client/src/features/jira_filters.rs`, its
   focus/retry handler in `crates/micold-client/src/shell/jira_filters.rs`, its field in the row in
-  `crates/micold-client/src/ui/worktree_form.rs`, and the second field in
-  `crates/micold-client/tests/gates/jira_filters_fit.rs`. Makes T025 pass.
+  `crates/micold-client/src/ui/worktree_form.rs`. Makes T025 pass.
 - [ ] T029 [P] [US1] In `crates/micold-client/examples/fake_jira.rs` serve versions `2.4`
   (unreleased), `2.3` (released), `1.0` (archived) and answer the `fixVersion` clause.
 - [ ] T030 [P] [US1] User guide: the fix-version filter (unreleased first, archived hidden, AND
@@ -277,7 +277,10 @@ person reported, identified by account, not name.
 - [ ] T034 [P] [US2] Extend `crates/micold-client/tests/jira_token_never_leaks.rs` (no reporter
   name or account in `{:?}` of the form, of `FilterMsg`, or in captured logs; FR-006) and
   `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs` (`myself` only on first
-  focus; `project_users` only after typed text).
+  focus; `project_users` only after typed text); `crates/micold-client/tests/gates/jira_filters_fit.rs`
+  expects the third field; the `jira_notice` unit test in
+  `crates/micold-client/src/features/worktree_form.rs` expects the full filter-ui §4 text with "the
+  name you type to find a reporter" (both fail until T037/T039).
 
 ### Implementation
 
@@ -291,13 +294,12 @@ person reported, identified by account, not name.
   `people_pending`, `PeopleSearchDue { seq }`, `MeLoaded`, `PeopleLoaded` in
   `crates/micold-client/src/features/jira_filters.rs`; the debounced search and handlers in
   `crates/micold-client/src/shell/jira_filters.rs`; the field ("You (name)" for the own user) in
-  `crates/micold-client/src/ui/worktree_form.rs`; the third field in
-  `crates/micold-client/tests/gates/jira_filters_fit.rs`. Makes T033 and T034 pass.
+  `crates/micold-client/src/ui/worktree_form.rs`. Makes T033 and T034 pass.
 - [ ] T038 [P] [US2] In `crates/micold-client/examples/fake_jira.rs` serve `/myself` and a user
   search with two people sharing a display name, and answer the `reporter` clause.
 - [ ] T039 [P] [US2] Statement and guide: `WorktreeForm::jira_notice` in
   `crates/micold-client/src/features/worktree_form.rs` gains "the name you type to find a
-  reporter" (full filter-ui §4 text, unit test updated in the same task); the reporter filter in
+  reporter" (makes T034's statement test pass); the reporter filter in
   `docs/user-guide/worktrees-and-sessions.md` and the people search in
   `docs/user-guide/settings.md`.
 
@@ -326,7 +328,9 @@ type a summary word and the results narrow within them.
   row "Only labels of the 1,000 most recent issues"; a filtered load never replaces the label
   choices (D5); a component picked before the unfiltered load returns still gets the label
   choices from that load's result, which is not shown as the list (FR-005); label `backend` plus search "login" loads with `labels = "backend"` and the results
-  match "login" by key, summary or label (AS2).
+  match "login" by key, summary or label (AS2); `crates/micold-client/tests/gates/jira_filters_fit.rs`
+  asserts all four fields, equal widths, fit the row and each list anchors under its field (fails
+  until T043).
 
 ### Implementation
 
@@ -336,9 +340,7 @@ type a summary word and the results narrow within them.
   Ready(LabelChoices)`) taken from the unfiltered Jira load of that seq, even when superseded, in
   `crates/micold-client/src/features/jira_filters.rs` and
   `crates/micold-client/src/features/worktree_form.rs`; its field in
-  `crates/micold-client/src/ui/worktree_form.rs`; `crates/micold-client/tests/gates/jira_filters_fit.rs`
-  asserts all four fields, equal widths, fit the row and each list anchors under its field. Makes
-  T041 pass.
+  `crates/micold-client/src/ui/worktree_form.rs`. Makes T041 pass.
 - [ ] T044 [P] [US3] In `crates/micold-client/examples/fake_jira.rs` answer the `labels` clause.
 - [ ] T045 [P] [US3] User guide: the label filter (labels of the loaded issues, the "most recent
   issues" notice, typing a label still searches) in `docs/user-guide/worktrees-and-sessions.md`.
