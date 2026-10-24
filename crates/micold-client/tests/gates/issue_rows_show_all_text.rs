@@ -24,6 +24,13 @@
 //! arrangement. Each state is read at the canonical window and again at [`NARROW`], where the same
 //! rows are narrower and taller.
 //!
+//! # Advanced mode (feature 1186)
+//!
+//! The results of a JQL query are drawn by the same row builder in the same list (FR-006), so the
+//! advanced state is read by the same findings. Its expected rows are the results, in Jira's order.
+//! The Basic/Advanced switch adds a line to the dialog; [`the_query_mode_switch_keeps_the_panel_placement`]
+//! holds the dialogs that show it to the panel-placement gate's two rules (SC-005).
+//!
 //! # Compiled into the `layout_snapshot` binary
 //!
 //! It reads covered states by name, and that binary is where they are in scope.
@@ -32,6 +39,7 @@ use crate::support::covered_states::covered_states;
 use crate::support::layout::{self as lay, Layer, LayoutRecord, Overflow, StateUnderTest};
 use iced::Size;
 use micold_core::github::Issue;
+use micold_core::theme::ColorScheme;
 
 /// Half a pixel, matching every geometry gate beside this one.
 const TOLERANCE: f32 = 0.5;
@@ -44,6 +52,23 @@ const STATES: &[&str] = &[
     "add-worktree-dialog-issue-list-longest-titles",
     "add-worktree-dialog-issue-list-labels",
     "add-worktree-dialog-issue-list-mixed-heights",
+    ADVANCED_RESULTS,
+];
+
+/// The one of [`STATES`] in advanced mode: a query's results, open (feature 1186, FR-006).
+const ADVANCED_RESULTS: &str = "add-worktree-dialog-jira-advanced-results";
+
+/// Every dialog that shows the Basic/Advanced switch: basic mode on the Jira source, and each
+/// advanced state (feature 1186, FR-001).
+const SWITCH_STATES: &[&str] = &[
+    "add-worktree-dialog-jira-loaded",
+    "add-worktree-dialog-jira-advanced-prompt",
+    ADVANCED_RESULTS,
+    "add-worktree-dialog-jira-advanced-capped",
+    "add-worktree-dialog-jira-advanced-running",
+    "add-worktree-dialog-jira-advanced-refused",
+    "add-worktree-dialog-jira-advanced-no-match",
+    "add-worktree-dialog-jira-advanced-rejected",
 ];
 
 /// The one of [`STATES`] whose rows are meant to differ in height.
@@ -66,6 +91,19 @@ const NARROW: Size = Size::new(440.0, lay::WINDOW.height);
 /// tree that renumbers fails here rather than reading some other node as a row.
 const LIST_VIEWPORT: &[usize] = &[0, 0, 0, 0, 0, 0];
 
+/// [`LIST_VIEWPORT`] in advanced mode, one level deeper: the query field shares a row with **Run**,
+/// and the row groups the overlays of its children (feature 1186).
+const ADVANCED_LIST_VIEWPORT: &[usize] = &[0, 0, 0, 0, 0, 0, 0];
+
+/// Where the list's scrollable is in `name`'s overlay.
+fn list_viewport(name: &str) -> &'static [usize] {
+    if name == ADVANCED_RESULTS {
+        ADVANCED_LIST_VIEWPORT
+    } else {
+        LIST_VIEWPORT
+    }
+}
+
 /// A covered state by name, built.
 fn build(name: &str) -> StateUnderTest {
     let covered = covered_states()
@@ -75,7 +113,8 @@ fn build(name: &str) -> StateUnderTest {
     (covered.build)()
 }
 
-/// The issues behind the state's rows, in row order.
+/// The issues behind the state's rows, in row order: in advanced mode the results as Jira returned
+/// them, else the held issues in match order.
 fn issues_of(under: &StateUnderTest) -> Vec<Issue> {
     let form = under
         .state
@@ -83,6 +122,11 @@ fn issues_of(under: &StateUnderTest) -> Vec<Issue> {
         .form
         .as_ref()
         .expect("an issue-list state opens the add-worktree form");
+    if form.shows_advanced() {
+        if let Some(results) = form.jira_query.results() {
+            return results.to_vec();
+        }
+    }
     let held = form.issues.held();
     form.issue_matches
         .iter()
@@ -127,10 +171,10 @@ impl Pass {
             .find(|b| b.layer == Layer::Overlay && b.path == path)
     }
 
-    /// The list's viewport and its rows, top to bottom.
-    fn rows(&self) -> Option<(&LayoutRecord, Vec<&LayoutRecord>)> {
-        let viewport = self.overlay(LIST_VIEWPORT)?;
-        let mut content = LIST_VIEWPORT.to_vec();
+    /// The list's viewport at `at` and its rows, top to bottom.
+    fn rows(&self, at: &[usize]) -> Option<(&LayoutRecord, Vec<&LayoutRecord>)> {
+        let viewport = self.overlay(at)?;
+        let mut content = at.to_vec();
         content.push(0);
         let rows = self
             .boxes
@@ -188,11 +232,11 @@ fn findings(name: &str, window: Size) -> Vec<String> {
             lines.len(),
         )];
     }
-    let Some((viewport, rows)) = pass.rows() else {
+    let Some((viewport, rows)) = pass.rows(list_viewport(name)) else {
         return vec![format!(
             "{at}: no list was laid out in the overlay layer at {}; the list is closed, or the \
              overlay's tree has changed shape around LIST_VIEWPORT",
-            lay::path_token(LIST_VIEWPORT),
+            lay::path_token(list_viewport(name)),
         )];
     };
     if rows.len() != issues.len() {
@@ -337,7 +381,7 @@ fn the_narrow_window_narrows_the_rows() {
         let under = build(name);
         let width = |window: Size| {
             let pass = pass(&under, window);
-            let (_, rows) = pass.rows().expect("the list is open");
+            let (_, rows) = pass.rows(list_viewport(name)).expect("the list is open");
             rows.first().expect("the list has a row").width
         };
         let (canonical, narrow) = (width(lay::WINDOW), width(NARROW));
@@ -383,7 +427,7 @@ fn the_states_hold_the_hard_cases() {
 
     let under = build(MIXED_HEIGHTS);
     let pass = pass(&under, lay::WINDOW);
-    let (_, rows) = pass.rows().expect("the list is open");
+    let (_, rows) = pass.rows(LIST_VIEWPORT).expect("the list is open");
     let mut heights: Vec<f32> = rows.iter().map(|r| r.height).collect();
     let count = heights.len();
     heights.dedup_by(|a, b| (*a - *b).abs() <= TOLERANCE);
@@ -393,4 +437,77 @@ fn the_states_hold_the_hard_cases() {
          above it; its rows are {:?}px tall",
         rows.iter().map(|r| r.height).collect::<Vec<_>>(),
     );
+}
+
+/// The advanced state is what its name says: advanced mode with results, so the rows read above are
+/// a query's (feature 1186). A state that fell back to basic mode would pass the gate on basic rows.
+#[test]
+fn the_advanced_state_lists_a_querys_results() {
+    let under = build(ADVANCED_RESULTS);
+    let form = under
+        .state
+        .worktree_form
+        .form
+        .as_ref()
+        .expect("the state opens the add-worktree form");
+    assert!(
+        form.shows_advanced(),
+        "{ADVANCED_RESULTS} is not in advanced mode"
+    );
+    let results = form
+        .jira_query
+        .results()
+        .expect("{ADVANCED_RESULTS} has run a query");
+    assert!(!results.is_empty(), "{ADVANCED_RESULTS} lists no result");
+    assert!(
+        form.issue_matches.is_empty() && form.issues.held().is_empty(),
+        "{ADVANCED_RESULTS} holds a basic list too, so its rows could be either"
+    );
+}
+
+/// The dialogs with the Basic/Advanced switch keep the panel placement the basic dialog has: no
+/// panel over the app bar, none past the window (feature 1186, FR-006, SC-005). The switch is one
+/// more line in the tallest dialog, so this is where it would push the dialog out.
+#[test]
+fn the_query_mode_switch_keeps_the_panel_placement() {
+    let renderer = lay::renderer();
+    let mut found = Vec::new();
+    for name in SWITCH_STATES {
+        let covered = covered_states()
+            .iter()
+            .find(|c| c.name == *name)
+            .unwrap_or_else(|| panic!("no covered state is named {name}; see SWITCH_STATES"));
+        let under = (covered.build)();
+        let form = under
+            .state
+            .worktree_form
+            .form
+            .as_ref()
+            .expect("the state opens the add-worktree form");
+        if !form.offers_query_modes() {
+            found.push(format!(
+                "{name}: the dialog does not show the Basic/Advanced switch"
+            ));
+        }
+        let records = lay::records_for(covered, &renderer, ColorScheme::Light);
+        let panels: Vec<_> = crate::panel_placement::anchored_panels(&records).collect();
+        if panels.is_empty() {
+            found.push(format!("{name}: no dialog panel was laid out"));
+        }
+        for panel in panels {
+            if panel.y < micold_core::tokens::anatomy::app_bar::BOTTOM_EDGE - TOLERANCE {
+                found.push(format!(
+                    "{name}: the dialog starts at y={:.1}, inside the app bar",
+                    panel.y
+                ));
+            }
+            let past = panel.y + panel.height - lay::WINDOW.height;
+            if past > TOLERANCE {
+                found.push(format!(
+                    "{name}: the dialog hangs {past:.1}px past the window"
+                ));
+            }
+        }
+    }
+    assert!(found.is_empty(), "{}", found.join("\n  "));
 }

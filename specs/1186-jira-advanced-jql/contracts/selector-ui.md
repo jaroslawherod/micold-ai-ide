@@ -19,10 +19,11 @@ Showing the first 1,000 issues this query returns.   ← only when !complete
 ```
 
 - `mode_switch(form, r)`: `ToggleChip::new("Basic", JiraQuery(ModeChanged(Basic)), r)` and
-  `"Advanced"`, `.active(..)`; the modal pushes it right after `provider_switch` (one `if` in
-  `ui::worktree_form::modal`).
-- `picker(form, board, r)`: called from the top of `ui::worktree_form::issue_picker` when the mode
-  is advanced (one early `return`), so the basic body below is untouched.
+  `"Advanced"`, `.active(..)`; it heads the issue picker's column (one `if` at the top of
+  `ui::worktree_form::issue_picker`), not a dialog field of its own: the form is the tallest dialog,
+  and a field's gap pushed it over the app bar (M3, decision D10).
+- `picker(col, form, board, r)`: called from the top of `ui::worktree_form::issue_picker`, after the
+  switch, when the mode is advanced (one early `return`), so the basic body below is untouched.
 - Query field: `material::Typeahead::new(&draft, rows, DraftChanged, r).label("Query")
   .placeholder(PROMPT).open(list_open).highlighted(highlight).empty_message(EMPTY)
   .on_submit(Run).on_focus(Focused).on_move(HighlightMoved).on_dismiss(Dismissed)

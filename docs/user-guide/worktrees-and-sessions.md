@@ -801,6 +801,39 @@ worktree by hand keeps working whatever the notice says.
 To send one prompt to several AI CLIs at once, each in its own new worktree, use **Run in
 parallel** beside **Add a worktree**; see [Running a prompt in parallel](parallel-runs.md).
 
+### Listing Jira issues with JQL
+
+With the Jira source showing, a **Basic / Advanced** switch sits under the source chips. **Basic**
+is the list described above. **Advanced** replaces the search text with a **Query** field where you
+type JQL, as in Jira's own advanced search, for example
+`assignee = currentUser() AND sprint in openSprints() AND type = Bug`. The GitHub source, and a
+project with the Jira integration off, show no switch.
+
+**Running it.** Press Enter in **Query** or click **Run**. Typing alone never runs anything, and
+switching to Advanced keeps the list as it was until a query runs. The results are listed in the
+order Jira returns them, in the same rows as the basic list; pick one with the pointer, or with the
+arrow keys and Enter, and the ticket, name and type are filled as for any picked issue. Switching
+back to **Basic** shows the search text and list as you left them, and the query stays in the field
+for the next switch while the dialog is open.
+
+**Scoped to the project, and sorted.** The query always runs inside the connected project: the app
+sends `project = "ABC" AND (your query)`, so it cannot list another project's issues. A trailing
+`ORDER BY` clause in your query is kept; without one the results are sorted by
+`ORDER BY updated DESC`. An empty query, or one that is only an `ORDER BY` clause, lists the whole
+project.
+
+**Done issues.** Unlike the basic list, which shows open issues only, Advanced lists whatever the
+query matches, Done issues included. Add a condition such as `statusCategory != Done` to leave them
+out.
+
+**What the app checks first.** A query longer than 2,000 characters, one with a quote that is not
+closed, or one whose parentheses outside quotes do not match is not sent; the line under the field
+says which, and the query stays as you typed it.
+
+**Up to 1,000 issues.** At most 1,000 matching issues are loaded; when more match, the line under
+the list says it shows the first 1,000 the query returns. A query that matches nothing says
+"No issue matches this query.", and a query Jira does not accept says it is not valid JQL.
+
 ### On a Kubernetes daemon
 
 A worktree bound to a Kubernetes daemon comes from the project's git remote: the daemon clones it

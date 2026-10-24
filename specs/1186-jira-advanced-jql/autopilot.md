@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: M2 PR
-- **Next step**: M2 done on local branch 1186-m2-wip (full gate green at e337333b, reviews A and B clean); orchestrator rebases onto main (M1 merged as 3a333f7f), pushes, opens the M2 PR (title/body in the unit's scratchpad, label docs-not-needed), waits on CI and merges; then milestone M3 (T018–T023)
+- **Phase**: M3 implement
+- **Next step**: M3 (T018–T023) in progress on local branch 1186-m3-wip, prepared while #1364's CI runs; orchestrator rebases onto main after #1364 merges, re-gates and pushes
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1346 | design (spec, plan, tasks) | merged | 527d91b36196fda8950f2d3e1d6a193fe3a0f1d9 |
 | #1350 | M1 core rules + advanced request | merged | 3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 |
-| (to open) | M2 render-free selector state and the run | gate green, local branch 1186-m2-wip, not pushed | — |
+| #1364 | M2 render-free selector state and the run | open, CI running | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Core rules + advanced request (no UI) | #1350 | merged |
-| M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | (to open) | gate green at e337333b, not pushed |
-| M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | — | planned |
+| M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | #1364 | PR open, CI running |
+| M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | — | in progress on local branch 1186-m3-wip (based on M2 head 682813bf) |
 | M4 | T024–T032 | full | Jira's error messages and Retry | — | planned |
 | M5 | T033–T039 | full | Remember last query and mode per project | — | planned |
 
@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D10 | M3 | Where does the Basic/Advanced switch sit? | At the top of the issue picker's column (XS gap), not as a dialog field after `provider_switch`: as a field it added 48 px and pushed every Jira dialog's card to y=60–64, inside the app bar (65); in the picker it adds 36 px and the card stays below the bar | agent-resolved | `the_query_mode_switch_keeps_the_panel_placement` red with the switch as a field; contracts/selector-ui.md §1 updated |
 | D9 | M2 | Where does the client's `jira_query` module live? | `features/worktree_form/jira_query.rs` (`features::worktree_form::jira_query`), a submodule of the form as `settings/github_tokens.rs` is of settings, not `features/jira_query.rs`: `tests/feature_registration_cost.rs` makes every file in `features/` a feature (own isolation test, own `update(&mut State, Msg)`, no naming of `worktree_form`), and this state is the form's, applied with the form's seq. Plan, data model, research and tasks paths updated (prose only) | agent-resolved | gate run 2: feature_registration_cost 3 FAILED (`jira_query` names `worktree_form`; no isolation test; no `update`) |
 | D8 | M2 | How does an advanced row pick reach `apply_pick` with the label mapping, which only the shell reads? | `jira_query::Msg::RowPicked(i)` is resolved by the shell exactly as `IssueRowPicked`: `State::issue_number_at` (now reading `shown_issues()`, the advanced results in advanced mode) gives the number, then `IssuePicked { number, mapping }`, whose reducer finds the issue in `shown_issues()` and calls `WorktreeForm::apply_pick`. One pick reducer for both modes, so FR-009's "exactly as basic" holds by construction | agent-resolved | contracts/selector-ui.md §5; tests/jira_query_state.rs `an_advanced_pick_fills_the_form_as_a_basic_pick_of_the_same_issue`; main_tests `jira_query_run` |
 | D7 | tasks | How to cut US1 (≈1,300 lines: core, adapter, reducer, shell, view)? | Three milestones M1 core+adapter, M2 render-free state, M3 view+guide; M1/M2 keep the UI unreachable (milestones rule 6) and carry `docs-not-needed`; no acceptance-scenario split exists because every US1 scenario needs the switch and field. T040 (quickstart §B record) is code-free Polish → close unit | agent-resolved | plan.md#delivery-order; tasks.md#milestones |
