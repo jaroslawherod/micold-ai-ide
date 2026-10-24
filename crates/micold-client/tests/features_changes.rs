@@ -4286,3 +4286,276 @@ fn a_current_session_dropped_from_the_catalog_shows_the_headers_review() {
     assert_eq!(app.session.active, None);
     assert_eq!(app.review_shown(), Some(&(project(), feat_b)));
 }
+
+// Feature 1272, M2: the source control's chips and Files option in the reducer (data-model §9,
+// R4; contract §2).
+
+#[path = "support/source_menu.rs"]
+mod drive;
+
+mod source_menu {
+    use super::drive::{highlight, menu, menu_label, pick, stops, view};
+    use super::*;
+    use changes::{Source, SourceKey};
+    use micold_core::pull_request::{BranchPrState, BranchPullRequest, CheckStatus, TreeListing};
+    use micold_core::review::pr_diff::split_pr_diff;
+    use micold_core::review::source_menu::{Kind, Stop};
+
+    const PR_DIFF: &str = "diff --git a/a.rs b/a.rs\nindex 1..2 100644\n--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\n";
+
+    fn branch_pr(number: u64) -> BranchPullRequest {
+        BranchPullRequest {
+            number,
+            title: format!("title {number}"),
+            url: format!("https://github.com/acme/widgets/pull/{number}"),
+            state: BranchPrState::Open,
+            created_at: "2026-10-10T09:00:00Z".into(),
+            base: "main".into(),
+            head: "abc".into(),
+            head_branch: "feat/a".into(),
+            checks: CheckStatus::None,
+        }
+    }
+
+    /// `showing(..)` with the PR status setting on and pull requests 7 and 8 listed.
+    fn with_prs() -> State {
+        let mut state = showing(commentable());
+        state.pr_enabled = true;
+        let Effect::ReadPullRequests { seq, .. } = changes::update(
+            &mut state,
+            Msg::PullRequestsWanted {
+                branch: Some("feat/a".into()),
+            },
+        ) else {
+            panic!("the pull requests are read");
+        };
+        changes::update(
+            &mut state,
+            Msg::PullRequestsRead {
+                seq,
+                read_at: 1,
+                result: Ok(vec![branch_pr(7), branch_pr(8)]),
+            },
+        );
+        state
+    }
+
+    fn effects(effect: Effect) -> Vec<Effect> {
+        match effect {
+            Effect::Batch(list) => list,
+            Effect::None => vec![],
+            one => vec![one],
+        }
+    }
+
+    /// Show pull request `number` and answer its diff read; returns the other reads it asked for.
+    fn show_pr(state: &mut State, number: u64) -> Vec<Effect> {
+        let mut rest = effects(changes::update(state, Msg::SourceChosen(Some(number))));
+        let at = rest
+            .iter()
+            .position(|e| matches!(e, Effect::ReadPullRequestDiff { .. }))
+            .expect("the diff is read");
+        let Effect::ReadPullRequestDiff { seq, .. } = rest.remove(at) else {
+            unreachable!()
+        };
+        changes::update(
+            state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number,
+                result: Ok(split_pr_diff(PR_DIFF)),
+            },
+        );
+        rest
+    }
+
+    /// Turn Files on and answer the tree read.
+    fn files_on(state: &mut State) {
+        let Effect::ReadTree { seq, .. } = changes::update(state, Msg::FilesPaneToggled) else {
+            panic!("the tree is read");
+        };
+        changes::update(
+            state,
+            Msg::TreeRead {
+                seq,
+                result: Ok(TreeListing {
+                    paths: vec![path("a.rs"), path("b.rs"), path("z.rs")],
+                    truncated: false,
+                }),
+            },
+        );
+    }
+
+    fn reads_tree_at(effects: &[Effect], at: SourceKey) -> bool {
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::ReadTree { source, .. } if *source == at))
+    }
+
+    fn reads_file_at(effects: &[Effect], at: SourceKey, p: &str) -> bool {
+        effects.iter().any(|e| {
+            matches!(e, Effect::ReadFile { source, path: asked, .. }
+                if *source == at && *asked == path(p))
+        })
+    }
+
+    /// FR-002, FR-004, US2 s2. A chip through the control flips its kind as the toggle did, and the
+    /// list stays open so the other chip can be changed too.
+    #[test]
+    fn a_chip_flips_its_kind_and_keeps_the_list_open() {
+        let mut state = ready(&["a.rs"]);
+        let mut direct = state.clone();
+        assert_eq!(
+            pick(&mut state, Stop::Kind(Kind::Committed)),
+            changes::update(&mut direct, Msg::CommittedToggled)
+        );
+        assert!(menu(&state).open);
+        assert_eq!(view(&state).toggles, view(&direct).toggles);
+        assert_eq!(menu_label(&state), "Working tree · uncommitted");
+        assert_eq!(
+            pick(&mut state, Stop::Kind(Kind::Uncommitted)),
+            changes::update(&mut direct, Msg::UncommittedToggled)
+        );
+        assert!(menu(&state).open);
+        assert_eq!(
+            view(&state).toggles,
+            Toggles {
+                committed: false,
+                uncommitted: false
+            }
+        );
+        assert_eq!(menu_label(&state), "Working tree · nothing shown");
+    }
+
+    /// FR-004, US2 s5. On the Default entry the Committed chip is unavailable and changes nothing.
+    #[test]
+    fn the_default_entrys_committed_chip_changes_nothing() {
+        let mut state = State::default();
+        open(&mut state, SessionLocation::Default);
+        assert_eq!(stops(&state)[1], (Stop::Kind(Kind::Committed), false));
+        assert_eq!(pick(&mut state, Stop::Kind(Kind::Committed)), Effect::None);
+        assert_eq!(view(&state).toggles, Toggles::default());
+        assert!(menu(&state).open);
+        assert_eq!(menu_label(&state), "Working tree");
+    }
+
+    /// FR-004, US2 s3, R4. A chip while a pull request is shown returns to the working tree first
+    /// (the entry's remembered pull request forgotten, the diff pane reset), then flips its kind
+    /// and reads the list; the list stays open. Through the control and as the toggle message.
+    #[test]
+    fn a_chip_while_a_pull_request_is_shown_returns_to_the_working_tree() {
+        for (stop, msg) in [
+            (Stop::Kind(Kind::Committed), Msg::CommittedToggled),
+            (Stop::Kind(Kind::Uncommitted), Msg::UncommittedToggled),
+        ] {
+            for through_menu in [true, false] {
+                let mut state = with_prs();
+                show_pr(&mut state, 7);
+                assert!(!state.remembered.is_empty());
+                highlight(&mut state, stop);
+                let effect = if through_menu {
+                    changes::update(&mut state, Msg::SourceMenuPicked)
+                } else {
+                    changes::update(&mut state, msg.clone())
+                };
+                assert!(
+                    effects(effect)
+                        .iter()
+                        .any(|e| matches!(e, Effect::ReadList { .. })),
+                    "the working tree's list is read"
+                );
+                let shown = view(&state);
+                assert_eq!(shown.source, Source::Changes);
+                assert!(
+                    state.remembered.is_empty(),
+                    "the remembered pull request is forgotten"
+                );
+                assert_eq!(shown.diff_offset, 0);
+                assert!(shown.browse.is_none());
+                let kinds = shown.toggles;
+                assert_eq!(
+                    (kinds.committed, kinds.uncommitted),
+                    (
+                        stop != Stop::Kind(Kind::Committed),
+                        stop != Stop::Kind(Kind::Uncommitted)
+                    )
+                );
+                assert!(menu(&state).open, "a chip keeps the list open");
+            }
+        }
+    }
+
+    /// FR-002, FR-007, US3 s1 and s5. Picking Files does what the Files toggle did and closes the
+    /// list; picking it again turns it off.
+    #[test]
+    fn picking_files_toggles_the_files_pane_and_closes_the_list() {
+        let mut state = ready(&["a.rs"]);
+        let mut direct = state.clone();
+        let effect = pick(&mut state, Stop::Files);
+        assert!(matches!(effect, Effect::ReadTree { .. }));
+        assert_eq!(effect, changes::update(&mut direct, Msg::FilesPaneToggled));
+        assert_eq!(state, direct, "list closed, everything else alike");
+        assert!(view(&state).files.shown);
+        assert_eq!(menu_label(&state), "Files · Working tree");
+
+        assert_eq!(pick(&mut state, Stop::Files), Effect::None);
+        changes::update(&mut direct, Msg::FilesPaneToggled);
+        assert_eq!(state, direct);
+        assert!(!view(&state).files.shown);
+        assert_eq!(menu_label(&state), "Working tree");
+    }
+
+    /// Data-model §9. The Files toggle sent directly closes an open list too.
+    #[test]
+    fn the_files_toggle_closes_an_open_list() {
+        let mut state = ready(&["a.rs"]);
+        changes::update(&mut state, Msg::SourceMenuToggled);
+        changes::update(&mut state, Msg::FilesPaneToggled);
+        assert!(!menu(&state).open);
+    }
+
+    /// FR-007, US3 s2 and s4 (1150 `reread_after_source_change`). Files stays on across a source
+    /// pick: the tree and the browsed file are read again at the new source, Back forgets where it
+    /// led, and the label follows.
+    #[test]
+    fn files_stays_on_across_a_source_pick_and_reads_again_at_the_new_source() {
+        let mut state = with_prs();
+        files_on(&mut state);
+        changes::update(&mut state, Msg::BrowseOpen(path("z.rs")));
+        assert!(can_go_back(view(&state)));
+
+        let reads = effects(pick(&mut state, Stop::PullRequest(7)));
+        assert!(reads_tree_at(&reads, SourceKey::Pr(7)), "{reads:?}");
+        assert!(reads_file_at(&reads, SourceKey::Pr(7), "z.rs"), "{reads:?}");
+        assert!(view(&state).files.shown, "Files stays on");
+        assert!(
+            view(&state).stack.is_empty(),
+            "Back led into the old source"
+        );
+        assert!(!menu(&state).open);
+        assert_eq!(menu_label(&state), "Files · #7 · title 7");
+
+        let reads = effects(pick(&mut state, Stop::WorkingTree));
+        assert!(reads_tree_at(&reads, SourceKey::Worktree), "{reads:?}");
+        assert!(
+            reads_file_at(&reads, SourceKey::Worktree, "z.rs"),
+            "{reads:?}"
+        );
+        assert!(view(&state).files.shown);
+        assert_eq!(menu_label(&state), "Files · Working tree");
+    }
+
+    /// US3 s4. A chip pressed while a pull request is shown with Files on reads the tree again at
+    /// the working tree, and Files stays on.
+    #[test]
+    fn a_chip_while_a_pull_request_is_shown_reads_the_tree_at_the_working_tree() {
+        let mut state = with_prs();
+        show_pr(&mut state, 7);
+        files_on(&mut state);
+        let reads = effects(pick(&mut state, Stop::Kind(Kind::Committed)));
+        assert!(reads_tree_at(&reads, SourceKey::Worktree), "{reads:?}");
+        assert!(view(&state).files.shown);
+        assert!(menu(&state).open);
+        assert_eq!(menu_label(&state), "Files · Working tree");
+    }
+}
