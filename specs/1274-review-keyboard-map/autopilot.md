@@ -46,6 +46,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
+- speckit-analyze (tasks): 0 CRITICAL/HIGH. Fixed C1 (SC-005 rank test in T050), C2 (SC-003 reducer timing in T017/T033/T041), C3 (SC-001 walk in T024/T038). Declined I1 (SC-004 counts FR-001/FR-010 keys; the sheet listing the save-comment chord too is a superset, not a conflict), U2 (T058 left to the close unit per milestones.md rule 4), S1 (M1 size: see D6), I2/C4/I3/U1/S2/P1 (LOW, no change).
+
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
