@@ -114,14 +114,17 @@ press **Changes**: every part is as left (U1).
   `client/src/features/changes.rs` (R6): every arm that read `state.open` reads
   `state.tabs.shown_mut()`/`shown()` and does nothing with nothing shown; `Msg::Opened` calls
   `open_or_show`, building today's fresh `OpenView` only on `Created`; `Msg::SessionSelected` calls
-  `hide`. Migrate every other reader of `changes.open` (`grep -rn "changes\.open\b" client/`):
+  `hide`. Migrate every other reader of `changes.open` (`grep -rn "changes\.open\b" client/`;
+  `grep -rn "\.open\b" client/tests` for test helpers that reach it another way):
   `src/shell/changes.rs`, `src/shell/pr_status.rs`, `src/ui/overview.rs` and `src/ui/status_bar.rs`
   tests, `src/main_tests.rs`, and the integration tests `app_state.rs`, `features_pr_changes.rs`,
-  `features_settings.rs`, `features_sidebar.rs`, `navigation_apply.rs`, `overlay_dismissal_delta.rs`,
-  `support/modals.rs`, `idle_subscriptions.rs`, `session_area_stability.rs`, `terminal_focus.rs`.
+  `idle_subscriptions.rs`, `session_area_stability.rs`, `terminal_focus.rs`. The readers in
+  `src/app.rs` (`terminal_focused`, `view_facts`, `header_watch_entry`), `src/ui/mod.rs`,
+  `src/ui/session_area.rs` and `src/shell/subscriptions.rs` read `tabs.shown()` as a stopgap so the
+  crate compiles; T013, T019, T022 and T024 replace those stopgaps.
 - [ ] T013 [US1] Add the render-free readers `review_shown()` (the shown key when its project is the
   active one) and `review_covered()` (Overview open, a Settings draft, or Compare open) to
-  `client/src/app.rs`; use `review_shown()` in `ui/mod.rs`'s `session_view_visible`,
+  `client/src/app.rs`; replace T012's stopgap with `review_shown()` in `ui/mod.rs`'s `session_view_visible`,
   `main_content_key` and the main-area branch; `follow_header` hides a shown review whose project is
   not active; `Outcome::ChangesClosedForCompare` hides. T010, T011 green.
 
@@ -190,7 +193,9 @@ kept view without it would present an older read as current (US4.5).
   `ListRead`/`DiffRead`/`PullRequestsRead`/`PullRequestDiffRead`/`FileRead`/`TreeRead` whose `seq`
   belongs to a hidden view changes no view; hiding with a load in flight sets `Unwatched`; showing
   settles every `Loading` (to its `last`, else `Idle`) then issues exactly one `ReadList`; zero read
-  effects between hide and show whatever `Changed` messages arrive (SC-003).
+  effects between hide and show whatever `Changed` messages arrive (SC-003); a re-read on show
+  that answers an error keeps `tabs.len()` and the view's comments, picks and toggles, and shows the
+  error as today (spec edge case *Failure*).
 - [ ] T021 [US4] Tests U6, U7 (freshness) and U11: in `client/src/features/changes.rs` tests,
   `Msg::Changed` marks a hidden tab of the header's location with no read, and `ReviewChanged` for a
   hidden tab's entry calls `comments_changed` and still updates `reviews` (a send in progress when
@@ -208,7 +213,8 @@ kept view without it would present an older read as current (US4.5).
   location; `ReviewChanged` → `comments_changed`. In `client/src/app.rs`: `follow_header` calls
   `location_left` for the location it stops following, `location_left` on the shown key while
   `review_covered()`, and `uncovered` (one re-read) when the cover goes; `review_watch_entry()`;
-  `header_watch_entry` uses the shown review. `client/src/shell/subscriptions.rs` takes the view
+  `header_watch_entry` uses the shown review (replacing T012's stopgap there and in
+  `shell/subscriptions.rs`). `client/src/shell/subscriptions.rs` takes the view
   watch from `review_watch_entry()` (R13). T020, T021 green.
 
 ---
@@ -226,8 +232,8 @@ kept view without it would present an older read as current (US4.5).
 
 ### Implementation for User Story 5
 
-- [ ] T024 [US5] `terminal_focused` and `view_facts` in `client/src/app.rs` use `review_shown()`
-  in place of `changes.open.is_some()` (R12). T023 green.
+- [ ] T024 [US5] `terminal_focused` and `view_facts` in `client/src/app.rs` replace T012's
+  stopgap (`tabs.shown()`) with `review_shown()` (R12). T023 green.
 
 ### Documentation (M2)
 
@@ -304,10 +310,11 @@ the changed mark and ×; × replaces the view's **Close**.
 
 ### Implementation
 
-- [ ] T035 [P] [US4] Add `client/src/ui/material/count_badge.rs` (`CountBadge::new(count:
+- [ ] T035 [US4] Add `client/src/ui/material/count_badge.rs` (`CountBadge::new(count:
   NonZeroUsize, roles)`, `.tooltip(..)`, `From<CountBadge> for Element`, colours from `Roles`),
   export it in `client/src/ui/material/mod.rs`, move `section_list.rs`'s badge chip onto it, and
-  show it in `client/src/showcase/` (R11). T032 green.
+  show it in `client/src/showcase/sections/atoms.rs` (registered in `client/src/showcase/catalogue.rs`)
+  (R11). T032 green.
 - [ ] T036 [US1] In `client/src/features/session_strip.rs`: `Member::Review { project, entry, face:
   ReviewTabFace, shown }`, unit `MemberKey::Review`, `StripModel::of` from `shown_location()` incl.
   the sessionless strip, the marked rule, presses and `width`; `tab::REVIEW_WIDTH` in
@@ -325,7 +332,7 @@ the changed mark and ×; × replaces the view's **Close**.
   `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` (only session-area
   states may change).
 - [ ] T039 [P] [US1] The showcase shows the Review tab hidden with badge and dot in
-  `client/src/showcase/sections/` beside the strip's tabs (R11).
+  `client/src/showcase/sections/terminal.rs` beside the strip's tabs (R11).
 - [ ] T040 [P] [US1] Docs: `docs/user-guide/reviewing-changes.md` (the Review tab, badge, changed
   mark, × in place of **Close**), `docs/user-guide/terminal-panes.md` (the strip's Review tab;
   chords with it shown), `docs/user-guide/worktrees-and-sessions.md` (where it describes the strip),
@@ -362,14 +369,14 @@ Tests first and red; then the implementation that turns them green; docs last.
 ### Parallel opportunities
 
 - T018 (session_area unit test) beside T017; T025, T031, T039, T040 (docs, showcase) beside code.
-- T032/T035 (`CountBadge`) beside T033/T034 (strip tests).
+- T032 (`CountBadge` test) beside T033/T034 (strip tests); T035 after T032.
 - T002–T009 share one file: sequential.
 
 ## Parallel example: Phase 9
 
 ```text
-T032 + T035  CountBadge test and component  (ui/material/count_badge.rs)
-T033 + T034  strip member tests             (features/session_strip.rs, tests/session_area_stability.rs)
+T032          CountBadge test      (ui/material/count_badge.rs)
+T033 + T034   strip member tests   (features/session_strip.rs, tests/session_area_stability.rs)
 ```
 
 ## Implementation strategy
@@ -389,6 +396,8 @@ docs and visual pass. Each merges to `main` green on its own; none depends on #1
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — Review tab rules in the core 🎯 MVP
+
+Departs from milestones.md rule 1 (Foundational alone, no P1 story) on purpose: see ledger D10.
 
 - **Tasks**: T001–T009
 - **Deliverable**: `micold_core::review_tabs` decides open-or-show, hide, ×, the drop rules,
