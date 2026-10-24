@@ -196,7 +196,7 @@ no extra code: advanced mode reads none of the form's basic fields.
 
 ## Delivery order
 
-Milestones for the tasks unit to size (Task-size gate):
+Milestones for the tasks unit to size (Task-size gate); [tasks.md §Milestones](./tasks.md#milestones) cuts them into M1–M5 and is the one that holds:
 
 1. **M1 Core rules**: `jira_query.rs` parse/scope/messages/texts/remembered format, `load_pages`
    generic, `query_page` + fake, `jira_query::load`, `jira_query_path`. Core tests only.
