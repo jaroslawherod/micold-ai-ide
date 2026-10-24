@@ -507,7 +507,8 @@ pre-change source named, with the red recorded in `tdd/cycle-log.md`.
   case; the chips and title carry their tooltips. Red: `.on_press(press)` removed from
   `changes_button`. Proof: `scripts/build-lock.sh cargo test -p micold-client --lib -- session_area`
 - [x] T064 Make the header test assert the state (finding 6): `session_area.rs:589-590` asserts
-  `CardState::Working`; split the sidebar-parity and follow-entry assertions into their own tests.
+  the literal `CardState` (`NeedsAttention`: the fixture's pull request has failing checks; the audit
+  first wrote `Working`); split the sidebar-parity and follow-entry assertions into their own tests.
   Proof: `scripts/build-lock.sh cargo test -p micold-client --lib -- session_area`
 - [x] T065 Harden the source guards (finding 8): in `session_area_stability.rs` add a minimum-size
   and an expected-token check to `body_from`'s result (a truncated body fails), end the extraction at
