@@ -42,6 +42,30 @@ merged).
 - **Changed mark**: the sign on a Review tab that is not the shown tab saying the location's files
   changed since the developer last saw its view ("Changed since you looked").
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: While the Review tab is the shown tab, what does pressing the Changes button do: return to the
+  location's session with the view kept (today's toggle, minus the forgetting), or nothing because
+  the tab is already shown? → A: Nothing changes: the Review tab stays shown with its kept view. The
+  button opens or shows the tab and never leaves it; the way back to a session is its session tab,
+  and the way to close is the tab's ×. Its tooltip says the review is shown instead of offering to
+  close it. _(agent-resolved: issue #1269 body "the header Changes button and Review changes open or
+  focus the tab"; docs/development/review-redesign.md#fit-with-the-open-layout-redesign-11241128 row #1126 "stops
+  opening a modal view and opens/focuses the Review tab" and #0-review-is-a-tab-one-per-entry-and-keeps-its-state
+  "Close becomes the tab's ×"; this replaces 1126 FR-007's close-on-second-press)_
+- Q: Does **Review changes** on a location other than the shown one make that location the shown
+  location, and where is the review of a worktree with no session drawn? → A: Yes: that location
+  becomes the shown location (its last-shown, else main, session becomes the current session) and
+  its Review tab, created or existing, is the shown tab. A location with no session is shown with
+  its own context header and a strip holding only its Review tab and **New session**; its review is
+  never drawn under another location's header or without a header. _(agent-resolved:
+  docs/development/review-redesign.md#0-review-is-a-tab-one-per-entry-and-keeps-its-state "Opening
+  from the sidebar (Review changes) focuses the existing tab or creates it"; spec.md FR-001 (the
+  tab lives in that location's strip, under its header; the review never replaces header or strip);
+  the issue body "a Review tab in the session tab strip, one per entry")_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Review beside the sessions, without losing my place (Priority: P1)
@@ -103,14 +127,15 @@ appears.
 3. **Given** the Review tab is the shown tab, **When** the developer looks at the context header,
    **Then** the Changes button shows itself selected; with a session tab shown it does not.
 4. **Given** the Review tab is the shown tab, **When** the developer presses the Changes button,
-   **Then** [NEEDS CLARIFICATION: does a second press return to the location's session tab with the
-   view kept (today's toggle, minus the forgetting), or do nothing because the tab is already
-   focused?].
+   **Then** nothing changes: the Review tab stays the shown tab with its kept view (the button opens
+   or shows the tab, it never leaves or closes it); its tooltip says the review is shown.
 5. **Given** the developer chooses **Review changes** on a location other than the shown one,
-   **When** it is chosen, **Then** [NEEDS CLARIFICATION: is that location made the shown location
-   (its last-shown, else main, session selected) with its Review tab shown — and for a worktree with
-   no session, is the review shown under that location's header with a strip holding only the
-   Review tab — or is the review shown without changing the shown location?].
+   **When** it is chosen, **Then** that location becomes the shown location (its last-shown, else
+   main, session becomes the current session) and its Review tab, created or existing, is the shown
+   tab under that location's context header.
+6. **Given** a worktree with no session, **When** the developer chooses **Review changes** on it,
+   **Then** it becomes the shown location with its own context header and a strip holding only its
+   Review tab and **New session**, the Review tab shown.
 
 ---
 
@@ -216,7 +241,8 @@ terminal shown, and as it did with the Changes view open, respectively.
   views; opening or closing a Review tab in one does not open or close it in another; the draft badge
   agrees in every window because comments are shared, as today.
 - **Location's last session closed**: the Review tab and kept view stay until × or worktree removal
-  (clarification 2 decides where a sessionless location's review is drawn).
+  while the location stays shown with its context header and a strip holding only its Review tab and
+  **New session**.
 - **Project removed from the window**: its Review tabs and kept views go with it.
 - **Overview or Settings open**: they take the area as today; the Review tabs and kept views return
   unchanged when they close.
@@ -242,8 +268,9 @@ terminal shown, and as it did with the Changes view open, respectively.
 - **FR-002**: A window MUST hold at most one Review tab per location; opening the review of a
   location that has one MUST show that tab, not create another.
 - **FR-003**: The Changes button and **Review changes** MUST create the location's Review tab when it
-  has none and show it when it has one (for a location other than the shown one, see User Story 2
-  scenario 5, open for clarification).
+  has none and show it when it has one; **Review changes** on a location other than the shown one
+  MUST make that location the shown location (its last-shown, else main, session current) with its
+  Review tab shown.
 - **FR-004**: Pressing a session or shell tab MUST show that tab's content and leave the Review tab
   in the strip with its kept view.
 - **FR-005**: Selecting a session (sidebar, session tab, chord, quick switcher), switching location
@@ -265,7 +292,7 @@ terminal shown, and as it did with the Changes view open, respectively.
 - **FR-011**: Showing a Review tab that has the changed mark, or whose location was not shown since
   its last read, MUST read its changes again and clear the mark.
 - **FR-012**: The Changes button MUST show itself selected exactly while the shown location's Review
-  tab is the shown tab (what a press does then: User Story 2 scenario 4, open for clarification).
+  tab is the shown tab; a press then MUST leave the Review tab shown and change nothing.
 - **FR-013**: Every pane chord and focus rule of `docs/user-guide/terminal-panes.md` MUST behave as
   before this feature with a session tab shown, and as it does today with the Changes view open while
   the Review tab is shown, except that selecting a session keeps the Review tab (FR-005).

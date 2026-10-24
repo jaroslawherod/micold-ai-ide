@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1269
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve the two `[NEEDS CLARIFICATION]` markers in spec.md User Story 2 (scenarios 4 and 5)
+- **Phase**: plan
+- **Next step**: plan unit: write plan.md from spec.md (clarify done: 1 round, 2 questions, both agent-resolved)
 
 ## Pull requests
 
@@ -30,6 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D2 | spec | Are kept views persisted across restart? | No: window memory only, like the remembered PR | agent-resolved | review-redesign.md open question 0; feature 040 FR-032; spec.md Assumptions |
 | D3 | spec | How does a hidden tab learn of changes without watching every location? | The shown location is already watched (1126 R6 header counts); other locations' kept views re-read when next shown | agent-resolved | shell/subscriptions.rs header_watch_entry; spec.md FR-010, FR-011 |
 | D4 | spec | Where in the strip does the Review tab sit? | Last scrolling member, after session and shell tabs, before **New session**; scrolled into view when shown | agent-resolved | mockup TabStrip.dc.html; 1126 FR-010 |
+| D5 | clarify | What does the Changes button do while the Review tab is shown? | Nothing changes: the tab stays shown; the button only opens or shows it (replaces 1126 FR-007's close-on-second-press); tooltip says the review is shown | agent-resolved | issue #1269 body "open or focus the tab"; review-redesign.md fit table row #1126, §0 |
+| D6 | clarify | Does **Review changes** on another location make it the shown location; where is a sessionless worktree's review drawn? | Yes, it becomes the shown location (last-shown else main session current) with its Review tab shown; a sessionless location shows its own header and a strip of only Review + **New session** | agent-resolved | review-redesign.md §0 "focuses the existing tab or creates it"; spec.md FR-001 |
 
 ## Review rounds
 
