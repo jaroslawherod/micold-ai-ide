@@ -15,8 +15,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: spec
-- **Next step**: spec review round 2 (re-review of the fix diff, sonnet) from snapshot 9e154017e95adc6a613e45c3f02e6da155dc11ba:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2; then clarify (FR-014)
+- **Phase**: clarify
+- **Next step**: clarify round 1 escalated (FR-014); on the answer, apply it to spec.md (Clarifications + FR-014 + whole-view-conditional items), then run clarify round 2
 
 ## Pull requests
 
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | spec | 1 | 9e154017e95adc6a613e45c3f02e6da155dc11ba:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | 3 MAJOR, 2 MINOR. F1 fixed: FR-001a per-row change identity (git object ids from `diff --raw`, `hash-object` for working-tree files, size+mtime over limits, PR patch hash), AS12, FR-003, Context/Assumptions. F2 fixed: FR-009 + US1 AS9–11 (select non-held reads as today; held reads latest and leaves set; no-longer-listed says no changes), Key Entities. F3 fixed: whole-view-only MUSTs marked conditional on FR-014. F4 fixed: match by path, rename counts once under new path. F5 fixed: checklist item unticked. |
+| spec | 2 | 89c07d79a52e9cb5ae89d0beff62b6ccf424039e:4a06e88388d0b4cd7395ec7ce70882b466871cf9 | CLEAN (sonnet), 1 MINOR: edge case *Selected between reads* not marked conditional on FR-014. Fixed: prefixed "under the whole-view hold (FR-014)" and noted it does not arise under open-diff-only. |
 
 ## Declined review findings
 
@@ -46,13 +47,31 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec review round 1 (orchestrator) acted on; all five findings fixed, none declined. Next: spec
-review round 2 (re-review of the fix diff), then clarify. Open marker for clarify: FR-014 (hold the
-whole view vs only the open diff).
+None.
 
 ## Open escalation
 
-None.
+Clarify round 1, Q1 (category 1, product decision the repo does not settle): **FR-014 — while
+changes are held, is the whole view frozen, or only the open file's diff?**
+
+- **A. Whole-view hold (Recommended)**: the file list, its +/- counts and every file stay one
+  snapshot until the notice is pressed; changed files get a dot and count in *n*; selecting a dotted
+  file shows its latest diff (US1 AS9–11). Nothing on screen moves. Evidence:
+  `docs/development/review-redesign.md` item 8 shows *3 files changed since you looked* with dots on
+  the file rows while one diff is open, so *n* must count files other than the open one; a live list
+  would insert, drop and re-sort rows (a tree after #1273) under the reader, the same movement the
+  item exists to stop; the spec as reviewed (2 rounds) is written for it.
+- **B. Live list, held open diff with dots**: list rows and counts update live as today; files that
+  changed since the user last saw them get a dot and count in *n*; only the open diff is held until
+  the notice (or reselecting) is pressed. Literal minimum of item 8 ("the open diff does not
+  reflow"); simpler (no held list, no AS9–11), but rows still move.
+- **C. Open diff only, no dots on other files**: the spec's current second answer; *n* is at most 1.
+  Contradicts item 8's example of 3 files.
+
+What the repo says: item 8 and the issue only require that the open diff not reflow, and that rows
+carry a dot and the header a count of several files; neither says whether the list itself is held.
+`docs/user-guide/reviewing-changes.md` *Keeping up with changes*: today the list and diff re-read
+together within ~2 s.
 
 ## Follow-ups not done
 

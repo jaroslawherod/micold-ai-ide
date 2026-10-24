@@ -173,9 +173,10 @@ holds that chip's text and the focus stays in the box.
 - **Open file removed by the agent**: it counts and carries its dot; the user keeps reading it until
   they apply. On apply it leaves the list as today, and an unsaved new comment on it is closed as
   today (*Writing a comment*).
-- **Selected between reads**: a file changed after the last background read but before the user
+- **Selected between reads**: under the whole-view hold (FR-014), a file changed after the last background read but before the user
   selects it shows the diff read on selection; its row takes that read's counts and identity, and
-  the next background read compares against them, so it does not count for that change.
+  the next background read compares against them, so it does not count for that change. Under the
+  open-diff-only answer it does not arise: the list and other files update live as today.
 - **Large files**: a working-tree file over the size limits is identified by its size and
   modification time instead of its content (FR-001a); touching it without changing its bytes counts
   it once, which is accepted.
