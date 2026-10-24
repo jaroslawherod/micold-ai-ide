@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ttad83
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: M1 gate and reviews, then push (orchestrator opens the PR)
+- **Next step**: M1 pushed; orchestrator opens and merges its PR, then M2 (Layer A)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | — | implemented; gate and reviews running |
+| M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | (orchestrator opens) | pushed; full gate green at e0c0e828; reviews A, B clean |
 | M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | — | pending |
 | M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B, **blocked by #1269**) | — | blocked |
 | M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B, **blocked by #1269**) | — | blocked |
@@ -54,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 5f5fd06c9c015ce43b1c2b6043648cfdbcdfd036:eac77a56e214e2eccdb0fb472fca37e75f1274fa | CLEAN: 1 MINOR (fixed, prose only) |
 | Tasks | 1 | 42a7804ed6fa03cda55289e1422ccf12057a0998:41be4d60561ee8c3d899e38224a6e17ac52eafd3 | CLEAN: 3 MINOR (F2 fixed: focus/dialog cleanup named in T037; F1, F3 task size left, D10) |
 | Review A M1 (code-review high) | 1 | f9a89ea1e47eb2cbbd913fbc60a375822d8a5c1c:0150d727dfd87b94372093b4ab921f5a7101e7c8 | CLEAN: 7 MINOR (2 fixed: card_preview reuses `shortened`, `Drawer::apply` no longer clones per event; 5 declined) |
+| Review B M1 (conformance, sonnet) | 1 | b6012172e220e4d9d93f952787685df926024fff:e0c0e82856af85e3d012a459d4ebc13200983d46 | CLEAN |
 
 ## Declined review findings
 
