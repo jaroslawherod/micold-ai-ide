@@ -2336,6 +2336,13 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: STATUS_BAR_ANCHORS,
         },
+        // The plan usage after the CLI item (US5): a reading with no reset time, so it is current
+        // at any clock and the label is the same text every run.
+        CoveredState {
+            name: "status-bar-usage",
+            build: status_bar_usage,
+            anchors: STATUS_BAR_ANCHORS,
+        },
         // --- Feature 1124, US3: banners stay for conditions with an action ----------------------
         // Another window holds the project and the sandbox did not start: both banners are drawn
         // under the app bar with their buttons, and both bar items show a warning (FR-009).
@@ -2510,6 +2517,32 @@ pub fn status_bar_long_texts() -> StateUnderTest {
         ..Default::default()
     };
     StateUnderTest::new(state).sandbox(sandbox)
+}
+
+/// The status bar with a plan-usage reading beside the CLI item (feature 1124, US5): the window
+/// has a session, the sandbox is up, and the only usage window never resets.
+pub fn status_bar_usage() -> StateUnderTest {
+    with_usage(StateUnderTest::new(with_active_session()).sandbox(running_sandbox()))
+}
+
+/// The status bar's longest texts with a plan-usage reading too (feature 1124, US5).
+pub fn status_bar_long_texts_with_usage() -> StateUnderTest {
+    with_usage(status_bar_long_texts())
+}
+
+fn with_usage(mut under: StateUnderTest) -> StateUnderTest {
+    let state = &mut under.state;
+    state
+        .plan_usage
+        .received(Some(micold_core::plan_usage::UsageReading {
+            windows: vec![micold_core::plan_usage::LimitWindow {
+                key: "five_hour".into(),
+                used_tenths: 370,
+                resets_at: None,
+            }],
+            obtained_at: 0,
+        }));
+    under
 }
 
 /// A current session with the sandbox in `state` (feature 1124, US2).

@@ -26,7 +26,6 @@ use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{
     unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar, Tooltip, TypeRole, UnreadMark,
-    UsageIndicator,
 };
 use iced::Element;
 use micold_core::metadata::APP_NAME;
@@ -88,20 +87,10 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         switcher = switcher.trailing_mark(unread, unread_total_tooltip(unread));
     }
     let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r);
-    let mut bar = Toolbar::new(APP_NAME, r)
+    let bar = Toolbar::new(APP_NAME, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
         // the sidebar's offset rather than stored, so nothing else can set it.
         .elevated(state.app_bar_elevated());
-    // Feature 490 (contract U3): the plan's usage leads the trailing actions, and only while there
-    // is a current reading to show; without one the bar is exactly as before (FR-015).
-    // The clock and zone are read only when a reading is held: most redraws have none.
-    if state.plan_usage.reading.is_some() {
-        let now = micold_core::unix_time::unix_secs() as i64;
-        let offset = micold_core::local_time::UtcOffset::local_at(now);
-        if let Some(usage) = usage_indicator(state, now, offset, &r) {
-            bar = bar.action(usage);
-        }
-    }
     // Where the panel hangs from: the trigger's own bottom-left corner, reported on the press
     // ahead of the toggle (BUG-1023).
     let switcher = ContextArea::new(switcher)
@@ -160,45 +149,9 @@ fn overview_press(state: &State) -> Option<Message> {
         .then_some(Message::Overview(OverviewMsg::Toggled { settings_open }))
 }
 
-/// The usage indicator for `now` in the zone `offset`, or `None` when nothing is shown (feature
-/// 490, FR-004, FR-015).
-fn usage_indicator<'a>(
-    state: &State,
-    now: i64,
-    offset: micold_core::local_time::UtcOffset,
-    roles: &micold_core::tokens::Roles,
-) -> Option<Element<'a, Message>> {
-    let view = state.plan_usage.view(now, offset)?;
-    Some(
-        UsageIndicator::new(view.label, roles)
-            .warning(view.warning)
-            .details(view.details)
-            .into(),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_core::plan_usage::{LimitWindow, UsageReading, WarnPercent};
-
-    const NOON: i64 = 1_791_720_000;
-
-    fn utc() -> micold_core::local_time::UtcOffset {
-        micold_core::local_time::UtcOffset::UTC
-    }
-
-    fn reading() -> UsageReading {
-        UsageReading {
-            windows: vec![LimitWindow {
-                key: "five_hour".into(),
-                used_tenths: 420,
-                resets_at: Some(NOON + 3600),
-            }],
-            obtained_at: NOON,
-        }
-    }
-
     /// The badge is red with the action glyph for an error, yellow with the attention glyph for a
     /// warning, and the tooltip carries the chord and the badge's words.
     #[test]
@@ -244,29 +197,5 @@ mod tests {
         assert!(state.overview.full_screen());
         assert!(overview_press(&state).is_some(), "button still pressable");
         let _bar = view(&state, ColorScheme::Light);
-    }
-
-    /// U3: the indicator is in the bar only with the switch on and a current reading.
-    #[test]
-    fn the_bar_carries_the_indicator_only_for_a_current_reading() {
-        let r = tokens::roles(ColorScheme::Light);
-        let mut state = State::default();
-        assert!(
-            usage_indicator(&state, NOON, utc(), &r).is_none(),
-            "no reading"
-        );
-
-        state.plan_usage.received(Some(reading()));
-        assert!(usage_indicator(&state, NOON, utc(), &r).is_some());
-        assert!(
-            usage_indicator(&state, NOON + 7200, utc(), &r).is_none(),
-            "every window has reset"
-        );
-
-        state.plan_usage.settings(false, WarnPercent::default());
-        assert!(
-            usage_indicator(&state, NOON, utc(), &r).is_none(),
-            "switch off"
-        );
     }
 }

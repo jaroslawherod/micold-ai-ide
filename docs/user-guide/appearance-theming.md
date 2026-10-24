@@ -42,6 +42,10 @@ with the full detail.
 - **CLI** — in the session view only, the AI CLI the focused pane's session runs, for example
   "CLI: Claude Code". It follows focus when you move between split panes, and it is left out in
   the Overview, Changes, Compare, Settings, the project page and the empty start screen.
+- **Plan usage** — after the CLI item, once a Claude session has had a response and "Show Claude
+  plan usage" is on: the highest percentage among your plan's limits and when it resets, for example
+  "42% · 15:30", with a warning look at your threshold. Hovering it lists every limit. It is hidden
+  when there is no current reading, and it is no longer in the app bar.
 - **Key hints** — at the right end, the chords that open the Overview and the quick switcher
   ("Ctrl+Shift+O Overview", "Ctrl+Shift+P Jump"; "Cmd+Shift+O" and "Cmd+Shift+P" on macOS).
 

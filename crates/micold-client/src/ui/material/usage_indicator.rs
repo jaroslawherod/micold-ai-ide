@@ -1,4 +1,4 @@
-//! `UsageIndicator` — the Claude plan's usage in the app bar (Constitution Principle VIII; feature
+//! `UsageIndicator` — the Claude plan's usage in the status bar (Constitution Principle VIII; feature
 //! 490, contract `usage-indicator.md`).
 //!
 //! The `data_usage` glyph at 18 px, then the label at `label_large`, both `on_surface_variant`;
@@ -23,7 +23,7 @@ const GLYPH: f32 = 18.0;
 const GAP: f32 = 8.0;
 /// Before the glyph and after the label.
 const ENDS: f32 = 12.0;
-/// The app bar's action height.
+/// The indicator's natural height; the status bar gives it its own 28 dp row.
 const HEIGHT: f32 = 40.0;
 
 /// The indicator. See the module documentation.

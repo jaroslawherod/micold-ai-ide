@@ -77,12 +77,11 @@ pub fn model(
     now: i64,
     offset: UtcOffset,
 ) -> StatusModel {
-    let _ = (now, offset);
     StatusModel {
         connection: connection_item(state, connection),
         sandbox: sandbox_item(sandbox),
         cli: cli_item(state),
-        usage: None,
+        usage: state.plan_usage.view(now, offset),
         hints: [
             format!("{} Overview", crate::keymap::overview_chord_label()),
             format!("{} Jump", crate::keymap::switcher_chord_label()),
@@ -614,5 +613,52 @@ mod tests {
         assert_eq!(m.hints[0], format!("{overview} Overview"));
         assert_eq!(m.hints[1], format!("{switcher} Jump"));
         assert_eq!(m.usage, None);
+    }
+
+    /// A reading whose only window never resets, so it is current at any clock.
+    fn reading() -> micold_core::plan_usage::UsageReading {
+        micold_core::plan_usage::UsageReading {
+            windows: vec![micold_core::plan_usage::LimitWindow {
+                key: "five_hour".into(),
+                used_tenths: 420,
+                resets_at: Some(NOON + 3600),
+            }],
+            obtained_at: NOON,
+        }
+    }
+
+    const NOON: i64 = 1_791_720_000;
+
+    fn usage_at(state: &State, now: i64) -> Option<UsageView> {
+        model(
+            state,
+            &ConnectionStatus::Connected,
+            &Sandbox::default(),
+            now,
+            UtcOffset::UTC,
+        )
+        .usage
+    }
+
+    /// FR-011, US5 s1: the bar carries usage only for a current reading with the switch on.
+    #[test]
+    fn usage_is_present_only_for_a_current_reading_with_the_switch_on() {
+        let mut state = State::default();
+        assert_eq!(usage_at(&state, NOON), None, "no reading");
+
+        state.plan_usage.received(Some(reading()));
+        let view = usage_at(&state, NOON).expect("a current reading");
+        assert!(view.label.starts_with("42%"), "{}", view.label);
+        assert!(!view.details.is_empty());
+        assert_eq!(
+            usage_at(&state, NOON + 7200),
+            None,
+            "every window has reset"
+        );
+
+        state
+            .plan_usage
+            .settings(false, micold_core::plan_usage::WarnPercent::default());
+        assert_eq!(usage_at(&state, NOON), None, "switch off");
     }
 }

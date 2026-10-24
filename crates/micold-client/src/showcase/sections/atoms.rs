@@ -546,7 +546,7 @@ pub fn pull_request_indicator<'a>(
     )
 }
 
-/// `UsageIndicator` — the plan's usage in the app bar (feature 490, contract U4): a label with its
+/// `UsageIndicator` — the plan's usage in the status bar (feature 490, contract U4): a label with its
 /// reset today, with the details as its tooltip, the warning look, and the widest label, a full
 /// plan resetting on another day. What has to be checked by eye is the glyph–label gap, the
 /// warning glyph's shape, and the 40 px height beside the bar's other actions.
