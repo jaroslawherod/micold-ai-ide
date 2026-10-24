@@ -1636,6 +1636,21 @@ pub fn interpret(
                 crate::features::changes::Msg::SessionSelected,
             );
         }
+        // Feature 1269 (U2): a selected session's terminal takes the main area; hiding reads
+        // nothing.
+        Outcome::ReviewHidden => {
+            let _ = crate::features::changes::update(
+                &mut state.changes,
+                crate::features::changes::Msg::SessionSelected,
+            );
+        }
+        // Feature 1269 (U9): the forgotten project's Review tabs go with it, under either spelling
+        // of its path.
+        Outcome::ProjectForgotten(path) => {
+            let canonical = micold_core::project::canonicalize_best_effort(&path);
+            state.changes.tabs.drop_project(&canonical);
+            state.changes.tabs.drop_project(&path);
+        }
         Outcome::RunInParallelRequested => return crate::features::runs::requested(state),
         Outcome::WorktreeCreated(worktree) => {
             return crate::features::worktree::created(state, worktree)

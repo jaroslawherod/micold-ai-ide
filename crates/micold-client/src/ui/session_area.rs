@@ -705,10 +705,8 @@ mod tests {
             (open.clone(), ChangesButton::of(true, false)),
             "another location's review shown: shows this one's kept tab, not selected"
         );
-        let _ = crate::features::changes::update(
-            &mut state.changes,
-            crate::features::changes::Msg::SessionSelected,
-        );
+        let current = state.session.active.expect("a session is shown");
+        state.update(Message::Session(SessionMsg::Selected(current)));
         assert_eq!(
             changes_press(&state, &location),
             (open, ChangesButton::of(true, false)),

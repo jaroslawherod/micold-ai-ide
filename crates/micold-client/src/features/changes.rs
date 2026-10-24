@@ -1804,15 +1804,19 @@ fn hide_shown(state: &mut State) {
 }
 
 /// The shown review is no longer covered by the Overview, Settings or Compare (feature 1269, U7):
-/// read it again once if its files may have changed meanwhile.
+/// read it again once if its files may have changed meanwhile, and the header's counts with it,
+/// which no watch kept current either (the header's defers to the review's on its location).
 pub fn uncovered(state: &mut State) -> Effect {
     let Some(key) = state.tabs.shown_key().cloned() else {
         return Effect::None;
     };
-    if state.tabs.uncovered(&key) {
-        reread_shown(state)
-    } else {
-        Effect::None
+    if !state.tabs.uncovered(&key) {
+        return Effect::None;
+    }
+    match (reread_shown(state), request_counts(state)) {
+        (list, Effect::None) => list,
+        (Effect::None, counts) => counts,
+        (list, counts) => Effect::Batch(vec![list, counts]),
     }
 }
 

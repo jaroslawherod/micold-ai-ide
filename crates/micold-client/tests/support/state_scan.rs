@@ -42,6 +42,11 @@ pub use source_scan::code_only;
 /// `Workspace` is not in here: its members belong to three different features, so a call on it is
 /// resolved to the members it actually writes rather than treated as one opaque mutation.
 pub const MUTATORS: &[&str] = &[
+    // Feature 1269: `changes.tabs` — × closes a Review tab, a forgotten project drops its tabs,
+    // and the follow step marks a location unwatched.
+    "close",
+    "drop_project",
+    "location_left",
     // #943: the command palette, the model picker, the composer's draft, a kind change.
     "pick",
     // #942: `permission_prompts.cancel_mode` closes the Bypass mode confirmation.
@@ -114,6 +119,8 @@ pub const MUTATORS: &[&str] = &[
 
 /// Methods that only read the receiver.
 pub const READERS: &[&str] = &[
+    // Feature 1269: `changes.tabs.shown_key`, the shown Review tab's location.
+    "shown_key",
     // #943: a session's draft in the composer.
     "draft",
     // `structured_transcript.transcript` names a session's transcript, which the render cache is

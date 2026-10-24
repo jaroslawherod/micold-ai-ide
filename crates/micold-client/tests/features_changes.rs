@@ -3618,6 +3618,13 @@ fn answer_reads(state: &mut State, effect: Effect, files: &[&str], diff: &Loaded
                     result: Ok(list(files)),
                 },
             ),
+            Effect::ReadCounts { seq, .. } => changes::update(
+                state,
+                Msg::HeaderCountsRead {
+                    seq,
+                    result: Ok(micold_core::context_header::ChangeSummary::default()),
+                },
+            ),
             Effect::ReadDiff { seq, .. } => changes::update(
                 state,
                 Msg::DiffRead {
@@ -3816,6 +3823,22 @@ fn list_reads(effect: Option<Effect>) -> Vec<SessionLocation> {
     out
 }
 
+/// The counts reads in `effect`, by entry.
+fn counts_reads_in(effect: Option<Effect>) -> Vec<SessionLocation> {
+    fn flat(effect: Effect, out: &mut Vec<SessionLocation>) {
+        match effect {
+            Effect::Batch(effects) => effects.into_iter().for_each(|e| flat(e, out)),
+            Effect::ReadCounts { entry, .. } => out.push(entry),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(effect) = effect {
+        flat(effect, &mut out);
+    }
+    out
+}
+
 /// `feat-a`'s session `a1` current, its review open and read, a part of its view changed.
 fn reviewing_feat_a() -> (
     micold_client::app::State,
@@ -3911,7 +3934,16 @@ fn covering_the_review_keeps_it_and_rereads_it_once() {
     app.update(Message::NoOp);
     app.settings.settings_draft = None;
     app.update(Message::NoOp);
-    assert_eq!(list_reads(answer_pending(&mut app)), vec![worktree()]);
+    let pending = app.take_changes_effect();
+    assert_eq!(
+        counts_reads_in(pending.clone()),
+        vec![worktree()],
+        "the header's counts, unwatched while covered, are read too"
+    );
+    if let Some(effect) = pending.clone() {
+        answer_reads(&mut app.changes, effect, &["a.rs", "b.rs"], &text_diff());
+    }
+    assert_eq!(list_reads(pending), vec![worktree()]);
     assert_eq!(app.changes.tabs, before, "Settings too");
 }
 

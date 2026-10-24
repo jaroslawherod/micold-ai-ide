@@ -11737,6 +11737,40 @@ mod pr_status {
         );
     }
 
+    /// Feature 1269 T016 (U4): **Close** reaches the root through the shell, so the session shown
+    /// before the review is shown again with the keyboard, and the tab is gone.
+    #[test]
+    fn closing_the_review_tab_through_the_shell_shows_the_session_with_the_keyboard() {
+        let (mut app, _rx, ids) = app_with_sessions_at_feat_x(2);
+        let project = PathBuf::from("/repo/demo");
+        app.core.session.active = Some(ids[1]);
+        app.core.update(Message::Sidebar(
+            micold_client::features::sidebar::Msg::ReviewChangesRequested(occupied_loc()),
+        ));
+        assert_eq!(
+            app.core.changes.tabs.len(),
+            1,
+            "precondition: the review is open"
+        );
+        app.core.update(Message::Session(
+            micold_client::features::session::Msg::TerminalFocusReleased,
+        ));
+        let _ = crate::shell::changes::update(
+            &mut app,
+            ChangesMsg::TabClosed {
+                project,
+                entry: occupied_loc(),
+            },
+        );
+        assert!(app.core.changes.tabs.is_empty(), "the tab is gone");
+        assert_eq!(
+            app.core.session.active,
+            Some(ids[1]),
+            "the session shown before"
+        );
+        assert!(!app.core.session.terminal_released, "with the keyboard");
+    }
+
     fn view_list(app: &App) -> &PrList {
         &app.core
             .changes
