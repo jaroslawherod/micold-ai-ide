@@ -20,6 +20,22 @@ choose a folder.
 ## Browsing worktrees
 
 - Worktrees discovered under `.claude/worktrees/` appear as top-level items in the sidebar.
+- **The sidebar groups its rows by state**, worst first, under four headers: **Needs action**,
+  **Working**, **Idle** and **Done**, in that order. Each header reads its name and how many rows
+  it holds, for example "Working · 2"; a group with no row (none in that state, or all hidden by a
+  tag filter) is not shown. A row's state is the one its Overview card shows, so the two always
+  agree, and a row moves to its new group as soon as its state changes. A worktree that needs
+  attention (failing checks, a failed session) is listed under **Needs action**; there is no
+  separate group for it. Inside a group, rows keep the sidebar's usual order: *Default* first, then
+  the worktrees as before, and a run group counts as one row.
+- **Done starts collapsed**, unless it holds the session you are looking at; the other groups start
+  open. Press a header, or press Enter or Space while it has the keyboard, to collapse or expand
+  that group. Your choice holds for the rest of the run, per project: rows moving in and out, the
+  worktree list being re-read and switching to another project and back leave it as you set it.
+- **A reveal opens a collapsed group.** When the app brings a row into view (the session you
+  switched to, a row the Overview, the quick switcher or a notification sends you to) or a
+  navigation chord lands on a row in a collapsed group, that group opens first and stays open. The
+  navigation chords step through locations in the grouped order, collapsed groups included.
 - Selecting a worktree opens its **main session** in the terminal, whichever session you looked at
   last. A worktree with one session has no toggle and no sub-rows; one with several has a toggle
   (collapsed by default) that lists the main session first and marks each helper "helper". Rename

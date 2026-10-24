@@ -38,6 +38,8 @@ const MAPPING: &[(TypeRole, &str)] = &[
     // alone" (feature 024, FR-003a) cannot be quietly undone by re-anchoring it onto the same
     // role as every other session row.
     (TypeRole::SidebarSessionCurrent, "label_medium"),
+    // A sidebar state group's header (feature 1125, R8): 12 px at weight 500.
+    (TypeRole::SidebarGroup, "label_medium"),
     // The Overview card's title: a scoped role off the scale (feature 1120, FR-004, R10).
     (TypeRole::CardTitle, "overview_card_title"),
     // The card's other scoped roles, from the Overview Card Redesign mockup (BUG-1298).
@@ -169,6 +171,13 @@ fn the_current_session_row_differs_from_its_siblings_only_in_weight() {
          the current one at 500. Equal weights would leave the mark carried by colour alone, which \
          is what FR-003a forbids"
     );
+}
+
+/// Feature 1125 (R8, T009): a group header is 12 px at the heavier of the two weights that ship.
+#[test]
+fn a_sidebar_group_header_is_twelve_px_bold() {
+    let header = TypeRole::SidebarGroup.resolved();
+    assert_eq!((header.size, header.weight), (12.0, 500));
 }
 
 /// Only the weights that ship are reachable (contract §2.1).

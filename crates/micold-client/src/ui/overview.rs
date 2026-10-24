@@ -15,11 +15,10 @@ use iced::advanced::widget::Operation;
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
 use micold_core::issue_link::IssueLink;
-use micold_core::location_state::location_state;
 use micold_core::occupancy::main_session;
 use micold_core::overview::{
-    activation, card_state, location_type, order, session_counts, CardModel, CardSignals,
-    CardState, CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
+    activation, location_type, order, session_counts, CardModel, CardState, LocationType,
+    PrDisplay, PrSignal, PrUnknown,
 };
 use micold_core::overview_expansion::{page_target, CardLink, Event, Expansion};
 use micold_core::session::{Session, SessionLocation};
@@ -750,17 +749,8 @@ fn card(app: &State, place: &Place) -> CardModel {
         .iter()
         .filter(|s| s.location == location && !s.archived)
         .collect();
-    let agent_request = app
-        .agent_confirm
-        .pending
-        .iter()
-        .any(|prompt| sessions.iter().any(|s| s.id == prompt.session));
-    let signals = CardSignals {
-        location: location_state(sessions.iter().copied()),
-        agent_request,
-        pr: pr_signal(&app.pr_status, branch.as_deref()),
-    };
-    let (state, reason) = card_state(&signals);
+    let (state, reason) =
+        crate::features::overview::location_card_state(app, &location, branch.as_deref());
     let ticket = match &location {
         SessionLocation::Worktree(dir) => crate::features::overview::numeric_ticket(dir),
         SessionLocation::Default => None,
@@ -772,7 +762,7 @@ fn card(app: &State, place: &Place) -> CardModel {
     let title =
         micold_core::overview_text::card_title(issue_title, branch.as_deref(), &display_name);
     let pr_open = matches!(
-        pr_signal(&app.pr_status, branch.as_deref()),
+        crate::features::overview::pr_signal(&app.pr_status, branch.as_deref()),
         PrSignal::Known { current: Some(current), .. } if current.open
     );
     let progress = progress(app, &location, state, pr_open);
@@ -849,18 +839,6 @@ pub fn pr_rows(model: &CardModel, expanded: bool) -> (Vec<CardPrRow>, usize) {
         })
         .collect();
     (rows, more)
-}
-
-/// The pull request reading for a branch: unknown while the reading is off or holds nothing (never
-/// read, or released), and for a location with no branch, such as Default (research R6, R14).
-fn pr_signal(pr: &crate::features::pr_status::State, branch: Option<&str>) -> PrSignal {
-    match branch {
-        Some(branch) if pr.enabled && pr.read_at.is_some() => PrSignal::Known {
-            current: pr.statuses.get(branch).map(CurrentPr::from_status),
-            removable: pr.removable.contains(branch),
-        },
-        _ => PrSignal::Unknown,
-    }
 }
 
 /// What a card's footer shows of its branch's pull requests: nothing without a branch, else the

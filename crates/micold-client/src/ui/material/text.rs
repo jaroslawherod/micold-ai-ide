@@ -86,6 +86,9 @@ pub enum TypeRole {
     /// slot holds the activity dot and only that (BUG-005), and its name is already tinted by
     /// lifecycle.
     SidebarSessionCurrent,
+    /// A sidebar state group's header (feature 1125, R8): 12 px at the scale's heavier weight,
+    /// `label_medium`, so a header reads as a heading over the 12 px rows it names.
+    SidebarGroup,
     /// An Overview card's title (feature 1120, FR-004): 17/22 at weight 600, a card-scoped role
     /// declared off the Material scale in `typography::SCOPED` (R10, BUG-1298 FR-022).
     CardTitle,
@@ -147,6 +150,7 @@ impl TypeRole {
             // weight changed. Adding an alias would widen `typography::SIDEBAR` and the core tests
             // that enumerate it, to say something the scale already says.
             TypeRole::SidebarSessionCurrent => typography::LABEL_MEDIUM,
+            TypeRole::SidebarGroup => typography::LABEL_MEDIUM,
             TypeRole::CardTitle => typography::OVERVIEW_CARD_TITLE,
             TypeRole::CardStrong => typography::OVERVIEW_CARD_STRONG,
             TypeRole::CardType => typography::OVERVIEW_CARD_TYPE,
@@ -157,7 +161,7 @@ impl TypeRole {
 
     /// Every role a call site can name, so a test or the showcase can enumerate them without
     /// restating the list (and drifting from it).
-    pub const ALL: [TypeRole; 17] = [
+    pub const ALL: [TypeRole; 18] = [
         TypeRole::Display,
         TypeRole::Headline,
         TypeRole::Title,
@@ -170,6 +174,7 @@ impl TypeRole {
         TypeRole::SidebarTag,
         TypeRole::SidebarSession,
         TypeRole::SidebarSessionCurrent,
+        TypeRole::SidebarGroup,
         TypeRole::CardTitle,
         TypeRole::CardStrong,
         TypeRole::CardType,
@@ -193,6 +198,7 @@ impl TypeRole {
             TypeRole::SidebarTag => "SidebarTag",
             TypeRole::SidebarSession => "SidebarSession",
             TypeRole::SidebarSessionCurrent => "SidebarSessionCurrent",
+            TypeRole::SidebarGroup => "SidebarGroup",
             TypeRole::CardTitle => "CardTitle",
             TypeRole::CardStrong => "CardStrong",
             TypeRole::CardType => "CardType",

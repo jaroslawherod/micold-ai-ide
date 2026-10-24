@@ -33,8 +33,9 @@ pub enum Step {
 }
 
 /// The active project's locations in the order the sidebar draws them (contracts/ui.md U2):
-/// Default, then each worktree row as drawn. Worktrees the tag filter hides and those of a
-/// collapsed run group are not drawn, so they are not in the order.
+/// state group by state group (feature 1125, FR-006), each group's rows in the order drawn, closed
+/// groups included. Worktrees the tag filter hides and those of a collapsed run group are not
+/// drawn, so they are not in the order.
 pub fn location_order(state: &State) -> Vec<SessionLocation> {
     location_nodes(state)
         .into_iter()
@@ -45,7 +46,13 @@ pub fn location_order(state: &State) -> Vec<SessionLocation> {
 /// [`location_order`]'s locations with their rows, from one walk of the sidebar's entries.
 pub(crate) fn location_nodes(state: &State) -> Vec<(SessionLocation, LocationNode)> {
     let mut nodes = Vec::new();
-    for entry in state.sidebar_entries() {
+    // Feature 1125 (FR-006): the grouped order, closed groups included, since a chord into one
+    // opens it.
+    let entries = state
+        .sidebar_groups()
+        .into_iter()
+        .flat_map(|group| group.entries);
+    for entry in entries {
         match entry {
             SidebarEntry::Default(node) => {
                 nodes.push((SessionLocation::Default, LocationNode::Default(node)));

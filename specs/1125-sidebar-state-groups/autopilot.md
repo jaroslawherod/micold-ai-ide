@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: design-pr
-- **Next step**: orchestrator opens the design PR (title/body in the session scratchpad), waits on CI and merges; then milestone M1
+- **Phase**: milestone M1
+- **Next step**: implement M1 (T001–T019), gate, reviews, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| (to open) | Design: spec, plan, tasks (branch pushed at the tasks unit's last commit; orchestrator opens via GitHub MCP) | pending | — |
+| #1320 | Design: spec, plan, tasks | merged | 663899346b1c6c44682895eb6d8f4e4402f714ed |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | — | todo |
+| M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | — | implemented; gate and reviews next |
 | M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | — | todo |
 | M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | — | todo |
 | M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | todo |
@@ -41,6 +41,10 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | D5 | clarify 1 | Which groups are collapsible? | Every group; Done starts collapsed, the others expanded | decided by user | jaro, 2026-10-24 |
 | D6 | clarify 2 | More menu's look and dismissal | Shared `Menu` primitive + feature 017 overlay rules | agent-resolved | ui/material/menu.rs, micold-core/src/overlay.rs module docs |
 | D7 | plan | Overview row badge under a tag filter: all locations or the listed ones? | The listed ones, the same cards as the top bar badge; spec FR-008 and US2.6 amended | agent-resolved | ui/overview.rs `cards` walks `sidebar_entries()` (filtered); 813 FR-001 one card per listed location; SC-002 requires equality (research R10) |
+| D8 | M1 | Where do T003 and T005 tests live? | T003 in `tests/overview.rs`, T005 in `tests/sidebar_state.rs` (`state_groups`), T008 order test in `tests/navigation_apply.rs`; one shared `five_states()` fixture in `tests/support/sidebar_fixture.rs` | agent-resolved | an in-crate `mod tests` has no app-state builder; `features_sidebar.rs` is the isolation test that builds no `State` (its module doc) |
+| D9 | M1 | The Overview's reveal and the chord/current-session reveal: one target? | Two calls: `open_group_of_reveal_target()` (keyboard row, else current session) in `reveal_scroll` while armed, `open_group_of_revealed()` (`sidebar.revealed`) in `revealed_scroll` | agent-resolved | one chain would open the current session's group, not the revealed row's, when both exist |
+| D10 | M1 | `sidebar_fixture::session_at` sessions are `Starting`, which counts as Working | The fixture's sessions are Idle, so existing navigation/sidebar tests keep today's order inside one Idle group | agent-resolved | `location_state::session_state` maps Starting to Running |
+| D11 | M1 | Headers in the Tab order | A heading's keyboard wrapper is always enabled (rows only when focused), so Enter/Space reach it (US5.2) | agent-resolved | `TakesTheKeyboard::new(_, enabled)` skips a disabled wrapper |
 
 ## Review rounds
 

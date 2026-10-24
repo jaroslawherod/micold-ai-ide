@@ -147,6 +147,8 @@ pub const COMPONENTS: &[Entry] = &[
             // deliberately — the difference is the whole point, and a weight difference is one of
             // the few things you genuinely cannot judge from memory.
             "SidebarSessionCurrent",
+            // Feature 1125: a sidebar state group's header, 12 px at weight 500 (R8).
+            "SidebarGroup",
             // Feature 1120: the Overview card's 17 px title, scoped to the card (R10).
             "CardTitle",
             // BUG-1298: the card-scoped 13/12 px roles of the Overview Card Redesign (D6).
@@ -876,6 +878,8 @@ pub const COMPONENTS: &[Entry] = &[
         density: &[],
         posed: &[
             "selected row",
+            "group header, open",
+            "group header, closed",
             "keyboard-focused worktree row",
             "tags",
             "expandable parent",
