@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn a_character_fira_mono_lacks_falls_back_to_another_face_not_a_box() {
         use iced::advanced::graphics::text::cosmic_text::{Buffer, Metrics, Shaping};
-        const ICON: char = '\u{e5cd}';
+        const ICON: char = crate::icons::Icon::Close.glyph();
         let _ = super::super::test_support::renderer();
         let has = |bytes: &[u8], c: char| {
             ttf_parser::Face::parse(bytes, 0)
