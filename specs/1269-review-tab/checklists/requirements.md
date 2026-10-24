@@ -14,10 +14,10 @@
 ## Requirement Completeness
 
 - [ ] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
+- [ ] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
-- [x] All acceptance scenarios are defined
+- [ ] All acceptance scenarios are defined
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
@@ -30,6 +30,9 @@
 - [x] No implementation details leak into specification
 
 ## Notes
+
+- "Requirements are testable and unambiguous" and "All acceptance scenarios are defined" stay
+  unticked until the clarify unit answers the two markers: FR-003 and FR-012 depend on them.
 
 - Two `[NEEDS CLARIFICATION]` markers remain, both in User Story 2, left for the clarify unit:
   (1) what a second press of the Changes button does while the Review tab is shown (scenario 4);

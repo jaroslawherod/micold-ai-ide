@@ -242,7 +242,8 @@ terminal shown, and as it did with the Changes view open, respectively.
 - **FR-002**: A window MUST hold at most one Review tab per location; opening the review of a
   location that has one MUST show that tab, not create another.
 - **FR-003**: The Changes button and **Review changes** MUST create the location's Review tab when it
-  has none and show it when it has one.
+  has none and show it when it has one (for a location other than the shown one, see User Story 2
+  scenario 5, open for clarification).
 - **FR-004**: Pressing a session or shell tab MUST show that tab's content and leave the Review tab
   in the strip with its kept view.
 - **FR-005**: Selecting a session (sidebar, session tab, chord, quick switcher), switching location
@@ -264,7 +265,7 @@ terminal shown, and as it did with the Changes view open, respectively.
 - **FR-011**: Showing a Review tab that has the changed mark, or whose location was not shown since
   its last read, MUST read its changes again and clear the mark.
 - **FR-012**: The Changes button MUST show itself selected exactly while the shown location's Review
-  tab is the shown tab.
+  tab is the shown tab (what a press does then: User Story 2 scenario 4, open for clarification).
 - **FR-013**: Every pane chord and focus rule of `docs/user-guide/terminal-panes.md` MUST behave as
   before this feature with a session tab shown, and as it does today with the Changes view open while
   the Review tab is shown, except that selecting a session keeps the Review tab (FR-005).
