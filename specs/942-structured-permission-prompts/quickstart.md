@@ -48,3 +48,46 @@ transcript view and #941's composer on `main`.
     keyboard focus order through the actions (Tab, Space/Enter).
 
 Record the pass with the `visual-pass` skill into `visual-pass/`.
+
+## Results (close unit, 2026-10-24)
+
+### Part A — run at `ae23a467` (main after M9, PR #1312)
+
+The full gate (`/mnt/project-files/scripts/split-gate.sh`, `scripts/gate.sh`'s steps in CI's order,
+split to fit the cloud container's disk) passed: fmt, clippy (core, then workspace, `-D warnings`),
+every test binary of the workspace (10,129 passed, 0 failed, 18 ignored, 639 binaries), the
+as-a-normal-user tests and `scripts/tests/*.test.sh`. The rows above, read from that run:
+
+| Check | Result |
+|---|---|
+| Request parsing, kinds, answers against the fixtures | core `structured_permission` 9 passed |
+| Mode, rules, decisions, control lines | core lib `structured::permission` 34 and `structured::control` 6 passed |
+| Persisted and summarised mode | `session_store` 12, `protocol_roundtrip` 45 passed |
+| Daemon against the stand-in CLI | daemon `structured_permission` 30, `structured_permission_mode` 13 passed |
+| Terminal sessions and #938 unchanged | the whole gate green (SC-007) |
+| Window state | `features_permission_prompts` 26 passed |
+| Shared components | `showcase_completeness` 46, `material_builder_api` 13 passed |
+| Geometry | `layout_snapshot` 103 passed (`gates/prompt_card_fits.rs`, `gates/composer_fits.rs`) |
+
+### Part B — offscreen only; the live steps are not run
+
+This cloud container has no logged-in `claude`, so no step that needs a real request was run.
+What each step checks was covered offscreen instead (tiny-skia captures after `layout::settle`,
+light and dark, in [visual-pass/](visual-pass/)) or by a test:
+
+| Step | Covered by | Live run |
+|---|---|---|
+| 1 request card, *Waiting for you*, sidebar *Blocked* | `visual-pass/m7-prompt-cards-*`, `m9-waiting-*`; `transcript_permission_view`, `composer_fits` | not run |
+| 2 Always allow, deny with a message | daemon `each_decision_reaches_the_cli_and_always_allow_skips_an_identical_call` | not run |
+| 3 two windows, first answer wins | daemon `a_call_is_shown_to_every_client_and_held_until_one_decides`, `of_two_concurrent_decisions_exactly_one_wins` | not run |
+| 4 large Write, **Show all** | `a_cut_preview_offers_show_all_which_asks_for_the_whole_input` | not run |
+| 5 mode control, Bypass confirmation and label | `visual-pass/m9-accept-edits-*`, `m9-bypass-confirm-*`, `m9-bypass-*`, `m8-bypass-bar-*`; `pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it` | not run |
+| 6 create in Plan, plan view, shown mode after approval | `visual-pass/m8-start-list-*`, `m7-prompt-cards-*`; daemon `approving_a_plan_with_accept_edits_sets_the_mode_before_claude_is_answered` | not run |
+| 7 two questions, Other, Submit disabled | `visual-pass/m7-choice-list-*`; `a_question_is_submitted_only_once_every_question_is_answered` | not run |
+| 8 interrupt and stop withdraw the request | `visual-pass/m9-withdrawn-*`; daemon `a_result_withdraws_the_request_and_the_cli_is_denied`, `a_request_whose_agent_hangs_up_is_withdrawn`, `a_request_is_withdrawn_when_its_session_stops` | not run |
+| 9 a request pending over 10 minutes | `mcp_binding_plan` `a_structured_binding_waits_for_the_prompt_tools_answer_and_a_terminal_one_is_unchanged` (the binding's tool timeout) | not run |
+| 10 a terminal session asks in its terminal | `a_terminal_sessions_launch_and_binding_carry_no_permission_setting` | not run |
+| 11 light and dark, focus order | every capture above in both schemes; focus order not checked | not run |
+
+The click counts of SC-006 (steps 1 and 7) were never measured live. Follow-up for jaro: run Part
+B 1–11 by hand with a logged-in `claude` and the dev client.

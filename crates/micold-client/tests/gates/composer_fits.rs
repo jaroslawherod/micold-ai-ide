@@ -705,22 +705,11 @@ fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() 
 }
 
 #[test]
-fn choosing_a_mode_asks_for_it_and_bypass_is_confirmed_first() {
-    use micold_client::features::permission_prompts::Msg as PromptsMsg;
-    use micold_client::ui::mode_control::{chosen, MODE_CHOICES};
+fn choosing_bypass_sends_nothing_before_its_confirmation() {
+    // What each pick asks for is pinned through the painted list by
+    // `pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it`.
     use micold_core::session::PermissionMode;
     let (mut state, id) = pane();
-    for choice in MODE_CHOICES {
-        assert_eq!(
-            chosen(id, choice),
-            Message::PermissionPrompts(PromptsMsg::ModeRequested {
-                session: id,
-                mode: choice.0,
-            }),
-            "a pick asks the shell for {:?}, which sends `SetPermissionMode`",
-            choice.0
-        );
-    }
     assert_eq!(
         state
             .permission_prompts

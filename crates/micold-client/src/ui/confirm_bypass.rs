@@ -72,10 +72,42 @@ mod tests {
     use crate::features::session::BypassStart;
     use micold_core::session::{AiCli, PermissionMode, SessionId, SessionLocation};
 
-    /// T064 (FR-014): the dialog names Bypass's effect in the words the spec gives it.
+    /// T064 (FR-014, FR-017): both confirmations draw their headline and name Bypass's effect, in
+    /// the words the spec gives it.
     #[test]
     fn the_dialog_names_the_effect() {
+        use crate::ui::material::test_support::Mounted;
         assert!(EFFECT.starts_with("Claude will run every tool without asking"));
+        let outcome = EnvIncludeOutcome::Disabled;
+        let mut start = State::default();
+        start.session.bypass_start = Some(BypassStart {
+            location: SessionLocation::Default,
+            provider: AiCli::ClaudeCode,
+            menu: None,
+        });
+        let mut change = State::default();
+        assert_eq!(
+            change
+                .permission_prompts
+                .request_mode(SessionId::new(), PermissionMode::Bypass),
+            None
+        );
+        for (which, dialog) in [
+            ("start", start_dialog(&start, ColorScheme::Light, &outcome)),
+            (
+                "mode change",
+                mode_dialog(&change, ColorScheme::Light, &outcome),
+            ),
+        ] {
+            let dialog = dialog.expect("the confirmation waits");
+            let painted = Mounted::new(dialog.map(|_| String::new())).painted_text();
+            for text in [TITLE, EFFECT] {
+                assert!(
+                    painted.iter().any(|p| p.content == text),
+                    "the {which} confirmation draws `{text}`: {painted:?}"
+                );
+            }
+        }
     }
 
     /// T064 (FR-014, FR-017): each confirmation is drawn exactly while its state waits for it.

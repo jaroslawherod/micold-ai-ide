@@ -164,6 +164,11 @@ mod tests {
         for scheme in [ColorScheme::Light, ColorScheme::Dark] {
             let r = roles_of(scheme);
             let plate = r.surface_container_low;
+            assert_eq!(
+                style::prompt_card(r)(&style::theme(scheme)).background,
+                Some(iced::Background::Color(style::color(plate))),
+                "{scheme:?}: the plate graded here is the one the card draws"
+            );
             for (what, ink, floor) in [
                 ("text", r.on_surface, AA_TEXT),
                 ("note", r.on_surface_variant, AA_TEXT),
