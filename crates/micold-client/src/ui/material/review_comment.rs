@@ -439,8 +439,8 @@ mod tests {
     #[test]
     fn a_reply_over_four_lines_is_cut_there_and_offers_show_all() {
         let long = "Reading it twice keeps the cached layout in step. ".repeat(30);
-        let painted = painted(answered(&long, false));
-        let reply = painted
+        let cut = painted(answered(&long, false));
+        let reply = cut
             .iter()
             .find(|p| p.content.starts_with("Reading it twice"))
             .expect("the reply is painted");
@@ -449,16 +449,11 @@ mod tests {
             reply.bounds.height,
             micold_core::review::reply::CARD_LINES as f32 * TypeRole::Body.line_height_dp()
         );
-        assert!(painted.iter().any(|p| p.content == SHOW_ALL));
+        assert!(cut.iter().any(|p| p.content == SHOW_ALL));
 
-        let lines = "one\ntwo\nthree\nfour\nfive\nsix";
-        let painted = super::super::test_support::Mounted::new_in(
-            answered(lines, false),
-            Size::new(400.0, 2_000.0),
-        )
-        .painted_text();
+        let six = painted(answered("one\ntwo\nthree\nfour\nfive\nsix", false));
         assert!(
-            painted.iter().any(|p| p.content == SHOW_ALL),
+            six.iter().any(|p| p.content == SHOW_ALL),
             "six short lines are cut too"
         );
     }
@@ -466,30 +461,22 @@ mod tests {
     /// Feature 1270 T048 (US4 #1): a short reply is drawn whole, without Show all.
     #[test]
     fn a_short_reply_is_whole_without_show_all() {
-        let painted = painted(answered("not needed", false));
-        assert!(painted.iter().any(|p| p.content == "not needed"));
-        assert!(!painted.iter().any(|p| p.content == SHOW_ALL));
-        let four = painted_lines("one\ntwo\nthree\nfour");
+        let short = painted(answered("not needed", false));
+        assert!(short.iter().any(|p| p.content == "not needed"));
+        assert!(!short.iter().any(|p| p.content == SHOW_ALL));
+        let four = painted(answered("one\ntwo\nthree\nfour", false));
         assert!(
             !four.iter().any(|p| p.content == SHOW_ALL),
             "four lines fit"
         );
     }
 
-    fn painted_lines(reply: &str) -> Vec<super::super::test_support::Painted> {
-        super::super::test_support::Mounted::new_in(
-            answered(reply, false),
-            Size::new(400.0, 2_000.0),
-        )
-        .painted_text()
-    }
-
     /// Feature 1270 T048: a reply shortened past 4,000 characters offers Show all even when its
     /// start fits in four lines.
     #[test]
     fn a_shortened_reply_offers_show_all_even_when_it_fits() {
-        let painted = painted(answered("not needed", true));
-        assert!(painted.iter().any(|p| p.content == SHOW_ALL));
+        let shortened = painted(answered("not needed", true));
+        assert!(shortened.iter().any(|p| p.content == SHOW_ALL));
     }
 
     #[test]
