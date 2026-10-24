@@ -829,16 +829,16 @@ pub(crate) mod tests {
     /// when it no longer resolves.
     #[test]
     fn the_status_is_the_shown_sessions_words_and_the_location_its_own() {
-        for lifecycle in [
-            SessionLifecycle::Running,
-            SessionLifecycle::Starting,
-            SessionLifecycle::Idle,
-            SessionLifecycle::InterruptedResumable,
-            failed(),
+        for (lifecycle, words) in [
+            (SessionLifecycle::Running, "running"),
+            (SessionLifecycle::Starting, "starting…"),
+            (SessionLifecycle::Idle, "idle"),
+            (SessionLifecycle::InterruptedResumable, "interrupted"),
+            (failed(), "failed after 3 attempts"),
         ] {
-            let (state, id) = state_showing(lifecycle.clone());
+            let (state, _) = state_showing(lifecycle.clone());
             let model = StripModel::of(&state).expect("shown");
-            assert_eq!(model.status, session_status(&state, id), "{lifecycle:?}");
+            assert_eq!(model.status, words, "{lifecycle:?}");
             assert_eq!(model.location, Some(SessionLocation::Default));
         }
         let (mut state, id) = state_showing(SessionLifecycle::Running);
@@ -974,6 +974,9 @@ pub(crate) mod tests {
         }
     }
 
+    /// The shells among [`twelve`]'s members.
+    const SHELLS_IN_TWELVE: f32 = 9.0;
+
     /// Twelve members: two sessions, the shown one's nine shells and "+".
     fn twelve() -> Vec<Member> {
         let session = |shown| Member::Session {
@@ -1008,13 +1011,23 @@ pub(crate) mod tests {
         assert_eq!(members.len(), 12);
         let offsets = member_offsets(members);
         let sw = tab::SESSION_WIDTH;
-        assert_eq!(offsets[0], (0.0, sw));
-        assert_eq!(offsets[1], (sw + spacing::SM, sw + spacing::SM + TAB_WIDTH));
+        // Accumulated float sums: equal within the edge tolerance, not bit for bit.
+        let near = |got: (f32, f32), want: (f32, f32)| {
+            assert!(
+                (got.0 - want.0).abs() <= EDGE_TOLERANCE
+                    && (got.1 - want.1).abs() <= EDGE_TOLERANCE,
+                "offsets {got:?}, wanted {want:?}"
+            );
+        };
+        near(offsets[0], (0.0, sw));
+        near(offsets[1], (sw + spacing::SM, sw + spacing::SM + TAB_WIDTH));
         let plus = offsets[10];
-        let lead = sw + 9.0 * (TAB_WIDTH + spacing::SM) + spacing::SM;
-        assert_eq!(plus, (lead, lead + PLUS_WIDTH));
-        assert_eq!(offsets[11].0, plus.1 + spacing::SM);
-        assert_eq!(offsets[11].1 - offsets[11].0, sw);
+        let lead = sw + SHELLS_IN_TWELVE * (TAB_WIDTH + spacing::SM) + spacing::SM;
+        near(plus, (lead, lead + PLUS_WIDTH));
+        near(
+            offsets[11],
+            (plus.1 + spacing::SM, plus.1 + spacing::SM + sw),
+        );
         assert!(member_offsets(&[]).is_empty());
     }
 
@@ -1182,45 +1195,55 @@ pub(crate) mod tests {
         }
     }
 
-    /// R2's other half: the bar's own restart control and the strip must not be able to disagree.
-    ///
-    /// `attached_process_restartable` is now a call into the predicate above rather than a second
-    /// match statement, so this asserts the two give the same answer for the process the bar is
-    /// describing. This file has paid twice for the alternative — `empty_terminal_message` and the
-    /// bar disagreed "for exactly as long as they were two readings of one fact", and BUG-004 was
-    /// `restart_message` re-deriving something the predicate beside it already had.
+    /// R2's other half: the strip's restart is offered for the process the pane shows. In AI CLI
+    /// mode, or in Regular mode with no instance shown, that is the AI process and its lifecycle
+    /// decides; with an instance shown, that instance's lifecycle does, whatever the AI process
+    /// is doing.
     #[test]
-    fn the_bar_and_the_strip_read_one_predicate() {
-        for (mode, shells, active) in [
-            (TerminalMode::AiCli, &[][..], None),
+    fn the_strips_restart_is_offered_for_the_process_the_pane_shows() {
+        const IDLE: SessionLifecycle = SessionLifecycle::Idle;
+        const RUNNING: SessionLifecycle = SessionLifecycle::Running;
+        for (mode, shells, active, lifecycle, offered) in [
+            (TerminalMode::AiCli, &[][..], None, IDLE, true),
+            (TerminalMode::AiCli, &[][..], None, RUNNING, false),
+            (TerminalMode::AiCli, &[][..], None, failed(), true),
             (
                 TerminalMode::Regular,
                 &[ShellLifecycle::Exited][..],
                 Some(0),
+                RUNNING,
+                true,
+            ),
+            (
+                TerminalMode::Regular,
+                &[ShellLifecycle::Exited][..],
+                Some(0),
+                IDLE,
+                true,
             ),
             (
                 TerminalMode::Regular,
                 &[ShellLifecycle::Running][..],
                 Some(0),
+                IDLE,
+                false,
             ),
-            (TerminalMode::Regular, &[][..], None),
+            (
+                TerminalMode::Regular,
+                &[ShellLifecycle::Running][..],
+                Some(0),
+                failed(),
+                false,
+            ),
+            (TerminalMode::Regular, &[][..], None, IDLE, true),
+            (TerminalMode::Regular, &[][..], None, RUNNING, false),
         ] {
-            for lifecycle in [SessionLifecycle::Idle, SessionLifecycle::Running, failed()] {
-                let (state, id) = state_with_instances(mode, lifecycle.clone(), shells, active);
-                let attached = match mode {
-                    TerminalMode::AiCli => StripTab::Ai,
-                    TerminalMode::Regular => state.active_sessions()[0]
-                        .active_shell
-                        .map(StripTab::Instance)
-                        .unwrap_or(StripTab::Ai),
-                };
-                assert_eq!(
-                    attached_process_restartable(&state, id),
-                    process_stopped(&state, id, attached),
-                    "{mode:?}/{lifecycle:?}: the bar's restart control and the strip's mark are \
-                     two readings of one fact and must not be able to differ"
-                );
-            }
+            let (state, id) = state_with_instances(mode, lifecycle.clone(), shells, active);
+            assert_eq!(
+                attached_process_restartable(&state, id),
+                offered,
+                "{mode:?}/{shells:?}/{lifecycle:?}"
+            );
         }
     }
 

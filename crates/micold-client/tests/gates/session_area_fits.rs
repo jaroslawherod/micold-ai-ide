@@ -40,6 +40,22 @@ const SESSION_STATES: &[&str] = &[
     "status-bar-split-panes",
 ];
 
+/// A branch's worth of counts: more than `Changes` alone, within H10's three-digit bound.
+const A_BRANCHS_COUNTS: micold_core::context_header::ChangeSummary =
+    micold_core::context_header::ChangeSummary {
+        files: 12,
+        added: 345,
+        removed: 67,
+    };
+
+/// The widest counts a branch ever shows: five-digit files and six-digit lines (M3 review B F2).
+const THE_WIDEST_COUNTS: micold_core::context_header::ChangeSummary =
+    micold_core::context_header::ChangeSummary {
+        files: 12_345,
+        added: 987_654,
+        removed: 876_543,
+    };
+
 /// The sidebar width H10 measures the smallest window beside.
 const SIDEBAR: u16 = 300;
 
@@ -74,7 +90,9 @@ fn records_of(under: StateUnderTest, window: Size) -> Vec<LayoutRecord> {
 pub(crate) fn header_height(state: State) -> f32 {
     let records = records_at(state, WINDOW);
     let header = [SESSION_AREA, &[0]].concat();
-    at(&records, &header).map_or(0.0, |r| r.height)
+    at(&records, &header)
+        .expect("the session area draws its header")
+        .height
 }
 
 /// The record at `path`.
@@ -298,12 +316,7 @@ fn a_long_title_and_a_pull_request_chip_still_fit() {
         .current_session_location()
         .expect("a session is shown");
     state.changes.header.entry = Some((state.workspace.active.clone().unwrap(), location));
-    state.changes.header.load =
-        micold_client::features::changes::Load::Ready(micold_core::context_header::ChangeSummary {
-            files: 12,
-            added: 345,
-            removed: 67,
-        });
+    state.changes.header.load = micold_client::features::changes::Load::Ready(A_BRANCHS_COUNTS);
     let parts = header_parts(&records_at(state.clone(), WINDOW));
     assert_eq!(
         parts.len(),
@@ -394,13 +407,8 @@ fn the_widest_counts_fit_at_the_layout_window() {
             .expect("a session is shown");
         let project = under.state.workspace.active.clone().unwrap();
         under.state.changes.header.entry = Some((project, location));
-        under.state.changes.header.load = micold_client::features::changes::Load::Ready(
-            micold_core::context_header::ChangeSummary {
-                files: 12_345,
-                added: 987_654,
-                removed: 876_543,
-            },
-        );
+        under.state.changes.header.load =
+            micold_client::features::changes::Load::Ready(THE_WIDEST_COUNTS);
         let state = under.state.clone();
         let records = records_of(under, window);
         let what = format!("widest counts {theme:?} {window:?}");
@@ -430,6 +438,10 @@ fn the_widest_counts_fit_at_the_layout_window() {
             .iter()
             .filter(|r| r.path.len() > button.len() && r.path.starts_with(&button))
             .collect();
+        assert!(
+            !inside_button.is_empty(),
+            "{what}: the Changes button holds a glyph and a label"
+        );
         // The deepest nodes are the glyph and the label's text, under the 40 dp button's fill.
         let deepest = inside_button
             .iter()
@@ -441,7 +453,12 @@ fn the_widest_counts_fit_at_the_layout_window() {
             .filter(|r| r.path.len() == deepest)
             .map(|r| r.height)
             .fold(0.0_f32, f32::max);
-        let one_line = *one_line.get_or_insert(inner);
+        assert!(inner > 0.0, "{what}: the button's label has a height");
+        // The baseline is the layout window in light, laid out whole; it comes first in the loop.
+        if matches!(theme, ThemePreference::Light) && window == WINDOW {
+            one_line = Some(inner);
+        }
+        let one_line = one_line.expect("the light layout window is measured first");
         assert!(
             inner <= one_line + TOLERANCE,
             "{what}: the button's label wraps ({inner} tall inside, one line is {one_line})"

@@ -3459,6 +3459,41 @@ fn the_header_reads_the_counts_of_the_location_it_follows() {
     assert_eq!(counts_reads(&mut app), vec![], "and no read");
 }
 
+/// Feature 1126 (M3 review A F3): the Changes view's read, started by `Outcome::ChangesRequested`,
+/// is left for the shell beside the header's counts read already waiting, not in place of it.
+#[test]
+fn changes_requested_queues_its_read_beside_a_waiting_counts_read() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+
+    let (mut app, [a1_id, _, _]) = two_worktrees_app();
+    let at = |dir: &str| SessionLocation::Worktree(dir.into());
+
+    // Following feat-a leaves its counts read waiting; the shell has not taken it yet.
+    app.update(Message::Session(SessionMsg::Selected(a1_id)));
+    // The sidebar then asks to review feat-b's changes, which opens the view and reads its list.
+    app.update(Message::Sidebar(
+        micold_client::features::sidebar::Msg::ReviewChangesRequested(at("feat-b")),
+    ));
+
+    let Some(Effect::Batch(reads)) = app.take_changes_effect() else {
+        panic!("the waiting counts read and the view's read are both left for the shell");
+    };
+    assert!(
+        reads
+            .iter()
+            .any(|e| matches!(e, Effect::ReadCounts { entry, .. } if *entry == at("feat-a"))),
+        "the header's counts read is kept: {reads:?}"
+    );
+    assert!(
+        reads
+            .iter()
+            .any(|e| matches!(e, Effect::ReadList { entry, .. } if *entry == at("feat-b"))),
+        "the view's read is queued: {reads:?}"
+    );
+    assert_eq!(app.take_changes_effect(), None, "and each is taken once");
+}
+
 /// Feature 1126 T050 (R6): the header's location is watched while it is shown and the Overview is
 /// closed, and not a second time while the Changes view is open on it.
 #[test]

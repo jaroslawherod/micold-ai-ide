@@ -7575,10 +7575,12 @@ mod issue_source {
         assert_eq!(sent.len(), 1, "the remotes are asked for");
         answer_remotes(&mut rig.app, sent[0].0, github_remote());
         assert_eq!(rig.source.lookup_calls(), vec![("o/r".to_string(), 42)]);
-        assert!(
+        assert_eq!(
+            rig.app.core.overview.titles[&42],
             micold_client::features::overview::TitleLookup::Known(
                 "Crash when opening empty project".into()
-            ) == rig.app.core.overview.titles[&42]
+            ),
+            "the issue's title is known"
         );
     }
 
@@ -7615,10 +7617,12 @@ mod issue_source {
         assert_eq!(sent.len(), 1, "the title's remotes are asked for once");
         answer_remotes(&mut rig.app, sent[0].0, github_remote());
         assert_eq!(rig.source.lookup_calls(), vec![("o/r".to_string(), 42)]);
-        assert!(
+        assert_eq!(
+            rig.app.core.overview.titles[&42],
             micold_client::features::overview::TitleLookup::Known(
                 "Crash when opening empty project".into()
-            ) == rig.app.core.overview.titles[&42]
+            ),
+            "the issue's title is known"
         );
         let work = crate::update(&mut rig.app, Message::NoOp);
         settle(&mut rig.app, work);

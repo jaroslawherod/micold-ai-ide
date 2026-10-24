@@ -360,7 +360,7 @@ pressing it opens the Changes view for it; pressing again returns (quickstart B6
 
 - [ ] T056 Run quickstart Part A end to end and record the results in
   `specs/1126-session-context-header/quickstart.md`
-- [ ] T057 Run the whole quickstart Part B once more on the final tree, light and dark, and complete
+- [x] T057 Run the whole quickstart Part B once more on the final tree, light and dark, and complete
   `specs/1126-session-context-header/visual-pass.md`
 
 ---
@@ -459,3 +459,80 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 Polish (T056–T057) changes no code and is left to the close unit.
+
+---
+
+## Phase 8: TDD remediation
+
+**Source**: `specs/1126-session-context-header/tdd/verification.md` (verdict FAIL, audited at `9c1f758f`).
+The feature is not done until T058–T063 (the HIGH findings) are cleared. Each task proves itself with
+the command after it; tests are written or restored first and seen failing against the stub or the
+pre-change source named, with the red recorded in `tdd/cycle-log.md`.
+
+- [x] T058 Restore the terminal-size test's rows bound (finding 1): in
+  `crates/micold-client/tests/terminal_size_reporting.rs:133` replace `rows > 1` with the rows the
+  area gives under the header and the status bar, measured as `composer_fits` measures its header
+  (`session_area_fits::header_height`), not a literal; the bound must still fail a grid at the
+  daemon's 30-row seed's complement. Proof: `scripts/build-lock.sh cargo test -p micold-client --test
+  terminal_size_reporting`
+- [x] T059 Give `Outcome::ChangesRequested`'s queueing a test (finding 3): in
+  `crates/micold-client/tests/features_changes.rs`, with a header counts read waiting in
+  `changes.pending`, interpret `ChangesRequested` and assert `take_changes_effect` yields both the
+  waiting `ReadCounts` and the view's read. Red: against `app.rs:1553` set back to
+  `state.changes.pending = Some(effect)`. Proof: `scripts/build-lock.sh cargo test -p micold-client
+  --test features_changes -- changes_requested`
+- [x] T060 Take the missing reds (finding 2), one test at a time, recording each failure in
+  `tdd/cycle-log.md`: (a) T025's `session_area_stability` gates against a version of `session_area`
+  with a release-focus control, a child under an `if` and a bar under the pane; (b) T039's
+  `terminal_focus::a_strip_press…` against a strip press that takes focus; (c) T045's H7 cases
+  against `State::update` without the follow step's read; (d) T050's `header_watch_entry` and T046's
+  `changes_press` already have late reds, so only record that they stand; (e) the recount after the
+  Overview (M3 review A F1) against `HeaderCounts.unwatched` never set; (f) M2 review A F2's pane pin
+  against a pane with a bar row. Proof: each test named in the log fails against its stub and passes
+  restored: `scripts/build-lock.sh cargo test -p micold-client --test session_area_stability --test
+  terminal_focus --test features_changes`
+- [x] T061 Replace the delegating expectations (finding 5): `session_strip.rs:841` asserts literal
+  status words for two lifecycles; `session_strip.rs:1193` (`the_bar_and_the_strip_read_one_predicate`,
+  renamed for the strip) asserts literal `restart` outcomes per (mode, shell, lifecycle) row rather
+  than rebuilding `marked_tab`. Proof: `scripts/build-lock.sh cargo test -p micold-client --lib --
+  session_strip`
+- [x] T062 Pin `counts_of` (finding 4): in `crates/micold-client/src/ui/session_area.rs` tests, three
+  rows: the followed location under the active project reads `Known` once the read is `Ready`; the
+  same location under another active project reads `Unknown`; another location reads `Unknown`.
+  Red: the project check forced true (`session_area.rs:107`). Proof: `scripts/build-lock.sh cargo
+  test -p micold-client --lib -- session_area::tests::counts_of`
+- [x] T063 Press the rendered Changes button (finding 7): through the laid-out header
+  (`clicks_at`), pressing the button with the view closed yields `Sidebar(ReviewChangesRequested)`,
+  with it open on the shown location yields `Changes(Closed)`; the button reads selected in the second
+  case; the chips and title carry their tooltips. Red: `.on_press(press)` removed from
+  `changes_button`. Proof: `scripts/build-lock.sh cargo test -p micold-client --lib -- session_area`
+- [x] T064 Make the header test assert the state (finding 6): `session_area.rs:589-590` asserts
+  `CardState::Working`; split the sidebar-parity and follow-entry assertions into their own tests.
+  Proof: `scripts/build-lock.sh cargo test -p micold-client --lib -- session_area`
+- [x] T065 Harden the source guards (finding 8): in `session_area_stability.rs` add a minimum-size
+  and an expected-token check to `body_from`'s result (a truncated body fails), end the extraction at
+  the item's own closing brace, and have the pane-area guard also reject `column![`, `container(` and
+  `Surface::new` in `terminal::pane`; drop `the_strips_restart_control_asks_which_process_it_is_restarting`
+  in favour of a rendered press of the restart control. Proof: `scripts/build-lock.sh cargo test -p
+  micold-client --test session_area_stability`
+- [x] T066 Make `a_press_survives_a_header_chip_appearing` able to fail (finding 9): assert the header
+  gained a child between `before` and `after`, or rename it as the no-regression pin the log says it
+  is. Proof: `scripts/build-lock.sh cargo test -p micold-client --test session_area_stability`
+- [x] T067 Harden `session_area_fits` (finding 10): assert `!inside_button.is_empty()` and a positive
+  `inner`, take `one_line` from `WINDOW` and light explicitly, and make `header_height` `expect` its
+  record. Proof: `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot --
+  session_area_fits composer_fits`
+- [ ] T068 [P] Collapse the redundant, eager and bypassed-utility tests (finding 11): one of each
+  redundant pair; split `a_change_rereads_the_counts_or_queues_a_read` and
+  `a_stopped_mark_is_each_members_own_and_restart_follows_the_shown_one` along their commented
+  scenarios; use `source_scan::strip_comments` and move `body_from` there; `Project::new` for the
+  hand-built `Project {..}` fixtures. Proof: `scripts/build-lock.sh cargo test -p micold-client --lib
+  --test terminal_tabs --test tab_reveal --test terminal_focus --test session_area_stability`
+- [x] T069 [P] Restore a vertical-alignment gate for the strip's controls (finding 12): a gate in
+  `crates/micold-client/tests/gates/` that the strip's tabs, New session and the split buttons share a
+  midline within `TOLERANCE`, with a `checked > 0` guard. Proof: `scripts/build-lock.sh cargo test -p
+  micold-client --test layout_snapshot`
+- [x] T070 [P] Style items (findings 14, 15): messages on the bare asserts, `assert_eq!` for
+  `main_tests.rs:7618`, a tolerance for `session_strip.rs:1011-1017`, drop `context_header.rs:281`,
+  name the magic literals. Proof: `scripts/build-lock.sh cargo test -p micold-core --lib --
+  context_header` and `mise run gate`

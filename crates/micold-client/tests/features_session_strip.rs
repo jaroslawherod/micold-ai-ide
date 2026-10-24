@@ -14,9 +14,13 @@ use micold_core::session::{SessionId, ShellInstanceId};
 #[test]
 fn with_no_session_shown_the_ai_tab_is_marked_and_there_is_no_strip() {
     let state = State::default();
-    assert_eq!(marked_tab(&state, SessionId::new()), StripTab::Ai);
-    assert_eq!(marked_tab_index(&state), None);
-    assert_eq!(StripModel::of(&state), None);
+    assert_eq!(
+        marked_tab(&state, SessionId::new()),
+        StripTab::Ai,
+        "the AI tab is the marked one"
+    );
+    assert_eq!(marked_tab_index(&state), None, "but no member is marked");
+    assert_eq!(StripModel::of(&state), None, "and there is no strip");
 }
 
 fn shells(n: u32) -> Vec<Member> {
