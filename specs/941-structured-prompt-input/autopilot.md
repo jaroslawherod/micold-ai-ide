@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: close
-- **Next step**: close unit: speckit-converge (M6's last review B round was CHANGES), speckit-tdd-verify, T062 quickstart Part A, spec Status, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1249 | M5: shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator | merged (rebase) | 74907e8f7c158ee992f119e223772f52628c09a8 |
 | #1255 | M6: composer under the structured transcript, user guide | merged (rebase; the orchestrator rebased it twice onto #942/#943/#944 — commit "fix(941): rebase M6 onto #942, #943 and #944": the composer's editor lives in `features::composer` and #943's `sync_editor` calls went; the transcript sits in a column over the composer under #944's session bar; fixture re-recorded) | e65993bcb7a42336104ddcc38a1d48d772591d86 |
 | #1311 | M7: interrupt withdraws a pending #942 request; composer Tab reach (FocusWithin) | merged (rebase) | a669ad1d0a8c55d8f7baefccfe3d532dc053e70d |
+| (close PR) | Close: TDD remediation (T064, T065, T068–T070), T062 quickstart results, spec Closed | open (title/body in the scratchpad; branch pushed) | — |
 
 ## Milestones
 
@@ -114,6 +115,10 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 | Review B M7 (conformance, sonnet) | 1 | 9ab4c700cd2044d42c3733b5989758de087e67cf:dfd9d87a6413469708c01477adf1e12c5f85f4d5 | CLEAN: 1 MINOR (traversal index in `FocusWithin`, declined) |
 | T061 F5 visual re-check (worker, M7) | — | 9714dc00 | PASS (light): Tab from the text area rings **Send** and it holds 12 s later, Enter sends (`b-tab-1-*.png`); Shift+Tab visits **Send queued**, then each queued row's Move to composer, Remove, Edit, row 1 last (`b-tab-2-*.png`). Dark not run; Space on Send not tried |
 | Full gate M7 | — | — | green at a0ca454d (`scripts/gate.sh`; origin/main unchanged since e65993bc, no rebase, no wire change, no pin moved). Scoped gate before it: 1st red clippy `clone_on_copy` in the T063 test (fixed), 2nd red `showcase_completeness` (FocusWithin needs a gallery exemption; added) |
+| speckit-converge (close, sonnet) | — | — | CONVERGED: nothing unbuilt (FR-011 met by the summary's activity, `the_sessions_activity_follows_the_turn`) |
+| speckit-tdd-verify (close) | — | bc69abc0 | FAIL: 5 HIGH, 4 MED, 1 LOW (`tdd/verification.md`); fixed F1, F3, F5, F7 (partly), F10 as T064, T065, T068, T069, T070; declined F2, F4, F6, F8, F9 |
+| Review close | 1 | 9ce55145556a3c54cd15f214b3493c6a39c9c847:c8b6ae2c3c9996b4aebf16400d8e33ba8b8798ab | CLEAN: 2 MINOR (T069 partial decline unrecorded; T070 names another test): fixed, prose only |
+| Full gate close | — | — | green at c8b6ae2c (`scripts/gate.sh`, first run; target-shared cleared first); quickstart Part A recorded (T062), SC-007 release test 1 passed |
 
 ## Declined review findings
 
@@ -163,6 +168,7 @@ still answers `TurnInProgress` internally) and moves `a_blank_message_is_refused
 - Close tdd-verify F2 / F6 (HIGH/MED, cycles 9–11 test-after; history cannot show order) → T067: history cannot be rewritten; each of those cycles already records a mutant set on the finished code with the failing tests named (cycle-log Cycles 9–11), and the close's fixes (T064, T065, T070) are recorded red-under-mutant.
 - Close tdd-verify F4 (HIGH, SC-007 test `#[ignore]`d, no gate) → T066: release-only timing, like the repo's other ignored timing tests (`first_turn_label_corpus`); a debug or loaded-runner budget would flake. Run on merged main as part of T062 (quickstart Part A) and recorded there; a CI job for `--ignored` release timing tests is a repo-wide follow-up. The 10,000-line paste is setup, not a keystroke (cycle-log Cycle 10).
 - Close tdd-verify F8 (MED, no real-CLI / `sandbox_real_*` test): the stand-in replays the M1 recorded fixtures of the real CLI; the real-runtime suite needs a container runtime and the signed-in CLI, which neither CI nor this container has for a structured turn.
+- Close tdd-verify F7 (MED, fixed sleeps and real-clock bounds) → T069, partly: the saved-queue "nothing delivered on hold" sleep is now a condition (the hold seen after restart, then the take's round trip); the other sleeps check that a write never comes, so no event orders after them (each commented), and the 1 s / 3 s bounds are the spec's own budgets (SC-002; SC-003, 95% of 20 runs).
 - Close tdd-verify F9 (MED, eager tests; send test compares to `encode_user_message`): the encoder is pinned independently by core `user_message` unit tests (one stream-json line, text decodes back unchanged, picture blocks in attach order); the daemon test checks the daemon writes the encoder's line. Taste.
 
 ## Handover

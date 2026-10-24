@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: Draft
+**Status**: Closed 2026-10-24 — shipped in PRs #1209, #1223, #1240, #1243, #1246, #1249, #1255, #1311 and the close PR
 
 **Input**: GitHub issue #941 "Structured session view: prompt input, interrupt and queued messages".
 "Part of the structured-session (stream-json) UI epic. Keeps the PTY/TUI session mode as the

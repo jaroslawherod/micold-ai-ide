@@ -399,7 +399,7 @@ file reads (Constitution I: `shell/` holds no decision).
 
 ## Phase 8: Polish and the #942 seam (close unit, M7)
 
-- [ ] T062 Run quickstart Part A on the merged `main` and record the results
+- [x] T062 Run quickstart Part A on the merged `main` and record the results
 - [X] T063 [US3] Once #942 M3 (withdrawal) and this feature are both on `main` (I-3): a daemon test
   that interrupting a turn with a pending permission request withdraws it (US3 AS6), in
   `daemon/tests/structured_input.rs`
@@ -532,7 +532,7 @@ unit (milestones rule 4); T063 is M7, which waits on #942 M3.
 
 ## Phase 9: TDD remediation
 
-The TDD verdict is FAIL (`tdd/verification.md`). The close unit cleared T064, T065, T068–T070 and declined T066 and T067 (reasons in the ledger).
+The TDD verdict is FAIL (`tdd/verification.md`). The close unit cleared T064, T065, T068, T070, part of T069, and declined T066, T067 and the rest of T069 (reasons in the ledger).
 
 - [x] T064 [US4] Finding 1: add a daemon test in `daemon/tests/structured_input.rs` where an earlier
   process's late `Exit` close leaves a running later process's queue and hold alone (`state.rs:7697`);
@@ -547,8 +547,8 @@ The TDD verdict is FAIL (`tdd/verification.md`). The close unit cleared T064, T0
   against a deliberate mutant per test and record it in `tdd/cycle-log.md` with command and output.
 - [x] T068 Finding 5: write `tdd/test-list.md` mapping each behavior and criterion to its test (the
   traceability table in `tdd/verification.md` is the start). Check: each `traces` names a test that runs.
-- [x] T069 Finding 7: replace the fixed 300 ms sleeps in `structured_input.rs:311,1241` and
+- [x] T069 (partly declined at close: one sleep replaced by a condition; the rest are negatives with no event to order after, each commented; ledger) Finding 7: replace the fixed 300 ms sleeps in `structured_input.rs:311,1241` and
   `structured_input_saved.rs:251,287,334,408` with a condition or an injected clock.
-- [x] T070 Finding 10: assert the hold in `structured_input_saved.rs` `a_saved_queue_survives_a_restart_on_hold`
+- [x] T070 (done as the new `a_restored_queue_is_held_before_any_process_starts`: the restart test cannot pin it, a process start re-holds a non-empty queue) Finding 10: assert the hold in `structured_input_saved.rs` `a_saved_queue_survives_a_restart_on_hold`
   against the mutant `input.hold = false` in `input.rs:134`. `cargo test -p micold-daemon --test structured_input_saved`
 
