@@ -89,3 +89,55 @@ fn with_room_the_bar_carries_the_cli_and_both_hints() {
         );
     }
 }
+
+/// With room to spare the usage sits after the CLI item (T034, FR-011).
+#[test]
+fn with_room_the_usage_follows_the_cli_item() {
+    let window = iced::Size::new(1400.0, MIN_WINDOW_SIZE.height);
+    let under = crate::support::covered_states::status_bar_usage();
+    let (painted, _) =
+        lay::painted_text_settled_at(lay::view_of(&under), &mut lay::renderer(), window);
+    let x_of = |wanted: &str| {
+        painted
+            .iter()
+            .find(|p| p.content.contains(wanted))
+            .unwrap_or_else(|| panic!("{wanted:?} is drawn: {painted:?}"))
+            .origin
+            .x
+    };
+    assert!(
+        x_of("37%") > x_of("CLI: "),
+        "usage comes after the CLI item"
+    );
+}
+
+/// At the smallest window usage goes after the hints and before any text is shortened (T034,
+/// FR-012): with the longest texts the hints and the usage are gone, and the usage never outlives
+/// a shortened text.
+#[test]
+fn at_the_smallest_window_usage_drops_before_any_text_shortens() {
+    let window = MIN_WINDOW_SIZE;
+    let under = crate::support::covered_states::status_bar_long_texts_with_usage();
+    let (painted, _) =
+        lay::painted_text_settled_at(lay::view_of(&under), &mut lay::renderer(), window);
+    let bar_y = window.height - HEIGHT - TOLERANCE;
+    let in_bar: Vec<_> = painted.iter().filter(|p| p.origin.y >= bar_y).collect();
+    let texts = || in_bar.iter().map(|p| &p.content).collect::<Vec<_>>();
+    let shortened = in_bar.iter().any(|p| p.content.contains('…'));
+    let usage = in_bar.iter().any(|p| p.content.contains("37%"));
+    assert!(
+        !in_bar.iter().any(|p| p.content.contains("Overview")),
+        "{:?}",
+        texts()
+    );
+    assert!(
+        !(shortened && usage),
+        "usage outlived a shortening: {:?}",
+        texts()
+    );
+    assert!(
+        !usage,
+        "the long texts leave no room for usage: {:?}",
+        texts()
+    );
+}

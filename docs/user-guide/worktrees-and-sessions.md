@@ -1189,7 +1189,7 @@ the background service keeps the events it reports. It is Claude Code only.
   **Stopped** or **Ended without a report** (Claude Code stopped or restarted while it ran), with
   the outcome Claude Code reported. The tool card that started a task shows the task's state in its
   header too. A session without background tasks shows neither the list nor the count.
-- **Plan usage.** A structured session also keeps the app bar's
+- **Plan usage.** A structured session also keeps the status bar's
   [Claude plan usage](#claude-plan-usage) indicator up to date, with no terminal session open.
 - **It follows the end.** While you are at the end of the transcript, it stays there as a reply
   streams in. Scroll up and it stops following, so what you are reading does not move, and a
@@ -2013,8 +2013,8 @@ Nothing appears until a Claude session started by the app has had a response.
 
 Sessions on other AI CLIs, and Claude sessions you started outside the app, are not changed.
 
-Once a Claude session has had a response, the app bar shows the usage at its right-hand end,
-before the project switcher: the highest percentage among your plan's limits and when that limit
+Once a Claude session has had a response, the status bar shows the usage after the CLI item at
+its left-hand end: the highest percentage among your plan's limits and when that limit
 resets, for example **42% · 15:30**. The reset is in your local time, with the day added when it is
 more than a day away. Hover the indicator to see every limit with its percentage and reset time,
 and when the values were last updated.

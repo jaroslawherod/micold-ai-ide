@@ -1,7 +1,7 @@
 # Settings
 
 Open **Settings** from the overflow menu (the three-dots button) in the top toolbar. It fills the
-main area, with a rail down the left listing seven sections. The app bar and the connection strip
+main area, with a rail down the left listing seven sections. The app bar and the status bar
 stay where they are, so the way back out is always in view.
 
 **Collapse**, at the bottom of the rail, slides the rail in to its icons and gives the width to the
@@ -289,7 +289,7 @@ nothing, whatever the system would allow. Where each system keeps its setting is
 ### Claude plan usage
 
 **Show Claude plan usage** shows how much of your Claude plan's usage limits you have used, and
-when the next limit resets, in the app bar (see
+when the next limit resets, in the status bar along the bottom of the window (see
 [Claude plan usage](worktrees-and-sessions.md#claude-plan-usage)). It is **on** by default,
 because it reads no credential and sends nothing off your machine. The values come from Claude
 Code's own status-line data in the Claude sessions the app runs, and from the plan-limit events

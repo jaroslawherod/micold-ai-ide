@@ -56,3 +56,16 @@ only where it was observed, and the rest are marked as written beside the change
 | Focus between panes of different CLIs changes the item (T027; US4 s2) | `main_tests::panes::moving_pane_focus_changes_the_status_bars_cli` | written beside the change (`follow_focus` already writes `session.active`, so it passes by construction) | ok |
 | The CLI item and hints fit at 640 dp; hints go first (T028) | `status_bar_fits::*` | the 640 dp test fails if a hint is drawn there; checked by reading, not by a mutated build | ok |
 | CLI item in session-view states, hints in every state (T031) | `layout_snapshot` | the fixture differed (additions only: 13 CLI items, hints in every state) before re-recording | re-recorded |
+
+### M5 (T033–T038)
+
+| Behaviour | Test | Red | Result |
+|---|---|---|---|
+| `model().usage` is `Some` only with a current reading and the switch on (T033, T035; US5 s1) | `status_bar::usage_is_present_only_for_a_current_reading_with_the_switch_on` | FAILED (`expect("a current reading")` on `None`: `model` set `usage: None`) | ok |
+| The app bar draws no usage (T033, T035; US5 s2) | `toolbar::the_app_bar_draws_no_usage_indicator` | FAILED (the "37%" label was drawn in the app bar's top strip: `["Micold AI IDE", …, "37%", …, "Overview", …]`) | ok |
+| Usage follows the CLI item (T034) | `status_bar_fits::with_room_the_usage_follows_the_cli_item` | passed before the change: the old app-bar label sat left of nothing in the bar, but its x was already past the CLI item's; a guard, not a red | ok |
+| Usage drops with the hints, before any text shortens, at 640 dp (T034; FR-012) | `status_bar_fits::at_the_smallest_window_usage_drops_before_any_text_shortens` | FAILED once on a fixture clash (the sandbox's "Getting image… 42%" matched the usage label; usage reading changed to 37%); the bar's give-way order is the M1 pass, so it passes by construction | ok |
+| Usage state fits (T034, T037) | `layout_snapshot`, `layout_text_overflow` (`status-bar-usage`) | new covered state, recorded; no existing state changed (none has a reading) | ok |
+
+§B7 (640 dp): `status_bar_fits` now holds all of CLI item, key hints and plan usage against the
+longest texts at `MIN_WINDOW_SIZE`: hints and usage are gone, nothing is shortened beyond its box.
