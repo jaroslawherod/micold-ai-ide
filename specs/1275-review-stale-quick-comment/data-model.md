@@ -29,13 +29,16 @@ Equality is structural (`PartialEq`).
 ### §3 `ChangedFile` (extended)
 
 New field `identity: ChangeIdentity` with `#[serde(default)]`. `NameStatus` gains `old_id` and
-`new_id: Option<String>` (`None` for an all-zero id). `assemble` sets `Sides` from them, leaving a
+`new_id: Option<String>` (`None` for an id of all zeros; ids are full length because the `--raw`
+read passes `--no-abbrev`, §4). `assemble` sets `Sides` from them, leaving a
 working-tree new side `None` → filled by `git.rs` (§4). Every struct literal of `ChangedFile`
 (core `context_header.rs`, `runs/summary.rs`, `pr_diff.rs`, `tests/review_git.rs`, client
 `tests/features_changes.rs`) gains `identity: ChangeIdentity::Unknown` or a real value.
 
 ### §4 `review::git` (extended)
 
+- `range_rows` and `range_paths` add `--no-abbrev` to their `--raw` read (R1), so ids are full
+  length and compare equal to `hash-object` output; the name-only reads are unchanged.
 - `identify(dir, files: &mut [ChangedFile])` (private): for each row whose new side is a working
   tree version with no id, one `git hash-object --stdin-paths` over the hashable paths (regular
   file, ≤ `limits::MAX_VERSION_BYTES`, no newline in the path); others get `Stat`; a missing file
@@ -84,6 +87,9 @@ working-tree new side `None` → filled by `git.rs` (§4). Every struct literal 
 ### §9 `settings::Settings` (extended)
 
 `suggestion_chips: bool`, `#[serde(default)]` (false). Client-owned: the daemon never reads it.
+Settings are saved through the private `StoredSettings` (`settings.rs`), so the field is added
+there too, with `#[serde(default)]`, and carried by both conversions, `StoredSettings::from_settings`
+and the conversion back to `Settings`, as `reduce_motion` is.
 
 ## Client (`micold-client`, render-free `features/`)
 
@@ -115,7 +121,8 @@ snapshot stays `diff: PrDiffLoad::Ready { files, patches }`; the reducer convert
 | `Msg::GutterPressed` | unchanged shape; starts a `DragState` as well as picking (a click is a drag that never moves) |
 | `Msg::ChipPressed(usize)` | new: index into `CHIPS` |
 | `Msg::SuggestionChipsInForce(bool)` | new: the applied setting, at start and after a save (FR-026) |
-| `Msg::DiffRead` | gains `row: Option<ChangedFile>`: the diff-time row (R5); `None` for "not listed any more" |
+| `Msg::DiffRead` | gains `row: DiffRow`: the diff-time row (R5) |
+| `DiffRow` | new enum: `NotRead` (a read that is not of the working tree, or `change_list_of` failed; the diff itself still shows), `Unlisted` (`change_list_of` succeeded and lists no row for the path), `Row(ChangedFile)` |
 | `Effect::ReadDiff` | unchanged shape; the shell also runs `change_list_of` |
 | `State.suggestion_chips` | new `bool`: the setting in force |
 

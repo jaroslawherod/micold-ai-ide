@@ -36,8 +36,11 @@ with `apply_next` unset. "List on screen" = `view.list` is `Ready` with at least
 - **H9** Selecting a file in the set that the latest read no longer lists issues no read;
   `no_longer_changed` is true and the diff area says the file has no changes any more; the row
   keeps its dot (AS11).
-- **H10** With nothing held, a working-tree `DiffRead` with a `row` writes it into the shown list,
-  so the next watch read compares against it (Edge *Selected between reads*).
+- **H10** With nothing held, a working-tree `DiffRead` with `DiffRow::Row` writes it into the shown
+  list, so the next watch read compares against it (Edge *Selected between reads*).
+- **H10a** `DiffRow::NotRead` (a non-working-tree read, or a failed `change_list_of`) adopts
+  nothing: the diff shows, the file keeps its dot, the set is unchanged. `DiffRow::Unlisted` under a
+  hold sets `no_longer_changed` as H9; with nothing held it leaves the shown list unchanged.
 - **H11** Pull request: a head refresh that differs sets `pr.held` and leaves `pr.diff`,
   `pr.selected`, `pr.file` unchanged (AS8). Selecting a file in `pr.held`'s set adopts its row and
   patch from `held.latest` and shows that patch; another file shows the held snapshot's patch.
