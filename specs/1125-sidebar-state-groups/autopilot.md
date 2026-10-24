@@ -72,6 +72,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M2 review A (code-review high, sonnet) | 2 | ec2c9336949b1368872b8dbf32b907159948d404:a7213fdae80ddd2f0dd6cfd1409445afbd0b3c29 | CLEAN: F1–F3, F5, F6 fixes hold; F4 decline stands |
 | M2 review B (conformance, sonnet) | 1 | 092fa3acba03841019c0235d725522fea9aecfa0:bf2c21dfec749c3aae73d8db08e4ab95052cf4e8 | CLEAN (1 MINOR: T029 named `atoms.rs`; fixed, prose only) |
 | M2 visual pass | — | bf2c21df | B3, B4 (revealed row, both themes), B8 PASS; issue titles and a session's selected row not seen live (no GitHub, no agent session): `visual-pass/m2-record.md` |
+| M3 review A (code-review high) | 1 | 3e26f93812bf434d26e39518b6e128d54de8810c:8f29b0bac5ec9bae89a761cd901c3c093c787849 | CHANGES: F1 a location whose sessions are all archived became selectable while viewing one (fixed: `pressable_sessions`, as before 1125); F6 no selected Overview-row pose and T039 named `atoms.rs` (fixed: pose added, T039 points at surfaces.rs per D17); F2, F3, F4, F5, F7 declined. Scoped gate red on `feature_registration_cost` (`overview` named `features::sidebar` in a test; fixed: the tag-filter badge test moved to `ui/overview.rs`) |
 
 ## Declined review findings
 
@@ -79,13 +80,15 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 |---|---|---|---|
 | M1 | A r1 F5 | `card()` and `location_card_state` each filter the location's sessions | a constant factor per card; one function owning the card state (R2) is what makes the sidebar and the Overview agree |
 | M2 | A r1 F4 | the second line's supporting text is `Length::Fill`; use `.shrink()` | iced lays out Shrink children before Fill ones, so a shrinking long second line would take the row's width first and squeeze the chips out in a narrow sidebar; Fill keeps the chips whole and ellipsizes the text |
+| M3 | A r1 F2 | the sidebar calls `ui::overview::cards` a second time per view; compute the badge once and pass it to the toolbar too | the toolbar is #1127's (T036: nothing else in it changes); R14 already accepts the uncached cards, and the cost is linear in the worktrees listed |
+| M3 | A r1 F3 | `overview_row` repeats the toolbar's Settings/project gating; share one helper | the toolbar's `overview_press` is #1127's to change; the `settings_open: true` arm of `Opened` is the contract's R9 no-op guard, tested in T032 |
+| M3 | A r1 F4 | `TreeItem::tab_stop` needs `keyboard_focus` to act | taste (MINOR); D17 chose the flag beside `heading`, and its one caller sets both |
+| M3 | A r1 F5 | the Settings-open test checks only that no `Opened` is published | MINOR; the published-nothing check is T035's stated observable |
+| M3 | A r1 F7 | the Overview row is not on the arrow-key row model | FR-017 asks for keyboard reachability in display order, which Tab gives (T035, T058 documents Tab); the arrow-key row model is unchanged by this feature |
 
 ## Handover
 
-- **Done**: M3 T032–T041 implemented and ticked, committed at 6fde29a5 on top of origin/main b54fa759 (M2 merged). Local runs green: `cargo test -p micold-client --lib -- overview composition_contrast sidebar toolbar tree_view showcase` (210 passed), `--test features_sidebar --test layout_snapshot --test showcase_completeness` (95/112/46 passed). Layout snapshot regenerated with `UPDATE_LAYOUT_SNAPSHOT=1`; sidebar paths re-pointed (D18). `cargo fmt --all` run. No gate, review or visual pass yet.
-- **Next**: verify.md from step 1: scoped gate detached + review A (`code-review` high on origin/main...HEAD); then review B (sonnet, conformance) with visual pass (quickstart §B1 Overview-row half, §B4; both themes); full gate (`scripts/gate.sh`); push; PR files in the scratchpad (title prefix "#1125: Layout: sidebar grouped by state with Overview as its first row — M3: ").
-- **Open findings**: none. No PR opened.
-- **Note**: disk was 14 GB free at start (target-shared/debug 16 GB); wipe target-shared/debug if a build runs short (standing approval).
+None.
 
 ## Open escalation
 

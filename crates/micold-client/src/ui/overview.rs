@@ -1817,4 +1817,55 @@ mod tests {
         mounted.drive(stepped(false));
         assert_eq!(focused(&mut mounted), Some(card_id(&l[2])));
     }
+
+    /// T032 (US2.6, D7), here rather than in `features::overview` because it composes the sidebar
+    /// feature's filter with the Overview's cards: under a tag filter the badge counts the listed locations only, the cards
+    /// the Overview shows, so the sidebar row's and the top bar's badges agree.
+    #[test]
+    fn under_a_tag_filter_the_badge_counts_the_listed_locations() {
+        use crate::features::overview::{badge, Tone};
+        use crate::features::sidebar::TagFilter;
+        use micold_core::naming::ConventionalType;
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::{AiCli, Session, SessionLifecycle};
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+        let mut app = crate::app::State::default();
+        let path = std::path::PathBuf::from("/repo");
+        app.workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        app.workspace.active = Some(path.clone());
+        for dir in ["feat-a", "fix-b"] {
+            app.worktree.worktrees.push(Worktree {
+                dir_name: dir.into(),
+                path: path.join(".claude/worktrees").join(dir),
+                branch: Some(dir.replacen('-', "/", 1)),
+                status: WorktreeStatus::Valid,
+                included: false,
+            });
+            let mut session =
+                Session::start_new(SessionLocation::Worktree(dir.into()), AiCli::ClaudeCode);
+            session.lifecycle = SessionLifecycle::Failed {
+                reason: "exit status 1".into(),
+                attempts: 3,
+            };
+            app.workspace
+                .sessions
+                .entry(path.clone())
+                .or_default()
+                .push(session);
+        }
+        let label = |app: &crate::app::State| badge(&cards(app)).map(|b| (b.tone, b.label));
+        assert_eq!(
+            label(&app),
+            Some((Tone::Warning, "2 need attention".to_string()))
+        );
+        app.sidebar
+            .filters
+            .insert(TagFilter::Type(ConventionalType::Feat));
+        assert_eq!(
+            label(&app),
+            Some((Tone::Warning, "1 need attention".to_string()))
+        );
+    }
 }

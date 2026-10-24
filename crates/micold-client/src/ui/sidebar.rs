@@ -19,7 +19,7 @@ use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
 use micold_core::pull_request::{CheckStatus, PrState};
-use micold_core::session::{SessionLifecycle, SessionLocation};
+use micold_core::session::{Session, SessionLifecycle, SessionLocation};
 use micold_core::tokens::{self, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
 
@@ -291,6 +291,16 @@ fn row_selection(state: &State) -> RowSelection<'_> {
         overview_open: state.overview.open,
         viewed: state.session.active,
         revealed: state.sidebar.revealed.as_ref(),
+    }
+}
+
+/// The sessions a location row may be selected for: none while the row has no main session (every
+/// one archived), so viewing an archived session never selects the row, as before feature 1125.
+fn pressable_sessions<T>(main: Option<T>, sessions: &[Session]) -> &[Session] {
+    if main.is_some() {
+        sessions
+    } else {
+        &[]
     }
 }
 
@@ -814,7 +824,7 @@ fn build_items(
             &row_selection(state),
             SelectableRow::Location {
                 location: &location,
-                sessions: &node.sessions,
+                sessions: pressable_sessions(node.main_session(), &node.sessions),
                 sessions_shown: node.sessions_shown(),
             },
         ));
@@ -1215,7 +1225,7 @@ fn build_default_item(
         &row_selection(state),
         SelectableRow::Location {
             location: &SessionLocation::Default,
-            sessions: &node.sessions,
+            sessions: pressable_sessions(node.main_session(), &node.sessions),
             sessions_shown: node.sessions_shown(),
         },
     ));
