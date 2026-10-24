@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M9 done (T061–T065): full gate green on f38301f3 (split-gate.sh); pushed, PR to open
-- **Next step**: the orchestrator opens the M9 PR from `$SCRATCHPAD/943-M9/pr-title.txt` and `pr-body.md`, waits on CI and merges; then the close unit (Phase 12 polish)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -25,6 +25,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1257 | M6 | merged (rebase) | 319e8706 |
 | #1265 | M7 | merged (rebase) | f462ddf5 |
 | #1313 | M8 | merged (rebase) | 3c7db2eb |
+| #1321 | M9 | merged (rebase) | 4910aeee |
+| (to open) | close: quickstart results, tdd-verify, spec Closed | open (branch `claude/project-thread-k392yq`) | |
 
 ## Milestones
 
@@ -38,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | #1257 | merged |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | #1265 | merged |
 | M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** (met, e65993bc) | #1313 | merged |
-| M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** (met) | | T061–T065 done (f38301f3); PR to open |
+| M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** (met) | #1321 | merged |
 
 ## Decisions
 
@@ -105,6 +107,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M9 (scoped, sonnet, claude -p) | 2 | b135d83a39982b5f3ad479473826238fdfb3b04c:751150ca9977f7708fea767b9fd1c09919e52359 | CLEAN (F1–F3, F5 fixes hold; F4, F6–F8 declines stand; the `wire_command` fix checked) |
 | Full gate M9 run 1 | — | 751150ca + fmt | `split-gate.sh` (disk): fmt, clippy, core and daemon green; client chunk 160 red: `root_is_routing_only` (the root reducer's new `SwitchDismissed` arm decided) — moved into the feature (f38301f3) |
 | Full gate M9 run 2 | — | f38301f3 | `split-gate.sh`: green (ALL_GREEN) |
+| speckit-converge (close, claude -p) | 1 | 4910aeee | NONE: no unbuilt behaviour; only T066 open (done in the close PR). Run because M8 has no review B row |
+| speckit-tdd-verify (close, sonnet, claude -p) | 1 | 4910aeee | FAIL: F1 (T063/T064 red only by mutation), F2–F3 HIGH, F4–F9 MED, F10–F11 LOW; 10 core mutants, 9 caught, 1 equivalent (F10). F3 fixed (the SC-002 helper counts the names whose unique prefix it checked and fails at none); the rest declined or follow-ups (below). `tdd/verification.md` |
+| Close review (fresh, sonnet, claude -p) | 1 | 27a69438e9f442555728def0f83cc56886248014:4910aeee90b59dd49d50e93a89c7713366196eb5 | CHANGES: F1 MAJOR the first F3 fix (an else-branch) restated its own condition — replaced by a count of names checked; F2/F3 MAJOR the quickstart row and ledger claimed that fix — reworded |
+| Close review (scoped, sonnet, claude -p) | 2 | f35757fab971788190dfbd93809766d4c1a68b05:4910aeee90b59dd49d50e93a89c7713366196eb5 | CLEAN (2 MINOR: one checked name passes the count guard — left; commit the edits together — done) |
+| Full gate close run 1 | — | f35757fa | `split-gate.sh` (disk, `target-shared/debug` wiped first): green (ALL_GREEN) |
 
 ## Declined review findings
 
@@ -128,15 +135,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Review A M9 F6 (`view_full`'s eighth argument and `too_many_arguments`): MINOR, taste; left.
 - Review A M9 F7 (`SwitchDismissed` handled by the lib reducer and the shell): declined — the registry closes a dialog through the lib reducer (another dialog opening, `close_dialogs`), the shell receives the window's own presses; both are needed, as for #942's `ModeCancelled`.
 - Review A M9 F8 (the table parser splits on every `|`): MINOR; a reason with a `|` fails the test loudly, not silently; left.
+- tdd-verify F1 (T063/T064 have no recorded red): disclosed in M9's PR and `cycle-log.md`; the red was shown by mutation after green and cannot be recorded first after the fact.
+- tdd-verify F2 (`MODEL_SHORTCUTS`, `CHECKED_AGAINST` asserted equal to literals): declined — both mirror facts of the external CLI; the pin makes a change to them a reviewed one, and `terminal_only_doc` checks the version against the guide.
+- tdd-verify F4 (no `tdd/test-list.md`): process artefact this flow never used; `cycle-log.md` holds the traces.
+- tdd-verify F5 (SC-007 has no automated test): SC-007 is a manual check by the spec's GUI exception, passed live in T065; T066 done in this PR.
+- tdd-verify F8 (terminal-period marker assertions removed in 65a62038): false — the marker moved to `features::session::terminal_period_marker`, asserted by `features_session` `the_terminal_period_marker_says_where_the_turns_are`.
+- tdd-verify F9 (serde test round-trips a test-local struct): the real record is covered by `session_store` `a_named_model_round_trips_and_default_is_not_written` and `a_record_written_before_model_choices_loads_default`.
+- tdd-verify F11 (`len() == 70` tied to the fixture): declined — the fixture is recorded and fixed; the count is the check that parsing drops nothing.
 
 ## Handover
 
-**M9 done.** T061–T064 at `98efa87d`, the live pass's fix (a switch's command with its `/`) and
-review A's fixes at `9e21bda4`, the root-reducer fix at `f38301f3`. The full gate is green on
-`f38301f3` (`split-gate.sh`). Review A ran two rounds and ended clean; review B was clean. T065
-covered B3, B6 and B7 live in both themes (`visual-pass/m9-record.md`); its gaps are listed under
-*Follow-ups*. The PR title and body are in `$SCRATCHPAD/943-M9/`; the orchestrator opens the PR. Next: the close
-unit.
+None.
 
 ## Open escalation
 
@@ -156,3 +165,6 @@ None.
 - Review A M6 round 2 MINORs: a switch's delayed command task is not tied to the process it was for; the switch-ends-before-the-command ordering and the `SwitchEnding` guard have no test.
 - M9 T065: the command of a switch is not typed when Claude Code first asks to trust the folder (938's first-prompt rule); the daemon logs why, the window says nothing.
 - M9 T065 gaps: `/mcp` typed into the terminal not seen live (folder trust), B8's sandboxed switch (no container runtime here), B8's Copilot session (no `copilot`), B9 (macOS, Windows), the `/login` card (needs a signed-out CLI) — for a human pass.
+- tdd-verify F6: fixed sleeps in the daemon tests' "nothing happened" checks (`structured_switch.rs:873,892,930`, `structured_commands.rs:363`, `structured_model.rs:374`); replace with an event or a barrier.
+- tdd-verify F7: the SC-003 palette test (`command_palette.rs:234`) asserts 100 ms on the wall clock; can flake on a loaded runner.
+- tdd-verify F10: the equal-name tier in `palette.rs:39` `filter` is dead (the equivalent mutant); fold it into the prefix tier.

@@ -397,7 +397,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 12: Polish (close unit)
 
-- [ ] T066 Run quickstart Part A and record the results in
+- [x] T066 Run quickstart Part A and record the results in
   `specs/943-structured-commands-fallback/quickstart.md`
 
 ---

@@ -40,3 +40,34 @@ client against a scratch project with one project skill and one custom command.
 7. Switch during a turn: the confirmation names the work that will end. Two windows: both follow.
 8. A Copilot session offers no switch. A sandboxed Claude session switches inside its sandbox.
 9. On macOS and Windows: palette keys, picker and switching behave the same.
+
+## Results (close, 2026-10-24, `main` at 4910aeee)
+
+Part A, run on Linux:
+
+| Check | Result |
+|---|---|
+| Parsing the recorded fixtures | `structured_commands` 10 passed, `structured_parse` 20 passed |
+| Command list, kinds, terminal-only, classification | core lib `structured::commands`/`model`/`control` 17 passed |
+| Palette ordering and speed | `command_palette` 7 passed; the SC-002 check now also fails a list in which no name had a unique prefix to check (tdd-verify F3) |
+| Terminal-only list equals the guide | `terminal_only_doc` 2 passed |
+| Transcript markers | `structured_transcript` 71 passed |
+| Persisted model and handle | `protocol_roundtrip` 45 passed, `session_store` 12 passed |
+| Daemon against the stand-in | `structured_commands` 10, `structured_model` 10, `structured_switch` 11 passed |
+| Window state | `features_command_palette` 18 passed, `features_session` 75 passed |
+| Everything else unchanged | the close PR's full gate (`split-gate.sh`) green |
+
+Part B ran live against `claude` 2.1.310 under Xvfb in both themes, recorded in
+[visual-pass/m8-record.md](visual-pass/m8-record.md) (steps 1, 2, 4, 5) and
+[visual-pass/m9-record.md](visual-pass/m9-record.md) (steps 3, 6, 7). Every step run passed, after
+two bugs the passes found were fixed (the picker's name field took no keys; a switch's command went
+out without its `/`). Not run, left for a human pass:
+
+- Step 4: restarting after `/clear` to check Claude forgot the cleared part (FR-005a is covered by
+  M5's daemon tests).
+- Step 6: `/mcp` seen typed into the terminal — Claude Code first asked to trust the scratch folder,
+  and the daemon does not type a switch's command over that prompt.
+- Step 8: a Copilot session (no `copilot` CLI; covered by `features_session`) and a sandboxed
+  session's switch (no container runtime; CI's sandbox job).
+- Step 9: macOS and Windows.
+- The `/login` card after an authentication failure (needs a signed-out CLI; M7's tests).
