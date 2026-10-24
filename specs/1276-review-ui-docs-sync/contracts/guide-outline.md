@@ -54,4 +54,5 @@ control's **Pull requests** entry), `settings.md:659` (the **The Changes view:**
 Review tab), `worktrees-and-sessions.md:978` (row menu **Review changes** "opens the Changes view"
 → opens or focuses the Review tab), `agent-tools.md:299` ("from the Changes view" → from the Review
 tab); and in `reviewing-changes.md` itself (lines 3, 6, 9, 132 today), which the outline rewrites.
+Outside those five pages the same wording is reworded to the Review tab: `parallel-runs.md:84` (**Open diff** opens the run's Changes view, and closing it → opens the run's Review tab, and closing the tab), `parallel-runs.md:91` and `:92` (the totals the Changes view shows → the Review tab shows), `docs/README.md:45` (the index line "the Changes view" → the Review tab), and `docs/development/layout-snapshot.md:105` (rewritten with the `session-area-changes-open` sentences, plan §2 step 6).
 Line numbers are today's; the implementer re-runs the grep after rebase and rewords every hit.

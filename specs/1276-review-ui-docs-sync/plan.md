@@ -172,7 +172,7 @@ sections, and every inbound link is re-pointed (FR-014). Every *Changes view* me
 pages quickstart §A2 greps is reworded to the Review tab, so that grep returns nothing: the link text
 at `settings.md:660` and `worktrees-and-sessions.md:240`, and `settings.md:653`, `settings.md:659`,
 `worktrees-and-sessions.md:978` and `agent-tools.md:299` (list in
-[contracts/guide-outline.md](contracts/guide-outline.md) § *Inbound links*; re-grep after rebase). Each slice's own guide edits are
+[contracts/guide-outline.md](contracts/guide-outline.md) § *Inbound links*; re-grep after rebase). The same mentions outside those pages are reworded to the Review tab as well: `parallel-runs.md:84`, `:91`, `:92`, `docs/README.md:45`, and `docs/development/layout-snapshot.md:105` (with §2 step 6). Each slice's own guide edits are
 the starting text; this feature reconciles them into one chapter and removes leftovers (FR-002).
 
 ### 4. Visual pass (FR-009, FR-010)
