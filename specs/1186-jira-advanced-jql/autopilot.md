@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
 - **Phase**: spec
-- **Next step**: clarify unit (spec reviewed; see Review rounds)
+- **Next step**: clarify unit: spec reviewed CLEAN (round 2); no [NEEDS CLARIFICATION] markers, so clarify checks for remaining ambiguities (e.g. auto-run on open FR-004a, 2,000-char cap)
 
 ## Pull requests
 
@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec review | 1 | 3f9cc1e70535abc53505245bbebd94feceb8cdb5:b43218cdb7025279d1129ac4f6452b88298f123b | CHANGES: 3 MAJOR, 3 MINOR — all fixed (quote/sort-clause terms; FR-004a auto-run on open; draft vs last run query; moved-issue edge; HTTP 400 = invalid query; empty query = same rule as sort-only) |
+| Spec review | 2 | 50939e7590e958b50053133db00b8fe7f26e966b:5510e0471524f4d4a847f1d9f80dc643b9b99499 | CLEAN (1 MINOR kept: HTTP 400 in FR-010 is the observable rule round 1 asked for) |
 
 ## Declined review findings
 
