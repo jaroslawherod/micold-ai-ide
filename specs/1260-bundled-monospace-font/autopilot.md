@@ -47,6 +47,9 @@ Polish T028–T029 (quickstart §A/§C records, no code) is left to the close un
 | Plan review | 2 | 3b69b243e65412cceb69de7ab247213b1a4f1a6f:5f36be6f05b0fd5cb520da88bf1c3c6f00ef576b | CLEAN (1 MINOR: DestDir parser helper unnamed — fixed, prose only). Headless `claude -p --model sonnet` |
 | speckit-analyze | 1 | ccc7a9c9bc87b622321fd307fa4ff85b1a14fa2f:e95ade0538e2e07e26e282c7175002d0efd09666 | 0 CRITICAL/HIGH; 5 MEDIUM: C1 (startup.rs is `main`'s body — recorded in plan Constitution Check), I2/I3 (spec assumptions on bundle licences and snapshot — fixed, FR-008 now names the other faces' licences), G1 (C-3 error path — contract), I1 declined (below); LOW A1, F1, F2, G2 fixed. Headless `claude -p --model sonnet` |
 | Tasks review | 1 | 88521610e9b631345d58ac2c2dda25746ac7c51f:e95ade0538e2e07e26e282c7175002d0efd09666 | CLEAN (3 MINOR, all fixed: T013 red-before-T010 note, T001 full paths, SC-001 in M2). Checklist item "Requirements are testable and unambiguous" confirmed and ticked. Headless `claude -p` |
+| M1 review A (code-review, high) | 1 | 6277037163e0bbcd861a37d435b1356720e4bb8c:70e7a73c96d09bcd9fef5a4a8efdbd3b81a804d2 | CLEAN (1 MINOR: host-copy assertion matched only `Source::File` — fixed, now asserts every `Fira Mono` face is `Source::Binary`). Headless `claude -p` |
+| M1 gate | 1 | 70e7a73c | red: `anatomy_call_sites::the_test_module_convention_this_relies_on_holds` (two `#[cfg(test)]` items in mono.rs) — test helpers moved to `test_support.rs` |
+| M1 review B (conformance, sonnet) | 1 | 50ccc692ca798e03d24794557a4da0a64a4f706c:7e49d4ed6e9b6f2490c2d49d16a17e95aaa1db81 | CHANGES (1 MAJOR declined, below; 2 MINOR: guide bullet rewrapped — fixed; terminal test paths verbose — left). Headless `claude -p --model sonnet` |
 
 ## Declined review findings
 
@@ -54,6 +57,7 @@ Polish T028–T029 (quickstart §A/§C records, no code) is left to the close un
 |---|---|---|---|
 | design | speckit-analyze I1 | FR-007 is agent-resolved in spec but "pending" in plan/tasks; drop the decline branch | The orchestrator keeps FR-007 open for the user's confirmation; the decline branch (plan D4, T013) must stay droppable until they answer |
 | design | speckit-analyze D1, F3 (LOW) | terminal rule restated four times; T026 large | Taste; each restatement serves its section, and T026's parts share one file and one red test |
+| M1 | review B F1 (MAJOR) | T006/T007 have no red run before green (Constitution I) | Red is recorded by mutation in `tdd/cycle-log.md`, and the mutation is the reviewer's own suggested stub (Bold constant pointed at the Regular file, `remove_face` skipped): both tests FAILED, then passed on the restored source. Same evidence form the project accepts (specs/972 cycle log). T009 and T013 were run red before T010 |
 
 ## Handover
 
