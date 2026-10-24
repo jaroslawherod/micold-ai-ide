@@ -122,7 +122,7 @@ different version or build, the sandbox failed or is out of date, a session is r
 sandbox — the user still gets a banner with the button that ends the condition. The bar shows the
 short state as well, but it never replaces the call to action.
 
-**Why this priority**: Moving these into a 12 px line at the bottom would hide conditions the
+**Why this priority**: Moving these into a 28 px bar of small text at the bottom would hide conditions the
 product deliberately keeps loud (a sandbox bypassed for weeks unnoticed is the known failure).
 
 **Independent Test**: Put the window in each of the seven action-needing states; check that the banner with its
@@ -171,7 +171,7 @@ check the bar names that pane's CLI; check the two key hints show the platform's
    behind it — **When** the bar is drawn, **Then** the CLI item is not shown, and only the items
    after it move.
 4. **Given** the application runs on macOS, **When** the key hints are shown, **Then** they read
-   with Cmd (for example "⌘⇧O Overview"); on Windows and Linux they read with Ctrl ("Ctrl+Shift+O
+   with Cmd (for example "Cmd+Shift+O Overview"); on Windows and Linux they read with Ctrl ("Ctrl+Shift+O
    Overview").
 5. **Given** the Overview is open over an active session, **When** the user closes the Overview
    and the session view returns, **Then** the CLI item shows that session's CLI again.

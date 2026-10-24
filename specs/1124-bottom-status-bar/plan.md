@@ -87,7 +87,7 @@ crates/micold-client/src/ui/
 crates/micold-client/src/showcase/sections/     # + StatusBar entry; UsageIndicator caption "status bar"
 crates/micold-client/tests/
 ├── support/layout.rs                           # + StateUnderTest::sandbox()
-├── support/covered_states.rs                   # + 6 status-bar states (appended)
+├── support/covered_states.rs                   # + 12 status-bar states (appended across stories)
 ├── fixtures/layout_snapshot.txt                # regenerated
 ├── gates/status_bar_fits.rs                    # NEW geometry gate (640 dp)
 ├── layout_snapshot.rs                          # + #[path] mod for the new gate
