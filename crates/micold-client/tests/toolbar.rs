@@ -26,7 +26,10 @@ fn the_app_bar_draws_no_usage_indicator() {
         painted.iter().any(|p| p.content.contains("37%")),
         "the reading is drawn somewhere"
     );
-    let app_bar: Vec<_> = painted.iter().filter(|p| p.origin.y < 56.0).collect();
+    let app_bar: Vec<_> = painted
+        .iter()
+        .filter(|p| p.origin.y < micold_core::tokens::anatomy::app_bar::HEIGHT)
+        .collect();
     assert!(
         !app_bar.iter().any(|p| p.content.contains("37%")),
         "{:?}",

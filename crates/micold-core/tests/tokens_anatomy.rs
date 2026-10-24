@@ -268,13 +268,6 @@ fn the_status_bar_anatomy_matches_the_contract() {
     assert_eq!(anatomy::status_bar::HEIGHT, 28.0);
 }
 
-/// `ALL` grew by the status bar's one figure; a count that moves without a new figure, or a new
-/// figure without the count, is caught here as well as by the source check below.
-#[test]
-fn the_table_lists_forty_eight_figures() {
-    assert_eq!(anatomy::ALL.len(), 48);
-}
-
 // -------------------------------------------------------------------------------------------
 // Properties that hold across the whole anatomy
 // -------------------------------------------------------------------------------------------

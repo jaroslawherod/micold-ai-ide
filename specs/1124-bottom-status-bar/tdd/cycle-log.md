@@ -69,3 +69,26 @@ only where it was observed, and the rest are marked as written beside the change
 
 §B7 (640 dp): `status_bar_fits` now holds all of CLI item, key hints and plan usage against the
 longest texts at `MIN_WINDOW_SIZE`: hints and usage are gone, nothing is shortened beyond its box.
+
+### M2 (T016–T020)
+
+M2's commit (`ebcd28ca`) landed the test change and the code together, and no red was recorded at
+the time. The close unit's audit showed the red against a mutated build: with a 24 dp row restored
+above the body while the sandbox comes up (MU2),
+`sandbox_progress::the_window_column_has_no_row_above_the_body_during_bring_up` FAILED with
+"Probing added a row to the window column". The bring-up covered states were recorded for the first
+time, so no red was possible for them.
+
+### Close (TDD audit and remediation)
+
+16 deliberate mutants were run against `ui/status_bar.rs` and the window column of `ui/mod.rs`. All
+16 were caught; the table is in [verification.md](verification.md). For the M4 rows marked "written
+beside the change", these runs are the red evidence: MU3, MU4, MU5, MU6, MU14 and MU15. For M5's
+usage order guard it is MU16, and for M1's six model tests that M1's mutants did not reach it is
+MU9 to MU13.
+
+| Behaviour | Test | Red | Result |
+|---|---|---|---|
+| Only the root drives a feature (gate, T040) | `feature_registration_cost::only_the_root_drives_a_feature` | FAILED on `m4-local`: `ui/status_bar.rs calls changes::update` | ok after routing through `State::update_changes` |
+| A lost connection adds no row, through the layout (T041) | `banner_is_not_a_snackbar::a_lost_connection_raises_no_banner` | the first version's premise failed (it measured child 1, which is the banner when one is drawn). With the body measured as the row above the bar, MU1 FAILED it with `(4, 153.0)` against `(3, 65.0)` | ok |
+| 640 dp usage test asserts the bar is drawn (T042) | `status_bar_fits::at_the_smallest_window_usage_drops_before_any_text_shortens` | MU7 FAILED it | ok |

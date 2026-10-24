@@ -21,6 +21,9 @@ use micold_client::features::window::{self, FieldId};
 use micold_client::features::Outcome;
 use micold_core::install_location::InstallLocation;
 
+#[path = "support/mod.rs"]
+mod support;
+
 #[test]
 fn focus_moves_to_whichever_field_reports_gaining_it() {
     let mut st = State::default();
@@ -233,9 +236,6 @@ fn gaining_focus_reports_no_blur() {
     let mut st = State::default();
     assert!(window::field_focus_changed(&mut st, FieldId::RunName, true).is_empty());
 }
-
-#[path = "support/mod.rs"]
-mod support;
 
 /// Feature 1124 (spec edge case, T010): the install-location screen is the one view that draws no
 /// status bar — it returns before the window column the bar is mounted in.
