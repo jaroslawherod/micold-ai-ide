@@ -44,17 +44,10 @@ pub const NOT_IN_DIFF: &str = "Not in the current diff";
 pub const PR_TOO_LARGE: &str = "This pull request is too large to show here";
 /// A pull request whose diff could not be read; pressing its row again retries.
 pub const PR_UNREAD: &str = "The pull request's diff could not be read; select it again to retry";
-/// The row that returns the view to the entry's own changes (FR-005).
-pub const WORKING_TREE: &str = "Working tree";
-/// The caption under the pull request section's title once a failed refresh left a list older than
-/// the PR status stale threshold (feature 775, FR-012).
-pub const POSSIBLY_STALE: &str = "Possibly stale";
-/// The section's line while the first read is pending (feature 1003, FR-010).
-pub const PRS_LOADING: &str = "Reading pull requests…";
-/// The section's muted line when no list can be read (FR-011).
-pub const PRS_UNAVAILABLE: &str = "Pull requests can't be shown for this worktree";
-/// The section's line for a worktree with no pull request (FR-010).
-pub const PRS_EMPTY: &str = "No pull requests from this worktree yet";
+/// The section's wording, decided in core with the source control's (feature 1272, R2).
+pub use micold_core::review::source_menu::{
+    POSSIBLY_STALE, PRS_EMPTY, PRS_LOADING, PRS_UNAVAILABLE, WORKING_TREE,
+};
 /// The tallest the list of pull requests grows before it scrolls.
 const PRS_MAX_HEIGHT: f32 = 220.0;
 pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines to place it.";

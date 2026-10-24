@@ -35,9 +35,8 @@ use micold_core::settings::DiffLayout;
 use micold_core::tokens::Rgb;
 use micold_core::typeahead::{rank, Query};
 
-/// The note beside the Default entry's unavailable Committed toggle (L1, US1 s9).
-pub const DEFAULT_ENTRY_NOTE: &str =
-    "The project root has no branch of its own to compare; only uncommitted changes are listed";
+/// The note beside the Default entry's unavailable Committed toggle (L1, US1 s9), worded in core.
+pub use micold_core::review::source_menu::DEFAULT_ENTRY_NOTE;
 
 /// The empty state when every toggle that can list something is off (Edge "Both toggles off").
 pub const BOTH_HIDDEN: &str = "Committed and uncommitted changes are both hidden";
@@ -115,25 +114,9 @@ impl PrList {
     }
 }
 
-/// What the Pull requests section draws (feature 1003, spec § Section states).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PrSection<'a> {
-    /// Nothing: the setting is off, or the entry has no branch of its own.
-    Absent,
-    /// The first read is pending.
-    Loading,
-    /// No list was read and none can be: one muted line.
-    Unavailable,
-    /// A list was read and holds no pull request.
-    Empty,
-    /// The list, marked possibly stale once past the threshold.
-    List {
-        /// The pull requests, newest first.
-        prs: &'a [BranchPullRequest],
-        /// The list is older than the stale threshold.
-        stale: bool,
-    },
-}
+/// What the Pull requests section draws (feature 1003, spec § Section states): the core's list
+/// state, which the source control's rows are built from too (feature 1272, data-model §2).
+pub use micold_core::review::source_menu::PrRows as PrSection;
 
 /// The section's state for `view` at `now` (Unix seconds); `enabled` is the PR status setting.
 pub fn section(view: &OpenView, enabled: bool, now: u64) -> PrSection<'_> {
