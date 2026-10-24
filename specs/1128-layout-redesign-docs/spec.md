@@ -22,7 +22,7 @@ The layout redesign (mockup *Micold Layout Redesign*, boards **Proposal: session
 | #1124 | Bottom status bar (connection, sandbox, CLI, plan usage, key hints) | merged | `specs/1124-bottom-status-bar` |
 | #1126 | Worktree context header and session tab strip above the terminal | merged | `specs/1126-session-context-header` |
 | #1125 | Sidebar grouped by state, Overview as its first row, chip bar, two-line rows | open, partly merged (groups, two-line rows) | `specs/1125-sidebar-state-groups` |
-| #1127 | One 44 px title bar: breadcrumb `project / worktree`, jump-to field, plan usage, Settings, overflow menu | open, no spec yet | — |
+| #1127 | One 44 px title bar: breadcrumb `project / worktree`, jump-to field, Settings, overflow menu (plan usage stays in the status bar, per #1124) | open, no spec yet | — |
 
 Each of those features updates the user-guide sections, layout-snapshot states and visual pass of
 **its own region**. None of them owns the window as a whole: the four pages a user reads to learn
@@ -56,7 +56,8 @@ parts for open ones wait:
   menu button, **Open another project** in the app bar (if #1127 moves it), the connection banner,
   sandbox banner and sandbox bring-up row stacked under the app bar in the steady state, the bar
   under the terminal, the sidebar's filter button and tag-filter panel (replaced by the chip bar),
-  the sidebar's type/issue chips on rows. The list is final only once #1125 and #1127 have merged;
+  the sidebar's type/issue chips on rows. A banner inside a region that still ships, such as the
+  stored-sessions offer at the top of the sidebar, is not a removed element. The list is final only once #1125 and #1127 have merged;
   each stage reads it from what shipped, not from this list.
 - **Owning section**: the one section of the user guide that describes a region's element in full.
   Every other mention links to it.
@@ -212,6 +213,10 @@ its follow-up.
   from the mockup (the mockup's own note asks whether groups stay collapsible and whether Changes
   opens as an inspector). The pages describe what shipped; the visual pass records the difference
   as on purpose, naming the decision.
+- **#1127 puts plan usage in the title bar**: #1127's issue body still lists plan usage among the
+  title bar's elements, against #1124's decision that it lives in the status bar
+  (`specs/1124-bottom-status-bar/spec.md`, Clarifications). If #1127 ships it in the title bar,
+  the pages describe what shipped (FR-017), and stage 2 updates FR-001 and FR-010 to match.
 - **A blocker reverts or never merges**: stage 2 does not start until both #1125 and #1127 have
   merged; if one is closed unmerged, stage 2's parts for that region are dropped and the ledger
   says so.
@@ -237,7 +242,8 @@ its follow-up.
 
 - **FR-001**: No sentence in the four pages MAY place the connection state, the sandbox state, the
   session's CLI or plan usage anywhere but the status bar, nor describe a row stacked under the
-  top of the window in the steady state.
+  top of the window in the steady state. A banner inside a region, such as the stored-sessions
+  offer at the top of the sidebar, is not such a row.
 - **FR-002**: No sentence in the four pages MAY describe a bar under the terminal; a session's
   state, restart control and instances are placed in the context header or the tab strip as #1126
   shipped them.
@@ -263,7 +269,7 @@ its follow-up.
   regions top to bottom (title bar, sidebar beside the session area, status bar) and links each to
   its owning section.
 - **FR-010**: The sidebar's elements (Overview row, chip bar, groups, two-line rows) and the title
-  bar's elements (breadcrumb, jump-to field, plan usage, Settings, overflow menu) each MUST have one
+  bar's elements (breadcrumb, jump-to field, Settings, overflow menu) each MUST have one
   owning section, linked from every other mention in the four pages.
 - **FR-011**: User-guide pages outside the four that name a removed element MUST be
   [NEEDS CLARIFICATION: in scope? `appearance-theming.md`, `icons.md`, `settings.md` and
@@ -291,7 +297,7 @@ its follow-up.
 - **FR-017**: The pages MUST describe what shipped; where it differs from the mockup, the text
   follows the running window.
 - **FR-018**: Every shortcut the four pages name MUST give the Linux/Windows and the macOS form.
-- **FR-019**: Every link added or changed in the four pages and in `layout-snapshot.md` MUST
+- **FR-019**: Every link in the four pages and in `layout-snapshot.md` MUST
   resolve, including its `#anchor`.
 - **FR-020**: This feature MUST NOT change the application's behaviour or layout, except to fix a
   defect the visual pass finds, if the clarification in User Story 4, scenario 4 allows it.
