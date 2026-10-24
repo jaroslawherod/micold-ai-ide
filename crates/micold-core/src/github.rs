@@ -1205,9 +1205,10 @@ pub struct PagedIssues {
 /// The paging and cap rule both providers share: ask `fetch` for pages (with the previous page's
 /// cursor) until there is no next cursor or [`ISSUE_LOAD_CAP`] issues are held, truncating the page
 /// that crosses the cap. The first error aborts the load: a partial list is never shown as the list.
-pub fn load_pages(
-    mut fetch: impl FnMut(Option<&str>) -> Result<IssuePage, IssueLoadError>,
-) -> Result<PagedIssues, IssueLoadError> {
+/// Generic over the error, so a JQL run (feature 1186) pages through the same rule.
+pub fn load_pages<E>(
+    mut fetch: impl FnMut(Option<&str>) -> Result<IssuePage, E>,
+) -> Result<PagedIssues, E> {
     let mut issues: Vec<Issue> = Vec::new();
     let mut cursor: Option<String> = None;
     loop {

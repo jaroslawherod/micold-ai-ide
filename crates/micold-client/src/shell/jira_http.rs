@@ -19,6 +19,7 @@ use micold_core::github::{Issue, IssueLoadError, IssuePage};
 use micold_core::jira::{
     classify, list_jql, parse_page, search_jql, ApiToken, JiraConnection, JiraSource, Outcome,
 };
+use micold_core::jira_query::{QueryFailure, ScopedQuery};
 use micold_core::jira_status::{parse_statuses, status_jql, statuses_jql, KeyedStatus};
 
 /// How many times a refused status request is halved to find the key Jira refuses: 2^7 covers a
@@ -218,6 +219,18 @@ impl JiraSource for JiraCloud {
             read.extend(self.read_chunk(conn, token, &query.keys, 0)?);
         }
         Ok(read)
+    }
+
+    fn query_page(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        jql: &ScopedQuery,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, QueryFailure> {
+        let body = request_body(jql.as_str(), cursor, PAGE_SIZE);
+        let bytes = self.post(conn, token, &body).map_err(QueryFailure::Load)?;
+        parse_page(&bytes).map_err(QueryFailure::Load)
     }
 }
 

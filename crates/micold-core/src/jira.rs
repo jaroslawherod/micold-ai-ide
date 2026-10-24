@@ -10,6 +10,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage, GHOST_LOGIN};
+use crate::jira_query::{QueryFailure, ScopedQuery};
 use crate::jira_status::{KeyedStatus, TicketStatus};
 use crate::settings::Settings;
 
@@ -634,6 +635,20 @@ pub trait JiraSource: Send + Sync {
     ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
         Ok(Vec::new())
     }
+
+    /// One page of the issues `jql` lists, in its order; `cursor` is Jira's `nextPageToken`. A 400
+    /// is `QueryFailure::Rejected` with Jira's messages (feature 1186).
+    fn query_page(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+        _jql: &ScopedQuery,
+        _cursor: Option<&str>,
+    ) -> Result<IssuePage, QueryFailure> {
+        Err(QueryFailure::Load(IssueLoadError::Other(
+            "this Jira source cannot run a query".into(),
+        )))
+    }
 }
 
 /// Load a project's open issues page by page up to the load cap, through the paging rule GitHub
@@ -652,7 +667,7 @@ pub fn load(
     })
 }
 
-type Script<T> = std::sync::Mutex<std::collections::VecDeque<Result<T, IssueLoadError>>>;
+type Script<T, E = IssueLoadError> = std::sync::Mutex<std::collections::VecDeque<Result<T, E>>>;
 
 fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
@@ -671,6 +686,8 @@ pub struct FakeJiraSource {
     search_calls: std::sync::Mutex<Vec<String>>,
     statuses: Script<Vec<KeyedStatus>>,
     status_calls: std::sync::Mutex<Vec<Vec<String>>>,
+    queries: Script<IssuePage, QueryFailure>,
+    query_calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
 }
 
 impl FakeJiraSource {
@@ -723,6 +740,17 @@ impl FakeJiraSource {
     pub fn search_calls(&self) -> Vec<String> {
         locked(&self.search_calls).clone()
     }
+
+    /// Answer the next unanswered `query_page` call with `result` (feature 1186).
+    pub fn with_query(self, result: Result<IssuePage, QueryFailure>) -> Self {
+        locked(&self.queries).push_back(result);
+        self
+    }
+
+    /// Every `query_page` call so far, as its JQL and cursor.
+    pub fn query_calls(&self) -> Vec<(String, Option<String>)> {
+        locked(&self.query_calls).clone()
+    }
 }
 
 impl JiraSource for FakeJiraSource {
@@ -762,6 +790,21 @@ impl JiraSource for FakeJiraSource {
     ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
         locked(&self.status_calls).push(keys.to_vec());
         locked(&self.statuses).pop_front().unwrap_or(Ok(Vec::new()))
+    }
+
+    fn query_page(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+        jql: &ScopedQuery,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, QueryFailure> {
+        locked(&self.query_calls).push((jql.as_str().to_owned(), cursor.map(str::to_owned)));
+        locked(&self.queries).pop_front().unwrap_or_else(|| {
+            Err(QueryFailure::Load(IssueLoadError::Other(
+                "FakeJiraSource: no query scripted for this call".into(),
+            )))
+        })
     }
 }
 
