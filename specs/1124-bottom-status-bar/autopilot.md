@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M2 gate
-- **Next step**: gate, reviews A and B, then the orchestrator opens the M2 PR from scratchpad pr-title.md / pr-body.md
+- **Phase**: M2 pr
+- **Next step**: the orchestrator opens the M2 PR from scratchpad pr-title.md / pr-body.md
 
 ## Pull requests
 
