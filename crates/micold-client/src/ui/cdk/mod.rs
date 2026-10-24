@@ -16,6 +16,7 @@
 pub mod context_area;
 pub mod control_overlay;
 pub mod focus;
+pub mod focus_within;
 pub mod keyboard_elsewhere;
 pub mod motion;
 pub mod overlay;

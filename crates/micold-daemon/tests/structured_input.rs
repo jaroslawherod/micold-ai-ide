@@ -1,7 +1,8 @@
 //! Feature 941, milestones M2 (T024, T025) and M3 (T035): a structured session's messages are
 //! delivered once to an idle CLI and queued while it is busy; every window sees the turn's phase,
 //! the queue and its hold; the sidebar's activity follows the turn; an interrupt ends the open turn
-//! with the process running on, is reported overdue when ignored, and holds the queue.
+//! with the process running on, is reported overdue when ignored, and holds the queue; and M7
+//! (T063): an interrupt withdraws the turn's pending #942 permission request.
 //!
 //! Every case runs the stand-in of `support/structured.rs`, first on `PATH` for the whole test
 //! process, scripted per project through `.fake-stream`.
@@ -16,8 +17,8 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
-    ActivitySignal, ClientMsg, DaemonMsg, ErrorKind, InterruptAsk, OperationResult, QueueEntryId,
-    QueuedSummary, TurnPhase,
+    ActivitySignal, ClientMsg, DaemonMsg, ErrorKind, InterruptAsk, OperationResult, PromptChoice,
+    PromptId, QueueEntryId, QueuedSummary, Resolution, TurnPhase, WithdrawReason,
 };
 use micold_core::session::{SessionId, SessionLocation};
 use micold_core::structured::attachment::{admit, ImageAttachment};
@@ -41,7 +42,8 @@ mod structured;
 use conn::Client;
 use history::service;
 use structured::{
-    clear_records, fake_stream_cli, fixture, stdin_lines, stream_script, structured_session,
+    clear_records, fake_stream_cli, fixture, prompt_answers, prompt_call_file, stdin_lines,
+    stream_script, structured_session,
 };
 
 /// One turn per message, each `result` written once the test creates `turn-<n>`.
@@ -120,6 +122,10 @@ struct Window {
     answers: HashMap<u64, DaemonMsg>,
     inputs: HashMap<SessionId, Vec<Seen>>,
     events: Vec<(SequencedEvent, Instant)>,
+    /// Each `PermissionRequested` (#942), as the request's id.
+    requested: Vec<PromptId>,
+    /// Each `PermissionResolved` (#942), as the request's id and how it ended.
+    resolved: Vec<(PromptId, Resolution)>,
 }
 
 impl Window {
@@ -138,6 +144,8 @@ impl Window {
             answers: HashMap::new(),
             inputs: HashMap::new(),
             events: Vec::new(),
+            requested: Vec::new(),
+            resolved: Vec::new(),
         }
     }
 
@@ -189,6 +197,12 @@ impl Window {
             Frame::Control(DaemonMsg::StructuredEvents { events, .. }) => {
                 let at = Instant::now();
                 self.events.extend(events.into_iter().map(|e| (e, at)));
+            }
+            Frame::Control(DaemonMsg::PermissionRequested { request }) => {
+                self.requested.push(request.id);
+            }
+            Frame::Control(DaemonMsg::PermissionResolved { id, resolution, .. }) => {
+                self.resolved.push((id, resolution));
             }
             _ => {}
         }
@@ -1306,5 +1320,114 @@ async fn a_late_interrupt_naming_the_last_turn_holds_the_queue() {
     let seen = window.last(id).cloned().unwrap();
     assert!(idle(&seen) && seen.hold);
     assert_eq!(seen.texts(), ["q1"]);
+    state.stop_session(id);
+}
+
+// --- M7: an interrupt withdraws a pending permission request (US3 AS6, I-3) --------------------
+
+/// T063, US3 AS6 (I-3): a turn whose CLI waits on a #942 permission request is interrupted; the
+/// turn ends `Interrupted` with the same process running on and the session idle, and #942's rules
+/// withdraw the request from both windows (`TurnEnded`): the waiting call is answered deny and a
+/// decision after it is refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interrupt_withdraws_the_turns_pending_permission_request() {
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let call = prompt_call_file(
+        dir,
+        "p1",
+        "Bash",
+        serde_json::json!({"command": "make"}),
+        "toolu_p1",
+    );
+    let script = format!(
+        "await-stdin\nprompt-async {}\n{}",
+        call.display(),
+        honouring()
+    );
+    // As `started`, with #942's tool server bound first, so the CLI's prompt-tool call is served.
+    fake_stream_cli();
+    let session = structured_session(SessionLocation::Default);
+    let id = session.id;
+    let state = service(dir, vec![session]);
+    let bindings = tempfile::tempdir().unwrap();
+    mcp::serve_tool_server(&state, bindings.path().to_path_buf()).await;
+    stream_script(dir, &script);
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    micold_daemon::server::spawn_input_driver(Arc::clone(&state));
+    let mut one = Window::viewing(&state, dir, id).await;
+    let mut two = Window::viewing(&state, dir, id).await;
+    one.sees(id, "idle", idle).await;
+    let pid = stand_in_pid(dir);
+    assert_ack(
+        &one.request(message(1, id, "go", vec![]), 1).await,
+        "the message",
+    );
+    let seen = one.sees(id, "busy", Seen::busy).await;
+    let (turn, _) = busy_with(&seen).expect("busy");
+    one.until("the request shown", |w| !w.requested.is_empty())
+        .await;
+    two.until("the request shown", |w| !w.requested.is_empty())
+        .await;
+    let request = one.requested[0];
+    assert_eq!(
+        two.requested,
+        [request],
+        "one request, shown in both windows"
+    );
+    assert!(one.resolved.is_empty(), "pending until the interrupt");
+
+    one.send(interrupt(id, turn)).await;
+    let withdrawn = (
+        request,
+        Resolution::Withdrawn {
+            reason: WithdrawReason::TurnEnded,
+        },
+    );
+    for window in [&mut one, &mut two] {
+        window
+            .until("the request withdrawn", |w| !w.resolved.is_empty())
+            .await;
+        assert_eq!(
+            window.resolved,
+            [withdrawn.clone()],
+            "withdrawn once, TurnEnded"
+        );
+        window.sees(id, "idle after the interrupt", idle).await;
+    }
+    assert_eq!(interrupts(dir).len(), 1, "one interrupt line");
+    assert_eq!(
+        prompt_answers(dir, 1),
+        [serde_json::json!({"behavior": "deny", "message": "The turn ended before you answered."})],
+        "the waiting call is answered deny"
+    );
+    let late = one
+        .request(
+            ClientMsg::PermissionDecision {
+                req: 2,
+                session: id,
+                id: request,
+                choice: PromptChoice::Allow,
+            },
+            2,
+        )
+        .await;
+    assert!(
+        matches!(late, DaemonMsg::OperationError { .. }),
+        "a decision after the withdrawal is refused: {late:?}"
+    );
+
+    let events: Vec<SequencedEvent> = one.events.iter().map(|(e, _)| e.clone()).collect();
+    let mut transcript = Transcript::new();
+    transcript.apply(0, &events, false);
+    assert!(
+        matches!(
+            transcript.entries().last().map(|e| e.kind()),
+            Some(EntryKind::Interrupted)
+        ),
+        "the turn closes Interrupted"
+    );
+    assert_eq!(stand_in_pid(dir), pid, "the same process runs on");
+    assert_eq!(structured::starts(dir), 1, "never restarted");
     state.stop_session(id);
 }
