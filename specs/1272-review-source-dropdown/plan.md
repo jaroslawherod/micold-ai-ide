@@ -60,7 +60,7 @@ layout snapshot
 | IV. Local-First | PASS | No new network use or storage; pull requests are read as today through `gh`, and their absence offline shows the existing muted line. |
 | V. Rust + iced | PASS | iced only. `Row`/`Stop` enums make "a pull request row without a number" or "a chip outside the Working tree option" unrepresentable; Files is a flag, not a source arm, so it cannot be "the shown source" (R3). |
 | VI. Cross-Platform | PASS | No platform branch; the list floats through the one `Picker` overlay on all three platforms; CI covers all three. |
-| VII. Documentation | PASS | `docs/user-guide/reviewing-changes.md` (*Opening the Changes view*, *Pull requests*, *Committed and uncommitted*, *Browsing the repository*) updated in M4, with the view change; showcase entry in M3. |
+| VII. Documentation | PASS | `docs/user-guide/reviewing-changes.md` (*Opening the Changes view*, *Pull requests*, *Committed and uncommitted*, *The Default entry*, *Browsing the repository*) updated in M4, with the view change; showcase entry in M3. |
 | VIII. Component Foundation | PASS | `MenuSelect` is a new shared builder component composed of existing primitives (`Picker`, `Tooltip`, `Ellipsized`, `ToggleChip`, `PullRequestRow`); `Select` and `MenuOverlay` cannot hold chips in an option or stay open on a chip press (R6). No feature-local widget. |
 
 Re-checked after Phase 1 design: unchanged, no violations; Complexity Tracking empty.
@@ -93,9 +93,9 @@ Each milestone is one PR, sized for one session (Task-size gate). M1 to M3 do no
 | ID | Deliverable | Waits on | Files |
 |---|---|---|---|
 | M1 | Core model: `review::source_menu` with unit tests; wording constants moved to core and re-exported by the client; `PrSection` becomes the core `PrRows` | nothing | `crates/micold-core/src/review/{source_menu.rs, mod.rs}`; `features/changes.rs` (`section` return type, `pub use`); `ui/changes.rs` (constants become re-exports) |
-| M2 | Reducer: `OpenView::source_menu`, `SourceMenu*` messages, pick closes, chips keep open, chip-while-PR returns to the working tree, refresh re-seats highlight; `source_menu_input` | M1 | `features/changes.rs`; `tests/features_changes.rs`, `tests/features_pr_changes.rs` |
+| M2 | Reducer: `OpenView::source_menu`, `SourceMenu*` messages, pick closes, chips keep open, chip-while-PR returns to the working tree, refresh re-seats highlight; `source_menu_input`, `source_menu_stops`, `show_working_tree` | M1 | `features/changes.rs`; `tests/features_changes.rs`, `tests/features_pr_changes.rs` |
 | M3 | Shared component `MenuSelect` + `MenuSelectRow`, geometry gate, showcase entry | M1 (label type) | `ui/material/{menu_select.rs, mod.rs}`; `showcase/sections/review.rs` (or `controls.rs`); a gate under `tests/gates/` |
-| M4 | **Waits on #1270 merged** (and #1269, if open then, merged or confirmed not to touch the review header). View wiring: control in the header, left column emptied, subtitle ellipsized, two-column body at 260 px; layout snapshot; user guide; visual pass | M2, M3, #1270 | `ui/changes.rs`; `tests/support/covered_states.rs`, `tests/fixtures/layout_snapshot.txt`; `docs/user-guide/reviewing-changes.md`; `specs/1272-review-source-dropdown/visual-pass/` |
+| M4 | **Waits on #1270 merged** (and #1269, if open then, merged or confirmed not to touch the review header). View wiring: control in the header, left column emptied, subtitle ellipsized, two-column body at 260 px; layout snapshot; user guide; visual pass | M2, M3, #1270 | `ui/changes.rs`; `tests/support/covered_states.rs`, `tests/fixtures/layout_snapshot.txt`; `docs/user-guide/reviewing-changes.md` (the sections of Constitution row VII, including *The Default entry*, whose Committed note beside the toggle moves into the list); `specs/1272-review-source-dropdown/visual-pass/` |
 
 If #1270 has not merged when M3 merges, M4 waits; the orchestrator decides then whether to hold or
 escalate. M4 is not split to land the header before #1270: both features rewrite the same header and

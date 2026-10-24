@@ -49,9 +49,11 @@ the repository root.
 ## R4: Kind chips while a pull request is shown
 
 - **Decision**: `Msg::CommittedToggled` and `Msg::UncommittedToggled` keep their names and, when a
-  pull request is shown, first do what `Msg::SourceChosen(None)` does (source back to
+  pull request is shown, first call `show_working_tree(state)` (NEW private helper holding today's
+  `Msg::SourceChosen(None)` body, `features/changes.rs:1840-1852`: source back to
   `Source::Changes`, the entry's remembered pull request forgotten, `reset_diff_pane`), then flip the
-  kind and `request_read`. They never close the list (FR-002, FR-004 s3). The flip stays a no-op for
+  kind and `request_read`. `SourceChosen(None)` calls the same helper and then closes the list; the
+  chip arms do not close it (FR-002, FR-004 s3). The flip stays a no-op for
   Committed on the Default entry (`committed_available`). Because the source changes,
   `reread_after_source_change` runs as for any other source change (Story 3 s4).
 - **Rejected**: a new `Msg::KindChosen` (two messages for one toggle); leaving the chips inert while
