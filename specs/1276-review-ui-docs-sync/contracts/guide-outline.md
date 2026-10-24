@@ -47,3 +47,11 @@ reworded: today both say the *Changes view* lists the pull requests ("above the 
 Changes view"); they become the Review tab's source control and its **Pull requests** entry;
 `agent-tools.md:300` → `#sending-a-review`; `agent-tools.md:311` → `#statuses-and-replies`. Each
 keeps resolving or is re-pointed; `site/checks/links.sh --sources` passes.
+
+Every other *Changes view* mention on the pages §A2 greps is reworded to the Review tab too, so the
+grep returns nothing: `settings.md:653` (the open view's **Pull requests** list → the source
+control's **Pull requests** entry), `settings.md:659` (the **The Changes view:** bullet label → the
+Review tab), `worktrees-and-sessions.md:978` (row menu **Review changes** "opens the Changes view"
+→ opens or focuses the Review tab), `agent-tools.md:299` ("from the Changes view" → from the Review
+tab); and in `reviewing-changes.md` itself (lines 3, 6, 9, 132 today), which the outline rewrites.
+Line numbers are today's; the implementer re-runs the grep after rebase and rewords every hit.
