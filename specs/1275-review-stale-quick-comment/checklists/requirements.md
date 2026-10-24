@@ -14,7 +14,7 @@
 ## Requirement Completeness
 
 - [ ] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
+- [ ] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -37,3 +37,6 @@
   issue, not implementation choices made by the spec.
 - The dependency table in *Context* names which requirements need #1269 / #1271 (only FR-013 needs
   #1271).
+- "Testable and unambiguous" unticked: spec review round 1 found F1 (no change identity) and F2
+  (no snapshot of unselected diffs); fixed by FR-001a and FR-009, pending re-review, and FR-014 is
+  still open.
