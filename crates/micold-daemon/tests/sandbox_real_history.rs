@@ -8,7 +8,7 @@
 
 #![cfg(all(feature = "sandbox-real-runtime", unix))]
 
-use crate::sandbox_real_support;
+mod sandbox_real_support;
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
