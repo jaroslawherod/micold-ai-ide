@@ -43,7 +43,7 @@ and Windows.
 
 **Purpose**: the two new core modules exist, so every later test file compiles against them.
 
-- [ ] T001 *Layer A* Create `crates/micold-core/src/review/bar.rs` and `crates/micold-core/src/review/drawer.rs` with module headers (feature 1270, links to `specs/1270-review-bar-drawer/data-model.md`), declare `pub mod bar; pub mod drawer;` in `crates/micold-core/src/review/mod.rs`, and create the empty test files `crates/micold-core/tests/review_bar.rs` and `crates/micold-core/tests/review_drawer.rs`
+- [x] T001 *Layer A* Create `crates/micold-core/src/review/bar.rs` and `crates/micold-core/src/review/drawer.rs` with module headers (feature 1270, links to `specs/1270-review-bar-drawer/data-model.md`), declare `pub mod bar; pub mod drawer;` in `crates/micold-core/src/review/mod.rs`, and create the empty test files `crates/micold-core/tests/review_bar.rs` and `crates/micold-core/tests/review_drawer.rs`
 
 ---
 
@@ -51,8 +51,8 @@ and Windows.
 
 **Purpose**: the sizes every later component and rule reads.
 
-- [ ] T002 *Layer A* Red: in `crates/micold-core/tests/tokens_anatomy.rs` assert `anatomy::review_bar::HEIGHT == 44.0`, `anatomy::comments_drawer::WIDTH == 360.0`, `anatomy::review_bar::SEND_WIDTH > 0.0`, and that all three appear in the anatomy table the module's property tests enumerate
-- [ ] T003 *Layer A* Add `pub mod review_bar { HEIGHT = 44.0, SEND_WIDTH }` and `pub mod comments_drawer { WIDTH = 360.0 }` to `crates/micold-core/src/tokens/anatomy.rs` and to its anatomy table; `SEND_WIDTH` gets a provisional value, fixed by T009's measurement (data-model "Core: tokens::anatomy")
+- [x] T002 *Layer A* Red: in `crates/micold-core/tests/tokens_anatomy.rs` assert `anatomy::review_bar::HEIGHT == 44.0`, `anatomy::comments_drawer::WIDTH == 360.0`, `anatomy::review_bar::SEND_WIDTH > 0.0`, and that all three appear in the anatomy table the module's property tests enumerate
+- [x] T003 *Layer A* Add `pub mod review_bar { HEIGHT = 44.0, SEND_WIDTH }` and `pub mod comments_drawer { WIDTH = 360.0 }` to `crates/micold-core/src/tokens/anatomy.rs` and to its anatomy table; `SEND_WIDTH` gets a provisional value, fixed by T009's measurement (data-model "Core: tokens::anatomy")
 
 **Checkpoint**: `mise run test-core` green.
 
@@ -69,10 +69,10 @@ button's bounds equal across drawer, counts and error states (SC-001); quickstar
 
 ### Layer A — core rules and the bar component
 
-- [ ] T004 [P] [US1] *Layer A* Red: in `crates/micold-core/tests/review_bar.rs` test `ScopeCounts::of` counts only the given scope's comments (working tree vs a pull request, Story 2 #5), `is_empty`, `reported_or_sent() = sent + applied + answered`; `counts_text`: `Full` all zero → `"No review comments yet"`; `Full` non-zero → only non-zero statuses in order Draft, Sent, Applied, Answered joined by `" · "` (`"3 drafts · 2 sent · 1 applied · 1 answered"`), `"1 draft"` singular, sent/applied/answered not inflected; `DraftsOnly` → `"3 drafts"`/`"1 draft"`, `None` when `draft == 0`; `Hidden` → `None` (FR-002, R3, contract B2)
-- [ ] T005 [US1] *Layer A* Red: in `crates/micold-core/tests/review_bar.rs` test `send_button(counts, sending, sendable)`: 0 drafts → `"Send review (0)"` disabled; n drafts sendable → `"Send review (n)"` enabled; 1,000 drafts → `"Send review (999+)"`; `sending` → `"Sending…"` disabled whatever the counts; `sendable == false` (pull request not in the list) → disabled; `primary == enabled` in every case (FR-003, FR-005, R4, contract B4); and `error_text("why") == "Couldn't send the review: why"` (FR-006)
-- [ ] T006 [US1] *Layer A* Implement `ScopeCounts` (`of`, `is_empty`, `reported_or_sent`), `CountsForm { Full, DraftsOnly, Hidden }` and `counts_text` in `crates/micold-core/src/review/bar.rs` until T004 passes
-- [ ] T007 [US1] *Layer A* Implement `SendButton { label, enabled, primary }`, `send_button` and `error_text` in `crates/micold-core/src/review/bar.rs` until T005 passes
+- [x] T004 [P] [US1] *Layer A* Red: in `crates/micold-core/tests/review_bar.rs` test `ScopeCounts::of` counts only the given scope's comments (working tree vs a pull request, Story 2 #5), `is_empty`, `reported_or_sent() = sent + applied + answered`; `counts_text`: `Full` all zero → `"No review comments yet"`; `Full` non-zero → only non-zero statuses in order Draft, Sent, Applied, Answered joined by `" · "` (`"3 drafts · 2 sent · 1 applied · 1 answered"`), `"1 draft"` singular, sent/applied/answered not inflected; `DraftsOnly` → `"3 drafts"`/`"1 draft"`, `None` when `draft == 0`; `Hidden` → `None` (FR-002, R3, contract B2)
+- [x] T005 [US1] *Layer A* Red: in `crates/micold-core/tests/review_bar.rs` test `send_button(counts, sending, sendable)`: 0 drafts → `"Send review (0)"` disabled; n drafts sendable → `"Send review (n)"` enabled; 1,000 drafts → `"Send review (999+)"`; `sending` → `"Sending…"` disabled whatever the counts; `sendable == false` (pull request not in the list) → disabled; `primary == enabled` in every case (FR-003, FR-005, R4, contract B4); and `error_text("why") == "Couldn't send the review: why"` (FR-006)
+- [x] T006 [US1] *Layer A* Implement `ScopeCounts` (`of`, `is_empty`, `reported_or_sent`), `CountsForm { Full, DraftsOnly, Hidden }` and `counts_text` in `crates/micold-core/src/review/bar.rs` until T004 passes
+- [x] T007 [US1] *Layer A* Implement `SendButton { label, enabled, primary }`, `send_button` and `error_text` in `crates/micold-core/src/review/bar.rs` until T005 passes
 - [ ] T008 [US1] *Layer A* Red: in the `#[cfg(test)]` module of new `crates/micold-client/src/ui/material/review_bar.rs` test `ReviewBar` layout: at three widths it draws the longest `CountsForm` that fits (Full, then DraftsOnly, then Hidden); the trailing group (Send review at `SEND_WIDTH`, ⋮ trigger, **Comments** toggle, right to left) has identical bounds across labels `"Send review (0)"`, `"Send review (999+)"`, `"Sending…"`, any counts, error on/off and drawer flag on/off; the widest label fits `SEND_WIDTH`; the bar is `review_bar::HEIGHT` high; the error's × emits its message (contract B2, B3)
 - [ ] T009 [US1] *Layer A* Implement `ReviewBar` in `crates/micold-client/src/ui/material/review_bar.rs` (builder ending in `.into()`, existing roles only: surface container, outline divider on top, contract B10), export it in `crates/micold-client/src/ui/material/mod.rs`, and set `anatomy::review_bar::SEND_WIDTH` in `crates/micold-core/src/tokens/anatomy.rs` to the measured width of the widest label, until T008 passes
 - [ ] T010 [US1] *Layer A* Add a `review_bar` showcase entry (poses: no comments, drafts, sending, error shown, narrow width with counts hidden) in `crates/micold-client/src/showcase/sections/review.rs` and register it in `crates/micold-client/src/showcase/catalogue.rs`
@@ -103,8 +103,8 @@ discard, and close the menu with Esc; quickstart §B step 3.
 
 ### Layer A — core rule
 
-- [ ] T017 [US2] *Layer A* Red: in `crates/micold-core/tests/review_bar.rs` test `overflow(counts, sending)`: `clear_sent` true when any of sent, applied or answered is non-zero (incl. only applied, only answered) and false otherwise; `discard_drafts` true only when `draft > 0 && !sending` (FR-007, R2, contract B7)
-- [ ] T018 [US2] *Layer A* Implement `Overflow { clear_sent, discard_drafts }` and `overflow` in `crates/micold-core/src/review/bar.rs` until T017 passes
+- [x] T017 [US2] *Layer A* Red: in `crates/micold-core/tests/review_bar.rs` test `overflow(counts, sending)`: `clear_sent` true when any of sent, applied or answered is non-zero (incl. only applied, only answered) and false otherwise; `discard_drafts` true only when `draft > 0 && !sending` (FR-007, R2, contract B7)
+- [x] T018 [US2] *Layer A* Implement `Overflow { clear_sent, discard_drafts }` and `overflow` in `crates/micold-core/src/review/bar.rs` until T017 passes
 
 ### Layer B — reducer and overlay (blocked until #1269 merges)
 
@@ -132,10 +132,10 @@ steps 4, 6–9, 11.
 
 ### Layer A — core rules
 
-- [ ] T023 [P] [US3] *Layer A* Red: in `crates/micold-core/tests/review_drawer.rs` test `DrawerTab::of` (Draft → Drafts; Sent, Applied, Answered → Replies), `label` (`"Drafts 3"`, `"Replies 4"`, US3 #7), `empty_text` (`"No drafts"`, `"No replies yet"`, FR-018), `START_HINT` equals today's hint; `tab_counts` over every scope of the entry; a property over all four statuses × both scopes that every comment is in exactly one tab (FR-013, SC-006); `rows_of` orders by (scope, path bytewise, `line_of`, side, created) with the working tree first (FR-014); `width(area) == min(360, area / 2)` at 1,000 and 500 px (FR-010)
-- [ ] T024 [US3] *Layer A* Red: in `crates/micold-core/tests/review_drawer.rs` test `Drawer::default()` closed on Drafts with no watch (FR-011); `apply` returns whether anything changed: `Toggle` open↔closed, closing drops `watch` (FR-008); `Close` closes and drops `watch`; `Escape` closes and returns `false` when already closed (FR-012); `SelectTab`; `Scrolled { tab, offset }` keeps one offset per tab (FR-019); `SendStarted(ids)` replaces any earlier watch; `SendFailed` drops it; `Reported { ids, shown }`: first report of the watched send opens on Replies, a second report does not reopen, `shown == false` consumes the watch and stays closed, a drawer closed since the send stays closed, an open drawer keeps its tab, a report of another send changes nothing (FR-020); `newly_reported`: Draft or Sent → Applied/Answered is new, absent → Applied/Answered is new, Applied → Answered is not
-- [ ] T025 [US3] *Layer A* Implement `DrawerTab` (`of`, `label`, `empty_text`), `START_HINT`, `tab_counts`, `rows_of` and `width` in `crates/micold-core/src/review/drawer.rs` until T023 passes
-- [ ] T026 [US3] *Layer A* Implement `Drawer { open, tab, offsets: [u32; 2], watch: Option<SendWatch> }`, `SendWatch { ids: BTreeSet<CommentId> }`, `DrawerEvent`, `Drawer::apply` and `newly_reported` in `crates/micold-core/src/review/drawer.rs` until T024 passes
+- [x] T023 [P] [US3] *Layer A* Red: in `crates/micold-core/tests/review_drawer.rs` test `DrawerTab::of` (Draft → Drafts; Sent, Applied, Answered → Replies), `label` (`"Drafts 3"`, `"Replies 4"`, US3 #7), `empty_text` (`"No drafts"`, `"No replies yet"`, FR-018), `START_HINT` equals today's hint; `tab_counts` over every scope of the entry; a property over all four statuses × both scopes that every comment is in exactly one tab (FR-013, SC-006); `rows_of` orders by (scope, path bytewise, `line_of`, side, created) with the working tree first (FR-014); `width(area) == min(360, area / 2)` at 1,000 and 500 px (FR-010)
+- [x] T024 [US3] *Layer A* Red: in `crates/micold-core/tests/review_drawer.rs` test `Drawer::default()` closed on Drafts with no watch (FR-011); `apply` returns whether anything changed: `Toggle` open↔closed, closing drops `watch` (FR-008); `Close` closes and drops `watch`; `Escape` closes and returns `false` when already closed (FR-012); `SelectTab`; `Scrolled { tab, offset }` keeps one offset per tab (FR-019); `SendStarted(ids)` replaces any earlier watch; `SendFailed` drops it; `Reported { ids, shown }`: first report of the watched send opens on Replies, a second report does not reopen, `shown == false` consumes the watch and stays closed, a drawer closed since the send stays closed, an open drawer keeps its tab, a report of another send changes nothing (FR-020); `newly_reported`: Draft or Sent → Applied/Answered is new, absent → Applied/Answered is new, Applied → Answered is not
+- [x] T025 [US3] *Layer A* Implement `DrawerTab` (`of`, `label`, `empty_text`), `START_HINT`, `tab_counts`, `rows_of` and `width` in `crates/micold-core/src/review/drawer.rs` until T023 passes
+- [x] T026 [US3] *Layer A* Implement `Drawer { open, tab, offsets: [u32; 2], watch: Option<SendWatch> }`, `SendWatch { ids: BTreeSet<CommentId> }`, `DrawerEvent`, `Drawer::apply` and `newly_reported` in `crates/micold-core/src/review/drawer.rs` until T024 passes
 
 ### Layer A — components
 
@@ -177,8 +177,8 @@ at 4 lines with Show all; quickstart §B step 6.
 
 ### Layer A — core rule
 
-- [ ] T044 [P] [US4] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-core/src/review/reply.rs` test `card_preview(reply, lines_of)`: a reply of at most 4 lines is kept whole with `cut == false`; a single long line that wraps counts its drawn lines; over 4 lines is cut with `cut == true`; the 4,000-character `CARD_CHARS` cap still applies and sets `cut`; control characters are shown as `display()` shows them (FR-021, R7)
-- [ ] T045 [US4] *Layer A* Implement `CARD_LINES: usize = 4`, `Preview { text: Cow<str>, cut: bool }` and `card_preview` (`display()`, then the `CARD_CHARS` cap, then `tooltip::clamp_to_lines(.., CARD_LINES, lines_of)`) in `crates/micold-core/src/review/reply.rs` until T044 passes
+- [x] T044 [P] [US4] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-core/src/review/reply.rs` test `card_preview(reply, lines_of)`: a reply of at most 4 lines is kept whole with `cut == false`; a single long line that wraps counts its drawn lines; over 4 lines is cut with `cut == true`; the 4,000-character `CARD_CHARS` cap still applies and sets `cut`; control characters are shown as `display()` shows them (FR-021, R7)
+- [x] T045 [US4] *Layer A* Implement `CARD_LINES: usize = 4`, `Preview { text: Cow<str>, cut: bool }` and `card_preview` (`display()`, then the `CARD_CHARS` cap, then `tooltip::clamp_to_lines(.., CARD_LINES, lines_of)`) in `crates/micold-core/src/review/reply.rs` until T044 passes
 
 ### Layer A — components and docs
 

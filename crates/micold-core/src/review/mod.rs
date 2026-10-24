@@ -3,11 +3,13 @@
 //! functions; nothing in this module draws or owns a PTY (FR-022).
 
 pub mod anchor;
+pub mod bar;
 pub mod base;
 pub mod browse;
 pub mod changes;
 pub mod comment;
 pub mod diff;
+pub mod drawer;
 pub mod expand;
 pub mod git;
 pub mod pr_diff;
