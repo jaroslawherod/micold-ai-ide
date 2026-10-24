@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
 - **Phase**: tasks
-- **Next step**: tasks unit: write tasks.md from plan.md (milestones M1 core `review_tabs`, M2 kept views in client state, M3 strip tab + docs + snapshot + visual pass)
+- **Next step**: tasks unit: tasks review, close checklists, specs-only gate, push the design PR branch
 
 ## Pull requests
 
@@ -21,6 +21,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | — | todo |
+| M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | — | todo |
+| M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | — | todo |
+| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | — | todo |
 
 ## Decisions
 
@@ -34,7 +38,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D6 | clarify | Does **Review changes** on another location make it the shown location; where is a sessionless worktree's review drawn? | Yes, it becomes the shown location (last-shown else main session current) with its Review tab shown; a sessionless location shows its own header and a strip of only Review + **New session** | agent-resolved | review-redesign.md §0 "focuses the existing tab or creates it"; spec.md FR-001 |
 | D7 | plan | Where do the tab rules live? | Generic `micold_core::review_tabs::ReviewTabs<V>` (map by `(project, location)`, shown key, freshness, last-shown session, faces); client instantiates with `OpenView` | agent | research.md R1; orchestrator scope |
 | D8 | plan | How are a hidden view's in-flight reads handled? | All view messages act on the shown view; hidden results are dropped by the existing seq checks; the view is `Unwatched` and settles its loads then re-reads once when shown | agent | research.md R6; spec edge case *A read in flight* |
-| D9 | plan | Milestones | M1 core rules (no client change), M2 kept views in client state (header only, no strip member), M3 strip Review tab, CountBadge, ×, gates, snapshot, docs, visual pass; none depends on #1125/#1127 | agent | plan.md Delivery order |
+| D9 | plan | Milestones (superseded by D10) | M1 core rules (no client change), M2 kept views in client state (header only, no strip member), M3 strip Review tab, CountBadge, ×, gates, snapshot, docs, visual pass; none depends on #1125/#1127 | agent | plan.md Delivery order |
+| D10 | tasks | Milestones | M1 core rules (T001–T009), M2 kept views on the shown location (T010–T025), M3 another and sessionless locations (T026–T031), M4 the strip tab (T032–T041); Polish T042–T043 to the close unit. M1 departs from milestones.md rule 1 (Foundational alone): its deliverable is FR-016 itself, observable by `test-core`, and folding it into M2 would put M2 far over 800 lines; it also lets the core merge while #1125/#1127 contend for the client. M2 kept at 16 tasks: the hidden-read and re-read-on-show behaviour (US4.3–4.6) cannot ship apart from kept views without presenting old reads as current (US4.5), and the `open` → `tabs` migration touches every focus/attention reader at once. M4 at 10 tasks: no half-wired strip member (rule 6). Plan, quickstart B0, research R14 and contract U-headers renumbered (strip M3 → M4) | agent | tasks.md Milestones; plan.md Delivery order |
 
 ## Review rounds
 

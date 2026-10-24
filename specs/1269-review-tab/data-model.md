@@ -94,14 +94,14 @@ from `ReviewTabFace::of(drafts: Option<usize>, freshness, shown)`; `badge_text()
   (R13).
 - `review_covered(&self) -> bool`: Overview open, a Settings draft, or Compare open.
 
-### `features::session_strip` (changed, M3)
+### `features::session_strip` (changed, M4)
 
 - `Member::Review { project: PathBuf, entry: SessionLocation, face: ReviewTabFace, shown: bool }`.
 - `MemberKey::Review` — a unit variant: the strip shows one location, so it holds at most one
   Review member, and `MemberKey` stays `Copy + Hash`.
 - `StripModel::of` reads `shown_location()`; `StripModel.location` stays.
 
-### `ui/material` (new component, M3)
+### `ui/material` (new component, M4)
 
 - `CountBadge` (`ui/material/count_badge.rs`): `new(count: NonZeroUsize, roles)`, `.tooltip(..)`,
   `From<CountBadge> for Element`.

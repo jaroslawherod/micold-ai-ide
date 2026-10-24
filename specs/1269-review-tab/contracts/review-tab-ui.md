@@ -5,7 +5,10 @@ render-free module); integration tests drive `micold_client::app::State::update`
 `crates/micold-client/tests/`. Core rules T1–T8: [review-tabs.md](review-tabs.md). Decisions:
 [../research.md](../research.md).
 
-## State and routing (milestone M2)
+## State and routing (milestones M2 and M3)
+
+U3's other-location and sessionless cases, U7's follow of `shown_location()` with `remember`, U8
+and U16's header are M3; the rest is M2.
 
 ### U1. The map replaces `open` (FR-002, FR-006, US1.3, US1.6)
 
@@ -42,7 +45,7 @@ sessionless worktree, `session.active == None` and `shown_location() == Some(tha
 session to `show` and calls `focus_terminal`, as a session press does. `reviews` and `remembered` are
 untouched. Integration test: after ×, `Opened` again starts a fresh `OpenView` (toggles default,
 nothing selected) while the location's comments and remembered pull request are still there. In M2
-the view's **Close** control sends `TabClosed` for the shown key; M3 removes it (U13).
+the view's **Close** control sends `TabClosed` for the shown key; M4 removes it (U13).
 
 ### U5. Hidden reads (spec edge case *A read in flight*, SC-003)
 
@@ -104,7 +107,7 @@ shown and the tab kept.
 selected exactly while the location's tab is shown; a press while shown leaves `tabs` and the shown
 tab equal.
 
-## The strip (milestone M3)
+## The strip (milestone M4)
 
 ### U13. Members (FR-001, D4, R10)
 
@@ -145,7 +148,7 @@ and dark: label, badge, mark and × whole, nothing overlapping, nothing clipped.
 
 `ui::view_with`'s main area: Review shown → the header of `shown_location()` over the Changes view
 (`session_area::over_review`, replacing `over_changes`); the review is never drawn without its own
-location's header. In M2 it is header-only, as `over_changes` is today (`StripModel::of` still
-starts from `session.active`); in M3 `over_review` adds the strip, built from `shown_location()`
+location's header. In M3 it is header-only, as `over_changes` is today (`StripModel::of` still
+starts from `session.active`); in M4 `over_review` adds the strip, built from `shown_location()`
 with `Member::Review` (U13), the sessionless strip included. Covered states: `session-area-review-shown`, `session-area-review-hidden` (badge
 `3`, changed mark), `session-area-review-sessionless`.

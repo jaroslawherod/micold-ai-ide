@@ -268,7 +268,7 @@ recursive watch of entries nobody looks at wakes the window on every build, feat
 ## R14. Docs, layout snapshot, visual pass
 
 **Decision**: M2 updates `docs/user-guide/reviewing-changes.md` (*Opening the Changes view*: kept
-view, the button shows it, *Keeping up with changes*: re-read when shown). M3 updates it again for the
+view, the button shows it, *Keeping up with changes*: re-read when shown). M3 adds **Review changes** on another or a sessionless location. M4 updates it again for the
 tab (badge, changed mark, ×), `docs/user-guide/terminal-panes.md` (the strip's Review tab, chords
 with it shown) and `docs/user-guide/worktrees-and-sessions.md` where it describes the strip;
 `docs/development/layout-snapshot.md` *What is covered*; covered states
@@ -281,5 +281,5 @@ and at the minimum window (quickstart §B).
 
 **Alternatives rejected**: regenerating the fixture in M2 — M2 adds no covered state and changes no
 geometry the snapshot records (the Changes button keeps its size; `selected` is a layer), so a
-regeneration there would only record another thread's drift; all docs in M3 only — M2 changes what a
+regeneration there would only record another thread's drift; all docs in M4 only — M2 changes what a
 switch does, which Principle VII asks to document in the same change.
