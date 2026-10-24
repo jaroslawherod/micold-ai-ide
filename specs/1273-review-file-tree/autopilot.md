@@ -10,22 +10,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
 - **Phase**: implement (M2)
-- **Next step**: M2 implemented (T007–T018 ticked), reviews A/B done, full gate green locally. Push only after M1 PR #1367 merges: rebase on origin/main, re-gate if code changed, push, orchestrator opens the M2 PR (title/body in the unit's scratchpad). Then M3 waits for #1272. If the user's card on 4.3 picks "disabled with a reason", set `UNREVIEWED_UNTIL_MARKS` to `Offer::Disabled(..)` (tree.rs, its unit test) and update spec 4.3 and FR-012
+- **Next step**: M2 implemented (T007–T018 ticked), reviews A/B done, full gate green locally. #1367 merged at 78c2fc22; M2 rebased onto it and pushed; orchestrator opens the M2 PR (title/body in the unit's scratchpad). Then M3 waits for #1272. If the user's card on 4.3 picks "disabled with a reason", set `UNREVIEWED_UNTIL_MARKS` to `Offer::Disabled(..)` (tree.rs, its unit test) and update spec 4.3 and FR-012
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1354 | design (spec, plan, tasks) | merged (rebase) | 9c8473afbb8e49aaa8853892a6df818df3fdd138 |
-| #1367 | M1 core tree layout | open, CI running | — |
-| — | M2 totals, bars, filter, sort | gated (scripts/gate.sh green on the review-fix tree), reviews done; not pushed until #1367 merges | — |
+| #1367 | M1 core tree layout | merged (rebase) | 78c2fc228b7d3e1c88160385cea8ef5a6d402bd4 |
+| — | M2 totals, bars, filter, sort | rebased on 78c2fc22, gated, pushed; orchestrator opens it | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | #1367 | PR open |
-| M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | — | implemented, reviewed (A: 10 MINOR, B: CLEAN), gated; push after #1367 merges |
+| M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | #1367 | merged |
+| M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | — | implemented, reviewed (A: 10 MINOR, B: CLEAN), gated, pushed; PR to open |
 | M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | — | blocked: start after #1272 merges |
 | M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | blocked: after M3 (#1272) |
 | M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | blocked: after M4 (#1272) |
