@@ -527,3 +527,28 @@ unit (milestones rule 4); T063 is M7, which waits on #942 M3.
 - **Verify**: `cargo test -p micold-daemon --test structured_input`
 - **Depends on**: M6; #942 M3 merged
 - **Tier**: light
+
+---
+
+## Phase 9: TDD remediation
+
+The TDD verdict is FAIL (`tdd/verification.md`). The close unit cleared T064, T065, T068–T070 and declined T066 and T067 (reasons in the ledger).
+
+- [x] T064 [US4] Finding 1: add a daemon test in `daemon/tests/structured_input.rs` where an earlier
+  process's late `Exit` close leaves a running later process's queue and hold alone (`state.rs:7697`);
+  prove it by the mutant `.is_none_or(|_child| true)` failing it. `cargo test -p micold-daemon --test structured_input`
+- [x] T065 [US1] Finding 3: replace the `is_some()` checks at `client/tests/features_composer.rs:380,388,490,578`
+  with the exact sentence (`Some(NOT_CONNECTED)`, `Some(NOT_RUNNING)`, `Some(OVERDUE)`, the notice text);
+  swapping the two constants in `composer.rs:492-494` must fail it. `cargo test -p micold-client --test features_composer`
+- [x] T066 [US2] (declined at close: release-only timing, run in T062; ledger *Declined review findings*) Finding 4: make SC-007 run in a gate (a CI/`mise` step for `composer_large_draft` in
+  release, or an un-ignored bound generous enough for the suite) and assert the paste step again or
+  record why not. `cargo test -p micold-client --release --test composer_large_draft -- --ignored`
+- [x] T067 (declined at close: history cannot be rewritten; Cycles 9–11 record mutant sets; ledger *Declined review findings*) Finding 2: for the component unit tests of cycles 9 and 11 and the cycle 10 view, show a red
+  against a deliberate mutant per test and record it in `tdd/cycle-log.md` with command and output.
+- [x] T068 Finding 5: write `tdd/test-list.md` mapping each behavior and criterion to its test (the
+  traceability table in `tdd/verification.md` is the start). Check: each `traces` names a test that runs.
+- [x] T069 Finding 7: replace the fixed 300 ms sleeps in `structured_input.rs:311,1241` and
+  `structured_input_saved.rs:251,287,334,408` with a condition or an injected clock.
+- [x] T070 Finding 10: assert the hold in `structured_input_saved.rs` `a_saved_queue_survives_a_restart_on_hold`
+  against the mutant `input.hold = false` in `input.rs:134`. `cargo test -p micold-daemon --test structured_input_saved`
+

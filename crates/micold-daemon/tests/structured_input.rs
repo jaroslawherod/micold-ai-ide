@@ -305,7 +305,10 @@ async fn delivered_is(dir: &Path, expected: &[&str]) {
     }
 }
 
-/// And that it stays so for a moment: nothing more is written.
+/// And that it stays so for a moment: nothing more is written. A wait, not a condition: the
+/// check is that something does *not* happen, and no event orders after a delivery that never
+/// comes (a round-trip ack does not wait for the driver's task). Where the would-be delivery is
+/// driven synchronously, a test uses an ack as its barrier instead.
 async fn delivered_stays(dir: &Path, expected: &[&str]) {
     delivered_is(dir, expected).await;
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -845,6 +848,48 @@ async fn queue_edits_name_their_entry() {
     state.stop_session(id);
 }
 
+/// FR-022, US4 AS4: a late `Exit` close of an earlier process leaves a running later process's
+/// queue, and its hold, alone. The close is fed to the driver's step directly, naming a process
+/// serial that is not the current one; the ack of a later send orders after it (the step is
+/// synchronous), so no sleep is needed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_late_exit_of_an_earlier_process_leaves_the_running_queue_alone() {
+    let project = tempfile::tempdir().unwrap();
+    let dir = project.path();
+    let (state, id) = started(dir, &gated());
+    let mut window = Window::connect(&state).await;
+    window.sees(id, "idle", idle).await;
+    assert_ack(&window.request(message(1, id, "m1", vec![]), 1).await, "m1");
+    assert_ack(&window.request(message(2, id, "q1", vec![]), 2).await, "q1");
+    let seen = window.sees(id, "q1 queued", |s| s.queue.len() == 1).await;
+    assert!(!seen.hold && seen.busy());
+
+    // Serials start at 1 and count up: 0 is a process of an earlier life of this daemon run.
+    let late = micold_daemon::structured::TurnClosed {
+        session: id,
+        process: 0,
+        turn: None,
+        by: micold_daemon::structured::ClosedBy::Exit,
+        interrupted: false,
+    };
+    let closer = Arc::clone(&state);
+    tokio::task::spawn_blocking(move || closer.turn_closed(late))
+        .await
+        .unwrap();
+    assert_ack(&window.request(message(3, id, "q2", vec![]), 3).await, "q2");
+    let seen = window.sees(id, "q2 queued", |s| s.queue.len() == 2).await;
+    assert!(
+        !seen.hold,
+        "the earlier process's exit does not hold: {seen:?}"
+    );
+    assert!(seen.busy(), "the running process's turn is untouched");
+    assert_eq!(seen.texts(), ["q1", "q2"]);
+
+    end_turn(dir, 1);
+    delivered_is(dir, &["m1", "q1"]).await;
+    state.stop_session(id);
+}
+
 /// FR-022, Q1, Q5: a process exit and a stop hold a non-empty queue; a start keeps it held and
 /// nothing goes out until one `QueueRelease`; a send while idle and held goes out at once and the
 /// queue stays held; a release while busy waits for the result; two releases at once deliver once.
@@ -1238,6 +1283,9 @@ async fn an_interrupt_asked_before_its_message_is_written_follows_it() {
         Arc::clone(&state),
         pending,
     ));
+    // A wait, kept: the writer task is parked on the message's write and has no observable that
+    // orders after "did not write"; the positive half (the request follows the message) is
+    // asserted by condition below.
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(
         stdin_lines(dir).is_empty(),
