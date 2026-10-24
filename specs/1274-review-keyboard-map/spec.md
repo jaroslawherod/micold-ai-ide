@@ -16,6 +16,18 @@ updated."
 
 This is slice R5 of `docs/development/review-redesign.md` (Proposal item 6, *Next/prev everywhere*).
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: When the comment composer has unsaved text, does the send chord save it as a draft and send it,
+  or send only the saved drafts? → A: Only the saved drafts are sent; the composer stays open with
+  its text and the keyboard (User Story 4 scenario 4, FR-010). _(agent-resolved:
+  spec.md#FR-010 "exactly the result of pressing Send review (n)";
+  crates/micold-client/src/features/changes.rs `Msg::SendPressed` counts saved pending comments only
+  and leaves the composer untouched; spec.md#FR-009 and docs/development/review-redesign.md#proposal
+  item 8: composer text is kept)_
+
 ## Dependencies
 
 This feature adds keys and jump-to entries on top of work that is not merged yet. It uses what those
@@ -163,9 +175,9 @@ it.
 3. **Given** a send of this entry is under way in any window, **When** the user presses the send
    chord, **Then** nothing is sent, as **Sending…** is unavailable.
 4. **Given** the comment composer has the keyboard with text in it, **When** the user presses the
-   send chord, **Then** [NEEDS CLARIFICATION: does the chord save the open comment as a draft and
-   send it with the others, or send only the saved drafts and leave the composer open with its
-   text?].
+   send chord, **Then** only the saved drafts are sent, exactly as **Send review (n)** sends them;
+   the composer stays open with its text and keeps the keyboard, and its text is not saved or sent.
+   With no saved drafts, nothing is sent (scenario 2).
 
 ---
 
