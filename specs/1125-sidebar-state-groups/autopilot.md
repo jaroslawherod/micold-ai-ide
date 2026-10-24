@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M2
-- **Next step**: M2 gate + review A
+- **Next step**: M2 fix review A round 1 findings, then scoped gate + review A round 2
 
 ## Pull requests
 
@@ -64,6 +64,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M1 review A (code-review high, sonnet) | 2 | c656359f69d7d2b23bfdc07e5431aa3337fb346f:e11c2f7e8bb8d6cadc64b82f86df2e9ed1ae9100 | CLEAN of BLOCKER/MAJOR: r1 fixes hold; MINORs fixed (reveal opens a group only while its row is not drawn, stale comments, a test for a toggle of a hidden group) |
 | M1 review B (conformance, sonnet) | 1 | e54c4f32191630712064a90d938fd3be236f14bf:f7ca36b5d89ba51b9d774db606ed4a96cc3124f5 | CHANGES: F1 a chord into a closed group did not open it while the current session's row was drawn (fixed: `State::reveal_ready`); F2 the test bypassed that gate (fixed: tests go through it, new case with a drawn current session) |
 | M1 review B (conformance, sonnet) | 2 | 801128dd52fac679a288a6e71919acc608b17553:a72f9964ab30605790f03aa05a0d81ed83d18b56 | CLEAN: F1, F2 fixes hold |
+| M2 review A (code-review high) | 1 | 66f5278f77aeaf3c85facc0d72387b01d8bdcc1a:34bf5238bde08351387c0396b0c75cf531aa8eb8 | CHANGES: F1–F3 MAJOR, F4–F6 MINOR open (see Handover) |
 
 ## Declined review findings
 
@@ -73,7 +74,34 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 
 ## Handover
 
-None.
+Unit 1 of M2 handed over at 216k context (cap 150k). **Done**: T020–T031 implemented and ticked in
+commit 34bf5238 (two-line rows via `TreeItem::supporting_text`/`leading_chip`, `Selection::Primary`,
+`overview_text::sidebar_second_line`, `features::sidebar::{row_title, row_second_line,
+default_second_line, row_chips, RowChip, with_title_line}`, `overview::State::known_title`, snapshot
+re-recorded, user guide, spec wording per D13). Before the commit `cargo test -p micold-client
+--no-fail-fast` was green except `showcase_completeness` (fixed: the TreeView catalogue entry lists
+the `Selection` variants; re-run green with layout_snapshot and jira_status_sidebar); micold-core
+`overview_text` green. The scoped gate was started and killed unfinished at handover (`cargo fmt
+--all` ran before the commit). No PR, nothing pushed. Branch = origin/main 0e5a1e9b + 34bf5238 + this
+ledger commit.
+
+**Next**: fix review A round 1 (each looked real on a quick read; verify):
+- F1 MAJOR `ui/sidebar.rs` `build_items`: a user's rename (`workspace.worktree_name(dir)`) must win
+  the first line over the issue title and branch; carry it into `row_title`, add a features_sidebar test.
+- F2 MAJOR `tree_view.rs` (~473): the Primary override replaces session rows' lifecycle tint (Failed
+  = error, InterruptedResumable = primary; `ui/sidebar.rs` ~1003); keep it for session rows (e.g.
+  override only a row whose tint is `on_surface`/opt-in) and check contrast.
+- F3 MAJOR: titles are requested only on Overview open / header follow (`shell/issues.rs`
+  `request_titles`); request them when the worktree list loads, or record it as a follow-up.
+- F4 MINOR: supporting text is `Length::Fill`, so it gives way first to chips; consider `.shrink()`.
+- F5 MINOR: drop the duplicate contrast pair; add chip/state-icon pairs on `primary_container`.
+- F6 MINOR: skip `with_title_line` when the title equals the display name or the branch; fix the
+  comment wrap at `tree_view.rs` ~627–631 ("Such a row is two lines —").
+Then scoped gate, review A round 2 (sonnet, fix diff against the snapshot above), review B
+(conformance, sonnet), visual pass (quickstart B3, B4 row half, B8; showcase "two-line row" and
+"two-line row, selected" in `showcase/sections/surfaces.rs`), full gate (`scripts/gate.sh`), PR files.
+T022/T023 tests were written before T027's code, but their red was not run on its own (the tree_view
+and overview_text reds were observed as compile failures).
 
 ## Open escalation
 
