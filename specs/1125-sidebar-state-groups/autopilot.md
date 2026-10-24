@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M3
-- **Next step**: M3 verify (verify.md step 1: scoped gate + review A high)
+- **Next step**: M3 PR: the orchestrator opens it from the scratchpad's pr-title.md/pr-body.md (branch pushed), waits on CI and merges; then M4
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | #1325 | done |
 | M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | #1345 | done |
-| M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | — | in progress |
+| M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | (to open) | gate green, pushed |
 | M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | todo |
 | M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | — | todo |
 
@@ -75,6 +75,8 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M3 review A (code-review high) | 1 | 3e26f93812bf434d26e39518b6e128d54de8810c:8f29b0bac5ec9bae89a761cd901c3c093c787849 | CHANGES: F1 a location whose sessions are all archived became selectable while viewing one (fixed: `pressable_sessions`, as before 1125); F6 no selected Overview-row pose and T039 named `atoms.rs` (fixed: pose added, T039 points at surfaces.rs per D17); F2, F3, F4, F5, F7 declined. Scoped gate red on `feature_registration_cost` (`overview` named `features::sidebar` in a test; fixed: the tag-filter badge test moved to `ui/overview.rs`) |
 | M3 review A (code-review high, sonnet) | 2 | cb968e022a73bea38f9c5b38c83a8d44a4dc8b58:5d5b1577b5991f6d8c2bbf8636f5020e0dd89369 | CLEAN: F1, F6 and the test move hold; declines stand |
 | M3 review B (conformance, sonnet) | 1 | cb968e022a73bea38f9c5b38c83a8d44a4dc8b58:5d5b1577b5991f6d8c2bbf8636f5020e0dd89369 | CLEAN (1 MINOR: T032 named a "both" tooltip case `badge` cannot produce; fixed, prose only) |
+| M3 visual pass | — | 5d5b1577 | B1 (Overview row first; badge in the showcase), B4 (row selected while the Overview is open, both themes; revealed row selected after a card opens) PASS; live badge and a session's selected row not seen (no agent session): `visual-pass/m3-record.md` |
+| M3 full gate | — | 1309daed | `scripts/gate.sh` green after rebasing onto origin/main 08ff39f5 |
 
 ## Declined review findings
 
