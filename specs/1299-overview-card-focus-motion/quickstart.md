@@ -34,3 +34,15 @@ Reduce motion **off** unless stated. Capture frames at 60 fps where timing is ch
    first frame (US3, SC-002).
 9. Both schemes, all five card states at rest: focused, expanded and collapsed cards look as before
    (FR-010).
+
+## Results (close unit, 2026-10-24)
+
+- **Part A**: `scripts/gate.sh` green in this cloud session (mise not installed): fmt, clippy (core,
+  workspace), 10229 tests passed, 0 failed, 18 ignored across 639 binaries, then the script tests.
+  The fade, lift, draw-order, shadow and Reduce motion tests are among them, with the unchanged
+  ripple, context-menu, link-focus and navigation suites, `idle_requests_no_frames` and
+  `motion_tokens`. A first run failed once on
+  `micold-daemon --test attention_error_notice` (`without_focus_the_first_reporting_window_gets_the_notice`,
+  not touched by this feature); it passed five times alone and in the green rerun.
+- **Part B**: see [visual-pass.md](visual-pass.md). End states checked in both schemes; no frame
+  inside a transition could be captured, so the timing claims rest on the Part A tests.

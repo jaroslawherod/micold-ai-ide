@@ -118,9 +118,17 @@ showcase shows both motions; Reduce motion makes all of it instant.
 
 Code-free; done by the close unit in the close PR.
 
-- [ ] T024 Post research R1's comment text on issue #1299 (FR-006: the growth is not animated, and why), with `gh api repos/{owner}/{repo}/issues/1299/comments` (REST)
-- [ ] T025 Run quickstart §A (`scripts/gate.sh`) and record the result in `specs/1299-overview-card-focus-motion/quickstart.md`
-- [ ] T026 Run quickstart §B with the `visual-pass` skill and record it in `specs/1299-overview-card-focus-motion/visual-pass.md` (FR-013, SC-001 by eye, FR-010)
+- [x] T024 Post research R1's comment text on issue #1299 (FR-006: the growth is not animated, and why), with `gh api repos/{owner}/{repo}/issues/1299/comments` (REST)
+- [x] T025 Run quickstart §A (`scripts/gate.sh`) and record the result in `specs/1299-overview-card-focus-motion/quickstart.md`
+- [x] T026 Run quickstart §B with the `visual-pass` skill and record it in `specs/1299-overview-card-focus-motion/visual-pass.md` (FR-013, SC-001 by eye, FR-010)
+
+## Phase 6: TDD remediation
+
+From `tdd/verification.md` (close unit). Done in the close PR; verified with
+`scripts/build-lock.sh cargo test -p micold-client --lib`.
+
+- [x] T027 Finding 1 (`ui/overview.rs:213`): a test through the Overview `view` that Reduce motion as saved reaches the grid (`the_overview_grid_follows_reduce_motion`); mutants `.instant(false)` and `.instant(true)` each fail it
+- [x] T028 Findings 2 and 3 (`card_grid.rs` `focus_and_lift_ease_in_together`, `keyboard_focus.rs` `a_reversed_fade_turns_back_where_it_is_and_two_run_together`): assertions no longer inside an `if`
 
 ---
 
