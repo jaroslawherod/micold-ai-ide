@@ -212,4 +212,55 @@ mod tests {
             "bold Font::MONOSPACE does not resolve to the bundled Fira Mono Bold"
         );
     }
+
+    /// FR-004 through the global font system: a character Fira Mono lacks (a Material Symbols
+    /// private-use icon, bundled by the app itself, so host-independent) is shaped with a face that
+    /// is not Fira Mono and a real glyph, while the ASCII letter stays on the bundled Fira Mono.
+    #[test]
+    fn a_character_fira_mono_lacks_falls_back_to_another_face_not_a_box() {
+        use iced::advanced::graphics::text::cosmic_text::{Buffer, Metrics, Shaping};
+        const ICON: char = '\u{e5cd}';
+        let _ = super::super::test_support::renderer();
+        let has = |bytes: &[u8], c: char| {
+            ttf_parser::Face::parse(bytes, 0)
+                .expect("bundled font parses")
+                .glyph_index(c)
+                .is_some()
+        };
+        assert!(
+            !has(FIRA_MONO_REGULAR_BYTES, ICON),
+            "Fira Mono has {ICON:?}: pick a character it lacks (FR-004)"
+        );
+        assert!(
+            has(super::super::glyph::MATERIAL_SYMBOLS_BYTES, ICON),
+            "the bundled icon font lacks {ICON:?}: pick one it has (FR-004)"
+        );
+
+        let mut fonts = iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system lock was poisoned");
+        let attrs = iced::advanced::graphics::text::to_attributes(iced::Font::MONOSPACE);
+        let fs = fonts.raw();
+        let mut buffer = Buffer::new(fs, Metrics::new(14.0, 20.0));
+        buffer.set_text(fs, &format!("a{ICON}"), &attrs, Shaping::Advanced, None);
+        buffer.shape_until_scroll(fs, false);
+        let glyphs: Vec<_> = buffer
+            .layout_runs()
+            .flat_map(|run| run.glyphs.to_vec())
+            .collect();
+        assert_eq!(glyphs.len(), 2, "expected one glyph per character (FR-004)");
+        let db = fs.db();
+        assert!(
+            is_bundled(db, glyphs[0].font_id, FIRA_MONO_REGULAR_BYTES),
+            "the ASCII letter is not shaped with the bundled Fira Mono (FR-004)"
+        );
+        assert!(
+            !is_bundled(db, glyphs[1].font_id, FIRA_MONO_REGULAR_BYTES),
+            "{ICON:?} stayed on Fira Mono, which lacks it: no fallback face (FR-004)"
+        );
+        assert_ne!(
+            glyphs[1].glyph_id, 0,
+            "{ICON:?} fell back to a .notdef box, not another face (FR-004)"
+        );
+    }
 }
