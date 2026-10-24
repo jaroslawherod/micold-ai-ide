@@ -104,9 +104,13 @@ fn drop_picture(state: &mut State, id: SessionId) {
 fn paint(state: State, id: SessionId) -> (Vec<Overflow>, Rectangle) {
     let under = StateUnderTest::new(state);
     let transcript = viewport(&under, transcript_scroll_id(id));
+    (painted_at(&under, WINDOW), transcript)
+}
+
+/// What a window of `size` paints for `under`.
+fn painted_at(under: &StateUnderTest, size: iced::Size) -> Vec<Overflow> {
     let mut renderer = lay::renderer();
-    let (painted, _) = lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW);
-    (painted, transcript)
+    lay::painted_text_settled_at(lay::view_of(under), &mut renderer, size).0
 }
 
 fn find<'p>(painted: &'p [Overflow], content: &str) -> &'p Overflow {
@@ -174,6 +178,7 @@ fn a_long_draft_grows_the_composer_to_its_limit_and_the_transcript_stays() {
     type_draft(&mut short, id, "one line");
     let text: Vec<String> = (1..=400).map(|n| format!("line {n}")).collect();
     type_draft(&mut long, id, &text.join("\n"));
+    let header = crate::session_area_fits::header_height(long.clone());
     let (_, short_view) = paint(short, id);
     let (_, long_view) = paint(long, id);
     let lost = short_view.height - long_view.height;
@@ -185,9 +190,11 @@ fn a_long_draft_grows_the_composer_to_its_limit_and_the_transcript_stays() {
         lost <= MAX_HEIGHT + TOLERANCE,
         "the composer stops at its limit ({MAX_HEIGHT}): the transcript lost {lost}"
     );
+    // A third of the window, less the session area's header: feature 1126 put it above the panes
+    // at a fixed height the composer does not grow into, so it is not the composer's to give back.
     assert!(
-        long_view.height >= WINDOW.height / 3.0,
-        "the transcript keeps most of the pane: {long_view:?}"
+        long_view.height >= WINDOW.height / 3.0 - header,
+        "the transcript keeps most of the pane: {long_view:?} (header {header})"
     );
 }
 
@@ -346,7 +353,11 @@ fn an_interrupted_turn_closes_with_its_notice_and_a_message_names_its_pictures()
         .map(|(event, seq)| SequencedEvent { seq, event })
         .collect();
     let _jobs = state.structured_events(id, 0, &events, false, &micold_client::ui::syntax::GRAMMAR);
-    let (painted, _) = paint(state, id);
+    // A taller window than the shared one: what is checked is the transcript's words, and under
+    // the session area's header (1126) and the status bar (1124) the shared window's transcript
+    // ends before the turn's closing notice.
+    let tall = iced::Size::new(WINDOW.width, WINDOW.height * 2.0);
+    let painted = painted_at(&StateUnderTest::new(state), tall);
     find(&painted, micold_client::ui::transcript::INTERRUPTED);
     find(
         &painted,

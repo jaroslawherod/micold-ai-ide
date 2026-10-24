@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
 - **Phase**: M1 PR
-- **Next step**: orchestrator opens PR (M1) from pr-title.md/pr-body.md, waits on CI and merges; then M2 (confirm clarification 1 first)
+- **Next step**: orchestrator waits on PR #1328's CI (rebased onto afef53af) and merges; then M2 (confirm clarification 1 first)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | to open | review |
+| M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | #1328 | review |
 | M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | — | pending |
 | M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | — | pending |
 
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Clarify round 1 (strip tab contents, US2 sc. 3): option A, session tabs (main, then helpers) with the shown session's tab as its AI conversation, its shell tabs and "+" after it; New session runs **Start another session...** with its confirmation. Orchestrator's provisional pick of the recommended option, user decision pending (decision card). Applied to spec.md Terms, US2 sc. 3/7, FR-008 to FR-010, Key Entities (Tab), SC-004.
 - Tasks (2026-10-24): M2 keeps US2 whole with US4 (22 tasks, over the ~10 split guide): no acceptance-scenario split leaves main without a bar control (FR-009: bar removal and strip land together); the behaviour-preserving moves (StripTab and predicates into `features::session_strip`, `cdk::Keyed`) go in Foundational (M1) to shrink M2. Polish T056–T057 is code-free, left to the close unit.
 - Clarify round 2: session tab order and press behaviour agent-resolved from worktrees-and-sessions.md; no new requirement, clarify ends.
+- Rebase onto origin/main afef53af (#1124 M1 status bar, #1299, #1260) for PR #1328's merge conflicts: no behaviour choice; four gates restated for both chromes together (header above, status bar below the pane), fixture regenerated. Details in tdd/cycle-log.md.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
