@@ -41,6 +41,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D9 | plan | Bar figures: 43 + 1 divider, 40 dp targets, keep `anatomy::app_bar` name; 3 new shared components; US3 waits for #1125 M3 (not on origin/main 2026-10-24) | as research R1, R2, R12 | agent-resolved | research.md R1–R12; git log origin/main |
 | D10 | tasks | Plan paths after #1262 moved the generic components into `crates/micold-material`? | New and reshaped generic components go in `crates/micold-material/src/`; the app icon bytes stay in the client (`shell/startup.rs` `pub(crate) APP_ICON_RGBA`), `AppMark` takes a handle and a name; plan.md and research.md (header, R9, R11) fixed | agent-resolved | git show a4f2edd2 (#1262); crates/micold-material/tests/no_domain_types.rs |
 | D11 | tasks | Split US1 (24 tasks with Setup/Foundational)? | Yes, along its scenarios: M1 the bar's shape (s1 part, s7, s8), M2 the breadcrumb (s1–s6) | agent-resolved | milestones.md rule 3; tasks.md *Milestones* note |
+| D12 | tasks | M1 has 21 tasks: split further (analyze C2)? | No: Setup/Foundational alone has nothing to observe; sizing reason recorded under M1 in tasks.md | agent-resolved | milestones.md rule 1; constitution Task-size gate |
+| D13 | tasks | FR-013 needs a tooltip on the project segment; the contract gave it one only when shortened (analyze C1) | `Switch project`, full name on a second line when shortened; contract C2, T024, T025; FR-013 (C2) moved to M2 | agent-resolved | spec FR-013; contracts/title-bar-ui.md C2 |
 
 ## Review rounds
 
@@ -56,19 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done**: branch rebased onto origin/main 9c0b8108 (no previous PR); `speckit-tasks` → tasks.md
-  (T001–T051) with `## Milestones` M1–M4 (ledger *Milestones*); plan.md *Project Structure* and
-  research.md (header, R9, R11) updated for #1262's `micold-material` split (D10); US1 split (D11);
-  checklists/requirements.md already all ticked; specs-only gate (`check-criteria-observables.sh`)
-  passed. Committed 3d025944, not pushed.
-- **Next**: (1) read the `speckit-analyze` report the unit started headless (Sonnet) at
-  `/tmp/claude-0/-home-user-micold-ai-ide/edf7f901-1287-5da8-8160-87203f07f364/scratchpad/analyze.md`
-  (rerun `claude -p "/speckit-analyze specs/1127-title-bar-breadcrumb ..." --model sonnet` read-only
-  if missing/empty) and fix what it finds; (2) review-snapshot + tasks review (review.md, rubric
-  rubrics/tasks.md, round 1 session model) via `claude -p --agent autopilot-reviewer`; (3) design PR
-  title/body to the scratchpad (`docs(1127): specify and plan the 44 px title bar (#1127)`, body
-  ends `Refs #1127`), push `claude/project-thread-iwrht0`.
-- **Open findings**: none yet.
+None.
 
 ## Open escalation
 
@@ -76,4 +66,5 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- T051 (visual pass of quickstart Part B) is in no milestone: the close unit runs it (analyze G5).
+- Analyze LOWs left as is: G2 (icon contrast pairs; icons use existing app-bar roles), G4 (tooltip placement test), F3, F5, T1.

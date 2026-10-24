@@ -29,7 +29,7 @@ Paths are relative to `crates/micold-client/src/`. Each row names the test that 
 | ID | Control | Press | Tooltip | Keyboard |
 |---|---|---|---|---|
 | C1 | App mark (`material::AppMark`) | none | `Micold` | not a Tab stop (FR-003) |
-| C2 | Project segment (`material::Breadcrumb`) | `Project(SwitcherToggled)`; reports its leading corner via `ContextArea::on_primary_bounds` | the full project name when shortened; the unread mark keeps `unread_total_tooltip` | Tab stop, Enter/Space (FR-004, FR-013) |
+| C2 | Project segment (`material::Breadcrumb`) | `Project(SwitcherToggled)`; reports its leading corner via `ContextArea::on_primary_bounds` | `Switch project` (no shortcut), then the full project name on a second line when shortened; the unread mark keeps `unread_total_tooltip` | Tab stop, Enter/Space (FR-004, FR-013) |
 | C3 | Place segment | none | the full branch (or full text when shortened) | not a Tab stop (FR-006) |
 | C4 | Overview button (until US3) | today's `overview_press` | today's `overview_tooltip` | Tab stop (`Button`) (FR-015) |
 | C5 | Jump-to field (`material::FieldButton`) | `jump_press(state)` (data-model) | `Jump to location, session or project (Ctrl+Shift+P)` / `Cmd+Shift+P` | Tab stop when pressable (FR-009, FR-013) |

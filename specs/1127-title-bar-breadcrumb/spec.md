@@ -273,7 +273,7 @@ in full-screen Overview.
 - **FR-017**: The bar's text MUST have a contrast of at least 4.5:1, and its icons and the field's
   outline at least 3:1, against the bar in both themes, for every enabled control; a disabled control (the jump-to field
   while Settings is open, FR-009) uses the shared disabled treatment.
-- **FR-018**: The user guide (top bar, project switcher, Overview, icons, and appearance pages), the
+- **FR-018**: The user guide (top bar, project switcher, worktrees and sessions, Settings, Overview, icons, and appearance pages), the
   layout snapshot and this feature's visual pass MUST be updated in the same change as the bar they
   describe, and MUST NOT describe an Overview button in the bar after Story 3 lands.
 - **FR-019**: The bar MUST keep today's elevation rule: raised while the sidebar's content is
