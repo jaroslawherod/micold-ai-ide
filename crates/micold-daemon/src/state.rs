@@ -1113,22 +1113,36 @@ impl DaemonState {
         }
     }
 
-    /// `resolved` with the offered CLIs' `bin` directories in front of its `PATH`, so a session
-    /// finds what provisioning installed. Without an `offered.json`, `resolved` unchanged.
-    fn with_offered_path(&self, mut resolved: ResolvedEnv) -> ResolvedEnv {
+    /// `resolved` with the `PATH` an app-owned sandbox gives every spawn (feature 1289, contract
+    /// toolchain-path P2): the offered CLIs' `bin` directories, then the sandbox home's
+    /// `.local/bin`, then mise's shims folder, then `resolved`'s own `PATH`. `HOME`,
+    /// `MISE_DATA_DIR` and `XDG_DATA_HOME` are read from `resolved` first, else from this process
+    /// (FR-002). Without an `offered.json` (host and remote daemons, R2), `resolved` unchanged
+    /// (FR-008).
+    fn with_sandbox_path(&self, mut resolved: ResolvedEnv) -> ResolvedEnv {
         let Some(offered) = self.offered_clis() else {
             return resolved;
         };
-        let bins: Vec<PathBuf> = offered.clis.into_iter().map(|c| c.bin).collect();
-        if bins.is_empty() {
-            return resolved;
-        }
-        let current = session_path(&resolved.vars);
-        let joined = std::env::join_paths(bins.into_iter().chain(std::env::split_paths(&current)))
-            .map(|p| p.to_string_lossy().into_owned());
-        let Ok(joined) = joined else {
-            return resolved;
+        let var = |name: &str| -> Option<PathBuf> {
+            resolved
+                .vars
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| std::ffi::OsString::from(v))
+                .or_else(|| std::env::var_os(name))
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from)
         };
+        let input = micold_core::sandbox::toolchain_path::ToolchainPathInput {
+            offered_bins: offered.clis.into_iter().map(|c| c.bin).collect(),
+            home: var("HOME"),
+            mise_data_dir: var("MISE_DATA_DIR"),
+            xdg_data_home: var("XDG_DATA_HOME"),
+            rest: session_path(&resolved.vars),
+        };
+        let joined = micold_core::sandbox::toolchain_path::toolchain_path(input)
+            .to_string_lossy()
+            .into_owned();
         match resolved
             .vars
             .iter_mut()
@@ -1666,10 +1680,10 @@ impl DaemonState {
     /// Environment page lists the directory with what the script printed. The log line names the
     /// directory and the outcome's kind only, never the script's output.
     fn spawn_env_for(&self, cwd: &Path) -> ResolvedEnv {
-        self.with_offered_path(self.resolved_env_for(cwd))
+        self.with_sandbox_path(self.resolved_env_for(cwd))
     }
 
-    /// [`Self::spawn_env_for`] before the offered CLIs' directories join `PATH`.
+    /// [`Self::spawn_env_for`] before [`Self::with_sandbox_path`] orders its `PATH`.
     fn resolved_env_for(&self, cwd: &Path) -> ResolvedEnv {
         let (script_path, timeout_secs, cell) = {
             let mut inner = self.lock();
@@ -8432,6 +8446,147 @@ mod offered_tests {
         assert!(state.ai_clis_available_in(cwd.path()).is_empty());
         offer(&dir, &[(AiCli::Pi, &bin)]);
         assert_eq!(state.ai_clis_available_in(cwd.path()), [AiCli::Pi]);
+    }
+
+    /// Turn environment-include on with a script that exports `lines`, so the resolved session
+    /// environment carries them whatever this test process's own environment holds.
+    fn resolve_with(state: &DaemonState, store: &Path, lines: &[String]) {
+        let script = store.join("env-include.sh");
+        let body: String = lines.iter().map(|l| format!("export {l}\n")).collect();
+        std::fs::write(&script, body).unwrap();
+        state
+            .set_env_include(
+                Some(true),
+                Some(script.to_string_lossy().into_owned()),
+                Some(30),
+            )
+            .unwrap();
+    }
+
+    fn path_var(vars: &[(String, String)]) -> String {
+        vars.iter()
+            .find(|(k, _)| k == "PATH")
+            .map(|(_, v)| v.clone())
+            .expect("a PATH in the spawn environment")
+    }
+
+    /// The first folder of `path` holding `command`, as a spawn would find it.
+    fn found_in(path: &std::ffi::OsStr, command: &str) -> Option<PathBuf> {
+        std::env::split_paths(path).find(|dir| dir.join(command).is_file())
+    }
+
+    /// 1289 A2 (a), contract P2: the offered bin, then the home's `.local/bin`, then mise's shims,
+    /// then the resolved `PATH`, for terminals and AI CLI launches alike (FR-001, FR-005, FR-006).
+    #[cfg(unix)]
+    #[test]
+    fn a_sandbox_spawn_path_puts_the_home_folders_after_the_offered_bins() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        let bin = bin_of(store.path(), "claude-bin", &[AiCli::ClaudeCode]);
+        offer(&dir, &[(AiCli::ClaudeCode, &bin)]);
+        resolve_with(
+            &state,
+            store.path(),
+            &[
+                "HOME=/home/u".into(),
+                "XDG_DATA_HOME=/home/u/.local/share".into(),
+                "PATH=/usr/local/bin:/usr/bin:/bin".into(),
+            ],
+        );
+        let cwd = tempfile::tempdir().unwrap();
+        let want = format!(
+            "{}:/home/u/.local/bin:/home/u/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin",
+            bin.display()
+        );
+        assert_eq!(path_var(&state.env_include_vars_for(cwd.path())), want);
+        assert_eq!(
+            path_var(&state.ai_cli_env_for(cwd.path(), AiCli::ClaudeCode)),
+            want
+        );
+    }
+
+    /// 1289 A2 (b): an `offered.json` that lists no CLI still adds the two home folders, and
+    /// `MISE_DATA_DIR` from the resolved environment names the shims folder (FR-002).
+    #[cfg(unix)]
+    #[test]
+    fn an_empty_offer_still_adds_the_home_folders() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        offer(&dir, &[]);
+        resolve_with(
+            &state,
+            store.path(),
+            &[
+                "HOME=/home/u".into(),
+                "MISE_DATA_DIR=/opt/mise".into(),
+                "PATH=/usr/bin:/bin".into(),
+            ],
+        );
+        let cwd = tempfile::tempdir().unwrap();
+        assert_eq!(
+            path_var(&state.env_include_vars_for(cwd.path())),
+            "/home/u/.local/bin:/opt/mise/shims:/usr/bin:/bin"
+        );
+    }
+
+    /// 1289 A2 (c), FR-008: without an `offered.json` (host and remote daemons) the resolved
+    /// `PATH` is passed on byte for byte.
+    #[cfg(unix)]
+    #[test]
+    fn without_an_offer_the_resolved_path_is_unchanged() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, _dir) = daemon(store.path());
+        resolve_with(
+            &state,
+            store.path(),
+            // `/usr/bin` and `/bin` stay on it: the script's environment is read back with `env`.
+            &["HOME=/home/u".into(), "PATH=/a:/usr/bin:/a:/bin".into()],
+        );
+        let cwd = tempfile::tempdir().unwrap();
+        assert_eq!(
+            path_var(&state.env_include_vars_for(cwd.path())),
+            "/a:/usr/bin:/a:/bin"
+        );
+    }
+
+    /// 1289 A3, US1 scenario 5 and FR-007: a `claude` in the home's `.local/bin` neither runs
+    /// ahead of the offered one nor gets offered on its own, while a tool in mise's shims folder
+    /// is found on the path the availability check walks.
+    #[cfg(unix)]
+    #[test]
+    fn a_home_copy_of_a_cli_is_not_offered_ahead_and_a_shim_resolves() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        let home = store.path().join("home");
+        let local_bin = bin_of(&home, ".local/bin", &[AiCli::ClaudeCode]);
+        let shims = home.join(".local/share/mise/shims");
+        std::fs::create_dir_all(&shims).unwrap();
+        std::fs::write(shims.join("probe-tool"), b"#!/bin/sh\n").unwrap();
+        resolve_with(
+            &state,
+            store.path(),
+            &[
+                format!("HOME={}", home.display()),
+                format!("XDG_DATA_HOME={}", home.join(".local/share").display()),
+                "PATH=/usr/bin:/bin".into(),
+            ],
+        );
+        let cwd = tempfile::tempdir().unwrap();
+
+        let bin = bin_of(store.path(), "claude-bin", &[AiCli::ClaudeCode]);
+        offer(&dir, &[(AiCli::ClaudeCode, &bin)]);
+        let path = state.spawn_path_for(cwd.path());
+        assert_eq!(found_in(&path, "claude"), Some(bin.clone()));
+        assert_eq!(state.availability_in(cwd.path()).0, [AiCli::ClaudeCode]);
+        assert_eq!(found_in(&path, "probe-tool"), Some(shims));
+
+        let pi = bin_of(store.path(), "pi-bin", &[AiCli::Pi]);
+        offer(&dir, &[(AiCli::Pi, &pi)]);
+        assert_eq!(
+            found_in(&state.spawn_path_for(cwd.path()), "claude"),
+            Some(local_bin)
+        );
+        assert_eq!(state.availability_in(cwd.path()).0, [AiCli::Pi]);
     }
 }
 

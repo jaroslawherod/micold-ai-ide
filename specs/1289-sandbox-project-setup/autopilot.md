@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: design-pr
-- **Next step**: design PR #1347 open (specs-only gate green); orchestrator waits on CI and merges, then M1
+- **Phase**: M1
+- **Next step**: M1 scoped gate, then reviews A and B round 1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1347 | design (spec, plan, tasks) | open | — |
+| #1347 | design (spec, plan, tasks) | merged | 86fcb6b28cfe72ea680999550251409cbfa0921f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | — | pending |
+| M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | — | in progress |
 | M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | — | pending |
 | M3 | T018–T030 | full | protocol 69; daemon runs setup on create, streams output, MCP field, run/stop | — | pending |
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | — | pending |
@@ -40,6 +40,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 4 | plan | Which daemons get the home PATH folders? | Those with offered.json (app-owned container/pod) | unit (research R2) | provision::Ownership::AppOwned; MICOLD_IMAGE_REFERENCE absent on pods |
 | 5 | tasks | Milestone cut vs plan's five suggestions | Seven: plan M3 split into M3 (run on create) / M4 (persistence, delete) by size; client cut along scenarios into M5 (command, sync, tag, notification), M6 (output view), M7 (US3 run/stop). M3 kept at 13 tasks (~1000 lines): protocol messages, their handlers and the run task cannot land apart without a second version bump or a server answering Unsupported. plan.md §Milestones updated to point at tasks.md | unit (milestones.md rules 2–3) | tasks.md §Milestones |
 | 6 | tasks | How does the daemon look up `bash` (resolve_on_path is pub(crate) in core)? | New core `setup::shell::bash_on_path(&OsStr)` wraps it; data-model §shell_line updated | unit | provider.rs:575 private fn |
+| 7 | M1 | FR-006 "a script that sets PATH MAY put entries ahead": does it? | No: the order is computed after environment-include, so the script's PATH is `rest`; the guide says its folders keep their order after the home folders. FR-006 is permissive (MAY), and the MUST half (folders survive env-include) holds | unit | state.rs `with_sandbox_path`; test `a_sandbox_spawn_path_puts_the_home_folders_after_the_offered_bins` |
+| 8 | M1 | Empty `PATH` entries in `rest` | Dropped (an empty entry means the cwd); also `HOME=""` counts as unset | unit | data-model "An empty value counts as unset"; test `an_empty_rest_adds_no_empty_entry` |
 
 ## Review rounds
 

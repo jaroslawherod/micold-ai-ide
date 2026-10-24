@@ -10,6 +10,7 @@
 //! | [`parse`] | **pure** | `--format '{{json .}}'` output → typed facts |
 //! | [`dialect`] | **pure** | the per-runtime differences: flag names, defaults, quirks |
 //! | [`exec`] | impure | the single process-spawn shim everything above is composed over |
+//! | [`toolchain_path`] | **pure** | the `PATH` a spawn in an app-owned sandbox gets (feature 1289) |
 //!
 //! Only [`exec`] touches the world. That is what lets the whole adapter layer be exercised on
 //! Linux, macOS and Windows against an injected fake runner, with nothing installed (Principle VI)
@@ -33,6 +34,7 @@ pub mod parse;
 pub mod pathmap;
 pub mod placement;
 pub mod runtime;
+pub mod toolchain_path;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

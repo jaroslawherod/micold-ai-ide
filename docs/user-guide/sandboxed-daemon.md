@@ -34,6 +34,15 @@ image must:
 The simplest way is to start from the basic image: `FROM ghcr.io/jaroslawherod/micold-basic:<tag>`.
 An image with no SSH server fails to start with a message saying so.
 
+Tools you install in the sandbox's home folder, such as `uv` in `~/.local/bin` or a toolchain
+installed with `mise`, are on every session's `PATH` without a change to your image: see
+[Tools installed in the sandbox's home](#tools-installed-in-the-sandboxs-home).
+
+A project that needs its own image gets it from a second container daemon: add another container
+daemon, choose **My own image**, and give it an image built `FROM` the basic image with what the
+project needs. Then choose that daemon in the New worktree form's **Daemon** select; the project
+remembers the choice for its next worktree.
+
 A daemon that used to run the released daemon image moves to the basic image on its next start; its
 row says so until it has started. A container still running the released image keeps running, and
 its row says so too: restart it with no sessions running to move it to the basic image.
@@ -275,6 +284,28 @@ runs inside the container beside the sessions and listens on the container's own
 and each session's key file lives in the service's data directory there. The check for a server
 you already named `micold` reads the configuration the session sees inside the container, not the
 files in your own home directory.
+
+### Tools installed in the sandbox's home
+
+On a container daemon, every session, terminal and the tool servers the AI CLI starts get this
+`PATH`, in this order:
+
+1. the folders of the AI CLIs the application installed and offers, so the CLI a session starts
+   is always the one the application installed, even when the home holds another copy (Claude
+   Code's own installer writes `~/.local/bin/claude`);
+2. `~/.local/bin` in the sandbox's home;
+3. mise's shims folder: `$MISE_DATA_DIR/shims` when `MISE_DATA_DIR` is set, otherwise
+   `$XDG_DATA_HOME/mise/shims`, otherwise `~/.local/share/mise/shims`;
+4. the image's own `PATH`, or the one the environment-include script leaves.
+
+Both home folders are on the `PATH` even when they do not exist yet, so a tool installed there
+during a session is found by its next lookup, with no restart and no change to your startup files.
+A folder already on the image's `PATH` appears once, in the position above. A project's tool server
+entry such as `uvx <server>` therefore finds `uv` in `~/.local/bin`. Folders an environment-include
+script puts on `PATH` keep their order after these.
+
+The host daemon and daemons on remote machines over SSH keep the `PATH` they had: none of this
+applies to them.
 
 ## Credentials
 
