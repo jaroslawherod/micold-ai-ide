@@ -10,12 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ttad83
 - **Started**: 2026-10-24
 - **Phase**: tasks
-- **Next step**: tasks review, specs-only gate, design PR
+- **Next step**: design PR opened by orchestrator; then M1 (Layer A)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| (orchestrator opens) | design: spec, clarify, plan, tasks | pushed; specs-only gate green (check-criteria-observables) | — |
 
 ## Milestones
 
@@ -41,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D9 | plan | How is the work split around #1269 (not merged)? | Layer A (M1 core rules in review::{bar,drawer,reply}, M2 shared components) independent of #1269; Layer B (M3 reducer/shell/Esc wiring, M4 layout, snapshot re-record, docs, visual pass) after #1269 merges; building B on today's State.open is a fallback needing a ledger decision | agent-resolved | prompt; plan.md Delivery order; research R11 |
 
 | D10 | tasks | Milestone sizes: M1, M2 have 15 tasks, M3 16, over rule 3's ~10 | Kept per plan D9 (orchestrator: keep the layer split); M1/M2 are pure core / self-contained components, M3 is one reducer change in features/changes.rs that cannot ship half (Panel → ReviewDrawer) | agent-resolved | prompt; plan.md Delivery order |
+| D12 | tasks | Checklist item "No [NEEDS CLARIFICATION] markers remain" | Ticked: clarify resolved both markers; tasks reviewer r1 found no checklist finding | agent-resolved | grep finds 0 markers in spec.md |
 | D11 | tasks | speckit-analyze HIGH F1 (T015 gate needs drawer), C1 (T034/T042 too large), MEDIUM I1, A1, U1–U3, T1 | Fixed: drawer case moved to T041; reducer and layout tasks split; spec edge "Drawer opens over the line" and SC-004 reworded (plan test-strategy row follows); files-browser, 2 s and line-start checks added; T013/T014 split | agent-resolved | scratchpad analyze.md |
 
 ## Review rounds
@@ -49,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | fd089e07fa581ec092d2c314ae1f7f1a1ddc28a9:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CHANGES: 1 MAJOR (declined), 3 MINOR (fixed) |
 | Plan | 1 | 5f5fd06c9c015ce43b1c2b6043648cfdbcdfd036:eac77a56e214e2eccdb0fb472fca37e75f1274fa | CLEAN: 1 MINOR (fixed, prose only) |
+| Tasks | 1 | 42a7804ed6fa03cda55289e1422ccf12057a0998:41be4d60561ee8c3d899e38224a6e17ac52eafd3 | CLEAN: 3 MINOR (F2 fixed: focus/dialog cleanup named in T037; F1, F3 task size left, D10) |
 
 ## Declined review findings
 
