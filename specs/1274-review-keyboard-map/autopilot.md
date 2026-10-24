@@ -50,7 +50,7 @@ None.
 Clarify round 1, category 1 (product decision the repo does not settle). FR-001 marker:
 are the single-letter review keys (j k n p ] [ v g c ?) on by default, or behind a Settings switch?
 `docs/development/review-redesign.md` lists it as open question 5 for the user; the mockup and
-issue #1274 say nothing; the app has no key-binding settings today (specs/803-keyboard-navigation/spec.md#out-of-scope).
+issue #1274 say nothing; the app has no key-binding settings today (specs/803-keyboard-navigation/spec.md#assumptions).
 
 - **On by default, no setting (Recommended)**: keys act only while the review has the keyboard
   (spec Terms, FR-002, SC-002), so typing in a field or terminal is never taken; GitHub/Gerrit-style
