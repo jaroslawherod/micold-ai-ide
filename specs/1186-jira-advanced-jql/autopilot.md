@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: M1 PR
-- **Next step**: orchestrator opens the M1 PR from branch claude/project-thread-vf2ck6 (title/body in the M1 unit's scratchpad, label docs-not-needed), waits on CI and merges; then milestone M2 (T013–T017)
+- **Phase**: M2
+- **Next step**: M2 implemented on local branch 1186-m2-wip (worktree /home/user/micold-1186-m2); reviews and full gate next; orchestrator rebases onto main after #1350 merges, pushes and opens the M2 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1346 | design (spec, plan, tasks) | merged | 527d91b36196fda8950f2d3e1d6a193fe3a0f1d9 |
-| (to open) | M1 core rules + advanced request | pushed, PR not opened (gh unauthenticated) | — |
+| #1350 | M1 core rules + advanced request | open, CI running | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Core rules + advanced request (no UI) | (to open) | gate green, pushed |
-| M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | — | planned |
+| M1 | T001–T012 | full | Core rules + advanced request (no UI) | #1350 | PR open, CI running |
+| M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | — | implemented, in review |
 | M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | — | planned |
 | M4 | T024–T032 | full | Jira's error messages and Retry | — | planned |
 | M5 | T033–T039 | full | Remember last query and mode per project | — | planned |
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D8 | M2 | How does an advanced row pick reach `apply_pick` with the label mapping, which only the shell reads? | `jira_query::Msg::RowPicked(i)` is resolved by the shell exactly as `IssueRowPicked`: `State::issue_number_at` (now reading `shown_issues()`, the advanced results in advanced mode) gives the number, then `IssuePicked { number, mapping }`, whose reducer finds the issue in `shown_issues()` and calls `WorktreeForm::apply_pick`. One pick reducer for both modes, so FR-009's "exactly as basic" holds by construction | agent-resolved | contracts/selector-ui.md §5; tests/jira_query_state.rs `an_advanced_pick_fills_the_form_as_a_basic_pick_of_the_same_issue`; main_tests `jira_query_run` |
 | D7 | tasks | How to cut US1 (≈1,300 lines: core, adapter, reducer, shell, view)? | Three milestones M1 core+adapter, M2 render-free state, M3 view+guide; M1/M2 keep the UI unreachable (milestones rule 6) and carry `docs-not-needed`; no acceptance-scenario split exists because every US1 scenario needs the switch and field. T040 (quickstart §B record) is code-free Polish → close unit | agent-resolved | plan.md#delivery-order; tasks.md#milestones |
 | D6 | plan | Where are the mode and last run query remembered? | Owner-only `<data_dir>/jira/<project id>.query.json` beside the token, deleted with the connection; not the project state file, not settings.json | agent-resolved | research.md R7 |
 | D5 | clarify | Remembering and source switch | Mode remembered at each switch, query at each run; GitHub↔Jira keeps mode, resets draft to last run query, re-runs it in advanced (FR-003a) | agent-resolved | 533 FR-017; #1185 FR-016 |

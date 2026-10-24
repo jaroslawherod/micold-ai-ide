@@ -163,3 +163,40 @@ fn a_status_read_starts_only_from_focus_and_project_open() {
     // The status read reaches Jira through the same gate as the picker's.
     assert_eq!(occurrences(".jira_source()").len(), 1);
 }
+
+/// Feature 1186 (FR-004, FR-016): the advanced selector's modules log nothing and notify nothing,
+/// so no log line, toast or notification can take the draft, the last run query, a `UserQuery` or a
+/// `ScopedQuery`. Checked as "none at all", which also catches a macro whose arguments span lines.
+#[test]
+fn the_advanced_query_is_never_logged_or_notified() {
+    let root = root();
+    let calls = [
+        "tracing::",
+        "log::",
+        "info!(",
+        "warn!(",
+        "error!(",
+        "debug!(",
+        "trace!(",
+        "eprintln!(",
+        "println!(",
+        "notify",
+        "toast",
+        "Notification",
+    ];
+    for file in [
+        "crates/micold-client/src/features/jira_query.rs",
+        "crates/micold-client/src/shell/jira_query.rs",
+    ] {
+        let lines = code_lines(&root.join(file));
+        assert!(
+            lines.iter().any(|l| l.contains("ScopedQuery")),
+            "{file}: the scan reads the module that holds the query"
+        );
+        let offenders: Vec<_> = lines
+            .iter()
+            .filter(|l| calls.iter().any(|c| l.contains(c)))
+            .collect();
+        assert!(offenders.is_empty(), "{file}: {offenders:?}");
+    }
+}

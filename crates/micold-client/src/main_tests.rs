@@ -15660,3 +15660,139 @@ mod jira_status_driver {
         assert!(!chip(&rig));
     }
 }
+
+// --- feature 1186: the advanced query's run through the shell (`shell/jira_query.rs`) ----------
+//
+// The reducer's tests (`tests/jira_query_state.rs`) decide when a run is awaited; these drive the
+// shell against a fake source whose calls are counted: one accepted `Run` sends exactly one query
+// and its answer lands, while the switch and typing send none (FR-004).
+
+mod jira_query_run {
+    use super::*;
+    use micold_client::features::jira_query::{Msg as QueryMsg, QueryRun};
+    use micold_client::features::worktree_form::{BranchSource, Msg as FormMsg};
+    use micold_core::github::{Issue, IssuePage};
+    use micold_core::jira::{connection_key, FakeJiraSource, JiraConnection};
+    use micold_core::jira_query::QueryMode;
+    use std::sync::Arc;
+
+    const PROJECT: &str = "/repo/demo";
+
+    struct Rig {
+        app: App,
+        source: Arc<FakeJiraSource>,
+        _dir: tempfile::TempDir,
+    }
+
+    fn send(rig: &mut Rig, msg: FormMsg) {
+        let work = update_inner(&mut rig.app, Message::WorktreeForm(msg));
+        settle(&mut rig.app, work);
+    }
+
+    fn query(rig: &mut Rig, msg: QueryMsg) {
+        send(rig, FormMsg::JiraQuery(msg));
+    }
+
+    fn run(rig: &Rig) -> &QueryRun {
+        &rig.app
+            .core
+            .worktree_form
+            .form
+            .as_ref()
+            .expect("form open")
+            .jira_query
+            .run
+    }
+
+    /// Switch on, connected, token stored, the form open on a Jira-only project with the Issue
+    /// source showing; the source answers one basic page and one query page.
+    fn rig() -> Rig {
+        let dir = tempfile::tempdir().unwrap();
+        let issue = |key: &str, number| {
+            Issue::jira(
+                key,
+                number,
+                "Login".to_string(),
+                Vec::new(),
+                "2026-10-01T00:00:00Z".to_string(),
+            )
+        };
+        let source = Arc::new(
+            FakeJiraSource::new()
+                .with_page(IssuePage {
+                    issues: vec![issue("ABC-1", 1)],
+                    total_open: 1,
+                    next_cursor: None,
+                })
+                .with_query(Ok(IssuePage {
+                    issues: vec![issue("ABC-7", 7)],
+                    total_open: 1,
+                    next_cursor: None,
+                })),
+        );
+        let mut app = base_app();
+        app.caps = app
+            .caps
+            .clone()
+            .with_jira(source.clone(), dir.path().to_path_buf());
+        app.core.workspace.active = Some(PathBuf::from(PROJECT));
+        app.core.settings.jira_enabled = true;
+        app.core.settings.jira_connections.insert(
+            connection_key(std::path::Path::new(PROJECT)),
+            JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
+        );
+        std::fs::write(
+            micold_core::store::jira_token_path(dir.path(), std::path::Path::new(PROJECT)),
+            "token",
+        )
+        .unwrap();
+        let mut rig = Rig {
+            app,
+            source,
+            _dir: dir,
+        };
+        send(&mut rig, FormMsg::Opened);
+        send(&mut rig, FormMsg::RemotesListed(Ok(Vec::new())));
+        send(&mut rig, FormMsg::SourceChanged(BranchSource::Issue));
+        rig
+    }
+
+    #[test]
+    fn a_run_sends_one_query_and_lands_while_switching_and_typing_send_none() {
+        let mut rig = rig();
+        assert_eq!(rig.source.calls().len(), 1, "the basic list loaded once");
+        query(&mut rig, QueryMsg::ModeChanged(QueryMode::Advanced));
+        query(&mut rig, QueryMsg::DraftChanged("priority = High".into()));
+        query(
+            &mut rig,
+            QueryMsg::DraftChanged("priority = Highest".into()),
+        );
+        assert!(rig.source.query_calls().is_empty(), "no query before Run");
+
+        query(&mut rig, QueryMsg::Run);
+        assert_eq!(
+            rig.source.query_calls(),
+            vec![(
+                "project = \"ABC\" AND (priority = Highest) ORDER BY updated DESC".to_string(),
+                None
+            )]
+        );
+        match run(&rig) {
+            QueryRun::Loaded { listing, .. } => {
+                assert_eq!(listing.issues.len(), 1);
+                assert_eq!(listing.issues[0].key(), Some("ABC-7"));
+            }
+            other => panic!("expected the run's result, found {other:?}"),
+        }
+
+        // A row of the results resolves to its issue and fills the form.
+        query(&mut rig, QueryMsg::RowPicked(0));
+        let form = rig.app.core.worktree_form.form.as_ref().unwrap();
+        assert_eq!(form.ticket, "ABC-7");
+
+        // Back to basic: the list is as left, so nothing more is asked of the source.
+        query(&mut rig, QueryMsg::ModeChanged(QueryMode::Basic));
+        assert_eq!(rig.source.calls().len(), 1);
+        assert_eq!(rig.source.query_calls().len(), 1);
+    }
+}

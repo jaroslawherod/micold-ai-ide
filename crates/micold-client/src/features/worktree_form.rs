@@ -90,6 +90,12 @@ impl State {
         }
     }
 
+    /// The seq of the advanced query run the open form awaits, when one is in flight (feature
+    /// 1186, contracts/selector-source-and-storage.md §3).
+    pub fn awaited_jira_query(&self) -> Option<u64> {
+        self.form.as_ref()?.jira_query.running().map(|(seq, _)| seq)
+    }
+
     /// The search state of the open form's loaded list, if it has one.
     fn issue_search(&self) -> Option<&SearchState> {
         match &self.form.as_ref()?.issues {
@@ -606,6 +612,8 @@ pub struct WorktreeForm {
     /// The user has typed in the first-prompt field, so the template no longer rewrites it
     /// (feature 1161, FR-007).
     pub first_prompt_edited: bool,
+    /// The selector's advanced JQL state (feature 1186).
+    pub jira_query: crate::features::jira_query::JiraQuery,
 }
 
 impl WorktreeForm {
@@ -621,7 +629,7 @@ impl WorktreeForm {
         }
         let picked = self
             .picked_issue
-            .and_then(|n| self.issues.held().into_iter().find(|i| i.number() == n));
+            .and_then(|n| self.shown_issues().into_iter().find(|i| i.number() == n));
         let facts = micold_core::prompt_template::WorktreeFacts {
             issue: self.ticket.trim().to_string(),
             issue_title: picked.map(|i| i.title().to_string()).unwrap_or_default(),
@@ -695,10 +703,29 @@ impl WorktreeForm {
         micold_core::worktree::explain_directory_taken_on(dir, self.holder_daemon(dir))
     }
 
-    /// The issue number of row `index` of `issue_matches`.
+    /// The issue number of row `index` of the shown results: of `issue_matches`, or of the
+    /// advanced results while advanced mode shows them (feature 1186, FR-009).
     pub fn issue_number_at(&self, index: usize) -> Option<u64> {
-        let (held, _) = self.issue_matches.get(index)?;
-        self.issues.held().get(*held).map(|issue| issue.number())
+        let held = match self.advanced_results() {
+            Some(_) => index,
+            None => self.issue_matches.get(index)?.0,
+        };
+        self.shown_issues().get(held).map(|issue| issue.number())
+    }
+
+    /// Fill the form from a picked issue: its key or number becomes the ticket and its title the
+    /// name, and its labels choose the type through `mapping` (FR-009, FR-010, FR-013, FR-014). A
+    /// basic and an advanced pick both land here (feature 1186, FR-009).
+    pub fn apply_pick(&mut self, issue: &Issue, mapping: &[LabelTypeEntry]) {
+        let naming = naming_for_issue(issue, mapping);
+        self.ticket = naming.ticket.unwrap_or_default();
+        self.name = naming.name;
+        self.type_ = naming.type_;
+        self.error = None;
+        self.set_picked_issue(Some(issue.number()));
+        self.issue_list_open = false;
+        self.jira_query.list_open = false;
+        self.refresh_default_prompt();
     }
 
     /// The caption under the source switch (FR-002, FR-025): why the issue chip is disabled, or —
@@ -745,6 +772,9 @@ impl WorktreeForm {
         let JiraAvailability::Connected(site) = &self.jira else {
             return None;
         };
+        if self.jira_query.is_advanced() {
+            return Some(crate::features::jira_query::notice(site));
+        }
         Some(format!(
             "Reads open issues of project {} from {}. Sends the project key, your search text and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.",
             site.key, site.origin
@@ -885,6 +915,7 @@ impl WorktreeForm {
         self.issue_list_open = false;
         self.issue_highlight = None;
         self.set_picked_issue(None);
+        self.jira_query.reset();
         self.refresh_default_prompt();
     }
 
@@ -1303,7 +1334,9 @@ pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
         form.reset_branch_search();
         form.reset_issues();
         if source == BranchSource::Issue {
-            form.issues = IssueList::Loading { seq: next_seq };
+            if !form.jira_query_shown(next_seq) {
+                form.issues = IssueList::Loading { seq: next_seq };
+            }
             started = true;
         }
         form.refresh_default_prompt();
@@ -1333,7 +1366,7 @@ pub fn issue_provider_changed(
         form.provider = provider;
         form.remembered_provider = Some(provider);
         form.reset_issues();
-        if form.source == BranchSource::Issue {
+        if form.source == BranchSource::Issue && !form.jira_query_shown(next_seq) {
             form.issues = IssueList::Loading { seq: next_seq };
         }
         changed = true;
@@ -1673,22 +1706,15 @@ pub fn issue_dismissed(state: &mut crate::app::State) {
 /// hold changes nothing.
 pub fn issue_picked(state: &mut crate::app::State, number: u64, mapping: &[LabelTypeEntry]) {
     while_editing_unprompted(state, |form| {
-        let Some(naming) = form
-            .issues
-            .held()
+        let Some(issue) = form
+            .shown_issues()
             .into_iter()
             .find(|issue| issue.number() == number)
-            .map(|issue| naming_for_issue(issue, mapping))
+            .cloned()
         else {
             return;
         };
-        form.ticket = naming.ticket.unwrap_or_default();
-        form.name = naming.name;
-        form.type_ = naming.type_;
-        form.error = None;
-        form.set_picked_issue(Some(number));
-        form.issue_list_open = false;
-        form.refresh_default_prompt();
+        form.apply_pick(&issue, mapping);
     });
 }
 
@@ -1715,6 +1741,31 @@ pub fn issue_details_loaded(
             },
         };
     });
+}
+
+/// A message of the selector's advanced mode (feature 1186). A run's answer and the list's
+/// keyboard apply whatever the form is doing, as a load's answer does; the switch, the input and
+/// Run are inputs, inert while a create runs or a prompt is up. A run or a basic load the message
+/// started takes the next seq.
+fn jira_query_changed(state: &mut crate::app::State, msg: crate::features::jira_query::Msg) {
+    use crate::features::jira_query::Msg as QueryMsg;
+    let next_seq = state.worktree_form.issue_request_seq + 1;
+    let mut handed_out = false;
+    let inert_while_busy = !matches!(
+        msg,
+        QueryMsg::Ran { .. } | QueryMsg::HighlightMoved(_) | QueryMsg::Dismissed
+    );
+    let change = |form: &mut WorktreeForm| {
+        handed_out = crate::features::jira_query::update(form, msg, next_seq);
+    };
+    if inert_while_busy {
+        while_editing_unprompted(state, change);
+    } else {
+        with_form(state, change);
+    }
+    if handed_out {
+        state.worktree_form.issue_request_seq = next_seq;
+    }
 }
 
 /// Branch candidates arrived (feature 016).
@@ -2100,6 +2151,8 @@ pub enum Msg {
         number: u64,
         result: Result<Box<IssueDetails>, IssueLoadError>,
     },
+    /// A message of the selector's advanced mode (feature 1186, data-model §7).
+    JiraQuery(crate::features::jira_query::Msg),
 }
 
 /// The form's own reducer: one entry point, thirty-five answers (FR-004a).
@@ -2165,6 +2218,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             number,
             result,
         } => issue_details_loaded(state, seq, number, result),
+        Msg::JiraQuery(msg) => jira_query_changed(state, msg),
     }
     Vec::new()
 }

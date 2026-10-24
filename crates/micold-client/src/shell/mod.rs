@@ -30,6 +30,7 @@ pub mod env_include;
 pub mod issues;
 pub mod jira;
 pub mod jira_http;
+pub mod jira_query;
 pub mod jira_refresh;
 pub mod legacy_units;
 pub mod link_opener;

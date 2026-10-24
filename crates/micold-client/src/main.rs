@@ -1250,6 +1250,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::WorktreeForm(FormMsg::IssueRowPicked(index)) => {
             shell::issues::on_issue_row_picked(app, index)
         }
+        // Feature 1186: the selector's advanced mode; an accepted run or a switch back to a basic
+        // list never requested starts its request.
+        Message::WorktreeForm(FormMsg::JiraQuery(msg)) => shell::jira_query::on_message(app, msg),
         // Feature 038 (FR-007): rows differ in height, so the list is scrolled to its highlighted
         // row after the move rather than by a fixed step.
         Message::WorktreeForm(FormMsg::IssueHighlightMoved(direction)) => {
