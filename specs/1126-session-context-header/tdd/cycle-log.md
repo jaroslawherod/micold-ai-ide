@@ -58,3 +58,17 @@ Append only.
   reported `129×30` (`rows > 30` failed). The header takes rows from the pane. The bound is now
   `cols > 100 && rows >= 30`, because the columns alone tell the measurement from the daemon's
   100×30 seed.
+- Rebase onto origin/main afef53af (#1124 M1 status bar, #1299, #1260): three conflicts.
+  `ui/terminal.rs` tests: kept main's two FR-007 font tests and M1's move of `failed`/`state_showing`
+  into `features::session_strip::tests`. `composer_fits::a_long_queue_and_a_long_draft_…`: main
+  replaced the absolute floor with a bound relative to an idle composer in the same pane, which
+  already holds under any fixed chrome, so main's bound is kept with M1's `header > 0` check.
+  Fixture regenerated with `UPDATE_LAYOUT_SNAPSHOT=1`. Two more gates went red under both chromes
+  together: `a_long_draft_grows_the_composer_…` (`height: 247.4` under the `WINDOW.height / 3`
+  floor; now less the header's measured height) and `an_interrupted_turn_closes_with_its_notice_…`
+  (the 800px window's transcript ended before `You interrupted this turn`; it now paints at twice
+  the shared window's height, since it checks words, not geometry). Green: `layout_snapshot` 108 passed.
+- Same rebase: `terminal_size_reporting::the_terminal_area_reports_its_size_before_any_output_arrives`
+  reported `129×28` (`rows >= 30` failed): 1124's status bar takes two more rows. The bound is now
+  `cols > 100 && rows > 1`: the columns tell the measurement from the 100×30 seed, the rows only
+  from a degenerate grid; `grid_size_fits_cells_and_floors` still pins the exact numbers.

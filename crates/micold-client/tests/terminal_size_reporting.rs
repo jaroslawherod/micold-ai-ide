@@ -126,10 +126,11 @@ fn the_terminal_area_reports_its_size_before_any_output_arrives() {
     // Not the daemon's 100×30 spawn seed, and not a degenerate 1×1: this is a real measurement of
     // the area beside a 260px sidebar in a 1280×800 window. The exact numbers follow from the cell
     // metrics and are pinned by `grid_size_fits_cells_and_floors`; what matters here is that a
-    // measurement exists and describes that rectangle. Feature 1126's context header sits above
-    // the pane, so the rows come to the seed's 30 here; the columns alone tell it from the seed.
+    // measurement exists and describes that rectangle. Feature 1126's context header above the
+    // pane and 1124's status bar below it take rows, so the rows fall under the seed's 30 here;
+    // the columns alone tell it from the seed, and the rows only from a degenerate 1.
     assert!(
-        cols > 100 && rows >= 30,
+        cols > 100 && rows > 1,
         "reported {cols}×{rows}, which is no larger than the seed it exists to replace"
     );
     assert!(
