@@ -48,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | a336c6f1ebfd5e1598c453a4535ea5aeff6790b2:fe7a79742614d045774446cb51b847fe9564bb1e | CLEAN (2 MINOR: R11 typo, R6 None fallback — fixed, prose only) |
 | Tasks | 1 | c125de1a0438346af357aa10e590a942959da084:697e95407233a56669e0a960535abc7d181ec6f6 | CHANGES: 1 MAJOR (M4 Verify ran main_tests with --lib), 3 MINOR (SC-001 split, checklist note, macOS chord example) — all fixed |
 | Tasks | 2 | c42ec5e995bdd8f5e3c6560f3f5651acdf8c85f1:697e95407233a56669e0a960535abc7d181ec6f6 | CLEAN |
+| B M1 (conformance, sonnet) | 1 | 9bcb0c9d1fceee0a76897160ebb03fbe36ef3391:e4cc913076548077f3026bcb11c688c30388e4b1 | CHANGES: 1 MAJOR (F1 no red recorded for T003/T007/T009–T011 — fixed: red runs against a mutated build recorded in tdd/cycle-log.md), 1 MINOR (F2 banner-words refactor — noted in the log); fix is evidence/prose only, no code changed, so no round 2 |
 | A M1 (code-review high) | 1 | 1d17c59cc149d73c326b84b00dd8f37f9e20fae5:8a60fd0f91a8e9b92cd69538ff8e8903fe9ad44d | CLEAN (4 MINOR: F1 dot duplicated — fixed, shared `unread_mark::filled_circle`; F3 operate visits dropped items — fixed; F2, F4 declined) |
 
 ## Declined review findings
