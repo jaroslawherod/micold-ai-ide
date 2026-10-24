@@ -19,6 +19,7 @@ pub const ROBOTO_ITALIC_BYTES: &[u8];           // assets/fonts/Roboto-Italic.tt
 pub const ROBOTO_MEDIUM_ITALIC_BYTES: &[u8];    // assets/fonts/Roboto-MediumItalic.ttf (new)
 pub const ROBOTO_SEMIBOLD_ITALIC_BYTES: &[u8];  // assets/fonts/Roboto-SemiBoldItalic.ttf (new)
 pub const ROBOTO_FACES: [&[u8]; 6];             // the six above, upright then italic
+pub const ROBOTO_WEIGHTS: [u16; 3];             // [400, 500, 600], the shipped weights
 ```
 
 Each italic constant parses as TrueType, is static (no `fvar`), reports typographic family
@@ -32,14 +33,17 @@ Each italic constant parses as TrueType, is static (no `fvar`), reports typograp
 pub fn pin_roboto_italics(db: &mut fontdb::Database) -> usize
 ```
 
-- Removes every face whose `families` contains `ROBOTO_FAMILY`, whose `style` is not
-  `fontdb::Style::Normal`, and whose `source` is not `fontdb::Source::Binary`. Returns how many it
-  removed.
-- Leaves every upright `Roboto` face (host or bundled) and every face of every other family.
+- Removes every face whose `families` contains `ROBOTO_FAMILY`, whose `source` is not
+  `fontdb::Source::Binary`, and that either has a `style` other than `fontdb::Style::Normal` or a
+  `weight` other than 400, 500 and 600 (the shipped weights, `ROBOTO_WEIGHTS`). Returns how many it
+  removed. Research R2 and ledger D8 say why the off-weight upright faces go too.
+- Leaves every bundled face, every host upright `Roboto` face at 400, 500 or 600, and every face of
+  every other family.
 - Idempotent: a second call returns 0.
 
 Postconditions, given the six bundled faces are loaded as `Source::Binary`, even when the database
-held a file-loaded Roboto Italic (and a file-loaded upright Roboto) before the call:
+held a file-loaded Roboto Italic, a file-loaded upright Roboto Regular (400) and a file-loaded
+Roboto Bold (700, upright) before the call:
 
 | Query (`Family::Name("Roboto")`) | Resolves to |
 |---|---|
@@ -47,7 +51,15 @@ held a file-loaded Roboto Italic (and a file-loaded upright Roboto) before the c
 | weight 500, italic | `ROBOTO_MEDIUM_ITALIC_BYTES` |
 | weight 600, italic | `ROBOTO_SEMIBOLD_ITALIC_BYTES` |
 | weight 700 (`Weight::Bold`), italic | `ROBOTO_SEMIBOLD_ITALIC_BYTES` |
-| any weight, normal | the face it resolved to before the call (FR-004) |
+| weight 700 (`Weight::Bold`), normal | `ROBOTO_SEMIBOLD_BYTES`, never the host Bold 700 (FR-003, SC-002) |
+| weight 400, 500 or 600, normal | the face it resolved to before the call (FR-004) |
+
+The weight-700 rows are SC-002 itself: upright bold and bold-italic resolve to faces of the same
+`weight()` (600) on every host, with or without a host Roboto Bold. Each row is a `roboto.rs` unit
+test on a database seeded as above. No 700 face ships, so the test makes its host Bold by writing
+`ROBOTO_SEMIBOLD_BYTES` to a temp file with the OS/2 `usWeightClass` field patched to 700 (glyphs
+unchanged; `fontdb` reads the weight from that field), loaded with `load_font_file` before the
+bundled faces, as `mono.rs`'s host-copy test does.
 
 ## C-3 `install_roboto`
 
