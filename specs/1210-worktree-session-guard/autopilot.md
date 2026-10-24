@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 3 | tasks | US4 allowlist placement | Folded into M1 so the live guard cannot block target-shared writes or prefetch worktrees on main | agent | milestones.md rule 6 |
 | 4 | close | tdd-verify finding 1 (no recorded red, T029) | Exempt: milestones were built without a TDD cycle log and a red cannot be reconstructed after squash-merge. Tests are strong (9 of 9 hand mutants caught, 9 of 9 criteria covered) | agent | tdd/verification.md |
 | 5 | close | T033 layout snapshot of 8c027103a | Inspected the diff: root height 1280.0 to 1336.8 (one toggle row) and the rows below it shift down; no row beyond the toggle changes size. Not verified row by row | agent | git show 8c027103a |
+| 6 | close | Review r1 MINORs (T031, T033) | Accepted residual risk: T031 pins the rule strings only (rule_matches stays a model; real matcher covered by the manual spike, research.md R1); T033's snapshot review is partial (Decision 5) and its bound is widened to 1 s. Comment wrap in `mod.rs:384` left, to keep the gated tree unchanged | agent | close review r1 |
 
 ## Review rounds
 
@@ -55,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A (code-review high) | 1 | 86ee425da1e2cbbfebc38cb19d1b072940fe6fb6:c667802d37e322354801010490755f2daaeae0b1 | 4 fixed (cwd fallback, prefetch root, drive-like names, spawn_blocking), rest declined |
 | M5 review A (code-review high) | 1 | 4c3979e16da20f4ce0e899bf668e3d1e29ab731b:85d6478ef7628e280c72a1e30a2d6e868ee0da82 | CLEAN |
 | M1 review B | 1 | cd5bfcf1f255e7ef932ace763cf9b56411e8122e:45a6426ca6d00e7f96b854a111ffe6810469f2fe | CLEAN (1 MINOR: no log-capture test for fail-open warn; behaviour covered by verdict tests) |
+| Close review (diff) | 1 | 2a7fee9637f7f7d5ecea090502471ac2d072f2ab:6c8d8eafb7d9d01166263932931141088fb4abfe | CLEAN (3 MINOR: Decision 6; comment wrap left) |
 
 - tasks r1 (c3782371...:847ac3b5...): analyze fixed D1 (T028), A1, B1, E1, T2; reviewer CLEAN (3 MINOR fixed, prose/labels only).
 
