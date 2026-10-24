@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
 - **Phase**: spec
-- **Next step**: spec review round 1 (rubrics/spec.md) in a fresh reviewer subagent, then clarify
+- **Next step**: spec review round 2 (scoped, sonnet) on the fix diff, then clarify
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec | 1 | cd6df384829f4a9cf135e66858ff627637928a05:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | not run (no Agent tool in the spec unit) |
+| Spec | 1 | cd6df384829f4a9cf135e66858ff627637928a05:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CHANGES: 3 MAJOR, 2 MINOR (run by orchestrator); all fixed |
 
 ## Declined review findings
 
@@ -40,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-spec.md and checklists/requirements.md written and pushed. Not done: the spec review (tasks/spec.md step 3). This unit had no Agent tool, so it could not dispatch a fresh reviewer. Next: run review round 1 on snapshot cd6df384829f4a9cf135e66858ff627637928a05:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 (or a new one), act on it per review-rounds.md, then return DONE for clarify. Open markers for clarify: FR-004, FR-009, FR-012.
+None.
 
 ## Open escalation
 
