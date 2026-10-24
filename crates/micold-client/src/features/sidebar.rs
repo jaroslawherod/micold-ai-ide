@@ -222,12 +222,6 @@ pub enum ListRow {
     Entry(SidebarEntry),
 }
 
-impl From<SidebarEntry> for ListRow {
-    fn from(entry: SidebarEntry) -> Self {
-        ListRow::Entry(entry)
-    }
-}
-
 impl SidebarEntry {
     /// Whether this entry draws `location`'s row: its own, or one of a run group's runs'.
     pub fn holds(&self, location: &SessionLocation) -> bool {
@@ -758,6 +752,23 @@ pub const SIDEBAR_DENSITY: i8 = density::DENSE;
 /// Not a parameter: the gap is a property of the component that draws the rows, not of the caller
 /// that measures them, and passing it in would invite two answers.
 const ROW_GAP: f32 = spacing::XS;
+
+/// The drawn list of `groups` (feature 1125, contract S4): each group's header, then its entries
+/// when it is open.
+pub fn list_rows(groups: Vec<SidebarGroup>) -> Vec<ListRow> {
+    let mut rows = Vec::new();
+    for group in groups {
+        rows.push(ListRow::Header(GroupHeaderRow {
+            group: group.group,
+            count: group.entries.len(),
+            open: group.open,
+        }));
+        if group.open {
+            rows.extend(group.entries.into_iter().map(ListRow::Entry));
+        }
+    }
+    rows
+}
 
 /// The rendered height of every sidebar row, top to bottom (feature 024, research R6).
 ///
@@ -1531,6 +1542,12 @@ impl crate::app::State {
     /// Recorded as the user's choice, so the group stays open after the reveal. Called when an
     /// armed reveal is about to drain, before asking whether its row is drawn.
     pub fn open_group_of_reveal_target(&mut self) {
+        let groups = self.sidebar_groups();
+        let listed = |location: &SessionLocation| {
+            groups
+                .iter()
+                .any(|g| g.entries.iter().any(|e| e.holds(location)))
+        };
         let keyboard = self
             .sidebar
             .keyboard_row
@@ -1543,9 +1560,9 @@ impl crate::app::State {
                     .find(|s| s.id == *id)
                     .map(|s| s.location.clone()),
             })
-            .filter(|location| self.listed_location(location));
+            .filter(|location| listed(location));
         if let Some(target) = keyboard.or_else(|| self.current_session_location()) {
-            self.open_group_of(&target);
+            self.open_group_of(&groups, &target);
         }
     }
 
@@ -1553,24 +1570,19 @@ impl crate::app::State {
     /// research R5), before the reveal's scroll is computed.
     pub fn open_group_of_revealed(&mut self) {
         if let Some(target) = self.sidebar.revealed.clone() {
-            self.open_group_of(&target);
+            let groups = self.sidebar_groups();
+            self.open_group_of(&groups, &target);
         }
     }
 
-    /// Whether some entry of the sidebar, in any group, draws `location`'s row.
-    fn listed_location(&self, location: &SessionLocation) -> bool {
-        self.sidebar_entries().iter().any(|e| e.holds(location))
-    }
-
-    /// Record `true` for the group holding `location` when that group is closed; an open group's
-    /// choice stays unrecorded.
-    fn open_group_of(&mut self, location: &SessionLocation) {
+    /// Record `true` for the group of `groups` holding `location` when that group is closed; an
+    /// open group's choice stays unrecorded.
+    fn open_group_of(&mut self, groups: &[SidebarGroup], location: &SessionLocation) {
         let Some(project) = self.workspace.active.clone() else {
             return;
         };
-        let closed = self
-            .sidebar_groups()
-            .into_iter()
+        let closed = groups
+            .iter()
             .find(|g| g.entries.iter().any(|e| e.holds(location)))
             .filter(|g| !g.open);
         if let Some(group) = closed {
@@ -1645,21 +1657,10 @@ impl crate::app::State {
         .collect()
     }
 
-    /// The sidebar's drawn list (feature 1125, contract S4): each group's header, then its entries
-    /// when it is open.
+    /// The sidebar's drawn list (feature 1125, contract S4): [`list_rows`] of
+    /// [`Self::sidebar_groups`].
     pub fn sidebar_list(&self) -> Vec<ListRow> {
-        let mut rows = Vec::new();
-        for group in self.sidebar_groups() {
-            rows.push(ListRow::Header(GroupHeaderRow {
-                group: group.group,
-                count: group.entries.len(),
-                open: group.open,
-            }));
-            if group.open {
-                rows.extend(group.entries.into_iter().map(ListRow::Entry));
-            }
-        }
-        rows
+        list_rows(self.sidebar_groups())
     }
 
     /// The sidebar's keyboard left the row a navigation chord gave it, or the current session
@@ -2017,24 +2018,15 @@ pub fn group_toggled(state: &mut crate::app::State, group: StateGroup) {
     let Some(project) = state.workspace.active.clone() else {
         return;
     };
-    let open = state
+    // Only a shown group has a header to press.
+    let Some(open) = state
         .sidebar_groups()
         .iter()
         .find(|g| g.group == group)
-        .map_or_else(
-            || {
-                group_open(
-                    state
-                        .sidebar
-                        .group_choices
-                        .get(&project)
-                        .and_then(|c| c.get(&group).copied()),
-                    group,
-                    false,
-                )
-            },
-            |g| g.open,
-        );
+        .map(|g| g.open)
+    else {
+        return;
+    };
     state
         .sidebar
         .group_choices

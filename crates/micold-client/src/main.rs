@@ -608,7 +608,7 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 /// FR-009 says a reveal that did not need to move the list must not move it.
 fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
     // Feature 1125 (FR-006, R5): a target in a closed state group opens it, so its row is drawn.
-    if app.core.sidebar.pending_reveal_scroll {
+    if app.core.sidebar.pending_reveal_scroll && app.core.sidebar.viewport_height != 0 {
         app.core.open_group_of_reveal_target();
     }
     if !app.core.sidebar.pending_reveal_scroll
