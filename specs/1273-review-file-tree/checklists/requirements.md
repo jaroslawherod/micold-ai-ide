@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — 2 open (scenarios 4.2 and 4.3), left for the clarify unit
+- [x] No [NEEDS CLARIFICATION] markers remain — both (scenarios 4.2 and 4.3) resolved in spec *Clarifications*, session 2026-10-24
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -32,4 +32,4 @@
 ## Notes
 
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
-- The two open markers: tree kept or flattened under non-path sorts; how **Unreviewed first** behaves before #1271's reviewed marks exist.
+- The two former markers (tree kept or flattened under non-path sorts; **Unreviewed first** before #1271's marks) are answered in spec *Clarifications*.

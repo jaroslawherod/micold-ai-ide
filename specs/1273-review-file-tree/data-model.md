@@ -80,7 +80,8 @@ Rules (contracts §1):
 - Chaining (`chain: true`): a folder with exactly one sub-folder and no listed file merges with it;
   the label joins the names with `/`; `paths` lists each.
 - Within a level: folders, then files; each group ordered by `TreeSort` (research R3), ties in Path
-  order (byte order of `label`).
+  order: byte order of the row's name — a file's name, a chained folder's first folder name — so
+  `a/b` sorts before `a-x` as the **Files** browser's per-component `BTreeMap` does (spec 4.1).
 - Totals and Size order use the listed (filtered) files.
 
 ## 4. Sort offer
@@ -112,9 +113,13 @@ fn hover_text(path: &str, renamed_from: Option<&str>) -> String   // "path" or "
 | Field | Type | Notes |
 |---|---|---|
 | `tree` | `TreeChoices` | new; default at open; untouched by `list_read`, `SourceChosen`, toggles |
-| `tree_rows` | `Vec<Row>` | cache recomputed by `update` after any message that changes the list, the source, the choices, or the reviewed marks; never in `view` (R9) |
+| `change_rows` | `Vec<Row>` | cache recomputed by `update` after any message that changes the list, the source, the choices, or the reviewed marks; never in `view` (R9) |
 
 New messages: `TreeFolderToggled(Vec<String>)` (the row's `paths`), `TreeFilterChanged(String)`,
 `TreeFilterCleared` (the clear action and the field's `on_escape`, research R5), `TreeSortChosen(TreeSort)`. `FileSelected(path)` also
-calls `tree.reveal(&path)`. `selected`, `list_offset` and the diff are unchanged by any of them: a
+calls `tree.reveal(&path)`, so every route that selects a changed file through it (`OpenFileDiff`,
+and `ReferenceActivated` when it lands on a changed file) reveals it.
+`tree_pane(view) -> TreePane::{Hidden, Rows, NoMatch}` (render-free) decides what the list pane
+draws: `Hidden` unless `ListBody::Files` (no filter box or chips, FR-016), `NoMatch` with a filter
+and no rows (FR-011), else `Rows`. `selected`, `list_offset` and the diff are unchanged by any of them: a
 filtered-out selection keeps its diff (scenario 3.4).

@@ -143,8 +143,9 @@ level for each sort.
 
 **Acceptance Scenarios**:
 
-1. **Given** the view opens, **Then** the sort is **Path**: at each level folders, then files, each in
-   the order the list uses today.
+1. **Given** the view opens, **Then** the sort is **Path**: at each level folders, then files, each by
+   name compared byte by byte (no locale), a chained folder by the name of its first folder, so
+   `a/b` comes before `a-x` as in the **Files** browser.
 2. **Given** sort **Size**, **Then** at each level folders come before files, folders are ordered by the
    total changed lines (added + removed) of the files below them, largest first, files by their own
    added + removed, largest first, and ties keep path order. Every sort keeps the tree: it orders the
@@ -224,7 +225,8 @@ level for each sort.
   other, and its total length MUST grow with the file's added + removed lines relative to the other
   files listed, never exceeding the bar's maximum width; a file with no counted lines (binary, not
   text, Mode only, pure rename) MUST show no bar.
-- **FR-007**: A folder row MUST show the summed `+a −r` of the files below it.
+- **FR-007**: A folder row MUST show the summed `+a −r` of the files listed below it (with a filter,
+  the matching files only).
 - **FR-008**: Selecting a file row MUST open that file's diff and mark the row selected, as the list
   does today; selecting a file by other means MUST open the folders above it.
 - **FR-009**: Above the tree there MUST be a filter box; while it holds text, only files whose path
@@ -296,12 +298,14 @@ level for each sort.
   scenario 4.3; the option stays hidden until then).
 - **Reuses #1150's tree** (`tree_rows`, folder open state) rather than adding a second tree layout;
   the **Files** repository browser keeps its look and behaviour.
-- **Filter matching** is the matcher **Open file by path** already uses, applied to the full path of
+- **Filter matching** is the matcher **Open file by path** already uses (it also accepts a path one
+  typo away or holding the typed characters in order, not only a substring), applied to the full path of
   each changed file.
 - **Collapsed folders, filter and sort are view state**: kept while the view is kept (with #1269 that
   is across tab and session switches), not persisted across an app restart, not shared between
   windows. No daemon or protocol change.
-- **Bar scale** is relative to the largest change in the current list, so bars stay comparable within
+- **Bar scale** is relative to the largest change in the whole current list (not only the files a
+  filter leaves listed, so bars do not change while typing), so bars stay comparable within
   one review; the exact maximum width and colours follow the design tokens and the mockup.
 - **Out of scope**: keyboard navigation of the tree (`j`/`k`, #1274); reviewed marks and progress
   (#1271); stale-awareness dots (#1275); the source dropdown and two-column layout (#1272); the

@@ -69,7 +69,7 @@ section, the layout-snapshot covered states and `docs/user-guide/reviewing-chang
 | IV. Local-First | PASS | Pure in-memory computation; no network, no new storage. |
 | V. Rust + iced | PASS | iced only. Types: `TreeSort` enum; `Openness` makes "default open with a collapsed set" vs "default closed with an open set" explicit; `Offer` makes a hidden or disabled sort option a value, not a flag pair (data-model). |
 | VI. Cross-Platform | PASS | Byte-order comparison of `/`-separated `RelPath` components; the matcher is platform-free; Esc is the iced key event caught by the focused field on every platform (R5). |
-| VII. Documentation | PASS | `docs/user-guide/reviewing-changes.md` *What the list shows* rewritten for the tree, bar, filter and sort in the same PR as the UI (M5); showcase entry for `ChangeBar`. |
+| VII. Documentation | PASS | `docs/user-guide/reviewing-changes.md` *What the list shows* rewritten for the tree, bar, filter and sort in the same PR as the UI it describes (tree and bar in M4, filter and sort in M5); showcase entry for `ChangeBar`. |
 | VIII. Component Foundation | PASS | Reuses `VirtualRows`, `TextField` (`leading_icon`, `trailing_action`, extended with a builder `.on_escape(M)`, R5), `ToggleChip`, `Tooltip`, `Tag`; the bar is a new shared `ChangeBar` with a builder (`ChangeBar::new(parts, roles).into()`), added to the showcase (R7). Tree rows are drawn on `VirtualRows` rather than `TreeView` because `TreeView` is not virtualised (R6). |
 
 Re-checked after Phase 1 design: unchanged, no violations; Complexity Tracking empty.
@@ -89,7 +89,7 @@ Re-checked after Phase 1 design: unchanged, no violations; Complexity Tracking e
 | FR-010 | `TreeChoices::clear_filter`; `Msg::TreeFilterCleared` from the clear action and `TextField::on_escape` (R5) | core unit; client reducer; `TextField` widget-harness test (Escape focused / unfocused); Part B 3 |
 | FR-012 | `tree::sort_options`, `UNREVIEWED_UNTIL_MARKS` (R3); `TreeSort::UnreviewedFirst` ordering with a `reviewed` predicate | core unit (all three sorts, offer list) |
 | FR-013, FR-014 | `TreeChoices` in `OpenView` (not per source); `list_read` and source switch leave it untouched | client reducer (re-read, PR ↔ worktree switch) |
-| FR-015 | rows cached in `OpenView::tree_rows`, drawn by `VirtualRows` | core timing test (SC-003); Part B 5 |
+| FR-015 | rows cached in `OpenView::change_rows`, drawn by `VirtualRows` | core timing test (SC-003); Part B 5 |
 | FR-016 | `list_body` states unchanged; controls hidden unless `ListBody::Files` | client reducer; layout snapshot |
 | FR-017 | `tree::layout` with `Openness::DefaultClosed`, `chain: false` behind `features::changes::tree_rows`; input already sorted by `browse::list_tree` (R1) | existing **Files** tree tests unchanged; core unit (L12, unsorted input) |
 | FR-018 | user guide, covered states `changes-tree*`, Part B | layout snapshot; Part B |
@@ -103,12 +103,12 @@ Re-checked after Phase 1 design: unchanged, no violations; Complexity Tracking e
 |---|---|---|---|
 | M1 | `review::tree` layout: grouping, chaining, `Openness` both modes, Path order, `TreeChoices` toggle/reveal, **Files**-mode parity cases ported from the client tests | — | core only |
 | M2 | Totals, Size and Unreviewed-first sorts, filter + spans + filter-collapse, `retain`, bar maths, indent cap, `sort_options`, hover text, SC-003 timing test | M1 | core only |
-| M3 | Reducer: `OpenView.tree`, row cache, `Msg::TreeFolderToggled` / `TreeFilterChanged` / `TreeFilterCleared` / `TreeSortChosen`, reveal on `FileSelected`, re-read and source-switch retention; **Files** `tree_rows` delegates to core | M2, **#1272 merged** | `features/changes.rs`, client tests |
-| M4 | Drawing: tree rows on `VirtualRows`, `ChangeBar` component + showcase entry, `TextField::on_escape` + harness test, filter `TextField`, sort `ToggleChip` row, no-match sentence | M3 | `ui/changes.rs`, `ui/material/`, showcase |
-| M5 | User guide, layout-snapshot covered states, visual pass (1280×800, light and dark) | M4 | docs, `tests/support/covered_states.rs`, fixture |
+| M3 | Reducer for the tree: `OpenView.tree`, row cache, `Msg::TreeFolderToggled`, reveal on `FileSelected`, re-read and source-switch retention; **Files** `tree_rows` delegates to core; list still drawn flat | M2, **#1272 merged** | `features/changes.rs`, client tests |
+| M4 | Drawing the tree and bar: tree rows on `VirtualRows`, `ChangeBar` component + showcase entry, user guide (tree, bar), layout snapshot re-recorded + `changes-tree-collapsed`, visual pass | M3 | `ui/changes.rs`, `ui/material/`, showcase, docs, covered states |
+| M5 | Filter and sort: `TextField::on_escape` + harness test, `Msg::TreeFilterChanged` / `TreeFilterCleared` / `TreeSortChosen`, filter `TextField`, sort `ToggleChip` row, no-match sentence, user guide (filter, sort), covered states `changes-tree-filter` / `-no-match`, visual pass | M4 | `features/changes.rs`, `ui/changes.rs`, `ui/material/text_field.rs`, docs, covered states |
 
 M1 and M2 can merge while #1272 is open: they add a module and tests and change no existing file
-except `review/mod.rs`. M3 starts from `main` after #1272 merges; if #1272 moved the list pane, M3–M4
+except `review/mod.rs`. M3 starts from `main` after #1272 merges; if #1272 moved the list pane, M3–M5
 follow its structure (spec Assumptions).
 
 ## Project Structure
@@ -130,14 +130,14 @@ crates/micold-core/src/review/
 └── mod.rs         # + pub mod tree
 crates/micold-core/tests/review_tree.rs   # NEW  scenario-level tests (spec 1.x–4.x, SC-001/002/004/005, SC-003 timing)
 crates/micold-client/src/
-├── features/changes.rs   # + OpenView.tree (TreeChoices), tree_rows cache, Msgs, reveal; tree_rows → core
+├── features/changes.rs   # + OpenView.tree (TreeChoices), change_rows cache, tree_pane, Msgs, reveal; Files tree_rows → core
 ├── ui/changes.rs         # list pane: filter box, sort chips, tree rows on VirtualRows, no-match line
 ├── ui/material/change_bar.rs  # NEW shared component (builder)
 ├── ui/material/mod.rs    # + pub use ChangeBar
 ├── ui/material/text_field.rs  # + .on_escape(M) builder method, harness test (R5)
 └── showcase/sections/review.rs  # + ChangeBar samples
 crates/micold-client/tests/features_changes.rs, features_pr_changes.rs  # + reducer tests
-crates/micold-client/tests/support/covered_states.rs  # + changes-tree states (M5)
+crates/micold-client/tests/support/covered_states.rs  # + changes-tree states (M4, M5)
 docs/user-guide/reviewing-changes.md
 ```
 
