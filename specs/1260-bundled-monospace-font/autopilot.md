@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1260
 - **Worktree branch**: claude/project-thread-c0bgc0
 - **Started**: 2026-10-24
-- **Phase**: M3 in progress
-- **Next step**: M3 gate, reviews, push; orchestrator opens the M3 PR and merges; then the close unit. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
+- **Phase**: M3 PR pending
+- **Next step**: orchestrator opens the M3 PR (branch pushed) and merges; then the close unit (T028–T029). FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | App and showcase draw all code (incl. terminal) in bundled Fira Mono; user guide says so | #1323 | done |
 | M2 | T016–T019 | light | Layout tests guard Regular+Bold through the shipped installer; one-copy test | #1329 | done |
-| M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | pending | implemented (T020–T027 ticked); gate and reviews next |
+| M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | pending (branch pushed) | done |
 
 Polish T028–T029 (quickstart §A/§C records, no code) is left to the close unit.
 
@@ -59,6 +59,8 @@ Polish T028–T029 (quickstart §A/§C records, no code) is left to the close un
 | M2 gate | 1 | final tree | green (`split-gate.sh`, ALL_GREEN) |
 | M3 review A (code-review, high) | 1 | 3fe6623490317997fd5d70e5958074345582bb68:c47743b9062f038d9015d2d4032bdc94bb316491 | CLEAN (1 MINOR: the Rust macOS check accepts the `FONT_LICENCES` array without tying it to the copy loop — left, `macos-bundle.test.sh` stages the bundle and checks the copied files). Headless `claude -p` |
 | M3 gate | 1 | c47743b9 | red: `documentation_is_not_read` — the bare `"LICENSE"` literal of the licence set resolves to the root `/LICENSE` (`micold-docs`). `FONT_LICENCES` now holds repo-relative paths (`assets/fonts/LICENSE`, ...); `basename` shared in `support/packaging.rs`. Not an M2/main interaction |
+| M3 review A (re-review of the gate fix, sonnet) | 2 (not counted: red-gate fix) | a4e2a454193e1b96f10223d6484f5bebea8b23d7:a26592e980cd31343ae3b10e980eab4f5b1213f6 | CLEAN, no findings. Headless `claude -p --model sonnet` |
+| M3 gate | 2 | a26592e9 | green (`split-gate.sh`, GATE_EXIT=0) |
 | M3 review B (conformance, sonnet) | 1 | 3fe6623490317997fd5d70e5958074345582bb68:c47743b9062f038d9015d2d4032bdc94bb316491 | CLEAN (1 MINOR: T026 wording placed `iss_file_entries` beside `iss_file_sources` — tasks.md T026 amended, prose only). Headless `claude -p --model sonnet` |
 
 ## Implementation notes
