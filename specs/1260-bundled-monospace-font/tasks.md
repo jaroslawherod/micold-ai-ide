@@ -100,7 +100,7 @@ terminal — draws the bundled Fira Mono on every host, ahead of a host font of 
   beside the Roboto `.font(..)` comment, say why the monospace face is registered this way instead
   (`.font` cannot remove a same-name host face or set the monospace family; research R2)
 - [x] T012 [P] [US1] `client/src/showcase/main.rs`: the same call before its `iced::application(...)`
-- [ ] T013 [US1] **Terminal (plan D4, FR-007 — droppable, see the header).** In-crate tests in
+- [x] T013 [US1] **Terminal (plan D4, FR-007 — droppable, see the header).** In-crate tests in
   `client/src/ui/terminal.rs` `mod tests` (line 1505), using `test_support::renderer()`:
   `cell_font(Flags::empty())` and `cell_font(Flags::BOLD)` resolve in the global database to the
   bundled Regular and Bold faces; `CellMetrics::new(s).width` equals Fira Mono's advance at `s`

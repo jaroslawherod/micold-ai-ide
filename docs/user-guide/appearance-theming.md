@@ -54,15 +54,16 @@ Text is set at named sizes drawn from Material Design 3's type scale — a title
 caption differ in size, weight and line spacing together, so they are told apart by how they look
 rather than by where they sit on screen.
 
-**Code is drawn in Fira Mono.** Code blocks, inline code, diffs and tool output all use the bundled
-Fira Mono, so code and diff columns line up the same on Linux, macOS and Windows,
+**Code is drawn in Fira Mono.** Code blocks, inline code, diffs, tool output and the terminal all
+use the bundled Fira Mono, so code and diff columns line up the same on Linux, macOS and Windows,
 whichever fixed-width fonts are installed. Bold code uses Fira Mono's Bold weight. A copy of Fira
 Mono installed on your machine is not used in its place.
 
 Two exceptions, both deliberate:
 
-- **The terminal keeps its monospaced font** and its own character grid. Column alignment in
-  command output is unaffected.
+- **The terminal keeps its own character grid** and stays outside Roboto and the type scale, so
+  column alignment in command output is unaffected. It no longer uses your machine's monospaced
+  font: its cells are drawn in Fira Mono, like the rest of the code.
 - **Text the bundled fonts cannot draw falls back** to a font that can. A worktree named in
   Japanese, or any text or code using characters outside Roboto's or Fira Mono's coverage, renders
   normally rather than as empty boxes.
