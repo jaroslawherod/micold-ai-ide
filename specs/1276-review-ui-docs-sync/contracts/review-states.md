@@ -25,14 +25,23 @@ contract.
 ## Gates
 
 - Existing, at 1280×800, over all states: fixture match, coverage narrowing (`layout_snapshot.rs`
-  T016), text overflow, containment, `status_bar_fits`, `session_area_fits`.
+  T016), text overflow, containment. `status_bar_fits` and `session_area_fits` run today on their
+  own states only; their checks reach the review states through the new gate below.
 - New `gates/review_tab_fits.rs`, every `review-*` state and `session-area-changes-open`, both
   themes, at `MIN_WINDOW_SIZE` and 1280×800:
   - no text overflow (`support::layout::text_overflows`);
   - no escape outside the declared exemptions (`support::layout::escapes`);
   - `review.bar` bottom ≤ `status_bar` top, and both inside the window;
   - when `review.drawer` is present, `review.diff` has the same width as without it and the drawer
-    is inside the diff's rectangle (overlay, not push).
+    is inside the diff's rectangle (overlay, not push);
+  - the status bar's invariants (28 dp high, flush with the window's bottom edge, full width), by
+    calling the `pub(crate)` check extracted from `status_bar_fits.rs`;
+  - the session area's header and strip checks, by calling `session_area_fits.rs`'s
+    `assert_fits_under` made `pub(crate)`.
+
+  Where each FR-007 gate runs: fixture, coverage narrowing, text overflow and containment at
+  1280×800 over all states, and text overflow and escapes again in `review_tab_fits` at both
+  windows; status bar and session area in `review_tab_fits` at both windows.
 - Deliberate-failure check (US2 Independent Test): +1 px on the review bar's padding fails
   `layout_snapshot` naming `review.bar`.
 

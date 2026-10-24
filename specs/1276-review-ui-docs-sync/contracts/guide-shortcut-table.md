@@ -30,6 +30,15 @@ Checked by `crates/micold-core/tests/review_keys_doc.rs`.
 | `each_primary_chord_names_its_macos_form` | a binding with the primary modifier has a key cell without the macOS suffix, or one without it has a suffix |
 | `the_markers_are_there` | either marker is missing or `end` comes before `start`; message names the marker |
 
+### If the table is thinner
+
+- **No sheet text in the table** (the `?` sheet keeps its wording in the client): the core test
+  compares the `Key` cells only, in order, and a client test in `crates/micold-client/tests/`
+  compares each `Does` cell with the sheet's text for that key, using the same marker helpers.
+- **No primary-modifier flag**: the suffix is derived from the modifier set: a binding whose
+  modifiers include the platform's primary one (iced's `command`, `Ctrl` on Linux / Windows) gets
+  ``(`Cmd+…` on macOS)``; a binding with only `Shift` or no modifier gets none.
+
 The marker and row helpers come from `crates/micold-core/tests/support/marked_table.rs`, shared with
 `terminal_only_doc.rs` (research R3).
 

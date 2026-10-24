@@ -14,7 +14,8 @@ wins).
 | primary modifier | whether `Ctrl` becomes `Cmd` on macOS | guide `(… on macOS)` suffix |
 | sheet text | what the `?` sheet says the key does | guide `Does` cell |
 
-Order is the table's order. Validation: [contracts/guide-shortcut-table.md](contracts/guide-shortcut-table.md).
+Order is the table's order. Validation: [contracts/guide-shortcut-table.md](contracts/guide-shortcut-table.md),
+including what the test does when the table lacks sheet text or a primary-modifier flag.
 
 ## Guide shortcut row
 
@@ -52,9 +53,11 @@ Recorded in `visual-pass/results.md` with date, environment and checks not run (
 A private data directory with: one project; worktree **A** with changes in ≥ 12 files across nested
 directories (one deep path, one long name, one binary), 2 drafts, 2 sent comments of which 1 has a
 reply, 3 files marked reviewed and 1 marked then changed; worktree **B** with its own open Review
-tab and a different file selected; a worktree **C** with no changes; a PR source whose diff cannot
-be read (no `gh` auth in the private environment gives the error naturally); a long PR title. All
-invented: nothing from the author's machine.
+tab and a different file selected; a worktree **C** with no changes; a stub `gh` first on the
+daemon's `PATH` (a `sh` script, on the pattern of `crates/micold-core/tests/github_gh_cli.rs`) that
+lists one pull request for worktree A, with a long title, and exits non-zero on its diff request, so
+the PR source is listed and selecting it shows the "cannot be read" error (check 15). All invented:
+nothing from the author's machine.
 
 ## Mockup board
 

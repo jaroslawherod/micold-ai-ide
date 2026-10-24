@@ -18,11 +18,13 @@ Headings are the target; the merged slices' wording of a control wins over this 
 | Changed since you looked | the notice *n files changed since you looked*; the open diff does not reflow | 001 |
 | Keyboard | the marker table ([guide-shortcut-table.md](guide-shortcut-table.md)); `?` opens the sheet; jump-to field finds files and comments | 001, 004 |
 | Two worktrees, two windows | each tab keeps its own state; windows on one worktree share marks and drafts, also during a send | 001 |
-| The review message, Statuses and replies, Pull requests (reading a PR's diff), The base line, The Default entry | unchanged text and heading ids | — |
+| Pull requests | rewritten for the source control's **Pull requests** entry: the worktree's pull requests in it (state and check marks, `#number`, title), picking one shows its diff, the setting that hides them; today's text (a **Pull requests** section that precedes the file list) goes. The heading stays, so `#pull-requests` keeps resolving | 001, 002, 014 |
+| The review message, Statuses and replies, The base line, The Default entry | unchanged text and heading ids | — |
 
 ### Must not say (FR-002)
 
-Three columns; a left-column **Pull requests** section; **Committed** / **Uncommitted** / **Files**
+Three columns; a left-column **Pull requests** section, or a list "preceded by a **Pull requests**
+section"; the *Changes view* as the name of the review surface; **Committed** / **Uncommitted** / **Files**
 toggles in the list; a right-hand review panel (*The review panel* heading goes); a **Close**
 button; the view replacing the terminal or closing when a session is picked; re-reading the open
 diff within 2 s. quickstart §A2 greps for each.
@@ -40,6 +42,8 @@ resolves. FR-003, FR-014.
 
 ## Inbound links (FR-014)
 
-`settings.md:660` and `worktrees-and-sessions.md:240` → `#pull-requests`;
+`settings.md:660` and `worktrees-and-sessions.md:240` → `#pull-requests`, with their link text
+reworded: today both say the *Changes view* lists the pull requests ("above the file list of its
+Changes view"); they become the Review tab's source control and its **Pull requests** entry;
 `agent-tools.md:300` → `#sending-a-review`; `agent-tools.md:311` → `#statuses-and-replies`. Each
 keeps resolving or is re-pointed; `site/checks/links.sh --sources` passes.
