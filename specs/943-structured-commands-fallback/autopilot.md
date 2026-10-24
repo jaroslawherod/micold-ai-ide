@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M8 implemented (T055–T059) and committed at 255c6a31 on origin/main e65993bc; review A 1 round (7 findings, 6 fixed, 1 fixed-with-reason), review B 1 counted round (3 findings: T060 open, cycle log, guide check — the last two closed); full gate run on 73e55cbf: every suite green except the known `attention_error_notice` flake (`without_focus_the_first_reporting_window_gets_the_notice`, passed alone on rerun: 12 passed), so no green gate is recorded for this tree; **T060 open** (the live-session visual pass)
-- **Next step**: a fresh unit runs quickstart Part B 1, 2, 4 and 5 against a real structured session (the palette's component evidence is already in `visual-pass/`), ticks T060, re-runs the full gate, pushes and writes the PR files
+- **Phase**: M8 done (T055–T060): T055–T059 at 255c6a31, T060's live visual pass and its fix (the open model picker keeps the keyboard) at f3eb98e6, on origin/main e65993bc; full gate on the final tree pending in this unit (see *Review rounds*)
+- **Next step**: the orchestrator opens the M8 PR from `$SCRATCHPAD/943-M8/pr-title.txt` and `pr-body.md`, waits on CI and merges; then M9 (T061–T065)
 
 ## Pull requests
 
@@ -36,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T039–T042 | full | Daemon: resume the post-`/clear` conversation (decision 2: A, confirmed) | #1252 | merged |
 | M6 | T043–T049 | full | Daemon: switch kind. **Needs #941 M2** (met) | #1257 | merged |
 | M7 | T050–T054 | full | Client render-free palette, picker, switch offer. **Needs #941 M4** (met) | #1265 | merged |
-| M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** (met, e65993bc) | | T055–T059 done at 255c6a31; T060 open |
+| M8 | T055–T060 | full | Window palette, picker, markers, guide. **Needs #941 M6** (met, e65993bc) | | T055–T060 done (f3eb98e6); PR to open |
 | M9 | T061–T065 | full | Window switching, offers, terminal-only table. **Needs #942 M7 (PromptCard) / M8 (SC-007)** | | pending |
 
 ## Decisions
@@ -95,6 +95,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M7 run 2 | — | 0e7b9b19 | green (split-gate.sh, ALL_GREEN) |
 | Full gate M7 run 3 | — | 972fd90d | green (split-gate.sh, ALL_GREEN) after rebase onto origin/main b7f1b704 (#942 M6; conflicts in `app.rs` and `daemon_sync.rs` PendingOp arms resolved keeping both; no wire change in M7) |
 | Full gate M7 run 4 | — | 32b8657f | green (split-gate.sh) after rebase onto origin/main 79db5768 (#944 M6; no conflicts) |
+| T060 visual pass (live claude 2.1.310, Xvfb + tiny-skia) | — | a2a7cd87 | PASS B1, B2, B4 (restart-memory check not run), B5 except the picker's typed name: FAIL, its field took no keys (`KeyboardElsewhere`, `terminal_focused()` true once the composer blurred) — fixed at f3eb98e6 and re-checked live in dark (typed name → *Model 'no-such-model' not found*). Evidence and findings: `visual-pass/m8-record.md` (31 crops, both themes) |
+| Review of the T060 fix (fresh context, sonnet, claude -p) | 1 | f3eb98e6 | CLEAN of BLOCKER/MAJOR; 5 MINOR: keep the derived term (agreed); a `model_picker_open()` helper (declined, one use); a picker left open across a session switch holds neither terminal nor field focus until a click (pre-existing, follow-up); another-session test case and a `terminal_focus.rs` case (declined: `composer_fits` covers the term and its release); the focus contract does not enumerate later terms (nothing to add) |
 
 ## Declined review findings
 
@@ -117,36 +119,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-**M8, after T059.** Done: T055–T059, committed as `255c6a31` on `origin/main` e65993bc (branch
-reset to origin/main and not yet pushed). The shared `CommandPalette` (`client/src/ui/material/
-command_palette.rs`, showcase entry, `gates/command_palette_fits.rs`), the palette in the
-composer's completion slot and the model control/`Typeahead` picker in its status row
-(`ui/composer.rs`, `shell/composer.rs`), the transcript's `DisclosureCard` markers and the
-"Before the clear" era tag (`ui/transcript/entries.rs`, `mod.rs`), and the user guide's *Commands
-and the model*. Reviews: A 1 round (7 findings — the `lazy` era key, the picker's typed row, the
-keyboard back to the composer, `row_match`'s tiers, the showcase's words, one row builder, all
-fixed; the chip card's body kept, it shows the untruncated description); B 1 counted round (its
-cycle-log and guide-check findings closed; `check-user-guide-updated.sh origin/main HEAD` → `user
-guide: ok — 6 user-facing path(s), documented in 1 user-guide page(s)`). Scoped gate green. The full
-gate on 73e55cbf failed only on the ledger's known `attention_error_notice` flake (468 suites
-reported `ok`; the test passed alone on rerun), so the push hook still wants a green full gate.
-
-Next step: **T060**, quickstart Part B 1, 2, 4 and 5 against a real structured session in both
-themes (a logged-in `claude`, a scratch project, the client and daemon from one build — the
-`visual-pass` skill's recipe, and in this cloud container `apt-get install -y libxkbcommon-x11-0
-xdotool`, `ICED_BACKEND=tiny-skia` on Xvfb, ~12 s after a click before judging a frame). The
-palette's own component evidence is already committed: `visual-pass/m8-command-palette-light.png`
-and `-dark.png` (both themes, the grouped list with the emphasised match, the "opens in terminal"
-words, the fallback note and the no-match line). Then tick T060, re-run the full gate, push
-`--force-with-lease`, and write `$SCRATCHPAD/943-M8/pr-title.txt` / `pr-body.md` (title: `#943:
-Structured session: slash commands, model switching and PTY fallback — M8 of 9: … (#943)`, body
-ending `Refs #943`); the orchestrator opens the PR. No protocol change in M8.
+**M8 done.** T055–T059 at `255c6a31`, T060 at `f3eb98e6` (branch `claude/project-thread-k392yq` on
+`origin/main` e65993bc). T060 ran quickstart Part B 1, 2, 4 and 5 against a live structured
+`claude` session on Xvfb in both themes (`visual-pass/m8-record.md`, 31 crops); its one failure —
+the model picker's typed-name field took no keys — is fixed (`State::terminal_focused` yields while
+the displayed session's picker is open; red/green in the cycle log) and was re-checked live. The
+PR title and body are in `$SCRATCHPAD/943-M8/`; the orchestrator opens the PR. No protocol change
+in M8. Next: M9 (T061–T065) after the M8 merge.
 
 ## Open escalation
 
 None.
 
 ## Follow-ups not done
+
+- M8 T060: before a structured session's first turn its skills are grouped as **Custom commands** (the CLI sends `init` with `skills` only after the first message; `CommandList::from_history`).
+- M8 T060: after `/compact` a second **Command output** card repeats the earlier `/context` output; a model pick during a turn leaves a "Set model to …" **Command output** card beside the marker; the collapsed **Command output** preview shows markdown's `##`.
+- M8 T060: newer CLI `system` events (hook started/response, `post_turn_summary`, `active_goal`, `autocompact_state`, `rate_limit_event`) draw as *Raw event* rows (938/940's mapping).
+- M8 T060 fix review: a model picker left open across a switch of the displayed session holds neither the terminal's nor the field's keys until a click; close the picker on a session switch.
 
 - `micold-daemon --test attention_error_notice` `without_focus_the_first_reporting_window_gets_the_notice` is flaky (1 in 5 in isolation, M3 gate run 3); not this feature's, not touched by its diff.
 - Overlapping model picks (Review A M4 F2/F3, Review B M4 F1, all MINOR): a stale idle-pick note can take the deferred slot; a flushed-but-unanswered deferred pick's `previous` is inherited by the next busy pick; an idle pick does not clear a still-unflushed deferred one. Correlate the deferred slot with its `set_model` request id when M5/M6 touches `pick_model`.
