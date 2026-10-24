@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 
 #[path = "conn.rs"]
-mod conn;
+pub(crate) mod conn;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

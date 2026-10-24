@@ -1,8 +1,7 @@
 //! The daemon's `sessions` integration tests, linked as one test binary (#1175): one module per former test file.
 #[path = "../support/attention.rs"]
 mod attention;
-#[path = "../support/conn.rs"]
-mod conn;
+use attention::conn; // attention.rs loads support/conn.rs once
 
 mod activity_ended;
 mod agent_runs;
