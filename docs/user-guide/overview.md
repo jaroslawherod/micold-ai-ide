@@ -268,7 +268,7 @@ pull request reading updates the Overview as it happens. Nothing needs refreshin
 
 ## When the connection is lost
 
-If the connection to the session service drops, the status bar at the bottom shows a red dot and
+If the connection to the session service drops, the [status bar](./appearance-theming.md#status-bar) at the bottom shows a red dot and
 "Daemon disconnected · reconnecting…"; no banner appears, because there is nothing for you to do — the
 app reconnects on its own. The cards keep
 showing the last session states they knew, which may be out of date, and they make no claim about

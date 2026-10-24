@@ -14,7 +14,8 @@ The window is organised as a Material Design layout:
 - The **main area** shows either the active project or, when nothing is open, a welcoming
   empty state inviting you to open a folder.
 - A thin **status bar** along the bottom edge says whether the window is connected and whether the
-  sandbox is ready — see [Status bar](#status-bar).
+  sandbox is ready, with the session's CLI, plan usage and key hints when they apply — see
+  [Status bar](#status-bar).
 - Content sits on distinct **surfaces** (cards) with consistent spacing and rounded corners.
 - Buttons follow Material emphasis levels: a **filled** button for the single primary
   action, **outlined** and **text** buttons for secondary and low-emphasis actions. Buttons
@@ -26,8 +27,9 @@ The window is organised as a Material Design layout:
 A 28 px bar runs along the bottom of the window in every view: a session (one pane or split), the
 project page, the Overview (full screen too), Changes, Compare, Settings and the empty start screen.
 Menus, dialogs, the quick switcher and notifications open over it, and it never takes the keyboard
-from the terminal. Its items only inform: clicking one does nothing, and hovering shows a tooltip
-with the full detail.
+from the terminal. It is where you see the connection state, the sandbox, the session's CLI, plan
+usage and key hints. Its items only inform: clicking one does nothing, and hovering shows a tooltip with the
+full detail.
 
 - **Connection** — a coloured dot and where the session service runs: a green dot and
   "Daemon connected · local" (or the remote daemon's name); an amber dot with

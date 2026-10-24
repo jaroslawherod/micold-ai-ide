@@ -1192,7 +1192,7 @@ the background service keeps the events it reports. It is Claude Code only.
     first reply it says **No data yet**; when Claude Code did not report the model's window it shows
     the tokens only, with no bar. It follows each reply, and drops after a compaction;
   - at the compaction threshold (or at 90% of the window when no threshold is reported) the meter
-    turns to its warning look: the bar in the error colour, a warning icon and the words **Near
+    turns to its warning look: the meter's bar in the error colour, a warning icon and the words **Near
     compaction**, so it reads as a warning in greyscale too;
   - the **session totals**: the cost of the session so far and how many turns that covers, as
     `$0.1400 est. · 3 turns`. Hover it for each token figure (input, output, cached read and
@@ -1225,7 +1225,7 @@ the background service keeps the events it reports. It is Claude Code only.
   **Stopped** or **Ended without a report** (Claude Code stopped or restarted while it ran), with
   the outcome Claude Code reported. The tool card that started a task shows the task's state in its
   header too. A session without background tasks shows neither the list nor the count.
-- **Plan usage.** A structured session also keeps the status bar's
+- **Plan usage.** A structured session also keeps the [status bar](./appearance-theming.md#status-bar)'s
   [Claude plan usage](#claude-plan-usage) indicator up to date, with no terminal session open.
 - **It follows the end.** While you are at the end of the transcript, it stays there as a reply
   streams in. Scroll up and it stops following, so what you are reading does not move, and a
@@ -1491,7 +1491,7 @@ Each session row carries a short text label naming its CLI — `claude`, `copilo
 a colour or an icon alone, so it reads the same way for everyone and survives a narrow sidebar: if
 the row runs out of room the *title* is what shortens, never the CLI label.
 
-Open a session and the tab strip above its terminal names the CLI too — its session tab reads
+Open a session and the [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal) above its terminal names the CLI too — its session tab reads
 `claude · main`, `copilot · …`, `pi · …`, `codex · …` or `opencode · …` — so you can tell what you
 are talking to without going back to the sidebar. It is there whichever pane the session is showing.
 
@@ -1580,10 +1580,10 @@ guess; if you do run the same conversation in two places at once, both write to 
     the session.
 - **Restart fails the same way until that is fixed.** So the pane does not suggest *restart* for
   this failure, as it does after a crash loop. Once you have fixed the cause, or the service runs
-  from an image that has the CLI, press **restart** in the bar. The service has to restart before a
+  from an image that has the CLI, press **restart** beside the status in the [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal). The service has to restart before a
   newly chosen image is used, as described under [Container daemons](./settings.md#container-daemons).
 - The banner appears once per failure. Pressing **restart** again with nothing changed fails again
-  without a second banner, and the bar's `failed` is what remains.
+  without a second banner, and the tab strip's status `failed` is what remains.
 
 ### Reopening where you left off
 
@@ -1600,7 +1600,7 @@ ready to type in, with no clicks.
   its own last session waits until you switch to it.
 - If the resume cannot happen — the project is open in another window, or its folder is unavailable
   — the terminal says what is actually true of the session rather than looking as though it were
-  starting, and the `restart` control in the bar is there when you want it.
+  starting, and the **restart** control in the [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal) is there when you want it.
 - Each project remembers its own, so switching projects takes you to that project's last session.
 - If the session you were on has been **closed**, or its record has gone, the app opens the project
   as it otherwise would and leaves everything else alone. Closing a session does not wipe the
@@ -1694,9 +1694,9 @@ You keep control of the panel:
   conversation — the app asks the CLI to resume the session id it owns, so you come back to the
   same conversation rather than a fresh one. Repeated rapid failures stop the auto-restart and mark
   the session **failed** so you can retry manually. The pane then says why it gave up and what the
-  last exit was — *"Gave up after 3 restart attempts — last exit: exit status 1."* — beside the
-  **restart** control that resumes it, and the status in the tab strip above reads `failed after 3
-  attempts`.
+  last exit was — *"Gave up after 3 restart attempts — last exit: exit status 1."* — and the
+  status in the [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal) above reads `failed after 3 attempts`, beside
+  the **restart** control that resumes it.
   A window you open afterwards is shown both, so a loop that ran while you were away is not reduced
   to the word *failed*.
 - **Closing** the active project (or quitting the app) stops that project's session processes but
@@ -1745,7 +1745,7 @@ sessions started afterwards; running sessions keep the guard they started with.
 Each session's terminal can also run a plain shell instead of the AI CLI — useful for running git
 commands, scripts, or anything else scoped to that session's worktree without leaving the app.
 
-- The **tab strip** above the terminal is how you move between the AI CLI (`claude`, `copilot`,
+- The [**tab strip**](./terminal-panes.md#the-tab-strip-above-the-terminal) above the terminal is how you move between the AI CLI (`claude`, `copilot`,
   `pi`, `codex` or `opencode`) and a plain shell: press the session's own tab to talk to the CLI,
   press a numbered tab to get a shell. The marked tab is the one the pane is showing, so the strip is the
   single place to check which process your keystrokes are going to — it names where each press
@@ -1775,12 +1775,12 @@ commands, scripts, or anything else scoped to that session's worktree without le
 A session isn't limited to a single Regular Terminal — you can open as many independent shell
 instances as you need, side by side.
 
-- An **open a new instance** button — the "+" — sits in the tab strip right after the session's
-  numbered tabs. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on macOS while the terminal has focus)
+- An **open a new instance** button — the "+" — sits in the [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal) right after the session's
+  numbered tabs, or after its own tab while it has none. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on macOS while the terminal has focus)
   to start another independent shell, scoped to the same session working directory as the first.
-  The button is there even when only one instance is open, so you can always go from one to two.
-- The keyboard shortcut only opens a new instance while the session is already showing a Regular
-  Terminal — pressing it while the AI tab is marked does nothing and does not change tabs.
+  The button is there even when no instance is open yet, so you can always add one.
+- The keyboard shortcut works from the AI tab too: it opens a new instance and marks its tab, so a
+  session with no instance yet gets its first one.
 - Each instance is a fully separate shell process: running a long command in one never affects
   the others, and closing or restarting one instance never touches its siblings or your AI
   conversation.
@@ -1795,18 +1795,18 @@ instances as you need, side by side.
 
 ### The tab strip
 
-The row above the terminal carries a **tab strip** of everything the session can show you: the
-session's own tab, which is its AI conversation, then one numbered tab per open Regular Terminal
-instance, in the order you opened them, then the "+". The worktree's other sessions have a tab each
-after it (see [the tab strip above the terminal](./terminal-panes.md#the-tab-strip-above-the-terminal)).
+In the [tab strip above the terminal](./terminal-panes.md#the-tab-strip-above-the-terminal) a session's group starts with its own
+tab, which is its AI conversation, then one numbered tab per open Regular Terminal instance in the
+order you opened them, then the "+". The worktree's other sessions have a tab each, the main
+session first, then its helpers. How the group's tabs behave is below.
 
 **Exactly one tab is always marked**, and it is the one whose content the pane is displaying — so
 the strip tells you where you are without your having to press anything. Click a tab to bring that
 pane to the front; whatever you switch away from keeps running untouched in the background.
 
 The strip is **always there**, even in a session with one Regular Terminal or none at all. A
-brand-new session shows a single tab — the AI conversation's — marked, because that is what you are
-looking at.
+brand-new session shows its own tab — the AI conversation's — marked, because that is what you are
+looking at, with the "+" after it.
 
 #### The AI conversation's tab
 
@@ -2049,7 +2049,7 @@ Nothing appears until a Claude session started by the app has had a response.
 
 Sessions on other AI CLIs, and Claude sessions you started outside the app, are not changed.
 
-Once a Claude session has had a response, the status bar shows the usage after the CLI item at
+Once a Claude session has had a response, the [status bar](./appearance-theming.md#status-bar) shows the usage after the CLI item at
 its left-hand end: the highest percentage among your plan's limits and when that limit
 resets, for example **42% · 15:30**. The reset is in your local time, with the day added when it is
 more than a day away. Hover the indicator to see every limit with its percentage and reset time,

@@ -41,7 +41,7 @@ works from the fresh pattern run of its phase's first task.
 
 **Purpose**: the stage-1 hit list, fresh from main.
 
-- [ ] T001 Run the five stage-1 patterns of [doc-edits §Patterns](contracts/doc-edits.md#patterns)
+- [x] T001 Run the five stage-1 patterns of [doc-edits §Patterns](contracts/doc-edits.md#patterns)
   (`grep -E -i -n`) over `docs/user-guide/*.md site/media.toml` on the branch rebased on main;
   match each hit to E1–E12 of [doc-edits §Stage 1](contracts/doc-edits.md#stage-1--inventory-at-plan-time-m1)
   and list any hit not in the inventory, with its kind (stale, ambiguous bar, unlinked, checked,
@@ -55,7 +55,7 @@ works from the fresh pattern run of its phase's first task.
 **Purpose**: the link targets every stage-1 edit points at exist and answer SC-007's stage-1
 questions.
 
-- [ ] T002 Confirm the owning sections of [research R2](research.md#r2--owning-sections) exist with
+- [x] T002 Confirm the owning sections of [research R2](research.md#r2--owning-sections) exist with
   these anchors: `docs/user-guide/appearance-theming.md#status-bar`,
   `docs/user-guide/terminal-panes.md#the-header-above-the-terminal`,
   `docs/user-guide/terminal-panes.md#the-tab-strip-above-the-terminal`,
@@ -76,32 +76,32 @@ under the terminal or an unnamed "bar".
 mention, or historical; no hit for the bar under the terminal; every "bar" in the four pages names
 which bar. A1 passes.
 
-- [ ] T003 [US1] E1 in `docs/user-guide/worktrees-and-sessions.md` (~1195): "the bar in the error
+- [x] T003 [US1] E1 in `docs/user-guide/worktrees-and-sessions.md` (~1195): "the bar in the error
   colour" → "the meter's bar in the error colour" (FR-003)
-- [ ] T004 [US1] E3–E5 in `docs/user-guide/worktrees-and-sessions.md` (~1583, ~1586, ~1603): the
+- [x] T004 [US1] E3–E5 in `docs/user-guide/worktrees-and-sessions.md` (~1583, ~1586, ~1603): the
   restart control and the `failed` status are placed in the tab strip, the first of them linking to
   `./terminal-panes.md#the-tab-strip-above-the-terminal`, per the *Change* column of E3–E5
   (FR-002, FR-003)
-- [ ] T005 [US1] E6 in `docs/user-guide/worktrees-and-sessions.md` `### The tab strip` (~1796–1801):
+- [x] T005 [US1] E6 in `docs/user-guide/worktrees-and-sessions.md` `### The tab strip` (~1796–1801):
   the opening paragraph's list of the strip's members becomes one sentence linking to
   `./terminal-panes.md#the-tab-strip-above-the-terminal`; the instance rules (exactly one marked
   tab, the AI tab's rules, right-click) stay; the heading, and so `#the-tab-strip`, stays (FR-004)
-- [ ] T006 [US1] E7 in `docs/user-guide/worktrees-and-sessions.md` (~1494, ~1698, ~1748, ~1778,
+- [x] T006 [US1] E7 in `docs/user-guide/worktrees-and-sessions.md` (~1494, ~1698, ~1748, ~1778,
   ~1788): the first tab-strip mention in each section links to the owning section; wording
   otherwise unchanged (FR-004)
-- [ ] T007 [US1] E2 and E8 in `docs/user-guide/worktrees-and-sessions.md` (~1228, ~2052): the
+- [x] T007 [US1] E2 and E8 in `docs/user-guide/worktrees-and-sessions.md` (~1228, ~2052): the
   status-bar mentions link to `./appearance-theming.md#status-bar` (FR-004)
-- [ ] T008 [P] [US1] E9 in `docs/user-guide/overview.md` (~263): "the status bar at the bottom"
+- [x] T008 [P] [US1] E9 in `docs/user-guide/overview.md` (~263): "the status bar at the bottom"
   links to `./appearance-theming.md#status-bar` (FR-004)
-- [ ] T009 [P] [US1] E10 in `docs/user-guide/settings.md` (~292) and
+- [x] T009 [P] [US1] E10 in `docs/user-guide/settings.md` (~292) and
   `docs/user-guide/sandboxed-daemon.md` (~504): the status-bar mention links to
   `./appearance-theming.md#status-bar` if it does not already; the sentence is otherwise unchanged
   (FR-011)
-- [ ] T010 [US1] E11, E12 and T001's extra hits: confirm E11 (`worktrees-and-sessions.md` ~1561,
+- [x] T010 [US1] E11, E12 and T001's extra hits: confirm E11 (`worktrees-and-sessions.md` ~1561,
   error banner) and E12 (stored-sessions banner, ~409–416) stay unchanged (US1 scenario 2, spec
   Terms); fix each extra stage-1 hit from T001 by FR-001–FR-004 (outside the four pages, FR-011:
   that sentence only), leaving stage-2 hits for T012
-- [ ] T011 [US1] Verify stage 1: re-run the stage-1 patterns (quickstart A2) and confirm every hit
+- [x] T011 [US1] Verify stage 1: re-run the stage-1 patterns (quickstart A2) and confirm every hit
   is an owning section, a linked mention, historical or stage 2; every chord in a touched sentence
   has its macOS form (FR-018); `site/checks/links.sh --sources` passes, or record that lychee is
   missing and CI runs it (A1); `git diff --stat origin/main -- 'crates/*/src'` is empty (FR-020)

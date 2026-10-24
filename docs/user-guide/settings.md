@@ -289,7 +289,7 @@ nothing, whatever the system would allow. Where each system keeps its setting is
 ### Claude plan usage
 
 **Show Claude plan usage** shows how much of your Claude plan's usage limits you have used, and
-when the next limit resets, in the status bar along the bottom of the window (see
+when the next limit resets, in the [status bar](./appearance-theming.md#status-bar) along the bottom of the window (see
 [Claude plan usage](worktrees-and-sessions.md#claude-plan-usage)). It is **on** by default,
 because it reads no credential and sends nothing off your machine. The values come from Claude
 Code's own status-line data in the Claude sessions the app runs, and from the plan-limit events
@@ -468,9 +468,11 @@ that line — for example **Exited with an error in `<folder>`** — with what t
   underneath, to help you see what went wrong.
 - **Timed out** — sourcing didn't finish within the configured timeout and was abandoned.
 
-To recover once you've fixed the script: use the existing **restart** control on the affected
-session's terminal (shown whenever that session's process isn't running). Both restart controls
-work this way — the AI CLI's and a Regular Terminal's: the session service re-sources the script
+To recover once you've fixed the script: once the affected process has stopped (type `exit` in a
+shell; stop the session for the AI CLI), show its tab
+in the session's [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal) and press **restart** beside its status,
+or right-click the tab and choose **Restart**. Restarting either process — the AI CLI or a Regular
+Terminal — works this way: the session service re-sources the script
 fresh for that session's directory before the process starts again, without needing to restart the
 whole app. The AI CLI's restart also clears the failure note. Saving Settings (even without
 changing any value) also triggers a fresh re-source. Selecting a session, reconnecting, or a

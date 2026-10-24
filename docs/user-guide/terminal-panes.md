@@ -21,8 +21,9 @@ ends in `…`; point at it to read it in full.
 
 ## The tab strip above the terminal
 
-Under the header, one row of tabs switches what the terminal shows. Nothing is drawn under the
-terminal.
+Under the header, one row of tabs switches what the terminal shows. Press a numbered tab to switch
+to a shell, or `Ctrl+Shift+T` (`Cmd+Shift+T` on macOS) while the terminal has focus to open a new one; press the session's tab
+to go back to the AI CLI. Nothing is drawn under the terminal.
 
 - **Session tabs**: one per session of the shown worktree, the main session first, then its
   helpers, each named `<command> · <session name>`, such as `claude · main`. Point at one for its
@@ -31,8 +32,8 @@ terminal.
   session, as its sidebar row does.
 - **Shell tabs**: the shown session's shell instances, numbered, right after its tab, with a close
   control each. Press one to show that shell.
-- **"+"**: opens another shell instance of the shown session (`Ctrl+Shift+T`, `Cmd+Shift+T` on
-  macOS).
+- **"+"**: opens another shell instance of the shown session (`Ctrl+Shift+T`, or `Cmd+Shift+T` on
+  macOS, while the terminal has focus).
 - **Status and restart**: the shown session's status (*running*, *starting…*, *idle*, *exited*,
   *failed after 3 attempts* and so on) sits after the tabs. While the shown process has stopped,
   its tab wears the stopped mark and a **restart** control appears beside the status; press it to
@@ -50,7 +51,7 @@ it takes the accent colour when the marked tab is the one out of view.
 ## Split and pick a terminal
 
 Every pane has a header with two buttons: **split side by side** and **split stacked**. The same
-two buttons sit at the right end of the tab strip and act on the focused pane. The header and the
+two buttons sit at the right end of the [tab strip](#the-tab-strip-above-the-terminal) and act on the focused pane. The header and the
 strip are drawn once above all the panes. A new pane opens on a
 terminal no other pane shows. When every terminal is already shown, the pane is empty and lists the
 terminals you can put in it: one choice fills it.
@@ -89,8 +90,10 @@ program. The Overview, quick-switcher and location chords work whether or not a 
 | Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |
 
 A new pane takes focus. Moving focus towards an edge with no pane there leaves it where it is. A
-split that is refused (6 panes, or a pane too small) shows its reason next to the panes. The
-existing Ctrl+Shift+E (release focus), T (new terminal), C and V (copy, paste) are unchanged.
+split that is refused (6 panes, or a pane too small) shows its reason next to the panes. While a
+terminal has focus, Ctrl+Shift+E releases focus, Ctrl+Shift+T opens a shell instance, and
+Ctrl+Shift+C and Ctrl+Shift+V copy and paste; on macOS they are Cmd+Shift+E, Cmd+Shift+T, Cmd+C and
+Cmd+V.
 
 ## Resize, close and swap
 
@@ -100,7 +103,7 @@ The terminals are told their new size when you let go.
 
 **Close.** The × in a pane's header closes that pane, and so does Ctrl/Cmd+Shift+W for the focused
 one. The pane next to it takes the freed space and focus moves to it. Closing only removes the
-pane: the terminal it showed keeps running and stays in the tab strip and the sidebar, and you can
+pane: the terminal it showed keeps running and stays in the [tab strip](#the-tab-strip-above-the-terminal) and the sidebar, and you can
 put it in a pane again. The last pane cannot be closed; a message next to the panes says so.
 
 **Swap.** Drag a pane's header onto another pane. The two panes swap their terminals, and the
