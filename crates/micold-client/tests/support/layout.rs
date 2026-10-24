@@ -1233,6 +1233,99 @@ pub fn clicks_at<'a, M: 'a>(
     published
 }
 
+/// One thing a person does, for [`runtime_messages`]: a click or a key, which the floated layers
+/// see first.
+#[derive(Debug, Clone, Copy)]
+pub enum Gesture {
+    /// A left click (move, press, release) with the pointer here.
+    Click(iced::Point),
+    /// A press of this named key, the pointer where the last click left it.
+    Key(iced::keyboard::key::Named),
+}
+
+/// The messages each of `gestures` published, in order, with `view` driven through the runtime's
+/// own `UserInterface`: the floated layers (an open list, a tooltip) see an event before the window
+/// under them, and a layer that captured it keeps it from the window (feature 1272, T016).
+///
+/// [`messages_after`], [`clicks_at`] and [`messages_from_open_list`] each reach one layer; a
+/// control whose list is open while its trigger still answers needs both, in the runtime's order.
+/// `view` is called again for every event, as the runtime rebuilds the view after each update, and
+/// the tree's state is carried over in the interface's cache. Entrances are settled before the
+/// first gesture and after each, and what settling publishes is not returned.
+pub fn runtime_messages<'a, M: 'a>(
+    view: impl Fn() -> Element<'a, M>,
+    window: Size,
+    gestures: &[Gesture],
+) -> Vec<Vec<M>> {
+    use iced::advanced::{clipboard, mouse};
+    use iced_runtime::user_interface::{Cache, UserInterface};
+
+    let mut renderer = renderer();
+    let mut cache = Cache::default();
+    let mut step = |event: &iced::Event, cursor: mouse::Cursor| -> Vec<M> {
+        let mut ui =
+            UserInterface::build(view(), window, std::mem::take(&mut cache), &mut renderer);
+        let mut published = Vec::new();
+        let _ = ui.update(
+            std::slice::from_ref(event),
+            cursor,
+            &mut renderer,
+            &mut clipboard::Null,
+            &mut published,
+        );
+        cache = ui.into_cache();
+        published
+    };
+    let origin = std::time::Instant::now();
+    let mut frame = 0u32;
+    let mut settle = |step: &mut dyn FnMut(&iced::Event, mouse::Cursor) -> Vec<M>, cursor| {
+        for _ in 0..SETTLE_FRAMES {
+            frame += 1;
+            let at = origin + FRAME * frame;
+            step(
+                &iced::Event::Window(iced::window::Event::RedrawRequested(at)),
+                cursor,
+            );
+        }
+    };
+
+    let mut cursor = mouse::Cursor::Unavailable;
+    settle(&mut step, cursor);
+    let mut out = Vec::with_capacity(gestures.len());
+    for gesture in gestures {
+        let events: Vec<iced::Event> = match *gesture {
+            Gesture::Click(at) => {
+                cursor = mouse::Cursor::Available(at);
+                vec![
+                    iced::Event::Mouse(mouse::Event::CursorMoved { position: at }),
+                    iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                    iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                ]
+            }
+            Gesture::Key(named) => vec![iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(named),
+                modified_key: iced::keyboard::Key::Named(named),
+                physical_key: iced::keyboard::key::Physical::Unidentified(
+                    iced::keyboard::key::NativeCode::Unidentified,
+                ),
+                location: iced::keyboard::Location::Standard,
+                modifiers: iced::keyboard::Modifiers::empty(),
+                text: None,
+                repeat: false,
+            })],
+        };
+        // One event per update, as the runtime delivers them, so the press that moved the keyboard
+        // is in the tree before the release arrives.
+        let mut published = Vec::new();
+        for event in &events {
+            published.extend(step(event, cursor));
+        }
+        out.push(published);
+        settle(&mut step, cursor);
+    }
+    out
+}
+
 /// A grid of points covering `area`, `step` apart, for [`clicks_at`] to sweep.
 pub fn grid(area: Rectangle, step: f32) -> Vec<iced::Point> {
     let mut points = Vec::new();
