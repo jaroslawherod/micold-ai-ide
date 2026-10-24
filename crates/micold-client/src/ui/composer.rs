@@ -4,8 +4,8 @@
 //! Top to bottom: the queued messages (`QueueRow`, or the one being edited in place), the hold
 //! notice with **Send queued** (FR-022), the notice line, the status row (`BusyIndicator`, **Stop
 //! session** while an interrupt is overdue, and #942's slot, I-1), the draft's pictures
-//! (`AttachmentChip`), #943's completion slot (I-4), and the text area beside **Send** and, while
-//! busy, **Stop**. Everything it shows is `features::composer`'s; every control sends a
+//! (`AttachmentChip`), #943's completion slot (I-4), and the text area beside #942's control,
+//! **Send** and, while busy, **Stop**. Everything it shows is `features::composer`'s; every control sends a
 //! `composer::Msg` for the shell to carry out.
 
 use iced::widget::text_editor::{Binding, KeyPress, Status};
@@ -57,6 +57,9 @@ pub struct Seams<'a> {
     pub waiting: bool,
     /// #943's element over the text area.
     pub completion: Option<Element<'a, Message>>,
+    /// #942's control beside the text area, before **Stop** and **Send**: in the input row, whose
+    /// height the text area sets, so it adds no row to the composer.
+    pub control: Option<Element<'a, Message>>,
 }
 
 fn send(msg: Msg) -> Message {
@@ -171,7 +174,7 @@ pub fn view<'a>(
     // The parts above the input row come and go; held in a column of their own, they leave the
     // input row at the same place in the tree, so the text area keeps its state (focus, caret)
     // when a queue row, a notice or a chip appears (T061 run 2, step 6).
-    let input = input_row(state, session, phase, roles);
+    let input = input_row(state, session, phase, roles, seams.control);
     let composer =
         container(column![column(parts).spacing(spacing::SM), input].spacing(spacing::SM))
             .padding([spacing::SM, spacing::MD])
@@ -222,12 +225,13 @@ fn status_row<'a>(
     status.into()
 }
 
-/// The text area beside **Send** and, while busy, **Stop** (FR-004, FR-012).
+/// The text area beside #942's control, **Send** and, while busy, **Stop** (FR-004, FR-012).
 fn input_row<'a>(
     state: &'a State,
     session: SessionId,
     phase: TurnPhase,
     roles: Roles,
+    control: Option<Element<'a, Message>>,
 ) -> Element<'a, Message> {
     let composers = &state.composers;
     let editor = composers.editor(session);
@@ -246,6 +250,9 @@ fn input_row<'a>(
     let mut controls = row![container(area).width(Length::Fill)]
         .spacing(spacing::SM)
         .align_y(Alignment::End);
+    if let Some(control) = control {
+        controls = controls.push(control);
+    }
     if composers.offers_stop(session) {
         controls = controls
             .push(Button::outlined("Stop", roles).on_press(send(Msg::StopRequested(session))));

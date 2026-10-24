@@ -6357,6 +6357,31 @@ pub(crate) mod tests {
             assert_eq!((to, mode), (session, PermissionMode::Bypass));
         }
 
+        /// M9 (M8 review A r3): confirming closes the dialog through the core, so its
+        /// after-message work runs: an agent prompt held behind the dialog is released.
+        #[test]
+        fn confirming_bypass_releases_an_agent_prompt_held_behind_it() {
+            let (mut app, mut rx, session) = app_with_session();
+            let _ = crate::shell::permission_prompts::update(
+                &mut app,
+                PromptsMsg::ModeRequested {
+                    session,
+                    mode: PermissionMode::Bypass,
+                },
+            );
+            app.core.agent_confirm.held = true;
+            let _ = crate::shell::permission_prompts::update(&mut app, PromptsMsg::ModeConfirmed);
+            let ClientMsg::SetPermissionMode { mode, .. } = sent_one(&mut rx) else {
+                panic!("a SetPermissionMode")
+            };
+            assert_eq!(mode, PermissionMode::Bypass);
+            assert_eq!(app.core.permission_prompts.mode_confirmation(), None);
+            assert!(
+                !app.core.agent_confirm.held,
+                "the held agent prompt shows once the dialog is gone"
+            );
+        }
+
         #[test]
         fn a_refused_show_all_leaves_an_answer_on_its_way() {
             let (mut app, mut rx, session) = app_with_session();

@@ -275,6 +275,7 @@ fn the_status_and_completion_slots_take_space_only_when_filled() {
         status: None,
         waiting: false,
         completion: Some(iced::widget::text("completion").into()),
+        control: None,
     });
     assert!(
         filled > empty + TOLERANCE,
@@ -284,10 +285,19 @@ fn the_status_and_completion_slots_take_space_only_when_filled() {
         status: Some(iced::widget::text("mode").into()),
         waiting: false,
         completion: None,
+        control: None,
     });
     assert!(
         (with_status - empty).abs() <= TOLERANCE,
         "the status slot sits in the status row, adding no row: {empty} vs {with_status}"
+    );
+    let with_control = height(Seams {
+        control: Some(iced::widget::text("mode").into()),
+        ..Seams::default()
+    });
+    assert!(
+        (with_control - empty).abs() <= TOLERANCE,
+        "the control sits in the input row, adding no row: {empty} vs {with_control}"
     );
 }
 
@@ -344,10 +354,12 @@ fn a_press_on_the_composer_takes_the_keyboard_from_the_pane() {
         state.terminal_focused(),
         "the pane holds the keyboard first"
     );
-    let (painted, _) = paint(state.clone(), id);
+    let (painted, transcript) = paint(state.clone(), id);
     let send = find(&painted, "Send");
+    // Inside the text area, which starts at the pane's left; #942's mode control sits between it
+    // and Send.
     let at = iced::Point::new(
-        send.origin.x - 200.0,
+        transcript.x + 100.0,
         send.origin.y + send.natural_height / 2.0,
     );
     let under = StateUnderTest::new(state.clone());
@@ -464,10 +476,12 @@ fn the_composer_keeps_the_keyboard_when_a_queue_row_appears_above_it() {
     let renderer = lay::renderer();
     let (mut state, id) = pane();
     report(&mut state, id, busy(InterruptAsk::None), false, 0);
-    let (painted, _) = paint(state.clone(), id);
+    let (painted, transcript) = paint(state.clone(), id);
     let send = find(&painted, "Send");
+    // Inside the text area, which starts at the pane's left; #942's mode control sits between it
+    // and Send.
     let at = iced::Point::new(
-        send.origin.x - 300.0,
+        transcript.x + 100.0,
         send.origin.y + send.natural_height / 2.0,
     );
     let under = StateUnderTest::new(state.clone());
@@ -536,5 +550,132 @@ fn a_queued_message_edited_in_a_long_queue_shows_save_and_cancel() {
                 text.clip
             );
         }
+    }
+}
+
+// ---- #942 M9 (T071, T066): the mode control and *Waiting for you* in the composer ------------
+
+/// `id`'s session in `mode`, as its summary says (#942 FR-015).
+fn in_mode(state: &mut State, id: SessionId, mode: micold_core::session::PermissionMode) {
+    state
+        .workspace
+        .find_session_mut(id)
+        .expect("the pane's session")
+        .1
+        .permission_mode = mode;
+}
+
+/// A tool request of `id` pending in this window (#942 FR-009).
+fn pending_request(state: &mut State, id: SessionId) {
+    use micold_core::protocol::messages::{PermissionRequest, PromptId};
+    use micold_core::structured::permission::request::RequestKind;
+    state.permission_prompts.requested(PermissionRequest {
+        id: PromptId(1),
+        session: id,
+        tool_use_id: Some("toolu_waiting".into()),
+        tool_name: "Bash".into(),
+        input_preview: r#"{"command":"echo hi > out.txt"}"#.into(),
+        input_bytes: 31,
+        kind: RequestKind::Tool,
+        always_allow: None,
+    });
+}
+
+#[test]
+fn the_mode_control_offers_the_four_modes_and_shows_the_sessions_mode() {
+    use micold_client::ui::mode_control::{MODE_CHOICES, MODE_LABEL};
+    use micold_core::session::PermissionMode;
+    assert_eq!(
+        MODE_CHOICES.map(|c| c.0),
+        PermissionMode::ALL,
+        "the four modes, in the order a mode control lists them"
+    );
+    assert_eq!(
+        MODE_CHOICES.map(|c| c.to_string()),
+        PermissionMode::ALL.map(|m| m.label().to_owned()),
+        "each by the name the user reads"
+    );
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        for mode in PermissionMode::ALL {
+            let (mut state, id) = pane();
+            report(&mut state, id, TurnPhase::Idle, false, 0);
+            in_mode(&mut state, id, mode);
+            let (painted, transcript) = paint(themed(state, scheme), id);
+            under_the_transcript(&painted, transcript, MODE_LABEL);
+            under_the_transcript(&painted, transcript, mode.label());
+            let (ready, send) = (find(&painted, READY), find(&painted, "Send"));
+            let shown = find(&painted, mode.label());
+            assert!(
+                shown.origin.y > ready.origin.y && shown.origin.x < send.origin.x,
+                "the mode sits in the input row, before Send: {:?} vs {:?}, {:?}",
+                shown.origin,
+                ready.origin,
+                send.origin
+            );
+        }
+    }
+}
+
+#[test]
+fn choosing_a_mode_asks_for_it_and_bypass_is_confirmed_first() {
+    use micold_client::features::permission_prompts::Msg as PromptsMsg;
+    use micold_client::ui::mode_control::{chosen, MODE_CHOICES};
+    use micold_core::session::PermissionMode;
+    let (mut state, id) = pane();
+    for choice in MODE_CHOICES {
+        assert_eq!(
+            chosen(id, choice),
+            Message::PermissionPrompts(PromptsMsg::ModeRequested {
+                session: id,
+                mode: choice.0,
+            }),
+            "a pick asks the shell for {:?}, which sends `SetPermissionMode`",
+            choice.0
+        );
+    }
+    assert_eq!(
+        state
+            .permission_prompts
+            .request_mode(id, PermissionMode::Bypass),
+        None,
+        "Bypass sends nothing before its confirmation"
+    );
+    assert!(
+        micold_client::overlay::registry::open_dialog(&state).is_some(),
+        "its confirmation is the open dialog"
+    );
+}
+
+#[test]
+fn a_refused_mode_change_says_why_in_the_status_row() {
+    const WHY: &str = "Claude did not answer the mode change.";
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    state.permission_prompts.mode_failed(id, WHY.to_owned());
+    let (painted, transcript) = paint(state, id);
+    under_the_transcript(&painted, transcript, WHY);
+}
+
+#[test]
+fn a_session_with_a_pending_request_says_waiting_for_you() {
+    use micold_client::ui::composer::WAITING;
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let (mut state, id) = pane();
+        report(&mut state, id, busy(InterruptAsk::None), false, 0);
+        pending_request(&mut state, id);
+        let (painted, transcript) = paint(themed(state, scheme), id);
+        under_the_transcript(&painted, transcript, WAITING);
+        assert!(
+            !painted.iter().any(|p| p.content == BUSY),
+            "*{WAITING}* replaces `{BUSY}`"
+        );
+
+        let (mut state, id) = pane();
+        report(&mut state, id, busy(InterruptAsk::None), false, 0);
+        let (painted, _) = paint(themed(state, scheme), id);
+        assert!(
+            !painted.iter().any(|p| p.content == WAITING),
+            "no request pending: no *{WAITING}*"
+        );
     }
 }

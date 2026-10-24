@@ -380,13 +380,13 @@ Split from #941's composer (ledger decision 18): what needs #941's composer row 
 
 ## Phase 10b: Window — composer side (M9; needs #941 M6 on `main`, I-2)
 
-- [ ] T071 [P] [US2] Test in the composer's test file from #941: the mode `Select` beside the
+- [x] T071 [P] [US2] Test in the composer's test file from #941: the mode `Select` beside the
   composer offers the four modes, shows the session's summary mode, sends `SetPermissionMode`, and
   Bypass goes through the confirmation first (`ConfirmBypassModeDialog`, registered in M8)
-- [ ] T072 [US2] Draw the mode `Select` in #941's composer row, showing the session's mode (FR-015
+- [x] T072 [US2] Draw the mode `Select` in #941's composer row, showing the session's mode (FR-015
   in the view) and changing it (FR-017)
-- [ ] T066 [US5] Show *Waiting for you* in #941's composer status slot while `waiting(session)`
-- [ ] T073 Run quickstart Part B's composer parts (step 1's *Waiting for you*, step 5, step 6's
+- [x] T066 [US5] Show *Waiting for you* in #941's composer status slot while `waiting(session)`
+- [x] T073 Run quickstart Part B's composer parts (step 1's *Waiting for you*, step 5, step 6's
   shown mode, step 8, step 11's mode control) with the `visual-pass` skill into `visual-pass/`
 
 ---

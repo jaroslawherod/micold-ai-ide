@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M8 verify
-- **Next step**: M8: draft PR open; orchestrator waits on CI and merges
+- **Phase**: M9 implement
+- **Next step**: M9: implement T071, T072, T066, T073 and the M8 r3 follow-ups
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1231 | M5: mode change while running, following Claude, plan approval sets the mode | merged (rebase; CI's one red job `sandbox_real_provision_own_image_without_ssh_fails_in_reach`, a Docker Hub 502 pulling alpine:3, passed on one re-run) | 1403972ac7d6e4cc845004c89b558d8253ab33c7 |
 | #1263 | M6: client render-free prompt state and create-flow mode | merged (rebase; after CI went green main moved and the PR conflicted in `crates/micold-client/src/app.rs` `forget_structured` with #944 structured_insights; the orchestrator rebased keeping both forgets, the full gate passed again, then merged) | b7f1b704e184ad5b1e0c905f4fb3d6e35569839d |
 | #1266 | M7: requests, plans and questions in the transcript | merged (rebase) | b636391e9e89f14bd664f2f7a867048c1ad1b89d |
-| #1309 | M8: prompts on, create-flow mode rows, Bypass confirmation and label, user guide (draft) | open | — |
+| #1309 | M8: prompts on, create-flow mode rows, Bypass confirmation and label, user guide | merged (rebase) | 9e643d698af63cd79632eff27560db8423730b58 |
 
 ## Milestones
 
@@ -37,8 +37,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T043–T048 | full | Daemon: mode change while running, following Claude, plan approval sets mode | #1231 | merged |
 | M6 | T049–T055 | full | Client render-free prompt state and create-flow mode | #1263 | merged |
 | M7 | T056–T063 | full | Window transcript side (ChoiceList, PromptCard, request/plan/question views); needs #939 M5–M6 on main (I-1, met: #1203, #1206) | #1266 | merged |
-| M8 | T064, T065, T067, T068, T069 | full | Create-flow mode rows, Bypass confirmation and session-bar label, prompts switched on, user guide, Part B without the composer (split, decision 18) | #1309 | PR open |
-| M9 | T071, T072, T066, T073 | full | Composer side: mode Select and *Waiting for you* in #941's composer; needs #941 M6 on main (I-2) | — | pending (held on I-2) |
+| M8 | T064, T065, T067, T068, T069 | full | Create-flow mode rows, Bypass confirmation and session-bar label, prompts switched on, user guide, Part B without the composer (split, decision 18) | #1309 | merged |
+| M9 | T071, T072, T066, T073 | full | Composer side: mode Select and *Waiting for you* in #941's composer; needs #941 M6 on main (I-2, met: #1255, e65993bc) | — | in progress |
 
 ## Decisions
 
@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 18 | M8 | #941's composer (PR #1255) is not on main and #943 waits on prompts being on (its SC-007): wait for #941 or split M8? | Split (orchestrator): M8 builds what needs no composer (T067 switch on, the create-flow mode choice, `ui/confirm_bypass.rs`, the Bypass label, T068, T069 for what it draws); the composer's mode Select (FR-015 shown in the view, FR-017), T066 *Waiting for you* and their quickstart steps move to a new M9 (T071–T073, T066), held on #941 M6 (I-2) | orchestrator | tasks.md *Phase 10b*, *M9* |
 | 19 | M8 | The create flow's mode `Select` inside the start list, a `MenuOverlay` of items | Four **Permissions: <mode>** rows under the offered structured entry, the chosen one marked with the switcher's active marker; a row press sends `StartModeChosen` and leaves the list open; Bypass is confirmed when the structured entry is pressed (M6's `start_gate`). A `Select`'s own dropdown would be a menu inside the menu | agent | `ui/mod.rs` `start_mode_items`; `menu_anatomy.rs` `start_list_items` |
 | 20 | M8 | Where the *Bypass: Claude runs every tool without asking* label shows without #941's composer | First row of the session bar at the top of the transcript (feature 944), warning icon and words in the error role, while the session's summary mode is Bypass; the Bypass confirmation for a mode change (`ConfirmBypassModeDialog`) is registered now so M9 only adds the Select | agent | `ui/transcript/session_bar.rs` `mode_label`; showcase *the session bar of a session in Bypass* |
+| 21 | M9 | Where the mode `Select` goes in #941's composer: its status-row slot (plan I-2) or beside the text area | Beside the text area, before **Stop**/**Send**, through a new `Seams::control`: a filled field is taller than the status row, and in the status slot it pushed #941's crowded-composer gate under its bound (`a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view`: transcript 171 px < 200); the input row is as tall as the text area already. The refusal notice (FR-017 "tell the user why") goes in the status slot | agent | `ui/mode_control.rs`; `gates/composer_fits.rs` |
 | 17 | M3 | How a session's stdout reader withdraws its requests on a `result`, `TurnEndedWithoutResult` or end of output, with no `Arc<DaemonState>` and a teardown that may join it under the state lock | The reader signals `permission::Endings` (its own small mutex: `TurnEnded` on a result or the cut-off note, `ProcessEnded` at end of output); each waiting prompt call watches its session's next end and runs `withdraw_session_prompts`. Stop and remove withdraw directly (`SessionStopped`, `SessionRemoved`), before the kill. Rules drop on every reason but `TurnEnded` and at each structured spawn | agent | `permission.rs` `Endings`, `serve_prompt`; `state.rs` `spawn_structured`; tests `a_request_is_withdrawn_when_*` |
 | 16 | M2 | Always allow on a request that offers no rule (a `Bash` call without `command`) | Refused `WrongKind`, nothing changes; the request's `always_allow` is `None`, so a window never offers it | agent | data-model *AllowRule*; `permission.rs` `decide` |
 | 15 | M2 | Is the prompt tool offered to a structured caller while the switch is off? | No: `ListScope::Structured` only when prompts are on, else the model could call the listed tool and raise a request nobody can answer (R14 "behaves exactly as feature 938") | agent | `DaemonState::prompt_scope`; test `a_terminal_sessions_credential_cannot_list_or_call_the_prompt_tool` |
