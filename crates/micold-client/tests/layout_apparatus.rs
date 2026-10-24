@@ -168,57 +168,39 @@ fn the_icon_face_parses_and_is_the_face_that_measures() {
 #[test]
 fn the_monospace_face_parses_and_is_the_face_that_measures() {
     let face = ttf_parser::Face::parse(lay::REFERENCE_MONO_FONT_BYTES, 0)
-        .expect("the committed monospace font must parse");
+        .expect("the shipped Fira Mono Regular must parse");
     let family = face
         .names()
         .into_iter()
         .filter(|n| n.name_id == ttf_parser::name_id::FAMILY)
         .find_map(|n| n.to_string())
-        .expect("the monospace face must carry a decodable family name");
+        .expect("the shipped Fira Mono must carry a decodable family name");
     assert_eq!(family, lay::REFERENCE_MONO_FONT_FAMILY);
     assert!(face.is_monospaced());
 
     let _ = lay::renderer();
 
     // Widths alone cannot tell two 0.6 em faces apart (the host this was recorded on had one), so
-    // also ask the database which face `Family::Monospace` resolves to: it must be the committed
+    // the loop also asks the database which face `Family::Monospace` resolves to: the shipped
     // bytes, not a host file, even one of the same name.
-    {
-        use iced::advanced::graphics::text::cosmic_text::fontdb;
-        let mut fonts = iced::advanced::graphics::text::font_system()
-            .write()
-            .expect("the global font system lock was poisoned");
-        let db = fonts.raw().db();
-        let id = db
-            .query(&fontdb::Query {
-                families: &[fontdb::Family::Monospace],
-                ..fontdb::Query::default()
-            })
-            .expect("Family::Monospace must resolve to a face");
-        let info = db.face(id).expect("the resolved face is in the database");
-        assert!(
-            info.families
-                .iter()
-                .any(|(name, _)| name == lay::REFERENCE_MONO_FONT_FAMILY)
-                && matches!(info.source, fontdb::Source::Binary(_)),
-            "Family::Monospace resolved to {:?} from {:?}, not the committed face",
-            info.families,
-            info.source
-        );
-    }
-
     // Regular and Bold: each weight must resolve to the shipped bytes, and measure with that
     // face's own advances (SC-001). Every message names `Fira Mono` (FR-006).
+    use iced::advanced::graphics::text::cosmic_text::fontdb;
     const PROBE: &str = "cargo test -- --nocapture";
-    for (weight, bytes, what) in [
+    for (weight, db_weight, bytes, what) in [
         (
             iced::font::Weight::Normal,
+            fontdb::Weight::NORMAL,
             ui::FIRA_MONO_REGULAR_BYTES,
             "Regular",
         ),
-        (iced::font::Weight::Bold, ui::FIRA_MONO_BOLD_BYTES, "Bold"),
+        (
+            iced::font::Weight::Bold,
+            fontdb::Weight::BOLD,
+            ui::FIRA_MONO_BOLD_BYTES,
+            "Bold",
+        ),
     ] {
-        use iced::advanced::graphics::text::cosmic_text::fontdb;
         let weight_font = iced::Font {
             weight,
             ..iced::Font::MONOSPACE
@@ -232,11 +214,7 @@ fn the_monospace_face_parses_and_is_the_face_that_measures() {
             let db = fonts.raw().db();
             db.query(&fontdb::Query {
                 families: &[fontdb::Family::Monospace],
-                weight: if weight == iced::font::Weight::Bold {
-                    fontdb::Weight::BOLD
-                } else {
-                    fontdb::Weight::NORMAL
-                },
+                weight: db_weight,
                 ..fontdb::Query::default()
             })
             .map(|id| {
@@ -263,10 +241,10 @@ fn the_monospace_face_parses_and_is_the_face_that_measures() {
             .map(|ch| {
                 let id = face
                     .glyph_index(ch)
-                    .expect("the monospace face maps the probe");
+                    .unwrap_or_else(|| panic!("Fira Mono {what} lacks a glyph for {ch:?}"));
                 f32::from(
                     face.glyph_hor_advance(id)
-                        .expect("the face must carry advances"),
+                        .unwrap_or_else(|| panic!("Fira Mono {what} lacks an advance for {ch:?}")),
                 ) * lay::DEFAULT_TEXT_SIZE
                     / f32::from(face.units_per_em())
             })
@@ -295,13 +273,14 @@ fn there_is_one_copy_of_fira_mono_in_the_repository() {
         for entry in
             std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
         {
-            let path = entry.expect("read a directory entry").path();
+            let entry = entry.expect("read a directory entry");
+            let path = entry.path();
             let name = path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or_default()
                 .to_owned();
-            if path.is_dir() {
+            if entry.file_type().is_ok_and(|t| t.is_dir()) {
                 let rel = path.strip_prefix(root).unwrap_or(&path);
                 if name.starts_with("target")
                     || name == ".git"
