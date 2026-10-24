@@ -24,7 +24,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | — | reviews done; full gate, PR |
+| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | — | full gate green at 150a0410 after rebase onto origin/main; pushed, PR to open |
 | M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | blocked: #1125 and #1127 must merge |
 | M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | blocked: #1125 and #1127 must merge; after M2 |
 | M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
@@ -74,6 +74,7 @@ None.
 ## Follow-ups not done
 
 - M1: the app's empty-pane text still says "Choose restart below to resume it." (`crates/micold-client/src/ui/terminal.rs` `empty_terminal_message`, test comment ~:1075 "the bar below"), while restart now sits in the tab strip above; FR-020 forbids the fix here — needs its own bug issue.
+- M1 PR unit: previous PR #1365 merged as f955fbea; rebased onto origin/main; `scripts/gate.sh` green (disk at 15 GB free; wiping `target-shared/` was refused by the permission classifier, gate passed on the existing cache). `gh` not authenticated: the orchestrator opens the PR.
 - M1: `lychee` not installed and `mise` not on PATH in this cloud environment: links (A1) left to CI; the docs gate ran as the `test-scripts` loop directly (28/28 pass). Stage-1 extra hits fixed beyond E1–E12: `settings.md` restart recovery sentence (FR-011), `terminal-panes.md` other-section tab-strip mentions linked, `worktrees-and-sessions.md` shortcut-from-AI-tab bullet (stale since 027 FR-004). Left for stage 2: `appearance-theming.md:58`, `sandboxed-daemon.md:505` ("under the app bar"), `settings.md:4`, `settings.md:52` (app bar).
 - Design-PR unit: `speckit-analyze` run inline (no Agent tool to fork it to Sonnet). `gh` not authenticated, so the orchestrator opens the design PR via GitHub MCP.
 
