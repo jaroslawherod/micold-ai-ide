@@ -1154,12 +1154,19 @@ impl DaemonState {
         resolved
     }
 
-    /// `available` limited to the CLIs `offered.json` lists, when there is one.
+    /// `available` limited to the CLIs `offered.json` lists, when there is one, and to those whose
+    /// command is in the `bin` folder it names: a copy elsewhere on the spawn `PATH` (the home's
+    /// `.local/bin`, feature 1289) is not the one the application installed.
     fn only_offered(&self, available: Vec<AiCli>) -> Vec<AiCli> {
         match self.offered_clis() {
             Some(offered) => available
                 .into_iter()
-                .filter(|cli| offered.clis.iter().any(|o| o.cli == *cli))
+                .filter(|cli| {
+                    offered
+                        .clis
+                        .iter()
+                        .any(|o| o.cli == *cli && cli.provider().is_available(o.bin.as_os_str()))
+                })
                 .collect(),
             None => available,
         }
@@ -8448,8 +8455,10 @@ mod offered_tests {
         assert_eq!(state.ai_clis_available_in(cwd.path()), [AiCli::Pi]);
     }
 
-    /// Turn environment-include on with a script that exports `lines`, so the resolved session
-    /// environment carries them whatever this test process's own environment holds.
+    /// Turn environment-include on with a script that exports `lines`. Only a value that differs
+    /// from this test process's own reaches the resolved environment (`diff_env`), and the sandbox
+    /// `PATH` falls back to the process's value for one it lacks, so a test that depends on a
+    /// variable being unset exports it empty (empty counts as unset).
     fn resolve_with(state: &DaemonState, store: &Path, lines: &[String]) {
         let script = store.join("env-include.sh");
         let body: String = lines.iter().map(|l| format!("export {l}\n")).collect();
@@ -8489,6 +8498,8 @@ mod offered_tests {
             store.path(),
             &[
                 "HOME=/home/u".into(),
+                // Empty counts as unset, so this test process's own value cannot win.
+                "MISE_DATA_DIR=".into(),
                 "XDG_DATA_HOME=/home/u/.local/share".into(),
                 "PATH=/usr/local/bin:/usr/bin:/bin".into(),
             ],
@@ -8567,6 +8578,7 @@ mod offered_tests {
             store.path(),
             &[
                 format!("HOME={}", home.display()),
+                "MISE_DATA_DIR=".into(),
                 format!("XDG_DATA_HOME={}", home.join(".local/share").display()),
                 "PATH=/usr/bin:/bin".into(),
             ],
@@ -8587,6 +8599,45 @@ mod offered_tests {
             Some(local_bin)
         );
         assert_eq!(state.availability_in(cwd.path()).0, [AiCli::Pi]);
+    }
+
+    /// Review M1 A-F3, US1 scenario 5: an offered CLI whose own `bin` folder lacks it, or is
+    /// missing, is not offered, even though a `claude` in the home's `.local/bin` resolves on the
+    /// spawn `PATH`: that copy is not the one the application installed.
+    #[cfg(unix)]
+    #[test]
+    fn an_offered_cli_missing_from_its_bin_is_not_offered_through_a_home_copy() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        let home = store.path().join("home");
+        bin_of(&home, ".local/bin", &[AiCli::ClaudeCode]);
+        resolve_with(
+            &state,
+            store.path(),
+            &[
+                format!("HOME={}", home.display()),
+                "MISE_DATA_DIR=".into(),
+                "PATH=/usr/bin:/bin".into(),
+            ],
+        );
+        let cwd = tempfile::tempdir().unwrap();
+
+        let empty = bin_of(store.path(), "claude-bin", &[]);
+        offer(&dir, &[(AiCli::ClaudeCode, &empty)]);
+        assert!(found_in(&state.spawn_path_for(cwd.path()), "claude").is_some());
+        assert!(
+            state.availability_in(cwd.path()).0.is_empty(),
+            "bin lacks it"
+        );
+
+        offer(
+            &dir,
+            &[(AiCli::ClaudeCode, &store.path().join("no-such-bin"))],
+        );
+        assert!(
+            state.availability_in(cwd.path()).0.is_empty(),
+            "bin missing"
+        );
     }
 }
 

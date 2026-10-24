@@ -28,8 +28,9 @@ pub struct ToolchainPathInput {
 /// `input` as one `PATH`: the offered bins, then `home/.local/bin`, then mise's shims folder, then
 /// `rest`. A folder keeps only its first position, compared as exact path text (FR-004); empty
 /// entries are left out. Without `home` the two home folders are left out (the shims folder still
-/// comes from `MISE_DATA_DIR` or `XDG_DATA_HOME` when one is set). Should the folders not join (a
-/// name holding the separator), `rest` is returned unchanged.
+/// comes from `MISE_DATA_DIR` or `XDG_DATA_HOME` when one is set). A folder whose name holds the
+/// separator cannot be one `PATH` entry, so it alone is left out and the others keep their order;
+/// should the rest still not join, `rest` is returned unchanged.
 pub fn toolchain_path(input: ToolchainPathInput) -> OsString {
     let ToolchainPathInput {
         offered_bins,
@@ -56,7 +57,8 @@ pub fn toolchain_path(input: ToolchainPathInput) -> OsString {
         .chain(std::env::split_paths(&rest));
     for folder in candidates {
         let text = folder.as_os_str();
-        if !text.is_empty() && !ordered.iter().any(|kept| kept.as_os_str() == text) {
+        let joins = std::env::join_paths([&folder]).is_ok();
+        if joins && !text.is_empty() && !ordered.iter().any(|kept| kept.as_os_str() == text) {
             ordered.push(folder);
         }
     }

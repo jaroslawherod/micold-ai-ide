@@ -119,7 +119,8 @@ ToolchainPathInput {
 The output order is: offered bins, then `home/.local/bin`, then the shims folder (R3), then `rest`.
 Duplicates are dropped after their first position (FR-004). An empty value counts as unset. With
 no `home`, the two home folders are left out. Paths are joined with `std::env::join_paths`, which
-gives `:` inside the Linux sandbox.
+gives `:` inside the Linux sandbox; a folder whose name holds the separator is left out on its own,
+so the others keep their order.
 
 ## Core: settings and store
 

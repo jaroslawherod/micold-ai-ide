@@ -162,3 +162,24 @@ fn folders_are_named_whether_or_not_they_exist() {
         "/nonexistent-1289/bin:/nonexistent-1289/home/.local/bin:/nonexistent-1289/xdg/mise/shims:/nonexistent-1289/rest"
     );
 }
+
+#[test]
+fn a_home_holding_the_separator_leaves_out_only_the_home_folders() {
+    // Review M1 A-F1: neither home folder can be one entry, and the offered bin stays first.
+    let mut input = input(REST);
+    input.home = Some(PathBuf::from("/a:b"));
+    assert_eq!(
+        path(input),
+        "/s/ai-clis/claude/bin:/usr/local/bin:/usr/bin:/bin"
+    );
+}
+
+#[test]
+fn an_xdg_data_home_holding_the_separator_leaves_out_only_the_shims_folder() {
+    let mut input = input(REST);
+    input.xdg_data_home = Some(PathBuf::from("/a:/b"));
+    assert_eq!(
+        path(input),
+        "/s/ai-clis/claude/bin:/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin"
+    );
+}
