@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
 - **Phase**: implement M1 (reviews pending)
-- **Next step**: reviews A and B of M1 (orchestrator runs them; unit has no Agent tool), then full gate and the M1 PR. Visual pass deferred to the close unit (no Agent/visual-pass in this session)
+- **Next step**: full gate (scripts/gate.sh, CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 to fit the disk) green at b0b8c38f; reviews A and B of M1 (orchestrator runs them; unit has no Agent tool), then full gate and the M1 PR. Visual pass deferred to the close unit (no Agent/visual-pass in this session)
 
 ## Pull requests
 
@@ -42,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan | 1 | 577b43efa9a360325533cf64df7477eec5f512fc:4acec2deae057fa05e7e2201ced9f3ffd17255f2 | CLEAN (3 MINOR, all applied: FR-004 reversal is `on_frame` retargeting, not private `retarget`; SC-001 16 ms tick assertions added to the lift test both directions; R8/D1 built-focused start limited to wrappers with `on_focus_change`, cards fade in after reopening) |
 | tasks | 1 | 2bed35d91ef460077b32335b674b42ff21c4b977:7a4c2143fcab1448dc202c93ae8352b219a54d1b | CHANGES (2 MAJOR, 2 MINOR, all fixed: F1 M1 Verify used showcase live pose built in M2 → client Tab onto/away check; F2 `[P]` dropped from T003/T015, Parallel Opportunities updated; F3 T014 gains US2-4 ring+lift together case; F4 T001 names the closures by test name. speckit-analyze not loadable; FR/SC coverage checked by hand) |
 | tasks | 2 | 6b49c1b05d37c7c32799ad09201c21d974d12f3f:426765d05b781532d0d71423dd122cba5db2be39 | CLEAN (1 MINOR applied: M1 Verify §B.8 limited to its focus half) |
+| A M1 (code-review high) | 1 | 5ccdd3607cb7cb51889bd26cda53d6820e01f56e:b0b8c38f3d52bb1dee3ecaf67845ca0937dab3e8 | pending (orchestrator) |
+| B M1 (conformance) | 1 | 5ccdd3607cb7cb51889bd26cda53d6820e01f56e:b0b8c38f3d52bb1dee3ecaf67845ca0937dab3e8 | pending (orchestrator) |
 
 ## Declined review findings
 
