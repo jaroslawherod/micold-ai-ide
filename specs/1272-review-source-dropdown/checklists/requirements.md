@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (one open: Story 3 scenario 2, how the Files option combines with the shown source; for the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (Story 3 s2 resolved in clarify: Files stays an on/off mode over the shown source, as today)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)

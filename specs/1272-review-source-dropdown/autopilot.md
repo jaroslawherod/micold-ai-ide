@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1272
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve the open marker in spec.md Story 3 s2 (how the Files option combines with the shown source)
+- **Phase**: plan
+- **Next step**: plan unit: write plan.md from the clarified spec
 
 ## Pull requests
 
@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | How does the Files option combine with the shown source (Story 3 s2)? | As today: on/off mode over the shown source, stays on across source picks (tree and browsed file re-read, Back forgotten); label `Files · <source>`; Open diff leaves source and Files unchanged | agent | docs/user-guide/reviewing-changes.md#Browsing the repository; specs/1150-diff-full-file-view/spec.md#Edge Cases; features/changes.rs `reread_after_source_change`; spec FR-006/FR-007/SC-004 |
 
 ## Review rounds
 
@@ -33,6 +34,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 0f203fb2717e1fa99d2ac2b68c94c24f64c916f3:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec | 2 | 5cb0e7aeb46f21b103a07c493f87bb563ef37b13:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CLEAN: 3 MINOR (fixed, prose only) |
+| Clarify | 1 | 1 question, agent-resolved (Story 3 s2) | requirements changed: FR-001, FR-002, FR-007, Story 3 s1–s5 |
+| Clarify | 2 | rescan of the clarified spec | no critical ambiguities |
 
 ## Declined review findings
 
