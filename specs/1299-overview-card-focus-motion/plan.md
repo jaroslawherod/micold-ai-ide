@@ -112,8 +112,11 @@ lines, so the lift bookkeeping goes in `card_lift.rs` rather than growing it.
 `keyboard_focus.rs`:
 
 - `Focus` gains `fade: Progress`, on the `STANDARD` curve. Its `Default` is written out so a fresh
-  control starts at `0.0`; `state()` for a control created already focused and shown starts at
-  `1.0` (a control built focused must not animate into existence, `Progress::new` docs).
+  control starts at `0.0`; for a wrapper with `on_focus_change`, `state()` for a control created
+  already focused and shown starts at `1.0` (a control built focused must not animate into
+  existence, `Progress::new` docs). Overview cards wire only `on_shown_change`
+  (`overview_card.rs`), so `state()` returns `Focus::default()` for them: focus that traversal
+  gives back after the Overview reopens fades in, as FR-001 allows.
 - `TakesTheKeyboard::fade(self, over: Option<Duration>) -> Self`, default `None`: `None` is today's
   behaviour, so every other control (and the card's links, FR-011) is unchanged.
 - `update`, after `shown` is worked out at its end: target = `shown` as `0.0`/`1.0`. With `Some(over)`,
@@ -129,8 +132,9 @@ lines, so the lift bookkeeping goes in `card_lift.rs` rather than growing it.
   today's top-up (`Focus::indicator`'s body, now computed whether or not the focus is shown) times
   the strength, and the ring's colour alpha is the strength; nothing is drawn at strength 0. At
   strength 1 both are exactly today's (FR-010). One opacity for ring and layer (spec Assumptions).
-- Reversal (FR-004) is `Progress::retarget`: it restarts the eased clock from the current value, so
-  a reversed fade turns back from where it is and takes at most the full 150 ms.
+- Reversal (FR-004) comes from `Progress::on_frame` retargeting inside the call when the target
+  changes (`from = value`, `t = 0`; the retarget helper itself is private): a reversed fade turns
+  back from where it is and takes at most the full 150 ms.
 
 ### D2 Card wiring (FR-001, FR-002, FR-010, FR-011)
 
@@ -228,7 +232,7 @@ there is no expanded content left to shrink. Text for the issue comment is in re
 
 ### FR → design map
 
-FR-001 D1, D2 · FR-002 D1, D2 · FR-003 D3 · FR-004 D1, D3 (`retarget`) · FR-005 D1 (per-card
+FR-001 D1, D2 · FR-002 D1, D2 · FR-003 D3 · FR-004 D1, D3 (`on_frame` retargets) · FR-005 D1 (per-card
 tree state), D3 (per-location entries) · FR-006 D7 · FR-007 D4 · FR-008 D4 · FR-009 D1, D3
 (`Progress` asks only while moving; `Lifts` drops resting entries) · FR-010 D1, D2, D3
 (`eased_shadow` at 1) · FR-011 D1 (`fade` default off; press snaps), D2, D3 (layout and events
@@ -243,7 +247,7 @@ unchanged) · FR-012 Test strategy · FR-013 D5, D6.
 | FR-005 | same, two faded controls | Tab from one to the other: one falling, one rising on the same frames |
 | FR-009, SC-003 | same + `Lifts` unit | after the end, a `RedrawRequested` leaves `shell.redraw_request()` at `RedrawRequest::Wait`; `tests/idle_requests_no_frames.rs` unchanged and green |
 | FR-011 (press, ring) | same | a press on a shown-focused control: strength 0 on the next frame; a control without `fade` draws exactly as before (existing ring tests unchanged) |
-| FR-003, FR-005, SC-005 | client unit, `card_lift.rs` and `card_grid.rs` | expanded location eases 0 → 1 and back; two locations settle independently; seeded grid starts at 1; removed location dropped; slot rectangles of every card equal across all frames of a transition |
+| FR-003, FR-005, SC-005 | client unit, `card_lift.rs` and `card_grid.rs` | expanded location eases 0 → 1 and back, ticks 16 ms apart: 0 < lift < 1 at the tick nearest 75 ms, 1 (or 0 on the way back) by 150 ms + one frame (SC-001), both directions; two locations settle independently; seeded grid starts at 1; removed location dropped; slot rectangles of every card equal across all frames of a transition |
 | FR-003 draw order | client unit, `card_grid.rs` (rasterised `drawn`) | a settling card's shadow shows below it over the card beneath (not cut), and a settling card is drawn after its neighbours |
 | FR-010 | client unit, `style.rs` + `card_grid.rs` | `eased_shadow(.., 1.0) == elevation_shadow`, `0.0` is default; grid's expanded card at rest paints the same pixels below it as feature 1121's card-drawn shadow |
 | FR-007, FR-012, SC-002 | client unit, `card_grid.rs` (grid `.instant(true)`) | **the Reduce motion test**: on the first redraw after gaining and after losing the keyboard focus the ring is at full / none, and after expanding and collapsing the shadow is full / none, with no request for a next frame |

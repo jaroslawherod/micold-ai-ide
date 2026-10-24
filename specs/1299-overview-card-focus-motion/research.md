@@ -111,9 +111,11 @@
 
 ## R8 Edge cases
 
-- **Built already focused or expanded** (reopened Overview, showcase poses): `Focus` built focused
-  and shown starts at 1; `Lifts::seeded` starts the expanded card at 1; nothing animates into
-  existence.
+- **Built already focused or expanded** (reopened Overview, showcase poses): a `Focus` wrapper
+  with `on_focus_change`, built focused and shown, starts at 1; `Lifts::seeded` starts the expanded
+  card at 1. Overview cards wire only `on_shown_change` (`keyboard_focus.rs` returns
+  `Focus::default()` without `on_focus_change`), so focus that traversal gives back after reopening
+  fades in, as FR-001 allows.
 - **Card removed mid-transition**: its tree (fade) goes with it; `Lifts::step` drops a location no
   longer present. **Card added**: no entry, at rest.
 - **Card state changes mid-fade**: the colours are read at each draw from the rebuilt element; the

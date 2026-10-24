@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: plan review (round 1), then tasks unit
+- **Phase**: tasks
+- **Next step**: tasks.md and milestones, then tasks review round 1
 
 ## Pull requests
 
@@ -36,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | spec | 1 | 6b313c8abe79644b3f5e295d48bb1ca579e97efa:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CLEAN (3 MINOR, all applied: US1-4 link focus keeps card expanded; window-blur edge case; FR-001 bezier moved to Assumptions) |
-| plan | 1 | 577b43efa9a360325533cf64df7477eec5f512fc:4acec2deae057fa05e7e2201ced9f3ffd17255f2 | pending (orchestrator dispatches fresh reviewer) |
+| plan | 1 | 577b43efa9a360325533cf64df7477eec5f512fc:4acec2deae057fa05e7e2201ced9f3ffd17255f2 | CLEAN (3 MINOR, all applied: FR-004 reversal is `on_frame` retargeting, not private `retarget`; SC-001 16 ms tick assertions added to the lift test both directions; R8/D1 built-focused start limited to wrappers with `on_focus_change`, cards fade in after reopening) |
 
 ## Declined review findings
 
@@ -45,7 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit over context cap after writing the plan. Done: plan.md, research.md (R1 = FR-006 decision and issue-comment text), data-model.md, contracts/ui-contract.md, quickstart.md, committed and pushed; plan review round 1 snapshot recorded. Next: orchestrator runs the fresh plan reviewer on that snapshot; a fresh plan unit acts on its findings (review-rounds.md), then sets Next step to `tasks unit`. Open findings: none yet. PR: none.
+None.
 
 ## Open escalation
 
