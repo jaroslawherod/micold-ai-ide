@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M1
-- **Next step**: M1 PR open; orchestrator waits on CI and merges, then M2
+- **Next step**: M1 PR #1353 open; orchestrator waits on CI and merges, then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1347 | design (spec, plan, tasks) | merged | 86fcb6b28cfe72ea680999550251409cbfa0921f |
+| #1353 | M1 sandbox PATH | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | — | in progress |
+| M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | #1353 | PR open |
 | M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | — | pending |
 | M3 | T018–T030 | full | protocol 69; daemon runs setup on create, streams output, MCP field, run/stop | — | pending |
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | — | pending |
