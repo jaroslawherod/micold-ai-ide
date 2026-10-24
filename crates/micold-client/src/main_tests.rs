@@ -7631,6 +7631,39 @@ mod issue_source {
         assert_eq!(rig.source.lookup_calls().len(), 1, "one title read");
     }
 
+    /// Review A F1: a worktree shown while titles cannot be read (the switch still off) has its
+    /// title read once they can, without being shown again.
+    #[test]
+    fn the_header_reads_its_title_once_titles_become_readable() {
+        let mut rig = titles_rig(false);
+        show_session_at(&mut rig, SessionLocation::Worktree("feat-42_crash".into()));
+        assert!(
+            remote_lists_sent(&mut rig.rx).is_empty(),
+            "the switch is off"
+        );
+        let settings = DaemonMsg::SettingsChanged {
+            settings: super::quiet_settings(),
+        };
+        let work = crate::update(
+            &mut rig.app,
+            Message::Connection(ConnectionMsg::Event(settings)),
+        );
+        settle(&mut rig.app, work);
+        assert!(
+            rig.app.core.settings.github_issues_enabled,
+            "the switch arrived on"
+        );
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(
+            sent.len(),
+            1,
+            "the shown worktree's title is asked for once"
+        );
+        let work = crate::update(&mut rig.app, Message::NoOp);
+        settle(&mut rig.app, work);
+        assert!(remote_lists_sent(&mut rig.rx).is_empty(), "and not again");
+    }
+
     // --- 1122: the issue links' repository (R2) and opening a link (R10) -------------------------
 
     fn repo_named(url: &str) -> micold_client::features::overview::RepoLookup {

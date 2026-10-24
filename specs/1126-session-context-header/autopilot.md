@@ -46,12 +46,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 4d4fb75608f438dc27c9078b4aa4db62f62e68a1:938d94c5b529d63aa2ac171bcb132cfb2383899a | CHANGES: 3 MAJOR (tab menu not mapped, StripTab importers, containment gate), 3 MINOR; all fixed |
 | Plan | 2 | 29583b02c933d279616339822384ea215db890db:3616cce290dbc0e95358c640c3b0c58fabf0feaa | CLEAN (sonnet); 1 MINOR fixed (containment retarget detail) |
 | Tasks | 1 | 8ab80bc5203f8fcd8be0c73b112b09dc4539067a:2fa1a219553a964ec33e235d36e1d193a87f7128 | CLEAN; 3 MINOR: checklist ticks + note fixed, provisional clarification noted in follow-ups |
+| M1 A (code review, high) | 1 | 77849f887d81f709896e3b79ed506ee1f7c5e311:7a7afc6b185623b1c507387ea64f1a38484a286e | CLEAN; 2 MINOR: F1 fixed (title read once titles become readable), F2 declined |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | tasks | speckit-analyze | C1 HIGH: `gates/session_bar_fits.rs` not retargeted though the bar is removed | that gate holds feature 944's transcript session bar (`session-transcript-insights`), not the bottom bar under the terminal (`layout_snapshot.rs:222`) |
+- M1 A F2 (`pr_chip_input` lacks a Default exclusion): the Default entry's `CardModel` has no branch (`ui/overview.rs::card`, R2), so `pr_chip_input` gets `None` and returns `None`; the header cannot show a pull request the sidebar does not.
 
 ## Handover
 
