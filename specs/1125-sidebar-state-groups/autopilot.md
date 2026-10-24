@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: plan unit: plan review round 1
+- **Phase**: tasks
+- **Next step**: tasks unit: /speckit-tasks for specs/1125-sidebar-state-groups (plan review CLEAN in round 1; spec FR-008/US2.6 amended per D7)
 
 ## Pull requests
 
@@ -39,7 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | da2d807c9816acd2626754adf775bd75bfdf81bb:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CLEAN (3 MINOR, fixed, prose only) |
-| Plan | 1 | e7874cdbc745d323aa39bf2af5b3eb37e903f5d6:14cef2c07be917f0d69a3be91fbcea6f77f1b079 | pending |
+| Plan | 1 | e7874cdbc745d323aa39bf2af5b3eb37e903f5d6:14cef2c07be917f0d69a3be91fbcea6f77f1b079 | CLEAN |
 
 ## Declined review findings
 
