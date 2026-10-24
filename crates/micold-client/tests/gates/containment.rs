@@ -49,46 +49,19 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 /// layout, far below anything a person could see.
 const TOLERANCE: f32 = 0.5;
 
-/// Children that a clip-revealing wrapper deliberately lays out oversized, by node path.
+/// Children that a clip-revealing wrapper (`material::Expand`) deliberately lays out oversized, by
+/// node path: `Expand::layout` reports `full.height * progress` to its parent while its child keeps
+/// its full height, and reveals the child by clipping to its own bounds in `draw`.
 ///
-/// **Keyed by path alone, not by `(covered state, path)`.** Being a clip-revealing wrapper's child
-/// is a property of the widget, not of the screen it appears on — the state dimension was never
-/// meaningful, it was just how the list first got written, once per state that happened to render a
-/// sidebar. It cost seven entries for two nodes, and it made FR-016 false in practice: T032 added a
-/// tenth covered state, and because that state renders a sidebar the gate demanded a second edit
-/// here before it would go green. Registering a covered state is supposed to take one change in one
-/// place.
+/// Keyed by path alone, not by `(covered state, path)`: being a clip-revealing wrapper's child is a
+/// property of the widget, not of the screen it appears on (FR-016).
 ///
-/// What this trades away: a *different* node arriving at one of these paths in some future state
-/// would be exempted without anyone noticing. The paths are structural rather than named, so that
-/// is a real risk and worth stating. It is bounded by the staleness assertion below — every listed
-/// path must still fire somewhere — and by `the_recorded_escapes_are_the_accordion_reveal`, which
-/// re-derives the attribution from behaviour rather than trusting the list.
-///
-/// **Both are one widget: `material::Expand`**, holding the sidebar's collapsed filter accordion.
-/// `Expand::layout` reports `full.height * progress` to its parent while the child node keeps its
-/// full height, so at rest the child is a 40–42px node inside a 0px one. It then reveals the child
-/// top-down by clipping to its own bounds in `draw` — the overhang is how the reveal works, not a
-/// mistake.
-///
-/// The two paths are the same accordion under two shell arrangements: the disconnection banner
-/// shifts the shell index from 2 to 3. That the invariant follows the structure rather than a
-/// hardcoded path is the reason there are two and not one.
-///
-/// Attribution is not inferred from the shape: `the_recorded_escapes_are_the_accordion_reveal`
-/// drives the panel open and shows the same nodes come clean.
-///
-/// **These were once recorded as BUG-001 and they are not.** The list was written while that bug
-/// was open, in the belief that the overhang was the defect. The fix left `Expand::layout`
-/// unchanged — the real cause was `layout` not re-running, so the clip received stale bounds — and
-/// every entry survived it untouched. The correction is worth keeping visible: this gate reported
-/// the right nodes for the wrong reason, and would have reported them just as loudly had nothing
-/// been wrong at all.
-///
-/// So, unlike a defect exemption, this list **does not expire**. What the assertion below still
-/// buys is that it cannot quietly grow: a new entry means either a new clip-revealing wrapper, to
-/// be named here with its reason, or a child escaping a parent that does not clip, which is a bug.
-const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/2/0", "0/0/0/3/0/0/0/2/0"];
+/// **Empty since feature 1125.** Its two entries were the sidebar's collapsed filter accordion
+/// under two shell arrangements; the chip bar replaced the accordion (FR-014), so no covered state
+/// holds a collapsed `Expand` at rest any more. A new entry means either a new clip-revealing
+/// wrapper, to be named here with its reason and an attribution test that drives it open, or a
+/// child escaping a parent that does not clip, which is a bug.
+const CLIP_REVEALED: &[&str] = &[];
 
 /// The sidebar list's scroll content, which is taller than its viewport by design.
 ///
@@ -107,7 +80,7 @@ const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/2/0", "0/0/0/3/0/0/0/2/0"];
 /// and it is the overflow that makes FR-011 mean anything. The staleness assertion still applies:
 /// if this path goes quiet, either the state stopped overflowing (and FR-011 is uncovered again) or
 /// the tree renumbered around it.
-const SCROLL_CONTENT: &[&str] = &["0/0/0/1/0/0/0/3/0"];
+const SCROLL_CONTENT: &[&str] = &["0/0/0/1/0/0/0/2/0"];
 
 /// The **select's open list**, overflowing its own eight-row cap (feature 022).
 ///
@@ -194,10 +167,10 @@ fn is_settings_page_scroll(state: &str, escape: &lay::Escape) -> bool {
 /// `add-worktree-dialog-issue-details…` state, past the **bottom** edge of the block's `Scrollable`
 /// ([`ISSUE_DETAILS_VIEWPORT`]). `the_recorded_details_overflow_is_the_loaded_state` shows the other
 /// details states come clean.
-const ISSUE_DETAILS_CONTENT: &[&str] = &["0/6/0/0/0/3/2/0"];
+const ISSUE_DETAILS_CONTENT: &[&str] = &["0/8/0/0/0/3/2/0"];
 
 /// The `Scrollable` the details scroll in: the parent of [`ISSUE_DETAILS_CONTENT`].
-const ISSUE_DETAILS_VIEWPORT: &str = "0/6/0/0/0/3/2";
+const ISSUE_DETAILS_VIEWPORT: &str = "0/8/0/0/0/3/2";
 
 /// Whether `escape`, in the covered state `state`, is the picked issue's details outgrowing their
 /// viewport downwards, which is the only overhang [`ISSUE_DETAILS_CONTENT`] allows.
@@ -426,12 +399,14 @@ fn the_recorded_details_overflow_is_the_loaded_state() {
 /// Every other check here resolves a settled frame. That is deliberate — mid-animation geometry is
 /// excluded from the fixture (T030) because it would churn on any change to a duration or an easing
 /// curve. But an invariant is not a recording, and it can be asked at a moment no fixture would
-/// want to hold: this pins the sidebar's filter panel partway into its 90ms reveal and requires
-/// that the *only* node escaping its parent is the one the wrapper is deliberately clipping.
+/// want to hold: this pins every `revealing_states()` entry partway into its reveal and requires
+/// that the *only* node escaping its parent is the one the wrapper is deliberately clipping. The
+/// list is empty since feature 1125 removed the sidebar's filter accordion, the reveal it pinned;
+/// the check stands for the next one.
 ///
 /// What that buys, concretely: a reveal that grows into its siblings, or reflows a neighbour out of
-/// the shell, shows up here and nowhere else. The settled states cannot see it — at rest the panel
-/// is closed and the geometry is the closed geometry.
+/// the shell, shows up here and nowhere else. The settled states cannot see it — at rest a
+/// collapsed wrapper is closed and the geometry is the closed geometry.
 ///
 /// What it does **not** buy is any statement about BUG-001. That bug was a stale-bounds defect in
 /// `update`, invisible to the layout tree at every progress value; this test passed against the
@@ -564,7 +539,7 @@ fn the_check_reports_an_escape_when_one_exists() {
 
 /// The recorded scroll overflow is the sidebar's list, and this is what proves it.
 ///
-/// Same argument as the accordion test below: a tall child in a shorter parent is *consistent* with
+/// A tall child in a shorter parent is *consistent* with
 /// a scroll viewport, and consistent is not the same as caused. So drive the one input that decides
 /// whether the list overflows — how many worktrees there are — and change nothing else. Three, and
 /// the node is contained; thirty, and it escapes by hundreds of pixels.
@@ -867,65 +842,6 @@ fn the_recorded_tab_overflow_is_the_instance_strip() {
              overflow the strip, and FR-010 is uncovered again",
             strip.width,
             viewport.width,
-        );
-    }
-}
-
-/// The recorded escapes are `Expand`'s, and this is what proves it rather than asserting it.
-///
-/// A zero-height parent holding a full-height child is `Expand::layout` at `progress` 0
-/// (`animation.rs:741`) — but that reasoning is inference from a shape, and the same shape could
-/// come from any collapsed container. So drive the one input that changes `Expand`'s progress and
-/// nothing else: the sidebar's filter panel is `Accordion`, which *is* `expand(...)`. Closed, the
-/// escape is there; open, the same node is clean. Nothing else about the state differs.
-///
-/// Without this, `CLIP_REVEALED` would be a list of paths whose cause was guessed.
-#[test]
-fn the_recorded_escapes_are_the_accordion_reveal() {
-    let escaping_nodes = |filter_open: bool| -> Vec<String> {
-        let mut workspace = crate::support::workspace_with(vec![("/fixture/project", vec![])]);
-        workspace.active = workspace.projects.first().map(|p| p.path.clone());
-        let state = micold_client::app::State {
-            workspace,
-            sidebar: micold_client::features::sidebar::State {
-                width: 260,
-                filter_open,
-                ..Default::default()
-            },
-            ..micold_client::app::State::default()
-        };
-
-        let element = micold_client::ui::view(
-            &state,
-            None,
-            None,
-            0,
-            None,
-            &micold_core::env_include::EnvIncludeOutcome::Disabled,
-            &micold_client::features::connection::ConnectionStatus::Connected,
-            &micold_client::features::sandbox::Sandbox::default(),
-        );
-
-        let renderer = lay::renderer();
-        lay::escapes(&lay::resolve(element, &renderer), TOLERANCE)
-            .into_iter()
-            .map(|e| e.child_path)
-            .collect()
-    };
-
-    let closed = escaping_nodes(false);
-    let opened = escaping_nodes(true);
-
-    assert!(
-        !closed.is_empty(),
-        "the sidebar with its filter panel closed reports no escape, so the entries in \
-         CLIP_REVEALED cannot be attributed to the accordion at all"
-    );
-    for node in &closed {
-        assert!(
-            !opened.contains(node),
-            "node {node} escapes whether the filter panel is open or closed, so it is not the \
-             accordion's reveal and the attribution recorded in CLIP_REVEALED is wrong"
         );
     }
 }

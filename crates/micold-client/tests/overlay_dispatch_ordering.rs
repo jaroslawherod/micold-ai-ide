@@ -34,7 +34,7 @@ use support::modals::{modals, open_dialog, Modal};
 // preserve what the code does, so these tests assert the code and the contract has been corrected
 // to match. Written out because the difference is easy to read past:
 //
-//     if state.overlay == Overlay::None && state.sidebar.filter_open { ...popover... }
+//     if state.overlay == Overlay::None && state.sidebar.more_menu_open { ...popover... }
 //     match state.overlay { ...modal... }
 //
 // The popover branch comes first *textually*, which is what makes it look like popover-priority.
@@ -42,7 +42,7 @@ use support::modals::{modals, open_dialog, Modal};
 //
 // The comment at that branch says the combination is unreachable because `open_overlay` clears
 // popovers. That is only half true: it stops a modal opening *over* a popover, but
-// `SidebarFilterMenuToggled` sets the flag with no regard for `overlay`, so a popover can still be
+// `SidebarMoreMenuToggled` sets the flag with no regard for `overlay`, so a popover can still be
 // opened over a modal through the reducer. The state is representable and is handled deliberately;
 // it is not a gap.
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ use support::modals::{modals, open_dialog, Modal};
 fn modal_and_popover(open: fn(&mut State)) -> State {
     let mut state = State {
         sidebar: sidebar::State {
-            filter_open: true,
+            more_menu_open: true,
             ..Default::default()
         },
 
@@ -64,12 +64,15 @@ fn modal_and_popover(open: fn(&mut State)) -> State {
 #[test]
 fn escape_belongs_to_the_popover_when_nothing_modal_is_open() {
     let mut state = State::default();
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar.filter_open, "precondition: the panel is open");
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
+    assert!(
+        state.sidebar.more_menu_open,
+        "precondition: the panel is open"
+    );
 
     assert_eq!(
         on_escape(&state),
-        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
+        Some(Message::Sidebar(SidebarMsg::MoreMenuToggled)),
         "the everyday case: one lightweight surface open, and Escape closes it"
     );
 }
@@ -100,7 +103,7 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
     // Guards against a dispatch that "simplifies" by treating any open popover as the Escape
     // target -- which would pass the everyday test above while silently changing the tie-break.
     let mut alone = State::default();
-    alone.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    alone.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
     let over_modal = modal_and_popover(|s| s.help.about_open = true);
 
     assert_ne!(
@@ -119,7 +122,7 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
 fn every_dismissible_popover_open() -> State {
     State {
         sidebar: sidebar::State {
-            filter_open: true,
+            more_menu_open: true,
             ..Default::default()
         },
 
@@ -162,8 +165,8 @@ fn opening_a_modal_closes_the_popovers_floating_above_it() {
             "the project switcher survived {name} opening"
         );
         assert!(
-            !state.sidebar.filter_open,
-            "the filter panel survived {name} opening"
+            !state.sidebar.more_menu_open,
+            "the more menu survived {name} opening"
         );
         assert!(
             state.project.menu_open.is_none(),
@@ -191,12 +194,12 @@ fn opening_a_modal_over_nothing_is_not_a_special_case() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn closing_the_filter_panel_leaves_the_active_filters_alone() {
+fn closing_the_more_menu_leaves_the_active_filters_alone() {
     use micold_client::features::sidebar::TagFilter;
     use micold_core::naming::ConventionalType;
 
     let mut state = State::default();
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(
         TagFilter::Type(ConventionalType::Feat),
     )));
@@ -206,9 +209,12 @@ fn closing_the_filter_panel_leaves_the_active_filters_alone() {
     let chosen = state.sidebar.filters.clone();
     assert_eq!(chosen.len(), 2, "precondition: two filters are active");
 
-    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled));
 
-    assert!(!state.sidebar.filter_open, "precondition: the panel closed");
+    assert!(
+        !state.sidebar.more_menu_open,
+        "precondition: the panel closed"
+    );
     assert_eq!(
         state.sidebar.filters, chosen,
         "closing the panel is putting the chooser away, not clearing the choice — a sidebar that \

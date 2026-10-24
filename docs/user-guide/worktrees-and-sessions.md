@@ -122,8 +122,8 @@ watching the repository. So a worktree that appears by any other route is invisi
 those moments comes round again: one you created with `git worktree add` in a terminal, one a
 coding agent made for its own work, or one you removed by hand.
 
-Click the **refresh** button in the sidebar header — between the "Worktrees" title and **add
-worktree** — to re-read the list right now. Whatever git and the filesystem currently report is
+Choose **Refresh the worktree list** from the **more** (⋯) menu at the end of the sidebar's chip
+bar to re-read the list right now. Whatever git and the filesystem currently report is
 what you get: worktrees that appeared are added, ones that are gone are removed, and a branch that
 changed is shown as it now is.
 
@@ -131,17 +131,16 @@ Switching away from the project and back used to be the only way to force this, 
 is. Nothing else about your view changes: the rows you had expanded stay expanded, your tag
 filters stay applied, and the session you are working in keeps running.
 
-While the re-read is running the button dims and stops responding, and its hover label reads
-"Refreshing worktrees…" — pressing it again does nothing, because one refresh is already on its
-way. When the answer arrives you get a short "Worktree list refreshed." notice. That notice is the
+While the re-read is running the menu item dims, stops responding and reads "Refreshing
+worktrees…" — choosing it again does nothing, because one refresh is already on its way. When the answer arrives you get a short "Worktree list refreshed." notice. That notice is the
 point of the whole exchange on a project where nothing has changed: most refreshes find nothing,
 and without it a button that correctly did its job would be indistinguishable from one that ignored
 you.
 
 If the re-read cannot be done — the project folder has been moved or deleted, git cannot read the
 repository, or the session service is not running — you get a notice saying why, and **the list you
-were already looking at stays on screen**. A failed refresh never empties the sidebar. The button
-returns to normal either way, so you can fix the problem and press it again. In the rare case where
+were already looking at stays on screen**. A failed refresh never empties the sidebar. The menu item
+returns to normal either way, so you can fix the problem and choose it again. In the rare case where
 no answer comes back at all, it gives up after about half a minute rather than staying dimmed.
 
 The button re-reads the list once, and that is all it does: it starts no timer, installs no watcher,
@@ -246,8 +245,9 @@ With the switch on, the status of a project is read:
 - when you open the project in a window;
 - when you turn the switch on;
 - every 5 minutes while the project stays open, without you doing anything;
-- whenever you press the sidebar's refresh button: the indicators catch up within about 10
-  seconds, and the button and its "Worktree list refreshed." notice do not wait for the reading.
+- whenever you choose **Refresh the worktree list** in the sidebar: the indicators catch up within
+  about 10 seconds, and the menu item and its "Worktree list refreshed." notice do not wait for the
+  reading.
 
 Only one reading of a project runs at a time. Refreshes pressed while one is under way cause one
 further reading when it ends. A project no window shows is never read, and with the switch off
@@ -317,20 +317,21 @@ the application cannot then tell that the branch holds nothing newer.
 
 ### Filtering worktrees by tag
 
-Tap the **filter** button in the sidebar header to reveal the tag-filter panel — it's hidden
-by default so the list has the full sidebar to itself until you need it:
+The tag filters are the chips on the sidebar's **chip bar**, under the **Overview** row, shown at
+all times. **All** comes first and looks selected while no filter is on; when there are more chips
+than fit one line they wrap onto further lines, and the **add**, **hide** and **more** (⋯) actions
+stay at the end of the first line:
 
 - Tap a **type chip** (e.g. `fix`) to show only worktrees of that type.
 - Tap **issue** to show only worktrees that have a Jira key.
 - Tap **untyped** to show worktrees that do not follow the naming convention.
 - Multiple filters combine with **OR** — tapping `feat` and `fix` shows both.
-- **Clear filters** restores the full list in one tap. If a filter matches nothing, an empty
-  message with a clear action is shown.
+- **All** restores the full list in one tap. If a filter matches nothing, an empty message with
+  a **Clear filters** action is shown, and the Overview row and the chip bar stay.
 
-Only chips for tags actually present in your worktrees are offered. Close the panel by
-clicking outside it, pressing `Esc`, or tapping the filter button again — any active filter
-stays applied either way. Whenever a filter is active, the filter button itself stays tinted
-so you can tell filtering is on even with the panel closed.
+Only chips for tags actually present in your worktrees are offered. Tab reaches every chip and
+action on the chip bar, after the Overview row; Enter or Space presses the one with the focus
+ring.
 
 **One exception, and only one.** The worktree holding your current session stays listed even when
 your filters exclude it — including when it's an [agent worktree](#agent-worktrees). It sits where it would sit unfiltered, and carries a **current session** chip saying why
@@ -371,8 +372,9 @@ Worktrees kept anywhere else on disk are listed only when you asked for them; se
 
 Every worktree of the project is listed in the sidebar, whatever its name and whoever made it; the
 app keeps no separate record of which ones are "yours". What the app may not know about are
-sessions: to see the conversations an assistant stored for this project, press the folder button
-in the sidebar header (its tooltip reads **Attach existing…**). It needs a project to be open.
+sessions: to see the conversations an assistant stored for this project, choose **Attach
+existing…** from the **more** (⋯) menu at the end of the sidebar's chip bar. It needs a project to
+be open.
 
 #### Resuming sessions the app has no record of
 
@@ -419,10 +421,10 @@ nothing: **Attach existing…** still lists everything.
 ### Resizing and hiding the sidebar
 
 - **Resize**: drag the thin handle on the sidebar's right edge to make it wider or narrower.
-- **Hide**: click the **hide** button (panel-collapse icon) in the sidebar header, next to
-  **add worktree**. The sidebar collapses to a thin strip.
-- Hiding takes the header with it, so the **refresh** button is unavailable until you show the
-  sidebar again; the collapsed strip hosts only the **show** button.
+- **Hide**: click the **hide** button (panel-collapse icon) on the sidebar's chip bar, between
+  **add worktree** and **more** (⋯). The sidebar collapses to a thin strip.
+- Hiding takes the chip bar with it, so **Refresh the worktree list** is unavailable until you
+  show the sidebar again; the collapsed strip hosts only the **show** button.
 - **Show**: click the **show** button (panel-open icon) on the collapsed strip to bring it back.
 
 ## The "Default" entry: sessions without a worktree
@@ -473,7 +475,7 @@ is unnecessary overhead this avoids.
 
 ## Creating a worktree
 
-Click **add** in the sidebar header to open the New worktree form. At the top, three chips choose
+Click **add** on the sidebar's chip bar to open the New worktree form. At the top, three chips choose
 where the worktree's branch comes from:
 
 - **New branch** (the default) — describe the work and the app derives a fresh branch name.

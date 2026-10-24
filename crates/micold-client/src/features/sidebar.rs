@@ -17,8 +17,9 @@
 //! # The vocabulary this feature declares
 //!
 //! Nine transitions in [`Msg`]: expansion (`WorktreeExpansionToggled`,
-//! `DefaultExpansionToggled`), the tag filters and their menu (`FilterToggled`, `FiltersCleared`,
-//! `FilterMenuToggled`), the scroll position (`Scrolled`, `ViewportResized`), and the panel itself
+//! `DefaultExpansionToggled`), the tag filters (`FilterToggled`, `FiltersCleared`), the chip bar's
+//! more (⋯) menu (`MoreMenuToggled`, `MoreMenuAnchored`, `MoreMenuChosen`; feature 1125, which
+//! removed the filter panel and its `FilterMenuToggled`), the scroll position (`Scrolled`, `ViewportResized`), and the panel itself
 //! (`Toggled`, `DragMoved`). [`update`] routes all nine and is pure (data-model.md §1.1 shape
 //! A) — every one of them is a question about what the sidebar shows, answerable without leaving the
 //! process, so the binary matches none of them again.
@@ -29,7 +30,8 @@
 //!
 //! - **what is expanded**: `expanded` (the worktree rows the user has opened), `default_expanded`,
 //!   and `pending_reveal_scroll`, the flag that arms a scroll-into-view once layout knows the height;
-//! - **what is shown**: `filters`, `filter_open`, and `group_choices` (feature 1125: the user's
+//! - **what is shown**: `filters`, `more_menu_open` and `more_anchor` (feature 1125: the chip
+//!   bar's more menu and the corner it hangs from), and `group_choices` (feature 1125: the user's
 //!   open or closed choice per project and state group);
 //! - **the panel's own geometry**: `hidden`, `width`, `scroll_offset`, `viewport_height`.
 //!
@@ -75,7 +77,7 @@ use std::path::{Path, PathBuf};
 ///
 /// Six of the ten shed the `sidebar` the qualifier now carries: `sidebar_filter_open`,
 /// `sidebar_filters`, `sidebar_hidden`, `sidebar_scroll_offset`, `sidebar_viewport_height` and
-/// `sidebar_width` are `filter_open`, `filters`, `hidden`, `scroll_offset`, `viewport_height` and
+/// `sidebar_width` are `filter_open` (since feature 1125 `more_menu_open`), `filters`, `hidden`, `scroll_offset`, `viewport_height` and
 /// `width`. The other four never carried it — `default_expanded`, `expanded`,
 /// `pending_reveal_scroll` — and keep their names. The reducers below
 /// spell the root's type `crate::app::State` now that `State` here means this struct.
@@ -102,10 +104,15 @@ pub struct State {
     /// The location the Overview sent the user to (feature 813, R12): scrolled into view and drawn
     /// with a session row's selected look until the next selection.
     pub revealed: Option<SessionLocation>,
-    /// Whether the sidebar's tag-filter panel is shown (feature 009, FR-002/FR-003). Mutually
-    /// exclusive with `help.help_menu_open`/`project.switcher_open`. Transient — not persisted;
-    /// closing it never alters `filters` (FR-007/FR-008).
-    pub filter_open: bool,
+    /// Whether the chip bar's more (⋯) menu is shown (feature 1125, FR-015). It took the place of
+    /// the tag-filter panel's flag, whose chips are always on the chip bar now. Mutually exclusive
+    /// with `help.help_menu_open`/`project.switcher_open`. Transient — not persisted; closing it
+    /// never alters `filters`.
+    pub more_menu_open: bool,
+    /// Where the more menu's top-left corner goes, in window pixels: the bottom-left corner of the
+    /// trigger whose press opened it, reported ahead of the toggle (the switcher's BUG-1023
+    /// pattern). `None` until a pointer press has reported one; cleared when the menu closes.
+    pub more_anchor: Option<(u16, u16)>,
     /// Active sidebar tag filters (feature 008, FR-024). Empty ⇒ all worktrees shown. Multiple
     /// filters combine with OR (FR-025). Transient — not persisted.
     pub filters: BTreeSet<TagFilter>,
@@ -292,19 +299,93 @@ impl RunNode {
     }
 }
 
-/// The sidebar header's actions, in order (parallel-surfaces D: **Run in parallel** beside
-/// **New worktree**).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HeaderAction {
-    /// Opens the add-worktree form.
-    NewWorktree,
-    /// Opens the Run in parallel dialog.
+/// The chip bar's more (⋯) menu's actions (feature 1125, D4, FR-015): the three header buttons
+/// that did not stay on the chip bar beside add and hide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MoreAction {
+    /// Re-read the worktree list (feature 029).
+    Refresh,
+    /// Open the "Attach existing…" list (feature 582).
+    AttachExisting,
+    /// Open the Run in parallel dialog (feature 483).
     RunInParallel,
 }
 
-/// The header's actions, left to right.
-pub const HEADER_ACTIONS: [HeaderAction; 2] =
-    [HeaderAction::NewWorktree, HeaderAction::RunInParallel];
+/// The more menu's items, top to bottom (contract S3).
+pub const MORE_MENU: [MoreAction; 3] = [
+    MoreAction::Refresh,
+    MoreAction::AttachExisting,
+    MoreAction::RunInParallel,
+];
+
+/// One item of the more menu as the view draws it: the header button's tooltip and enabled rule,
+/// unchanged (FR-015).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoreMenuItem {
+    pub action: MoreAction,
+    pub label: &'static str,
+    pub tooltip: &'static str,
+    pub enabled: bool,
+}
+
+/// The more menu's items for a sidebar with a project open (`project_active`) and a refresh
+/// running (`refreshing`): refresh is offered exactly when `can_refresh_worktrees` is true, the
+/// other two whenever a project is open, as the header's buttons were (feature 029 FR-005,
+/// features 582 and 483).
+pub fn more_menu_items(project_active: bool, refreshing: bool) -> Vec<MoreMenuItem> {
+    MORE_MENU
+        .iter()
+        .map(|&action| {
+            let (label, tooltip, enabled) = match action {
+                // The label is the tooltip, so a running refresh says so on the item itself: a
+                // menu item's tooltip is drawn only over a trailing icon, which this has none of.
+                MoreAction::Refresh => {
+                    let text = if refreshing {
+                        "Refreshing worktrees…"
+                    } else {
+                        "Refresh the worktree list"
+                    };
+                    (text, text, project_active && !refreshing)
+                }
+                MoreAction::AttachExisting => {
+                    ("Attach existing…", "Attach existing…", project_active)
+                }
+                MoreAction::RunInParallel => {
+                    ("Run in parallel…", "Run in parallel…", project_active)
+                }
+            };
+            MoreMenuItem {
+                action,
+                label,
+                tooltip,
+                enabled,
+            }
+        })
+        .collect()
+}
+
+/// One chip of the chip bar (feature 1125, FR-014): **All**, or one tag filter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChipBarChip {
+    All,
+    Filter(TagFilter),
+}
+
+/// The chip bar's chips, left to right, each with whether it looks selected: **All** first,
+/// selected exactly when no filter is active, then one chip per filter on offer in `available`'s
+/// order (US4.1, US4.2).
+pub fn chip_bar_chips(
+    available: &[TagFilter],
+    active: &BTreeSet<TagFilter>,
+) -> Vec<(ChipBarChip, bool)> {
+    std::iter::once((ChipBarChip::All, active.is_empty()))
+        .chain(
+            available
+                .iter()
+                .map(|&filter| (ChipBarChip::Filter(filter), active.contains(&filter))),
+        )
+        .collect()
+}
 
 /// **Run in parallel** was chosen: the root opens the dialog for the active project.
 pub fn run_in_parallel() -> Vec<crate::features::Outcome> {
@@ -2001,30 +2082,27 @@ impl crate::app::State {
     }
 }
 
-/// The sidebar's tag-filter panel, as a floating surface (feature 021, T029).
+/// The chip bar's more (⋯) menu, as a floating surface (feature 1125, FR-015, contract S3).
 ///
-/// The panel is a popover with no state of its own beyond "is it showing": the filters it edits
-/// live in `State::filters` and outlive it, which is contract D3 — closing the panel is
-/// not a decision about the filters. So the surface is a marker, and everything dispatch needs is
-/// the three answers below.
-///
-/// The one popover Escape reaches today. Registering it is a faithful description of what the
-/// code already does, which is why it is the popover Tier 2 registers first.
+/// It took the registry place of the tag-filter panel (feature 021, T029), whose chips are on the
+/// chip bar at all times now. A popover with no state of its own beyond "is it showing" and the
+/// corner it hangs from, so the surface is a marker and everything dispatch needs is the three
+/// answers below: feature 017's Escape, outside press and displacement close it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SidebarFilterPanel;
+pub struct SidebarMoreMenu;
 
-impl SidebarFilterPanel {
+impl SidebarMoreMenu {
     /// This surface's identity, nameable by the surfaces that displace it or that it
     /// displaces (T067a-2). The declaration has to point at something, and pointing at the
     /// literal string in two places is how the two would come to disagree.
-    pub const ID: SurfaceId = SurfaceId::new("sidebar_filter");
+    pub const ID: SurfaceId = SurfaceId::new("sidebar_more");
 }
 
-floating_surface!(SidebarFilterPanel, id: Self::ID, layer: Popover, cancelled_by: crate::app::Message::Sidebar(Msg::FilterMenuToggled));
+floating_surface!(SidebarMoreMenu, id: Self::ID, layer: Popover, cancelled_by: crate::app::Message::Sidebar(Msg::MoreMenuToggled));
 
-impl Registered for SidebarFilterPanel {
+impl Registered for SidebarMoreMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
-        state.sidebar.filter_open.then_some(SidebarFilterPanel)
+        state.sidebar.more_menu_open.then_some(SidebarMoreMenu)
     }
 }
 
@@ -2058,15 +2136,26 @@ pub fn scrolled(state: &mut crate::app::State, offset: u32) {
     state.dismiss_on_scroll_beneath();
 }
 
-/// The tag-filter panel was toggled (feature 009, FR-002/FR-003).
+/// The more menu was toggled (feature 1125, FR-015).
 ///
-/// Mutually exclusive with the other two panel popovers, and it closes the project row menu too.
-/// It used to assign those three fields; since T067a-2 it reports that the panel opened and the
-/// registry closes what this surface declares it displaces.
+/// Mutually exclusive with the other two panel popovers, and it closes the project row menu too:
+/// it reports that the menu opened and the registry closes what this surface declares it
+/// displaces (T067a-2). Closing it forgets the corner, which belongs to the press that opened it.
 #[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
-pub fn filter_menu_toggled(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
-    state.sidebar.filter_open = !state.sidebar.filter_open;
-    crate::features::surface_opened(state.sidebar.filter_open, SidebarFilterPanel::ID)
+pub fn more_menu_toggled(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
+    state.sidebar.more_menu_open = !state.sidebar.more_menu_open;
+    if !state.sidebar.more_menu_open {
+        state.sidebar.more_anchor = None;
+    }
+    crate::features::surface_opened(state.sidebar.more_menu_open, SidebarMoreMenu::ID)
+}
+
+/// An item of the more menu was chosen: the menu closes. What the item does is the header
+/// button's own message, which the shell sends next (`ui::sidebar::more_action_message`), so the
+/// refresh still goes through the shell's request path.
+pub fn more_menu_chosen(state: &mut crate::app::State) {
+    state.sidebar.more_menu_open = false;
+    state.sidebar.more_anchor = None;
 }
 
 /// The sidebar was collapsed or revealed.
@@ -2096,7 +2185,7 @@ pub fn worktrees_replaced(
 /// # The variants kept their meaning and lost their prefix
 ///
 /// The six that began with `Sidebar` do not any more — the type says which surface (contract M1),
-/// so `SidebarFilterMenuToggled` is `Msg::FilterMenuToggled`. The other three keep their names:
+/// so `SidebarFiltersCleared` is `Msg::FiltersCleared`. The other three keep their names:
 /// `WorktreeExpansionToggled` and `DefaultExpansionToggled` say *which row* expanded, and
 /// dropping the word would leave two messages with the same name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2105,14 +2194,20 @@ pub enum Msg {
     DefaultExpansionToggled,
     FilterToggled(TagFilter),
     FiltersCleared,
-    FilterMenuToggled,
+    /// The chip bar's more (⋯) action was pressed (feature 1125, FR-015).
+    MoreMenuToggled,
+    /// The more action's press reported its trigger's bottom-left corner, ahead of the toggle.
+    MoreMenuAnchored((u16, u16)),
+    /// An item of the more menu was chosen: the menu closes, and the shell sends the item's
+    /// header-button message (`ui::sidebar::more_action_message`).
+    MoreMenuChosen(MoreAction),
     Scrolled(u32),
     ViewportResized(u32),
     Toggled,
     DragMoved(u16),
     /// **Review changes** on a worktree row's or the Default row's menu (feature 482, V1).
     ReviewChangesRequested(SessionLocation),
-    /// **Run in parallel** on the sidebar header (feature 483, D).
+    /// **Run in parallel**, on the chip bar's more menu since feature 1125 (feature 483, D).
     RunInParallelRequested,
     /// The row a navigation chord focused lost the keyboard (feature 803, contracts/ui.md U4).
     KeyboardRowLeft,
@@ -2132,7 +2227,7 @@ pub fn review_changes(entry: SessionLocation) -> Vec<crate::features::Outcome> {
 /// This feature's whole reducer surface: one entry point, shape A (contract M2).
 ///
 /// Two of the ten report something back — expanding a row can reveal the current session, and
-/// opening the filter panel displaces the other popovers — so this returns outcomes rather than
+/// opening the more menu displaces the other popovers — so this returns outcomes rather than
 /// swallowing them. The other eight write fields this module owns and have nothing to say.
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
@@ -2140,7 +2235,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             return state.toggle_location(SessionLocation::Worktree(dir));
         }
         Msg::DefaultExpansionToggled => return state.toggle_location(SessionLocation::Default),
-        Msg::FilterMenuToggled => return filter_menu_toggled(state),
+        Msg::MoreMenuToggled => return more_menu_toggled(state),
+        Msg::MoreMenuAnchored(anchor) => state.sidebar.more_anchor = Some(anchor),
+        Msg::MoreMenuChosen(_) => more_menu_chosen(state),
         Msg::FilterToggled(filter) => filter_toggled(state, filter),
         Msg::FiltersCleared => filters_cleared(state),
         Msg::Scrolled(offset) => scrolled(state, offset),

@@ -21,13 +21,14 @@ status markers.
 | Check circle | This is the active project | Known-projects list, project switcher |
 | Error | This project's folder is currently unavailable | Known-projects list, project switcher, sidebar |
 | Up arrow | Go up one folder | Project selector, folder tree |
-| Hide sidebar | Collapse the sidebar | Sidebar header |
+| Hide sidebar | Collapse the sidebar | Sidebar chip bar |
 | Show sidebar | Expand the sidebar | Collapsed sidebar |
 | Add session | Start a new session | Sidebar worktree rows |
-| Add worktree | Create a new worktree | Sidebar header |
-| Refresh | Re-read the project's worktree list from git | Sidebar header |
+| Add worktree | Create a new worktree | Sidebar chip bar |
+| Refresh | Re-read the project's worktree list from git | Sidebar chip bar's more (⋯) menu |
 | Delete | Delete a worktree | Sidebar worktree rows |
-| Filter | Toggle the tag-filter panel | Sidebar toolbar |
+| Filter | Toggle a tag-filter panel | Component showcase |
+| More (⋯) | Open the menu holding refresh, attach existing and run in parallel | Sidebar chip bar |
 | Search | Search a long list by typing | Branch search in the New worktree form |
 | Project root | The repository's own working directory | Sidebar **Default** entry |
 | Copy | Copy a worktree's name to the clipboard | Worktree right-click menu (**Copy name**) |

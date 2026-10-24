@@ -289,7 +289,7 @@ const ADD_WORKTREE_ANCHORS: &[Anchor] = &[
     },
     Anchor {
         name: "dialog.actions",
-        path: &[6, 0, 0, 1],
+        path: &[8, 0, 0, 1],
     },
 ];
 
@@ -374,7 +374,7 @@ pub const SESSION_HEADER_CHANGES: &[usize] = &[0, 0, 1, 1, 0, 0, 0, 1];
 ///
 /// Named because this is the node whose height differed from its siblings' for two days with no
 /// fixture able to say so — every other covered state stops at depth 0.
-const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 3, 0, 0, 3];
+const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3];
 
 /// Deliberately long, so the label/close-button relationship this gate was built to watch is under
 /// real pressure at the canonical window size (FR-008b, FR-018).
@@ -420,6 +420,26 @@ fn with_project() -> State {
     assert!(
         state.workspace.active_project().is_some(),
         "the covered state must have a project open, or it is not covering what it claims"
+    );
+    state
+}
+
+/// The project with worktrees offering six tag filters — four types, *issue* and *untyped* — at
+/// sidebar `width` (feature 1125, T050).
+fn with_six_filters(width: u16) -> State {
+    let mut state = with_project();
+    state.sidebar.width = width;
+    state.worktree.worktrees = vec![
+        worktree("feat-42_login", "feat/42_login"),
+        worktree("fix-1117_ci-red", "fix/1117_ci-red"),
+        worktree("docs-guide", "docs/guide"),
+        worktree("chore-deps", "chore/deps"),
+        worktree("scratch", "scratch"),
+    ];
+    assert_eq!(
+        state.available_tag_filters().len(),
+        6,
+        "the chip bar must have six filter chips on offer"
     );
     state
 }
@@ -725,11 +745,11 @@ pub fn covered_states() -> &'static [CoveredState] {
                     // cluster from `…/0/2` to `…/0/3`.
                     // Re-pointed under feature 1125 (T018): the Idle group's header is the tree's
                     // first row, so the long-named worktree's row moved from index 2 to 3.
-                    path: &[0, 0, 1, 0, 0, 0, 3, 0, 0, 3, 1, 0, 2],
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 2],
                 },
                 Anchor {
                     name: "sidebar.row.delete_button",
-                    path: &[0, 0, 1, 0, 0, 0, 3, 0, 0, 3, 1, 0, 3, 1],
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 3, 1],
                 },
                 // `Toolbar`'s leading `text(title)` (`material/toolbar.rs:46`). Named on both shell
                 // states rather than on all eleven: the toolbar is behind every dialog too, and an
@@ -785,6 +805,35 @@ pub fn covered_states() -> &'static [CoveredState] {
                 path: &[],
             }],
         },
+        // Feature 1125 (T050, US4.7, FR-016): the chip bar with six filter chips on offer (four
+        // types, *issue*, *untyped*) at the narrowest, default and widest sidebar: at 180px they
+        // wrap onto further lines left of add, hide and more.
+        CoveredState {
+            name: "main-shell-sidebar-chip-bar-narrowest",
+            build: || StateUnderTest::new(with_six_filters(micold_client::app::SIDEBAR_MIN_WIDTH)),
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        CoveredState {
+            name: "main-shell-sidebar-chip-bar-default",
+            build: || {
+                StateUnderTest::new(with_six_filters(micold_client::app::SIDEBAR_DEFAULT_WIDTH))
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        CoveredState {
+            name: "main-shell-sidebar-chip-bar-widest",
+            build: || StateUnderTest::new(with_six_filters(micold_client::app::SIDEBAR_MAX_WIDTH)),
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
         CoveredState {
             name: "add-worktree-dialog-new-branch",
             build: || {
@@ -808,7 +857,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // than to the number.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[6, 0, 0, 1],
+                    path: &[8, 0, 0, 1],
                 },
             ],
         },
@@ -832,7 +881,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // free-standing `Type` label inside the control's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[6, 0, 0, 1],
+                    path: &[8, 0, 0, 1],
                 },
             ],
         },
@@ -887,7 +936,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.actions",
-                    path: &[6, 0, 0, 1],
+                    path: &[8, 0, 0, 1],
                 },
             ],
         },
@@ -1316,7 +1365,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // own, and it pushes the actions down.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[6, 0, 0, 1],
+                    path: &[8, 0, 0, 1],
                 },
             ],
         },
@@ -1397,7 +1446,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // Index 4: the heading, the source switch, then the caption under it (feature 034),
                 // the `* required` legend (feature 937), then the Type row, whose first child is
                 // the select (feature 776: the AI CLI select shares the row).
-                StateUnderTest::new(state).pressing(&[6, 0, 0, 0, 4, 0])
+                StateUnderTest::new(state).pressing(&[8, 0, 0, 0, 4, 0])
             },
             anchors: &[
                 Anchor {
@@ -1406,13 +1455,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.type-select",
-                    path: &[6, 0, 0, 0, 4, 0],
+                    path: &[8, 0, 0, 0, 4, 0],
                 },
                 // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
                 // layer, not a field.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[6, 0, 0, 1],
+                    path: &[8, 0, 0, 1],
                 },
             ],
         },
@@ -2198,7 +2247,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.actions",
-                    path: &[6, 0, 0, 1],
+                    path: &[8, 0, 0, 1],
                 },
             ],
         },
@@ -2743,23 +2792,8 @@ fn compare_group() -> micold_core::runs::RunGroup {
 /// place. A registry scan (T029) should expect both lists here and neither elsewhere.
 pub fn revealing_states() -> &'static [RevealingState] {
     &[
-        // BUG-001: the reveal that paints over what moved up. Two frames of a 90ms reveal at
-        // ~0.178 per frame lands at ~0.356 — far enough in that `Expand::draw` is past its
-        // early-return, and far enough from the end that the parent is still visibly short of
-        // its child.
-        RevealingState {
-            name: "sidebar-filter-panel-mid-reveal",
-            build: || StateUnderTest::new(with_project()),
-            toward: |state| state.sidebar.filter_open = true,
-            frames: 2,
-            node: "0/0/0/1/0/0/0/2",
-            // Widened when the reveal took §6.2's easing (T064). A *decelerating* curve covers
-            // most of its distance early, so two frames of a 150ms transition now sit at 0.64 of
-            // the open height where a linear ramp put them at 0.21. The window still fails at 0 and
-            // at 1, which is what "pinned mid-reveal" has to mean; it no longer assumes the value
-            // and the elapsed time are the same number.
-            expect_between: (0.2, 0.8),
-        },
+        // Empty since feature 1125 removed the sidebar's filter accordion, the one reveal this
+        // list pinned (`sidebar-filter-panel-mid-reveal`). The list stays for the next one.
     ]
 }
 

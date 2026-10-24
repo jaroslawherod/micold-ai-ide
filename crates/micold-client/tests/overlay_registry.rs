@@ -199,11 +199,11 @@ fn dialogs() -> Vec<Dialog> {
     all
 }
 
-/// A state with `dialog` open (or nothing open, for `None`) and the filter panel as asked.
-fn state(dialog: Option<&Dialog>, filter_open: bool) -> State {
+/// A state with `dialog` open (or nothing open, for `None`) and the more menu as asked.
+fn state(dialog: Option<&Dialog>, more_menu_open: bool) -> State {
     let mut state = State {
         sidebar: sidebar::State {
-            filter_open,
+            more_menu_open,
             ..Default::default()
         },
         ..Default::default()
@@ -241,7 +241,7 @@ fn escape_closes_the_open_dialog_in_every_state() {
     // of.
     for (dialog, filter, state) in every_state() {
         let cancel = dialog.as_ref().map(|d| d.cancel.clone());
-        let panel = filter.then_some(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+        let panel = filter.then_some(Message::Sidebar(SidebarMsg::MoreMenuToggled));
         // A dialog outranks the panel; with no dialog open the panel is the topmost surface.
         let want = cancel.or(panel);
         let (name, filter) = (label(&dialog), if filter { "open" } else { "closed" });
@@ -249,13 +249,13 @@ fn escape_closes_the_open_dialog_in_every_state() {
         assert_eq!(
             registry::escape(&state),
             want,
-            "{name} with the filter panel {filter}: generic dispatch did not produce the \
+            "{name} with the more menu {filter}: generic dispatch did not produce the \
              cancellation this dialog declares"
         );
         assert_eq!(
             on_escape(&state),
             want,
-            "{name} with the filter panel {filter}: the public Escape entry point disagreed with \
+            "{name} with the more menu {filter}: the public Escape entry point disagreed with \
              the registry it now delegates to"
         );
     }
@@ -303,7 +303,7 @@ fn every_dialog_is_in_the_list() {
     assert_eq!(
         every_state().len(),
         48,
-        "twenty-three dialogs (the Bypass confirmations, #942, and the switch confirmation, #943) plus nothing open, each with the filter panel open and closed"
+        "twenty-three dialogs (the Bypass confirmations, #942, and the switch confirmation, #943) plus nothing open, each with the more menu open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -434,7 +434,7 @@ fn a_modal_keeps_escape_whatever_floats_above_it() {
     let popover_alone = state(None, true);
     assert_eq!(
         registry::escape(&popover_alone),
-        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
+        Some(Message::Sidebar(SidebarMsg::MoreMenuToggled)),
         "with no modal the popover is the topmost surface, and Escape is its own"
     );
 }
@@ -446,7 +446,7 @@ fn a_scroll_beneath_reaches_every_menu_and_no_dialog() {
     // not a modal is over them.
     assert_eq!(
         registry::scroll_beneath(&state(Some(&dialogs()[0]), true)),
-        vec![Message::Sidebar(SidebarMsg::FilterMenuToggled)],
+        vec![Message::Sidebar(SidebarMsg::MoreMenuToggled)],
         "a scroll behind an open modal still invalidates the menu anchored beneath it, and does \
          not touch the modal"
     );
@@ -478,16 +478,16 @@ fn registration_order_does_not_decide_anything() {
 
 #[test]
 fn a_surface_is_registered_by_naming_it_once_and_nothing_else() {
-    // R1/SC-001 in miniature: the sidebar filter panel is described entirely in
+    // R1/SC-001 in miniature: the sidebar more menu is described entirely in
     // `features/sidebar.rs` and appears in exactly one line of `overlay/registry.rs`. Dispatch
     // finds it without any central match having heard of it.
     let open = registry::topmost(&state(None, true)).expect("the panel is open");
 
-    assert_eq!(open.id().as_str(), "sidebar_filter");
+    assert_eq!(open.id().as_str(), "sidebar_more");
     assert_eq!(open.layer(), Layer::Popover);
     assert_eq!(
         open.on(Trigger::Escape),
-        Some(&Message::Sidebar(SidebarMsg::FilterMenuToggled))
+        Some(&Message::Sidebar(SidebarMsg::MoreMenuToggled))
     );
 }
 
@@ -496,7 +496,7 @@ fn escape_now_reaches_every_popover() {
     // **A behaviour change, and the only one in T031's dispatch.** Escape did not close the
     // overflow menu, the switcher, or the three context menus: no widget handles Escape — the
     // `cdk::overlay::Surface` observes an outside click and nothing else — and the keyboard path
-    // only ever asked about a modal or the filter panel. The *rule* has said since feature 017
+    // only ever asked about a modal or the more menu. The *rule* has said since feature 017
     // that a non-modal surface dismisses on Escape, and `Surface::dismisses_on` exists precisely
     // so "callers that own such a trigger consult the same rule rather than re-deciding it". The
     // subscription was never wired to it. Registering the popovers finishes that wiring.
@@ -553,7 +553,7 @@ fn pressing_escape_closes_the_topmost_surface() {
         assert_eq!(
             open(&state),
             want,
-            "{} with the filter panel {}: Escape was supposed to close {top:?} and leave the rest \
+            "{} with the more menu {}: Escape was supposed to close {top:?} and leave the rest \
              alone",
             label(&dialog),
             if filter { "open" } else { "closed" }
@@ -569,7 +569,7 @@ fn pressing_escape_closes_the_topmost_surface() {
         "the dialog took the Escape"
     );
     assert!(
-        both.sidebar.filter_open,
+        both.sidebar.more_menu_open,
         "and the popover beneath it is untouched — one Escape closes one surface"
     );
 
@@ -722,7 +722,7 @@ fn a_popover_is_not_drawn_from_the_registry() {
             },
 
             sidebar: sidebar::State {
-                filter_open: true,
+                more_menu_open: true,
                 ..Default::default()
             },
 

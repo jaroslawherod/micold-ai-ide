@@ -350,7 +350,7 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
         },
 
         sidebar: sidebar::State {
-            filter_open: true,
+            more_menu_open: true,
             ..Default::default()
         },
 

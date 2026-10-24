@@ -695,9 +695,9 @@ fn keyboard_taking_surfaces() -> Vec<(&'static str, Message, Message)> {
             Message::Project(ProjectMsg::SwitcherToggled),
         ),
         (
-            "sidebar filter panel",
-            Message::Sidebar(SidebarMsg::FilterMenuToggled),
-            Message::Sidebar(SidebarMsg::FilterMenuToggled),
+            "sidebar more menu",
+            Message::Sidebar(SidebarMsg::MoreMenuToggled),
+            Message::Sidebar(SidebarMsg::MoreMenuToggled),
         ),
     ]
 }

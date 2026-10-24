@@ -1516,6 +1516,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Worktree(WorktreeMsg::RefreshRequested) => {
             shell::daemon_sync::on_worktree_refresh_requested(app)
         }
+        // Feature 1125 (FR-015): an item of the sidebar's more menu closes the menu, then does what
+        // its header button did, by the same route — the refresh through the shell's request above.
+        Message::Sidebar(msg @ micold_client::features::sidebar::Msg::MoreMenuChosen(action)) => {
+            app.core.update(Message::Sidebar(msg));
+            update_inner(app, micold_client::ui::sidebar::more_action_message(action))
+        }
         // The bounded wait fired. Routed here rather than falling through to the reducer because
         // whether *this* timer still names the live request is a question about correlation, and
         // correlation lives in the shell.

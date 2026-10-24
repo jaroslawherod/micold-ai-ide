@@ -10,10 +10,11 @@ use crate::features::sidebar::{row_selected, RowSelection, SelectableRow};
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
+use crate::ui::cdk;
 use crate::ui::material::{
-    self, Accordion, ActivityBadge, Button, ButtonVariant, CheckMark, Divider, FilterTrigger,
-    HoverReveal, IconButton, PrMark, PullRequestIndicator, Scrollable, SplitAction, StateIcon,
-    SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
+    self, ActivityBadge, Button, ButtonVariant, CheckMark, Divider, HoverReveal, IconButton,
+    PrMark, PullRequestIndicator, Scrollable, SplitAction, StateIcon, SurfaceKind, Text,
+    ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
 };
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
@@ -44,113 +45,10 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     let r = tokens::roles(scheme);
     let width = state.sidebar_width_px() as f32;
 
-    // Header: filter (left) + title (fill) + refresh + add-worktree + hide.
-    // Toggles the filter accordion below (feature 009); tinted to show whether any filter is
-    // currently active even while the accordion is collapsed (FR-005, US2).
-    let filter_toggle: Element<'_, Message> =
-        FilterTrigger::new(Message::Sidebar(SidebarMsg::FilterMenuToggled), r)
-            .active(!state.sidebar.filters.is_empty())
-            .into();
-    // Re-read the listing on the user's ask (feature 029, FR-001). Neutral tint, matching "Hide
-    // sidebar" rather than the accented "Add a worktree": refreshing is a routine action, not the
-    // header's primary one. It sits left of `add_worktree` so the two pre-existing controls keep
-    // their positions and the user's muscle memory (spec Assumptions).
-    //
-    // `on_press_maybe` rather than a disabled style: with no project open there is no listing to
-    // re-read, and a control with no message attached cannot be activated at all (FR-005). That is
-    // what makes unavailability structural instead of a guard the reducer has to remember.
-    //
-    // While one is running the same withheld `on_press` doubles as the busy affordance, and the
-    // tooltip says so. No spinner: an indeterminate indicator would be a new component for a state
-    // that is normally over within a frame or two, and the honest report of "a refresh is running"
-    // is the control refusing a second press (research R6).
-    let refresh = Tooltip::new(
-        IconButton::new(Icon::Refresh, r)
-            .compact()
-            .tint(r.on_surface_variant)
-            .on_press_maybe(
-                state
-                    .can_refresh_worktrees()
-                    .then_some(Message::Worktree(WorktreeMsg::RefreshRequested)),
-            ),
-        if state.worktree.refreshing {
-            "Refreshing worktrees…"
-        } else {
-            "Refresh the worktree list"
-        },
-        r,
-    );
-    let add_worktree = Tooltip::new(
-        IconButton::new(Icon::AddWorktree, r)
-            .compact()
-            .tint(r.primary)
-            .on_press(Message::WorktreeForm(FormMsg::Opened)),
-        "Add a worktree (new git branch)",
-        r,
-    );
-    // Feature 483 (D): Run in parallel, directly after New worktree (`HEADER_ACTIONS`).
-    let run_in_parallel = Tooltip::new(
-        IconButton::new(Icon::AiCli, r)
-            .compact()
-            .tint(r.primary)
-            .on_press_maybe(
-                state
-                    .workspace
-                    .active
-                    .is_some()
-                    .then_some(Message::Sidebar(SidebarMsg::RunInParallelRequested)),
-            ),
-        "Run in parallel…",
-        r,
-    );
-    // Feature 582: offered only with a project open, where there is something to look in. The
-    // label is the tooltip; the glyph is the folder the "open project" action already uses.
-    let attach_existing = Tooltip::new(
-        IconButton::new(Icon::OpenProject, r)
-            .compact()
-            .tint(r.on_surface_variant)
-            .on_press_maybe(
-                state
-                    .workspace
-                    .active
-                    .is_some()
-                    .then_some(Message::Attach(crate::features::attach::Msg::Opened)),
-            ),
-        "Attach existing…",
-        r,
-    );
-    let hide = Tooltip::new(
-        IconButton::new(Icon::HideSidebar, r)
-            .compact()
-            .tint(r.on_surface_variant)
-            .on_press(Message::Sidebar(SidebarMsg::Toggled)),
-        "Hide sidebar",
-        r,
-    );
-    let header = row![
-        filter_toggle,
-        Text::new("Worktrees", TypeRole::Section, r).width(Length::Fill),
-        refresh,
-        attach_existing,
-        add_worktree,
-        run_in_parallel,
-        hide,
-    ]
-    .align_y(Alignment::Center)
-    .spacing(spacing::XS);
-
-    // The filter chips (feature 008) live in an accordion that expands/collapses below the
-    // header (feature 009) — collapsed to zero height by default, pushing the worktree list
-    // down rather than floating over it.
-    //
-    // Built on every render, including while collapsed. It used to be skipped in that case
-    // (`filter_bar()` is an O(worktrees) scan plus a chip `Element` tree), but the test was "is
-    // the reveal still in progress", which only the accordion itself can answer now that it owns
-    // its own track — and asking it would mean it could no longer be built from a single pass over
-    // the state. A collapsed accordion lays out and hit-tests nothing regardless.
-    let filter_accordion: Element<'_, Message> = Accordion::new(filter_bar(state, r), r)
-        .open(state.sidebar.filter_open)
-        .into();
+    // Feature 1125 (S3, R11): the chip bar under the Overview row took the place of the header row
+    // (the "Worktrees" title, the filter button and five actions) and of the filter accordion. Only
+    // with a project open, as the Overview row (S1).
+    let chip_bar = state.workspace.active.as_ref().map(|_| chip_bar(state, r));
 
     // The "Default" entry (feature 010) is always present once a project is open — see
     // `sidebar_entries()` — so, unlike before this feature, the sidebar is never truly "empty":
@@ -256,18 +154,19 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // room is kept.
     // Feature 582 (FR-012): the start-up offer, between the header and the list. The shared banner,
     // not a snackbar: the offer stands until the user answers it.
-    // Feature 1125 (S1, R9): the Overview row first, above the header and outside the scroll
+    // Feature 1125 (S1, R9): the Overview row first, above the chip bar and outside the scroll
     // region, so it stays the first row however far the list is scrolled.
     let mut content = column![];
     if let Some(overview) = overview_row(state, r) {
         content = content.push(overview);
     }
-    let mut content = content.push(header);
+    if let Some(chip_bar) = chip_bar {
+        content = content.push(chip_bar);
+    }
     if let Some(offer) = offer_banner(state, r) {
         content = content.push(offer);
     }
     let content = content
-        .push(filter_accordion)
         .push(body)
         .spacing(spacing::SM)
         .padding(iced::Padding {
@@ -454,42 +353,168 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
     .into()
 }
 
-/// The filter chip bar, shown inside the sidebar's filter accordion (feature 009) rather than
-/// always visible above the worktree list. One chip per available filter (chunked into rows so
-/// they never overflow the panel), plus a "Clear" control when any filter is active (feature
-/// 008, FR-024/FR-026). When no tags exist anywhere yet, shows a short message instead of an
-/// empty panel (FR-009).
-fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
-    let available = state.available_tag_filters();
-    if available.is_empty() {
-        return Text::new("No tags to filter yet.", TypeRole::SidebarTag, r)
-            .muted()
-            .into();
-    }
-    let mut col = column![].spacing(spacing::XS);
-    for chunk in available.chunks(3) {
-        let mut rw = row![].spacing(spacing::XS).align_y(Alignment::Center);
-        for &filter in chunk {
-            rw = rw.push(filter_chip(
-                filter,
-                state.sidebar.filters.contains(&filter),
-                r,
-            ));
+/// The chip bar (feature 1125, contract S3, research R11): **All** and the tag filter chips
+/// (feature 008), wrapping onto further lines, left of add, hide and more (⋯), which stay on the
+/// first line (US4.7, FR-016). Every control takes the keyboard, in display order (FR-017).
+fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
+    use crate::features::sidebar::{chip_bar_chips, ChipBarChip};
+    let chips: Vec<Element<'static, Message>> =
+        chip_bar_chips(&state.available_tag_filters(), &state.sidebar.filters)
+            .into_iter()
+            .map(|(chip, active)| match chip {
+                // Selected while no filter is; pressing it clears every filter (US4.2, US4.3).
+                ChipBarChip::All => {
+                    let clear = Message::Sidebar(SidebarMsg::FiltersCleared);
+                    takes_the_keyboard(
+                        ToggleChip::new("All", clear.clone(), r).active(active),
+                        clear,
+                        r,
+                    )
+                }
+                ChipBarChip::Filter(filter) => takes_the_keyboard(
+                    filter_chip(filter, active, r),
+                    Message::Sidebar(SidebarMsg::FilterToggled(filter)),
+                    r,
+                ),
+            })
+            .collect();
+    let chips = container(
+        iced::widget::Row::with_children(chips)
+            .spacing(spacing::XS)
+            .wrap(),
+    )
+    .width(Length::Fill);
+
+    let add_message = Message::WorktreeForm(FormMsg::Opened);
+    let add = Tooltip::new(
+        takes_the_keyboard(
+            IconButton::new(Icon::AddWorktree, r)
+                .compact()
+                .tint(r.primary)
+                .on_press(add_message.clone()),
+            add_message,
+            r,
+        ),
+        "Add a worktree (new git branch)",
+        r,
+    );
+    let hide_message = Message::Sidebar(SidebarMsg::Toggled);
+    let hide = Tooltip::new(
+        takes_the_keyboard(
+            IconButton::new(Icon::HideSidebar, r)
+                .compact()
+                .tint(r.on_surface_variant)
+                .on_press(hide_message.clone()),
+            hide_message,
+            r,
+        ),
+        "Hide sidebar",
+        r,
+    );
+    // Refresh, attach existing and run in parallel (D4): the menu hangs from this trigger's
+    // bottom-left corner, reported on the press ahead of the toggle (the switcher's BUG-1023).
+    let more_message = Message::Sidebar(SidebarMsg::MoreMenuToggled);
+    let more = cdk::context_area::ContextArea::new(Tooltip::new(
+        takes_the_keyboard(
+            // `MenuTrigger`'s button at the chip bar's compact size, beside add and hide: the
+            // trigger is a plain icon button, and its 48dp target would make the first line taller
+            // than the chips it shares.
+            IconButton::new(Icon::MoreHorizontal, r)
+                .compact()
+                .tint(r.on_surface_variant)
+                .on_press(more_message.clone()),
+            more_message,
+            r,
+        ),
+        "More actions",
+        r,
+    ))
+    .on_primary_bounds(|corner| Message::Sidebar(SidebarMsg::MoreMenuAnchored(corner)));
+    // As tall as a chip line and centred in it, so the actions sit on the first line's midline.
+    let actions = container(
+        row![add, hide, more]
+            .spacing(spacing::XS)
+            .align_y(Alignment::Center),
+    )
+    .height(Length::Fixed(micold_core::tokens::anatomy::chip::HEIGHT))
+    .align_y(Alignment::Center);
+    row![chips, actions]
+        .spacing(spacing::XS)
+        .align_y(Alignment::Start)
+        .into()
+}
+
+/// `control` as a Tab stop answering Enter and Space with `message`, with §5's focus ring: the
+/// chip bar's chips and icon buttons hold no keyboard focus of their own (`keyboard_focus.rs`).
+fn takes_the_keyboard<'a>(
+    control: impl Into<Element<'a, Message>>,
+    message: Message,
+    r: Roles,
+) -> Element<'a, Message> {
+    use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
+    TakesTheKeyboard::new(control, true)
+        .key(iced::keyboard::key::Named::Enter, message.clone())
+        .key(iced::keyboard::key::Named::Space, message)
+        .indicator(Indicator {
+            outline: r.secondary,
+            layer: r.on_surface_variant,
+            radius: tokens::shape::FULL,
+        })
+        .into()
+}
+
+/// The more menu's items (feature 1125, contract S3): the header buttons' labels, enabled rules
+/// and tooltips, each choosing [`SidebarMsg::MoreMenuChosen`].
+pub fn more_menu_items(state: &State) -> Vec<material::MenuItem<Message>> {
+    use crate::features::sidebar::MoreAction;
+    crate::features::sidebar::more_menu_items(
+        state.workspace.active.is_some(),
+        state.worktree.refreshing,
+    )
+    .into_iter()
+    .map(|item| {
+        let icon = match item.action {
+            MoreAction::Refresh => Icon::Refresh,
+            MoreAction::AttachExisting => Icon::OpenProject,
+            MoreAction::RunInParallel => Icon::AiCli,
+        };
+        material::MenuItem {
+            message: item
+                .enabled
+                .then_some(Message::Sidebar(SidebarMsg::MoreMenuChosen(item.action))),
+            ..material::MenuItem::new(icon, item.label, Message::NoOp)
+                .trailing_tooltip(item.tooltip)
         }
-        col = col.push(rw);
+    })
+    .collect()
+}
+
+/// What choosing `action` on the more menu does: the message today's header button sent (FR-015).
+/// The shell sends it once the menu has closed, so the refresh still goes through its request path.
+pub fn more_action_message(action: crate::features::sidebar::MoreAction) -> Message {
+    use crate::features::sidebar::MoreAction;
+    match action {
+        MoreAction::Refresh => Message::Worktree(WorktreeMsg::RefreshRequested),
+        MoreAction::AttachExisting => Message::Attach(crate::features::attach::Msg::Opened),
+        MoreAction::RunInParallel => Message::Sidebar(SidebarMsg::RunInParallelRequested),
     }
-    if !state.sidebar.filters.is_empty() {
-        col = col.push(
-            Button::with_content(
-                Text::new("Clear filters", TypeRole::SidebarTag, r),
-                ButtonVariant::Text,
-                r,
-            )
-            .padding(spacing::XS)
-            .on_press(Message::Sidebar(SidebarMsg::FiltersCleared)),
-        );
-    }
-    col.into()
+}
+
+/// Where the more menu hangs when no pointer press reported its trigger's corner (a keyboard
+/// press has no point): the sidebar's trailing edge, level with the chip bar's first line's
+/// bottom. The menu is clamped into the window from there like any other.
+pub fn more_menu_fallback_anchor(state: &State) -> (u16, u16) {
+    use micold_core::tokens::{anatomy, density};
+    let overview_row = density::height(
+        density::LIST_ROW_BASE,
+        crate::features::sidebar::SIDEBAR_DENSITY,
+    );
+    let y = anatomy::app_bar::BOTTOM_EDGE
+        + spacing::SM
+        + overview_row
+        + spacing::SM
+        + anatomy::chip::HEIGHT;
+    (state.sidebar_width_px(), y.round() as u16)
 }
 
 /// One action icon in a worktree row's hover cluster. When `active` (the hovered row) it is
@@ -1431,6 +1456,68 @@ mod tests {
             !published.iter().any(|m| m.contains("Opened")),
             "{published:?}"
         );
+    }
+
+    /// What Enter publishes on each of the sidebar's first `stops` Tab stops, in Tab order.
+    fn tab_order(state: &State, stops: usize) -> Vec<Vec<String>> {
+        use crate::ui::material::test_support::{named_key, Mounted};
+        (1..=stops)
+            .map(|k| {
+                let mut mounted =
+                    Mounted::new(view(state, ColorScheme::Dark).map(|m| format!("{m:?}")));
+                for _ in 0..k {
+                    mounted.focus_next();
+                }
+                mounted.redraw();
+                mounted.send(
+                    named_key(iced::keyboard::key::Named::Enter),
+                    iced::mouse::Cursor::Unavailable,
+                )
+            })
+            .collect()
+    }
+
+    /// Feature 1125 (T045, US5.1, FR-017, SC-005): Tab visits the Overview row, **All**, each
+    /// filter chip, add, hide and more, then the group headers, in display order.
+    #[test]
+    fn tab_visits_the_overview_row_the_chip_bar_then_the_groups_in_display_order() {
+        use micold_core::naming::ConventionalType;
+        use micold_core::sidebar_groups::StateGroup;
+        let mut state = with_project();
+        state.worktree.worktrees = ["feat-a", "fix-b"]
+            .into_iter()
+            .map(|dir| micold_core::worktree::Worktree {
+                dir_name: dir.into(),
+                path: std::path::Path::new("/repo/.claude/worktrees").join(dir),
+                branch: Some(dir.replace('-', "/")),
+                status: WorktreeStatus::Valid,
+                included: false,
+            })
+            .collect();
+        let m = |message: Message| vec![format!("{message:?}")];
+        let filter = |t| {
+            m(Message::Sidebar(SidebarMsg::FilterToggled(
+                TagFilter::Type(t),
+            )))
+        };
+        let stops = tab_order(&state, 8);
+        let mut expected = vec![
+            vec![opened()],
+            m(Message::Sidebar(SidebarMsg::FiltersCleared)),
+            filter(ConventionalType::Feat),
+            filter(ConventionalType::Fix),
+            m(Message::WorktreeForm(FormMsg::Opened)),
+            m(Message::Sidebar(SidebarMsg::Toggled)),
+            m(Message::Sidebar(SidebarMsg::MoreMenuToggled)),
+        ];
+        let groups: Vec<StateGroup> = state.sidebar_groups().iter().map(|g| g.group).collect();
+        expected.extend(
+            groups
+                .iter()
+                .take(1)
+                .map(|&g| m(Message::Sidebar(SidebarMsg::GroupToggled(g)))),
+        );
+        assert_eq!(stops, expected);
     }
 
     #[test]

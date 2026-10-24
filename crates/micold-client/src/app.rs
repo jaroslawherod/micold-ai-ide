@@ -568,7 +568,7 @@ impl State {
     /// Popovers and modals are meant to be mutually exclusive (`on_escape` and the keyboard
     /// subscription both assume it — feature 009 code review), but before this helper existed each
     /// overlay-opening arm had to reset the popovers by hand, and none of them reset
-    /// `filter_open`, so it was possible to open e.g. the Add Worktree form while the
+    /// the filter panel's flag, so it was possible to open e.g. the Add Worktree form while the
     /// filter panel was still (invisibly) open, leaving Escape's two implementations disagreeing
     /// about what to dismiss. Routing every dialog-open through here makes that reset
     /// unconditional. Since T031 the popovers are closed by asking the registry which are open

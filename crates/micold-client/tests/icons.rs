@@ -89,6 +89,7 @@ fn expected(icon: Icon) -> char {
         Icon::BackgroundTask => '\u{f1bb}',
         Icon::TaskDone => '\u{e834}',
         Icon::TaskOpen => '\u{e835}',
+        Icon::MoreHorizontal => '\u{e5d3}',
     }
 }
 
@@ -134,8 +135,9 @@ fn all_covers_every_variant_without_duplicates() {
     // `fullscreen_exit`), +7 for feature 939's transcript cards (`psychology`, `build`,
     // `progress_activity`, `check_circle`, `error`, `do_not_disturb_on`, `arrow_downward`), +2 for
     // feature 944's subagent and background-task icons (`smart_toy`, `pending_actions`), +2 for
-    // feature 940's markdown task-list marks (`check_box`, `check_box_outline_blank`).
-    assert_eq!(Icon::ALL.len(), 81, "curated set size");
+    // feature 940's markdown task-list marks (`check_box`, `check_box_outline_blank`), +1 for
+    // feature 1125's sidebar more menu (`more_horiz`; `more_vert` is `Menu`'s).
+    assert_eq!(Icon::ALL.len(), 82, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
