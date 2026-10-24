@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
 - **Phase**: plan
-- **Next step**: plan (clarify done: round 1 agent-resolved 3 markers, round 2 found no critical ambiguity)
+- **Next step**: plan review round 1 (plan, research, data model, contracts, quickstart committed; reviewer run by orchestrator), then tasks unit
 
 ## Pull requests
 
