@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M1 implement
-- **Next step**: M1 tasks T005–T015, then verify (gate, review A/B, visual pass) and the M1 PR
+- **Phase**: M1 verify
+- **Next step**: M1 verify: full gate, review B, visual pass; then the M1 PR
 
 ## Pull requests
 
@@ -48,8 +48,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | a336c6f1ebfd5e1598c453a4535ea5aeff6790b2:fe7a79742614d045774446cb51b847fe9564bb1e | CLEAN (2 MINOR: R11 typo, R6 None fallback — fixed, prose only) |
 | Tasks | 1 | c125de1a0438346af357aa10e590a942959da084:697e95407233a56669e0a960535abc7d181ec6f6 | CHANGES: 1 MAJOR (M4 Verify ran main_tests with --lib), 3 MINOR (SC-001 split, checklist note, macOS chord example) — all fixed |
 | Tasks | 2 | c42ec5e995bdd8f5e3c6560f3f5651acdf8c85f1:697e95407233a56669e0a960535abc7d181ec6f6 | CLEAN |
+| A M1 (code-review high) | 1 | 1d17c59cc149d73c326b84b00dd8f37f9e20fae5:8a60fd0f91a8e9b92cd69538ff8e8903fe9ad44d | CLEAN (4 MINOR: F1 dot duplicated — fixed, shared `unread_mark::filled_circle`; F3 operate visits dropped items — fixed; F2, F4 declined) |
 
 ## Declined review findings
+
+| Review | Finding | Reason |
+|---|---|---|
+| A M1 | F2 (MINOR) clock and zone looked up each view while `model` ignores them | `model`'s signature is fixed by the contract's test hook; M5's plan usage reads them; the lookup is two cheap calls |
+| A M1 | F4 (MINOR) each item laid out twice, floor measured even when everything fits | a handful of items in a 28 dp bar; the pass stays one simple shape |
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
