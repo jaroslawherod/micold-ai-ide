@@ -95,6 +95,8 @@ pub use sidebar::{overview_row_view, start_control_id, SIDEBAR_SCROLL_ID};
 // library (FR-002). Defined in `material`, not here: a feature module naming the styling layer is
 // exactly what the boundary test forbids, and `ui/mod.rs` is a feature module.
 pub use material::theme;
+/// The Jira selector's advanced mode (feature 1186): the Basic/Advanced switch and the query field.
+pub(crate) mod jira_query;
 pub(crate) mod parallel_dialog;
 /// Syntax colours for the Changes view's diff (feature 482, R10): highlighted off the update thread
 /// by the shell, painted by `DiffView`.

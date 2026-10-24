@@ -19,6 +19,10 @@
 //!
 //! Contracts: `specs/021-branch-typeahead-search/contracts/typeahead-component.md` §1, §4, and
 //! `specs/022-dedicated-select-component/contracts/picker-base.md` §3.
+//!
+//! **Enter.** With a highlighted, enabled row the list claims Enter and picks that row. With none,
+//! Enter reaches the field: [`Typeahead::on_submit`] names what it then publishes, for a search that
+//! runs on Enter (feature 1186, research R8). Without it Enter in the field does nothing, as before.
 
 use super::form_field::{field_text_builders, FieldText};
 use super::picker::{animated_menu, menu_element, Row, EXIT, GAP};
@@ -47,6 +51,7 @@ pub struct Typeahead<'a, M> {
     on_move: Option<Box<dyn Fn(Direction) -> M + 'a>>,
     on_focus: Option<M>,
     on_dismiss: Option<M>,
+    on_submit: Option<M>,
     id: Option<iced::widget::Id>,
     in_flow: bool,
 }
@@ -81,6 +86,7 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
             on_move: None,
             on_focus: None,
             on_dismiss: None,
+            on_submit: None,
             id: None,
             in_flow: false,
         }
@@ -157,6 +163,13 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
         self.on_dismiss = Some(message);
         self
     }
+
+    /// Emitted on Enter in the field while no enabled row is highlighted; Enter on a highlighted
+    /// row still picks it. Handed to the inner [`TextField::on_submit`](super::TextField::on_submit).
+    pub fn on_submit(mut self, message: M) -> Self {
+        self.on_submit = Some(message);
+        self
+    }
 }
 impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
     fn from(t: Typeahead<'a, M>) -> Self {
@@ -175,6 +188,7 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
             on_move,
             on_focus,
             on_dismiss,
+            on_submit,
             id,
             in_flow,
         } = t;
@@ -222,6 +236,9 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
         if let Some(id) = id {
             input = input.id(id);
         }
+        if let Some(on_submit) = on_submit {
+            input = input.on_submit(on_submit);
+        }
         if !query.is_empty() {
             input = input.trailing_action(Icon::Close, cleared);
         }
@@ -259,5 +276,58 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
         }
 
         behaviour.into()
+    }
+}
+
+/// `.on_submit` (feature 1186, research R8): Enter runs the field's own action when the list has no
+/// enabled row under the keyboard, and picks that row when it has one.
+#[cfg(test)]
+mod on_submit_tests {
+    use super::super::picker::Row;
+    use super::super::test_support::{named_key, roles, Mounted};
+    use super::Typeahead;
+    use iced::keyboard::key::Named;
+    use iced::mouse;
+
+    fn rows() -> Vec<Row> {
+        vec![
+            Row::new("ABC-1 First", Vec::new()),
+            Row::new("ABC-2 Second", Vec::new()),
+        ]
+    }
+
+    /// An open list laid out in flow, so the keys reach it through the base tree, with the field
+    /// focused; what Enter publishes.
+    fn enter(typeahead: Typeahead<'_, String>) -> Vec<String> {
+        let mut mounted = Mounted::new(typeahead.open(true).in_flow(true));
+        mounted.focus_next();
+        mounted.send(named_key(Named::Enter), mouse::Cursor::Unavailable)
+    }
+
+    fn typeahead<'a>(query: &'a str) -> Typeahead<'a, String> {
+        Typeahead::new(query, rows(), |q: String| format!("typed {q}"), roles())
+            .on_pick(|i: usize| format!("picked {i}"))
+    }
+
+    #[test]
+    fn enter_with_no_highlighted_row_publishes_the_submit_message() {
+        let published = enter(typeahead("status = Done").on_submit("run".to_string()));
+        assert_eq!(published, vec!["run".to_string()]);
+    }
+
+    #[test]
+    fn enter_on_a_highlighted_enabled_row_still_picks() {
+        let published = enter(
+            typeahead("status = Done")
+                .highlighted(Some(1))
+                .on_submit("run".to_string()),
+        );
+        assert_eq!(published, vec!["picked 1".to_string()]);
+    }
+
+    #[test]
+    fn without_on_submit_enter_publishes_nothing() {
+        let published = enter(typeahead("status = Done"));
+        assert!(published.is_empty(), "published {published:?}");
     }
 }

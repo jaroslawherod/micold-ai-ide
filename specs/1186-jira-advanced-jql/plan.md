@@ -186,7 +186,7 @@ each with an additive edit:
 | `source_changed`, `issue_provider_changed`, `reset_issues` (#1185 FR-016 resets filters there) | one call each into `features::worktree_form::jira_query` | one-line conflicts |
 | `WorktreeForm::jira_notice` (#1185 FR-014 adds filter values) | one early branch to `jira_query::notice` in advanced mode | small |
 | `ui::worktree_form::issue_picker` (#1185 adds the filter row) | one early `return` at the top; the basic body is untouched | small |
-| `ui::worktree_form::modal` | one `if` pushing `mode_switch` after `provider_switch` | small |
+| `ui::worktree_form::issue_picker` (switch) | the same top lines also push `mode_switch` when the Jira source shows (ledger D10: as a `modal` field it pushed the dialog over the app bar) | small |
 | `issue_rows_with` | per-issue row builder extracted (#1185 may not touch it) | possible |
 | `shell/jira_http.rs` `PostError` | `BadRequest` carries the body | none unless #1185 edits `send` |
 

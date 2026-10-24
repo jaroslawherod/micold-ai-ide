@@ -26,6 +26,7 @@ use micold_client::features::settings::{
 };
 use micold_client::features::window::FieldId;
 use micold_client::features::worktree::WorktreeMenu;
+use micold_client::features::worktree_form::jira_query::{JiraQuery, QueryRun};
 use micold_client::features::worktree_form::{
     BranchSource, GithubAvailability, IssueDetailsState, IssueList, JiraAvailability, JiraSite,
     SearchState, WorktreeForm,
@@ -35,7 +36,8 @@ use micold_core::issue_details::{
     Blockers, IssueDetails, Kind, PlainText, PrListState, ProjectMembership, Reference,
     RelatedIssue, RelatedList, RelatedPr, SubIssues,
 };
-use micold_core::jira::{IssueProvider, JiraConnection};
+use micold_core::jira::{IssueProvider, JiraConnection, ProjectKey};
+use micold_core::jira_query::{QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery};
 use micold_core::project::Availability;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
@@ -217,6 +219,100 @@ fn jira_form(issues: IssueList) -> WorktreeForm {
         provider: IssueProvider::Jira,
         issues,
         ..WorktreeForm::default()
+    }
+}
+
+/// The query every advanced state ran (feature 1186).
+const ADVANCED_QUERY: &str = "assignee = currentUser() AND priority = High";
+
+/// [`ADVANCED_QUERY`] scoped to the Jira form's project `ABC`.
+fn advanced_scoped() -> ScopedQuery {
+    ScopedQuery::new(
+        &ProjectKey::parse("ABC").expect("a project key"),
+        &UserQuery::parse(ADVANCED_QUERY).expect("the query passes the checks"),
+    )
+}
+
+/// The Jira form in advanced mode (feature 1186, contracts/selector-ui.md §1), its run at `run`
+/// and its result list open or not.
+fn jira_advanced_state(draft: &str, run: QueryRun, list_open: bool) -> StateUnderTest {
+    let mut state = with_project();
+    let mut form = jira_form(IssueList::NotRequested);
+    form.jira_query = JiraQuery {
+        mode: QueryMode::Advanced,
+        draft: draft.to_string(),
+        last_run: if matches!(run, QueryRun::Idle) {
+            String::new()
+        } else {
+            ADVANCED_QUERY.to_string()
+        },
+        run,
+        highlight: None,
+        list_open,
+    };
+    state.worktree_form.form = Some(form);
+    StateUnderTest::new(state)
+}
+
+/// The advanced results the list shows, as `add-worktree-dialog-issue-list-labels` holds them for
+/// the basic list: twenty labels, which wrap; one; and none. Small enough that every row lies wholly
+/// inside the list's viewport, which the rows gate needs.
+fn jira_advanced_results(complete: bool) -> QueryRun {
+    let issue = |key: &str, number: u64, title: &str, labels: &[&str], reporter: &str| {
+        Issue::jira(
+            key,
+            number,
+            title.to_string(),
+            labels.iter().map(|l| l.to_string()).collect(),
+            "2026-09-29T00:00:00Z".to_string(),
+        )
+        .reported_by(reporter)
+    };
+    let issues = vec![
+        issue(
+            "ABC-310",
+            310,
+            "Tooltip opens under the pointer",
+            &[
+                "area-add-worktree",
+                "area-daemon",
+                "area-picker",
+                "area-sandbox",
+                "area-sidebar",
+                "area-terminal",
+                "bug",
+                "confirmed",
+                "design",
+                "documentation",
+                "good-first-issue",
+                "help-wanted",
+                "linux",
+                "macos",
+                "needs-reproduction",
+                "performance",
+                "priority-high",
+                "regression",
+                "ux",
+                "windows",
+            ],
+            "octocat",
+        ),
+        issue(
+            "ABC-42",
+            42,
+            "Crash when opening empty project",
+            &["bug"],
+            "hubot",
+        ),
+        issue("ABC-7", 7, "Sidebar flickers on resize", &[], "monalisa"),
+    ];
+    QueryRun::Loaded {
+        scoped: advanced_scoped(),
+        listing: IssueListing {
+            total_open: issues.len() as u64,
+            issues,
+            complete,
+        },
     }
 }
 
@@ -1063,6 +1159,81 @@ pub fn covered_states() -> &'static [CoveredState] {
                     descriptions: Default::default(),
                 }));
                 StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Feature 1186: the Jira source in advanced mode — the prompt before any query ran, the
+        // results open (the rows gate reads them) and capped, the run in flight, a refused query,
+        // no match, and a query Jira rejected.
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-prompt",
+            build: || jira_advanced_state("", QueryRun::Idle, false),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-results",
+            build: || jira_advanced_state(ADVANCED_QUERY, jira_advanced_results(true), true),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-capped",
+            build: || jira_advanced_state(ADVANCED_QUERY, jira_advanced_results(false), false),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-running",
+            build: || {
+                jira_advanced_state(
+                    ADVANCED_QUERY,
+                    QueryRun::Running {
+                        seq: 1,
+                        scoped: advanced_scoped(),
+                    },
+                    false,
+                )
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-refused",
+            build: || {
+                jira_advanced_state(
+                    "status = \"In Review",
+                    QueryRun::Refused(QueryRefusal::UnclosedQuote),
+                    false,
+                )
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-no-match",
+            build: || {
+                jira_advanced_state(
+                    ADVANCED_QUERY,
+                    QueryRun::Loaded {
+                        scoped: advanced_scoped(),
+                        listing: IssueListing {
+                            issues: Vec::new(),
+                            total_open: 0,
+                            complete: true,
+                        },
+                    },
+                    false,
+                )
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-rejected",
+            build: || {
+                jira_advanced_state(
+                    ADVANCED_QUERY,
+                    QueryRun::Failed {
+                        scoped: advanced_scoped(),
+                        failure: QueryFailure::Rejected(Vec::new()),
+                    },
+                    false,
+                )
             },
             anchors: ADD_WORKTREE_ANCHORS,
         },

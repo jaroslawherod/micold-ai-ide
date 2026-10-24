@@ -23,6 +23,7 @@ use crate::ui::material::{
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::github::Issue;
 use micold_core::issue_details::DetailLine;
 use micold_core::jira::IssueProvider;
 use micold_core::jira_status::StatusBoard;
@@ -460,10 +461,22 @@ pub fn issue_rows(form: &WorktreeForm) -> (Vec<TypeaheadRow>, Option<usize>) {
 /// [`issue_rows`], where a ticket the open project's status board holds shows the board's status
 /// and its stale flag, as every surface does (1101 FR-010); any other ticket keeps the status its
 /// own listing carried.
+///
+/// While advanced mode shows its results (feature 1186), the rows are those results in Jira's
+/// order, with no emphasis: the list the selector shows and a row index addresses
+/// (`WorktreeForm::issue_number_at`).
 pub fn issue_rows_with(
     form: &WorktreeForm,
     board: &StatusBoard,
 ) -> (Vec<TypeaheadRow>, Option<usize>) {
+    let picked = |issue: &Issue| form.picked_issue == Some(issue.number());
+    if let Some(results) = form.advanced_results() {
+        let rows = results
+            .iter()
+            .map(|issue| issue_row(issue, &[], board))
+            .collect();
+        return (rows, results.iter().position(picked));
+    }
     let held = form.issues.held();
     let mut selected = None;
     let mut rows: Vec<TypeaheadRow> = Vec::with_capacity(form.issue_matches.len());
@@ -471,33 +484,48 @@ pub fn issue_rows_with(
         let Some(issue) = held.get(*index) else {
             continue;
         };
-        if form.picked_issue == Some(issue.number()) {
+        if picked(issue) {
             selected = Some(row);
         }
-        let emphasis = issue.emphasis(&matched.spans);
-        let entry = issue.key().and_then(|key| board.status_of(key));
-        let (status, stale) = match entry {
-            Some(entry) => (Some(entry.status.clone()), entry.stale),
-            None => (issue.status().cloned(), false),
-        };
-        // The key tells a reused row that it stands for another issue now. An issue without a
-        // description gets no tooltip at all (FR-020): `Row::tooltip` drops an empty text.
-        rows.push(
-            TypeaheadRow::new(issue.title_line(), emphasis.title)
-                .details(issue.details_line(), emphasis.details)
-                .key(issue.number())
-                .status(status)
-                .status_stale(stale)
-                .tooltip(issue.description()),
-        );
+        rows.push(issue_row(issue, &matched.spans, board));
     }
     (rows, selected)
+}
+
+/// One issue's row, the one form every issue list shows (038 FR-006, 1186 FR-006): the title line
+/// and the details line with the match's emphasis, the status (the board's when it holds the
+/// ticket) and the description as the tooltip.
+fn issue_row(issue: &Issue, spans: &[std::ops::Range<usize>], board: &StatusBoard) -> TypeaheadRow {
+    let emphasis = issue.emphasis(spans);
+    let entry = issue.key().and_then(|key| board.status_of(key));
+    let (status, stale) = match entry {
+        Some(entry) => (Some(entry.status.clone()), entry.stale),
+        None => (issue.status().cloned(), false),
+    };
+    // The key tells a reused row that it stands for another issue now. An issue without a
+    // description gets no tooltip at all (FR-020): `Row::tooltip` drops an empty text.
+    TypeaheadRow::new(issue.title_line(), emphasis.title)
+        .details(issue.details_line(), emphasis.details)
+        .key(issue.number())
+        .status(status)
+        .status_stale(stale)
+        .tooltip(issue.description())
 }
 
 /// The issue source's body (feature 034, contracts/issue-picker-ui.md §2): the notice naming the
 /// repository, then the picker as far as the load has got.
 fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> Element<'a, Message> {
     let mut col = column![].spacing(spacing::XS);
+    // Feature 1186 (FR-001): with the Jira source showing, Basic or Advanced, heading the picker
+    // rather than a field of its own: the form is the tallest dialog, and a field's gap would push
+    // it over the app bar (`gates/issue_rows_show_all_text.rs`). Advanced mode has a body of its
+    // own; the basic one below is untouched.
+    if form.offers_query_modes() {
+        col = col.push(super::jira_query::mode_switch(form, r));
+    }
+    if form.shows_advanced() {
+        return super::jira_query::picker(col, form, board, r);
+    }
     if let Some(notice) = form.issue_notice() {
         col = col.push(Text::new(notice, TypeRole::Caption, r).muted());
     }
