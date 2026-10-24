@@ -130,3 +130,5 @@ together within ~2 s.
   in a child with `GIT_TRACE` set, so parallel tests do not write to the trace. TDD red shown by
   mutation (no `identify`, no `--no-abbrev`: I1a, I3–I6 fail); the unit lacked the Agent tool, so
   reviews A/B did not run in it.
+- M1 review snapshot (code commit, gate green: `scripts/gate.sh` exit 0):
+  `4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc`.
