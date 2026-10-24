@@ -16,8 +16,10 @@ shape). Built only by:
 | `ChangeId::of_worktree(&WholeFile)` | a working-tree file (below) | `w`, kind tag, path, old mode, old id, new mode, new id |
 | `ChangeId::of_patch(&ChangedFile, &[u8])` | a pull request file and its patch section | `p`, kind tag, path, patch bytes |
 
-Kind tags: `A` added, `M` modified, `D` deleted, `R` + old path renamed, `T` mode only, `U`
-untracked. Fields are separated by `\0` (a path never holds one). `ChangeId::parse(&str)` accepts
+Kind tags: `A` added, `M` modified, `D` deleted, `R` + old path renamed, `T` mode only. An
+untracked file has no tag of its own: it is digested as an added one (`A`, old mode and id all
+zeros, new mode from disk, new id from `hash-object`), so staging or committing it unaltered keeps
+its id (research R1). Fields are separated by `\0` (a path never holds one). `ChangeId::parse(&str)` accepts
 exactly 40 hex characters (stored lower-cased); anything else is refused.
 
 ### `WholeFile`, `WholeChange`
@@ -145,7 +147,8 @@ contracts/marks-wire.md). Stored per entry:
 
 ## Shell (`micold-client/src/shell`)
 
-- `daemon_sync.rs`: `DaemonMsg::ReviewChanged.marks` into `Msg::ReviewChanged`; `PendingOp::ReviewMark`
-  with failure text "save the reviewed mark" (before #1269).
+- `daemon_sync.rs`: `DaemonMsg::ReviewChanged.marks` into `Msg::ReviewChanged` (before #1269);
+  `PendingOp::ReviewMark` with failure text "save the reviewed mark" (after #1269, with its sender
+  below: `shell` is private to the binary, so the variant alone would fail clippy's `dead_code`).
 - `changes.rs`: `read_list` also runs `git.whole_change(dir, &scope)`; `Effect::ReviewEdit` for
   `SetReviewed` uses `PendingOp::ReviewMark` (after #1269).

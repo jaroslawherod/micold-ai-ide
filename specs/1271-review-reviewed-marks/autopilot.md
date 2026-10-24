@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-umhor9
 - **Started**: 2026-10-24
 - **Phase**: plan
-- **Next step**: plan review round 1 (orchestrator dispatches; snapshot in Review rounds), then tasks unit. D4 still provisional: plan isolates it in `review::marks::mark_block` (research R7); option C would change the data model and must be settled before M1
+- **Next step**: plan review round 2 (sonnet, fix diff from round 1's snapshot; orchestrator dispatches), then tasks unit. D4 still provisional and now M1's listed dependency (A or B; C changes the data model, R7)
 
 ## Pull requests
 
@@ -39,7 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | ebf5c8ada3cf70b15771dbcb49161fbc5e7fd27f:029348b9eeae8148929f5bcf846f762b40db03b6 | CLEAN (model sonnet, scoped re-review of F1, F3, F4) |
 | Clarify | 1 | b4b18fc6 | 2 questions: D3 agent-resolved, Q1 escalated, applied provisionally as A (D4) |
 | Clarify | 2 | after D4 applied | No critical ambiguities (US1 s7 added to test D4) |
-| Plan | 1 | 94d6338cedb4a1484792ddd227b4525777910dda:eff5ce1c9241292547074d7c78439557f5f162c8 | pending (unit has no Agent tool; orchestrator runs it) |
+| Plan | 1 | 94d6338cedb4a1484792ddd227b4525777910dda:eff5ce1c9241292547074d7c78439557f5f162c8 | CHANGES: 2 MAJOR, 2 MINOR (run by the orchestrator). F1 fixed: untracked file digested as git's added file (no `U` tag), two G2 tests added (R1, data-model, contract G2); F2 fixed: `PendingOp::ReviewMark` moved to M3 with its sender; F3 fixed (prose): M2's edit of the `Msg::ReviewChanged` arm and the expected trivial conflict stated (plan, R8); F4 fixed (prose): M1 depends on D4 answered (A or B) |
 
 ## Declined review findings
 
@@ -48,7 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit over the context cap after writing the plan. Done: plan.md, research.md, data-model.md, contracts/marks-wire.md, quickstart.md committed and pushed. Next: act on plan review round 1 (snapshot in Review rounds) in a fresh plan unit, then tasks unit. No open findings yet.
+Plan review round 1 acted on (all four findings fixed, none declined), committed and pushed. Next: plan review round 2 on the new snapshot (Review rounds), then tasks unit.
 
 ## Open escalation
 
