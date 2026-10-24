@@ -44,6 +44,14 @@ BUG-004).
 | **New session** | `Session(AdditionalRequested(location))` (confirmation included; feature 776) |
 | split side by side / stacked | `Session(Pane(Split(focused pane, axis)))` |
 | restart | `restart` |
+| shown session's tab, right-click | `Session(StripTabMenuRequested(StripTab::Ai, x, y))`: menu **Restart** while its process is stopped, else no menu (today's FR-012d) |
+| shell tab, right-click | `Session(StripTabMenuRequested(StripTab::Instance(instance), x, y))`: **Restart** while stopped, **Close** |
+| another session's tab, right-click | nothing: no menu, since `TerminalRestartRequested` acts on the shown session; press the tab to show it first |
+
+The menu keeps `ui/mod.rs::strip_tab_menu_items` and reads `process_stopped` for the member it was
+opened on, so a member's menu offers **Restart** exactly when its stopped mark shows (unit test:
+for every member of the S1 fixtures, `strip_tab_menu_labels` contains *Restart* iff `stopped`;
+another session's tab yields no `StripTabMenuRequested`).
 
 Every strip control that changes the marked tab arms the reveal (`arm_tab_reveal`), as today
 (`tests/tab_reveal.rs`).
@@ -68,7 +76,7 @@ marked member lies (feature 027 FR-002e).
 
 `row![ EdgeFade(Scrollable(Keyed::row(members))) Fill, status_cluster, new_session, split_buttons ]`
 with a child list that never varies. `status_cluster` is `row![Ellipsized(status) capped at
-STATUS_MAX_WIDTH, restart?]` with the restart last. Session tabs `Tab::new(..)` at `SESSION_WIDTH`
+STATUS_MAX_WIDTH (new const in `ui/session_area.rs`), restart?]` with the restart last. Session tabs `Tab::new(..)` at `SESSION_WIDTH`
 with the stopped mark in the leading slot and an empty reserved trailing slot; shell tabs as today
 (`Tab` at `tab::WIDTH`, close in the trailing slot). Indicator edge `Bottom` (the strip sits above
 the panes it selects; feature 012 FR-004b's rule, inverted with the strip's position).

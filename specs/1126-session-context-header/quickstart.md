@@ -7,7 +7,7 @@
 | `mise run test-core` | H1–H6: title, state, branch chip, pull request chip, Changes label, summary; `StatusPhrase::of_status` agrees with `of` (FR-002–FR-006) |
 | `scripts/build-lock.sh cargo test -p micold-client --lib -- session_strip changes::tests cdk::keyed session_area` | S1–S6: members, order, marked, stopped, status, presses, offsets; `HeaderCounts` transitions; keyed slots; `changes_press` (FR-007–FR-011) |
 | `scripts/build-lock.sh cargo test -p micold-client --test features_changes --test session_area_stability --test terminal_tabs --test tab_reveal --test terminal_focus --test keyboard --test navigation` (and the lib's `app_chord_tests`) | H7 follow step; S8 stability; reveal on every marking press; pane chords and focus unchanged (FR-011, FR-012, FR-014, SC-002) |
-| `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot --test layout_text_overflow` | the session-area covered states match the regenerated fixture; overflow, containment, `strip_controls_hold_their_size`, `strip_controls_anchor_the_trailing_edge`, `tab_children_fit`, `session_area_fits` pass (FR-001, FR-010, FR-013, SC-004, SC-005) |
+| `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot --test layout_text_overflow` | the session-area covered states match the regenerated fixture; overflow, `strip_controls_hold_their_size`, `strip_controls_anchor_the_trailing_edge`, `tab_children_fit`, `session_area_fits` and `containment` (strip overflow in `session-area-twelve-tabs`) pass (FR-001, FR-010, FR-013, SC-004, SC-005) |
 | `scripts/gate.sh` | the whole merge gate |
 
 Regenerate the fixture only once the session area is done:
@@ -26,7 +26,7 @@ two sessions in it (main and a helper), two shell instances in the main one; lig
 | B2 | Press the helper's tab; press a shell tab; press the main tab | the helper is shown and the header is unchanged; the shell's terminal; the AI conversation (US2.2, US2.7, Edge *several sessions*) |
 | B3 | Press "+", then **New session** and cancel, then confirm | a third shell tab; the confirmation opens; cancel changes nothing; confirm adds a helper tab after the others, selected and shown (US2.3) |
 | B4 | Press split side by side, then split stacked | the focused pane splits; each pane keeps its own header; header and strip stay once above the panes (US2.4, Edge *several panes*) |
-| B5 | Exit the AI process (`/exit`) | stopped mark on its tab, status *idle* and **restart** beside it; restart runs it again (US2.5, US2.6) |
+| B5 | Exit the AI process (`/exit`); right-click its tab, a shell tab and the helper's tab | stopped mark on its tab, status *idle* and **restart** beside it; its tab's menu offers *Restart*, the shell tab's *Close*, the helper's tab opens no menu; restart runs it again (US2.5, US2.6, FR-009) |
 | B6 | Press Changes; press it again | the Changes view under the header, button shown pressed; back to the terminal (US3.2, US3.5) |
 | B7 | Edit a file in the worktree | the counts change within a few seconds (FR-014) |
 | B8 | Open the Default entry's session | title *Default*, its state chip, no pull request chip (US1.4) |

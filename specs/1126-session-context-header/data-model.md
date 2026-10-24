@@ -75,7 +75,7 @@ Transitions:
 ## StripModel (new, `client::features::session_strip`)
 
 `StripModel::of(&State) -> Option<StripModel>`; `None` without an active session. Rules:
-[contracts/session-strip.md](contracts/session-strip.md).
+[contracts/session-area.md](contracts/session-area.md).
 
 | Field | Type | Notes |
 |---|---|---|
@@ -88,8 +88,8 @@ Transitions:
 
 | Variant | Fields | Press | Width |
 |---|---|---|---|
-| `Session` | `id`, `label` (`<command> · <name>`), `tooltip`, `shown: bool`, `marked: bool`, `stopped: bool` | shown: `TerminalAiCliSelected(id)`; other: `Session(Selected(id))` | `tab::SESSION_WIDTH` |
-| `Shell` | `session`, `instance`, `label` (ordinal), `marked`, `stopped` | `ShellInstanceSelected(session, instance)`; close: `ShellInstanceCloseRequested` | `tab::WIDTH` |
+| `Session` | `id`, `label` (`<command> · <name>`), `tooltip`, `shown: bool`, `marked: bool`, `stopped: bool` | shown: `TerminalAiCliSelected(id)`, right-click `StripTabMenuRequested(StripTab::Ai, ..)`; other: `Session(Selected(id))`, no menu | `tab::SESSION_WIDTH` |
+| `Shell` | `session`, `instance`, `label` (ordinal), `marked`, `stopped` | `ShellInstanceSelected(session, instance)`; close: `ShellInstanceCloseRequested`; right-click `StripTabMenuRequested(StripTab::Instance(instance), ..)` | `tab::WIDTH` |
 | `Plus` | — | `ShellInstanceOpenRequested` | the icon button's size |
 
 `MemberKey`: `Session(SessionId)`, `Shell(SessionId, ShellInstanceId)`, `Plus` — the keyed row's
@@ -99,4 +99,8 @@ process's (`process_stopped(state, member's session, member's tab)`).
 ## StripTab (moved, `client::features::session_strip`)
 
 Unchanged enum (`Instance(ShellInstanceId)`, `Ai`), moved from `ui/terminal.rs` with `marked_tab`,
-`process_stopped` and the overflow arithmetic (R7).
+`process_stopped` and the overflow arithmetic (R7). `ui/terminal.rs` re-exports them
+(`pub use crate::features::session_strip::{StripTab, process_stopped, ..}`), so `ui/mod.rs`'s menu
+and the integration tests that import `micold_client::ui::terminal::StripTab` are unchanged;
+`features/session.rs` (`shell_instance_menu`, `strip_tab_menu_requested`, `Msg::StripTabMenuRequested`)
+switches to `crate::features::session_strip::StripTab`.
