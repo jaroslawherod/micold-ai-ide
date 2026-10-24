@@ -80,13 +80,24 @@ pub fn run() -> iced::Result {
             config.frames, config.warm_up
         );
     }
+    // The bundled Fira Mono, for every piece of code-like text (feature 1260). Registered on iced's
+    // global font system before the application starts, not with `.font(..)` beside Roboto below:
+    // `.font` can only add a face, while code must also stop resolving to the host. This also
+    // removes any host face named `Fira Mono` and makes the bundled face the monospace family
+    // (research R2). It runs before any text is shaped, since cosmic-text caches font matches.
+    micold_client::ui::install_monospace(
+        &mut iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system lock was poisoned"),
+    );
     iced::application(boot, update, view)
         .title("Micold AI IDE")
         .theme(theme)
         // Roboto is the application's typeface, so the interface looks the same on every platform
-        // instead of inheriting whatever UI font the OS provides (FR-008). Every weight is
-        // registered because the type scale uses 400 and 500, the Overview card 600 (BUG-1298),
-        // and the matcher can only choose from what it has been given.
+        // instead of inheriting whatever UI font the OS provides (FR-008). Code is drawn in the
+        // bundled Fira Mono, registered above rather than here. Every Roboto weight is registered
+        // because the type scale uses 400 and 500, the Overview card 600 (BUG-1298), and the
+        // matcher can only choose from what it has been given.
         .default_font(micold_client::ui::ROBOTO)
         .font(micold_client::ui::ROBOTO_REGULAR_BYTES)
         .font(micold_client::ui::ROBOTO_MEDIUM_BYTES)

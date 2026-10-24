@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1260
 - **Worktree branch**: claude/project-thread-c0bgc0
 - **Started**: 2026-10-24
-- **Phase**: tasks done
-- **Next step**: design PR merge (orchestrator), then milestone M1. FR-007 (terminal adopts the face) still awaits the user's confirmation: if declined, replace T013 per plan D4's decline list before M1 ends
+- **Phase**: M1 implementing
+- **Next step**: M1 gate, reviews, visual pass, PR. FR-007 (terminal adopts the face) still awaits the user's confirmation: T013 is implemented as the default in its own commit, revertible per plan D4's decline list
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1316 | design (spec, plan, tasks) | merged (rebase) | 5d634edeb2db3f2be6f85e07df320623911e2c36 |
 
 ## Milestones
 
