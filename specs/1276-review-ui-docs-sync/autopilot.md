@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: plan review round 3 (sonnet, scoped to the round-2 fix diff; run by orchestrator), then tasks unit
+- **Phase**: tasks
+- **Next step**: tasks review round 1 (run by orchestrator; rubric rubrics/tasks.md; also confirm checklists/requirements.md items 16–17), then gate (specs-only) and design PR
 
 ## Pull requests
 
@@ -21,6 +21,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | — | blocked: #1269–#1275 |
+| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | blocked: M1, #1269–#1275, #1128 |
+| M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
+| M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
+| M5 | T033–T034 | docs | `review-redesign.md` is a record | — | blocked: M1, M4, #1269–#1275, #1128 |
 
 ## Decisions
 
@@ -38,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | e130e157ec45aa2c55f68f1cd624e18698a09441:7783f026de44f8644464cd7933653c0bed11d5c1 | CLEAN, 2 MINOR (sonnet): FR-005 groups reworded to match US2 sc.1 — fixed, prose only; FR-009 check list wrapped — fixed, prose only |
 | Plan | 1 | a39dc72ffead95575b27b0702260cb2dd3dc760a:428a3f5fc565c1a7898b2b37503471f52e1f5e0a | CHANGES: 3 MAJOR, 3 MINOR (run by orchestrator); all fixed: F1 Pull requests section rewritten in outline + link text + §A2 grep; F2 review_tab_fits calls status-bar and session-area checks made pub(crate); F3 core table is a requirement on #1274, blocker issue if missing, no move here; F4 session_area_stability press tests named; F5 stub `gh` in visual-pass world; F6 thinner-table fallbacks in shortcut contract |
 | Plan | 2 | 82562df08a1ccd946a30c12d3291e816b721a0b9:be1df5925e6a15b503e9550140c38e290b0a4075 | CHANGES (sonnet): F2–F6 fixes verified; 1 MAJOR: §A2 `Changes view` grep would still hit settings.md:653/659, worktrees-and-sessions.md:978, agent-tools.md:299 — fixed: every hit listed in outline § Inbound links and plan §3 as reworded to the Review tab |
+| Plan | 3 | b071908fcf6dd7d0c516e4321efa5f0e7d2ee778:c8b7b7954d99ef1165f82f84f9e53ed1e8e5354a | CLEAN, 1 MINOR (sonnet): parallel-runs.md:84,91,92, docs/README.md:45, layout-snapshot.md:105 also say "Changes view" — fixed, prose only: added to outline § Inbound links and plan §3 as reworded to the Review tab |
 
 ## Declined review findings
 
@@ -57,3 +63,6 @@ None.
 - Environment: `gh` is not authenticated and `mise` is missing in this cloud container; GitHub reads
   went through the GitHub MCP tools. Blockers #1269–#1275 and #1128 are unmerged at spec time; the
   spec describes their deliverables from their issue bodies and `docs/development/review-redesign.md`.
+- `speckit-analyze` is not available as a skill in this container (Skill tool: unknown skill); the
+  tasks unit checked FR/SC → task coverage and milestone dependency direction by hand, and the
+  tasks reviewer covers the rest. Branch rebased onto origin/main 9c0b8108 at the tasks unit start.
