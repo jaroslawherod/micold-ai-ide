@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1269
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
-- **Phase**: spec
+- **Phase**: clarify
 - **Next step**: clarify unit: resolve the two `[NEEDS CLARIFICATION]` markers in spec.md User Story 2 (scenarios 4 and 5)
 
 ## Pull requests
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec | 1 | 06a25d880f08b234d103ea2291fb03b0635afc26:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | pending |
+| Spec | 1 | 06a25d880f08b234d103ea2291fb03b0635afc26:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CLEAN: 2 MINOR (FR-003/FR-012 provisional note, checklist ticks), fixed, prose only |
 
 ## Declined review findings
 
