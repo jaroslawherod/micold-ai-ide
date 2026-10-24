@@ -43,24 +43,6 @@ fn field<'a>(value: &'a str, r: Roles) -> TextField<'a, String> {
 }
 
 impl<'a> Mounted<'a> {
-    /// Rebuild the element over the **same** tree, the way a frame does after the application's
-    /// state has moved on.
-    ///
-    /// This is the only way to pose the question these tests exist for: a supplied flag is read
-    /// when the widget is *built*, so "the application changed its mind" is not an event that can
-    /// be sent — it is a rebuild carrying a different answer. `Mounted::new` would allocate a fresh
-    /// tree and lose exactly the state under test.
-    fn rebuild(&mut self, element: impl Into<Element<'a, String>>) {
-        let mut element = element.into();
-        self.tree.diff(element.as_widget());
-        self.node = element.as_widget_mut().layout(
-            &mut self.tree,
-            &self.renderer,
-            &layout::Limits::new(Size::ZERO, WINDOW),
-        );
-        self.element = element;
-    }
-
     /// The container's four slots: `[leading, control, trailing, label]`.
     fn slot(&self, index: usize) -> Rectangle {
         self.node.children()[0].children()[index].bounds()

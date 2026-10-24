@@ -39,12 +39,15 @@
 //!
 //! [`state::FOCUS_RING_WIDTH`]: micold_core::tokens::state::FOCUS_RING_WIDTH
 
+use crate::ui::cdk::motion::Progress;
 use crate::ui::cdk::passthrough::forward_to_child;
 use iced::advanced::widget::{operation, tree, Operation, Tree, Widget};
 use iced::advanced::{mouse, renderer, Clipboard, Layout, Renderer as _, Shell};
 use iced::touch;
 use iced::{keyboard, Background, Border, Color, Element, Event, Rectangle};
+use micold_core::tokens::motion::STANDARD;
 use micold_core::tokens::{state, Rgb};
+use std::time::Duration;
 
 use super::style;
 
@@ -92,6 +95,9 @@ pub(super) struct TakesTheKeyboard<'a, M> {
     child_layers: bool,
     /// Outline these parts of the child rather than all of it; `None` outlines the whole.
     regions: Option<Regions>,
+    /// How long the indicator takes to fade in or out (feature 1299, D1); `None` draws it at
+    /// once, as every control did before.
+    fade: Option<Duration>,
 }
 
 impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
@@ -112,7 +118,15 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
             press_takes_focus: true,
             child_layers: true,
             regions: None,
+            fade: None,
         }
+    }
+
+    /// Fade the indicator in and out over `over` on the standard curve rather than drawing it at
+    /// once (feature 1299, FR-001, FR-002); `None`, the default, is instant.
+    pub fn fade(mut self, over: Option<Duration>) -> Self {
+        self.fade = over;
+        self
     }
 
     /// Draw the indicator around each rectangle `regions` gives, not around the whole child: one
@@ -219,7 +233,7 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
 ///
 /// Implements the stack's own focus trait, so a focus traversal moves through the wrapped control
 /// like any text input — which is what makes this a keyboard fix and not only a paint one.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(super) struct Focus {
     focused: bool,
     /// The application's answer, as of the last frame this saw it (BUG-004).
@@ -258,10 +272,33 @@ pub(super) struct Focus {
     /// Whether the child is held down, mirrored from the rendering stack's button, which keeps its
     /// own copy private. The indicator needs it to know which layer the child has already drawn.
     pressed: bool,
+    /// How much of the indicator is drawn, `0.0` none to `1.0` full (feature 1299, D1): eased
+    /// toward the shown focus when the control fades, held at it when it does not.
+    fade: Progress,
+}
+
+impl Default for Focus {
+    /// Unfocused, and the indicator at none.
+    fn default() -> Self {
+        Self {
+            focused: false,
+            supplied: false,
+            reported: false,
+            visible: false,
+            shown_reported: false,
+            pressed: false,
+            fade: faded(0.0),
+        }
+    }
+}
+
+/// A fade track resting at `at`, on the standard curve (feature 1299, R5).
+fn faded(at: f32) -> Progress {
+    Progress::new(at).easing(STANDARD.x1, STANDARD.y1, STANDARD.x2, STANDARD.y2)
 }
 
 impl Focus {
-    /// The opacity of the focus layer drawn over the child, or `None` for no indicator at all.
+    /// The opacity of the focus layer drawn over the child at full strength.
     ///
     /// Not §5's focus opacity as it stands. The child has already drawn its own hover or pressed
     /// layer in the same colour, and §5's states are mutually exclusive — "the heaviest single
@@ -270,17 +307,30 @@ impl Focus {
     /// Laying a full focus layer over it composited 17.2% hovered and 19% pressed (BUG-013).
     ///
     /// `over` is whether the pointer is over the control, which is what the child's own status is
-    /// decided from.
-    pub(super) fn indicator(&self, enabled: bool, over: bool) -> Option<f32> {
-        if !(self.focused && self.visible) {
-            return None;
-        }
+    /// decided from. Worked out whether or not the focus is shown, so a fading indicator can be
+    /// drawn at a part of it (feature 1299, D1).
+    fn layer(&self, enabled: bool, over: bool) -> f32 {
         let child = match (enabled && over, self.pressed) {
             (false, _) => 0.0,
             (true, false) => state::HOVER,
             (true, true) => state::PRESSED,
         };
-        Some(top_up(child, state::FOCUS))
+        top_up(child, state::FOCUS)
+    }
+
+    /// Whether the focus is held and shown: what the indicator is drawn for.
+    fn shown(&self) -> bool {
+        self.focused && self.visible
+    }
+
+    /// How much of the indicator is drawn, `0.0` none to `1.0` full (feature 1299, D1): the
+    /// fade's value for a control that `fades`, else the shown focus itself.
+    pub(super) fn strength(&self, fades: bool) -> f32 {
+        if fades {
+            self.fade.value()
+        } else {
+            f32::from(u8::from(self.shown()))
+        }
     }
 
     /// Whether this holds the keyboard, and whether that is shown.
@@ -342,11 +392,12 @@ pub(super) fn ring_bounds(bounds: Rectangle) -> Rectangle {
     }
 }
 
-/// The state layer and ring over one rectangle.
+/// The state layer and ring over one rectangle, both at `strength` of their full opacity
+/// (feature 1299, D1): `opacity` is the layer's at full.
 fn draw_indicator(
     renderer: &mut iced::Renderer,
     indicator: Indicator,
-    opacity: f32,
+    (opacity, strength): (f32, f32),
     bounds: Rectangle,
 ) {
     // §5's state layer: the content colour over the container, topped up to the focus opacity
@@ -362,7 +413,7 @@ fn draw_indicator(
             ..renderer::Quad::default()
         },
         Background::Color(Color {
-            a: opacity,
+            a: opacity * strength,
             ..style::color(indicator.layer)
         }),
     );
@@ -371,7 +422,10 @@ fn draw_indicator(
         renderer::Quad {
             bounds: ring_bounds(bounds),
             border: Border {
-                color: style::color(indicator.outline),
+                color: Color {
+                    a: strength,
+                    ..style::color(indicator.outline)
+                },
                 width: state::FOCUS_RING_WIDTH,
                 radius: (indicator.radius - state::FOCUS_RING_WIDTH / 2.0)
                     .max(0.0)
@@ -419,13 +473,16 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         if self.on_focus_change.is_none() || !self.enabled {
             return tree::State::new(Focus::default());
         }
+        let shown = self.focused && self.shown;
+        // Built already shown, the indicator is already there: it does not fade into existence.
         tree::State::new(Focus {
             focused: self.focused,
             supplied: self.focused,
             reported: self.focused,
-            visible: self.focused && self.shown,
-            shown_reported: self.focused && self.shown,
+            visible: shown,
+            shown_reported: shown,
             pressed: false,
+            fade: faded(if shown { 1.0 } else { 0.0 }),
         })
     }
 
@@ -456,13 +513,16 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
             return;
         };
         let bounds = layout.bounds();
-        let Some(opacity) = tree
-            .state
-            .downcast_ref::<Focus>()
-            .indicator(self.enabled, self.child_layers && cursor.is_over(bounds))
-        else {
+        let focus = tree.state.downcast_ref::<Focus>();
+        // Without a fade the indicator is the shown focus itself, whatever the track holds.
+        let strength = focus.strength(self.fade.is_some());
+        if strength <= 0.0 {
             return;
-        };
+        }
+        let opacity = (
+            focus.layer(self.enabled, self.child_layers && cursor.is_over(bounds)),
+            strength,
+        );
         match &self.regions {
             None => draw_indicator(renderer, indicator, opacity, bounds),
             Some(regions) => {
@@ -561,6 +621,11 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
             let over = cursor.is_over(layout.bounds());
             if self.press_takes_focus || !over {
                 let state = tree.state.downcast_mut::<Focus>();
+                // A press that hides the focus shown here ripples, and the ripple is the only
+                // state layer while it runs: the indicator goes at once (feature 1299, R7).
+                if over && state.shown() {
+                    state.fade.restart_at(0.0);
+                }
                 state.focused = self.enabled && over;
                 state.visible = false;
             }
@@ -594,12 +659,21 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
                 shell.publish(on_focus_change(now));
             }
         }
-        let shown = state.focused && state.visible;
+        let shown = state.shown();
         if state.shown_reported != shown {
             state.shown_reported = shown;
             if let Some(on_shown_change) = &self.on_shown_change {
                 shell.publish(on_shown_change(shown));
             }
+        }
+        // The indicator follows the shown focus: eased over `fade`, at once without one. A
+        // traversal changed it outside any event; the frame that follows retargets it here.
+        let target = f32::from(u8::from(shown));
+        match self.fade {
+            Some(over) => {
+                state.fade.on_frame(event, target, over, shell);
+            }
+            None => state.fade.restart_at(target),
         }
     }
 }
@@ -613,6 +687,13 @@ impl<'a, M: Clone + 'a> From<TakesTheKeyboard<'a, M>> for Element<'a, M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    impl Focus {
+        /// The focus layer's opacity at full strength, or `None` when the focus is not shown.
+        pub(in crate::ui::material) fn indicator(&self, enabled: bool, over: bool) -> Option<f32> {
+            self.shown().then(|| self.layer(enabled, over))
+        }
+    }
 
     /// The ring is drawn inside the control's own box, so a focused rail row does not paint over
     /// the row above it — they sit `spacing::XS` apart, which is narrower than two rings.
@@ -891,5 +972,149 @@ mod tests {
             ),
             ["link enter"]
         );
+    }
+
+    // --- Feature 1299: the focus indicator fades (D1) ------------------------------------------
+
+    use super::super::test_support::FRAME_MS;
+    use iced::window::RedrawRequest;
+
+    const OVER: Duration = Duration::from_millis(micold_core::tokens::motion::duration::SHORT_3);
+
+    /// A control that fades its indicator over [`OVER`] (or draws it at once, `fade: None`).
+    fn fading(name: &'static str, fade: Option<Duration>) -> TakesTheKeyboard<'static, String> {
+        let r = roles();
+        TakesTheKeyboard::new(container(text(name)).padding(8), true)
+            .indicator(Indicator {
+                outline: r.secondary,
+                layer: r.on_surface,
+                radius: 8.0,
+            })
+            .fade(fade)
+    }
+
+    fn faded_pair() -> Mounted<'static> {
+        Mounted::new(iced::widget::column![
+            fading("first", Some(OVER)),
+            fading("second", Some(OVER))
+        ])
+    }
+
+    use super::super::test_support::{at, strengths, DONE, MIDWAY};
+
+    /// FR-001, FR-002, SC-001, FR-009: Tab onto a faded control fades its indicator in, part-way
+    /// at ~75 ms and full by 150 ms + a frame; a press elsewhere fades it out the same way; once
+    /// at its end the control asks for no frame.
+    #[test]
+    fn a_faded_indicator_eases_in_and_out_and_then_asks_for_nothing() {
+        let mut m = Mounted::new(iced::widget::column![
+            fading("first", Some(OVER)),
+            container(text("elsewhere")).padding(8)
+        ]);
+        m.focus_next();
+        let up = m.frames(0, DONE, strengths);
+        let mid = at(&up, MIDWAY)[0];
+        assert!(0.0 < mid && mid < 1.0, "at ~75 ms the ring is at {mid}");
+        assert_eq!(at(&up, DONE)[0], 1.0);
+        let end = up
+            .iter()
+            .position(|(_, s, _)| s[0] == 1.0)
+            .expect("it ends");
+        assert!(up[..end]
+            .iter()
+            .all(|(.., r)| *r == RedrawRequest::NextFrame));
+        assert!(up[end..].iter().all(|(.., r)| *r == RedrawRequest::Wait));
+        let elsewhere = m.node.children()[1].bounds().center();
+        m.press(elsewhere);
+        let start = DONE + 100;
+        let down = m.frames(start, start + DONE, strengths);
+        let mid = at(&down, start + MIDWAY)[0];
+        assert!(0.0 < mid && mid < 1.0, "at ~75 ms out the ring is at {mid}");
+        assert_eq!(at(&down, start + DONE)[0], 0.0);
+        assert_eq!(down.last().expect("ticks").2, RedrawRequest::Wait);
+    }
+
+    /// FR-004, FR-005: Tab from one faded control to the next fades one out while the other fades
+    /// in, on the same ticks; a reversal at ~75 ms turns back from where it was, by no more than a
+    /// tick's step, and ends within 150 ms + a frame of it.
+    #[test]
+    fn a_reversed_fade_turns_back_where_it_is_and_two_run_together() {
+        let mut m = faded_pair();
+        m.focus_next();
+        let up = m.frames(0, MIDWAY, strengths);
+        let steepest = up
+            .windows(2)
+            .map(|w| (w[1].1[0] - w[0].1[0]).abs())
+            .fold(0.0, f32::max);
+        let reached = at(&up, MIDWAY)[0];
+        m.focus_next();
+        let start = MIDWAY + FRAME_MS;
+        let after = m.frames(start, start + DONE, strengths);
+        let next = &after[0].1;
+        assert!(
+            (next[0] - reached).abs() <= steepest + 1e-4,
+            "the first control jumped from {reached} to {}",
+            next[0]
+        );
+        assert!(next[0] < reached, "the first control did not turn back");
+        for pair in after.windows(2) {
+            let (was, now) = (&pair[0].1, &pair[1].1);
+            if now[0] != was[0] || now[1] != was[1] {
+                assert!(now[0] <= was[0] && now[1] >= was[1], "{was:?} -> {now:?}");
+            }
+        }
+        let midway = at(&after, start + MIDWAY);
+        assert!(
+            midway[0] > 0.0 && midway[1] > 0.0 && midway[1] < 1.0,
+            "{midway:?}"
+        );
+        assert_eq!(*at(&after, start + DONE), [0.0, 1.0]);
+    }
+
+    /// D1, FR-011: a press on a faded control whose focus is shown removes its indicator at once:
+    /// the press ripples, and the ripple is the only state layer.
+    #[test]
+    fn a_press_on_a_faded_control_drops_its_indicator_at_once() {
+        let mut m = Mounted::new(fading("first", Some(OVER)));
+        m.focus_next();
+        assert_eq!(*at(&m.frames(0, DONE, strengths), DONE), [1.0]);
+        m.press(m.node.bounds().center());
+        let next = m.frames(DONE + FRAME_MS, DONE + FRAME_MS, strengths);
+        assert_eq!(next[0].1, [0.0]);
+        assert_eq!(next[0].2, RedrawRequest::Wait);
+    }
+
+    /// FR-010: a faded control at full strength draws exactly what an unfaded one does.
+    #[test]
+    fn a_faded_indicator_at_full_draws_todays_indicator() {
+        let mut instant = Mounted::new(fading("first", None));
+        instant.focus_next();
+        instant.redraw();
+        let mut faded = Mounted::new(fading("first", Some(OVER)));
+        faded.focus_next();
+        faded.frames(0, DONE, strengths);
+        assert_eq!(pixels(&mut faded), pixels(&mut instant));
+    }
+
+    /// R8: a faded wrapper built already focused and shown starts at full and asks for no frame.
+    #[test]
+    fn a_faded_wrapper_built_focused_starts_at_full() {
+        let r = roles();
+        let mut m = Mounted::new(
+            TakesTheKeyboard::new(container(text("a worktree row")).padding(8), true)
+                .focused(true)
+                .shown(true)
+                .on_focus_change(|focused| format!("focus {focused}"))
+                .indicator(Indicator {
+                    outline: r.secondary,
+                    layer: r.on_surface,
+                    radius: 8.0,
+                })
+                .fade(Some(OVER)),
+        );
+        assert_eq!(strengths(&m.tree), [1.0]);
+        let first = m.frames(0, 0, strengths);
+        assert_eq!(first[0].1, [1.0]);
+        assert_eq!(first[0].2, RedrawRequest::Wait);
     }
 }
