@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: spec
-- **Next step**: spec review round 1 (fresh reviewer, rubrics/spec.md) on snapshot 6b313c8a…:3c7db2eb
+- **Phase**: clarify
+- **Next step**: clarify round 1
 
 ## Pull requests
 
@@ -31,6 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| spec | 1 | 6b313c8abe79644b3f5e295d48bb1ca579e97efa:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CLEAN (3 MINOR, all applied: US1-4 link focus keeps card expanded; window-blur edge case; FR-001 bezier moved to Assumptions) |
 
 ## Declined review findings
 
@@ -39,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-spec.md and checklists/requirements.md written (no [NEEDS CLARIFICATION] markers). The spec unit had no Agent tool in this cloud session, so the fresh-subagent spec review (tasks/review.md, rubrics/spec.md) has not run. Next: dispatch review round 1 from the orchestrator against snapshot `6b313c8abe79644b3f5e295d48bb1ca579e97efa:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2` (taken before this commit; the diff since is the spec, checklist and ledger), act on it per review-rounds.md, then clarify.
+None.
 
 ## Open escalation
 
