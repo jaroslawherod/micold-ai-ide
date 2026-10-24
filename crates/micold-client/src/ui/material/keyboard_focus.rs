@@ -342,10 +342,12 @@ impl Focus {
         (self.focused, self.visible)
     }
 
-    /// See [`Self::held`].
+    /// See [`Self::held`]. The indicator is put straight at what the handed-over flags show: a
+    /// ring handed over is the one already drawn, so it does not fade in again (feature 1299, D1).
     pub(super) fn hold(&mut self, focused: bool, visible: bool) {
         self.focused = focused;
         self.visible = visible;
+        self.fade.restart_at(f32::from(u8::from(self.shown())));
     }
 }
 
@@ -621,9 +623,10 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
             let over = cursor.is_over(layout.bounds());
             if self.press_takes_focus || !over {
                 let state = tree.state.downcast_mut::<Focus>();
-                // A press that hides the focus shown here ripples, and the ripple is the only
-                // state layer while it runs: the indicator goes at once (feature 1299, R7).
-                if over && state.shown() {
+                // A press over this control ripples, and the ripple is the only state layer while
+                // it runs: any indicator still drawn here, shown or still fading out, goes at once
+                // (feature 1299, R7).
+                if over && state.fade.value() > 0.0 {
                     state.fade.restart_at(0.0);
                 }
                 state.focused = self.enabled && over;
@@ -1082,6 +1085,40 @@ mod tests {
         let next = m.frames(DONE + FRAME_MS, DONE + FRAME_MS, strengths);
         assert_eq!(next[0].1, [0.0]);
         assert_eq!(next[0].2, RedrawRequest::Wait);
+    }
+
+    /// R7: a press on a faded control whose indicator is still fading out removes what is left of
+    /// it at once, so no part-faded ring or layer is drawn under the ripple.
+    #[test]
+    fn a_press_on_a_control_fading_out_drops_its_indicator_at_once() {
+        let mut m = faded_pair();
+        m.focus_next();
+        assert_eq!(*at(&m.frames(0, DONE, strengths), DONE), [1.0, 0.0]);
+        let first = m.node.children()[0].bounds().center();
+        let second = m.node.children()[1].bounds().center();
+        m.press(second);
+        let start = DONE + FRAME_MS;
+        let out = m.frames(start, start + MIDWAY, strengths);
+        let left = at(&out, start + MIDWAY)[0];
+        assert!(0.0 < left && left < 1.0, "midway out the ring is at {left}");
+        m.press(first);
+        let next = m.frames(
+            start + MIDWAY + FRAME_MS,
+            start + MIDWAY + FRAME_MS,
+            strengths,
+        );
+        assert_eq!(next[0].1, [0.0, 0.0]);
+        assert_eq!(next[0].2, RedrawRequest::Wait);
+    }
+
+    /// D1: focus handed over by [`Focus::hold`] draws its indicator at once, not from none.
+    #[test]
+    fn a_held_focus_is_drawn_at_once() {
+        let mut focus = Focus::default();
+        focus.hold(true, true);
+        assert_eq!(focus.strength(true), 1.0);
+        focus.hold(false, false);
+        assert_eq!(focus.strength(true), 0.0);
     }
 
     /// FR-010: a faded control at full strength draws exactly what an unfaded one does.

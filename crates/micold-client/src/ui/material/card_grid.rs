@@ -424,7 +424,11 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             cards: self
                 .cards
                 .iter()
-                .map(|card| Element::from(card.clone().instant(instant)))
+                .map(|card| {
+                    // The grid's Reduce motion adds to a card's own; it never takes it away.
+                    let card = card.clone();
+                    Element::from(if instant { card.instant(true) } else { card })
+                })
                 .collect(),
             min_width: self.min_width,
             spacing: self.spacing,

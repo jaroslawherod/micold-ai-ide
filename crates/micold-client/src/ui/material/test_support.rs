@@ -186,11 +186,12 @@ pub fn holds_whole<M>(host: Element<'_, M>, part: Element<'_, M>, room: Size) ->
 pub const WINDOW: Size = Size::new(400.0, 800.0);
 
 /// One nominal frame, in milliseconds: [`Mounted::frames`] ticks this far apart.
-pub const FRAME_MS: u64 = 16;
+pub const FRAME_MS: u64 = crate::ui::cdk::motion::FRAME.as_millis() as u64;
 /// The tick nearest 75 ms into a 150 ms transition that starts on a tick: five frames on.
 pub const MIDWAY: u64 = 5 * FRAME_MS;
 /// The last tick by 150 ms and one frame into such a transition (SC-001).
-pub const DONE: u64 = (150 + FRAME_MS) / FRAME_MS * FRAME_MS;
+pub const DONE: u64 =
+    (super::overview_card::CARD_MOTION.as_millis() as u64 + FRAME_MS) / FRAME_MS * FRAME_MS;
 
 /// How much of each focus indicator in `tree` is drawn, in tree order (feature 1299).
 pub fn strengths(tree: &Tree) -> Vec<f32> {

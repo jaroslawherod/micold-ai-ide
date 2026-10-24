@@ -56,9 +56,9 @@ The app bar's mode button cycles the same setting, for when you want it in one p
 Off by default. Turn it on and the Overview's [full-screen](overview.md#full-screen) zoom switches
 in one step: the sidebar goes or returns and the cards take their new places in the next frame,
 with no sliding. The focus outline of an Overview card also appears and disappears at once instead
-of fading in and out over 150 ms. Other animations in the app are unchanged. Like the other settings it applies when
-you press **Save** and is discarded by **Cancel**. The operating system's reduced-motion setting is
-not read.
+of fading in and out over 150 ms. Other animations in the app are unchanged. Like the other
+settings it applies when you press **Save** and is discarded by **Cancel**. The operating system's
+reduced-motion setting is not read.
 
 ## Terminal
 
