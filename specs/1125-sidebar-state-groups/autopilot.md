@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M2
-- **Next step**: M2 review B + visual pass, full gate, PR
+- **Next step**: M2 full gate (`scripts/gate.sh`), push, PR files
 
 ## Pull requests
 
@@ -66,6 +66,8 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M1 review B (conformance, sonnet) | 2 | 801128dd52fac679a288a6e71919acc608b17553:a72f9964ab30605790f03aa05a0d81ed83d18b56 | CLEAN: F1, F2 fixes hold |
 | M2 review A (code-review high) | 1 | 66f5278f77aeaf3c85facc0d72387b01d8bdcc1a:34bf5238bde08351387c0396b0c75cf531aa8eb8 | CHANGES: F1 a rename lost the first line (fixed: `row_title` takes the rename, it wins); F2 Primary selection replaced lifecycle tints (fixed: neutral tints only, contrast pairs); F3 titles read only on Overview open (fixed: read when the worktree list changes); F5, F6 MINOR fixed; F4 declined |
 | M2 review A (code-review high, sonnet) | 2 | ec2c9336949b1368872b8dbf32b907159948d404:a7213fdae80ddd2f0dd6cfd1409445afbd0b3c29 | CLEAN: F1–F3, F5, F6 fixes hold; F4 decline stands |
+| M2 review B (conformance, sonnet) | 1 | 092fa3acba03841019c0235d725522fea9aecfa0:bf2c21dfec749c3aae73d8db08e4ab95052cf4e8 | CLEAN (1 MINOR: T029 named `atoms.rs`; fixed, prose only) |
+| M2 visual pass | — | bf2c21df | B3, B4 (revealed row, both themes), B8 PASS; issue titles and a session's selected row not seen live (no GitHub, no agent session): `visual-pass/m2-record.md` |
 
 ## Declined review findings
 
