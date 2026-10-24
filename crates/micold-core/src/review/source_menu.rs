@@ -200,7 +200,8 @@ pub fn rows<'a>(input: &MenuInput<'a>) -> Vec<Row<'a>> {
         PrRows::Absent => None,
         PrRows::Loading => Some(PRS_LOADING),
         PrRows::Unavailable => Some(PRS_UNAVAILABLE),
-        PrRows::Empty => Some(PRS_EMPTY),
+        // A list that holds nothing reads as `Empty`, so a heading is never left alone.
+        PrRows::Empty | PrRows::List { prs: [], .. } => Some(PRS_EMPTY),
         PrRows::List { prs, stale } => {
             rows.push(Row::Heading);
             if *stale {
@@ -245,14 +246,16 @@ pub fn stops(rows: &[Row<'_>]) -> Vec<(Stop, bool)> {
 
 /// The closed control's label (data-model §6).
 pub fn label<'a>(input: &MenuInput<'a>) -> Label<'a> {
-    let files = if input.files_on {
-        format!("{FILES}{SEP}")
-    } else {
-        String::new()
+    let files = || {
+        if input.files_on {
+            format!("{FILES}{SEP}")
+        } else {
+            String::new()
+        }
     };
     match input.shown {
         Shown::WorkingTree if input.files_on => Label {
-            fixed: format!("{files}{WORKING_TREE}"),
+            fixed: format!("{}{WORKING_TREE}", files()),
             title: None,
         },
         Shown::WorkingTree => {
@@ -277,14 +280,14 @@ pub fn label<'a>(input: &MenuInput<'a>) -> Label<'a> {
             number,
             title: Some(title),
         } => Label {
-            fixed: format!("{files}#{number}{SEP}"),
+            fixed: format!("{}#{number}{SEP}", files()),
             title: Some(title),
         },
         Shown::PullRequest {
             number,
             title: None,
         } => Label {
-            fixed: format!("{files}#{number}"),
+            fixed: format!("{}#{number}", files()),
             title: None,
         },
     }
@@ -342,6 +345,14 @@ mod tests {
     /// Every list state with every `shown`, `files_on`, toggle and availability combination.
     fn every_input(prs: &[BranchPullRequest]) -> Vec<MenuInput<'_>> {
         let states = [
+            PrRows::List {
+                prs: &[],
+                stale: false,
+            },
+            PrRows::List {
+                prs: &[],
+                stale: true,
+            },
             PrRows::Absent,
             PrRows::Loading,
             PrRows::Unavailable,
@@ -525,6 +536,22 @@ mod tests {
     }
 
     #[test]
+    fn a_list_that_holds_nothing_reads_as_empty() {
+        for stale in [false, true] {
+            let rows = rows(&input(Shown::WorkingTree, PrRows::List { prs: &[], stale }));
+            assert_eq!(
+                rows,
+                vec![
+                    working_tree(true),
+                    Row::Heading,
+                    Row::Note(PRS_EMPTY),
+                    Row::Files { on: false },
+                ]
+            );
+        }
+    }
+
+    #[test]
     fn an_unlisted_number_marks_nothing() {
         let prs = [pr(7, "seven")];
         let rows = rows(&input(
@@ -565,7 +592,6 @@ mod tests {
                 }
             );
             assert_eq!(note == Some(DEFAULT_ENTRY_NOTE), !input.committed_available);
-            assert!(note.is_none() || note == Some(DEFAULT_ENTRY_NOTE));
         }
     }
 

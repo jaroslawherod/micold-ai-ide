@@ -46,7 +46,8 @@ every `now`. Both functions share one private builder that takes the stale flag.
      PRS_UNAVAILABLE | PRS_EMPTY)`.
    - `List { prs, stale }`: `Row::Heading`, `Row::Stale` when `stale`, then one
      `Row::PullRequest { pr: &BranchPullRequest, chosen: bool }` per entry in list order (newest
-     first, as read), `chosen` when `shown` has its number.
+     first, as read), `chosen` when `shown` has its number. A `List` that holds nothing gives what
+     `Empty` gives, so a heading is never left alone.
 3. `Row::Files { on: files_on }`.
 
 Invariants (unit-tested): exactly one Working tree row first and one Files row last; at most one
@@ -71,6 +72,7 @@ unavailable. A disabled stop stays in the list: arrows can land on it and taking
 | working tree, only committed | no | `Working tree · committed` | none |
 | working tree, only uncommitted | no | `Working tree · uncommitted` | none |
 | working tree, no listable kind | no | `Working tree · nothing shown` | none |
+| Default entry (Committed unavailable), Uncommitted on / off | no | `Working tree` / `Working tree · nothing shown` | none |
 | working tree, any kinds | yes | `Files · Working tree` | none |
 | PR #n listed | no | `#n · ` | its title |
 | PR #n listed | yes | `Files · #n · ` | its title |
