@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M4
-- **Next step**: M4 scoped gate and review A
+- **Next step**: M4 scoped gate green, then visual pass and full gate
 
 ## Pull requests
 
@@ -81,6 +81,9 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M3 review B (conformance, sonnet) | 1 | cb968e022a73bea38f9c5b38c83a8d44a4dc8b58:5d5b1577b5991f6d8c2bbf8636f5020e0dd89369 | CLEAN (1 MINOR: T032 named a "both" tooltip case `badge` cannot produce; fixed, prose only) |
 | M3 visual pass | — | 5d5b1577 | B1 (Overview row first; badge in the showcase), B4 (row selected while the Overview is open, both themes; revealed row selected after a card opens) PASS; live badge and a session's selected row not seen (no agent session): `visual-pass/m3-record.md` |
 | M3 full gate | — | 1309daed | `scripts/gate.sh` green after rebasing onto origin/main 08ff39f5 |
+| M4 review A (code-review, high) | 1 | 72dd2cce4cea0f68442ed9f47474aff93f0fab69:a229182db05824cbded5f710aeda58324dcf544b | 8 findings: chip lines had no vertical gap when wrapped (fixed, `vertical_spacing(XS)`, snapshot regenerated); dead `trailing_tooltip` on the more items (fixed, dropped); stale module docs (fixed); 5 declined (below) |
+| M4 review B (conformance, sonnet) | 1 | 72dd2cce4cea0f68442ed9f47474aff93f0fab69:a229182db05824cbded5f710aeda58324dcf544b | CLEAN (2 MINOR: no `tdd/cycle-log.md`, as M1–M3; T045 Tab test stops at the first header, as T045's observable states for the chip bar's order — declined) |
+| M4 scoped gate | — | after rebase onto origin/main 5b5064bc | red twice, fixed: `layout_coverage_registry` ratchet needed `RevealingState` listed as empty (`EMPTY_KINDS`); `refresh_is_only_on_demand` allowlist re-pointed at `more_action_message` |
 
 ## Declined review findings
 
@@ -93,6 +96,11 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M3 | A r1 F4 | `TreeItem::tab_stop` needs `keyboard_focus` to act | taste (MINOR); D17 chose the flag beside `heading`, and its one caller sets both |
 | M3 | A r1 F5 | the Settings-open test checks only that no `Opened` is published | MINOR; the published-nothing check is T035's stated observable |
 | M3 | A r1 F7 | the Overview row is not on the arrow-key row model | FR-017 asks for keyboard reachability in display order, which Tab gives (T035, T058 documents Tab); the arrow-key row model is unchanged by this feature |
+| M4 | A r1 F1 | the chip bar (with hide and add) is absent with no project open | contract S1: "With no project open: no Overview row, chip bar, header or row (Edge Cases)" |
+| M4 | A r1 F3 | `MoreMenuChosen`'s action is sent by the shell, not the reducer | D19: refresh is answered in `main.rs` before the core reducer; the module doc now names this follow-up |
+| M4 | A r1 F4 | keyboard fallback anchor is arithmetic, not the trigger's bounds | MINOR; a key press has no point; checked in the visual pass; the menu is clamped into the window |
+| M4 | A r1 F5 | `more_menu_items` restates `can_refresh_worktrees` | `sidebar_state.rs` asserts the two agree (D19) |
+| M4 | A r1 F8 | a stale `more_anchor` could survive a close | every close path (toggle, Escape/outside/displacement via `cancelled_by: MoreMenuToggled`, choose) clears it |
 
 ## Handover
 

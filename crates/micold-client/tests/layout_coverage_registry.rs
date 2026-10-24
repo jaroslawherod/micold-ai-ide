@@ -34,6 +34,12 @@ const REGISTRY: &str = "support/covered_states.rs";
 /// about where a state is declared, not about how many lists that file keeps.
 const REGISTERED_KINDS: &[&str] = &["CoveredState", "RevealingState"];
 
+/// The kinds whose list in the registry is empty today, so the ratchet below expects no
+/// construction of them there. They stay in `REGISTERED_KINDS`, so a construction anywhere else is
+/// still refused. `RevealingState` emptied when feature 1125 removed the sidebar's filter accordion,
+/// its one reveal; the first new reveal strikes it from here, and the ratchet then holds it again.
+const EMPTY_KINDS: &[&str] = &["RevealingState"];
+
 fn tests_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
 }
@@ -256,6 +262,14 @@ fn the_registry_still_registers_every_kind() {
         });
 
     for kind in REGISTERED_KINDS {
+        if EMPTY_KINDS.contains(kind) {
+            assert!(
+                !registry.1.contains(kind),
+                "{REGISTRY} constructs a {kind} again: strike it from EMPTY_KINDS so the ratchet \
+                 below holds it.",
+            );
+            continue;
+        }
         assert!(
             registry.1.contains(kind),
             "{REGISTRY} no longer constructs any {kind}. If that kind is gone, strike it from \
