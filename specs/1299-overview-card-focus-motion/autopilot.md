@@ -64,7 +64,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Close unit, over the context cap after its checks. Done: T024 (comment on #1299), T025 (gate green,
+`quickstart.md` Results), T026 (`visual-pass.md`, `visual/`), tdd-verify inline
+(`tdd/verification.md`, FAIL resolved: T027, T028 in 25281aa7), spec Status Closed, full gate
+(`scripts/gate.sh`) green on 25281aa7's code. Pushed to the branch; no PR yet. Next: act on the close
+review (snapshot in *Review rounds*); then set **Phase** `done`, **Next step** `handoff`, add the
+close PR row, and open it via REST (`gh api repos/{owner}/{repo}/pulls`): title
+`#1299: Overview cards: animate keyboard focus and expansion — close`, body as the orchestrator's
+prompt requires (attribution header, `Refs #1299`, session footer), summarising
+`verification.md`, `visual-pass.md` and the two *Follow-ups not done* findings.
 
 ## Open escalation
 
