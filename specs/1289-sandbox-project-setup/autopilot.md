@@ -50,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 2 | after round-1 answers | no critical ambiguities (UI placement and app→daemon command hand-off left to plan) → CLEAN |
 | Plan | 1 | f5e4485bc71dd9eaf5ff5dfa2d7a3c0444768d51:cfc387029e91b351cae9a77b2329e2e5b12d471a | CHANGES: 2 MAJOR, 3 MINOR — all fixed (F1 daemon-wide persisted RunId counter + A12/A16 recreate test; F2 delete awaits run end via stop_and_wait bounded by RUN_OVERRUN, stale finish dropped, A12 asserts no record/log; F3 C4 three values + Started(RunId); F4 M4 split into M4a/M4b; F5 ProjectSetupSet carries daemon-catalog path, A16 mapped case) |
 | Plan | 2 (sonnet, scoped) | c6904f37533cfa3183cad458c3e458eb852b92f7:71a9120e6a1fca096755b00c0c38b356273d79f9 | CLEAN, 1 MINOR — fixed, prose only (data-model §RunId: id allocated in memory under the lock, counter file persisted just after release, before the record write) |
+| Tasks | 1 | afa51c1f5757e7d989ae7915d46182fa1e6dc0f7:0b28553c5169f0e4d6cc8ce59e6cff80cbff1039 | pending — reviewer to dispatch (speckit-analyze unavailable here: manual FR/SC/A/G coverage check done, FR-005/006 and SC-002 gaps fixed) |
 
 ## Declined review findings
 
