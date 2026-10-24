@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: plan review round 1 acted on, round 2 pending
-- **Next step**: plan review round 2 (Sonnet re-review of the fix diff from round 1's snapshot; orchestrator dispatches), then tasks unit. Milestones per plan.md: M1 (stage 1 docs) now; M2–M4 after #1125 and #1127 merge.
+- **Phase**: tasks written, tasks review pending
+- **Next step**: tasks review round 1 (fresh reviewer, `rubrics/tasks.md`, snapshot in Review rounds; orchestrator dispatches), then the rest of the tasks unit: `speckit-analyze`, checklists (none unchecked), specs-only gate, design PR. M1 can be built after the design PR merges; M2–M4 wait for #1125 and #1127 to merge.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -23,6 +23,10 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | — | todo |
+| M2 | T012–T020 | docs | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | blocked: #1125 and #1127 must merge |
+| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | blocked: #1125 and #1127 must merge; after M2 |
+| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
 
 ## Decisions
 
@@ -41,12 +45,13 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | clarify | 1 | — | 3 questions, all agent-resolved (D1–D3); FR-011, FR-012, FR-020, SC-001, US4 scenario 4 changed. |
 | clarify | 2 | — | No critical ambiguity; unit ends. |
 | plan | 1 | `042e8e0058432d5b45e9377611122c12f1cce667:2fa8a2688c30d42e47a2ec0733539e77cba161bc` | CHANGES: F1 MAJOR fixed (`title_bar` anchors the 64 px bar, not its 65 px container; W1 `h == app_bar::HEIGHT`, W3 `title_bar.y + app_bar::BOTTOM_EDGE == shell.body.y`; hairline is the bar's bottom edge for SC-004's gap; follows #1127 if it drops the divider; R6, contract, data model, plan updated); F2 MINOR fixed (W5 in R6 and data model, asserted on `State` not records, selection accessor open until #1125 M3; mutation row: Overview closed → W5); F3 MINOR fixed, prose only (extended `strip_with` replaces `feat-working`'s session, keeping Working, in R5 and plan). Round 2 needed: F1 changes gate assertions. |
-| plan | 2 | `2d670a35839ea1afff7c10d0094098102cdaa020:7301669f92b15e41ef74c6fbb0abe48878927cef` (fix diff from round 1's snapshot) | pending: orchestrator dispatches a Sonnet re-review |
+| plan | 2 | `2d670a35839ea1afff7c10d0094098102cdaa020:7301669f92b15e41ef74c6fbb0abe48878927cef` (Sonnet re-review of the diff from `042e8e00…:2fa8a268…`) | CLEAN; one MINOR declined (see Declined review findings). |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| — (design) | plan round 2 | MINOR: `contracts/covered-states.md:40` says each anchor is "held by W1–W4" under a W1–W5 table | W5 is a state-level assertion on the `State`, not on an anchor, so W1–W4 are the anchors' properties; the sentence is correct. |
 
 ## Handover
 
@@ -59,4 +64,5 @@ None.
 ## Follow-ups not done
 
 - Cloud environment: `gh` not authenticated; `branch-start.sh` ran without a previous PR (none). Issue #1127's body was read through the GitHub MCP instead.
+- Tasks unit: no Agent tool, so the tasks review was not dispatched; snapshot recorded for the orchestrator. Stopped before `speckit-analyze`, the gate and the design PR, as the orchestrator asked. `branch-start.sh` not run: origin/main is 2 unrelated commits ahead, and a rebase would rewrite the commits the plan-review snapshots name; the design-PR unit rebases. Optional hooks (`docguard.review` before tasks; `tdd.plan`, `docguard.score` after) skipped, non-interactive run. M3 will meet the mandatory `before_implement` `tdd.run` hook.
 - Plan unit: no Agent tool in this environment, so the plan review was not dispatched by the unit; snapshot recorded for the orchestrator. `lychee` not installed locally (links check runs in CI).
