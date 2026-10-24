@@ -25,15 +25,27 @@ fn the_strip_measures_its_tabs_and_leaves_the_rest_at_its_leading_edge() {
     let two = natural_strip_width(2);
     assert!(one > 0.0 && two > 2.0 * one, "a gap between two tabs");
     assert_eq!(leading_slack(two + 10.0, 2), 10.0);
-    assert_eq!(leading_slack(one, 2), 0.0, "no slack once the tabs overflow");
+    assert_eq!(
+        leading_slack(one, 2),
+        0.0,
+        "no slack once the tabs overflow"
+    );
 }
 
 #[test]
 fn a_tab_scrolls_just_into_view_and_not_when_it_is_already_there() {
     let one = natural_strip_width(1);
     assert_eq!(scroll_into_view(0, 0.0, one * 3.0), None, "in view");
-    assert_eq!(scroll_into_view(0, one, one * 3.0), Some(0.0), "behind the leading edge");
+    assert_eq!(
+        scroll_into_view(0, one, one * 3.0),
+        Some(0.0),
+        "behind the leading edge"
+    );
     let past = scroll_into_view(5, 0.0, one).expect("past the trailing edge");
     assert!(past > 0.0);
-    assert_eq!(scroll_into_view(5, past, one), None, "just in view after the scroll");
+    assert_eq!(
+        scroll_into_view(5, past, one),
+        None,
+        "just in view after the scroll"
+    );
 }

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1126
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
-- **Phase**: implement M1
-- **Next step**: M1 verify (scoped gate + review A, review B, full gate), then PR (M1)
+- **Phase**: M1 PR
+- **Next step**: orchestrator opens PR (M1) from pr-title.md/pr-body.md, waits on CI and merges; then M2 (confirm clarification 1 first)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | — | in progress |
+| M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | to open | review |
 | M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | — | pending |
 | M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | — | pending |
 
@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | 29583b02c933d279616339822384ea215db890db:3616cce290dbc0e95358c640c3b0c58fabf0feaa | CLEAN (sonnet); 1 MINOR fixed (containment retarget detail) |
 | Tasks | 1 | 8ab80bc5203f8fcd8be0c73b112b09dc4539067a:2fa1a219553a964ec33e235d36e1d193a87f7128 | CLEAN; 3 MINOR: checklist ticks + note fixed, provisional clarification noted in follow-ups |
 | M1 A (code review, high) | 1 | 77849f887d81f709896e3b79ed506ee1f7c5e311:7a7afc6b185623b1c507387ea64f1a38484a286e | CLEAN; 2 MINOR: F1 fixed (title read once titles become readable), F2 declined |
+| M1 B (conformance, sonnet) | 1 | fd556e46e1cb2aa0abc417f86102606b87d79e16:157c47ec92b0f0734825178f76445f2a041b9540 | CLEAN; 3 MINOR (cycle-log evidence for T004/T016, T003's extra moved helpers) recorded in the cycle log |
 
 ## Declined review findings
 
