@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M1
-- **Next step**: M1 review A round 2 (scoped, fix diff) and review B round 2 (sonnet) on the fix snapshot; then full gate, PR
+- **Next step**: M1 PR open; orchestrator waits on CI and merges, then M2
 
 ## Pull requests
 
@@ -57,7 +57,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 2 (sonnet, scoped) | e8a60871840097dcc1874c2b1084ebd6e30eb98e:62160ffc5876e446a80f7dcd6f1b623f4b490ab3 | CLEAN, no findings |
 | M1 A | 1 (high) | bfedc8feff31a942849a46161efd9046cd8ac84b:65b4a48c150e71ebb1754ffda28df43e74b95f10 | CLEAN, 3 MINOR — all fixed (F1 a folder holding the separator drops only itself, 2 core tests; F2 A2 (a)/A3 scripts export `MISE_DATA_DIR=`, `resolve_with` doc corrected; F3 `only_offered` keeps a CLI only when its command is in its offered `bin`, new test) |
 | M1 B | 1 (sonnet) | bfedc8feff31a942849a46161efd9046cd8ac84b:65b4a48c150e71ebb1754ffda28df43e74b95f10 | CHANGES: 1 MAJOR, 1 MINOR — fixed (F1 `tdd/cycle-log.md` added, red/green per behaviour; F2 guide says "container or Kubernetes daemon", prose only). Verify: toolchain_path 14/14, daemon `offered` 8/8 |
-| M1 A + B | 2 | da8d7b2975423f682e8ed7b67404de7fa34812af:079a1970a4f38c03df7d287289a5d26dac1513f5 | pending (A scoped on fix diff, B sonnet); full gate green on this tree; Verify toolchain_path 16/16, daemon `offered` 9/9 |
+| M1 A | 2 (sonnet, scoped) | da8d7b2975423f682e8ed7b67404de7fa34812af:079a1970a4f38c03df7d287289a5d26dac1513f5 | CLEAN, no findings |
+| M1 B | 2 (sonnet) | da8d7b2975423f682e8ed7b67404de7fa34812af:079a1970a4f38c03df7d287289a5d26dac1513f5 | CLEAN, 1 MINOR — fixed, prose only (guide paragraph re-wrapped to ~100 columns). Verify: toolchain_path 16/16, daemon `offered` 9/9 |
 
 ## Declined review findings
 
