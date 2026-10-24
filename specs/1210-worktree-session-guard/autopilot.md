@@ -81,7 +81,7 @@ None.
 
 ## Open escalation
 
-None.
+Close gate blocked: after rebasing onto origin/main 0e5a1e9bb (which re-recorded the layout snapshot), full `mise run gate` still fails at `micold-client --test layout_snapshot` (`status-bar-warnings` and `-overview`, element 0/0/0/2/0/0/0/1: recorded width 778.1, observed 775.2). The diff against origin/main touches no `crates/micold-client` file. Not bypassing the push hook and not re-recording the fixture. Close branch is rebased, 4 local commits, unpushed.
 
 ## Follow-ups not done
 
