@@ -2,29 +2,37 @@
 //! `reviews/<project id>.json` beside `projects/`, written and read by
 //! [`crate::store::JsonFileStore::save_reviews`] and [`crate::store::JsonFileStore::load_reviews`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
 use super::comment::{fresh_id, CommentId, EntryReview, ReviewComment};
+use super::marks::ReviewMark;
 
-/// The newest version this build writes (feature 1149, S3): 3, and only while some comment has a
-/// pull request; otherwise 2 (feature 946, S2), so a file without PR comments stays readable by an
-/// older build. It also reads 482's version 1, whose `pending` state loads as Draft.
-pub const REVIEW_FILE_VERSION: u32 = 3;
+/// The newest version this build writes (feature 1271, S4): 4, and only while some entry has a
+/// reviewed mark; otherwise 3 while some comment has a pull request (feature 1149, S3), else 2
+/// (feature 946, S2), so a file without marks stays readable by an older build. It also reads
+/// 482's version 1, whose `pending` state loads as Draft.
+pub const REVIEW_FILE_VERSION: u32 = 4;
 
-/// The version written while no comment has a pull request.
+/// The version written while some comment has a pull request and no entry has a mark.
+const PR_FILE_VERSION: u32 = 3;
+
+/// The version written while no comment has a pull request and no entry has a mark.
 const PLAIN_FILE_VERSION: u32 = 2;
 
 /// The versions this build reads.
-const READABLE_VERSIONS: [u32; 3] = [1, PLAIN_FILE_VERSION, REVIEW_FILE_VERSION];
+const READABLE_VERSIONS: [u32; 4] = [1, PLAIN_FILE_VERSION, PR_FILE_VERSION, REVIEW_FILE_VERSION];
 
 /// Every entry's comments of one project, keyed by worktree directory name; `""` is the Default
 /// entry (the project root), as on the wire.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReviewFile {
-    /// Comments per entry. An entry with none is not written.
+    /// Comments per entry.
     pub entries: BTreeMap<String, Vec<ReviewComment>>,
+    /// Reviewed marks per entry, keyed like `entries` (feature 1271). An entry with neither
+    /// comments nor marks is not written.
+    pub marks: BTreeMap<String, Vec<ReviewMark>>,
 }
 
 /// An entry's location as stored: `"default"` or `{ "worktree": "<dir>" }`.
@@ -39,6 +47,8 @@ enum StoredLocation {
 struct StoredEntry {
     location: StoredLocation,
     comments: Vec<ReviewComment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    marks: Vec<ReviewMark>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -50,32 +60,44 @@ struct StoredReviews {
 impl ReviewFile {
     /// The file's JSON text.
     pub fn to_json(&self) -> String {
-        let entries = self
+        let dirs: BTreeSet<&String> = self
             .entries
             .iter()
             .filter(|(_, comments)| !comments.is_empty())
-            .map(|(dir, comments)| StoredEntry {
+            .map(|(dir, _)| dir)
+            .chain(
+                self.marks
+                    .iter()
+                    .filter(|(_, marks)| !marks.is_empty())
+                    .map(|(dir, _)| dir),
+            )
+            .collect();
+        let entries = dirs
+            .into_iter()
+            .map(|dir| StoredEntry {
                 location: if dir.is_empty() {
                     StoredLocation::Default
                 } else {
                     StoredLocation::Worktree(dir.clone())
                 },
-                comments: comments.clone(),
+                comments: self.entries.get(dir).cloned().unwrap_or_default(),
+                marks: self.marks.get(dir).cloned().unwrap_or_default(),
             })
             .collect();
+        let with_marks = self.marks.values().any(|marks| !marks.is_empty());
         let with_pr = self
             .entries
             .values()
             .flatten()
             .any(|comment| comment.pr.is_some());
-        let stored = StoredReviews {
-            version: if with_pr {
-                REVIEW_FILE_VERSION
-            } else {
-                PLAIN_FILE_VERSION
-            },
-            entries,
+        let version = if with_marks {
+            REVIEW_FILE_VERSION
+        } else if with_pr {
+            PR_FILE_VERSION
+        } else {
+            PLAIN_FILE_VERSION
         };
+        let stored = StoredReviews { version, entries };
         // Every field is a string, a number or a list of them: serialising cannot fail.
         serde_json::to_string_pretty(&stored).unwrap_or_default()
     }
@@ -88,18 +110,19 @@ impl ReviewFile {
         if !READABLE_VERSIONS.contains(&stored.version) {
             return Err(format!("unknown review file version {}", stored.version));
         }
-        let entries = stored
-            .entries
-            .into_iter()
-            .map(|entry| {
-                let dir = match entry.location {
-                    StoredLocation::Default => String::new(),
-                    StoredLocation::Worktree(dir) => dir,
-                };
-                (dir, with_distinct_references(entry.comments))
-            })
-            .collect();
-        Ok(Self { entries })
+        let mut file = Self::default();
+        for entry in stored.entries {
+            let dir = match entry.location {
+                StoredLocation::Default => String::new(),
+                StoredLocation::Worktree(dir) => dir,
+            };
+            if !entry.marks.is_empty() {
+                file.marks.insert(dir.clone(), entry.marks);
+            }
+            file.entries
+                .insert(dir, with_distinct_references(entry.comments));
+        }
+        Ok(file)
     }
 }
 
@@ -119,7 +142,8 @@ fn with_distinct_references(comments: Vec<ReviewComment>) -> Vec<ReviewComment> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::review::comment::CommentState;
+    use crate::review::comment::{CommentState, Scope};
+    use crate::review::marks::ChangeId;
     use crate::review::{LineRange, RelPath, Side};
     use crate::store::JsonFileStore;
     use serde_json::json;
@@ -203,7 +227,7 @@ mod tests {
             "garbage is refused"
         );
         assert!(
-            ReviewFile::from_json(r#"{ "version": 4, "entries": [] }"#).is_err(),
+            ReviewFile::from_json(r#"{ "version": 5, "entries": [] }"#).is_err(),
             "a version this build does not know is refused rather than misread"
         );
     }
@@ -424,7 +448,7 @@ mod tests {
         let project = Path::new("/repo");
         let path = store.reviews_path(project);
         std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
-        let text = file_of(4, Vec::new());
+        let text = file_of(5, Vec::new());
         std::fs::write(&path, &text).expect("written");
         assert_eq!(store.load_reviews(project), ReviewFile::default());
         let mut aside = path.as_os_str().to_os_string();
@@ -432,7 +456,7 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&aside).ok(),
             Some(text),
-            "a version 4 file is quarantined as 482's"
+            "a version 5 file is quarantined as 482's"
         );
     }
 
@@ -456,5 +480,136 @@ mod tests {
             Some("{ broken"),
             "the unreadable bytes are kept as `<name>.corrupt`"
         );
+    }
+
+    // ---- version 4: reviewed marks (feature 1271, S4, T016) -------------------------------------
+
+    fn mark(scope: Scope, path: &str, n: u8) -> ReviewMark {
+        ReviewMark {
+            scope,
+            path: RelPath::from_git(path),
+            change: ChangeId::parse(&format!("{n:02x}").repeat(20)).expect("40 hex"),
+        }
+    }
+
+    fn with_marks() -> ReviewFile {
+        let mut file = sample();
+        file.marks.insert(
+            "feature-x".into(),
+            vec![
+                mark(Scope::WorkingTree, "src/a.rs", 1),
+                mark(Scope::PullRequest(12), "src/a.rs", 2),
+            ],
+        );
+        file.marks.insert(
+            "marks-only".into(),
+            vec![mark(Scope::WorkingTree, "b.rs", 3)],
+        );
+        file
+    }
+
+    #[test]
+    fn a_file_with_marks_is_version_4_and_round_trips_them() {
+        let file = with_marks();
+        let json = file.to_json();
+        let value: serde_json::Value = serde_json::from_str(&json).expect("JSON");
+        assert_eq!(value["version"], json!(4));
+        assert_eq!(
+            value["entries"][1]["marks"],
+            json!([
+                { "scope": "WorkingTree", "path": "src/a.rs", "change": "01".repeat(20) },
+                { "scope": { "PullRequest": 12 }, "path": "src/a.rs", "change": "02".repeat(20) },
+            ]),
+            "the data-model shape"
+        );
+        assert_eq!(
+            value["entries"][0].get("marks"),
+            None,
+            "an entry without marks writes no `marks`"
+        );
+        let back = ReviewFile::from_json(&json).expect("loads");
+        assert_eq!(back.marks, file.marks);
+        assert_eq!(back.entries["feature-x"], file.entries["feature-x"]);
+    }
+
+    #[test]
+    fn an_entry_with_marks_and_no_comments_is_written_with_no_comments() {
+        let value: serde_json::Value = serde_json::from_str(&with_marks().to_json()).expect("JSON");
+        let entries = value["entries"].as_array().expect("a list");
+        let only = entries
+            .iter()
+            .find(|e| e["location"] == json!({ "worktree": "marks-only" }))
+            .expect("the entry with marks only is written");
+        assert_eq!(only["comments"], json!([]));
+        assert_eq!(only["marks"][0]["path"], json!("b.rs"));
+    }
+
+    #[test]
+    fn without_marks_the_version_stays_3_or_2() {
+        let mut file = sample();
+        file.marks.insert("feature-x".into(), Vec::new());
+        let version = |file: &ReviewFile| {
+            serde_json::from_str::<serde_json::Value>(&file.to_json()).expect("JSON")["version"]
+                .clone()
+        };
+        assert_eq!(version(&file), json!(2), "no marks, no PR comment");
+        file.entries
+            .get_mut("feature-x")
+            .expect("entry")
+            .push(pr_comment(5));
+        assert_eq!(version(&file), json!(3), "no marks, a PR comment");
+    }
+
+    #[test]
+    fn versions_1_to_3_load_with_no_marks_and_every_comment() {
+        for version in [1, 2, 3] {
+            let mut comment = stored_comment(ID_1, json!({ "draft": null }));
+            if version < 3 {
+                comment.as_object_mut().expect("object").remove("pr");
+            }
+            let file = ReviewFile::from_json(&file_of(version, vec![comment])).expect("loads");
+            assert!(file.marks.is_empty(), "version {version} has no marks");
+            assert_eq!(file.entries["feature-x"].len(), 1, "version {version}");
+        }
+    }
+
+    fn file_with_mark(mark: serde_json::Value) -> String {
+        json!({
+            "version": 4,
+            "entries": [{ "location": "default", "comments": [], "marks": [mark] }]
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn a_malformed_mark_makes_the_file_unreadable() {
+        let good = json!({ "scope": "WorkingTree", "path": "a.rs", "change": "ab".repeat(20) });
+        assert!(ReviewFile::from_json(&file_with_mark(good)).is_ok());
+        for bad in [
+            json!({ "scope": "WorkingTree", "path": "a.rs", "change": "ab".repeat(19) }),
+            json!({ "scope": "WorkingTree", "path": "a.rs", "change": "zz".repeat(20) }),
+            json!({ "scope": { "PullRequest": 0 }, "path": "a.rs", "change": "ab".repeat(20) }),
+        ] {
+            assert!(
+                ReviewFile::from_json(&file_with_mark(bad.clone())).is_err(),
+                "{bad} is refused"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_with_a_malformed_mark_is_kept_aside() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = store_in(dir.path());
+        let project = Path::new("/repo");
+        let path = store.reviews_path(project);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+        let text =
+            file_with_mark(json!({ "scope": "WorkingTree", "path": "a.rs", "change": "not hex" }));
+        std::fs::write(&path, &text).expect("written");
+        assert_eq!(store.load_reviews(project), ReviewFile::default());
+        let mut aside = path.as_os_str().to_os_string();
+        aside.push(".corrupt");
+        assert_eq!(std::fs::read_to_string(&aside).ok(), Some(text));
     }
 }

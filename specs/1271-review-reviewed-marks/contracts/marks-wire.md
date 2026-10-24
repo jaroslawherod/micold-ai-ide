@@ -72,8 +72,9 @@ None can attach: the handshake refuses a peer of another `PROTOCOL_VERSION` or `
 `GitCli::whole_change(dir, &ReviewScope) -> io::Result<WholeChange>` and the matching `Git` trait
 method; read-only, with the review git reads' deadline:
 
-1. `git diff --no-ext-diff --no-textconv --no-color -z -M --raw --full-index <rev>`, `<rev>` the
-   merge-base for a worktree with a base, else `HEAD`;
+1. `git diff --no-ext-diff --no-textconv --no-color -z -M --raw --no-abbrev <rev>`, `<rev>` the
+   merge-base for a worktree with a base, else `HEAD` (`--no-abbrev`, not `--full-index`: git 2.43
+   still abbreviates `--raw` ids under `--full-index`, which widens only a patch's `index` line);
 2. for a worktree with a base, `range_paths(<base>, HEAD)` and `range_paths(HEAD)` for the origin;
    otherwise every file is Uncommitted;
 3. untracked, not-ignored files (`untracked`), and `git hash-object --stdin-paths` over the paths

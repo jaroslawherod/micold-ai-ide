@@ -669,3 +669,253 @@ fn has_commit_tells_present_from_missing_and_never_runs_git_for_a_bad_id() {
     // A directory that is no repository would make git fail: a bad id never gets that far.
     assert!(!cli.has_commit(&f.root.join("missing"), "--help"));
 }
+
+// ---- the whole change and its change ids (feature 1271, T010, contracts/marks-wire.md § G2) -----
+
+use micold_core::git::{FakeGit, Git};
+use micold_core::review::marks::{ChangeId, WholeChange, WholeFile};
+
+fn whole(dir: &Path, scope: &ReviewScope) -> WholeChange {
+    GitCli::new()
+        .whole_change(dir, scope)
+        .expect("the whole change reads")
+}
+
+fn worktree_whole(dir: &Path) -> WholeChange {
+    let base = GitCli::new().review_base(dir);
+    whole(dir, &ReviewScope::Worktree { base })
+}
+
+fn whole_file<'a>(change: &'a WholeChange, path: &str) -> &'a WholeFile {
+    change
+        .files
+        .get(&rel(path))
+        .unwrap_or_else(|| panic!("{path} is in the whole change"))
+}
+
+fn id_of(change: &WholeChange, path: &str) -> ChangeId {
+    whole_file(change, path)
+        .id
+        .unwrap_or_else(|| panic!("{path} has a change id"))
+}
+
+#[test]
+fn the_whole_change_gives_each_file_its_origin_and_an_id() {
+    let f = fixture();
+    write(&f.wt, "old.rs", "one\ntwo\nthree\nfour\nfive\n");
+    commit_all(&f.wt, "old.rs committed");
+    write(&f.wt, "old.rs", "one\ntwo\nthree\nfour\nfive\nsix\n");
+    write(&f.wt, "b.rs", "fn b() { uncommitted(); }\n");
+    let change = worktree_whole(&f.wt);
+    let paths: Vec<&str> = change.files.keys().map(RelPath::as_str).collect();
+    assert_eq!(paths, ["a.rs", "b.rs", "old.rs"]);
+    assert_eq!(whole_file(&change, "a.rs").origin, Origin::Committed);
+    assert_eq!(whole_file(&change, "b.rs").origin, Origin::Uncommitted);
+    assert_eq!(whole_file(&change, "old.rs").origin, Origin::Both);
+    assert!(change.files.values().all(|file| file.id.is_some()));
+    assert_eq!(whole_file(&change, "b.rs").kind, ChangeKind::Modified);
+}
+
+#[test]
+fn an_untracked_file_is_an_added_uncommitted_file_with_an_id() {
+    let f = fixture();
+    write(&f.wt, "new.rs", "fn new() {}\n");
+    write(&f.wt, "skip.log", "ignored\n");
+    let change = worktree_whole(&f.wt);
+    let new = whole_file(&change, "new.rs");
+    assert_eq!(new.kind, ChangeKind::Added, "digested as git's added file");
+    assert_eq!(new.origin, Origin::Uncommitted);
+    assert!(new.id.is_some());
+    assert!(
+        !change.files.contains_key(&rel("skip.log")),
+        "an ignored file is not part of the change"
+    );
+}
+
+#[test]
+fn a_renamed_file_is_keyed_by_its_new_path_and_its_old_path_is_in_the_id() {
+    let f = fixture();
+    git(&f.wt, &["mv", "old.rs", "new.rs"]);
+    let moved = worktree_whole(&f.wt);
+    assert_eq!(
+        whole_file(&moved, "new.rs").kind,
+        ChangeKind::Renamed {
+            from: rel("old.rs")
+        }
+    );
+    assert!(!moved.files.contains_key(&rel("old.rs")));
+    git(&f.wt, &["mv", "new.rs", "old.rs"]);
+    git(&f.wt, &["mv", "b.rs", "new.rs"]);
+    write(&f.wt, "new.rs", "one\ntwo\nthree\nfour\n");
+    git(&f.wt, &["add", "-A"]);
+    let other = worktree_whole(&f.wt);
+    assert_ne!(
+        whole_file(&other, "new.rs").id,
+        whole_file(&moved, "new.rs").id,
+        "the same bytes moved from another path are another change"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_mode_only_change_has_an_id_of_its_own() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = fixture();
+    let before = worktree_whole(&f.wt);
+    assert!(!before.files.contains_key(&rel("b.rs")));
+    fs::set_permissions(f.wt.join("b.rs"), fs::Permissions::from_mode(0o755)).unwrap();
+    let change = worktree_whole(&f.wt);
+    assert_eq!(whole_file(&change, "b.rs").kind, ChangeKind::ModeOnly);
+    assert!(whole_file(&change, "b.rs").id.is_some());
+}
+
+#[test]
+fn a_binary_files_id_follows_its_bytes() {
+    let f = fixture();
+    fs::write(f.wt.join("bin.dat"), b"\x00\x01\x02").unwrap();
+    commit_all(&f.wt, "binary");
+    let first = id_of(&worktree_whole(&f.wt), "bin.dat");
+    fs::write(f.wt.join("bin.dat"), b"\x00\x01\x03").unwrap();
+    let changed = id_of(&worktree_whole(&f.wt), "bin.dat");
+    assert_ne!(first, changed, "one byte more or less is another change");
+    fs::write(f.wt.join("bin.dat"), b"\x00\x01\x02").unwrap();
+    assert_eq!(id_of(&worktree_whole(&f.wt), "bin.dat"), first);
+}
+
+#[test]
+fn the_default_entry_and_a_worktree_without_a_base_are_read_over_head() {
+    let f = fixture();
+    write(&f.root, "b.rs", "fn b() { root(); }\n");
+    write(&f.root, "c.md", "new\n");
+    let root = whole(&f.root, &ReviewScope::RootUncommitted);
+    let paths: Vec<&str> = root.files.keys().map(RelPath::as_str).collect();
+    assert_eq!(paths, ["b.rs", "c.md"], "the root's own uncommitted change");
+    assert!(root
+        .files
+        .values()
+        .all(|file| file.origin == Origin::Uncommitted));
+
+    let trunk = fixture_on("trunk");
+    let base = GitCli::new().review_base(&trunk.wt);
+    assert_eq!(
+        base,
+        Base::Unavailable(BaseUnavailable::NoDefaultBranch),
+        "no main or master"
+    );
+    write(&trunk.wt, "b.rs", "fn b() { wt(); }\n");
+    let change = whole(&trunk.wt, &ReviewScope::Worktree { base });
+    let paths: Vec<&str> = change.files.keys().map(RelPath::as_str).collect();
+    assert_eq!(
+        paths,
+        ["b.rs"],
+        "the committed a.rs has nothing to be compared with"
+    );
+    assert_eq!(whole_file(&change, "b.rs").origin, Origin::Uncommitted);
+}
+
+#[test]
+fn committing_an_uncommitted_change_unaltered_keeps_its_id() {
+    let f = fixture();
+    write(&f.wt, "b.rs", "fn b() { reviewed(); }\n");
+    let before = worktree_whole(&f.wt);
+    assert_eq!(whole_file(&before, "b.rs").origin, Origin::Uncommitted);
+    commit_all(&f.wt, "b.rs as reviewed");
+    let after = worktree_whole(&f.wt);
+    assert_eq!(whole_file(&after, "b.rs").origin, Origin::Committed);
+    assert_eq!(
+        id_of(&after, "b.rs"),
+        id_of(&before, "b.rs"),
+        "committing does not alter the change against the base (US2 s5)"
+    );
+    assert_eq!(
+        id_of(&after, "a.rs"),
+        id_of(&before, "a.rs"),
+        "another file's commit leaves a.rs's id alone (US2 s4)"
+    );
+}
+
+#[test]
+fn a_new_file_keeps_its_id_from_untracked_to_staged_to_committed() {
+    let f = fixture();
+    write(&f.wt, "new.rs", "fn new() {}\n");
+    let untracked = id_of(&worktree_whole(&f.wt), "new.rs");
+    git(&f.wt, &["add", "new.rs"]);
+    let staged = id_of(&worktree_whole(&f.wt), "new.rs");
+    assert_eq!(staged, untracked, "git add keeps the id (research R1)");
+    git(&f.wt, &["commit", "-q", "-m", "new"]);
+    let committed = worktree_whole(&f.wt);
+    assert_eq!(id_of(&committed, "new.rs"), untracked, "and so does commit");
+    assert_eq!(whole_file(&committed, "new.rs").origin, Origin::Committed);
+}
+
+#[test]
+fn a_reverted_and_redone_change_gets_the_same_id() {
+    let f = fixture();
+    write(&f.wt, "b.rs", "fn b() { first(); }\n");
+    let first = id_of(&worktree_whole(&f.wt), "b.rs");
+    write(&f.wt, "b.rs", "fn b() { second(); }\n");
+    assert_ne!(
+        id_of(&worktree_whole(&f.wt), "b.rs"),
+        first,
+        "an altered change is another change (US2 s1)"
+    );
+    write(&f.wt, "b.rs", "fn b() {}\n");
+    assert!(
+        !worktree_whole(&f.wt).files.contains_key(&rel("b.rs")),
+        "reverted: the file leaves the change"
+    );
+    write(&f.wt, "b.rs", "fn b() { first(); }\n");
+    assert_eq!(
+        id_of(&worktree_whole(&f.wt), "b.rs"),
+        first,
+        "the same change again is the same id (US2 s3, s6)"
+    );
+}
+
+#[test]
+fn the_whole_change_does_not_follow_the_toggles() {
+    let f = fixture();
+    write(&f.wt, "b.rs", "fn b() { uncommitted(); }\n");
+    let change = worktree_whole(&f.wt);
+    let ids = |change: &WholeChange| -> Vec<(String, Option<ChangeId>)> {
+        change
+            .files
+            .values()
+            .map(|file| (file.path.to_string(), file.id))
+            .collect()
+    };
+    for toggles in [on(), COMMITTED, UNCOMMITTED] {
+        let shown = worktree_list(&f.wt, toggles);
+        assert!(shown.files.len() < change.files.len() || toggles == on());
+        assert_eq!(
+            ids(&worktree_whole(&f.wt)),
+            ids(&change),
+            "the same whole change whatever {toggles:?} the list shows (FR-005)"
+        );
+    }
+    let listed = worktree_list(&f.wt, on());
+    let both: Vec<&str> = paths(&listed);
+    let whole_paths: Vec<&str> = change.files.keys().map(RelPath::as_str).collect();
+    assert_eq!(whole_paths, both, "both kinds: the same files as the list");
+}
+
+#[test]
+fn a_fake_git_answers_its_scripted_whole_change() {
+    let mut change = WholeChange::default();
+    change.files.insert(
+        rel("a.rs"),
+        WholeFile {
+            path: rel("a.rs"),
+            kind: ChangeKind::Modified,
+            origin: Origin::Uncommitted,
+            id: ChangeId::parse(&"ab".repeat(20)),
+        },
+    );
+    let fake = FakeGit::new().with_whole_change("/wt", change.clone());
+    let scope = ReviewScope::RootUncommitted;
+    assert_eq!(fake.whole_change(Path::new("/wt"), &scope).unwrap(), change);
+    assert_eq!(
+        fake.whole_change(Path::new("/other"), &scope).unwrap(),
+        WholeChange::default()
+    );
+}

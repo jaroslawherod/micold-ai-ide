@@ -47,7 +47,7 @@ not merged yet (R8).
   in `micold-core/src/review/git.rs`, with a matching `Git` trait method (and the fakes in
   `micold-core/src/git.rs`). It always reads the entry's whole change, independent of the
   Committed / Uncommitted toggles (FR-005):
-  1. `git diff --raw --full-index` (with the R1 options of `DIFF`) over `<base>` for a worktree
+  1. `git diff --raw --no-abbrev` (with the R1 options of `DIFF`) over `<base>` for a worktree
      with a base, else over `HEAD` (the Default entry, or no base: their whole change is the
      uncommitted one, Edge Cases > Toggles);
   2. the committed and uncommitted path sets (`range_paths`, as `change_list` reads them) to give

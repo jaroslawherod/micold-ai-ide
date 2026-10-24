@@ -178,6 +178,14 @@ pub trait Git {
     /// base branch is not the default branch. Read-only.
     fn review_base_against(&self, dir: &Path, branch: &str) -> crate::review::base::Base;
 
+    /// The entry's whole working-tree change in `dir`, whatever the toggles, with each file's
+    /// change id (feature 1271, research R2, contracts/marks-wire.md § G2). Read-only.
+    fn whole_change(
+        &self,
+        dir: &Path,
+        scope: &crate::review::base::ReviewScope,
+    ) -> io::Result<crate::review::marks::WholeChange>;
+
     /// The files changed in `dir` under `scope` and `toggles`, one row per path (feature 482,
     /// research R1, FR-002, FR-004, FR-005). Read-only.
     fn change_list(
@@ -766,6 +774,14 @@ impl Git for GitCli {
         GitCli::review_base_against(self, dir, branch)
     }
 
+    fn whole_change(
+        &self,
+        dir: &Path,
+        scope: &crate::review::base::ReviewScope,
+    ) -> io::Result<crate::review::marks::WholeChange> {
+        GitCli::whole_change(self, dir, scope)
+    }
+
     fn change_list(
         &self,
         dir: &Path,
@@ -944,6 +960,9 @@ struct FakeState {
     submodule_progress_lines: Vec<String>,
     /// (worktree dir, refs) -> the reflog text `reflogs` answers, as scripted (feature 1003).
     reflogs: BTreeMap<(PathBuf, Vec<String>), String>,
+    /// worktree dir -> the answer `whole_change` gives, as scripted (feature 1271); an unscripted
+    /// dir has an empty whole change.
+    whole_changes: BTreeMap<PathBuf, crate::review::marks::WholeChange>,
 }
 
 impl FakeGit {
@@ -959,6 +978,19 @@ impl FakeGit {
             .borrow_mut()
             .reflogs
             .insert((dir.into(), refs), text.to_string());
+        self
+    }
+
+    /// Answer `whole_change(dir, _)` with `change` (feature 1271).
+    pub fn with_whole_change(
+        self,
+        dir: impl Into<PathBuf>,
+        change: crate::review::marks::WholeChange,
+    ) -> Self {
+        self.inner
+            .borrow_mut()
+            .whole_changes
+            .insert(dir.into(), change);
         self
     }
 
@@ -1500,6 +1532,21 @@ impl Git for FakeGit {
         crate::review::base::Base::Unavailable(
             crate::review::base::BaseUnavailable::NoDefaultBranch,
         )
+    }
+
+    /// The scripted whole change of `dir`, else none: a fake repository has no files.
+    fn whole_change(
+        &self,
+        dir: &Path,
+        _scope: &crate::review::base::ReviewScope,
+    ) -> io::Result<crate::review::marks::WholeChange> {
+        Ok(self
+            .inner
+            .borrow()
+            .whole_changes
+            .get(dir)
+            .cloned()
+            .unwrap_or_default())
     }
 
     /// Nothing changed: a fake repository has no files.

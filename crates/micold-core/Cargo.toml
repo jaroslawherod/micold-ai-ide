@@ -35,6 +35,8 @@ unicode-segmentation = { workspace = true }
 pulldown-cmark = { workspace = true }
 # Feature 940: Edit, MultiEdit and Write tool inputs as line diffs (research R6).
 similar = { workspace = true }
+# Feature 1271: the digest of a file's change record (`review::marks::ChangeId`, research R1).
+sha1 = { workspace = true }
 directories = { workspace = true }
 postcard = { workspace = true }
 # Shared client<->daemon framing codec (protocol::codec). `tokio-util`'s `LengthDelimitedCodec`
