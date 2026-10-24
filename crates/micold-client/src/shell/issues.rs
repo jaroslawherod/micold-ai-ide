@@ -56,6 +56,7 @@ use micold_core::store::jira_token_path;
 
 use crate::shell::daemon_sync::{on_add_worktree_source_changed, send_op, PendingOp};
 use crate::shell::env_include::resolve_env_include;
+use crate::shell::jira_query::run_if_newly_awaited;
 use crate::App;
 
 /// How long typing must pause before the search beyond the loaded issues runs (research R9).
@@ -97,10 +98,12 @@ pub fn on_form_opened(app: &mut App) -> Task<Message> {
 /// it — it refuses while no GitHub remote is known, and ignores a second press.
 pub fn on_source_changed(app: &mut App, source: BranchSource) -> Task<Message> {
     let before = app.core.worktree_form.issue_request_seq;
+    let before_query = app.core.worktree_form.awaited_jira_query();
     let listed = on_add_worktree_source_changed(app, source);
     match newly_awaited(app, before) {
         Some(chosen) => start_issue_load(app, chosen),
-        None => listed,
+        // Feature 1186 (FR-004a): the Jira source shown in advanced mode runs the last query.
+        None => Task::batch([listed, run_if_newly_awaited(app, before_query)]),
     }
 }
 
@@ -109,6 +112,7 @@ pub fn on_source_changed(app: &mut App, source: BranchSource) -> Task<Message> {
 /// provider's load starts.
 pub fn on_issue_provider_changed(app: &mut App, provider: IssueProvider) -> Task<Message> {
     let before = app.core.worktree_form.issue_request_seq;
+    let before_query = app.core.worktree_form.awaited_jira_query();
     let project = app.core.workspace.active.clone();
     let previous = project
         .as_ref()
@@ -140,6 +144,16 @@ pub fn on_issue_provider_changed(app: &mut App, provider: IssueProvider) -> Task
     }
     match newly_awaited(app, before) {
         Some(chosen) => start_issue_load(app, chosen),
+        // Feature 1186 (FR-003a): back from GitHub in advanced mode runs the last query.
+        None => run_if_newly_awaited(app, before_query),
+    }
+}
+
+/// The basic list a switch from advanced mode made the form await, never requested before, starts
+/// loading (feature 1186, FR-003). Any other message leaves no load newly awaited.
+pub(crate) fn on_basic_shown(app: &mut App, before: u64) -> Task<Message> {
+    match newly_awaited(app, before) {
+        Some(shown) => start_issue_load(app, shown),
         None => Task::none(),
     }
 }

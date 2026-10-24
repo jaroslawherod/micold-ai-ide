@@ -31,6 +31,7 @@ const MARKERS: &[&str] = &[
     "start_issue_load(",
     "start_issue_search(",
     "start_issue_descriptions(",
+    "start_query(",
 ];
 
 /// `(file relative to the repository root, the trimmed line, why it is not another trigger)`.
@@ -95,6 +96,24 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "038 U99 (FR-024): `update_then_follow`, after the reducer accepted a load (named events \
          1 and 2) or a page of that pass, starts the read it now awaits. A stale or failed load, \
          a stale page, the last page, the cap and a failure await none.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "Some(shown) => start_issue_load(app, shown),",
+        "1186 FR-003: the reducer accepted a switch from advanced mode back to a basic list never \
+         requested, the load the Issue source would have started when it was shown.",
+    ),
+    (
+        "crates/micold-client/src/shell/jira_query.rs",
+        "fn start_query(app: &mut App, seq: u64, scoped: ScopedQuery) -> Task<Message> {",
+        "1186: the definition of the single path to an advanced query; it calls nothing.",
+    ),
+    (
+        "crates/micold-client/src/shell/jira_query.rs",
+        "Some((seq, scoped)) => start_query(app, seq, scoped),",
+        "1186 FR-004, FR-004a, FR-003a: `run_if_newly_awaited`, after the reducer accepted `Run`, \
+         or showed the Jira source in advanced mode with a last run query, and now awaits a fresh \
+         run. A switch or a keystroke awaits none.",
     ),
     (
         "crates/micold-client/src/shell/pr_status.rs",
