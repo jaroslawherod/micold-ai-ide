@@ -13,14 +13,13 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — two remain (where refresh / attach existing /
-      run in parallel go; which groups collapse), escalated by the clarify unit; Needs attention's
-      group resolved (joins Needs action)
-- [x] Requirements are testable and unambiguous (apart from FR-001, FR-005 and FR-015's open
-      parts, which wait on the three markers)
+- [x] No [NEEDS CLARIFICATION] markers remain — clarify round 1 resolved all three (Needs
+      attention joins Needs action; a more menu holds refresh / attach existing / run in parallel;
+      every group collapsible, Done collapsed at start)
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
-- [x] All acceptance scenarios are defined (US1 sc.2, US4 sc.6 and US5 sc.2 wait on the markers)
+- [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
@@ -37,4 +36,4 @@
 - FR-020 and FR-021 name the render-free core and the shared UI components because the issue's
   acceptance and the constitution (Principles I and VIII) require them; they name where the rules
   are tested, not how they are built.
-- The three open markers go to `/speckit-clarify` before `/speckit-plan`.
+- The three markers were resolved by `/speckit-clarify` round 1 (see spec.md *Clarifications*).

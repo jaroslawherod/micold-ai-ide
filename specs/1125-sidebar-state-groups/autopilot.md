@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: clarify
-- **Next step**: clarify unit (continued with the user's answers): record Q2/Q3 below as decided by user, apply them to spec.md US4 sc.6 + FR-015 and US5 sc.2 + FR-005, update checklists/requirements.md, then judge whether another clarify round is needed
+- **Phase**: plan
+- **Next step**: plan unit: /speckit-plan for specs/1125-sidebar-state-groups (clarify CLEAN after 2 rounds; spec has no markers)
 
 ## Pull requests
 
@@ -29,6 +29,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | Overview button in the top bar: removed here? | No: it stays; #1127 removes it ("Blocked by: #1125 (Overview moves into the sidebar first)") | agent-resolved | issue #1127 body |
 | D2 | spec | Order of Done vs Idle | Done last, after Idle | agent-resolved | issue #1125 body; mockup board sidebar |
 | D3 | clarify 1 | Needs attention: own group or joins Needs action? | Joins Needs action; no separate group | agent-resolved | issue #1125 lists four groups; mockup puts fix/1117 "checks failing" (NeedsAttention, overview.rs card_state) under "Needs action · 2" |
+| D4 | clarify 1 | Where do refresh, attach existing, run in parallel go? | A more (⋯) menu at the chip bar's end, beside add and hide | decided by user | jaro, 2026-10-24 |
+| D5 | clarify 1 | Which groups are collapsible? | Every group; Done starts collapsed, the others expanded | decided by user | jaro, 2026-10-24 |
+| D6 | clarify 2 | More menu's look and dismissal | Shared `Menu` primitive + feature 017 overlay rules | agent-resolved | ui/material/menu.rs, micold-core/src/overlay.rs module docs |
 
 ## Review rounds
 
@@ -47,10 +50,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, category 1 (product decision the repo does not settle):
-
-- **Q2 (US4 sc.6, FR-015)**: Where do refresh worktree list, attach existing sessions and run in parallel go, now that only add and hide sit beside the chips? Options: (a) **(Recommended)** an overflow (⋯ more) menu at the chip bar's end, beside add and hide — keeps them in the sidebar with today's enabled rules and tooltips, matches the mockup's two visible actions, and does not depend on #1127, which is blocked by #1125 and does not list these actions for its title-bar overflow menu; (b) keep them as icons beside add and hide — no new menu, but the bar gets crowded and departs from the mockup; (c) move them to #1127's title-bar overflow menu — they would be unreachable from the sidebar until #1127 ships.
-- **Q3 (US5 sc.2, FR-005)**: Which sidebar groups are collapsible (mockup's open question "keep the sidebar groups collapsible?")? Options: (a) **(Recommended)** every group collapsible, Done collapsed at start, the others expanded — one header behaviour for keyboard and pointer, and US5 sc.3/sc.4 already speak of any collapsed group; (b) only Done collapsible — fewer controls, but headers behave differently and Needs action/Working headers become inert.
+None.
 
 ## Follow-ups not done
 
