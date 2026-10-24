@@ -138,6 +138,20 @@ fn the_changes_watch_runs_only_while_the_view_is_open() {
     );
 }
 
+/// The header's watch (feature 1126, R6) runs only for the location the header shows while a
+/// session is shown: `State::header_watch_entry`, whose rows `tests/features_changes.rs` covers.
+#[test]
+fn the_header_watch_runs_only_while_a_location_is_shown() {
+    let src = fs::read_to_string(subscriptions_rs()).expect("read src/shell/subscriptions.rs");
+    let guard = enclosing_block(&src, "changes_watch::watch(app, entry)")
+        .expect("the header's watch is subscribed unconditionally");
+    assert!(
+        guard.contains("header_watch_entry()"),
+        "the header's watch is inside `{guard}`, which does not ask whether a location is shown \
+         (1126 R6)"
+    );
+}
+
 /// The pull request status interval (feature 040, FR-018, SC-006) runs only while the switch is on
 /// and the window holds its active project.
 ///

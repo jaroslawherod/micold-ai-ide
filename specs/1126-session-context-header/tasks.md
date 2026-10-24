@@ -297,56 +297,56 @@ pressing it opens the Changes view for it; pressing again returns (quickstart B6
 
 ### Tests for User Story 3 (write first, see them fail)
 
-- [ ] T043 [P] [US3] Core unit tests H5 and H6 in `core/src/context_header.rs` tests: the four label
+- [x] T043 [P] [US3] Core unit tests H5 and H6 in `core/src/context_header.rs` tests: the four label
   rows (`−` is U+2212), and `ChangeSummary::of` over a text (+10 −2), a binary (0, 0) and a renamed
   (+1 −1) file is `{ files: 3, added: 11, removed: 3 }` (saturating sums)
-- [ ] T044 [P] [US3] `HeaderCounts` transition tests in `client/src/features/changes.rs` tests, one
+- [x] T044 [P] [US3] `HeaderCounts` transition tests in `client/src/features/changes.rs` tests, one
   per row of data-model *HeaderCounts*: follow to a new entry → `Loading { seq }` and `ReadCounts`;
   current-seq `Ok` → `Ready`, with a queued `again` reading once more; current-seq `Err` →
   `Failed`; old seq dropped; `Changed` from `Ready`/`Failed`/`Idle` with an entry → `Loading { last }`
   and `ReadCounts`; `Changed` while `Loading` → `again`; `WorktreesListed` without the entry's dir →
   `entry: None`, `Idle`; and `CountsReading` is `Unknown` for `Idle`, `Loading { .. }` whatever
   `last` holds, and `Failed` (US3 scenario 4)
-- [ ] T045 [P] [US3] H7 integration cases in `client/tests/features_changes.rs` through
+- [x] T045 [P] [US3] H7 integration cases in `client/tests/features_changes.rs` through
   `State::update`: selecting a session of another location sends one `ReadCounts` for it; another
   session of the same location sends none; no active session or its worktree removed → entry
   `None`, no read; an answer for an earlier location is dropped; `Msg::Changed` with the view open on
   A and the header on B reads both lists
-- [ ] T046 [P] [US3] Unit test of `session_area::changes_press(state, &location)` in
+- [x] T046 [P] [US3] Unit test of `session_area::changes_press(state, &location)` in
   `client/src/ui/session_area.rs` tests: the three H8 rows (closed → `ReviewChangesRequested(shown)`;
   open on the shown location → `changes::Msg::Closed`, selected; open on another →
   `ReviewChangesRequested(shown)`, not selected)
 
 ### Implementation for User Story 3
 
-- [ ] T047 [US3] `ChangeSummary { files, added, removed }` with `ChangeSummary::of(&ChangeList)`,
+- [x] T047 [US3] `ChangeSummary { files, added, removed }` with `ChangeSummary::of(&ChangeList)`,
   `CountsReading { Unknown, Known(ChangeSummary) }`, and `HeaderText.changes` (with the third
   argument `CountsReading` to `HeaderText::of`) in `core/src/context_header.rs` (H5, H6); T043 passes
-- [ ] T048 [US3] `Msg::HeaderCountsRead { seq, result: Result<ChangeSummary, String> }`,
+- [x] T048 [US3] `Msg::HeaderCountsRead { seq, result: Result<ChangeSummary, String> }`,
   `Effect::ReadCounts { seq, entry }`, the field `HeaderCounts.load: Load<ChangeSummary>` and the
   `HeaderFollowed`, `Changed` and `WorktreesListed` transitions of data-model *HeaderCounts* in
   `client/src/features/changes.rs`; the effect goes out through `changes.pending` /
   `App::take_changes_effect`, batched with one already there (R6); T044 passes
-- [ ] T049 [US3] Run `ReadCounts` in `client/src/shell/changes.rs` with the view's `local` +
+- [x] T049 [US3] Run `ReadCounts` in `client/src/shell/changes.rs` with the view's `local` +
   `read_list` under `Toggles::default()`, reducing with `ChangeSummary::of` off the update thread;
   `local`'s refusal (service on another computer) answers `Err` (R5); T045 passes
-- [ ] T050 [US3] In `client/src/shell/subscriptions.rs`, also watch the header's entry while a session
+- [x] T050 [US3] In `client/src/shell/subscriptions.rs`, also watch the header's entry while a session
   is shown and the Overview is closed, keyed so a view and a header on the same worktree share one
   watcher (R6); `client/tests/idle_subscriptions.rs` stays green (no watch without a shown session)
-- [ ] T051 [US3] `session_area::changes_press` in `client/src/ui/session_area.rs` (H8); T046 passes
-- [ ] T052 [US3] The Changes button in `session_area::header`: `material::Button` outlined with
+- [x] T051 [US3] `session_area::changes_press` in `client/src/ui/session_area.rs` (H8); T046 passes
+- [x] T052 [US3] The Changes button in `session_area::header`: `material::Button` outlined with
   `Icon::Git` leading, label `HeaderText.changes`, `.selected(view open on this location)`, tooltip
   *Open the Changes view* / *Close the Changes view*, never narrower than it asks (H9); the header's
   row becomes `row![column![title, chips], changes_button]` with a fixed child list; and the
   Changes branch of `client/src/ui/mod.rs::view_with` draws `column![header, changes view]` when a
   session is shown, no strip, no header without one (R12, A1)
-- [ ] T053 [US3] Gate and snapshot (the gate part written before T052 and seen failing):
+- [x] T053 [US3] Gate and snapshot (the gate part written before T052 and seen failing):
   `client/tests/gates/session_area_fits.rs` checks the Changes
   button is laid out at its requested width at both sizes and themes (H10); new covered state
   `session-area-changes-open` (header over the Changes view) and anchor `session.header.changes` in
   `client/tests/support/covered_states.rs`; regenerate the fixture and check only session states
   change; `docs/development/layout-snapshot.md` *What is covered* lists it
-- [ ] T054 [P] [US3] User guide: `docs/user-guide/reviewing-changes.md` *Opening the Changes view*:
+- [x] T054 [P] [US3] User guide: `docs/user-guide/reviewing-changes.md` *Opening the Changes view*:
   the header's Changes button, what its counts mean (no changes, no counts while reading), pressing
   it again to close; the right-click **Review changes** route still listed
 - [ ] T055 [US3] Visual pass B6, B7 (light and dark), appended to

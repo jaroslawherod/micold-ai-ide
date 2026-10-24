@@ -8,6 +8,7 @@
 use crate::overview::{CardModel, CardState};
 use crate::pr_list::StatusPhrase;
 use crate::pull_request::{PrState, ReviewState};
+use crate::review::changes::ChangeList;
 
 /// What a pull request chip's tooltip adds when the reading it comes from is stale (FR-005).
 pub const STALE_NOTE: &str = "as of the last reading";
@@ -37,7 +38,46 @@ pub struct Chip {
     pub tooltip: String,
 }
 
-/// What the header says (data-model *HeaderText*, contract H1–H4).
+/// The shown location's changes as the Changes view's list counts them (data-model
+/// *ChangeSummary*, contract H6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChangeSummary {
+    /// Changed files: the list's rows.
+    pub files: u32,
+    /// Lines added over every row (0 for a binary file, as its row).
+    pub added: u32,
+    /// Lines removed over every row.
+    pub removed: u32,
+}
+
+impl ChangeSummary {
+    /// The summary of `list`; the sums saturate.
+    pub fn of(list: &ChangeList) -> Self {
+        list.files.iter().fold(
+            Self {
+                files: u32::try_from(list.files.len()).unwrap_or(u32::MAX),
+                ..Self::default()
+            },
+            |sum, file| Self {
+                added: sum.added.saturating_add(file.added),
+                removed: sum.removed.saturating_add(file.removed),
+                ..sum
+            },
+        )
+    }
+}
+
+/// What the header knows of the counts (data-model *CountsReading*): nothing yet, a read under
+/// way or a read that failed (`Unknown`), or the last answer (`Known`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CountsReading {
+    /// No figure to show: never a stale or made-up one (US3 scenario 4).
+    Unknown,
+    /// The counts of the latest read.
+    Known(ChangeSummary),
+}
+
+/// What the header says (data-model *HeaderText*, contract H1–H6).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeaderText {
     /// The card's title (FR-002).
@@ -52,11 +92,14 @@ pub struct HeaderText {
     pub branch: Option<Chip>,
     /// The current pull request in words; `None` without one (FR-005).
     pub pull_request: Option<Chip>,
+    /// The Changes button's label (H5, FR-006).
+    pub changes: String,
 }
 
 impl HeaderText {
-    /// What the header says for `model`'s location, with its current pull request `pr`.
-    pub fn of(model: &CardModel, pr: Option<&PrChipInput>) -> Self {
+    /// What the header says for `model`'s location, with its current pull request `pr` and what
+    /// is known of its change counts.
+    pub fn of(model: &CardModel, pr: Option<&PrChipInput>, counts: CountsReading) -> Self {
         let title = model.title.clone();
         let title_tooltip = if model.display_name == title {
             title.clone()
@@ -70,6 +113,24 @@ impl HeaderText {
             state_tooltip: model.reason.label().to_string(),
             branch: model.branch.as_deref().map(branch_chip),
             pull_request: pr.map(pull_request_chip),
+            changes: changes_label(counts),
+        }
+    }
+}
+
+/// The Changes button's label (H5): `Changes`, then the files and lines, or `no changes`; only
+/// `Changes` while the counts are unknown. `−` is U+2212, as the Changes view's rows write it.
+pub fn changes_label(counts: CountsReading) -> String {
+    match counts {
+        CountsReading::Unknown => "Changes".to_string(),
+        CountsReading::Known(ChangeSummary { files: 0, .. }) => "Changes \u{b7} no changes".into(),
+        CountsReading::Known(ChangeSummary {
+            files,
+            added,
+            removed,
+        }) => {
+            let noun = if files == 1 { "file" } else { "files" };
+            format!("Changes \u{b7} {files} {noun} \u{b7} +{added} \u{2212}{removed}")
         }
     }
 }
@@ -157,7 +218,9 @@ mod tests {
 
     fn pr_text(input: &PrChipInput) -> Option<String> {
         let m = model("t", Some("b"), "n");
-        HeaderText::of(&m, Some(input)).pull_request.map(|c| c.text)
+        HeaderText::of(&m, Some(input), CountsReading::Unknown)
+            .pull_request
+            .map(|c| c.text)
     }
 
     /// H1: the title is the card's, the tooltip adds the display name on a second line when it
@@ -187,7 +250,7 @@ mod tests {
             (default_entry(), "Default", "Default".to_string()),
         ];
         for (m, title, tooltip) in rows {
-            let text = HeaderText::of(&m, None);
+            let text = HeaderText::of(&m, None, CountsReading::Unknown);
             assert_eq!(text.title, title, "H1 title of {:?}", m.location);
             assert_eq!(
                 text.title_tooltip, tooltip,
@@ -213,7 +276,7 @@ mod tests {
                 reason,
                 ..model("t", None, "n")
             };
-            let text = HeaderText::of(&m, None);
+            let text = HeaderText::of(&m, None, CountsReading::Unknown);
             assert_eq!(text.state, state, "H2 state");
             assert_eq!(text.state.label(), state.label());
             assert_eq!(
@@ -227,7 +290,9 @@ mod tests {
     /// H3: the short branch, the full branch on hover; no chip without a branch.
     #[test]
     fn the_branch_chip_is_short_with_the_full_branch_on_hover() {
-        let chip = |branch: Option<&str>| HeaderText::of(&model("t", branch, "n"), None).branch;
+        let chip = |branch: Option<&str>| {
+            HeaderText::of(&model("t", branch, "n"), None, CountsReading::Unknown).branch
+        };
         assert_eq!(
             chip(Some("fix/1117_ci-red-on-main")),
             Some(Chip {
@@ -243,7 +308,10 @@ mod tests {
             })
         );
         assert_eq!(chip(None), None, "no branch, no chip");
-        assert_eq!(HeaderText::of(&default_entry(), None).branch, None);
+        assert_eq!(
+            HeaderText::of(&default_entry(), None, CountsReading::Unknown).branch,
+            None
+        );
     }
 
     /// H4: the pull request chip's words for each state, phrase and stale reading.
@@ -251,7 +319,7 @@ mod tests {
     fn the_pull_request_chip_names_number_state_and_phrase() {
         let m = model("t", Some("b"), "n");
         assert_eq!(
-            HeaderText::of(&m, None).pull_request,
+            HeaderText::of(&m, None, CountsReading::Unknown).pull_request,
             None,
             "no input, no chip"
         );
@@ -290,13 +358,17 @@ mod tests {
         ];
         for (input, text) in rows {
             assert_eq!(pr_text(&input).as_deref(), Some(text), "H4 {input:?}");
-            let chip = HeaderText::of(&m, Some(&input)).pull_request.unwrap();
+            let chip = HeaderText::of(&m, Some(&input), CountsReading::Unknown)
+                .pull_request
+                .unwrap();
             assert_eq!(chip.tooltip, text, "a fresh reading's tooltip is the text");
             let stale = PrChipInput {
                 stale: true,
                 ..input
             };
-            let chip = HeaderText::of(&m, Some(&stale)).pull_request.unwrap();
+            let chip = HeaderText::of(&m, Some(&stale), CountsReading::Unknown)
+                .pull_request
+                .unwrap();
             assert_eq!(chip.text, text, "stale: same text");
             assert!(
                 chip.tooltip.starts_with(text) && chip.tooltip.ends_with(STALE_NOTE),
@@ -304,5 +376,92 @@ mod tests {
                 chip.tooltip
             );
         }
+    }
+
+    /// H5: the Changes button's label for files and lines, no changes, and unknown counts.
+    #[test]
+    fn the_changes_label_names_files_and_lines_or_says_there_are_none() {
+        let m = model("t", Some("b"), "n");
+        let known = |files, added, removed| {
+            CountsReading::Known(ChangeSummary {
+                files,
+                added,
+                removed,
+            })
+        };
+        let rows = [
+            (
+                known(3, 42, 7),
+                "Changes \u{b7} 3 files \u{b7} +42 \u{2212}7",
+            ),
+            (known(1, 0, 5), "Changes \u{b7} 1 file \u{b7} +0 \u{2212}5"),
+            (known(0, 0, 0), "Changes \u{b7} no changes"),
+            (known(0, 4, 1), "Changes \u{b7} no changes"),
+            (CountsReading::Unknown, "Changes"),
+        ];
+        for (counts, label) in rows {
+            assert_eq!(
+                HeaderText::of(&m, None, counts).changes,
+                label,
+                "H5 {counts:?}"
+            );
+        }
+    }
+
+    /// H6: the summary counts every row and sums its lines, a binary row adding none.
+    #[test]
+    fn the_summary_counts_rows_and_sums_their_lines() {
+        use crate::review::base::ReviewScope;
+        use crate::review::changes::{ChangeKind, ChangedFile, Content, Origin};
+        use crate::review::RelPath;
+        let file = |path: &str, kind, content, added, removed| ChangedFile {
+            path: RelPath::from_git(path),
+            kind,
+            content,
+            added,
+            removed,
+            large: false,
+            origin: Origin::Uncommitted,
+        };
+        let list = ChangeList {
+            files: vec![
+                file("a.rs", ChangeKind::Modified, Content::Text, 10, 2),
+                file("logo.png", ChangeKind::Added, Content::Binary, 0, 0),
+                file(
+                    "b.rs",
+                    ChangeKind::Renamed {
+                        from: RelPath::from_git("old.rs"),
+                    },
+                    Content::Text,
+                    1,
+                    1,
+                ),
+            ],
+            scope: ReviewScope::RootUncommitted,
+        };
+        assert_eq!(
+            ChangeSummary::of(&list),
+            ChangeSummary {
+                files: 3,
+                added: 11,
+                removed: 3,
+            }
+        );
+        let huge = ChangeList {
+            files: vec![
+                file("x", ChangeKind::Modified, Content::Text, u32::MAX, 1),
+                file("y", ChangeKind::Modified, Content::Text, 1, u32::MAX),
+            ],
+            scope: ReviewScope::RootUncommitted,
+        };
+        assert_eq!(
+            ChangeSummary::of(&huge),
+            ChangeSummary {
+                files: 2,
+                added: u32::MAX,
+                removed: u32::MAX,
+            },
+            "the sums saturate"
+        );
     }
 }

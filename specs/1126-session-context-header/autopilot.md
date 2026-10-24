@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1126
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
-- **Phase**: M2 gate
-- **Next step**: M2 full gate, then push and open the M2 PR (title/body in the scratchpad); clarification 1 stays provisional option A
+- **Phase**: M3 implement
+- **Next step**: implement M3 (T043–T055), gate, reviews, PR
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1318 | design (spec, plan, tasks) | merged | f8eeaa43e5f151a08a2c20b055c5c9ce64bf9584 |
 | #1328 | M1 context header | merged | 127a817868d7b463ad78ea588b43a0339d483991 |
+| #1334 | M2 tab strip | merged | 25de2370813389d6ae82fcfb49ebce6cf15da226 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | #1328 | merged |
-| M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | — | in progress |
-| M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | — | pending |
+| M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | #1334 | merged |
+| M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | — | in progress |
 
 ## Decisions
 
@@ -35,6 +36,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Tasks (2026-10-24): M2 keeps US2 whole with US4 (22 tasks, over the ~10 split guide): no acceptance-scenario split leaves main without a bar control (FR-009: bar removal and strip land together); the behaviour-preserving moves (StripTab and predicates into `features::session_strip`, `cdk::Keyed`) go in Foundational (M1) to shrink M2. Polish T056–T057 is code-free, left to the close unit.
 - Clarify round 2: session tab order and press behaviour agent-resolved from worktrees-and-sessions.md; no new requirement, clarify ends.
 - Rebase onto origin/main afef53af (#1124 M1 status bar, #1299, #1260) for PR #1328's merge conflicts: no behaviour choice; four gates restated for both chromes together (header above, status bar below the pane), fixture regenerated. Details in tdd/cycle-log.md.
+
+- M3 (2026-10-24): the Changes button sits on the header's title line (`column![row![title, button], chips]`), not beside both lines as H9 first said: at 640×480 beside a 300 px sidebar the button beside the column left the chips 0 px (`session_area_fits` red). Contract H9 and R11 updated; mockup look kept at wide windows (button at the header's right).
+- M3: the counts read is drained by `shell::changes::run_followed` after every message's follow step (main.rs `update`); `Msg::Changed` returns the view's `ReadList` and the header's `ReadCounts` batched; one watcher per location (`State::header_watch_entry` skips the view's own entry).
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -70,5 +74,7 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M3: at the smallest window (640×480, 300 px sidebar) the title line holds about 286 px; a Changes label with counts in the thousands (e.g. `Changes · 128 files · +2048 −1024`, 283 px) is wider than the room beside the title and wraps inside the 40 dp button. A compact label below a width, or counts in the tooltip, would fix it; not specified, left for the close unit or a follow-up issue.
 
 - Clarification 1 (strip contents, New session) is still the orchestrator's provisional pick; confirm with the user before M2 starts. If it changes, T021–T023, T032, T033, T037 change with it.

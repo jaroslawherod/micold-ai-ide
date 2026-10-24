@@ -17,7 +17,7 @@ use crate::ui::material::{
 use crate::ui::terminal;
 use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Element, Length, Padding};
-use micold_core::context_header::{Chip, HeaderText, PrChipInput};
+use micold_core::context_header::{Chip, CountsReading, HeaderText, PrChipInput};
 use micold_core::session::SessionLocation;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
@@ -93,10 +93,88 @@ pub(crate) fn header_text(
 ) -> Option<(HeaderText, Option<PrChipInput>)> {
     let model = crate::ui::overview::location_card(state, location)?;
     let pr = pr_chip_input(state, model.branch.as_deref(), now);
-    Some((HeaderText::of(&model, pr.as_ref()), pr))
+    Some((
+        HeaderText::of(&model, pr.as_ref(), counts_of(state, location)),
+        pr,
+    ))
 }
 
-/// The context header (H9 without the Changes button): the title line, then the chips row.
+/// What is known of `location`'s change counts: the header's reading when the header follows it,
+/// else nothing (US3 scenario 4: never another location's figure).
+pub fn counts_of(state: &State, location: &SessionLocation) -> CountsReading {
+    match &state.changes.header.entry {
+        Some((project, entry))
+            if entry == location && state.workspace.active.as_ref() == Some(project) =>
+        {
+            state.changes.header.reading()
+        }
+        _ => CountsReading::Unknown,
+    }
+}
+
+/// What pressing the header's Changes button sends, and whether it shows the view open (H8): the
+/// view open on `location` closes as its **Close** does; closed, or open on another location, it
+/// opens on `location` as the sidebar's **Review changes** does.
+pub fn changes_press(state: &State, location: &SessionLocation) -> (Message, bool) {
+    let open_here = state.changes.open.as_ref().is_some_and(|view| {
+        &view.entry == location && state.workspace.active.as_ref() == Some(&view.project)
+    });
+    if open_here {
+        (
+            Message::Changes(crate::features::changes::Msg::Closed),
+            true,
+        )
+    } else {
+        (
+            Message::Sidebar(crate::features::sidebar::Msg::ReviewChangesRequested(
+                location.clone(),
+            )),
+            false,
+        )
+    }
+}
+
+/// The open Changes view under the header when a session is shown (R12, A1): the header stays,
+/// the strip does not (its tabs and splits act on panes that are not drawn). With no session
+/// shown, the view alone and no header (edge case *Empty*).
+pub fn over_changes<'a>(
+    state: &'a State,
+    changes: Element<'a, Message>,
+    scheme: ColorScheme,
+) -> Element<'a, Message> {
+    match state.current_session_location() {
+        Some(location) => column![header(state, &location, scheme), changes].into(),
+        None => changes,
+    }
+}
+
+/// The header's Changes button labelled `label` (H8, H9): outlined, the git glyph leading, shown
+/// selected while the view is open on `location`, its tooltip saying what a press does.
+pub fn changes_button<'a>(
+    state: &State,
+    location: &SessionLocation,
+    label: String,
+    r: Roles,
+) -> Element<'a, Message> {
+    let (press, open) = changes_press(state, location);
+    let tooltip = if open {
+        "Close the Changes view"
+    } else {
+        "Open the Changes view"
+    };
+    Tooltip::new(
+        material::Button::outlined(label, r)
+            .leading(Icon::Git)
+            .selected(open)
+            .on_press(press),
+        tooltip,
+        r,
+    )
+    .into()
+}
+
+/// The context header (H9): the title line with the Changes button at its right, then the chips
+/// row; child lists that never vary.
 fn header<'a>(
     state: &State,
     location: &SessionLocation,
@@ -123,9 +201,14 @@ fn header<'a>(
         }
         chips.push(neutral_chip(chip, Some(indicator.into()), r));
     }
+    // Shrink beside the Fill title: laid out at the width it asks for (H10). On the title line, so
+    // the chips keep the header's whole width at the smallest window.
+    let changes = changes_button(state, location, text.changes, r);
     container(
         column![
-            title,
+            row![container(title).width(Length::Fill), changes]
+                .spacing(spacing::MD)
+                .align_y(Alignment::Center),
             row(chips).spacing(spacing::SM).align_y(Alignment::Center)
         ]
         .spacing(spacing::XS)
@@ -513,6 +596,34 @@ mod tests {
             state.changes.header.entry,
             Some((std::path::PathBuf::from("/repo"), location)),
             "the follow step points the header at the shown location"
+        );
+    }
+
+    /// T046 (H8): the three rows of the Changes button's press.
+    #[test]
+    fn the_changes_press_opens_the_shown_location_or_closes_its_view() {
+        use crate::features::changes::Msg as ChangesMsg;
+        use crate::features::sidebar::Msg as SidebarMsg;
+        let (mut state, location) = shown_worktree();
+        let open = Message::Sidebar(SidebarMsg::ReviewChangesRequested(location.clone()));
+        assert_eq!(
+            changes_press(&state, &location),
+            (open.clone(), false),
+            "closed: opens on the shown location"
+        );
+        state.update(open.clone());
+        assert_eq!(
+            changes_press(&state, &location),
+            (Message::Changes(ChangesMsg::Closed), true),
+            "open on it: closes, shown open"
+        );
+        state.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+            SessionLocation::Default,
+        )));
+        assert_eq!(
+            changes_press(&state, &location),
+            (open, false),
+            "open on another location: opens on the shown one"
         );
     }
 }

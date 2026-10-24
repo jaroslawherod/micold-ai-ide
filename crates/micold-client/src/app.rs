@@ -1329,6 +1329,22 @@ impl State {
         }
     }
 
+    /// The location whose files the header's counts watch (feature 1126, R6): the header's entry
+    /// while a session is shown and the Overview is closed, unless the open Changes view is on it,
+    /// whose own watch then serves both (one watcher per worktree). `None` with nothing shown.
+    pub fn header_watch_entry(&self) -> Option<&micold_core::session::SessionLocation> {
+        let (project, entry) = self.changes.header.entry.as_ref()?;
+        if self.overview.open {
+            return None;
+        }
+        let on_view = self
+            .changes
+            .open
+            .as_ref()
+            .is_some_and(|view| &view.project == project && &view.entry == entry);
+        (!on_view).then_some(entry)
+    }
+
     /// The effective sidebar width in pixels: the user's chosen width (clamped), or the
     /// default until they resize it.
     pub fn sidebar_width_px(&self) -> u16 {

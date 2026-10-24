@@ -249,7 +249,7 @@ existing keyed widget follows Principle VIII rather than writing a second one.
 
 **Decision**: `client/src/ui/session_area.rs::header` lays out, with a fixed child list: a column
 (title line: `Ellipsized` at `TypeRole::Title`, full title as tooltip; chips row) and, at the right,
-the **Changes** button. Chips are `material::Tag`, extended with `.leading(Element)` (a glyph or the
+the **Changes** button (M3: on the title line, see contract H9). Chips are `material::Tag`, extended with `.leading(Element)` (a glyph or the
 `PullRequestIndicator`) and `.max_width(f32)` (ellipsis under a ceiling, the chip sized by its
 content below it), each in a `Tooltip` with its full text. The state chip uses the card's
 `overview_card::palette(state)` fill and `state_icon(state)` glyph with the state word (colour,
