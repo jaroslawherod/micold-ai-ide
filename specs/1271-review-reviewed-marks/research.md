@@ -9,8 +9,11 @@ not merged yet (R8).
 - **Decision**: a `ChangeId` is the SHA-1 digest (40 lowercase hex characters) of a canonical byte
   record of the file's change, built by pure functions in the new `micold-core::review::marks`:
   - **Working tree**: `ChangeId::of_worktree(&WholeFile)` over the file's kind tag (`A`, `M`, `D`,
-    `R<from path>`, `T` for mode only, `U` untracked), its path, and both sides' mode and git
-    object id (an absent side is spelled as git spells it, all zeros). The object ids come from
+    `R<from path>`, `T` for mode only), its path, and both sides' mode and git object id (an absent
+    side is spelled as git spells it, all zeros). An untracked file is digested exactly as git's
+    added file: tag `A`, old mode and id all zeros, new mode from disk, new id from
+    `hash-object`. So `git add` and then committing an unaltered new file keep its id, and its
+    mark (US2 s5); a separate untracked tag would change the id on every `git add`. The object ids come from
     git (R2), so two changes have the same id exactly when path, kind, modes and both sides'
     contents are the same: the spec's "every line of its diff on both sides identical", and also
     right for binary, not-UTF-8 and large files, whose lines are never read (Edge Cases).
@@ -156,10 +159,14 @@ not merged yet (R8).
 - **Decision**: the work is split so that everything below the client view can merge first:
   - **Before #1269**: `micold-core` (marks, ids, whole-change read, store), the wire, the daemon,
     and the client's receipt of marks: `Msg::ReviewChanged.marks` into `State.reviews` (keyed by
-    project and entry, outside `State.open`, which #1269 replaces), and `PendingOp::ReviewMark`.
-    None of this touches `State.open` or `OpenView`.
+    project and entry, outside `State.open`, which #1269 replaces). None of this touches
+    `State.open` or `OpenView`; the `Msg::ReviewChanged` arm, which #1269 also rewrites, only
+    gains the `marks` binding and the field in the `ReviewView` insert after the `state.open`
+    block (a trivial rebase conflict).
   - **After #1269**: the whole-change load kept with the list in `OpenView` (per view; #1269 keeps
-    one `OpenView` per entry, so the field moves with it unchanged), the PR ids, the row state,
+    one `OpenView` per entry, so the field moves with it unchanged), `PendingOp::ReviewMark` with
+    its only sender in `shell/changes.rs` (`shell` is private to the binary, so the variant alone
+    would be dead code), the PR ids, the row state,
     the changed dot, the mark control, the progress in the view's header, the reducer tests, the
     layout snapshot state, the docs and the visual pass.
 - **Rationale**: #1269 rewrites how `OpenView` is held and where the header is drawn; changes to

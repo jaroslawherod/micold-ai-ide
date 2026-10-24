@@ -127,12 +127,16 @@ No violation: Complexity Tracking is empty.
 
 | M | Content | Depends on |
 |---|---|---|
-| M1 | Core: `review::marks` (ids, `EntryMarks`, states, progress, `mark_block`), `NameStatus` ids, `WholeChange` + `GitCli::whole_change` + `Git` trait and fakes, `pr_change_ids`, `EntryReview.marks`, store v4, `sha1` dependency | none |
-| M2 | Wire and service: `SetReviewed`, `ReviewMark`, `ReviewChanged.marks`, protocol bump; daemon `apply_edit`, pushes, removal tests; client receipt only (`Msg::ReviewChanged.marks` into `State.reviews`, `PendingOp::ReviewMark`) | M1 |
-| M3 | Client view: whole-change load with the list, PR ids, row state and changed dot, mark control, header progress, reducer tests, icons | M2 **and #1269 merged** |
+| M1 | Core: `review::marks` (ids, `EntryMarks`, states, progress, `mark_block`), `NameStatus` ids, `WholeChange` + `GitCli::whole_change` + `Git` trait and fakes, `pr_change_ids`, `EntryReview.marks`, store v4, `sha1` dependency | D4 answered (A or B; C changes the data model, R7) |
+| M2 | Wire and service: `SetReviewed`, `ReviewMark`, `ReviewChanged.marks`, protocol bump; daemon `apply_edit`, pushes, removal tests; client receipt only (`Msg::ReviewChanged.marks` into `State.reviews`) | M1 |
+| M3 | Client view: whole-change load with the list, PR ids, row state and changed dot, mark control, `PendingOp::ReviewMark` and its failure text with its sender in `shell/changes.rs`, header progress, reducer tests, icons | M2 **and #1269 merged** |
 | M4 | Docs, layout snapshot states, visual pass | M3 |
 
-M1 and M2 touch nothing #1269 changes (`State.open`, `OpenView`, the view's header). If #1269 is
+M1 and M2 leave `State.open`, `OpenView` and the view's header alone. M2 does edit one arm #1269
+also rewrites, `Msg::ReviewChanged` in `features/changes.rs`: it only destructures `marks` and adds
+it to the `ReviewView` inserted after the `state.open` block, so a trivial textual conflict is
+expected on rebase. `PendingOp::ReviewMark` waits for M3: `shell` is private to the binary, so a
+variant without its constructor would fail clippy's `dead_code`. If #1269 is
 still open when M2 has merged, the run waits on it (or, by the spec's assumption, M3 targets
 today's Changes view and is rebased when #1269 lands).
 
@@ -166,7 +170,7 @@ crates/micold-daemon/src/
 └── server.rs, state.rs        # pass the new field (pushes)
 crates/micold-client/src/
 ├── features/changes.rs        # ReviewView.marks, Msg fields, OpenView.whole, MarkToggled, file_reviews, mark_control, header_progress
-├── shell/daemon_sync.rs       # marks into Msg::ReviewChanged, PendingOp::ReviewMark
+├── shell/daemon_sync.rs       # marks into Msg::ReviewChanged (M2); PendingOp::ReviewMark (M3)
 ├── shell/changes.rs           # read_list runs whole_change; SetReviewed through PendingOp::ReviewMark
 ├── ui/changes.rs              # row glyph and dot, diff header chip, header progress slot
 └── icons.rs                   # ReviewUnseen, ReviewDrafts, ReviewDone

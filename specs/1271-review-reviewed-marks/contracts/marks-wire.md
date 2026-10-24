@@ -78,7 +78,9 @@ method; read-only, with the review git reads' deadline:
    otherwise every file is Uncommitted;
 3. untracked, not-ignored files (`untracked`), and `git hash-object --stdin-paths` over the paths
    whose new id is all zeros plus the untracked ones, in one process; a path holding `\n` is not
-   sent and its file has `id: None`.
+   sent and its file has `id: None`. An untracked file becomes a `WholeFile` of kind added (old
+   mode and id all zeros, new mode from disk), the same record git's added file gives, so its id
+   does not change when it is staged or committed unaltered.
 
 A failure of step 1 or 2 is the read's error; a failure of step 3 leaves the affected files with
 `id: None`.
@@ -93,4 +95,4 @@ A failure of step 1 or 2 is the read's error; a failure of step 3 leaves the aff
 | RM6 | daemon `tests/review_edit.rs`: comments in the push unchanged by `SetReviewed` |
 | wire | core `tests/protocol_roundtrip.rs`: `SetReviewed` with `Some` and `None`, `ReviewChanged.marks`, a `ChangeId` that is not hex fails to decode; `tests/schema_hash.rs` pin moves with the bump |
 | S4 | core `review/store.rs` unit tests: v4 round-trip; marks-only entry written; no marks writes 3 or 2; v1 to v3 load with no marks; malformed `change` set aside; the "unknown version" tests move from 4 to 5 |
-| G2 | core `tests/review_git.rs` against real temp repos: committed, uncommitted and both; untracked; rename; mode only; binary; the Default entry; no base; an unaltered commit keeps the id (US2 s5); a reverted and redone change gets the same id (US2 s3, s6) |
+| G2 | core `tests/review_git.rs` against real temp repos: committed, uncommitted and both; untracked; rename; mode only; binary; the Default entry; no base; an unaltered commit keeps the id (US2 s5); untracked → staged → committed keeps the id of a new file; a new file committed unaltered in an entry with a base stays Reviewed; a reverted and redone change gets the same id (US2 s3, s6) |
