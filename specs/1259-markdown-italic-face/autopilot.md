@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec review | 1 | 6721080f0a781ff07679652e804cc693d92581c9:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CLEAN, 2 MINOR (run by orchestrator): F1 FR-005/FR-008 implementation detail vs checklist, F2 FR-009 bold-italic vs shared fixture; both applied in clarify |
 | Clarify | 1 | spec.md | 3 questions, all agent-resolved (record existing rules); no new requirement, unit ends |
+| Plan review | 1 | e209d8637cc99c1c00d5b3b330033eabd3b06074:7bcd080cc6c6f537fd45f68b69b97148f3485dca | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
