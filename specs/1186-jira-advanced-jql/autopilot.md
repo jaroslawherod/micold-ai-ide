@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: M3 implement
-- **Next step**: M3 (T018–T023) in progress on local branch 1186-m3-wip, prepared while #1364's CI runs; orchestrator rebases onto main after #1364 merges, re-gates and pushes
+- **Phase**: M3 PR
+- **Next step**: M3 done on local branch 1186-m3-wip (full gate green at 1c12b691; review A clean in round 2, review B clean; visual pass B1–B3, B7 PASS, screenshots in /mnt/project-files/issue-1186/); orchestrator rebases onto main (M2 merged as 5b5064bc), re-gates, pushes and opens the M3 PR (title/body in the unit's scratchpad); then milestone M4 (T024–T032)
 
 ## Pull requests
 
@@ -18,15 +18,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1346 | design (spec, plan, tasks) | merged | 527d91b36196fda8950f2d3e1d6a193fe3a0f1d9 |
 | #1350 | M1 core rules + advanced request | merged | 3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 |
-| #1364 | M2 render-free selector state and the run | open, CI running | — |
+| #1364 | M2 render-free selector state and the run | merged | 5b5064bc72729361327aabc63581311b92d0815f |
+| (to open) | M3 Basic/Advanced switch, query field and results | gate green, local branch 1186-m3-wip, not pushed | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Core rules + advanced request (no UI) | #1350 | merged |
-| M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | #1364 | PR open, CI running |
-| M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | — | in progress on local branch 1186-m3-wip (based on M2 head 682813bf) |
+| M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | #1364 | merged |
+| M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | (to open) | gate green at 1c12b691, not pushed |
 | M4 | T024–T032 | full | Jira's error messages and Retry | — | planned |
 | M5 | T033–T039 | full | Remember last query and mode per project | — | planned |
 
@@ -63,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review A (high) | 1 | 05b5792f2b197c5d37170e31d18c562fe1668d83:9e7ccfdb7909b15402e98a4f3ad95432920f3940 | CHANGES: 1 MAJOR (editing the query kept the row highlight, so Enter picked a stale row instead of running; fixed in `DraftChanged`, test `editing_the_query_drops_the_highlight`), 1 MINOR fixed |
 | M3 review A (high) | 2 | 158a6fb536deca830d63382549c53caefc87f7f1:a4eddeb72ddfa28cd1d169141c8fc4d7b03c752d | CLEAN (sonnet, fix diff: F1, F2 hold) |
 | M3 review B (conformance, sonnet) | 1 | 158a6fb536deca830d63382549c53caefc87f7f1:a4eddeb72ddfa28cd1d169141c8fc4d7b03c752d | CLEAN (1 MINOR fixed: an empty result said "No issue matches this query." twice; the list's empty message dropped, the caption kept) |
+| M3 visual pass (quickstart §B B1–B3, B7) | 1 | 1c12b691 binary | PASS all four (Xvfb, tiny-skia, fake_jira); not run: B1's GitHub-source variant (no remote in the scratch repo), B3 sort order (the fake ignores ORDER BY); the fake repeats its page because it always returns a next-page token, not a client defect |
 
 ## Declined review findings
 
