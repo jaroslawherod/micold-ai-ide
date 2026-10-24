@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
 - **Phase**: done
-- **Next step**: handoff — the orchestrator merges M3 (#1333), opens and merges the M4 and M5 PRs, fills the #TBD-M4 / #TBD-M5 / #TBD-close placeholders (spec Status, this ledger), runs the full gate and opens the close PR from scratchpad close-pr-title.md / close-pr-body.md
+- **Next step**: handoff — the orchestrator merges the combined M4 + M5 + close PR, then runs the handoff.
 
 ## Pull requests
 
@@ -20,9 +20,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1327 | M1 | merged (rebase) | afef53af8836a80b7a4ae575f0dbb2c75dee077e |
 | #1330 | M2 | merged (rebase) | a54f93313fec84e8501d455a4ae17ea40daca185 |
 | #1333 | M3 | open | (orchestrator fixes the merge SHA) |
-| #TBD-M4 | M4 | to open (m4-local) | |
-| #TBD-M5 | M5 | to open (m4-local) | |
-| #TBD-close | close (T039, TDD audit, spec Closed) | to open (m4-local; commits c239782c, 7eb68151, 02a382cb and the ledger commit) | |
+| combined | M4 | shipped with M5 and close in one PR (orchestrator: main moved fast, one CI cycle instead of three) | |
+| combined | M5 | same PR as M4 | |
+| combined | close (T039, TDD audit, spec Closed) | same PR as M4 | |
 
 ## Milestones
 
