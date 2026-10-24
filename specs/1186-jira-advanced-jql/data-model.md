@@ -4,7 +4,7 @@
 
 All core types are in the new module `micold_core::jira_query`
 (`crates/micold-core/src/jira_query.rs`); client types in the new
-`micold_client::features::jira_query` (`crates/micold-client/src/features/jira_query.rs`).
+`micold_client::features::worktree_form::jira_query` (`crates/micold-client/src/features/worktree_form/jira_query.rs`).
 None derives `Serialize` except `RememberedQuery`, and no issue type gains it
 (`crates/micold-client/tests/jira_is_requested_only_on_named_events.rs`).
 

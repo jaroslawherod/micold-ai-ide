@@ -1,7 +1,7 @@
 //! The selector's advanced JQL mode: the shell's half (feature 1186,
 //! `specs/1186-jira-advanced-jql/contracts/selector-source-and-storage.md` §3).
 //!
-//! The reducer decides everything about the selector (`features/jira_query.rs`). What is left here
+//! The reducer decides everything about the selector (`features/worktree_form/jira_query.rs`). What is left here
 //! is running the scoped query it accepted, through the one Jira gate (`jira_request` in
 //! `shell/issues.rs`), off the update thread.
 //!
@@ -16,7 +16,7 @@
 
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::jira_query::Msg as QueryMsg;
+use micold_client::features::worktree_form::jira_query::Msg as QueryMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_core::github::IssueLoadError;
 use micold_core::jira_query::{QueryFailure, ScopedQuery};

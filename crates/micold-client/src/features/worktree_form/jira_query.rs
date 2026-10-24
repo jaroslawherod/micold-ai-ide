@@ -3,9 +3,9 @@
 //!
 //! The rules for the query itself (cleaning, the checks, the scope) are `micold_core::jira_query`;
 //! this module holds what the selector shows: the mode, the draft as typed, the last run query and
-//! where the run is. Its transitions are applied by `worktree_form`, which owns the seq counter
-//! every run is numbered from, so a reset that already makes a basic load stale makes a run stale
-//! too (research R9).
+//! where the run is. A sub-state of the form rather than a feature of its own: its transitions are
+//! applied by `worktree_form`, which owns the seq counter every run is numbered from, so a reset
+//! that already makes a basic load stale makes a run stale too (research R9).
 //!
 //! Render-free, like every module here. Nothing in this module logs or notifies: the draft, the last
 //! run query and the scoped query never leave the form's state except as the request (FR-016).
@@ -15,9 +15,7 @@ use micold_core::jira::ProjectKey;
 use micold_core::jira_query::{QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery};
 use micold_core::typeahead::{move_highlight, Direction};
 
-use crate::features::worktree_form::{
-    BranchSource, IssueList, JiraSite, SearchState, WorktreeForm,
-};
+use super::{BranchSource, IssueList, JiraSite, SearchState, WorktreeForm};
 
 /// The selector's advanced state (data-model §6).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
