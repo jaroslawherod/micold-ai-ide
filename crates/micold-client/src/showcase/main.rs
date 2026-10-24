@@ -56,11 +56,23 @@ fn subscription(_showcase: &Showcase) -> Subscription<Message> {
 pub fn main() -> iced::Result {
     // The bundled monospace face, registered as the application registers it
     // (`shell/startup.rs`): a gallery drawing code in a host face would misreport the library.
-    micold_client::ui::install_monospace(
-        &mut iced::advanced::graphics::text::font_system()
+    // Every Roboto face, upright and italic, likewise: a gallery that renders the library in some
+    // other typeface misreports the library.
+    //
+    // Roboto was once missing here, and it was not a cosmetic gap. Several roles differ from each
+    // other *only* in weight — `Caption` against `Label`, `Body` against `Action`, and (feature
+    // 024) `SidebarSession` against `SidebarSessionCurrent`, which is how the current session's
+    // row is told apart without relying on colour. With no Roboto Medium registered, the matcher
+    // fell back to a serif face for every weight-500 role, so the heavier roles rendered *lighter*
+    // than the lighter ones — the gallery showed the distinction backwards, on the one screen a
+    // reviewer would go to in order to check it. Emphasis without the italics drew upright.
+    {
+        let mut fonts = iced::advanced::graphics::text::font_system()
             .write()
-            .expect("the global font system lock was poisoned"),
-    );
+            .expect("the global font system lock was poisoned");
+        micold_client::ui::install_monospace(&mut fonts);
+        micold_client::ui::install_roboto(&mut fonts);
+    }
     iced::application(boot, update, gallery::view)
         .title(gallery::TITLE)
         // The application's own theme function — the one part of the styling layer that reaches
@@ -68,19 +80,6 @@ pub fn main() -> iced::Result {
         // resolve the same colours here as it does in the application (FR-010, SC-006).
         .theme(|showcase: &Showcase| micold_client::ui::theme(showcase.scheme))
         .default_font(iced::Font::DEFAULT)
-        // Both Roboto faces, for the same reason as the icon font below: a gallery that renders the
-        // library in some other typeface misreports the library.
-        //
-        // This was missing, and it was not a cosmetic gap. Several roles differ from each other
-        // *only* in weight — `Caption` against `Label`, `Body` against `Action`, and (feature 024)
-        // `SidebarSession` against `SidebarSessionCurrent`, which is how the current session's row
-        // is told apart without relying on colour. With no Roboto Medium registered, the matcher
-        // fell back to a serif face for every weight-500 role, so the heavier roles rendered
-        // *lighter* than the lighter ones — the gallery showed the distinction backwards, on the
-        // one screen a reviewer would go to in order to check it.
-        .font(micold_client::ui::ROBOTO_REGULAR_BYTES)
-        .font(micold_client::ui::ROBOTO_MEDIUM_BYTES)
-        .font(micold_client::ui::ROBOTO_SEMIBOLD_BYTES)
         // Without the icon font, every component that draws a glyph renders a fallback box — and a
         // gallery of fallback boxes would misreport the library it exists to display.
         .font(micold_client::ui::MATERIAL_SYMBOLS_BYTES)

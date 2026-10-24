@@ -56,6 +56,7 @@ pub mod ripple;
 /// A press draws one state layer with its ripple, read back from rendered frames (BUG-014).
 #[cfg(test)]
 pub mod ripple_layers;
+pub mod roboto;
 pub mod scrollable;
 pub mod scrolling_dialog;
 pub mod section_list;
@@ -132,6 +133,11 @@ pub use progress::StageProgress;
 pub use required_legend::RequiredLegend;
 pub use resize_handle::{ResizeHandle, WIDTH as RESIZE_HANDLE_WIDTH};
 pub use ripple::{pulse as ripple_pulse, Ripple};
+pub use roboto::{
+    install_roboto, ROBOTO, ROBOTO_FACES, ROBOTO_FAMILY, ROBOTO_ITALIC_BYTES, ROBOTO_MEDIUM_BYTES,
+    ROBOTO_MEDIUM_ITALIC_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES,
+    ROBOTO_SEMIBOLD_ITALIC_BYTES, ROBOTO_WEIGHTS,
+};
 pub use scrollable::{ScrollDirection, Scrollable};
 pub use scrolling_dialog::ScrollingDialog;
 pub use section_list::{Section, SectionList};
@@ -142,9 +148,7 @@ pub use surface::{Kind as SurfaceKind, Surface};
 pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
 pub use tab_strip::TabStrip;
 pub use tag::Tag;
-pub use text::{
-    Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES,
-};
+pub use text::{Text, TypeRole};
 pub use text_area::TextArea;
 pub use text_field::TextField;
 pub use text_link::TextLink;

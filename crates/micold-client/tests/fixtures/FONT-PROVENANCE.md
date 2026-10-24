@@ -7,6 +7,7 @@
 | `Roboto-Regular.ttf` | body text and every type role below weight 500 |
 | `Roboto-Medium.ttf` | the type roles that resolve to weight 500 (`material/text.rs`) |
 | `Roboto-SemiBold.ttf` | the Overview card's roles at weight 600 (`material/text.rs`, BUG-1298) |
+| `Roboto-Italic.ttf`, `Roboto-MediumItalic.ttf`, `Roboto-SemiBoldItalic.ttf` | markdown emphasis at weights 400, 500 and 600 (`material/roboto.rs`, feature 1259); bold italic resolves to the 600 italic |
 | `MaterialSymbolsOutlined.ttf` | icons, which are glyphs and are shaped and measured like any other text |
 | `FiraMono-Regular.ttf` | `Font::MONOSPACE` (code blocks, inline code, diff and tool-result lines), set as the database's monospace family |
 

@@ -1,5 +1,5 @@
 //! The shipped typeface is real, and it is the weights the type scale and the Overview card need
-//! (feature 018, T013 — FR-008a, FR-009, SC-012).
+//! (feature 018, T013 — FR-008a, FR-009, SC-012), each with its italic twin (feature 1259, FR-008).
 //!
 //! Feature 018 ships Roboto so the application looks the same on every platform rather than
 //! inheriting whatever UI font the OS provides (FR-008). That guarantee rests entirely on the
@@ -13,12 +13,28 @@
 //! reads the tables directly.
 
 /// The two faces the Material 3 type scale uses. Weights 400 and 500 are the only ones it
-/// specifies (contract §2.1), which is why exactly two static instances ship rather than a variable
-/// font — the smallest binary that expresses every role faithfully.
+/// specifies (contract §2.1), which is why static instances ship rather than a variable font — the
+/// smallest binary that expresses every role faithfully.
 const REGULAR: &[u8] = include_bytes!("../../../assets/fonts/Roboto-Regular.ttf");
 const MEDIUM: &[u8] = include_bytes!("../../../assets/fonts/Roboto-Medium.ttf");
 /// The Overview card's semibold face (BUG-1298): its scoped roles ask for weight 600.
 const SEMIBOLD: &[u8] = include_bytes!("../../../assets/fonts/Roboto-SemiBold.ttf");
+/// The italic twin of each upright weight (feature 1259, FR-002): markdown emphasis draws in them,
+/// so a role or a bold run that gains emphasis keeps its weight.
+const ITALIC: &[u8] = include_bytes!("../../../assets/fonts/Roboto-Italic.ttf");
+const MEDIUM_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/Roboto-MediumItalic.ttf");
+const SEMIBOLD_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/Roboto-SemiBoldItalic.ttf");
+
+/// Every shipped Roboto face: its file name, its bytes, the weight it must report and whether it
+/// must be italic.
+const FACES: [(&str, &[u8], u16, bool); 6] = [
+    ("Roboto-Regular.ttf", REGULAR, 400, false),
+    ("Roboto-Medium.ttf", MEDIUM, 500, false),
+    ("Roboto-SemiBold.ttf", SEMIBOLD, 600, false),
+    ("Roboto-Italic.ttf", ITALIC, 400, true),
+    ("Roboto-MediumItalic.ttf", MEDIUM_ITALIC, 500, true),
+    ("Roboto-SemiBoldItalic.ttf", SEMIBOLD_ITALIC, 600, true),
+];
 
 /// The family name the GUI selects the font with. Must match `src/main.rs`.
 const EXPECTED_FAMILY: &str = "Roboto";
@@ -35,7 +51,7 @@ fn face<'a>(bytes: &'a [u8], what: &str) -> ttf_parser::Face<'a> {
 ///
 /// By convention a weighted instance puts `Roboto Medium` in ID 1, for the benefit of old software
 /// that can only express a family plus regular/bold, and keeps the real family `Roboto` in ID 16.
-/// Matching on ID 1 alone would conclude the two shipped faces are unrelated typefaces.
+/// Matching on ID 1 alone would conclude the shipped faces are unrelated typefaces.
 fn family_of(face: &ttf_parser::Face<'_>) -> Option<String> {
     let named = |id| {
         face.names()
@@ -47,49 +63,45 @@ fn family_of(face: &ttf_parser::Face<'_>) -> Option<String> {
 }
 
 #[test]
-fn both_faces_parse() {
-    face(REGULAR, "Roboto-Regular.ttf");
-    face(MEDIUM, "Roboto-Medium.ttf");
-    face(SEMIBOLD, "Roboto-SemiBold.ttf");
+fn the_faces_parse() {
+    for (file, bytes, _, _) in FACES {
+        face(bytes, file);
+    }
 }
 
-/// The weights the roles resolve to. A `Medium` file carrying 400 is the failure this catches, and
-/// it is invisible short of comparing screenshots letter by letter.
+/// The weights the roles resolve to, and the style emphasis selects. A `Medium` file carrying 400
+/// is the failure this catches, and it is invisible short of comparing screenshots letter by
+/// letter; an italic file that reports upright would never be chosen for emphasis.
 #[test]
-fn the_two_faces_report_the_weights_the_type_scale_asks_for() {
-    assert_eq!(
-        face(REGULAR, "Regular").weight().to_number(),
-        400,
-        "Roboto-Regular must report weight 400 — it backs every display, headline and body role"
-    );
-    assert_eq!(
-        face(MEDIUM, "Medium").weight().to_number(),
-        500,
-        "Roboto-Medium must report weight 500 — it backs the title and label roles, and a file that \
-         reports 400 renders every one of them a shade too light with nothing to point at"
-    );
-    assert_eq!(
-        face(SEMIBOLD, "SemiBold").weight().to_number(),
-        600,
-        "Roboto-SemiBold must report weight 600 — it backs the Overview card's semibold words"
-    );
+fn the_faces_report_the_weights_and_styles_the_type_scale_asks_for() {
+    for (file, bytes, weight, italic) in FACES {
+        let f = face(bytes, file);
+        assert_eq!(
+            f.weight().to_number(),
+            weight,
+            "{file} must report weight {weight} — a face that reports another weight renders every \
+             role it backs a shade off, with nothing to point at"
+        );
+        assert_eq!(
+            f.is_italic(),
+            italic,
+            "{file} must report is_italic() == {italic} — emphasis selects the bundled faces by \
+             their style"
+        );
+    }
 }
 
-/// Both advertise the family the GUI pins, or `.default_font(Font::with_name(\"Roboto\"))` silently
-/// falls back to the platform font and FR-008's whole guarantee is void — while still looking
-/// perfectly reasonable on the machine that built it.
+/// Every face advertises the family the GUI pins, or `.default_font(Font::with_name(\"Roboto\"))`
+/// silently falls back to the platform font and FR-008's whole guarantee is void — while still
+/// looking perfectly reasonable on the machine that built it.
 #[test]
-fn both_faces_advertise_the_family_the_gui_pins() {
-    for (bytes, what) in [
-        (REGULAR, "Regular"),
-        (MEDIUM, "Medium"),
-        (SEMIBOLD, "SemiBold"),
-    ] {
-        let f = face(bytes, what);
+fn the_faces_advertise_the_family_the_gui_pins() {
+    for (file, bytes, _, _) in FACES {
+        let f = face(bytes, file);
         assert_eq!(
             family_of(&f).as_deref(),
             Some(EXPECTED_FAMILY),
-            "Roboto-{what} advertises a different family name; the GUI selects fonts by name, so a \
+            "{file} advertises a different family name; the GUI selects fonts by name, so a \
              mismatch falls back to the platform font without erroring"
         );
     }
@@ -98,18 +110,14 @@ fn both_faces_advertise_the_family_the_gui_pins() {
 /// Static instances, not variable fonts. A variable font still renders, but at its default weight
 /// for every role — so the 400/500 distinction the scale is built on silently disappears.
 #[test]
-fn both_faces_are_static_instances() {
-    for (bytes, what) in [
-        (REGULAR, "Regular"),
-        (MEDIUM, "Medium"),
-        (SEMIBOLD, "SemiBold"),
-    ] {
-        let f = face(bytes, what);
+fn the_faces_are_static_instances() {
+    for (file, bytes, _, _) in FACES {
+        let f = face(bytes, file);
         assert!(
             !f.is_variable(),
-            "Roboto-{what} is a variable font. It would render, but every role would take its \
-             default weight and the type scale's 400/500 distinction would vanish (contract §2.1 \
-             ships two static instances deliberately)"
+            "{file} is a variable font. It would render, but every role would take its default \
+             weight and the type scale's 400/500 distinction would vanish (contract §2.1 ships \
+             static instances deliberately)"
         );
     }
 }
@@ -127,31 +135,30 @@ fn the_faces_cover_the_interfaces_own_text() {
     // symbols that appear in its own strings (an em dash, a copyright sign, the comparison and
     // status marks). Every one verified present in the shipped file.
     const REQUIRED: &str = "AZaz09 .,:;/-_()[]{}'\"!?@#%&*+=<>|~`^$É—©×≈≥○●";
-    for (bytes, what) in [
-        (REGULAR, "Regular"),
-        (MEDIUM, "Medium"),
-        (SEMIBOLD, "SemiBold"),
-    ] {
-        let f = face(bytes, what);
+    for (file, bytes, _, _) in FACES {
+        let f = face(bytes, file);
         for ch in REQUIRED.chars() {
             assert!(
                 f.glyph_index(ch).is_some(),
-                "Roboto-{what} has no glyph for {ch:?} (U+{:04X}) — the interface's own text would \
-                 render as tofu",
+                "{file} has no glyph for {ch:?} (U+{:04X}) — the interface's own text would render \
+                 as tofu",
                 ch as u32
             );
         }
     }
 }
 
-/// The two files are genuinely different. Copying one over the other is a plausible slip during
+/// The files are genuinely different. Copying one over another is a plausible slip during
 /// vendoring, and every other assertion here would still pass on the copy that was *not* checked.
 #[test]
-fn the_two_faces_are_not_the_same_file() {
-    for (a, b) in [(REGULAR, MEDIUM), (MEDIUM, SEMIBOLD), (REGULAR, SEMIBOLD)] {
-        assert_ne!(
-            a, b,
-            "two shipped faces are byte-identical — one was copied over another during vendoring"
-        );
+fn the_faces_are_not_the_same_file() {
+    for (i, (file_a, a, _, _)) in FACES.iter().enumerate() {
+        for (file_b, b, _, _) in &FACES[i + 1..] {
+            assert_ne!(
+                a, b,
+                "{file_a} and {file_b} are byte-identical — one was copied over the other during \
+                 vendoring"
+            );
+        }
     }
 }

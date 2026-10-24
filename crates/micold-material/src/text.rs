@@ -13,6 +13,7 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
+use crate::roboto::ROBOTO;
 use crate::style;
 use iced::widget::text;
 use iced::widget::text::{LineHeight, Wrapping};
@@ -102,21 +103,6 @@ pub enum TypeRole {
     /// An Overview card's 12 px semibold labels: "NOW" and the pull request pills (BUG-1298).
     CardTag,
 }
-
-/// The embedded Roboto faces. Registered once at startup in `main` so the application looks the
-/// same on every platform rather than inheriting the OS UI font (FR-008); see
-/// `assets/fonts/PROVENANCE.md`. Weight 400 and 500 are the only weights the Material 3 type scale
-/// specifies; the Overview card's scoped roles add weight 600 (BUG-1298), the third static instance.
-pub const ROBOTO_REGULAR_BYTES: &[u8] = include_bytes!("../../../assets/fonts/Roboto-Regular.ttf");
-pub const ROBOTO_MEDIUM_BYTES: &[u8] = include_bytes!("../../../assets/fonts/Roboto-Medium.ttf");
-/// Roboto at weight 600, for the Overview card's semibold words (BUG-1298 FR-022, FR-024–FR-026).
-pub const ROBOTO_SEMIBOLD_BYTES: &[u8] =
-    include_bytes!("../../../assets/fonts/Roboto-SemiBold.ttf");
-
-/// The family both shipped faces belong to (asserted by `tests/roboto_font.rs`). The Medium face
-/// advertises `Roboto Medium` in its legacy family name and `Roboto` as its typographic family, so
-/// both resolve here and are told apart by weight.
-pub const ROBOTO: Font = Font::with_name("Roboto");
 
 impl TypeRole {
     /// The Material 3 role this resolves to (contract §2.4, §2.5).

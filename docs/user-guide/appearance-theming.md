@@ -97,6 +97,11 @@ Text is set at named sizes drawn from Material Design 3's type scale — a title
 caption differ in size, weight and line spacing together, so they are told apart by how they look
 rather than by where they sit on screen.
 
+**Emphasis is drawn in Roboto's own italic.** Emphasised words in agent replies (`*like this*` or
+`_like this_`) use the italic Roboto that ships with the application, at the weight of the text
+around them, so emphasis in a heading or a bold run stays as heavy as its surroundings and bold
+italic is exactly as bold as bold. Code inside emphasis stays upright.
+
 **Code is drawn in Fira Mono.** Code blocks, inline code, diffs, tool output and the terminal all
 use the bundled Fira Mono, so code and diff columns line up the same on Linux, macOS and Windows,
 whichever fixed-width fonts are installed. Bold code uses Fira Mono's Bold weight. A copy of Fira

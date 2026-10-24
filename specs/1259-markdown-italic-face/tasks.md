@@ -25,7 +25,7 @@ Paths: `client` = `crates/micold-client`, `core` = `crates/micold-core`.
 
 ## Phase 1: Setup — the faces and their provenance (plan D1; FR-002, FR-007, FR-008, SC-004)
 
-- [ ] T001 Face guard, red first (fails to compile until T002: the `include_bytes!` files are
+- [x] T001 Face guard, red first (fails to compile until T002: the `include_bytes!` files are
   missing): extend `client/tests/roboto_font.rs` from three to six faces. Add `ITALIC`,
   `MEDIUM_ITALIC`, `SEMIBOLD_ITALIC` (`include_bytes!("../../../assets/fonts/Roboto-Italic.ttf")`,
   `Roboto-MediumItalic.ttf`, `Roboto-SemiBoldItalic.ttf`, beside `REGULAR` line 18) and fold them
@@ -36,7 +36,7 @@ Paths: `client` = `crates/micold-client`, `core` = `crates/micold-core`.
   own text (line 125), and its bytes differ from every upright face (line 150); each upright face
   reports `!is_italic()`. Rename the tests whose names say "two faces" to say "faces". Every failure
   message names the file (FR-008, contract C-1)
-- [ ] T002 Cut the three italic faces (research R1): fetch
+- [x] T002 Cut the three italic faces (research R1): fetch
   `https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Italic[wdth,wght].ttf`
   into the session scratchpad, record its sha256, and run the instancer script in
   `assets/fonts/PROVENANCE.md` (the one that cut the upright faces: `fontTools.varLib.instancer`,
@@ -44,19 +44,19 @@ Paths: `client` = `crates/micold-client`, `core` = `crates/micold-core`.
   `[(400, "Roboto-Italic.ttf"), (500, "Roboto-MediumItalic.ttf"), (600, "Roboto-SemiBoldItalic.ttf")]`,
   writing into `assets/fonts/`. Each file is about 160 KB, under 0.5 MB together (SC-004); stop if
   not. T001 passes
-- [ ] T003 [P] `assets/fonts/PROVENANCE.md`: the overview table's Roboto row lists the six files; the
+- [x] T003 [P] `assets/fonts/PROVENANCE.md`: the overview table's Roboto row lists the six files; the
   Roboto section is retitled from "Regular 400, Medium 500" to the six faces and gains the italic
   upstream path and its sha256 (T002), the cut command, the date and the fonttools version, and a
   row per italic file in the weight and checksum tables (sha256, name IDs 1/16);
   `LICENSE-Roboto-OFL.txt` is named as covering them (same project, same OFL) (FR-007)
-- [ ] T004 [P] `client/tests/fixtures/FONT-PROVENANCE.md`: the three italic faces join the faces the
+- [x] T004 [P] `client/tests/fixtures/FONT-PROVENANCE.md`: the three italic faces join the faces the
   layout tests measure with (plan D6)
 
 ---
 
 ## Phase 2: Foundational — the Roboto module (plan D2; contract C-1, C-3)
 
-- [ ] T005 Resolution tests, red first (fail to compile until T006), in a `#[cfg(test)] mod tests`
+- [x] T005 Resolution tests, red first (fail to compile until T006), in a `#[cfg(test)] mod tests`
   of a new `client/src/ui/material/roboto.rs`, on a bare `fontdb::Database`
   (`iced::advanced::graphics::text::cosmic_text::fontdb`) holding the six `ROBOTO_FACES` loaded as
   `Source::Binary`: `Family::Name("Roboto")` italic at 400, 500, 600 resolves to
@@ -64,7 +64,7 @@ Paths: `client` = `crates/micold-client`, `core` = `crates/micold-core`.
   (`Weight::Bold`) and upright at 700 both resolve to faces whose `weight` is 600 (SC-002); upright
   400/500/600 resolve to the three upright bytes. Follow `mono.rs`' helpers (`monospace`, line 117;
   `assert_bundled_face`, line 71) for the query and the byte comparison
-- [ ] T006 Implement `client/src/ui/material/roboto.rs` per contract C-1 and C-3: move `ROBOTO` and
+- [x] T006 Implement `client/src/ui/material/roboto.rs` per contract C-1 and C-3: move `ROBOTO` and
   the three `ROBOTO_*_BYTES` from `client/src/ui/material/text.rs` (lines 110–121, doc comments
   with them); add `ROBOTO_FAMILY`, the three italic `ROBOTO_*_ITALIC_BYTES` (`include_bytes!` of
   T002's files), `ROBOTO_FACES` (upright then italic), `ROBOTO_WEIGHTS = [400, 500, 600]` and
@@ -88,48 +88,48 @@ US2 alone is the showcase sample (see the ledger, milestone cut).
 **Independent test**: T007, T012, T014 pass; `layout_snapshot` changes only in
 `session-transcript-rich`; quickstart §B B1–B4, B6, B7 on Linux.
 
-- [ ] T007 [US1] Test, red until T008: in `client/src/ui/material/roboto.rs` tests, after
+- [x] T007 [US1] Test, red until T008: in `client/src/ui/material/roboto.rs` tests, after
   `test_support::renderer()`, `test_support::resolves_to_bundled` (line 638) holds for `ROBOTO`
   with `Slant::Italic` at weights 400, 500, 600 → the three italic bytes, and at `Weight::Bold` →
   `ROBOTO_SEMIBOLD_ITALIC_BYTES` (FR-001, FR-002, FR-003, FR-005); messages name the face
   (assumes no host Roboto italic: it resolves through the global font system, so on a machine
   with `fonts-roboto` installed it can fail until the pin joins `install_roboto` in T020)
-- [ ] T008 [US1] `client/src/ui/material/test_support.rs::renderer`: replace the three
+- [x] T008 [US1] `client/src/ui/material/test_support.rs::renderer`: replace the three
   `load_font(ROBOTO_*)` lines (73–75) with `super::install_roboto(&mut fonts)` inside the `Once`.
   T007 passes
-- [ ] T009 [US1] `client/tests/support/layout.rs::renderer`: replace the three Roboto `load_font`
+- [x] T009 [US1] `client/tests/support/layout.rs::renderer`: replace the three Roboto `load_font`
   calls (lines 193–201) with `micold_client::ui::install_roboto(&mut fonts)` inside the `Once`; the
   `REFERENCE_FONT_*` constants stay for the apparatus guard (contract C-3).
   `cargo test -p micold-client --test layout_apparatus` stays green (plan D5)
-- [ ] T010 [P] [US1] `client/src/shell/startup.rs`: call `micold_client::ui::install_roboto` on the
+- [x] T010 [P] [US1] `client/src/shell/startup.rs`: call `micold_client::ui::install_roboto` on the
   same `font_system().write()` guard as `install_monospace` (line 88), before
   `iced::application(...)`; drop the three `.font(ROBOTO_*_BYTES)` calls (lines 102–104); keep
   `.default_font(ROBOTO)`; the comment says the italic faces are registered here too and why
   through the font system (the pin, T020)
-- [ ] T011 [P] [US1] `client/src/showcase/main.rs`: the same change (install beside line 59, drop
+- [x] T011 [P] [US1] `client/src/showcase/main.rs`: the same change (install beside line 59, drop
   lines 81–83)
-- [ ] T012 [US1] Span-font tests, red first, in `client/src/ui/material/link_text.rs` `mod tests`
+- [x] T012 [US1] Span-font tests, red first, in `client/src/ui/material/link_text.rs` `mod tests`
   (line 244), calling `painted` directly: an italic span is `Slant::Italic` at the base weight
   (FR-010); a bold+italic span is `Weight::Bold` + `Slant::Italic` (US2, FR-003); a code span with
   `italic` set is `Font::MONOSPACE` with `Slant::Normal` (Edge: inline code), and at `Weight::Bold`
   when also bold (contract C-4). The code case is red until T013
-- [ ] T013 [US1] `client/src/ui/material/link_text.rs::painted` (line 114):
+- [x] T013 [US1] `client/src/ui/material/link_text.rs::painted` (line 114):
   `if s.style.italic && !s.style.code { font.style = Slant::Italic }`; nothing else changes. T012
   passes
-- [ ] T014 [US2] Core test, red until T015: in `core/tests/markdown_subset.rs`, beside the
+- [x] T014 [US2] Core test, red until T015: in `core/tests/markdown_subset.rs`, beside the
   `style("italic")` assertion (line 118), `style("bold italic") == Style { bold: true, italic: true,
   ..Style::default() }` (FR-009)
-- [ ] T015 [US2] `core/tests/fixtures/stream-json/markdown-subset.md` line 11: `**bold**, *italic*,
+- [x] T015 [US2] `core/tests/fixtures/stream-json/markdown-subset.md` line 11: `**bold**, *italic*,
   ***bold italic***, ~~struck~~` (plan D4). Run `mise run test-core`; fix any count or text
   assertion in `core/tests/markdown_subset.rs` / `markdown_stream.rs` that the extra run moves.
   `core/tests/fixtures/stream-json/README.md` (line 91): mention the bold-italic run if it lists
   the paragraph's contents. T014 passes
-- [ ] T016 [US1] Run `client/tests/layout_snapshot.rs` (plan D5, research R7). If it differs,
+- [x] T016 [US1] Run `client/tests/layout_snapshot.rs` (plan D5, research R7). If it differs,
   re-record once with `UPDATE_LAYOUT_SNAPSHOT=1` and confirm the diff of
   `client/tests/fixtures/layout_snapshot.txt` touches only `session-transcript-rich`'s paragraph
   holding `*leaves*` (or its block's wrap); say so in the commit message. Any other state changing
   is an FR-004 regression to fix, not to record
-- [ ] T017 [US1] User guide: `docs/user-guide/appearance-theming.md` *The typeface* (around line
+- [x] T017 [US1] User guide: `docs/user-guide/appearance-theming.md` *The typeface* (around line
   87): emphasis in agent replies is drawn in Roboto's own italic, which ships with the application,
   at the weight of the text around it (bold italic stays bold); code inside emphasis stays upright
 - [ ] T018 [US1] Visual pass, quickstart §B B1–B4, B6, B7, light and dark, through the
