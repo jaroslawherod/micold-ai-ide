@@ -92,10 +92,17 @@ The states are listed in one place: `crates/micold-client/tests/support/covered_
 017's reduced parity set, plus the empty and error layouts no manual walkthrough reliably reached,
 the Settings dialog, the add-worktree dialog with its type dropdown open, and the Overview open
 over the fixture project (`overview-open`, feature 1120): its cards, header row and title, the only
-state the text-overflow and containment gates reach the Overview's cards in. The six session
-states (`session-terminal-*`, `session-transcript-*`) draw the session area's context header above
-the panes (feature 1126), anchored as `session.header`; `gates/session_area_fits.rs` holds its title
-and chips inside the session area at the smallest window and at 1280×800.
+state the text-overflow and containment gates reach the Overview's cards in. The session
+states draw the session area (feature 1126): the context header, anchored as `session.header`, then
+the tab strip, then the panes, with nothing under them. `session-area-one-tab`,
+`session-area-six-tabs` and `session-area-twelve-tabs` hold the strip with 1, 6 and 12 tabs
+(session and shell tabs together), anchored as `session.strip`, `session.strip.tabs` (its keyed row
+of members), `session.strip.new_session` and `session.strip.split`; the twelve-tab strip overflows
+and scrolls. `gates/session_area_fits.rs` holds the header's title and chips and the strip's
+controls inside the session area at the smallest window and at 1280×800, in that order above the
+panes; `gates/strip_controls_hold_their_size.rs` and `gates/strip_controls_anchor_the_trailing_edge.rs`
+hold every member at its own width and New session and the split buttons at the strip's right end.
+The bar that sat under the terminal, and its `session-terminal-*` states, are gone.
 
 Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
 the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session

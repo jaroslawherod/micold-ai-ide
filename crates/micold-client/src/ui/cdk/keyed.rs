@@ -14,7 +14,7 @@
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell, Widget};
 use iced::widget::{Column, Row};
-use iced::{Element, Event, Length, Padding, Rectangle, Renderer, Size, Theme, Vector};
+use iced::{Alignment, Element, Event, Length, Padding, Rectangle, Renderer, Size, Theme, Vector};
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -71,6 +71,15 @@ impl<'a, K: Copy + Eq + Hash + 'static, M: 'a> Keyed<'a, K, M> {
         self.line = match self.line {
             Line::Row(row) => Line::Row(row.padding(padding)),
             Line::Column(column) => Line::Column(column.padding(padding)),
+        };
+        self
+    }
+
+    /// Align the children across the axis: vertically in a row, horizontally in a column.
+    pub fn align(mut self, alignment: Alignment) -> Self {
+        self.line = match self.line {
+            Line::Row(row) => Line::Row(row.align_y(alignment)),
+            Line::Column(column) => Line::Column(column.align_x(alignment)),
         };
         self
     }
@@ -271,5 +280,64 @@ mod tests {
             assert_eq!(built_by_diff(axis, &[1, 2, 3], &[1, 2, 3]), 0);
             assert_eq!(built_by_diff(axis, &[1, 2, 3], &[2, 3]), 0);
         }
+    }
+
+    /// A child that holds one number of widget state, as a pressed button holds `is_pressed`.
+    struct Held;
+
+    impl Widget<(), Theme, Renderer> for Held {
+        fn tag(&self) -> tree::Tag {
+            tree::Tag::of::<u32>()
+        }
+        fn state(&self) -> tree::State {
+            tree::State::new(0_u32)
+        }
+        fn size(&self) -> Size<Length> {
+            Size::new(Length::Shrink, Length::Shrink)
+        }
+        fn layout(&mut self, _: &mut Tree, _: &Renderer, _: &layout::Limits) -> layout::Node {
+            layout::Node::new(Size::ZERO)
+        }
+        fn draw(
+            &self,
+            _: &Tree,
+            _: &mut Renderer,
+            _: &Theme,
+            _: &renderer::Style,
+            _: Layout<'_>,
+            _: mouse::Cursor,
+            _: &Rectangle,
+        ) {
+        }
+    }
+
+    fn held(keys: &[u32]) -> Element<'static, ()> {
+        Keyed::row(
+            keys.iter()
+                .map(|&k| (k, Element::new(Held)))
+                .collect::<Vec<_>>(),
+        )
+        .into()
+    }
+
+    /// Feature 1126 S8, R10: a member added before the pressed child leaves that child's state
+    /// with its key, so the press is delivered to it and not to its new neighbour.
+    #[test]
+    fn a_member_added_before_the_pressed_child_keeps_its_state_with_its_key() {
+        let before = held(&[1, 2]);
+        let mut tree = Tree::new(before.as_widget());
+        *tree.children[1].state.downcast_mut::<u32>() = 7; // key 2 is "pressed"
+        let after = held(&[0, 1, 2]);
+        tree.diff(after.as_widget());
+        let states: Vec<u32> = tree
+            .children
+            .iter()
+            .map(|c| *c.state.downcast_ref::<u32>())
+            .collect();
+        assert_eq!(
+            states,
+            vec![0, 0, 7],
+            "key 2's state moved with it to slot 2"
+        );
     }
 }

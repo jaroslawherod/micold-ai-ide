@@ -434,7 +434,7 @@ fn a_catalog_arriving_mid_session_does_not_move_the_user() {
 /// this codebase has been in three times now (`010` BUG-011, `012` BUG-003, `012` BUG-004): both
 /// halves tested, the join untested, the application broken. `shell/daemon_sync.rs` lives in the
 /// binary crate and cannot be reached from here, so the call is read out of the source — the same
-/// idiom as `terminal_bar_stability.rs`'s gates, and for the same reason.
+/// idiom as `session_area_stability.rs`'s gates, and for the same reason.
 ///
 /// Order matters as much as presence: `on_connected` reads `active_session` further down to decide
 /// whether to view-and-start a session or send the empty overview view. Re-resolving after that

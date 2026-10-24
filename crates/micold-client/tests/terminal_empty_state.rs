@@ -9,7 +9,7 @@
 //!
 //! Asserting on the rendered element instead is not available: iced builds an `Element` tree with
 //! no text-node accessor, and the pane's other empty state has never been assertable either. So
-//! this follows `tests/terminal_bar_stability.rs` and `tests/showcase_glue.rs`, under Principle I's
+//! this follows `tests/session_area_stability.rs` and `tests/showcase_glue.rs`, under Principle I's
 //! GUI-wiring exception: *a precondition nobody checks is a precondition nobody keeps.*
 //!
 //! # What it guards

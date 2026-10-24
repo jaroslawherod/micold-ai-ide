@@ -1,11 +1,18 @@
 //! The session area: what the main area draws while a session is shown (feature 1126, contract
-//! A1, research R12). Top to bottom: the context header naming the shown location, then the pane
-//! area with its bar. The header's words come from `micold_core::context_header`; this module only
-//! lays them out (contract H9).
+//! A1, research R12). Top to bottom: the context header naming the shown location, the tab strip,
+//! then the pane area; nothing under it. The header's words come from
+//! `micold_core::context_header` and the strip's members from `features::session_strip`; this
+//! module only lays them out (contracts H9, S7).
 
 use crate::app::{Message, State};
+use crate::features::session::Msg as SessionMsg;
+use crate::features::session_strip::{strip_overflow, Member, StripModel};
+use crate::icons::Icon;
+use crate::ui::cdk::keyed::Keyed;
 use crate::ui::material::{
-    card_palette, card_state_icon, Ellipsized, Glyph, PullRequestIndicator, Tag, Tooltip, TypeRole,
+    self, card_palette, card_state_icon, tab, tab_content_colour, ActivityBadge, BadgeEmphasis,
+    Ellipsized, Glyph, IconButton, IndicatorEdge, PullRequestIndicator, SurfaceKind, Tab, Tag,
+    Text, Tooltip, TooltipPosition, TypeRole,
 };
 use crate::ui::terminal;
 use iced::widget::{column, container, row, Space};
@@ -19,9 +26,13 @@ use micold_core::tokens::{self, spacing, Roles};
 /// is in its tooltip.
 pub const CHIP_MAX_WIDTH: f32 = 240.0;
 
-/// The session area for the shown session: the header above the pane area (A1). The header's slot
-/// is there even when the shown location does not resolve, empty, so the pane area's place in the
-/// tree never moves (feature 023 FR-008a).
+/// The widest the strip's status words grow before they are cut with an ellipsis (S7); the full
+/// words are in their tooltip.
+pub const STATUS_MAX_WIDTH: f32 = 160.0;
+
+/// The session area for the shown session: the header, the strip, then the pane area (A1, A2). The
+/// header's and the strip's slots are there even when they have nothing to draw, empty, so the pane
+/// area's place in the tree never moves (feature 023 FR-008a).
 #[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     state: &'a State,
@@ -36,8 +47,13 @@ pub fn view<'a>(
         Some(location) => header(state, &location, scheme),
         None => container(Space::new()).into(),
     };
+    let strip: Element<'a, Message> = match StripModel::of(state) {
+        Some(model) => strip(state, &model, area, scheme),
+        None => container(Space::new()).into(),
+    };
     column![
         header,
+        strip,
         terminal::pane(
             state,
             area,
@@ -123,6 +139,191 @@ fn header<'a>(
         right: spacing::LG,
     })
     .into()
+}
+
+/// The tab strip above the panes (S7): the scrolling members, then the status cluster, **New
+/// session** and the split buttons, a child list that never varies (FR-011). The members sit from
+/// the leading edge in a keyed row, so a press in flight follows its member when one is added
+/// before it (R10); everything after the scrolling region is outside its viewport and keeps its
+/// place and size at any member count (FR-010).
+pub(crate) fn strip<'a>(
+    state: &'a State,
+    model: &StripModel,
+    area: Option<&crate::ui::panes::PaneArea<'a>>,
+    scheme: ColorScheme,
+) -> Element<'a, Message> {
+    let r = tokens::roles(scheme);
+    let offset = state.session.tab_strip_scroll_offset as f32;
+    let viewport = state.session.tab_strip_viewport_width as f32;
+    let beyond = strip_overflow(offset, viewport, &model.members);
+    // Feature 027 FR-002e: the fade takes the indicator's accent on the side the marked member lies
+    // beyond.
+    let marked_beyond = model.marked_index().and_then(|index| {
+        crate::features::session_strip::scroll_into_view(index, offset, viewport, &model.members)
+            .map(|target| target < offset)
+    });
+    let members = Keyed::row(model.members.iter().map(|m| (m.key(), member(m, r))))
+        .spacing(spacing::SM)
+        .align(Alignment::Center);
+    let tabs = material::EdgeFade::new(
+        material::Scrollable::new(members, r)
+            .direction(material::ScrollDirection::Horizontal)
+            .width(Length::Fill)
+            .id(terminal::TAB_STRIP_SCROLL_ID.clone())
+            // The content width it reports is dropped: `strip_overflow` derives it from the
+            // members, because a measured one is stale until the first scroll (feature 027).
+            .on_scroll_metrics(|offset, width, _content| {
+                Message::Session(SessionMsg::TabStripScrolled { offset, width })
+            })
+            // The first frame matters most: a strip that already overflows must fade its edge
+            // before anything has scrolled.
+            .on_viewport_resize(|size| {
+                Message::Session(SessionMsg::TabStripViewportResized {
+                    width: crate::app::scroll_offset_px(size.width),
+                })
+            }),
+        r,
+    )
+    .leading(beyond.leading)
+    .trailing(beyond.trailing)
+    .accent_on(marked_beyond)
+    .width(Length::Fill);
+
+    let new_session = Tooltip::new(
+        IconButton::new(Icon::AddSession, r)
+            .padding(spacing::SM)
+            .on_press_maybe(
+                model
+                    .location
+                    .clone()
+                    .map(|at| Message::Session(SessionMsg::AdditionalRequested(at))),
+            ),
+        "Start another session…",
+        r,
+    )
+    .position(TooltipPosition::Left);
+    let splits: Element<'a, Message> = match area.and_then(|a| a.layout.pane(a.layout.focused())) {
+        Some(pane) => crate::ui::panes::split_buttons(pane, r),
+        None => container(Space::new()).into(),
+    };
+    let strip = row![tabs, status_cluster(model, r), new_session, splits]
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center);
+    material::Surface::new(strip, SurfaceKind::Toolbar, r)
+        .width(Length::Fill)
+        .padding(spacing::SM)
+        .into()
+}
+
+/// The shown session's status words, cut under [`STATUS_MAX_WIDTH`] with the full words on hover,
+/// and while its marked process is stopped the restart as the cluster's last child, so its coming
+/// and going moves no other control (R9, US2 sc. 5 and 6).
+fn status_cluster<'a>(model: &StripModel, r: tokens::Roles) -> Element<'a, Message> {
+    let words = Tooltip::new(
+        container(
+            Ellipsized::<Message>::at_role(
+                model.status.clone(),
+                TypeRole::Label,
+                r.on_surface_variant,
+            )
+            .shrink(),
+        )
+        .max_width(STATUS_MAX_WIDTH),
+        model.status.clone(),
+        r,
+    )
+    .position(TooltipPosition::Bottom);
+    let mut cluster = row![words].spacing(spacing::SM).align_y(Alignment::Center);
+    if let Some(restart) = model.restart.clone() {
+        cluster = cluster.push(
+            material::Button::with_content(
+                Text::new("restart", TypeRole::Label, r).muted(),
+                material::ButtonVariant::Text,
+                r,
+            )
+            .padding(spacing::SM)
+            .on_press(restart),
+        );
+    }
+    cluster.into()
+}
+
+/// One strip member (S5, S7): a session tab at [`tab::SESSION_WIDTH`], a shell tab at
+/// [`tab::WIDTH`] with its close control, or the "+". Indicators on the bottom edge: the strip sits
+/// above the panes it selects (feature 012 FR-004b's rule, inverted with the strip's position).
+fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
+    let mark =
+        |stopped: bool| ActivityBadge::for_emphasis(stopped.then_some(BadgeEmphasis::Stopped), r);
+    let menu = m.menu_tab();
+    let with_menu = |tab: Tab<'a, Message>| match menu {
+        Some(target) => tab.on_secondary_press(move |(x, y)| {
+            Message::Session(SessionMsg::StripTabMenuRequested(target, x, y))
+        }),
+        None => tab,
+    };
+    match m {
+        Member::Session {
+            label,
+            tooltip,
+            marked,
+            stopped,
+            ..
+        } => {
+            let tint = tab_content_colour(*marked, r);
+            let tab = Tab::new(
+                Ellipsized::<Message>::at_role(label.clone(), TypeRole::Label, tint).shrink(),
+                r,
+            )
+            .fixed_width(tab::SESSION_WIDTH)
+            .edge(IndicatorEdge::Bottom)
+            .active(*marked)
+            .leading(mark(*stopped))
+            .on_press(m.press());
+            Tooltip::new(with_menu(tab), tooltip.clone(), r)
+                .position(TooltipPosition::Bottom)
+                .into()
+        }
+        Member::Shell {
+            label,
+            marked,
+            stopped,
+            ..
+        } => {
+            // Every nested control takes the colour this tab draws its own label in (feature 012
+            // BUG-001, FR-011a).
+            let tint = tab_content_colour(*marked, r);
+            let mut close = IconButton::new(Icon::Close, r)
+                .size(TypeRole::Label)
+                .padding(spacing::XS)
+                .circular()
+                .tint(tint);
+            if let Some(message) = m.close() {
+                close = close.on_press(message);
+            }
+            let tab = Tab::new(Text::new(label.clone(), TypeRole::Label, r).tint(tint), r)
+                .edge(IndicatorEdge::Bottom)
+                .active(*marked)
+                .leading(mark(*stopped))
+                .trailing(
+                    Tooltip::new(close, "Close this terminal instance", r)
+                        .position(TooltipPosition::Bottom),
+                )
+                .on_press(m.press());
+            with_menu(tab).into()
+        }
+        Member::Plus => Tooltip::new(
+            IconButton::new(Icon::AddTerminalInstance, r)
+                .padding(spacing::SM)
+                .on_press(m.press()),
+            format!(
+                "Open a new terminal instance ({})",
+                crate::keymap::new_terminal_chord_label()
+            ),
+            r,
+        )
+        .position(TooltipPosition::Bottom)
+        .into(),
+    }
 }
 
 /// The state chip (FR-003): the card's state colour, its icon and its word, the reason on hover.

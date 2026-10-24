@@ -130,14 +130,15 @@ const SCROLL_CONTENT: &[&str] = &["0/0/0/1/0/0/0/2/0"];
 /// attribution from the records rather than from the shape.
 const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0/0"];
 
-/// The **terminal tab strip**, overflowing its own viewport in the bar (feature 026 FR-002a).
+/// The **tab strip** above the panes, overflowing its own viewport (feature 026 FR-002a; feature
+/// 1126 FR-010).
 ///
 /// A third site of the same mechanism, kept apart from the two above for the reason they are kept
 /// apart from each other: each has its own attribution, and one list would leave "which scrollable
 /// is this?" answerable only by reading the path.
 ///
-/// It arrived with `session-terminal-instance-tabs-overflowing` (T014) and nothing else fires it,
-/// because no other covered state opens enough instances to overflow the bar. That is the whole
+/// It arrived with feature 026's overflowing bar (T014), and `session-area-twelve-tabs` holds it
+/// now (with `session-area-six-tabs`, whose session tabs overflow the layout window too). That is the whole
 /// point of the state: past about five instances the tabs want more width than the bar can give,
 /// and until T016 the bar answered by **shrinking its own trailing controls** — the mode toggle was
 /// laid out at 0.0dp, which is nothing a user can press, and iced reported it as a successful
@@ -146,14 +147,13 @@ const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0/0"];
 /// do not fit are reached by scrolling (FR-002a), which is a node outside a node exactly as the
 /// sidebar's list is.
 ///
-/// The path names the **padding container** feature 027 put around the strip, not the strip itself
-/// (FR-003) — that container carries the leading slack that pushes the tabs to the viewport's
-/// trailing edge, so it is the node that overhangs, and the strip inside it is exactly its size.
-/// `the_recorded_tab_overflow_is_the_instance_strip` descends through it before counting tabs.
+/// Since feature 1126 the strip sits **above** the panes and the path names its keyed row of
+/// members itself (`EdgeFade` → stack → layer → viewport → row, contract S7): feature 027's padding
+/// container went with its trailing slack (R9), so there is nothing to descend through.
 ///
 /// `the_recorded_tab_overflow_is_the_instance_strip` proves the attribution from the records rather
 /// than from the shape.
-const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/1/1/0/2/0/0/0/0"];
+const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/1/0/0/0/0/0/0"];
 
 /// A **Settings page** taller than the viewport it scrolls in (feature 039, T111).
 ///
@@ -267,12 +267,12 @@ fn is_inline_link_gutter(state: &str, escape: &lay::Escape) -> bool {
 /// ([`TRANSCRIPT_VIEWPORT`]). Feature 941 put the transcript in a column over the composer (the
 /// `0` after the pane's prefix). Feature 944 put the session bar above the scrollable (`1` before the
 /// last two steps) and added `session-transcript-insights`, whose open thread outgrows it too.
-/// Feature 1126 put the session area's header above the panes (the `1` after the main area's
-/// prefix).
-const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/1/0/0/0/1/0/0"];
+/// Feature 1126 put the session area's header and strip above the panes (the `2` after the main
+/// area's prefix) and dropped the pane column the bottom bar shared (one `0` fewer).
+const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/2/0/0/1/0/0"];
 
 /// The transcript's `Scrollable`: the parent of [`TRANSCRIPT_CONTENT`].
-const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/1/0/0/0/1/0";
+const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/2/0/0/1/0";
 
 /// The folded bodies of **feature 944's cards** in `session-transcript-insights` (T037): the
 /// background-task list's `AccordionSection`, the `Agent` card whose thread is open below it, and a
@@ -282,9 +282,9 @@ const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/1/0/0/0/1/0";
 /// that padding, so a body that grew past it still fires. #943 put the session bar in a row with
 /// **Open in terminal** (`0/0` after the bar's container).
 const FOLDED_BODY_REVEAL: &[&str] = &[
-    "0/0/0/1/1/1/0/0/0/0/0/0/0/1/1/0",
-    "0/0/0/1/1/1/0/0/0/1/0/0/4/0/0/1/0",
-    "0/0/0/1/1/1/0/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
+    "0/0/0/1/1/2/0/0/0/0/0/0/1/1/0",
+    "0/0/0/1/1/2/0/0/1/0/0/4/0/0/1/0",
+    "0/0/0/1/1/2/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
 ];
 
 /// The folded body's padding that [`FOLDED_BODY_REVEAL`] overhangs by (`spacing::SM`).
@@ -800,23 +800,27 @@ fn the_recorded_picker_overflow_is_the_open_option_list() {
 /// some other overhang wearing this path.
 #[test]
 fn the_recorded_tab_overflow_is_the_instance_strip() {
-    const STATE: &str = "session-terminal-instance-tabs-overflowing";
-    /// The instance count `covered_states.rs` opens in that state.
-    const INSTANCES: usize = 6;
+    const STATE: &str = "session-area-twelve-tabs";
+    let members = crate::support::covered_states::STRIP_MEMBERS
+        .iter()
+        .find(|(name, _)| *name == STATE)
+        .map(|(_, n)| *n)
+        .expect("the strip state's member count is recorded");
 
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
-    let records = covered_states()
+    let (covered, records) = covered_states()
         .iter()
         .zip(all.iter())
         .find(|(covered, _)| covered.name == STATE)
-        .map(|(_, records)| records)
         .unwrap_or_else(|| {
             panic!(
                 "no covered state named {STATE} — the exemption below is about that state's \
                  overflowing strip, so without it nothing proves the attribution"
             )
         });
+    let model = micold_client::features::session_strip::StripModel::of(&(covered.build)().state)
+        .expect("the state shows a session");
 
     let base = |path: &str| {
         records
@@ -825,32 +829,12 @@ fn the_recorded_tab_overflow_is_the_instance_strip() {
     };
 
     for path in TAB_STRIP_CONTENT {
-        let content = base(path).unwrap_or_else(|| {
+        let strip = base(path).unwrap_or_else(|| {
             panic!(
                 "{path} is exempted as the tab strip's content and no such base node was resolved \
                  in {STATE}; the tree renumbered around it"
             )
         });
-        // One level in: the exempted node is feature 027's padding container, whose whole job is
-        // the leading slack (FR-003). Its single child is the strip. Asserted rather than assumed —
-        // a container that grew a second child is a strip this gate would then be counting the
-        // wrong node's children for, and the count below would fail with a confusing figure.
-        let inner: Vec<_> = records
-            .iter()
-            .filter(|r| {
-                r.layer == lay::Layer::Base
-                    && r.path.len() == content.path.len() + 1
-                    && r.path.starts_with(&content.path)
-            })
-            .collect();
-        assert_eq!(
-            inner.len(),
-            1,
-            "{path} holds {} children; feature 027's slack container holds exactly one, the strip",
-            inner.len(),
-        );
-        let strip = inner[0];
-
         let tabs: Vec<_> = records
             .iter()
             .filter(|r| {
@@ -859,41 +843,32 @@ fn the_recorded_tab_overflow_is_the_instance_strip() {
                     && r.path.starts_with(&strip.path)
             })
             .collect();
-
         assert_eq!(
             tabs.len(),
-            INSTANCES,
-            "{path} holds {} children against {INSTANCES} open instances, so it is not the \
-             scrolling strip and the exemption is attributed to the wrong node.\n\nDeliberately \
-             **not** `INSTANCES + 1`. The session's AI CLI process is a tab (FR-001), but FR-002b \
-             pins it outside this viewport so it keeps its right-hand position and stays reachable \
-             in one press however many instances are open — inside, it would be reachable only by \
-             scrolling to the far end, which is the state SC-002 forbids. This node holds exactly \
-             what scrolls.",
+            members,
+            "{path} holds {} children against the strip's {members} members (its tabs and the \
+             \"+\"), so it is not the scrolling strip and the exemption is attributed to the wrong \
+             node",
             tabs.len(),
         );
-
-        let widest = tabs
-            .iter()
-            .map(|t| t.width)
-            .fold(f32::NEG_INFINITY, f32::max);
-        let narrowest = tabs.iter().map(|t| t.width).fold(f32::INFINITY, f32::min);
-        assert!(
-            (widest - narrowest).abs() < TOLERANCE,
-            "the strip's tabs measure {narrowest:.1}..{widest:.1}dp. They are one fixed width \
-             (feature 012 FR-004c) and the whole point of scrolling them is that overflow does not \
-             change that — a spread here means the shortfall is being settled by shrinking again, \
-             one level in, which is the defect this exemption's own scrollable exists to prevent"
-        );
-
-        let viewport = base(&lay::path_token(&content.path[..content.path.len() - 1]))
+        for (tab, member) in tabs.iter().zip(&model.members) {
+            assert!(
+                (tab.width - member.width()).abs() < TOLERANCE,
+                "{} is {:.1}dp against its fixed {:.1}dp: the strip's members keep their own width \
+                 and the ones that do not fit are scrolled to (FR-010), never shrunk",
+                lay::path_token(&tab.path),
+                tab.width,
+                member.width(),
+            );
+        }
+        let viewport = base(&lay::path_token(&strip.path[..strip.path.len() - 1]))
             .expect("the exempted node has a parent");
         assert!(
-            content.width > viewport.width + TOLERANCE,
+            strip.width > viewport.width + TOLERANCE,
             "{path} is {:.1}dp inside a {:.1}dp viewport, so nothing is overflowing and the \
-             exemption is covering a strip that fits — which means this state stopped opening \
-             enough instances to overflow the bar, and FR-002a is uncovered again",
-            content.width,
+             exemption is covering a strip that fits — this state stopped opening enough tabs to \
+             overflow the strip, and FR-010 is uncovered again",
+            strip.width,
             viewport.width,
         );
     }

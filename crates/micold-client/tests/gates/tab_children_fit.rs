@@ -73,7 +73,7 @@ const TOLERANCE: f32 = 0.5;
 /// scrolling members are one strip and the pinned tab is another, and they are two nodes in the bar
 /// rather than one. A gate that knew only the first would have stopped covering the tab this whole
 /// feature adds, silently and while still passing — which is the shape feature 019 keeps meeting.
-const STRIP_ANCHORS: &[&str] = &["terminal.tabs", "terminal.tabs.pinned"];
+const STRIP_ANCHORS: &[&str] = &["session.strip.tabs"];
 
 /// Every tab strip in a state, or an empty list for a state without one.
 ///

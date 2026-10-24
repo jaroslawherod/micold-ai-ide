@@ -890,3 +890,102 @@ fn the_status_bar_adds_no_focusable_widget() {
         );
     }
 }
+
+// ---- feature 1126: the strip above the terminal (US4 scenario 2, T039) ----
+
+/// A project at its root with a session in Regular mode, one shell instance marked and stopped, and
+/// a second session beside it; the first is displayed, so its terminal holds the keyboard.
+fn showing_a_strip() -> State {
+    use micold_core::project::{Availability, Project};
+    let mut s = State::default();
+    let path = std::path::PathBuf::from("/repo");
+    s.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    s.workspace.active = Some(path);
+    let first = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    let id = first.id;
+    s.update(Message::Session(SessionMsg::Started(first)));
+    s.update(Message::Session(SessionMsg::Started(Session::start_new(
+        SessionLocation::Default,
+        AiCli::ClaudeCode,
+    ))));
+    s.update(Message::Session(SessionMsg::Selected(id)));
+    let (_, session) = s.workspace.find_session_mut(id).expect("started");
+    let shell = session.open_shell_instance();
+    session.mark_shell_exited(shell);
+    session.select_shell(shell);
+    session.mode = micold_core::session::TerminalMode::Regular;
+    s
+}
+
+/// US4 scenario 2 (guard: it pins the bar's outcome and passed on arrival, before the strip took
+/// the bar's controls): with the terminal focused, every strip control — each member, the "+", the
+/// split buttons and the restart — leaves the keyboard with the terminal, as the bar's same control
+/// did; **New session** hands it to its confirmation, as the sidebar's *Start another session…*
+/// does.
+#[test]
+fn a_strip_press_leaves_focus_where_the_bar_control_left_it() {
+    use micold_client::features::session::PaneMsg;
+    use micold_client::features::session_strip::StripModel;
+    use micold_core::pane_layout::{Axis, PaneLayout};
+
+    let base = showing_a_strip();
+    assert!(
+        base.terminal_focused(),
+        "precondition: the terminal holds the keyboard"
+    );
+    let model = StripModel::of(&base).expect("a session is shown");
+    let pane = PaneLayout::single().focused();
+    let mut presses: Vec<(String, Message)> = model
+        .members
+        .iter()
+        .map(|m| (format!("{:?}", m.key()), m.press()))
+        .collect();
+    presses.extend(
+        model
+            .members
+            .iter()
+            .filter_map(|m| m.close().map(|c| (format!("close {:?}", m.key()), c))),
+    );
+    presses.push((
+        "restart".into(),
+        model.restart.clone().expect("the marked shell has exited"),
+    ));
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        presses.push((
+            format!("split {axis:?}"),
+            Message::Session(SessionMsg::Pane(PaneMsg::Split(pane, axis))),
+        ));
+    }
+    assert!(
+        presses.len() >= 7,
+        "every kind of strip control: {presses:?}"
+    );
+    for (what, press) in presses {
+        let mut s = base.clone();
+        s.update(press);
+        assert!(
+            s.terminal_focused(),
+            "{what}: the bar's same control left the keyboard with the terminal (US4 sc. 2)"
+        );
+        assert_eq!(open_dialog(&s), None, "{what} opens no dialog");
+    }
+
+    let mut s = base.clone();
+    s.update(Message::Session(SessionMsg::AdditionalRequested(
+        model.location.clone().expect("the shown location resolves"),
+    )));
+    assert_eq!(
+        open_dialog(&s),
+        Some("confirm_additional_session"),
+        "New session opens the sidebar action's confirmation"
+    );
+    assert!(
+        !s.terminal_focused(),
+        "and the confirmation takes the keyboard from the terminal"
+    );
+}

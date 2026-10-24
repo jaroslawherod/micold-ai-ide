@@ -96,9 +96,49 @@ pub fn tab<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message
                 .on_press(Message::NoOp),
                 roles,
             ),
+            // Feature 1126 (R8, T035): the strip's session tab above the terminal — the shown
+            // session's (its AI conversation, marked), another session's, and a stopped one — at
+            // the session tab's derived width, indicator on the bottom edge.
+            posed(
+                "session, shown",
+                session_tab("claude · main", true, false, roles),
+                roles,
+            ),
+            posed(
+                "session, other",
+                session_tab("claude · helper-1", false, false, roles),
+                roles,
+            ),
+            posed(
+                "session, stopped",
+                session_tab("copilot · a-much-longer-session-name", false, true, roles),
+                roles,
+            ),
         ],
         Layout::Inline,
     )
+}
+
+/// A session tab as the strip draws one (`ui/session_area.rs::member`).
+fn session_tab<'a>(
+    label: &str,
+    marked: bool,
+    stopped: bool,
+    roles: Roles,
+) -> material::Tab<'a, Message> {
+    let tint = material::tab_content_colour(marked, roles);
+    material::Tab::new(
+        material::Ellipsized::<Message>::at_role(label, material::TypeRole::Label, tint).shrink(),
+        roles,
+    )
+    .fixed_width(material::tab::SESSION_WIDTH)
+    .edge(material::IndicatorEdge::Bottom)
+    .active(marked)
+    .leading(material::ActivityBadge::for_emphasis(
+        stopped.then_some(material::BadgeEmphasis::Stopped),
+        roles,
+    ))
+    .on_press(Message::NoOp)
 }
 
 /// `TabStrip` — the same strip twice, with its indicator on opposite edges (FR-014, SC-011).

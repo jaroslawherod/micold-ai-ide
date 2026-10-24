@@ -311,6 +311,21 @@ fn overview_chord_label_names_the_platform_chord() {
     );
 }
 
+/// Feature 1126 R13: the "+"'s tooltip names the platform's chord, Cmd on macOS.
+#[test]
+fn new_terminal_chord_label_names_the_platform_chord() {
+    #[cfg(target_os = "macos")]
+    assert_eq!(
+        micold_client::keymap::new_terminal_chord_label(),
+        "Cmd+Shift+T"
+    );
+    #[cfg(not(target_os = "macos"))]
+    assert_eq!(
+        micold_client::keymap::new_terminal_chord_label(),
+        "Ctrl+Shift+T"
+    );
+}
+
 /// Feature 970 (FR-001, FR-014): the Overview's full-screen chord is F with the platform's primary
 /// modifier and Shift, and nothing else.
 #[test]

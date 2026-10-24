@@ -306,7 +306,7 @@ pub struct State {
     /// (FR-021a). It replaced a stored `terminal_focused: bool` that seven scattered assignments
     /// had to keep correct between them, which is how project switch, mode toggle and instance
     /// switch each ended up missing a case. Written only by `focus_terminal` and
-    /// `release_terminal`; `tests/terminal_bar_stability.rs` fails if that stops being
+    /// `release_terminal`; `tests/session_area_stability.rs` fails if that stops being
     /// true.
     pub terminal_released: bool,
     /// Sessions whose kind a catalog snapshot changed, for the shell to drop the old primary's
@@ -1334,6 +1334,9 @@ pub fn started(state: &mut crate::app::State, session: Session) -> Vec<crate::fe
 /// name; any other direct write to `active_session` fails that gate.
 pub fn selected(state: &mut crate::app::State, id: SessionId) -> Vec<crate::features::Outcome> {
     state.session.active = Some(id);
+    // Feature 1126 (S5): the strip above the terminal holds this session's tab, now the marked one,
+    // so it has to be in view (026 FR-002d) whether it was pressed there or in the sidebar.
+    arm_tab_reveal(state);
     // Feature 803 (U5): a pointer or chord selection leaves any navigation stop, and (FR-012, 813
     // FR-023) the session it shows takes the main area from the Overview.
     let mut outcomes = vec![

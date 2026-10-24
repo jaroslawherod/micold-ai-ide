@@ -168,34 +168,34 @@ the strip; no bar under the terminal (quickstart B1–B5, B9, B10).
 
 ### Tests for User Story 2 (write first, see them fail)
 
-- [ ] T021 [P] [US2] Unit tests S1–S4 in `client/src/features/session_strip.rs` tests for
+- [x] T021 [P] [US2] Unit tests S1–S4 in `client/src/features/session_strip.rs` tests for
   `StripModel::of`: the S1 fixtures (main `M` with two shells and helpers `H1`, `H2`; `M` shown, `H1`
   shown; one session no shell → `[Session(M, shown, marked), Plus]`; an agent-started session after
   its origin, folded or not), exactly one member marked (S2), stopped per member and never across
   sessions, `restart` `Some` exactly when the shown marked tab is stopped and targeting that process
   (S3), `status` words unchanged (S4), `location` `None` when it no longer resolves; `None` without an
   active session
-- [ ] T022 [P] [US2] Unit tests S5 in `client/src/features/session_strip.rs` tests: each member's
+- [x] T022 [P] [US2] Unit tests S5 in `client/src/features/session_strip.rs` tests: each member's
   press and close message per the S5 table; another session's tab yields no
   `StripTabMenuRequested`; and in `client/src/ui/mod.rs` tests, for every member of the S1 fixtures,
   `strip_tab_menu_labels` contains *Restart* iff that member is `stopped` (FR-009)
-- [ ] T023 [P] [US2] Unit tests S6 in `client/src/features/session_strip.rs` tests:
+- [x] T023 [P] [US2] Unit tests S6 in `client/src/features/session_strip.rs` tests:
   `member_offsets` from `SESSION_WIDTH`, `tab::WIDTH`, the "+" size and `spacing::SM` gaps; the three
   `strip_overflow` rows of the S6 table (viewport 0 means no edge beyond); `scroll_into_view` brings
   a marked member beyond either edge into view
-- [ ] T024 [P] [US2] Keyed slot test in `client/src/ui/cdk/keyed.rs` tests: in a `Keyed::row`, a
+- [x] T024 [P] [US2] Keyed slot test in `client/src/ui/cdk/keyed.rs` tests: in a `Keyed::row`, a
   member added before the pressed child keeps that child's tree state with its key (S8, R10)
-- [ ] T025 [P] [US2] `client/tests/session_area_stability.rs` replacing
+- [x] T025 [P] [US2] `client/tests/session_area_stability.rs` replacing
   `client/tests/terminal_bar_stability.rs` (delete it): source-level gates that
   `session_area::strip` and `session_area::header` read no focus (`terminal_focused`), push no child
   under an `if` on session shape, and have no release-focus control (S8, FR-011); carry over every pin of the old file that still
   applies (restart wiring through `restart_message`, the `command_caption` label) and repoint the
   comments that cite it (`src/ui/terminal.rs`, `src/features/session.rs`,
   `tests/{terminal_tabs,terminal_empty_state,features_session}.rs`)
-- [ ] T026 [P] [US2] Retarget `client/tests/terminal_tabs.rs` and `client/tests/tab_reveal.rs` to
+- [x] T026 [P] [US2] Retarget `client/tests/terminal_tabs.rs` and `client/tests/tab_reveal.rs` to
   the strip: pressing a session, shell, "+" or New session member sends the S5 message, and every
   strip control that changes the marked tab arms the reveal (`arm_tab_reveal`)
-- [ ] T027 [US2] Geometry gates: rename `client/tests/gates/bar_controls_hold_their_size.rs` →
+- [x] T027 [US2] Geometry gates: rename `client/tests/gates/bar_controls_hold_their_size.rs` →
   `strip_controls_hold_their_size.rs` (every member and fixed control at its requested width);
   retire `client/tests/gates/tabs_anchor_the_trailing_edge.rs` for
   `client/tests/gates/strip_controls_anchor_the_trailing_edge.rs` (New session and the split buttons
@@ -205,11 +205,11 @@ the strip; no bar under the terminal (quickstart B1–B5, B9, B10).
   `session-area-twelve-tabs` and the `EdgeFade` → `Scrollable` → keyed-row path (no padding
   container), its member count read from `covered_states.rs`, "+" included, doc comment naming the
   strip (R14); register the new files in `client/tests/layout_snapshot.rs`
-- [ ] T028 [US2] Extend `client/tests/gates/session_area_fits.rs`: with 1, 6 and 12 members at both
+- [x] T028 [US2] Extend `client/tests/gates/session_area_fits.rs`: with 1, 6 and 12 members at both
   sizes and both themes, no strip element overlaps another or leaves the window, New session and
   the split buttons whole (S9, SC-004), and nothing is laid out below the pane area inside the session area (A1, SC-005); with two panes, the header and the strip are each laid out
   once, above the pane area, and each pane keeps its own header (A2)
-- [ ] T029 [US2] Covered states in `client/tests/support/covered_states.rs`:
+- [x] T029 [US2] Covered states in `client/tests/support/covered_states.rs`:
   `session-terminal-bottom-bar` → `session-area-one-tab`, `session-terminal-instance-tabs` →
   `session-area-six-tabs`, `session-terminal-instance-tabs-overflowing` →
   `session-area-twelve-tabs` (member counts 1, 6, 12, session and shell tabs together); anchors
@@ -218,19 +218,19 @@ the strip; no bar under the terminal (quickstart B1–B5, B9, B10).
 
 ### Implementation for User Story 2
 
-- [ ] T030 [P] [US2] `SESSION_LABEL_WIDTH = LABEL_MAX_WIDTH` and `SESSION_WIDTH = SLOT_WIDTH + XS +
+- [x] T030 [P] [US2] `SESSION_LABEL_WIDTH = LABEL_MAX_WIDTH` and `SESSION_WIDTH = SLOT_WIDTH + XS +
   SESSION_LABEL_WIDTH + XS + SLOT_WIDTH` in `client/src/ui/material/tab.rs`, with a test beside
   `WIDTH`'s that it is derived, not literal (R8)
-- [ ] T031 [P] [US2] `new_terminal_chord_label()` in `client/src/keymap.rs` as
+- [x] T031 [P] [US2] `new_terminal_chord_label()` in `client/src/keymap.rs` as
   `overview_chord_label`, with a test for both platform words (R13)
-- [ ] T032 [US2] `StripModel::of`, `Member` (`Session { id, label, tooltip, shown, marked, stopped
+- [x] T032 [US2] `StripModel::of`, `Member` (`Session { id, label, tooltip, shown, marked, stopped
   }`, `Shell { session, instance, label, marked, stopped }`, `Plus`), `MemberKey` and
   `member_offsets` in `client/src/features/session_strip.rs` (data-model *StripModel*): sessions in
   `navigation::location_node(..).unfolded_sessions()` order, the shown session's shells in creation
   order and `Plus` right after its tab; label `<command> · <session name>`
   (`session::command_caption`, `session_strip::session_title`), tooltip label + role (main or helper) +
   status; `strip_overflow`/`scroll_into_view` read `member_offsets`; T021–T023 pass
-- [ ] T033 [US2] `session_area::strip(state, &model)` in `client/src/ui/session_area.rs` (S7):
+- [x] T033 [US2] `session_area::strip(state, &model)` in `client/src/ui/session_area.rs` (S7):
   `row![EdgeFade(Scrollable(Keyed::row(members)).id(TAB_STRIP_SCROLL_ID)) Fill, status_cluster,
   new_session, split_buttons]`, child list fixed; session tabs `Tab::new` at `SESSION_WIDTH` with the
   stopped mark leading and an empty reserved trailing slot; shell tabs as today; "+" with the
@@ -239,21 +239,21 @@ the strip; no bar under the terminal (quickstart B1–B5, B9, B10).
   session…*) sending `Session(AdditionalRequested(location))`; `panes::split_buttons` of the focused
   pane; indicator edge `Bottom`; the right-click menu per S5 through `strip_tab_menu_items`; marked
   edge cue per feature 027 FR-002e; T022, T024, T026 pass
-- [ ] T034 [US2] `session_area::view` draws header, strip, then `terminal::pane` (A1, A2); remove the
+- [x] T034 [US2] `session_area::view` draws header, strip, then `terminal::pane` (A1, A2); remove the
   bottom bar from `client/src/ui/terminal.rs::pane` together with `tab_strip_row`, `pinned_ai_tab`,
   `right_aligned_tabs`, `leading_slack` and `natural_strip_width` and their tests; `ui/panes.rs::header`
   unchanged; T025, T027–T029 pass
-- [ ] T035 [P] [US2] Show the strip's session tab (shown, other, stopped) in
+- [x] T035 [P] [US2] Show the strip's session tab (shown, other, stopped) in
   `client/src/showcase/sections/terminal.rs` (`tests/showcase_completeness.rs`)
-- [ ] T036 [US2] Regenerate `client/tests/fixtures/layout_snapshot.txt` and check its diff changes only
+- [x] T036 [US2] Regenerate `client/tests/fixtures/layout_snapshot.txt` and check its diff changes only
   the session-area states; `docs/development/layout-snapshot.md` *What is covered* lists
   `session-area-one-tab`, `-six-tabs`, `-twelve-tabs` and drops the bar's states
-- [ ] T037 [P] [US2] User guide: `docs/user-guide/terminal-panes.md` *Split and pick a terminal*
+- [x] T037 [P] [US2] User guide: `docs/user-guide/terminal-panes.md` *Split and pick a terminal*
   describes the strip above the terminal (session tabs, the shown session's shell tabs and "+", New
   session with its confirmation, status and restart, splits at the right, scrolling with a faded
   edge) and no bar under the terminal; any other page that names the bar under the terminal
   (`grep -rn "bar under\|bottom bar" docs/user-guide`) is corrected
-- [ ] T038 [US2] Visual pass B1–B5, B9, B10, B12 (quickstart Part B), appended to
+- [x] T038 [US2] Visual pass B1–B5, B9, B10, B12 (quickstart Part B), appended to
   `specs/1126-session-context-header/visual-pass.md`
 
 **Checkpoint**: header and strip above the panes; nothing under them.
@@ -268,19 +268,19 @@ whose change it guards.
 **Independent test**: every chord of `terminal-panes.md#keyboard-shortcuts` with the terminal
 focused; presses on header and strip controls leave focus as the bar did (quickstart B11).
 
-- [ ] T039 [P] [US4] Guard test (passes on arrival: it pins the bar's outcome and must stay green
+- [x] T039 [P] [US4] Guard test (passes on arrival: it pins the bar's outcome and must stay green
   through T033–T034; written before T034) in `client/tests/terminal_focus.rs`: with the terminal focused, pressing a
   strip member, "+", a split button or restart leaves focus where the same bar control left it
   (US4 scenario 2); pressing New session leaves focus to its confirmation as the sidebar action does
-- [ ] T040 [P] [US4] Test, written before T033 and seen failing against a positional row, in `client/tests/terminal_focus.rs` (or `session_area_stability.rs`): a
+- [x] T040 [P] [US4] Test, written before T033 and seen failing against a positional row, in `client/tests/terminal_focus.rs` (or `session_area_stability.rs`): a
   press in flight on a strip member is delivered to that member while a process stops, a chip
   appears or a shell instance opens before it (US4 scenario 3, FR-011)
-- [ ] T041 [US4] Keep `client/tests/keyboard.rs`, `client/tests/navigation.rs` and the lib's
+- [x] T041 [US4] Keep `client/tests/keyboard.rs`, `client/tests/navigation.rs` and the lib's
   `ui::app_chord_tests` green with no assertion changed (FR-012, SC-002); any edit there is a
   behaviour change and goes back to the spec. CI runs these and the geometry gates on Linux, macOS
   and Windows, which is SC-002's and SC-004's per-platform check; the visual pass is Linux only and
   says so
-- [ ] T042 [US4] Visual pass B11 (every chord), appended to
+- [x] T042 [US4] Visual pass B11 (every chord), appended to
   `specs/1126-session-context-header/visual-pass.md`
 
 **Checkpoint**: US1, US2 and US4 complete.

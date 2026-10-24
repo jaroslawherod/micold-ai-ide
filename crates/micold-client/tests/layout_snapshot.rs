@@ -87,18 +87,18 @@ mod tab_children_fit;
 #[path = "gates/rail_icons_align.rs"]
 mod rail_icons_align;
 
-/// Feature 026's FR-002c, one level out from `tab_children_fit`: the bar's own controls must not be
-/// shrunk by a strip that grew. A second gate rather than a widened first one because the bar's
-/// children are not tabs and are not recognised by that gate's structural rule.
-#[path = "gates/bar_controls_hold_their_size.rs"]
-mod bar_controls_hold_their_size;
+/// Feature 026's FR-002c, one level out from `tab_children_fit`, carried to the strip above the panes
+/// (feature 1126, S9): every member and fixed control of the strip is laid out at the width it asked
+/// for, at every member count.
+#[path = "gates/strip_controls_hold_their_size.rs"]
+mod strip_controls_hold_their_size;
 
-/// Feature 027's FR-002/FR-003, beside the gate above rather than inside it: that one asks whether
-/// a bar control kept its **size**, this one whether it kept its **place**. Deleting the mode
-/// toggle made the arrangement itself the requirement — tabs, then "+", then the AI tab, all
-/// against the trailing edge — and an arrangement is a fact about coordinates.
-#[path = "gates/tabs_anchor_the_trailing_edge.rs"]
-mod tabs_anchor_the_trailing_edge;
+/// Feature 1126's FR-008, beside the gate above: that one asks whether a strip control kept its
+/// **size**, this one whether it kept its **place** — New session and the split buttons are the
+/// strip's last children, in order, against its trailing padding. It replaced feature 027's
+/// `tabs_anchor_the_trailing_edge`, whose trailing-anchored tabs FR-008 superseded.
+#[path = "gates/strip_controls_anchor_the_trailing_edge.rs"]
+mod strip_controls_anchor_the_trailing_edge;
 
 /// Feature 029's FR-006, and the only gate here that asserts geometry did **not** change. The
 /// refresh control's busy form withholds a press and swaps a tooltip, neither of which is layout —
