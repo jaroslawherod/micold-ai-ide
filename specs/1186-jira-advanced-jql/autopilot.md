@@ -55,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | 50939e7590e958b50053133db00b8fe7f26e966b:5510e0471524f4d4a847f1d9f80dc643b9b99499 | CLEAN (1 MINOR kept: HTTP 400 in FR-010 is the observable rule round 1 asked for) |
 | M1 review A (high) | 1 | 9f945fcd9f9ecead6d6fc3aed002bbdf583fd556:d74375825a41dbcd2302e960f7693f17d1438490 | CLEAN (1 MINOR fixed: an `ORDER BY` inside parentheses split a group; sort clause now only at depth 0, contract §2 updated, test added) |
 | M1 review B (sonnet) | 1 | 9f945fcd9f9ecead6d6fc3aed002bbdf583fd556:d74375825a41dbcd2302e960f7693f17d1438490 | CLEAN (same MINOR as A, fixed); Verify: jira_query 25, jira_load 8, jira_http_adapter 18 passed |
+| M2 review A (high) | 1 | e62354d4a4924fa030171958c744b15b81a486ae:5cdbf8a3e887c5d7851318adbee7eba5b87b7f7c | CLEAN (2 MINOR fixed: `IssueRetry` no longer loads a failed basic list while advanced mode shows; a pick's title is looked up in both lists, so the default prompt keeps it across a switch; tests added) |
+| M2 review B (sonnet) | 1 | e62354d4a4924fa030171958c744b15b81a486ae:5cdbf8a3e887c5d7851318adbee7eba5b87b7f7c | CLEAN; Verify: bin 709, jira_query_state 18, issue_source_state 49, jira_source_state 20, issues_are_requested… 3, jira_is_requested… 6 passed |
 
 ## Declined review findings
 

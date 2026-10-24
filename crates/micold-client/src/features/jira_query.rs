@@ -266,6 +266,16 @@ impl WorktreeForm {
         }
     }
 
+    /// Every issue the form holds, basic and advanced, whichever list shows: what a pick made
+    /// earlier is looked up in, so switching the mode does not lose its title (feature 1186).
+    pub(crate) fn held_issues(&self) -> impl Iterator<Item = &Issue> {
+        let advanced = match &self.jira_query.run {
+            QueryRun::Loaded { listing, .. } => listing.issues.as_slice(),
+            _ => &[],
+        };
+        self.issues.held().into_iter().chain(advanced)
+    }
+
     /// The advanced results shown in place of the basic list; `None` in basic mode, and while no
     /// query has run since the switch, when the basic list stays (US1 AS1).
     pub(crate) fn advanced_results(&self) -> Option<&[Issue]> {

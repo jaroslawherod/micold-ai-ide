@@ -37,6 +37,10 @@ fn form(state: &State) -> &WorktreeForm {
     state.worktree_form.form.as_ref().expect("the form is open")
 }
 
+fn form_mut(state: &mut State) -> &mut WorktreeForm {
+    state.worktree_form.form.as_mut().expect("the form is open")
+}
+
 fn jq(state: &State) -> &JiraQuery {
     &form(state).jira_query
 }
@@ -604,6 +608,50 @@ fn no_basic_load_is_awaited_while_advanced_mode_shows() {
     assert_eq!(state.worktree_form.awaited_issue_load(), None);
     send(&mut state, Msg::IssueRetry);
     assert_eq!(state.worktree_form.awaited_issue_load(), None);
+}
+
+#[test]
+fn retry_of_a_failed_basic_list_loads_nothing_while_advanced_mode_shows() {
+    let mut state = jira_form();
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    let seq = awaited_load(&state);
+    send(
+        &mut state,
+        Msg::IssuesLoaded {
+            seq,
+            result: Err(IssueLoadError::CredentialsRefused),
+            resolved_env: None,
+        },
+    );
+    query(&mut state, QueryMsg::ModeChanged(QueryMode::Advanced));
+    send(&mut state, Msg::IssueRetry);
+    assert_eq!(state.worktree_form.awaited_issue_load(), None);
+    query(&mut state, QueryMsg::ModeChanged(QueryMode::Basic));
+    send(&mut state, Msg::IssueRetry);
+    assert!(
+        state.worktree_form.awaited_issue_load().is_some(),
+        "basic retries"
+    );
+}
+
+#[test]
+fn an_advanced_pick_keeps_its_title_in_the_prompt_after_a_switch_to_basic() {
+    let mut state = advanced_loaded(
+        "type = Task",
+        vec![issue("ABC-500", 500, "Only in advanced", &[], "Task")],
+    );
+    form_mut(&mut state).default_prompt_template = "{issue_title}".into();
+    send(
+        &mut state,
+        Msg::IssuePicked {
+            number: 500,
+            mapping: default_mapping(),
+        },
+    );
+    assert_eq!(form(&state).first_prompt, "Only in advanced");
+    query(&mut state, QueryMsg::ModeChanged(QueryMode::Basic));
+    send(&mut state, Msg::NameChanged("renamed".into()));
+    assert_eq!(form(&state).first_prompt, "Only in advanced");
 }
 
 // ---- FR-015: the notice names the query ----
