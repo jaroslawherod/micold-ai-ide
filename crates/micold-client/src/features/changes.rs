@@ -4122,7 +4122,7 @@ mod tests {
 
     /// T044, US3 scenario 4 (#1342): the last finished read's figure stays while a read repeats.
     #[test]
-    fn the_counts_are_unknown_unless_a_read_finished() {
+    fn the_last_finished_figure_is_shown_while_rereading() {
         let header = |load| HeaderCounts {
             load,
             ..HeaderCounts::default()
