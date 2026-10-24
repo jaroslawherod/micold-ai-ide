@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M5 pr
-- **Next step**: the orchestrator rebases m4-local after M3 and M4 merge, runs the full gate, pushes and opens the M4 and M5 PRs from scratchpad m4-pr-*.md / m5-pr-*.md; then the close unit runs T039 (visual pass)
+- **Phase**: done
+- **Next step**: handoff — the orchestrator merges M3 (#1333), opens and merges the M4 and M5 PRs, fills the #TBD-M4 / #TBD-M5 / #TBD-close placeholders (spec Status, this ledger), runs the full gate and opens the close PR from scratchpad close-pr-title.md / close-pr-body.md
 
 ## Pull requests
 
@@ -20,6 +20,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1327 | M1 | merged (rebase) | afef53af8836a80b7a4ae575f0dbb2c75dee077e |
 | #1330 | M2 | merged (rebase) | a54f93313fec84e8501d455a4ae17ea40daca185 |
 | #1333 | M3 | open | (orchestrator fixes the merge SHA) |
+| #TBD-M4 | M4 | to open (m4-local) | |
+| #TBD-M5 | M5 | to open (m4-local) | |
+| #TBD-close | close (T039, TDD audit, spec Closed) | to open (m4-local; commits c239782c, 7eb68151, 02a382cb and the ledger commit) | |
 
 ## Milestones
 
@@ -63,6 +66,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M5 (conformance, `claude -p` reviewer) | 1 | 48862f0d7e7c9205917a5eec3ee4fdd5d7d052d5:9b28cbddeb6440fde7288f705cd53b6ab5d45577 | CHANGES: 1 MAJOR (T033–T038 unticked; ticked), 1 MINOR (cycle-log wording; fixed) |
 | A M4 (code-review high, `claude -p` reviewer) | 1 | 7749633dda9668555742afd106cf354a3d225446:c6d03bc1ef8b3c15779ea453f9bc85b3e0392634 | CLEAN |
 | B M4 (conformance, `claude -p` reviewer) | 1 | 7749633dda9668555742afd106cf354a3d225446:c6d03bc1ef8b3c15779ea453f9bc85b3e0392634 | CHANGES: 1 MAJOR (no M4 section in tdd/cycle-log.md; added, prose only), 1 MINOR (`session_view_visible` repeats checks of earlier arms; kept on purpose, so view_with and the bar share one predicate) |
+| Close (tests and docs, `claude -p` reviewer) | 1 | 5d239e9cf081b8ad0bcb71456330efccbe26a828:02a382cb5f3c706612b81087fb1ef58950aaef14 | CHANGES: 1 MAJOR (verification.md counts 34/20 vs a 36-row table; fixed), 2 MINOR (not_applicable breakdown; M5 drop-order row PROVEN on a mutant — both fixed) |
+| Close (scoped, sonnet) | 2 | 923964efb4c2145cbd02c963d7089d65719b24e7:85eb1c25695adcfee5c12573aee7ea31fa862f31 | CLEAN |
+| Close TDD smell pass (`claude -p` reviewer) | 1 | — (read-only, on 3e610f5a's test diff) | 10 findings: S1 HIGH, S5, S7, S8, S9 (part), S10 fixed; S2, S3, S4, S6 declined (see below) |
 
 ## Declined review findings
 
@@ -73,6 +79,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| close | TDD smell pass | S3 (MED) seven-conditions test checks source text, not pairing | banners are private elements; `overview::the_connection_banner_has_height_only_for_an_action_condition` measures a real banner; arms unchanged by 1124 (as A M3) |
+| close | TDD smell pass | S4 (MED) tooltip expectations read the shared helpers | FR-006 makes the banner's words the tooltip, so the tests pin the one source; the switcher key label is keyboard-layout dependent; MU5/MU8/MU10 caught |
+| close | TDD smell pass | S6 (MED) focus test counts the bar alone | the claim is about the bar's own widgets; its mount is pinned by the snapshot |
+| close | TDD smell pass | S2 (reported HIGH) composer_fits floor dropped | a floor relative to the pane's idle transcript, not a weakening; D6; the 941 T055 mutant still fails |
+
+## Close
+
+Close unit done on m4-local (commits c239782c, 7eb68151, 02a382cb, 85eb1c25 and the ledger commit): T039 visual pass (`visual/t039-*`), TDD audit PASS_WITH_GAPS (16/16 mutants caught), remediation T040–T044, spec Closed with #TBD placeholders. Checks at 85eb1c25: fmt, clippy `-D warnings`, micold-client all targets green, micold-core green but the 4 uid-0 permission tests. PR title/body in the session scratchpad `close-pr-title.md` / `close-pr-body.md`.
 
 ## Handover
 
@@ -86,5 +100,8 @@ None.
 
 - Pre-existing (#941): the composer's caps are fixed, so a crowded composer (~520 px at its limits) overflows the pane at the 640×480 minimum window. Caps that follow the window's height would fix it; out of 1124's scope (D6).
 - M1 visual §B7: at 640 px the M1 bar's texts fit whole, so the client never showed "…"; the shortening is covered by the showcase's too-narrow instance and `status_bar_fits`. Re-checked in M5: `status_bar_fits` holds CLI item, hints and usage against the longest texts at 640 px (hints and usage drop first, nothing overflows); the client's own texts still fit whole there, so "…" shows only in the gate's long-text state.
+- Close: M4's scoped checks ran only its Verify tests, so `feature_registration_cost::only_the_root_drives_a_feature` went red on m4-local unnoticed (fixed in c239782c). A light-tier milestone's scoped checks should include the client's architecture gates.
+- Close visual pass: under `ICED_BACKEND=tiny-skia` the quick switcher's surface renders black behind its field (`visual/t039-7`). Not this feature; worth a look on the tiny-skia backend.
+- Close visual pass: §B3 (two CLIs), §B4 live bring-up (no container runtime), §B6 (second window) and plan usage were not reachable live; covered by tests (quickstart Results).
 
 Notes: speckit-analyze (sonnet) 0 CRITICAL/HIGH; its MEDIUM/LOW findings fixed in tasks.md, plan.md (state count), quickstart.md, spec.md (US3 wording). Optional after_tasks hooks (tdd.plan, docguard.score) skipped. Checklist requirements.md: last item ticked (markers resolved in clarify).
