@@ -2034,7 +2034,7 @@ mod issue_link {
         let mut state = linked_project();
         set_base(&mut state, &project_path(), "https://example.atlassian.net");
         let link = link_of(&state, &wt(JIRA)).expect("the card has its Jira link");
-        assert_eq!(link.label, "Issue MIC-87");
+        assert_eq!(link.label, "MIC-87");
         assert_eq!(link.address, "https://example.atlassian.net/browse/MIC-87");
         assert_eq!(issue_link_for(&state, &wt(JIRA)), Some(link));
     }

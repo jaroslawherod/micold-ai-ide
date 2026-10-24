@@ -312,7 +312,7 @@ D1–D19; D20–D23 are follow-ups). Requirements FR-021–FR-028, SC-006. Drawi
 ripple, menu, focus-order, link hit-area and expansion test unchanged and green. Issue #1299 (card
 focus animation) works on the same file in parallel, so stay out of the focus-ring code.
 
-- [ ] T050 [US1] Regression tests first, red on `origin/main`, in the tests of `crates/micold-client/src/ui/material/overview_card.rs`, built with the design's data (`bugs/BUG-1298/render_probe.rs` has every model):
+- [X] T050 [US1] Regression tests first, red on `origin/main`, in the tests of `crates/micold-client/src/ui/material/overview_card.rs`, built with the design's data (`bugs/BUG-1298/render_probe.rs` has every model):
   - (a) a pixel probe finds a 1 px `outline_variant` edge at the card's left, right and bottom, and the body fill is `surface`, in both schemes (FR-021);
   - (b) the header words paint at 13 px, there is no type glyph, and the header is 8 px / 14 px padded (FR-022);
   - (c) the issue link, the short branch (monospace, 13 px) and the sessions phrase paint on one line in that order at 243 px (FR-023);
@@ -322,7 +322,7 @@ focus animation) works on the same file in parallel, so stay out of the focus-ri
   - (g) the body's first line starts 12 px under the header, 14 px from the left (FR-027).
 
   Record each red in `tdd/cycle-log.md`. Done when the new tests fail on main for the stated reason and the old tests still pass.
-- [ ] T051 [P] [US2] Core text in `crates/micold-core/src/overview_text.rs`, with unit tests. Each new text is a `CardText` field; the old `sessions` and `prs` fields go only where no caller is left (list them with LSP `findReferences` first):
+- [X] T051 [P] [US2] Core text in `crates/micold-core/src/overview_text.rs`, with unit tests. Each new text is a `CardText` field; the old `sessions` and `prs` fields go only where no caller is left (list them with LSP `findReferences` first):
   - `meta_sessions((total, running), first: bool)` gives FR-023's phrases;
   - `progress_row` gives FR-025's caption ("PR phase", " tasks"), leaving `Phase::label` alone;
   - `CardText` drops `prs` when the model lists pull requests (FR-026);

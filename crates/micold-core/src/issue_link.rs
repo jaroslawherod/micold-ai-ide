@@ -33,7 +33,7 @@ pub struct IssueSources<'a> {
 /// An issue link: the text the card shows and the address the browser is asked to open.
 #[derive(Clone, PartialEq, Eq)]
 pub struct IssueLink {
-    /// "Issue #N" or "Issue KEY" (FR-002).
+    /// "Issue #N", or a Jira ticket's bare key "KEY" (FR-002, BUG-1298 FR-024).
     pub label: String,
     /// The issue's page (FR-004). Never logged.
     pub address: String,
@@ -87,7 +87,8 @@ pub fn issue_link(dir_name: &str, sources: &IssueSources<'_>) -> Option<IssueLin
             let base = sources.jira_base.filter(|_| sources.jira_on)?;
             Some(IssueLink {
                 address: format!("{}/browse/{key}", base.as_str()),
-                label: format!("Issue {key}"),
+                // The bare key (BUG-1298 FR-024): "MIC-87" reads as a ticket on its own.
+                label: key.to_string(),
             })
         }
     }
@@ -211,7 +212,7 @@ mod tests {
         assert_eq!(
             issue_link("feat-mic-87_add-login", &sources),
             Some(IssueLink {
-                label: "Issue MIC-87".into(),
+                label: "MIC-87".into(),
                 address: "https://example.atlassian.net/browse/MIC-87".into(),
             })
         );

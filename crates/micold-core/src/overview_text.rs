@@ -1,5 +1,5 @@
-//! What an Overview card says (feature 1120, research R1): its title, short branch, sessions line,
-//! progress row and activity line, derived from a [`CardModel`]. The card widget only places these
+//! What an Overview card says (feature 1120, research R1): its title, short branch, sessions phrase,
+//! progress caption and activity line, derived from a [`CardModel`]. The card widget only places these
 //! words; every rule with a branch in it lives here so it is tested without the GUI (FR-018).
 //!
 //! Pure: no I/O and no logging. The activity line carries a user's prompt text, so nothing here may
@@ -24,11 +24,12 @@ pub struct CardText {
     /// The short branch, unless the title is the branch (FR-007). The full branch is on the
     /// expanded card (feature 1121, FR-004), so the collapsed one has no tooltip.
     pub branch: Option<String>,
-    /// *No sessions*, *1 session · 1 running* (FR-008).
+    /// The meta line's sessions phrase, *· 1 session running* ([`meta_sessions`], FR-023).
     pub sessions: String,
     /// The progress row, when there is a phase or a ratio (FR-009).
     pub progress: Option<ProgressRow>,
-    /// The pull request row and, for the unknown mark, its tooltip (FR-010).
+    /// The counts line and, for the unknown mark, its tooltip (FR-010); `None` while the card
+    /// lists pull requests as rows (BUG-1298 FR-026).
     pub prs: Option<(String, Option<String>)>,
     /// What the agent is doing now, when its hooks report (FR-011).
     pub activity: Option<String>,
@@ -72,26 +73,43 @@ pub fn branch_line(title: &str, branch: Option<&str>) -> Option<String> {
     Some(short_branch(branch).unwrap_or_else(|| branch.to_string()))
 }
 
-/// The sessions line (C7, FR-008): *No sessions*, *1 session*, *n sessions*, then *· k running*
-/// when some run. `running` is clamped to `total` for display; no cap.
-pub fn sessions_line((total, running): (u32, u32)) -> String {
+/// The meta line's sessions phrase (C7, FR-008, BUG-1298 FR-023): *no sessions*, *1 session*,
+/// *n sessions*, then *running* when all run or *, k running* when some do. `running` is clamped
+/// to `total` for display; no cap. After the branch or the link it follows "· "; `first`, with
+/// nothing before it on the line, it stands alone and starts with a capital.
+pub fn meta_sessions((total, running): (u32, u32), first: bool) -> String {
     let sessions = match total {
-        0 => return "No sessions".to_string(),
+        0 => "no sessions".to_string(),
         1 => "1 session".to_string(),
         n => format!("{n} sessions"),
     };
-    match running.min(total) {
+    let phrase = match running.min(total) {
         0 => sessions,
-        k => format!("{sessions} \u{b7} {k} running"),
+        k if k == total => format!("{sessions} running"),
+        k => format!("{sessions}, {k} running"),
+    };
+    if !first {
+        return format!("\u{b7} {phrase}");
     }
+    let mut chars = phrase.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
-/// The progress row, `None` with neither a phase nor a ratio; a bar only with a ratio (C8, FR-009).
+/// The progress caption, `None` with neither a phase nor a ratio; a bar only with a ratio (C8,
+/// FR-009, BUG-1298 FR-025): *Phase · done/total tasks*, *done/total tasks* or the phase alone, the
+/// PR phase reading *PR phase*.
 pub fn progress_row(progress: &crate::task_progress::Progress) -> Option<ProgressRow> {
-    let text = match (progress.phase, progress.ratio) {
-        (Some(phase), Some(r)) => format!("{} \u{b7} {}/{}", phase.label(), r.done, r.total),
-        (None, Some(r)) => format!("{}/{}", r.done, r.total),
-        (Some(phase), None) => phase.label().to_string(),
+    let phase = progress.phase.map(|phase| match phase {
+        crate::task_progress::Phase::Pr => "PR phase",
+        phase => phase.label(),
+    });
+    let text = match (phase, progress.ratio) {
+        (Some(phase), Some(r)) => format!("{phase} \u{b7} {}/{} tasks", r.done, r.total),
+        (None, Some(r)) => format!("{}/{} tasks", r.done, r.total),
+        (Some(phase), None) => phase.to_string(),
         (None, None) => return None,
     };
     Some(ProgressRow {
@@ -190,12 +208,18 @@ impl ExpandedText {
 impl CardText {
     /// What `model`'s card says, each field from its rule (data-model *CardText*).
     pub fn of(model: &crate::overview::CardModel) -> Self {
+        let branch = branch_line(&model.title, model.branch.as_deref());
+        let first = branch.is_none() && model.issue_link.is_none();
+        let rows = model
+            .pull_requests
+            .as_ref()
+            .is_some_and(|list| !list.prs().is_empty());
         Self {
-            branch: branch_line(&model.title, model.branch.as_deref()),
+            branch,
             title: model.title.clone(),
-            sessions: sessions_line(model.sessions),
+            sessions: meta_sessions(model.sessions, first),
             progress: progress_row(&model.progress),
-            prs: model.prs.footer(),
+            prs: model.prs.footer().filter(|_| !rows),
             activity: activity_line(model.activity.as_ref()),
         }
     }
@@ -318,20 +342,30 @@ mod tests {
         );
     }
 
-    /// C7, US2.5: singular for one, the running count only when some run, clamped to the total.
+    /// C7, US2.5, FR-023 (BUG-1298): the meta line's sessions phrase, after "· " when something
+    /// precedes it on the line and capitalised alone: singular for one, the running count only
+    /// when some run, clamped to the total, "running" alone when every session runs.
     #[test]
-    fn the_sessions_line_counts_sessions_and_the_running_ones() {
-        for (counts, line) in [
-            ((0, 0), "No sessions"),
-            ((1, 1), "1 session \u{b7} 1 running"),
+    fn the_meta_sessions_phrase_counts_sessions_and_the_running_ones() {
+        for (counts, phrase) in [
+            ((0, 0), "no sessions"),
+            ((1, 1), "1 session running"),
             ((1, 0), "1 session"),
             ((2, 0), "2 sessions"),
-            ((3, 2), "3 sessions \u{b7} 2 running"),
-            ((120, 101), "120 sessions \u{b7} 101 running"),
-            ((2, 5), "2 sessions \u{b7} 2 running"),
+            ((2, 1), "2 sessions, 1 running"),
+            ((3, 2), "3 sessions, 2 running"),
+            ((3, 3), "3 sessions running"),
+            ((120, 101), "120 sessions, 101 running"),
+            ((2, 5), "2 sessions running"),
         ] {
-            assert_eq!(sessions_line(counts), line, "{counts:?}");
+            assert_eq!(
+                meta_sessions(counts, false),
+                format!("\u{b7} {phrase}"),
+                "{counts:?}"
+            );
         }
+        assert_eq!(meta_sessions((0, 0), true), "No sessions");
+        assert_eq!(meta_sessions((1, 1), true), "1 session running");
     }
 
     /// C8, US2.6: no row with neither a phase nor a ratio; a bar only with a ratio.
@@ -345,7 +379,7 @@ mod tests {
         assert_eq!(
             progress_row(&progress(Some(Phase::Implement), Some(ratio(6, 10)))),
             Some(ProgressRow {
-                text: "Implement \u{b7} 6/10".into(),
+                text: "Implement \u{b7} 6/10 tasks".into(),
                 bar: Some(ratio(6, 10)),
             }),
             "C8: phase and ratio show text and bar"
@@ -353,7 +387,7 @@ mod tests {
         assert_eq!(
             progress_row(&progress(None, Some(ratio(6, 10)))),
             Some(ProgressRow {
-                text: "6/10".into(),
+                text: "6/10 tasks".into(),
                 bar: Some(ratio(6, 10)),
             }),
             "C8: a ratio alone shows the ratio and a bar"
@@ -365,6 +399,15 @@ mod tests {
                 bar: None,
             }),
             "a phase alone draws no bar"
+        );
+        assert_eq!(
+            progress_row(&progress(Some(Phase::Pr), Some(ratio(21, 25)))).map(|row| row.text),
+            Some("PR phase \u{b7} 21/25 tasks".into()),
+            "FR-025: the PR phase reads \"PR phase\""
+        );
+        assert_eq!(
+            progress_row(&progress(Some(Phase::Pr), None)).map(|row| row.text),
+            Some("PR phase".into())
         );
     }
 
@@ -486,13 +529,52 @@ mod tests {
             CardText {
                 title: ISSUE_TITLE.into(),
                 branch: Some("feat/1120".into()),
-                sessions: "1 session \u{b7} 1 running".into(),
+                sessions: "\u{b7} 1 session running".into(),
                 progress: None,
                 prs: Some(("1 open".into(), None)),
                 activity: Some("Writing tests".into()),
             },
             "CardText: each field comes from its rule"
         );
+    }
+
+    /// FR-023: with neither a branch nor an issue link before it, the phrase starts the line.
+    #[test]
+    fn the_sessions_phrase_starts_a_line_with_nothing_before_it() {
+        let mut m = model();
+        m.branch = None;
+        m.title = "x".into();
+        assert_eq!(CardText::of(&m).sessions, "1 session running");
+        m.issue_link = Some(crate::issue_link::IssueLink {
+            label: "Issue #1".into(),
+            address: "https://example.invalid".into(),
+        });
+        assert_eq!(CardText::of(&m).sessions, "\u{b7} 1 session running");
+    }
+
+    /// FR-026 (BUG-1298): a card whose model lists pull requests draws them as rows, so it has
+    /// no counts line; the unknown dash stays while it lists none.
+    #[test]
+    fn a_card_listing_pull_requests_has_no_counts_line() {
+        use crate::pr_list::{BranchPrList, ListedPr};
+        use crate::pull_request::{BranchPrState, CheckStatus, ReviewState};
+        let mut m = model();
+        m.pull_requests = Some(BranchPrList::new(
+            vec![ListedPr {
+                number: 7,
+                url: "https://example.invalid/7".into(),
+                state: BranchPrState::Open,
+                checks: CheckStatus::None,
+                review: ReviewState::None,
+                conflict: false,
+                created_at: "2026-10-24T00:00:00Z".into(),
+            }],
+            false,
+            false,
+        ));
+        assert_eq!(CardText::of(&m).prs, None);
+        m.pull_requests = Some(BranchPrList::new(Vec::new(), false, false));
+        assert_eq!(CardText::of(&m).prs, Some(("1 open".into(), None)));
     }
 
     /// K6 (FR-014, D2): a path inside the home folder starts with `~`, in the platform's

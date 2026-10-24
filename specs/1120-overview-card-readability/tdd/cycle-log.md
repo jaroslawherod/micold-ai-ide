@@ -92,3 +92,4 @@ tests added to `overview_card.rs`:
 | T050 (e) | A 6 px bar above the caption "Implement · 4/10 tasks" | `the_bar_lies_above_the_caption`: `no "Implement · 4/10 tasks"` (caption without "tasks", above a 4 px bar) | |
 | T050 (f) | No counts line under rows; "+1 more, hover to see" | `a_card_with_rows_has_no_counts_line`: `no counts line under rows: … "1 open · 1 merged" …` | |
 | T050 (g) | The title 12 px under the header, 14 px inside the edge, weight 600 | `the_body_starts_12_px_under_the_header_and_14_px_in`: left `Medium` right `Semibold` | |
+| T051 | `meta_sessions` phrases (· prefix, capital when first), "tasks"/"PR phase" caption, no counts while the model lists pull requests, the bare Jira key | `cargo test -p micold-core --lib -- overview_text issue_link`: `cannot find function meta_sessions`; the caption and Jira tests changed first | 32 passed; `cargo test -p micold-core --all-targets --no-fail-fast`: only the root-only tests fail as root |
