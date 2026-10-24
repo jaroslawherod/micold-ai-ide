@@ -67,6 +67,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 None: close review fixed, full gate green, close PR opened. The run ends when it merges.
 
+- Red CI on #1335 (`layout_snapshot`, `status-bar-bring-up`): main moved on (1126, up to 25de2370, regenerated the same fixture). Rebased onto origin/main; fixture taken from main and regenerated with `UPDATE_LAYOUT_SNAPSHOT=1` — identical to the rebased tree, differing from main only in the Reduce motion note width (2 states × 2 rows). `layout_snapshot` 106/106 green, full gate green (first run hit a timing flake in `micold-daemon --test attention_error_notice`, 5/5 green in isolation, untouched by this PR).
+
 ## Open escalation
 
 None.
