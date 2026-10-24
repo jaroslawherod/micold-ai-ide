@@ -16,11 +16,10 @@
 //! `StatusBar::new(roles).item(StatusItem::new("Sandbox ready")).hint(..).into()`.
 
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
 use iced::advanced::widget::{Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::widget::{container, row, Space};
-use iced::{alignment, Alignment, Background, Element, Event, Length, Pixels, Point};
+use iced::{Alignment, Background, Element, Event, Length, Point};
 use iced::{Rectangle, Size, Vector};
 use micold_core::tokens::anatomy::status_bar::HEIGHT;
 use micold_core::tokens::{spacing, Rgb, Roles};
@@ -314,19 +313,7 @@ fn plan(items: &[Widths], gap: f32, available: f32) -> Vec<Option<f32>> {
 
 /// How wide `content` shapes at the bar's text role.
 fn measure(content: &str) -> f32 {
-    <iced::Renderer as text::Renderer>::Paragraph::with_text(CoreText {
-        content,
-        bounds: Size::INFINITE,
-        size: Pixels(ROLE.size()),
-        line_height: text::LineHeight::default(),
-        font: ROLE.font(),
-        align_x: text::Alignment::Left,
-        align_y: alignment::Vertical::Top,
-        shaping: text::Shaping::Advanced,
-        wrapping: text::Wrapping::None,
-    })
-    .min_bounds()
-    .width
+    super::shaped_text::width_of(content, ROLE)
 }
 
 /// Whether a laid-out child was dropped: a zero-area node.

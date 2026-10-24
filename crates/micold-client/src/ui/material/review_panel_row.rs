@@ -7,6 +7,11 @@
 //!
 //! Builder form: `ReviewPanelRow::new("Lines 3–5", &text, Status::Draft, roles).reply(&reply)
 //! .selected(false).on_press(Msg::Jump(id)).on_edit(Msg::Edit(id)).on_delete(Msg::Delete(id))`.
+//!
+//! **Whole-reply mode** (feature 1270, contract D7) is the comments drawer's Replies row:
+//! `.whole_reply(&reply, shortened)` draws the reply whole and wrapped, so the row is as tall as it
+//! needs, with **Show all** under a reply shortened past 4,000 characters (`.on_show_reply`), and a
+//! Sent row offers **Mark applied** and **Answer…** (`.on_mark_applied`, `.on_answer`).
 
 use std::borrow::Cow;
 
@@ -16,9 +21,10 @@ use micold_core::review::comment::Status;
 use micold_core::tokens::{spacing, Rgb, Roles};
 
 use super::line_clamp::LineClamped;
+use super::review_comment::{show_all, ANSWER, MARK_APPLIED};
 use super::{style, Button, Tag, Text, TypeRole};
 
-/// Every row's height, whatever it shows.
+/// Every row's height, whatever it shows, outside whole-reply mode.
 pub const HEIGHT: f32 = 104.0;
 /// The tag of a row whose file the current diff does not list.
 pub const NOT_IN_DIFF: &str = "Not in the current diff";
@@ -36,6 +42,12 @@ pub struct Parts {
     pub selected: bool,
     /// The "Not in the current diff" tag.
     pub not_in_diff: bool,
+    /// The reply is drawn whole and wrapped, and the row is as tall as it needs (feature 1270).
+    pub whole_reply: bool,
+    /// "Show all" is drawn under the whole reply: it was shortened past 4,000 characters.
+    pub show_all: bool,
+    /// Mark applied and Answer…, on a Sent row.
+    pub mark_actions: bool,
 }
 
 /// One comment's row.
@@ -45,11 +57,16 @@ pub struct ReviewPanelRow<'a, M> {
     status: Status,
     roles: Roles,
     reply: Option<Cow<'a, str>>,
+    /// `Some(shortened)` in whole-reply mode.
+    whole: Option<bool>,
     selected: bool,
     not_in_diff: bool,
     on_press: Option<M>,
     on_edit: Option<M>,
     on_delete: Option<M>,
+    on_mark_applied: Option<M>,
+    on_answer: Option<M>,
+    on_show_reply: Option<M>,
 }
 
 /// The label of a status tag.
@@ -86,11 +103,15 @@ impl<'a, M: Clone + 'a> ReviewPanelRow<'a, M> {
             status,
             roles,
             reply: None,
+            whole: None,
             selected: false,
             not_in_diff: false,
             on_press: None,
             on_edit: None,
             on_delete: None,
+            on_mark_applied: None,
+            on_answer: None,
+            on_show_reply: None,
         }
     }
 
@@ -98,6 +119,14 @@ impl<'a, M: Clone + 'a> ReviewPanelRow<'a, M> {
     pub fn reply(mut self, reply: impl Into<Cow<'a, str>>) -> Self {
         let reply = reply.into();
         self.reply = (!reply.is_empty()).then_some(reply);
+        self
+    }
+
+    /// Whole-reply mode: draw `reply` (already made displayable) whole and wrapped, the row as
+    /// tall as it needs; `shortened` (cut past 4,000 characters) adds "Show all" (contract D7).
+    pub fn whole_reply(mut self, reply: impl Into<Cow<'a, str>>, shortened: bool) -> Self {
+        self = self.reply(reply);
+        self.whole = Some(shortened);
         self
     }
 
@@ -131,6 +160,24 @@ impl<'a, M: Clone + 'a> ReviewPanelRow<'a, M> {
         self
     }
 
+    /// The message **Mark applied** sends; shown only on a Sent row.
+    pub fn on_mark_applied(mut self, message: M) -> Self {
+        self.on_mark_applied = Some(message);
+        self
+    }
+
+    /// The message **Answer…** sends; shown only on a Sent row.
+    pub fn on_answer(mut self, message: M) -> Self {
+        self.on_answer = Some(message);
+        self
+    }
+
+    /// The message "Show all" sends; it is drawn only under a shortened whole reply.
+    pub fn on_show_reply(mut self, message: M) -> Self {
+        self.on_show_reply = Some(message);
+        self
+    }
+
     /// What the row shows besides its text.
     fn parts(&self) -> Parts {
         Parts {
@@ -140,6 +187,10 @@ impl<'a, M: Clone + 'a> ReviewPanelRow<'a, M> {
                 && (self.on_edit.is_some() || self.on_delete.is_some()),
             selected: self.selected,
             not_in_diff: self.not_in_diff,
+            whole_reply: self.whole.is_some(),
+            show_all: self.reply.is_some() && self.whole == Some(true),
+            mark_actions: self.status == Status::Sent
+                && (self.on_mark_applied.is_some() || self.on_answer.is_some()),
         }
     }
 }
@@ -166,25 +217,47 @@ impl<'a, M: Clone + 'a> From<ReviewPanelRow<'a, M>> for Element<'a, M> {
                 head = head.push(Button::text("Delete", r).on_press(message));
             }
         }
+        if parts.mark_actions {
+            if let Some(message) = row_.on_mark_applied {
+                head = head.push(Button::text(MARK_APPLIED, r).on_press(message));
+            }
+            if let Some(message) = row_.on_answer {
+                head = head.push(Button::text(ANSWER, r).on_press(message));
+            }
+        }
         let mut body = column![
             head,
             LineClamped::<M>::new(row_.text.into_owned(), TypeRole::Body, 1)
         ]
         .spacing(spacing::XS);
-        if let Some(reply) = row_.reply {
-            body = body.push(Element::from(
-                row![
-                    Text::new("Reply:", TypeRole::Caption, r).muted(),
-                    LineClamped::<M>::new(reply.into_owned(), TypeRole::Caption, 1),
-                ]
-                .spacing(spacing::XS),
-            ));
+        match (row_.reply, parts.whole_reply) {
+            (Some(reply), true) => {
+                body = body.push(Text::new(reply, TypeRole::Body, r).muted());
+                if parts.show_all {
+                    body = body.push(show_all(row_.on_show_reply, r));
+                }
+            }
+            (Some(reply), false) => {
+                body = body.push(Element::from(
+                    row![
+                        Text::new("Reply:", TypeRole::Caption, r).muted(),
+                        LineClamped::<M>::new(reply.into_owned(), TypeRole::Caption, 1),
+                    ]
+                    .spacing(spacing::XS),
+                ));
+            }
+            (None, _) => {}
         }
         let selected = parts.selected;
+        let height = if parts.whole_reply {
+            Length::Shrink
+        } else {
+            Length::Fixed(HEIGHT)
+        };
         let card = container(body)
             .padding(spacing::SM)
             .width(Length::Fill)
-            .height(Length::Fixed(HEIGHT))
+            .height(height)
             .style(move |_| container::Style {
                 background: selected
                     .then(|| iced::Background::Color(style::color(r.surface_container_highest))),
@@ -223,7 +296,7 @@ mod tests {
         ReviewPanelRow::new("Lines 3\u{2013}5", "rename this", status, LIGHT)
     }
 
-    fn height(element: Element<'_, ()>, width: f32) -> f32 {
+    fn height<M>(element: Element<'_, M>, width: f32) -> f32 {
         super::super::test_support::size_of(element, Size::new(width, 600.0)).height
     }
 
@@ -280,6 +353,73 @@ mod tests {
         assert!(row_of(Status::Sent).selected(true).parts().selected);
         assert!(!row_of(Status::Sent).parts().not_in_diff);
         assert!(row_of(Status::Sent).not_in_diff(true).parts().not_in_diff);
+    }
+
+    fn painted(row: ReviewPanelRow<'_, String>, width: f32) -> Vec<String> {
+        super::super::test_support::Mounted::new_in(row, Size::new(width, 2_000.0))
+            .painted_text()
+            .into_iter()
+            .map(|p| p.content)
+            .collect()
+    }
+
+    fn replied(status: Status, reply: &str, shortened: bool) -> ReviewPanelRow<'_, String> {
+        ReviewPanelRow::new("Lines 3\u{2013}5", "rename this", status, LIGHT)
+            .whole_reply(reply, shortened)
+            .on_show_reply("show".to_owned())
+    }
+
+    /// Feature 1270 T029 (contract D7): in whole-reply mode the reply is laid out whole and
+    /// wrapped, so the row grows with it.
+    #[test]
+    fn a_whole_reply_is_laid_out_whole_and_wrapped() {
+        let long = "The height is passed in now, so the layout is read once. ".repeat(12);
+        let shown = painted(replied(Status::Answered, &long, false), 360.0);
+        assert!(shown.contains(&long), "the whole reply: {shown:?}");
+        let wide = height(replied(Status::Answered, &long, false).into(), 900.0);
+        let narrow = height(replied(Status::Answered, &long, false).into(), 360.0);
+        assert!(narrow > HEIGHT, "grows past the fixed height: {narrow}");
+        assert!(narrow > wide, "wraps: {narrow} > {wide}");
+        assert!(replied(Status::Answered, "x", false).parts().whole_reply);
+        assert!(!row_of(Status::Answered).reply("x").parts().whole_reply);
+    }
+
+    /// Feature 1270 T029: Show all only under a reply shortened past 4,000 characters.
+    #[test]
+    fn show_all_only_under_a_shortened_reply() {
+        let short = painted(replied(Status::Answered, "not needed", false), 360.0);
+        assert!(!short.iter().any(|t| t == "Show all"), "{short:?}");
+        let cut = painted(replied(Status::Answered, "not needed", true), 360.0);
+        assert!(cut.iter().any(|t| t == "Show all"), "{cut:?}");
+        assert!(replied(Status::Answered, "x", true).parts().show_all);
+        assert!(!replied(Status::Answered, "x", false).parts().show_all);
+    }
+
+    /// Feature 1270 T029: Mark applied and Answer… only on a Sent row given their handlers.
+    #[test]
+    fn mark_applied_and_answer_only_on_a_sent_row_with_handlers() {
+        let marked = |status| {
+            ReviewPanelRow::new("Lines 1", "rename this", status, LIGHT)
+                .on_mark_applied("mark".to_owned())
+                .on_answer("answer".to_owned())
+        };
+        let sent = painted(marked(Status::Sent), 480.0);
+        assert!(sent.iter().any(|t| t == "Mark applied"), "{sent:?}");
+        assert!(sent.iter().any(|t| t == "Answer\u{2026}"), "{sent:?}");
+        assert!(marked(Status::Sent).parts().mark_actions);
+        for status in [Status::Draft, Status::Applied, Status::Answered] {
+            let shown = painted(marked(status), 480.0);
+            assert!(!shown.iter().any(|t| t == "Mark applied"), "{status:?}");
+            assert!(!marked(status).parts().mark_actions, "{status:?}");
+        }
+        let bare = painted(
+            ReviewPanelRow::<String>::new("Lines 1", "rename this", Status::Sent, LIGHT),
+            480.0,
+        );
+        assert!(
+            !bare.iter().any(|t| t == "Mark applied"),
+            "without handlers"
+        );
     }
 
     #[test]

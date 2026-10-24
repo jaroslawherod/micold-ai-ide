@@ -10,20 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ttad83
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: M1 pushed; orchestrator opens and merges its PR, then M2 (Layer A)
+- **Next step**: M2 committed on `m2-1270` (prepared in parallel, not pushed); orchestrator rebases it onto main after #1369 merges, gates, pushes and opens its PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1356 | design: spec, clarify, plan, tasks | merged (rebase) | f15ecc59696cceeef6c4fca16b1b7eb7d8776b45 |
+| #1369 | M1: core rules review::{bar,drawer}, reply::card_preview, anatomy tokens | open, CI running | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | (orchestrator opens) | pushed; full gate green at e0c0e828; reviews A, B clean |
-| M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | — | pending |
+| M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | #1369 | PR open, CI running; full gate green at e0c0e828; reviews A, B clean |
+| M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | — (branch `m2-1270`, worktree /home/user/micold-m2) | implemented; gate and reviews in progress |
 | M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B, **blocked by #1269**) | — | blocked |
 | M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B, **blocked by #1269**) | — | blocked |
 
@@ -44,6 +45,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | tasks | Milestone sizes: M1, M2 have 15 tasks, M3 16, over rule 3's ~10 | Kept per plan D9 (orchestrator: keep the layer split); M1/M2 are pure core / self-contained components, M3 is one reducer change in features/changes.rs that cannot ship half (Panel → ReviewDrawer) | agent-resolved | prompt; plan.md Delivery order |
 | D12 | tasks | Checklist item "No [NEEDS CLARIFICATION] markers remain" | Ticked: clarify resolved both markers; tasks reviewer r1 found no checklist finding | agent-resolved | grep finds 0 markers in spec.md |
 | D11 | tasks | speckit-analyze HIGH F1 (T015 gate needs drawer), C1 (T034/T042 too large), MEDIUM I1, A1, U1–U3, T1 | Fixed: drawer case moved to T041; reducer and layout tasks split; spec edge "Drawer opens over the line" and SC-004 reworded (plan test-strategy row follows); files-browser, 2 s and line-start checks added; T013/T014 split | agent-resolved | scratchpad analyze.md |
+| D14 | M2 | Where do the M2 component tests and helpers live, given tasks.md's paths predate feature 1262's crate split? | `LineClamped` is in `crates/micold-material/src/line_clamp.rs`, so T046/T047 are there; `ReviewBar`, `SideSheet`, card and row stay in `crates/micold-client/src/ui/material/`. One-line text width is the new shared `micold_material::shaped_text::width_of`, which `StatusBar` now uses too (no copy) | agent-resolved | `grep -rn "struct LineClamped"` → micold-material |
+| D15 | M2 | `SEND_WIDTH` value | 169: the widest of "Send review (999+)", "Send review (999)", "Sending…" as a filled `Button` lays it out (169.0 measured), rounded up; asserted by `the_widest_label_fits_the_send_width` | agent-resolved | T009 red run: `left: 176.0 right: 169.0` |
+| D16 | M2 | Error vs counts when the bar is narrow | The error is kept whole while it fits and the counts shorten first (Full → DraftsOnly → hidden) against the room left of it; the error is ellipsized only once the counts are gone. ⋮ and the error's × are compact icon buttons (the bar is 44 high, under the 48 dp target, as `ui/changes.rs` already does) | agent-resolved | spec Edge Cases "Narrow window"; research R3 |
+| D17 | M2 | Does M2 need #1269's per-entry review view? | No: every M2 task is a self-contained component, showcase pose or doc; nothing reads view state | agent-resolved | tasks T008–T010, T027–T031, T046–T052 |
 | D13 | M1 | The three new anatomy figures reach no client component until M2/M4, and `anatomy_call_sites` fails on an unbound, unrecorded figure | Recorded them as `NOT_BUILT` gaps in `crates/micold-client/tests/anatomy_call_sites.rs`; M2 (`ReviewBar`) and M4 (drawer layout) remove the entries, which `a_recorded_gap_that_became_bound_is_stale` enforces | agent-resolved | plan missed the client gate; anatomy_call_sites.rs RECORDED |
 
 ## Review rounds

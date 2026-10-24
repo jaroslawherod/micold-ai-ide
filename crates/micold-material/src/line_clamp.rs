@@ -14,17 +14,20 @@
 //!
 //! Not `pub`: it is the label of `material::Tooltip::max_lines`, a review row's lines, and an
 //! overview card's title (three lines) and activity (two), tinted (feature 1121, R2).
-
-use std::marker::PhantomData;
+//!
+//! [`LineClamped::when_cut`] hangs an element under the text that is laid out only when the measure
+//! cut it: a review comment card's "Show all" under a reply of more than four lines (feature 1270,
+//! FR-021, research R7). The decision stays where the cut is made, so the card never guesses it
+//! from a character count.
 
 use super::shaped_text::{draw_paragraph, State};
 use super::text::TypeRole;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
-use iced::advanced::widget::{tree, Tree};
-use iced::advanced::{mouse, renderer, Widget};
-use iced::{alignment, Element, Font, Length, Pixels, Rectangle, Size};
-use micold_core::tokens::Rgb;
+use iced::advanced::widget::{tree, Operation, Tree};
+use iced::advanced::{mouse, renderer, Clipboard, Shell, Widget};
+use iced::{alignment, Element, Event, Font, Length, Pixels, Point, Rectangle, Size};
+use micold_core::tokens::{spacing, Rgb};
 use micold_core::tooltip::clamp_to_lines;
 
 /// What a shaped paragraph was shaped from: the text, the width, the line limit, the role (its
@@ -41,7 +44,7 @@ struct Lead {
 }
 
 /// A wrapping label at a type role, cut to at most `max_lines` lines.
-pub struct LineClamped<M> {
+pub struct LineClamped<'a, M> {
     content: String,
     role: TypeRole,
     max_lines: usize,
@@ -50,10 +53,11 @@ pub struct LineClamped<M> {
     /// `Shrink` is as wide as the text, as a tooltip's label is; `Fill` spans the row it is in.
     width: Length,
     lead: Option<Lead>,
-    marker: PhantomData<M>,
+    /// Laid out under the text only when the text was cut ([`Self::when_cut`]).
+    when_cut: Option<Element<'a, M>>,
 }
 
-impl<M> LineClamped<M> {
+impl<'a, M> LineClamped<'a, M> {
     /// `content` at `role`, in the surrounding text colour, on at most `max_lines` lines.
     pub fn new(content: impl Into<String>, role: TypeRole, max_lines: usize) -> Self {
         Self {
@@ -63,7 +67,7 @@ impl<M> LineClamped<M> {
             tint: None,
             width: Length::Shrink,
             lead: None,
-            marker: PhantomData,
+            when_cut: None,
         }
     }
 
@@ -89,18 +93,39 @@ impl<M> LineClamped<M> {
         });
         self
     }
+
+    /// Lay `element` out under the text, `spacing::XS` below it, only when the text was cut to fit
+    /// its lines; a text shown whole gives it no room and it is not drawn (feature 1270, R7).
+    pub fn when_cut(mut self, element: impl Into<Element<'a, M>>) -> Self {
+        self.when_cut = Some(element.into());
+        self
+    }
 }
 
-impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for LineClamped<Message>
-where
-    Renderer: text::Renderer<Font = Font>,
-{
+/// Whether the element under the text was left out: a whole text gives it a zero-area node.
+fn left_out(layout: Layout<'_>) -> bool {
+    let b = layout.bounds();
+    b.width <= 0.0 || b.height <= 0.0
+}
+
+impl<Message> Widget<Message, iced::Theme, iced::Renderer> for LineClamped<'_, Message> {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State<Renderer::Paragraph, Key>>()
+        tree::Tag::of::<State<<iced::Renderer as text::Renderer>::Paragraph, Key>>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::<Renderer::Paragraph, Key>::default())
+        tree::State::new(State::<<iced::Renderer as text::Renderer>::Paragraph, Key>::default())
+    }
+
+    fn children(&self) -> Vec<Tree> {
+        self.when_cut.iter().map(Tree::new).collect()
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        match &self.when_cut {
+            Some(element) => tree.diff_children(std::slice::from_ref(element)),
+            None => tree.children.clear(),
+        }
     }
 
     fn size(&self) -> Size<Length> {
@@ -110,10 +135,12 @@ where
     fn layout(
         &mut self,
         tree: &mut Tree,
-        _renderer: &Renderer,
+        renderer: &iced::Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let state = tree.state.downcast_mut::<State<Renderer::Paragraph, Key>>();
+        let state = tree
+            .state
+            .downcast_mut::<State<<iced::Renderer as text::Renderer>::Paragraph, Key>>();
         let available = limits.max().width;
 
         let key = (
@@ -126,7 +153,7 @@ where
         if !state.holds(&key) {
             // Shaped as it will be drawn: at the width on offer, breaking on words and, where a
             // word is wider than the line (a path, an address), on glyphs.
-            let template: CoreText<(), Renderer::Font> = CoreText {
+            let template: CoreText<(), Font> = CoreText {
                 content: (),
                 bounds: Size::new(available, f32::INFINITY),
                 size: Pixels(self.role.size()),
@@ -143,7 +170,9 @@ where
                 .as_ref()
                 .map(|lead| (format!("{}  ", lead.words), lead));
             let shape = |candidate: &str| match &lead {
-                None => Renderer::Paragraph::with_text(template.with_content(candidate)),
+                None => <iced::Renderer as text::Renderer>::Paragraph::with_text(
+                    template.with_content(candidate),
+                ),
                 Some((words, lead)) => {
                     let spans: [text::Span<'_, (), Font>; 2] = [
                         text::Span::new(words.as_str())
@@ -152,7 +181,9 @@ where
                             .color(super::style::color(lead.tint)),
                         text::Span::new(candidate),
                     ];
-                    Renderer::Paragraph::with_spans(template.with_content(&spans[..]))
+                    <iced::Renderer as text::Renderer>::Paragraph::with_spans(
+                        template.with_content(&spans[..]),
+                    )
                 }
             };
             let lines_of = |candidate: &str| {
@@ -165,20 +196,104 @@ where
             state.store(paragraph, fitted, key);
         }
 
-        layout::Node::new(limits.resolve(self.width, Length::Shrink, state.paragraph.min_bounds()))
+        let text = state.paragraph.min_bounds();
+        let cut = state.fitted != self.content;
+        let Some(element) = self.when_cut.as_mut() else {
+            return layout::Node::new(limits.resolve(self.width, Length::Shrink, text));
+        };
+        let below = if cut {
+            let loose = layout::Limits::new(Size::ZERO, Size::new(available, f32::INFINITY));
+            element
+                .as_widget_mut()
+                .layout(&mut tree.children[0], renderer, &loose)
+                .move_to(Point::new(0.0, text.height + spacing::XS))
+        } else {
+            layout::Node::new(Size::ZERO)
+        };
+        let content = if cut {
+            let b = below.bounds();
+            Size::new(text.width.max(b.width), b.y + b.height)
+        } else {
+            text
+        };
+        layout::Node::with_children(
+            limits.resolve(self.width, Length::Shrink, content),
+            vec![below],
+        )
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        if let (Some(element), Some(below)) = (self.when_cut.as_mut(), layout.children().next()) {
+            if !left_out(below) {
+                element
+                    .as_widget_mut()
+                    .operate(&mut tree.children[0], below, renderer, operation);
+            }
+        }
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
+    ) {
+        if let (Some(element), Some(below)) = (self.when_cut.as_mut(), layout.children().next()) {
+            if !left_out(below) {
+                element.as_widget_mut().update(
+                    &mut tree.children[0],
+                    event,
+                    below,
+                    cursor,
+                    renderer,
+                    clipboard,
+                    shell,
+                    viewport,
+                );
+            }
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+        renderer: &iced::Renderer,
+    ) -> mouse::Interaction {
+        match (self.when_cut.as_ref(), layout.children().next()) {
+            (Some(element), Some(below)) if !left_out(below) => element
+                .as_widget()
+                .mouse_interaction(&tree.children[0], below, cursor, viewport, renderer),
+            _ => mouse::Interaction::default(),
+        }
     }
 
     fn draw(
         &self,
         tree: &Tree,
-        renderer: &mut Renderer,
-        _theme: &Theme,
+        renderer: &mut iced::Renderer,
+        theme: &iced::Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
-        _cursor: mouse::Cursor,
+        cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_ref::<State<Renderer::Paragraph, Key>>();
+        let state = tree
+            .state
+            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, Key>>();
         // A measurement off by a fraction must not paint a fourth line below the panel.
         draw_paragraph(
             renderer,
@@ -187,17 +302,24 @@ where
             viewport,
             self.tint.map_or(style.text_color, super::style::color),
         );
+        if let (Some(element), Some(below)) = (self.when_cut.as_ref(), layout.children().next()) {
+            if !left_out(below) {
+                element.as_widget().draw(
+                    &tree.children[0],
+                    renderer,
+                    theme,
+                    style,
+                    below,
+                    cursor,
+                    viewport,
+                );
+            }
+        }
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<LineClamped<Message>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-    Theme: 'a,
-    Renderer: text::Renderer<Font = Font> + 'a,
-{
-    fn from(label: LineClamped<Message>) -> Self {
+impl<'a, Message: 'a> From<LineClamped<'a, Message>> for Element<'a, Message> {
+    fn from(label: LineClamped<'a, Message>) -> Self {
         Element::new(label)
     }
 }
@@ -417,6 +539,62 @@ pub(super) mod tests {
             );
             assert!(fitted.ends_with('…'), "{role:?}: {fitted:?}");
         }
+    }
+
+    /// Feature 1270 T046 (FR-021, research R7): `when_cut`'s element is laid out under the text
+    /// when the measure cut it, and takes no height when the text fits whole.
+    #[test]
+    fn the_when_cut_element_is_laid_out_under_a_cut_text_and_takes_no_height_otherwise() {
+        let room = Size::new(NARROWEST_LABEL, 2_000.0);
+        let line = TypeRole::Body.line_height_dp();
+        let after = || iced::widget::Space::new().width(40.0).height(20.0);
+
+        let cut = test_support::laid_out(
+            LineClamped::<()>::new(long(), TypeRole::Body, 4)
+                .when_cut(after())
+                .into(),
+            room,
+        );
+        let element = cut
+            .children()
+            .first()
+            .expect("the element under the text")
+            .bounds();
+        assert_eq!(element.size(), Size::new(40.0, 20.0));
+        assert!(element.y >= 4.0 * line, "under the four lines: {element:?}");
+        assert_eq!(cut.size().height, element.y + element.height, "{cut:?}");
+
+        let plain = test_support::size_of(
+            LineClamped::<()>::new("Short", TypeRole::Body, 4).into(),
+            room,
+        );
+        let whole = test_support::size_of(
+            LineClamped::<()>::new("Short", TypeRole::Body, 4)
+                .when_cut(after())
+                .into(),
+            room,
+        );
+        assert_eq!(whole, plain, "a whole text gives the element no room");
+        assert_eq!(whole.height, line);
+    }
+
+    /// Feature 1270 T046: the element is drawn only under a cut text.
+    #[test]
+    fn the_when_cut_element_is_drawn_only_under_a_cut_text() {
+        let roles = test_support::roles();
+        let drawn = |content: String| {
+            let mut mounted = test_support::Mounted::new(
+                LineClamped::<String>::new(content, TypeRole::Body, 4)
+                    .width(Length::Fixed(NARROWEST_LABEL))
+                    .when_cut(material::Text::new("Show all", TypeRole::Label, roles)),
+            );
+            mounted
+                .painted_text()
+                .into_iter()
+                .any(|p| p.content == "Show all")
+        };
+        assert!(drawn(long()), "a cut text offers the element");
+        assert!(!drawn("Short".to_owned()), "a whole text does not");
     }
 
     #[test]

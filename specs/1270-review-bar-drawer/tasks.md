@@ -73,9 +73,9 @@ button's bounds equal across drawer, counts and error states (SC-001); quickstar
 - [x] T005 [US1] *Layer A* Red: in `crates/micold-core/tests/review_bar.rs` test `send_button(counts, sending, sendable)`: 0 drafts → `"Send review (0)"` disabled; n drafts sendable → `"Send review (n)"` enabled; 1,000 drafts → `"Send review (999+)"`; `sending` → `"Sending…"` disabled whatever the counts; `sendable == false` (pull request not in the list) → disabled; `primary == enabled` in every case (FR-003, FR-005, R4, contract B4); and `error_text("why") == "Couldn't send the review: why"` (FR-006)
 - [x] T006 [US1] *Layer A* Implement `ScopeCounts` (`of`, `is_empty`, `reported_or_sent`), `CountsForm { Full, DraftsOnly, Hidden }` and `counts_text` in `crates/micold-core/src/review/bar.rs` until T004 passes
 - [x] T007 [US1] *Layer A* Implement `SendButton { label, enabled, primary }`, `send_button` and `error_text` in `crates/micold-core/src/review/bar.rs` until T005 passes
-- [ ] T008 [US1] *Layer A* Red: in the `#[cfg(test)]` module of new `crates/micold-client/src/ui/material/review_bar.rs` test `ReviewBar` layout: at three widths it draws the longest `CountsForm` that fits (Full, then DraftsOnly, then Hidden); the trailing group (Send review at `SEND_WIDTH`, ⋮ trigger, **Comments** toggle, right to left) has identical bounds across labels `"Send review (0)"`, `"Send review (999+)"`, `"Sending…"`, any counts, error on/off and drawer flag on/off; the widest label fits `SEND_WIDTH`; the bar is `review_bar::HEIGHT` high; the error's × emits its message (contract B2, B3)
-- [ ] T009 [US1] *Layer A* Implement `ReviewBar` in `crates/micold-client/src/ui/material/review_bar.rs` (builder ending in `.into()`, existing roles only: surface container, outline divider on top, contract B10), export it in `crates/micold-client/src/ui/material/mod.rs`, and set `anatomy::review_bar::SEND_WIDTH` in `crates/micold-core/src/tokens/anatomy.rs` to the measured width of the widest label, until T008 passes
-- [ ] T010 [US1] *Layer A* Add a `review_bar` showcase entry (poses: no comments, drafts, sending, error shown, narrow width with counts hidden) in `crates/micold-client/src/showcase/sections/review.rs` and register it in `crates/micold-client/src/showcase/catalogue.rs`
+- [x] T008 [US1] *Layer A* Red: in the `#[cfg(test)]` module of new `crates/micold-client/src/ui/material/review_bar.rs` test `ReviewBar` layout: at three widths it draws the longest `CountsForm` that fits (Full, then DraftsOnly, then Hidden); the trailing group (Send review at `SEND_WIDTH`, ⋮ trigger, **Comments** toggle, right to left) has identical bounds across labels `"Send review (0)"`, `"Send review (999+)"`, `"Sending…"`, any counts, error on/off and drawer flag on/off; the widest label fits `SEND_WIDTH`; the bar is `review_bar::HEIGHT` high; the error's × emits its message (contract B2, B3)
+- [x] T009 [US1] *Layer A* Implement `ReviewBar` in `crates/micold-client/src/ui/material/review_bar.rs` (builder ending in `.into()`, existing roles only: surface container, outline divider on top, contract B10), export it in `crates/micold-client/src/ui/material/mod.rs`, and set `anatomy::review_bar::SEND_WIDTH` in `crates/micold-core/src/tokens/anatomy.rs` to the measured width of the widest label, until T008 passes
+- [x] T010 [US1] *Layer A* Add a `review_bar` showcase entry (poses: no comments, drafts, sending, error shown, narrow width with counts hidden) in `crates/micold-client/src/showcase/sections/review.rs` and register it in `crates/micold-client/src/showcase/catalogue.rs`
 
 ### Layer B — reducer and shell (blocked until #1269 merges)
 
@@ -139,11 +139,11 @@ steps 4, 6–9, 11.
 
 ### Layer A — components
 
-- [ ] T027 [P] [US3] *Layer A* Red: in the `#[cfg(test)]` module of new `crates/micold-client/src/ui/material/side_sheet.rs` test `SideSheet` width `min(360, half the area)` at two area widths, the title and × laid out, × emits its message (contract D2, D3)
-- [ ] T028 [US3] *Layer A* Implement `SideSheet` (title, ×, content, width from `micold_core::review::drawer::width`) in `crates/micold-client/src/ui/material/side_sheet.rs` and export it in `crates/micold-client/src/ui/material/mod.rs`, until T027 passes
-- [ ] T029 [P] [US3] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/review_panel_row.rs` test whole-reply mode: the reply is laid out whole and wrapped, **Show all** only when the reply was shortened past 4,000 characters, **Mark applied** and **Answer…** laid out only when their handlers are set (contract D7)
-- [ ] T030 [US3] *Layer A* Implement whole-reply mode and `on_mark_applied`/`on_answer`/`on_show_reply` builders on `ReviewPanelRow` in `crates/micold-client/src/ui/material/review_panel_row.rs` until T029 passes
-- [ ] T031 [US3] *Layer A* Add a `side_sheet` showcase entry and `review_panel_row` reply-mode poses (long reply, Sent row with actions) in `crates/micold-client/src/showcase/sections/review.rs`, registered in `crates/micold-client/src/showcase/catalogue.rs`
+- [x] T027 [P] [US3] *Layer A* Red: in the `#[cfg(test)]` module of new `crates/micold-client/src/ui/material/side_sheet.rs` test `SideSheet` width `min(360, half the area)` at two area widths, the title and × laid out, × emits its message (contract D2, D3)
+- [x] T028 [US3] *Layer A* Implement `SideSheet` (title, ×, content, width from `micold_core::review::drawer::width`) in `crates/micold-client/src/ui/material/side_sheet.rs` and export it in `crates/micold-client/src/ui/material/mod.rs`, until T027 passes
+- [x] T029 [P] [US3] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/review_panel_row.rs` test whole-reply mode: the reply is laid out whole and wrapped, **Show all** only when the reply was shortened past 4,000 characters, **Mark applied** and **Answer…** laid out only when their handlers are set (contract D7)
+- [x] T030 [US3] *Layer A* Implement whole-reply mode and `on_mark_applied`/`on_answer`/`on_show_reply` builders on `ReviewPanelRow` in `crates/micold-client/src/ui/material/review_panel_row.rs` until T029 passes
+- [x] T031 [US3] *Layer A* Add a `side_sheet` showcase entry and `review_panel_row` reply-mode poses (long reply, Sent row with actions) in `crates/micold-client/src/showcase/sections/review.rs`, registered in `crates/micold-client/src/showcase/catalogue.rs`
 
 ### Layer B — reducer, Esc and docs (blocked until #1269 merges)
 
@@ -182,13 +182,13 @@ at 4 lines with Show all; quickstart §B step 6.
 
 ### Layer A — components and docs
 
-- [ ] T046 [P] [US4] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/line_clamp.rs` test `LineClamped::when_cut(element)`: the element is laid out under the text only when the measure cut it, and takes no height otherwise
-- [ ] T047 [US4] *Layer A* Implement `LineClamped::when_cut` in `crates/micold-client/src/ui/material/line_clamp.rs` until T046 passes
-- [ ] T048 [US4] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/review_comment.rs` test that a card's reply is drawn through `LineClamped` with `CARD_LINES` lines, **Show all** laid out only when the reply is cut or was `shortened`, and a short reply without it (US4 #1, #2, contract D12)
-- [ ] T049 [US4] *Layer A* Draw the reply in `ReviewCommentCard` (`crates/micold-client/src/ui/material/review_comment.rs`) through `LineClamped` with `CARD_LINES` and pass **Show all** to `when_cut`; keep the `reply(text, shortened)` signature so `crates/micold-client/src/ui/changes.rs` is untouched; until T048 passes
-- [ ] T050 [US4] *Layer A* Add `review_comment` poses with a short reply and a reply cut at 4 lines in `crates/micold-client/src/showcase/sections/review.rs`
-- [ ] T051 [US4] *Layer A* Update "Statuses and replies" and "Reading a whole reply" in `docs/user-guide/reviewing-changes.md`: a card shows at most the first 4 lines of a reply, then **Show all**
-- [ ] T052 [US4] *Layer A* Run the layout snapshot (`crates/micold-client/tests/layout_snapshot.rs`); if a covered state shows a card with a long reply, re-record `crates/micold-client/tests/fixtures/layout_snapshot.txt` with that card's diff alone (plan Delivery order, M2)
+- [x] T046 [P] [US4] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/line_clamp.rs` test `LineClamped::when_cut(element)`: the element is laid out under the text only when the measure cut it, and takes no height otherwise
+- [x] T047 [US4] *Layer A* Implement `LineClamped::when_cut` in `crates/micold-client/src/ui/material/line_clamp.rs` until T046 passes
+- [x] T048 [US4] *Layer A* Red: in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/review_comment.rs` test that a card's reply is drawn through `LineClamped` with `CARD_LINES` lines, **Show all** laid out only when the reply is cut or was `shortened`, and a short reply without it (US4 #1, #2, contract D12)
+- [x] T049 [US4] *Layer A* Draw the reply in `ReviewCommentCard` (`crates/micold-client/src/ui/material/review_comment.rs`) through `LineClamped` with `CARD_LINES` and pass **Show all** to `when_cut`; keep the `reply(text, shortened)` signature so `crates/micold-client/src/ui/changes.rs` is untouched; until T048 passes
+- [x] T050 [US4] *Layer A* Add `review_comment` poses with a short reply and a reply cut at 4 lines in `crates/micold-client/src/showcase/sections/review.rs`
+- [x] T051 [US4] *Layer A* Update "Statuses and replies" and "Reading a whole reply" in `docs/user-guide/reviewing-changes.md`: a card shows at most the first 4 lines of a reply, then **Show all**
+- [x] T052 [US4] *Layer A* Run the layout snapshot (`crates/micold-client/tests/layout_snapshot.rs`); if a covered state shows a card with a long reply, re-record `crates/micold-client/tests/fixtures/layout_snapshot.txt` with that card's diff alone (plan Delivery order, M2)
 
 **Checkpoint**: US4 is complete after M2 on today's panel.
 

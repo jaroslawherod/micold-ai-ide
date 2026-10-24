@@ -36,9 +36,10 @@ use micold_core::tokens;
 use crate::ui::syntax;
 
 use crate::ui::material::{
-    BrowseBar, CardState, DiffLayout, DiffView, InlineDiff, ReviewCommentCard, ReviewPanelRow, Tag,
-    Text, TextArea, TypeRole, VirtualRows, PANEL_ROW_HEIGHT,
+    BrowseBar, CardState, DiffLayout, DiffView, InlineDiff, ReviewBar, ReviewCommentCard,
+    ReviewPanelRow, SideSheet, Tag, Text, TextArea, TypeRole, VirtualRows, PANEL_ROW_HEIGHT,
 };
+use micold_core::review::bar::{error_text, send_button, ScopeCounts};
 
 /// Rows in the long-list pose: the length research R11 measures the list at.
 pub const LONG_LIST: usize = 2_000;
@@ -361,6 +362,14 @@ static TALL_DRAFT: LazyLock<String> = LazyLock::new(|| {
 /// The width a text area or card is posed at: about the diff pane's in a laptop window.
 const COMMENT_WIDTH: f32 = 480.0;
 
+/// A reply of more than four lines at [`COMMENT_WIDTH`], not shortened: the card cuts it at four
+/// drawn lines and offers Show all (feature 1270, FR-021).
+const CUT_REPLY: &str = "Not changed: reading it twice is what keeps the cached layout in step with     the resize the window manager sends after the first frame. Passing it through would let the two     drift apart for one frame on every resize, which is the flicker issue 812 was about. The second     read is cheap: the value is cached by the layout pass, so it costs a lookup and no shaping. If     the cost ever shows in a profile, the fix is to cache the size in the view state, not to pass it.";
+
+/// The comments drawer's width over a laptop window's diff (`anatomy::comments_drawer::WIDTH`
+/// less the sheet's edge), what a Replies row is posed at.
+const DRAWER_ROW_WIDTH: f32 = 340.0;
+
 /// `TextArea` — empty with its placeholder, grown to three lines, and held at its height limit
 /// (feature 941). The empty one takes focus when clicked (its edits go nowhere here), which is the focused pose.
 pub fn text_area<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
@@ -405,7 +414,7 @@ pub fn review_comment<'a>(
     _i: usize,
 ) -> Element<'a, Message> {
     let card = |state| {
-        let card = ReviewCommentCard::new(COMMENT, state, roles);
+        let card = ReviewCommentCard::new(COMMENT, state, roles).on_show_reply(Message::NoOp);
         if state == CardState::Draft {
             card.on_edit(Message::NoOp).on_delete(Message::NoOp)
         } else {
@@ -440,11 +449,12 @@ pub fn review_comment<'a>(
             ),
             posed(
                 "answered, shortened reply",
-                sized(
-                    card(CardState::Answered)
-                        .reply(LONG_REPLY, true)
-                        .on_show_reply(Message::NoOp),
-                ),
+                sized(card(CardState::Answered).reply(LONG_REPLY, true)),
+                roles,
+            ),
+            posed(
+                "answered, reply cut at 4 lines",
+                sized(card(CardState::Answered).reply(CUT_REPLY, false)),
                 roles,
             ),
             posed(
@@ -511,6 +521,39 @@ pub fn review_panel_row<'a>(
                 roles,
             ),
             posed(
+                "answered, whole reply",
+                container(
+                    ReviewPanelRow::new("src/lib.rs · Lines 3–5", COMMENT, Status::Answered, roles)
+                        .whole_reply(CUT_REPLY, false)
+                        .on_press(Message::NoOp),
+                )
+                .width(Length::Fixed(DRAWER_ROW_WIDTH)),
+                roles,
+            ),
+            posed(
+                "long reply, shortened",
+                container(
+                    ReviewPanelRow::new("src/lib.rs · Lines 3–5", COMMENT, Status::Applied, roles)
+                        .whole_reply(LONG_REPLY, true)
+                        .on_show_reply(Message::NoOp)
+                        .on_press(Message::NoOp),
+                )
+                .width(Length::Fixed(DRAWER_ROW_WIDTH)),
+                roles,
+            ),
+            posed(
+                "sent, with actions",
+                container(
+                    ReviewPanelRow::new("src/lib.rs · Lines 3–5", COMMENT, Status::Sent, roles)
+                        .whole_reply("", false)
+                        .on_mark_applied(Message::NoOp)
+                        .on_answer(Message::NoOp)
+                        .on_press(Message::NoOp),
+                )
+                .width(Length::Fixed(DRAWER_ROW_WIDTH)),
+                roles,
+            ),
+            posed(
                 "highlighted card",
                 container(
                     ReviewCommentCard::new(COMMENT, CardState::Sent, roles).highlighted(true),
@@ -522,6 +565,116 @@ pub fn review_panel_row<'a>(
         Layout::FullWidth,
     )
 }
+
+/// `ReviewBar` — no comments, drafts with the drawer open, a send under way, a send error, and a
+/// narrow bar whose counts are hidden (feature 1270, T010). What has to be checked by eye is that
+/// **Send review (n)**, ⋮ and **Comments** sit in the same place in every pose of one width.
+pub fn review_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let counts = |draft, sent, applied, answered| ScopeCounts {
+        draft,
+        sent,
+        applied,
+        answered,
+    };
+    let bar = |c: ScopeCounts, sending: bool| {
+        ReviewBar::new(c, send_button(&c, sending, true), roles)
+            .on_send(Message::NoOp)
+            .on_overflow(Message::NoOp)
+            .on_toggle_drawer(Message::NoOp)
+            .on_dismiss_error(Message::NoOp)
+    };
+    let sized =
+        |bar: ReviewBar<'a, Message>, width: f32| container(bar).width(Length::Fixed(width));
+    let mixed = counts(3, 2, 1, 1);
+    arrange(
+        vec![
+            posed(
+                "no comments",
+                sized(bar(counts(0, 0, 0, 0), false), BAR_WIDTH),
+                roles,
+            ),
+            posed("drafts", sized(bar(mixed, false), BAR_WIDTH), roles),
+            posed(
+                "drafts, drawer open",
+                sized(bar(mixed, false).drawer_open(true), BAR_WIDTH),
+                roles,
+            ),
+            posed("sending", sized(bar(mixed, true), BAR_WIDTH), roles),
+            posed(
+                "error shown",
+                sized(
+                    bar(mixed, false).error(error_text("no session could be started")),
+                    BAR_WIDTH,
+                ),
+                roles,
+            ),
+            posed(
+                "narrow, drafts only",
+                sized(bar(mixed, false), NARROW_BAR_WIDTH),
+                roles,
+            ),
+            posed(
+                "narrow, counts hidden",
+                sized(bar(mixed, false), NARROWEST_BAR_WIDTH),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// The review bar's width in a laptop window's Review tab, beside the file list.
+const BAR_WIDTH: f32 = 960.0;
+/// A bar with room for the draft count but not the whole counts.
+const NARROW_BAR_WIDTH: f32 = 520.0;
+/// A bar with room for its trailing group alone.
+const NARROWEST_BAR_WIDTH: f32 = 440.0;
+
+/// `SideSheet` — the comments drawer over a diff, 360 wide, and over a narrow area, half of it
+/// (feature 1270, T031). The text under it stands in for the diff the sheet covers.
+pub fn side_sheet<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let over = |width: f32| {
+        let area = container(Text::new(DIFF_STAND_IN, TypeRole::Body, roles))
+            .padding(spacing::MD)
+            .width(Length::Fill)
+            .height(Length::Fill);
+        let rows = column![
+            ReviewPanelRow::new("src/lib.rs · Lines 3–5", COMMENT, Status::Answered, roles)
+                .whole_reply(SHORT_REPLY, false),
+            ReviewPanelRow::new("src/view.rs · Line 12", COMMENT, Status::Sent, roles)
+                .whole_reply("", false)
+                .on_mark_applied(Message::NoOp)
+                .on_answer(Message::NoOp),
+        ]
+        .spacing(spacing::SM)
+        .padding([0.0, spacing::MD]);
+        container(iced::widget::stack![
+            area,
+            SideSheet::new(rows, roles)
+                .title("Comments")
+                .on_close(Message::NoOp),
+        ])
+        .width(Length::Fixed(width))
+        .height(Length::Fixed(SHEET_AREA_HEIGHT))
+    };
+    arrange(
+        vec![
+            posed("over a diff", over(BAR_WIDTH), roles),
+            posed(
+                "over a narrow area: half of it",
+                over(NARROW_BAR_WIDTH),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// What stands in for the diff under the sheet.
+const DIFF_STAND_IN: &str = "The diff under the drawer keeps its width and its lines: the sheet     covers its right side without moving it.";
+
+/// The posed area's height: a few rows of the drawer.
+const SHEET_AREA_HEIGHT: f32 = 320.0;
 
 /// `BrowseBar` — Back beside the path, with and without "Open diff", a path longer than the bar and
 /// Back with nothing to return to (feature 1150). What has to be checked by eye is that the strip

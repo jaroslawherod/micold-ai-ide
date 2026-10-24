@@ -3,8 +3,10 @@
 //! the sizing of the two widgets differ and stay in their modules.
 
 use iced::advanced::layout::Layout;
-use iced::advanced::text::{self, Paragraph as _};
-use iced::{Color, Font, Rectangle};
+use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
+use iced::{alignment, Color, Font, Pixels, Rectangle, Size};
+
+use super::text::TypeRole;
 
 /// The shaped label, plus the key `K` it was shaped for.
 ///
@@ -62,4 +64,22 @@ pub(super) fn draw_paragraph<R>(
     );
     let clip = bounds.intersection(viewport).unwrap_or(bounds);
     renderer.fill_paragraph(paragraph, anchor, color, clip);
+}
+
+/// How wide `content` shapes on one line at `role`: what a bar that picks between texts by the room
+/// it has measures them with (`StatusBar`'s give-way plan, the review bar's counts, feature 1270).
+pub fn width_of(content: &str, role: TypeRole) -> f32 {
+    <iced::Renderer as text::Renderer>::Paragraph::with_text(CoreText {
+        content,
+        bounds: Size::INFINITE,
+        size: Pixels(role.size()),
+        line_height: text::LineHeight::default(),
+        font: role.font(),
+        align_x: text::Alignment::Left,
+        align_y: alignment::Vertical::Top,
+        shaping: text::Shaping::Advanced,
+        wrapping: text::Wrapping::None,
+    })
+    .min_bounds()
+    .width
 }
