@@ -32,5 +32,5 @@
 ## Notes
 
 - No [NEEDS CLARIFICATION] markers were needed: the issue fixes duration, easing, triggers and the Reduce motion path, and leaves the growth animation to the plan (FR-006).
-- Timing names (150 ms, the standard curve, contract §6) come from the issue itself; they are the user-visible behaviour, not an implementation choice.
+- Timing names (150 ms, the standard curve, contract §6) come from the issue itself; they are the user-visible behaviour, not an implementation choice. The curve's coordinates (contract §6.2) sit in Assumptions, not in an FR (spec review round 1, F3).
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.

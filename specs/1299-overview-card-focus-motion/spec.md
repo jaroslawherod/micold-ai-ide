@@ -63,7 +63,8 @@ a card and watch the outline and tint: about 75 ms after the key they are partly
    (feature 1121), keeps the keyboard focus, and its shadow eases out over 150 ms.
 4. **Given** a focused card, **When** the focus leaves the grid (Tab past the last card, Shift+Tab
    before the first, or the focus moves to a card's link), **Then** the card's focus indication
-   fades out over 150 ms.
+   fades out over 150 ms; when the focus moves to the card's own link, the card stays expanded and
+   its shadow does not change (feature 1122, US1-1).
 5. **Given** a fade in progress, **When** the focus returns to the card before the fade ends,
    **Then** the indication turns back from the opacity it had reached, with no jump to none or to
    full.
@@ -175,9 +176,9 @@ not new value.
 - **Several windows or Overviews**: each Overview animates its own cards; a transition in one never
   shows in another.
 - **Empty Overview**: with no cards, there is nothing to animate and nothing runs.
-- **Window loses and regains focus**: the window losing focus is not a card losing the keyboard
-  focus; the card's indication follows what the Overview already shows on blur and refocus
-  (feature 1121), easing where that changes it.
+- **Window loses and regains focus**: on window blur an expanded card collapses (feature 1121,
+  FR-005) and its shadow eases out over 150 ms (FR-003); the focus indication does on blur and on
+  refocus what feature 1121 specifies, easing (FR-001, FR-002) wherever that changes it.
 - **Frames missed**: when the app draws fewer frames than usual (a busy machine), the transition
   still ends at 150 ms, on time, rather than stretching.
 - **Cross-platform** (Principle VI): durations, easing and the Reduce motion behaviour are the same
@@ -192,7 +193,7 @@ not new value.
 
 - **FR-001**: When a card gains the keyboard focus (Tab, Shift+Tab, an arrow move, or the focus
   handed back to it), its focus outline and focus state layer MUST fade from none to full opacity
-  over 150 ms along the standard easing curve, (0.2, 0, 0, 1) in contract §6.2.
+  over 150 ms along the standard easing curve.
 - **FR-002**: When a card loses the keyboard focus, by any route, its focus outline and focus state
   layer MUST fade from their current opacity to none over 150 ms along the same curve.
 - **FR-003**: When a card expands (hover or keyboard focus, feature 1121), its shadow MUST ease
@@ -242,6 +243,7 @@ not new value.
 
 ## Assumptions
 
+- The standard easing curve is the cubic bezier (0.2, 0, 0, 1) of contract §6.2.
 - The design's `transition: box-shadow .15s` sets the time; the issue fixes the curve as Material's
   standard easing, so the browser's default `ease` in the design is not copied.
 - The focus fade covers both the outline and the state layer together, at one opacity, since the
