@@ -42,7 +42,13 @@ and are out of scope here.
 
 ## Clarifications
 
-_None yet._
+### Session 2026-10-24
+
+- Q: Does a Needs attention location join the Needs action group or get its own group? → A: It joins
+  the Needs action group; there is no separate Needs attention group, so the groups stay the issue's
+  four. _(agent-resolved: issue #1125 body lists four groups; mockup board Main.dc.html#sidebar puts
+  fix/1117, "PR #1118 open · checks failing" — Needs attention per
+  crates/micold-core/src/overview.rs card_state — under "Needs action · 2")_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -68,9 +74,8 @@ collapsed.
    Needs action, Working, Idle, Done, and each header reads its name and the number of location
    rows in it (for example "Working · 2").
 2. **Given** a location whose card state is Needs attention, **When** the sidebar shows it, **Then**
-   it is listed in [NEEDS CLARIFICATION: Needs attention has no group in the issue's list; does it
-   join the Needs action group (one "needs you" group, as the mockup's two red rows suggest) or get
-   its own Needs attention group between Needs action and Working?].
+   it is listed in the Needs action group, counted in its header; within the group, rows keep
+   today's order (scenario 5), whichever of the two states they are in.
 3. **Given** a project just opened, **When** the sidebar first shows it, **Then** the Done group is
    collapsed (its header shows with its count and no rows below it), unless it holds the current
    session's row, which expands it (see Edge Cases).
@@ -287,7 +292,7 @@ chords to reach a location in a collapsed group.
 - **FR-001**: The sidebar MUST list its location rows in state groups, in the order Needs action,
   Working, Idle, Done, each group holding the locations whose card state (feature 813, the same
   state the location's Overview card shows) belongs to it. A location in Needs attention MUST be
-  listed as US1 scenario 2 resolves.
+  listed in the Needs action group; there is no separate Needs attention group.
 - **FR-002**: Each group MUST have a header reading the group's name, " · " and the number of
   location rows in it after filtering (a run group counts as one); a group with no row MUST NOT be
   shown.

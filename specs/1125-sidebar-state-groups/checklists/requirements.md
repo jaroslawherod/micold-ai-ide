@@ -13,8 +13,9 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — three remain (Needs attention's group; where
-      refresh / attach existing / run in parallel go; which groups collapse), for the clarify unit
+- [ ] No [NEEDS CLARIFICATION] markers remain — two remain (where refresh / attach existing /
+      run in parallel go; which groups collapse), escalated by the clarify unit; Needs attention's
+      group resolved (joins Needs action)
 - [x] Requirements are testable and unambiguous (apart from FR-001, FR-005 and FR-015's open
       parts, which wait on the three markers)
 - [x] Success criteria are measurable
