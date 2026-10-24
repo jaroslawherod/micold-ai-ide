@@ -16,7 +16,7 @@ half that draws it.
   working-tree versions, size and modification time over the size limits, a patch hash for a pull
   request. A new pure module `review::stale` compares the shown list with the latest one
   (`changed_since`) and holds the latest read beside the shown one (`Held<L>`) until it is applied
-  or one file is adopted by selection. The client's Changes view stops replacing its list and diff
+  or one file is adopted by selection. The client's Review view (after #1269) stops replacing its list and diff
   on a watch read: it keeps the shown snapshot, shows *n files changed since you looked* in the
   header and a dot on each changed row, and applies on a press.
 - **Quick comment.** A pure `review::drag::Drag` turns a press, the rows passed and the release into
@@ -26,7 +26,7 @@ half that draws it.
   client-owned `Settings::suggestion_chips` (off by default) switches them on; the composer shows
   them as `ToggleChip`s that join the keyboard order.
 
-Core lands first (M1, M2) on today's code with unit tests; they build now. The client milestones
+Core lands first (M1, M2) with unit tests; they build now. The client milestones
 that touch the Changes/Review view (M3 hold and notice, M4 drag to comment, M5 chips UI) wait until
 #1269 (Review tab) and #1271 are merged, since #1269 reshapes that view; FR-013 (M6) also needs
 #1271.
@@ -157,11 +157,10 @@ docs/user-guide/{reviewing-changes.md,settings.md}
 
 Client parts that #1269–#1273 reshape:
 
-- **#1269 (Review tab)** turns `State.open` into a map keyed by entry. The hold fields live on
-  `OpenView` (and `PullRequestView`), so they move with the view unchanged; the merge cost is
-  textual (whichever lands second rebases the reducer). #1269's re-read when a hidden tab is shown
-  goes through the watch path, so it is held like any other watch read (research R9). The notice
-  moves from the Changes view header to the Review tab header with the header itself.
+- **#1269 (Review tab)** turns `State.open` into a map keyed by entry. M3 builds after it, so the
+  hold fields go on the per-entry `OpenView` (and `PullRequestView`) it leaves. #1269's re-read when
+  a hidden tab is shown goes through the watch path, so it is held like any other watch read
+  (research R9). The notice sits in the Review tab header.
 - **#1270 (review bar, drawer)** moves *Send review* and the counts to a bottom bar; the notice
   stays in the view header (spec Assumptions), the composer stays inline, so chips are unaffected.
 - **#1272 / #1273 (source dropdown, file tree)** replace `file_row` with tree rows. The dot is the
