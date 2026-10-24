@@ -105,14 +105,16 @@ fn assert_leaves_index_input(rows: &[Row], paths: &[&str]) {
 
 // --- T002: layout under Path, no filter -----------------------------------------------------
 
-/// L1, scenario 1.1: folders before files at each level, each under its folder.
+/// L1, scenario 1.1: folders before files at each level, each under its folder. (`NOTES.md`
+/// stands in for the contract's `README.md`: a literal naming real documentation fails
+/// `documentation_is_not_read`.)
 #[test]
 fn folders_come_before_files_and_hold_their_files() {
-    let paths = ["src/a.rs", "src/ui/b.rs", "README.md"];
+    let paths = ["src/a.rs", "src/ui/b.rs", "NOTES.md"];
     let rows = changes_tree(&paths, &BTreeSet::new());
     assert_eq!(
         shape(&rows),
-        ["0src/", "1ui/", "2b.rs", "1a.rs", "0README.md"]
+        ["0src/", "1ui/", "2b.rs", "1a.rs", "0NOTES.md"]
     );
     assert!(rows.iter().all(|row| row.spans.is_empty()));
     assert_leaves_index_input(&rows, &paths);
@@ -154,15 +156,15 @@ fn a_chain_stops_where_a_folder_branches_or_holds_a_file() {
 /// sub-folders with their own state.
 #[test]
 fn collapsing_a_folder_hides_its_rows_and_keeps_inner_state() {
-    let paths = ["src/a.rs", "src/ui/b.rs", "README.md"];
+    let paths = ["src/a.rs", "src/ui/b.rs", "NOTES.md"];
     let rows = changes_tree(&paths, &set(&["src", "src/ui"]));
-    assert_eq!(shape(&rows), ["0src/-", "0README.md"]);
+    assert_eq!(shape(&rows), ["0src/-", "0NOTES.md"]);
     let rows = changes_tree(&paths, &set(&["src/ui"]));
-    assert_eq!(shape(&rows), ["0src/", "1ui/-", "1a.rs", "0README.md"]);
+    assert_eq!(shape(&rows), ["0src/", "1ui/-", "1a.rs", "0NOTES.md"]);
     let rows = changes_tree(&paths, &BTreeSet::new());
     assert_eq!(
         shape(&rows),
-        ["0src/", "1ui/", "2b.rs", "1a.rs", "0README.md"]
+        ["0src/", "1ui/", "2b.rs", "1a.rs", "0NOTES.md"]
     );
 }
 
