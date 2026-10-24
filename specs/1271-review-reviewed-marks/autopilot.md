@@ -59,7 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 unit 1 stopped at 180k context. Done: T001–T017 implemented and ticked, committed 3f3d70ab, pushed (no PR). Next: review round 1 on snapshot d666189b8e5357d37344c06f55639874bdebb5c7:3f3d70abe73089804fe8fe57960c022bef086b75 (A high, B conformance); a fresh unit acts on the findings, then runs the full gate (`scripts/gate.sh`) and writes the PR text. Open findings: none yet. Deviations from the plan: D6.
 
 ## Open escalation
 
