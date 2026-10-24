@@ -23,13 +23,13 @@ use iced::widget::{container, row, Space};
 use iced::{alignment, Alignment, Background, Element, Event, Length, Pixels, Point};
 use iced::{Rectangle, Size, Vector};
 use micold_core::tokens::anatomy::status_bar::HEIGHT;
-use micold_core::tokens::{shape, spacing, Rgb, Roles};
+use micold_core::tokens::{spacing, Rgb, Roles};
 
-use super::busy_indicator;
+use super::{busy_indicator, unread_mark};
 use super::{style, Ellipsized, Tooltip, TooltipPosition, TypeRole};
 
-/// The coloured dot's diameter: the unread mark's 8 dp, so the two marks read alike.
-const DOT: f32 = 8.0;
+/// The coloured dot's diameter: the unread mark's, so the two marks read alike.
+const DOT: f32 = unread_mark::DIAMETER;
 
 /// What an item's text is drawn in: the bar is a quiet strip of `Label` text.
 const ROLE: TypeRole = TypeRole::Label;
@@ -156,17 +156,10 @@ impl StatusItem {
     }
 }
 
-/// A filled circle in `colour`.
+/// A filled circle in `colour`, as the unread mark draws one.
 fn dot<'a, M: 'a>(colour: Rgb) -> Element<'a, M> {
     container(Space::new().width(DOT).height(DOT))
-        .style(move |_| container::Style {
-            background: Some(Background::Color(style::color(colour))),
-            border: iced::Border {
-                radius: shape::FULL.into(),
-                ..Default::default()
-            },
-            ..Default::default()
-        })
+        .style(move |_| unread_mark::filled_circle(colour))
         .into()
 }
 
@@ -445,6 +438,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Bar<'_, M> {
                 .zip(tree.children.iter_mut())
                 .zip(layout.children())
             {
+                if dropped(l) {
+                    continue;
+                }
                 child.as_widget_mut().operate(state, l, renderer, operation);
             }
         });

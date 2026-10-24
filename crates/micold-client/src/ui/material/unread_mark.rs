@@ -19,8 +19,8 @@ use iced::{Alignment, Background, Element, Length};
 use micold_core::tokens::{shape, spacing, Rgb, Roles};
 use std::marker::PhantomData;
 
-/// The mark's diameter (U1).
-const DIAMETER: f32 = 8.0;
+/// The mark's diameter (U1). Also the status bar's dot (feature 1124), so the two marks read alike.
+pub(super) const DIAMETER: f32 = 8.0;
 
 /// The size of an icon standing in for the dot: the label role's, so it reads with the number.
 const GLYPH_SIZE: f32 = 16.0;
@@ -33,8 +33,13 @@ pub(crate) fn fill(r: Roles) -> Rgb {
 
 /// The mark itself: a box filled in [`fill`], with the `full` corner.
 fn dot_style(r: Roles) -> container::Style {
+    filled_circle(fill(r))
+}
+
+/// A box filled in `colour` with the `full` corner: the unread mark, and the status bar's dot.
+pub(super) fn filled_circle(colour: Rgb) -> container::Style {
     container::Style {
-        background: Some(Background::Color(style::color(fill(r)))),
+        background: Some(Background::Color(style::color(colour))),
         border: iced::Border {
             radius: shape::FULL.into(),
             ..Default::default()
