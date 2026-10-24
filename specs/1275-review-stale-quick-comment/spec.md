@@ -252,7 +252,8 @@ holds that chip's text and the focus stays in the box.
   held changes. Selecting a file not in the set reads and shows its diff as today; selecting a file
   in the set that the latest read lists MUST read and show its latest diff, update its row and drop
   it from the set; selecting one the latest read no longer lists MUST say it has no changes any more
-  and keep it in the set (US1 scenarios 9–11). For a pull request every file's diff is already in memory and selection shows the held snapshot's patch,
+  and keep it in the set (US1 scenarios 9–11). For a pull request every file's diff is already in
+  memory and selection shows the held snapshot's patch,
   except for a file in the set, which shows the latest patch and leaves the set.
 - **FR-010**: Applying MUST keep the selected file while it is listed, and MUST keep picked lines
   and comment-box text by the rules a refresh follows today.
