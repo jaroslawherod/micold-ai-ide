@@ -83,7 +83,9 @@ repository-relative; line numbers are as of the plan (2026-10-24, main after #11
   entry in `covered_states.rs`" (`layout-snapshot.md#adding-a-covered-state`) and avoids a
   duplicate fixture builder (CLAUDE.md, search before writing). `strip_with` today builds its
   session on `feat-short` over its own base; it is extended to take the base `State` and the
-  location (its current callers pass what they pass now), not copied. The `window-` prefix sets them apart
+  location (its current callers pass what they pass now), not copied. At `feat-working` the
+  extended builder **replaces** the session `with_every_card_state()` put there with its own main
+  session, keeping `ActivitySignal::Working`, so `feat-working` stays in its sidebar group. The `window-` prefix sets them apart
   from region states (`status-bar-*`, `session-area-*`, `main-shell-*`) in a failure message.
 - **Rejected**: `proposal-session-view` (names the mockup, not the window); reusing
   `status-bar-steady` (one worktree, one group, one tab: it does not compose SC-004's regions, D3);
@@ -93,6 +95,14 @@ repository-relative; line numbers are as of the plan (2026-10-24, main after #11
 
 ## R6 — Anchors and the region gate
 
+- **Title bar and its divider**: `title_bar` anchors the bar itself, not the container that also
+  holds the 1 px hairline beneath it (`anatomy::app_bar::DIVIDER`; in `status-bar-steady` today the
+  container `0/0/0/0` is 65 px, the bar `0/0/0/0/0` 64 px, the hairline `0/0/0/0/1` 1 px at y 64).
+  The hairline is the title bar's own bottom edge (§7.1, `app_bar::BOTTOM_EDGE = HEIGHT +
+  DIVIDER`), so SC-004's "title bar's bottom edge" is `BOTTOM_EDGE` and its "0 px gap" is between
+  that edge and `shell.body`'s top; its "44 px tall" is `HEIGHT`. The gate reads both constants. If
+  #1127 drops the divider (or the constant), the rule follows what #1127 ships: the bottom edge is
+  then the bar's own, `BOTTOM_EDGE == HEIGHT`.
 - **Decision**: each new state anchors `shell.root`, `title_bar`, `shell.body`, `sidebar`,
   `session.area` (the session area, or the Overview in its place) and `status_bar`. Paths are read
   from the resolved fixture after regeneration, never from the source
@@ -103,10 +113,14 @@ repository-relative; line numbers are as of the plan (2026-10-24, main after #11
      `micold_core::tokens::anatomy` (today `app_bar::HEIGHT` = 64.0; #1127 sets it to 44) and its
      top is 0;
   2. `status_bar` height equals `anatomy::status_bar::HEIGHT` (28.0) and its bottom is the window's;
-  3. `title_bar` bottom equals `shell.body` top (gap 0, SC-004), `shell.body` bottom equals
-     `status_bar` top;
+  3. `title_bar.y + app_bar::BOTTOM_EDGE` (the bar plus its hairline) equals `shell.body` top (gap
+     0, SC-004), `shell.body` bottom equals `status_bar` top;
   4. `sidebar` and `session.area` each span `shell.body`'s height, `sidebar` right edge equals
-     `session.area` left edge.
+     `session.area` left edge;
+  5. in `window-overview` only, a state-level assertion on the `State` the state builds (the
+     records hold geometry, not style): the Overview is open, and the sidebar's selected row is
+     the Overview row. The selection's field or accessor comes from #1125 M3 as merged (open until
+     stage 2, as in R5).
 - **Rationale**: SC-004 is a claim about numbers, and the fixture can only catch a change, never a
   defect older than it (`layout-snapshot.md#3-the-containment-invariant`). The gate is also each new
   anchor's "property only its own element satisfies" that the page requires ("Add an anchor, add
@@ -117,8 +131,8 @@ repository-relative; line numbers are as of the plan (2026-10-24, main after #11
   regenerated defect).
 - **Test-first**: the gate is test code over an unchanged layout, so it passes when written. Its
   red is shown by mutation (quickstart §A3): moving a region edge by 1 px fails the fixture naming
-  the state (SC-005), and breaking each of the four assertions by a 1 px edit fails the gate; both
-  are reverted.
+  the state (SC-005), breaking each of assertions 1–4 by a 1 px edit fails the gate, and building
+  `window-overview` with the Overview closed fails assertion 5; all are reverted.
 
 ## R7 — Fixture regeneration
 

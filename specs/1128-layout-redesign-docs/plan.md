@@ -96,9 +96,13 @@ says so (Edge cases); M3 and M4 then compose what shipped.
   [research R5](research.md#r5--whole-window-covered-states-names-and-composition).
 - `strip_with(shells, helpers)` gains a variant taking the base `State` and the location, so the
   strip is built on `with_every_card_state()` at `feat-working`; existing callers keep their
-  result.
-- Gate W reads `micold_core::tokens::anatomy::status_bar::HEIGHT` and the title bar's height
-  constant (today `anatomy::app_bar::HEIGHT` = 64.0; #1127 makes it 44), never literals (R6).
+  result. At `feat-working` it replaces the session `with_every_card_state()` added there with its
+  main session, keeping `ActivitySignal::Working`, so the row stays in its group (R5).
+- Gate W reads `micold_core::tokens::anatomy::status_bar::HEIGHT` and the title bar's
+  `anatomy::app_bar::HEIGHT` (today 64.0; #1127 makes it 44) and `BOTTOM_EDGE` (`HEIGHT +
+  DIVIDER`), never literals (R6). `title_bar` anchors the bar, not its container; the 1 px
+  hairline is the bar's bottom edge, so the body starts at `BOTTOM_EDGE` (W1, W3). W5 asserts on
+  the `State`, not the records.
 - Regenerate and confirm byte equality on main after #1127 (R7); `layout-snapshot.md` *What is
   covered* gets one passage listing each region's states with the issue that added them (#1124
   `status-bar-*`, #1125 `main-shell-sidebar-grouped` and its later states, #1126 `session-area-*`,
