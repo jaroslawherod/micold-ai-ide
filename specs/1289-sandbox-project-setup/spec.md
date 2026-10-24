@@ -8,7 +8,7 @@
 
 **Input**: User description: "Sandbox: per-project setup command and PATH for project toolchains
 (issue #1289). A sandbox has no per-project setup. The only customization is a daemon-wide 'My own
-image' (`docs/user-guide/sandboxed-daemon.md:27-35`). A project that uses `mise` (or any other
+image' (`docs/user-guide/sandboxed-daemon.md`, "Which image it runs on", lines 21-35). A project that uses `mise` (or any other
 toolchain manager) gets nothing installed, so every new session works out that the toolchain is
 missing and installs ~1 GB by hand. Even once tools are installed under the home (`~/.local/bin`,
 mise shims), they are not on `PATH` for sessions or for the MCP servers Claude Code starts. A project
@@ -53,6 +53,9 @@ the shim's name starts without a "not found in PATH" error.
    CLI starts that MCP server, **Then** the server starts (it inherits the session's `PATH`).
 4. **Given** an image whose own `PATH` already names a tool by the same name in a system folder,
    **When** a session starts, **Then** the version in the sandbox home folders is found first.
+7. **Given** a different `claude` executable in `~/.local/bin` of the sandbox home and Claude Code
+   installed and offered by the app, **When** a Claude Code session starts, **Then** the app's
+   installed Claude Code runs, and the one in `~/.local/bin` is not used.
 5. **Given** neither folder exists in the sandbox home, **When** a session starts, **Then** it
    starts normally with no error or notice about the missing folders.
 6. **Given** a tool the user installs into one of those folders while a session is running,
@@ -167,13 +170,19 @@ existing daemon select.]
   offered.
 - **Daemon unavailable** when the worktree is created: the worktree is not created there (today's
   behaviour); no setup is attempted.
-- **Daemon drops or restarts while setup runs**: the row shows setup interrupted, with the output
+- **Daemon stops or restarts while setup runs**: the row shows setup interrupted, with the output
   received so far; **Run setup** runs it again.
+- **The app's connection to the daemon drops while setup runs**: setup keeps running (FR-018); the
+  row's state and output catch up when the app reconnects.
 - **The app closes while setup runs**: setup keeps running on the daemon (it belongs to the daemon,
   like a session), and the app shows its state and output when it reconnects.
 - **Two worktrees created at once**: each runs its own setup; neither waits for the other. A
   command that cannot run concurrently with itself (two `mise install` writing the same cache)
   handles that itself; the app does not serialise runs.
+- **Two requests to set up the same worktree at once** (two app windows, two apps on one daemon, or
+  the app and an AI session): the daemon runs at most one setup per worktree (or per project folder
+  for the "Default" entry); a request while one runs is refused, and the requester is told that
+  setup is already running there.
 - **Setup command changed while a run is in progress**: the running command is not affected; the
   new command is used from the next run.
 - **Very long output**: the output view keeps at least the last 10,000 lines of a run; older lines
@@ -184,14 +193,15 @@ existing daemon select.]
   so it fails or proceeds by itself; the user can stop it.
 - **Deleting a worktree while its setup runs**: setup is stopped first, then the worktree is
   deleted with the usual confirmation.
-- **Platforms**: on a host daemon on Windows the setup command runs in the same shell the app's
-  environment-include uses there (PowerShell); on Linux and macOS, and in every container or
-  Kubernetes daemon, it runs in `sh`. Mapped-path Windows sandboxes keep today's refusal (`paths are
-  mapped`), so no setup runs there.
+- **Platforms**: the setup command runs in the shell environment-include uses on that daemon:
+  `bash` on Linux and macOS and in container and Kubernetes daemons (falling back to `sh` when the
+  image has no `bash`), PowerShell on a Windows host daemon. Mapped-path Windows sandboxes keep
+  today's refusal (`paths are mapped`), so no setup runs there.
 - **Empty or whitespace-only command**: treated as no setup command; saving it clears the setting.
-- **Tools installed in the sandbox home with the same name as the AI CLI** (for example a different
-  `claude` in `~/.local/bin`): the home folders come first, so that one is used; this is the same
-  rule as any other tool.
+- **Tools installed in the sandbox home with the same name as an offered AI CLI** (for example a
+  `claude` in `~/.local/bin`, which Claude Code's own installer writes): the app's offered CLI comes
+  first on `PATH` (FR-001), so the session runs the CLI the app installed; other tools in the home
+  folders win over the image's.
 
 ## Requirements *(mandatory)*
 
@@ -200,9 +210,12 @@ existing daemon select.]
 **PATH for project toolchains (Story 1)**
 
 - **FR-001**: On a container or Kubernetes daemon, the environment given to every AI CLI process
-  and every regular terminal MUST have the sandbox home's `.local/bin` folder and the mise shims
-  folder of the sandbox home at the front of `PATH`, in that order, ahead of the image's own `PATH`
-  entries.
+  and every regular terminal MUST have this `PATH` order: first the `bin` folders of the AI CLIs the
+  app installed and offers (unchanged from today), then the sandbox home's `.local/bin` folder, then
+  the mise shims folder of the sandbox home, then the image's own `PATH` entries. The app's offered
+  CLIs come first so that the CLI a session was started with is the one the app installed and
+  checked, even when the home holds another copy (Claude Code's own installer writes
+  `~/.local/bin/claude`).
 - **FR-002**: The mise shims folder MUST be the one mise itself uses in the sandbox home: the
   `shims` folder under `MISE_DATA_DIR` when the session environment sets it, otherwise under the
   XDG data folder (`$XDG_DATA_HOME/mise`, defaulting to `~/.local/share/mise`).
@@ -216,7 +229,7 @@ existing daemon select.]
   result MUST still contain the folders of FR-001; a script that sets `PATH` itself MAY put further
   entries ahead of them.
 - **FR-007**: The check that decides which AI CLIs a sandboxed worktree offers MUST look the CLIs
-  up with the same `PATH` a session there gets.
+  up with the same `PATH`, in the same order, that a session there gets (FR-001).
 - **FR-008**: A daemon running directly on the user's computer (host or remote over SSH) MUST keep
   its current `PATH` behaviour unchanged.
 
@@ -240,13 +253,14 @@ existing daemon select.]
 - **FR-013**: Worktree creation MUST NOT wait for setup to finish, and MUST NOT fail because setup
   fails; the `create_worktree` result MUST say whether setup was started.
 - **FR-014**: Starting a session or a regular terminal in a worktree MUST NOT wait for its setup.
-- **FR-015**: Each worktree MUST show its setup state: none, running, succeeded, failed, stopped or
-  interrupted. The state MUST be visible on the worktree's row without opening anything.
-- **FR-016**: The user MUST be able to open a worktree's setup output: everything the command
+- **FR-015**: Each worktree, and the project's "Default" entry, MUST show its setup state: none, running, succeeded, failed, stopped or
+  interrupted. The state MUST be visible on the row without opening anything.
+- **FR-016**: The user MUST be able to open the setup output of a worktree or of the "Default" entry: everything the command
   printed on standard output and standard error, in the order printed, updated while it runs, and
   kept after it ends until the worktree is deleted or setup runs again.
 - **FR-017**: When setup fails — a non-zero exit, a signal, or the command could not be started —
-  the app MUST post a notification that names the project and the worktree, and the output view
+  each app connected to that daemon MUST post one notification for that run (one per app, not one
+  per window) that names the project and the worktree, and the output view
   MUST show the exit status or the reason it could not start.
 - **FR-018**: Setup MUST belong to the daemon: it MUST keep running when the app disconnects or
   closes, and the app MUST show its current state and output when it reconnects.
@@ -264,6 +278,10 @@ existing daemon select.]
   project's current command as FR-010 and FR-011 describe, replacing the previous run's output.
 - **FR-023**: While setup runs, the worktree's menu MUST offer **Stop setup**, which ends the
   command and every process it started and sets the state to stopped.
+- **FR-023a**: The daemon MUST allow at most one setup run at a time per worktree (and per project
+  folder for the "Default" entry), whoever asks. A request while one runs MUST be refused with a
+  reason that says setup is already running there; the app shows it, and `create_worktree` or any
+  tool request gets it in its result.
 - **FR-024**: Deleting a worktree whose setup is running MUST stop setup before the worktree is
   removed.
 
@@ -294,7 +312,8 @@ existing daemon select.]
   and test commands run.
 - **SC-003**: A user can tell whether a worktree's setup is running, succeeded or failed from the
   sidebar alone, without opening anything, in every case.
-- **SC-004**: Every failed setup run produces exactly one notification naming its worktree, and its
+- **SC-004**: Every failed setup run produces exactly one notification per connected app naming its
+  worktree, and its
   output view ends with the reason (the exit status or the start failure line is its last line).
 - **SC-005**: Creating a worktree with a setup command takes no longer to complete (to the row
   appearing and a session being startable) than creating one without, within 1 second.
