@@ -39,6 +39,30 @@ every earlier slice has merged:
 Where a slice lands differently from this table, the as-built application is the source of truth
 for every deliverable below, and the difference is written down (FR-013).
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Is FR-004's guide-equals-bindings check the "pure logic in micold-core with unit tests" the
+  acceptance asks for, or does this docs-only slice satisfy that clause by stating it adds no
+  logic? → A: The check is that clause. It is a `micold-core` test that reads the shortcut table
+  between marker comments in `reviewing-changes.md` and compares it with the review key table the
+  application binds from `micold-core`, the way `terminal_only_doc.rs` pins the terminal-only table;
+  the page is then read under test, so it is excluded from `micold-docs` in `.gitattributes` as
+  `worktrees-and-sessions.md` is. _(agent-resolved:
+  crates/micold-core/tests/terminal_only_doc.rs; .gitattributes#micold-docs;
+  .specify/memory/constitution.md#TDD gate)_
+- Q: Is the visual pass recorded at 1280×800 only, or also at 900 and 1920 px wide? → A: 1280×800
+  only, in both themes. The issue's acceptance and the redesign doc's Tasks section (the per-slice
+  acceptance habit) both say 1280×800; the 900 / 1920 list in "Scope and files" is the earlier
+  proposal. Narrow and wide windows stay covered by the layout snapshot's gates (FR-007). _(agent-resolved:
+  docs/development/review-redesign.md#Tasks)_
+- Q: Are mockup elements the build does not have removed from the boards or kept and labelled? →
+  A: An element the redesign doc lists as a follow-up (the split option of section 0, and any other
+  follow-up FR-013 records) stays on its board labelled "follow-up, not built"; an element the build
+  dropped or replaced, with no follow-up planned, is removed. _(agent-resolved:
+  docs/development/review-redesign.md#0. Review is a tab, one per entry, and keeps its state — "Split option … Follow-up"; FR-013)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The user guide describes the review tab as it is (Priority: P1)
@@ -242,14 +266,17 @@ the merged PRs.
   changes** in the row menu, the header **Changes** button, and any review line the sidebar row shows.
 - **FR-004**: The keyboard shortcuts listed in the user guide MUST equal the review keys the
   application binds, checked by an automated test so a later key change that skips the guide fails
-  CI. [NEEDS CLARIFICATION: is this check the "pure logic in micold-core with unit tests" the
-  acceptance asks for, or does this docs-only slice satisfy that clause by stating it adds no logic?]
+  CI. The check is a `micold-core` test that compares the shortcut table between marker comments in
+  `reviewing-changes.md` with the review key table the application binds from `micold-core`, as
+  `crates/micold-core/tests/terminal_only_doc.rs` does for the terminal-only table; it is this
+  feature's "pure logic in micold-core with unit tests". Because the test reads the page,
+  `.gitattributes` MUST exclude `docs/user-guide/reviewing-changes.md` from `micold-docs`.
 
 **Layout snapshot**
 
 - **FR-005**: After every blocker has merged, the geometry fixture MUST be re-recorded once, against
   the bundled monospace face, and the re-record's diff MUST be explained line group by line group in
-  the PR (review states, Overview cards, anything else with its reason).
+  the PR (review-tab states; any other group, e.g. Overview drift from #1128, with its reason).
 - **FR-006**: The fixture's covered states MUST include at least: the Review tab shown beside session
   tabs with a badge; the hidden tab with *changed since you looked*; the review bar with drafts, sent
   and replies counts; the drawer open on **Drafts** and on **Replies**; the source control open (as an
@@ -272,9 +299,9 @@ the merged PRs.
   the bundled monospace face with an inline draft card and a sent card showing its reply; review bar
   above the status bar in idle, *Sending…* and error states; drawer over the diff on both tabs;
   shortcut sheet; *changed since you looked* on the tab and the notice in the header; drag-to-comment
-  composer; empty review; drawer with no drafts and no replies; a PR source whose diff cannot be read; two worktrees with separate open Review tabs (switching between them); Overview board with as-built cards. [NEEDS CLARIFICATION: 1280×800 only, as
-  the issue's acceptance says, or also 900 and 1920 px wide as the redesign doc's "Scope and files"
-  lists?]
+  composer; empty review; drawer with no drafts and no replies; a PR source whose diff cannot be
+  read; two worktrees with separate open Review tabs (switching between them); Overview board with
+  as-built cards. The pass is recorded at 1280×800 only; other widths are covered by FR-007.
 - **FR-010**: Each FAIL in the pass MUST be either fixed in this feature (styling or doc defects that
   do not change behaviour) or filed as an issue linked from the pass results; no FAIL is left
   unrecorded.
@@ -287,8 +314,9 @@ the merged PRs.
   count formats and state treatments the build draws, using the canvas's shared `tokens.css`. The
   **Overview** board and `OverviewCard` component MUST match the as-built Overview cards (tiers, stripe
   on a neutral card, empty rows removed, title wrapping, cards per row at the board's width).
-- **FR-012**: Mockup elements the build does not have MUST be [NEEDS CLARIFICATION: removed from the
-  boards, or kept and labelled "follow-up, not built" (for example the split option of section 0)?].
+- **FR-012**: A mockup element the build does not have MUST stay on its board labelled "follow-up,
+  not built" when the redesign doc lists it as a follow-up (for example the split option of section
+  0, and every follow-up FR-013 records), and MUST be removed from the boards otherwise.
 
 **Redesign record**
 
