@@ -62,7 +62,7 @@ const BACKGROUND_OS_THEME_POLL: Duration = Duration::from_secs(1);
 /// FR-018, SC-003, SC-006): at most 12 readings an hour, 30 requests at most each.
 const PR_STATUS_INTERVAL: Duration = Duration::from_secs(300);
 
-/// How often the app bar re-reads which plan-usage windows are still current while a reading is
+/// How often the status bar re-reads which plan-usage windows are still current while a reading is
 /// held (feature 490, research R7): a passed reset leaves the indicator within 30 s.
 const PLAN_USAGE_TICK: Duration = Duration::from_secs(30);
 

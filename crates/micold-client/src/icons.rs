@@ -136,7 +136,7 @@ pub enum Icon {
     ChecksFailing,
     /// **Open pull request** in a worktree row's menu (feature 040, §4) — `open_in_new`.
     OpenInBrowser,
-    /// The Claude plan's usage in the app bar (feature 490, contract U2) — `data_usage`.
+    /// The Claude plan's usage in the status bar (feature 490, contract U2) — `data_usage`.
     PlanUsage,
     /// The same indicator at or above the warning threshold (feature 490, U2, FR-010) —
     /// `warning`, a different shape so the warning is not colour alone.

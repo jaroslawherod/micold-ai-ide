@@ -248,7 +248,7 @@ pub fn view<'a>(
     .on_toggle(|v| Message::Settings(SettingsMsg::PlanUsageToggled(v)));
     let plan_usage = field_note(
         plan_usage,
-        Some("Shows your plan's usage and next limit reset in the app bar. The values come from Claude Code's status-line data in the sessions this app runs, and from the plan-limit events of structured sessions. No credential is read, and nothing is sent anywhere."),
+        Some("Shows your plan's usage and next limit reset in the status bar. The values come from Claude Code's status-line data in the sessions this app runs, and from the plan-limit events of structured sessions. No credential is read, and nothing is sent anywhere."),
         roles,
     );
     let plan_usage_warn = TextField::new("", &draft.environment.plan_usage_warn_percent, roles)

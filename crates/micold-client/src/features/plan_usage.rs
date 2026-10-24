@@ -1,4 +1,4 @@
-//! What this window holds of the Claude plan's usage, and what the app bar shows of it (feature
+//! What this window holds of the Claude plan's usage, and what the status bar shows of it (feature
 //! 490, data-model *Client state*).
 //!
 //! The service keeps the one reading and pushes it (`Welcome.plan_usage`, `PlanUsageChanged`);
@@ -6,7 +6,7 @@
 //! and with the switch off. Whether a window is still current is decided here, when drawn
 //! (research R7), so the caller passes `now` and the local offset.
 //!
-//! Render-free: the app bar maps [`View`] to a `UsageIndicator`.
+//! Render-free: the status bar maps [`View`] to a `UsageIndicator`.
 
 use micold_core::local_time::UtcOffset;
 use micold_core::plan_usage::{UsageReading, WarnPercent, DEFAULT_PLAN_USAGE_ENABLED};
