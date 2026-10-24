@@ -76,3 +76,19 @@ and the files restored from copies (nothing committed); T043's red is the defect
 | T044 (08cc9207) | A sub-pixel sliver does not stretch its row; a spaced label takes its role's line height | mutants: `.filter(\|p\| p.rect.width >= ROW_PIECE)` removed from `row_heights`; `at_role_spaced` without its `line_height`; `a_sliver_does_not_stretch_its_row`: `[272.0, 272.0]`; `a_spaced_label_takes_its_roles_line_height`: left `Relative(1.3)` right `Absolute(Pixels(24.0))` | pass at HEAD |
 | T044 (92424431) | The five-state grid is drawn (at least 100 px) and the next pose starts below it | before `CardGrid::unscrolled()`: the grid was 0 px tall at 600 px (M4 round-2 visual pass, ledger *Review rounds*) | `the_five_state_grid_is_drawn_and_the_next_pose_starts_below_it` passes |
 | T046 | No file that reads prompt or label text logs (FR-020) | `// tracing::debug!("{text}");` appended to `markup.rs`: `src/markup.rs:118: tracing:: in …` | `cargo test -p micold-core --test prompt_text_is_never_logged` passes |
+
+## M5: BUG-1298, the Overview Card Redesign mockup (T050–T058)
+
+Red runs on 2026-10-24 at 350da4ad (`origin/main` 3c7db2eb plus the spec patch), with the T050
+tests added to `overview_card.rs`:
+`cargo test -p micold-client --lib -- overview_card::tests::the_card_is_an_outlined …` → 7 failed.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T050 (a) | A 1 px `outline_variant` edge on the card's left, right (header included) and bottom; the body on `surface`, both schemes | `the_card_is_an_outlined_frame_on_the_surface`: `NeedsAction: (0.0, 31.0) is not the 1 px outline_variant edge` (no border) | |
+| T050 (b) | Header words at 13 px, state 600, type 500 at 85 %, no type glyph, 8 / 14 px padding | `the_header_is_13_px_without_a_type_glyph_and_padded_8_by_14`: the state word left `12.0` right `13.0` | |
+| T050 (c) | Link, monospace 13 px short branch, then "· sessions" on one line in that order | `the_link_branch_and_sessions_share_one_meta_line`: `nothing starts "·"` (the sessions are a separate line, the link after the branch) | |
+| T050 (d) | "NOW" leads the activity's first line; the activity in `on_body` | `now_leads_the_activity_line`: `NOW leads the activity's first line: Painted { content: "Running autopilot on #1117", … }` | |
+| T050 (e) | A 6 px bar above the caption "Implement · 4/10 tasks" | `the_bar_lies_above_the_caption`: `no "Implement · 4/10 tasks"` (caption without "tasks", above a 4 px bar) | |
+| T050 (f) | No counts line under rows; "+1 more, hover to see" | `a_card_with_rows_has_no_counts_line`: `no counts line under rows: … "1 open · 1 merged" …` | |
+| T050 (g) | The title 12 px under the header, 14 px inside the edge, weight 600 | `the_body_starts_12_px_under_the_header_and_14_px_in`: left `Medium` right `Semibold` | |
