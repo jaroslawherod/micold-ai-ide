@@ -607,6 +607,10 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 /// Once it does drain, the offset may still be `None`: the row was already fully visible, and
 /// FR-009 says a reveal that did not need to move the list must not move it.
 fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
+    // Feature 1125 (FR-006, R5): a target in a closed state group opens it, so its row is drawn.
+    if app.core.sidebar.pending_reveal_scroll {
+        app.core.open_group_of_reveal_target();
+    }
     if !app.core.sidebar.pending_reveal_scroll
         || app.core.sidebar.viewport_height == 0
         || !app.core.current_session_is_listed()
@@ -1087,6 +1091,8 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
 /// Scroll the sidebar to the row the Overview revealed, recording where the list was sent for the
 /// reason `reveal_scroll` does (BUG-002).
 fn revealed_scroll<T: Send + 'static>(app: &mut App) -> Task<T> {
+    // Feature 1125 (FR-006, R5): the revealed row's closed state group opens first.
+    app.core.open_group_of_revealed();
     let Some(offset) = app.core.revealed_scroll_offset() else {
         return Task::none();
     };

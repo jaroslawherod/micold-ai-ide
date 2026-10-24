@@ -369,12 +369,12 @@ pub const SESSION_HEADER_CHANGES: &[usize] = &[0, 0, 1, 1, 0, 0, 0, 1];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
-/// the `Default` project row, then `feat-short`, then its session, then the two remaining
-/// worktrees. Index 2 is that session.
+/// the Idle group's header (feature 1125), the `Default` project row, then `feat-short`, then its
+/// session, then the two remaining worktrees. Index 3 is that session.
 ///
 /// Named because this is the node whose height differed from its siblings' for two days with no
 /// fixture able to say so — every other covered state stops at depth 0.
-const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2];
+const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3];
 
 /// Deliberately long, so the label/close-button relationship this gate was built to watch is under
 /// real pressure at the canonical window size (FR-008b, FR-018).
@@ -476,6 +476,77 @@ fn with_stale_pull_requests(width: u16) -> State {
 fn with_removable_pull_request(width: u16) -> State {
     let mut state = with_pull_requests(width);
     state.pr_status.removable.insert("fix/a-bug".to_string());
+    state
+}
+
+/// *Default* and one worktree per card state (feature 1125, T018): `needs-action` waits on a
+/// permission prompt, `fix-checks` has an open pull request with failing checks (Needs attention),
+/// `feat-working` a working session, `idle-one` nothing, and `merged-one` a merged pull request
+/// holding all of its work (Done, collapsed as it starts).
+fn with_every_card_state() -> State {
+    use micold_core::protocol::messages::ActivitySignal;
+    use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
+    use micold_core::session::SessionLifecycle;
+    let mut state = with_project();
+    state.worktree.worktrees = vec![
+        worktree("needs-action", "feat/needs-action"),
+        worktree("fix-checks", "fix/checks"),
+        worktree("feat-working", "feat/working"),
+        worktree("idle-one", "feat/idle-one"),
+        worktree("merged-one", "feat/merged-one"),
+    ];
+    let session = |dir: &str, activity: ActivitySignal, paused: bool| {
+        let mut session = Session::start_new(
+            SessionLocation::Worktree(dir.to_string()),
+            AiCli::ClaudeCode,
+        );
+        session.lifecycle = SessionLifecycle::Running;
+        session.activity = activity;
+        session.paused_on_user = paused;
+        session
+    };
+    state
+        .workspace
+        .sessions
+        .entry(PathBuf::from(PROJECT))
+        .or_default()
+        .extend([
+            session("needs-action", ActivitySignal::AwaitingInput, true),
+            session("feat-working", ActivitySignal::Working, false),
+        ]);
+    let status = |number: u64, state| PullRequestStatus {
+        number,
+        title: format!("Pull request {number}"),
+        url: format!("https://github.com/o/r/pull/{number}"),
+        state,
+        review: ReviewState::None,
+        head: "abc".to_string(),
+        conflict: false,
+    };
+    state.pr_status.enabled = true;
+    state.pr_status.held = true;
+    state.pr_status.read_at = Some(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs()),
+    );
+    state.pr_status.statuses.insert(
+        "fix/checks".to_string(),
+        status(
+            7,
+            PrState::Open {
+                checks: CheckStatus::Failing,
+            },
+        ),
+    );
+    state
+        .pr_status
+        .statuses
+        .insert("feat/merged-one".to_string(), status(8, PrState::Merged));
+    state
+        .pr_status
+        .removable
+        .insert("feat/merged-one".to_string());
     state
 }
 
@@ -652,11 +723,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                     // Re-pointed under feature 905 (T008): the row gained its state-icon slot after
                     // the twisty, so the label moved from `…/0/1` to `…/0/2` and the action
                     // cluster from `…/0/2` to `…/0/3`.
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 2],
+                    // Re-pointed under feature 1125 (T018): the Idle group's header is the tree's
+                    // first row, so the long-named worktree's row moved from index 2 to 3.
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 2],
                 },
                 Anchor {
                     name: "sidebar.row.delete_button",
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 3, 1],
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 3, 1],
                 },
                 // `Toolbar`'s leading `text(title)` (`material/toolbar.rs:46`). Named on both shell
                 // states rather than on all eleven: the toolbar is behind every dialog too, and an
@@ -697,6 +770,15 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TOOLBAR_TITLE,
                 },
             ],
+        },
+        // Feature 1125 (T018): every group header, Done collapsed as it starts.
+        CoveredState {
+            name: "main-shell-sidebar-grouped",
+            build: || StateUnderTest::new(with_every_card_state()),
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         CoveredState {
             name: "add-worktree-dialog-new-branch",

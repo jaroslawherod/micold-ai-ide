@@ -463,6 +463,50 @@ pub fn numeric_ticket(dir_name: &str) -> Option<u64> {
     micold_core::naming::ticket(dir_name)?.parse().ok()
 }
 
+/// A location's card state and why (feature 1125, research R2): from its un-archived sessions, the
+/// agent requests waiting on them and its branch's pull request reading. The Overview's card and the
+/// sidebar's state group both ask this, so the two cannot disagree about a location (US1.7).
+pub fn location_card_state(
+    app: &crate::app::State,
+    location: &SessionLocation,
+    branch: Option<&str>,
+) -> (
+    micold_core::overview::CardState,
+    micold_core::overview::CardReason,
+) {
+    let sessions: Vec<&micold_core::session::Session> = app
+        .active_sessions()
+        .iter()
+        .filter(|s| s.location == *location && !s.archived)
+        .collect();
+    let agent_request = app
+        .agent_confirm
+        .pending
+        .iter()
+        .any(|prompt| sessions.iter().any(|s| s.id == prompt.session));
+    micold_core::overview::card_state(&micold_core::overview::CardSignals {
+        location: micold_core::location_state::location_state(sessions.iter().copied()),
+        agent_request,
+        pr: pr_signal(&app.pr_status, branch),
+    })
+}
+
+/// The pull request reading for a branch: unknown while the reading is off or holds nothing (never
+/// read, or released), and for a location with no branch, such as Default (research R6, R14).
+pub fn pr_signal(
+    pr: &crate::features::pr_status::State,
+    branch: Option<&str>,
+) -> micold_core::overview::PrSignal {
+    use micold_core::overview::{CurrentPr, PrSignal};
+    match branch {
+        Some(branch) if pr.enabled && pr.read_at.is_some() => PrSignal::Known {
+            current: pr.statuses.get(branch).map(CurrentPr::from_status),
+            removable: pr.removable.contains(branch),
+        },
+        _ => PrSignal::Unknown,
+    }
+}
+
 /// The titles to fetch on opening: each numeric ticket of `dirs` with no entry yet, once, in
 /// order. None unless the project's issue tooling is GitHub and available (R8, FR-019).
 pub fn titles_to_fetch(state: &State, dirs: &[String], github_available: bool) -> Vec<u64> {

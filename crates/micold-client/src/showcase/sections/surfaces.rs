@@ -1409,8 +1409,33 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
         roles,
     )
     .selected_label_role(material::TypeRole::Label);
+    // A sidebar state group's header (feature 1125, FR-021, R8): open over its rows, and closed.
+    let group_header = |open: bool| {
+        let mut items = vec![material::TreeItem::new(
+            0,
+            micold_core::sidebar_groups::header_text(
+                micold_core::sidebar_groups::StateGroup::Working,
+                2,
+            ),
+            roles.on_surface_variant,
+        )
+        .heading()
+        .expandable(open, Message::NoOp)];
+        if open {
+            for (name, _) in samples::WORKTREES.iter().take(2) {
+                items.push(
+                    material::TreeItem::new(0, *name, roles.on_surface).on_press(Message::NoOp),
+                );
+            }
+        }
+        material::TreeView::new(items, roles)
+            .density(micold_core::tokens::density::DENSE)
+            .label_role(TypeRole::SidebarName)
+    };
     arrange(
         vec![
+            posed("group header, open", group_header(true), roles),
+            posed("group header, closed", group_header(false), roles),
             posed("keyboard-focused worktree row", keyboard_focused, roles),
             posed("sessions started by an agent", spawned, roles),
             posed("run group, expanded", group(true), roles),

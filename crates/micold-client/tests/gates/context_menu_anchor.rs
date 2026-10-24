@@ -397,8 +397,12 @@ fn expected_origin(point: (f32, f32), panel: &LayoutRecord) -> ((f32, f32), bool
 /// **Row 0 is the "Default" project-root row** (`sidebar_entries`' first entry), which carries no
 /// context menu — the worktrees start at 1. Getting this wrong reports "the press reached no
 /// handler" rather than a wrong anchor, which is why those are two different failures here.
+///
+/// `index` counts the rows under the one state group these gates' projects fill: every location
+/// in them is Idle, so the tree's first child is the Idle group's header (feature 1125) and row
+/// `index` is the tree's child `index + 1`.
 pub(crate) fn sidebar_row(index: usize) -> Vec<usize> {
-    vec![0, 0, 1, 0, 0, 0, 2, 0, 0, index]
+    vec![0, 0, 1, 0, 0, 0, 2, 0, 0, index + 1]
 }
 
 /// The last worktree row: past the Default row, past the other seven.

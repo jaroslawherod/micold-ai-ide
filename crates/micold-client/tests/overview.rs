@@ -1172,10 +1172,7 @@ fn a_card_whose_worktree_sits_in_a_collapsed_group_has_its_row_drawn_once_activa
     state.update(Message::Runs(RunsMsg::GroupsChanged(vec![group])));
     state.update(Message::Runs(RunsMsg::GroupToggled(id)));
     assert!(!state.runs.is_expanded(id), "the group starts collapsed");
-    assert_eq!(
-        location_row(&state.sidebar_entries(), &wt("feat-a-1")),
-        None
-    );
+    assert_eq!(location_row(&state.sidebar_list(), &wt("feat-a-1")), None);
 
     open_overview(&mut state);
     state.update(Message::Overview(Msg::CardActivated(
@@ -1183,7 +1180,7 @@ fn a_card_whose_worktree_sits_in_a_collapsed_group_has_its_row_drawn_once_activa
     )));
     assert!(state.runs.is_expanded(id), "the activation opens the group");
     assert!(
-        location_row(&state.sidebar_entries(), &wt("feat-a-1")).is_some(),
+        location_row(&state.sidebar_list(), &wt("feat-a-1")).is_some(),
         "the revealed row is drawn, so it can be scrolled to and its start control focused"
     );
 }
@@ -2296,5 +2293,27 @@ mod issue_link {
                 "{close:?}"
             );
         }
+    }
+}
+
+/// Feature 1125 (T003, US1.7, R2): a location's card state comes from one call, and the card the
+/// Overview builds for it carries that same state.
+#[test]
+fn a_locations_card_state_is_the_one_its_card_shows() {
+    use micold_client::features::overview::location_card_state;
+    let state = support::sidebar_fixture::five_states();
+    let all = cards(&state);
+    for (location, branch, expected) in [
+        (wt("act"), Some("feat/act"), CardState::NeedsAction),
+        (wt("attn"), Some("feat/attn"), CardState::NeedsAttention),
+        (wt("work"), Some("feat/work"), CardState::Working),
+        (wt("done"), Some("feat/done"), CardState::Done),
+        (wt("idle"), Some("feat/idle"), CardState::Idle),
+        (SessionLocation::Default, None, CardState::Idle),
+    ] {
+        let (got, reason) = location_card_state(&state, &location, branch);
+        assert_eq!(got, expected, "{location:?}");
+        let shown = card(&all, &location);
+        assert_eq!((shown.state, shown.reason), (got, reason), "{location:?}");
     }
 }

@@ -116,6 +116,9 @@ bar in `empty-no-project-open` and `empty-project-without-worktrees`. A state na
 `StateUnderTest::sandbox`; one that does not keeps it off, so no bring-up animation is recorded.
 `gates/status_bar_fits.rs` holds the bar's texts inside their boxes at the smallest window.
 
+Feature 1125 added the sidebar grouped by state (`main-shell-sidebar-grouped`), which holds *Default* and one worktree per card state,
+so every group header is recorded, Done collapsed as it starts.
+
 Every state resolves at one canonical window size, 1280×800, from fixed invented data. Nothing reads
 your workspace, configuration or session store — a fixture recording the author's own machine would
 be unreproducible anywhere else, including on the same machine tomorrow.

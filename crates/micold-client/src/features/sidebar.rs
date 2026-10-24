@@ -29,12 +29,21 @@
 //!
 //! - **what is expanded**: `expanded` (the worktree rows the user has opened), `default_expanded`,
 //!   and `pending_reveal_scroll`, the flag that arms a scroll-into-view once layout knows the height;
-//! - **what is shown**: `filters`, `filter_open`;
+//! - **what is shown**: `filters`, `filter_open`, and `group_choices` (feature 1125: the user's
+//!   open or closed choice per project and state group);
 //! - **the panel's own geometry**: `hidden`, `width`, `scroll_offset`, `viewport_height`.
 //!
 //! Four kept the names they had flat on the root. Six shed the `sidebar` the qualifier carries:
 //! `sidebar_filters`, `sidebar_filter_open`, `sidebar_hidden`, `sidebar_width`,
 //! `sidebar_scroll_offset` and `sidebar_viewport_height` (T035).
+//!
+//! # State groups (feature 1125)
+//!
+//! [`crate::app::State::sidebar_groups`] puts the entries in [`SidebarGroup`]s by their card
+//! state, through `micold_core::sidebar_groups`; [`crate::app::State::sidebar_list`] flattens them
+//! into the drawn list of [`ListRow`]s, a [`GroupHeaderRow`] per group then its entries when open.
+//! The row metrics ([`row_heights`], [`row_index`], [`location_row`], [`current_session_row`])
+//! walk that list. `Msg::GroupToggled` flips a group for the active project.
 //!
 //! **The tree is not here.** Which projects, worktrees and sessions the sidebar lists is derived on
 //! every view from `state.workspace` and `state.worktree`, which is what lets a wholesale
@@ -54,10 +63,13 @@ use micold_core::naming::{ConventionalType, Tag};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
+use micold_core::sidebar_groups::{
+    group_by_state, group_open, run_group_state, RunCard, StateGroup,
+};
 use micold_core::tokens::{density, spacing};
 use micold_core::worktree::Worktree;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// What this feature remembers (feature 028, contract S1).
 ///
@@ -125,6 +137,11 @@ pub struct State {
     /// The row a navigation chord gave the sidebar's keyboard (feature 803, contracts/ui.md U3):
     /// the reveal scroll reaches it rather than the current session's row.
     pub keyboard_row: Option<RowRef>,
+    /// The user's open (`true`) or closed (`false`) choice per project and state group (feature
+    /// 1125, FR-005, research R4); a group never chosen is absent and follows
+    /// [`group_open`]'s default. Keyed by group, not by row, so it is never pruned; untouched by a
+    /// project switch; in memory only, for the run.
+    pub group_choices: BTreeMap<PathBuf, BTreeMap<StateGroup, bool>>,
 }
 
 /// A sidebar row named by what it shows, not by its position, so it survives the list arriving
@@ -169,6 +186,59 @@ pub enum SidebarEntry {
     Default(DefaultNode),
     /// A run group's row with its runs one level in (feature 483, G1–G3).
     Group(GroupNode),
+}
+
+/// One state group of the sidebar (feature 1125, data-model *SidebarGroup*): its entries in
+/// [`crate::app::State::sidebar_entries`] order, and whether it is open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SidebarGroup {
+    /// Which group.
+    pub group: StateGroup,
+    /// Whether its entries are drawn ([`group_open`], research R4).
+    pub open: bool,
+    /// The group's entries; a run group is one (FR-002).
+    pub entries: Vec<SidebarEntry>,
+}
+
+/// A group header as the list draws it (feature 1125, FR-002).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GroupHeaderRow {
+    /// Which group.
+    pub group: StateGroup,
+    /// How many entries it holds, drawn or not.
+    pub count: usize,
+    /// Whether its entries follow it.
+    pub open: bool,
+}
+
+/// One row of the sidebar's drawn list, top to bottom (feature 1125, research R3): a group's header,
+/// or an entry of an open group. A separate enum rather than a [`SidebarEntry`] variant, so a walk
+/// over locations never meets a header.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ListRow {
+    /// A state group's header.
+    Header(GroupHeaderRow),
+    /// An entry of an open group, drawn as today.
+    Entry(SidebarEntry),
+}
+
+impl From<SidebarEntry> for ListRow {
+    fn from(entry: SidebarEntry) -> Self {
+        ListRow::Entry(entry)
+    }
+}
+
+impl SidebarEntry {
+    /// Whether this entry draws `location`'s row: its own, or one of a run group's runs'.
+    pub fn holds(&self, location: &SessionLocation) -> bool {
+        match self {
+            SidebarEntry::Default(_) => *location == SessionLocation::Default,
+            SidebarEntry::Worktree(node) => node.location() == *location,
+            SidebarEntry::Group(group) => group.runs.iter().any(
+                |run| matches!(&run.row, RunRow::Worktree(node) if node.location() == *location),
+            ),
+        }
+    }
 }
 
 /// A run group's row (feature 483, parallel-surfaces G1, G2).
@@ -693,47 +763,51 @@ const ROW_GAP: f32 = spacing::XS;
 ///
 /// A location row is Material's two-line list item when it carries tags and its one-line item
 /// otherwise; a session row is always one line. Both figures come from the same `density::height`
-/// the renderer uses, at [`SIDEBAR_DENSITY`].
+/// the renderer uses, at [`SIDEBAR_DENSITY`]. A group header (feature 1125) is one line.
 ///
-/// Only *open* locations contribute session rows, because only those are drawn.
-pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
+/// Only *open* locations contribute session rows, because only those are drawn, and only the
+/// entries of open groups are in `rows` ([`crate::app::State::sidebar_list`]).
+pub fn row_heights(rows: &[ListRow]) -> Vec<f32> {
     let one_line = density::height(density::LIST_ROW_BASE, SIDEBAR_DENSITY);
     let two_line = density::height(density::LIST_ROW_TWO_LINE_BASE, SIDEBAR_DENSITY);
     let mut heights = Vec::new();
-    for entry in entries {
+    let location = |heights: &mut Vec<f32>, tagged: bool, shown: bool, sessions: usize| {
+        heights.push(if tagged { two_line } else { one_line });
+        if shown {
+            heights.extend(std::iter::repeat_n(one_line, sessions));
+        }
+    };
+    for row in rows {
+        let ListRow::Entry(entry) = row else {
+            heights.push(one_line);
+            continue;
+        };
         match entry {
             SidebarEntry::Default(node) => {
-                heights.push(one_line);
-                if node.sessions_shown() {
-                    heights.extend(std::iter::repeat_n(one_line, node.sessions.len()));
-                }
+                location(
+                    &mut heights,
+                    false,
+                    node.sessions_shown(),
+                    node.sessions.len(),
+                );
             }
-            SidebarEntry::Worktree(node) => {
-                heights.push(if node.tags.is_empty() {
-                    one_line
-                } else {
-                    two_line
-                });
-                if node.sessions_shown() {
-                    heights.extend(std::iter::repeat_n(one_line, node.sessions.len()));
-                }
-            }
+            SidebarEntry::Worktree(node) => location(
+                &mut heights,
+                !node.tags.is_empty(),
+                node.sessions_shown(),
+                node.sessions.len(),
+            ),
             SidebarEntry::Group(group) => {
                 heights.push(one_line);
                 if group.expanded {
                     for run in &group.runs {
                         match &run.row {
-                            RunRow::Worktree(node) => {
-                                heights.push(if node.tags.is_empty() {
-                                    one_line
-                                } else {
-                                    two_line
-                                });
-                                if node.sessions_shown() {
-                                    heights
-                                        .extend(std::iter::repeat_n(one_line, node.sessions.len()));
-                                }
-                            }
+                            RunRow::Worktree(node) => location(
+                                &mut heights,
+                                !node.tags.is_empty(),
+                                node.sessions_shown(),
+                                node.sessions.len(),
+                            ),
                             RunRow::NoWorktree => heights.push(one_line),
                         }
                     }
@@ -746,18 +820,19 @@ pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
 
 /// Which rendered row holds the current session, if any (feature 024).
 ///
-/// Counted the way the list is built — locations, and the sessions of the open ones — because the
-/// answer is a position in what is on screen, not a position in the model.
-pub fn current_session_row(entries: &[SidebarEntry], current: Option<SessionId>) -> Option<usize> {
-    row_index(entries, &RowRef::Session(current?))
+/// Counted the way the list is built — headers, locations, and the sessions of the open ones —
+/// because the answer is a position in what is on screen, not a position in the model.
+pub fn current_session_row(rows: &[ListRow], current: Option<SessionId>) -> Option<usize> {
+    row_index(rows, &RowRef::Session(current?))
 }
 
 /// Which rendered row `target` is, if the list draws it (feature 803, plan D4).
 ///
-/// Counted the way the list is built — locations, and the sessions of the open ones — because the
-/// answer is a position in what is on screen, not a position in the model. A session whose
-/// location draws no sub-rows is on its location's row.
-pub fn row_index(entries: &[SidebarEntry], target: &RowRef) -> Option<usize> {
+/// Counted the way the list is built — headers, locations, and the sessions of the open ones —
+/// because the answer is a position in what is on screen, not a position in the model. A session
+/// whose location draws no sub-rows is on its location's row. A target in a closed group is not
+/// drawn, so it is `None`.
+pub fn row_index(rows: &[ListRow], target: &RowRef) -> Option<usize> {
     let mut row = 0usize;
     let location = |row: &mut usize,
                     location: SessionLocation,
@@ -778,7 +853,11 @@ pub fn row_index(entries: &[SidebarEntry], target: &RowRef) -> Option<usize> {
                 .map(|i| at + 1 + i),
         }
     };
-    for entry in entries {
+    for list_row in rows {
+        let ListRow::Entry(entry) = list_row else {
+            row += 1;
+            continue;
+        };
         let found = match entry {
             SidebarEntry::Default(node) => location(
                 &mut row,
@@ -822,14 +901,18 @@ pub fn row_index(entries: &[SidebarEntry], target: &RowRef) -> Option<usize> {
 /// Which rendered row is `target`'s own location row, if the list draws it (feature 813, R12).
 ///
 /// Counted exactly as [`row_heights`] lays the list out, so the index addresses the same row.
-pub fn location_row(entries: &[SidebarEntry], target: &SessionLocation) -> Option<usize> {
+pub fn location_row(rows: &[ListRow], target: &SessionLocation) -> Option<usize> {
     let mut row = 0usize;
     let step = |at: &SessionLocation, shown: bool, sessions: usize, row: &mut usize| {
         let found = (at == target).then_some(*row);
         *row += 1 + if shown { sessions } else { 0 };
         found
     };
-    for entry in entries {
+    for list_row in rows {
+        let ListRow::Entry(entry) = list_row else {
+            row += 1;
+            continue;
+        };
         match entry {
             SidebarEntry::Default(node) => {
                 let at = SessionLocation::Default;
@@ -1386,9 +1469,9 @@ impl crate::app::State {
     /// row does not exist for the first frame or two. The caller keeps the reveal armed rather than
     /// scrolling to a stale offset (invariant I4).
     pub fn reveal_scroll_offset(&self) -> Option<u32> {
-        let entries = self.sidebar_entries();
-        let index = self.reveal_row(&entries)?;
-        let heights = row_heights(&entries);
+        let rows = self.sidebar_list();
+        let index = self.reveal_row(&rows)?;
+        let heights = row_heights(&rows);
         if crate::reveal_trace::enabled() {
             let top: f32 = heights[..index].iter().sum::<f32>() + ROW_GAP * index as f32;
             let content =
@@ -1414,10 +1497,10 @@ impl crate::app::State {
     /// Where the list should sit to show the row the Overview revealed (feature 813, R12), or
     /// `None` when nothing is revealed, the row is not drawn, no layout is known, or it is visible.
     pub fn revealed_scroll_offset(&self) -> Option<u32> {
-        let entries = self.sidebar_entries();
-        let index = location_row(&entries, self.sidebar.revealed.as_ref()?)?;
+        let rows = self.sidebar_list();
+        let index = location_row(&rows, self.sidebar.revealed.as_ref()?)?;
         scroll_target(
-            &row_heights(&entries),
+            &row_heights(&rows),
             index,
             self.sidebar.viewport_height as f32,
             self.sidebar.scroll_offset as f32,
@@ -1430,17 +1513,153 @@ impl crate::app::State {
     /// The condition for draining an armed reveal: until it is true there is nothing to scroll to,
     /// and the arm stays set.
     pub fn current_session_is_listed(&self) -> bool {
-        self.reveal_row(&self.sidebar_entries()).is_some()
+        self.reveal_row(&self.sidebar_list()).is_some()
     }
 
     /// The row the reveal scroll reaches (feature 803, contracts/ui.md U3): the row a navigation
     /// chord gave the keyboard while the list draws it, else the current session's row.
-    fn reveal_row(&self, entries: &[SidebarEntry]) -> Option<usize> {
+    fn reveal_row(&self, rows: &[ListRow]) -> Option<usize> {
         self.sidebar
             .keyboard_row
             .as_ref()
-            .and_then(|target| row_index(entries, target))
-            .or_else(|| current_session_row(entries, self.session.active))
+            .and_then(|target| row_index(rows, target))
+            .or_else(|| current_session_row(rows, self.session.active))
+    }
+
+    /// Open the closed state group holding the reveal's target (feature 1125, FR-006, research
+    /// R5): the row a navigation chord gave the keyboard, else the current session's location.
+    /// Recorded as the user's choice, so the group stays open after the reveal. Called when an
+    /// armed reveal is about to drain, before asking whether its row is drawn.
+    pub fn open_group_of_reveal_target(&mut self) {
+        let keyboard = self
+            .sidebar
+            .keyboard_row
+            .as_ref()
+            .and_then(|row| match row {
+                RowRef::Location(location) => Some(location.clone()),
+                RowRef::Session(id) => self
+                    .active_sessions()
+                    .iter()
+                    .find(|s| s.id == *id)
+                    .map(|s| s.location.clone()),
+            })
+            .filter(|location| self.listed_location(location));
+        if let Some(target) = keyboard.or_else(|| self.current_session_location()) {
+            self.open_group_of(&target);
+        }
+    }
+
+    /// Open the closed state group holding the row the Overview revealed (feature 1125, FR-006,
+    /// research R5), before the reveal's scroll is computed.
+    pub fn open_group_of_revealed(&mut self) {
+        if let Some(target) = self.sidebar.revealed.clone() {
+            self.open_group_of(&target);
+        }
+    }
+
+    /// Whether some entry of the sidebar, in any group, draws `location`'s row.
+    fn listed_location(&self, location: &SessionLocation) -> bool {
+        self.sidebar_entries().iter().any(|e| e.holds(location))
+    }
+
+    /// Record `true` for the group holding `location` when that group is closed; an open group's
+    /// choice stays unrecorded.
+    fn open_group_of(&mut self, location: &SessionLocation) {
+        let Some(project) = self.workspace.active.clone() else {
+            return;
+        };
+        let closed = self
+            .sidebar_groups()
+            .into_iter()
+            .find(|g| g.entries.iter().any(|e| e.holds(location)))
+            .filter(|g| !g.open);
+        if let Some(group) = closed {
+            self.sidebar
+                .group_choices
+                .entry(project)
+                .or_default()
+                .insert(group.group, true);
+        }
+    }
+
+    /// The card state an entry's group is chosen by (feature 1125, R2): the location's own, from
+    /// the same call the Overview's card makes; a run group's, the worst over its runs (G6).
+    fn entry_card_state(&self, entry: &SidebarEntry) -> micold_core::overview::CardState {
+        let of = |node: &WorktreeNode| {
+            crate::features::overview::location_card_state(
+                self,
+                &node.location(),
+                node.worktree.branch.as_deref(),
+            )
+            .0
+        };
+        match entry {
+            SidebarEntry::Default(_) => {
+                crate::features::overview::location_card_state(
+                    self,
+                    &SessionLocation::Default,
+                    None,
+                )
+                .0
+            }
+            SidebarEntry::Worktree(node) => of(node),
+            SidebarEntry::Group(group) => {
+                run_group_state(group.runs.iter().map(|run| match &run.row {
+                    RunRow::Worktree(node) => RunCard::Worktree(of(node)),
+                    RunRow::NoWorktree => RunCard::NoWorktree {
+                        failed: run.failed(),
+                    },
+                }))
+            }
+        }
+    }
+
+    /// The sidebar's entries in state groups (feature 1125, FR-001–FR-005, contract S4): the
+    /// groups that hold an entry, in [`StateGroup::ALL`] order, each with its entries in
+    /// [`Self::sidebar_entries`] order, and whether it is open. Empty when no project is open.
+    pub fn sidebar_groups(&self) -> Vec<SidebarGroup> {
+        let current = self.current_session_location();
+        let choices = self
+            .workspace
+            .active
+            .as_ref()
+            .and_then(|project| self.sidebar.group_choices.get(project));
+        let entries = self.sidebar_entries();
+        group_by_state(
+            entries
+                .into_iter()
+                .map(|entry| (self.entry_card_state(&entry), entry)),
+        )
+        .into_iter()
+        .map(|group| {
+            let holds_current = current
+                .as_ref()
+                .is_some_and(|c| group.items.iter().any(|e| e.holds(c)));
+            let choice = choices.and_then(|c| c.get(&group.group).copied());
+            SidebarGroup {
+                group: group.group,
+                open: group_open(choice, group.group, holds_current),
+                entries: group.items,
+            }
+        })
+        .collect()
+    }
+
+    /// The sidebar's drawn list (feature 1125, contract S4): each group's header, then its entries
+    /// when it is open.
+    pub fn sidebar_list(&self) -> Vec<ListRow> {
+        let mut rows = Vec::new();
+        for group in self.sidebar_groups() {
+            rows.push(ListRow::Header(GroupHeaderRow {
+                group: group.group,
+                count: group.entries.len(),
+                open: group.open,
+            }));
+            if group.open {
+                rows.extend(group.entries.into_iter().map(ListRow::Entry));
+            }
+        }
+        rows
     }
 
     /// The sidebar's keyboard left the row a navigation chord gave it, or the current session
@@ -1750,6 +1969,9 @@ pub enum Msg {
     /// Fold or expand the children of an origin (feature 551, FR-011). The shell persists the
     /// set after it (FR-017).
     ToggleOrigin(SessionId),
+    /// A group header was pressed (feature 1125, FR-005, US5.2): the group's open state flips for
+    /// the active project, against its effective state (research R4).
+    GroupToggled(StateGroup),
 }
 
 /// **Review changes** was chosen for `entry` (feature 482, V1): the root opens the Changes view.
@@ -1783,6 +2005,40 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
                 state.sidebar.folded.insert(id);
             }
         }
+        Msg::GroupToggled(group) => group_toggled(state, group),
     }
     Vec::new()
+}
+
+/// A group header was pressed (feature 1125, research R4): store the negation of the group's
+/// *effective* open state for the active project, so a Done group open only because it holds the
+/// current session closes on the first press.
+pub fn group_toggled(state: &mut crate::app::State, group: StateGroup) {
+    let Some(project) = state.workspace.active.clone() else {
+        return;
+    };
+    let open = state
+        .sidebar_groups()
+        .iter()
+        .find(|g| g.group == group)
+        .map_or_else(
+            || {
+                group_open(
+                    state
+                        .sidebar
+                        .group_choices
+                        .get(&project)
+                        .and_then(|c| c.get(&group).copied()),
+                    group,
+                    false,
+                )
+            },
+            |g| g.open,
+        );
+    state
+        .sidebar
+        .group_choices
+        .entry(project)
+        .or_default()
+        .insert(group, !open);
 }

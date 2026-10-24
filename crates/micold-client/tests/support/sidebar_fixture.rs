@@ -57,9 +57,12 @@ pub fn deliver(state: &mut State, worktrees: Vec<Worktree>) {
     micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
 }
 
-/// Start a session at `location` of `/repo` (the store only; nothing becomes current).
+/// Start a session at `location` of `/repo` (the store only; nothing becomes current). It is idle,
+/// so it leaves its location in the Idle state group (feature 1125): every location these
+/// fixtures build is listed in today's order unless a test sets a state.
 pub fn session_at(state: &mut State, location: SessionLocation) -> SessionId {
-    let session = Session::start_new(location, AiCli::ClaudeCode);
+    let mut session = Session::start_new(location, AiCli::ClaudeCode);
+    session.lifecycle = micold_core::session::SessionLifecycle::Idle;
     let id = session.id;
     state
         .workspace
@@ -133,4 +136,92 @@ pub fn press(
         state.update(message);
     }
     state.finish_navigation(&step, terminal_had_focus);
+}
+
+/// Put a session at `location` of `/repo` in `lifecycle` and `activity` (feature 1125).
+pub fn session_in(
+    state: &mut State,
+    location: SessionLocation,
+    lifecycle: micold_core::session::SessionLifecycle,
+    activity: micold_core::protocol::messages::ActivitySignal,
+    paused_on_user: bool,
+) -> SessionId {
+    let id = session_at(state, location);
+    let session = state
+        .workspace
+        .sessions
+        .get_mut(&PathBuf::from("/repo"))
+        .and_then(|sessions| sessions.iter_mut().find(|s| s.id == id))
+        .expect("just added");
+    session.lifecycle = lifecycle;
+    session.activity = activity;
+    session.paused_on_user = paused_on_user;
+    id
+}
+
+/// Read pull request `pr` for `branch`, as a pull request reading does (feature 1125).
+pub fn pr_read(
+    state: &mut State,
+    branch: &str,
+    pr: micold_core::pull_request::PrState,
+    removable: bool,
+) {
+    state.pr_status.enabled = true;
+    state.pr_status.read_at = Some(100);
+    state.pr_status.statuses.insert(
+        branch.to_string(),
+        micold_core::pull_request::PullRequestStatus {
+            number: 7,
+            title: "t".to_string(),
+            url: "https://github.com/o/r/pull/7".to_string(),
+            state: pr,
+            review: micold_core::pull_request::ReviewState::None,
+            head: "abc".to_string(),
+            conflict: false,
+        },
+    );
+    if removable {
+        state.pr_status.removable.insert(branch.to_string());
+    }
+}
+
+/// One worktree per card state (feature 1125), listed in this order: `idle` (no session), `done`
+/// (a merged, removable pull request), `work` (a running session), `attn` (failing checks) and
+/// `act` (a permission prompt). *Default* has no session, so it is Idle.
+pub fn five_states() -> State {
+    use micold_core::protocol::messages::ActivitySignal;
+    use micold_core::pull_request::{CheckStatus, PrState};
+    use micold_core::session::SessionLifecycle;
+    let mut state = state_with_active();
+    deliver(
+        &mut state,
+        ["idle", "done", "work", "attn", "act"]
+            .into_iter()
+            .map(listed)
+            .collect(),
+    );
+    pr_read(&mut state, "feat/done", PrState::Merged, true);
+    session_in(
+        &mut state,
+        worktree("work"),
+        SessionLifecycle::Running,
+        ActivitySignal::Working,
+        false,
+    );
+    pr_read(
+        &mut state,
+        "feat/attn",
+        PrState::Open {
+            checks: CheckStatus::Failing,
+        },
+        false,
+    );
+    session_in(
+        &mut state,
+        worktree("act"),
+        SessionLifecycle::Running,
+        ActivitySignal::AwaitingInput,
+        true,
+    );
+    state
 }
