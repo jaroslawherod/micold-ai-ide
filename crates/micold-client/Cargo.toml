@@ -145,6 +145,12 @@ assets = [
     ["../../assets/icon/png/icon-512.png", "usr/share/icons/hicolor/512x512/apps/micold-ai-ide.png", "644"],
     ["../../assets/icon/icon.svg", "usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", "644"],
     ["../../README.md", "usr/share/doc/micold-ai-ide/README.md", "644"],
+    # The bundled fonts' licences (feature 1260, FR-008): the fonts are compiled into the binary, and
+    # their licences travel with them.
+    ["../../assets/fonts/LICENSE-FiraMono-OFL.txt", "usr/share/doc/micold-ai-ide/fonts/LICENSE-FiraMono-OFL.txt", "644"],
+    ["../../assets/fonts/LICENSE-Roboto-OFL.txt", "usr/share/doc/micold-ai-ide/fonts/LICENSE-Roboto-OFL.txt", "644"],
+    ["../../assets/fonts/LICENSE", "usr/share/doc/micold-ai-ide/fonts/LICENSE", "644"],
+    ["../../assets/fonts/PROVENANCE.md", "usr/share/doc/micold-ai-ide/fonts/PROVENANCE.md", "644"],
 ]
 
 # RPM packaging (`mise run rpm`, i.e. `cargo generate-rpm -p crates/micold-client`). Same payload as
@@ -178,4 +184,8 @@ assets = [
     { source = "assets/icon/png/icon-512.png", dest = "/usr/share/icons/hicolor/512x512/apps/micold-ai-ide.png", mode = "644" },
     { source = "assets/icon/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", mode = "644" },
     { source = "README.md", dest = "/usr/share/doc/micold-ai-ide/README.md", mode = "644", doc = true },
+    { source = "assets/fonts/LICENSE-FiraMono-OFL.txt", dest = "/usr/share/doc/micold-ai-ide/fonts/LICENSE-FiraMono-OFL.txt", mode = "644", doc = true },
+    { source = "assets/fonts/LICENSE-Roboto-OFL.txt", dest = "/usr/share/doc/micold-ai-ide/fonts/LICENSE-Roboto-OFL.txt", mode = "644", doc = true },
+    { source = "assets/fonts/LICENSE", dest = "/usr/share/doc/micold-ai-ide/fonts/LICENSE", mode = "644", doc = true },
+    { source = "assets/fonts/PROVENANCE.md", dest = "/usr/share/doc/micold-ai-ide/fonts/PROVENANCE.md", mode = "644", doc = true },
 ]

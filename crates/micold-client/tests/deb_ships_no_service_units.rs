@@ -16,58 +16,17 @@
 //! `packaging/micold-daemon.` is one of the two files feature 010 shipped, whatever it is
 //! installed as.
 
+#[path = "support/packaging.rs"]
+mod packaging;
+
+use packaging::{deb_assets, manifest_path, repo_root, rpm_assets};
 use std::fs;
-use std::path::{Path, PathBuf};
 
 /// Any destination beneath this is a service-manager artefact by definition (§1.2).
 const UNIT_DESTINATION: &str = "usr/lib/systemd";
 
 /// The source files feature 010 shipped as units, which T019 deletes (§1.2).
 const UNIT_SOURCE: &str = "packaging/micold-daemon.";
-
-fn manifest_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")
-}
-
-/// The `[package.metadata.deb] assets` list, verbatim, or `None` when the section is absent.
-///
-/// Read as text rather than parsed, and the closing bracket found *at depth* — both for the reasons
-/// `packaging_excludes_showcase.rs` writes down at length. Every entry is itself an array, so the
-/// first `]` is the end of the first asset, not the end of the list.
-fn deb_assets(manifest: &str) -> Option<&str> {
-    let after = manifest.split_once("[package.metadata.deb]")?.1;
-    let open = after.find("assets = [")?;
-    let rest = &after[open + "assets = [".len()..];
-    let mut depth = 0usize;
-    for (i, c) in rest.char_indices() {
-        match c {
-            '[' => depth += 1,
-            ']' if depth == 0 => return Some(&rest[..i]),
-            ']' => depth -= 1,
-            _ => {}
-        }
-    }
-    None
-}
-
-/// The `[package.metadata.generate-rpm] assets` list, verbatim, or `None` when absent. Same reading
-/// as `deb_assets`: text, closed at depth. The entries are inline tables (`{ source = ..., dest =
-/// ... }`), so the depth counts braces as well as brackets.
-fn rpm_assets(manifest: &str) -> Option<&str> {
-    let after = manifest.split_once("[package.metadata.generate-rpm]")?.1;
-    let open = after.find("assets = [")?;
-    let rest = &after[open + "assets = [".len()..];
-    let mut depth = 0usize;
-    for (i, c) in rest.char_indices() {
-        match c {
-            '[' | '{' => depth += 1,
-            ']' if depth == 0 => return Some(&rest[..i]),
-            ']' | '}' => depth -= 1,
-            _ => {}
-        }
-    }
-    None
-}
 
 /// One violation, phrased so the failure says what to do about it.
 #[derive(Debug, PartialEq)]
@@ -241,11 +200,7 @@ fn a_missing_asset_list_fails_rather_than_passing() {
 /// list is one line away from shipping them again.
 #[test]
 fn the_unit_files_are_not_in_the_repository() {
-    let packaging = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("repo root above crates/micold-client")
-        .join("packaging");
+    let packaging = repo_root().join("packaging");
     for unit in ["micold-daemon.service", "micold-daemon.socket"] {
         let path = packaging.join(unit);
         assert!(

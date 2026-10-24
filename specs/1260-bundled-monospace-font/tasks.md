@@ -162,37 +162,37 @@ both weights; the repository holds one copy of each face.
 **Independent test**: `cargo test -p micold-client --test packaging_ships_font_licences --test
 packaging_excludes_showcase`; `scripts/tests/macos-bundle.test.sh`.
 
-- [ ] T020 [US3] Refactor, no behaviour change: move `repo_root`, `deb_assets` and `rpm_assets` from
+- [x] T020 [US3] Refactor, no behaviour change: move `repo_root`, `deb_assets` and `rpm_assets` from
   `client/tests/packaging_excludes_showcase.rs` (lines 41, 71, 89) into a new
   `client/tests/support/packaging.rs`; `packaging_excludes_showcase.rs` and
   `client/tests/deb_ships_no_service_units.rs` (its own copies, lines 37, 56) use it. Both tests
   stay green
-- [ ] T021 [US3] New `client/tests/packaging_ships_font_licences.rs`, red until T024–T026: each of
+- [x] T021 [US3] New `client/tests/packaging_ships_font_licences.rs`, red until T024–T026: each of
   the four licence-set files exists in `assets/fonts/` and appears in the deb assets (destination
   `usr/share/doc/micold-ai-ide/fonts/`), the rpm assets (`/usr/share/doc/micold-ai-ide/fonts/`),
   the `packaging/windows/micold-ai-ide.iss` `[Files]` (`DestDir` `{app}\licenses\fonts`) and
   `scripts/macos-bundle.sh` (`Contents/Resources/licenses/fonts/`); a failure names the file and the
   bundle
-- [ ] T022 [P] [US3] `client/tests/packaging_excludes_showcase.rs`: synthetic cases beside
+- [x] T022 [P] [US3] `client/tests/packaging_excludes_showcase.rs`: synthetic cases beside
   `a_windows_installer_that_ships_an_unlisted_file_fails` (line 613), red until T026: a licence-set
   file with `DestDir: "{app}\licenses\fonts"` passes; the same file with `DestDir: "{app}"` fails;
   an unlisted file under `{app}\licenses\` still fails
-- [ ] T023 [P] [US3] `scripts/tests/macos-bundle.test.sh`: the staged bundle holds the four files in
+- [x] T023 [P] [US3] `scripts/tests/macos-bundle.test.sh`: the staged bundle holds the four files in
   `Contents/Resources/licenses/fonts/`; an `expect_failure` case with one licence file removed from
   the fake tree, expecting `missing font licence: assets/fonts/<file>`; red until T025
-- [ ] T024 [US3] `client/Cargo.toml`: `[package.metadata.deb] assets` and
+- [x] T024 [US3] `client/Cargo.toml`: `[package.metadata.deb] assets` and
   `[package.metadata.generate-rpm] assets` gain the four files at the destinations of T021
-- [ ] T025 [US3] `scripts/macos-bundle.sh`: copy each of the four files, named (no wildcard), to
+- [x] T025 [US3] `scripts/macos-bundle.sh`: copy each of the four files, named (no wildcard), to
   `Contents/Resources/licenses/fonts/`, failing with `die "missing font licence: <path>"` when one is
   missing (the `missing icon:` pattern, line 86)
-- [ ] T026 [US3] `packaging/windows/micold-ai-ide.iss` `[Files]`: four explicit lines to
+- [x] T026 [US3] `packaging/windows/micold-ai-ide.iss` `[Files]`: four explicit lines to
   `{app}\licenses\fonts` (no wildcard, as the file's comment requires);
   `client/tests/packaging_excludes_showcase.rs`: add `WINDOWS_SHIPPED_LICENCES` (the four basenames),
   a helper `iss_file_entries` returning `(source, dest_dir)` pairs beside `iss_file_sources`
   (line 529), and pass the licence set to `windows_violations` (line 488), which accepts those
   basenames only with a `DestDir` under `{app}\licenses\`; the wildcard and showcase rules unchanged.
   T021 and T022 pass, `the_windows_installer_contains_no_showcase` stays green
-- [ ] T027 [P] [US3] `.gitattributes`: `/assets/fonts/LICENSE*` and `/assets/fonts/PROVENANCE.md`
+- [x] T027 [P] [US3] `.gitattributes`: `/assets/fonts/LICENSE*` and `/assets/fonts/PROVENANCE.md`
   join the `micold-packaging` set (beside `/LICENSE`, line 149)
 
 **Checkpoint**: deb, rpm, `.app` and the Windows installer each carry the font licence set.

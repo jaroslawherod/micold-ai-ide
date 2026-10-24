@@ -58,13 +58,19 @@ ArchitecturesInstallIn64BitMode=arm64
 #endif
 
 [Files]
-; Exactly the app and the daemon it spawns (FR-002, FR-012). Never a wildcard: the showcase is built
-; into the same directory. Guarded by crates/micold-client/tests/packaging_excludes_showcase.rs.
+; Exactly the app, the daemon it spawns and their licences (FR-002, FR-012). Never a wildcard: the
+; showcase is built into the same directory. Guarded by crates/micold-client/tests/packaging_excludes_showcase.rs.
 Source: "{#BinDir}\micold-ai-ide.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BinDir}\micold-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; The static Linux daemons for remote hosts and containers: `SystemSsh::bundled_dir` reads `{app}\remote`.
 Source: "{#RemoteDir}\micold-daemon-linux-x86_64"; DestDir: "{app}\remote"; Flags: ignoreversion
 Source: "{#RemoteDir}\micold-daemon-linux-aarch64"; DestDir: "{app}\remote"; Flags: ignoreversion
+; The bundled fonts' licences (feature 1260, FR-008): the fonts are compiled into the app, and their
+; licences travel with them. One line per file, relative to this script like LicenseFile above.
+Source: "..\..\assets\fonts\LICENSE-FiraMono-OFL.txt"; DestDir: "{app}\licenses\fonts"; Flags: ignoreversion
+Source: "..\..\assets\fonts\LICENSE-Roboto-OFL.txt"; DestDir: "{app}\licenses\fonts"; Flags: ignoreversion
+Source: "..\..\assets\fonts\LICENSE"; DestDir: "{app}\licenses\fonts"; Flags: ignoreversion
+Source: "..\..\assets\fonts\PROVENANCE.md"; DestDir: "{app}\licenses\fonts"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

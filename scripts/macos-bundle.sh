@@ -32,6 +32,17 @@ ENTITLEMENTS="$ROOT/packaging/macos/entitlements.plist"
 ICON_REL="assets/icon/icon.icns"
 ICON="$ROOT/$ICON_REL"
 
+# The font licence set (feature 1260, FR-008). The fonts are compiled into the binary, and their
+# licences must travel with them, so each file is named here -- no wildcard -- and a missing one
+# fails the build rather than shipping a font without its licence.
+FONT_LICENCES=(
+  "assets/fonts/LICENSE-FiraMono-OFL.txt"
+  "assets/fonts/LICENSE-Roboto-OFL.txt"
+  "assets/fonts/LICENSE"
+  "assets/fonts/PROVENANCE.md"
+)
+FONT_LICENCE_DIR="Contents/Resources/licenses/fonts"
+
 # The bundle's executables, and the only ones. Order matters at signing time: the nested binary is
 # signed before the enclosing bundle, or the bundle's seal does not cover it.
 EXECUTABLE="micold-ai-ide"
@@ -84,6 +95,9 @@ if [ -n "$REMOTE_DIR" ]; then
   done
 fi
 [ -f "$ICON" ] || die "missing icon: $ICON_REL"
+for licence in "${FONT_LICENCES[@]}"; do
+  [ -f "$ROOT/$licence" ] || die "missing font licence: $licence"
+done
 [ -f "$TEMPLATE" ] || die "missing template: packaging/macos/Info.plist.in"
 
 if [ -z "$VERSION" ]; then
@@ -109,6 +123,11 @@ for bin in "${BINARIES[@]}"; do
 done
 
 cp "$ICON" "$CONTENTS/Resources/icon.icns"
+
+mkdir -p "$APP/$FONT_LICENCE_DIR"
+for licence in "${FONT_LICENCES[@]}"; do
+  cp "$ROOT/$licence" "$APP/$FONT_LICENCE_DIR/${licence##*/}"
+done
 
 # Not under Contents/MacOS: that directory holds exactly the two executables (see above).
 if [ -n "$REMOTE_DIR" ]; then

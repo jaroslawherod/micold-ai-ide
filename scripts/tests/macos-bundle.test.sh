@@ -61,7 +61,11 @@ if stage "$bins" "$out"; then
     "Contents/PkgInfo" \
     "Contents/MacOS/micold-ai-ide" \
     "Contents/MacOS/micold-daemon" \
-    "Contents/Resources/icon.icns"
+    "Contents/Resources/icon.icns" \
+    "Contents/Resources/licenses/fonts/LICENSE-FiraMono-OFL.txt" \
+    "Contents/Resources/licenses/fonts/LICENSE-Roboto-OFL.txt" \
+    "Contents/Resources/licenses/fonts/LICENSE" \
+    "Contents/Resources/licenses/fonts/PROVENANCE.md"
   do
     cases=$((cases + 1))
     if [ -f "$out/$APP/$part" ]; then
@@ -135,6 +139,8 @@ new_fake_root() {
   cp "$BUNDLE" "$dir/scripts/"
   cp "$ROOT/packaging/macos/Info.plist.in" "$dir/packaging/macos/"
   cp "$ROOT/assets/icon/icon.icns" "$dir/assets/icon/"
+  mkdir -p "$dir/assets/fonts"
+  cp "$ROOT"/assets/fonts/LICENSE* "$ROOT/assets/fonts/PROVENANCE.md" "$dir/assets/fonts/"
   echo "$dir"
 }
 
@@ -207,6 +213,15 @@ rm -f "$fake/assets/icon/icon.icns"
 bins="$(new_bin_dir)"
 out="$(mktemp -d)"
 expect_failure "a missing icon is named" "missing icon: assets/icon/icon.icns" "$bins" "$out" "$fake/scripts/macos-bundle.sh"
+rm -rf "$fake" "$bins" "$out"
+
+# A missing font licence is named (feature 1260, FR-008): the fonts are in the binary, so the
+# bundle must not be built without the licence that travels with them.
+fake="$(new_fake_root)"
+rm -f "$fake/assets/fonts/LICENSE-FiraMono-OFL.txt"
+bins="$(new_bin_dir)"
+out="$(mktemp -d)"
+expect_failure "a missing font licence is named" "missing font licence: assets/fonts/LICENSE-FiraMono-OFL.txt" "$bins" "$out" "$fake/scripts/macos-bundle.sh"
 rm -rf "$fake" "$bins" "$out"
 
 # ---------------------------------------------------------------------------
