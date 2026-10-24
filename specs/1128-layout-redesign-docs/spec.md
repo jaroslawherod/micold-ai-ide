@@ -44,6 +44,37 @@ parts for open ones wait:
   everything that needs the whole window: the whole-window covered states, the fixture
   regeneration and the visual pass.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: When the visual pass finds a defect in a shipped region, does this feature fix it (code
+  change, red test first) or only record it? → A: It records it. The verdict is *differs by
+  defect*, naming the region's issue and the follow-up; the follow-up goes in the ledger's
+  *Follow-ups not done*. This feature changes no code. _(agent-resolved: this spec#Context "It
+  changes no behaviour" and Issue #1128's title "docs, layout snapshot and visual pass";
+  `specs/1124-bottom-status-bar/autopilot.md`#Follow-ups not done, where a defect outside the
+  feature's scope was recorded, not fixed; `specs/1126-session-context-header/visual-pass.md`#M3,
+  where a visual-pass finding went to the ledger's follow-ups)_
+- Q: Are user-guide pages outside the four that name a removed element (`appearance-theming.md`,
+  `icons.md`, `settings.md`, `sandboxed-daemon.md`) swept here, or left to #1127 and a follow-up?
+  → A: Swept here, limited to the sentences and table rows that name a removed element: each is
+  corrected to the shipped element and links to its owning section; nothing else on those pages is
+  rewritten. Status-bar mentions are swept in stage 1, sidebar and title-bar mentions in stage 2
+  (after #1127, which may already fix its own). _(agent-resolved:
+  `.specify/memory/constitution.md`#VII, the user guide is a deliverable kept true to the code; this
+  spec#Context, this feature is the redesign's closing pass and the only one that owns the window as
+  a whole, so a stale mention left by it has no later owner)_
+- Q: Does the layout snapshot add two whole-window covered states, or only regenerate the fixture
+  over the states the four features added? → A: It adds the two states, one per mockup board, as
+  FR-012 describes, and regenerates the fixture. No existing state composes several sidebar groups,
+  a multi-tab strip and a steady status bar together, which SC-004 and SC-005 measure.
+  _(agent-resolved: `docs/development/layout-snapshot.md`#Adding a covered state, one entry in
+  `covered_states.rs` plus a regeneration, the route #1124, #1125 and #1126 each took for their
+  own states; `docs/development/layout-snapshot.md`#What is covered, which lists no state composed as a board)_
+- Round 2 (after the answers above changed FR-011, FR-012, FR-020 and SC-001): no critical
+  ambiguity left; how contrast is measured and how the new states are named are the plan's.
+
 ## Terms
 
 - **Region**: one of the four parts of the window the redesign rebuilt: the **title bar**, the
@@ -57,8 +88,8 @@ parts for open ones wait:
   sandbox banner and sandbox bring-up row stacked under the app bar in the steady state, the bar
   under the terminal, the sidebar's filter button and tag-filter panel (replaced by the chip bar),
   the sidebar's type/issue chips on rows. A banner inside a region that still ships, such as the
-  stored-sessions offer at the top of the sidebar, is not a removed element. The list is final only once #1125 and #1127 have merged;
-  each stage reads it from what shipped, not from this list.
+  stored-sessions offer at the top of the sidebar, is not a removed element. The list is final
+  only once #1125 and #1127 have merged; each stage reads it from what shipped, not from this list.
 - **Owning section**: the one section of the user guide that describes a region's element in full.
   Every other mention links to it.
 - **Mockup board**: *Proposal: session view* (a session shown) or *Proposal: Overview* (the Overview
@@ -171,7 +202,7 @@ recorded fixture is the one a fresh regeneration produces on main.
 
 A maintainer closing the redesign sees, at 1280×800 in light and in dark, screenshots of the
 running window beside each mockup board, with a recorded verdict per region: matches, differs on
-purpose (with the decision that made it differ), or differs by defect (with what was done about it).
+purpose (with the decision that made it differ), or differs by defect (with its follow-up).
 
 **Why this priority**: the geometry gates cannot see colour, weight, glyph collisions or contrast;
 this is the only check of how the redesign looks as a whole. P2 because the regions' own visual
@@ -193,10 +224,8 @@ its follow-up.
    names that decision and its spec.
 4. **Given** a defect found — text overlapping, clipped or illegible, contrast under 4.5:1 for body
    text, a region missing in one theme — **When** the verdict is recorded, **Then** the defect is
-   either fixed in this feature with the fix re-checked in a new screenshot, or recorded as a
-   follow-up with the region's issue named. [NEEDS CLARIFICATION: when the visual pass finds a
-   defect in a shipped region, does this feature fix it (code change, red test first) or only
-   record it as a follow-up issue?]
+   recorded as *differs by defect* with the region's issue named and a follow-up in the ledger;
+   this feature does not fix it (see Clarifications).
 
 ### Edge Cases
 
@@ -271,15 +300,15 @@ its follow-up.
 - **FR-010**: The sidebar's elements (Overview row, chip bar, groups, two-line rows) and the title
   bar's elements (breadcrumb, jump-to field, Settings, overflow menu) each MUST have one
   owning section, linked from every other mention in the four pages.
-- **FR-011**: User-guide pages outside the four that name a removed element MUST be
-  [NEEDS CLARIFICATION: in scope? `appearance-theming.md`, `icons.md`, `settings.md` and
-  `sandboxed-daemon.md` still say "top app bar", "Top bar, **Overview** button" or "banner under
-  the app bar" — are those swept here, or left to #1127 and a follow-up?].
+- **FR-011**: In user-guide pages outside the four (today `appearance-theming.md`, `icons.md`,
+  `settings.md` and `sandboxed-daemon.md`), every sentence or table row that names a removed
+  element as present MUST be corrected to the shipped element and link to its owning section;
+  the rest of those pages is not rewritten. Status-bar mentions are corrected in stage 1, sidebar
+  and title-bar mentions in stage 2.
 - **FR-012**: The layout snapshot MUST cover one whole-window state per mockup board, drawn at
   1280×800: *Proposal: session view* (a worktree's session shown, several worktrees in more than
   one sidebar group, more than one session tab, the status bar steady) and *Proposal: Overview*
-  (the Overview open, its sidebar row selected). [NEEDS CLARIFICATION: add these two whole-window
-  covered states, or only regenerate the fixture over the states the four features added?]
+  (the Overview open, its sidebar row selected). Both are added as new covered states.
 - **FR-013**: The committed layout snapshot fixture MUST equal a fresh regeneration on main after
   the last of #1124–#1127 has merged, and the text-overflow and containment gates MUST pass for
   every covered state in both colour schemes.
@@ -288,7 +317,7 @@ its follow-up.
 - **FR-015**: A visual pass MUST record, at 1280×800, a screenshot of each mockup board's state in
   light and in dark, the commit they were taken at, and per screenshot one verdict for each region
   and one for the whole window: *matches*, *differs on purpose* (naming the decision and its spec)
-  or *differs by defect* (with what was done about it).
+  or *differs by defect* (naming the region's issue and the follow-up).
 - **FR-016**: The visual pass MUST check body text contrast at or above 4.5:1 in every region in
   both themes, and record any text under it as a defect.
 
@@ -299,8 +328,9 @@ its follow-up.
 - **FR-018**: Every shortcut the four pages name MUST give the Linux/Windows and the macOS form.
 - **FR-019**: Every link in the four pages and in `layout-snapshot.md` MUST
   resolve, including its `#anchor`.
-- **FR-020**: This feature MUST NOT change the application's behaviour or layout, except to fix a
-  defect the visual pass finds, if the clarification in User Story 4, scenario 4 allows it.
+- **FR-020**: This feature MUST NOT change the application's behaviour or layout; a defect the
+  visual pass finds is recorded as a follow-up, not fixed here. The new covered states are test
+  fixtures, not a layout change.
 
 ### Key Entities
 
@@ -315,7 +345,7 @@ its follow-up.
 
 ### Measurable Outcomes
 
-- **SC-001**: A search of the four pages for each removed element's name returns 0 hits describing
+- **SC-001**: A search of the user guide for each removed element's name returns 0 hits describing
   it as present (stage 1 for the status bar and session area's removed elements, stage 2 for all).
 - **SC-002**: 100% of the four pages' mentions of a region element either are its owning section or
   link to it.
@@ -348,7 +378,8 @@ its follow-up.
 
 ## Out of scope
 
-- Any behaviour or layout change to a region, except a defect fix the clarification in User Story 4, scenario 4 may allow.
+- Any behaviour or layout change to a region, including a fix for a defect the visual pass finds
+  (recorded as a follow-up instead).
 - The review redesign (`docs/development/review-redesign.md`, #1269 onward).
 - The mockup's open questions (collapsible groups, Changes as a right inspector): decided by the
   regions' own features, recorded here only as *differs on purpose* if they differ.

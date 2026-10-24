@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,10 +31,8 @@
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers are left for the clarify unit: whether a defect the visual
-  pass finds is fixed here or filed (User Story 4, scenario 4); whether user-guide pages outside the
-  four are swept (FR-011); whether two whole-window covered states are added or the fixture is only
-  regenerated (FR-012).
+- The three `[NEEDS CLARIFICATION]` markers (User Story 4 scenario 4, FR-011, FR-012) were
+  resolved by the clarify unit from repo evidence; see the spec's Clarifications.
 - The spec names file paths (the four pages, `layout-snapshot.md`) and pixel heights because they
   are the deliverable and the shipped sizes from #1124 and #1127, not an implementation choice.
 - Stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) waits on #1125 and #1127.
