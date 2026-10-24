@@ -1222,15 +1222,21 @@ the background service keeps the events it reports. It is Claude Code only.
 - **Claude can ask you questions.** When Claude asks, each question shows its header, text and
   options with their descriptions, as a single or a multiple choice, plus **Other** for your own
   answer. **Submit** is available once every question is answered; **Decline** answers none.
-- **While a request waits**, the session's row shows **Blocked: needs permission**, as a terminal
-  session's does, and the needs-permission [notification](#being-told-when-a-session-needs-you)
+- **While a request waits**, the composer says **Waiting for you** instead of **Working**, the
+  session's row shows **Blocked: needs permission**, as a terminal session's does, and the
+  needs-permission [notification](#being-told-when-a-session-needs-you)
   fires under the same setting.
 - **The permission mode** decides how often Claude asks. Choose it in the start-session list: the
   **Permissions:** rows under **Claude Code (structured)** — **Default** (marked until you pick
   another), **Accept edits**, **Plan** and **Bypass** — set the mode the next structured session
   starts in; the list stays open so you can then pick **Claude Code (structured)**. Once you confirm a
   Bypass start, the choice goes back to **Default**. The mode is kept with the session,
-  across restarts.
+  across restarts. The composer's **Permissions** control, at the end of its state row, shows the
+  session's mode and changes it at any time: a running session's Claude Code uses the new mode
+  from its next tool request on, without a restart and with the conversation kept (a request
+  already waiting is unaffected); a stopped session starts in it next time. Every window shows the
+  change. Choosing **Bypass** there asks you to confirm first. If Claude Code refuses the change,
+  the mode stays as it was and the composer says why.
   - **Default** asks as your Claude Code settings say, as a terminal session in the same folder
     would.
   - **Accept edits** changes files without asking; other tools still ask.
@@ -1243,9 +1249,8 @@ the background service keeps the events it reports. It is Claude Code only.
   Terminal sessions are unchanged: they ask in their own terminal screen, and have no mode here.
 - **A turn you interrupted** ends with **You interrupted this turn** instead of a footer, and a
   message you sent with pictures names them under it (**Attached:** and the file names).
-- **It does not do yet** what the rest of this work adds: changing a running session's mode from
-  its view ([#942](https://github.com/jaroslawherod/micold-ai-ide/issues/942)), slash commands and
-  switching a session between kinds ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
+- **It does not do yet** what the rest of this work adds: slash commands and switching a session
+  between kinds ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
 - **Across a restart.** While [Save terminal history](./settings.md#terminal) is on, the events are
   kept across a restart of the background service; with it off they live in the service's memory
   only.

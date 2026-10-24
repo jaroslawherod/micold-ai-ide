@@ -256,3 +256,25 @@ Red runs recorded live, each before its implementation existed; commands with
 - Green: the full gate (`split-gate.sh`, CI's order) at the commit the PR carries.
 - **Exception (Constitution I)**: no separate red run for this cycle; the cloud container's disk
   holds one build at a time, and the gate was that build.
+
+### Cycle 13 — T071, T072, T066 the composer's mode control and *Waiting for you*; M8 r3 follow-ups (M9)
+
+- Red: the composer tests in `gates/composer_fits.rs` (`the_mode_control_offers_the_four_modes_and_shows_the_sessions_mode`,
+  `choosing_a_mode_asks_for_it_and_bypass_is_confirmed_first`,
+  `a_refused_mode_change_says_why_beside_the_mode_control`,
+  `a_session_with_a_pending_request_says_waiting_for_you`) written first: `layout_snapshot` did not
+  compile — `unresolved import micold_client::ui::mode_control` (2 errors). The shell test
+  `confirming_bypass_releases_an_agent_prompt_held_behind_it` ran red: it panicked at its
+  `!app.core.agent_confirm.held` assertion (`ModeConfirmed` changed `permission_prompts` directly,
+  skipping `State::update`'s after-message work).
+- `another_dialog_opening_closes_the_bypass_mode_confirmation` passed at once: it fills M8 review
+  A r3's test gap for behaviour M8 already had (`clear_for_dialog` closes every registered dialog).
+- Green: `layout_snapshot` 102 passed (the four composer tests; `the_layout_matches_the_committed_fixture`
+  after accepting the narrower text area of `session-transcript-pane` with
+  `UPDATE_LAYOUT_SNAPSHOT=1`; two #941 tests that pressed 200/300 px left of **Send**, now on the
+  mode control, press inside the text area instead), `--bin micold-ai-ide permission_prompts` 11,
+  `features_permission_prompts` 26, `feature_write_isolation` 8 (`confirm_mode` classified a
+  mutator).
+- First green attempt put the `Select` in the status-row slot: #941's
+  `a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view` failed (transcript 171 px
+  < 200): moved beside the text area (ledger decision 21).

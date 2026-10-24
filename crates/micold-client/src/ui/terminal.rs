@@ -818,7 +818,8 @@ pub(crate) fn transcript_body<'a>(
             state,
             id,
             tokens::roles(scheme),
-            crate::ui::composer::Seams::default()
+            // #942: the mode control, and *Waiting for you* while a request waits (plan I-1).
+            crate::ui::mode_control::seams(state, id, mode, tokens::roles(scheme)),
         ),
     ]
     .into()

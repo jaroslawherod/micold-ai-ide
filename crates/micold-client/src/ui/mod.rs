@@ -32,6 +32,7 @@ mod install_location;
 /// site. `tests/material_boundary.rs` scans the showcase at the same zero budgets it holds these
 /// feature modules to, so the wider visibility cannot become a way to style a widget by hand.
 pub(crate) mod material;
+pub mod mode_control;
 pub mod overview;
 pub mod panes;
 mod picker_scroll;

@@ -46,6 +46,8 @@ pub const MUTATORS: &[&str] = &[
     "pick",
     // #942: `permission_prompts.cancel_mode` closes the Bypass mode confirmation.
     "cancel_mode",
+    // #942 M9: `permission_prompts.confirm_mode` closes it on its confirm.
+    "confirm_mode",
     "picker_chose",
     "picker_typed",
     "step",

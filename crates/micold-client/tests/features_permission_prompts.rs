@@ -586,6 +586,21 @@ fn escape_closes_the_bypass_mode_confirmation() {
     assert_eq!(app.permission_prompts.confirm_mode(), None);
 }
 
+/// M9 (M8 review A r3): another dialog opening clears the window for itself, which closes the
+/// mode confirmation as it closes every open dialog, sending nothing.
+#[test]
+fn another_dialog_opening_closes_the_bypass_mode_confirmation() {
+    let mut app = micold_client::app::State::default();
+    assert_eq!(
+        app.permission_prompts
+            .request_mode(SessionId::new(), PermissionMode::Bypass),
+        None
+    );
+    app.clear_for_dialog();
+    assert_eq!(app.permission_prompts.mode_confirmation(), None);
+    assert_eq!(app.permission_prompts.confirm_mode(), None);
+}
+
 #[test]
 fn a_cancelled_bypass_confirmation_sends_nothing() {
     let session = SessionId::new();
