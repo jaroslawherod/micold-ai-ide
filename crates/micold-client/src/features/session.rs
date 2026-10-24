@@ -1337,6 +1337,12 @@ pub fn started(state: &mut crate::app::State, session: Session) -> Vec<crate::fe
 /// name; any other direct write to `active_session` fails that gate.
 pub fn selected(state: &mut crate::app::State, id: SessionId) -> Vec<crate::features::Outcome> {
     state.session.active = Some(id);
+    // Feature 482 (V2), 1269 (U2): the terminal takes the main area back; the shown review is
+    // hidden and kept. Hiding reads nothing.
+    let _ = crate::features::changes::update(
+        &mut state.changes,
+        crate::features::changes::Msg::SessionSelected,
+    );
     // Feature 1126 (S5): the strip above the terminal holds this session's tab, now the marked one,
     // so it has to be in view (026 FR-002d) whether it was pressed there or in the sidebar.
     arm_tab_reveal(state);

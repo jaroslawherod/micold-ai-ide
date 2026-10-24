@@ -11740,8 +11740,8 @@ mod pr_status {
     fn view_list(app: &App) -> &PrList {
         &app.core
             .changes
-            .open
-            .as_ref()
+            .tabs
+            .shown_view()
             .expect("the view is open")
             .pull_requests
     }
@@ -12236,7 +12236,7 @@ diff --git a/y.rs b/y.rs\nnew file mode 100644\n--- /dev/null\n+++ b/y.rs\n@@ -0
     }
 
     fn view_diff(app: &App) -> PrDiffLoad {
-        match &app.core.changes.open.as_ref().expect("open").source {
+        match &app.core.changes.tabs.shown_view().expect("open").source {
             Source::PullRequest(pr) => pr.diff.clone(),
             Source::Changes => panic!("a pull request is chosen"),
         }

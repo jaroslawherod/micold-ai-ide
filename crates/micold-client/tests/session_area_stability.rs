@@ -550,7 +550,6 @@ mod rendered_presses {
     use iced::advanced::{layout, Layout};
     use iced::{Point, Size};
     use micold_client::app::Message;
-    use micold_client::features::changes::Msg as ChangesMsg;
     use micold_client::features::session::Msg as SessionMsg;
     use micold_client::features::sidebar::Msg as SidebarMsg;
     use micold_core::session::SessionLocation;
@@ -594,18 +593,32 @@ mod rendered_presses {
         );
     }
 
+    /// Feature 1269 (T018, U12, FR-012): pressing **Changes** while the location's Review tab is
+    /// shown asks for it again, which leaves the tabs and the shown tab as they were.
     #[test]
-    fn pressing_changes_with_the_view_open_on_the_shown_location_closes_it() {
-        let state = changes_open_under_header();
+    fn pressing_changes_with_the_review_shown_changes_nothing() {
+        let mut state = changes_open_under_header();
         assert!(
-            state.changes.open.is_some(),
-            "the premise: the view is open"
+            state.changes.tabs.shown().is_some(),
+            "the premise: the review is shown"
         );
-        let pressed: Vec<Message> = click(StateUnderTest::new(state), SESSION_HEADER_CHANGES)
+        let pressed: Vec<Message> = click(StateUnderTest::new(state.clone()), SESSION_HEADER_CHANGES)
             .into_iter()
             .filter(|m| matches!(m, Message::Sidebar(_) | Message::Changes(_)))
             .collect();
-        assert_eq!(pressed, vec![Message::Changes(ChangesMsg::Closed)]);
+        assert_eq!(
+            pressed,
+            vec![Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+                SessionLocation::Worktree("feat-short".to_string())
+            ))],
+            "never a close"
+        );
+        let before = state.changes.tabs.clone();
+        for message in pressed {
+            state.update(message);
+        }
+        assert_eq!(state.changes.tabs, before, "the tabs and the shown tab are unchanged");
+        assert!(state.changes.pending.is_none(), "nothing is read");
     }
 
     /// `012` BUG-004 / FR-010, carried to the strip: with a shell instance shown and its process

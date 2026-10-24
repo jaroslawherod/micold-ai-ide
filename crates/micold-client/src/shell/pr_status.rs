@@ -178,7 +178,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
 /// asked while no view is open, while GitHub's request limit pauses reads, or while a list read is
 /// under way; a list that was `Unavailable` is asked again only here (R3).
 fn refresh_list(app: &mut App, now: u64) -> Task<Message> {
-    let Some(view) = app.core.changes.open.as_ref() else {
+    let Some(view) = app.core.changes.tabs.shown_view() else {
         return Task::none();
     };
     if matches!(view.pull_requests, PrList::Loading { .. })
@@ -381,7 +381,7 @@ pub fn on_list_remotes(
             result,
         })
     };
-    let awaited = app.core.changes.open.as_ref().is_some_and(|view| {
+    let awaited = app.core.changes.tabs.shown_view().is_some_and(|view| {
         matches!(
             view.pull_requests,
             PrList::Loading { seq: current, .. } if current == seq
@@ -486,7 +486,7 @@ pub fn on_diff_remotes(
             result,
         })
     };
-    let awaited = app.core.changes.open.as_ref().is_some_and(|view| {
+    let awaited = app.core.changes.tabs.shown_view().is_some_and(|view| {
         matches!(
             &view.source,
             Source::PullRequest(pr) if pr.number == number

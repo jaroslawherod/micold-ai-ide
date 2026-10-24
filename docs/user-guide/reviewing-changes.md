@@ -23,9 +23,20 @@ entry (the project root, see [Worktrees & Sessions](worktrees-and-sessions.md#th
 has a right-click menu too, with **Review changes** as its one item.
 
 The view takes the place of the terminal, with the header still above it and the **Changes**
-button shown pressed. Its own header names the entry; **Close**, or pressing **Changes** again,
-returns to the terminal. Selecting a session in the sidebar also closes it, and so does the
-worktree disappearing from the sidebar (for example, deleted from another window).
+button drawn selected while it is shown. Its own header names the entry.
+
+The review is kept while you work elsewhere. Selecting a session (in the sidebar, with a session
+chord or the quick switcher), switching to another worktree or project, or opening the Overview or
+Settings puts the review aside without losing anything: the selected file, both scroll positions,
+revealed lines, the whole-file and **Committed**/**Uncommitted** toggles, the comment you are
+writing, picked lines, the review panel, the chosen pull request and a browsed file all stay as
+you left them. Each location keeps its own review. Press **Changes** (or choose **Review changes**)
+to show it again exactly as left; while it is shown, pressing **Changes** changes nothing.
+
+Only **Close** drops the review, returning to the session shown before it; the next open starts
+afresh, with your comments and the chosen pull request still there. The review is also dropped
+when its worktree is removed (for example, deleted from another window) or its project is removed
+from the app.
 
 ## What the list shows
 
@@ -236,7 +247,7 @@ led.
 
 ### Keeping up with changes
 
-The view keeps itself current while it is open. When a file in the entry is created, edited,
+The view keeps itself current while it is shown. When a file in the entry is created, edited,
 deleted or renamed, or a change is staged or committed — by you in a terminal or editor, or by
 the agent — the list and the diff on screen are read again within about two seconds, with nothing
 to press. A burst of edits (a build, an agent rewriting several files) is read once when it
@@ -256,6 +267,12 @@ tree only when it leaves the list.
 
 The text you are writing in a comment box is kept across a refresh. Picked lines are kept while
 they are still in the diff; when they are gone, the pick is dropped.
+
+A review put aside is not read while it is hidden. When you show it again it is read once more if
+its files may have changed meanwhile (they changed while its location was shown, its location was
+not shown, or the Overview or Settings covered it), so it never shows an older read as current;
+the selected file, scroll positions, comment text and picked lines are kept as any refresh keeps
+them.
 
 ## Commenting on lines
 

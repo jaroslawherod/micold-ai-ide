@@ -87,7 +87,7 @@ fn wanted(state: &mut State, branch: Option<&str>) -> Effect {
 }
 
 fn view_list(state: &State) -> &PrList {
-    &state.open.as_ref().expect("open").pull_requests
+    &state.tabs.shown_view().expect("open").pull_requests
 }
 
 fn seq_of(effect: Effect) -> u64 {
@@ -155,7 +155,7 @@ fn the_base_line_names_the_shown_pull_requests_own_head_branch() {
     old.head_branch = "feat/old".into();
     listed(&mut state, vec![old]);
     chosen(&mut state, 5);
-    let view = state.open.as_ref().expect("open");
+    let view = state.tabs.shown_view().expect("open");
     assert_eq!(
         base_line(view).as_deref(),
         Some("Pull request #5: main ... feat/old"),
@@ -264,7 +264,7 @@ fn answered(
 }
 
 fn section_of(state: &State, enabled: bool, now: u64) -> PrSection<'_> {
-    section(state.open.as_ref().expect("open"), enabled, now)
+    section(state.tabs.shown_view().expect("open"), enabled, now)
 }
 
 fn failures() -> [ReadingFailure; 3] {
@@ -315,7 +315,7 @@ fn a_failure_without_a_list_resets_the_source_to_the_working_tree() {
         chosen(&mut state, 1);
         assert!(matches!(source(&state), Source::PullRequest(_)));
         // A read with no list behind it (as after the setting was toggled) fails.
-        state.open.as_mut().expect("open").pull_requests = PrList::Loading {
+        state.tabs.shown_view_mut().expect("open").pull_requests = PrList::Loading {
             seq: 77,
             again: false,
             last: None,
@@ -482,7 +482,7 @@ fn diff_seq(effect: Effect, expected_number: u64) -> u64 {
 }
 
 fn source(state: &State) -> &Source {
-    &state.open.as_ref().expect("open").source
+    &state.tabs.shown_view().expect("open").source
 }
 
 fn chosen(state: &mut State, number: u64) -> u64 {
@@ -505,7 +505,7 @@ fn choosing_a_pull_request_reads_its_diff_and_lists_its_files() {
     listed(&mut state, vec![pr(7, BranchPrState::Merged)]);
     let effect = changes::update(&mut state, Msg::SourceChosen(Some(7)));
     let seq = diff_seq(effect, 7);
-    let view = state.open.as_ref().expect("open");
+    let view = state.tabs.shown_view().expect("open");
     assert!(matches!(list_body(view), ListBody::Loading));
 
     changes::update(
@@ -516,7 +516,7 @@ fn choosing_a_pull_request_reads_its_diff_and_lists_its_files() {
             result: Ok(split_pr_diff(DIFF)),
         },
     );
-    let view = state.open.as_ref().expect("open");
+    let view = state.tabs.shown_view().expect("open");
     let ListBody::Files(files) = list_body(view) else {
         panic!("files of the pull request");
     };
@@ -541,7 +541,7 @@ fn selecting_a_file_of_a_pull_request_parses_its_patch_and_asks_for_the_head() {
         matches!(effect, Effect::ReadFile { .. }),
         "the head version is read: {effect:?}"
     );
-    let view = state.open.as_ref().expect("open");
+    let view = state.tabs.shown_view().expect("open");
     let DiffBody::Diff(loaded) = diff_body(view) else {
         panic!("the file's diff");
     };
@@ -563,23 +563,11 @@ fn each_entry_remembers_its_own_choice() {
     let mut state = opened(true);
     listed(&mut state, vec![pr(7, BranchPrState::Open)]);
     chosen(&mut state, 7);
-    // Switch to another entry, then back: the first entry shows its pull request again once the
+    // Open another entry, then reopen the first afresh: it shows its pull request again once the
     // list that holds it is read, and the other entry never showed it.
-    changes::update(
-        &mut state,
-        Msg::Opened {
-            project: project(),
-            entry: SessionLocation::Worktree("feat-b".into()),
-        },
-    );
+    reopen(&mut state, SessionLocation::Worktree("feat-b".into()));
     assert_eq!(source(&state), &Source::Changes);
-    changes::update(
-        &mut state,
-        Msg::Opened {
-            project: project(),
-            entry: worktree(),
-        },
-    );
+    reopen(&mut state, worktree());
     assert_eq!(source(&state), &Source::Changes);
     let seq = seq_of(wanted(&mut state, Some("feat/a")));
     let effect = changes::update(
@@ -613,7 +601,7 @@ fn a_pull_request_that_leaves_the_list_returns_the_view_to_the_working_tree() {
     );
     assert_eq!(source(&state), &Source::Changes);
     assert_eq!(
-        pr_header(state.open.as_ref().expect("open")),
+        pr_header(state.tabs.shown_view().expect("open")),
         None,
         "the header goes with the pull request"
     );
@@ -643,7 +631,7 @@ fn a_too_large_pull_request_and_a_failed_read_show_a_line_and_raise_nothing() {
         };
         assert_eq!(matches!(p.diff, PrDiffLoad::TooLarge), too_large);
         assert!(matches!(
-            list_body(state.open.as_ref().expect("open")),
+            list_body(state.tabs.shown_view().expect("open")),
             ListBody::PullRequestUnread { too_large: t } if t == too_large
         ));
     }
@@ -668,7 +656,16 @@ fn an_answer_for_another_read_is_dropped() {
     assert!(matches!(p.diff, PrDiffLoad::Loading { .. }));
 }
 
+/// Open `entry`'s view afresh: its Review tab, if any, is closed first (feature 1269 U4), so only
+/// the remembered pull request carries over.
 fn reopen(state: &mut State, entry: SessionLocation) {
+    changes::update(
+        state,
+        Msg::TabClosed {
+            project: project(),
+            entry: entry.clone(),
+        },
+    );
     changes::update(
         state,
         Msg::Opened {
@@ -854,7 +851,7 @@ fn diff_of(file: &str) -> String {
 
 /// The paths of the files listed for the shown pull request.
 fn shown_paths(state: &State) -> Vec<String> {
-    let view = state.open.as_ref().expect("open");
+    let view = state.tabs.shown_view().expect("open");
     let ListBody::Files(files) = list_body(view) else {
         panic!("files of the pull request");
     };
@@ -961,7 +958,7 @@ fn next_from_the_first_of_thirty_reaches_the_last() {
     }
     let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Next));
     assert_eq!(effect, Effect::None);
-    let header = pr_header(state.open.as_ref().expect("open")).expect("header");
+    let header = pr_header(state.tabs.shown_view().expect("open")).expect("header");
     assert_eq!(header.number, 1);
 }
 
@@ -972,16 +969,16 @@ fn the_header_names_the_shown_pull_request_with_state_and_checks() {
     let mut second = pr(2, BranchPrState::Merged);
     second.checks = CheckStatus::Failing;
     listed(&mut state, vec![pr(3, BranchPrState::Open), second]);
-    assert_eq!(pr_header(state.open.as_ref().expect("open")), None);
+    assert_eq!(pr_header(state.tabs.shown_view().expect("open")), None);
     chosen(&mut state, 2);
-    let header = pr_header(state.open.as_ref().expect("open")).expect("header");
+    let header = pr_header(state.tabs.shown_view().expect("open")).expect("header");
     assert_eq!((header.number, header.title.as_str()), (2, "title 2"));
     assert_eq!(header.mark, PrMark::Merged);
     assert_eq!(header.check, Some(micold_client::ui::CheckMark::Failing));
     assert_eq!(header.base, "Pull request #2: main ... feat/a");
 
     changes::update(&mut state, Msg::SourceChosen(None));
-    assert_eq!(pr_header(state.open.as_ref().expect("open")), None);
+    assert_eq!(pr_header(state.tabs.shown_view().expect("open")), None);
     let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Previous));
     assert_eq!(
         effect,
@@ -1002,7 +999,7 @@ fn three_fast_choices_show_only_the_last_ones_diff_under_its_header() {
     answer(&mut state, s1, 1, "one.rs");
     answer(&mut state, s3, 3, "three.rs");
     assert_eq!(shown_paths(&state), ["one.rs"]);
-    let header = pr_header(state.open.as_ref().expect("open")).expect("header");
+    let header = pr_header(state.tabs.shown_view().expect("open")).expect("header");
     assert_eq!(header.number, 1);
 }
 
@@ -1020,7 +1017,7 @@ fn a_failed_or_too_large_diff_keeps_the_header_and_stepping() {
         },
     );
     assert_eq!(
-        pr_header(state.open.as_ref().expect("open")).map(|h| h.number),
+        pr_header(state.tabs.shown_view().expect("open")).map(|h| h.number),
         Some(2)
     );
     let seq = diff_seq(
@@ -1036,7 +1033,7 @@ fn a_failed_or_too_large_diff_keeps_the_header_and_stepping() {
         },
     );
     assert_eq!(
-        pr_header(state.open.as_ref().expect("open")).map(|h| h.number),
+        pr_header(state.tabs.shown_view().expect("open")).map(|h| h.number),
         Some(1)
     );
     let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Previous));
@@ -1072,7 +1069,7 @@ fn a_refresh_adding_a_pull_request_keeps_the_selected_one_shown() {
     );
     assert_eq!(effect, Effect::None, "no new diff read");
     assert_eq!(
-        pr_header(state.open.as_ref().expect("open")).map(|h| h.number),
+        pr_header(state.tabs.shown_view().expect("open")).map(|h| h.number),
         Some(2)
     );
     assert_eq!(shown_paths(&state), ["a.rs", "b.rs"]);
@@ -1096,7 +1093,7 @@ fn a_refresh_changing_the_selected_ones_state_updates_the_header_without_a_read(
         },
     );
     assert_eq!(effect, Effect::None);
-    let header = pr_header(state.open.as_ref().expect("open")).expect("header");
+    let header = pr_header(state.tabs.shown_view().expect("open")).expect("header");
     assert_eq!(header.mark, PrMark::Merged);
     assert_eq!(header.check, Some(micold_client::ui::CheckMark::Passing));
     assert_eq!(shown_paths(&state), ["a.rs", "b.rs"]);
@@ -1186,7 +1183,7 @@ mod review_comments {
     #[test]
     fn a_pick_on_a_pull_request_file_builds_an_add_with_its_anchor() {
         let mut state = showing_seven();
-        assert!(can_pick(state.open.as_ref().unwrap()));
+        assert!(can_pick(state.tabs.shown_view().unwrap()));
         changes::update(
             &mut state,
             Msg::GutterPressed {
@@ -1256,7 +1253,7 @@ mod review_comments {
         let mut state = opened(true);
         listed(&mut state, vec![listed_pr(7)]);
         let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(7))), 7);
-        assert!(!can_pick(state.open.as_ref().unwrap()), "still loading");
+        assert!(!can_pick(state.tabs.shown_view().unwrap()), "still loading");
         let binary = "diff --git a/p.png b/p.png\nnew file mode 100644\nindex 0..3\nBinary files /dev/null and b/p.png differ\n";
         changes::update(
             &mut state,
@@ -1270,7 +1267,7 @@ mod review_comments {
             &mut state,
             Msg::FileSelected(RelPath::from_native("p.png").unwrap()),
         );
-        assert!(!can_pick(state.open.as_ref().unwrap()), "binary");
+        assert!(!can_pick(state.tabs.shown_view().unwrap()), "binary");
         let effect = changes::update(
             &mut state,
             Msg::GutterPressed {
@@ -1280,7 +1277,7 @@ mod review_comments {
             },
         );
         assert_eq!(effect, Effect::None);
-        assert_eq!(state.open.as_ref().unwrap().pick, None);
+        assert_eq!(state.tabs.shown_view().unwrap().pick, None);
     }
 
     // FR-014: a non-UTF-8 file, a large one not shown, and a diff GitHub calls too large cannot
@@ -1316,7 +1313,7 @@ mod review_comments {
         diff.files[0].patch.push(0xFF);
         read(&mut state, seq, Ok(diff));
         select(&mut state);
-        assert!(!can_pick(state.open.as_ref().unwrap()), "not UTF-8");
+        assert!(!can_pick(state.tabs.shown_view().unwrap()), "not UTF-8");
 
         let (mut state, seq) = start();
         let body = "+x\n".repeat(5_001);
@@ -1324,14 +1321,14 @@ mod review_comments {
             format!("diff --git a/p.rs b/p.rs\n--- a/p.rs\n+++ b/p.rs\n@@ -0,0 +1,5001 @@\n{body}");
         read(&mut state, seq, Ok(split_pr_diff(&raw)));
         select(&mut state);
-        assert!(!can_pick(state.open.as_ref().unwrap()), "large, not shown");
+        assert!(!can_pick(state.tabs.shown_view().unwrap()), "large, not shown");
         changes::update(&mut state, Msg::ShowLarge);
-        assert!(can_pick(state.open.as_ref().unwrap()), "large, shown");
+        assert!(can_pick(state.tabs.shown_view().unwrap()), "large, shown");
 
         let (mut state, seq) = start();
         read(&mut state, seq, Err(DiffReadFailure::TooLarge));
         assert!(
-            !can_pick(state.open.as_ref().unwrap()),
+            !can_pick(state.tabs.shown_view().unwrap()),
             "too large for GitHub"
         );
     }
@@ -1635,7 +1632,7 @@ mod review_comments {
             panic!("a send");
         };
         assert_eq!(pr.map(|p| p.current_head), Some(NEWER.to_string()));
-        let view = state.open.as_ref().unwrap();
+        let view = state.tabs.shown_view().unwrap();
         let reviews = state.reviews.values().next().expect("comments");
         assert_eq!(
             reviews.comments[0]
@@ -1659,7 +1656,7 @@ mod review_comments {
         let effect = head_moves(&mut state);
         let effect = answer_head(&mut state, effect, &patch_a(1, "new"));
         assert_eq!(sans_tree(effect), Effect::None);
-        let view = state.open.as_ref().unwrap();
+        let view = state.tabs.shown_view().unwrap();
         assert!(!micold_client::features::changes::is_outdated(
             view, &comment
         ));
@@ -1678,7 +1675,7 @@ mod review_comments {
         };
         assert_eq!(moves.len(), 1);
         assert_eq!(moves[0].to(), LineRange::new(5, 5).unwrap());
-        let view = state.open.as_ref().unwrap();
+        let view = state.tabs.shown_view().unwrap();
         assert_eq!(
             micold_client::features::changes::shown_range(view, &comment),
             LineRange::new(5, 5).unwrap()
@@ -1699,7 +1696,7 @@ mod review_comments {
             let effect = head_moves(&mut state);
             let effect = answer_head(&mut state, effect, &patch_a(1, "newer"));
             assert_eq!(sans_tree(effect), Effect::None, "no move for gone code");
-            let view = state.open.as_ref().unwrap();
+            let view = state.tabs.shown_view().unwrap();
             assert!(micold_client::features::changes::is_outdated(
                 view, &comment
             ));
@@ -1719,7 +1716,7 @@ mod review_comments {
         let other = patch_a(1, "x").replace("a.rs", "c.rs");
         answer_head(&mut state, effect, &other);
         assert_eq!(shown(&state).selected, None);
-        let view = state.open.as_ref().unwrap();
+        let view = state.tabs.shown_view().unwrap();
         assert!(micold_client::features::changes::is_outdated(
             view, &comment
         ));
@@ -1829,7 +1826,7 @@ mod head_version {
     }
 
     fn view(state: &State) -> &changes::OpenView {
-        state.open.as_ref().expect("open")
+        state.tabs.shown_view().expect("open")
     }
 
     /// Pull request 7 chosen and `a.rs` selected; the head read is asked for, not yet answered.
@@ -2056,12 +2053,12 @@ fn browse_under_a_pull_request_reads_the_tree_and_the_file_at_the_head() {
 #[test]
 fn browse_a_truncated_tree_is_noted_and_a_typed_path_still_reads() {
     let mut state = browsing_pr(true);
-    assert!(state.open.as_ref().unwrap().files.truncated);
+    assert!(state.tabs.shown_view().unwrap().files.truncated);
     changes::update(
         &mut state,
         Msg::PathPickerChanged("deep/not/listed.rs".into()),
     );
-    let matches = changes::picker_matches(state.open.as_ref().unwrap());
+    let matches = changes::picker_matches(state.tabs.shown_view().unwrap());
     assert_eq!(matches.last(), Some(&rel("deep/not/listed.rs")));
     let effect = changes::update(&mut state, Msg::BrowseOpen(rel("deep/not/listed.rs")));
     assert!(matches!(
@@ -2072,19 +2069,19 @@ fn browse_a_truncated_tree_is_noted_and_a_typed_path_still_reads() {
         }
     ));
     let whole = browsing_pr(false);
-    assert!(!whole.open.as_ref().unwrap().files.truncated);
+    assert!(!whole.tabs.shown_view().unwrap().files.truncated);
 }
 
 #[test]
 fn switching_pull_request_clears_back_and_reads_the_browsed_path_again() {
     let mut state = browsing_pr(false);
     changes::update(&mut state, Msg::BrowseOpen(rel("untouched/z.rs")));
-    assert!(!state.open.as_ref().unwrap().stack.is_empty());
+    assert!(!state.tabs.shown_view().unwrap().stack.is_empty());
     let effect = changes::update(&mut state, Msg::SourceChosen(Some(8)));
     let Effect::Batch(effects) = effect else {
         panic!("diff, file and tree are read: {effect:?}");
     };
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert!(view.stack.is_empty(), "Back led into the old source");
     assert!(effects.iter().any(|e| matches!(
         e,
@@ -2127,7 +2124,7 @@ fn a_browsed_path_missing_from_the_other_source_says_so() {
             spans: Default::default(),
         },
     );
-    let Some(BrowseBody::Failed { message, .. }) = browse_body(state.open.as_ref().unwrap()) else {
+    let Some(BrowseBody::Failed { message, .. }) = browse_body(state.tabs.shown_view().unwrap()) else {
         panic!("a failure line");
     };
     assert_eq!(message, "This file does not exist in this version");

@@ -325,7 +325,7 @@ pub fn session_view_visible(state: &State) -> bool {
     state.settings.settings_draft.is_none()
         && state.workspace.active_project().is_some()
         && !state.overview.open
-        && state.changes.open.is_none()
+        && state.review_shown().is_none()
         && crate::features::runs::compare_rows(&state.runs, state.active_sessions()).is_none()
         && state.session.active.is_some()
 }
@@ -422,7 +422,10 @@ pub fn view_with<'a>(
         let main_inner: Element<'a, Message> = if state.overview.open {
             // Feature 813, U1: the Overview takes the main area, ahead of Changes and Compare.
             overview::view(state, scheme)
-        } else if let Some(view) = state.changes.open.as_ref() {
+        } else if let Some(view) = state
+            .review_shown()
+            .and_then(|_| state.changes.tabs.shown_view())
+        {
             // Feature 482, V1: the Changes view takes the terminal pane's place while open;
             // feature 1126 R12: under the header while a session is shown.
             session_area::over_changes(state, changes::view(state, view, scheme, composer), scheme)
@@ -1278,7 +1281,7 @@ fn main_content_key(state: &State) -> u64 {
         return u64::MAX - 3;
     }
     // Feature 482: opening and closing the Changes view crossfades like any other content switch.
-    if state.changes.open.is_some() {
+    if state.review_shown().is_some() {
         return u64::MAX - 1;
     }
     // Feature 483: Compare crossfades in and out the same way.

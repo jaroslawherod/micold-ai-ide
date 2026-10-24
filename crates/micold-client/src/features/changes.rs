@@ -30,7 +30,8 @@ use micold_core::review::pr_diff::PrDiff;
 use micold_core::review::reference::{self, Reference};
 use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::{LineRange, RelPath, Side};
-use micold_core::session::SessionLocation;
+use micold_core::review_tabs::{EntryKey, Opened, ReviewTabs};
+use micold_core::session::{SessionId, SessionLocation};
 use micold_core::settings::DiffLayout;
 use micold_core::tokens::Rgb;
 use micold_core::typeahead::{rank, Query};
@@ -816,7 +817,7 @@ pub const PANEL_TEXT_CHARS: usize = 200;
 
 /// The review panel's rows: by file path (bytewise), first line, side (current first), created.
 pub fn panel_rows(state: &State) -> Vec<PanelRow> {
-    let Some(view) = state.open.as_ref() else {
+    let Some(view) = state.tabs.shown_view() else {
         return Vec::new();
     };
     let Some(review) = review_of(state, view) else {
@@ -917,7 +918,7 @@ impl PanelGroup {
 /// The panel's groups, in row order: the working tree first, then pull requests by number; only
 /// scopes that have a comment.
 pub fn panel_groups(state: &State) -> Vec<PanelGroup> {
-    let Some(view) = state.open.as_ref() else {
+    let Some(view) = state.tabs.shown_view() else {
         return Vec::new();
     };
     let Some(review) = review_of(state, view) else {
@@ -958,7 +959,7 @@ pub fn status_counts(state: &State) -> [(Status, usize); 4] {
         (Status::Applied, 0),
         (Status::Answered, 0),
     ];
-    let view = state.open.as_ref();
+    let view = state.tabs.shown_view();
     let review = view.and_then(|view| review_of(state, view));
     let scope = view.map_or(Scope::WorkingTree, view_scope);
     for comment in review.into_iter().flat_map(|r| in_scope(r, scope)) {
@@ -1000,7 +1001,7 @@ pub fn is_outdated(view: &OpenView, comment: &ReviewComment) -> bool {
 
 /// The toolbar toggle's label: "Review (n)", n being every comment of the shown scope.
 pub fn review_toolbar_label(state: &State) -> String {
-    let count = state.open.as_ref().map_or(0, |view| {
+    let count = state.tabs.shown_view().map_or(0, |view| {
         review_of(state, view).map_or(0, |r| in_scope(r, view_scope(view)).count())
     });
     format!("Review ({count})")
@@ -1008,7 +1009,7 @@ pub fn review_toolbar_label(state: &State) -> String {
 
 /// Where pressing the row of comment `id` goes; `None` for an unknown comment.
 pub fn jump_target(state: &State, id: CommentId) -> Option<Jump> {
-    let view = state.open.as_ref()?;
+    let view = state.tabs.shown_view()?;
     let comment = in_scope(review_of(state, view)?, view_scope(view)).find(|c| c.id == id)?;
     let listed = match &view.source {
         Source::Changes => {
@@ -1057,14 +1058,14 @@ fn row_of_line(shaped: ShapedRef<'_>, layout: DiffLayout, side: Side, line: u32)
 /// takes the pending jump; `None` when there is nothing to scroll to yet.
 fn jump_offset(state: &mut State) -> Option<u32> {
     let layout = state.layout;
-    let view = state.open.as_ref()?;
+    let view = state.tabs.shown_view()?;
     let focus = view.panel.focus?;
     let comment = review_of(state, view)
         .and_then(|r| r.comments.iter().find(|c| c.id == focus))
         .filter(|c| view.selected.as_ref() == Some(&c.path));
     let Some(comment) = comment else {
         // The comment is gone or another file was chosen: the jump is abandoned.
-        if let Some(view) = state.open.as_mut() {
+        if let Some(view) = state.tabs.shown_view_mut() {
             view.panel.to_show = false;
         }
         return None;
@@ -1085,7 +1086,7 @@ fn jump_offset(state: &mut State) -> Option<u32> {
     let offset = row.map_or(0.0, |r| {
         r.saturating_sub(2) as f32 * crate::ui::material::DIFF_ROW_HEIGHT + hung as f32
     });
-    if let Some(view) = state.open.as_mut() {
+    if let Some(view) = state.tabs.shown_view_mut() {
         view.panel.to_show = false;
         view.diff_offset = offset as u32;
     }
@@ -1143,8 +1144,9 @@ pub struct ReviewView {
 /// What this window holds about the Changes view.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
-    /// `None`: the view is closed.
-    pub open: Option<OpenView>,
+    /// The Review tabs of this window, each keeping its location's view; at most one is shown
+    /// (feature 1269, R6). Every message of the view acts on the shown one.
+    pub tabs: ReviewTabs<OpenView>,
     /// The sequence number the next read gets.
     pub next_seq: u64,
     /// A read the root started while interpreting an outcome, which only the shell can run. Taken
@@ -1197,15 +1199,21 @@ impl HeaderCounts {
 /// What this feature is told.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
-    /// Open the view of `entry` (V1); reopening resets the toggles.
+    /// Open the view of `entry` (V1), or show its kept view (feature 1269, T1).
     Opened {
         /// The entry's project.
         project: PathBuf,
         /// The entry.
         entry: SessionLocation,
     },
-    /// The view's close action (V2).
-    Closed,
+    /// The Review tab of `entry` of `project` is closed (×, the view's **Close**): its kept view
+    /// is forgotten (feature 1269, U4). The root shows the location's session instead.
+    TabClosed {
+        /// The entry's project.
+        project: PathBuf,
+        /// The entry.
+        entry: SessionLocation,
+    },
     /// The shown location changed: the header follows `entry` of `project`, or nothing (feature
     /// 1126, R6). Sent by the root's follow step, never by a control.
     HeaderFollowed {
@@ -1302,10 +1310,17 @@ pub enum Msg {
         /// The list, or git's message.
         result: Result<ChangeList, String>,
     },
-    /// The user selected a session: the terminal takes the main area back (V2).
+    /// The user selected a session: the terminal takes the main area back and the shown review
+    /// is hidden, kept (feature 1269, U2).
     SessionSelected,
-    /// The project's worktrees are now these `dir_name`s (V3): a view of one that is gone closes.
-    WorktreesListed(BTreeSet<String>),
+    /// `project`'s worktrees are now these `dir_name`s (V3): the Review tab of one that is gone
+    /// is dropped (feature 1269, U9).
+    WorktreesListed {
+        /// The project listed.
+        project: PathBuf,
+        /// Its worktrees' `dir_name`s.
+        names: BTreeSet<String>,
+    },
     /// The user chose a layout on the diff pane's toggle (D1).
     LayoutChosen(DiffLayout),
     /// The layout in force, from `Welcome` or `SettingsChanged` (R12).
@@ -1570,7 +1585,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         msg,
         Msg::DiffScrolled { .. } | Msg::ListScrolled { .. } | Msg::PanelScrolled { .. }
     );
-    let before = state.open.as_ref().filter(|_| !scroll).map(|view| {
+    let before = state.tabs.shown_view().filter(|_| !scroll).map(|view| {
         (
             view.project.clone(),
             view.entry.clone(),
@@ -1580,7 +1595,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
     });
     let wants_tree = matches!(msg, Msg::DiffRead { .. } | Msg::PullRequestDiffRead { .. });
     if !scroll && !matches!(msg, Msg::ReferenceActivated(..)) {
-        if let Some(view) = state.open.as_mut() {
+        if let Some(view) = state.tabs.shown_view_mut() {
             view.notice = None;
         }
     }
@@ -1597,7 +1612,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         };
     }
     if !scroll {
-        if let Some(view) = state.open.as_mut() {
+        if let Some(view) = state.tabs.shown_view_mut() {
             reshape(view);
             // R2: a pick stays only while its lines are still rows of the diff (a collapsed
             // revealed run takes its rows away too).
@@ -1630,7 +1645,7 @@ fn reread_after_source_change(
     before: Option<SourceBefore>,
 ) -> Option<Vec<Effect>> {
     let (project, entry, target, browsed) = before?;
-    let view = state.open.as_mut()?;
+    let view = state.tabs.shown_view_mut()?;
     if view.project != project || view.entry != entry || read_target(view) == target {
         return None;
     }
@@ -1718,6 +1733,152 @@ fn request_counts(state: &mut State) -> Effect {
     }
 }
 
+/// Open the Review tab of `entry` of `project`, or show its kept view (feature 1269, U3);
+/// `current` is the session to go back to when it closes. A new tab reads as the first open always
+/// did; a kept one is read again only when its location may have changed meanwhile (T5), its reads
+/// in flight settled first (U5); one already shown is left as it is.
+pub fn opened(
+    state: &mut State,
+    project: PathBuf,
+    entry: SessionLocation,
+    current: Option<SessionId>,
+) -> Effect {
+    let key: EntryKey = (project, entry);
+    if state.tabs.shown_key().is_some_and(|shown| *shown != key) {
+        hide_shown(state);
+    }
+    let make = || fresh_view(key.0.clone(), key.1.clone());
+    match state.tabs.open_or_show(key.clone(), current, make) {
+        Opened::Created => request_read(state),
+        Opened::Shown { reread: true } => reread_shown(state),
+        Opened::Shown { reread: false } | Opened::AlreadyShown => Effect::None,
+    }
+}
+
+/// The view of `entry` of `project` as a first open makes it: both toggles on, nothing selected.
+fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
+    OpenView {
+        project,
+        entry,
+        toggles: Toggles::default(),
+        list: Load::Idle,
+        selected: None,
+        list_offset: 0,
+        list_viewport: 0,
+        diff: Load::Idle,
+        shown_large: BTreeSet::new(),
+        diff_offset: 0,
+        diff_viewport: 0,
+        pick: None,
+        composer: None,
+        slot_heights: BTreeMap::new(),
+        anchors: BTreeMap::new(),
+        confirm_discard: false,
+        reply_open: None,
+        panel: Panel::default(),
+        branch: None,
+        pull_requests: PrList::Absent,
+        source: Source::Changes,
+        expansions: BTreeMap::new(),
+        shaped: Shaped::default(),
+        browse: None,
+        stack: BrowseStack::default(),
+        files: FilesPane::default(),
+        notice: None,
+    }
+}
+
+/// Hide the shown review, keeping its view (feature 1269, U2). One hidden with a read in flight,
+/// or whose location the header does not follow (so no watch sees its files), is read again when
+/// next shown (U5, R3): its answers are dropped while hidden.
+fn hide_shown(state: &mut State) {
+    let Some(key) = state.tabs.shown_key().cloned() else {
+        return;
+    };
+    let unwatched = state.tabs.shown_view().is_some_and(reading)
+        || state.header.entry.as_ref() != Some(&key);
+    state.tabs.hide();
+    if unwatched {
+        state.tabs.location_left(&key);
+    }
+}
+
+/// The shown review is no longer covered by the Overview, Settings or Compare (feature 1269, U7):
+/// read it again once if its files may have changed meanwhile.
+pub fn uncovered(state: &mut State) -> Effect {
+    let Some(key) = state.tabs.shown_key().cloned() else {
+        return Effect::None;
+    };
+    if state.tabs.uncovered(&key) {
+        reread_shown(state)
+    } else {
+        Effect::None
+    }
+}
+
+/// Read the shown view's list again after it was hidden or covered: the reads it started before
+/// were dropped (their answers carry no current `seq` any more), so it settles them first and
+/// then asks once (U5).
+fn reread_shown(state: &mut State) -> Effect {
+    let Some(view) = state.tabs.shown_view_mut() else {
+        return Effect::None;
+    };
+    settle(view);
+    request_read(state)
+}
+
+/// Whether any read of `view` is under way.
+fn reading(view: &OpenView) -> bool {
+    let pr_reading = match &view.source {
+        Source::PullRequest(pr) => {
+            pr.refresh.is_some()
+                || matches!(pr.diff, PrDiffLoad::Loading { .. })
+                || matches!(pr.head_text, HeadText::Reading { .. })
+        }
+        Source::Changes => false,
+    };
+    matches!(view.list, Load::Loading { .. })
+        || matches!(view.diff, Load::Loading { .. })
+        || matches!(view.files.tree, Load::Loading { .. })
+        || matches!(view.pull_requests, PrList::Loading { .. })
+        || view
+            .browse
+            .as_ref()
+            .is_some_and(|b| matches!(b.load, BrowseLoad::Reading { .. }))
+        || pr_reading
+}
+
+/// End every read of `view` that is under way without an answer: each shows what it showed before
+/// it started, else nothing yet (U5). The browsed file is read again by the list's re-read.
+fn settle(view: &mut OpenView) {
+    settle_load(&mut view.list);
+    settle_load(&mut view.diff);
+    settle_load(&mut view.files.tree);
+    if let PrList::Loading { last, .. } = &mut view.pull_requests {
+        view.pull_requests = match last.take() {
+            Some((prs, read_at)) => PrList::Ready { prs, read_at },
+            None => PrList::Unavailable { last: None },
+        };
+    }
+    if let Source::PullRequest(pr) = &mut view.source {
+        pr.refresh = None;
+        if matches!(pr.diff, PrDiffLoad::Loading { .. }) {
+            // Selecting the row again retries, as after a failed read.
+            pr.diff = PrDiffLoad::Failed;
+        }
+        if matches!(pr.head_text, HeadText::Reading { .. }) {
+            pr.head_text = HeadText::NotRead;
+        }
+    }
+}
+
+/// A `Loading` read becomes its `last` value, else `Idle`.
+fn settle_load<T>(load: &mut Load<T>) {
+    if let Load::Loading { last, .. } = load {
+        *load = last.take().map_or(Load::Idle, Load::Ready);
+    }
+}
+
 fn apply(state: &mut State, msg: Msg) -> Effect {
     match msg {
         // Handled in `update` before the view's bookkeeping.
@@ -1726,7 +1887,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::LayoutChosen(layout) => {
             if state.layout != layout {
-                if let Some(view) = state.open.as_mut() {
+                if let Some(view) = state.tabs.shown_view_mut() {
                     view.slot_heights.clear();
                 }
             }
@@ -1735,47 +1896,16 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::LayoutInForce(layout) => {
             if state.layout != layout {
-                if let Some(view) = state.open.as_mut() {
+                if let Some(view) = state.tabs.shown_view_mut() {
                     view.slot_heights.clear();
                 }
             }
             state.layout = layout;
             Effect::None
         }
-        Msg::Opened { project, entry } => {
-            state.open = Some(OpenView {
-                project,
-                entry,
-                toggles: Toggles::default(),
-                list: Load::Idle,
-                selected: None,
-                list_offset: 0,
-                list_viewport: 0,
-                diff: Load::Idle,
-                shown_large: BTreeSet::new(),
-                diff_offset: 0,
-                diff_viewport: 0,
-                pick: None,
-                composer: None,
-                slot_heights: BTreeMap::new(),
-                anchors: BTreeMap::new(),
-                confirm_discard: false,
-                reply_open: None,
-                panel: Panel::default(),
-                branch: None,
-                pull_requests: PrList::Absent,
-                source: Source::Changes,
-                expansions: BTreeMap::new(),
-                shaped: Shaped::default(),
-                browse: None,
-                stack: BrowseStack::default(),
-                files: FilesPane::default(),
-                notice: None,
-            });
-            request_read(state)
-        }
+        Msg::Opened { project, entry } => opened(state, project, entry, None),
         Msg::PullRequestsWanted { branch } => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             view.branch = branch;
@@ -1786,7 +1916,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             read_at,
             result,
         } => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             let (again, last) = match &mut view.pull_requests {
@@ -1821,7 +1951,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::SourceChosen(None) => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             if view.source == Source::Changes {
@@ -1835,7 +1965,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::SourceChosen(Some(number)) => {
-            let Some(view) = state.open.as_ref() else {
+            let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
             let listed = view
@@ -1854,7 +1984,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             read_pull_request_diff(state, number)
         }
         Msg::PullRequestStepped(step) => {
-            let Some(view) = state.open.as_ref() else {
+            let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
             let Source::PullRequest(shown) = &view.source else {
@@ -1874,7 +2004,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             number,
             result,
         } => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             let Source::PullRequest(pr) = &mut view.source else {
@@ -1917,7 +2047,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             if enabled && !was {
                 request_pull_requests(state)
             } else if !enabled {
-                if let Some(view) = state.open.as_mut() {
+                if let Some(view) = state.tabs.shown_view_mut() {
                     view.pull_requests = PrList::Absent;
                     if view.source != Source::Changes {
                         view.source = Source::Changes;
@@ -1929,12 +2059,16 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 Effect::None
             }
         }
-        Msg::Closed | Msg::SessionSelected => {
-            state.open = None;
+        Msg::TabClosed { project, entry } => {
+            state.tabs.close(&(project, entry), &[], None);
+            Effect::None
+        }
+        Msg::SessionSelected => {
+            hide_shown(state);
             Effect::None
         }
         Msg::CommittedToggled => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             if !committed_available(view) {
@@ -1945,7 +2079,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             request_read(state)
         }
         Msg::UncommittedToggled => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             view.toggles.uncommitted = !view.toggles.uncommitted;
@@ -1953,7 +2087,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             request_read(state)
         }
         Msg::FileSelected(path) => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             // Choosing a changed file leaves the browser and forgets where Back led.
@@ -1983,7 +2117,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             request_diff(state, false)
         }
         Msg::ShowLarge => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             // A browsed file over the limit is read despite it.
@@ -2014,7 +2148,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         Msg::ReferenceActivated(path, line) => reference_activated(state, path, line),
         Msg::BrowseBack => browse_back(state),
         Msg::OpenFileDiff => {
-            let Some(view) = state.open.as_ref().filter(|v| file_diff_available(v)) else {
+            let Some(view) = state.tabs.shown_view().filter(|v| file_diff_available(v)) else {
                 return Effect::None;
             };
             let path = view.browse.as_ref().map(|b| b.path.clone());
@@ -2025,13 +2159,13 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::PathPickerChanged(text) => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.files.picker = text;
             }
             Effect::None
         }
         Msg::FolderToggled(folder) => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 if !view.files.open_folders.remove(&folder) {
                     view.files.open_folders.insert(folder);
                 }
@@ -2039,7 +2173,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::FilesPaneToggled => {
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             view.files.shown = !view.files.shown;
@@ -2049,7 +2183,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             request_tree(view, &mut state.next_seq)
         }
         Msg::TreeRead { seq, result } => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 if matches!(view.files.tree, Load::Loading { seq: s, .. } if s == seq) {
                     (view.files.truncated, view.files.tree) = match result {
                         Ok(listing) => {
@@ -2067,7 +2201,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::GapToggled(key) => {
-            if let Some(view) = state.open.as_mut().filter(|v| v.browse.is_none()) {
+            if let Some(view) = state.tabs.shown_view_mut().filter(|v| v.browse.is_none()) {
                 if let Some(at) = selected_key(view).filter(|(_, p)| revealable(view, p)) {
                     if new_side(view).is_some() {
                         view.expansions.entry(at).or_default().toggle_key(key);
@@ -2077,7 +2211,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::WholeFileToggled => {
-            if let Some(view) = state.open.as_mut().filter(|v| v.browse.is_none()) {
+            if let Some(view) = state.tabs.shown_view_mut().filter(|v| v.browse.is_none()) {
                 if let (WholeFile::Available { on }, Some(at)) =
                     (whole_file(view), selected_key(view))
                 {
@@ -2093,7 +2227,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             result,
             spans,
         } => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 let waiting = view
                     .browse
                     .as_ref()
@@ -2120,7 +2254,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     };
                 }
             }
-            if let Some(Source::PullRequest(pr)) = state.open.as_mut().map(|v| &mut v.source) {
+            if let Some(Source::PullRequest(pr)) = state.tabs.shown_view_mut().map(|v| &mut v.source) {
                 let current = source == SourceKey::Pr(pr.number)
                     && pr.selected.as_ref() == Some(&path)
                     && pr.head_text == (HeadText::Reading { seq });
@@ -2134,14 +2268,14 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::DiffScrolled { offset, viewport } => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.diff_offset = offset;
                 view.diff_viewport = viewport;
             }
             Effect::None
         }
         Msg::DiffRead { seq, result } => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 if matches!(view.diff, Load::Loading { seq: s, .. } if s == seq) {
                     view.diff = match result {
                         Ok(diff) => Load::Ready(diff),
@@ -2151,20 +2285,20 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 }
             }
             let moves = judge_anchors(state);
-            let waiting = state.open.as_ref().is_some_and(|v| v.panel.to_show);
+            let waiting = state.tabs.shown_view().is_some_and(|v| v.panel.to_show);
             match waiting.then(|| jump_offset(state)).flatten() {
                 Some(offset) => Effect::ScrollDiff { offset },
                 None => reanchor_effect(state, moves),
             }
         }
         Msg::PanelToggled => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.panel.open = !view.panel.open;
             }
             Effect::None
         }
         Msg::PanelScrolled { offset, viewport } => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.panel.offset = offset;
                 view.panel.viewport = viewport;
             }
@@ -2174,7 +2308,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Some(jump) = jump_target(state, id) else {
                 return Effect::None;
             };
-            let Some(view) = state.open.as_mut() else {
+            let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
             let path = match jump {
@@ -2196,21 +2330,15 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::ListScrolled { offset, viewport } => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.list_offset = offset;
                 view.list_viewport = viewport;
             }
             Effect::None
         }
         Msg::ListRead { seq, result } => list_read(state, seq, result),
-        Msg::WorktreesListed(names) => {
-            let gone = matches!(
-                state.open.as_ref().map(|v| &v.entry),
-                Some(SessionLocation::Worktree(name)) if !names.contains(name)
-            );
-            if gone {
-                state.open = None;
-            }
+        Msg::WorktreesListed { project, names } => {
+            state.tabs.drop_gone_worktrees(&project, &names);
             // Feature 1126: the header's worktree gone, it follows nothing until the root's follow
             // step finds what is shown now.
             if matches!(
@@ -2222,7 +2350,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::GutterPressed { old, new, extend } => {
-            if let Some(view) = state.open.as_mut().filter(|v| pick_allowed(v)) {
+            if let Some(view) = state.tabs.shown_view_mut().filter(|v| pick_allowed(v)) {
                 // C1: a context line has both numbers and counts as the new side.
                 let (side, line) = match (old, new) {
                     (_, Some(n)) => (Side::New, n),
@@ -2248,13 +2376,13 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::SlotMeasured { side, line, height } => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.slot_heights.insert((side, line), height);
             }
             Effect::None
         }
         Msg::AddComment => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 if let Some(pick) = view.pick {
                     view.composer = Some(Composer {
                         target: ComposerTarget::New(pick),
@@ -2266,20 +2394,24 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::ComposerAction(_) => Effect::None,
         Msg::ComposerEdited(text) => {
-            if let Some(composer) = state.open.as_mut().and_then(|v| v.composer.as_mut()) {
+            if let Some(composer) = state.tabs.shown_view_mut().and_then(|v| v.composer.as_mut()) {
                 composer.text = text;
             }
             Effect::None
         }
         Msg::ComposerCancelled => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.composer = None;
             }
             Effect::None
         }
         Msg::ComposerSaved => composer_saved(state),
-        // The watch's wake rereads the open view's list and the header's counts (R5, R6).
+        // The watch's wake rereads the shown view's list and the header's counts (R5, R6); a
+        // hidden Review tab of the header's location gets the changed mark and no read (1269 U6).
         Msg::Changed => {
+            if let Some(key) = state.header.entry.clone() {
+                state.tabs.files_changed(&key);
+            }
             let list = request_read(state);
             match (list, request_counts(state)) {
                 (list, Effect::None) => list,
@@ -2288,7 +2420,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::SendPressed => {
-            let Some(view) = state.open.as_ref() else {
+            let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
             // Only a listed pull request can be sent (FR-013).
@@ -2324,7 +2456,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 pr,
             }
         }
-        Msg::ClearSentPressed => match state.open.as_ref() {
+        Msg::ClearSentPressed => match state.tabs.shown_view() {
             Some(view) if tidy_actions(state).is_some_and(|a| a.clear_sent) => review_edit(
                 view,
                 ReviewEditOp::ClearSent {
@@ -2335,13 +2467,13 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         },
         Msg::DiscardPendingPressed => {
             let enabled = tidy_actions(state).is_some_and(|a| a.discard_pending);
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.confirm_discard = enabled;
             }
             Effect::None
         }
         Msg::DiscardCancelled => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.confirm_discard = false;
             }
             Effect::None
@@ -2349,7 +2481,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         Msg::DiscardConfirmed => {
             // Re-checked: a push since the question opened may have left nothing to discard.
             let enabled = tidy_actions(state).is_some_and(|a| a.discard_pending);
-            match state.open.as_mut() {
+            match state.tabs.shown_view_mut() {
                 Some(view) if view.confirm_discard => {
                     view.confirm_discard = false;
                     if enabled {
@@ -2367,14 +2499,14 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::EditComment(id) => {
-            let Some(view) = state.open.as_ref() else {
+            let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
             let text = review_of(state, view)
                 .filter(|r| !r.sending)
                 .and_then(|r| r.comments.iter().find(|c| c.id == id && is_pending(c)))
                 .map(|c| c.text.clone());
-            if let (Some(text), Some(view)) = (text, state.open.as_mut()) {
+            if let (Some(text), Some(view)) = (text, state.tabs.shown_view_mut()) {
                 view.composer = Some(Composer {
                     target: ComposerTarget::Edit(id),
                     text,
@@ -2383,7 +2515,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::MarkApplied(id) => {
-            let Some(view) = state.open.as_ref() else {
+            let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
             if !is_markable(state, view, id) {
@@ -2400,10 +2532,10 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::AnswerComment(id) => {
             let markable = state
-                .open
-                .as_ref()
+                .tabs
+                .shown_view()
                 .is_some_and(|view| is_markable(state, view, id));
-            if let Some(view) = state.open.as_mut().filter(|_| markable) {
+            if let Some(view) = state.tabs.shown_view_mut().filter(|_| markable) {
                 view.composer = Some(Composer {
                     target: ComposerTarget::Answer(id),
                     text: String::new(),
@@ -2412,31 +2544,31 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::ShowReply(id) => {
-            let known = state.open.as_ref().is_some_and(|view| {
+            let known = state.tabs.shown_view().is_some_and(|view| {
                 review_of(state, view)
                     .and_then(|r| r.comments.iter().find(|c| c.id == id))
                     .is_some_and(|c| full_reply(c).is_some())
             });
-            if let Some(view) = state.open.as_mut().filter(|_| known) {
+            if let Some(view) = state.tabs.shown_view_mut().filter(|_| known) {
                 view.reply_open = Some(id);
             }
             Effect::None
         }
         Msg::ReplyClosed => {
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 view.reply_open = None;
             }
             Effect::None
         }
         Msg::DeleteComment(id) => {
-            let Some(view) = state.open.as_ref() else {
+            let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
             if review_of(state, view).is_some_and(|r| r.sending) {
                 return Effect::None;
             }
             let effect = review_edit(view, ReviewEditOp::Delete { id });
-            if let Some(view) = state.open.as_mut() {
+            if let Some(view) = state.tabs.shown_view_mut() {
                 close_edit_unless(view, |editing| editing != id);
             }
             effect
@@ -2447,8 +2579,17 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             comments,
             sending,
         } => {
-            if let Some(view) = state.open.as_mut() {
-                if view.project == project && entry_dir(&view.entry) == worktree_dir {
+            // The entry's view, shown or kept hidden (1269 U6): a hidden one is read again when
+            // next shown.
+            let key = state
+                .tabs
+                .iter()
+                .map(|(key, _)| key)
+                .find(|(p, entry)| *p == project && entry_dir(entry) == worktree_dir)
+                .cloned();
+            if let Some(key) = key {
+                state.tabs.comments_changed(&key);
+                if let Some(view) = state.tabs.get_mut(&key).map(|tab| &mut tab.view) {
                     close_edit_unless(view, |id| comments.iter().any(|c| c.id == id));
                     close_answer_unless(view, |id| {
                         comments
@@ -2520,7 +2661,7 @@ fn full_reply(comment: &ReviewComment) -> Option<String> {
 /// The text of the full-reply dialog, while it is open (FR-006): the whole reply of the comment
 /// **Show all** was pressed on.
 pub fn reply_dialog(state: &State) -> Option<String> {
-    let view = state.open.as_ref()?;
+    let view = state.tabs.shown_view()?;
     let id = view.reply_open?;
     let comment = review_of(state, view)?
         .comments
@@ -2565,7 +2706,7 @@ fn close_new(view: &mut OpenView) {
 /// Save in the composer (C2): `Add` with the quote from the loaded lines, or `SetText`; blank
 /// text sends nothing and keeps the composer open.
 fn composer_saved(state: &mut State) -> Effect {
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     let Some(composer) = view.composer.as_ref() else {
@@ -2708,7 +2849,7 @@ pub struct SendAction {
 
 /// The open view's **Send review (n)**; `None` with no view open (S1).
 pub fn send_action(state: &State) -> Option<SendAction> {
-    let view = state.open.as_ref()?;
+    let view = state.tabs.shown_view()?;
     // A pull request that is not listed cannot be sent (FR-013).
     let scope = view_scope(view);
     send_target(view, scope)?;
@@ -2787,7 +2928,7 @@ pub struct TidyActions {
 
 /// The open view's **Clear sent** and **Discard drafts…**; `None` with no view open (S3).
 pub fn tidy_actions(state: &State) -> Option<TidyActions> {
-    let view = state.open.as_ref()?;
+    let view = state.tabs.shown_view()?;
     let review = review_of(state, view);
     let scope = view_scope(view);
     let any = |pending: bool| {
@@ -2802,7 +2943,7 @@ pub fn tidy_actions(state: &State) -> Option<TidyActions> {
 /// The discard confirmation's question while it is open (S3): "Discard n draft comments? This
 /// cannot be undone."
 pub fn discard_prompt(state: &State) -> Option<String> {
-    let view = state.open.as_ref().filter(|view| view.confirm_discard)?;
+    let view = state.tabs.shown_view().filter(|view| view.confirm_discard)?;
     let scope = view_scope(view);
     let count =
         review_of(state, view).map_or(0, |r| in_scope(r, scope).filter(|c| is_pending(c)).count());
@@ -2830,7 +2971,7 @@ pub fn send_error_text(message: &str) -> String {
 /// Each file's pending-comment count in the open view's entry (L2).
 pub fn pending_counts(state: &State) -> BTreeMap<RelPath, usize> {
     let mut counts = BTreeMap::new();
-    let view = state.open.as_ref();
+    let view = state.tabs.shown_view();
     let review = view.and_then(|view| review_of(state, view));
     let scope = view.map_or(Scope::WorkingTree, view_scope);
     for comment in review.into_iter().flat_map(|r| in_scope(r, scope)) {
@@ -2860,7 +3001,7 @@ impl<'a> FileComments<'a> {
 /// The selected file's comments in the open view's entry, placed for the diff on screen (C3).
 pub fn file_comments(state: &State) -> FileComments<'_> {
     let mut placed = FileComments::default();
-    let Some(view) = state.open.as_ref() else {
+    let Some(view) = state.tabs.shown_view() else {
         return placed;
     };
     let (Some(path), Some(review)) = (selected_file(view), review_of(state, view)) else {
@@ -2978,7 +3119,7 @@ fn pr_lists(pr: &PullRequestView, path: &RelPath) -> bool {
 /// or a read of that head is already under way.
 fn follow_head(state: &mut State) -> Option<Effect> {
     let seq = state.next_seq;
-    let view = state.open.as_mut()?;
+    let view = state.tabs.shown_view_mut()?;
     let Source::PullRequest(pr) = &view.source else {
         return None;
     };
@@ -3046,7 +3187,7 @@ fn request_tree(view: &mut OpenView, next_seq: &mut u64) -> Effect {
 /// After a change, the worktree's files may differ: read the browsed file and the shown tree again
 /// (FR-014: the worktree's current version).
 fn refresh_browsed(state: &mut State) -> Vec<Effect> {
-    let Some(view) = state.open.as_mut().filter(|v| v.source == Source::Changes) else {
+    let Some(view) = state.tabs.shown_view_mut().filter(|v| v.source == Source::Changes) else {
         return Vec::new();
     };
     let mut effects = Vec::new();
@@ -3090,7 +3231,7 @@ fn request_browse(
 
 /// Open `path` in the browser, remembering what was on screen as the place Back returns to.
 fn browse_open(state: &mut State, path: RelPath, line: Option<u32>) -> Effect {
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     let shown = view
@@ -3141,7 +3282,7 @@ fn offset_of_line(line: u32) -> u32 {
 /// Follow a reference: open the file it names at its line, when the repository lists it; else say
 /// so and change nothing (FR-012).
 fn reference_activated(state: &mut State, path: RelPath, line: Option<u32>) -> Effect {
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     if !view.files.listed.contains(path.as_str()) {
@@ -3171,7 +3312,7 @@ pub fn references_in(view: &OpenView, text: &str) -> Vec<Reference> {
 
 /// Read the repository's files once a diff is shown, so its lines can link to them.
 fn tree_for_references(state: &mut State) -> Option<Effect> {
-    let view = state.open.as_mut()?;
+    let view = state.tabs.shown_view_mut()?;
     matches!(view.files.tree, Load::Idle).then(|| request_tree(view, &mut state.next_seq))
 }
 
@@ -3179,7 +3320,7 @@ fn tree_for_references(state: &mut State) -> Option<Effect> {
 /// expansion (kept untouched meanwhile, and re-shaped against any refreshed diff), or the browsed
 /// file that was left.
 fn browse_back(state: &mut State) -> Effect {
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     match view.stack.back() {
@@ -3283,7 +3424,7 @@ pub fn view_scope(view: &OpenView) -> Scope {
 /// Show pull request `number`: ask for its diff, replacing whatever source was shown.
 fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
     let seq = state.next_seq;
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     let head = listed_pull_request(view, number)
@@ -3312,7 +3453,7 @@ fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
 /// view to the working tree and is forgotten; the one this entry remembered is shown again once a
 /// list holds it (`again`: another list read follows, so wait for it).
 fn reconcile_source(state: &mut State, numbers: &[u64], again: bool) -> Option<Effect> {
-    let view = state.open.as_mut()?;
+    let view = state.tabs.shown_view_mut()?;
     let key = (view.project.clone(), view.entry.clone());
     match &view.source {
         Source::PullRequest(pr) if !numbers.contains(&pr.number) => {
@@ -3339,7 +3480,7 @@ fn reconcile_source(state: &mut State, numbers: &[u64], again: bool) -> Option<E
 fn request_pull_requests(state: &mut State) -> Effect {
     let seq = state.next_seq;
     let enabled = state.pr_enabled;
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     if !enabled || !matches!(view.entry, SessionLocation::Worktree(_)) {
@@ -3381,7 +3522,7 @@ fn request_pull_requests(state: &mut State) -> Effect {
 /// Start a read of the open view's list, or queue one behind the read under way.
 fn request_read(state: &mut State) -> Effect {
     let seq = state.next_seq;
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     if let Load::Loading { again, .. } = &mut view.list {
@@ -3407,7 +3548,7 @@ fn request_read(state: &mut State) -> Effect {
 
 /// Read `seq` ended: show its answer unless a newer read replaced it, then run a queued read.
 fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) -> Effect {
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     let again = match view.list {
@@ -3454,7 +3595,7 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
 /// answer is dropped by its `seq`.
 fn request_diff(state: &mut State, keep: bool) -> Effect {
     let seq = state.next_seq;
-    let Some(view) = state.open.as_mut() else {
+    let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     let Some(path) = view.selected.clone() else {
@@ -3513,7 +3654,7 @@ fn diff_rows(view: &OpenView) -> BTreeSet<(Side, u32)> {
 /// one only checks its quote); any other keeps its last anchor. Returns the moves of current-side
 /// comments whose code moved.
 fn judge_anchors(state: &mut State) -> Vec<Move> {
-    let Some(view) = state.open.as_ref() else {
+    let Some(view) = state.tabs.shown_view() else {
         return Vec::new();
     };
     let comments = review_of(state, view).map_or(&[][..], |r| r.comments.as_slice());
@@ -3591,7 +3732,7 @@ fn judge_anchors(state: &mut State) -> Vec<Move> {
             }
         }
     }
-    if let Some(view) = state.open.as_mut() {
+    if let Some(view) = state.tabs.shown_view_mut() {
         view.anchors = anchors;
     }
     moves
@@ -3639,7 +3780,7 @@ fn judge_pr_comment(
 /// new side is the working tree (the Default entry, or the Uncommitted toggle on); a pull request
 /// comment's always, since its diff is the one it was judged on (1149 W21).
 fn reanchor_effect(state: &State, moves: Vec<Move>) -> Effect {
-    let Some(view) = state.open.as_ref() else {
+    let Some(view) = state.tabs.shown_view() else {
         return Effect::None;
     };
     let working_tree = view.source == Source::Changes
@@ -3857,6 +3998,7 @@ pub fn cap_spans(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_core::review_tabs::Freshness;
 
     fn project() -> PathBuf {
         PathBuf::from("/repo")
@@ -4088,18 +4230,27 @@ mod tests {
         let mut state = read_once(entry, Ok(summary(2)));
         update(
             &mut state,
-            Msg::WorktreesListed(BTreeSet::from(["w".to_string()])),
+            Msg::WorktreesListed {
+                project: project(),
+                names: BTreeSet::from(["w".to_string()]),
+            },
         );
         assert!(state.header.entry.is_some(), "still listed: kept");
         update(
             &mut state,
-            Msg::WorktreesListed(BTreeSet::from(["other".to_string()])),
+            Msg::WorktreesListed {
+                project: project(),
+                names: BTreeSet::from(["other".to_string()]),
+            },
         );
         assert_eq!(state.header.entry, None);
         assert_eq!(state.header.load, Load::Idle);
         // The Default entry is never a listed worktree.
         let mut root = read_once(SessionLocation::Default, Ok(summary(2)));
-        update(&mut root, Msg::WorktreesListed(BTreeSet::new()));
+        update(&mut root, Msg::WorktreesListed {
+                project: project(),
+                names: BTreeSet::new(),
+            });
         assert!(root.header.entry.is_some());
     }
 
@@ -4158,5 +4309,241 @@ mod tests {
             },
         );
         assert_eq!(state.header.reading(), CountsReading::Known(summary(2)));
+    }
+
+    // Feature 1269, M2 (contracts/review-tab-ui.md U5, U6).
+
+    fn worktree_w() -> SessionLocation {
+        SessionLocation::Worktree("w".into())
+    }
+
+    fn key_w() -> EntryKey {
+        (project(), worktree_w())
+    }
+
+    fn listing() -> ChangeList {
+        ChangeList {
+            files: Vec::new(),
+            scope: ReviewScope::Worktree {
+                base: Base::MergeBase {
+                    branch: "main".into(),
+                    commit: "0123456789abcdef0123456789abcdef01234567".into(),
+                },
+            },
+        }
+    }
+
+    /// Every read effect in `effect` (the header's counts are not the view's).
+    fn view_reads(effect: &Effect) -> Vec<Effect> {
+        match effect {
+            Effect::Batch(effects) => effects.iter().flat_map(view_reads).collect(),
+            Effect::None | Effect::ReadCounts { .. } | Effect::SetLayout(_) => Vec::new(),
+            other => vec![other.clone()],
+        }
+    }
+
+    /// `w`'s review open with the header following it; the first read answered.
+    fn shown_w() -> State {
+        let mut state = State::default();
+        state.header.entry = Some(key_w());
+        let Effect::ReadList { seq, .. } = update(
+            &mut state,
+            Msg::Opened {
+                project: project(),
+                entry: worktree_w(),
+            },
+        ) else {
+            panic!("a first open reads");
+        };
+        update(
+            &mut state,
+            Msg::ListRead {
+                seq,
+                result: Ok(listing()),
+            },
+        );
+        state
+    }
+
+    fn show_w(state: &mut State) -> Effect {
+        update(
+            state,
+            Msg::Opened {
+                project: project(),
+                entry: worktree_w(),
+            },
+        )
+    }
+
+    /// T020 (U5, SC-003, spec edge case *A read in flight*): a hidden view's answers change no
+    /// view; hiding it with a read in flight makes it unwatched; no read is issued for it while
+    /// hidden, whatever changes arrive; showing it settles its reads and reads its list once.
+    #[test]
+    fn a_hidden_view_reads_nothing_and_is_read_once_when_shown() {
+        let mut state = shown_w();
+        let Effect::ReadList { seq, .. } = update(&mut state, Msg::CommittedToggled) else {
+            panic!("a toggle re-reads");
+        };
+        update(&mut state, Msg::SessionSelected);
+        assert_eq!(
+            state.tabs.get(&key_w()).map(|tab| tab.freshness()),
+            Some(Freshness::Unwatched),
+            "hidden with a read in flight"
+        );
+        let before = state.tabs.clone();
+        let answers = [
+            Msg::ListRead {
+                seq,
+                result: Ok(listing()),
+            },
+            Msg::DiffRead {
+                seq,
+                result: Err("late".into()),
+            },
+            Msg::PullRequestsRead {
+                seq,
+                read_at: 1,
+                result: Err(ReadingFailure::Passing),
+            },
+            Msg::PullRequestDiffRead {
+                seq,
+                number: 7,
+                result: Err(DiffReadFailure::Failed(ReadingFailure::Passing)),
+            },
+            Msg::FileRead {
+                seq,
+                source: SourceKey::Worktree,
+                path: RelPath::from_native("a.rs").unwrap(),
+                result: Err(FileReadFailure::Missing),
+                spans: Spans::default(),
+            },
+            Msg::TreeRead {
+                seq,
+                result: Err(FileReadFailure::Missing),
+            },
+        ];
+        let mut reads = Vec::new();
+        for answer in answers {
+            reads.extend(view_reads(&update(&mut state, answer)));
+        }
+        for _ in 0..3 {
+            reads.extend(view_reads(&update(&mut state, Msg::Changed)));
+        }
+        assert_eq!(reads, Vec::<Effect>::new(), "no read while hidden (SC-003)");
+        assert_eq!(
+            state.tabs.get(&key_w()).map(|tab| &tab.view),
+            before.get(&key_w()).map(|tab| &tab.view),
+            "no answer reached the hidden view"
+        );
+        let shown = show_w(&mut state);
+        let reads = view_reads(&shown);
+        assert!(
+            matches!(reads.as_slice(), [Effect::ReadList { .. }]),
+            "exactly one list read on show, got {reads:?}"
+        );
+        let Effect::ReadList { seq: again, .. } = shown else {
+            unreachable!()
+        };
+        assert_ne!(again, seq, "a new read, not the dropped one");
+        assert!(
+            matches!(state.tabs.shown_view().unwrap().list, Load::Loading { seq: s, last: Some(_), .. } if s == again),
+            "the settled list shown while it is read again"
+        );
+    }
+
+    /// T020 (spec edge case *Failure*): a re-read on show that fails keeps the tab, its toggles
+    /// and the entry's comments, and shows the error as a failed re-read does today.
+    #[test]
+    fn a_failed_reread_on_show_keeps_the_tab() {
+        let mut state = shown_w();
+        let Effect::ReadList { seq, .. } = update(&mut state, Msg::UncommittedToggled) else {
+            panic!("a toggle re-reads");
+        };
+        update(
+            &mut state,
+            Msg::ListRead {
+                seq,
+                result: Ok(listing()),
+            },
+        );
+        update(
+            &mut state,
+            Msg::ReviewChanged {
+                project: project(),
+                worktree_dir: "w".into(),
+                comments: Vec::new(),
+                sending: false,
+            },
+        );
+        update(&mut state, Msg::SessionSelected);
+        update(&mut state, Msg::Changed);
+        let Effect::ReadList { seq, .. } = show_w(&mut state) else {
+            panic!("the changed mark re-reads on show");
+        };
+        let reviews = state.reviews.clone();
+        update(
+            &mut state,
+            Msg::ListRead {
+                seq,
+                result: Err("git failed".into()),
+            },
+        );
+        assert_eq!(state.tabs.len(), 1);
+        let view = state.tabs.shown_view().unwrap();
+        assert!(!view.toggles.uncommitted, "toggles kept");
+        assert_eq!(view.list, Load::Failed("git failed".into()), "the error as today");
+        assert_eq!(state.reviews, reviews, "comments kept");
+    }
+
+    /// T021 (U6, FR-010): a change of the header's location marks its hidden tab and reads
+    /// nothing for it; a hidden tab of another location is left alone.
+    #[test]
+    fn a_change_marks_the_hidden_tab_of_the_headers_location() {
+        let mut state = shown_w();
+        update(&mut state, Msg::SessionSelected);
+        let effect = update(&mut state, Msg::Changed);
+        assert_eq!(view_reads(&effect), Vec::<Effect>::new());
+        assert!(matches!(effect, Effect::ReadCounts { .. }), "the header's counts, as today");
+        assert_eq!(
+            state.tabs.get(&key_w()).map(|tab| tab.freshness()),
+            Some(Freshness::Changed)
+        );
+        state.header.entry = Some((project(), SessionLocation::Default));
+        let mut fresh = shown_w();
+        update(&mut fresh, Msg::SessionSelected);
+        fresh.header.entry = Some((project(), SessionLocation::Default));
+        update(&mut fresh, Msg::Changed);
+        assert_eq!(
+            fresh.tabs.get(&key_w()).map(|tab| tab.freshness()),
+            Some(Freshness::Fresh),
+            "another location's change marks nothing"
+        );
+    }
+
+    /// T021 (U6, spec edge case *a send in progress*): comments pushed for a hidden tab's entry
+    /// reach the kept view (an edit of a deleted comment closes) and `reviews`, and the tab is read
+    /// again when next shown.
+    #[test]
+    fn comments_for_a_hidden_tab_reach_its_view_and_mark_it_unwatched() {
+        let mut state = shown_w();
+        let gone = CommentId::new();
+        state.tabs.shown_view_mut().unwrap().composer = Some(Composer {
+            target: ComposerTarget::Edit(gone),
+            text: "edit".into(),
+        });
+        update(&mut state, Msg::SessionSelected);
+        update(
+            &mut state,
+            Msg::ReviewChanged {
+                project: project(),
+                worktree_dir: "w".into(),
+                comments: Vec::new(),
+                sending: true,
+            },
+        );
+        let tab = state.tabs.get(&key_w()).unwrap();
+        assert_eq!(tab.view.composer, None, "the edit of a comment that is gone closes");
+        assert_eq!(tab.freshness(), Freshness::Unwatched);
+        assert!(state.reviews[&(project(), "w".to_string())].sending, "reviews updated");
     }
 }

@@ -436,3 +436,32 @@ fn an_unavailable_active_project_steps_to_the_available_ones() {
         "/a is active but gone: /b is skipped, /c is next"
     );
 }
+
+/// Feature 1269 T023 (U10, FR-005, FR-013, US5.2): every session chord (next and previous session,
+/// next and previous location) with the review shown shows its session and keeps the review,
+/// hidden.
+#[test]
+fn a_session_chord_with_the_review_shown_shows_the_session_and_keeps_the_review() {
+    for chord in [NEXT_SESSION, PREVIOUS_SESSION, NEXT, PREVIOUS] {
+        let (mut state, [main, ..]) = main_and_two_helpers();
+        deliver(&mut state, vec![listed("feat-a"), listed("feat-b")]);
+        session_at(&mut state, worktree("feat-b"));
+        session_at(&mut state, SessionLocation::Default);
+        state.session.active = Some(main);
+        state.update(Message::Sidebar(
+            micold_client::features::sidebar::Msg::ReviewChangesRequested(worktree("feat-a")),
+        ));
+        assert!(state.review_shown().is_some(), "precondition: the review is shown");
+        let step = update(&state, chord);
+        let Step::Session(target) = step else {
+            panic!("{chord:?} steps onto a session, got {step:?}");
+        };
+        for message in state.apply_navigation(step.clone(), true) {
+            state.update(message);
+        }
+        state.finish_navigation(&step, true);
+        assert_eq!(state.session.active, Some(target), "{chord:?}: that session is shown");
+        assert_eq!(state.review_shown(), None, "{chord:?}: the review is hidden");
+        assert_eq!(state.changes.tabs.len(), 1, "{chord:?}: and kept");
+    }
+}

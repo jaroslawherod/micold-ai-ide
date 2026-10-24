@@ -18,7 +18,6 @@ use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
 use micold_client::features::attach::Msg as AttachMsg;
-use micold_client::features::changes::Msg as ChangesMsg;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -1306,8 +1305,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Wired by the quick switcher's update (feature 968, T017).
         Message::QuickSwitch(msg) => shell::quick_switch::update(app, msg),
         Message::Session(SessionMsg::Selected(id)) => {
-            // Feature 482, V2: the terminal takes the main area back. Closing reads nothing.
-            let _ = app.core.update_changes(ChangesMsg::SessionSelected);
+            // Feature 482, V2: the terminal takes the main area back; the reducer's `Selected` arm
+            // hides the shown review (feature 1269, U2).
             // Feature 483: and so does Compare (C1).
             app.core.update(Message::Runs(
                 micold_client::features::runs::Msg::CompareClosed,

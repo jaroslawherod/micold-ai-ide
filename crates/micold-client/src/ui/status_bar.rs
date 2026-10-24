@@ -544,7 +544,7 @@ mod tests {
             project: PathBuf::from(PROJECT),
             entry: SessionLocation::Default,
         });
-        assert!(s.changes.open.is_some());
+        assert!(s.changes.tabs.shown().is_some());
         assert_eq!(cli_of(&s), None, "Changes");
 
         let mut s = base.clone();

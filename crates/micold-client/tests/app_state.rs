@@ -2461,7 +2461,7 @@ fn review_changes_opens_the_changes_view_of_that_entry() {
         entry.clone(),
     )));
     assert_eq!(
-        state.changes.open.as_ref().map(|view| &view.entry),
+        state.changes.tabs.shown_view().map(|view| &view.entry),
         Some(&entry)
     );
     assert!(state.worktree.menu_open.is_none(), "the row menu closes");

@@ -619,7 +619,7 @@ impl State {
             && self.settings.settings_draft.is_none()
             // The Changes view replaces the terminal pane too (feature 482, V1); without this
             // `KeyboardElsewhere` strips the review composer's focus while a session is selected.
-            && self.changes.open.is_none()
+            && self.review_shown().is_none()
             // Feature 483: so does Compare.
             && self.runs.compare.is_none()
             // Feature 813: and so does the Overview.
@@ -641,7 +641,7 @@ impl State {
         micold_core::attention::ViewFacts {
             window_focused: window.focused,
             main_area_taken: self.settings.settings_draft.is_some()
-                || self.changes.open.is_some()
+                || self.review_shown().is_some()
                 || self.runs.compare.is_some()
                 || self.overview.open
                 || !window.holds_project,
@@ -1140,6 +1140,10 @@ impl State {
             // The Changes view's discard confirmation and full-reply dialog are registered
             // dialogs: the registry closes them (Escape, another dialog opening) by sending their
             // cancellation here, and closing one is pure state with no effect to run.
+            // Feature 1269 (U4): closing a Review tab can show a session, which is the root's.
+            Message::Changes(crate::features::changes::Msg::TabClosed { project, entry }) => {
+                self.review_tab_closed(project, entry);
+            }
             Message::Changes(
                 msg @ (crate::features::changes::Msg::DiscardCancelled
                 | crate::features::changes::Msg::ReplyClosed),
@@ -1299,8 +1303,19 @@ impl State {
         let wanted = self
             .current_session_location()
             .and_then(|entry| Some((self.workspace.active.clone()?, entry)));
+        // Feature 1269 (U7): a review of a project that is no longer active is hidden, kept.
+        if self.changes.tabs.shown_key().is_some() && self.review_shown().is_none() {
+            let _ = update(&mut self.changes, Msg::SessionSelected);
+        }
         let mut effect = Effect::None;
         if wanted != self.changes.header.entry {
+            // No watch sees the location the header leaves: its hidden Review tab is read again
+            // when next shown (T5).
+            if let Some(left) = self.changes.header.entry.clone() {
+                if self.changes.tabs.shown_key() != Some(&left) {
+                    self.changes.tabs.location_left(&left);
+                }
+            }
             let (project, entry) = match wanted {
                 Some((project, entry)) => (project, Some(entry)),
                 None => (std::path::PathBuf::new(), None),
@@ -1315,6 +1330,77 @@ impl State {
             effect = update(&mut self.changes, Msg::HeaderRecount);
         }
         self.queue_changes_effect(effect);
+        // Feature 1269 (U7, R13): the shown review is not watched while something covers it, so
+        // it is read again, once, when the cover goes.
+        match self.changes.tabs.shown_key().cloned() {
+            Some(key) if self.review_covered() => self.changes.tabs.location_left(&key),
+            Some(_) => {
+                let reread = crate::features::changes::uncovered(&mut self.changes);
+                self.queue_changes_effect(reread);
+            }
+            None => {}
+        }
+    }
+
+    /// The shown Review tab's location, when its project is the active one (feature 1269, U10):
+    /// the review then takes the main area as the open Changes view did.
+    pub fn review_shown(&self) -> Option<&micold_core::review_tabs::EntryKey> {
+        self.changes
+            .tabs
+            .shown_key()
+            // No active project reads as the empty path, as `ChangesRequested` opens it.
+            .filter(|(project, _)| {
+                project.as_path()
+                    == self
+                        .workspace
+                        .active
+                        .as_deref()
+                        .unwrap_or(std::path::Path::new(""))
+            })
+    }
+
+    /// Whether something drawn over the main area covers a shown review (feature 1269, U7): the
+    /// Overview, a Settings draft, or Compare.
+    pub fn review_covered(&self) -> bool {
+        self.overview.open || self.settings.settings_draft.is_some() || self.runs.compare.is_some()
+    }
+
+    /// The location the shown review's own watch follows (feature 1269, U11, R13): the shown
+    /// review's while nothing covers it; `None` otherwise, so no hidden or covered view is read.
+    pub fn review_watch_entry(&self) -> Option<&micold_core::session::SessionLocation> {
+        let (_, entry) = self.review_shown()?;
+        (!self.review_covered()).then_some(entry)
+    }
+
+    /// The Review tab of `entry` of `project` is closed (feature 1269, U4): its kept view is
+    /// forgotten and, when it was shown, the location's session is shown instead (the one shown
+    /// before, else its main session) with the keyboard, as a session press does.
+    fn review_tab_closed(
+        &mut self,
+        project: std::path::PathBuf,
+        entry: micold_core::session::SessionLocation,
+    ) {
+        let active = self.workspace.active.as_ref() == Some(&project);
+        let live: Vec<micold_core::session::SessionId> = if active {
+            self.active_sessions()
+                .iter()
+                .filter(|s| s.location == entry)
+                .map(|s| s.id)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let main = active
+            .then(|| crate::features::navigation::main_session_at(self, &entry))
+            .flatten();
+        let Some(closed) = self.changes.tabs.close(&(project, entry), &live, main) else {
+            return;
+        };
+        if closed.was_shown && active {
+            let mut outcomes = self.set_current_session(closed.show);
+            outcomes.extend(self.focus_terminal());
+            drain(outcomes, |outcome| interpret(self, outcome));
+        }
     }
 
     /// Leave `effect` for the shell beside one already waiting in `changes.pending`, so neither is
@@ -1338,10 +1424,8 @@ impl State {
             return None;
         }
         let on_view = self
-            .changes
-            .open
-            .as_ref()
-            .is_some_and(|view| &view.project == project && &view.entry == entry);
+            .review_shown()
+            .is_some_and(|(p, e)| p == project && e == entry);
         (!on_view).then_some(entry)
     }
 
@@ -1519,27 +1603,33 @@ pub fn interpret(
         Outcome::WorktreesReplaced(names) => {
             crate::features::sidebar::worktrees_replaced(state, &names);
             crate::features::worktree_form::worktree_list_changed(state);
-            // V3: a view of a worktree that is gone closes. Nothing to read, so no effect.
+            // V3, feature 1269 U9: the Review tab of a worktree that is gone is dropped. Nothing to
+            // read, so no effect.
             let _ = crate::features::changes::update(
                 &mut state.changes,
-                crate::features::changes::Msg::WorktreesListed(names),
+                crate::features::changes::Msg::WorktreesListed {
+                    project: state.workspace.active.clone().unwrap_or_default(),
+                    names,
+                },
             );
         }
         Outcome::ChangesRequested(entry) => {
             // Feature 813 (FR-023): the Changes view takes the main area from the Overview.
             state.overview.open = false;
             crate::features::worktree::close_menu(state);
-            let effect = crate::features::changes::update(
+            // Feature 1269 (U3): the location's Review tab is made, or shown as it was left.
+            let current = state.session.active;
+            let effect = crate::features::changes::opened(
                 &mut state.changes,
-                crate::features::changes::Msg::Opened {
-                    project: state.workspace.active.clone().unwrap_or_default(),
-                    entry,
-                },
+                state.workspace.active.clone().unwrap_or_default(),
+                entry,
+                current,
             );
             state.queue_changes_effect(effect);
         }
         Outcome::ChangesClosedForCompare => {
-            // Feature 813 (FR-023): Compare takes the main area from the Overview too.
+            // Feature 813 (FR-023): Compare takes the main area from the Overview too; feature
+            // 1269 (U2): the shown review is hidden, kept.
             state.overview.open = false;
             let _ = crate::features::changes::update(
                 &mut state.changes,
@@ -1901,5 +1991,50 @@ fn field_blurred(state: &mut State, id: crate::features::window::FieldId) {
         }
         // Not a required field of any form: nothing to mark.
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod review_tab_tests {
+    use super::State;
+    use crate::features::changes::{self, Msg};
+    use micold_core::session::SessionLocation;
+    use std::path::PathBuf;
+
+    /// `/repo` active, the header on worktree `w`, and `w`'s review shown.
+    fn reviewing() -> State {
+        let mut state = State::default();
+        state.workspace.active = Some(PathBuf::from("/repo"));
+        let entry = SessionLocation::Worktree("w".into());
+        state.changes.header.entry = Some((PathBuf::from("/repo"), entry.clone()));
+        let _ = changes::opened(&mut state.changes, PathBuf::from("/repo"), entry, None);
+        state
+    }
+
+    /// Feature 1269 T021 (U11, R13): the view's watch follows the shown review while nothing
+    /// covers it; the header's watch never watches the same location twice.
+    #[test]
+    fn the_review_watch_follows_the_shown_uncovered_review() {
+        let w = SessionLocation::Worktree("w".into());
+        let mut state = reviewing();
+        assert_eq!(state.review_watch_entry(), Some(&w));
+        assert_eq!(state.header_watch_entry(), None, "one watcher per location");
+        state.overview.open = true;
+        assert_eq!(state.review_watch_entry(), None, "covered by the Overview");
+        state.overview.open = false;
+        state.runs.compare = Some(crate::features::runs::CompareView {
+            group: micold_core::runs::GroupId(uuid::Uuid::nil()),
+            project: "/repo".into(),
+            reads: Default::default(),
+        });
+        assert_eq!(state.review_watch_entry(), None, "covered by Compare");
+        state.runs.compare = None;
+        let _ = changes::update(&mut state.changes, Msg::SessionSelected);
+        assert_eq!(state.review_watch_entry(), None, "hidden");
+        assert_eq!(state.header_watch_entry(), Some(&w), "the header's watch takes over");
+        state.workspace.active = Some(PathBuf::from("/other"));
+        let _ = changes::opened(&mut state.changes, PathBuf::from("/repo"), w, None);
+        assert_eq!(state.review_shown(), None, "another project's review is not shown");
+        assert_eq!(state.review_watch_entry(), None);
     }
 }

@@ -100,7 +100,10 @@ pub fn view<'a>(
         .push(
             Button::text("Close", r)
                 .leading(Icon::Close)
-                .on_press(Message::Changes(Msg::Closed)),
+                .on_press(Message::Changes(Msg::TabClosed {
+                    project: view.project.clone(),
+                    entry: view.entry.clone(),
+                })),
         )
         .spacing(spacing::MD)
         .align_y(Alignment::Center);

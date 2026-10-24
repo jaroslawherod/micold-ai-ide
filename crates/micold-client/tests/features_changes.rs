@@ -73,6 +73,17 @@ fn open(state: &mut State, entry: SessionLocation) -> u64 {
     }
 }
 
+/// The worktree's Review tab closed (×, the view's **Close**; feature 1269 U4).
+fn close_tab(state: &mut State) {
+    changes::update(
+        state,
+        Msg::TabClosed {
+            project: project(),
+            entry: worktree(),
+        },
+    );
+}
+
 /// Open a worktree's view and answer its first read with `paths`.
 fn ready(paths: &[&str]) -> State {
     let mut state = State::default();
@@ -109,20 +120,29 @@ fn opening_an_entry_reads_its_list_with_both_toggles_on() {
     assert_eq!(entry, worktree());
     assert_eq!(toggles, Toggles::default());
     assert!(toggles.committed && toggles.uncommitted, "both on at open");
-    let view = state.open.as_ref().expect("the view is open");
+    let view = state.tabs.shown_view().expect("the view is open");
     assert_eq!(view.entry, worktree());
     assert!(matches!(view.list, Load::Loading { seq: s, again: false, .. } if s == seq));
 }
 
-/// FR-004: the toggles reset each time the view opens.
+/// FR-004: the toggles reset each time the view opens after its Review tab closed (1269 U4).
 #[test]
 fn reopening_resets_the_toggles() {
     let mut state = ready(&["a.rs"]);
     changes::update(&mut state, Msg::CommittedToggled);
-    changes::update(&mut state, Msg::Closed);
-    assert!(state.open.is_none(), "the close action closes the view");
+    changes::update(
+        &mut state,
+        Msg::TabClosed {
+            project: project(),
+            entry: worktree(),
+        },
+    );
+    assert!(state.tabs.is_empty(), "the close action drops the tab");
     open(&mut state, worktree());
-    assert_eq!(state.open.unwrap().toggles, Toggles::default());
+    assert_eq!(
+        state.tabs.shown_view().unwrap().toggles,
+        Toggles::default()
+    );
 }
 
 /// US1 s2. A toggle change re-reads the list under the new toggles.
@@ -151,7 +171,7 @@ fn a_toggle_change_rereads_the_list() {
         committed: false,
         uncommitted: false,
     };
-    let view = state.open.as_ref().expect("the view is open");
+    let view = state.tabs.shown_view().expect("the view is open");
     assert_eq!(view.toggles, off, "both toggles are off now");
     assert!(
         matches!(view.list, Load::Loading { seq: s, again: true, .. } if s == seq),
@@ -181,7 +201,7 @@ fn a_toggle_change_rereads_the_list() {
 fn an_answer_with_a_stale_seq_is_dropped() {
     let mut state = State::default();
     let first = open(&mut state, worktree());
-    changes::update(&mut state, Msg::Closed);
+    close_tab(&mut state);
     let second = open(&mut state, worktree());
     assert_ne!(first, second);
     changes::update(
@@ -192,7 +212,7 @@ fn an_answer_with_a_stale_seq_is_dropped() {
         },
     );
     assert!(
-        matches!(state.open.as_ref().unwrap().list, Load::Loading { seq, .. } if seq == second),
+        matches!(state.tabs.shown_view().unwrap().list, Load::Loading { seq, .. } if seq == second),
         "the stale answer changed nothing"
     );
 }
@@ -208,7 +228,7 @@ fn a_read_asked_while_one_runs_runs_once_after_it() {
         "no second read while one runs"
     );
     assert!(matches!(
-        state.open.as_ref().unwrap().list,
+        state.tabs.shown_view().unwrap().list,
         Load::Loading { again: true, .. }
     ));
     let effect = changes::update(
@@ -239,7 +259,7 @@ fn the_selection_is_kept_across_a_reread_while_still_listed() {
             result: Ok(list(&["b.rs", "c.rs"])),
         },
     );
-    assert_eq!(state.open.as_ref().unwrap().selected, Some(path("b.rs")));
+    assert_eq!(state.tabs.shown_view().unwrap().selected, Some(path("b.rs")));
 
     let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::CommittedToggled) else {
         panic!("re-read");
@@ -251,37 +271,42 @@ fn the_selection_is_kept_across_a_reread_while_still_listed() {
             result: Ok(list(&["c.rs"])),
         },
     );
-    assert_eq!(state.open.as_ref().unwrap().selected, None);
+    assert_eq!(state.tabs.shown_view().unwrap().selected, None);
 }
 
-/// V2. Selecting a session closes the view.
+/// V2, feature 1269 T011 (U2, FR-004): selecting a session hides the review and keeps it.
 #[test]
 fn selecting_a_session_closes_the_view() {
     let mut state = ready(&["a.rs"]);
+    let before = state.tabs.shown_view().cloned();
     changes::update(&mut state, Msg::SessionSelected);
-    assert!(state.open.is_none());
+    assert!(state.tabs.shown().is_none(), "hidden");
+    assert_eq!(state.tabs.len(), 1, "kept");
+    assert_eq!(
+        state.tabs.get(&(project(), worktree())).map(|tab| &tab.view),
+        before.as_ref(),
+        "its view as it was"
+    );
 }
 
-/// V3. The view of a worktree that leaves the list closes; others stay open.
+/// V3, feature 1269 U9. The Review tab of a worktree that leaves the list is dropped; others stay.
 #[test]
 fn the_entry_leaving_the_catalog_closes_the_view() {
+    let listed = |names: &[&str]| Msg::WorktreesListed {
+        project: project(),
+        names: names.iter().map(|n| n.to_string()).collect::<BTreeSet<_>>(),
+    };
     let mut state = ready(&["a.rs"]);
-    changes::update(
-        &mut state,
-        Msg::WorktreesListed(BTreeSet::from(["feat-a".to_string(), "other".to_string()])),
-    );
-    assert!(state.open.is_some(), "still listed: stays open");
-    changes::update(
-        &mut state,
-        Msg::WorktreesListed(BTreeSet::from(["other".to_string()])),
-    );
-    assert!(state.open.is_none(), "removed: closes");
+    changes::update(&mut state, listed(&["feat-a", "other"]));
+    assert!(state.tabs.shown().is_some(), "still listed: stays open");
+    changes::update(&mut state, listed(&["other"]));
+    assert!(state.tabs.is_empty(), "removed: dropped");
 
     let mut state = State::default();
     open(&mut state, SessionLocation::Default);
-    changes::update(&mut state, Msg::WorktreesListed(BTreeSet::new()));
+    changes::update(&mut state, listed(&[]));
     assert!(
-        state.open.is_some(),
+        state.tabs.shown().is_some(),
         "the Default entry never leaves the catalog"
     );
 }
@@ -291,7 +316,7 @@ fn the_entry_leaving_the_catalog_closes_the_view() {
 fn the_default_entry_has_no_committed_toggle() {
     let mut state = State::default();
     open(&mut state, SessionLocation::Default);
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert!(!committed_available(view));
     assert!(DEFAULT_ENTRY_NOTE.contains("only uncommitted changes are listed"));
     assert_eq!(
@@ -301,14 +326,14 @@ fn the_default_entry_has_no_committed_toggle() {
     );
 
     let state = ready(&["a.rs"]);
-    assert!(committed_available(state.open.as_ref().unwrap()));
+    assert!(committed_available(state.tabs.shown_view().unwrap()));
 }
 
 /// L3, US1 s6. No rows under the toggles: "No changes against <base>".
 #[test]
 fn an_empty_list_says_there_are_no_changes_against_the_base() {
     let state = ready(&[]);
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(
         list_body(view),
         ListBody::Empty("No changes against main".into())
@@ -344,7 +369,7 @@ fn both_toggles_off_says_both_are_hidden() {
         },
     );
     assert_eq!(
-        list_body(state.open.as_ref().unwrap()),
+        list_body(state.tabs.shown_view().unwrap()),
         ListBody::Empty(BOTH_HIDDEN.into())
     );
 }
@@ -366,7 +391,7 @@ fn a_worktree_without_a_base_says_why() {
             }),
         },
     );
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     let line = base_line(view).expect("a base line");
     assert!(line.contains("no history in common"), "{line}");
     assert!(line.contains("only uncommitted changes"), "{line}");
@@ -378,7 +403,7 @@ fn a_worktree_without_a_base_says_why() {
 fn loading_and_failure_have_their_own_bodies() {
     let mut state = State::default();
     let seq = open(&mut state, worktree());
-    assert_eq!(list_body(state.open.as_ref().unwrap()), ListBody::Loading);
+    assert_eq!(list_body(state.tabs.shown_view().unwrap()), ListBody::Loading);
     changes::update(
         &mut state,
         Msg::ListRead {
@@ -387,7 +412,7 @@ fn loading_and_failure_have_their_own_bodies() {
         },
     );
     assert_eq!(
-        list_body(state.open.as_ref().unwrap()),
+        list_body(state.tabs.shown_view().unwrap()),
         ListBody::Failed("fatal: not a git repository")
     );
 }
@@ -465,7 +490,7 @@ fn selecting_a_file_reads_its_diff() {
     assert_eq!(asked, path("b.rs"));
     assert_eq!(from, None);
     assert!(!force_large);
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert!(matches!(view.diff, Load::Loading { seq: s, .. } if s == seq));
     assert_eq!(diff_body(view), DiffBody::Loading);
 
@@ -476,7 +501,7 @@ fn selecting_a_file_reads_its_diff() {
             result: Ok(text_diff()),
         },
     );
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(diff_body(view), DiffBody::Diff(&text_diff()));
     assert!(can_pick(view), "a text diff takes comments");
 }
@@ -519,7 +544,7 @@ fn a_stale_diff_answer_is_dropped() {
             result: Ok(text_diff()),
         },
     );
-    assert_eq!(diff_body(state.open.as_ref().unwrap()), DiffBody::Loading);
+    assert_eq!(diff_body(state.tabs.shown_view().unwrap()), DiffBody::Loading);
     changes::update(
         &mut state,
         Msg::DiffRead {
@@ -528,7 +553,7 @@ fn a_stale_diff_answer_is_dropped() {
         },
     );
     assert_eq!(
-        diff_body(state.open.as_ref().unwrap()),
+        diff_body(state.tabs.shown_view().unwrap()),
         DiffBody::Failed("fatal: bad revision")
     );
 }
@@ -549,7 +574,7 @@ fn show_diff_reads_a_large_file_forced_and_remembers_it() {
             result: Ok(large.clone()),
         },
     );
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(
         diff_body(view),
         DiffBody::Diff(&large),
@@ -569,8 +594,8 @@ fn show_diff_reads_a_large_file_forced_and_remembers_it() {
     assert_eq!(asked, path("big.txt"));
     assert!(force_large);
     assert!(state
-        .open
-        .as_ref()
+        .tabs
+        .shown_view()
         .unwrap()
         .shown_large
         .contains(&path("big.txt")));
@@ -594,7 +619,7 @@ fn binary_not_utf8_and_mode_only_allow_no_pick() {
                 result: Ok(loaded(diff.clone())),
             },
         );
-        assert!(!can_pick(state.open.as_ref().unwrap()), "{diff:?}");
+        assert!(!can_pick(state.tabs.shown_view().unwrap()), "{diff:?}");
     }
 }
 
@@ -631,7 +656,7 @@ fn a_list_reread_keeps_the_selection_and_rereads_its_diff() {
     assert_eq!(asked, path("b.rs"));
     assert!(!toggles.uncommitted, "under the new toggles");
     assert_eq!(
-        diff_body(state.open.as_ref().unwrap()),
+        diff_body(state.tabs.shown_view().unwrap()),
         DiffBody::Diff(&text_diff()),
         "the old diff stays on screen while it is re-read"
     );
@@ -654,7 +679,7 @@ fn a_list_reread_that_drops_the_selection_drops_its_diff() {
     );
     assert_eq!(effect, Effect::None);
     assert_eq!(
-        diff_body(state.open.as_ref().unwrap()),
+        diff_body(state.tabs.shown_view().unwrap()),
         DiffBody::NoSelection
     );
 }
@@ -682,7 +707,7 @@ fn a_failed_list_reread_drops_the_selection_and_its_diff() {
         },
     );
     assert_eq!(effect, Effect::None);
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(view.selected, None);
     assert_eq!(diff_body(view), DiffBody::NoSelection);
 }
@@ -708,7 +733,7 @@ fn selecting_the_shown_file_again_keeps_its_diff_unless_it_failed() {
     );
     let effect = changes::update(&mut state, Msg::FileSelected(path("b.rs")));
     assert_eq!(effect, Effect::None);
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(diff_body(view), DiffBody::Diff(&text_diff()));
     assert_eq!(view.diff_offset, 120);
 
@@ -725,7 +750,7 @@ fn selecting_the_shown_file_again_keeps_its_diff_unless_it_failed() {
         retry, failed,
         "a failed diff is read again under a new read"
     );
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert!(
         matches!(view.diff, Load::Loading { seq, .. } if seq == retry),
         "the body goes back to loading the new read: {:?}",
@@ -807,7 +832,7 @@ fn gutter(state: &mut State, old: Option<u32>, new: Option<u32>, extend: bool) -
 }
 
 fn pick(state: &State) -> Option<Pick> {
-    state.open.as_ref().unwrap().pick
+    state.tabs.shown_view().unwrap().pick
 }
 
 fn comment(p: &str, side: Side, start: u32, end: u32, state: CommentState) -> ReviewComment {
@@ -911,7 +936,7 @@ fn save_sends_the_comment_with_the_quote_from_the_loaded_lines() {
     gutter(&mut state, Some(4), None, false);
     gutter(&mut state, Some(2), None, true);
     assert_eq!(changes::update(&mut state, Msg::AddComment), Effect::None);
-    let composer = state.open.as_ref().unwrap().composer.clone().unwrap();
+    let composer = state.tabs.shown_view().unwrap().composer.clone().unwrap();
     assert!(
         matches!(composer.target, ComposerTarget::New(p) if p.range() == LineRange::new(2, 4).unwrap())
     );
@@ -937,7 +962,7 @@ fn save_sends_the_comment_with_the_quote_from_the_loaded_lines() {
             },
         }
     );
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(view.composer, None);
     assert_eq!(view.pick, None);
 }
@@ -953,9 +978,9 @@ fn save_with_blank_text_sends_nothing() {
         changes::update(&mut state, Msg::ComposerSaved),
         Effect::None
     );
-    assert!(state.open.as_ref().unwrap().composer.is_some());
+    assert!(state.tabs.shown_view().unwrap().composer.is_some());
     changes::update(&mut state, Msg::ComposerCancelled);
-    assert_eq!(state.open.as_ref().unwrap().composer, None);
+    assert_eq!(state.tabs.shown_view().unwrap().composer, None);
 }
 
 /// US2 s7. Edit opens the composer with the comment's text and Save sends `SetText`; Delete sends
@@ -967,7 +992,7 @@ fn edit_and_delete_send_set_text_and_delete() {
     let id = c.id;
     push(&mut state, "feat-a", vec![c.clone()]);
     changes::update(&mut state, Msg::EditComment(id));
-    let composer = state.open.as_ref().unwrap().composer.clone().unwrap();
+    let composer = state.tabs.shown_view().unwrap().composer.clone().unwrap();
     assert_eq!(composer.target, ComposerTarget::Edit(id));
     assert_eq!(composer.text, c.text);
     changes::update(&mut state, Msg::ComposerEdited("better".into()));
@@ -1001,14 +1026,14 @@ fn an_edit_composer_closes_when_its_comment_is_gone() {
     let id = c.id;
     push(&mut state, "feat-a", vec![c.clone()]);
     changes::update(&mut state, Msg::EditComment(id));
-    assert!(state.open.as_ref().unwrap().composer.is_some());
+    assert!(state.tabs.shown_view().unwrap().composer.is_some());
     push(&mut state, "feat-a", vec![]);
-    assert_eq!(state.open.as_ref().unwrap().composer, None);
+    assert_eq!(state.tabs.shown_view().unwrap().composer, None);
 
     push(&mut state, "feat-a", vec![c]);
     changes::update(&mut state, Msg::EditComment(id));
     changes::update(&mut state, Msg::DeleteComment(id));
-    assert_eq!(state.open.as_ref().unwrap().composer, None);
+    assert_eq!(state.tabs.shown_view().unwrap().composer, None);
 }
 
 /// C4. The composer and its text survive a re-read of the list and of the diff.
@@ -1018,7 +1043,7 @@ fn the_composer_survives_a_list_and_diff_reread() {
     gutter(&mut state, None, Some(2), false);
     changes::update(&mut state, Msg::AddComment);
     changes::update(&mut state, Msg::ComposerEdited("half a thought".into()));
-    let before = state.open.as_ref().unwrap().composer.clone();
+    let before = state.tabs.shown_view().unwrap().composer.clone();
     let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled) else {
         panic!("re-read");
     };
@@ -1039,7 +1064,7 @@ fn the_composer_survives_a_list_and_diff_reread() {
         },
     );
     assert!(before.is_some());
-    assert_eq!(state.open.as_ref().unwrap().composer, before);
+    assert_eq!(state.tabs.shown_view().unwrap().composer, before);
 }
 
 /// FR-021. A `ReviewChanged` push replaces that entry's comments only.
@@ -1127,7 +1152,7 @@ fn slot_heights_are_kept_for_the_shown_file_and_layout_only() {
             height: 122,
         },
     );
-    let heights = |s: &State| s.open.as_ref().unwrap().slot_heights.clone();
+    let heights = |s: &State| s.tabs.shown_view().unwrap().slot_heights.clone();
     assert_eq!(heights(&state).get(&(Side::New, 2)), Some(&122));
     changes::update(&mut state, Msg::LayoutChosen(DiffLayout::SideBySide));
     assert!(
@@ -1319,7 +1344,7 @@ fn refresh(state: &mut State, paths: &[&str], diff: LoadedDiff) {
 }
 
 fn outdated(state: &State) -> BTreeSet<CommentId> {
-    let anchors = &state.open.as_ref().unwrap().anchors;
+    let anchors = &state.tabs.shown_view().unwrap().anchors;
     anchors
         .iter()
         .filter(|(_, anchor)| anchor.outdated)
@@ -1329,7 +1354,7 @@ fn outdated(state: &State) -> BTreeSet<CommentId> {
 
 /// Where the card of `id` is drawn.
 fn shown(state: &State, id: CommentId) -> LineRange {
-    state.open.as_ref().unwrap().anchors[&id].shown
+    state.tabs.shown_view().unwrap().anchors[&id].shown
 }
 
 /// A refresh of `showing(..)` like [`refresh`], returning the effect the diff answer asks for.
@@ -1409,7 +1434,7 @@ fn a_refresh_drops_a_pick_whose_lines_are_gone_and_keeps_the_composer() {
     };
     refresh(&mut state, &["a.rs", "b.rs"], shorter);
     assert_eq!(pick(&state), None, "line 4 of the new side is gone");
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(
         view.composer.as_ref().map(|c| c.text.as_str()),
         Some("half written"),
@@ -1514,7 +1539,7 @@ fn a_composer_whose_lines_are_gone_waits_for_a_new_pick_and_keeps_its_text() {
     changes::update(&mut state, Msg::AddComment);
     changes::update(&mut state, Msg::ComposerEdited("half written".into()));
     refresh(&mut state, &["a.rs", "b.rs"], shorter());
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(changes::composer_placed(view), None, "line 4 is gone");
     assert_eq!(
         changes::update(&mut state, Msg::ComposerSaved),
@@ -1522,7 +1547,7 @@ fn a_composer_whose_lines_are_gone_waits_for_a_new_pick_and_keeps_its_text() {
         "nowhere to save it"
     );
     gutter(&mut state, None, Some(2), false);
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     assert_eq!(
         changes::composer_placed(view),
         Some(Pick {
@@ -1554,7 +1579,7 @@ fn a_refresh_that_drops_the_selected_file_closes_a_new_comment() {
     changes::update(&mut state, Msg::AddComment);
     let effect = changes::update(&mut state, Msg::Changed);
     answer_list(&mut state, effect, &["a.rs"]);
-    assert_eq!(state.open.as_ref().unwrap().composer, None);
+    assert_eq!(state.tabs.shown_view().unwrap().composer, None);
 }
 
 // ---- Clear sent and Discard pending (M8, T092, contracts/changes-view.md S3) ----
@@ -1747,7 +1772,7 @@ fn the_discard_confirmation_counts_in_the_singular_and_closes_with_the_view() {
         discard_prompt(&state).as_deref(),
         Some("Discard 1 draft comment? This cannot be undone.")
     );
-    changes::update(&mut state, Msg::Closed);
+    close_tab(&mut state);
     assert_eq!(discard_prompt(&state), None);
 }
 
@@ -1759,9 +1784,9 @@ fn a_selection_the_list_does_not_have_is_not_left_loading() {
     let effect = changes::update(&mut state, Msg::FileSelected(path("ghost.rs")));
     assert!(matches!(effect, Effect::None), "{effect:?}");
     assert!(
-        matches!(diff_body(state.open.as_ref().unwrap()), DiffBody::Failed(_)),
+        matches!(diff_body(state.tabs.shown_view().unwrap()), DiffBody::Failed(_)),
         "{:?}",
-        diff_body(state.open.as_ref().unwrap())
+        diff_body(state.tabs.shown_view().unwrap())
     );
 }
 
@@ -1790,7 +1815,7 @@ fn reported(comment: ReviewComment, outcome: Outcome, reply: &str) -> ReviewComm
 }
 
 fn card_of(state: &State) -> CardModel {
-    let view = state.open.as_ref().unwrap();
+    let view = state.tabs.shown_view().unwrap();
     let review = changes::review_of(state, view).unwrap();
     card_model(&review.comments[0], review.sending)
 }
@@ -1933,7 +1958,7 @@ fn answer_opens_the_composer_and_saves_an_answered_mark() {
         changes::update(&mut state, Msg::AnswerComment(sent.id)),
         Effect::None
     );
-    let composer = state.open.as_ref().unwrap().composer.clone().unwrap();
+    let composer = state.tabs.shown_view().unwrap().composer.clone().unwrap();
     assert_eq!(composer.target, ComposerTarget::Answer(sent.id));
     assert_eq!(composer.text, "");
     changes::update(&mut state, Msg::ComposerEdited("  \n ".into()));
@@ -1942,7 +1967,7 @@ fn answer_opens_the_composer_and_saves_an_answered_mark() {
         Effect::None
     );
     assert!(
-        state.open.as_ref().unwrap().composer.is_some(),
+        state.tabs.shown_view().unwrap().composer.is_some(),
         "still open"
     );
     changes::update(&mut state, Msg::ComposerEdited("Kept on purpose".into()));
@@ -1954,7 +1979,7 @@ fn answer_opens_the_composer_and_saves_an_answered_mark() {
             note: "Kept on purpose".into(),
         })
     );
-    assert!(state.open.as_ref().unwrap().composer.is_none());
+    assert!(state.tabs.shown_view().unwrap().composer.is_none());
 }
 
 /// **Answer…** on a comment that is not Sent opens nothing; an Answer composer closes when its
@@ -1967,7 +1992,7 @@ fn an_answer_composer_closes_when_its_comment_is_gone_or_reported() {
     push(&mut state, "feat-a", vec![sent.clone(), draft.clone()]);
     changes::update(&mut state, Msg::AnswerComment(draft.id));
     assert!(
-        state.open.as_ref().unwrap().composer.is_none(),
+        state.tabs.shown_view().unwrap().composer.is_none(),
         "a draft is not answered"
     );
 
@@ -1976,15 +2001,15 @@ fn an_answer_composer_closes_when_its_comment_is_gone_or_reported() {
         vec![reported(sent.clone(), Outcome::Applied, ""), draft.clone()],
     ] {
         changes::update(&mut state, Msg::AnswerComment(sent.id));
-        assert!(state.open.as_ref().unwrap().composer.is_some());
+        assert!(state.tabs.shown_view().unwrap().composer.is_some());
         push(&mut state, "feat-a", after);
-        assert!(state.open.as_ref().unwrap().composer.is_none());
+        assert!(state.tabs.shown_view().unwrap().composer.is_none());
         push(&mut state, "feat-a", vec![sent.clone(), draft.clone()]);
     }
     changes::update(&mut state, Msg::AnswerComment(sent.id));
     push(&mut state, "feat-b", vec![]);
     assert!(
-        state.open.as_ref().unwrap().composer.is_some(),
+        state.tabs.shown_view().unwrap().composer.is_some(),
         "another entry's push leaves it"
     );
 }
@@ -2013,11 +2038,11 @@ fn show_all_opens_the_full_reply_and_closing_or_losing_the_comment_clears_it() {
     );
     push(&mut state, "feat-a", vec![]);
     assert_eq!(reply_dialog(&state), None, "its comment left the entry");
-    assert_eq!(state.open.as_ref().unwrap().reply_open, None);
+    assert_eq!(state.tabs.shown_view().unwrap().reply_open, None);
 
     changes::update(&mut state, Msg::ShowReply(CommentId::new()));
     assert_eq!(
-        state.open.as_ref().unwrap().reply_open,
+        state.tabs.shown_view().unwrap().reply_open,
         None,
         "no such comment"
     );
@@ -2030,7 +2055,7 @@ use micold_client::features::changes::{
 };
 
 fn panel(state: &State) -> &changes::Panel {
-    &state.open.as_ref().unwrap().panel
+    &state.tabs.shown_view().unwrap().panel
 }
 
 /// FR-016. Rows are ordered by file (bytewise), first line, side (current first), created, and
@@ -2159,7 +2184,7 @@ fn pressing_a_row_selects_the_file_scrolls_and_focuses() {
     );
     // Unified rows: header, a, -b, +B, c, -x, +d: line 4 is row 6; two rows above it stay.
     assert_eq!(sans_tree(effect), Effect::ScrollDiff { offset: 4 * 20 });
-    assert_eq!(state.open.as_ref().unwrap().diff_offset, 80);
+    assert_eq!(state.tabs.shown_view().unwrap().diff_offset, 80);
     assert!(!panel(&state).to_show);
     assert!(panel_rows(&state)[0].selected);
     // With the file already shown, the press scrolls at once.
@@ -2190,7 +2215,7 @@ fn a_hidden_comment_gives_a_reason_and_no_jump() {
     );
     assert_eq!(panel(&state).hidden, Some(Why::NotListed));
     assert_eq!(panel(&state).focus, None);
-    assert!(state.open.as_ref().unwrap().selected.is_none());
+    assert!(state.tabs.shown_view().unwrap().selected.is_none());
     changes::update(&mut state, Msg::CommittedToggled);
     assert_eq!(
         jump_target(&state, gone.id),
@@ -2217,17 +2242,17 @@ fn rows_edit_and_delete_drafts_and_open_replies() {
         vec![draft.clone(), sent.clone(), done.clone()],
     );
     changes::update(&mut state, Msg::EditComment(draft.id));
-    let composer = state.open.as_ref().unwrap().composer.clone().unwrap();
+    let composer = state.tabs.shown_view().unwrap().composer.clone().unwrap();
     assert_eq!(composer.text, draft.text);
     changes::update(&mut state, Msg::ComposerCancelled);
     changes::update(&mut state, Msg::EditComment(sent.id));
-    assert!(state.open.as_ref().unwrap().composer.is_none());
+    assert!(state.tabs.shown_view().unwrap().composer.is_none());
     assert_eq!(
         edit_of(changes::update(&mut state, Msg::DeleteComment(draft.id))),
         Some(ReviewEditOp::Delete { id: draft.id })
     );
     changes::update(&mut state, Msg::ShowReply(done.id));
-    assert_eq!(state.open.as_ref().unwrap().reply_open, Some(done.id));
+    assert_eq!(state.tabs.shown_view().unwrap().reply_open, Some(done.id));
 }
 
 /// FR-019. The panel's buttons are the toolbar's, so they share its availability; a push from
@@ -2385,7 +2410,7 @@ fn reanchor_is_sent_only_for_the_working_tree() {
     let about_b = quoting("b.rs", Side::New, 2, &["B"]);
     let mut state = showing(commentable());
     push(&mut state, "feat-a", vec![about_b.clone()]);
-    state.open.as_mut().unwrap().toggles.uncommitted = false;
+    state.tabs.shown_view_mut().unwrap().toggles.uncommitted = false;
     let effect = refresh_effect(&mut state, pushed_down(5));
     assert!(
         matches!(effect, Effect::None),
@@ -2442,7 +2467,7 @@ fn long_file(changed: &str) -> LoadedDiff {
 }
 
 fn view_of(state: &State) -> &changes::OpenView {
-    state.open.as_ref().expect("view open")
+    state.tabs.shown_view().expect("view open")
 }
 
 fn shown_lines(state: &State) -> usize {
@@ -2558,7 +2583,7 @@ fn files_without_two_text_versions_offer_no_markers() {
         let mut state = ready(&["b.rs"]);
         let mut files = list(&["b.rs"]);
         files.files[0].kind = kind.clone();
-        if let Some(view) = state.open.as_mut() {
+        if let Some(view) = state.tabs.shown_view_mut() {
             view.list = Load::Ready(files);
         }
         let (seq, _) = select(&mut state, "b.rs");
@@ -2645,7 +2670,7 @@ fn whole_file_is_hidden_for_added_files_and_disabled_without_a_text_version() {
         let mut state = ready(&["b.rs"]);
         let mut files = list(&["b.rs"]);
         files.files[0].kind = kind.clone();
-        if let Some(view) = state.open.as_mut() {
+        if let Some(view) = state.tabs.shown_view_mut() {
             view.list = Load::Ready(files);
         }
         let (seq, _) = select(&mut state, "b.rs");
@@ -2663,7 +2688,7 @@ fn whole_file_is_hidden_for_added_files_and_disabled_without_a_text_version() {
     let mut state = ready(&["b.rs"]);
     let mut files = list(&["b.rs"]);
     files.files[0].kind = ChangeKind::Deleted;
-    if let Some(view) = state.open.as_mut() {
+    if let Some(view) = state.tabs.shown_view_mut() {
         view.list = Load::Ready(files);
     }
     let (seq, _) = select(&mut state, "b.rs");
@@ -3559,4 +3584,389 @@ fn the_counts_are_read_again_when_the_overview_closes() {
     );
     app.update(Message::NoOp);
     assert_eq!(counts_reads(&mut app), vec![], "and only once");
+}
+
+// Feature 1269, M2: the Review tab keeps its view while hidden (contracts/review-tab-ui.md U1–U4,
+// U7, U9).
+
+/// Answer every read `effect` asks for, and the reads those answers ask for, as the shell would:
+/// lists with `files`, diffs with `diff`, so no read is left in flight.
+fn answer_reads(state: &mut State, effect: Effect, files: &[&str], diff: &LoadedDiff) {
+    let mut queue = vec![effect];
+    while let Some(effect) = queue.pop() {
+        let next = match effect {
+            Effect::Batch(effects) => {
+                queue.extend(effects);
+                continue;
+            }
+            Effect::ReadList { seq, .. } => changes::update(
+                state,
+                Msg::ListRead {
+                    seq,
+                    result: Ok(list(files)),
+                },
+            ),
+            Effect::ReadDiff { seq, .. } => changes::update(
+                state,
+                Msg::DiffRead {
+                    seq,
+                    result: Ok(diff.clone()),
+                },
+            ),
+            Effect::ReadTree { seq, .. } => changes::update(
+                state,
+                Msg::TreeRead {
+                    seq,
+                    result: Ok(micold_core::pull_request::TreeListing {
+                        paths: files.iter().map(|p| path(p)).collect(),
+                        truncated: false,
+                    }),
+                },
+            ),
+            Effect::ReadFile {
+                seq,
+                source,
+                path: asked,
+                ..
+            } => changes::update(
+                state,
+                Msg::FileRead {
+                    seq,
+                    source,
+                    path: asked,
+                    result: Ok(file_text(&["one", "two"])),
+                    spans: Default::default(),
+                },
+            ),
+            _ => continue,
+        };
+        queue.push(next);
+    }
+}
+
+fn opened_msg(entry: SessionLocation) -> Msg {
+    Msg::Opened {
+        project: project(),
+        entry,
+    }
+}
+
+/// Open `entry`'s review (with the header following it, a session of it current, when `follow`),
+/// answer its reads, and change every part of its view: the Committed toggle, the selected `file`, both
+/// scrolls, a revealed run, the whole-file toggle, a pick, a composer holding `text`, the panel,
+/// the files pane and a browsed file.
+fn edit_view(state: &mut State, entry: SessionLocation, follow: bool, file: &str, text: &str) {
+    let files = ["a.rs", "b.rs"];
+    let diff = long_file("X");
+    if follow {
+        state.header.entry = Some((project(), entry.clone()));
+    }
+    let effect = changes::update(state, opened_msg(entry));
+    answer_reads(state, effect, &files, &diff);
+    let effect = changes::update(state, Msg::CommittedToggled);
+    answer_reads(state, effect, &files, &diff);
+    let effect = changes::update(state, Msg::FileSelected(path(file)));
+    answer_reads(state, effect, &files, &diff);
+    changes::update(
+        state,
+        Msg::ListScrolled {
+            offset: 40,
+            viewport: 300,
+        },
+    );
+    changes::update(
+        state,
+        Msg::DiffScrolled {
+            offset: 120,
+            viewport: 500,
+        },
+    );
+    toggle_gap(state, 0);
+    toggle_whole(state);
+    gutter(state, None, Some(10), false);
+    changes::update(state, Msg::AddComment);
+    changes::update(state, Msg::ComposerEdited(text.into()));
+    changes::update(state, Msg::PanelToggled);
+    let effect = changes::update(state, Msg::FilesPaneToggled);
+    answer_reads(state, effect, &files, &diff);
+    let effect = changes::update(state, Msg::BrowseOpen(path("a.rs")));
+    answer_reads(state, effect, &files, &diff);
+}
+
+/// The shown view, minus the notice, which the next message clears anyway.
+fn kept(state: &State) -> changes::OpenView {
+    let mut view = view_of(state).clone();
+    view.notice = None;
+    view
+}
+
+/// Feature 1269 T010 (U1, US1.3, SC-001): every part of a review hidden by a session selection is
+/// as left when it is shown again, and showing it reads nothing (its location was watched).
+#[test]
+fn a_hidden_review_comes_back_exactly_as_left() {
+    let mut state = State::default();
+    edit_view(&mut state, worktree(), true, "b.rs", "half-written");
+    let before = kept(&state);
+    assert!(before.composer.is_some() && before.pick.is_some() && before.browse.is_some());
+    assert!(!before.expansions.is_empty() && before.toggles != Toggles::default());
+    changes::update(&mut state, Msg::SessionSelected);
+    assert!(state.tabs.shown().is_none(), "hidden");
+    assert_eq!(
+        changes::update(&mut state, opened_msg(worktree())),
+        Effect::None,
+        "shown as left: nothing read"
+    );
+    assert_eq!(kept(&state), before, "the view compared whole");
+}
+
+/// Feature 1269 T010 (U1, US1.6): two locations' reviews, each edited, keep their own views:
+/// neither holds the other's file, composer or pick.
+#[test]
+fn two_reviews_keep_their_own_views() {
+    let other = SessionLocation::Worktree("feat-b".into());
+    let mut state = State::default();
+    edit_view(&mut state, worktree(), true, "b.rs", "about feat-a");
+    let first = kept(&state);
+    // Opened from the sidebar while feat-a's session stays current: the header keeps feat-a.
+    edit_view(&mut state, other.clone(), false, "a.rs", "about feat-b");
+    let second = kept(&state);
+    assert_eq!(state.tabs.len(), 2);
+    assert_eq!(second.selected, Some(path("a.rs")));
+    assert_eq!(second.composer.as_ref().unwrap().text, "about feat-b");
+
+    assert_eq!(
+        changes::update(&mut state, opened_msg(worktree())),
+        Effect::None,
+        "feat-a was watched while hidden: nothing to read"
+    );
+    assert_eq!(kept(&state), first, "feat-a's view, untouched by feat-b's");
+    assert_eq!(first.selected, Some(path("b.rs")));
+    assert_eq!(first.composer.as_ref().unwrap().text, "about feat-a");
+    let hidden = &state.tabs.get(&(project(), other)).unwrap().view;
+    assert_eq!(hidden.selected, second.selected, "feat-b's kept view holds its own file");
+    assert_eq!(hidden.composer, second.composer);
+    assert_eq!(hidden.pick, second.pick);
+}
+
+/// Feature 1269 T017 (U3, SC-005): repeated opens leave one tab; the first reads, a hidden tab
+/// whose location was watched and the shown tab read nothing.
+#[test]
+fn repeated_opens_keep_one_tab_per_location() {
+    let mut state = State::default();
+    state.header.entry = Some((project(), worktree()));
+    let effect = changes::update(&mut state, opened_msg(worktree()));
+    assert!(matches!(effect, Effect::ReadList { .. }), "Created reads");
+    answer_reads(&mut state, effect, &["a.rs"], &text_diff());
+    for _ in 0..3 {
+        assert_eq!(
+            changes::update(&mut state, opened_msg(worktree())),
+            Effect::None,
+            "AlreadyShown"
+        );
+    }
+    changes::update(&mut state, Msg::SessionSelected);
+    assert_eq!(
+        changes::update(&mut state, opened_msg(worktree())),
+        Effect::None,
+        "Shown {{ reread: false }}"
+    );
+    assert_eq!(state.tabs.len(), 1);
+}
+
+/// Take the read the root left for the shell, and answer it.
+fn answer_pending(app: &mut micold_client::app::State) -> Option<Effect> {
+    let effect = app.take_changes_effect()?;
+    answer_reads(&mut app.changes, effect.clone(), &["a.rs", "b.rs"], &text_diff());
+    Some(effect)
+}
+
+/// The list reads in `effect`, by entry.
+fn list_reads(effect: Option<Effect>) -> Vec<SessionLocation> {
+    fn flat(effect: Effect, out: &mut Vec<SessionLocation>) {
+        match effect {
+            Effect::Batch(effects) => effects.into_iter().for_each(|e| flat(e, out)),
+            Effect::ReadList { entry, .. } => out.push(entry),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(effect) = effect {
+        flat(effect, &mut out);
+    }
+    out
+}
+
+/// `feat-a`'s session `a1` current, its review open and read, a part of its view changed.
+fn reviewing_feat_a() -> (
+    micold_client::app::State,
+    [micold_core::session::SessionId; 3],
+) {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_client::features::sidebar::Msg as SidebarMsg;
+    let (mut app, ids) = two_worktrees_app();
+    app.update(Message::Session(SessionMsg::Selected(ids[0])));
+    answer_pending(&mut app);
+    app.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(worktree())));
+    answer_pending(&mut app);
+    app.update_changes(Msg::ListScrolled {
+        offset: 40,
+        viewport: 300,
+    });
+    (app, ids)
+}
+
+fn review_again(app: &mut micold_client::app::State, entry: SessionLocation) {
+    use micold_client::app::Message;
+    use micold_client::features::sidebar::Msg as SidebarMsg;
+    app.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(entry)));
+}
+
+/// Feature 1269 T011, T021 (U2, U7, FR-005, SC-002): selecting another location's session hides
+/// the review and reads nothing for it; back on `feat-a` it is still hidden and nothing is read
+/// until it is shown, which reads it once and keeps its view.
+#[test]
+fn switching_location_and_back_keeps_the_review_and_rereads_it_when_shown() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    let (mut app, ids) = reviewing_feat_a();
+    let key = (project(), worktree());
+    app.update(Message::Session(SessionMsg::Selected(ids[2])));
+    assert_eq!(app.changes.tabs.shown_key(), None, "hidden");
+    assert!(app.terminal_focused(), "the terminal is shown and focused");
+    assert_eq!(
+        list_reads(Some(app.update_changes(Msg::Changed))),
+        vec![],
+        "a change read for no hidden view"
+    );
+    app.update(Message::Session(SessionMsg::Selected(ids[0])));
+    assert_eq!(list_reads(answer_pending(&mut app)), vec![], "nothing read while hidden");
+    assert!(app.changes.tabs.has(&key), "kept");
+    assert_eq!(app.review_shown(), None, "still hidden on feat-a's session");
+    review_again(&mut app, worktree());
+    assert_eq!(app.review_shown(), Some(&key));
+    assert_eq!(
+        list_reads(app.take_changes_effect()),
+        vec![worktree()],
+        "shown: read once"
+    );
+    assert_eq!(view_of(&app.changes).list_offset, 40, "the view as left");
+    assert_eq!(app.changes.tabs.len(), 1);
+}
+
+/// Feature 1269 T011, T021 (U2, U7, R13): the Overview and Settings opened and closed over the
+/// shown review keep it; it is not watched while covered and is read again once when uncovered.
+#[test]
+fn covering_the_review_keeps_it_and_rereads_it_once() {
+    use micold_client::app::Message;
+    let (mut app, _) = reviewing_feat_a();
+    let before = app.changes.tabs.clone();
+    app.overview.open = true;
+    app.update(Message::NoOp);
+    assert_eq!(app.review_watch_entry(), None, "not watched while covered");
+    assert_eq!(list_reads(app.take_changes_effect()), vec![]);
+    app.overview.open = false;
+    app.update(Message::NoOp);
+    assert_eq!(list_reads(answer_pending(&mut app)), vec![worktree()], "read once");
+    app.update(Message::NoOp);
+    assert_eq!(list_reads(app.take_changes_effect()), vec![], "and only once");
+    assert_eq!(app.changes.tabs, before, "the tabs and views as they were");
+
+    app.settings.settings_draft = Some(
+        micold_client::features::settings::SettingsDraft::from_settings(&Default::default()),
+    );
+    app.update(Message::NoOp);
+    app.settings.settings_draft = None;
+    app.update(Message::NoOp);
+    assert_eq!(list_reads(answer_pending(&mut app)), vec![worktree()]);
+    assert_eq!(app.changes.tabs, before, "Settings too");
+}
+
+/// Feature 1269 T011 (U2, U7, US1.5): switching project `P → Q → P` keeps `P`'s tabs and views,
+/// none shown; Compare taking the main area hides the review too.
+#[test]
+fn switching_project_and_back_keeps_its_reviews_hidden() {
+    use micold_client::app::Message;
+    let (mut app, ids) = reviewing_feat_a();
+    let key = (project(), worktree());
+    let view = view_of(&app.changes).clone();
+    app.workspace.active = Some("/projects/q".into());
+    app.session.active = None;
+    app.update(Message::NoOp);
+    assert_eq!(app.changes.tabs.shown_key(), None, "hidden with its project");
+    app.workspace.active = Some(project());
+    app.session.active = Some(ids[0]);
+    app.update(Message::NoOp);
+    assert_eq!(app.changes.tabs.shown_key(), None, "none shown");
+    assert_eq!(app.changes.tabs.get(&key).map(|tab| &tab.view), Some(&view));
+
+    review_again(&mut app, worktree());
+    let _ = micold_client::app::interpret(
+        &mut app,
+        micold_client::features::Outcome::ChangesClosedForCompare,
+    );
+    assert_eq!(app.changes.tabs.shown_key(), None, "Compare hides it");
+    assert!(app.changes.tabs.has(&key));
+}
+
+/// Feature 1269 T014 (U4, FR-007, US3.1, US3.2): × on the shown tab drops it, shows the session
+/// that was current with the keyboard, keeps the comments and the remembered pull request; the
+/// next open starts fresh.
+#[test]
+fn closing_the_review_tab_shows_the_session_and_starts_fresh_next_time() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_core::review::comment::CommentState;
+    use micold_core::review::Side;
+    let (mut app, ids) = reviewing_feat_a();
+    app.update_changes(Msg::ReviewChanged {
+        project: project(),
+        worktree_dir: "feat-a".into(),
+        comments: vec![comment("a.rs", Side::New, 1, 1, CommentState::Draft)],
+        sending: false,
+    });
+    app.changes.remembered.insert((project(), worktree()), 7);
+    let (reviews, remembered) = (app.changes.reviews.clone(), app.changes.remembered.clone());
+    app.update(Message::Session(SessionMsg::TerminalFocusReleased));
+    app.update(Message::Changes(Msg::TabClosed {
+        project: project(),
+        entry: worktree(),
+    }));
+    assert!(app.changes.tabs.is_empty(), "dropped");
+    assert_eq!(app.session.active, Some(ids[0]), "the session shown before");
+    assert!(app.terminal_focused(), "with the keyboard");
+    assert_eq!(app.changes.reviews, reviews, "comments kept");
+    assert_eq!(app.changes.remembered, remembered, "the pull request kept");
+    review_again(&mut app, worktree());
+    let view = view_of(&app.changes);
+    assert_eq!(view.toggles, Toggles::default());
+    assert_eq!((view.selected.clone(), view.list_offset), (None, 0), "fresh");
+}
+
+/// Feature 1269 T015 (U9, FR-008, US3.3): a removed worktree drops its tab only; forgetting a
+/// project drops all of its tabs and no other project's.
+#[test]
+fn removal_drops_only_the_removed_locations_tabs() {
+    use micold_client::app::Message;
+    use micold_client::features::project::Msg as ProjectMsg;
+    let (mut app, _) = reviewing_feat_a();
+    let feat_b = SessionLocation::Worktree("feat-b".into());
+    review_again(&mut app, feat_b.clone());
+    let other: std::path::PathBuf = "/projects/q".into();
+    let y = SessionLocation::Worktree("y".into());
+    changes::opened(&mut app.changes, other.clone(), y.clone(), None);
+    let _ = micold_client::app::interpret(
+        &mut app,
+        micold_client::features::Outcome::WorktreesReplaced(BTreeSet::from(["feat-b".into()])),
+    );
+    let keys: Vec<_> = app.changes.tabs.iter().map(|(k, _)| k.clone()).collect();
+    assert_eq!(
+        keys,
+        vec![(project(), feat_b), (other.clone(), y.clone())],
+        "feat-a's gone; feat-b's and another project's kept"
+    );
+    app.project.forget_target = Some(project());
+    app.update(Message::Project(ProjectMsg::ForgetConfirmed));
+    let keys: Vec<_> = app.changes.tabs.iter().map(|(k, _)| k.clone()).collect();
+    assert_eq!(keys, vec![(other, y)], "only the other project's");
 }

@@ -76,7 +76,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
 /// The address of pull request `number` of the open Changes view, when it is a GitHub one
 /// (FR-014): the held address, never one built from the number.
 pub fn pull_request_address(app: &App, number: u64) -> Option<String> {
-    let view = app.core.changes.open.as_ref()?;
+    let view = app.core.changes.tabs.shown_view()?;
     let (prs, _) = view.pull_requests.shown()?;
     let address = &prs.iter().find(|pr| pr.number == number)?.url;
     address
@@ -86,7 +86,7 @@ pub fn pull_request_address(app: &App, number: u64) -> Option<String> {
 
 /// Whether the open view is waiting for diff read `seq`.
 fn diff_read_is_current(app: &App, seq: u64) -> bool {
-    app.core.changes.open.as_ref().is_some_and(|view| {
+    app.core.changes.tabs.shown_view().is_some_and(|view| {
         matches!(view.diff, micold_client::features::changes::Load::Loading { seq: s, .. } if s == seq)
     })
 }
@@ -108,8 +108,8 @@ fn sync_composer(app: &mut App) {
     let text = app
         .core
         .changes
-        .open
-        .as_ref()
+        .tabs
+        .shown_view()
         .and_then(|view| view.composer.as_ref())
         .map_or("", |composer| composer.text.as_str());
     if app.composer.text() != text {
@@ -145,7 +145,7 @@ pub fn run_pending(app: &mut App) -> Task<Message> {
 
 /// The branch of the open view's entry: a listed worktree's own; none for the project root.
 fn entry_branch(app: &App) -> Option<String> {
-    let SessionLocation::Worktree(dir_name) = &app.core.changes.open.as_ref()?.entry else {
+    let SessionLocation::Worktree(dir_name) = &app.core.changes.tabs.shown_view()?.entry else {
         return None;
     };
     app.core

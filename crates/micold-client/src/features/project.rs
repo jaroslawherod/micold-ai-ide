@@ -430,6 +430,12 @@ pub fn forget_confirmed(state: &mut crate::app::State) -> Vec<crate::features::O
         let was_active =
             state.workspace.active.as_deref() == Some(canonicalize_best_effort(&path).as_path());
         state.workspace.forget(&path);
+        // Feature 1269 (U9): a forgotten project's Review tabs go with it.
+        state
+            .changes
+            .tabs
+            .drop_project(&canonicalize_best_effort(&path));
+        state.changes.tabs.drop_project(&path);
         if was_active {
             // Feature 024: an app-initiated clear like any other, so it goes through the same
             // function (contract §3's table). It arms nothing — there is no session and, after a

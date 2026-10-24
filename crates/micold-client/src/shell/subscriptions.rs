@@ -147,10 +147,11 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     //
     // Idle quiescence (SC-017, FR-039a) is unaffected because the branch is unreachable without the
     // environment variable; `tests/frame_probe_glue.rs` is what keeps that true.
-    // The Changes view's file watch (482 R9), **only while the view is open**: a recursive watch
-    // of an entry nobody is looking at would wake the window on every build and agent edit.
-    if let Some(view) = &app.core.changes.open {
-        subs.extend(crate::shell::changes_watch::watch(app, &view.entry));
+    // The Changes view's file watch (482 R9), **only while the review is shown and uncovered**
+    // (feature 1269, R13): a recursive watch of an entry nobody is looking at would wake the
+    // window on every build and agent edit.
+    if let Some(watched) = app.core.review_watch_entry() {
+        subs.extend(crate::shell::changes_watch::watch(app, watched));
     }
     // Feature 1126 R6: the header's counts follow edits too, so the shown location is watched
     // while a session is shown and the Overview is closed. Not a second watch of the view's entry:
