@@ -156,8 +156,10 @@ read. **Independent test**: `mise run test-core` runs S1–S10.
   - `set_changed` (`persist.rs:409`, the deliberate exhaustive destructure): add
     `suggestion_chips: _` with a line in its doc comment that a save does not set it until M5 (the
     form does not hold it), and do not `set!` it.
-  The `Settings` literals in `persist.rs`'s tests (`:1171`, `:1238`) and in
-  `features/settings.rs:2727` end in `..`, so they need no change. The client shows nothing new.
+  - the exhaustive `Settings` literal in `persist.rs`'s test `saving_a_theme_keeps_every_other_setting`
+    (`:1171`): add `suggestion_chips: false`.
+  The other test literals (`persist.rs:1238`, `features/settings.rs:2727`) end in `..Settings::default()`,
+  so they need no change; the compiler finds any further exhaustive literal. The client shows nothing new.
 
 **Checkpoint**: M2 done. `mise run test-core` and `mise run gate` green; no visible change.
 
