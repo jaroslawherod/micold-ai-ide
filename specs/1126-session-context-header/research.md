@@ -324,8 +324,10 @@ rebase small against #1124 (status bar, the window column) and #1125 (sidebar).
   `session.strip.new_session`, `session.strip.split`; fixture regenerated once the area is done.
 - `gates/containment.rs`: `the_recorded_tab_overflow_is_the_instance_strip` is pinned to
   `session-terminal-instance-tabs-overflowing` and the bar's container path; it is retargeted to
-  `session-area-twelve-tabs` and the strip's `EdgeFade` → `Scrollable` → keyed row path, with the
-  child count being the twelve members (its doc comment updated: the strip, not the bar).
+  `session-area-twelve-tabs` and the strip's `EdgeFade` → `Scrollable` → keyed row path: it drops
+  the descent through feature 027's one-child padding container (`leading_slack` is removed), and its
+  `INSTANCES = 6` becomes the state's member count, "+" included, taken from `covered_states.rs`
+  (its doc comment updated: the strip, not the bar).
 - Visual pass: quickstart Part B.
 
 **Alternatives rejected**:
