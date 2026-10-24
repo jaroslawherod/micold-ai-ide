@@ -54,10 +54,10 @@ const MARKERS: &[&str] = &[
 const ALLOWED: &[(&str, &str, &str)] = &[
     (
         "crates/micold-client/src/ui/sidebar.rs",
-        ".then_some(Message::Worktree(WorktreeMsg::RefreshRequested)),",
-        "The refresh control in the sidebar header — the one starter. `then_some` is what makes it \
-         a starter and not an automation: the message exists only when `can_refresh_worktrees()` \
-         says so, and only a press delivers it.",
+        "MoreAction::Refresh => Message::Worktree(WorktreeMsg::RefreshRequested),",
+        "The refresh item of the sidebar's more (⋯) menu — the one starter (feature 1125 moved it \
+         there from the header). The shell sends it only after a press chose the item, and the item \
+         is pressable only while `can_refresh_worktrees()` says so.",
     ),
     (
         "crates/micold-client/src/main.rs",

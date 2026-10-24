@@ -16,17 +16,18 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Nine transitions in [`Msg`]: expansion (`WorktreeExpansionToggled`,
-//! `DefaultExpansionToggled`), the tag filters (`FilterToggled`, `FiltersCleared`), the chip bar's
-//! more (⋯) menu (`MoreMenuToggled`, `MoreMenuAnchored`, `MoreMenuChosen`; feature 1125, which
-//! removed the filter panel and its `FilterMenuToggled`), the scroll position (`Scrolled`, `ViewportResized`), and the panel itself
-//! (`Toggled`, `DragMoved`). [`update`] routes all nine and is pure (data-model.md §1.1 shape
-//! A) — every one of them is a question about what the sidebar shows, answerable without leaving the
-//! process, so the binary matches none of them again.
+//! The transitions in [`Msg`] that are this module's own: expansion (`WorktreeExpansionToggled`,
+//! `DefaultExpansionToggled`, `GroupToggled`), the tag filters (`FilterToggled`, `FiltersCleared`),
+//! the chip bar's more (⋯) menu (`MoreMenuToggled`, `MoreMenuAnchored`, `MoreMenuChosen`; feature
+//! 1125, which removed the filter panel and its `FilterMenuToggled`), the scroll position
+//! (`Scrolled`, `ViewportResized`), and the panel itself (`Toggled`, `DragMoved`). [`update`]
+//! routes them and is pure (data-model.md §1.1 shape A). One message has a shell follow-up:
+//! after `MoreMenuChosen` closes the menu, the binary sends the chosen item's header-button message
+//! (`ui::sidebar::more_action_message`), so a refresh keeps the shell's request path (D19).
 //!
 //! # The state this feature remembers (feature 028, contract S1)
 //!
-//! Nine fields in [`State`], reached as `state.sidebar`, in three groups:
+//! Eleven fields in [`State`], reached as `state.sidebar`, in three groups:
 //!
 //! - **what is expanded**: `expanded` (the worktree rows the user has opened), `default_expanded`,
 //!   and `pending_reveal_scroll`, the flag that arms a scroll-into-view once layout knows the height;
@@ -35,7 +36,7 @@
 //!   open or closed choice per project and state group);
 //! - **the panel's own geometry**: `hidden`, `width`, `scroll_offset`, `viewport_height`.
 //!
-//! Four kept the names they had flat on the root. Six shed the `sidebar` the qualifier carries:
+//! Three kept the names they had flat on the root. Six shed the `sidebar` the qualifier carries:
 //! `sidebar_filters`, `sidebar_filter_open`, `sidebar_hidden`, `sidebar_width`,
 //! `sidebar_scroll_offset` and `sidebar_viewport_height` (T035).
 //!
@@ -75,11 +76,12 @@ use std::path::{Path, PathBuf};
 
 /// What this feature remembers (feature 028, contract S1).
 ///
-/// Six of the ten shed the `sidebar` the qualifier now carries: `sidebar_filter_open`,
+/// Six fields shed the `sidebar` the qualifier now carries: `sidebar_filter_open`,
 /// `sidebar_filters`, `sidebar_hidden`, `sidebar_scroll_offset`, `sidebar_viewport_height` and
-/// `sidebar_width` are `filter_open` (since feature 1125 `more_menu_open`), `filters`, `hidden`, `scroll_offset`, `viewport_height` and
-/// `width`. The other four never carried it — `default_expanded`, `expanded`,
-/// `pending_reveal_scroll` — and keep their names. The reducers below
+/// `sidebar_width` became `filter_open`, `filters`, `hidden`, `scroll_offset`, `viewport_height`
+/// and `width`; feature 1125 then replaced `filter_open` with `more_menu_open` and added
+/// `more_anchor` and `group_choices`. `default_expanded`, `expanded` and `pending_reveal_scroll`
+/// never carried it and keep their names. The reducers below
 /// spell the root's type `crate::app::State` now that `State` here means this struct.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {

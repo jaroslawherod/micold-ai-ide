@@ -381,7 +381,8 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
     let chips = container(
         iced::widget::Row::with_children(chips)
             .spacing(spacing::XS)
-            .wrap(),
+            .wrap()
+            .vertical_spacing(spacing::XS),
     )
     .width(Length::Fill);
 
@@ -482,8 +483,9 @@ pub fn more_menu_items(state: &State) -> Vec<material::MenuItem<Message>> {
             message: item
                 .enabled
                 .then_some(Message::Sidebar(SidebarMsg::MoreMenuChosen(item.action))),
+            // No `trailing_tooltip`: a menu item draws one only over a trailing icon, so the
+            // label carries the header button's tooltip text instead (D20).
             ..material::MenuItem::new(icon, item.label, Message::NoOp)
-                .trailing_tooltip(item.tooltip)
         }
     })
     .collect()
