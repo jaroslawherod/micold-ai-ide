@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M8 done (T055–T060): T055–T059 at 255c6a31, T060's live visual pass and its fix (the open model picker keeps the keyboard) at f3eb98e6, on origin/main e65993bc; full gate on the final tree pending in this unit (see *Review rounds*)
+- **Phase**: M8 done (T055–T060): T055–T059 at 255c6a31, T060's live visual pass and its fix (the open model picker keeps the keyboard) at f3eb98e6, on origin/main e65993bc; full gate green on 46b3dc76 (split-gate.sh); pushed, PR to open
 - **Next step**: the orchestrator opens the M8 PR from `$SCRATCHPAD/943-M8/pr-title.txt` and `pr-body.md`, waits on CI and merges; then M9 (T061–T065)
 
 ## Pull requests
@@ -97,6 +97,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M7 run 4 | — | 32b8657f | green (split-gate.sh) after rebase onto origin/main 79db5768 (#944 M6; no conflicts) |
 | T060 visual pass (live claude 2.1.310, Xvfb + tiny-skia) | — | a2a7cd87 | PASS B1, B2, B4 (restart-memory check not run), B5 except the picker's typed name: FAIL, its field took no keys (`KeyboardElsewhere`, `terminal_focused()` true once the composer blurred) — fixed at f3eb98e6 and re-checked live in dark (typed name → *Model 'no-such-model' not found*). Evidence and findings: `visual-pass/m8-record.md` (31 crops, both themes) |
 | Review of the T060 fix (fresh context, sonnet, claude -p) | 1 | f3eb98e6 | CLEAN of BLOCKER/MAJOR; 5 MINOR: keep the derived term (agreed); a `model_picker_open()` helper (declined, one use); a picker left open across a session switch holds neither terminal nor field focus until a click (pre-existing, follow-up); another-session test case and a `terminal_focus.rs` case (declined: `composer_fits` covers the term and its release); the focus contract does not enumerate later terms (nothing to add) |
+| Full gate M8 run 2 | — | 46b3dc76 | `scripts/gate.sh` ran out of disk while linking tests (fmt and clippy had passed); `target-shared/debug` wiped, then `split-gate.sh`: green (ALL_GREEN) |
 
 ## Declined review findings
 
