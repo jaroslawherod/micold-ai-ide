@@ -104,6 +104,9 @@ pub(crate) mod parallel_dialog;
 pub mod syntax;
 pub mod terminal;
 mod toolbar;
+/// The application's icon as raw RGBA, read by the window's icon and the title bar's app mark
+/// (feature 1127, R9).
+pub use toolbar::{APP_ICON_RGBA, APP_ICON_SIDE};
 pub mod transcript;
 pub(crate) mod worktree_form;
 /// The issue picker's rows, named individually for `tests/issue_picker_rows.rs` (feature 038): the
@@ -583,7 +586,12 @@ pub fn view_with<'a>(
     .open(state.project.switcher_open)
     // Hung from the trigger that opened it, not the window's trailing edge, and slid back in so the
     // panel cannot run off the window (BUG-1023).
-    .hung_from(state.project.switcher_anchor.map(|anchor| {
+    //
+    // Only the reported `x` is kept (feature 1127, R8): the switcher is a 40dp button inside the
+    // 43dp bar, so its own bottom is 1.5dp above the bar's, and FR-005 puts the panel's top edge
+    // at the bar's bottom edge.
+    .hung_from(state.project.switcher_anchor.map(|(x, _)| {
+        let anchor = (x, anatomy::app_bar::BOTTOM_EDGE as u16);
         let (x, y) = crate::features::project::clamp_menu_anchor(
             anchor,
             material::menu_panel_size(1),

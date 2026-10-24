@@ -10,12 +10,13 @@
 //!
 //! Parity: each variant resolves to exactly the style its call sites use today (FR-005).
 
+use crate::give_way::{Floor, GiveWay, Lane, Slot};
 use crate::glyph::icon;
 use crate::icons::Icon;
 use crate::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::style;
 use crate::text::{Text, TypeRole};
-use iced::widget::{button, container, row};
+use iced::widget::{button, container};
 use iced::{keyboard, Alignment, Element, Length, Padding};
 use micold_core::tokens::{anatomy, density, shape, spacing, Rgb, Roles};
 
@@ -350,26 +351,35 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         let inner: Element<'a, M> = if b.leading.is_none() && mark.is_none() {
             b.content
         } else {
-            let slot = match b.leading {
-                Some((glyph, tint)) => {
-                    // The variant's own content colour unless the call site meant something by
-                    // the glyph's tone — one control, one colour, by default.
-                    let tint = tint.unwrap_or_else(|| b.variant.content(b.roles, b.host));
-                    row![icon(glyph, anatomy::button::LEADING_ICON, tint)]
-                }
-                None => row![],
+            // A give-way lane rather than a `row!` (feature 1127): in a narrowed button the label
+            // is what shortens, and the glyph and the mark keep their width. A row lays its
+            // children out in order, so the label took the whole room and left the mark none.
+            let kept = || Slot {
+                give_way: GiveWay::Keep,
+                trailing: false,
+                floor: Floor::Natural,
             };
-            let mut inner = slot
-                .spacing(spacing::XS)
-                .align_y(Alignment::Center)
-                .push(b.content);
+            let mut inner = Lane::hugging(spacing::XS);
+            if let Some((glyph, tint)) = b.leading {
+                // The variant's own content colour unless the call site meant something by
+                // the glyph's tone — one control, one colour, by default.
+                let tint = tint.unwrap_or_else(|| b.variant.content(b.roles, b.host));
+                inner = inner.push(icon(glyph, anatomy::button::LEADING_ICON, tint), kept());
+            }
+            let label = Slot {
+                give_way: GiveWay::Shorten(0),
+                trailing: false,
+                floor: Floor::Squeezed,
+            };
+            inner = inner.push(b.content, label);
             if let Some(mark) = mark {
                 // One more `XS` before the mark than between the glyph and the label: the glyph
                 // belongs to the name, and the count is a second thing said after it.
-                inner = inner.push(container(mark).padding(Padding {
+                let mark = container(mark).padding(Padding {
                     left: spacing::XS,
                     ..Padding::ZERO
-                }));
+                });
+                inner = inner.push(mark.into(), kept());
             }
             inner.into()
         };
@@ -530,6 +540,41 @@ mod tests {
             (inset - anatomy::button::PADDING_TEXT).abs() < 0.5,
             "the mark ends {inset}dp inside the button's trailing edge, not at its {}dp padding",
             anatomy::button::PADDING_TEXT
+        );
+    }
+
+    /// Feature 1127 (contract B4): in a narrowed button the label shortens and the glyph and the
+    /// mark keep their place inside it — a row gave the label the whole room and the mark none.
+    #[test]
+    fn a_narrowed_button_shortens_its_label_and_keeps_its_mark() {
+        use super::super::test_support::{leaves, Mounted};
+        let long = "a-project-with-a-name-sixty-characters-long-for-the-title-ba";
+        let label = crate::Ellipsized::at_role(long, TypeRole::Action, roles().primary).shrink();
+        let button = Button::<String>::with_content(label, Variant::Text, roles())
+            .leading(Icon::OpenProject)
+            .trailing_mark(3, "3 unread")
+            .on_press("go".to_string());
+        let room = Size::new(200.0, 100.0);
+        let mut m = Mounted::new_in(button, room);
+        let outer = m.node.bounds();
+        assert!(outer.width <= room.width, "{outer:?}");
+        for leaf in leaves(&m.node) {
+            assert!(
+                leaf.x + leaf.width <= outer.x + outer.width + 0.5,
+                "{leaf:?} leaves {outer:?}"
+            );
+        }
+        let painted = m.painted_text();
+        let words: Vec<&str> = painted.iter().map(|p| p.content.as_str()).collect();
+        assert!(words.contains(&"3"), "the mark's count is drawn: {words:?}");
+        let label = painted
+            .iter()
+            .find(|p| p.content.ends_with('…'))
+            .unwrap_or_else(|| panic!("the label shortens: {words:?}"));
+        assert!(
+            label.bounds.width > 40.0,
+            "the label keeps the room left beside the glyph and the mark: {:?}",
+            label.bounds
         );
     }
 

@@ -7,11 +7,12 @@
 
 use crate::glyph::{icon, icon_colored};
 use crate::icons::Icon;
+use crate::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::style;
 use crate::text::TypeRole;
 use iced::widget::{button, container};
-use iced::{Alignment, Element, Length};
-use micold_core::tokens::{anatomy, shape, spacing, Rgb, Roles};
+use iced::{keyboard, Alignment, Element, Length};
+use micold_core::tokens::{anatomy, shape, spacing, state, Rgb, Roles};
 use std::marker::PhantomData;
 
 /// A boxed button style function — lets [`From::from`] pick between [`style::text_button`] and
@@ -28,6 +29,9 @@ pub struct IconButton<'a, M> {
     padding: Option<f32>,
     compact: bool,
     circular: bool,
+    selected: bool,
+    keyboard: bool,
+    target: Option<f32>,
     on_press: Option<M>,
     _marker: PhantomData<&'a ()>,
 }
@@ -44,6 +48,9 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
             padding: None,
             compact: false,
             circular: false,
+            selected: false,
+            keyboard: false,
+            target: None,
             on_press: None,
             _marker: PhantomData,
         }
@@ -129,6 +136,33 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
         self
     }
 
+    /// Draw the button toggled on: the selected state layer behind its glyph (feature 1127,
+    /// FR-011). Drawn **also when the button has no press**, with the glyph at full strength, so
+    /// "open, and pressing again does nothing" reads as selected rather than as disabled.
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    /// Let the keyboard reach the button (feature 1127, R11): while it can be pressed it is a Tab
+    /// stop, and Enter or Space sends its press — the library's one wrapper,
+    /// [`TakesTheKeyboard`], as [`Button`](crate::Button) uses it.
+    ///
+    /// Opt-in rather than the default because turning it on everywhere would change the Tab order
+    /// of the sidebar and of every dialog, which is not this option's business.
+    pub fn keyboard(mut self, keyboard: bool) -> Self {
+        self.keyboard = keyboard;
+        self
+    }
+
+    /// The interactive target's side, in place of §7.3's [`anatomy::button::MIN_TOUCH_TARGET`]:
+    /// the title bar's 43dp cannot hold a 48dp target, so its icon-only actions take
+    /// [`anatomy::app_bar::ICON_TARGET`] (feature 1127, R1).
+    pub fn target(mut self, side: f32) -> Self {
+        self.target = Some(side);
+        self
+    }
+
     /// Set the message emitted on press (enables the button).
     pub fn on_press(mut self, message: M) -> Self {
         self.on_press = Some(message);
@@ -142,6 +176,41 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
     }
 }
 
+impl<'a, M: Clone + 'a> IconButton<'a, M> {
+    /// Whether the glyph is greyed: only when the button can neither be pressed nor is drawn
+    /// selected.
+    fn greyed(&self) -> bool {
+        self.on_press.is_none() && !self.selected
+    }
+
+    /// The rendering stack's button style, with the selected layer where it is toggled on.
+    fn style_fn(&self) -> ButtonStyleFn {
+        // `text_button`/`circular_icon_button` are each a distinct `impl Fn` opaque type, so an
+        // `if`/`else` can't bind them to one local — box both branches to a common `dyn Fn`.
+        let base: ButtonStyleFn = if self.circular {
+            Box::new(style::circular_icon_button(self.roles))
+        } else {
+            Box::new(style::text_button(self.roles, None))
+        };
+        if !self.selected {
+            return base;
+        }
+        // The layer `Button::selected` draws, over the same content colour the hover layer uses.
+        // Kept in `Disabled` too: a selected button with no press is still selected.
+        let layer = style::color(self.roles.primary);
+        Box::new(move |theme, status| {
+            let mut style = base(theme, status);
+            if !matches!(status, button::Status::Pressed) {
+                style.background = Some(iced::Background::Color(style::state_fill(
+                    layer,
+                    state::SELECTED,
+                )));
+            }
+            style
+        })
+    }
+}
+
 impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
     fn from(b: IconButton<'a, M>) -> Self {
         let tint = b.tint.unwrap_or(b.roles.on_surface);
@@ -149,19 +218,14 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         // `icon` sets an explicit `.color()`, which overrides the button's inherited
         // `text_color`, so the style fn could never reach the glyph and a disabled icon button
         // rendered at full strength — contradicting this type's own doc comment.
-        let content = if b.on_press.is_none() {
+        let content = if b.greyed() {
             icon_colored(b.glyph, b.glyph_size(), style::disabled_color(tint))
         } else {
             icon(b.glyph, b.glyph_size(), tint)
         };
-        // `text_button`/`circular_icon_button` are each a distinct `impl Fn` opaque type, so an
-        // `if`/`else` can't bind them to one local — box both branches to a common `dyn Fn`.
-        let style_fn: ButtonStyleFn = if b.circular {
-            Box::new(style::circular_icon_button(b.roles))
-        } else {
-            Box::new(style::text_button(b.roles, None))
-        };
+        let style_fn = b.style_fn();
         let pressable = b.on_press.is_some();
+        let on_key = b.on_press.clone();
         let mut btn = button(content).padding(b.inset()).style(style_fn);
         if let Some(message) = b.on_press {
             btn = btn.on_press(message);
@@ -173,9 +237,27 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         } else {
             btn.into()
         };
-        if !pressable {
+        // An inert button keeps its natural box, unless the call site named its target: the title
+        // bar's Settings button is drawn selected and inert while Settings is open, and must stay
+        // the bar's 40dp square rather than its glyph's line height (feature 1127).
+        if !pressable && b.target.is_none() {
             return element;
         }
+        // The keyboard, when the call site asked (R11): outside the ripple, as `Button` does, so
+        // the focus indicator draws over the state layer; inside the target, so the ring hugs the
+        // visible container rather than the larger box around it.
+        let element: Element<'a, M> = match on_key {
+            Some(message) if b.keyboard => TakesTheKeyboard::new(element, true)
+                .key(keyboard::key::Named::Enter, message.clone())
+                .key(keyboard::key::Named::Space, message)
+                .indicator(Indicator {
+                    outline: b.roles.secondary,
+                    layer: tint,
+                    radius: shape::FULL,
+                })
+                .into(),
+            _ => element,
+        };
         // §7.3's 48dp minimum interactive target, honoured **even though the visible container is
         // smaller** — a 24dp glyph in a 40dp box is the ordinary case here, so a target that merely
         // matched the container would be wrong on every icon button in the application (FR-027).
@@ -193,14 +275,108 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         // holding a `Length::Fill` sibling it took an equal share of the free space and floated its
         // glyph in the middle of it — which is what pushed the app bar's ⋮ and the terminal bar's
         // mode toggle off their trailing edges. Aligning without resizing is the whole fix.
-        if b.compact {
+        if b.compact && b.target.is_none() {
             return element;
         }
+        let side = b.target.unwrap_or(anatomy::button::MIN_TOUCH_TARGET);
         container(element)
-            .width(Length::Fixed(anatomy::button::MIN_TOUCH_TARGET))
-            .height(Length::Fixed(anatomy::button::MIN_TOUCH_TARGET))
+            .width(Length::Fixed(side))
+            .height(Length::Fixed(side))
             .align_x(Alignment::Center)
             .align_y(Alignment::Center)
             .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_support::{named_key, roles, size_of, Mounted};
+    use super::*;
+    use iced::keyboard::key::Named;
+    use iced::{mouse, Size};
+
+    const ROOM: Size = Size::new(400.0, 200.0);
+
+    fn settings() -> IconButton<'static, String> {
+        IconButton::new(Icon::Settings, roles())
+    }
+
+    fn background(b: &IconButton<'_, String>, status: button::Status) -> Option<iced::Background> {
+        b.style_fn()(&iced::Theme::Light, status).background
+    }
+
+    /// Feature 1127 T004 (FR-011): selected draws the selected layer with no press, and keeps the
+    /// glyph at full strength — the selected look, not the disabled one.
+    #[test]
+    fn a_selected_button_with_no_press_draws_the_selected_layer_not_the_disabled_look() {
+        let selected = settings().selected(true);
+        let Some(iced::Background::Color(layer)) = background(&selected, button::Status::Disabled)
+        else {
+            panic!("a selected button with no press draws no layer");
+        };
+        assert!(
+            (layer.a - state::SELECTED).abs() < 1e-3,
+            "the layer is the selected opacity, not {}",
+            layer.a
+        );
+        assert!(
+            !selected.greyed(),
+            "the glyph is greyed like a disabled one"
+        );
+        assert!(
+            settings().greyed(),
+            "an unselected button with no press is still disabled"
+        );
+        assert_eq!(
+            background(&settings().selected(false), button::Status::Active),
+            background(&settings(), button::Status::Active),
+            "unselected is the plain style"
+        );
+    }
+
+    /// T004 (FR-013, R11): `.keyboard(true)` makes a pressable button a Tab stop whose Enter and
+    /// Space publish its press.
+    #[test]
+    fn a_keyboard_button_takes_tab_and_answers_enter_and_space() {
+        let mut m = Mounted::new(settings().keyboard(true).on_press("open".to_string()));
+        m.focus_next();
+        let off = mouse::Cursor::Unavailable;
+        assert_eq!(m.send(named_key(Named::Enter), off), ["open"]);
+        assert_eq!(m.send(named_key(Named::Space), off), ["open"]);
+    }
+
+    /// T004: without `.keyboard(true)`, or without a press, the button is no Tab stop.
+    #[test]
+    fn without_keyboard_or_without_a_press_the_button_is_no_tab_stop() {
+        let off = mouse::Cursor::Unavailable;
+        let mut plain = Mounted::new(settings().on_press("open".to_string()));
+        plain.focus_next();
+        assert!(plain.send(named_key(Named::Enter), off).is_empty());
+        let mut inert = Mounted::new(settings().keyboard(true).selected(true));
+        inert.focus_next();
+        assert!(inert.send(named_key(Named::Enter), off).is_empty());
+    }
+
+    /// Feature 1127 R1: `.target(side)` replaces §7.3's 48dp target; without it the target stays.
+    #[test]
+    fn the_target_is_the_one_asked_for() {
+        let at = |b: IconButton<'static, String>| size_of(b.on_press("x".into()).into(), ROOM);
+        assert_eq!(
+            at(settings().target(anatomy::app_bar::ICON_TARGET)),
+            Size::new(anatomy::app_bar::ICON_TARGET, anatomy::app_bar::ICON_TARGET)
+        );
+        assert_eq!(
+            at(settings()),
+            Size::new(
+                anatomy::button::MIN_TOUCH_TARGET,
+                anatomy::button::MIN_TOUCH_TARGET
+            )
+        );
+        let side = anatomy::app_bar::ICON_TARGET;
+        assert_eq!(
+            size_of::<String>(settings().target(side).selected(true).into(), ROOM),
+            Size::new(side, side),
+            "an inert button with a target keeps it"
+        );
     }
 }

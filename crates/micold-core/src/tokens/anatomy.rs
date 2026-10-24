@@ -23,16 +23,30 @@
 //! positive and finite.
 
 /// §7.1 — the small top app bar. The medium and large variants are not adopted.
+///
+/// **The figures are feature 1127's** (its contract T1: one 44 px title bar, divider included),
+/// superseding 018 §7.1's height (64), padding (16), target (48) and bottom edge (65). §7.1's
+/// surface, elevation, divider and icon-colour rows still hold. Every control in the bar is one
+/// 40 dp height — `density::BUTTON_BASE` — with 1.5 dp of slack above and below in the 43 dp bar.
 pub mod app_bar {
-    /// Total bar height.
-    pub const HEIGHT: f32 = 64.0;
+    /// The bar's height, without its divider (feature 1127: 43 + 1 = 44).
+    pub const HEIGHT: f32 = 43.0;
     /// Horizontal padding either side.
-    pub const PADDING: f32 = 16.0;
+    pub const PADDING: f32 = 12.0;
+    /// The space between two of the bar's children (the mockup's `gap:12px`).
+    pub const GAP: f32 = 12.0;
+    /// The app mark's side: the application's icon at the bar's leading end.
+    pub const MARK: f32 = 24.0;
+    /// The jump-to field's height.
+    pub const FIELD_HEIGHT: f32 = 32.0;
+    /// The jump-to field's widest: it never grows past this, however much room the bar has.
+    pub const FIELD_MAX_WIDTH: f32 = 360.0;
     /// Padding before a *leading icon button*, which is smaller than [`PADDING`] because the
     /// button's own padding supplies the rest of the gap — 4 + 12 reads as 16 to the eye.
     pub const LEADING_ICON_PADDING: f32 = 4.0;
-    /// The interactive target of each action, honoured regardless of the glyph's size.
-    pub const ICON_TARGET: f32 = 48.0;
+    /// The interactive target of each icon-only action, honoured regardless of the glyph's size:
+    /// the labelled button's 40 dp, since a 48 dp target cannot stand in a 43 dp bar.
+    pub const ICON_TARGET: f32 = 40.0;
     /// The hairline the bar draws beneath itself **at rest**. Once the bar is elevated its own
     /// shadow does that job and the divider is gone (§7.1), so this is the bar's resting extent.
     pub const DIVIDER: f32 = 1.0;
@@ -41,7 +55,7 @@ pub mod app_bar {
     /// Neither figure above answers that on its own, which is the whole of BUG-003: the overflow
     /// menu and the project switcher each carried `const TOP_OFFSET: f32 = 52.0; // approx. toolbar
     /// height` — an eyeballed copy of a bar that was content-sized when it was written, kept when
-    /// §7.1 pinned the bar at 64. Both panels opened 13dp inside the bar, over the triggers they
+    /// §7.1 pinned the bar at 64 (since feature 1127, 43). Both panels opened 13dp inside the bar, over the triggers they
     /// came from. A panel's offset is not that panel's anatomy; it is this constant, read.
     ///
     /// Deliberately the **resting** edge. A panel that clears the divider clears the elevated bar
@@ -248,7 +262,7 @@ pub mod comments_drawer {
 /// it, which is the same shape as a figure nothing applies, one level further out.
 /// `tokens_anatomy::the_listed_table_holds_every_constant` now holds this against the module's own
 /// source, which is the only thing that can notice.
-pub const ALL: [(&str, f32); 51] = [
+pub const ALL: [(&str, f32); 55] = [
     ("app_bar::HEIGHT", app_bar::HEIGHT),
     ("app_bar::PADDING", app_bar::PADDING),
     (
@@ -258,6 +272,10 @@ pub const ALL: [(&str, f32); 51] = [
     ("app_bar::ICON_TARGET", app_bar::ICON_TARGET),
     ("app_bar::DIVIDER", app_bar::DIVIDER),
     ("app_bar::BOTTOM_EDGE", app_bar::BOTTOM_EDGE),
+    ("app_bar::GAP", app_bar::GAP),
+    ("app_bar::MARK", app_bar::MARK),
+    ("app_bar::FIELD_HEIGHT", app_bar::FIELD_HEIGHT),
+    ("app_bar::FIELD_MAX_WIDTH", app_bar::FIELD_MAX_WIDTH),
     ("list_row::STANDARD_PADDING", list_row::STANDARD_PADDING),
     ("list_row::DENSE_PADDING", list_row::DENSE_PADDING),
     ("list_row::STANDARD_ICON_GAP", list_row::STANDARD_ICON_GAP),

@@ -123,6 +123,16 @@ bar in `empty-no-project-open` and `empty-project-without-worktrees`. A state na
 `StateUnderTest::sandbox`; one that does not keeps it off, so no bring-up animation is recorded.
 `gates/status_bar_fits.rs` holds the bar's texts inside their boxes at the smallest window.
 
+Feature 1127 made the top bar one 44 px title bar (43 dp and a 1 dp divider), so every body starts
+21 dp higher than before. Its states are anchored on the bar's children (`app_bar`, `toolbar.mark`,
+`app_bar.switcher_trigger`, `app_bar.settings`, `app_bar.overflow_trigger`): `title-bar-session`
+(a session open and three unread sessions elsewhere), `title-bar-overview`,
+`title-bar-overview-full-screen`, `title-bar-changes`, `title-bar-settings` (the Settings button
+drawn selected), `title-bar-no-project` (projects known, none open) and `title-bar-menu-open`.
+`toolbar.title` became `toolbar.mark`, the app mark at the bar's leading end.
+`gates/title_bar_fits.rs` holds the fullest bar — a 60-character project name, an unread mark and
+the Overview badge — inside its 43 dp at 640 and 1280 dp, in both schemes.
+
 Feature 1125 added the sidebar grouped by state (`main-shell-sidebar-grouped`), which holds *Default* and one worktree per card state,
 so every group header is recorded, Done collapsed as it starts.
 

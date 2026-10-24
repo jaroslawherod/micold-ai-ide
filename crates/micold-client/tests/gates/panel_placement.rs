@@ -155,7 +155,8 @@ fn the_gate_can_fail() {
         path: vec![2, 0],
         layer: lay::Layer::Base,
         x: 1032.0,
-        y: 52.0,
+        // BUG-003's offset was 52 inside a 65 bar; the same 13px inside today's bar.
+        y: anatomy::app_bar::BOTTOM_EDGE - 13.0,
         width: 240.0,
         height: 264.0,
     }];
@@ -166,7 +167,7 @@ fn the_gate_can_fail() {
 
     assert!(
         panel.y < anatomy::app_bar::BOTTOM_EDGE - TOLERANCE,
-        "a panel at y=52 is 13px inside a bar whose bottom edge is at {}, and this gate reported it \
+        "a panel 13px inside a bar whose bottom edge is at {}, and this gate reported it \
          as correctly placed — it cannot see the defect it exists for",
         anatomy::app_bar::BOTTOM_EDGE,
     );

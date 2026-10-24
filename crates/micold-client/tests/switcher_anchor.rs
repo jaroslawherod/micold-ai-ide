@@ -43,10 +43,19 @@ fn panel_at(state: &State, x: f32, y: f32) -> bool {
     })
 }
 
+/// Feature 1127 (R8, FR-005): the panel's leading edge is the trigger's reported `x`, and its top
+/// edge is the bar's bottom edge whatever `y` the trigger reported — the trigger is a 40dp button
+/// inside the 43dp bar, so its own bottom is not the bar's.
 #[test]
 fn the_panel_opens_where_the_trigger_reported() {
-    let state = open_state(Some((300, 64)));
-    assert!(panel_at(&state, 300.0, 64.0), "panel not at the trigger");
+    let edge = micold_core::tokens::anatomy::app_bar::BOTTOM_EDGE;
+    for reported_y in [42, 64] {
+        let state = open_state(Some((300, reported_y)));
+        assert!(
+            panel_at(&state, 300.0, edge),
+            "panel not at x 300, y {edge} for a reported y of {reported_y}"
+        );
+    }
 }
 
 #[test]

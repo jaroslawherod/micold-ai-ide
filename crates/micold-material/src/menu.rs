@@ -328,11 +328,15 @@ fn focus_marked<'a, M: 'a>(entry: Element<'a, M>, r: Roles) -> Element<'a, M> {
 }
 
 /// The menu trigger: an icon button (emitting `on_toggle`) placed in the toolbar. Builder form
-/// (Principle VIII): `MenuTrigger::new(icon, on_toggle, roles).into()`.
+/// (Principle VIII): `MenuTrigger::new(icon, on_toggle, roles).tooltip("More").into()`.
+///
+/// It is a Tab stop answering Enter and Space (feature 1127, FR-013, R11) and stands at the title
+/// bar's [`anatomy::app_bar::ICON_TARGET`], since the toolbar is where it lives.
 pub struct MenuTrigger<M> {
     icon: Icon,
     on_toggle: M,
     roles: Roles,
+    tooltip: Option<String>,
 }
 
 impl<M> MenuTrigger<M> {
@@ -342,15 +346,28 @@ impl<M> MenuTrigger<M> {
             icon,
             on_toggle,
             roles,
+            tooltip: None,
         }
+    }
+
+    /// Name the trigger in a tooltip shown on hover (FR-013: every bar control names itself).
+    pub fn tooltip(mut self, label: impl Into<String>) -> Self {
+        self.tooltip = Some(label.into());
+        self
     }
 }
 
 impl<'a, M: Clone + 'a> From<MenuTrigger<M>> for Element<'a, M> {
     fn from(t: MenuTrigger<M>) -> Self {
-        IconButton::new(t.icon, t.roles)
+        let button: Element<'a, M> = IconButton::new(t.icon, t.roles)
+            .target(anatomy::app_bar::ICON_TARGET)
+            .keyboard(true)
             .on_press(t.on_toggle)
-            .into()
+            .into();
+        match t.tooltip {
+            Some(label) => super::Tooltip::new(button, label, t.roles).into(),
+            None => button,
+        }
     }
 }
 
@@ -585,6 +602,32 @@ mod tests {
 
     const ROOM: Size = Size::new(PANEL_WIDTH, 600.0);
     const TOLERANCE: f32 = 0.5;
+
+    /// Feature 1127 T004 (FR-013, contract C7): the trigger is a Tab stop whose Enter and Space
+    /// open the menu, it names itself with the tooltip it is given, and it is the bar's target.
+    #[test]
+    fn a_menu_trigger_is_a_tab_stop_with_its_tooltip() {
+        use iced::keyboard::key::Named;
+        use test_support::{named_key, Mounted};
+        let trigger =
+            || MenuTrigger::new(Icon::Menu, "toggle".to_string(), roles()).tooltip("More");
+        let mut m = Mounted::new(trigger());
+        m.focus_next();
+        let off = iced::mouse::Cursor::Unavailable;
+        assert_eq!(m.send(named_key(Named::Enter), off), ["toggle"]);
+        assert_eq!(m.send(named_key(Named::Space), off), ["toggle"]);
+        let mut m = Mounted::new(trigger());
+        let at = m.container().center();
+        assert!(
+            m.floated_text(at).iter().any(|t| t == "More"),
+            "{:?}",
+            m.floated_text(at)
+        );
+        assert_eq!(
+            test_support::size_of(trigger().into(), ROOM),
+            Size::new(anatomy::app_bar::ICON_TARGET, anatomy::app_bar::ICON_TARGET)
+        );
+    }
 
     /// A switcher row for a project with `running` and `unread` in its trailing slots.
     fn project_row(running: Option<&str>, unread: Option<usize>) -> MenuItem<Message> {

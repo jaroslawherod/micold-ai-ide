@@ -9,8 +9,11 @@ follows your operating system's preference.
 
 The window is organised as a Material Design layout:
 
-- A **top app bar** across the top holds the application title and its primary actions
-  (including the overflow menu).
+- A 44 px **title bar** across the top holds, from the left: the app mark (hover it for the
+  application's name), the **project switcher** naming the open project, and the **Overview**
+  button; at the right, a **Settings** button (the gear) and the **overflow menu** (three dots).
+  It shows no title text. When the window is narrow, the project name shortens with an ellipsis
+  and every control stays in the bar.
 - The **main area** shows either the active project or, when nothing is open, a welcoming
   empty state inviting you to open a folder.
 - A thin **status bar** along the bottom edge says whether the window is connected and whether the

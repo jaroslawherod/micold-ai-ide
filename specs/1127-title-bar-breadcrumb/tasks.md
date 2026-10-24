@@ -34,11 +34,11 @@ Paths are relative to the repository root. `client/` means `crates/micold-client
 
 **Purpose**: the anatomy figures every panel under the bar already reads (research R1, contract T1).
 
-- [ ] T001 Change the expected `app_bar` figures in `crates/micold-core/tests/tokens_anatomy.rs`:
+- [x] T001 Change the expected `app_bar` figures in `crates/micold-core/tests/tokens_anatomy.rs`:
   `HEIGHT` 43, `DIVIDER` 1, `BOTTOM_EDGE` 44, `PADDING` 12, `ICON_TARGET` 40, NEW `GAP` 12, `MARK`
   24, `FIELD_HEIGHT` 32, `FIELD_MAX_WIDTH` 360, and the `anatomy::ALL` length 48 → 52 (fails: old
   figures, no new constants)
-- [ ] T002 Set those figures in `crates/micold-core/src/tokens/anatomy.rs` `mod app_bar`, add `GAP`,
+- [x] T002 Set those figures in `crates/micold-core/src/tokens/anatomy.rs` `mod app_bar`, add `GAP`,
   `MARK`, `FIELD_HEIGHT`, `FIELD_MAX_WIDTH` to `anatomy::ALL`, and say in the module's doc comment
   that the figures are feature 1127's (contract T1), superseding 018 §7.1's height, padding, target
   and bottom edge; `LEADING_ICON_PADDING` stays for its other readers
@@ -50,31 +50,31 @@ Paths are relative to the repository root. `client/` means `crates/micold-client
 **Purpose**: the library pieces US1 composes (research R2, R3, R9, R10, R11). **⚠️ CRITICAL**: the
 bar cannot be rebuilt until this phase is complete.
 
-- [ ] T003 [P] Move `plan()`, `Widths` and their unit tests out of `lib/status_bar.rs` into NEW
+- [x] T003 [P] Move `plan()`, `Widths` and their unit tests out of `lib/status_bar.rs` into NEW
   `lib/give_way.rs` (`pub(crate)`; `GiveWay` stays public and re-exported for `StatusItem::give_way`),
   register the module in `lib/lib.rs`, and make `StatusBar` call it; the moved tests and
   `client/tests/gates/status_bar_fits.rs` stay green unchanged (R3, no behaviour change)
-- [ ] T004 [P] Write failing unit tests in `lib/icon_button.rs` (`#[cfg(test)]`, `test_support`):
+- [x] T004 [P] Write failing unit tests in `lib/icon_button.rs` (`#[cfg(test)]`, `test_support`):
   `.selected(true)` draws the selected state layer also with no press (not the disabled look);
   `.keyboard(true)` makes a pressable button a `TakesTheKeyboard` stop whose Enter and Space publish
   its press, and a button without it or without a press is no Tab stop; and in `lib/menu.rs` that a
   `MenuTrigger` is a Tab stop with the tooltip it is given
-- [ ] T005 Implement `IconButton::selected(bool)` and `IconButton::keyboard(bool)` in
+- [x] T005 Implement `IconButton::selected(bool)` and `IconButton::keyboard(bool)` in
   `lib/icon_button.rs` (the wrapper of `lib/keyboard_focus.rs`, as `Button` uses it), and turn
   keyboard reach on with a tooltip (`More`) in `MenuTrigger` in `lib/menu.rs` (R10, R11, FR-013)
-- [ ] T006 [P] Write failing unit tests in NEW `lib/app_mark.rs`: `AppMark::new(handle, name, roles)`
+- [x] T006 [P] Write failing unit tests in NEW `lib/app_mark.rs`: `AppMark::new(handle, name, roles)`
   lays out an `app_bar::MARK` square, shows `name` in a tooltip on hover, publishes nothing when
   pressed and is not a Tab stop (FR-003, contract C1)
-- [ ] T007 Implement `AppMark` in `lib/app_mark.rs` (an `iced::widget::image` of `MARK` side inside
+- [x] T007 Implement `AppMark` in `lib/app_mark.rs` (an `iced::widget::image` of `MARK` side inside
   `Tooltip`, no press, no `TakesTheKeyboard`; it holds no Micold asset, #1262) and `pub mod` /
   `pub use AppMark` in `lib/lib.rs` (R9)
-- [ ] T008 Write failing unit tests in `lib/toolbar.rs`: B1 `Toolbar::new(roles)` is `HEIGHT` + `DIVIDER`
+- [x] T008 Write failing unit tests in `lib/toolbar.rs`: B1 `Toolbar::new(roles)` is `HEIGHT` + `DIVIDER`
   tall at rest and `HEIGHT` elevated, full width, `PADDING` at each end, `GAP` between children,
   children centred vertically; B2 order mark, leading, leading-fixed, actions; B4 at a narrow width
   the leading child shortens (planner `Shorten`) while the mark, leading-fixed items and actions
   keep their natural width, and no child leaves the bar or overlaps another; B6 the bar's children
   keep their bounds whatever is drawn over them
-- [ ] T009 Reshape `Toolbar` in `lib/toolbar.rs`: `new(roles)` (no title),
+- [x] T009 Reshape `Toolbar` in `lib/toolbar.rs`: `new(roles)` (no title),
   `.mark(e)`, `.leading(e)`, `.leading_fixed(e)`, `.action(e)`/`.actions(v)`, `.elevated(b)`; `From<Toolbar>`
   builds a measuring widget that lays fixed children at natural width and gives the leading child
   the rest through `give_way::plan` (R2); divider and elevation unchanged (FR-019)
@@ -93,36 +93,36 @@ Test*.
 
 #### Tests for Part A ⚠️
 
-- [ ] T010 [US1] Write failing render-free tests in `client/src/ui/toolbar.rs` for `settings_press(state)`:
+- [x] T010 [US1] Write failing render-free tests in `client/src/ui/toolbar.rs` for `settings_press(state)`:
   Settings closed → `Some(Message::Settings(SettingsMsg::Opened))`; Settings open → `None`
   (FR-011, R10)
-- [ ] T011 [P] [US1] Change `client/tests/switcher_anchor.rs`: a reported corner `(300, 42)` puts the
+- [x] T011 [P] [US1] Change `client/tests/switcher_anchor.rs`: a reported corner `(300, 42)` puts the
   panel at `x` 300 and `y` `anatomy::app_bar::BOTTOM_EDGE`, whatever `y` was reported (R8, FR-005;
   fails: the view reads the reported `y`)
-- [ ] T012 [P] [US1] Write NEW `client/tests/title_bar_keyboard.rs`: the bar's focusable controls in
+- [x] T012 [P] [US1] Write NEW `client/tests/title_bar_keyboard.rs`: the bar's focusable controls in
   tree order are the project switcher, the Overview button, Settings, the overflow trigger; Enter on
   Settings publishes `Settings(Opened)`; the app mark is not focusable and publishes nothing when
   pressed (FR-003, FR-013, contract C1, C4, C6, C7)
-- [ ] T013 [P] [US1] Write NEW geometry gate `client/tests/gates/title_bar_fits.rs` and its `#[path]`
+- [x] T013 [P] [US1] Write NEW geometry gate `client/tests/gates/title_bar_fits.rs` and its `#[path]`
   `mod` in `client/tests/layout_snapshot.rs`: at 640 and 1280 dp wide, light and dark, the bar's
   bottom edge is 44, every child lies inside its 43 dp height, no two children overlap, and the
   mark, project switcher, Overview button with its badge, Settings and overflow trigger are all
   drawn — with a 60-character project name and an unread mark (FR-001, FR-010, SC-001, SC-003,
   contract B5)
-- [ ] T014 [US1] Add covered states `title-bar-session`, `title-bar-overview`,
+- [x] T014 [US1] Add covered states `title-bar-session`, `title-bar-overview`,
   `title-bar-overview-full-screen`, `title-bar-changes`, `title-bar-settings`, `title-bar-no-project`,
   `title-bar-menu-open` at the end of `client/tests/support/covered_states.rs`, and move the
   existing `app_bar.*` component paths (`app_bar.overflow_trigger`, `app_bar.switcher_trigger`) to
   the new child indices (R13)
-- [ ] T015 [US1] Rewrite `app_bar_actions` in `client/tests/gates/sibling_parity.rs` for the new
+- [x] T015 [US1] Rewrite `app_bar_actions` in `client/tests/gates/sibling_parity.rs` for the new
   children (no title, no `Fill` spacer: the trailing actions after the mark and leading children),
   keeping its icon-only shape check against `anatomy::app_bar::ICON_TARGET` (R13)
 
 #### Implementation for Part A
 
-- [ ] T016 [US1] Rename `ICON_RGBA` in `client/src/shell/startup.rs` to `pub(crate) APP_ICON_RGBA`
+- [x] T016 [US1] Rename `ICON_RGBA` in `client/src/shell/startup.rs` to `pub(crate) APP_ICON_RGBA`
   (startup keeps reading it) (R9)
-- [ ] T017 [US1] Rebuild `view()` in `client/src/ui/toolbar.rs`: `Toolbar::new(r)`
+- [x] T017 [US1] Rebuild `view()` in `client/src/ui/toolbar.rs`: `Toolbar::new(r)`
   `.mark(AppMark::new(APP_MARK.clone(), APP_NAME, r))` from one
   `static APP_MARK: LazyLock<image::Handle>` built from `APP_ICON_RGBA` (64 × 64);
   `.leading(today's switcher Button in its ContextArea)`; `.leading_fixed(overview_button(state, r))`
@@ -130,18 +130,18 @@ Test*.
   `.selected(settings_open).keyboard(true).on_press_maybe(settings_press(state)))`; `.action(menu)`;
   `.elevated(state.app_bar_elevated())`; add `settings_press()`; no title text, no usage
   (FR-002, FR-011, FR-012)
-- [ ] T018 [US1] Hang the switcher panel from `(anchor.x, anatomy::app_bar::BOTTOM_EDGE)` in
+- [x] T018 [US1] Hang the switcher panel from `(anchor.x, anatomy::app_bar::BOTTOM_EDGE)` in
   `client/src/ui/mod.rs`'s `hung_from`, ignoring the reported `y`, before
   `features::project::clamp_menu_anchor` (R8)
-- [ ] T019 [US1] Build `Toolbar::new(LABEL…)` callers in the new shape: the content-placement test in
+- [x] T019 [US1] Build `Toolbar::new(LABEL…)` callers in the new shape: the content-placement test in
   `client/src/ui/material/content_placement.rs` and the `Toolbar` entry in
   `client/src/showcase/sections/surfaces.rs` (mark, leading, actions), plus a NEW `AppMark` showcase
   entry; `client/tests/showcase_completeness.rs` and `client/tests/material_builder_api.rs` green
-- [ ] T020 [US1] Regenerate `client/tests/fixtures/layout_snapshot.txt`
+- [x] T020 [US1] Regenerate `client/tests/fixtures/layout_snapshot.txt`
   (`UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`), check every body
   moved up 21 dp and the bar's children are in B2 order, and list the new `title-bar-*` states in
   `docs/development/layout-snapshot.md`
-- [ ] T021 [US1] Update the user guide for Part A: `docs/user-guide/appearance-theming.md` (the
+- [x] T021 [US1] Update the user guide for Part A: `docs/user-guide/appearance-theming.md` (the
   44 px title bar: app mark, project switcher, Overview button, Settings, overflow menu; no title
   text), `docs/user-guide/settings.md` (the Settings button in the bar, drawn selected while open),
   `docs/user-guide/icons.md` (Settings gear in the title bar; the app mark) (FR-018)

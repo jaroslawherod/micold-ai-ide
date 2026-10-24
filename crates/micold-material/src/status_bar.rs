@@ -15,15 +15,13 @@
 //! Builder form (Principle VIII):
 //! `StatusBar::new(roles).item(StatusItem::new("Sandbox ready")).hint(..).into()`.
 
-use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::{Operation, Tree};
-use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
+use iced::advanced::renderer;
 use iced::widget::{container, row, Space};
-use iced::{Alignment, Background, Element, Event, Length, Point};
-use iced::{Rectangle, Size, Vector};
+use iced::{Alignment, Background, Element, Rectangle, Size};
 use micold_core::tokens::anatomy::status_bar::HEIGHT;
 use micold_core::tokens::{spacing, Rgb, Roles};
 
+use super::give_way::{Floor, GiveWay, Lane, Slot};
 use super::{busy_indicator, unread_mark};
 use super::{style, Ellipsized, Tooltip, TooltipPosition, TypeRole};
 
@@ -57,18 +55,6 @@ impl ItemTone {
             ItemTone::Error => r.error,
         }
     }
-}
-
-/// How an item yields when the bar is too narrow for every item at its natural width (R4).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum GiveWay {
-    /// Never yields.
-    #[default]
-    Keep,
-    /// Vanishes; lower ranks first, and every `Drop` before any `Shorten`.
-    Drop(u8),
-    /// Ellipsized down to its dot, one character and "…"; lower ranks first.
-    Shorten(u8),
 }
 
 /// One item of the bar: an optional dot or busy ring, then a one-line text.
@@ -205,110 +191,59 @@ impl<'a, M: 'a> StatusBar<'a, M> {
     }
 }
 
-/// What layout needs to know about one child beside its element.
-struct Meta {
-    give_way: GiveWay,
-    trailing: bool,
-    /// The full and the floor text, for an item that can be shortened.
-    texts: Option<(String, String)>,
-}
-
-/// The laid-out bar.
-struct Bar<'a, M> {
-    roles: Roles,
-    children: Vec<Element<'a, M>>,
-    metas: Vec<Meta>,
-}
-
 impl<'a, M: 'a> From<StatusBar<'a, M>> for Element<'a, M> {
     fn from(b: StatusBar<'a, M>) -> Self {
         let r = b.roles;
-        let mut children = Vec::new();
-        let mut metas = Vec::new();
+        let mut lane = Lane::new(HEIGHT, spacing::MD, spacing::MD).backdrop(Box::new(
+            move |renderer, bounds| {
+                use iced::advanced::Renderer as _;
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds,
+                        ..Default::default()
+                    },
+                    Background::Color(style::color(r.surface_container)),
+                );
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds: Rectangle {
+                            height: 1.0,
+                            ..bounds
+                        },
+                        ..Default::default()
+                    },
+                    Background::Color(style::separator(r)),
+                );
+            },
+        ));
         let groups = b
             .leading
             .into_iter()
             .map(|e| (e, false))
             .chain(b.trailing.into_iter().map(|e| (e, true)));
         for (entry, trailing) in groups {
-            let (element, give_way, texts) = match entry {
+            let (element, give_way, floor) = match entry {
                 Entry::Item(item) => {
-                    let texts = Some((item.text.clone(), item.floor_text()));
+                    // What shortening to the floor text saves, measured once: the item's own width
+                    // less this is its floor (its dot, one character and "…").
+                    let saved = measure(&item.text) - measure(&item.floor_text());
                     let give_way = item.give_way;
-                    (item.element(r), give_way, texts)
+                    (item.element(r), give_way, Floor::Saving(saved))
                 }
-                Entry::Element(element, give_way) => (element, give_way, None),
+                // No text of its own to shorten, so a `Shorten` element keeps its width.
+                Entry::Element(element, give_way) => (element, give_way, Floor::Natural),
             };
-            children.push(element);
-            metas.push(Meta {
-                give_way,
-                trailing,
-                texts,
-            });
+            lane = lane.push(
+                element,
+                Slot {
+                    give_way,
+                    trailing,
+                    floor,
+                },
+            );
         }
-        Element::new(Bar {
-            roles: r,
-            children,
-            metas,
-        })
+        lane.into()
     }
-}
-
-/// One child's widths for the give-way pass.
-#[derive(Debug, Clone, Copy)]
-struct Widths {
-    give_way: GiveWay,
-    natural: f32,
-    floor: f32,
-}
-
-/// The width each child gets in `available`, separated by `gap`; `None` is a dropped child (R4).
-///
-/// While the total is over: drop `Drop` children by rank (within a rank, the last first, so of two
-/// key hints the rightmost goes first); then shorten `Shorten` children by rank, each by as much of
-/// the excess as its floor allows.
-fn plan(items: &[Widths], gap: f32, available: f32) -> Vec<Option<f32>> {
-    let mut widths: Vec<Option<f32>> = items.iter().map(|w| Some(w.natural)).collect();
-    let total = |widths: &[Option<f32>]| {
-        let shown: Vec<f32> = widths.iter().flatten().copied().collect();
-        shown.iter().sum::<f32>() + gap * shown.len().saturating_sub(1) as f32
-    };
-
-    let mut drops: Vec<(u8, usize)> = items
-        .iter()
-        .enumerate()
-        .filter_map(|(i, w)| match w.give_way {
-            GiveWay::Drop(rank) => Some((rank, i)),
-            _ => None,
-        })
-        .collect();
-    drops.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
-    for (_, i) in drops {
-        if total(&widths) <= available {
-            break;
-        }
-        widths[i] = None;
-    }
-
-    let mut shortens: Vec<(u8, usize)> = items
-        .iter()
-        .enumerate()
-        .filter_map(|(i, w)| match w.give_way {
-            GiveWay::Shorten(rank) => Some((rank, i)),
-            _ => None,
-        })
-        .collect();
-    shortens.sort();
-    for (_, i) in shortens {
-        let excess = total(&widths) - available;
-        if excess <= 0.0 {
-            break;
-        }
-        if let Some(w) = widths[i] {
-            widths[i] = Some((w - excess).max(items[i].floor.min(w)));
-        }
-    }
-    widths
 }
 
 /// How wide `content` shapes at the bar's text role.
@@ -316,248 +251,14 @@ fn measure(content: &str) -> f32 {
     super::shaped_text::width_of(content, ROLE)
 }
 
-/// Whether a laid-out child was dropped: a zero-area node.
-fn dropped(layout: Layout<'_>) -> bool {
-    let b = layout.bounds();
-    b.width <= 0.0 || b.height <= 0.0
-}
-
-impl<M> Widget<M, iced::Theme, iced::Renderer> for Bar<'_, M> {
-    fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.children);
-    }
-
-    fn size(&self) -> Size<Length> {
-        Size::new(Length::Fill, Length::Fixed(HEIGHT))
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &iced::Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        let size = limits.resolve(Length::Fill, Length::Fixed(HEIGHT), Size::ZERO);
-        let available = (size.width - 2.0 * spacing::MD).max(0.0);
-        let loose = layout::Limits::new(Size::ZERO, Size::new(f32::INFINITY, HEIGHT));
-
-        let widths: Vec<Widths> = self
-            .children
-            .iter_mut()
-            .zip(tree.children.iter_mut())
-            .zip(&self.metas)
-            .map(|((child, state), meta)| {
-                let natural = child
-                    .as_widget_mut()
-                    .layout(state, renderer, &loose)
-                    .size()
-                    .width;
-                let floor = match (&meta.texts, meta.give_way) {
-                    (Some((full, floor)), GiveWay::Shorten(_)) => {
-                        let saved = measure(full) - measure(floor);
-                        (natural - saved.max(0.0)).ceil()
-                    }
-                    _ => natural,
-                };
-                Widths {
-                    give_way: meta.give_way,
-                    natural,
-                    floor,
-                }
-            })
-            .collect();
-        let planned = plan(&widths, spacing::MD, available);
-
-        let mut nodes: Vec<layout::Node> = self
-            .children
-            .iter_mut()
-            .zip(tree.children.iter_mut())
-            .zip(&planned)
-            .map(|((child, state), width)| match width {
-                Some(w) => {
-                    let fixed = layout::Limits::new(Size::ZERO, Size::new(*w, HEIGHT));
-                    child.as_widget_mut().layout(state, renderer, &fixed)
-                }
-                None => layout::Node::new(Size::ZERO),
-            })
-            .collect();
-
-        let centred = |node: &layout::Node, x: f32| {
-            Point::new(x, ((HEIGHT - node.size().height) / 2.0).max(0.0))
-        };
-        let mut x = spacing::MD;
-        for (node, meta) in nodes.iter_mut().zip(&self.metas) {
-            if meta.trailing || node.size().width <= 0.0 {
-                continue;
-            }
-            let at = centred(node, x);
-            node.move_to_mut(at);
-            x += node.size().width + spacing::MD;
-        }
-        let mut x = size.width - spacing::MD;
-        for (node, meta) in nodes.iter_mut().zip(&self.metas).rev() {
-            if !meta.trailing || node.size().width <= 0.0 {
-                continue;
-            }
-            x -= node.size().width;
-            let at = centred(node, x);
-            node.move_to_mut(at);
-            x -= spacing::MD;
-        }
-        layout::Node::with_children(size, nodes)
-    }
-
-    fn operate(
-        &mut self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        renderer: &iced::Renderer,
-        operation: &mut dyn Operation,
-    ) {
-        operation.traverse(&mut |operation| {
-            for ((child, state), l) in self
-                .children
-                .iter_mut()
-                .zip(tree.children.iter_mut())
-                .zip(layout.children())
-            {
-                if dropped(l) {
-                    continue;
-                }
-                child.as_widget_mut().operate(state, l, renderer, operation);
-            }
-        });
-    }
-
-    fn update(
-        &mut self,
-        tree: &mut Tree,
-        event: &Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &iced::Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, M>,
-        viewport: &Rectangle,
-    ) {
-        for ((child, state), l) in self
-            .children
-            .iter_mut()
-            .zip(tree.children.iter_mut())
-            .zip(layout.children())
-        {
-            if dropped(l) {
-                continue;
-            }
-            child.as_widget_mut().update(
-                state, event, l, cursor, renderer, clipboard, shell, viewport,
-            );
-        }
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &iced::Renderer,
-    ) -> mouse::Interaction {
-        self.children
-            .iter()
-            .zip(tree.children.iter())
-            .zip(layout.children())
-            .filter(|(_, l)| !dropped(*l))
-            .map(|((c, s), l)| {
-                c.as_widget()
-                    .mouse_interaction(s, l, cursor, viewport, renderer)
-            })
-            .max()
-            .unwrap_or_default()
-    }
-
-    fn draw(
-        &self,
-        tree: &Tree,
-        renderer: &mut iced::Renderer,
-        theme: &iced::Theme,
-        style_: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        use iced::advanced::Renderer as _;
-        let bounds = layout.bounds();
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds,
-                ..Default::default()
-            },
-            Background::Color(style::color(self.roles.surface_container)),
-        );
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds: Rectangle {
-                    height: 1.0,
-                    ..bounds
-                },
-                ..Default::default()
-            },
-            Background::Color(style::separator(self.roles)),
-        );
-        let Some(visible) = bounds.intersection(viewport) else {
-            return;
-        };
-        renderer.with_layer(visible, |renderer| {
-            for ((child, state), l) in self
-                .children
-                .iter()
-                .zip(tree.children.iter())
-                .zip(layout.children())
-            {
-                if dropped(l) {
-                    continue;
-                }
-                child
-                    .as_widget()
-                    .draw(state, renderer, theme, style_, l, cursor, viewport);
-            }
-        });
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &iced::Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        let overlays: Vec<_> = self
-            .children
-            .iter_mut()
-            .zip(tree.children.iter_mut())
-            .zip(layout.children())
-            .filter(|(_, l)| !dropped(*l))
-            .filter_map(|((child, state), l)| {
-                child
-                    .as_widget_mut()
-                    .overlay(state, l, renderer, viewport, translation)
-            })
-            .collect();
-        (!overlays.is_empty()).then(|| overlay::Group::with_children(overlays).overlay())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::test_support::{bounds_at, dark_roles, laid_out, roles, Mounted};
     use super::*;
+    use iced::advanced::layout::{self, Layout};
+    use iced::advanced::{mouse, Shell};
     use iced::window::RedrawRequest;
+    use iced::Event;
 
     const ROOM: Size = Size::new(1200.0, 600.0);
 
@@ -601,82 +302,6 @@ mod tests {
                 "{b:?} is not centred"
             );
         }
-    }
-
-    fn w(give_way: GiveWay, natural: f32, floor: f32) -> Widths {
-        Widths {
-            give_way,
-            natural,
-            floor,
-        }
-    }
-
-    /// B4, the order: `Drop(0)` before `Drop(1)`, every `Drop` before any `Shorten`.
-    #[test]
-    fn drops_go_by_rank_before_any_shortening() {
-        let items = [
-            w(GiveWay::Shorten(2), 100.0, 20.0),
-            w(GiveWay::Shorten(1), 100.0, 20.0),
-            w(GiveWay::Drop(1), 50.0, 50.0),
-            w(GiveWay::Drop(0), 50.0, 50.0),
-        ];
-        // All fit: 300 + 3 gaps of 10.
-        assert_eq!(
-            plan(&items, 10.0, 330.0),
-            vec![Some(100.0), Some(100.0), Some(50.0), Some(50.0)]
-        );
-        // 10 over: the rank-0 drop goes, and nothing else changes.
-        assert_eq!(
-            plan(&items, 10.0, 320.0),
-            vec![Some(100.0), Some(100.0), Some(50.0), None]
-        );
-        // Still over without the rank-1 drop too: both drops go before any shortening.
-        assert_eq!(
-            plan(&items, 10.0, 260.0),
-            vec![Some(100.0), Some(100.0), None, None]
-        );
-        // Over with both drops gone: Shorten(1) gives first.
-        assert_eq!(
-            plan(&items, 10.0, 180.0),
-            vec![Some(100.0), Some(70.0), None, None]
-        );
-    }
-
-    /// B4: `Shorten(0)` before `Shorten(1)` before `Shorten(2)`, each down to its floor.
-    #[test]
-    fn shortening_goes_by_rank_down_to_the_floor() {
-        let items = [
-            w(GiveWay::Shorten(2), 100.0, 20.0),
-            w(GiveWay::Shorten(1), 100.0, 20.0),
-            w(GiveWay::Shorten(0), 100.0, 20.0),
-        ];
-        assert_eq!(
-            plan(&items, 0.0, 250.0),
-            vec![Some(100.0), Some(100.0), Some(50.0)]
-        );
-        assert_eq!(
-            plan(&items, 0.0, 180.0),
-            vec![Some(100.0), Some(60.0), Some(20.0)]
-        );
-        assert_eq!(
-            plan(&items, 0.0, 50.0),
-            vec![Some(20.0), Some(20.0), Some(20.0)],
-            "nothing goes below its floor"
-        );
-    }
-
-    /// Of two key hints at the same rank, the rightmost goes first.
-    #[test]
-    fn of_two_hints_the_rightmost_drops_first() {
-        let items = [
-            w(GiveWay::Keep, 100.0, 100.0),
-            w(GiveWay::Drop(0), 50.0, 50.0),
-            w(GiveWay::Drop(0), 50.0, 50.0),
-        ];
-        assert_eq!(
-            plan(&items, 0.0, 160.0),
-            vec![Some(100.0), Some(50.0), None]
-        );
     }
 
     /// B4/B5 mounted: at a too-narrow width the hints have zero-area nodes and the shortened text

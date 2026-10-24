@@ -49,15 +49,16 @@ use crate::shell::persist::prune_empty_sessions;
 use crate::shell::workspace::discover_worktrees;
 use crate::{observe_system_scheme, probe_config, theme, update, view, App};
 
-/// The app window icon as raw 64x64 RGBA (generated from `assets/icon/icon.svg` by
-/// `assets/icon/generate.py`). Embedded directly so no runtime image decoder is needed.
-const ICON_RGBA: &[u8] = include_bytes!("../../../../assets/icon/icon-64.rgba");
-
 /// Window settings carrying the app icon (taskbar / titlebar) and the narrowest size the interface
 /// is supported at. On Linux the window app-id / WM_CLASS is set to match `StartupWMClass` in the
 /// `.desktop` entry so the running window groups under the launcher icon.
 fn window_settings() -> iced::window::Settings {
-    let icon = iced::window::icon::from_rgba(ICON_RGBA.to_vec(), 64, 64).ok();
+    let icon = iced::window::icon::from_rgba(
+        micold_client::ui::APP_ICON_RGBA.to_vec(),
+        micold_client::ui::APP_ICON_SIDE,
+        micold_client::ui::APP_ICON_SIDE,
+    )
+    .ok();
     #[allow(unused_mut)]
     let mut settings = iced::window::Settings {
         icon,
