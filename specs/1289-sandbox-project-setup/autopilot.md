@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: plan
-- **Next step**: plan review round 1 (fresh reviewer), then tasks unit
+- **Next step**: plan review round 2 (sonnet, fix diff), then tasks unit
 
 ## Pull requests
 
@@ -39,7 +39,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 (sonnet, scoped) | daabf27317f59eec2cdebd72955b471611832070:8dead641fd56a494c0cee555f52cb82540b3d57d | CLEAN, 2 MINOR — both fixed in clarify (Story 1 scenarios renumbered in order; FR-011 names bash/sh/PowerShell and points to Platforms) |
 | Clarify | 1 | 54752543 | 2 questions → provisional A/A applied (FR-009, FR-025, Out of scope, Story 4 removed) |
 | Clarify | 2 | after round-1 answers | no critical ambiguities (UI placement and app→daemon command hand-off left to plan) → CLEAN |
-| Plan | 1 | f5e4485bc71dd9eaf5ff5dfa2d7a3c0444768d51:cfc387029e91b351cae9a77b2329e2e5b12d471a | pending — fresh reviewer to dispatch |
+| Plan | 1 | f5e4485bc71dd9eaf5ff5dfa2d7a3c0444768d51:cfc387029e91b351cae9a77b2329e2e5b12d471a | CHANGES: 2 MAJOR, 3 MINOR — all fixed (F1 daemon-wide persisted RunId counter + A12/A16 recreate test; F2 delete awaits run end via stop_and_wait bounded by RUN_OVERRUN, stale finish dropped, A12 asserts no record/log; F3 C4 three values + Started(RunId); F4 M4 split into M4a/M4b; F5 ProjectSetupSet carries daemon-catalog path, A16 mapped case) |
+| Plan | 2 (sonnet, scoped) | see next commit | pending — reviewer to dispatch |
 
 ## Declined review findings
 

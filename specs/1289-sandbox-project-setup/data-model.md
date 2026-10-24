@@ -18,9 +18,14 @@ user typed, not a secret.
 
 ### `RunId` (NEW)
 
-`u64`. The daemon makes it unique per (project, location) from the last record's id + 1, so a
-reloaded record never repeats an id. The client keys "already notified" by
-`(daemon, project, location, RunId)` (R11).
+`u64`, unique across the whole daemon, never per location. The daemon keeps a counter in
+`setup/next_run_id` (`JsonFileStore::setup_counter_path()`), written atomically with the new
+value before the run's record is written. At start it loads the counter as
+`max(counter, highest loaded record id + 1)`, so a lost counter file cannot repeat an id. A
+worktree deleted and recreated under the same `dir_name` (`ops.rs`: "a worktree recreated for the
+same branch reuses this exact path") gets a fresh id, because a delete removes the record but not
+the counter. The client keys "already notified" by `(daemon, project, location, RunId)` (R11).
+The ephemeral catalog (tests) keeps the counter in memory.
 
 ### `SetupState` (NEW)
 
@@ -121,7 +126,7 @@ gives `:` inside the Linux sandbox.
   unchanged (additive, defaulted).
 - `SetupCommandChange { project: String, command: Option<SetupCommand> }` (NEW): `apply(&mut map)`
   sets or removes one entry, the shape of `JiraBaseUrlChange`.
-- `JsonFileStore::setup_dir()`, `setup_record_path(project, location)`,
+- `JsonFileStore::setup_dir()`, `setup_counter_path()`, `setup_record_path(project, location)`,
   `setup_log_path(project, location)` and `remove_setup(project, Option<location>)` (NEW). The
   location file stem is `default` or `wt-<dir_name>`. Records use `write_atomic`, and a corrupt
   record is quarantined (`read_or_quarantine`), as reviews and runs are.
@@ -147,7 +152,7 @@ job are the ones `run_bounded` uses, shared rather than copied.
 | Field | Type | Notes |
 |---|---|---|
 | `commands` | `HashMap<PathBuf, SetupCommand>` | From `ProjectSetupSet`. Memory only (R4). |
-| `runs` | `HashMap<(PathBuf, SessionLocation), Entry>` | `Entry { record: SetupRun, output: OutputBuffer, terminator: Option<Terminator>, stop_requested: bool, watchers: BTreeSet<ConnId> }` |
+| `runs` | `HashMap<(PathBuf, SessionLocation), Entry>` | `Entry { record: SetupRun, output: OutputBuffer, terminator: Option<Terminator>, stop_requested: bool, done: watch::Receiver<bool>, watchers: BTreeSet<ConnId> }` |
 
 Operations, each under the state lock and with no I/O under it:
 
@@ -155,9 +160,18 @@ Operations, each under the state lock and with no I/O under it:
   - `NotConfigured` when there is no command;
   - `Busy` when the run is `Running` (FR-023a);
   - `Started(RunId)` otherwise: it writes the record, then spawns the run on the blocking pool.
-- `stop(project, location) -> Result<(), NotFound>`: sets `stop_requested`, then terminates.
+- `stop(project, location) -> Result<(), NotFound>`: sets `stop_requested`, then terminates. It
+  does not wait.
+- `stop_and_wait(project, location) -> impl Future`: `stop`, then awaits the run task's end
+  (`Entry` holds a `done: tokio::sync::watch::Receiver<bool>` the run task sets after its last
+  `finish` and log append), bounded by the kill-and-drain bound `RUN_OVERRUN`
+  (`process.rs`: one poll plus `READER_GRACE`). Returns at once when nothing runs. Used by
+  `ops::delete_worktree` (FR-024).
 - `finish(project, location, id, exit)` maps the exit to a `SetupState`, then records and
-  broadcasts.
+  broadcasts. It drops the result, writing and pushing nothing, when the `(project, location)`
+  entry is gone or holds another `RunId` (a delete forgot it, or a newer run replaced it). Log
+  appends from the run task check the same thing under the lock, so a late line never re-creates
+  a deleted `<location>.log`.
 - `on_attach(project) -> Vec<DaemonMsg>`: one `SetupChanged` per location with a record.
 - `forget(project, location)` and `forget_project(project)`: delete paths.
 - `interrupt_all()`: the unwind path.
