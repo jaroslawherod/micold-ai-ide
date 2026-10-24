@@ -9,22 +9,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1273
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
-- **Phase**: implement (M1 PR)
-- **Next step**: orchestrator opens the M1 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M2 (core-only, need not wait for #1272). M3 waits for #1272. If the user's card on 4.3 picks "disabled with a reason", set `UNREVIEWED_UNTIL_MARKS` to `Offer::Disabled` per research R3 (in M2) and update spec 4.3 and FR-012
+- **Phase**: implement (M2)
+- **Next step**: M2 implemented (T007–T018 ticked), reviews A/B done, full gate green locally. Push only after M1 PR #1367 merges: rebase on origin/main, re-gate if code changed, push, orchestrator opens the M2 PR (title/body in the unit's scratchpad). Then M3 waits for #1272. If the user's card on 4.3 picks "disabled with a reason", set `UNREVIEWED_UNTIL_MARKS` to `Offer::Disabled(..)` (tree.rs, its unit test) and update spec 4.3 and FR-012
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1354 | design (spec, plan, tasks) | merged (rebase) | 9c8473afbb8e49aaa8853892a6df818df3fdd138 |
-| — | M1 core tree layout | gated (scripts/gate.sh green at ddc64264), pushed; orchestrator opens it | — |
+| #1367 | M1 core tree layout | open, CI running | — |
+| — | M2 totals, bars, filter, sort | gated (scripts/gate.sh green on the review-fix tree), reviews done; not pushed until #1367 merges | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | — | implemented, gated; PR to open |
-| M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | — | pending (mergeable before #1272) |
+| M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | #1367 | PR open |
+| M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | — | implemented, reviewed (A: 10 MINOR, B: CLEAN), gated; push after #1367 merges |
 | M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | — | blocked: start after #1272 merges |
 | M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | blocked: after M3 (#1272) |
 | M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | blocked: after M4 (#1272) |
@@ -50,6 +51,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (code-review high) | 1 | 5696a22e0cae23f54d87d5a8792580eec1767ed5:9c8473afbb8e49aaa8853892a6df818df3fdd138 | 5 MINOR (F1, F3, F4, F5 fixed in 88f3f377; F2 deferred) |
 | Review B M1 (conformance, sonnet) | 1 | 5696a22e…:9c8473af | CLEAN uncited — not counted; re-run |
 | Review B M1 (conformance, sonnet) | 1 | bce2c567f7b1bed1d8b308b7a0b8a6704cea53c6:88f3f377cea4adfd8323022041b81e37fc170188 | CLEAN, cited (2 MINOR: cycle-log count fixed; test-first commits noted) |
+| Review A M2 (code-review high) | 1 | da02017a64ead8f45b762267d2848db413cea704:2bad8b6cb7f52c5bd212d0a49655fe71af1b88d3 (base 6d0475a5) | 10 MINOR (F2, F3, F4, F5, F6, F7, F8, F9 fixed; F1, F10 declined) |
+| Review B M2 (conformance, sonnet) | 1 | da02017a…:2bad8b6c (base 6d0475a5) | CLEAN, cited (tree.rs, tasks.md:70-91, cycle-log.md:15-19) |
 
 ## Declined review findings
 
@@ -64,6 +67,8 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A | F2 (`walk` clones and sorts a level's files) | `(&str, usize)` pairs, small; M2 replaces the ordering with Size / Unreviewed-first sorts, so the per-level sort is reworked there |
+| M2 | A | F1 (`reveal` while filtering clears `collapsed`, so clearing the filter does not restore a fold above the selected file) | follows data-model §2 and R2 as written ("removes every ancestor folder of `path` from both sets"); whether a select while filtering should keep the pre-filter fold is M3's reducer wiring (T020, scenario 3.4) — M3 to decide and, if needed, reveal only in the active set |
+| M2 | A | F10 (wall-clock thresholds; untested Unreviewed-first + filter + chain) | the timed test is SC-003's chosen measure (R9), slowest of runs, 5x headroom in debug; sort keys of a chained row are its outer node's, equal to the inner's by construction, and L11 covers sort + filter. Fixed the part that held: the Size step now times the full unfiltered list |
 
 ## Handover
 

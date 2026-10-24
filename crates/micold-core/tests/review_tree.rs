@@ -29,16 +29,7 @@ fn set(paths: &[&str]) -> BTreeSet<String> {
 
 /// The changed-file tree's options: chained, default-open over `collapsed`, Path order.
 fn changes_tree(paths: &[&str], collapsed: &BTreeSet<String>) -> Vec<Row> {
-    layout(
-        &leaves(paths),
-        &LayoutOptions {
-            chain: true,
-            openness: Openness::DefaultOpen { collapsed },
-            sort: TreeSort::Path,
-            query: None,
-            reviewed: &never,
-        },
-    )
+    sorted_tree(&leaves(paths), collapsed, TreeSort::Path, None, &never)
 }
 
 /// The **Files** browser's options: no chaining, default-closed over `open`.
@@ -669,8 +660,10 @@ fn clearing_the_filter_restores_the_folds_from_before_it() {
     assert!(choices.filter_collapsed.is_empty());
     assert_eq!(choices.collapsed, set(&["src"]));
     choices.set_filter("x");
+    choices.filter_collapsed = set(&["docs"]);
     choices.set_filter("");
     assert_eq!(choices.collapsed, set(&["src"]));
+    assert!(choices.filter_collapsed.is_empty());
 }
 
 /// Whitespace-only text is no filter: a fold writes `collapsed`.
@@ -896,12 +889,13 @@ fn laying_out_five_thousand_files_stays_under_100_ms() {
         Duration::from_millis(100)
     };
     let mut choices = TreeChoices::default();
+    // Collapse, then a sort change over the whole list, then a keystroke over the sorted list.
     let steps: [&dyn Fn(&mut TreeChoices); 3] = [
         &|c| {
             c.collapsed.insert("crates/area3/module7".to_owned());
         },
-        &|c| c.set_filter("file4"),
         &|c| c.sort = TreeSort::Size,
+        &|c| c.set_filter("file4"),
     ];
     let mut slowest = Duration::ZERO;
     for _ in 0..5 {
