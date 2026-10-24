@@ -142,6 +142,13 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          code read it from `ui/terminal.rs` before the move)",
     ),
     (
+        "session_strip",
+        "navigation",
+        "location_node — the strip lists the location's sessions in the order the session chords \
+         walk them (`unfolded_sessions`); a pure read of navigation's ordering, so the tabs and \
+         the chords can never disagree (feature 1126, R7)",
+    ),
+    (
         "sidebar",
         "worktree",
         "worktree_tags — the sidebar renders a worktree row's tags and does not get to decide what \

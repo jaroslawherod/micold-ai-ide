@@ -17,12 +17,41 @@ While a session is shown, a header above its terminal names the worktree it runs
   no pull request or pull request status is off in Settings; an old reading says so in its tooltip.
 
 The header follows the session you show, and changes when the sidebar does. Text that does not fit
-ends in `…`; point at it to read it in full. The bar under the terminal is unchanged.
+ends in `…`; point at it to read it in full.
+
+## The tab strip above the terminal
+
+Under the header, one row of tabs switches what the terminal shows. Nothing is drawn under the
+terminal.
+
+- **Session tabs**: one per session of the shown worktree, the main session first, then its
+  helpers, each named `<command> · <session name>`, such as `claude · main`. Point at one for its
+  full name, whether it is the main or a helper session, and its status. The shown session's tab is
+  its AI conversation: press it to show the AI CLI. Press another session's tab to show that
+  session, as its sidebar row does.
+- **Shell tabs**: the shown session's shell instances, numbered, right after its tab, with a close
+  control each. Press one to show that shell.
+- **"+"**: opens another shell instance of the shown session (`Ctrl+Shift+T`, `Cmd+Shift+T` on
+  macOS).
+- **Status and restart**: the shown session's status (*running*, *starting…*, *idle*, *exited*,
+  *failed after 3 attempts* and so on) sits after the tabs. While the shown process has stopped,
+  its tab wears the stopped mark and a **restart** control appears beside the status; press it to
+  run the process again. Right-click the shown session's tab or a shell tab for its menu
+  (*Restart* while it is stopped, *Close* on a shell tab); another session's tab has no menu.
+- **New session**: starts another session in the shown worktree, as the sidebar's *Start another
+  session…* does, confirmation included. Cancel changes nothing; confirm adds the new helper's tab
+  after the others and shows it.
+- **Split buttons** at the right end: split the focused pane side by side or stacked.
+
+When the tabs do not fit, the row scrolls with the mouse wheel rather than shrinking a tab. New
+session and the split buttons stay at the right end. A faded edge says more tabs lie beyond it, and
+it takes the accent colour when the marked tab is the one out of view.
 
 ## Split and pick a terminal
 
 Every pane has a header with two buttons: **split side by side** and **split stacked**. The same
-two buttons sit in the bar under the terminal and act on the focused pane. A new pane opens on a
+two buttons sit at the right end of the tab strip and act on the focused pane. The header and the
+strip are drawn once above all the panes. A new pane opens on a
 terminal no other pane shows. When every terminal is already shown, the pane is empty and lists the
 terminals you can put in it: one choice fills it.
 

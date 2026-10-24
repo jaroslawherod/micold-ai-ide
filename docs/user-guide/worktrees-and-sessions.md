@@ -1455,9 +1455,9 @@ Each session row carries a short text label naming its CLI — `claude`, `copilo
 a colour or an icon alone, so it reads the same way for everyone and survives a narrow sidebar: if
 the row runs out of room the *title* is what shortens, never the CLI label.
 
-Open a session and its terminal bar names the CLI too — on the AI tab at the bottom-right, beside
-its sparkle, reading `claude`, `copilot`, `pi`, `codex` or `opencode` — so you can tell what you are talking to without going
-back to the sidebar. It is there whichever pane the session is showing.
+Open a session and the tab strip above its terminal names the CLI too — its session tab reads
+`claude · main`, `copilot · …`, `pi · …`, `codex · …` or `opencode · …` — so you can tell what you
+are talking to without going back to the sidebar. It is there whichever pane the session is showing.
 
 The busy/idle indicator works the same way for both CLIs — same shape, same states, no "less
 certain" variant for one of them.
@@ -1659,7 +1659,8 @@ You keep control of the panel:
   same conversation rather than a fresh one. Repeated rapid failures stop the auto-restart and mark
   the session **failed** so you can retry manually. The pane then says why it gave up and what the
   last exit was — *"Gave up after 3 restart attempts — last exit: exit status 1."* — beside the
-  **restart** control that resumes it, and the status bar under it reads `failed after 3 attempts`.
+  **restart** control that resumes it, and the status in the tab strip above reads `failed after 3
+  attempts`.
   A window you open afterwards is shown both, so a loop that ran while you were away is not reduced
   to the word *failed*.
 - **Closing** the active project (or quitting the app) stops that project's session processes but
@@ -1708,9 +1709,9 @@ sessions started afterwards; running sessions keep the guard they started with.
 Each session's terminal can also run a plain shell instead of the AI CLI — useful for running git
 commands, scripts, or anything else scoped to that session's worktree without leaving the app.
 
-- The **tab strip** in the terminal's bottom bar is how you move between the AI CLI (`claude`,
-  `copilot`, `pi`, `codex` or `opencode`) and a plain shell: press the AI tab at the right-hand end to talk to the CLI, press a
-  numbered tab to get a shell. The marked tab is the one the pane is showing, so the strip is the
+- The **tab strip** above the terminal is how you move between the AI CLI (`claude`, `copilot`,
+  `pi`, `codex` or `opencode`) and a plain shell: press the session's own tab to talk to the CLI,
+  press a numbered tab to get a shell. The marked tab is the one the pane is showing, so the strip is the
   single place to check which process your keystrokes are going to — it names where each press
   takes you rather than just saying "the other one".
 - The shell starts with its working directory set to the session's worktree, same as the AI CLI —
@@ -1719,7 +1720,7 @@ commands, scripts, or anything else scoped to that session's worktree without le
   the CLI, and leaving a shell's tab leaves that shell running in the background. Switching back
   reattaches to whichever process was already there, exactly as you left it.
 - If the shell exits (you typed `exit`, or it crashed), a **restart** control appears in the same
-  bar so you can start a fresh one; unlike the AI CLI, the shell never restarts on its own.
+  strip so you can start a fresh one; unlike the AI CLI, the shell never restarts on its own.
 - Switching to a shell never stops, restarts, or otherwise touches your AI conversation —
   even mid-turn. It keeps running in the background exactly as it was, including its own
   crash-auto-restart if it happens to exit while you're looking at the shell, and switching back
@@ -1738,8 +1739,8 @@ commands, scripts, or anything else scoped to that session's worktree without le
 A session isn't limited to a single Regular Terminal — you can open as many independent shell
 instances as you need, side by side.
 
-- An **open a new instance** button — the "+" — sits in the bottom bar at the end of the numbered
-  tabs. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on macOS while the terminal has focus)
+- An **open a new instance** button — the "+" — sits in the tab strip right after the session's
+  numbered tabs. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on macOS while the terminal has focus)
   to start another independent shell, scoped to the same session working directory as the first.
   The button is there even when only one instance is open, so you can always go from one to two.
 - The keyboard shortcut only opens a new instance while the session is already showing a Regular
@@ -1758,9 +1759,10 @@ instances as you need, side by side.
 
 ### The tab strip
 
-The bottom bar carries a **tab strip** of everything the session can show you: one numbered tab per
-open Regular Terminal instance, in the order you opened them, and then the AI conversation's own tab
-at the right-hand end.
+The row above the terminal carries a **tab strip** of everything the session can show you: the
+session's own tab, which is its AI conversation, then one numbered tab per open Regular Terminal
+instance, in the order you opened them, then the "+". The worktree's other sessions have a tab each
+after it (see [the tab strip above the terminal](./terminal-panes.md#the-tab-strip-above-the-terminal)).
 
 **Exactly one tab is always marked**, and it is the one whose content the pane is displaying — so
 the strip tells you where you are without your having to press anything. Click a tab to bring that
@@ -1772,12 +1774,14 @@ looking at.
 
 #### The AI conversation's tab
 
-It sits at the right-hand end and stays there as you open and close instances, so it is always one
-press away. Three things make it different from its neighbours, and all three are deliberate:
+It is the session's own tab, the first of its group, and the strip scrolls it into view whenever it
+is the marked one, so it is always one press away. Three things make it different from its
+neighbours, and all three are deliberate:
 
 - **It has no close button.** A session has exactly one AI CLI process, and ending it is not
   something this control offers — by any press. Every instance tab has one; the AI tab keeps the
-  space and leaves it empty, so all the tabs stay the same size and the strip still reads as a strip.
+  space and leaves it empty, so every session tab is the same size and the strip still reads as a
+  strip.
 - **Clicking it only switches the view.** It never starts, stops or restarts anything — not
   the AI CLI, and not any terminal instance — and clicking it while you are already looking at the AI
   conversation does nothing at all. Switching away and back returns you to the same terminal
@@ -1789,7 +1793,7 @@ press away. Three things make it different from its neighbours, and all three ar
 **Right-click any tab** for what you can do to that process. On an instance tab that is **Restart**
 (offered only while that instance's own shell is stopped) and **Close**; on the AI tab it is the
 same menu without Close. The menu acts on the tab you clicked, not on whichever pane you happen to
-be looking at.
+be looking at. Another session's tab has no menu: press it to show that session first.
 
 If a right-click **does nothing**, that is the answer rather than a fault: the only thing the menu
 could have offered is a restart, the process is running, and an empty panel would say there is
@@ -1814,11 +1818,10 @@ strip tells you what is and isn't running.
 
 #### When there are more tabs than fit
 
-Past about five open instances the tabs need more width than the bar can give them. They **scroll**
-rather than shrink: turn the mouse wheel over the strip to move along it. No tab is ever made
-narrower, ellipsised or dropped, and the "+" and the AI tab keep their full size and position
-however many instances are open — the AI tab in particular stays one press away rather
-than being something you have to scroll to.
+When the tabs need more width than the strip can give them, they **scroll** rather than shrink:
+turn the mouse wheel over the strip to move along it. No tab is ever made narrower or dropped (a
+long session name ends in `…`, in full on hover), and **New session** and the split buttons at the
+strip's right end keep their full size and position however many tabs are open.
 
 - **A faded edge means there is more that way.** When the tab you are *looking at* is the one out of
   sight, that edge takes the marked tab's own accent colour instead — so the fade tells you not just
@@ -2193,10 +2196,7 @@ What a press does to the keyboard depends only on what you pressed:
   — leaves the keyboard exactly where it was. Press it while typing in the terminal and you carry
   straight on typing.
 - **Empty space, or a disabled control** — changes nothing at all. Inert space is not a way out of
-  the terminal; the release chord and the release control are.
-
-The release control is always in the bottom bar, and greys out when the terminal does not hold the
-keyboard — it does not appear and disappear as you work.
+  the terminal; the release chord is.
 
 ### While you are typing somewhere else
 

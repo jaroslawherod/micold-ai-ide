@@ -406,6 +406,16 @@ pub fn overview_chord_label() -> &'static str {
     }
 }
 
+/// The new-terminal-instance chord as the platform writes it, for the "+"'s tooltip (feature 1126,
+/// R13).
+pub fn new_terminal_chord_label() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Cmd+Shift+T"
+    } else {
+        "Ctrl+Shift+T"
+    }
+}
+
 /// Whether the press is the Overview's full-screen chord (feature 970, FR-001, research R7; macOS
 /// `Cmd+Shift+F`, else `Ctrl+Shift+F`). Not in the terminal's reserved tier: the app hears it only
 /// while no terminal has the keyboard, which opening the Overview ensures (it moves the keyboard to

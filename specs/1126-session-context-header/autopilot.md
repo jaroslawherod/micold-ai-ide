@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1126
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
-- **Phase**: M1 PR
-- **Next step**: orchestrator waits on PR #1328's CI (rebased onto afef53af) and merges; then M2 (confirm clarification 1 first)
+- **Phase**: M2 implement
+- **Next step**: M2 implement T021–T042 (clarification 1: provisional option A, building as specified)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1318 | design (spec, plan, tasks) | merged | f8eeaa43e5f151a08a2c20b055c5c9ce64bf9584 |
+| #1328 | M1 context header | merged | 127a817868d7b463ad78ea588b43a0339d483991 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | #1328 | review |
-| M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | — | pending |
+| M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | #1328 | merged |
+| M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | — | in progress |
 | M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | — | pending |
 
 ## Decisions

@@ -114,6 +114,19 @@ pub const WIDTH: f32 = SLOT_WIDTH          // the leading slot
     + spacing::XS
     + SLOT_WIDTH; // the trailing slot
 
+/// A session tab's label share (feature 1126, R8): the label's own ceiling, so a session tab
+/// holds `<command> · <name>` up to where any tab's label ellipsises.
+pub const SESSION_LABEL_WIDTH: f32 = LABEL_MAX_WIDTH;
+
+/// Every session tab's width above the terminal (feature 1126, R8): [`WIDTH`]'s anatomy with the
+/// label share [`SESSION_LABEL_WIDTH`]. Fixed and derived like [`WIDTH`], so the strip's reveal and
+/// edge-fade arithmetic stay derived from the member list rather than measured.
+pub const SESSION_WIDTH: f32 = SLOT_WIDTH // the leading slot
+    + spacing::XS
+    + SESSION_LABEL_WIDTH
+    + spacing::XS
+    + SLOT_WIDTH; // the trailing slot, reserved and empty
+
 /// A tab's own inset: **none**.
 ///
 /// Named rather than left as a literal `0.0` at the call site, for the reason [`indicator_colour`]
@@ -158,6 +171,7 @@ pub struct Tab<'a, M> {
     leading: Option<Element<'a, M>>,
     trailing: Option<Element<'a, M>>,
     content_sized: bool,
+    width: f32,
     pub(crate) edge: IndicatorEdge,
     active: bool,
     on_press: Option<M>,
@@ -174,6 +188,7 @@ impl<'a, M: Clone + 'a> Tab<'a, M> {
             leading: None,
             trailing: None,
             content_sized: false,
+            width: WIDTH,
             edge: IndicatorEdge::Top,
             active: false,
             on_press: None,
@@ -228,6 +243,14 @@ impl<'a, M: Clone + 'a> Tab<'a, M> {
     /// mismatched-but-adequate tabs breaks no geometry rule.
     pub fn content_sized(mut self) -> Self {
         self.content_sized = true;
+        self
+    }
+
+    /// Lay this tab out at another derived fixed width than [`WIDTH`] — a session tab's
+    /// [`SESSION_WIDTH`] (feature 1126, R8). Every member of one kind keeps one width, which is
+    /// what BUG-001 asks of a strip.
+    pub fn fixed_width(mut self, width: f32) -> Self {
+        self.width = width;
         self
     }
 
@@ -397,7 +420,7 @@ impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M> {
                 // [`LABEL_MAX_WIDTH`], so the result is never smaller than the two slots and the
                 // gaps and never wider than the ceiling.
                 true => Length::Shrink,
-                false => Length::Fixed(WIDTH),
+                false => Length::Fixed(t.width),
             })
             .padding(TAB_PADDING)
             // FR-015: a tab's highlight is a tab's. See the module doc.
@@ -610,6 +633,19 @@ mod tests {
              properties of the region rather than of something inside it — so reserving width for \
              one would be a chosen figure wearing a derivation's clothes."
         );
+    }
+
+    /// Feature 1126 R8: a session tab's width is derived like [`WIDTH`], with the label ceiling as
+    /// its label share — restated term by term, so a literal or a dropped term fails here.
+    #[test]
+    fn the_session_tab_width_is_derived_not_literal() {
+        assert_eq!(SESSION_LABEL_WIDTH, LABEL_MAX_WIDTH);
+        assert_eq!(
+            SESSION_WIDTH,
+            2.0 * anatomy::button::MIN_TOUCH_TARGET + 2.0 * spacing::XS + LABEL_MAX_WIDTH,
+            "a session tab holds the two slots, the two gaps and the label's ceiling"
+        );
+        assert_eq!(SESSION_WIDTH - WIDTH, LABEL_MAX_WIDTH - LABEL_MIN_WIDTH);
     }
 
     /// FR-004b, and what the user meets: the indicator spans the **whole** tab, edge to edge.

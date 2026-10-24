@@ -673,11 +673,12 @@ fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
         return None;
     }
     app.core.session.pending_tab_reveal = false;
-    let index = micold_client::ui::terminal::marked_tab_index(&app.core)?;
+    let model = micold_client::ui::terminal::StripModel::of(&app.core)?;
     let offset = micold_client::ui::terminal::scroll_into_view(
-        index,
+        model.marked_index()?,
         app.core.session.tab_strip_scroll_offset as f32,
         app.core.session.tab_strip_viewport_width as f32,
+        &model.members,
     )?;
     Some(iced::widget::operation::scroll_to(
         micold_client::ui::terminal::TAB_STRIP_SCROLL_ID.clone(),

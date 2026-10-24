@@ -1,40 +1,40 @@
-//! The instance switcher's entries must read as a tab strip (feature 012, BUG-001 then BUG-002).
+//! The strip's tabs must read as a tab strip (feature 012, BUG-001 then BUG-002), and since feature
+//! 1126 they are the strip **above** the terminal: session tabs, the shown session's shell tabs and
+//! the "+" (contracts S5, S7).
 //!
 //! # Why a source-level test
 //!
-//! Same reasoning as `tests/terminal_bar_stability.rs`: this guards a precondition of how the row
+//! Same reasoning as `tests/session_area_stability.rs`: this guards a precondition of how the row
 //! is *built*, and the defect it describes is invisible to every behavioural test. The switcher
 //! worked perfectly — the right instance was active, the right message dispatched — while reading
 //! as loose characters in the status bar, because only the active entry was given a container and
-//! every other entry was bare text with a close glyph floating beside it. `SC-004` was satisfied
-//! (you could tell which instance was active) and the row still looked wrong, which is exactly the
-//! gap `FR-004a` was added to close.
+//! every other entry was bare text with a close glyph floating beside it.
 //!
-//! BUG-001 fixed that by giving every entry a container. BUG-002 corrected the idiom again: a tab
-//! strip carries **no** container and marks its active member with an indicator, so the rule these
-//! tests pin has changed once already. That is the argument for pinning it at all — each time the
-//! decision moved, the test that held the old one failed loudly instead of the row quietly drifting.
-//!
-//! What is checked here is only that the call site still delegates its two rules — which tab is
-//! marked, and what colour a control nested inside it takes — to the places that test them
-//! (`tab_indicator_colour` in `ui/terminal.rs`, and `tests/icon_roles.rs`'s contrast arithmetic),
-//! plus the one structural trap a value test cannot see: that both arms reserve the indicator's
-//! height. The centred label, the trailing close and the indicator's *appearance* are visual and
-//! belong to the `visual-pass` skill against `quickstart.md` §8.
+//! What is checked here is that the call site delegates its rules — which member is marked and
+//! what each press sends (`features::session_strip`), what colour a control nested inside a tab
+//! takes (`tests/icon_roles.rs`) — plus the structural traps a value test cannot see: that every
+//! tab reserves the indicator's height and its mark's slot. The behavioural half (each member sends
+//! its S5 message) is asserted from a `State` below.
 
+use micold_client::app::{Message, State};
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::session_strip::{Member, MemberKey, StripModel, StripTab};
+use micold_core::project::{Availability, Project};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use std::fs;
 use std::path::Path;
 
-/// `ui/terminal.rs`, comment-stripped — the call site half.
-fn terminal_source() -> String {
-    source_of("src/ui/terminal.rs")
+/// `ui/session_area.rs`, comment-stripped — the call site half.
+fn area_source() -> String {
+    source_of("src/ui/session_area.rs")
+}
+
+/// `features/session_strip.rs`, comment-stripped — the rules half.
+fn strip_rules_source() -> String {
+    source_of("src/features/session_strip.rs")
 }
 
 /// `ui/material/tab.rs`, comment-stripped — the component half.
-///
-/// Feature 026 promoted the tab out of the call site (FR-013), so the indicator rule this file
-/// pins now lives here. The property is unchanged and so is the argument for pinning it; only its
-/// address moved, which is the same move `tests/inventory/mod.rs` made for the same reason.
 fn tab_source() -> String {
     source_of("src/ui/material/tab.rs")
 }
@@ -74,19 +74,9 @@ fn source_of(relative: &str) -> String {
     out
 }
 
-/// The body of `fn tab_strip_row`, from its signature to the closing brace at column 0.
-///
-/// It was `instance_switcher_row` until feature 026 FR-003 made the strip unconditional and FR-001
-/// put the AI process in it — a strip of every displayable pane, not a switcher between instances.
-fn switcher_row_body(src: &str) -> String {
-    body_from(src, "fn tab_strip_row")
-}
-
-/// The body of `fn pinned_ai_tab` — the AI tab, which FR-002b puts **outside** the scrolling
-/// region so it keeps its right-hand position and stays reachable in one press at any instance
-/// count. Two functions because they are two nodes in the bar, not because they are two ideas.
-fn ai_tab_body(src: &str) -> String {
-    body_from(src, "fn pinned_ai_tab")
+/// The body of `fn member` — one strip member's widget (S7).
+fn member_body(src: &str) -> String {
+    body_from(src, "fn member<'a>(")
 }
 
 /// The body of the tab component's conversion — where the indicator is chosen and reserved.
@@ -149,97 +139,57 @@ fn every_tab_reserves_the_indicators_height() {
 /// arithmetic; this proves the call site actually asks for a tint.
 #[test]
 fn the_nested_close_control_is_tinted_from_its_tab() {
-    let body = switcher_row_body(&terminal_source());
+    let body = member_body(&area_source());
     assert!(
-        body.contains(".tint("),
+        body.contains(".tint(tint)") && body.contains("tab_content_colour("),
         "the close control nested inside a tab must take that tab's foreground explicitly \
          (feature 012 FR-011a, BUG-001). `IconButton::new` defaults its tint to `on_surface`, \
-         which is near tone-on-tone against the `primary` fill the active tab paints — the close \
-         glyph all but disappears on the one tab a user is most likely to want to close. Pass \
-         `.tint(icon_role(..))` for the tab's own state."
+         which is near tone-on-tone against the active tab's accent."
     );
 }
 
-// ---- feature 026: the AI process is a tab -------------------------------------------------------
-
-/// FR-001/FR-002/FR-003: the strip holds one tab per instance **plus** the AI tab, the AI tab is
-/// last, and the strip exists at zero and one instance too.
-///
-/// Source-level for the reason this file's module doc gives, and for one more: what is being
-/// asserted is the *membership rule*, and a membership rule read off a rendered element tree is
-/// read through whatever the layout did to it. The two facts that matter — that the AI tab is
-/// pushed after the loop over instances, and that nothing gates the strip on how many there are —
-/// are both statements about how the row is built.
+/// S1, S7: the strip lays out the model's members, every one of them, in a keyed row; nothing
+/// gates a member on how many there are, and each member's press, close and menu come from the
+/// member (S5), never written at the call site.
 #[test]
-fn the_strip_holds_every_instance_plus_the_ai_tab_last() {
-    let body = switcher_row_body(&terminal_source());
-
+fn the_strip_lays_out_the_models_members_and_their_presses() {
+    let src = area_source();
+    let strip = body_from(&src, "pub(crate) fn strip<'a>(");
     assert!(
-        !body.contains("shells.len() <= 1") && !body.contains("shells.is_empty()"),
-        "the strip must be drawn whenever a session is displayed, including at zero and one \
-         instance (FR-003, superseding feature 012 FR-005). An early return on the instance count \
-         is what hid it, and it is also a bar child that comes and goes — feature 023 FR-008a."
-    );
-
-    assert!(
-        body.contains("for instance in"),
-        "the strip must still build one tab per open instance (FR-001)"
-    );
-
-    let src = terminal_source();
-    let ai = ai_tab_body(&src);
-    assert!(
-        ai.contains("Icon::AiCli"),
-        "the session's AI CLI process must have a tab (FR-001, FR-009), labelled with the glyph \
-         the mode toggle already shows for that mode"
+        strip.contains("Keyed::row(model.members.iter()"),
+        "the strip's members must be the model's, in a keyed row (R10)"
     );
     assert!(
-        ai.contains("Tab::new(") && ai.contains("TabStrip::new("),
-        "the AI tab must be built as a `Tab` in a `TabStrip`, like the tabs it sits beside \
-         (FR-010). It is a member of the strip that happens to be pinned, not a control next to \
-         one — and building it the same way is how that stops being an intention. It also keeps \
-         `gates/tab_children_fit.rs` covering it, since that gate finds tabs as an anchored \
-         strip's immediate children."
+        !strip.contains("shells.len()") && !strip.contains("shells.is_empty()"),
+        "a member gated on the instance count is a child that comes and goes (feature 023 \
+         FR-008a)"
     );
-
-    // FR-002b: the AI tab is pushed to the bar *after* the scrolling viewport, not into it. Inside,
-    // it would be reachable only by scrolling to the far end, which is what SC-002's "one press"
-    // forbids — and FR-002 is only a meaningful requirement where there is more than fits.
-    let pane = body_from(&src, "pub fn pane<'a>(");
-    let viewport_at = pane
-        .find("ScrollDirection::Horizontal")
-        .expect("the terminal tabs must scroll horizontally (FR-002a)");
-    let pinned_at = pane
-        .find("pinned_ai_tab(")
-        .expect("the AI tab must be pushed to the bar in its own right (FR-002b)");
+    let body = member_body(&src);
+    for call in ["m.press()", "m.close()", "m.menu_tab()"] {
+        assert!(
+            body.contains(call),
+            "a member's widget must send what `{call}` says (S5)"
+        );
+    }
     assert!(
-        pinned_at > viewport_at,
-        "the AI tab must be pushed **after** the scrolling viewport and outside it (FR-002b, \
-         SC-002, SC-008), so it holds the bar's right-hand end at any instance count"
+        body.contains("tab::SESSION_WIDTH"),
+        "a session tab takes the session tab's one derived width (R8)"
     );
 }
 
-/// FR-004/FR-005: the AI tab has no close control, and the mark comes from the shared rule.
+/// FR-004, R8: a session tab has no close control; its trailing slot stays reserved and empty.
 #[test]
-fn the_ai_tab_is_unclosable_and_marked_from_one_source() {
-    let body = switcher_row_body(&terminal_source());
-
-    let ai = ai_tab_body(&terminal_source());
+fn a_session_tab_is_unclosable() {
+    let body = member_body(&area_source());
+    let session_arm = body
+        .split_once("Member::Session {")
+        .and_then(|(_, rest)| rest.split_once("Member::Shell {"))
+        .expect("`member` matches a session tab before a shell tab")
+        .0;
     assert!(
-        !ai.contains("ShellInstanceCloseRequested") && !ai.contains(".trailing("),
-        "the AI tab must not offer a close control (FR-004, SC-005). A session has exactly one AI \
-         CLI process and terminating it is not an action offered from this control — by any press. \
-         Its trailing slot stays reserved and empty rather than filled or reclaimed (FR-010a): \
-         reclaimed it would be narrower than its neighbours, and a strip whose tabs are not all \
-         one size reads as a control among controls."
-    );
-
-    assert!(
-        body.contains("marked_tab("),
-        "which tab is marked must come from `marked_tab(..)` (FR-005), whose own test proves it \
-         total. Comparing against `active_shell` here instead reintroduces the state the AI pane \
-         showed with nothing marked, which is the defect this feature exists to remove — and it \
-         would let the mode toggle and the strip disagree, which FR-008 forbids."
+        !session_arm.contains(".trailing(") && !session_arm.contains("CloseRequested"),
+        "a session tab must not offer a close control (feature 026 FR-004): its trailing slot \
+         stays reserved and empty, so it is no narrower than its neighbours"
     );
 }
 
@@ -249,60 +199,113 @@ fn the_ai_tab_is_unclosable_and_marked_from_one_source() {
 /// inside one shifts every sibling after it — iced's positional `Tree::diff_children` then hands
 /// the pressed control its neighbour's node and the press is dropped. A mark that appears when a
 /// process exits is exactly such a child.
-///
-/// Source-level, because the defect is a *shape* rather than a value: `.leading(..)` inside an `if`
-/// is the whole bug, and it is invisible to any test that renders one state at a time. What the
-/// slot does when it is empty is held by value tests either side of this — `material/tab.rs`'s
-/// `a_slot_is_the_slots_width_whatever_is_in_it` and `activity_badge.rs`'s
-/// `an_emphasis_less_badge_reserves_its_slot_and_draws_nothing`.
 #[test]
 fn the_marks_slot_is_reserved_rather_than_pushed_when_stopped() {
-    let src = terminal_source();
-    for (what, body) in [
-        ("a terminal tab", switcher_row_body(&src)),
-        ("the AI tab", ai_tab_body(&src)),
-    ] {
+    let body = member_body(&area_source());
+    assert_eq!(
+        body.matches(".leading(mark(").count(),
+        2,
+        "both kinds of tab must always build their leading slot (FR-012c, research R4)"
+    );
+    for line in body.lines() {
+        let trimmed = line.trim_start();
         assert!(
-            body.contains(".leading("),
-            "{what} must always build its leading slot (FR-012c, research R4) — the mark goes in \
-             the spacer every tab already reserves, so no tab grows and the derived width is \
-             untouched"
+            !(trimmed.starts_with("if ") && line.contains(".leading(")),
+            "a tab builds its leading slot conditionally: `{trimmed}`. Pass the badge \
+             unconditionally and let its *emphasis* be `None` when there is nothing to draw."
         );
-        for line in body.lines() {
-            let trimmed = line.trim_start();
-            assert!(
-                !(trimmed.starts_with("if ") && line.contains(".leading(")),
-                "{what} builds its leading slot conditionally: `{}`\n\nA child that comes and \
-                 goes shifts every sibling after it, and iced's positional tree diff then drops \
-                 the pressed sibling's press (feature 023 FR-008a). Pass the badge unconditionally \
-                 and let its *emphasis* be `None` when there is nothing to draw.",
-                trimmed
-            );
-        }
     }
 }
 
-/// Feature 029, T033 (FR-010, SC-004a): the pinned AI tab reads the session's CLI from `command()`,
-/// so a Pi session's tab says `pi` without the bar knowing Pi exists.
-///
-/// Source-level for the reason the rest of this file is: a literal, or `display_name()`, renders a
-/// perfectly plausible tab — "claude" on a Pi session, or "Pi Coding Agent" squeezed into a label
-/// slot — and no value test of the strip can tell that from the right answer.
+/// Feature 029, T033 (FR-010, SC-004a), carried to the session tab (R8): the label reads the
+/// session's CLI from `command()`, so a Pi session's tab says `pi` without the strip knowing Pi
+/// exists.
 #[test]
-fn the_ai_tab_names_the_cli_from_the_provider_and_never_a_literal() {
-    let ai = ai_tab_body(&terminal_source());
+fn a_session_tab_names_the_cli_from_the_provider_and_never_a_literal() {
+    let src = strip_rules_source();
+    let tab = body_from(&src, "fn session_member(");
     assert!(
-        ai.contains("command_caption(") && ai.contains("session_provider("),
-        "the AI tab's label must come from the session's provider, in the command register"
+        tab.contains("command_caption(provider, kind)") && tab.contains("s.provider"),
+        "a session tab's label must come from the session's provider, in the command register"
     );
     assert!(
-        !ai.contains("display_name()"),
+        !tab.contains("display_name()"),
         "a tab is a label in a width budget; the menu register does not belong in it"
     );
     for literal in ["\"pi\"", "\"claude\"", "\"copilot\""] {
         assert!(
-            !ai.contains(literal),
-            "the AI tab names a CLI by literal ({literal}), so every other CLI's session wears it"
+            !tab.contains(literal),
+            "a session tab names a CLI by literal ({literal}), so every other CLI's session wears it"
         );
     }
+}
+
+/// A project at `/repo` with two sessions at its root, the second shown; the first holds one shell.
+fn two_sessions() -> (State, [micold_core::session::SessionId; 2]) {
+    let mut s = State::default();
+    let path = std::path::PathBuf::from("/repo");
+    s.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    s.workspace.active = Some(path);
+    let mut ids = Vec::new();
+    for _ in 0..2 {
+        let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        ids.push(session.id);
+        s.update(Message::Session(SessionMsg::Started(session)));
+    }
+    s.update(Message::Session(SessionMsg::Selected(ids[0])));
+    let (_, main) = s.workspace.find_session_mut(ids[0]).expect("started");
+    main.open_shell_instance();
+    (s, [ids[0], ids[1]])
+}
+
+/// US2 sc. 2 and 3, S5: pressing a session, shell, "+" or another session's member sends what the
+/// bar's control did (or the sidebar row does, for another session).
+#[test]
+fn each_strip_member_sends_its_s5_message() {
+    let (state, [main, other]) = two_sessions();
+    let model = StripModel::of(&state).expect("a session is shown");
+    let shell = state.active_sessions()[0].shells[0].id;
+    let presses: Vec<(MemberKey, Message)> = model
+        .members
+        .iter()
+        .map(|m: &Member| (m.key(), m.press()))
+        .collect();
+    assert_eq!(
+        presses,
+        vec![
+            (
+                MemberKey::Session(main),
+                Message::Session(SessionMsg::TerminalAiCliSelected(main))
+            ),
+            (
+                MemberKey::Shell(main, shell),
+                Message::Session(SessionMsg::ShellInstanceSelected(main, shell))
+            ),
+            (
+                MemberKey::Plus,
+                Message::Session(SessionMsg::ShellInstanceOpenRequested)
+            ),
+            (
+                MemberKey::Session(other),
+                Message::Session(SessionMsg::Selected(other))
+            ),
+        ]
+    );
+    assert_eq!(model.members[1].menu_tab(), Some(StripTab::Instance(shell)));
+    assert_eq!(
+        model.location,
+        Some(SessionLocation::Default),
+        "New session starts another session here"
+    );
+    let src = area_source();
+    let strip = body_from(&src, "pub(crate) fn strip<'a>(");
+    assert!(
+        strip.contains("SessionMsg::AdditionalRequested(at)") && strip.contains("Icon::AddSession"),
+        "New session runs **Start another session…** for the shown location (US2 sc. 3)"
+    );
 }

@@ -6,9 +6,9 @@
 
 use crate::app::{Message, State};
 use crate::features::session::Msg as SessionMsg;
-use crate::ui::material::TAB_WIDTH;
+use crate::ui::material::{tab, TAB_WIDTH};
 use micold_core::session::{
-    SessionId, SessionLifecycle, ShellInstanceId, ShellLifecycle, TerminalMode,
+    SessionId, SessionLifecycle, SessionLocation, ShellInstanceId, ShellLifecycle, TerminalMode,
 };
 use micold_core::tokens::spacing;
 
@@ -208,58 +208,235 @@ pub(crate) fn overflowing(offset: f32, viewport: f32, content: f32) -> Beyond {
     }
 }
 
-/// What lies beyond the strip's edges, for a viewport `viewport` wide holding `tabs` tabs and
-/// scrolled `offset` from the leading end (FR-002e; feature 027 FR-003).
-///
-/// # Why the content width is derived here and not measured
-///
-/// `State::tab_strip_content_width` is only ever written by a scroll event, so between the strip's
-/// first layout and the user's first scroll it holds whatever it last held — and since feature 027
-/// the content width is a function of the viewport (the slack is laid out inside it), so a stale
-/// pair can claim an overflow the strip does not have. It did: the first terminal instance opened
-/// in a fresh session drew a trailing fade across its own tab, over the indicator, with nothing
-/// beyond that edge at all. Found by the visual pass, invisible to every gate — a gradient occupies
-/// the same box whether it is opaque or not.
-///
-/// Deriving it from the tab count is what makes the fade and the geometry incapable of disagreeing:
-/// the strip lays out `leading_slack(..) + natural_strip_width(..)`, so that *is* the content width,
-/// and it is known on the same frame the layout is rather than one scroll later.
-///
-/// A viewport of zero means "not measured yet" — nothing has been laid out, so nothing is known to
-/// lie beyond anything, and the honest answer is neither edge.
-pub(crate) fn strip_overflow(offset: f32, viewport: f32, tabs: usize) -> Beyond {
+/// One member of the tab strip above the terminal, in order (feature 1126, data-model
+/// *StripModel*, contract S1): a session tab per session of the shown location, and right after
+/// the shown session's own tab its shell tabs and the "+".
+#[derive(Debug, Clone, PartialEq)]
+pub enum Member {
+    /// A session's tab: `<command> · <session name>`; the shown session's tab is its AI
+    /// conversation.
+    Session {
+        id: SessionId,
+        label: String,
+        tooltip: String,
+        shown: bool,
+        marked: bool,
+        stopped: bool,
+    },
+    /// One of the shown session's shell instances, labelled by its ordinal.
+    Shell {
+        session: SessionId,
+        instance: ShellInstanceId,
+        label: String,
+        marked: bool,
+        stopped: bool,
+    },
+    /// Open another shell instance of the shown session.
+    Plus,
+}
+
+/// The key a member's widget state is kept under in the strip's keyed row (R10): a press in flight
+/// follows its member when another is added before it (FR-011).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MemberKey {
+    Session(SessionId),
+    Shell(SessionId, ShellInstanceId),
+    Plus,
+}
+
+/// The "+" member's width: its icon button's touch target (R8).
+pub const PLUS_WIDTH: f32 = micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET;
+
+impl Member {
+    /// The key its widget state is kept under (R10).
+    pub fn key(&self) -> MemberKey {
+        match self {
+            Self::Session { id, .. } => MemberKey::Session(*id),
+            Self::Shell {
+                session, instance, ..
+            } => MemberKey::Shell(*session, *instance),
+            Self::Plus => MemberKey::Plus,
+        }
+    }
+
+    /// Whether this member is the marked one (S2).
+    pub fn marked(&self) -> bool {
+        match self {
+            Self::Session { marked, .. } | Self::Shell { marked, .. } => *marked,
+            Self::Plus => false,
+        }
+    }
+
+    /// Whether this member's own process is stopped (S3).
+    pub fn stopped(&self) -> bool {
+        match self {
+            Self::Session { stopped, .. } | Self::Shell { stopped, .. } => *stopped,
+            Self::Plus => false,
+        }
+    }
+
+    /// What a primary press sends (S5).
+    pub fn press(&self) -> Message {
+        Message::Session(match self {
+            Self::Session {
+                id, shown: true, ..
+            } => SessionMsg::TerminalAiCliSelected(*id),
+            // As its sidebar row does: the session is shown, its terminal takes the keyboard.
+            Self::Session { id, .. } => SessionMsg::Selected(*id),
+            Self::Shell {
+                session, instance, ..
+            } => SessionMsg::ShellInstanceSelected(*session, *instance),
+            Self::Plus => SessionMsg::ShellInstanceOpenRequested,
+        })
+    }
+
+    /// What its close control sends: shell tabs only (S5).
+    pub fn close(&self) -> Option<Message> {
+        match self {
+            Self::Shell {
+                session, instance, ..
+            } => Some(Message::Session(SessionMsg::ShellInstanceCloseRequested(
+                *session, *instance,
+            ))),
+            _ => None,
+        }
+    }
+
+    /// The tab a right-click opens the menu for (S5): the shown session's tab and its shell tabs;
+    /// another session's tab and the "+" open none, since the menu's restart acts on the shown
+    /// session (`TerminalRestartRequested`).
+    pub fn menu_tab(&self) -> Option<StripTab> {
+        match self {
+            Self::Session { shown: true, .. } => Some(StripTab::Ai),
+            Self::Shell { instance, .. } => Some(StripTab::Instance(*instance)),
+            _ => None,
+        }
+    }
+
+    /// Its fixed width (R8): a session tab's, a shell tab's, or the "+"'s.
+    pub fn width(&self) -> f32 {
+        match self {
+            Self::Session { .. } => tab::SESSION_WIDTH,
+            Self::Shell { .. } => TAB_WIDTH,
+            Self::Plus => PLUS_WIDTH,
+        }
+    }
+}
+
+/// What the strip above the terminal shows (data-model *StripModel*; contract S1–S4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct StripModel {
+    /// In order: session tabs; the shown session's shell tabs and `Plus` right after its own tab.
+    pub members: Vec<Member>,
+    /// The shown session's status words (S4).
+    pub status: String,
+    /// The restart press, while the shown session's attached process is stopped (S3).
+    pub restart: Option<Message>,
+    /// The shown location, for **New session**; `None` when it no longer resolves.
+    pub location: Option<SessionLocation>,
+}
+
+impl StripModel {
+    /// The strip for the shown session; `None` without one.
+    pub fn of(state: &State) -> Option<Self> {
+        let shown = state.session.active?;
+        let location = state.current_session_location();
+        let node = location
+            .as_ref()
+            .and_then(|at| crate::features::navigation::location_node(state, at));
+        let main = node.as_ref().and_then(|n| n.main_session());
+        // The order the previous/next-session chords step through, folds ignored (R7), so a session
+        // under a folded origin keeps its tab while it is shown.
+        let order: Vec<SessionId> = node
+            .as_ref()
+            .map(|n| n.unfolded_sessions().iter().map(|s| s.id).collect())
+            .filter(|ids: &Vec<SessionId>| ids.contains(&shown))
+            .unwrap_or_else(|| vec![shown]);
+        let marked = marked_tab(state, shown);
+        let mut members = Vec::with_capacity(order.len() + 2);
+        for id in order {
+            let is_shown = id == shown;
+            members.push(session_member(
+                state,
+                id,
+                is_shown,
+                main == Some(id),
+                marked,
+            ));
+            if is_shown {
+                let shells = state
+                    .active_sessions()
+                    .iter()
+                    .find(|s| s.id == id)
+                    .map(|s| s.shells.iter().map(|i| i.id).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                members.extend(shells.into_iter().map(|instance| Member::Shell {
+                    session: id,
+                    instance,
+                    label: instance.0.to_string(),
+                    marked: marked == StripTab::Instance(instance),
+                    stopped: process_stopped(state, id, StripTab::Instance(instance)),
+                }));
+                members.push(Member::Plus);
+            }
+        }
+        Some(Self {
+            members,
+            status: session_status(state, shown),
+            restart: attached_process_restartable(state, shown)
+                .then(|| restart_message(state, shown)),
+            location,
+        })
+    }
+
+    /// Where the marked member sits in [`Self::members`].
+    pub fn marked_index(&self) -> Option<usize> {
+        self.members.iter().position(Member::marked)
+    }
+}
+
+/// Each member's (leading, trailing) edge along the strip, from the members' fixed widths and the
+/// strip's `spacing::SM` gaps (S6). Derived, never measured: a measured content width is stale
+/// until the first scroll, which drew a fade over nothing (feature 027).
+pub fn member_offsets(members: &[Member]) -> Vec<(f32, f32)> {
+    let mut at = 0.0;
+    members
+        .iter()
+        .map(|member| {
+            let edges = (at, at + member.width());
+            at = edges.1 + spacing::SM;
+            edges
+        })
+        .collect()
+}
+
+/// What lies beyond the strip's edges, for a viewport `viewport` wide holding `members` and
+/// scrolled `offset` from the leading end (FR-010; feature 027 FR-002e). A viewport of zero means
+/// "not measured yet": no edge is beyond.
+pub(crate) fn strip_overflow(offset: f32, viewport: f32, members: &[Member]) -> Beyond {
     if viewport <= 0.0 {
         return Beyond {
             leading: false,
             trailing: false,
         };
     }
-    overflowing(
-        offset,
-        viewport,
-        leading_slack(viewport, tabs) + natural_strip_width(tabs),
-    )
+    let content = member_offsets(members).last().map_or(0.0, |&(_, end)| end);
+    overflowing(offset, viewport, content)
 }
 
-/// The distance between one tab's leading edge and the next's.
-fn tab_pitch() -> f32 {
-    TAB_WIDTH + spacing::SM
-}
-
-/// Where to scroll a viewport `viewport` wide, currently at `offset`, to bring the tab at `index`
-/// fully into view — or `None` if it already is (FR-002d).
+/// Where to scroll a viewport `viewport` wide, currently at `offset`, to bring member `index` fully
+/// into view — or `None` if it already is (feature 026 FR-002d).
 ///
-/// `None` rather than "scroll to where you already are" is the requirement, not an optimisation.
-/// FR-002d lets a user scroll away from the marked tab by hand, and a reveal that fires on every
-/// selection would yank them back each time — including on selections made from the keyboard
-/// rather than with the strip, which are the ones they were not looking at the strip for.
-///
-/// It scrolls the tab **just** into view rather than centring it: the tabs either side are context,
-/// and a strip that recentres on every press moves more than the selection did.
-pub fn scroll_into_view(index: usize, offset: f32, viewport: f32) -> Option<f32> {
-    let pitch = tab_pitch();
-    let leading = index as f32 * pitch;
-    let trailing = leading + TAB_WIDTH;
+/// `None` rather than "scroll to where you already are" is the requirement: a user may scroll away
+/// from the marked tab by hand, and a reveal that fired on every selection would yank them back.
+/// It scrolls the member **just** into view rather than centring it.
+pub fn scroll_into_view(
+    index: usize,
+    offset: f32,
+    viewport: f32,
+    members: &[Member],
+) -> Option<f32> {
+    let (leading, trailing) = *member_offsets(members).get(index)?;
     if leading + EDGE_TOLERANCE < offset {
         Some(leading)
     } else if trailing > offset + viewport + EDGE_TOLERANCE {
@@ -269,54 +446,44 @@ pub fn scroll_into_view(index: usize, offset: f32, viewport: f32) -> Option<f32>
     }
 }
 
-/// The marked tab's position **within the scrolling region**, or `None` when the marked tab is the
-/// pinned AI one (FR-002b, FR-002d).
-///
-/// `None` is not a failure and not "nothing is marked" — FR-005 makes that unrepresentable. It is
-/// the AI tab, which sits outside the viewport and therefore cannot be scrolled into it. There is
-/// nothing to do, which is exactly the right answer.
-pub fn marked_tab_index(state: &State) -> Option<usize> {
-    let id = state.session.active?;
-    let StripTab::Instance(instance) = marked_tab(state, id) else {
-        return None;
-    };
-    state
+/// A session's tab (S1, R8): `<command> · <session name>`, its role and status on hover.
+fn session_member(
+    state: &State,
+    id: SessionId,
+    shown: bool,
+    main: bool,
+    marked: StripTab,
+) -> Member {
+    let (provider, kind) = state
         .active_sessions()
         .iter()
-        .find(|s| s.id == id)?
-        .shells
-        .iter()
-        .position(|s| s.id == instance)
-}
-
-/// What a strip of `tabs` members measures, derived from the tab's own width and the strip's own
-/// spacing (feature 027 FR-001).
-///
-/// # Why this is derived rather than measured
-///
-/// `State::tab_strip_content_width` is the same number, reported by the scrollable from the content
-/// it actually laid out — and it cannot be used here, because [`leading_slack`]'s result becomes
-/// part of that content. Feeding the measurement back in would make the space a function of itself:
-/// a strip with room to spare would compute a slack, grow its content by exactly that slack,
-/// measure no slack on the next frame, collapse to the left, and flip back — oscillating between
-/// flush-right and flush-left for as long as it was on screen. The tab count is an input the strip
-/// does not influence, so deriving from it terminates.
-pub fn natural_strip_width(tabs: usize) -> f32 {
-    match tabs {
-        0 => 0.0,
-        n => n as f32 * TAB_WIDTH + (n - 1) as f32 * spacing::SM,
+        .find(|s| s.id == id)
+        .map(|s| (s.provider, s.kind))
+        .unwrap_or_default();
+    let label = format!(
+        "{} · {}",
+        crate::features::session::command_caption(provider, kind),
+        session_title(state, id)
+    );
+    let role = if main {
+        "main session"
+    } else {
+        "helper session"
+    };
+    let tooltip = format!("{label}\n{role} · {}", session_status(state, id));
+    Member::Session {
+        id,
+        label,
+        tooltip,
+        shown,
+        marked: shown && marked == StripTab::Ai,
+        stopped: process_stopped(state, id, StripTab::Ai),
     }
 }
 
-/// The empty width the strip leaves at its **leading** edge so its tabs finish against the "+" and
-/// the AI tab at the bar's trailing end (feature 027 FR-001).
-///
-/// Zero once the tabs no longer fit: there is no slack to distribute then, and the strip scrolls
-/// instead (feature 026 FR-002a). That is also what keeps the edge fades honest — the fade asks
-/// whether content exceeds viewport, and a slack that padded an already-full strip would report an
-/// overflow that is not there.
-pub fn leading_slack(viewport: f32, tabs: usize) -> f32 {
-    (viewport - natural_strip_width(tabs)).max(0.0)
+/// The marked member's position in the shown session's strip, or `None` without a session.
+pub fn marked_tab_index(state: &State) -> Option<usize> {
+    StripModel::of(state)?.marked_index()
 }
 
 #[cfg(test)]
@@ -435,103 +602,461 @@ pub(crate) mod tests {
         );
     }
 
-    /// FR-002e + feature 027 FR-003: the fade asks the tab count, not the last measurement.
-    ///
-    /// The case this exists for is the one the visual pass found: a strip that fits draws no fade,
-    /// on the very first frame, before anything has scrolled. `overflowing` above is still right
-    /// about the arithmetic; what was wrong was the numbers it was handed.
+    /// A location with main `M` (two shell instances) and helpers `H1`, `H2` at the project root,
+    /// session `shown` (0 = `M`) shown, every session at `Running` (contract S1's fixture).
+    pub(crate) fn strip_fixture(shown: usize) -> (State, [SessionId; 3]) {
+        let (mut state, main) = state_with_instances(
+            TerminalMode::AiCli,
+            SessionLifecycle::Running,
+            &[ShellLifecycle::Running, ShellLifecycle::Running],
+            None,
+        );
+        let path = std::path::PathBuf::from("/repo");
+        let sessions = state.workspace.sessions.get_mut(&path).expect("fixture");
+        sessions[0].main = true;
+        let mut ids = [main; 3];
+        for id in ids.iter_mut().skip(1) {
+            let helper = Session::start_new(
+                SessionLocation::Default,
+                micold_core::session::AiCli::ClaudeCode,
+            );
+            *id = helper.id;
+            sessions.push(helper);
+        }
+        for s in sessions.iter_mut() {
+            s.lifecycle = SessionLifecycle::Running;
+        }
+        state.session.active = Some(ids[shown]);
+        (state, ids)
+    }
+
+    fn keys(model: &StripModel) -> Vec<MemberKey> {
+        model.members.iter().map(Member::key).collect()
+    }
+
+    fn shells_of(state: &State, id: SessionId) -> Vec<ShellInstanceId> {
+        state
+            .active_sessions()
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.shells.iter().map(|i| i.id).collect())
+            .unwrap_or_default()
+    }
+
+    /// S1: session tabs in the location's order, the shown session's shells and "+" right after its
+    /// own tab, and no other session's shells.
     #[test]
-    fn a_strip_that_fits_fades_neither_edge_before_anything_has_scrolled() {
+    fn the_strip_holds_each_session_then_the_shown_ones_shells_and_plus() {
+        let (state, [m, h1, h2]) = strip_fixture(0);
+        let shells = shells_of(&state, m);
+        let model = StripModel::of(&state).expect("a session is shown");
+        assert_eq!(
+            keys(&model),
+            vec![
+                MemberKey::Session(m),
+                MemberKey::Shell(m, shells[0]),
+                MemberKey::Shell(m, shells[1]),
+                MemberKey::Plus,
+                MemberKey::Session(h1),
+                MemberKey::Session(h2),
+            ]
+        );
+
+        let (state, [m, h1, h2]) = strip_fixture(1);
+        assert_eq!(
+            keys(&StripModel::of(&state).expect("shown")),
+            vec![
+                MemberKey::Session(m),
+                MemberKey::Session(h1),
+                MemberKey::Plus,
+                MemberKey::Session(h2),
+            ],
+            "another session's shell tabs are not members while it is not shown (US2 sc. 7)"
+        );
+
+        let (state, id) = state_showing(SessionLifecycle::Running);
+        let model = StripModel::of(&state).expect("shown");
+        assert_eq!(keys(&model), vec![MemberKey::Session(id), MemberKey::Plus]);
+        assert!(matches!(
+            model.members[0],
+            Member::Session {
+                shown: true,
+                marked: true,
+                ..
+            }
+        ));
+
+        assert_eq!(StripModel::of(&State::default()), None, "no session shown");
+    }
+
+    /// S1: a session an agent started follows the session that started it, folded or not.
+    #[test]
+    fn an_agent_started_session_follows_its_origin_folded_or_not() {
+        let (mut state, [m, h1, h2]) = strip_fixture(0);
+        let mut child = Session::start_new(
+            SessionLocation::Default,
+            micold_core::session::AiCli::ClaudeCode,
+        );
+        child.origin = Some(micold_core::origin::SessionOrigin {
+            id: h1,
+            status: micold_core::origin::OriginStatus::Known,
+        });
+        let c = child.id;
+        state
+            .workspace
+            .sessions
+            .get_mut(&std::path::PathBuf::from("/repo"))
+            .expect("fixture")
+            .push(child);
+        let sessions = |state: &State| -> Vec<MemberKey> {
+            keys(&StripModel::of(state).expect("shown"))
+                .into_iter()
+                .filter(|k| matches!(k, MemberKey::Session(_)))
+                .collect()
+        };
+        let want = vec![
+            MemberKey::Session(m),
+            MemberKey::Session(h1),
+            MemberKey::Session(c),
+            MemberKey::Session(h2),
+        ];
+        assert_eq!(sessions(&state), want);
+        state.sidebar.folded.insert(h1);
+        assert_eq!(sessions(&state), want, "a fold hides no tab");
+    }
+
+    /// S2: exactly one member is marked, and never one of another session.
+    #[test]
+    fn exactly_one_member_is_marked_and_only_of_the_shown_session() {
+        let marked = |state: &State| -> Vec<MemberKey> {
+            StripModel::of(state)
+                .expect("shown")
+                .members
+                .iter()
+                .filter(|m| m.marked())
+                .map(Member::key)
+                .collect()
+        };
+        let (mut state, [m, _, _]) = strip_fixture(0);
+        assert_eq!(marked(&state), vec![MemberKey::Session(m)], "AI mode");
+        let shells = shells_of(&state, m);
+        {
+            let (_, s) = state.workspace.find_session_mut(m).expect("session");
+            s.mode = TerminalMode::Regular;
+            s.active_shell = Some(shells[1]);
+        }
+        assert_eq!(marked(&state), vec![MemberKey::Shell(m, shells[1])]);
+        {
+            let (_, s) = state.workspace.find_session_mut(m).expect("session");
+            s.active_shell = None;
+        }
+        assert_eq!(
+            marked(&state),
+            vec![MemberKey::Session(m)],
+            "Regular with no active instance falls to the session tab"
+        );
+        let (state, [_, h, _]) = strip_fixture(1);
+        assert_eq!(marked(&state), vec![MemberKey::Session(h)]);
+    }
+
+    /// S3: each member's stopped mark is its own process's, never across sessions; `restart` is
+    /// offered exactly when the shown marked tab is stopped, aimed at that process.
+    #[test]
+    fn a_stopped_mark_is_each_members_own_and_restart_follows_the_shown_one() {
+        let stopped = |state: &State| -> Vec<(MemberKey, bool)> {
+            StripModel::of(state)
+                .expect("shown")
+                .members
+                .iter()
+                .map(|m| (m.key(), m.stopped()))
+                .collect()
+        };
+        let (mut state, [m, h1, h2]) = strip_fixture(0);
+        {
+            let (_, s) = state.workspace.find_session_mut(h1).expect("session");
+            s.lifecycle = SessionLifecycle::Idle;
+        }
+        let shells = shells_of(&state, m);
+        {
+            let (_, s) = state.workspace.find_session_mut(m).expect("session");
+            s.shells[1].lifecycle = ShellLifecycle::Exited;
+        }
+        assert_eq!(
+            stopped(&state),
+            vec![
+                (MemberKey::Session(m), false),
+                (MemberKey::Shell(m, shells[0]), false),
+                (MemberKey::Shell(m, shells[1]), true),
+                (MemberKey::Plus, false),
+                (MemberKey::Session(h1), true),
+                (MemberKey::Session(h2), false),
+            ],
+            "a stopped helper never marks the main tab"
+        );
+        assert_eq!(
+            StripModel::of(&state).expect("shown").restart,
+            None,
+            "the shown marked tab (M's AI) runs"
+        );
+
+        {
+            let (_, s) = state.workspace.find_session_mut(m).expect("session");
+            s.mode = TerminalMode::Regular;
+            s.active_shell = Some(shells[1]);
+        }
+        assert_eq!(
+            StripModel::of(&state).expect("shown").restart,
+            Some(restart_message(&state, m)),
+            "the marked exited shell offers its restart"
+        );
+        assert_eq!(
+            restart_message(&state, m),
+            Message::Session(SessionMsg::ShellInstanceRestartRequested(m, shells[1]))
+        );
+
+        let (mut state, [m, _, _]) = strip_fixture(0);
+        {
+            let (_, s) = state.workspace.find_session_mut(m).expect("session");
+            s.lifecycle = failed();
+        }
+        assert_eq!(
+            StripModel::of(&state).expect("shown").restart,
+            Some(Message::Session(SessionMsg::TerminalRestartRequested))
+        );
+    }
+
+    /// S4: the status words are the shown session's, unchanged; `location` is the shown one, `None`
+    /// when it no longer resolves.
+    #[test]
+    fn the_status_is_the_shown_sessions_words_and_the_location_its_own() {
+        for lifecycle in [
+            SessionLifecycle::Running,
+            SessionLifecycle::Starting,
+            SessionLifecycle::Idle,
+            SessionLifecycle::InterruptedResumable,
+            failed(),
+        ] {
+            let (state, id) = state_showing(lifecycle.clone());
+            let model = StripModel::of(&state).expect("shown");
+            assert_eq!(model.status, session_status(&state, id), "{lifecycle:?}");
+            assert_eq!(model.location, Some(SessionLocation::Default));
+        }
+        let (mut state, id) = state_showing(SessionLifecycle::Running);
+        {
+            let (_, s) = state.workspace.find_session_mut(id).expect("session");
+            s.location = SessionLocation::Worktree("gone".into());
+        }
+        let model = StripModel::of(&state).expect("still shown");
+        assert_eq!(model.location, None);
+        assert_eq!(keys(&model), vec![MemberKey::Session(id), MemberKey::Plus]);
+    }
+
+    /// S1, R8: a session tab reads `<command> · <session name>`; its tooltip adds the role and the
+    /// status.
+    #[test]
+    fn a_session_tab_names_its_cli_and_session_and_says_its_role_on_hover() {
+        let (state, [m, h1, _]) = strip_fixture(0);
+        let model = StripModel::of(&state).expect("shown");
+        let tab = |id| {
+            model.members.iter().find_map(|member| match member {
+                Member::Session {
+                    id: at,
+                    label,
+                    tooltip,
+                    ..
+                } if *at == id => Some((label.clone(), tooltip.clone())),
+                _ => None,
+            })
+        };
+        let (label, tooltip) = tab(m).expect("main tab");
+        assert_eq!(label, format!("claude · {}", session_title(&state, m)));
+        assert!(
+            tooltip.contains(&label) && tooltip.contains("main"),
+            "{tooltip:?}"
+        );
+        assert!(tooltip.contains("running"), "{tooltip:?}");
+        let (_, tooltip) = tab(h1).expect("helper tab");
+        assert!(tooltip.contains("helper"), "{tooltip:?}");
+    }
+
+    /// S5: each member's press, close and menu.
+    #[test]
+    fn each_member_presses_what_its_bar_control_pressed() {
+        let (state, [m, h1, _]) = strip_fixture(0);
+        let shell = shells_of(&state, m)[0];
+        let model = StripModel::of(&state).expect("shown");
+        let member = |key| {
+            model
+                .members
+                .iter()
+                .find(|x| x.key() == key)
+                .expect("member")
+                .clone()
+        };
+        let shown = member(MemberKey::Session(m));
+        assert_eq!(
+            shown.press(),
+            Message::Session(SessionMsg::TerminalAiCliSelected(m))
+        );
+        assert_eq!(shown.close(), None);
+        assert_eq!(shown.menu_tab(), Some(StripTab::Ai));
+
+        let other = member(MemberKey::Session(h1));
+        assert_eq!(other.press(), Message::Session(SessionMsg::Selected(h1)));
+        assert_eq!(
+            other.menu_tab(),
+            None,
+            "another session's tab yields no StripTabMenuRequested"
+        );
+
+        let tab = member(MemberKey::Shell(m, shell));
+        assert_eq!(
+            tab.press(),
+            Message::Session(SessionMsg::ShellInstanceSelected(m, shell))
+        );
+        assert_eq!(
+            tab.close(),
+            Some(Message::Session(SessionMsg::ShellInstanceCloseRequested(
+                m, shell
+            )))
+        );
+        assert_eq!(tab.menu_tab(), Some(StripTab::Instance(shell)));
+
+        let plus = member(MemberKey::Plus);
+        assert_eq!(
+            plus.press(),
+            Message::Session(SessionMsg::ShellInstanceOpenRequested)
+        );
+        assert_eq!((plus.close(), plus.menu_tab()), (None, None));
+    }
+
+    /// S5, FR-009: a member's menu offers *Restart* exactly when its stopped mark shows, for every
+    /// member of the S1 fixtures; another session's tab opens no menu at all.
+    #[test]
+    fn a_members_menu_offers_restart_exactly_when_it_wears_the_stopped_mark() {
+        let (mut state, [m, h1, _]) = strip_fixture(0);
+        let shells = shells_of(&state, m);
+        {
+            let (_, s) = state.workspace.find_session_mut(m).expect("session");
+            s.shells[0].lifecycle = ShellLifecycle::Exited;
+        }
+        {
+            let (_, s) = state.workspace.find_session_mut(h1).expect("session");
+            s.lifecycle = SessionLifecycle::Idle;
+        }
+        for ai in [SessionLifecycle::Running, SessionLifecycle::Idle] {
+            {
+                let (_, s) = state.workspace.find_session_mut(m).expect("session");
+                s.lifecycle = ai.clone();
+            }
+            let model = StripModel::of(&state).expect("shown");
+            let mut menus = 0;
+            for member in &model.members {
+                match member.menu_tab() {
+                    Some(tab) => {
+                        menus += 1;
+                        let labels = crate::ui::strip_tab_menu_labels(&state, m, tab);
+                        assert_eq!(
+                            labels.contains(&"Restart"),
+                            member.stopped(),
+                            "{ai:?} {:?}: menu {labels:?}",
+                            member.key()
+                        );
+                    }
+                    None => assert!(
+                        matches!(member, Member::Plus | Member::Session { shown: false, .. }),
+                        "{:?} opens no menu",
+                        member.key()
+                    ),
+                }
+            }
+            assert_eq!(menus, 1 + shells.len(), "the shown tab and its shells");
+        }
+    }
+
+    /// Twelve members: two sessions, the shown one's nine shells and "+".
+    fn twelve() -> Vec<Member> {
+        let session = |shown| Member::Session {
+            id: SessionId::new(),
+            label: String::new(),
+            tooltip: String::new(),
+            shown,
+            marked: shown,
+            stopped: false,
+        };
+        let main = session(true);
+        let MemberKey::Session(id) = main.key() else {
+            unreachable!()
+        };
+        let mut members = vec![main];
+        members.extend((1..=9).map(|n| Member::Shell {
+            session: id,
+            instance: ShellInstanceId(n),
+            label: n.to_string(),
+            marked: false,
+            stopped: false,
+        }));
+        members.push(Member::Plus);
+        members.push(session(false));
+        members
+    }
+
+    /// S6: offsets from the fixed widths and `SM` gaps.
+    #[test]
+    fn member_offsets_add_fixed_widths_and_gaps() {
+        let members = &twelve()[..];
+        assert_eq!(members.len(), 12);
+        let offsets = member_offsets(members);
+        let sw = tab::SESSION_WIDTH;
+        assert_eq!(offsets[0], (0.0, sw));
+        assert_eq!(offsets[1], (sw + spacing::SM, sw + spacing::SM + TAB_WIDTH));
+        let plus = offsets[10];
+        let lead = sw + 9.0 * (TAB_WIDTH + spacing::SM) + spacing::SM;
+        assert_eq!(plus, (lead, lead + PLUS_WIDTH));
+        assert_eq!(offsets[11].0, plus.1 + spacing::SM);
+        assert_eq!(offsets[11].1 - offsets[11].0, sw);
+        assert!(member_offsets(&[]).is_empty());
+    }
+
+    /// S6's table: which edges have members beyond them; viewport 0 means none.
+    #[test]
+    fn the_overflow_rows_of_the_s6_table() {
         let beyond = |leading, trailing| Beyond { leading, trailing };
-        let pitch = TAB_WIDTH + spacing::SM;
-
-        // Never laid out: nothing is known, so nothing is claimed.
-        assert_eq!(strip_overflow(0.0, 0.0, 1), beyond(false, false));
-        // One tab in a bar with room for five — the state that drew a fade over its own tab.
-        assert_eq!(strip_overflow(0.0, 5.0 * pitch, 1), beyond(false, false));
-        // Room for exactly as many as there are.
+        let (state, _) = state_showing(SessionLifecycle::Running);
+        let one = StripModel::of(&state).expect("shown").members;
+        assert_eq!(strip_overflow(0.0, 340.0, &one), beyond(false, false));
+        let members = twelve();
+        let content = member_offsets(&members).last().expect("members").1;
+        assert_eq!(strip_overflow(0.0, 340.0, &members), beyond(false, true));
         assert_eq!(
-            strip_overflow(0.0, 3.0 * TAB_WIDTH + 2.0 * spacing::SM, 3),
-            beyond(false, false)
+            strip_overflow(content - 340.0, 340.0, &members),
+            beyond(true, false)
         );
-        // More tabs than room, unscrolled: there is something that way, and only that way.
-        assert_eq!(strip_overflow(0.0, 3.0 * pitch, 6), beyond(false, true));
-        // Scrolled off the leading end with more still to come.
-        assert_eq!(strip_overflow(pitch, 3.0 * pitch, 6), beyond(true, true));
+        assert_eq!(strip_overflow(0.0, 0.0, &members), beyond(false, false));
     }
 
-    /// FR-002d: changing the marked tab yields a scroll request for **that** tab, and none at all
-    /// when it is already fully visible.
-    ///
-    /// The second half is the one worth a test. A reveal that did not need to move the strip must
-    /// not move it — a user who has scrolled by hand (which FR-002d explicitly allows) would
-    /// otherwise be yanked back on every selection, including selections they made from the
-    /// keyboard rather than with the strip.
+    /// S6: the reveal brings a marked member beyond either edge just into view, and leaves one in
+    /// view alone (feature 026 FR-002d).
     #[test]
-    fn the_marked_tab_is_scrolled_into_view_only_when_it_is_not() {
-        let pitch = TAB_WIDTH + spacing::SM;
-
-        // Already fully visible at the leading end: nothing to do.
-        assert_eq!(scroll_into_view(0, 0.0, 3.0 * pitch), None);
-        assert_eq!(scroll_into_view(1, 0.0, 3.0 * pitch), None);
-
-        // Beyond the trailing edge: scroll just far enough that its **trailing edge** lands on the
-        // viewport's, not far enough to centre it — the neighbouring tabs are context, and a strip
-        // that recentres on every press moves more than the selection did.
-        //
-        // The figure is `5·pitch + TAB_WIDTH - viewport`, not `6·pitch - viewport`: a pitch is a
-        // tab plus the gap that follows it, and there is no gap after the last tab shown. The 8dp
-        // between them is a gap this would have opened at the viewport's trailing edge.
+    fn a_member_beyond_either_edge_scrolls_just_into_view() {
+        let members = twelve();
+        let offsets = member_offsets(&members);
+        assert_eq!(scroll_into_view(0, 0.0, 340.0, &members), None);
+        let (_, trailing) = offsets[11];
         assert_eq!(
-            scroll_into_view(5, 0.0, 3.0 * pitch),
-            Some(5.0 * pitch + TAB_WIDTH - 3.0 * pitch),
+            scroll_into_view(11, 0.0, 340.0, &members),
+            Some(trailing - 340.0)
         );
-
-        // Beyond the leading edge: scroll to put its leading edge on the viewport's.
-        assert_eq!(scroll_into_view(0, 4.0 * pitch, 3.0 * pitch), Some(0.0));
+        let (leading, _) = offsets[2];
         assert_eq!(
-            scroll_into_view(2, 4.0 * pitch, 3.0 * pitch),
-            Some(2.0 * pitch)
+            scroll_into_view(2, leading + 50.0, 340.0, &members),
+            Some(leading)
         );
-    }
-
-    /// Feature 027 FR-003: the strip sits against the **trailing** edge of its viewport, and the
-    /// slack that puts it there is a pure function of the tab count.
-    ///
-    /// Derived from the count, never from the measured content width. The slack is laid out
-    /// *inside* the scrolling content, so it is part of what `State::tab_strip_content_width`
-    /// reports back — computing it from that measurement would feed its own output back in and the
-    /// strip would swing flush-right, flush-left, flush-right on successive frames. From the count
-    /// it terminates by construction, which is why this is arithmetic a test can read rather than a
-    /// `Length::Fill`: `Fill` inside a horizontal `Scrollable` resolves against an unbounded width
-    /// limit — infinity, not "whatever is left" — so it pushes the strip out of the viewport
-    /// entirely.
-    #[test]
-    fn the_strip_hugs_the_trailing_edge_of_its_viewport() {
-        let pitch = TAB_WIDTH + spacing::SM;
-
-        // No tabs, no strip: nothing to push, and a viewport's worth of slack would be a scrollable
-        // region made entirely of emptiness.
-        assert_eq!(natural_strip_width(0), 0.0);
-        assert_eq!(leading_slack(600.0, 0), 600.0);
-
-        // One tab is a tab, not a tab plus a trailing gap — n tabs carry n-1 gaps between them.
-        assert_eq!(natural_strip_width(1), TAB_WIDTH);
-        assert_eq!(natural_strip_width(3), 3.0 * TAB_WIDTH + 2.0 * spacing::SM);
-
-        // Room to spare: the slack is exactly what is left, so the strip's trailing edge lands on
-        // the viewport's however few tabs there are.
-        assert_eq!(leading_slack(3.0 * pitch, 1), 3.0 * pitch - TAB_WIDTH);
         assert_eq!(
-            leading_slack(3.0 * pitch, 2),
-            3.0 * pitch - (2.0 * TAB_WIDTH + spacing::SM)
+            scroll_into_view(12, 0.0, 340.0, &members),
+            None,
+            "no such member"
         );
-
-        // Overflowing: there is no slack to give, and the answer is zero rather than negative. A
-        // negative width would be a panic in iced; worse, a slack that shrank as the strip grew
-        // would let the strip keep scrolling past its own leading tab.
-        assert_eq!(leading_slack(3.0 * pitch, 6), 0.0);
-        assert_eq!(leading_slack(0.0, 3), 0.0);
     }
 
     /// FR-005: exactly one tab is marked, for **every** combination of mode and active instance.
