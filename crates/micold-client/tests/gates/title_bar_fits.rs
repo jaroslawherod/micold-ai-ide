@@ -82,7 +82,7 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
                 .collect();
             let drawn = |wanted: &str| in_bar.iter().any(|c| c.contains(wanted));
             assert!(
-                in_bar.iter().any(|c| *c == "3"),
+                in_bar.contains(&"3"),
                 "{at}: the unread mark's count is not drawn: {in_bar:?}"
             );
             assert!(
