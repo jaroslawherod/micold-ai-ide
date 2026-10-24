@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M2
-- **Next step**: M2 full gate (`scripts/gate.sh`), push, PR files
+- **Next step**: M2 PR open (orchestrator opens it from the PR files), CI, merge; then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | #1325 | done |
-| M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | — | in progress |
+| M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | pushed, PR pending | gate green at 14cff475 |
 | M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | — | todo |
 | M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | todo |
 | M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | — | todo |
