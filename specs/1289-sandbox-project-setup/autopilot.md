@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M1
-- **Next step**: M1 scoped gate, then reviews A and B round 1
+- **Next step**: M1 reviews A (code-review high) and B (conformance) round 1 on snapshot bfedc8fe:65b4a48c; then full gate, PR
 
 ## Pull requests
 
@@ -55,6 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 (sonnet, scoped) | c6904f37533cfa3183cad458c3e458eb852b92f7:71a9120e6a1fca096755b00c0c38b356273d79f9 | CLEAN, 1 MINOR — fixed, prose only (data-model §RunId: id allocated in memory under the lock, counter file persisted just after release, before the record write) |
 | Tasks | 1 | afa51c1f5757e7d989ae7915d46182fa1e6dc0f7:0b28553c5169f0e4d6cc8ce59e6cff80cbff1039 | CHANGES: 3 MAJOR, 2 MINOR — all fixed (F1 A4 tests split into setup_model/setup_output/setup_shell.rs, Parallel line and M2 Verify updated; F2 G2 test now T052 before impl T053, deps updated; F3 "T020–T022 pass" moved to T027, deps T020–T022 → T025–T027, T021 red until T025–T027; F4 T022 gains a WorktreeCreate positive control so it is red until T025–T027; F5 `delete_warns_setup` predicate case in T050/T051, T054 uses it) |
 | Tasks | 2 (sonnet, scoped) | e8a60871840097dcc1874c2b1084ebd6e30eb98e:62160ffc5876e446a80f7dcd6f1b623f4b490ab3 | CLEAN, no findings |
+| M1 A + B | 1 | bfedc8feff31a942849a46161efd9046cd8ac84b:65b4a48c150e71ebb1754ffda28df43e74b95f10 | pending (dispatched by orchestrator) |
 
 ## Declined review findings
 
