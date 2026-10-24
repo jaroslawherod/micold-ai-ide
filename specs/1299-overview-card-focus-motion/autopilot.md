@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
 - **Phase**: close (checks, polish, visual pass done; close review pending)
-- **Next step**: close review (fresh reviewer on the close diff); then gate, finish the ledger, open the close PR
+- **Next step**: close review (fresh reviewer, snapshot in *Review rounds*); then finish the ledger and open the close PR (full gate green at fba4e302's tree)
 
 ## Pull requests
 
@@ -55,6 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 (code-review high) | 2 | 6555ce6bd5178312ab9515a006c8667c52aeeb67:97e8d0b62832fa53a3487bd777827b06d7ce1f8d | CLEAN (scoped, sonnet, orchestrator-run: all four round-1 findings fixed, no new bugs) |
 | A M2 (code-review high) | 1 | 7c125b3e7a5ca6506cf90291d6d64ee42db9855d:92fe861ca11843a9f43ad66386360a75c31f0cf4 | CLEAN, 3 MINOR all fixed in c1590fd9: F1 project switch kept the old set's lifts → `update` reseeds `lifts` with `resting` on a rest_scope change (test `a_new_rest_scope_drops_the_old_sets_lifts`, fails without the fix); F2 catalogue OverviewCard `live: ["expand and collapse"]`, interactive (showcase_completeness `the_overview_card_and_grid_are_posed` now expects both interactive); F3 settling pass culls cards whose shadow-expanded bounds miss the viewport. No re-review (minors) |
 | B M2 (conformance) | 1 | 7c125b3e7a5ca6506cf90291d6d64ee42db9855d:92fe861ca11843a9f43ad66386360a75c31f0cf4 | CLEAN (Verify: style/card_lift/card_grid/overview_card 206 passed; idle_requests_no_frames 14, layout_snapshot 105 passed); 1 MINOR fixed, prose only: settings.md Reduce motion paragraph rewrapped |
+| close (tests and docs) | 1 | 09a1ac600ab91bd0fca414d71907cbe40cb528ae:fba4e302c119b20af9aadfcd10d02990f8add7d1 | pending (orchestrator runs it) |
 
 ## Declined review findings
 
