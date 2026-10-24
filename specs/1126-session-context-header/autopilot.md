@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1126
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
-- **Phase**: M2 implement
-- **Next step**: M2 implement T021–T042 (clarification 1: provisional option A, building as specified)
+- **Phase**: M2 gate
+- **Next step**: M2 full gate, then push and open the M2 PR (title/body in the scratchpad); clarification 1 stays provisional option A
 
 ## Pull requests
 
@@ -50,6 +50,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 8ab80bc5203f8fcd8be0c73b112b09dc4539067a:2fa1a219553a964ec33e235d36e1d193a87f7128 | CLEAN; 3 MINOR: checklist ticks + note fixed, provisional clarification noted in follow-ups |
 | M1 A (code review, high) | 1 | 77849f887d81f709896e3b79ed506ee1f7c5e311:7a7afc6b185623b1c507387ea64f1a38484a286e | CLEAN; 2 MINOR: F1 fixed (title read once titles become readable), F2 declined |
 | M1 B (conformance, sonnet) | 1 | fd556e46e1cb2aa0abc417f86102606b87d79e16:157c47ec92b0f0734825178f76445f2a041b9540 | CLEAN; 3 MINOR (cycle-log evidence for T004/T016, T003's extra moved helpers) recorded in the cycle log |
+| M2 A (code review, high) | 1 | ef68e24018cb80883fc8e3cd890be0482b2b0da6:a00127d3e3e8f40571f7c94f2a70aac16f049c7c | CHANGES: 2 MAJOR (new session tab not revealed; nothing-under-panes check could not fail), 1 MINOR; all fixed in 0e326613 |
+| M2 A (re-review, sonnet) | 2 | dd505d9a035d24e925094c0ceb5780578a4b3107:0e326613517ad725c43eaba23d8c3341db1b4ebe | CLEAN; F1–F3 resolved, lines cited |
+| M2 B (conformance, sonnet) | 1 | dd505d9a035d24e925094c0ceb5780578a4b3107:0e326613517ad725c43eaba23d8c3341db1b4ebe | CLEAN; 1 MINOR (T039 guard written after T033, already noted in the cycle log) |
 
 ## Declined review findings
 
