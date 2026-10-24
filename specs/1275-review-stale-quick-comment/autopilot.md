@@ -15,8 +15,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: tasks unit (plan review round 2 findings fixed, prose only; orchestrator decides on a round 3). FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Phase**: tasks
+- **Next step**: tasks review round 1 (orchestrator runs it; snapshot in *Review rounds*), then checklists, specs-only gate, design PR. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
@@ -27,6 +27,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | | planned (builds now) |
+| M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | planned (builds now) |
+| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
+| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
+| M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
+| M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | gated: #1271 merged |
 
 ## Decisions
 
@@ -42,12 +48,26 @@ finds this file by its **Worktree branch** line. Keep it true.
 | spec | 2 | 89c07d79a52e9cb5ae89d0beff62b6ccf424039e:4a06e88388d0b4cd7395ec7ce70882b466871cf9 | CLEAN (sonnet), 1 MINOR: edge case *Selected between reads* not marked conditional on FR-014. Fixed: prefixed "under the whole-view hold (FR-014)" and noted it does not arise under open-diff-only. |
 | plan | 1 | d4cee46d92e7567c10df1b1c2dd058d0e9665e4c:c9789f7dba0d05f1eaeb440c527c01daf3f56c20 | CHANGES: 1 MAJOR, 2 MINOR, all verified and fixed. F1 (MAJOR, held: `DIFF` in `review/git.rs:33` has no `--no-abbrev`, so `--raw` ids are abbreviated and never equal `hash-object`'s): R1, data-model §3–§4 now say `range_rows`/`range_paths` add `--no-abbrev`; I1 all-zero = 40 zeros; new I1a real-git check that ids are full length. F2 (MINOR, held: `StoredSettings` at `settings.rs:742`, conversions `:903`/`:950`): named in data-model §9 and K5. F3 (MINOR, held): `DiffRead.row` is now `DiffRow { NotRead, Unlisted, Row }` (data-model §12, R5, H10a; failed `change_list_of` → `NotRead`). Also per orchestrator: M3–M5 wait for #1269 and #1271 (plan, spec dependency note). |
 | plan | 2 | 94877b893db9017f02f0ab873e42ac7c5df470eb:00519bfa6217bd0107f1f710cc7d94ebdf4b596f | CHANGES (sonnet): round-1 fixes confirmed; 2 MAJOR, 1 MINOR, all on the gating wording, fixed prose only (no design change): F1 spec.md blocker table (hold, drag, chips rows → "no: after #1269 and #1271 (core part ships now)"), US1/US2 priority notes, Assumptions notice line; F2 research R11 rewritten (core now, M3–M5 after #1269+#1271, M6 after #1271; rejected: build M3–M5 now in today's view, rework cost); F3 plan #1269 bullet and summary line, contract H title. Was: Round-1 snapshot is STALE after branch-start rebased onto origin/main (review-snapshot.sh diff exits 2): run a full round on round 1's model, or review the fix commit 00519bfa (`git show 00519bfa -- specs/`). |
+| plan | 2 (fixes) | 1191f086 | ACCEPTED by the orchestrator: round-2 fixes are prose only (verified); no round 3. Branch rebased onto origin/main by the tasks unit (fix commit now 14fa6a7a). |
 
 Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
 changes-view-hold.md, quick-comment.md, quickstart.md). Milestones proposed: M1 core stale tracking
 (identity + `review::stale`), M2 core drag/chips/setting, M3 hold + notice, M4 drag, M5 chips +
 visual pass, M6 FR-013. Only M1/M2 (micold-core) build now; M3–M5 touch the Changes/Review view and
 wait until #1269 (Review tab, reshapes the view) and #1271 are merged; M6 needs #1271.
+
+Tasks: written 2026-10-24 (T001–T047, 6 milestones + T047 Polish left to the close unit). Milestones
+follow the plan's layer split, not milestones.md rule 1 (M1 = core only, no observable UI): the
+orchestrator gated every client part on #1269/#1271, so the core milestones' deliverable is
+developer-observable (tests) with `docs-not-needed`. M3 has 11 tasks, kept whole (rule 3): hold
+without notice/dot/selection rules would leave invisible held changes on main (rule 6), and the PR
+hold shares the apply path. Each client milestone carries its own docs, snapshot and 1280×800
+two-theme visual pass (issue acceptance). Plan fixed: `ToggleChip` lives in
+`crates/micold-material/src/toggle_chip.rs` (plan named `ui/material/`), and `ChangedDot` goes in
+`micold-material` drawn with `unread_mark`'s `filled_circle`. M2 T014 adds a `Settings` field the
+client's `SettingsDraft::into_settings` literal must set (stopgap until M5). `speckit-analyze` is not
+available to this unit (Unknown skill): FR/SC coverage checked by grep only; the tasks review
+covers the rest.
 
 Clarify: round 1 asked FR-014 (escalated; applied provisionally as A, which made the whole-view
 items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.
