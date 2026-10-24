@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M3
-- **Next step**: M3 implement T032–T041
+- **Next step**: M3 verify (verify.md step 1: scoped gate + review A high)
 
 ## Pull requests
 
@@ -82,7 +82,10 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 
 ## Handover
 
-None.
+- **Done**: M3 T032–T041 implemented and ticked, committed at 6fde29a5 on top of origin/main b54fa759 (M2 merged). Local runs green: `cargo test -p micold-client --lib -- overview composition_contrast sidebar toolbar tree_view showcase` (210 passed), `--test features_sidebar --test layout_snapshot --test showcase_completeness` (95/112/46 passed). Layout snapshot regenerated with `UPDATE_LAYOUT_SNAPSHOT=1`; sidebar paths re-pointed (D18). `cargo fmt --all` run. No gate, review or visual pass yet.
+- **Next**: verify.md from step 1: scoped gate detached + review A (`code-review` high on origin/main...HEAD); then review B (sonnet, conformance) with visual pass (quickstart §B1 Overview-row half, §B4; both themes); full gate (`scripts/gate.sh`); push; PR files in the scratchpad (title prefix "#1125: Layout: sidebar grouped by state with Overview as its first row — M3: ").
+- **Open findings**: none. No PR opened.
+- **Note**: disk was 14 GB free at start (target-shared/debug 16 GB); wipe target-shared/debug if a build runs short (standing approval).
 
 ## Open escalation
 
