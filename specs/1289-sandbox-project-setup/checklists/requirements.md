@@ -13,11 +13,11 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 left for the clarify unit: setup command location, per-project image scope)
+- [x] No [NEEDS CLARIFICATION] markers remain (resolved in clarify: FR-009 app setting; Story 4 deferred)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
-- [x] All acceptance scenarios are defined (except Story 4, pending its clarification)
+- [x] All acceptance scenarios are defined (Story 4 deferred to a follow-up issue)
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
