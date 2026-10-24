@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: M1 implementing
-- **Next step**: M1: gate, reviews A and B, visual pass, then the M1 PR
+- **Phase**: M1 implemented, reviews pending
+- **Next step**: orchestrator dispatches review A (code-review high), review B (conformance) and the visual pass (T018, quickstart §B B1–B4, B6, B7); the M1 unit then fixes findings and opens the M1 PR
 
 ## Pull requests
 
@@ -48,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 1 | e209d8637cc99c1c00d5b3b330033eabd3b06074:7bcd080cc6c6f537fd45f68b69b97148f3485dca | CHANGES (run by orchestrator): F1 MAJOR host Roboto Bold 700 breaks FR-003/SC-002 → option (a), D8; F2 MINOR R6/R7/R8 lacked rejected alternatives → added. Both applied |
 | Plan review | 2 | b530e8ce4e792f8d5efd2595d56a740898e653ed:7dc4a597b0b322dedf551f73f0d16810cf578500 | CLEAN (orchestrator, sonnet); 1 MINOR: plan.md Test strategy roboto.rs row not updated for D8 → fixed, prose only |
 | Tasks review | 1 | 73cdce2dbb41cb29369c478080c14350bb320212:d20f1b50e27026933493e4e4d962f14aadbb3a33 | CLEAN (orchestrator; also covered speckit-analyze: all FR/SC covered, paths verified); 3 MINOR applied: F1 C-3 pin joins in M2 + T007 host-Roboto note, F2 D9 M1-size note, F3 Verify adds `mise run gate` |
+| M1 review A + B | 1 | 9d4252ee3fb689d755244756853ea3ec0e6e73fa:e4c4ba50ea9a87862bd9f149d94fd1a3abbc9655 | pending (orchestrator dispatches); full gate (scripts/gate.sh) green at e4c4ba50; layout snapshot unchanged (T016); T018 visual pass open |
 
 ## Declined review findings
 
