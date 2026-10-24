@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #941
 - **Worktree branch**: claude/project-thread-ik47pq
 - **Started**: 2026-10-21
-- **Phase**: M7
-- **Next step**: M7 PR (title/body in the scratchpad; branch pushed); then the close unit (T062)
+- **Phase**: close
+- **Next step**: close unit: speckit-converge (M6's last review B round was CHANGES), speckit-tdd-verify, T062 quickstart Part A, spec Status, close PR
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1246 | M4: client composer state, sends, drops | merged (rebase) | f114ea2ee0eb7e97c7e0ada228b26af6a870a383 |
 | #1249 | M5: shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator | merged (rebase) | 74907e8f7c158ee992f119e223772f52628c09a8 |
 | #1255 | M6: composer under the structured transcript, user guide | merged (rebase; the orchestrator rebased it twice onto #942/#943/#944 — commit "fix(941): rebase M6 onto #942, #943 and #944": the composer's editor lives in `features::composer` and #943's `sync_editor` calls went; the transcript sits in a column over the composer under #944's session bar; fixture re-recorded) | e65993bcb7a42336104ddcc38a1d48d772591d86 |
+| #1311 | M7: interrupt withdraws a pending #942 request; composer Tab reach (FocusWithin) | merged (rebase) | a669ad1d0a8c55d8f7baefccfe3d532dc053e70d |
 
 ## Milestones
 
@@ -34,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T039–T047 | full | Client render-free composer state, sends, drops (no draw code); may merge beside M2–M3 | #1246 | merged |
 | M5 | T048–T054 | full | Shared components TextArea limits, AttachmentChip, QueueRow, BusyIndicator; iced image feature | #1249 | merged |
 | M6 | T055–T061 | full | Composer under the structured transcript, transcript lines, user guide, Part B | #1255 | merged |
-| M7 | T063 | light | Interrupt withdraws a pending #942 request (daemon test); with it the T061 F5 fix (Tab reach) | — | in progress |
+| M7 | T063 | light | Interrupt withdraws a pending #942 request (daemon test); with it the T061 F5 fix (Tab reach) | #1311 | merged |
 
 T062 (Polish, no code) is left to the close unit; T063 is M7, waiting on #942 M3 (I-3).
 M1 has 22 tasks (over rule 3's ~10) and is kept whole: it is no user story but the foundation every
