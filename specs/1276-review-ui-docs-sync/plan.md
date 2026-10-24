@@ -108,10 +108,13 @@ row-parsing helpers are the same as `terminal_only_doc.rs`'s; they move to a sha
 
 The table's name and shape come from the merged #1274. The plan names it
 `micold_core::review::keys::REVIEW_KEYS` (new in #1274); the implementer uses whatever #1274
-merged and updates the contract's names. If #1274 binds its keys in the client without a
-`micold-core` table, this feature moves the table into `micold-core` unchanged (same keys, same
-sheet text) and has the client bind from it, with #1274's client tests as the regression net
-(research R1).
+merged and updates the contract's names. A `micold-core` review key table that the client binds and
+the `?` sheet reads is a requirement on #1274, passed to that thread at plan time. This feature
+never moves the table itself (no production module here, spec Out of Scope): if #1274 merges
+without one, it files a blocker issue for the table, links it from the ledger and the spec status,
+and M1's key test waits on it (research R1). If the table has no sheet text or no modifier flag,
+the fallbacks in [contracts/guide-shortcut-table.md](contracts/guide-shortcut-table.md) § *If the
+table is thinner* apply.
 
 `.gitattributes` gains, after `docs/**`, a commented
 `/docs/user-guide/reviewing-changes.md -micold-docs` line in the form of the
@@ -127,15 +130,27 @@ Order of work, all after the last blocker merges (spec Edge Cases):
 2. Register the states of [contracts/review-states.md](contracts/review-states.md) that no slice
    registered, reusing the slices' state builders in `covered_states.rs` (`grep -n` for each
    slice's builder before writing one). Redefine `session-area-changes-open` as the Review tab
-   shown in the strip, and update `gates/session_area_fits.rs::the_header_stands_over_the_open_changes_view`
-   to the new state (header, strip with the Review tab, then the review body).
+   shown in the strip by changing its builder `changes_open_under_header()` in place, and update
+   both users of that builder: `gates/session_area_fits.rs::the_header_stands_over_the_open_changes_view`
+   (header, strip with the Review tab, then the review body) and the press tests in
+   `session_area_stability.rs` (`rendered_presses`,
+   `pressing_changes_with_the_view_open_on_the_shown_location_closes_it`), whose expected message
+   becomes what R0 built for **Changes** pressed while the Review tab is shown. If R0 already
+   changed them, follow R0.
 3. Write `gates/review_tab_fits.rs`, registered in `layout_snapshot.rs` with a `#[path]` module as
    `session_area_fits` is: for every state whose name starts `review-`, in both themes, at
    `MIN_WINDOW_SIZE` and 1280×800, assert no `text_overflows`, no `escapes` beyond the declared
    exemptions, the review bar's bottom edge at or above `status_bar`'s top edge, and the drawer's
-   rectangle inside the diff's (overlay, not a narrower diff). It calls the existing
-   `tests/support/layout.rs` helpers; nothing is copied from `layout_text_overflow.rs` or
-   `gates/containment.rs`.
+   rectangle inside the diff's (overlay, not a narrower diff). For the same states, windows and
+   themes it also runs the two existing gates' invariants, so every FR-007 gate holds at both
+   windows: the status bar's (28 dp high, flush with the window's bottom edge, full width), moved
+   out of `status_bar_fits.rs::at_the_smallest_window_the_bars_texts_stay_in_their_boxes` into a
+   `pub(crate) fn` that test also calls; and the session area's header and strip checks, by
+   calling `session_area_fits.rs`'s `assert_fits_under` (with `assert_order`, `header_parts`,
+   `strip_parts`) made `pub(crate)`. Where the Review tab changes the strip's child count that
+   function asserts, the count comes from `STRIP_MEMBERS`, not a second constant. It calls the
+   existing `tests/support/layout.rs` helpers; nothing is copied from `layout_text_overflow.rs`,
+   `gates/containment.rs`, `status_bar_fits.rs` or `session_area_fits.rs`.
 4. Re-record once (`UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`),
    then explain the diff line group by line group in the PR body (FR-005).
 5. Prove the gate is live: a one-pixel change to the review bar's padding fails `layout_snapshot`
@@ -148,10 +163,13 @@ Order of work, all after the last blocker merges (spec Edge Cases):
 
 `reviewing-changes.md` is restructured to the outline in
 [contracts/guide-outline.md](contracts/guide-outline.md): each R0–R6 control is a heading (SC-005).
-Sections that describe unchanged behaviour (anchoring, the review message, statuses, PR diffs, the
-base line, the Default entry) keep their text and heading ids, so inbound links still resolve; the
-headings that go (*The review panel*, *Committed and uncommitted* as a list toggle) are folded into
-their new sections, and every inbound link is re-pointed (FR-014). Each slice's own guide edits are
+Sections that describe unchanged behaviour (anchoring, the review message, statuses, the base line,
+the Default entry) keep their text and heading ids, so inbound links still resolve. *Pull requests*
+keeps its heading (and `#pull-requests`) but is rewritten for the source control's **Pull
+requests** entry: today it describes the left-column section FR-002 forbids. The headings that go
+(*The review panel*, *Committed and uncommitted* as a list toggle) are folded into their new
+sections, and every inbound link is re-pointed (FR-014); the link text at `settings.md:660` and
+`worktrees-and-sessions.md:240` drops "Changes view" for the Review tab's source control. Each slice's own guide edits are
 the starting text; this feature reconciles them into one chapter and removes leftovers (FR-002).
 
 ### 4. Visual pass (FR-009, FR-010)
@@ -233,7 +251,9 @@ crates/micold-core/tests/
 crates/micold-client/tests/
 ├── support/covered_states.rs                    # review states added / redefined
 ├── gates/review_tab_fits.rs                     # new (FR-007)
-├── gates/session_area_fits.rs                   # follows the redefined state
+├── gates/session_area_fits.rs                   # follows the redefined state; checks pub(crate)
+├── gates/status_bar_fits.rs                     # bar invariants as a pub(crate) fn
+├── session_area_stability.rs                    # press tests follow the redefined builder
 └── fixtures/layout_snapshot.txt                 # one re-record (FR-005)
 docs/user-guide/{reviewing-changes,terminal-panes,worktrees-and-sessions,settings,agent-tools}.md
 docs/development/{layout-snapshot,review-redesign}.md

@@ -8,9 +8,11 @@ given. Each decision below records what was chosen and what was rejected.
 
 - **Decision**: The test reads the review key table in `micold-core` that #1274 (R5) delivers
   (its acceptance: "pure logic in micold-core with unit tests") and the client binds; the plan calls
-  it `micold_core::review::keys::REVIEW_KEYS` until #1274 merges. If #1274 merges with its keys
-  only in the client, this feature moves the table to `micold-core` unchanged and has the client
-  bind from it.
+  it `micold_core::review::keys::REVIEW_KEYS` until #1274 merges. The core table is a requirement
+  on #1274, passed to that thread at plan time. If #1274 merges with its keys only in the client,
+  this feature does not move the table (that would add a production module and rewire the client's
+  binding, against the plan's Structure Decision and the spec's Out of Scope): it files a blocker
+  issue for the table, and the key test waits on it.
 - **Rationale**: One table that both the key handler and the `?` sheet read is the only source the
   guide can be held to; it is the pattern `structured::commands::TERMINAL_ONLY` already follows for
   `terminal_only_doc.rs`. A table in `micold-core` is testable without iced (`mise run test-core`).
@@ -48,7 +50,8 @@ given. Each decision below records what was chosen and what was rejected.
 - **Decision**: A new gate module `tests/gates/review_tab_fits.rs` lays out every `review-*` covered
   state at `MIN_WINDOW_SIZE` and 1280×800 in both themes and runs the existing
   `support::layout::{text_overflows, escapes}` checks plus two review-specific assertions (bar above
-  the status bar; drawer inside the diff).
+  the status bar; drawer inside the diff), and calls the status bar's and the session area's
+  existing assertions, made `pub(crate)`, for the same states at both windows.
 - **Rationale**: `layout_text_overflow.rs` and `gates/containment.rs` run only at the canonical
   1280×800 window (`cached_records` over `covered_states()`); FR-007 also asks for the smallest
   window. `session_area_fits.rs` already loops `[MIN_WINDOW_SIZE, WINDOW]` × themes for one state;
@@ -63,7 +66,8 @@ given. Each decision below records what was chosen and what was rejected.
 - **Decision**: Redefine it: the Review tab selected in the strip, header above, review body below;
   anchors `session.header`, `session.header.changes`, `session.strip`, `review.tab`. Update
   `session_area_fits.rs::the_header_stands_over_the_open_changes_view` to assert the strip is
-  present.
+  present, and the `rendered_presses` tests in `session_area_stability.rs` that build the same
+  state through `changes_open_under_header()`.
 - **Rationale**: FR-006 forbids leaving it recording "header over the view, no strip", which R0
   makes impossible. Keeping the name keeps the history of the header-button gate (feature 1126 T053)
   readable; if R0 already redefined or renamed it, follow R0 and only update the doc.

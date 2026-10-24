@@ -7,9 +7,10 @@ Prerequisites: #1269–#1275 and #1128 merged; branch rebased on `origin/main`; 
 
 1. **Key table** — `mise run test-core` (or `cargo test -p micold-core --test review_keys_doc`):
    passes. Change one `Does` cell in the marker table: the test fails listing both rows; revert.
-2. **No pre-redesign statements** (FR-002) — each of these returns nothing from
-   `docs/user-guide/reviewing-changes.md`, `terminal-panes.md`, `worktrees-and-sessions.md`:
-   `grep -n -i -E 'three columns|review panel|\*\*Close\*\*|within 2 s|replaces the terminal'`; and
+2. **No pre-redesign statements** (FR-002, FR-014) — each of these returns nothing from
+   `docs/user-guide/reviewing-changes.md`, `terminal-panes.md`, `worktrees-and-sessions.md`,
+   `settings.md`, `agent-tools.md`:
+   `grep -n -i -E 'three columns|review panel|\*\*Close\*\*|within 2 s|replaces the terminal|preceded by a \*\*Pull requests\*\* section|Changes view'`; and
    no *Pull requests* / *Committed* / *Uncommitted* toggle described in the file list. Read each hit
    of `grep -n -i 'committed\|pull requests'` and confirm it describes the source control.
 3. **Other pages** (FR-003) — `terminal-panes.md` lists the Review tab with badge and mark;
