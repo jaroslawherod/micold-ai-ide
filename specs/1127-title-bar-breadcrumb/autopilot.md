@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
 - **Phase**: tasks
-- **Next step**: tasks unit
+- **Next step**: tasks unit (continue from *Handover*)
 
 ## Pull requests
 
@@ -56,7 +56,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: branch rebased onto origin/main 9c0b8108 (no previous PR); `speckit-tasks` → tasks.md
+  (T001–T051) with `## Milestones` M1–M4 (ledger *Milestones*); plan.md *Project Structure* and
+  research.md (header, R9, R11) updated for #1262's `micold-material` split (D10); US1 split (D11);
+  checklists/requirements.md already all ticked; specs-only gate (`check-criteria-observables.sh`)
+  passed. Committed 3d025944, not pushed.
+- **Next**: (1) read the `speckit-analyze` report the unit started headless (Sonnet) at
+  `/tmp/claude-0/-home-user-micold-ai-ide/edf7f901-1287-5da8-8160-87203f07f364/scratchpad/analyze.md`
+  (rerun `claude -p "/speckit-analyze specs/1127-title-bar-breadcrumb ..." --model sonnet` read-only
+  if missing/empty) and fix what it finds; (2) review-snapshot + tasks review (review.md, rubric
+  rubrics/tasks.md, round 1 session model) via `claude -p --agent autopilot-reviewer`; (3) design PR
+  title/body to the scratchpad (`docs(1127): specify and plan the 44 px title bar (#1127)`, body
+  ends `Refs #1127`), push `claude/project-thread-iwrht0`.
+- **Open findings**: none yet.
 
 ## Open escalation
 
