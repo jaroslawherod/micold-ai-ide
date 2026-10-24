@@ -226,8 +226,8 @@ check both cards show their status and reply, and a long reply offers **Show all
   when space runs out the counts shorten first (to the draft count alone, then hidden).
 - **Drawer opens over the line being read**: the drawer covers the diff's right side and never
   hides the comment a row jump scrolls to; the jump scrolls so the target line starts left of the
-  drawer's edge, or the line is visible under the drawer's left part when the diff is narrower
-  than the drawer allows.
+  drawer's edge, which holds at every window width because the drawer covers at most half the
+  diff area (FR-010).
 - **Worktree removed while its Review tab is open**: the tab, its bar and its drawer go away with
   it (#1269), and the comments are deleted as today.
 - **Platforms** (Principle VI): the bar, the overflow menu, the drawer and Esc behave the same on
@@ -345,8 +345,9 @@ check both cards show their status and reply, and a long reply offers **Show all
   line by 0 px and 0 lines.
 - **SC-003**: From the drawer open with nothing above it, one Esc press closes it; with a dialog or
   menu above it, the first Esc closes only that.
-- **SC-004**: At a 1280×800 window with the drawer closed, the diff area is at least as wide as
-  today's diff area plus today's review column, measured on the same entry.
+- **SC-004**: At a 1280×800 window with the drawer closed, the diff area spans the whole tab body
+  beside the file list, so it is at least as wide as today's diff area plus today's review column
+  on the same entry.
 - **SC-005**: A report, send, clear or discard made in another window shows in this window's bar,
   drawer and cards within 2 seconds.
 - **SC-006**: Every comment of an entry appears in exactly one drawer tab, verified by automated
