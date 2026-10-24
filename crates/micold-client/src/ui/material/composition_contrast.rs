@@ -187,6 +187,22 @@ fn every_state_icon_is_legible_on_every_fill_of_a_sidebar_row() {
     );
 }
 
+/// Feature 1125 (FR-019, R12, T010): a sidebar group header's text, `on_surface_variant` on the
+/// sidebar's `surface_container_low`, is legible in both schemes.
+#[test]
+fn a_sidebar_group_header_is_legible_on_the_sidebar() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let fill = style::to_rgb(style::sidebar_fill(r));
+        assert_eq!(fill, r.surface_container_low, "the sidebar's tone");
+        let ratio = contrast(r.on_surface_variant, fill);
+        assert!(
+            ratio >= AA_TEXT,
+            "{scheme:?}: a group header at {ratio:.2}:1 (needs {AA_TEXT})"
+        );
+    }
+}
+
 /// The fill behind a hovered sidebar row: the sidebar's surface with the hover state layer of the
 /// row's content colour over it (feature 575, FR-013).
 fn hovered_sidebar_row(r: tokens::Roles) -> Rgb {

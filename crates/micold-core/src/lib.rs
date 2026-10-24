@@ -80,6 +80,7 @@ pub mod script_path_check;
 pub mod selector;
 pub mod session;
 pub mod settings;
+pub mod sidebar_groups;
 pub mod spawn;
 pub mod ssh;
 pub mod store;

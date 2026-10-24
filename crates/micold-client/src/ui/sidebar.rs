@@ -156,12 +156,11 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // a zero-worktree or filtered-to-nothing project still shows the Default row and its
     // start-session action, with a muted hint appended below about worktrees specifically.
     //
-    // Computed once and reused for both the hint and the tree below (rather than calling
-    // `filtered_worktree_tree()`/`sidebar_entries()` twice per render) — `sidebar_entries()`
-    // always puts the Default entry first, so "only that one entry survived" is equivalent to
-    // "no worktree entries matched" without a second filter pass.
-    let entries = state.sidebar_entries();
-    let no_worktree_entries = entries.len() <= 1;
+    // The groups hold every entry once, the Default entry among them, so "one entry in all" is
+    // "no worktree entries matched". Built once per render (feature 1125): they give both the hint
+    // and the list.
+    let groups = state.sidebar_groups();
+    let no_worktree_entries = groups.iter().map(|g| g.entries.len()).sum::<usize>() <= 1;
     // A project with no discovered worktree takes the "none yet" branch — the "no match / clear
     // filters" branch would offer to clear a filter that was never applied.
     let hint: Option<Element<'_, Message>> = if state.worktree.worktrees.is_empty() {
@@ -194,7 +193,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         None
     };
 
-    let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, 0, None, r), r)
+    let tree: Element<'_, Message> = TreeView::new(list_items(state, groups, r), r)
         // The sidebar is the one list at `dense` (§7.2, FR-026a): 36dp rows rather than 48dp, so
         // the worktree count visible without scrolling does not drop. A named step on the shared
         // density scale, not a bespoke shrink (FR-026c).
@@ -604,6 +603,45 @@ fn row_actions_cluster(
     HoverReveal::new(cluster, material::SurfaceKind::Sidebar.tone(r))
         .shown(active)
         .into()
+}
+
+/// The drawn list (feature 1125, contract S4): each state group's header, then the group's
+/// entries when it is open, as [`build_items`] draws them.
+fn list_items(
+    state: &State,
+    groups: Vec<crate::features::sidebar::SidebarGroup>,
+    r: Roles,
+) -> Vec<TreeItem<'static, Message>> {
+    use crate::features::sidebar::ListRow;
+    let mut items = Vec::new();
+    for row in crate::features::sidebar::list_rows(groups) {
+        match row {
+            // A header holds no chord's keyboard row, so a change of its focus tells nobody.
+            ListRow::Header(header) => {
+                items.push(group_header(header, r).keyboard_focus(false, |_| Message::NoOp))
+            }
+            ListRow::Entry(entry) => items.extend(build_items(state, vec![entry], 0, None, r)),
+        }
+    }
+    items
+}
+
+/// A state group's header row (feature 1125, R8): its name and count, the twisty open or closed,
+/// and a press anywhere on it (or Enter or Space) toggling the group.
+fn group_header(
+    header: crate::features::sidebar::GroupHeaderRow,
+    r: Roles,
+) -> TreeItem<'static, Message> {
+    TreeItem::new(
+        0,
+        micold_core::sidebar_groups::header_text(header.group, header.count),
+        r.on_surface_variant,
+    )
+    .heading()
+    .expandable(
+        header.open,
+        Message::Sidebar(SidebarMsg::GroupToggled(header.group)),
+    )
 }
 
 /// Flatten the sidebar's location list (feature 010: the "Default" entry, then worktrees) into

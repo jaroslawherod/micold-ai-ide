@@ -14,8 +14,8 @@
 
 use micold_client::features::sidebar::{
     current_session_row, effective_open, filters_from_env_value, matches_filters, row_heights,
-    row_pull_request, scroll_target, worktree_tooltip, DefaultNode, RowPullRequest, SidebarEntry,
-    TagFilter, WorktreeNode, DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
+    row_pull_request, scroll_target, worktree_tooltip, DefaultNode, ListRow, RowPullRequest,
+    SidebarEntry, TagFilter, WorktreeNode, DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
 };
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
@@ -23,6 +23,12 @@ use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+
+/// Entries as the drawn list holds them when no group header sits between them (feature 1125):
+/// the row metrics walk [`ListRow`]s.
+fn rows(entries: &[SidebarEntry]) -> Vec<ListRow> {
+    entries.iter().cloned().map(ListRow::Entry).collect()
+}
 
 fn worktree(dir_name: &str) -> Worktree {
     Worktree {
@@ -504,7 +510,7 @@ fn a_tagged_worktree_row_is_a_two_line_row_and_a_session_row_is_not() {
     ];
 
     assert_eq!(
-        row_heights(&entries),
+        row_heights(&rows(&entries)),
         vec![one_line(), two_line(), one_line()],
         "a row's height follows its line count and the sidebar's density, and nothing else — the \
          same rule `TreeView` renders by. A metric that disagreed with the rendered height would \
@@ -522,7 +528,7 @@ fn an_open_locations_sessions_are_rows_and_a_closed_ones_are_not() {
             session(SessionLocation::Worktree("feat-a".into())),
         ],
     )];
-    assert_eq!(row_heights(&with_sessions).len(), 3);
+    assert_eq!(row_heights(&rows(&with_sessions)).len(), 3);
 
     // FR-017: one session has no expander, so no sub-row even when the row is marked open.
     let single = vec![worktree_entry(
@@ -530,7 +536,7 @@ fn an_open_locations_sessions_are_rows_and_a_closed_ones_are_not() {
         vec![],
         vec![session(SessionLocation::Worktree("feat-a".into()))],
     )];
-    assert_eq!(row_heights(&single).len(), 1);
+    assert_eq!(row_heights(&rows(&single)).len(), 1);
 
     let closed = vec![SidebarEntry::Worktree(WorktreeNode {
         worktree: worktree("feat-a"),
@@ -546,7 +552,7 @@ fn an_open_locations_sessions_are_rows_and_a_closed_ones_are_not() {
         daemon: String::new(),
     })];
     assert_eq!(
-        row_heights(&closed).len(),
+        row_heights(&rows(&closed)).len(),
         1,
         "a closed location draws no session rows, so they occupy no height — measuring them anyway \
          would put every row below it out by their total"
@@ -640,13 +646,13 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
     // Rows as drawn: Default, feat-a. One session has no sub-row (FR-017), so the session is
     // found at its location's row.
     assert_eq!(
-        current_session_row(&entries, Some(wanted)),
+        current_session_row(&rows(&entries), Some(wanted)),
         Some(1),
         "the index is a position in the rendered list, so it has to be counted the way the list is \
          built — locations and the sessions of the open ones, in order"
     );
     assert_eq!(
-        current_session_row(&entries, None),
+        current_session_row(&rows(&entries), None),
         None,
         "and with no current session there is no row to scroll to (FR-013)"
     );
@@ -662,8 +668,11 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
         default_entry(vec![]),
         worktree_entry("feat-b", vec![], vec![helper, main]),
     ];
-    assert_eq!(current_session_row(&entries, Some(main_id)), Some(2));
-    assert_eq!(current_session_row(&entries, Some(helper_id)), Some(3));
+    assert_eq!(current_session_row(&rows(&entries), Some(main_id)), Some(2));
+    assert_eq!(
+        current_session_row(&rows(&entries), Some(helper_id)),
+        Some(3)
+    );
 }
 
 // --- Feature 776 (M4): worktrees only, a press opens the main session -----------------------
@@ -809,7 +818,7 @@ fn a_session_row_stays_one_line_when_it_gains_a_cli_label() {
         folded: Default::default(),
         sessions: vec![claude, copilot],
     })];
-    let heights = row_heights(&entries);
+    let heights = row_heights(&rows(&entries));
 
     assert_eq!(heights.len(), 3, "the location row and its two sessions");
     assert_eq!(
@@ -887,7 +896,7 @@ fn a_session_on_an_uninstalled_cli_is_still_listed_and_still_identified() {
     })];
 
     assert_eq!(
-        row_heights(&entries).len(),
+        row_heights(&rows(&entries)).len(),
         1,
         "its location's row is drawn; one session has no sub-row (FR-017)"
     );
@@ -935,7 +944,7 @@ fn a_location_holding_a_long_history_costs_no_more_per_row() {
         sessions: sessions.clone(),
     })];
 
-    let heights = row_heights(&entries);
+    let heights = row_heights(&rows(&entries));
     assert_eq!(
         heights.len(),
         251,
@@ -951,7 +960,7 @@ fn a_location_holding_a_long_history_costs_no_more_per_row() {
     // The scroll target for the last session is arithmetic over those heights and nothing else —
     // no per-session lookup, no I/O, no growth beyond the list itself.
     let last = sessions.last().unwrap().id;
-    let row = current_session_row(&entries, Some(last)).expect("the last session has a row");
+    let row = current_session_row(&rows(&entries), Some(last)).expect("the last session has a row");
     assert_eq!(row, 250);
     assert!(scroll_target(&heights, row, 400.0, 0.0).is_some());
 }
@@ -1586,8 +1595,8 @@ mod parallel_runs {
         let c = group_of(&collapsed);
         assert!(!c.expanded);
         assert_eq!((c.run_count, c.failed_count), (3, 1));
-        let heights_collapsed = row_heights(&collapsed);
-        let heights_expanded = row_heights(&expanded);
+        let heights_collapsed = row_heights(&rows(&collapsed));
+        let heights_expanded = row_heights(&rows(&expanded));
         assert_eq!(heights_collapsed.len(), 2, "Default and the group row");
         assert_eq!(
             heights_expanded.len(),
@@ -1609,7 +1618,7 @@ mod parallel_runs {
             run(2, AiCli::Copilot, RunStatus::Prompted),
         ]);
         let arranged = arrange_groups(entries, &[g], |_| true);
-        let heights = row_heights(&arranged);
+        let heights = row_heights(&rows(&arranged));
         // Default, group, run 1, run 2, zeta.
         assert_eq!(heights.len(), 5);
         assert!(
@@ -1618,7 +1627,7 @@ mod parallel_runs {
         );
         // The last row (zeta) is below a short viewport: scrolling reaches it.
         assert!(scroll_target(&heights, 4, 40.0, 0.0).is_some());
-        assert_eq!(current_session_row(&arranged, None), None);
+        assert_eq!(current_session_row(&rows(&arranged), None), None);
     }
 
     #[test]

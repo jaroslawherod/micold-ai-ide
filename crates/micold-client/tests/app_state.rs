@@ -2040,10 +2040,12 @@ fn state_with_many_worktrees(count: usize) -> State {
             included: false,
         })
         .collect();
-    let session = Session::start_new(
+    let mut session = Session::start_new(
         SessionLocation::Worktree(format!("feat-{:02}", count - 1)),
         AiCli::ClaudeCode,
     );
+    // Idle, so its row stays last in the Idle group (feature 1125) rather than moving to Working.
+    session.lifecycle = micold_core::session::SessionLifecycle::Idle;
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.session.active = Some(id);

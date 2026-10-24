@@ -596,6 +596,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 
 /// Drain an armed reveal into a scroll, once there is something to scroll to (feature 024, §6.4).
 ///
+/// Before the conditions below, an armed reveal whose target sits in a closed state group opens that
+/// group (feature 1125), once the viewport is known.
+///
 /// Three conditions, and the arm survives all three failing:
 ///
 /// - nothing is armed — the ordinary case, and the reason this is cheap to call on every message;
@@ -607,10 +610,8 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 /// Once it does drain, the offset may still be `None`: the row was already fully visible, and
 /// FR-009 says a reveal that did not need to move the list must not move it.
 fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
-    if !app.core.sidebar.pending_reveal_scroll
-        || app.core.sidebar.viewport_height == 0
-        || !app.core.current_session_is_listed()
-    {
+    // Feature 1125 (FR-006, R5): `reveal_ready` first opens the closed state group of the target.
+    if !app.core.reveal_ready() {
         if app.core.sidebar.pending_reveal_scroll && micold_client::reveal_trace::enabled() {
             micold_client::reveal_trace::line(format_args!(
                 "armed, waiting: viewport_h={} listed={}",
@@ -1087,6 +1088,8 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
 /// Scroll the sidebar to the row the Overview revealed, recording where the list was sent for the
 /// reason `reveal_scroll` does (BUG-002).
 fn revealed_scroll<T: Send + 'static>(app: &mut App) -> Task<T> {
+    // Feature 1125 (FR-006, R5): the revealed row's closed state group opens first.
+    app.core.open_group_of_revealed();
     let Some(offset) = app.core.revealed_scroll_offset() else {
         return Task::none();
     };
