@@ -413,7 +413,8 @@ fn an_overview_cards_issue_link_is_legible_on_its_body() {
 /// Overview card pull request rows (feature 1123, T011 — FR-015, research R9; BUG-1298 FR-026):
 /// each state's pill word in its container's on-colour on the tonal pill (`overview_card::pill`,
 /// drawn by `style::chip_solid`), the status words in their tone (*bad* in `error`, *waiting* in
-/// `warning`, *good* in `success`, *plain* muted) and the "+N more" line in the muted body role,
+/// `warning`, *good* in `success`, *plain* muted), the number in `primary` and the "+N more" line
+/// in the muted body role,
 /// on the body bare and under the selected layer, in every card state and both schemes, at
 /// feature 1120 FR-003's 4.5:1.
 #[test]
@@ -433,6 +434,7 @@ fn an_overview_cards_pull_request_rows_are_legible_on_its_body() {
                     ("good words".into(), r.success, ground),
                     ("plain words".into(), p.on_body_variant, ground),
                     ("+N more".into(), p.on_body_variant, ground),
+                    ("number".into(), r.primary, ground),
                 ];
                 for mark in [PrMark::Open, PrMark::Draft, PrMark::Merged, PrMark::Closed] {
                     let (fill, on_fill) = super::overview_card::pill(mark, &r);
