@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: tasks review round 1 (run by orchestrator; rubric rubrics/tasks.md; also confirm checklists/requirements.md items 16–17), then gate (specs-only) and design PR
+- **Phase**: design PR
+- **Next step**: orchestrator waits on design PR CI and merges; then M1 (blocked on #1269–#1275)
 
 ## Pull requests
 
@@ -34,6 +34,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 1 | clarify | FR-004: is the guide-equals-bindings check the micold-core logic + unit tests clause? | Yes: micold-core test compares a marked shortcut table in reviewing-changes.md with the bound review key table; page gets -micold-docs | agent | crates/micold-core/tests/terminal_only_doc.rs; .gitattributes:125 |
 | 2 | clarify | FR-009: visual pass widths | 1280×800 only, both themes; other widths via FR-007 gates | agent | review-redesign.md#Tasks; issue acceptance |
 | 3 | clarify | FR-012: unbuilt mockup elements removed or labelled? | Doc-listed follow-ups (split option, FR-013 list) stay labelled "follow-up, not built"; other unbuilt elements removed | agent | review-redesign.md#0 ("Split option … Follow-up") |
+| 4 | tasks | M1 has 13 tasks, over the ~10-task split threshold: split? | No: M1 is mostly docs plus one test, under ~800 lines | agent | tasks review round 1 F2 |
+| 5 | tasks | M2 has 12 tasks, over the ~10-task split threshold: split? | No: M2's single fixture re-record (FR-005) cannot be split across PRs | agent | tasks review round 1 F2; spec FR-005 |
 
 ## Review rounds
 
@@ -44,7 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | a39dc72ffead95575b27b0702260cb2dd3dc760a:428a3f5fc565c1a7898b2b37503471f52e1f5e0a | CHANGES: 3 MAJOR, 3 MINOR (run by orchestrator); all fixed: F1 Pull requests section rewritten in outline + link text + §A2 grep; F2 review_tab_fits calls status-bar and session-area checks made pub(crate); F3 core table is a requirement on #1274, blocker issue if missing, no move here; F4 session_area_stability press tests named; F5 stub `gh` in visual-pass world; F6 thinner-table fallbacks in shortcut contract |
 | Plan | 2 | 82562df08a1ccd946a30c12d3291e816b721a0b9:be1df5925e6a15b503e9550140c38e290b0a4075 | CHANGES (sonnet): F2–F6 fixes verified; 1 MAJOR: §A2 `Changes view` grep would still hit settings.md:653/659, worktrees-and-sessions.md:978, agent-tools.md:299 — fixed: every hit listed in outline § Inbound links and plan §3 as reworded to the Review tab |
 | Plan | 3 | b071908fcf6dd7d0c516e4321efa5f0e7d2ee778:c8b7b7954d99ef1165f82f84f9e53ed1e8e5354a | CLEAN, 1 MINOR (sonnet): parallel-runs.md:84,91,92, docs/README.md:45, layout-snapshot.md:105 also say "Changes view" — fixed, prose only: added to outline § Inbound links and plan §3 as reworded to the Review tab |
-| Tasks | 1 | 2172de0899146cb46d218285f19e84958b64c45d:07827f22ca321e5ed423241daeacccd0ba41a4e7 | pending (run by orchestrator) |
+| Tasks | 1 | 2172de0899146cb46d218285f19e84958b64c45d:07827f22ca321e5ed423241daeacccd0ba41a4e7 | CLEAN, 3 MINOR (session model, run by orchestrator; speckit-analyze could not run, reviewer checked cross-artifact consistency in its place); all fixed: F1 checklist items 16–17 ticked, notes say clarify answered all three; F2 M1/M2 size kept, decisions 4–5; F3 T005 names the `#[path]` include of marked_table.rs, M1 Verify adds `review_sheet_doc` |
 
 ## Declined review findings
 
