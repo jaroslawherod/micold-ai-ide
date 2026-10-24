@@ -237,6 +237,28 @@ pub fn elevation_shadow(r: Roles, level: u8) -> Shadow {
     }
 }
 
+/// The shadow of elevation `level` grown from none by `strength` (feature 1299, R4, contract C4):
+/// its colour alpha, `offset.y` and `blur_radius` each times `strength.clamp(0.0, 1.0)`, as CSS
+/// interpolates a `box-shadow` from `none`. `1.0` is [`elevation_shadow`], `0.0` no shadow.
+pub(crate) fn eased_shadow(r: Roles, level: u8, strength: f32) -> Shadow {
+    let s = strength.clamp(0.0, 1.0);
+    if s <= 0.0 {
+        return Shadow::default();
+    }
+    let full = elevation_shadow(r, level);
+    if s >= 1.0 {
+        return full;
+    }
+    Shadow {
+        color: Color {
+            a: full.color.a * s,
+            ..full.color
+        },
+        offset: iced::Vector::new(full.offset.x, full.offset.y * s),
+        blur_radius: full.blur_radius * s,
+    }
+}
+
 /// A container at an elevation level, with the given corner size.
 ///
 /// The single place a surface's depth is expressed, so "which containers are elevated, and how" is
@@ -1146,5 +1168,30 @@ mod tests {
         let r = tokens::roles(ColorScheme::Dark);
         assert_eq!(color(r.on_surface).a, 1.0);
         assert_eq!(disabled_color(r.on_surface).a, DISABLED_OPACITY);
+    }
+
+    // --- Feature 1299: the expanded card's shadow eases (C4, R4) -------------------------------
+
+    /// C4, FR-010: at 1 the eased shadow is the level's own, at 0 none, at 0.5 its alpha, offset
+    /// and blur are half the level's, and a strength outside `0..=1` is clamped.
+    #[test]
+    fn an_eased_shadow_scales_the_levels_shadow_by_its_strength() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let full = elevation_shadow(r, elevation::MENU);
+            assert!(full.color.a > 0.0 && full.blur_radius > 0.0 && full.offset.y > 0.0);
+            assert_eq!(eased_shadow(r, elevation::MENU, 1.0), full);
+            assert_eq!(eased_shadow(r, elevation::MENU, 0.0), Shadow::default());
+            let half = eased_shadow(r, elevation::MENU, 0.5);
+            assert!((half.color.a - full.color.a / 2.0).abs() < 1e-6, "{half:?}");
+            assert_eq!(
+                (half.color.r, half.color.g, half.color.b),
+                (full.color.r, full.color.g, full.color.b)
+            );
+            assert!((half.offset.y - full.offset.y / 2.0).abs() < 1e-6);
+            assert!((half.blur_radius - full.blur_radius / 2.0).abs() < 1e-6);
+            assert_eq!(eased_shadow(r, elevation::MENU, 1.5), full);
+            assert_eq!(eased_shadow(r, elevation::MENU, -0.5), Shadow::default());
+        }
     }
 }
