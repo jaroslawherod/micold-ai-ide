@@ -3676,4 +3676,272 @@ mod tests {
             "the number is in view: {after:?} in {viewport:?}"
         );
     }
+
+    // ---- BUG-1298 (T050): the card as the Overview Card Redesign mockup draws it ----
+
+    /// The mockup's card width: its five-column grid in a 1312 px window.
+    const DESIGN_WIDTH: f32 = 243.0;
+
+    /// A backdrop no role is, so the card's own edge pixels tell themselves apart from it.
+    fn backdrop() -> iced::Color {
+        iced::Color::from_rgb8(255, 0, 255)
+    }
+
+    /// The mockup's "Needs action" card with an issue link (BUG-1298 `o1-action`), plus counts.
+    fn design_card() -> CardModel {
+        let mut m = model(CardState::Working, "fix-1117_ci-red-on-main");
+        m.kind = LocationType::Bugfix;
+        m.title = "CI red on main".into();
+        m.branch = Some("fix/1117_ci-red-on-main".into());
+        m.issue_link = Some(micold_core::issue_link::IssueLink {
+            label: "Issue #1117".into(),
+            address: "https://example.invalid".into(),
+        });
+        m.sessions = (1, 1);
+        m.activity = Some(micold_core::hook_activity::CurrentActivity {
+            line: "Running autopilot on #1117".into(),
+            ratio: None,
+        });
+        m.progress = Progress {
+            phase: Some(Phase::Implement),
+            ratio: Some(Ratio { done: 4, total: 10 }),
+            source: micold_core::task_progress::Source::Ledger,
+        };
+        m.prs = PrDisplay::Counts(micold_core::overview::PrCounts {
+            open: 1,
+            merged: 1,
+            open_capped: false,
+            merged_capped: false,
+        });
+        m
+    }
+
+    /// `model`'s card at the mockup's width with its links wired and `rows` (and `more`) drawn.
+    fn design_mounted(
+        model: &CardModel,
+        rows: Vec<CardPrRow>,
+        more: usize,
+        r: Roles,
+    ) -> Mounted<'static> {
+        Mounted::new_in(
+            container(
+                OverviewCard::<String>::new(model, r)
+                    .on_press("open".to_string())
+                    .on_issue_link("issue".to_string())
+                    .on_pr_link(|n| format!("pr{n}"))
+                    .pull_requests(rows, more),
+            )
+            .width(Length::Fixed(DESIGN_WIDTH)),
+            Size::new(DESIGN_WIDTH, 1000.0),
+        )
+    }
+
+    /// The first row under the header: scanning down the card's middle from the top edge, the
+    /// first row that is no longer `header`.
+    fn header_bottom(pixels: &[u8], w: u32, header: Rgb) -> f32 {
+        let x = DESIGN_WIDTH / 2.0;
+        let mut y = 2.0;
+        while is_colour(pixels, w, (x, y), header) {
+            y += 1.0;
+        }
+        y
+    }
+
+    /// The paragraph whose words start with `start`.
+    fn starting<'p>(
+        text: &'p [super::super::test_support::Painted],
+        start: &str,
+    ) -> &'p super::super::test_support::Painted {
+        text.iter()
+            .find(|p| p.content.starts_with(start))
+            .unwrap_or_else(|| panic!("nothing starts {start:?}: {text:?}"))
+    }
+
+    /// T050 (a), FR-021: a 1 px `outline_variant` edge runs down the card's left and right, the
+    /// header's included, and along its bottom, and the body is the `surface` role, in both
+    /// schemes and every state.
+    #[test]
+    fn the_card_is_an_outlined_frame_on_the_surface() {
+        for r in [roles(), super::super::test_support::dark_roles()] {
+            for state in CardState::ALL {
+                let mut m = design_card();
+                m.state = state;
+                let mut card = design_mounted(&m, Vec::new(), 0, r);
+                let (pixels, w) = card.drawn(backdrop());
+                let h = card.node.size().height;
+                let header = palette(state, &r).header;
+                let band = header_bottom(&pixels, w, header) - 4.0;
+                for spot in [
+                    (0.0, band),
+                    (DESIGN_WIDTH - 1.0, band),
+                    (0.0, h / 2.0),
+                    (DESIGN_WIDTH - 1.0, h / 2.0),
+                    (DESIGN_WIDTH / 2.0, h - 1.0),
+                ] {
+                    assert!(
+                        is_colour(&pixels, w, spot, r.outline_variant),
+                        "{state:?}: {spot:?} is not the 1 px outline_variant edge"
+                    );
+                }
+                for spot in [(1.0, h / 2.0), (DESIGN_WIDTH / 2.0, h - 4.0)] {
+                    assert!(
+                        is_colour(&pixels, w, spot, r.surface),
+                        "{state:?}: {spot:?} inside the edge is not the surface role"
+                    );
+                }
+            }
+        }
+    }
+
+    /// T050 (b), FR-022: the header's words paint at 13 px (the state word semibold, the type word
+    /// at 85 % of the header's colour), no type glyph paints, and the header is padded 8 px above
+    /// and below its words and 14 px inside the edge at its start.
+    #[test]
+    fn the_header_is_13_px_without_a_type_glyph_and_padded_8_by_14() {
+        for r in [roles(), super::super::test_support::dark_roles()] {
+            let m = design_card();
+            let p = palette(m.state, &r);
+            let mut card = design_mounted(&m, Vec::new(), 0, r);
+            let text = card.painted_text();
+            let state_word = word(&text, m.state.label());
+            let type_word = word(&text, m.kind.label());
+            assert_eq!(state_word.size, 13.0, "the state word");
+            assert_eq!(type_word.size, 13.0, "the type word");
+            assert_eq!(state_word.font.weight, iced::font::Weight::Semibold);
+            assert_eq!(type_word.font.weight, iced::font::Weight::Medium);
+            let mut faded = style::color(p.on_header);
+            faded.a = 0.85;
+            assert_eq!(type_word.color, faded, "the type word is at 85 %");
+            let glyph = type_icon(m.kind).glyph().to_string();
+            assert!(
+                !text.iter().any(|t| t.content == glyph),
+                "no type glyph: {text:?}"
+            );
+            let state_glyph = word(&text, &state_icon(m.state).glyph().to_string());
+            assert!(
+                (state_glyph.bounds.x - 15.0).abs() < 0.5,
+                "1 px edge and 14 px padding before the state icon: {:?}",
+                state_glyph.bounds
+            );
+            let (pixels, w) = card.drawn(backdrop());
+            let bottom = header_bottom(&pixels, w, p.header);
+            let line = state_word.bounds.y + state_word.bounds.height;
+            assert!(
+                (state_word.bounds.y - 9.0).abs() < 1.0 && (bottom - line - 8.0).abs() < 1.0,
+                "8 px above and below the words: {:?}, header ends at {bottom}",
+                state_word.bounds
+            );
+        }
+    }
+
+    /// T050 (c), FR-023, FR-024: the issue link, the short branch (monospace, 13 px) and the
+    /// sessions phrase paint on one line, in that order, at the mockup's width.
+    #[test]
+    fn the_link_branch_and_sessions_share_one_meta_line() {
+        let m = design_card();
+        let text = design_mounted(&m, Vec::new(), 0, roles()).painted_text();
+        let link = word(&text, "Issue #1117");
+        let branch = word(&text, "fix/1117");
+        let dot = starting(&text, "\u{b7}");
+        assert_eq!(branch.font, iced::Font::MONOSPACE, "the branch is monospace");
+        assert_eq!(branch.size, 13.0, "the branch is 13 px");
+        assert_eq!(link.size, 13.0, "the link is 13 px");
+        assert_eq!(link.font.weight, iced::font::Weight::Semibold);
+        for (what, p) in [("branch", branch), ("sessions", dot)] {
+            assert!(
+                (p.bounds.center_y() - link.bounds.center_y()).abs() < 3.0,
+                "the {what} {:?} is on the link's line {:?}",
+                p.bounds,
+                link.bounds
+            );
+        }
+        assert!(
+            link.bounds.x < branch.bounds.x && branch.bounds.x < dot.bounds.x,
+            "link, branch, sessions: {:?} {:?} {:?}",
+            link.bounds,
+            branch.bounds,
+            dot.bounds
+        );
+    }
+
+    /// T050 (d), FR-025: "NOW" paints before the activity, on its first line, and the activity
+    /// is in the body text colour.
+    #[test]
+    fn now_leads_the_activity_line() {
+        let m = design_card();
+        let r = roles();
+        let text = design_mounted(&m, Vec::new(), 0, r).painted_text();
+        let activity = text
+            .iter()
+            .find(|p| p.content.contains("Running autopilot"))
+            .unwrap_or_else(|| panic!("no activity: {text:?}"));
+        assert!(
+            activity.content.starts_with("NOW"),
+            "NOW leads the activity's first line: {activity:?}"
+        );
+        assert_eq!(activity.color, style::color(palette(m.state, &r).on_body));
+    }
+
+    /// T050 (e), FR-025: the 6 px bar lies above the progress caption, which reads "tasks".
+    #[test]
+    fn the_bar_lies_above_the_caption() {
+        let m = design_card();
+        let mut card = design_mounted(&m, Vec::new(), 0, roles());
+        let text = card.painted_text();
+        let caption = word(&text, "Implement \u{b7} 4/10 tasks");
+        assert_eq!(caption.size, 13.0);
+        let bars: Vec<Rectangle> = leaves(&card.node)
+            .into_iter()
+            .filter(|l| (l.height - 6.0).abs() < 0.01 && l.width > 100.0)
+            .collect();
+        assert_eq!(bars.len(), 1, "one 6 px bar: {bars:?}");
+        assert!(
+            bars[0].y + bars[0].height <= caption.bounds.y,
+            "the bar {:?} lies above the caption {:?}",
+            bars[0],
+            caption.bounds
+        );
+    }
+
+    /// T050 (f), FR-026: a card that draws rows paints no counts line, and its more line reads
+    /// "+1 more, hover to see".
+    #[test]
+    fn a_card_with_rows_has_no_counts_line() {
+        let m = design_card();
+        let rows = vec![
+            pr_row(1118, PrMark::Open, Some("checks failing")),
+            pr_row(1103, PrMark::Merged, None),
+        ];
+        let text = design_mounted(&m, rows, 1, roles()).painted_text();
+        assert!(
+            !text.iter().any(|t| t.content.contains(" open") || t.content.contains(" merged")),
+            "no counts line under rows: {text:?}"
+        );
+        let more = word(&text, "+1 more, hover to see");
+        assert_eq!(more.size, 13.0);
+    }
+
+    /// T050 (g), FR-027: the body's first line, the title, starts 12 px under the header and
+    /// 14 px inside the edge, at weight 600.
+    #[test]
+    fn the_body_starts_12_px_under_the_header_and_14_px_in() {
+        let m = design_card();
+        let r = roles();
+        let mut card = design_mounted(&m, Vec::new(), 0, r);
+        let text = card.painted_text();
+        let title = word(&text, "CI red on main");
+        assert_eq!(title.font.weight, iced::font::Weight::Semibold, "title 600");
+        let (pixels, w) = card.drawn(backdrop());
+        let bottom = header_bottom(&pixels, w, palette(m.state, &r).header);
+        assert!(
+            (title.bounds.y - bottom - 12.0).abs() < 1.0,
+            "12 px under the header (ends {bottom}): {:?}",
+            title.bounds
+        );
+        assert!(
+            (title.bounds.x - 15.0).abs() < 0.5,
+            "1 px edge and 14 px padding: {:?}",
+            title.bounds
+        );
+    }
 }
