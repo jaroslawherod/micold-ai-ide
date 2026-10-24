@@ -872,7 +872,7 @@ pub const COMPONENTS: &[Entry] = &[
         density: &[],
         posed: &["the application's mark"],
         live: &["hover: the application's name"],
-        interactive: false,
+        interactive: true,
         section: Section::Components,
         layout: Layout::Inline,
         render: sections::surfaces::app_mark,
