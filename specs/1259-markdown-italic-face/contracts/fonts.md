@@ -71,6 +71,8 @@ Loads each of `ROBOTO_FACES` with `FontSystem::load_font`, then calls
 `pin_roboto_italics(fonts.raw().db_mut())`. Glue: no branch, no error path (`load_font` logs and
 skips bytes it cannot parse; `tests/roboto_font.rs` fails on such a file, so it cannot ship).
 
+Milestone note: M1 ships `install_roboto` without the pin call; the call joins in M2 (T020).
+
 **Callers** (each exactly once, before any text is shaped), replacing the Roboto registration each
 does today:
 
