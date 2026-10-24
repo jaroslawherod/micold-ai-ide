@@ -23,7 +23,7 @@
 //! Each component is laid out under two differently-sized limits. That is what separates the
 //! outcomes an axis can have, which no single measurement can:
 //!
-//! - **`Fixed`** — the same number under both, equal to the anatomy constant. §7.1's 64dp bar,
+//! - **`Fixed`** — the same number under both, equal to the anatomy constant. The 43dp app bar,
 //!   §7.3's 48dp target and 40dp button, §7.5's 48dp menu item, §7.6's 32dp chip, §7.7's 56dp field.
 //! - **`Fill`** — tracks the limit. Intended for the app bar's width and a menu item's; a defect
 //!   anywhere a contract states a number.
@@ -287,9 +287,9 @@ fn a_chip_is_32dp_tall_and_sized_by_its_label() {
     );
 }
 
-/// §7.1: the small app bar is a fixed height (43dp since feature 1127) that spans its window. The one component here with a
-/// deliberately elastic axis — which is the point of declaring the axes separately rather than
-/// asserting "nothing fills".
+/// §7.1: the small app bar is a fixed height (43dp since feature 1127) that spans its window. The
+/// one component here with a deliberately elastic axis — which is the point of declaring the axes
+/// separately rather than asserting "nothing fills".
 ///
 /// Raised, because at rest the `Toolbar` element is the bar *and* its 1dp separator, and the 43dp
 /// under test is the bar's.

@@ -55,8 +55,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 8eb3f915c06f64566ad2e62c6f69da7d28f756f5:08ff39f5c466168d2ad5a9ff688e3b192d4f9461 | CLEAN (3 MINOR, fixed, prose only) |
 | Plan | 1 | 11ac16c31ec7892dbc9503a8efc59c62abc11341:7c59c3b9c7fa3e6b0a2d12520149d5778c88796e | CLEAN (1 MINOR: APP_ICON_RGBA is a rename of private ICON_RGBA; fixed, prose only) |
 | Tasks | 1 | 84a84006f20dfcb2715de005af939bd8cc8f3def:605ab3e676a083538fdd7b001e0f5be80469cecb | CLEAN (3 MINOR: `app_bar.*` paths in T032/T044, T022 under Implementation, M1 Verify narrowed to its quickstart parts; fixed, prose only) |
+| M1 review A (code-review, high) | 1 | 0f05699fb840f8b46965b4b2bbd40170d47bdf41:bb8a87948c85d1b1a7644e73d13adab2b78c7c74 | 10 findings (no BLOCKER): fixed 5 — Lane lays each child out once when all fit; status bar measures floors only for `Shorten` items; one shared app-mark handle and a size assert on the icon bytes; exact-match asserts in `title_bar_fits`; stale 64dp comments. Declined 5 (below) |
 
 ## Declined review findings
+
+- M1 A: `rising_above(app_bar::HEIGHT)` for the shell-instance menu (`ui/mod.rs`) — pre-existing coupling to a bar that no longer sits at the window's bottom; the panel's bottom is now 43 dp above the window edge and still clears the 28 dp status bar. Out of M1's scope; follow-up below.
+- M1 A: selected `IconButton` drops the hover layer — the same rule as `Button::selected` (the selected layer except while pressed); the bar's Settings button is inert while selected.
+- M1 A: `MenuTrigger` hard-codes the 40 dp target and keyboard reach — T005 asks for keyboard reach on `MenuTrigger`; it is the toolbar's trigger (its doc) and the bar is its only application caller.
+- M1 A: 1.5 dp / 9.5 dp fractional offsets — research R1 chose 43 dp with 40 dp controls (1.5 dp slack) on purpose.
+- M1 A: 64 px icon drawn at 24 dp may alias — spec Assumptions use the existing icon; the visual pass judges it.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
@@ -71,5 +78,6 @@ None.
 
 ## Follow-ups not done
 
+- `ui/mod.rs` shell-instance menu `.rising_above(anatomy::app_bar::HEIGHT)` (and the showcase's twin) reads the title bar's height for a bottom bar; it should read the bar it rises from (M1 review A).
 - T051 (visual pass of quickstart Part B) is in no milestone: the close unit runs it (analyze G5).
 - Analyze LOWs left as is: G2 (icon contrast pairs; icons use existing app-bar roles), G4 (tooltip placement test), F3, F5. (T1 fixed with tasks review F2.)

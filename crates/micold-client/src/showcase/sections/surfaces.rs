@@ -567,20 +567,16 @@ pub fn field_group<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
     )
 }
 
-/// The application's mark, made once (feature 1127): one handle keeps one texture across frames.
-static APP_MARK: std::sync::LazyLock<iced::widget::image::Handle> =
-    std::sync::LazyLock::new(|| {
-        iced::widget::image::Handle::from_rgba(
-            crate::ui::APP_ICON_SIDE,
-            crate::ui::APP_ICON_SIDE,
-            crate::ui::APP_ICON_RGBA.to_vec(),
-        )
-    });
-
 /// `Toolbar` — the title bar's shape (feature 1127): the mark and a leading label alone, then with a
 /// fixed leading item and trailing actions.
 pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    let mark = || material::AppMark::new(APP_MARK.clone(), micold_core::metadata::APP_NAME, roles);
+    let mark = || {
+        material::AppMark::new(
+            crate::ui::app_mark_handle(),
+            micold_core::metadata::APP_NAME,
+            roles,
+        )
+    };
     let leading = || {
         material::Button::text("micold-ai-ide", roles)
             .leading(Icon::OpenProject)
@@ -627,7 +623,11 @@ pub fn app_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Me
     arrange(
         vec![posed(
             "the application's mark",
-            material::AppMark::new(APP_MARK.clone(), micold_core::metadata::APP_NAME, roles),
+            material::AppMark::new(
+                crate::ui::app_mark_handle(),
+                micold_core::metadata::APP_NAME,
+                roles,
+            ),
             roles,
         )],
         Layout::Inline,

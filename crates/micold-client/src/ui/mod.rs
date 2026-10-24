@@ -104,6 +104,7 @@ pub(crate) mod parallel_dialog;
 pub mod syntax;
 pub mod terminal;
 mod toolbar;
+pub(crate) use toolbar::app_mark_handle;
 /// The application's icon as raw RGBA, read by the window's icon and the title bar's app mark
 /// (feature 1127, R9).
 pub use toolbar::{APP_ICON_RGBA, APP_ICON_SIDE};

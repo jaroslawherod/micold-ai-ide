@@ -81,16 +81,20 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
                 .map(|p| p.content.as_str())
                 .collect();
             let drawn = |wanted: &str| in_bar.iter().any(|c| c.contains(wanted));
+            assert!(
+                in_bar.iter().any(|c| *c == "3"),
+                "{at}: the unread mark's count is not drawn: {in_bar:?}"
+            );
+            assert!(
+                in_bar
+                    .iter()
+                    .any(|c| c.len() > 4
+                        && SIXTY_CHARACTER_PROJECT.starts_with(c.trim_end_matches('…'))),
+                "{at}: the project name, whole or shortened, is not drawn: {in_bar:?}"
+            );
             let settings = Icon::Settings.glyph().to_string();
             let menu = Icon::Menu.glyph().to_string();
-            let project_start: String = SIXTY_CHARACTER_PROJECT.chars().take(1).collect();
-            for wanted in [
-                project_start.as_str(),
-                "Overview",
-                "3",
-                settings.as_str(),
-                menu.as_str(),
-            ] {
+            for wanted in ["Overview", settings.as_str(), menu.as_str()] {
                 assert!(
                     drawn(wanted),
                     "{at}: {wanted:?} is not drawn in the bar: {in_bar:?}"

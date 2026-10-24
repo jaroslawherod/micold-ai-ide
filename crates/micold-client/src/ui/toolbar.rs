@@ -44,9 +44,12 @@ pub const APP_ICON_RGBA: &[u8] = include_bytes!("../../../../assets/icon/icon-64
 /// The side of [`APP_ICON_RGBA`], in pixels.
 pub const APP_ICON_SIDE: u32 = 64;
 
+// The bytes are a square of `APP_ICON_SIDE` RGBA pixels, or every reader decodes them wrongly.
+const _: () = assert!(APP_ICON_RGBA.len() == (APP_ICON_SIDE * APP_ICON_SIDE * 4) as usize);
+
 /// The app mark's picture, made once: one handle keeps one texture across frames, so the mark costs
 /// no upload per frame (R9, `tests/idle_requests_no_frames.rs`).
-static APP_MARK: LazyLock<image::Handle> = LazyLock::new(|| {
+static APP_MARK_HANDLE: LazyLock<image::Handle> = LazyLock::new(|| {
     image::Handle::from_rgba(APP_ICON_SIDE, APP_ICON_SIDE, APP_ICON_RGBA.to_vec())
 });
 
@@ -74,6 +77,11 @@ pub fn overflow_items(_state: &State) -> Vec<MenuItem<Message>> {
             Message::Help(HelpMsg::AboutOpened),
         ),
     ]
+}
+
+/// The app mark's picture: the one handle every caller shares (the bar and the showcase).
+pub(crate) fn app_mark_handle() -> image::Handle {
+    APP_MARK_HANDLE.clone()
 }
 
 /// Render the title bar (feature 1127, contract B2): the app mark, the project switcher, the
@@ -122,7 +130,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r).tooltip("More");
 
     Toolbar::new(r)
-        .mark(AppMark::new(APP_MARK.clone(), APP_NAME, r))
+        .mark(AppMark::new(app_mark_handle(), APP_NAME, r))
         .leading(switcher)
         .leading_fixed(overview_button(state, r))
         .action(Tooltip::new(settings, "Settings", r))

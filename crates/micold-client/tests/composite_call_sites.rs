@@ -272,24 +272,26 @@ fn the_library_is_excluded_because_it_owns_the_composite() {
                 .keys()
                 .any(|k| k.starts_with(&format!("ui/{layer}/"))),
             "ui/{layer}/ is in the scan, but it is the layer that builds the composite — \
-             `button.rs`'s leading slot is `row![icon(..), content]` and would fail its own rule"
+             `button.rs` lays `icon(..)` beside its content and would fail its own rule"
         );
     }
-    // Not merely absent from the scan: the exempted layer really does build a glyph into a row of
-    // its own, so the exemption is load-bearing rather than decorative. Only the glyph half is
-    // asserted — the slot's other child is `b.content`, an already-built `Element`, so `button.rs`
-    // would not trip the full rule anyway. What matters is that the leading slot is still a row
-    // here; if it stops being one, this exemption is protecting nothing and should be re-examined.
+    // Not merely absent from the scan: the exempted layer really does build a glyph beside its
+    // label, so the exemption is load-bearing rather than decorative. Since feature 1127 the
+    // leading slot is a give-way lane rather than a `row!` (the label shortens, the glyph keeps its
+    // width), so what is asserted is that `button.rs` still pushes a glyph onto that lane beside
+    // `b.content`; if it stops doing so, this exemption is protecting nothing and should be
+    // re-examined.
     let button = fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../micold-material/src/button.rs"),
     )
     .expect("read button.rs");
     let code = strip_comments_keep_lines(&button);
+    let compact: String = code.split_whitespace().collect();
     assert!(
-        composites(&code)
-            .iter()
-            .any(|c| builds_glyph(&c.direct_children)),
-        "button.rs no longer builds its leading slot as a row; re-check what this exemption is for"
+        compact.contains("Lane::hugging(")
+            && compact.contains(".push(icon(")
+            && compact.contains(".push(b.content,"),
+        "button.rs no longer builds its glyph beside its label; re-check what this exemption is for"
     );
 }
 
