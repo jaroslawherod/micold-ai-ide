@@ -154,7 +154,11 @@ pub use material::glyph::{icon, icon_colored, MATERIAL_SYMBOLS, MATERIAL_SYMBOLS
 pub use material::{
     install_monospace, pin_monospace, FIRA_MONO_BOLD_BYTES, FIRA_MONO_REGULAR_BYTES, MONO_FAMILY,
 };
-pub use material::{ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES};
+pub use material::{
+    install_roboto, ROBOTO, ROBOTO_FACES, ROBOTO_FAMILY, ROBOTO_ITALIC_BYTES, ROBOTO_MEDIUM_BYTES,
+    ROBOTO_MEDIUM_ITALIC_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES,
+    ROBOTO_SEMIBOLD_ITALIC_BYTES, ROBOTO_WEIGHTS,
+};
 
 use crate::features::connection::ConnectionStatus;
 

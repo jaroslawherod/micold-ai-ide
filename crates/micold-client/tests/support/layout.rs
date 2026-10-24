@@ -187,18 +187,13 @@ pub fn reference_font_at(weight: u16) -> Font {
 pub fn renderer() -> iced::Renderer {
     static LOADED: Once = Once::new();
     LOADED.call_once(|| {
-        iced::advanced::graphics::text::font_system()
-            .write()
-            .expect("the global font system lock was poisoned")
-            .load_font(Cow::Borrowed(REFERENCE_FONT_BYTES));
-        iced::advanced::graphics::text::font_system()
-            .write()
-            .expect("the global font system lock was poisoned")
-            .load_font(Cow::Borrowed(REFERENCE_FONT_MEDIUM_BYTES));
-        iced::advanced::graphics::text::font_system()
-            .write()
-            .expect("the global font system lock was poisoned")
-            .load_font(Cow::Borrowed(REFERENCE_FONT_SEMIBOLD_BYTES));
+        // Every shipped Roboto face, upright and italic, registered as the application registers
+        // them (feature 1259). The `REFERENCE_FONT_*` constants stay for the apparatus guard.
+        micold_client::ui::install_roboto(
+            &mut iced::advanced::graphics::text::font_system()
+                .write()
+                .expect("the global font system lock was poisoned"),
+        );
         iced::advanced::graphics::text::font_system()
             .write()
             .expect("the global font system lock was poisoned")

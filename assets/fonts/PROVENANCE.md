@@ -6,7 +6,7 @@ and each names the licence file that covers it:
 | Font | Files | Licence | Licence text |
 |------|-------|---------|--------------|
 | Material Symbols Outlined | `MaterialSymbolsOutlined.ttf` | Apache-2.0 | `LICENSE` |
-| Roboto | `Roboto-Regular.ttf`, `Roboto-Medium.ttf`, `Roboto-SemiBold.ttf` | SIL Open Font License 1.1 | `LICENSE-Roboto-OFL.txt` |
+| Roboto | `Roboto-Regular.ttf`, `Roboto-Medium.ttf`, `Roboto-SemiBold.ttf`, `Roboto-Italic.ttf`, `Roboto-MediumItalic.ttf`, `Roboto-SemiBoldItalic.ttf` | SIL Open Font License 1.1 | `LICENSE-Roboto-OFL.txt` |
 | Fira Mono | `FiraMono-Regular.ttf`, `FiraMono-Bold.ttf` | SIL Open Font License 1.1 | `LICENSE-FiraMono-OFL.txt` |
 
 **Why two licence files rather than one.** Feature 018's T014a required this to be decided
@@ -139,17 +139,23 @@ The font already contains every upstream glyph, so no regeneration step is neede
 
 ---
 
-## Roboto (Regular 400, Medium 500)
+## Roboto (Regular 400, Medium 500, SemiBold 600, and their italics)
 
-**Files**: `Roboto-Regular.ttf`, `Roboto-Medium.ttf`
+**Files**: `Roboto-Regular.ttf`, `Roboto-Medium.ttf`, `Roboto-SemiBold.ttf`, `Roboto-Italic.ttf`,
+`Roboto-MediumItalic.ttf`, `Roboto-SemiBoldItalic.ttf`
 
 ### Source
 
 - **Upstream**: [google/fonts](https://github.com/google/fonts), `ofl/roboto/`
 - **Original**: `Roboto[wdth,wght].ttf` — the upstream variable font
   - sha256 `d7598e12c5dbef095ff8272cfc55da0250bd07fbdecbac8a530b9b277872a134`
+- **Original (italics)**: `Roboto-Italic[wdth,wght].ttf` — the upstream italic variable font,
+  fetched from
+  `https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Italic[wdth,wght].ttf`
+  - sha256 `9725a847af6b460ffca162ae66d20dad48b01876137947180b42d7dcd7887182`
 - **Licence**: SIL Open Font License 1.1 (see `LICENSE-Roboto-OFL.txt`, copied verbatim from
-  `ofl/roboto/OFL.txt`)
+  `ofl/roboto/OFL.txt`). It covers all six files: the italics come from the same project, under the
+  same licence.
 - **Copyright**: Copyright 2011 The Roboto Project Authors
   (<https://github.com/googlefonts/roboto-classic>)
 
@@ -165,12 +171,21 @@ role at its default weight and silently collapses the scale's 400/500 distinctio
 | `Roboto-Regular.ttf` | 400 | display, headline, body roles |
 | `Roboto-Medium.ttf` | 500 | title medium/small, all label roles |
 | `Roboto-SemiBold.ttf` | 600 | the Overview card's semibold words (BUG-1298) |
+| `Roboto-Italic.ttf` | 400 italic | markdown emphasis in body text (feature 1259) |
+| `Roboto-MediumItalic.ttf` | 500 italic | emphasis in title and label roles (feature 1259) |
+| `Roboto-SemiBoldItalic.ttf` | 600 italic | emphasis in bold runs, headings and header cells (feature 1259) |
 
 The third instance came with BUG-1298: the Overview Card Redesign mockup sets the card's title,
 state word, issue link, "NOW", pull request pills and alarming status words at weight 600. Without
 a 600 face the matcher would fall back to Medium and the card would read a shade lighter than its
 design. It is cut from the same variable font with the same command, `wght` 600:
 `(600, "Roboto-SemiBold.ttf")`.
+
+The three italics came with feature 1259: markdown emphasis selects `Slant::Italic`, and without an
+italic Roboto it drew upright. One italic per upright weight ships, so a role or a bold run (which
+resolves to 600) that gains emphasis keeps its weight. They are cut from the upstream **italic**
+variable font with the same command, reading `Roboto-Italic[wdth,wght].ttf` with the list
+`[(400, "Roboto-Italic.ttf"), (500, "Roboto-MediumItalic.ttf"), (600, "Roboto-SemiBoldItalic.ttf")]`.
 
 ### How these files were produced
 
@@ -199,15 +214,19 @@ Resulting artifacts:
 | `Roboto-Regular.ttf` | `928c76997bb8f7c298f0f19f92b016333af514d47cedc25ba7cc99c307d4c4f5` | `Roboto` | — |
 | `Roboto-Medium.ttf` | `835e5e39f60aee644a9ee55268ad698c755e271b6d3d9a906861b08d41f51885` | `Roboto Medium` | `Roboto` |
 | `Roboto-SemiBold.ttf` | `4f87cafb0738d613b4ad4c873255aaed4f169cb567b50ce78f76a30d480c94f7` | `Roboto SemiBold` | `Roboto` |
+| `Roboto-Italic.ttf` | `2f700a535d646e50887c1623339d31c4bda6b808d2c30db7e7721c8264a26f97` | `Roboto` | — |
+| `Roboto-MediumItalic.ttf` | `709d3b3b226aa58d6a1ca6ab55906644197a47c68b5856aadab1b811eaa4ee64` | `Roboto Medium` | `Roboto` |
+| `Roboto-SemiBoldItalic.ttf` | `a446d79e013cbcf40aea0bf7294d13e68e10a727d1b35412878fe1d0c2ed0713` | `Roboto SemiBold` | `Roboto` |
 
 `Roboto-SemiBold.ttf` was cut on 2026-10-24 with fonttools 4.67.0 from the variable font with the
-sha256 above.
+sha256 above. The three italics were cut on 2026-10-24 with fonttools 4.67.0 from the italic
+variable font with the sha256 above; each reports its weight and the italic bit (`fsSelection` 1).
 
 The Medium instance putting `Roboto Medium` in name ID 1 is the standard convention — it exists for
 software that can only express a family plus regular/bold — while the real family stays in ID 16.
-Font matching resolves on the typographic family, so both faces belong to `Roboto` and are told
-apart by weight. `crates/micold-client/tests/roboto_font.rs` asserts exactly that, along with the
-weights, the static-ness, and coverage of the interface's own text.
+Font matching resolves on the typographic family, so every face belongs to `Roboto` and is told
+apart by weight and style. `crates/micold-client/tests/roboto_font.rs` asserts exactly that, along with the
+weights, the italic style, the static-ness, and coverage of the interface's own text.
 
 ### Coverage and fallback
 

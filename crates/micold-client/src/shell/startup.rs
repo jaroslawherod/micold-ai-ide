@@ -85,23 +85,27 @@ pub fn run() -> iced::Result {
     // `.font` can only add a face, while code must also stop resolving to the host. This also
     // removes any host face named `Fira Mono` and makes the bundled face the monospace family
     // (research R2). It runs before any text is shaped, since cosmic-text caches font matches.
-    micold_client::ui::install_monospace(
-        &mut iced::advanced::graphics::text::font_system()
+    //
+    // Every Roboto face, upright and italic, is registered on the same font system for the same
+    // reason (feature 1259): markdown emphasis must draw in the bundled italics, and only the font
+    // system can also keep a host Roboto from displacing them (the pin, contract C-2).
+    {
+        let mut fonts = iced::advanced::graphics::text::font_system()
             .write()
-            .expect("the global font system lock was poisoned"),
-    );
+            .expect("the global font system lock was poisoned");
+        micold_client::ui::install_monospace(&mut fonts);
+        micold_client::ui::install_roboto(&mut fonts);
+    }
     iced::application(boot, update, view)
         .title("Micold AI IDE")
         .theme(theme)
         // Roboto is the application's typeface, so the interface looks the same on every platform
-        // instead of inheriting whatever UI font the OS provides (FR-008). Code is drawn in the
-        // bundled Fira Mono, registered above rather than here. Every Roboto weight is registered
-        // because the type scale uses 400 and 500, the Overview card 600 (BUG-1298), and the
-        // matcher can only choose from what it has been given.
+        // instead of inheriting whatever UI font the OS provides (FR-008). Its faces, and the
+        // bundled Fira Mono code is drawn in, are registered above rather than here. Every Roboto
+        // weight is registered because the type scale uses 400 and 500, the Overview card 600
+        // (BUG-1298), emphasis the italic of each (feature 1259), and the matcher can only choose
+        // from what it has been given.
         .default_font(micold_client::ui::ROBOTO)
-        .font(micold_client::ui::ROBOTO_REGULAR_BYTES)
-        .font(micold_client::ui::ROBOTO_MEDIUM_BYTES)
-        .font(micold_client::ui::ROBOTO_SEMIBOLD_BYTES)
         // Registering fonts does not disable fallback: text outside a registered font's coverage —
         // a worktree named in Japanese, say — still resolves through the system's own font list
         // rather than rendering missing-glyph boxes (FR-013). Roboto covers Latin and the symbols

@@ -111,7 +111,10 @@ fn painted(
     if s.style.bold || strong {
         font.weight = Weight::Bold;
     }
-    if s.style.italic {
+    // Emphasis draws in Roboto's own italic at the span's weight (feature 1259). Code inside
+    // emphasis stays upright: the bundled Fira Mono has no italic, and a synthesised slant would
+    // misalign the column a code span is read in.
+    if s.style.italic && !s.style.code {
         font.style = Slant::Italic;
     }
     let link = s.link.as_ref();
@@ -280,6 +283,70 @@ mod tests {
 
     fn mounted(spans: &[Span]) -> Mounted<'_> {
         Mounted::new(LinkText::new(spans, roles()).on_link(|url| format!("open {url}")))
+    }
+
+    fn styled(bold: bool, italic: bool, code: bool) -> Span {
+        Span {
+            style: Style {
+                bold,
+                italic,
+                code,
+                ..Style::default()
+            },
+            ..plain("word")
+        }
+    }
+
+    /// The font `painted` gives `s` on a regular-weight base, neither muted, strong nor opening.
+    fn font_of(s: &Span) -> Font {
+        painted(s, super::super::ROBOTO, roles(), false, false, false)
+            .font
+            .expect("painted always sets a font")
+    }
+
+    /// FR-010: an italic span keeps the italic slant, at the base weight.
+    #[test]
+    fn an_italic_span_is_slanted_at_the_base_weight() {
+        let font = font_of(&styled(false, true, false));
+        assert_eq!(font.style, Slant::Italic, "an italic span is not slanted");
+        assert_eq!(font.weight, Weight::Normal, "an italic span changed weight");
+        assert_eq!(font.family, super::super::ROBOTO.family);
+    }
+
+    /// US2, FR-003: bold italic is bold and slanted, so it resolves to the 600 italic.
+    #[test]
+    fn a_bold_italic_span_is_bold_and_slanted() {
+        let font = font_of(&styled(true, true, false));
+        assert_eq!(
+            font.weight,
+            Weight::Bold,
+            "a bold-italic span lost its weight"
+        );
+        assert_eq!(
+            font.style,
+            Slant::Italic,
+            "a bold-italic span is not slanted"
+        );
+    }
+
+    /// Edge (inline code), contract C-4: code inside emphasis stays monospace and upright, and is
+    /// bold when also bold.
+    #[test]
+    fn code_inside_emphasis_stays_upright() {
+        let font = font_of(&styled(false, true, true));
+        assert_eq!(font.family, Font::MONOSPACE.family, "code is not monospace");
+        assert_eq!(font.style, Slant::Normal, "code inside emphasis is slanted");
+        let bold = font_of(&styled(true, true, true));
+        assert_eq!(
+            bold.weight,
+            Weight::Bold,
+            "bold code inside emphasis lost its weight"
+        );
+        assert_eq!(
+            bold.style,
+            Slant::Normal,
+            "bold code inside emphasis is slanted"
+        );
     }
 
     /// FR-004: one focus stop per activatable link; the relative link offers none.

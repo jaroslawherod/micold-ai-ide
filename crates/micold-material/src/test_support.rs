@@ -70,9 +70,9 @@ pub fn renderer() -> iced::Renderer {
         let mut fonts = iced::advanced::graphics::text::font_system()
             .write()
             .expect("the global font system lock was poisoned");
-        fonts.load_font(Cow::Borrowed(super::ROBOTO_REGULAR_BYTES));
-        fonts.load_font(Cow::Borrowed(super::ROBOTO_MEDIUM_BYTES));
-        fonts.load_font(Cow::Borrowed(super::ROBOTO_SEMIBOLD_BYTES));
+        // Every shipped Roboto face, upright and italic, registered the way the application
+        // registers them (feature 1259), so emphasis measures against the bundled italics.
+        super::install_roboto(&mut fonts);
         fonts.load_font(Cow::Borrowed(super::glyph::MATERIAL_SYMBOLS_BYTES));
         // The bundled Fira Mono, pinned as the monospace family the way the application pins it,
         // so code-like text measures against the shipped face rather than a host one (feature 1260).

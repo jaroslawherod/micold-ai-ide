@@ -122,6 +122,15 @@ fn emphasis_strikethrough_and_inline_code_are_styled_spans() {
         }
     );
     assert_eq!(
+        style("bold italic"),
+        Style {
+            bold: true,
+            italic: true,
+            ..Style::default()
+        },
+        "`***bold italic***` is one span both bold and italic (feature 1259, FR-009)"
+    );
+    assert_eq!(
         style("struck"),
         Style {
             strike: true,

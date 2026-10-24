@@ -8,7 +8,7 @@ Setext heading two
 ##### Heading five
 ###### Heading six
 
-A paragraph with **bold**, *italic*, ~~struck~~ and `inline code`, a soft
+A paragraph with **bold**, *italic*, ***bold italic***, ~~struck~~ and `inline code`, a soft
 break, and a hard break here\
 then the next line. Links: [the web](https://example.com/web), [mail](mailto:team@example.com),
 <https://example.com/auto>, a bare https://example.com/bare address, [script](javascript:alert)
