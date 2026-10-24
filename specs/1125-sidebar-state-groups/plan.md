@@ -133,7 +133,8 @@ layout gates.
 `docs/user-guide/worktrees-and-sessions.md` (*Browsing worktrees*, *Reading a worktree: name &
 tags*, *Refreshing the list*, *Filtering worktrees by tag*, *Resizing and hiding the sidebar*),
 `docs/user-guide/overview.md` (opening section), `docs/development/layout-snapshot.md` (covered
-states, exemptions), `docs/user-guide/icons.md` if it lists the sidebar's icons.
+states, exemptions), `docs/user-guide/icons.md` (the Overview row, hide and ⋯ locations),
+`docs/development/architecture.md` (where it names the sidebar's filter panel).
 
 ## Requirement map
 
@@ -237,8 +238,8 @@ crates/micold-client/tests/
 ├── support/covered_states.rs   # main-shell-sidebar-grouped
 └── fixtures/layout_snapshot.txt
 assets/fonts/PROVENANCE.md
-docs/user-guide/{worktrees-and-sessions.md,overview.md}
-docs/development/layout-snapshot.md
+docs/user-guide/{worktrees-and-sessions.md,overview.md,icons.md}
+docs/development/{layout-snapshot.md,architecture.md}
 ```
 
 **Structure Decision**: Existing workspace layout; rules in `micold-core`, render-free projection

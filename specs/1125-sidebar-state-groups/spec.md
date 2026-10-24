@@ -135,8 +135,9 @@ looks selected while the Overview is open.
    the selected look and no location row does; **When** the user then selects a location row,
    **Then** the Overview closes and that row wears the selected look, as selecting a session does
    today.
-5. **Given** Settings is open or no project is active, **When** the sidebar is shown, **Then** the
-   Overview row cannot be activated, as the top bar's button cannot (feature 813).
+5. **Given** Settings is open, **When** the sidebar is shown, **Then** the Overview row cannot be
+   activated, as the top bar's button cannot (feature 813); **given** no project is open, **then**
+   the sidebar shows no Overview row (Edge Cases *No project open*).
 6. **Given** a tag filter is active, **When** the badge is shown, **Then** it counts the locations
    the sidebar lists (the Overview's cards, feature 813 FR-001), as the top bar's badge does, so the
    two badges always agree. _(plan research R10: the top bar's badge counts the listed locations,
@@ -321,7 +322,7 @@ chords to reach a location in a collapsed group.
   the grouped order (feature 803's location order becomes this order).
 - **FR-007**: The sidebar's first row MUST be the Overview row (icon and "Overview"); activating it
   MUST open the Overview, and MUST do nothing more when the Overview is already open; it MUST be
-  inert while Settings is open or no project is active.
+  inert while Settings is open, and MUST NOT be shown while no project is open (Edge Cases).
 - **FR-008**: The Overview row MUST carry the same attention badge (state, count, words) as the top
   bar's Overview button, computed from the same cards (the locations the sidebar lists, feature 813
   FR-001), so the two never differ, with or without a tag filter.
