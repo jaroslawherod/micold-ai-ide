@@ -1388,11 +1388,7 @@ async fn an_interrupt_withdraws_the_turns_pending_permission_request() {
         window
             .until("the request withdrawn", |w| !w.resolved.is_empty())
             .await;
-        assert_eq!(
-            window.resolved,
-            [withdrawn.clone()],
-            "withdrawn once, TurnEnded"
-        );
+        assert_eq!(window.resolved, [withdrawn], "withdrawn once, TurnEnded");
         window.sees(id, "idle after the interrupt", idle).await;
     }
     assert_eq!(interrupts(dir).len(), 1, "one interrupt line");

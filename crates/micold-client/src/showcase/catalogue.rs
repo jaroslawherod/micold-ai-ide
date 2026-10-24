@@ -1428,4 +1428,13 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  changes is a focus ring that is *not* drawn, which the gallery cannot pose; its \
                  rule is held by `material/field_focus.rs`'s tests.",
     },
+    Exemption {
+        module: "cdk/focus_within.rs",
+        component: "FocusWithin",
+        reason: "a behaviour-layer wrapper with no appearance: it delegates layout, draw, operate \
+                 and overlay to its single child and reports which of the child's focusables holds \
+                 the keyboard (feature 941, T061 F5). What it changes is which control keeps its \
+                 focus ring after Tab, which the gallery cannot pose; its rule is held by its own \
+                 unit test and `tests/composer_tab.rs`.",
+    },
 ];
