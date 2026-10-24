@@ -1112,12 +1112,8 @@ fn the_overview_card_and_grid_are_posed() {
                 "{component}: pose \"{pose}\" is missing"
             );
         }
-        // The card answers no press; the grid's zoom pose has a button that flips full screen
-        // (feature 970).
-        assert_eq!(
-            entry.interactive,
-            component == "CardGrid",
-            "{component}: interactive"
-        );
+        // The card's expand-and-collapse pose answers a press (feature 1299); the grid's zoom pose
+        // has a button that flips full screen (feature 970).
+        assert!(entry.interactive, "{component}: interactive");
     }
 }
