@@ -706,6 +706,64 @@ pub fn stage_progress<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
     )
 }
 
+/// `StatusBar` (feature 1124, B6): steady, bringing the sandbox up, with warnings, and too narrow
+/// for its items — key hints dropped, the texts ending in "…".
+pub fn status_bar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use material::{GiveWay, ItemTone, StatusBar, StatusItem};
+    let connection = |text: &str, tone| {
+        StatusItem::new(text)
+            .dot(tone)
+            .give_way(GiveWay::Shorten(2))
+    };
+    let hints = |bar: StatusBar<'a, Message>| {
+        bar.hint(StatusItem::new("Ctrl+Shift+O Overview").give_way(GiveWay::Drop(0)))
+            .hint(StatusItem::new("Ctrl+Shift+P Jump").give_way(GiveWay::Drop(0)))
+    };
+    let steady = || {
+        hints(
+            StatusBar::new(roles)
+                .item(connection("Daemon connected · local", ItemTone::Positive))
+                .item(StatusItem::new("Sandbox ready").give_way(GiveWay::Shorten(1)))
+                .item(StatusItem::new("CLI: Claude Code").give_way(GiveWay::Shorten(0))),
+        )
+    };
+    let busy = hints(
+        StatusBar::new(roles)
+            .item(connection("Daemon connected · local", ItemTone::Positive))
+            .item(
+                StatusItem::new("Getting image… 42%")
+                    .busy(true)
+                    .tooltip("Getting the sandbox image\nDownloading 42% — layer 3")
+                    .give_way(GiveWay::Shorten(1)),
+            ),
+    );
+    let warning = hints(
+        StatusBar::new(roles)
+            .item(connection(
+                "Daemon disconnected · reconnecting…",
+                ItemTone::Error,
+            ))
+            .item(
+                StatusItem::new("Sandbox failed")
+                    .tone(ItemTone::Warning)
+                    .give_way(GiveWay::Shorten(1)),
+            ),
+    );
+    arrange(
+        vec![
+            posed("steady", steady(), roles),
+            posed("busy", busy, roles),
+            posed("warning", warning, roles),
+            posed(
+                "too narrow",
+                iced::widget::container(steady()).width(Length::Fixed(240.0)),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// `ProgressBar` at none, most and all of a task list; then with a marker at 8/10 (feature 944's
 /// compaction threshold), below it and, as a warning bar, past it.
 pub fn progress_bar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {

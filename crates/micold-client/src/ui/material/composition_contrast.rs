@@ -748,3 +748,34 @@ fn a_queue_rows_and_an_attachment_chips_words_are_legible_on_their_plates() {
         violations.join("\n")
     );
 }
+
+/// Feature 1124 (T006, research R11): the status bar's words and dots on its `surface_container`
+/// fill, in both schemes — neutral and warning text at 4.5:1, the success, warning and error dots at
+/// 3:1. No role is added for the bar, so this guards the existing pairs it now draws.
+#[test]
+fn the_status_bars_text_and_dots_are_legible_on_its_fill() {
+    use super::status_bar::ItemTone;
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let fill = r.surface_container;
+        let pairs = [
+            ("neutral text", ItemTone::Neutral, AA_TEXT),
+            ("warning text", ItemTone::Warning, AA_TEXT),
+            ("success dot", ItemTone::Positive, AA_NON_TEXT),
+            ("warning dot", ItemTone::Warning, AA_NON_TEXT),
+            ("error dot", ItemTone::Error, AA_NON_TEXT),
+        ];
+        for (what, tone, needs) in pairs {
+            let ratio = contrast(tone.colour(r), fill);
+            if ratio < needs {
+                violations.push(format!("{scheme:?} / {what}: {ratio:.2}:1 (needs {needs})"));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "a status bar item cannot be read on the bar:\n  {}",
+        violations.join("\n  ")
+    );
+}
