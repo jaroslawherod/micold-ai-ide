@@ -159,8 +159,10 @@ press it and check the Changes view opens for that worktree.
    for the shown location, as **Review changes** from the sidebar's right-click menu does.
 3. **Given** a location with no changes, **When** the header is drawn, **Then** the button still
    opens the Changes view and says there are no changes instead of showing zero counts.
-4. **Given** the counts are still being read or cannot be read, **When** the header is drawn,
-   **Then** the button shows no counts (no stale or made-up figure) and still opens the view.
+4. **Given** the counts have been read before and are being read again or the re-read fails,
+   **When** the header is drawn, **Then** the button keeps the last known figure (its text does not
+   change until a new figure arrives, #1342); **Given** no read has finished yet or the first read
+   failed, **Then** the button shows no counts (no made-up figure). Either way it opens the view.
 5. **Given** the Changes view is open, **When** the developer looks at the header, **Then** the
    button shows that the view is open, and pressing it again returns to the terminal as **Close**
    does.

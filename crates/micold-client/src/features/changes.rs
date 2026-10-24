@@ -1197,11 +1197,15 @@ pub struct HeaderCounts {
 }
 
 impl HeaderCounts {
-    /// What the Changes button may say: only a finished read's answer, never the figure of a read
-    /// that is being repeated or one that failed (US3 scenario 4).
+    /// What the Changes button may say: the last finished read's figure, kept while a read is
+    /// repeated (#1342, US3 scenario 4); `Unknown` only before the first read finished.
     pub fn reading(&self) -> CountsReading {
         match &self.load {
-            Load::Ready(summary) => CountsReading::Known(*summary),
+            Load::Ready(summary)
+            | Load::Loading {
+                last: Some(summary),
+                ..
+            } => CountsReading::Known(*summary),
             _ => CountsReading::Unknown,
         }
     }
@@ -1684,7 +1688,7 @@ fn header_counts_read(
     let Load::Loading {
         seq: current,
         again,
-        ..
+        last,
     } = state.header.load
     else {
         return Effect::None;
@@ -1692,9 +1696,10 @@ fn header_counts_read(
     if current != seq {
         return Effect::None;
     }
-    state.header.load = match result {
-        Ok(summary) => Load::Ready(summary),
-        Err(why) => Load::Failed(why),
+    // A failed re-read keeps the last figure rather than blanking the label (#1342).
+    state.header.load = match (result, last) {
+        (Ok(summary), _) | (Err(_), Some(summary)) => Load::Ready(summary),
+        (Err(why), None) => Load::Failed(why),
     };
     if again {
         request_counts(state)
@@ -3997,7 +4002,7 @@ mod tests {
         );
     }
 
-    /// T044: a change while the counts are known, failed or idle reads them again (hiding the
+    /// T044: a change while the counts are known, failed or idle reads them again (keeping the
     /// last figure); a change during a read queues one more, run when the read succeeds.
     #[test]
     fn a_change_rereads_the_counts_or_queues_a_read() {
@@ -4014,10 +4019,11 @@ mod tests {
                 Load::Loading {
                     seq,
                     again: false,
-                    last: start.ok(),
+                    last: start.clone().ok(),
                 }
             );
-            assert_eq!(state.header.reading(), CountsReading::Unknown);
+            let shown = start.map_or(CountsReading::Unknown, CountsReading::Known);
+            assert_eq!(state.header.reading(), shown);
         }
         // Idle with an entry: a read that cannot be answered left none behind.
         let mut idle = State::default();
@@ -4065,9 +4071,9 @@ mod tests {
             Load::Loading {
                 seq: next,
                 again: false,
-                last: None,
+                last: Some(summary(1)),
             },
-            "a failure leaves no figure behind"
+            "a failed re-read keeps the last figure (#1342)"
         );
         // Back to the success path's state for the assertion below.
         update(
@@ -4114,7 +4120,7 @@ mod tests {
         assert!(root.header.entry.is_some());
     }
 
-    /// T044, US3 scenario 4: only a finished read's figure is shown.
+    /// T044, US3 scenario 4 (#1342): the last finished read's figure stays while a read repeats.
     #[test]
     fn the_counts_are_unknown_unless_a_read_finished() {
         let header = |load| HeaderCounts {
@@ -4128,11 +4134,6 @@ mod tests {
                 again: false,
                 last: None,
             },
-            Load::Loading {
-                seq: 1,
-                again: true,
-                last: Some(summary(5)),
-            },
             Load::Failed("boom".into()),
         ] {
             assert_eq!(
@@ -4145,5 +4146,34 @@ mod tests {
             header(Load::Ready(summary(5))).reading(),
             CountsReading::Known(summary(5))
         );
+        for again in [false, true] {
+            assert_eq!(
+                header(Load::Loading {
+                    seq: 1,
+                    again,
+                    last: Some(summary(5)),
+                })
+                .reading(),
+                CountsReading::Known(summary(5))
+            );
+        }
+    }
+
+    /// #1342: a failed re-read keeps the last figure; a failed first read stays failed.
+    #[test]
+    fn a_failed_reread_keeps_the_last_figure() {
+        let mut state = read_once(SessionLocation::Default, Ok(summary(2)));
+        let Effect::ReadCounts { seq, .. } = update(&mut state, Msg::Changed) else {
+            panic!("a recount reads");
+        };
+        assert_eq!(state.header.reading(), CountsReading::Known(summary(2)));
+        update(
+            &mut state,
+            Msg::HeaderCountsRead {
+                seq,
+                result: Err("boom".into()),
+            },
+        );
+        assert_eq!(state.header.reading(), CountsReading::Known(summary(2)));
     }
 }
