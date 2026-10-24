@@ -66,7 +66,7 @@ pub use picker_scroll::{into_view as picker_into_view, picker_highlight_into_vie
 /// The bring-up indicator, and the wording it shows. Named individually — like the ripple
 /// below — because `tests/sandbox_progress.rs` checks both halves and the module itself has
 /// no reason to be public.
-pub use sandbox_status::{attempt_line, stage_line, view as sandbox_indicator, StageLine};
+pub use sandbox_status::{attempt_line, stage_line, StageLine};
 pub(crate) mod project_selector;
 pub(crate) mod rename;
 pub(crate) mod rename_dialog;
@@ -463,10 +463,6 @@ pub fn view_with<'a>(
             toolbar::view(state, scheme),
             connection_banner(connection, roles),
             sandbox_banner(sandbox, roles),
-            // Same reasoning as the banners above it, and the same slot: a bring-up in flight is a
-            // condition of the whole window, not of whichever body branch happens to be taken
-            // (T043, SC-004).
-            sandbox_status::indicator(sandbox_status::attempt_line(sandbox), roles),
             body,
             // The status bar (feature 1124, R1): the column's last child, so it is drawn under every
             // body branch and beneath every overlay pushed after `base` (FR-002, FR-013).

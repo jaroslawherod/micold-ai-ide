@@ -2466,6 +2466,21 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: STATUS_BAR_ANCHORS,
         },
+        // The image download in flight: the bar's sandbox item shows the stage and percent, and the
+        // column still holds only the app bar, the body and the bar (US2, SC-003).
+        CoveredState {
+            name: "status-bar-bring-up",
+            build: || {
+                with_sandbox_state(micold_core::sandbox::lifecycle::SandboxState::Acquiring(
+                    micold_core::sandbox::runtime::Progress {
+                        stage: "Downloading".into(),
+                        detail: Some("sha256:3f4a1b2c layer of the image".into()),
+                        percent: Some(42),
+                    },
+                ))
+            },
+            anchors: STATUS_BAR_ANCHORS,
+        },
     ]
 }
 
@@ -2539,6 +2554,14 @@ pub fn status_bar_long_texts() -> StateUnderTest {
         ..Default::default()
     };
     StateUnderTest::new(state).sandbox(sandbox)
+}
+
+/// A current session with the sandbox in `state` (feature 1124, US2).
+pub fn with_sandbox_state(state: micold_core::sandbox::lifecycle::SandboxState) -> StateUnderTest {
+    StateUnderTest::new(with_active_session()).sandbox(micold_client::features::sandbox::Sandbox {
+        state,
+        ..Default::default()
+    })
 }
 
 /// A sandbox that is up: the bar reads "Sandbox ready".

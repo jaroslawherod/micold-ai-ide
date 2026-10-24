@@ -500,9 +500,12 @@ outside, the machine waking without it — it brings the sandbox up again itself
 - **Up to three attempts**, the first at once, then after 5 seconds, then after 15. The count starts
   over once the service has answered, so a sandbox that recovers gets all three again next time.
 - **Each attempt shows its stage**, the same as a first start: checking the runtime, getting the
-  image (with its download progress), starting. While one is under way there is no
+  image (with its download progress), starting. The stage and the download's percentage appear in
+  the sandbox item of the status bar along the bottom edge, with a busy mark; point at the item for
+  the runtime's own last line. Nothing is drawn as a row under the app bar, so the window does not
+  move while the sandbox comes up. While one is under way there is no
   "could not connect" banner — a sandbox that is coming up is not a lost connection.
-- **Why the last attempt failed stays on screen** as *Trying again: …* beside the stage of the next.
+- **Why the last attempt failed stays on screen** as *Trying again: …* in the sandbox item's tooltip, with the stage of the next.
 - **When all three have failed**, the failure is left standing with its cause and next step from the
   catalogue below, and **Restart** is how you try again. Nothing is retried after that without you.
 

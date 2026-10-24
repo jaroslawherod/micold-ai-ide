@@ -4,19 +4,15 @@
 //! remedy for a hang is to kill the application — which is why the runtime's progress callbacks are
 //! an obligation in the contract (C-8) rather than a nicety, and why they have to reach the screen.
 //!
-//! Two halves. The wording is pure and checked directly; whether the indicator is on screen at all
-//! is checked by laying the view out, because an indeterminate bar **animates**, and one rendered
-//! while nothing is happening would request frames at rest for as long as the app is open
-//! (SC-017, `idle_requests_no_frames.rs`).
+//! Two halves. The wording is pure and checked directly; that the progress takes no row of its own
+//! (it is the status bar's sandbox item, feature 1124) is checked by laying the window out.
 
 mod support;
 
 use micold_client::app::Message;
-use micold_client::ui::{sandbox_indicator, stage_line};
+use micold_client::ui::stage_line;
 use micold_core::sandbox::lifecycle::{Failure, SandboxState, Stage};
 use micold_core::sandbox::runtime::{ContainerId, Progress, RuntimeError, RuntimeKind};
-use micold_core::theme::ColorScheme;
-use micold_core::tokens;
 use support::layout as lay;
 
 fn acquiring(stage: &str, detail: Option<&str>, percent: Option<u8>) -> SandboxState {
@@ -121,32 +117,38 @@ fn the_acquiring_label_says_what_is_being_waited_for() {
     );
 }
 
-/// And the widget itself is absent — not merely empty — while nothing is coming up.
-///
-/// The bar is indeterminate, so it drives its own animation for as long as it exists. Rendering one
-/// unconditionally would request a frame every tick for the life of the process, which is the
-/// property `idle_requests_no_frames.rs` exists to protect.
+/// No row appears between the toolbar and the body while the sandbox comes up, so the body's top
+/// edge is where it is with the sandbox running (SC-003). The progress is the bar's, not a row's.
 #[test]
-fn the_indicator_occupies_nothing_unless_the_sandbox_is_coming_up() {
+fn the_window_column_has_no_row_above_the_body_during_bring_up() {
     let renderer = lay::renderer();
-    let roles = tokens::roles(ColorScheme::Light);
+    let column_of = |state: SandboxState| {
+        let under = support::covered_states::with_sandbox_state(state);
+        let records = lay::resolve::<Message>(lay::view_of(&under), &renderer);
+        let children: Vec<_> = records
+            .iter()
+            .filter(|r| r.layer == lay::Layer::Base && r.path.len() == 3 && r.path[..2] == [0, 0])
+            .cloned()
+            .collect();
+        children
+    };
+    let running = column_of(SandboxState::Running(ContainerId("c".into())));
+    assert_eq!(running.len(), 3, "toolbar, body, bar: {running:?}");
 
-    let at_rest =
-        lay::resolve::<Message>(sandbox_indicator(&SandboxState::Disabled, roles), &renderer);
-    let root = at_rest.first().expect("a root record");
-    assert_eq!(
-        (root.width, root.height),
-        (0.0, 0.0),
-        "an indicator with size at rest is one that is animating at rest"
-    );
-
-    let in_flight = lay::resolve::<Message>(
-        sandbox_indicator(&acquiring("Downloading", Some("3f4a1b2c"), Some(47)), roles),
-        &renderer,
-    );
-    let root = in_flight.first().expect("a root record");
-    assert!(
-        root.height > 0.0,
-        "the acquiring stage rendered nothing, so SC-004's five minutes are silent"
-    );
+    for state in [
+        SandboxState::Probing,
+        acquiring("Downloading", Some("3f4a1b2c"), Some(47)),
+        SandboxState::Starting,
+    ] {
+        let column = column_of(state.clone());
+        assert_eq!(
+            column.len(),
+            3,
+            "{state:?} added a row to the window column: {column:?}"
+        );
+        assert_eq!(
+            column[1].y, running[1].y,
+            "{state:?} moved the body's top edge"
+        );
+    }
 }
