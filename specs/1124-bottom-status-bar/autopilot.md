@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M3 implemented
-- **Next step**: M3 gate, reviews A and B, then the PR
+- **Phase**: M3 pr
+- **Next step**: the orchestrator opens the M3 PR from scratchpad pr-title.md / pr-body.md
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | (orchestrator opens) | done: rebased on 4910aeee, gate green at 2045d640, A CLEAN (r2 scoped CLEAN), B CLEAN r2, visual pass 5/5 |
 | M2 | T016–T020 | light | Bring-up shown in the bar; no row above the body | #1330 | done: merged |
-| M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | T021–T025 done; gate and reviews pending |
+| M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | T021–T025 done; gate green at ba558456, A CLEAN, B CLEAN, visual pass not run (layout snapshot + text-overflow cover the states) |
 | M4 | T026–T032 | light | CLI item follows the focused pane; Overview/Jump key hints | — | planned |
 | M5 | T033–T038 | light | Plan usage moves from the app bar into the status bar | — | planned |
 
@@ -55,6 +55,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B M1 (conformance, sonnet) | 2 | bc81fc61c3a72f35e00d9e3c432be7e7f6da6680:8dec2fd824c32932a342e929595d8405e244a948 | CLEAN (1 MINOR: wording in the log — fixed, prose only) |
 | A M1 (code-review high) | 1 | 1d17c59cc149d73c326b84b00dd8f37f9e20fae5:8a60fd0f91a8e9b92cd69538ff8e8903fe9ad44d | CLEAN (4 MINOR: F1 dot duplicated — fixed, shared `unread_mark::filled_circle`; F3 operate visits dropped items — fixed; F2, F4 declined) |
 | A M1 (scoped, sonnet; crowded-composer gate after rebase) | 2 | 399b94d98548a63965b1986cd30a1e0a8048087c:13ea198a2ddf30a6139418aa2f48b8f14f081636 | CLEAN (1 MINOR: bound slack 56 px — fixed, the idle input row's 40dp subtracted) |
+
+| A M3 (code-review high) | 1 | 1a47b96016f1232a162280f363770e2d9277dcd1:ba5584566b52696ac012392be4583a271a73bbcf | CLEAN (2 MINOR: source-substring tests weak — declined, the overview height test measures the real banner) |
+| B M3 (conformance) | 1 | 1a47b96016f1232a162280f363770e2d9277dcd1:ba5584566b52696ac012392be4583a271a73bbcf | CLEAN (2 MINOR: same two tests; no test for the banner ending on Connected — declined) |
 
 ## Declined review findings
 
