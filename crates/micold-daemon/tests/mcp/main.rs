@@ -7,7 +7,6 @@ mod mcp_support;
 mod env_include_cache_coherence;
 mod env_include_failure_report;
 mod env_include_restart_refresh;
-mod hooks_receiver;
 mod label_mapping;
 mod mcp_binding_file_mode;
 mod mcp_confirmations;

@@ -9,7 +9,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::mcp_support;
+#[path = "support/mcp.rs"]
+mod mcp_support;
 
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::ActivitySignal;
