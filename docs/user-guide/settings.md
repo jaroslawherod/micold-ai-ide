@@ -786,7 +786,7 @@ and **Remove** deletes it as above.
 With the switch on and a project open, the page also shows an optional **Jira base URL** field
 after the connection's fields, with the line *Used to link Jira keys on this project's Overview
 cards.* It holds the address a worktree's Jira key is linked to: a worktree named after a Jira key,
-such as `feat-mic-87_add-login`, shows **Issue MIC-87** on its Overview card, which opens
+such as `feat-mic-87_add-login`, shows **MIC-87** on its Overview card, which opens
 `<Jira base URL>/browse/MIC-87` (see [Opening a worktree's issue](overview.md#opening-a-worktrees-issue)).
 
 | Accepted | Refused, with the reason on the field |

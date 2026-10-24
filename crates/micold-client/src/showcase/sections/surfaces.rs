@@ -920,9 +920,9 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         .unscrolled(),
     ))
     .width(Length::Fill);
-    // Feature 1122 (FR-003, FR-015, quickstart §B1): "Issue #1122" on the branch line, collapsed
-    // at the three card widths with a short branch, a 120-character one and none (the title is the
-    // branch: the link alone in its place), and on an expanded card over its neighbours.
+    // Feature 1122 (FR-003, FR-015, quickstart §B1): "Issue #1122" leading the meta line
+    // (BUG-1298 FR-023), collapsed at the three card widths with a short branch, a 120-character
+    // one and none (the title is the branch), and on an expanded card over its neighbours.
     let issue = |mut m: micold_core::overview::CardModel| {
         m.issue_link = Some(micold_core::issue_link::IssueLink {
             label: "Issue #1122".to_string(),

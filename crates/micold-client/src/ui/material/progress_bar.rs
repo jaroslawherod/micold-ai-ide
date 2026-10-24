@@ -29,6 +29,7 @@ pub struct ProgressBar {
     width: Length,
     marker: Option<Ratio>,
     warning: bool,
+    thickness: f32,
 }
 
 impl ProgressBar {
@@ -40,7 +41,15 @@ impl ProgressBar {
             width: Length::Fill,
             marker: None,
             warning: false,
+            thickness: anatomy::progress::THICKNESS,
         }
+    }
+
+    /// Draw the bar `px` tall, its ends still rounded: an Overview card's 6 px bar (BUG-1298
+    /// FR-025). Every other bar keeps the anatomy's thickness.
+    pub fn thickness(mut self, px: f32) -> Self {
+        self.thickness = px;
+        self
     }
 
     /// Mark `at` on the track with a [`MARKER_WIDTH`] tick, inside the track at every ratio.
@@ -99,7 +108,7 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        Size::new(self.width, Length::Fixed(anatomy::progress::THICKNESS))
+        Size::new(self.width, Length::Fixed(self.thickness))
     }
 
     fn layout(
@@ -108,11 +117,7 @@ where
         _renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        layout::Node::new(limits.resolve(
-            self.width,
-            Length::Fixed(anatomy::progress::THICKNESS),
-            Size::ZERO,
-        ))
+        layout::Node::new(limits.resolve(self.width, Length::Fixed(self.thickness), Size::ZERO))
     }
 
     fn draw(

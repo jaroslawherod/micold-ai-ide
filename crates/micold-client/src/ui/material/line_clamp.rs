@@ -27,9 +27,18 @@ use iced::{alignment, Element, Font, Length, Pixels, Rectangle, Size};
 use micold_core::tokens::Rgb;
 use micold_core::tooltip::clamp_to_lines;
 
-/// What a shaped paragraph was shaped from: the text, the width, the line limit and the role
-/// (its size, font and line height), so a tree slot reused at another role shapes again.
-type Key = (String, f32, usize, TypeRole);
+/// What a shaped paragraph was shaped from: the text, the width, the line limit, the role (its
+/// size, font and line height) and the lead, so a tree slot reused at another role shapes again.
+type Key = (String, f32, usize, TypeRole, Option<Lead>);
+
+/// Words drawn before the text on its first line, at their own role and in their own colour: an
+/// Overview card's "NOW" before its activity (BUG-1298 FR-025). They are never cut.
+#[derive(Debug, Clone, PartialEq)]
+struct Lead {
+    words: String,
+    role: TypeRole,
+    tint: Rgb,
+}
 
 /// A wrapping label at a type role, cut to at most `max_lines` lines.
 pub(crate) struct LineClamped<M> {
@@ -40,6 +49,7 @@ pub(crate) struct LineClamped<M> {
     tint: Option<Rgb>,
     /// `Shrink` is as wide as the text, as a tooltip's label is; `Fill` spans the row it is in.
     width: Length,
+    lead: Option<Lead>,
     marker: PhantomData<M>,
 }
 
@@ -52,6 +62,7 @@ impl<M> LineClamped<M> {
             max_lines,
             tint: None,
             width: Length::Shrink,
+            lead: None,
             marker: PhantomData,
         }
     }
@@ -65,6 +76,17 @@ impl<M> LineClamped<M> {
     /// Laid out `width` wide: `Fill` spans the row, as the one-line label it replaces did.
     pub(crate) fn width(mut self, width: Length) -> Self {
         self.width = width;
+        self
+    }
+
+    /// Lead the first line with `words` at `role` in `tint`, then two spaces, the text flowing on
+    /// after them and wrapping back to the left edge (BUG-1298 FR-025, the mockup's `::before`).
+    pub(crate) fn lead(mut self, words: impl Into<String>, role: TypeRole, tint: Rgb) -> Self {
+        self.lead = Some(Lead {
+            words: words.into(),
+            role,
+            tint,
+        });
         self
     }
 }
@@ -94,7 +116,13 @@ where
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph, Key>>();
         let available = limits.max().width;
 
-        let key = (self.content.clone(), available, self.max_lines, self.role);
+        let key = (
+            self.content.clone(),
+            available,
+            self.max_lines,
+            self.role,
+            self.lead.clone(),
+        );
         if !state.holds(&key) {
             // Shaped as it will be drawn: at the width on offer, breaking on words and, where a
             // word is wider than the line (a path, an address), on glyphs.
@@ -110,15 +138,30 @@ where
                 wrapping: text::Wrapping::WordOrGlyph,
             };
             let line = self.role.line_height_dp();
+            let lead = self
+                .lead
+                .as_ref()
+                .map(|lead| (format!("{}  ", lead.words), lead));
+            let shape = |candidate: &str| match &lead {
+                None => Renderer::Paragraph::with_text(template.with_content(candidate)),
+                Some((words, lead)) => {
+                    let spans: [text::Span<'_, (), Font>; 2] = [
+                        text::Span::new(words.as_str())
+                            .size(lead.role.size())
+                            .font(lead.role.font())
+                            .color(super::style::color(lead.tint)),
+                        text::Span::new(candidate),
+                    ];
+                    Renderer::Paragraph::with_spans(template.with_content(&spans[..]))
+                }
+            };
             let lines_of = |candidate: &str| {
-                let height = Renderer::Paragraph::with_text(template.with_content(candidate))
-                    .min_bounds()
-                    .height;
+                let height = shape(candidate).min_bounds().height;
                 // A paragraph is a whole number of lines tall; rounding takes the float's dust off.
                 (height / line).round() as usize
             };
             let fitted = clamp_to_lines(&self.content, self.max_lines, lines_of).into_owned();
-            let paragraph = Renderer::Paragraph::with_text(template.with_content(&fitted));
+            let paragraph = shape(&fitted);
             state.store(paragraph, fitted, key);
         }
 

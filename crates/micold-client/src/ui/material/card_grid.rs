@@ -2474,7 +2474,9 @@ mod tests {
             .activity
             .expect("an activity");
         assert!(
-            m.painted_text().iter().any(|p| p.content == activity),
+            m.painted_text()
+                .iter()
+                .any(|p| p.content == format!("NOW  {activity}")),
             "the new activity is not painted"
         );
     }
@@ -2596,8 +2598,8 @@ mod tests {
             .iter()
             .position(|p| p.content == content.title)
             .expect("the expanded title is painted");
-        // The header's state word, three paragraphs before the title (glyph, word, glyph, word).
-        let word = painted[title - 3].bounds;
+        // The header's state word, two paragraphs before the title (glyph, word, type word).
+        let word = painted[title - 2].bounds;
         assert!(
             word.y > 0.0 && word.y < slot.y,
             "the card is not moved up within the view: {word:?} {slot:?}"
@@ -3082,7 +3084,7 @@ mod tests {
                         label: "#12".into(),
                         mark: super::super::PrMark::Open,
                         phrase: Some("checks failing".into()),
-                        failing: true,
+                        tone: super::super::PrTone::Bad,
                     }],
                     0,
                 )

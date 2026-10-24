@@ -6,7 +6,7 @@ and each names the licence file that covers it:
 | Font | Files | Licence | Licence text |
 |------|-------|---------|--------------|
 | Material Symbols Outlined | `MaterialSymbolsOutlined.ttf` | Apache-2.0 | `LICENSE` |
-| Roboto | `Roboto-Regular.ttf`, `Roboto-Medium.ttf` | SIL Open Font License 1.1 | `LICENSE-Roboto-OFL.txt` |
+| Roboto | `Roboto-Regular.ttf`, `Roboto-Medium.ttf`, `Roboto-SemiBold.ttf` | SIL Open Font License 1.1 | `LICENSE-Roboto-OFL.txt` |
 
 **Why two licence files rather than one.** Feature 018's T014a required this to be decided
 explicitly rather than by default, and the answer is forced: the two works are under *different*
@@ -163,6 +163,13 @@ role at its default weight and silently collapses the scale's 400/500 distinctio
 |------|-------:|-------|
 | `Roboto-Regular.ttf` | 400 | display, headline, body roles |
 | `Roboto-Medium.ttf` | 500 | title medium/small, all label roles |
+| `Roboto-SemiBold.ttf` | 600 | the Overview card's semibold words (BUG-1298) |
+
+The third instance came with BUG-1298: the Overview Card Redesign mockup sets the card's title,
+state word, issue link, "NOW", pull request pills and alarming status words at weight 600. Without
+a 600 face the matcher would fall back to Medium and the card would read a shade lighter than its
+design. It is cut from the same variable font with the same command, `wght` 600:
+`(600, "Roboto-SemiBold.ttf")`.
 
 ### How these files were produced
 
@@ -190,6 +197,10 @@ Resulting artifacts:
 |------|--------|--------------------|----------------------------|
 | `Roboto-Regular.ttf` | `928c76997bb8f7c298f0f19f92b016333af514d47cedc25ba7cc99c307d4c4f5` | `Roboto` | — |
 | `Roboto-Medium.ttf` | `835e5e39f60aee644a9ee55268ad698c755e271b6d3d9a906861b08d41f51885` | `Roboto Medium` | `Roboto` |
+| `Roboto-SemiBold.ttf` | `4f87cafb0738d613b4ad4c873255aaed4f169cb567b50ce78f76a30d480c94f7` | `Roboto SemiBold` | `Roboto` |
+
+`Roboto-SemiBold.ttf` was cut on 2026-10-24 with fonttools 4.67.0 from the variable font with the
+sha256 above.
 
 The Medium instance putting `Roboto Medium` in name ID 1 is the standard convention — it exists for
 software that can only express a family plus regular/bold — while the real family stays in ID 16.

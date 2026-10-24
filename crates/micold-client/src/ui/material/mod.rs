@@ -227,7 +227,7 @@ pub use markdown_view::MarkdownView;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
-pub use overview_card::{CardPrRow, OverviewCard};
+pub use overview_card::{CardPrRow, OverviewCard, PrTone};
 pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;
@@ -259,7 +259,9 @@ pub(crate) use terminal_pane::scrollbar_metrics;
 pub use terminal_pane::target_offset_delta;
 pub use terminal_pane::GridSizeReporter;
 pub use terminal_pane::TerminalPane;
-pub use text::{Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
+pub use text::{
+    Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES,
+};
 pub use text_area::TextArea;
 pub use text_field::TextField;
 pub use text_link::TextLink;

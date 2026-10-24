@@ -25,14 +25,18 @@ use iced::{Element, Font, Pixels, Rectangle, Size, Vector};
 /// that is reproducible and wrong. T002 said this asset "MUST NOT be committed twice" and it had
 /// been; pointing at the shipped files is what that requirement asked for.
 ///
-/// Both weights are loaded because `TypeRole` resolves weight >= 500 to Medium
-/// (`material/text.rs`). Loading Regular alone measured every Medium label with Regular metrics.
+/// Every shipped weight is loaded because `TypeRole` resolves weight >= 500 to Medium and >= 600 to
+/// Semibold (`material/text.rs`). Loading Regular alone measured every Medium label with Regular metrics.
 pub const REFERENCE_FONT_BYTES: &[u8] =
     include_bytes!("../../../../assets/fonts/Roboto-Regular.ttf");
 
 /// The medium face, for the type roles that ask for weight >= 500.
 pub const REFERENCE_FONT_MEDIUM_BYTES: &[u8] =
     include_bytes!("../../../../assets/fonts/Roboto-Medium.ttf");
+
+/// The semibold face, for the Overview card's roles at weight 600 (BUG-1298).
+pub const REFERENCE_FONT_SEMIBOLD_BYTES: &[u8] =
+    include_bytes!("../../../../assets/fonts/Roboto-SemiBold.ttf");
 
 /// The icon face. **Every bit as load-bearing as the text faces**, and it was missing.
 ///
@@ -191,6 +195,10 @@ pub fn renderer() -> iced::Renderer {
             .write()
             .expect("the global font system lock was poisoned")
             .load_font(Cow::Borrowed(REFERENCE_FONT_MEDIUM_BYTES));
+        iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system lock was poisoned")
+            .load_font(Cow::Borrowed(REFERENCE_FONT_SEMIBOLD_BYTES));
         iced::advanced::graphics::text::font_system()
             .write()
             .expect("the global font system lock was poisoned")

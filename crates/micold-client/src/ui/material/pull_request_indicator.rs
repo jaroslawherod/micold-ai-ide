@@ -79,16 +79,6 @@ impl PrMark {
             PrMark::Merged => r.tertiary,
         }
     }
-
-    /// The label colour of a pill filled with [`Self::role`] (feature 1123, research R9): the fill's
-    /// own on-colour, so the word reads on the solid pill in every theme.
-    pub(crate) fn on_role(self, r: &Roles) -> Rgb {
-        match self {
-            PrMark::Open => r.on_primary,
-            PrMark::Draft | PrMark::Closed => r.surface,
-            PrMark::Merged => r.on_tertiary,
-        }
-    }
 }
 
 impl CheckMark {

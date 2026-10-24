@@ -73,6 +73,7 @@ pub fn main() -> iced::Result {
         // one screen a reviewer would go to in order to check it.
         .font(micold_client::ui::ROBOTO_REGULAR_BYTES)
         .font(micold_client::ui::ROBOTO_MEDIUM_BYTES)
+        .font(micold_client::ui::ROBOTO_SEMIBOLD_BYTES)
         // Without the icon font, every component that draws a glyph renders a fallback box — and a
         // gallery of fallback boxes would misreport the library it exists to display.
         .font(micold_client::ui::MATERIAL_SYMBOLS_BYTES)

@@ -5,7 +5,8 @@
 | File | Role in the snapshot |
 |---|---|
 | `Roboto-Regular.ttf` | body text and every type role below weight 500 |
-| `Roboto-Medium.ttf` | the type roles that resolve to weight >= 500 (`material/text.rs`) |
+| `Roboto-Medium.ttf` | the type roles that resolve to weight 500 (`material/text.rs`) |
+| `Roboto-SemiBold.ttf` | the Overview card's roles at weight 600 (`material/text.rs`, BUG-1298) |
 | `MaterialSymbolsOutlined.ttf` | icons, which are glyphs and are shaped and measured like any other text |
 
 One more face is committed here, **for the tests only**, because the application ships none:

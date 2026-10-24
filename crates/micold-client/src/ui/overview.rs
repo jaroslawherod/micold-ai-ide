@@ -8,7 +8,9 @@ use crate::features::overview::{MenuOrigin, Msg};
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
-use crate::ui::material::{Button, CardGrid, CardPrRow, MenuItem, OverviewCard, Tooltip, Zoom};
+use crate::ui::material::{
+    Button, CardGrid, CardPrRow, MenuItem, OverviewCard, PrTone, Tooltip, Zoom,
+};
 use iced::advanced::widget::Operation;
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
@@ -20,7 +22,6 @@ use micold_core::overview::{
     CardState, CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
 };
 use micold_core::overview_expansion::{page_target, CardLink, Event, Expansion};
-use micold_core::pr_list::StatusPhrase;
 use micold_core::session::{Session, SessionLocation};
 use micold_core::task_progress::{self, Progress, Source};
 use micold_core::theme::ColorScheme;
@@ -824,7 +825,7 @@ pub fn pr_rows(model: &CardModel, expanded: bool) -> (Vec<CardPrRow>, usize) {
             label: row.label,
             mark: crate::features::changes::pr_mark(row.pill),
             phrase: row.phrase.map(|phrase| phrase.label().to_string()),
-            failing: row.phrase == Some(StatusPhrase::ChecksFailing),
+            tone: PrTone::of(row.phrase),
         })
         .collect();
     (rows, more)
@@ -1269,10 +1270,10 @@ mod tests {
         ];
         model.pull_requests = Some(BranchPrList::new(prs, false, false));
         let (rows, _) = pr_rows(&model, true);
-        let failing: Vec<_> = rows.iter().map(|r| (r.number, r.failing)).collect();
-        assert_eq!(failing.len(), 2);
-        assert!(failing.contains(&(12, true)), "{failing:?}");
-        assert!(failing.contains(&(11, false)), "{failing:?}");
+        let tones: Vec<_> = rows.iter().map(|r| (r.number, r.tone)).collect();
+        assert_eq!(tones.len(), 2);
+        assert!(tones.contains(&(12, PrTone::Bad)), "{tones:?}");
+        assert!(tones.contains(&(11, PrTone::Good)), "{tones:?}");
     }
 
     /// Feature 1123 T032, FR-009: on the mounted Overview, Tab from a card onto its number reports

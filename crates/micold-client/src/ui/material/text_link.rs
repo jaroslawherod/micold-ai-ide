@@ -1,7 +1,7 @@
 //! `TextLink` — a line of text that opens something when clicked (feature 1122, contract U1).
 //!
 //! Drawn in the theme's `primary`, with a 1 px underline in the same colour while the pointer is on
-//! it and the pointing-hand pointer; the focus ring is [`TakesTheKeyboard`]'s, in `secondary`, and
+//! it (always, with `.underlined(true)`) and the pointing-hand pointer; the focus ring is [`TakesTheKeyboard`]'s, in `secondary`, and
 //! only for keyboard focus (FR-015, Principle VIII). A click is a press and a release both on it;
 //! Enter and Space activate it while it holds the keyboard.
 //!
@@ -33,6 +33,8 @@ pub struct TextLink<'a, M> {
     focusable: bool,
     inline: bool,
     hit_on_label: bool,
+    underlined: bool,
+    monospace: bool,
 }
 
 impl<'a, M: Clone + 'a> TextLink<'a, M> {
@@ -51,12 +53,27 @@ impl<'a, M: Clone + 'a> TextLink<'a, M> {
             focusable: true,
             inline: false,
             hit_on_label: false,
+            underlined: false,
+            monospace: false,
         }
     }
 
     /// The type role the label is set in; [`TypeRole::Body`] unless said otherwise.
     pub fn role(mut self, role: TypeRole) -> Self {
         self.role = role;
+        self
+    }
+
+    /// Draw the underline always, not only under the pointer: an Overview card's issue link and
+    /// pull request numbers read as links at rest (BUG-1298 FR-024, FR-026).
+    pub fn underlined(mut self, always: bool) -> Self {
+        self.underlined = always;
+        self
+    }
+
+    /// Set the label in the monospace face: an Overview card's pull request numbers (FR-026).
+    pub fn monospace(mut self, monospace: bool) -> Self {
+        self.monospace = monospace;
         self
     }
 
@@ -124,17 +141,23 @@ impl<'a, M: Clone + 'a> From<TextLink<'a, M>> for Element<'a, M> {
         let roles = link.roles;
         // The click is the rendering stack's button's: a press and a release both on it, each
         // captured, and the redraw when the pointer comes and goes, which draws the underline.
-        let click =
-            iced::widget::button(Text::new(link.label, link.role, roles).tint(roles.primary))
-                .padding(GUTTER)
-                .style(|_: &iced::Theme, _| iced::widget::button::Style::default())
-                .on_press(link.on_press.clone());
+        let label = Text::new(link.label, link.role, roles).tint(roles.primary);
+        let label = if link.monospace {
+            label.monospace()
+        } else {
+            label
+        };
+        let click = iced::widget::button(label)
+            .padding(GUTTER)
+            .style(|_: &iced::Theme, _| iced::widget::button::Style::default())
+            .on_press(link.on_press.clone());
         let body = LinkBody {
             content: click.into(),
             underline: roles.primary,
             role: link.role,
             id: link.id.clone(),
             hit_on_label: link.hit_on_label,
+            underlined: link.underlined,
         };
         let mut focus = TakesTheKeyboard::new(Element::new(body), link.focusable)
             .key(Named::Enter, link.on_press.clone())
@@ -282,6 +305,8 @@ struct LinkBody<'a, M> {
     id: Option<iced::advanced::widget::Id>,
     /// [`TextLink::hit_on_label`].
     hit_on_label: bool,
+    /// [`TextLink::underlined`].
+    underlined: bool,
 }
 
 impl<M> LinkBody<'_, M> {
@@ -348,7 +373,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for LinkBody<'_, M> {
             cursor,
             viewport,
         );
-        if !cursor.is_over(self.hit(layout)) {
+        if !self.underlined && !cursor.is_over(self.hit(layout)) {
             return;
         }
         // The button's one child is the label, inside the padding.
