@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1126
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
-- **Phase**: close
-- **Next step**: close unit: speckit-tdd-verify, Polish T056–T057, review, gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1328 | M1 context header | merged | 127a817868d7b463ad78ea588b43a0339d483991 |
 | #1334 | M2 tab strip | merged | 25de2370813389d6ae82fcfb49ebce6cf15da226 |
 | #1337 | M3 Changes button | merged (CI red twice on the layout snapshot as main moved under it; rebased and re-recorded each time) | 9c1f758fc9a573960f71729679e6cabee25d2a36 |
+| (close) | close: TDD verification and remediation (T058–T067, T069, T070), Polish T056–T057, spec closed | branch pushed; orchestrator opens the PR | |
 
 ## Milestones
 
@@ -67,7 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 B (conformance, sonnet) | 1 | ad49afbb772c22a42e02e75f8f1cb4a1b944597a:52632d457a59d561d87d7f30750d5367df16e913 | CHANGES: 1 BLOCKER (Verify file unreadable: prompt path lost its scratchpad prefix, not a code finding), 1 MAJOR (Changes label wraps at 640×480 with four-digit counts), 2 MINOR (ledger next step; late reds); F2–F4 fixed |
 | M3 A (re-review, sonnet) | 2 | 971ff20c3c357d30d2f9710c6cbe9b1481b50dea:d2f82b178335efee2987c5707c1e18199b1d1463 → 5a9d52fa | CLEAN; F1–F3 fixed and F4's decline confirmed, lines cited (first r2 answer cited none and was re-asked) |
 | M3 B (conformance, sonnet) | 2 | 7fd22c02a06c5b38313d3be8153870c14ebd905d:5a9d52fa68a1ff52373e5d0dc73e3717902a12fe | CLEAN; 1 MINOR (Verify output did not name the new gate) fixed in the Verify file |
-| Close review (tests + docs) | 1 | 3c2eade41bf2761279d2d9d2f1132b5bc05e73b3:1cd58a22f0613ffcd203d6af4ef995a3fa7e09c6 | running |
+| Close review (tests + docs) | 1 | 3c2eade41bf2761279d2d9d2f1132b5bc05e73b3:1cd58a22f0613ffcd203d6af4ef995a3fa7e09c6 | CLEAN, lines cited; 3 MINOR: F3 fixed (prose only), F1 stands (the worker ran the bin's `the_header_reads`: 2 passed), F2 stands (close gate green) |
 
 ## Declined review findings
 
@@ -86,6 +87,9 @@ None.
 None.
 
 ## Follow-ups not done
+
+- Close: speckit-tdd-verify verdict FAIL at 9c1f758f (tdd/verification.md); remediation T058–T067, T069, T070 done in the close (tests only; T063 and T065 partly, as tasks.md and the cycle log say: no draw/hover harness for the selected state and tooltips; the pane guard checks the body's tail instead of banning `column!`/`container(`). T068 (collapse redundant/eager tests, finding 11) not done: churn with no strength gain.
+- Close: speckit-converge skipped (review B CLEAN for M1, M2, M3).
 
 - M3 red CI 2 gate: `micold-daemon` `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` failed the first gate run and 2 of 5 reruns (notice reached no window). Main's code: the branch changes nothing the daemon uses. A race in the test or in C14's focus fallback; the second full gate was green. Not fixed here.
 - M3 gate: `micold-daemon` `mcp_audit_log::every_successful_mutating_call_writes_one_info_line` failed once (paste refused: "no bracketed paste") and passed 3/3 on rerun; untouched by this feature, a flake to watch in CI.

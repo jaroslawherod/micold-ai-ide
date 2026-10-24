@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-24 — shipped in PRs #1318, #1328, #1334, #1337 and the close PR. Clarification 1 is still the orchestrator's provisional pick (option A); the user has not answered.
 
 **Input**: User description: "Implement GitHub issue #1126: Layout: worktree context header and
 session tabs above the terminal. Blocked by: #1120 (title and branch logic). Above the terminal:
