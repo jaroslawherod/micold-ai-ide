@@ -17,6 +17,8 @@ use std::path::Path;
 
 use micold_client::app::State;
 
+mod support;
+
 /// The source of the rendering layer, for the structural half.
 fn source(relative: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -257,13 +259,46 @@ fn each_of_the_seven_action_conditions_keeps_its_banner_and_button() {
 }
 
 /// FR-003, FR-009: a lost connection has no action, so it raises no banner — the bar says it.
-/// The banner function returns its zero-size row for `Disconnected` as it does for `Connected`.
+/// Laid out through the real window: the column holds the same rows, and the body's top edge is
+/// where it is while connected. An action condition, laid out the same way, does push the body
+/// down, so the measurement can see a banner when there is one.
 #[test]
 fn a_lost_connection_raises_no_banner() {
-    let banner = ui_function("connection_banner");
+    use micold_client::app::Message;
+    use micold_client::features::connection::ConnectionStatus;
+    use micold_core::sandbox::lifecycle::SandboxState;
+    use micold_core::sandbox::runtime::ContainerId;
+    use support::layout as lay;
+
+    let renderer = lay::renderer();
+    let body_top = |connection: ConnectionStatus| {
+        let under = support::covered_states::with_sandbox_state(SandboxState::Running(
+            ContainerId("c".into()),
+        ))
+        .connection(connection);
+        let records = lay::resolve::<Message>(lay::view_of(&under), &renderer);
+        let column: Vec<_> = records
+            .iter()
+            .filter(|r| r.layer == lay::Layer::Base && r.path.len() == 3 && r.path[..2] == [0, 0])
+            .cloned()
+            .collect();
+        // The bar is the column's last row and the body the one above it.
+        (column.len(), column[column.len() - 2].y)
+    };
+    let connected = body_top(ConnectionStatus::Connected);
+    assert_eq!(
+        body_top(ConnectionStatus::Disconnected),
+        connected,
+        "a lost connection added a row above the body; the bar's connection item is the only \
+         place it is shown (FR-003, FR-009)"
+    );
+    let (_, under_banner) = body_top(ConnectionStatus::BuildMismatch {
+        client_build: "b2".into(),
+        daemon_build: "b1".into(),
+    });
     assert!(
-        banner.contains("ConnectionStatus::Disconnected"),
-        "`connection_banner` still draws a row for a lost connection; the bar's connection item \
-         is the only place it is shown (FR-003, FR-009)"
+        under_banner > connected.1,
+        "premise: an action condition's banner pushes the body down ({under_banner} vs {})",
+        connected.1
     );
 }

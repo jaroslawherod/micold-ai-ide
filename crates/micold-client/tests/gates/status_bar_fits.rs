@@ -123,21 +123,19 @@ fn at_the_smallest_window_usage_drops_before_any_text_shortens() {
     let bar_y = window.height - HEIGHT - TOLERANCE;
     let in_bar: Vec<_> = painted.iter().filter(|p| p.origin.y >= bar_y).collect();
     let texts = || in_bar.iter().map(|p| &p.content).collect::<Vec<_>>();
-    let shortened = in_bar.iter().any(|p| p.content.contains('…'));
-    let usage = in_bar.iter().any(|p| p.content.contains("37%"));
+    assert!(
+        in_bar.iter().any(|p| p.content.starts_with("Daemon")),
+        "premise: the bar is drawn, its connection item first: {:?}",
+        texts()
+    );
     assert!(
         !in_bar.iter().any(|p| p.content.contains("Overview")),
         "{:?}",
         texts()
     );
     assert!(
-        !(shortened && usage),
-        "usage outlived a shortening: {:?}",
-        texts()
-    );
-    assert!(
-        !usage,
-        "the long texts leave no room for usage: {:?}",
+        !in_bar.iter().any(|p| p.content.contains("37%")),
+        "the long texts leave no room for usage, so it goes before any text shortens: {:?}",
         texts()
     );
 }
