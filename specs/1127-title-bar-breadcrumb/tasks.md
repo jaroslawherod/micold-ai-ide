@@ -160,11 +160,13 @@ Test*.
   draws the project segment as a pressable text button with a trailing drop-down glyph; `.place(text,
   tooltip)` adds a `/` separator and a non-pressable place label, and without it neither is drawn;
   `.trailing_mark(count, tooltip)` draws the unread mark; `.open(true)` draws the segment selected;
+  the project segment always carries its tooltip (`Switch project`, contract C2);
   narrowed, the place shortens with `…` before the project segment (to a floor of one character and
   `…`), the glyph and mark never shorten, and a shortened segment's tooltip holds its full text
   (FR-004, FR-006, FR-007, contract C2, C3)
 - [ ] T025 [US1] Write failing render-free tests in `client/src/ui/toolbar.rs` for
-  `model(state) -> TitleBarModel` over data-model *Place*: no project → project `Select project`,
+  `model(state) -> TitleBarModel` over data-model *Place*: the project segment's tooltip is
+  `Switch project`, with the full name on a second line when the name is shortened (FR-013, C2); no project → project `Select project`,
   place `None`; project, no location → place `None`; a session on `fix/1117-x` → place short branch
   `fix/1117` with the full branch as tooltip; the Default location without a branch → its display
   name; Overview (normal and full screen) → `Overview`; Settings → `Settings`; Changes → its entry's
@@ -280,8 +282,9 @@ Test*.
   full screen included), and drop the Overview button from the expected Tab order in
   `client/tests/title_bar_keyboard.rs` (FR-016, contract O1)
 - [ ] T047 [P] [US3] Make sure `client/src/ui/app_chord_tests.rs` covers the Overview chord opening and
-  closing the Overview with the terminal focused and in full screen; add the missing cases (FR-016,
-  contract O2, SC-006)
+  closing the Overview from the session view (terminal focused), from Changes and in full screen;
+  and that #1125's sidebar Overview-row tests press the row from the session view and from Changes;
+  add the missing cases (FR-016, contract O2, SC-006)
 
 ### Implementation for User Story 3
 
@@ -342,7 +345,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   Settings is open) and the overflow trigger; the switcher panel hangs at the bar's bottom edge;
   every body starts 21 dp higher
 - **Satisfies**: US1 acceptance scenarios 1 (without the place segment and the field), 7, 8;
-  FR-001, FR-002 (without field), FR-003, FR-005 (`y`), FR-011, FR-012, FR-013 (C1, C2, C4, C6, C7),
+  FR-001, FR-002 (without field), FR-003, FR-005 (`y`), FR-011, FR-012, FR-013 (C1, C4, C6, C7),
   FR-014, FR-015, FR-018 (Part A pages), FR-019; SC-001, SC-002, SC-003 (without the field)
 - **Verify**: `cargo test -p micold-core --test tokens_anatomy`; `cargo test -p micold-material`;
   `cargo test -p micold-client --lib -- toolbar`; `cargo test -p micold-client --test layout_snapshot
@@ -355,6 +358,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 US1 has 24 tasks with Setup and Foundational, so it is split along its acceptance scenarios: M1 ships
 the bar's shape (s1 partly, s7, s8), M2 the breadcrumb (s1–s6). Setup and Foundational cannot be cut
 further: the 43 dp figure forces the reshaped `Toolbar` and the 40 dp targets in the same change.
+M1's 21 tasks fit one session (Task-size gate): nine are test-first edits to existing test files or
+covered-state lists, two are fixture regeneration and docs, and the code tasks touch one figure
+module, three small `micold-material` components and `ui/toolbar.rs`. Splitting off Setup and
+Foundational would leave a milestone with nothing to observe (milestones rule 1).
 
 ### M2 — The `project / place` breadcrumb
 
@@ -362,7 +369,7 @@ further: the 43 dp figure forces the reshaped `Toolbar` and the 40 dp targets in
 - **Deliverable**: the bar reads `micold-ai-ide ▾ / fix/1117` (or `Overview`, `Settings`, the
   project alone, `Select project`), long names shorten place-first with `…` and a full-text tooltip,
   and pressing the project segment by pointer or keyboard opens the switcher under its leading edge
-- **Satisfies**: US1 acceptance scenarios 1–6; FR-004, FR-005, FR-006, FR-007, FR-017 (breadcrumb),
+- **Satisfies**: US1 acceptance scenarios 1–6; FR-004, FR-005, FR-006, FR-007, FR-013 (C2), FR-017 (breadcrumb),
   FR-018 (Part B pages); SC-004, SC-005
 - **Verify**: `cargo test -p micold-core`; `cargo test -p micold-material -- button breadcrumb`;
   `cargo test -p micold-client --lib -- toolbar composition_contrast`; `cargo test -p micold-client

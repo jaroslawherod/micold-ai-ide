@@ -76,7 +76,7 @@ specs/1127-title-bar-breadcrumb/
 ├── quickstart.md         # Part A test layers, Part B visual pass
 ├── contracts/
 │   └── title-bar-ui.md   # T tokens, B bar, C controls, P panels, O Overview removal
-└── tasks.md              # next unit
+└── tasks.md
 ```
 
 ### Source Code (repository root)
@@ -170,7 +170,9 @@ figures and one visibility change in `micold-core`. `micold-material` names no M
 
 ## Milestones (proposed for the tasks unit)
 
-Each lands on `main` on its own; the tasks unit sizes and may split them.
+Each lands on `main` on its own; the tasks unit sizes and may split them. The tasks unit split
+the first in two, so tasks.md *Milestones* numbers them M1–M4 (US2 is M3, US3 is M4) and is the
+authoritative list; "#1125 M3" below is the other feature's milestone.
 
 1. **M1 — US1, the 44 px bar** (P1): anatomy figures, `give_way.rs` extraction, `Toolbar` reshape,
    `AppMark`, `Breadcrumb` (+ `Button::trailing`), Settings button (`IconButton::selected`,
