@@ -468,8 +468,7 @@ that line — for example **Exited with an error in `<folder>`** — with what t
   underneath, to help you see what went wrong.
 - **Timed out** — sourcing didn't finish within the configured timeout and was abandoned.
 
-To recover once you've fixed the script: once the affected process has stopped (type `exit` in a
-shell; stop the session for the AI CLI), show its tab
+To recover once you've fixed the script: once the affected process has stopped, show its tab
 in the session's [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal) and press **restart** beside its status,
 or right-click the tab and choose **Restart**. Restarting either process — the AI CLI or a Regular
 Terminal — works this way: the session service re-sources the script
