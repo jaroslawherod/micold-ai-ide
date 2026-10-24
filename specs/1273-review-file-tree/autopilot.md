@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1273
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
-- **Phase**: clarify
-- **Next step**: clarify unit: apply the user's answer to the open escalation (scenario 4.3), then run clarify round 2
+- **Phase**: plan
+- **Next step**: plan unit (if the user's card on 4.3 answers other than "hide", update spec 4.3 and FR-012 first)
 
 ## Pull requests
 
@@ -24,9 +24,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- Clarify round 1, Q1 (scenario 4.2): every sort keeps the tree and orders within each level; no flattening. _(agent-resolved: docs/development/review-redesign.md#Layout item 2)_
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify r1 | 4.2: do Size / Unreviewed first keep folders or flatten? | Keep the tree; order within each level | agent-resolved | docs/development/review-redesign.md#Layout item 2 |
+| 2 | clarify r1 | 4.3: Unreviewed first before #1271's marks exist? | Hidden; core implements and unit-tests the ordering against a reviewed set | recommended, pending user's decision card | no `reviewed` state in crates; review-redesign.md#Tasks. If the user picks otherwise, update spec 4.3 and FR-012 |
+| 3 | clarify r2 | (scan) | No critical ambiguities; clarify done | agent | spec.md |
 
 ## Review rounds
 
@@ -45,11 +47,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, Q2 (scenario 4.3), category 1 (product decision the repo does not settle):
-Until #1271's reviewed marks exist, how does the **Unreviewed first** sort behave?
-- **Hide it until #1271 lands (Recommended)**: the control offers Path and Size; core implements and unit-tests the unreviewed ordering against a reviewed set now, so #1271 only shows the option. Evidence: no `reviewed` state exists in the code (`grep -rn reviewed crates` finds none); review-redesign.md#Tasks plans R4 (#1271) before R3 but R3 is not blocked by it, so the gap may be short or zero; an option that orders exactly like Path would look broken.
-- **Show it disabled with a reason** ("needs reviewed marks, #1271"): allowed by docs/development/component-library.md (disabled chip says why), but ships a dead control.
-- **Offer it, every file counted unreviewed**: orders exactly like Path until #1271; no visible effect.
+None.
 
 ## Follow-ups not done
 
