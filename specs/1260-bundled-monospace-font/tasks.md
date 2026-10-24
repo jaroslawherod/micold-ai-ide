@@ -188,8 +188,8 @@ packaging_excludes_showcase`; `scripts/tests/macos-bundle.test.sh`.
 - [x] T026 [US3] `packaging/windows/micold-ai-ide.iss` `[Files]`: four explicit lines to
   `{app}\licenses\fonts` (no wildcard, as the file's comment requires);
   `client/tests/packaging_excludes_showcase.rs`: add `WINDOWS_SHIPPED_LICENCES` (the four basenames),
-  a helper `iss_file_entries` returning `(source, dest_dir)` pairs beside `iss_file_sources`
-  (line 529), and pass the licence set to `windows_violations` (line 488), which accepts those
+  a helper `iss_file_entries` returning `(source, dest_dir)` pairs (in `tests/support/packaging.rs`,
+  replacing `iss_file_sources`, since T021 reads the entries too), and pass the licence set to `windows_violations` (line 488), which accepts those
   basenames only with a `DestDir` under `{app}\licenses\`; the wildcard and showcase rules unchanged.
   T021 and T022 pass, `the_windows_installer_contains_no_showcase` stays green
 - [x] T027 [P] [US3] `.gitattributes`: `/assets/fonts/LICENSE*` and `/assets/fonts/PROVENANCE.md`
