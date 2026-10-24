@@ -9,19 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1273
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
-- **Phase**: tasks (design PR)
-- **Next step**: orchestrator opens the design PR (title/body in the unit's scratchpad); after it merges, milestone M1 (then M2; both core-only, need not wait for #1272). M3 waits for #1272. If the user's card on 4.3 picks "disabled with a reason", set `UNREVIEWED_UNTIL_MARKS` to `Offer::Disabled` per research R3 (in M2) and update spec 4.3 and FR-012
+- **Phase**: implement (M1 PR)
+- **Next step**: orchestrator opens the M1 PR (title/body in the unit's scratchpad), waits on CI and merges; then milestone M2 (core-only, need not wait for #1272). M3 waits for #1272. If the user's card on 4.3 picks "disabled with a reason", set `UNREVIEWED_UNTIL_MARKS` to `Offer::Disabled` per research R3 (in M2) and update spec 4.3 and FR-012
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1354 | design (spec, plan, tasks) | merged (rebase) | 9c8473afbb8e49aaa8853892a6df818df3fdd138 |
+| — | M1 core tree layout | gated, to open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | — | pending (mergeable before #1272) |
+| M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | — | implemented, gated; PR to open |
 | M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | — | pending (mergeable before #1272) |
 | M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | — | blocked: start after #1272 merges |
 | M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | blocked: after M3 (#1272) |
@@ -45,6 +47,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 27619aca6068cb5bfbd487391e1db782f959f496:f7905e9c249e711053db1639dcc416db7e1b114b | CHANGES (1 MAJOR, 3 MINOR; all fixed) |
 | Plan | 2 | 2edca85acb541dbe1c6af23daa58aac7d52dde64:f7905e9c249e711053db1639dcc416db7e1b114b | CLEAN (sonnet; every fix cited) |
 | Tasks | 1 | bb169f2093970d1919ca520ac5765b3094415eaa:b18235fb3e0c3b1e03cf6278542ddad08555ff7e | CHANGES (1 MAJOR: `[P]` on T034 sharing a file; fixed, prose only — task metadata, no behaviour claim; MINOR F2, F3 fixed; F4 declined) |
+| Review A M1 (code-review high) | 1 | 5696a22e0cae23f54d87d5a8792580eec1767ed5:9c8473afbb8e49aaa8853892a6df818df3fdd138 | 5 MINOR (F1, F3, F4, F5 fixed in 88f3f377; F2 deferred) |
+| Review B M1 (conformance, sonnet) | 1 | 5696a22e…:9c8473af | CLEAN uncited — not counted; re-run |
+| Review B M1 (conformance, sonnet) | 1 | bce2c567f7b1bed1d8b308b7a0b8a6704cea53c6:88f3f377cea4adfd8323022041b81e37fc170188 | CLEAN, cited (2 MINOR: cycle-log count fixed; test-first commits noted) |
 
 ## Declined review findings
 
@@ -58,6 +63,7 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | F2 (`walk` clones and sorts a level's files) | `(&str, usize)` pairs, small; M2 replaces the ordering with Size / Unreviewed-first sorts, so the per-level sort is reworked there |
 
 ## Handover
 
