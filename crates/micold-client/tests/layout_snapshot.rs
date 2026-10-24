@@ -203,6 +203,14 @@ mod composer_parts_fit;
 #[path = "gates/command_palette_fits.rs"]
 mod command_palette_fits;
 
+// --- The review's source control holds its parts (feature 1272, T016) --------------------------
+
+// The showcase's `MenuSelect` poses, closed, with a long title and open in each list state: the list
+// floats without moving the body, the title gives way before `#n · `, the list caps and scrolls, the
+// chips and note stay in their row, and each gesture sends what contract §3 says (FR-001, FR-011).
+#[path = "gates/menu_select_fits.rs"]
+mod menu_select_fits;
+
 // --- A permission prompt's actions stay inside its card (feature 942, T057) -------------------
 
 // The tool request, plan approval and question views, as the showcase poses them, at the narrowest

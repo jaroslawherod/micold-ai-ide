@@ -66,6 +66,7 @@ mod markdown_view;
 /// (BUG-003).
 #[cfg(test)]
 mod menu_anatomy;
+mod menu_select;
 mod overview_card;
 mod picker;
 /// The transition both lists arrive and leave by, asserted against **each other** and against
@@ -130,6 +131,7 @@ pub use diff_view::{
 pub use host_picker::HostPicker;
 pub use inline_diff::InlineDiff;
 pub use markdown_view::MarkdownView;
+pub use menu_select::{MenuSelect, MenuSelectRow};
 pub(crate) use overview_card::{palette as card_palette, state_icon as card_state_icon};
 pub use overview_card::{CardPrRow, OverviewCard, PrTone};
 pub use picker::Row as TypeaheadRow;

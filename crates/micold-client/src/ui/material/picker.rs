@@ -314,9 +314,23 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
                 .height(Length::Fixed(density::MENU_ITEM_BASE))
                 .padding([0.0, spacing::SM])
         }
-    }
-    .style(style::menu_row(r, highlighted, selected))
-    .on_press_maybe(press.clone());
+    };
+    row_surface(pressable, highlighted, selected, press, r)
+}
+
+/// A row's pressable surface: the menu row's state layer and selection fill, the ripple when it can
+/// be pressed, and `opaque` when it cannot. Shared by the picker's result rows and `MenuSelect`'s
+/// options (feature 1272), so a list row presses, ripples and refuses one way.
+pub(super) fn row_surface<'a, M: Clone + 'a>(
+    surface: iced::widget::Button<'a, M>,
+    highlighted: bool,
+    selected: bool,
+    press: Option<M>,
+    r: Roles,
+) -> Element<'a, M> {
+    let pressable = surface
+        .style(style::menu_row(r, highlighted, selected))
+        .on_press_maybe(press.clone());
 
     match press {
         // Every pressable surface ripples (feature 019, FR-024c), and a menu row is one — built
@@ -344,7 +358,7 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
 /// The space is kept when nothing is selected so every label in the list starts at the same x —
 /// a marker that shifted the text sideways would make the selection the loudest thing on the row
 /// rather than the quietest.
-fn marker<'a, M: 'a>(selected: bool, r: Roles) -> Element<'a, M> {
+pub(super) fn marker<'a, M: 'a>(selected: bool, r: Roles) -> Element<'a, M> {
     let size = TypeRole::Action.size();
     if selected {
         super::Glyph::new(Icon::ActiveMarker, TypeRole::Action, r)

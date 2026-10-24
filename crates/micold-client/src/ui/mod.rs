@@ -85,6 +85,7 @@ pub mod session_area;
 pub(crate) mod settings_view;
 mod shell;
 pub mod sidebar;
+pub(crate) mod source_menu;
 pub mod status_bar;
 // The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
 // reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the

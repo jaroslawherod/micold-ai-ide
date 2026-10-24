@@ -893,3 +893,257 @@ pub fn inline_diff<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
         Layout::FullWidth,
     )
 }
+
+// --- `MenuSelect`: the review's source control (feature 1272, T018) ------------------------------
+
+use micold_core::pull_request::{BranchPrState, BranchPullRequest, CheckStatus};
+use micold_core::review::base::Toggles;
+use micold_core::review::source_menu::{self, MenuInput, PrRows, Shown, Stop};
+use micold_core::typeahead::Direction;
+
+/// The width a posed control is given: a header's share, narrow enough for a long title to give way.
+pub const MENU_SAMPLE_WIDTH: f32 = 360.0;
+/// The posed list's height before it scrolls: about five rows, so the many-pull-requests pose
+/// shows the cap.
+pub const MENU_LIST_HEIGHT: f32 = 240.0;
+/// The line under the control, which the open list floats over without moving.
+pub const MENU_BODY: &str = "The file list starts here";
+/// The long-title pose's pull request.
+pub const MENU_LONG_NUMBER: u64 = 1290;
+/// Its title: far longer than the trigger.
+pub const MENU_LONG_TITLE: &str =
+    "Review UI: move the source to a dropdown in the header and give \
+                                   the file list its height back";
+/// How many pull requests the many-pull-requests pose lists.
+pub const MENU_MANY: usize = 24;
+
+/// What a posed control sends, so a gate can tell its gestures apart. The showcase drops them all.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MenuEvent {
+    /// The trigger was pressed, or `Enter`/`Space` on it.
+    Toggled,
+    /// A press outside the open list, `Esc` or `Tab`.
+    Dismissed,
+    /// An arrow key moved the highlight.
+    Moved(Direction),
+    /// `Enter` took the highlighted stop.
+    Picked,
+    /// A row or a chip was pressed.
+    Took(Stop),
+}
+
+/// How a posed control stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuPose {
+    /// Closed on the working tree.
+    Closed,
+    /// Closed on a pull request whose title is longer than the trigger.
+    ClosedLongTitle,
+    /// Open with the pull-request setting off: no pull-request rows at all.
+    Absent,
+    /// Open while the first read is pending.
+    Loading,
+    /// Open when no list can be read.
+    Unavailable,
+    /// Open on a worktree with no pull request.
+    Empty,
+    /// Open on a list of pull requests, the second one shown.
+    List,
+    /// Open on a list past the stale threshold.
+    Stale,
+    /// Open on more pull requests than the list's height holds.
+    Many,
+    /// Open on the Default entry: Committed unavailable, with its note.
+    DefaultEntry,
+}
+
+fn sample_pr(
+    number: u64,
+    title: String,
+    state: BranchPrState,
+    checks: CheckStatus,
+) -> BranchPullRequest {
+    BranchPullRequest {
+        number,
+        title,
+        url: format!("https://github.com/o/r/pull/{number}"),
+        state,
+        created_at: String::new(),
+        base: "main".to_owned(),
+        head: "abc".to_owned(),
+        head_branch: "topic".to_owned(),
+        checks,
+    }
+}
+
+static MENU_PRS: LazyLock<Vec<BranchPullRequest>> = LazyLock::new(|| {
+    vec![
+        sample_pr(
+            14,
+            "Add the export".into(),
+            BranchPrState::Open,
+            CheckStatus::Passing,
+        ),
+        sample_pr(
+            13,
+            "Try a spike".into(),
+            BranchPrState::Draft,
+            CheckStatus::Pending,
+        ),
+        sample_pr(
+            12,
+            "Ship the parser".into(),
+            BranchPrState::Merged,
+            CheckStatus::Failing,
+        ),
+        sample_pr(
+            11,
+            "Abandoned attempt".into(),
+            BranchPrState::Closed,
+            CheckStatus::None,
+        ),
+    ]
+});
+
+static MENU_MANY_PRS: LazyLock<Vec<BranchPullRequest>> = LazyLock::new(|| {
+    (0..MENU_MANY as u64)
+        .map(|i| {
+            let state = [BranchPrState::Open, BranchPrState::Merged][i as usize % 2];
+            sample_pr(
+                100 - i,
+                format!("Pull request {}", 100 - i),
+                state,
+                CheckStatus::None,
+            )
+        })
+        .collect()
+});
+
+static MENU_LONG_PRS: LazyLock<Vec<BranchPullRequest>> = LazyLock::new(|| {
+    vec![sample_pr(
+        MENU_LONG_NUMBER,
+        MENU_LONG_TITLE.to_owned(),
+        BranchPrState::Open,
+        CheckStatus::Passing,
+    )]
+});
+
+/// The input core decides the pose's rows and label from.
+fn menu_input(pose: MenuPose) -> (MenuInput<'static>, bool) {
+    let list = |prs: &'static [BranchPullRequest], stale| PrRows::List { prs, stale };
+    let (shown, prs, committed_available, open) = match pose {
+        MenuPose::Closed => (Shown::WorkingTree, list(&MENU_PRS, false), true, false),
+        MenuPose::ClosedLongTitle => (
+            Shown::PullRequest {
+                number: MENU_LONG_NUMBER,
+                title: Some(MENU_LONG_TITLE),
+            },
+            list(&MENU_LONG_PRS, false),
+            true,
+            false,
+        ),
+        MenuPose::Absent => (Shown::WorkingTree, PrRows::Absent, true, true),
+        MenuPose::Loading => (Shown::WorkingTree, PrRows::Loading, true, true),
+        MenuPose::Unavailable => (Shown::WorkingTree, PrRows::Unavailable, true, true),
+        MenuPose::Empty => (Shown::WorkingTree, PrRows::Empty, true, true),
+        MenuPose::List => (
+            Shown::PullRequest {
+                number: 13,
+                title: Some("Try a spike"),
+            },
+            list(&MENU_PRS, false),
+            true,
+            true,
+        ),
+        MenuPose::Stale => (Shown::WorkingTree, list(&MENU_PRS, true), true, true),
+        MenuPose::Many => (Shown::WorkingTree, list(&MENU_MANY_PRS, false), true, true),
+        MenuPose::DefaultEntry => (Shown::WorkingTree, PrRows::Absent, false, true),
+    };
+    let input = MenuInput {
+        shown,
+        files_on: false,
+        toggles: Toggles::default(),
+        committed_available,
+        prs,
+    };
+    (input, open)
+}
+
+/// One posed control over the line it floats over, sending `send(event)` for each gesture.
+///
+/// Generic over the message so the geometry gate can read what each gesture sends; the showcase
+/// passes every event to [`Message::NoOp`].
+pub fn menu_select_sample<M: Clone + 'static>(
+    pose: MenuPose,
+    roles: Roles,
+    send: fn(MenuEvent) -> M,
+) -> Element<'static, M> {
+    use crate::ui::source_menu::{control, Control};
+    let (input, open) = menu_input(pose);
+    // On the shown source's stop, as the reducer opens it.
+    let rows = source_menu::rows(&input);
+    let highlight = source_menu::stops(&rows)
+        .iter()
+        .position(|(stop, _)| match input.shown {
+            Shown::WorkingTree => *stop == Stop::WorkingTree,
+            Shown::PullRequest { number, .. } => *stop == Stop::PullRequest(number),
+        });
+    let tooltip = source_menu::tooltip(Some("Compared with main"), &source_menu::label(&input));
+    let select = control(
+        &input,
+        open,
+        highlight.filter(|_| open),
+        Control {
+            on_toggle: send(MenuEvent::Toggled),
+            on_dismiss: send(MenuEvent::Dismissed),
+            on_pick: send(MenuEvent::Picked),
+        },
+        move |stop| send(MenuEvent::Took(stop)),
+        move |direction| send(MenuEvent::Moved(direction)),
+        tooltip,
+        roles,
+    )
+    .max_list_height(MENU_LIST_HEIGHT);
+    column![
+        container(select).width(Length::Fixed(MENU_SAMPLE_WIDTH)),
+        Text::new(MENU_BODY, TypeRole::Body, roles),
+    ]
+    .spacing(spacing::SM)
+    .into()
+}
+
+/// `MenuSelect` — the review's source control closed, with a long title, open in every
+/// pull-request list state and on the Default entry (feature 1272, T018). What has to be checked by
+/// eye: the list floating over the line below, the chips and note inside the Working tree option,
+/// the `…` of the long title, and the many-pull-requests list scrolling.
+pub fn menu_select<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    // An open list floats below its control: room is kept under each open pose so the list lies
+    // over its own pose rather than the next.
+    let pose = |label: &'a str, pose: MenuPose| {
+        let sample = menu_select_sample(pose, roles, |_| Message::NoOp);
+        let sample: Element<'a, Message> =
+            if matches!(pose, MenuPose::Closed | MenuPose::ClosedLongTitle) {
+                sample
+            } else {
+                container(sample)
+                    .height(Length::Fixed(MENU_LIST_HEIGHT + 96.0))
+                    .into()
+            };
+        posed(label, sample, roles)
+    };
+    arrange(
+        vec![
+            pose("closed", MenuPose::Closed),
+            pose("closed, a long title", MenuPose::ClosedLongTitle),
+            pose("open, no pull requests shown", MenuPose::Absent),
+            pose("open, loading", MenuPose::Loading),
+            pose("open, unavailable", MenuPose::Unavailable),
+            pose("open, empty", MenuPose::Empty),
+            pose("open, a list", MenuPose::List),
+            pose("open, a stale list", MenuPose::Stale),
+            pose("open, many pull requests", MenuPose::Many),
+            pose("open, the Default entry", MenuPose::DefaultEntry),
+        ],
+        Layout::Inline,
+    )
+}
