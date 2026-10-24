@@ -45,7 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit over context cap after writing the plan. Done: plan.md, research.md (R1 = FR-006 decision and issue-comment text), data-model.md, contracts/ui-contract.md, quickstart.md, committed and pushed; plan review round 1 snapshot recorded. Next: orchestrator runs the fresh plan reviewer on that snapshot; a fresh plan unit acts on its findings (review-rounds.md), then sets Next step to `tasks unit`. Open findings: none yet. PR: none.
 
 ## Open escalation
 
