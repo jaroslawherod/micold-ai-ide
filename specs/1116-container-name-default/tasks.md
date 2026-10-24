@@ -6,30 +6,30 @@
 
 ## Phase 1: Foundational (core function)
 
-- [ ] T001 [P] Tests for `default_container_name` in `crates/micold-core/tests/daemons_registry.rs`: `Build Box!` -> `Build-Box`, `_web.` -> `web`, `  web  ` -> `web`, `build box` -> `build-box`, `a--b` stays `a--b`, a 70-char name whose 63rd char is `-`/`.`/`_` loses the trailing run, `日本語` and `!!!` -> `None`, 100-char name truncates to 63, runs of replaced chars collapse, a typed run of `-` stays (FR-002, FR-003, FR-011)
-- [ ] T002 Add `default_container_name(&str) -> Option<String>` and `DEFAULT_CONTAINER_NAME_MAX` (63) to `crates/micold-core/src/daemons.rs`, per plan.md *Design* (FR-002, FR-003, FR-011)
+- [x] T001 [P] Tests for `default_container_name` in `crates/micold-core/tests/daemons_registry.rs`: `Build Box!` -> `Build-Box`, `_web.` -> `web`, `  web  ` -> `web`, `build box` -> `build-box`, `a--b` stays `a--b`, a 70-char name whose 63rd char is `-`/`.`/`_` loses the trailing run, `日本語` and `!!!` -> `None`, 100-char name truncates to 63, runs of replaced chars collapse, a typed run of `-` stays (FR-002, FR-003, FR-011)
+- [x] T002 Add `default_container_name(&str) -> Option<String>` and `DEFAULT_CONTAINER_NAME_MAX` (63) to `crates/micold-core/src/daemons.rs`, per plan.md *Design* (FR-002, FR-003, FR-011)
 
 ## Phase 2: User Story 1 - Save without a container name (P1) 🎯 MVP
 
-- [ ] T003 [US1] Update the tests `a_container_daemon_requires_name_and_container_name_and_its_own_image_only_when_chosen` and `a_container_daemon_marks_name_and_container_name_together` in `crates/micold-client/tests/features_daemons.rs`: the container name is not required (FR-007)
-- [ ] T004 [US1] Add client tests in `crates/micold-client/tests/features_daemons.rs` driving `Msg::Saved`: empty container name stores the sanitized daemon name; whitespace-only container name defaults; typed `my-ctr` is kept (FR-001, FR-004)
-- [ ] T005 [US1] In `crates/micold-client/tests/features_daemons.rs`, unit test for the pub pure helper `container_name_hint(&Draft) -> String`: sanitized name when the field is empty, empty when the daemon name is empty or unusable (FR-007)
-- [ ] T006 [US1] In `crates/micold-client/src/features/daemons.rs`: add `Draft::resolved_container_name`, use it in `runtime_of`, drop `DaemonContainerName` from `required_fields`, add `container_name_hint` (FR-001, FR-003, FR-004, FR-007)
-- [ ] T007 [US1] In `crates/micold-client/src/ui/settings/daemons.rs`: label no longer required, placeholder from `container_name_hint` (FR-007); checked by quickstart §B step 1-2
+- [x] T003 [US1] Update the tests `a_container_daemon_requires_name_and_container_name_and_its_own_image_only_when_chosen` and `a_container_daemon_marks_name_and_container_name_together` in `crates/micold-client/tests/features_daemons.rs`: the container name is not required (FR-007)
+- [x] T004 [US1] Add client tests in `crates/micold-client/tests/features_daemons.rs` driving `Msg::Saved`: empty container name stores the sanitized daemon name; whitespace-only container name defaults; typed `my-ctr` is kept (FR-001, FR-004)
+- [x] T005 [US1] In `crates/micold-client/tests/features_daemons.rs`, unit test for the pub pure helper `container_name_hint(&Draft) -> String`: sanitized name when the field is empty, empty when the daemon name is empty or unusable (FR-007)
+- [x] T006 [US1] In `crates/micold-client/src/features/daemons.rs`: add `Draft::resolved_container_name`, use it in `runtime_of`, drop `DaemonContainerName` from `required_fields`, add `container_name_hint` (FR-001, FR-003, FR-004, FR-007)
+- [x] T007 [US1] In `crates/micold-client/src/ui/settings/daemons.rs`: label no longer required, placeholder from `container_name_hint` (FR-007); checked by quickstart §B step 1-2
 
 ## Phase 3: User Story 4 - Uniqueness enforced (P1)
 
-- [ ] T008 [US4] Tests in `crates/micold-client/tests/features_daemons.rs`: a defaulted-name clash (`devbox`) lands on `container_name`; a port-only clash lands on `port`; `a b` vs `a-b` refused; truncation collision refused; no daemon created; the registry `check` still refuses a duplicate resolved name (FR-005, FR-010, SC-004)
-- [ ] T009 [US4] In `form_error` (`crates/micold-client/src/features/daemons.rs`), compare the holder's container name with `draft.resolved_container_name()` (FR-010)
+- [x] T008 [US4] Tests in `crates/micold-client/tests/features_daemons.rs`: a defaulted-name clash (`devbox`) lands on `container_name`; a port-only clash lands on `port`; `a b` vs `a-b` refused; truncation collision refused; no daemon created; the registry `check` still refuses a duplicate resolved name (FR-005, FR-010, SC-004)
+- [x] T009 [US4] In `form_error` (`crates/micold-client/src/features/daemons.rs`), compare the holder's container name with `draft.resolved_container_name()` (FR-010)
 
 ## Phase 4: User Stories 2 and 3 - Fixed at save, invalid names refused (P2)
 
-- [ ] T010 [US2] [US3] Tests in `crates/micold-client/tests/features_daemons.rs`: rename after save keeps the container name; editing shows the stored name as a value (rename and edit-open cases are regression guards, expected green at once; the `日本語` refusal and clearing the stored name while editing, which derives from the current daemon name, are red-first); `日本語` with an empty field refused with "Enter a container name." on `container_name`; empty daemon name keeps "A daemon needs a name."; host/ssh/kube drafts unchanged (FR-003, FR-006, FR-008, FR-009)
+- [x] T010 [US2] [US3] Tests in `crates/micold-client/tests/features_daemons.rs`: rename after save keeps the container name; editing shows the stored name as a value (rename and edit-open cases are regression guards, expected green at once; the `日本語` refusal and clearing the stored name while editing, which derives from the current daemon name, are red-first); `日本語` with an empty field refused with "Enter a container name." on `container_name`; empty daemon name keeps "A daemon needs a name."; host/ssh/kube drafts unchanged (FR-003, FR-006, FR-008, FR-009)
 
 ## Phase 5: Docs and gate
 
-- [ ] T011 Update `docs/user-guide/settings.md` and `docs/user-guide/sandboxed-daemon.md`: container name is optional, defaults to the sanitized daemon name, stored at save (FR-007; Constitution VII)
-- [ ] T012 Run `mise run gate`; confirm `container_section_fits` still passes
+- [x] T011 Update `docs/user-guide/settings.md` and `docs/user-guide/sandboxed-daemon.md`: container name is optional, defaults to the sanitized daemon name, stored at save (FR-007; Constitution VII)
+- [x] T012 Run `mise run gate`; confirm `container_section_fits` still passes
 
 ## Dependencies
 
