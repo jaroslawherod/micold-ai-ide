@@ -13,11 +13,11 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
-- [ ] All acceptance scenarios are defined
+- [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
@@ -31,14 +31,10 @@
 
 ## Notes
 
-- "Requirements are testable and unambiguous" and "All acceptance scenarios are defined" stay
-  unticked until the clarify unit answers the two markers: FR-003 and FR-012 depend on them.
-
-- Two `[NEEDS CLARIFICATION]` markers remain, both in User Story 2, left for the clarify unit:
-  (1) what a second press of the Changes button does while the Review tab is shown (scenario 4);
-  (2) whether **Review changes** on another location makes it the shown location, and where a
-  sessionless worktree's review is drawn (scenario 5; also referenced by the edge case "Location's
-  last session closed").
+- The two `[NEEDS CLARIFICATION]` markers in User Story 2 (Changes button press while the Review
+  tab is shown; **Review changes** on another location and a sessionless worktree's review) were
+  answered by the clarify unit (spec.md *Clarifications*, session 2026-10-24) and applied to
+  scenarios 4-6, FR-003, FR-012 and the edge case "Location's last session closed".
 - FR-016 names testability without a window or renderer because the issue's acceptance asks for the
   logic to be unit-tested in the render-free core; it names no module or type.
 - The issue text names `State.open` and `Msg::Closed | SessionSelected`; the spec states their
