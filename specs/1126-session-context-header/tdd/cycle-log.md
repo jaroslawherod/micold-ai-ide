@@ -48,3 +48,9 @@ Append only.
   `tests/features_session_strip.rs`; `session` ↔ `session_strip` not in
   `ALLOWED_CROSS_FEATURE_NAMES`). Green after adding the isolation test file and the two allowlist
   lines: `--test feature_registration_cost --test features_session_strip` 7 + 3 passed.
+- Rebase onto origin/main 763a59dc (#943 M9, #1120 BUG-1298): `composer_fits::a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view`
+  failed (`Rectangle { y: 176.6, height: 99.4 }` against the room under the transcript's top).
+  #943 M9 took more of the pane, and the header's fixed height came out of the transcript. The
+  gate now subtracts the header's measured height (`session_area_fits::header_height`) from main's
+  own bound. Green: `layout_snapshot` 107 passed, with the fixture regenerated on the new base and
+  only the six session states differing from main.
