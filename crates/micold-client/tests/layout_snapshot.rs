@@ -219,6 +219,12 @@ mod composer_fits;
 #[path = "gates/transcript_jump_control_fits.rs"]
 mod transcript_jump_control_fits;
 
+// --- The status bar's texts stay in their boxes at the smallest window (feature 1124, T009) -----
+
+// Builds its own state and reads no cache; it shares this binary for the `support::layout` passes.
+#[path = "gates/status_bar_fits.rs"]
+mod status_bar_fits;
+
 // --- The session bar's figures stay whole inside the pane (feature 944, T037) -------------------
 
 // A structured session's pane with the meter warning, the totals, a running background task and an

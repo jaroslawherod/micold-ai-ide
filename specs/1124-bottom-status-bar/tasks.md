@@ -66,10 +66,10 @@ Paths are relative to the repository root. `client/` below means `crates/micold-
   `client/src/ui/material/status_bar.rs` (R4): measure natural widths, drop `Drop` items by rank,
   then ellipsize `Shorten` items by rank to the floor; a dropped item gets a zero-area node and no
   tooltip hit area (makes T003's B4, B5 cases pass)
-- [ ] T005 [P] Add the `StatusBar` showcase entry (steady, busy, warning and a too-narrow instance;
+- [x] T005 [P] Add the `StatusBar` showcase entry (steady, busy, warning and a too-narrow instance;
   B6) to `client/src/showcase/sections/surfaces.rs` so `client/tests/showcase_completeness.rs` and
   `client/tests/material_builder_api.rs` cover it
-- [ ] T006 [P] Add contrast checks for `warning` text and `success`/`warning`/`error` dots on
+- [x] T006 [P] Add contrast checks for `warning` text and `success`/`warning`/`error` dots on
   `surface_container` in both schemes to `client/src/ui/material/composition_contrast.rs` (a
   guard on existing roles: no new role is added, so it may pass on first run; it fails if a role
   pair misses contrast)
@@ -98,7 +98,7 @@ Overview (full screen too), Changes, Settings and the empty screen.
   (fallback wins over the sandbox state; `Acquiring` with and without `percent`; `busy` true only
   for Probing/Acquiring/Starting; tooltip `attempt_line()` = label then detail on a new line for
   the bring-up rows, `persistent_notice()` for fallback/Stale/Failed, none for Running/Disabled)
-- [ ] T008 [P] [US1] Add `StateUnderTest::sandbox(Sandbox)` (states that do not call it keep
+- [x] T008 [P] [US1] Add `StateUnderTest::sandbox(Sandbox)` (states that do not call it keep
   `Sandbox::default()`) to `client/tests/support/layout.rs`, and append covered states
   `status-bar-steady` (connected, sandbox running, session active), `status-bar-overview-full-screen`,
   `status-bar-settings`, `status-bar-changes`, `status-bar-compare`, `status-bar-split-panes` and
@@ -107,11 +107,11 @@ Overview (full screen too), Changes, Settings and the empty screen.
   in `client/tests/support/covered_states.rs`, with anchors on the bar and on the body's top edge;
   the empty screen and the project surface are covered by the existing `empty-no-project-open` and
   `empty-project-without-worktrees`, which gain the bar when re-recorded (T014)
-- [ ] T009 [P] [US1] Write the failing geometry gate `client/tests/gates/status_bar_fits.rs` (mounted
+- [x] T009 [P] [US1] Write the failing geometry gate `client/tests/gates/status_bar_fits.rs` (mounted
   with `#[path]` in `client/tests/layout_snapshot.rs`): at 640 dp wide with a long remote daemon name
   and a long download detail, no text in the bar is painted past its box and the bar is 28 dp high,
   flush with the window's bottom edge
-- [ ] T010 [P] [US1] Add a check to `client/tests/terminal_focus.rs` that the window with the bar
+- [x] T010 [P] [US1] Add a check to `client/tests/terminal_focus.rs` that the window with the bar
   mounted adds no focusable widget (FR-013), and a case to `client/tests/idle_requests_no_frames.rs`
   that the bar at rest (sandbox running) requests no frames while a bar with the sandbox
   `Acquiring` does (busy ring); add a case to `client/tests/features_window.rs` that the
@@ -132,11 +132,11 @@ Overview (full screen too), Changes, Settings and the empty screen.
 - [x] T013 [US1] Mount `status_bar::view(..)` as the last child of the window column in
   `ui::view_with` (`client/src/ui/mod.rs`) after `body`, outside every body branch; the
   install-location early return stays before it (R1, contract P1)
-- [ ] T014 [US1] Regenerate `client/tests/fixtures/layout_snapshot.txt`
+- [x] T014 [US1] Regenerate `client/tests/fixtures/layout_snapshot.txt`
   (`UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`) and review the diff:
   each state gains the 28 dp bar and the body loses 28 dp, nothing else moves; confirm
   `client/tests/layout_text_overflow.rs` passes over the new states
-- [ ] T015 [P] [US1] Add a "Status bar" section to `docs/user-guide/appearance-theming.md` (where the
+- [x] T015 [P] [US1] Add a "Status bar" section to `docs/user-guide/appearance-theming.md` (where the
   bar sits, the connection and sandbox items and their colours, what gives way at narrow widths,
   that banners needing an action still appear under the app bar) and list the new covered states in
   `docs/development/layout-snapshot.md`

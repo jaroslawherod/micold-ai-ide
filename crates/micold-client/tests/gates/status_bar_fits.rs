@@ -1,0 +1,68 @@
+//! The status bar keeps every text inside its box at the smallest window (feature 1124, T009 —
+//! FR-001, FR-012, SC-002, SC-005).
+//!
+//! The worst case the bar meets: a remote daemon with a long name and an image download in flight,
+//! at `MIN_WINDOW_SIZE`. The bar must stay 28 dp high and flush with the window's bottom edge, and
+//! each of its texts must be drawn no wider than the room it was given and inside the window — the
+//! give-way pass shortens them; nothing may paint past the box.
+//!
+//! **Compiled into the `layout_snapshot` binary** for the `support::layout` passes; it builds its
+//! own state and reads no cache.
+
+use crate::support::covered_states::status_bar_long_texts;
+use crate::support::layout as lay;
+use micold_client::app::MIN_WINDOW_SIZE;
+use micold_core::tokens::anatomy::status_bar::HEIGHT;
+
+/// Half a pixel, matching every geometry gate beside this one.
+const TOLERANCE: f32 = 0.5;
+
+#[test]
+fn at_the_smallest_window_the_bars_texts_stay_in_their_boxes() {
+    let window = MIN_WINDOW_SIZE;
+    let under = status_bar_long_texts();
+    let (painted, records) =
+        lay::painted_text_settled_at(lay::view_of(&under), &mut lay::renderer(), window);
+
+    // The bar is the window column's last child.
+    let bar = records
+        .iter()
+        .filter(|r| r.layer == lay::Layer::Base && r.path.len() == 3 && r.path[..2] == [0, 0])
+        .max_by_key(|r| r.path[2])
+        .expect("the window column has children");
+    assert_eq!(bar.height, HEIGHT, "the bar is {HEIGHT} dp high: {bar:?}");
+    assert!(
+        (bar.y + bar.height - window.height).abs() <= TOLERANCE,
+        "the bar is flush with the window's bottom edge: {bar:?} in {window:?}"
+    );
+    assert_eq!(bar.width, window.width, "the bar spans the window: {bar:?}");
+
+    let in_bar: Vec<_> = painted
+        .iter()
+        .filter(|p| p.origin.y >= bar.y - TOLERANCE)
+        .collect();
+    for wanted in ["D", "G"] {
+        assert!(
+            in_bar.iter().any(|p| p.content.starts_with(wanted)),
+            "the bar draws its connection and sandbox items: {:?}",
+            in_bar.iter().map(|p| &p.content).collect::<Vec<_>>()
+        );
+    }
+    for p in &in_bar {
+        assert!(
+            p.natural_width <= p.allowed_width + TOLERANCE,
+            "{:?} wants {} of the {} it was given",
+            p.content,
+            p.natural_width,
+            p.allowed_width
+        );
+        assert!(
+            p.origin.x >= -TOLERANCE && p.origin.x + p.natural_width <= window.width + TOLERANCE,
+            "{:?} at x {} ({} wide) lies inside the {} dp window",
+            p.content,
+            p.origin.x,
+            p.natural_width,
+            window.width
+        );
+    }
+}

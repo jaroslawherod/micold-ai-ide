@@ -854,3 +854,39 @@ fn a_launch_that_restores_nothing_focuses_nothing() {
          separate rule needed for the empty case"
     );
 }
+
+#[path = "support/mod.rs"]
+mod support;
+
+/// Feature 1124 (FR-013, T010): the status bar holds no focusable widget, so mounting it under
+/// every body branch gives a traversal nothing new to land on and the terminal keeps the keyboard.
+#[test]
+fn the_status_bar_adds_no_focusable_widget() {
+    use micold_client::features::connection::ConnectionStatus;
+    use micold_client::features::sandbox::Sandbox;
+    use micold_client::ui::status_bar;
+
+    let state = state_with_current_session();
+    let roles = micold_core::tokens::roles(state.color_scheme());
+    for connection in [
+        ConnectionStatus::Connected,
+        ConnectionStatus::Disconnected,
+        ConnectionStatus::ProjectBusy {
+            holder: "another window".into(),
+        },
+    ] {
+        let model = status_bar::model(
+            &state,
+            &connection,
+            &Sandbox::default(),
+            0,
+            micold_core::local_time::UtcOffset::UTC,
+        );
+        let bar = status_bar::view(model, roles);
+        assert_eq!(
+            support::layout::focusable_count(bar),
+            0,
+            "the bar under {connection:?} offers a focus stop"
+        );
+    }
+}

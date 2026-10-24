@@ -197,8 +197,10 @@ fn a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view() {
     type_draft(&mut state, id, &text.join("\n"));
     let (painted, transcript) = paint(state, id);
     // A quarter of the pane, less the status row's own height: #943 put the session's model
-    // there, and a control of the shared 40dp touch target is as short as that row can be.
-    let crowded = WINDOW.height / 4.0 - micold_core::tokens::density::BUTTON_BASE;
+    // there, and a control of the shared 40dp touch target is as short as that row can be. The
+    // pane is the window less the bottom status bar (feature 1124).
+    let pane = WINDOW.height - micold_core::tokens::anatomy::status_bar::HEIGHT;
+    let crowded = pane / 4.0 - micold_core::tokens::density::BUTTON_BASE;
     assert!(
         transcript.height >= crowded,
         "the transcript keeps room above a crowded composer: {transcript:?}"

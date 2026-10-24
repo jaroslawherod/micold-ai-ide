@@ -233,3 +233,38 @@ fn gaining_focus_reports_no_blur() {
     let mut st = State::default();
     assert!(window::field_focus_changed(&mut st, FieldId::RunName, true).is_empty());
 }
+
+#[path = "support/mod.rs"]
+mod support;
+
+/// Feature 1124 (spec edge case, T010): the install-location screen is the one view that draws no
+/// status bar — it returns before the window column the bar is mounted in.
+#[test]
+fn the_install_location_screen_draws_no_status_bar() {
+    use support::layout::{painted_text, renderer, view_of, StateUnderTest};
+
+    let mut blocked = State::default();
+    window::install_location_reported(&mut blocked, InstallLocation::MountedImage);
+    let under = StateUnderTest::new(blocked);
+    let drawn: Vec<String> = painted_text(view_of(&under), &mut renderer())
+        .into_iter()
+        .map(|p| p.content)
+        .collect();
+    assert!(
+        !drawn
+            .iter()
+            .any(|t| t.starts_with("Daemon ") || t.starts_with("Sandbox ")),
+        "the install-location screen draws the status bar: {drawn:?}"
+    );
+
+    // The premise: an ordinary window does draw it.
+    let under = StateUnderTest::new(State::default());
+    let drawn: Vec<String> = painted_text(view_of(&under), &mut renderer())
+        .into_iter()
+        .map(|p| p.content)
+        .collect();
+    assert!(
+        drawn.iter().any(|t| t == "Daemon connected · local"),
+        "an ordinary window draws the status bar: {drawn:?}"
+    );
+}

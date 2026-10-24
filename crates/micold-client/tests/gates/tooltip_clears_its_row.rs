@@ -389,11 +389,14 @@ fn assert_last_row_keeps_its_tooltip_off_itself(size: Size) {
     let hovered = hover_row(&state, last, size, Scroll::None);
     let row = &hovered.row;
 
+    // The body ends where the status bar begins (feature 1124), so that is the edge a row near the
+    // bottom of the list is near.
+    let body_bottom = size.height - micold_core::tokens::anatomy::status_bar::HEIGHT;
     assert!(
-        size.height - (row.y + row.height) < row.height,
-        "the last worktree row ends at y={:.0} in a {:.0}px window — more than a row's height \
-         ({:.0}px) above its bottom edge, so this fixture no longer reaches the case BUG-001 is \
-         about",
+        body_bottom - (row.y + row.height) < row.height,
+        "the last worktree row ends at y={:.0} in a {:.0}px window whose body ends at {body_bottom:.0} \
+         — more than a row's height ({:.0}px) above it, so this fixture no longer reaches the case \
+         BUG-001 is about",
         row.y + row.height,
         size.height,
         row.height
