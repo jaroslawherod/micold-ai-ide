@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: clarify done
-- **Next step**: plan unit
+- **Phase**: plan written
+- **Next step**: plan review round 1 (orchestrator dispatches), then commit fixes; then tasks unit
 
 ## Pull requests
 
@@ -30,6 +30,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D2 | spec | Which italic weights? Issue suggests Italic + Medium Italic | 400, 500 and 600: one italic twin per shipped upright weight, so bold (resolves to 600) + italic keeps its weight (FR-002/FR-003) | agent-resolved | link_text.rs `painted` sets `Weight::Bold`; assets/fonts ships 400/500/600 only |
 | D3 | spec | Upstream reachable from the sandbox? | Yes: raw.githubusercontent.com google/fonts `ofl/roboto/Roboto-Italic[wdth,wght].ttf` returns 200; `uv` present for fonttools | agent-resolved | curl -I 2026-10-24 |
 | D4 | clarify | FR-009 sample: extend shared core fixture or showcase-only sample? | Left to the plan; spec requires only a bold-italic run | agent-resolved | spec review F2 |
+| D5 | plan | FR-009 sample location | Shared `markdown-subset.md` gains `***bold italic***`; core test asserts bold+italic style | agent-resolved | research R5; showcase draws MARKDOWN_SUBSET |
+| D6 | plan | How to make emphasis beat a host Roboto Italic (FR-006) | `install_roboto` loads six faces, `pin_roboto_italics` removes non-Binary non-normal Roboto faces only (upright host faces kept for FR-004) | agent-resolved | research R2; mono.rs precedent |
+| D7 | plan | Code inside emphasis | `painted` sets no slant on code runs | agent-resolved | research R4; spec Edge: inline code |
 
 ## Review rounds
 
