@@ -32,6 +32,24 @@ diff only when asked for.
   only: "the Review tab of an entry" and "the entry's review view state survives switching". It
   does not depend on how #1269 stores or keys that state.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: How much of an agent reply does a comment card show — the first 4 lines or the first 4,000
+  characters (today)? → A: At most the first 4 lines as drawn at the card's width, then **Show
+  all**; the drawer's **Replies** row shows the whole reply (4,000-character cap and **Show all**
+  as today) _(agent-resolved: docs/development/review-redesign.md#layout items 5 and 7)_
+- Q: Does the drawer open by itself when replies arrive? → A: Yes, on its **Replies** tab at the
+  first report of a send started in this window, once per send, only while this entry's Review
+  tab is shown and the user has not closed the drawer since that send; an open drawer keeps its
+  tab _(agent-resolved: docs/development/review-redesign.md#layout item 5, "Opens itself on a
+  send that gets replies"; the limits keep FR-019's per-view state and Edge Cases "Two windows on
+  one entry")_
+- Q: Is the auto-open rule (FR-020) tested like the bar and drawer rules? → A: Yes, it joins
+  FR-023's drawing-free rules _(agent-resolved: .specify/memory/constitution.md#i-test-first-development;
+  spec FR-023)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Send a review from one fixed place (Priority: P1)
@@ -165,9 +183,9 @@ check both cards show their status and reply, and a long reply offers **Show all
    open or closed.
 2. **Given** a reply longer than the card shows, **When** the card is shown, **Then** it shows the
    reply's start and **Show all**, which opens the whole reply in the existing dialog. The card
-   shows [NEEDS CLARIFICATION: how much of a reply does a card show — the first 4 lines (as the
-   redesign proposes, with the drawer showing the full text) or the first 4,000 characters (as
-   today)?].
+   shows at most the first 4 lines of the reply as drawn at the card's width (a long line that
+   wraps counts as the lines it takes); the drawer's **Replies** row shows the whole reply
+   (FR-016).
 3. **Given** a reply arrives from the session, **When** it reaches the window, **Then** the card,
    the drawer's **Replies** row and the bar's counts all show it within two seconds.
 
@@ -215,11 +233,12 @@ check both cards show their status and reply, and a long reply offers **Show all
 - **Platforms** (Principle VI): the bar, the overflow menu, the drawer and Esc behave the same on
   macOS, Linux and Windows; the overflow menu is the app's own menu, not a native one, so it looks
   the same everywhere.
-- **Auto-opening the drawer**: [NEEDS CLARIFICATION: should the drawer open itself on its
-  **Replies** tab when the agent's first report of a send arrives (as the redesign proposes:
-  "opens itself on a send that gets replies"), and if so, only while this entry's Review tab is
-  shown and the user has not closed the drawer since that send — or should it never open by
-  itself?]
+- **Auto-opening the drawer**: when the agent's first report (Applied or Answered) of a comment
+  sent by a send started in this window arrives, the drawer opens itself on its **Replies** tab,
+  once per send, and only if this entry's Review tab is shown at that moment and the user has not
+  closed the drawer since that send started. A drawer that is already open keeps its tab. In any
+  other case (another window's send, the Review tab not shown, a later report of the same send)
+  the drawer stays as it is.
 
 ## Requirements *(mandatory)*
 
@@ -280,14 +299,17 @@ check both cards show their status and reply, and a long reply offers **Show all
 - **FR-019**: The drawer's open/closed state, selected tab, scroll position and any unsaved text in
   it MUST belong to the entry's review view, so they survive switching away and back as #1269
   keeps that view, and are dropped when the Review tab is closed.
-- **FR-020**: The drawer's automatic opening MUST follow the rule decided for the "Auto-opening the
-  drawer" edge case; until decided, the drawer opens only when the user asks.
+- **FR-020**: The drawer MUST open itself on its **Replies** tab when the first report (Applied or
+  Answered) of a send started in this window arrives, at most once per send, only while this
+  entry's Review tab is shown and only if the user has not closed the drawer since that send
+  started; an already open drawer keeps its tab. Otherwise it opens only when the user asks.
 
 #### Comment cards
 
 - **FR-021**: A comment card in the diff MUST show its status and, once replied to, the reply under
-  the comment's text, with the drawer open or closed; a reply longer than the card shows offers
-  **Show all**, which opens the existing whole-reply dialog.
+  the comment's text, with the drawer open or closed. The card MUST show at most the reply's first
+  4 lines as drawn at the card's width; a longer reply ends there and offers **Show all**, which
+  opens the existing whole-reply dialog.
 
 #### Consistency and quality
 
@@ -295,8 +317,8 @@ check both cards show their status and reply, and a long reply offers **Show all
   session (reports, sends, clears, discards, new or edited drafts) within two seconds.
 - **FR-023**: The rules that decide the bar's content (counts, button label and availability,
   overflow item availability, message) and the drawer's content (which comment is in which tab,
-  row order, tab counts, empty texts) MUST be verifiable by automated tests that run without
-  drawing the window.
+  row order, tab counts, empty texts, and whether an arriving report opens the drawer) MUST be
+  verifiable by automated tests that run without drawing the window.
 - **FR-024**: The user guide's review chapter, the layout snapshot and the component showcase MUST
   describe the bar and the drawer, and a visual pass at 1280×800 in the light and the dark theme
   MUST show them without clipping or overlap.

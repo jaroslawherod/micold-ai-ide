@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1270
 - **Worktree branch**: claude/project-thread-ttad83
 - **Started**: 2026-10-24
-- **Phase**: spec
-- **Next step**: clarify unit: ask the two [NEEDS CLARIFICATION] markers (card reply length; drawer auto-open)
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -31,6 +31,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | spec | Bar counts: all statuses or non-zero only? | Non-zero only; "No review comments yet" when none | agent-resolved | spec Edge Cases |
 | D4 | spec | Drawer tabs' content | Drafts = Draft; Replies = Sent, Applied, Answered (Mark applied / Answer… on Sent rows) | agent-resolved | review-redesign.md item 5 |
 | D5 | spec | Pre-execution step skipped | branch-start.sh and issue.sh skipped: gh unauthenticated, branch already at origin/main 3a333f7f | orchestrator | prompt |
+| D6 | clarify | How much of a reply does a card show? | At most the first 4 lines as drawn at the card's width, then Show all; drawer Replies rows keep the whole reply (4,000-char cap) (FR-021, US3 #2) | agent-resolved | review-redesign.md#layout items 5, 7 |
+| D7 | clarify | Does the drawer open by itself? | Yes, on Replies at the first report of a send started in this window, once per send, only while the entry's Review tab is shown and not closed since the send; open drawer keeps its tab (FR-020) | agent-resolved | review-redesign.md#layout item 5; FR-019; Edge Cases "Two windows" |
+| D8 | clarify | Is the auto-open rule tested without drawing? | Yes, added to FR-023 | agent-resolved | constitution I; FR-023 |
 
 ## Review rounds
 
